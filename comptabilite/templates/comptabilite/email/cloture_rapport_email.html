@@ -1,0 +1,25 @@
+{% load i18n %}<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family: Arial, sans-serif; color: #222; max-width: 600px; margin: auto; padding: 16px;">
+    <h1 style="font-size: 18pt; margin: 0 0 12px 0;">
+        {{ config.organisation }} — {% translate "Closure report" %}
+    </h1>
+    <p>
+        {% blocktrans with niveau=cloture.get_niveau_display num=cloture.numero_sequentiel %}
+        Periodic accounting closure: {{ niveau }} #{{ num }}.
+        {% endblocktrans %}
+    </p>
+    <p>
+        <strong>{% translate "Period" %}:</strong>
+        {{ cloture.datetime_debut|date:"d/m/Y H:i" }} → {{ cloture.datetime_fin|date:"d/m/Y H:i" }}<br>
+        <strong>{% translate "Transactions" %}:</strong> {{ cloture.nombre_transactions }}<br>
+        <strong>{% translate "Total TTC" %}:</strong> {{ cloture.total_general|floatformat:0 }} (cents)
+    </p>
+    <p>{% translate "Full report attached as PDF." %}</p>
+    <hr>
+    <p style="font-size: 8pt; color: #888; margin-top: 16px;">
+        {% translate "Sent automatically by the accounting module. To stop receiving these reports, ask a tenant administrator to update the configuration." %}
+    </p>
+</body>
+</html>

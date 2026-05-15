@@ -144,3 +144,79 @@ class ClotureCaisse(models.Model):
 
     def __str__(self):
         return f"{self.get_niveau_display()} #{self.numero_sequentiel} — {self.datetime_fin:%Y-%m-%d}"
+
+
+class CompteComptable(models.Model):
+    """
+    Compte comptable utilise pour la ventilation des ecritures (FEC, CSV comptable).
+    / Accounting account used for entry dispatch (FEC, accounting CSV exports).
+
+    LOCALISATION : comptabilite/models.py
+
+    Modele paramétrable par tenant. Seed initial via data migration 0002
+    (plan comptable francais general PCG). Le tenant peut modifier les
+    numeros de compte selon son systeme comptable.
+    / Tenant-customizable. Initial seed via data migration 0002 (French PCG).
+    """
+
+    TYPE_VENTE = "V"
+    TYPE_TVA = "T"
+    TYPE_TRESORERIE = "B"
+    TYPE_CLIENT = "C"
+    TYPE_AUTRE = "X"
+    TYPE_CHOICES = [
+        (TYPE_VENTE, _("Sales")),
+        (TYPE_TVA, _("VAT collected")),
+        (TYPE_TRESORERIE, _("Cash / Bank")),
+        (TYPE_CLIENT, _("Customers")),
+        (TYPE_AUTRE, _("Other")),
+    ]
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    numero = models.CharField(
+        max_length=12, unique=True,
+        verbose_name=_("Account number"),
+    )
+    libelle = models.CharField(max_length=120, verbose_name=_("Label"))
+    type_compte = models.CharField(
+        max_length=1, choices=TYPE_CHOICES,
+        verbose_name=_("Account type"),
+    )
+    actif = models.BooleanField(default=True, verbose_name=_("Active"))
+
+    class Meta:
+        ordering = ["numero"]
+        verbose_name = _("Accounting account")
+        verbose_name_plural = _("Accounting accounts")
+
+    def __str__(self):
+        return f"{self.numero} — {self.libelle}"
+
+
+class MappingMoyenDePaiement(models.Model):
+    """
+    Mappage d'un moyen de paiement (PaymentMethod) vers un compte comptable.
+    / Maps a PaymentMethod code to an accounting account.
+
+    LOCALISATION : comptabilite/models.py
+    """
+
+    payment_method = models.CharField(
+        max_length=2, unique=True,
+        verbose_name=_("Payment method"),
+        help_text=_("PaymentMethod code from BaseBillet (CC, CA, CH, TR, SF, ...)"),
+    )
+    compte = models.ForeignKey(
+        CompteComptable,
+        on_delete=models.PROTECT,
+        verbose_name=_("Accounting account"),
+        limit_choices_to={"type_compte__in": ["B", "C"]},
+    )
+
+    class Meta:
+        ordering = ["payment_method"]
+        verbose_name = _("Payment method mapping")
+        verbose_name_plural = _("Payment method mappings")
+
+    def __str__(self):
+        return f"{self.get_payment_method_display()} → {self.compte}"

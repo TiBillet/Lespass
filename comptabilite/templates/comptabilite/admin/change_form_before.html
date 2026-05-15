@@ -16,6 +16,41 @@
 <div class="flex flex-col gap-4">
 
     {% if cloture %}
+        <div class="flex flex-row gap-2 flex-wrap" data-testid="comptabilite-bandeau-exports">
+            <a href="exporter-csv/"
+               data-testid="comptabilite-export-csv"
+               class="bg-base-100 hover:bg-base-200 dark:bg-base-800 dark:hover:bg-base-700 px-3 py-2 rounded-md text-sm font-medium no-underline border border-base-200 dark:border-base-700">
+                📄 {% translate "CSV" %}
+            </a>
+            <a href="exporter-excel/"
+               data-testid="comptabilite-export-excel"
+               class="bg-base-100 hover:bg-base-200 dark:bg-base-800 dark:hover:bg-base-700 px-3 py-2 rounded-md text-sm font-medium no-underline border border-base-200 dark:border-base-700">
+                📊 {% translate "Excel" %}
+            </a>
+            <a href="exporter-pdf/"
+               data-testid="comptabilite-export-pdf"
+               class="bg-base-100 hover:bg-base-200 dark:bg-base-800 dark:hover:bg-base-700 px-3 py-2 rounded-md text-sm font-medium no-underline border border-base-200 dark:border-base-700">
+                🖨️ {% translate "PDF" %}
+            </a>
+            <a href="exporter-fec/"
+               data-testid="comptabilite-export-fec"
+               class="bg-base-100 hover:bg-base-200 dark:bg-base-800 dark:hover:bg-base-700 px-3 py-2 rounded-md text-sm font-medium no-underline border border-base-200 dark:border-base-700"
+               title="{% translate 'Fichier des Écritures Comptables (French legal format)' %}">
+                ⚖️ {% translate "FEC" %}
+            </a>
+            <button type="button"
+                    data-testid="comptabilite-bouton-csv-comptable"
+                    hx-get="exporter-csv-comptable/"
+                    hx-target="#zone-csv-comptable"
+                    hx-swap="innerHTML"
+                    class="bg-base-100 hover:bg-base-200 dark:bg-base-800 dark:hover:bg-base-700 px-3 py-2 rounded-md text-sm font-medium border border-base-200 dark:border-base-700 cursor-pointer">
+                📑 {% translate "Accounting CSV" %}
+            </button>
+        </div>
+        <div id="zone-csv-comptable" class="mt-2"></div>
+    {% endif %}
+
+    {% if cloture %}
         {% component "unfold/components/card.html" with title=_("Closure summary") %}
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                 <div>
@@ -40,7 +75,7 @@
                 </div>
                 <div>
                     <strong>{% translate "Total" %} TTC:</strong>
-                    <span class="font-mono">{{ cloture.total_general|floatformat:0 }}c</span>
+                    <span class="font-mono">{{ cloture_total_general_euros }} €</span>
                 </div>
                 <div class="col-span-2 md:col-span-2">
                     <strong>{% translate "Lines hash" %}:</strong>

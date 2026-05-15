@@ -283,14 +283,39 @@ def test_admin_changelist_contient_lien_temps_reel(admin_client):
 def test_admin_rapport_temps_reel_se_charge(admin_client):
     """
     GET /admin/comptabilite/cloturecaisse/rapport-temps-reel/ retourne 200
-    avec la zone HTMX et l'attribut aria-live.
-    / The real-time report view returns 200 with HTMX + a11y attributes.
+    avec le formulaire de selection de periode et la zone du rapport.
+    / The real-time report view returns 200 with the period form + report zone.
     """
     client, _ = admin_client
     response = client.get("/admin/comptabilite/cloturecaisse/rapport-temps-reel/")
     assert response.status_code == 200
     contenu = response.content.decode("utf-8")
+    # Zone du rapport (avec a11y)
+    # / Report zone (with a11y)
     assert 'data-testid="comptabilite-rapport-temps-reel-zone"' in contenu
     assert 'aria-live="polite"' in contenu
-    # HTMX poll : every 30s
-    assert 'hx-trigger="every 30s"' in contenu
+    # Formulaire de selection de periode (3 elements)
+    # / Period selection form (3 elements)
+    assert 'data-testid="comptabilite-input-datetime-debut"' in contenu
+    assert 'data-testid="comptabilite-input-datetime-fin"' in contenu
+    assert 'data-testid="comptabilite-bouton-actualiser"' in contenu
+
+
+def test_admin_rapport_temps_reel_avec_periode_custom(admin_client):
+    """
+    GET /admin/comptabilite/cloturecaisse/rapport-temps-reel/?datetime_debut=...
+    affiche la periode demandee dans le formulaire (value des inputs).
+    / GET with custom period params: form inputs reflect the requested period.
+    """
+    client, _ = admin_client
+    response = client.get(
+        "/admin/comptabilite/cloturecaisse/rapport-temps-reel/"
+        "?datetime_debut=2026-05-14T10:00"
+        "&datetime_fin=2026-05-14T18:00"
+    )
+    assert response.status_code == 200
+    contenu = response.content.decode("utf-8")
+    # Les inputs doivent re-afficher la valeur soumise (formatee en local)
+    # / Inputs must re-display the submitted value (localized)
+    assert 'value="2026-05-14T10:00"' in contenu
+    assert 'value="2026-05-14T18:00"' in contenu

@@ -85,6 +85,30 @@ def setup_periodic_tasks(sender, **kwargs):
         cron_purge_stale_onboard_drafts.s(),
     )
 
+    # Clotures comptables periodiques (cf. comptabilite/tasks.py)
+    # / Periodic accounting closures
+    logger.info(f"setup_periodic_tasks cron_cloture_quotidienne at 6:00 UTC")
+    sender.add_periodic_task(
+        crontab(hour=6, minute=0),
+        cron_cloture_quotidienne.s(),
+        name="cron_cloture_quotidienne",
+    )
+    sender.add_periodic_task(
+        crontab(day_of_week=1, hour=6, minute=15),
+        cron_cloture_hebdomadaire.s(),
+        name="cron_cloture_hebdomadaire",
+    )
+    sender.add_periodic_task(
+        crontab(day_of_month=1, hour=6, minute=30),
+        cron_cloture_mensuelle.s(),
+        name="cron_cloture_mensuelle",
+    )
+    sender.add_periodic_task(
+        crontab(month_of_year=1, day_of_month=1, hour=6, minute=45),
+        cron_cloture_annuelle.s(),
+        name="cron_cloture_annuelle",
+    )
+
     logger.info(f'setup_periodic_tasks DONE')
 
 
@@ -137,3 +161,38 @@ def cron_purge_stale_onboard_drafts():
     logger.info(f'purge_stale_onboard_drafts START')
     deleted = purge_stale_onboard_drafts()
     logger.info(f'purge_stale_onboard_drafts END (deleted={deleted})')
+
+
+@app.task
+def cron_cloture_quotidienne():
+    """
+    Genere les clotures comptables quotidiennes (niveau J).
+    / Generates daily accounting closures (J level).
+    """
+    logger.info(f"call_command generer_cloture --niveau=J START")
+    call_command("generer_cloture", "--niveau=J")
+    logger.info(f"call_command generer_cloture --niveau=J END")
+
+
+@app.task
+def cron_cloture_hebdomadaire():
+    """Wrapper hebdomadaire (lundi 6h15 UTC)."""
+    logger.info(f"call_command generer_cloture --niveau=H START")
+    call_command("generer_cloture", "--niveau=H")
+    logger.info(f"call_command generer_cloture --niveau=H END")
+
+
+@app.task
+def cron_cloture_mensuelle():
+    """Wrapper mensuel (1er du mois 6h30 UTC)."""
+    logger.info(f"call_command generer_cloture --niveau=M START")
+    call_command("generer_cloture", "--niveau=M")
+    logger.info(f"call_command generer_cloture --niveau=M END")
+
+
+@app.task
+def cron_cloture_annuelle():
+    """Wrapper annuel (1er janvier 6h45 UTC)."""
+    logger.info(f"call_command generer_cloture --niveau=A START")
+    call_command("generer_cloture", "--niveau=A")
+    logger.info(f"call_command generer_cloture --niveau=A END")

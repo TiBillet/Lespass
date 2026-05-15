@@ -19,6 +19,11 @@ from django.db import transaction
 from django.utils import timezone
 from django_tenants.utils import tenant_context
 
+# Import au niveau module pour que les tests puissent le mocker via
+# patch("comptabilite.tasks.CeleryMailerClass").
+# / Module-level import so tests can mock via patch("comptabilite.tasks.CeleryMailerClass").
+from BaseBillet.tasks import CeleryMailerClass
+
 logger = logging.getLogger(__name__)
 
 
@@ -187,4 +192,81 @@ def generer_cloture_pour_tenant(
             f"[{schema_name}] Cloture {niveau} #{numero} creee "
             f"(total={total_general}c, {nombre_transactions} txns)."
         )
+
+        # Email automatique si periodicite + emails configures
+        # / Auto email if periodicity + emails are configured
+        if config.rapport_periodicite == niveau and config.rapport_emails:
+            envoyer_email_cloture.delay(schema_name, str(cloture.uuid))
+
         return str(cloture.uuid)
+
+
+@shared_task
+def envoyer_email_cloture(schema_name, cloture_uuid):
+    """
+    Envoie un email de cloture aux destinataires configures dans
+    Configuration.rapport_emails, avec le PDF en piece jointe.
+    Skip si rapport_emails vide OU rapport_periodicite ne matche pas
+    le niveau de la cloture.
+    / Send a closure email with PDF attachment.
+    Skip if rapport_emails is empty OR rapport_periodicite doesn't match.
+
+    Retourne True si envoye, False sinon.
+    / Returns True if sent, False otherwise.
+    """
+    from Customers.models import Client
+    tenant = Client.objects.get(schema_name=schema_name)
+
+    with tenant_context(tenant):
+        from comptabilite.models import ClotureCaisse
+        from comptabilite.pdf import generer_pdf_cloture
+        from BaseBillet.models import Configuration
+
+        try:
+            cloture = ClotureCaisse.objects.get(uuid=cloture_uuid)
+        except ClotureCaisse.DoesNotExist:
+            logger.warning(
+                f"[{schema_name}] Cloture {cloture_uuid} introuvable, skip email."
+            )
+            return False
+
+        config = Configuration.get_solo()
+
+        # Skip si pas configure
+        # / Skip if not configured
+        if not config.rapport_emails or not config.rapport_emails.strip():
+            return False
+        if config.rapport_periodicite != cloture.niveau:
+            return False
+
+        # Liste d'emails parsee (separateur virgule, trim)
+        # / Parsed email list (comma-separated, trimmed)
+        emails = [e.strip() for e in config.rapport_emails.split(",") if e.strip()]
+        if not emails:
+            return False
+
+        # Genere le PDF en piece jointe
+        # / Generate PDF attachment
+        pdf_bytes, pdf_filename, _ = generer_pdf_cloture(cloture)
+
+        # Sujet
+        # / Subject
+        subject = (
+            f"[{config.organisation}] "
+            f"Cloture {cloture.get_niveau_display()} "
+            f"#{cloture.numero_sequentiel}"
+        )
+
+        mailer = CeleryMailerClass(
+            email=emails,
+            title=subject,
+            template="comptabilite/email/cloture_rapport_email.html",
+            context={"config": config, "cloture": cloture},
+            attached_files={pdf_filename: pdf_bytes},
+        )
+        result = mailer.send()
+        logger.info(
+            f"[{schema_name}] Email cloture #{cloture.numero_sequentiel} "
+            f"envoye a {len(emails)} destinataire(s) : result={result}"
+        )
+        return True

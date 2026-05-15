@@ -18,7 +18,7 @@ from unfold.admin import ModelAdmin
 from Administration.admin.site import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 
-from comptabilite.models import ClotureCaisse
+from comptabilite.models import ClotureCaisse, CompteComptable, MappingMoyenDePaiement
 
 
 # Helpers d'affichage definis AU NIVEAU MODULE (pas methodes de classe).
@@ -50,6 +50,28 @@ CATEGORIES_PAIEMENT_AFFICHAGE = [
     ("cashless", _("Cashless (NFC / local currency)"), ["LE", "LG", "QR"]),
     ("autres", _("Other"), ["CH", "NA", "UK"]),
 ]
+
+
+def _parse_datetime_param(value, defaut):
+    """
+    Parse une string ISO (depuis un GET param ou <input type="datetime-local">)
+    en datetime aware. Si invalide ou vide, retourne defaut.
+    / Parse an ISO string into an aware datetime. Falls back to defaut if invalid.
+
+    Format attendu : 'YYYY-MM-DDTHH:MM' (input HTML5 datetime-local, sans tz).
+    On applique la timezone locale Django si le datetime parse est naive.
+    """
+    if not value:
+        return defaut
+    try:
+        from datetime import datetime
+        from django.utils import timezone
+        dt = datetime.fromisoformat(value)
+        if timezone.is_naive(dt):
+            dt = timezone.make_aware(dt, timezone.get_current_timezone())
+        return dt
+    except (ValueError, TypeError):
+        return defaut
 
 
 def _agreger_paiements_par_categorie(totaux_par_moyen: dict) -> list:
@@ -85,6 +107,17 @@ def _agreger_paiements_par_categorie(totaux_par_moyen: dict) -> list:
             "nb": nb,
         })
     return categories
+
+
+def _telecharger(bytes_data, filename, content_type):
+    """
+    Construit une HttpResponse de telechargement (Content-Disposition: attachment).
+    / Build an HttpResponse for download (attachment).
+    """
+    from django.http import HttpResponse
+    response = HttpResponse(bytes_data, content_type=content_type)
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
 
 
 def _enrichir_rapport_pour_template(rapport: dict) -> dict:
@@ -129,6 +162,21 @@ def _enrichir_rapport_pour_template(rapport: dict) -> dict:
             for v in section.get("detail", {}).values():
                 if "total" in v:
                     v["total_euros"] = f"{v['total'] / 100:.2f}"
+
+    # detail_ventes : enrichit chaque article ET chaque categorie avec leurs euros
+    # / detail_ventes: enrich each article AND each category with euros strings
+    if "detail_ventes" in r and isinstance(r["detail_ventes"], dict):
+        for cat in r["detail_ventes"].values():
+            if not isinstance(cat, dict):
+                continue
+            if "total_ttc" in cat:
+                cat["total_ttc_euros"] = f"{cat['total_ttc'] / 100:.2f}"
+            for article in cat.get("articles", []):
+                if not isinstance(article, dict):
+                    continue
+                article["total_ttc_euros"] = f"{article.get('total_ttc', 0) / 100:.2f}"
+                article["total_ht_euros"] = f"{article.get('total_ht', 0) / 100:.2f}"
+                article["total_tva_euros"] = f"{article.get('total_tva', 0) / 100:.2f}"
 
     # remboursements : credit_notes + refunded
     if "remboursements" in r and isinstance(r["remboursements"], dict):
@@ -194,33 +242,152 @@ class ClotureCaisseAdmin(ModelAdmin):
                 self.admin_site.admin_view(self.rapport_temps_reel),
                 name="comptabilite_cloturecaisse_temps_reel",
             ),
+            path(
+                "<uuid:object_id>/exporter-csv/",
+                self.admin_site.admin_view(self.exporter_csv),
+                name="comptabilite_cloturecaisse_csv",
+            ),
+            path(
+                "<uuid:object_id>/exporter-excel/",
+                self.admin_site.admin_view(self.exporter_excel),
+                name="comptabilite_cloturecaisse_excel",
+            ),
+            path(
+                "<uuid:object_id>/exporter-pdf/",
+                self.admin_site.admin_view(self.exporter_pdf),
+                name="comptabilite_cloturecaisse_pdf",
+            ),
+            path(
+                "<uuid:object_id>/exporter-fec/",
+                self.admin_site.admin_view(self.exporter_fec),
+                name="comptabilite_cloturecaisse_fec",
+            ),
+            path(
+                "<uuid:object_id>/exporter-csv-comptable/",
+                self.admin_site.admin_view(self.exporter_csv_comptable),
+                name="comptabilite_cloturecaisse_csv_comptable",
+            ),
         ]
         return custom + urls
 
+    def exporter_csv(self, request, object_id):
+        """
+        Telecharge la cloture au format CSV (sections + totaux).
+        / Download the cloture as CSV (sections + totals).
+        """
+        from django.shortcuts import get_object_or_404
+        from comptabilite.csv_export import generer_csv_cloture
+        cloture = get_object_or_404(ClotureCaisse, pk=object_id)
+        return _telecharger(*generer_csv_cloture(cloture))
+
+    def exporter_excel(self, request, object_id):
+        """
+        Telecharge la cloture au format Excel (.xlsx).
+        / Download the cloture as Excel (.xlsx).
+        """
+        from django.shortcuts import get_object_or_404
+        from comptabilite.excel_export import generer_excel_cloture
+        cloture = get_object_or_404(ClotureCaisse, pk=object_id)
+        return _telecharger(*generer_excel_cloture(cloture))
+
+    def exporter_pdf(self, request, object_id):
+        """
+        Telecharge la cloture au format PDF A4 (WeasyPrint).
+        / Download the cloture as PDF A4 (WeasyPrint).
+        """
+        from django.shortcuts import get_object_or_404
+        from comptabilite.pdf import generer_pdf_cloture
+        cloture = get_object_or_404(ClotureCaisse, pk=object_id)
+        return _telecharger(*generer_pdf_cloture(cloture))
+
+    def exporter_fec(self, request, object_id):
+        """
+        Telecharge la cloture au format FEC (Fichier des Ecritures Comptables,
+        norme francaise A47 A-1). Encodage CP1252, tabulation, 18 colonnes.
+        / Download the cloture as FEC (French legal accounting format).
+        """
+        from django.shortcuts import get_object_or_404
+        from comptabilite.fec import generer_fec_cloture
+        cloture = get_object_or_404(ClotureCaisse, pk=object_id)
+        return _telecharger(*generer_fec_cloture(cloture))
+
+    def exporter_csv_comptable(self, request, object_id):
+        """
+        Export CSV comptable avec choix du profil (Sage50 / EBP / Paheko).
+        GET = form HTMX, POST = telecharge le CSV genere.
+        / Accounting CSV export with profile choice. GET = HTMX form. POST = CSV download.
+        """
+        from django.shortcuts import get_object_or_404, render
+        from comptabilite.csv_comptable import generer_csv_comptable
+        from comptabilite.profils_csv import PROFILS
+
+        cloture = get_object_or_404(ClotureCaisse, pk=object_id)
+
+        if request.method == "POST":
+            profil_slug = request.POST.get("profil", "sage_50")
+            if profil_slug not in PROFILS:
+                profil_slug = "sage_50"
+            bytes_data, filename, content_type, avertissements = generer_csv_comptable(
+                cloture, profil_slug,
+            )
+            if avertissements:
+                import logging
+                logging.getLogger(__name__).warning(
+                    f"CSV comptable {profil_slug} pour cloture "
+                    f"#{cloture.numero_sequentiel}: {len(avertissements)} avertissement(s)"
+                )
+            return _telecharger(bytes_data, filename, content_type)
+
+        # GET : retourne le form HTMX
+        # / GET: returns the HTMX form
+        return render(
+            request,
+            "comptabilite/admin/export_csv_comptable_form.html",
+            {
+                "cloture": cloture,
+                "profils": [(slug, p["nom_affiche"]) for slug, p in PROFILS.items()],
+            },
+        )
+
     def rapport_temps_reel(self, request):
         """
-        Vue admin custom : agrege en temps reel les LigneArticle depuis la
-        derniere cloture journaliere jusqu'a maintenant.
-        / Custom admin view: real-time aggregation since last daily closure.
+        Vue admin custom : rapport agrege sur une periode personnalisable.
+        / Custom admin view: aggregated report over a user-defined period.
+
+        Bornes par defaut : aujourd'hui 04:00 local -> now(). Si l'heure
+        courante est avant 04:00, on recule debut a hier 04:00 (service nuit).
+        L'utilisateur peut surcharger via les GET params datetime_debut /
+        datetime_fin (format ISO 'YYYY-MM-DDTHH:MM', input HTML5 datetime-local).
+        Pas de polling : F5 manuel suffit.
         """
+        from datetime import timedelta
         from django.shortcuts import render
         from django.utils import timezone
         from comptabilite.services import RapportComptableService
 
-        derniere = (
-            ClotureCaisse.objects
-            .filter(niveau=ClotureCaisse.NIVEAU_JOURNALIER)
-            .order_by("-datetime_fin")
-            .first()
+        # --- Bornes par defaut : aujourd'hui 04:00 local -> now()
+        # / Default bounds: today 04:00 local -> now()
+        now_local = timezone.localtime()
+        debut_defaut = now_local.replace(hour=4, minute=0, second=0, microsecond=0)
+        if debut_defaut > now_local:
+            # On est avant 04:00 du matin : le service en cours a commence hier 04:00
+            # / Before 04:00 AM: the current shift started yesterday at 04:00
+            debut_defaut -= timedelta(days=1)
+        fin_defaut = timezone.now()
+
+        # --- Override depuis GET params si presents
+        # / Override via GET params if present
+        datetime_debut = _parse_datetime_param(
+            request.GET.get("datetime_debut"), defaut=debut_defaut,
         )
-        if derniere:
-            datetime_debut = derniere.datetime_fin
-        else:
-            # Pas de cloture J : on prend depuis ce matin minuit local
-            # / No daily closure yet: take from local midnight today
-            now_local = timezone.localtime()
-            datetime_debut = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-        datetime_fin = timezone.now()
+        datetime_fin = _parse_datetime_param(
+            request.GET.get("datetime_fin"), defaut=fin_defaut,
+        )
+
+        # Garde-fou : si debut > fin, on inverse (typo utilisateur)
+        # / Safety: swap if start > end (user typo)
+        if datetime_debut > datetime_fin:
+            datetime_debut, datetime_fin = datetime_fin, datetime_debut
 
         service = RapportComptableService(datetime_debut, datetime_fin)
         rapport_brut = service.generer_rapport_complet()
@@ -232,6 +399,10 @@ class ClotureCaisseAdmin(ModelAdmin):
             "rapport": rapport,
             "datetime_debut": datetime_debut,
             "datetime_fin": datetime_fin,
+            # Format pour input HTML5 datetime-local : 'YYYY-MM-DDTHH:MM'
+            # / Format for HTML5 datetime-local input
+            "datetime_debut_input": timezone.localtime(datetime_debut).strftime("%Y-%m-%dT%H:%M"),
+            "datetime_fin_input": timezone.localtime(datetime_fin).strftime("%Y-%m-%dT%H:%M"),
             "nb_transactions": service.queryset.count(),
             "opts": self.model._meta,
         }
@@ -251,6 +422,11 @@ class ClotureCaisseAdmin(ModelAdmin):
             extra_context["rapport"] = rapport_pretty
             extra_context["datetime_debut"] = cloture.datetime_debut
             extra_context["datetime_fin"] = cloture.datetime_fin
+            # Montants pre-formates en euros (les templates Django n'ont pas de division)
+            # / Pre-formatted euros (Django templates can't divide)
+            extra_context["cloture_total_general_euros"] = f"{cloture.total_general / 100:.2f}"
+            extra_context["cloture_total_ht_euros"] = f"{cloture.total_ht / 100:.2f}"
+            extra_context["cloture_total_tva_euros"] = f"{cloture.total_tva / 100:.2f}"
         return super().changeform_view(request, object_id, form_url, extra_context)
 
     # --- Permissions : modele immuable ---
@@ -276,3 +452,72 @@ class ClotureCaisseAdmin(ModelAdmin):
     @admin.display(description=_("Total TTC"), ordering="total_general")
     def ca_ttc(self, obj):
         return _format_euros(obj.total_general)
+
+
+@admin.register(CompteComptable, site=staff_admin_site)
+class CompteComptableAdmin(ModelAdmin):
+    """
+    Admin pour le plan comptable (paramétrable par tenant).
+    / Admin for the chart of accounts (tenant-customizable).
+    """
+
+    compressed_fields = True
+    warn_unsaved_form = True
+
+    list_display = ("numero", "libelle", "type_compte", "actif")
+    list_filter = ("type_compte", "actif")
+    search_fields = ("numero", "libelle")
+    ordering = ("numero",)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
+@admin.register(MappingMoyenDePaiement, site=staff_admin_site)
+class MappingMoyenDePaiementAdmin(ModelAdmin):
+    """
+    Admin pour les mappings PaymentMethod -> CompteComptable.
+    / Admin for PaymentMethod -> CompteComptable mappings.
+    """
+
+    compressed_fields = True
+    warn_unsaved_form = True
+
+    list_display = ("payment_method_label", "payment_method", "compte")
+    list_filter = ("compte__type_compte",)
+    search_fields = ("payment_method", "compte__numero", "compte__libelle")
+    ordering = ("payment_method",)
+    autocomplete_fields = ("compte",)
+
+    @admin.display(description=_("Payment method"), ordering="payment_method")
+    def payment_method_label(self, obj):
+        """
+        Affiche le libelle humain de PaymentMethod (ex: 'Cash' pour 'CA').
+        Le champ payment_method du modele est un CharField sans choices,
+        donc Django ne fait pas le mapping automatique en list_display.
+        / Show the human label for PaymentMethod (e.g. 'Cash' for 'CA').
+        """
+        from BaseBillet.models import PaymentMethod
+        labels = dict(PaymentMethod.choices)
+        return str(labels.get(obj.payment_method, obj.payment_method))
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)

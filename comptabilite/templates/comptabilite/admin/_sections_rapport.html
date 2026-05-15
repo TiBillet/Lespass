@@ -92,6 +92,9 @@
                                     <th class="py-1 px-2 font-medium text-right">{% translate "Paid" %}</th>
                                     <th class="py-1 px-2 font-medium text-right">{% translate "Free" %}</th>
                                     <th class="py-1 px-2 font-medium text-right">{% translate "Total qty" %}</th>
+                                    <th class="py-1 px-2 font-medium text-right">{% translate "VAT rate" %}</th>
+                                    <th class="py-1 px-2 font-medium text-right">{% translate "Excl. tax" %}</th>
+                                    <th class="py-1 px-2 font-medium text-right">{% translate "VAT" %}</th>
                                     <th class="py-1 px-2 font-medium text-right">{% translate "Incl. tax" %}</th>
                                 </tr>
                             </thead>
@@ -102,7 +105,10 @@
                                         <td class="py-1 px-2 text-right">{{ article.qty_payants }}</td>
                                         <td class="py-1 px-2 text-right">{{ article.qty_offerts }}</td>
                                         <td class="py-1 px-2 text-right">{{ article.qty_total }}</td>
-                                        <td class="py-1 px-2 text-right font-mono">{{ article.total_ttc|default:0|stringformat:"d" }}c</td>
+                                        <td class="py-1 px-2 text-right">{{ article.taux_tva|default:0 }}%</td>
+                                        <td class="py-1 px-2 text-right font-mono">{{ article.total_ht_euros|default:"0.00" }} €</td>
+                                        <td class="py-1 px-2 text-right font-mono">{{ article.total_tva_euros|default:"0.00" }} €</td>
+                                        <td class="py-1 px-2 text-right font-mono">{{ article.total_ttc_euros|default:"0.00" }} €</td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
