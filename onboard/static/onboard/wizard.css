@@ -517,15 +517,152 @@
 
 /* ===========================================================
  * Mobile-first : sur mobile le panneau passe au-dessus, plus compact.
- * / Mobile-first: on mobile the panel stacks on top, more compact.
+ * Feedback mainteneur 2026-05-15 : pas de toggle <details>, le panel est
+ * toujours visible. On masque les `onboard-step-hint` pour eviter qu'il
+ * prenne toute la hauteur de l'ecran (6 etapes x 2-3 lignes de hint
+ * ferait 1 ecran complet avant le formulaire).
+ * / Mobile-first: panel always stacks on top, no <details> toggle. We
+ * hide step hints to avoid filling the whole screen before the form.
  * =========================================================== */
 @media (max-width: 991.98px) {
     .onboard-panel {
-        padding: 1.25rem;
+        padding: 1rem 1.25rem;
     }
     .onboard-panel::after {
         display: none;
     }
+    /* Etapes plus compactes sur mobile : pas de hint, padding reduit.
+       Le numero + le label suffisent pour s'orienter sur petit ecran.
+       / More compact on mobile: no hint, reduced padding. The number +
+       label is enough to navigate. */
+    .onboard-panel-steps {
+        margin-top: 0.75rem;
+        gap: 0.125rem;
+    }
+    .onboard-step {
+        padding: 0.4rem 0.6rem;
+    }
+    .onboard-step-hint {
+        display: none;
+    }
+}
+
+
+/* ===========================================================
+ * Desktop : alignement helper gauche / formulaire droite.
+ * Le row Bootstrap a `align-items: stretch` par defaut. On rend
+ * `.onboard-panel-wrapper` (le <aside>) en flex column et son enfant
+ * `.onboard-panel` flex:1 pour qu'il occupe toute la hauteur disponible
+ * (alignement avec le bouton "Continuer" du formulaire).
+ * Feedback mainteneur 2026-05-15 : sans ce flex, le panel finissait sa
+ * hauteur naturelle (en haut du col) et laissait un espace vide en bas.
+ * / Desktop: align left helper with the form's "Continuer" button. The
+ * Bootstrap row uses `align-items: stretch`; we make the aside a flex
+ * column with the panel `flex:1` so it stretches to the full column
+ * height.
+ * =========================================================== */
+@media (min-width: 992px) {
+    .onboard-panel-wrapper {
+        display: flex;
+        flex-direction: column;
+    }
+    .onboard-panel-wrapper > .onboard-panel {
+        flex: 1;
+    }
+}
+
+
+/* ===========================================================
+ * Switch CGU (etape 1) : toggle slider vert TiBillet, label avec lien.
+ * Feedback mainteneur 2026-05-15 : on remplace la checkbox carree par un
+ * switch `form-switch` Bootstrap 5 — plus moderne pour un "j'accepte".
+ * / CGU switch (step 1): TiBillet green slider toggle with linked label.
+ * =========================================================== */
+.onboard-cgu-switch {
+    /* Padding-left assez large pour un toggle confortable. Sans `padding`,
+       le switch chevauche le label. / Wide left padding for the slider
+       to breathe; without it, it overlaps the label. */
+    padding-left: 3rem;
+    margin-top: 0.5rem;
+}
+.onboard-cgu-switch .form-check-input {
+    /* Toggle un peu plus grand que le defaut Bootstrap : meilleure
+       affordance tactile (mobile). / Slightly larger than default for
+       better touch affordance on mobile. */
+    width: 2.75em;
+    height: 1.5em;
+    margin-left: -3rem;
+    cursor: pointer;
+    border-color: #cbd5e1;
+}
+.onboard-cgu-switch .form-check-input:checked {
+    background-color: var(--tb-green-600);
+    border-color: var(--tb-green-600);
+}
+.onboard-cgu-switch .form-check-input:focus {
+    box-shadow: var(--tb-shadow-focus);
+    border-color: var(--tb-green-500);
+}
+.onboard-cgu-switch .form-check-label {
+    cursor: pointer;
+    line-height: 1.6;
+}
+.onboard-cgu-switch a {
+    color: var(--tb-green-600);
+    font-weight: 500;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.onboard-cgu-switch a:hover {
+    color: var(--tb-green-700);
+}
+
+
+/* ===========================================================
+ * Radios DNS (etape 1) : pills btn-check, vert TiBillet quand coche.
+ * Feedback mainteneur 2026-05-15 : remplace le <select> par 2 boutons
+ * visibles (tibillet.coop / tibillet.re) — plus parlant qu'un dropdown.
+ * / DNS radios (step 1): btn-check pills, green when checked.
+ * =========================================================== */
+.onboard-dns-fieldset {
+    border: 0;
+    padding: 0;
+    margin: 0;
+}
+.onboard-dns-radios {
+    display: flex;
+    gap: 0.625rem;
+    flex-wrap: wrap;
+}
+.onboard-dns-radio {
+    border-radius: var(--tb-radius-input);
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    border: 1px solid #cbd5e1;
+    color: var(--bs-body-color);
+    background-color: #fff;
+    box-shadow: var(--tb-shadow-sm);
+    transition: all 200ms ease;
+}
+.onboard-dns-radio:hover {
+    border-color: var(--tb-green-500);
+    color: var(--tb-green-700);
+}
+.btn-check:checked + .onboard-dns-radio {
+    background: linear-gradient(180deg, var(--tb-green-500), var(--tb-green-600));
+    border-color: var(--tb-green-700);
+    color: #fff;
+    box-shadow:
+        0 1px 2px rgba(22, 101, 52, 0.2),
+        0 4px 8px -2px rgba(22, 101, 52, 0.18);
+}
+.btn-check:checked + .onboard-dns-radio:hover {
+    color: #fff;
+    filter: brightness(1.03);
+}
+.btn-check:focus-visible + .onboard-dns-radio {
+    outline: none;
+    box-shadow: var(--tb-shadow-focus);
 }
 
 

@@ -132,20 +132,34 @@
     }
 
     function setupDomainPreview() {
+        // Le DNS est maintenant un radiogroup (feedback mainteneur 2026-05-15).
+        // On lit le radio coche via `input[name="dns_choice"]:checked`. On
+        // ecoute `change` sur chacun des radios — pas d'event delegation
+        // pour rester FALC (lecture explicite top-down).
+        // / DNS is now a radio group (maintainer feedback). We read the
+        // checked radio and listen for `change` on each one.
         const nameInput = document.getElementById("onboard-id-name");
-        const dnsSelect = document.getElementById("onboard-id-dns");
         const slugEl = document.getElementById("onboard-id-domain-slug");
         const suffixEl = document.getElementById("onboard-id-domain-suffix");
-        if (!nameInput || !dnsSelect || !slugEl || !suffixEl) {
+        const dnsRadios = document.querySelectorAll('input[name="dns_choice"]');
+        if (!nameInput || !slugEl || !suffixEl || dnsRadios.length === 0) {
             return;
+        }
+        function getSelectedDnsSuffix() {
+            const checked = document.querySelector('input[name="dns_choice"]:checked');
+            // Defense : si rien n'est coche (cas extreme), on garde le default
+            // attendu cote serveur. / Defensive: fall back to default suffix.
+            return checked ? checked.value : "tibillet.coop";
         }
         function update() {
             const s = slugify(nameInput.value);
             slugEl.textContent = s || "…";
-            suffixEl.textContent = "." + dnsSelect.value;
+            suffixEl.textContent = "." + getSelectedDnsSuffix();
         }
         nameInput.addEventListener("input", update);
-        dnsSelect.addEventListener("change", update);
+        dnsRadios.forEach(function (radio) {
+            radio.addEventListener("change", update);
+        });
         // Initialisation (cas : champs deja remplis au reload, ex. erreurs 422).
         // / Init (case: fields prefilled on reload, e.g. 422 errors).
         update();
@@ -187,9 +201,130 @@
         window.addEventListener("beforeunload", () => clearInterval(intervalId), { once: true });
     }
 
+    // 4. Cooldown visuel sur le bouton "Renvoyer le code" (etape 2)
+    //    Quand l'utilisateur clique le bouton, le serveur applique un
+    //    cooldown de 60s (cf. OTP_RESEND_COOLDOWN_SECONDS dans
+    //    onboard/views.py). On miroite ce cooldown cote UI : le bouton
+    //    est desactive et son label affiche un decompte "Renvoyer le code
+    //    (Xs)". L'utilisateur sait qu'il doit patienter au lieu de
+    //    recliquer en boucle et se prendre des 429.
+    //
+    //    Logique 100% cote JS (pas de modif serveur) : on demarre le
+    //    timer apres la reponse HTMX (200 envoi reussi OU 429 cooldown
+    //    deja actif sur le serveur — dans les deux cas, l'utilisateur
+    //    doit attendre 60s avant de pouvoir recliquer).
+    //
+    //    / Visual cooldown on the "Resend code" button (step 2). Mirrors
+    //    the server-side 60s cooldown (cf. OTP_RESEND_COOLDOWN_SECONDS in
+    //    onboard/views.py). Button gets disabled with a "Resend code (Xs)"
+    //    countdown label. Triggers on both 200 (sent) and 429 (server
+    //    cooldown already active) — both cases require a 60s wait.
+    function setupResendCooldown() {
+        const resendBtn = document.querySelector('[data-testid="onboard-verify-resend"]');
+        if (!resendBtn) {
+            return;
+        }
+
+        // Doit rester aligne sur OTP_RESEND_COOLDOWN_SECONDS cote serveur.
+        // / Must stay aligned with OTP_RESEND_COOLDOWN_SECONDS server-side.
+        const cooldownSeconds = 60;
+
+        // On sauvegarde le HTML original du bouton (icone + texte traduit
+        // par Django). On extrait aussi le texte brut pour le reinjecter
+        // dans le label avec le decompte. textContent ne contient pas
+        // l'icone (les icones bi-* sont des pseudo-elements), donc trim()
+        // donne directement "Renvoyer le code" / "Resend the code" selon
+        // la langue active.
+        // / Save original HTML (icon + Django-translated text). Also
+        // extract the raw text to reuse in the countdown label. textContent
+        // does not include the icon (bi-* icons are pseudo-elements), so
+        // trim() yields "Renvoyer le code" / "Resend the code" depending
+        // on the active language.
+        const originalHtml = resendBtn.innerHTML;
+        const baseText = resendBtn.textContent.trim();
+
+        // Reference de l'interval pour permettre un cleanup propre si la
+        // page se ferme avant la fin du decompte.
+        // / Interval ref for clean teardown on page unload.
+        let intervalId = null;
+
+        function startCooldown() {
+            // Defense : si un decompte est deja en cours, on ne le redemarre
+            // pas (cas : double `htmx:afterRequest` sur la meme reponse).
+            // / Defensive: don't restart an in-flight countdown.
+            if (intervalId !== null) {
+                return;
+            }
+            let remaining = cooldownSeconds;
+            resendBtn.disabled = true;
+            // `disabled` natif suffit pour l'a11y (le screen reader annonce
+            // "button, dimmed"). On ajoute la classe Bootstrap pour le
+            // visuel grise. / `disabled` is enough for a11y; we add the
+            // Bootstrap class for visual feedback.
+            resendBtn.classList.add("disabled");
+
+            // Construit le label avec icone hourglass + texte original +
+            // decompte. L'icone hourglass remplace l'icone arrow-clockwise
+            // pour signaler visuellement "attente". / Build label with
+            // hourglass icon + original text + countdown. Hourglass icon
+            // replaces the arrow-clockwise to signal "waiting".
+            function renderLabel() {
+                resendBtn.innerHTML =
+                    '<i class="bi bi-hourglass-split me-1" aria-hidden="true"></i>'
+                    + baseText + ' (' + remaining + 's)';
+            }
+            renderLabel();
+
+            intervalId = setInterval(function () {
+                remaining -= 1;
+                if (remaining <= 0) {
+                    // Fin du cooldown : restaure l'etat initial du bouton.
+                    // / End of cooldown: restore the original button state.
+                    clearInterval(intervalId);
+                    intervalId = null;
+                    resendBtn.disabled = false;
+                    resendBtn.classList.remove("disabled");
+                    resendBtn.innerHTML = originalHtml;
+                } else {
+                    renderLabel();
+                }
+            }, 1000);
+        }
+
+        // On ecoute `htmx:afterRequest` plutot que `click` : on attend la
+        // reponse serveur avant de demarrer le timer. Si la requete echoue
+        // (reseau coupe, status 5xx), on ne demarre pas — l'utilisateur
+        // peut reessayer immediatement.
+        // / Listen on `htmx:afterRequest` (not `click`): start the timer
+        // only after the server responds. Don't start on network error
+        // or 5xx — the user should be able to retry immediately.
+        resendBtn.addEventListener("htmx:afterRequest", function (event) {
+            const status = event.detail.xhr.status;
+            // 200 = envoi reussi, 429 = cooldown deja actif cote serveur
+            // (autre tab, ou refresh apres clic recent). Dans les 2 cas
+            // on miroite le cooldown 60s cote UI.
+            // / 200 = sent; 429 = server cooldown already active (other
+            // tab, refresh after recent click). Both mirror the 60s wait.
+            if (status === 200 || status === 429) {
+                startCooldown();
+            }
+        });
+
+        // Cleanup : si l'utilisateur ferme la page pendant le decompte,
+        // on libere le setInterval pour ne pas laisser de timer fantome.
+        // / Cleanup: clear the interval on page unload to avoid ghost timers.
+        window.addEventListener("beforeunload", function () {
+            if (intervalId !== null) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+        }, { once: true });
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
         setupOtpAutoTab();
         setupDomainPreview();
         setupCarousel();
+        setupResendCooldown();
     });
 })();

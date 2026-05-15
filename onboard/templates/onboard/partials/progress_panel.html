@@ -1,4 +1,5 @@
 {% load i18n %}
+{% load onboard_steps %}
 {% comment %}
   Panneau de progression du wizard onboarding (6 etapes).
   / Onboarding wizard progress panel (6 steps).
@@ -9,23 +10,40 @@
     - `step` (string) : valeur de `WaitingConfiguration.STEP_*` indiquant
       la step courante ("identity", "verify", "place", "descriptions",
       "events", "launch").
-    - `step_index` (int, optionnel) : 1..6 — l'index de la step courante.
-      Si fourni, la comparaison numerique est utilisee pour determiner
-      `is-done` (etape `i` est faite quand `step_index > i`). Si absent,
-      on retombe sur une comparaison explicite par nom (cf. helpers de
-      OnboardViewSet qui passent `step_index` depuis Task 24).
-
     - `invitation` (OnboardInvitation, optionnel) : si present, affiche le
       badge "Invite·e par <name>".
 
-  / Context variables:
+  Refacto N3 (2026-05-15) : les chaines `step == 'X' or step == 'Y' or ...`
+  ont ete remplacees par les templatetags `{% is_step_current %}` et
+  `{% is_step_done %}` (cf. onboard/templatetags/onboard_steps.py).
+  Source unique de verite pour l'ordre des etapes : `STEP_ORDER` dans le
+  templatetag.
+
+  / Refactor N3 (2026-05-15): replaced brittle `step == 'X' or ...`
+  chains with `{% is_step_current %}` / `{% is_step_done %}` template
+  tags. Single source of truth for step order: `STEP_ORDER` in the
+  templatetag module.
+
+  Context variables:
     - `step` (string): one of `WaitingConfiguration.STEP_*` values.
-    - `step_index` (int, optional): 1..6 — index of current step. When
-      present, used for numeric comparison (`step_index > i` => done).
-      Falls back to explicit name comparison if absent.
     - `invitation` (OnboardInvitation, optional): renders an "invited by"
       badge if provided.
 {% endcomment %}
+
+{# Calcul des flags is-current / is-done une seule fois en haut du template #}
+{# / Compute is-current / is-done flags once at the top of the template #}
+{% is_step_current step 'identity' as identity_current %}
+{% is_step_done step 'identity' as identity_done %}
+{% is_step_current step 'verify' as verify_current %}
+{% is_step_done step 'verify' as verify_done %}
+{% is_step_current step 'place' as place_current %}
+{% is_step_done step 'place' as place_done %}
+{% is_step_current step 'descriptions' as descriptions_current %}
+{% is_step_done step 'descriptions' as descriptions_done %}
+{% is_step_current step 'events' as events_current %}
+{% is_step_done step 'events' as events_done %}
+{% is_step_current step 'launch' as launch_current %}
+
 <div class="onboard-panel" data-testid="onboard-progress-panel">
     <div class="onboard-panel-header">
         <span class="onboard-panel-eyebrow">{% translate "CRÉER MON ESPACE" %}</span>
@@ -42,48 +60,48 @@
     {% endcomment %}
     <ol class="onboard-panel-steps">
         {# Etape 1 : Identite / Step 1: Identity #}
-        <li class="onboard-step {% if step == 'identity' %}is-current{% elif step == 'verify' or step == 'place' or step == 'descriptions' or step == 'events' or step == 'launch' %}is-done{% endif %}"
-            {% if step == 'identity' %}aria-current="step"{% endif %}>
-            {% if step != 'identity' %}
+        <li class="onboard-step {% if identity_current %}is-current{% elif identity_done %}is-done{% endif %}"
+            {% if identity_current %}aria-current="step"{% endif %}>
+            {% if identity_done %}
                 <a href="{% url 'onboard-identity' %}" class="onboard-step-link" data-testid="onboard-progress-1">
                     <span class="onboard-step-num">1</span> {% translate "Identité" %}
-                    <small class="onboard-step-hint">{% translate "Qui es-tu et comment t'appelles ton lieu ?" %}</small>
+                    <small class="onboard-step-hint">{% translate "Qui êtes-vous et comment s'appelle votre lieu ?" %}</small>
                 </a>
             {% else %}
                 <span class="onboard-step-num">1</span> {% translate "Identité" %}
-                <small class="onboard-step-hint">{% translate "Qui es-tu et comment t'appelles ton lieu ?" %}</small>
+                <small class="onboard-step-hint">{% translate "Qui êtes-vous et comment s'appelle votre lieu ?" %}</small>
             {% endif %}
         </li>
         {# Etape 2 : Verification / Step 2: Verification #}
-        <li class="onboard-step {% if step == 'verify' %}is-current{% elif step == 'place' or step == 'descriptions' or step == 'events' or step == 'launch' %}is-done{% endif %}"
-            {% if step == 'verify' %}aria-current="step"{% endif %}>
-            {% if step == 'place' or step == 'descriptions' or step == 'events' or step == 'launch' %}
+        <li class="onboard-step {% if verify_current %}is-current{% elif verify_done %}is-done{% endif %}"
+            {% if verify_current %}aria-current="step"{% endif %}>
+            {% if verify_done %}
                 <a href="{% url 'onboard-verify' %}" class="onboard-step-link" data-testid="onboard-progress-2">
                     <span class="onboard-step-num">2</span> {% translate "Vérification" %}
-                    <small class="onboard-step-hint">{% translate "On t'envoie un code par email." %}</small>
+                    <small class="onboard-step-hint">{% translate "Nous vous envoyons un code par email." %}</small>
                 </a>
             {% else %}
                 <span class="onboard-step-num">2</span> {% translate "Vérification" %}
-                <small class="onboard-step-hint">{% translate "On t'envoie un code par email." %}</small>
+                <small class="onboard-step-hint">{% translate "Nous vous envoyons un code par email." %}</small>
             {% endif %}
         </li>
         {# Etape 3 : Lieu / Step 3: Place #}
-        <li class="onboard-step {% if step == 'place' %}is-current{% elif step == 'descriptions' or step == 'events' or step == 'launch' %}is-done{% endif %}"
-            {% if step == 'place' %}aria-current="step"{% endif %}>
-            {% if step == 'descriptions' or step == 'events' or step == 'launch' %}
+        <li class="onboard-step {% if place_current %}is-current{% elif place_done %}is-done{% endif %}"
+            {% if place_current %}aria-current="step"{% endif %}>
+            {% if place_done %}
                 <a href="{% url 'onboard-place' %}" class="onboard-step-link" data-testid="onboard-progress-3">
                     <span class="onboard-step-num">3</span> {% translate "Votre lieu" %}
-                    <small class="onboard-step-hint">{% translate "On localise ton lieu sur la carte." %}</small>
+                    <small class="onboard-step-hint">{% translate "Nous localisons votre lieu sur la carte." %}</small>
                 </a>
             {% else %}
                 <span class="onboard-step-num">3</span> {% translate "Votre lieu" %}
-                <small class="onboard-step-hint">{% translate "On localise ton lieu sur la carte." %}</small>
+                <small class="onboard-step-hint">{% translate "Nous localisons votre lieu sur la carte." %}</small>
             {% endif %}
         </li>
         {# Etape 4 : Presentation / Step 4: Presentation #}
-        <li class="onboard-step {% if step == 'descriptions' %}is-current{% elif step == 'events' or step == 'launch' %}is-done{% endif %}"
-            {% if step == 'descriptions' %}aria-current="step"{% endif %}>
-            {% if step == 'events' or step == 'launch' %}
+        <li class="onboard-step {% if descriptions_current %}is-current{% elif descriptions_done %}is-done{% endif %}"
+            {% if descriptions_current %}aria-current="step"{% endif %}>
+            {% if descriptions_done %}
                 <a href="{% url 'onboard-descriptions' %}" class="onboard-step-link" data-testid="onboard-progress-4">
                     <span class="onboard-step-num">4</span> {% translate "Présentation" %}
                     <small class="onboard-step-hint">{% translate "Accroche, texte long et logo." %}</small>
@@ -94,9 +112,9 @@
             {% endif %}
         </li>
         {# Etape 5 : Evenements / Step 5: Events #}
-        <li class="onboard-step {% if step == 'events' %}is-current{% elif step == 'launch' %}is-done{% endif %}"
-            {% if step == 'events' %}aria-current="step"{% endif %}>
-            {% if step == 'launch' %}
+        <li class="onboard-step {% if events_current %}is-current{% elif events_done %}is-done{% endif %}"
+            {% if events_current %}aria-current="step"{% endif %}>
+            {% if events_done %}
                 <a href="{% url 'onboard-events' %}" class="onboard-step-link" data-testid="onboard-progress-5">
                     <span class="onboard-step-num">5</span> {% translate "Événements" %}
                     <small class="onboard-step-hint">{% translate "Optionnel : déclare 0 à N événements." %}</small>
@@ -107,8 +125,8 @@
             {% endif %}
         </li>
         {# Etape 6 : Launch / Step 6: Launch (jamais cliquable depuis la sidebar) #}
-        <li class="onboard-step {% if step == 'launch' %}is-current{% endif %}"
-            {% if step == 'launch' %}aria-current="step"{% endif %}>
+        <li class="onboard-step {% if launch_current %}is-current{% endif %}"
+            {% if launch_current %}aria-current="step"{% endif %}>
             <span class="onboard-step-num">6</span> {% translate "C'est parti !" %}
             <small class="onboard-step-hint">{% translate "Découverte de TiBillet pendant la création." %}</small>
         </li>
@@ -122,10 +140,6 @@
     </div>
     {% endif %}
 
-    {# Bouton "Reprendre plus tard" — masque sur identity (rien a reprendre) #}
-    {# et verify (OTP qui expire). #}
-    {# / "Resume later" button — hidden on identity (nothing to resume) #}
-    {# and verify (expiring OTP). #}
     {# Bouton "Reprendre plus tard" retire (feedback mainteneur 2026-05-14) :  #}
     {# l'action n'etait pas implementee cote serveur et risquait de tromper    #}
     {# l'utilisateur. La reprise se fait via le magic link envoye par email  #}

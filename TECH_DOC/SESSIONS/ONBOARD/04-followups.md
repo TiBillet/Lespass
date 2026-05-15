@@ -200,14 +200,16 @@ TiBillet a une vocation outre-mer / coopérative internationale. Ajouter : ES (A
 
 ## 🟡 NICE-to-have (polish, dette technique)
 
-### N1. Décorateur `@require_confirmed_draft`
+### N1. ~~Décorateur `@require_confirmed_draft`~~ ✅ FAIT (2026-05-15)
 Pattern dupliqué 6× dans `views.py` :
 ```python
 wc = _get_or_none_wc(request)
 if wc is None or not wc.email_confirmed:
     return redirect("onboard-identity")
 ```
-À factoriser en décorateur méthode ou en helper `_get_confirmed_wc_or_redirect(request) -> (wc, redirect_or_none)`.
+~~À factoriser en décorateur méthode ou en helper `_get_confirmed_wc_or_redirect(request) -> (wc, redirect_or_none)`.~~
+
+**Réalisé** : 2 helpers explicites `_get_confirmed_wc_or_redirect` (4 vues nav) et `_get_confirmed_wc_or_404` (2 actions HTMX) plutôt qu'un seul avec paramètre — plus FALC. Cf. `03-session-recap.md` section 7.
 
 ### N2. Refactor `events_draft` JSONField → modèle `OnboardEventDraft`
 Actuellement les events brouillons sont en JSONField. C'est OK FALC mais limite :
@@ -217,7 +219,7 @@ Actuellement les events brouillons sont en JSONField. C'est OK FALC mais limite 
 
 Refactor : créer `OnboardEventDraft(FK WaitingConfiguration, name, datetime, description, image=StdImageField)`. Migration data si nécessaire (peu probable, peu de drafts en cours).
 
-### N3. Templatetag `is_step_done`
+### N3. ~~Templatetag `is_step_done`~~ ✅ FAIT (2026-05-15)
 Au lieu de répéter les `or step == '...'` dans `progress_panel.html`, créer un templatetag :
 ```python
 @register.simple_tag
@@ -225,6 +227,8 @@ def is_step_done(current_step, target_step):
     order = ['identity', 'verify', 'place', 'descriptions', 'events', 'launch']
     return order.index(current_step) > order.index(target_step)
 ```
+
+**Réalisé** : module `onboard/templatetags/onboard_steps.py` avec `is_step_done` + `is_step_current` (sucre syntaxique). Constante `STEP_ORDER` = source unique de vérité. Template refactoré avec flags pré-calculés en haut. Cf. `03-session-recap.md` section 7. Piège noté : Django ne re-scanne pas les `templatetags/` à chaud → restart serveur dev requis après création d'un nouveau module.
 
 ### N4. Wizard JS extraction en module ES6
 `wizard.js` mélange OTP, slug preview, carrousel dans une IIFE. Refactor en 3 modules `otp.js` / `slug-preview.js` / `carousel.js` avec un loader principal. Plus testable.
@@ -276,4 +280,8 @@ Priorité 4 (exploration) :
   M13 Try-first temporaire
   M15 PWA notifications
   M20 i18n extended
+
+✅ FAIT (2026-05-15) :
+  N1 Helpers _get_confirmed_wc_or_redirect / _or_404 (cf. recap §7)
+  N3 Templatetag is_step_done + is_step_current (cf. recap §7)
 ```

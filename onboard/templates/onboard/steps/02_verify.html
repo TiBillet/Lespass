@@ -34,22 +34,22 @@
 {% block page_title %}{% translate "Vérification — Créer votre espace TiBillet" %}{% endblock %}
 
 {% block step_content %}
+{# Refacto 2026-05-15 : l'OTP est maintenant envoye automatiquement par     #}
+{# `identity` POST. Pas besoin de discriminer `has_pending_otp` : le code  #}
+{# vient TOUJOURS d'etre envoye quand l'utilisateur arrive ici. La branche #}
+{# "Recevoir le code" disparait, le bouton reste pour les renvois.         #}
+{# / Refactor 2026-05-15: OTP is now auto-sent by `identity` POST. No need #}
+{# to branch on `has_pending_otp`: the code was JUST sent when the user    #}
+{# lands here. The "Receive code" branch is gone, the button stays for     #}
+{# resends.                                                                 #}
 <header class="mb-4">
     <p class="onboard-step-counter mb-1">{% translate "Étape 2 / 6" %}</p>
     <h1 class="onboard-h1 mb-2">{% translate "Vérifiez votre adresse email" %}</h1>
     <p class="text-muted">
-        {% if has_pending_otp %}
-            {% blocktranslate trimmed with email=email %}
-                Un code à 6 chiffres a été envoyé à <strong>{{ email }}</strong>.
-                Saisissez-le ci-dessous pour continuer.
-            {% endblocktranslate %}
-        {% else %}
-            {% blocktranslate trimmed with email=email %}
-                Pour valider votre adresse <strong>{{ email }}</strong>, cliquez
-                sur « Recevoir le code » plus bas. Vous recevrez un code à
-                6 chiffres à saisir ici.
-            {% endblocktranslate %}
-        {% endif %}
+        {% blocktranslate trimmed with email=email %}
+            Un code à 6 chiffres a été envoyé à <strong>{{ email }}</strong>.
+            Saisissez-le ci-dessous pour continuer.
+        {% endblocktranslate %}
     </p>
 </header>
 
@@ -148,25 +148,15 @@
     </div>
 </form>
 
-{# Section "Recevoir / Renvoyer le code" — bouton HTMX qui appelle               #}
-{# `onboard-resend-otp`. Le label depend de `has_pending_otp` (context view) :  #}
-{#   - False = aucun code encore demande -> "Recevoir le code".                #}
-{#   - True  = code deja demande -> "Renvoyer le code".                        #}
-{# Mod 1 (feedback mainteneur 2026-05-15) : l'OTP n'est PAS envoye             #}
-{# automatiquement par identity ; le user doit cliquer ici pour le recevoir.   #}
-{# / "Receive/Resend code" section — HTMX button calling resend-otp.           #}
-{# The label depends on `has_pending_otp` (context from view):                 #}
-{#   - False = no code requested yet -> "Receive the code".                    #}
-{#   - True  = code already requested -> "Resend the code".                    #}
-{# Mod 1 (maintainer feedback): identity does NOT auto-send the OTP;           #}
-{# the user has to click here to receive it.                                   #}
+{# Section "Renvoyer le code" — bouton HTMX qui appelle `onboard-resend-otp`. #}
+{# Refacto 2026-05-15 : label fixe "Renvoyer le code" (l'OTP est toujours    #}
+{# deja envoye par `identity` POST). Garde-fous serveur : cooldown 60s WC + #}
+{# rate-limit IP 3/h (cf. resend_otp dans views.py).                         #}
+{# / "Resend code" section — fixed label since the OTP is always already    #}
+{# sent by `identity` POST. Server guards: 60s WC cooldown + 3/h IP RL.     #}
 <section class="mt-4 pt-3 border-top">
     <p class="text-muted small mb-2">
-        {% if has_pending_otp %}
-            {% translate "Vous n'avez pas reçu le code ?" %}
-        {% else %}
-            {% translate "Cliquez ci-dessous pour recevoir votre code par email." %}
-        {% endif %}
+        {% translate "Vous n'avez pas reçu le code ?" %}
     </p>
     <button type="button"
             class="btn btn-outline-secondary"
@@ -175,12 +165,8 @@
             hx-swap="innerHTML"
             hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
             data-testid="onboard-verify-resend">
-        <i class="bi {% if has_pending_otp %}bi-arrow-clockwise{% else %}bi-envelope{% endif %} me-1" aria-hidden="true"></i>
-        {% if has_pending_otp %}
-            {% translate "Renvoyer le code" %}
-        {% else %}
-            {% translate "Recevoir le code" %}
-        {% endif %}
+        <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>
+        {% translate "Renvoyer le code" %}
     </button>
     <div id="resend-status"
          class="mt-2"

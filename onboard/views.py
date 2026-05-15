@@ -146,6 +146,118 @@ def _redirect_to_current_step(request, wc):
     return redirect(url_name)
 
 
+def _get_confirmed_wc_or_redirect(request):
+    """
+    Garde de session pour les vues "navigationnelles" du wizard (steps
+    place / descriptions / events GET / launch GET).
+
+    Verifie qu'il y a un brouillon en session ET que l'email a ete
+    confirme par OTP. Si OK -> retourne `(wc, None)`. Si KO -> retourne
+    `(None, redirect("onboard-identity"))` : l'utilisateur ne doit pas
+    pouvoir sauter l'OTP.
+
+    Usage attendu dans une action :
+        wc, redirect_response = _get_confirmed_wc_or_redirect(request)
+        if redirect_response is not None:
+            return redirect_response
+        # ... suite de la vue, `wc` est garanti non-None et confirme.
+
+    / Session guard for navigational wizard views. Returns `(wc, None)`
+    if a draft is in session AND email is confirmed; otherwise returns
+    `(None, redirect("onboard-identity"))` so the user cannot bypass OTP.
+    """
+    wc = _get_or_none_wc(request)
+    if wc is None or not wc.email_confirmed:
+        return None, redirect("onboard-identity")
+    return wc, None
+
+
+def _get_confirmed_wc_or_404(request):
+    """
+    Variante du garde precedent pour les actions HTMX (events add /
+    remove, etc.) ou un `redirect` n'aurait pas de sens cote client
+    (HTMX ne suit pas les 302 vers une page complete proprement). On
+    renvoie `(None, HttpResponse(status=404))` qui se traduit cote
+    navigateur par une erreur HTMX visible.
+
+    / Same as `_get_confirmed_wc_or_redirect` but for HTMX actions:
+    returns a 404 response instead of a redirect, since HTMX cannot
+    follow a 302 to a full page cleanly.
+    """
+    wc = _get_or_none_wc(request)
+    if wc is None or not wc.email_confirmed:
+        return None, HttpResponse(status=404)
+    return wc, None
+
+
+# Cooldown anti-spam entre 2 envois d'OTP pour le meme brouillon. Mesure
+# COMPLEMENTAIRE au rate-limit IP existant (3/h/IP via `cache.add(key)`) :
+# le rate-limit IP empeche un attaquant de spammer la plateforme entiere,
+# le cooldown WC empeche un user de double-cliquer "Renvoyer".
+# / Anti-spam cooldown between two OTP sends for the same draft.
+# Complements the existing per-IP rate-limit (3/h): the cooldown prevents
+# the user from double-clicking "Resend".
+OTP_RESEND_COOLDOWN_SECONDS = 60
+
+
+def _generate_and_send_otp_for_wc(wc, is_resend=False):
+    """
+    Genere un nouvel OTP, le persiste sur le brouillon `wc` (schema
+    `meta`), et enqueue l'envoi par email via Celery.
+
+    Cette fonction est appelee a 2 endroits :
+      1. `identity` POST : envoi automatique apres creation du brouillon
+         (sauf branche `skip_otp` user authentifie). `is_resend=False`.
+      2. `resend_otp` action : sur clic explicite "Renvoyer le code" par
+         l'utilisateur. `is_resend=True` (incremente `otp_resend_count`
+         pour l'audit).
+
+    Champs mis a jour :
+      - otp_hash, otp_expires_at : nouveau code (l'ancien est invalide).
+      - otp_attempts : reset 0 (nouveau quota de 5 tentatives).
+      - otp_sent_at : timestamp now (sert au cooldown 60s).
+      - otp_resend_count : +1 si `is_resend=True` uniquement.
+
+    Effets de bord :
+      - Update DB dans le schema `meta`.
+      - Enqueue `onboard_otp_mailer.delay()` (Celery, async).
+
+    / Generates a fresh OTP, persists it on the draft `wc`, and enqueues
+    the email send via Celery. Called both from `identity` POST (auto-send
+    after draft creation, `is_resend=False`) and from `resend_otp` (user
+    click, `is_resend=True` increments `otp_resend_count` for audit).
+    """
+    # Imports locaux : evitent les dependances circulaires au chargement
+    # du module `views` (services et tasks importent indirectement views).
+    # / Local imports: avoid circular dependencies at module load time.
+    from django.utils import timezone
+
+    from onboard.services import generate_otp
+    from onboard.tasks import onboard_otp_mailer
+
+    otp_clair, otp_hash, expires_at = generate_otp()
+    sent_at = timezone.now()
+
+    update_fields = {
+        "otp_hash": otp_hash,
+        "otp_expires_at": expires_at,
+        "otp_attempts": 0,
+        "otp_sent_at": sent_at,
+    }
+    if is_resend:
+        # Incremente uniquement sur resend explicite : le premier envoi
+        # (depuis identity POST) n'est pas un "resend" et ne doit pas
+        # gonfler le compteur d'audit.
+        # / Increment only on explicit resend.
+        update_fields["otp_resend_count"] = wc.otp_resend_count + 1
+
+    with schema_context("meta"):
+        WaitingConfiguration.objects.filter(uuid=wc.uuid).update(**update_fields)
+
+    onboard_otp_mailer.delay(wc_uuid=str(wc.uuid), otp_clair=otp_clair)
+    return sent_at
+
+
 class OnboardViewSet(viewsets.ViewSet):
     """
     Wizard d'onboarding en 6 etapes pour creer un nouveau tenant.
@@ -323,18 +435,7 @@ class OnboardViewSet(viewsets.ViewSet):
         )
 
         # Persistance du brouillon dans le schema `meta`.
-        # NOTE (feedback mainteneur 2026-05-15) : on N'envoie PAS l'OTP
-        # automatiquement ici. L'utilisateur doit cliquer "Recevoir le
-        # code" sur la step Verify pour declencher l'envoi via
-        # `OnboardViewSet.resend_otp`. Cela evite d'envoyer un email a
-        # chaque visite/refresh de la page identity, et donne un controle
-        # explicite au user (qui peut corriger son email d'abord).
         # / Persist the draft in the `meta` schema.
-        # NOTE (maintainer feedback 2026-05-15): we do NOT send the OTP
-        # automatically here. The user must click "Receive code" on the
-        # Verify step to trigger sending via `resend_otp`. This avoids
-        # sending an email on every identity refresh and gives the user
-        # explicit control (e.g. fix the email first).
         with schema_context("meta"):
             wc = WaitingConfiguration.objects.create(
                 organisation=data["name"],
@@ -357,10 +458,24 @@ class OnboardViewSet(viewsets.ViewSet):
                 ),
                 invitation=invitation,
             )
-            # Pas d'envoi OTP ici (cf. NOTE ci-dessus). Le hash reste vide
-            # tant que l'user n'a pas clique "Recevoir le code".
-            # / No OTP sent here (cf. NOTE above). The hash stays empty
-            # until the user clicks "Receive the code".
+
+        # Envoi automatique de l'OTP (refacto 2026-05-15) : auparavant,
+        # l'OTP n'etait envoye que sur clic explicite "Recevoir le code"
+        # cote step Verify. Friction UX inutile : l'utilisateur arrivait
+        # sur Verify, regardait sa boite mail vide, devait revenir cliquer
+        # un bouton, attendre. Slack / Linear / Stripe envoient l'OTP des
+        # la validation de l'email — on s'aligne. Le bouton "Renvoyer"
+        # reste, avec cooldown 60s + rate-limit IP 3/h (cf. resend_otp).
+        # On skip si l'utilisateur est deja authentifie + email valide
+        # (branche `skip_otp` ci-dessus) — il sera redirige direct vers
+        # Place sans passer par Verify.
+        # / Auto-send OTP (refactor 2026-05-15): used to require an
+        # explicit "Receive code" click on Verify — pointless friction.
+        # Now sent here, right after draft creation. The "Resend" button
+        # stays, with 60s cooldown + 3/h IP rate-limit (cf. resend_otp).
+        # Skipped on the `skip_otp` branch (auth user, redirected to Place).
+        if not skip_otp:
+            _generate_and_send_otp_for_wc(wc, is_resend=False)
 
         _set_session_wc(request, wc)
         return redirect(
@@ -584,22 +699,39 @@ class OnboardViewSet(viewsets.ViewSet):
         # Imports locaux : evite la dependance circulaire et le cout au
         # chargement du module. / Local imports: avoid circular dep + load cost.
         from django.core.cache import cache
+        from django.utils import timezone
 
         from AuthBillet.utils import get_client_ip
-        from onboard.services import generate_otp
-        from onboard.tasks import onboard_otp_mailer
 
-        # Rate-limit Redis par vraie IP client. On utilise `get_client_ip` qui
-        # lit `HTTP_X_FORWARDED_FOR` derriere le proxy (Traefik/nginx). Sans
-        # ca, `REMOTE_ADDR` brut serait l'IP du proxy et tous les utilisateurs
-        # partageraient le meme bucket — un seul attaquant pourrait bloquer
-        # les renvois OTP de toute la plateforme. TTL 1h, compteur incremente
-        # a chaque demande.
-        # / Redis rate-limit per real client IP. We use `get_client_ip` which
-        # reads `HTTP_X_FORWARDED_FOR` behind the proxy (Traefik/nginx).
-        # Otherwise raw `REMOTE_ADDR` would be the proxy IP and all users
-        # would share the same bucket — a single attacker could block OTP
-        # resends platform-wide. 1h TTL.
+        # Garde 1 — Cooldown WC : empeche un user de spammer "Renvoyer"
+        # sur le meme brouillon (ex. double-clic accidentel ou refresh).
+        # 60s entre 2 envois pour le meme WC. Independant du rate-limit IP.
+        # / Guard 1 — WC cooldown: prevents the user from spamming "Resend"
+        # on the same draft. 60s between two sends for the same WC.
+        if wc.otp_sent_at is not None:
+            seconds_since_last_send = (
+                timezone.now() - wc.otp_sent_at
+            ).total_seconds()
+            if seconds_since_last_send < OTP_RESEND_COOLDOWN_SECONDS:
+                seconds_remaining = int(
+                    OTP_RESEND_COOLDOWN_SECONDS - seconds_since_last_send,
+                )
+                return render(
+                    request,
+                    "onboard/partials/resend_cooldown.html",
+                    {"seconds_remaining": seconds_remaining},
+                    status=429,
+                )
+
+        # Garde 2 — Rate-limit Redis par vraie IP client. On utilise
+        # `get_client_ip` qui lit `HTTP_X_FORWARDED_FOR` derriere le proxy
+        # (Traefik/nginx). Sans ca, `REMOTE_ADDR` brut serait l'IP du proxy
+        # et tous les utilisateurs partageraient le meme bucket — un seul
+        # attaquant pourrait bloquer les renvois OTP de toute la plateforme.
+        # TTL 1h, compteur incremente a chaque demande.
+        # / Guard 2 — Per-real-IP Redis rate-limit. Uses `get_client_ip`
+        # (X-Forwarded-For aware) so all users don't share the proxy IP
+        # bucket. 1h TTL.
         ip = get_client_ip(request) or "unknown"
         cache_key = f"onboard:resend:{ip}"
         count = cache.get(cache_key, 0)
@@ -611,20 +743,11 @@ class OnboardViewSet(viewsets.ViewSet):
         # / cache.set with 3600s TTL: window auto-renews.
         cache.set(cache_key, count + 1, 3600)
 
-        # Regeneration cote brouillon.
-        # / Regeneration on the draft side.
-        otp_clair, otp_hash, expires_at = generate_otp()
-        with schema_context("meta"):
-            WaitingConfiguration.objects.filter(uuid=wc.uuid).update(
-                otp_hash=otp_hash,
-                otp_expires_at=expires_at,
-                otp_attempts=0,
-                otp_resend_count=wc.otp_resend_count + 1,
-            )
-
-        # Envoi asynchrone du nouveau code via Celery.
-        # / Async send of the new code via Celery.
-        onboard_otp_mailer.delay(wc_uuid=str(wc.uuid), otp_clair=otp_clair)
+        # Generation + envoi via le helper partage avec `identity` POST.
+        # `is_resend=True` -> incremente `otp_resend_count` pour l'audit.
+        # / Generate + send via the helper shared with `identity` POST.
+        # `is_resend=True` -> increments `otp_resend_count` for audit.
+        _generate_and_send_otp_for_wc(wc, is_resend=True)
         return render(request, "onboard/partials/resend_sent.html")
 
     # ------------------------------------------------------------------
@@ -660,9 +783,9 @@ class OnboardViewSet(viewsets.ViewSet):
         Prerequisite: draft in session AND `email_confirmed=True`. Otherwise
         -> silent redirect to `onboard-identity` (user must not bypass OTP).
         """
-        wc = _get_or_none_wc(request)
-        if wc is None or not wc.email_confirmed:
-            return redirect("onboard-identity")
+        wc, redirect_response = _get_confirmed_wc_or_redirect(request)
+        if redirect_response is not None:
+            return redirect_response
 
         if request.method == "GET":
             return render(request, "onboard/steps/03_place.html", {
@@ -800,9 +923,9 @@ class OnboardViewSet(viewsets.ViewSet):
         the attribute, then call `wc.save()` to trigger variations
         generation (med, hdr, fhd, thumbnail).
         """
-        wc = _get_or_none_wc(request)
-        if wc is None or not wc.email_confirmed:
-            return redirect("onboard-identity")
+        wc, redirect_response = _get_confirmed_wc_or_redirect(request)
+        if redirect_response is not None:
+            return redirect_response
 
         if request.method == "GET":
             return render(request, "onboard/steps/04_descriptions.html", {
@@ -902,9 +1025,9 @@ class OnboardViewSet(viewsets.ViewSet):
 
         Choice: no event is required. The user can launch with an empty list.
         """
-        wc = _get_or_none_wc(request)
-        if wc is None or not wc.email_confirmed:
-            return redirect("onboard-identity")
+        wc, redirect_response = _get_confirmed_wc_or_redirect(request)
+        if redirect_response is not None:
+            return redirect_response
 
         if request.method == "GET":
             # `events_draft` est un JSONField default=list. On force `or []`
@@ -958,11 +1081,11 @@ class OnboardViewSet(viewsets.ViewSet):
         Expected POST fields: `name`, `datetime`, `description` (optional).
         Validation via `OnboardEventDraftSerializer`.
         """
-        wc = _get_or_none_wc(request)
-        if wc is None or not wc.email_confirmed:
+        wc, error_response = _get_confirmed_wc_or_404(request)
+        if error_response is not None:
             # Pas de session : 404. HTMX recevra une erreur visible cote
             # client. / No session: 404. HTMX will show an error.
-            return HttpResponse(status=404)
+            return error_response
 
         # Import local pour eviter la dependance circulaire au chargement
         # de l'app onboard. / Local import to avoid circular import.
@@ -1096,9 +1219,9 @@ class OnboardViewSet(viewsets.ViewSet):
         path is declared via `url_path`. DRF regex is supported by
         `as_view()`.
         """
-        wc = _get_or_none_wc(request)
-        if wc is None or not wc.email_confirmed:
-            return HttpResponse(status=404)
+        wc, error_response = _get_confirmed_wc_or_404(request)
+        if error_response is not None:
+            return error_response
 
         # Conversion explicite : `idx` arrive en str via le routeur DRF.
         # / Explicit cast: `idx` comes as str from the DRF router.
@@ -1195,9 +1318,9 @@ class OnboardViewSet(viewsets.ViewSet):
         (events finalize, POST `/onboard/events/`) already did. `launch`
         is purely a status / waiting screen.
         """
-        wc = _get_or_none_wc(request)
-        if wc is None or not wc.email_confirmed:
-            return redirect("onboard-identity")
+        wc, redirect_response = _get_confirmed_wc_or_redirect(request)
+        if redirect_response is not None:
+            return redirect_response
 
         # `events_draft` est un JSONField default=list. On force `or []` par
         # defense (cas None apres migration ou override admin).

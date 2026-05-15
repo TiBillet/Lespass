@@ -242,6 +242,15 @@ class WaitingConfiguration(models.Model):
         default=0,
         verbose_name=_("OTP resend count"),
     )
+    # Cooldown anti-spam : timestamp du dernier envoi OTP (auto ou via
+    # resend). Sert a bloquer un spam de re-envois (60s entre 2 envois).
+    # / Anti-spam cooldown: timestamp of the last OTP send (auto or
+    # resend). Used to block a resend spam (60s between two sends).
+    otp_sent_at = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name=_("OTP last sent at"),
+        help_text=_("Timestamp of the last OTP send (used for cooldown)."),
+    )
 
     # Etapes du wizard. / Wizard steps.
     STEP_IDENTITY = "identity"

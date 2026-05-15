@@ -44,7 +44,7 @@
     <p class="onboard-step-counter mb-1">{% translate "Étape 4 / 6" %}</p>
     <h1 class="onboard-h1 mb-2">{% translate "Présentation et logo" %}</h1>
     <p class="text-muted">
-        {% translate "Présente ton lieu : une accroche courte pour l'aperçu sur le réseau, un texte long pour la page publique, et un logo pour l'en-tête du site." %}
+        {% translate "Présentez votre lieu : une accroche courte pour l'aperçu sur le réseau, un texte long pour la page publique, et un logo pour l'en-tête du site." %}
     </p>
 </header>
 
@@ -114,7 +114,7 @@
                   class="form-control{% if errors.long_description %} is-invalid{% endif %}"
                   data-testid="onboard-descriptions-long">{{ initial.long_description|default:wc.long_description|default:'' }}</textarea>
         <div class="form-text">
-            {% translate "5000 caractères max. Décris ton lieu, son ambiance, ses valeurs. Tu pourras compléter plus tard." %}
+            {% translate "5000 caractères max. Décrivez votre lieu, son ambiance, ses valeurs. Vous pourrez compléter plus tard." %}
         </div>
         {% if errors.long_description %}
             <div class="invalid-feedback">

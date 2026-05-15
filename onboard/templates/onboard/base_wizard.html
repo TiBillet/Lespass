@@ -5,15 +5,28 @@
   Base layout pour le wizard d'onboarding (6 etapes).
   / Base layout for the onboarding wizard (6 steps).
 
-  - Colonne gauche : panneau pedagogique (progress + invitation + reprendre plus tard).
-  - Colonne droite : contenu de l'etape courante (block `step_content`).
-  - Sur mobile, le panneau gauche se replie via <details> (collapse natif).
-  - aria-live="polite" sur le contenu : les lecteurs d'ecran annoncent les changements
-    d'etape sans interrompre la lecture en cours.
+  LOCALISATION : onboard/templates/onboard/base_wizard.html
 
-  / - Left column: pedagogical panel (progress + invitation + resume later).
+  - Colonne gauche : panneau pedagogique (progress + invitation).
+  - Colonne droite : contenu de l'etape courante (block `step_content`).
+  - Sur mobile, le panneau passe sequentiellement AU-DESSUS du formulaire
+    (col-12 par defaut Bootstrap). Pas de toggle <details> : feedback
+    mainteneur 2026-05-15 — un toggle "Voir les etapes" prenait toute la
+    place sans servir, et l'etat replie pouvait etre confondu avec une
+    page sans repere visuel.
+  - Sur desktop, le panneau prend 5 colonnes et s'etire en hauteur jusqu'au
+    bas du formulaire (alignement avec le bouton "Continuer") via flex
+    sur le row + h-100 sur l'aside.
+  - aria-live="polite" sur le contenu : les lecteurs d'ecran annoncent les
+    changements d'etape sans interrompre la lecture en cours.
+
+  / - Left column: pedagogical panel (progress + invitation).
   / - Right column: current step content (block `step_content`).
-  / - On mobile, the left panel collapses via a native <details> element.
+  / - On mobile, the panel stacks ABOVE the form (Bootstrap col-12). No
+  /   <details> toggle: maintainer feedback 2026-05-15 — the toggle took
+  /   the whole height while not collapsed, and confused users when collapsed.
+  / - On desktop, the panel takes 5 columns and stretches in height to
+  /   reach the "Continuer" button (flex on row + h-100 on aside).
   / - aria-live="polite" on content: screen readers announce step changes
   /   without interrupting the current reading.
 {% endcomment %}
@@ -31,19 +44,13 @@
 
 {% block main_wrapper %}
 <main class="onboard-wizard container-lg my-4" data-testid="onboard-wizard">
+    {# `align-items-stretch` (defaut Bootstrap row) + `h-100` sur l'aside : #}
+    {# le panel gauche s'etire a la hauteur de la colonne droite (formulaire). #}
+    {# / Bootstrap row defaults to `align-items: stretch`; `h-100` on the #}
+    {# aside makes the panel reach the bottom of the form column. #}
     <div class="row g-4">
-        {# Panneau gauche (orientation) — collapse mobile via <details> #}
-        {# / Left panel (orientation) — mobile collapse via <details> #}
         <aside class="col-lg-5 onboard-panel-wrapper">
-            <details open class="onboard-panel-collapse d-lg-none">
-                <summary class="btn btn-outline-primary w-100 mb-3">
-                    {% translate "Voir les étapes" %}
-                </summary>
-                {% include "onboard/partials/progress_panel.html" %}
-            </details>
-            <div class="d-none d-lg-block">
-                {% include "onboard/partials/progress_panel.html" %}
-            </div>
+            {% include "onboard/partials/progress_panel.html" %}
         </aside>
 
         {# Formulaire / etape courante #}

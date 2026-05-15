@@ -16,19 +16,24 @@
   (422), the view re-renders this same template with errors, initial values
   (to refill inputs), and the optional invitation banner.
 
-  Garde-fou test : le titre "Creer votre espace TiBillet" commence par "Cr",
-  ce qui satisfait `test_identity_get_renders_form` (assert b"Cr" in body).
-  / Test guard: the title "Creer votre espace TiBillet" starts with "Cr",
-  satisfying `test_identity_get_renders_form` (assert b"Cr" in body).
+  Garde-fou test : le data-testid="onboard-identity-form" sur le <form>
+  est presence-checke par `test_identity_get_renders_form` (le test
+  recherche `b"onboard-identity-form"` dans le body).
+  / Test guard: the form's `data-testid="onboard-identity-form"` is
+  asserted by `test_identity_get_renders_form`.
 {% endcomment %}
 
 {% block page_title %}{% translate "Créer votre espace TiBillet" %}{% endblock %}
 
 {% block step_content %}
+{# Le titre principal "Creer votre espace TiBillet" a ete retire du content #}
+{# (feedback mainteneur 2026-05-15) : il etait deja porte par l'eyebrow du #}
+{# panneau gauche ("CRÉER MON ESPACE") — duplication visuelle inutile.    #}
+{# / Main title removed from content (maintainer feedback): already shown  #}
+{# by the left panel eyebrow ("CRÉER MON ESPACE").                        #}
 <header class="mb-4">
     <p class="onboard-step-counter mb-1">{% translate "Étape 1 / 6" %}</p>
-    <h1 class="onboard-h1 mb-2">{% translate "Créer votre espace TiBillet" %}</h1>
-    <p class="text-muted">
+    <p class="text-muted mb-0">
         {% translate "Renseignez votre identité et celle de votre collectif. Un code de vérification vous sera envoyé par email." %}
     </p>
 </header>
@@ -176,29 +181,49 @@
     </div>
 
     <div>
-        <label for="onboard-id-dns" class="form-label">
-            {% translate "Nom de domaine" %}
-        </label>
-        <select id="onboard-id-dns"
-                name="dns_choice"
-                class="form-select{% if errors.dns_choice %} is-invalid{% endif %}"
-                data-testid="onboard-identity-dns">
-            <option value="tibillet.coop"{% if initial.dns_choice == 'tibillet.coop' %} selected{% endif %}>
-                tibillet.coop
-            </option>
-            <option value="tibillet.re"{% if initial.dns_choice == 'tibillet.re' %} selected{% endif %}>
-                tibillet.re
-            </option>
-            <option value="tibillet.fr"{% if initial.dns_choice == 'tibillet.fr' %} selected{% endif %}>
-                tibillet.fr
-            </option>
-        </select>
+        {# Choix du domaine en boutons radios visibles (feedback mainteneur 2026-05-15) #}
+        {# Le pattern Bootstrap btn-check / btn-outline-* fait des "pills" que       #}
+        {# l'utilisateur peut comparer d'un coup d'oeil — plus parlant qu'un select. #}
+        {# Le `name` est partage par les deux <input> -> selection mutuellement       #}
+        {# exclusive. Le slug preview ci-dessous reagit aux changements via          #}
+        {# `wizard.js::setupDomainPreview()` (event delegation sur input[name=dns_choice]). #}
+        {# / Domain choice as visible radio buttons. The Bootstrap btn-check pattern  #}
+        {# renders pills the user can compare at a glance — more telling than a select. #}
+        {# Same `name` -> mutually exclusive selection. Slug preview reacts via       #}
+        {# `wizard.js::setupDomainPreview()` (event delegation).                      #}
+        <fieldset class="onboard-dns-fieldset"
+                  aria-describedby="onboard-id-dns-help">
+            <legend class="form-label mb-2">{% translate "Nom de domaine" %}</legend>
+            <div class="onboard-dns-radios" role="radiogroup">
+                <input type="radio"
+                       class="btn-check"
+                       name="dns_choice"
+                       id="onboard-id-dns-coop"
+                       value="tibillet.coop"
+                       data-testid="onboard-identity-dns-coop"
+                       {% if initial.dns_choice == 'tibillet.re' %}{% else %}checked{% endif %}>
+                <label class="btn btn-outline-success onboard-dns-radio" for="onboard-id-dns-coop">
+                    <i class="bi bi-globe2 me-2" aria-hidden="true"></i>tibillet.coop
+                </label>
+
+                <input type="radio"
+                       class="btn-check"
+                       name="dns_choice"
+                       id="onboard-id-dns-re"
+                       value="tibillet.re"
+                       data-testid="onboard-identity-dns-re"
+                       {% if initial.dns_choice == 'tibillet.re' %}checked{% endif %}>
+                <label class="btn btn-outline-success onboard-dns-radio" for="onboard-id-dns-re">
+                    <i class="bi bi-globe2 me-2" aria-hidden="true"></i>tibillet.re
+                </label>
+            </div>
+        </fieldset>
         {% if errors.dns_choice %}
-            <div class="invalid-feedback">
+            <div class="invalid-feedback d-block">
                 {% for msg in errors.dns_choice %}{{ msg }}{% endfor %}
             </div>
         {% endif %}
-        <div class="form-text">
+        <div class="form-text" id="onboard-id-dns-help">
             {% translate "Votre adresse finale :" %}
             <code data-testid="onboard-identity-domain-preview">
                 <span id="onboard-id-domain-slug">…</span><span id="onboard-id-domain-suffix">.tibillet.coop</span>
@@ -206,18 +231,33 @@
         </div>
     </div>
 
-    <div class="form-check">
+    {# CGU en switch Bootstrap 5 (feedback mainteneur 2026-05-15) :        #}
+    {# `form-switch` rend la checkbox sous forme de toggle slider, plus    #}
+    {# moderne et plus parlant pour un "j'accepte". Lien target=_blank +  #}
+    {# rel="noopener" vers la doc CGU/CGV (numerique.gouv pattern).        #}
+    {# / CGU as a Bootstrap 5 form-switch slider — more modern than a     #}
+    {# bare checkbox for an "I accept" intent. Link opens the T&C page in #}
+    {# a new tab (target=_blank + rel=noopener).                          #}
+    <div class="form-check form-switch onboard-cgu-switch">
         <input id="onboard-id-cgu"
                type="checkbox"
                name="cgu"
                value="on"
                required
+               role="switch"
                class="form-check-input{% if errors.cgu %} is-invalid{% endif %}"
                data-testid="onboard-identity-cgu">
         <label for="onboard-id-cgu" class="form-check-label">
             {% blocktranslate trimmed %}
-                J'accepte les conditions générales d'utilisation.
+                J'accepte les
             {% endblocktranslate %}
+            <a href="https://tibillet.github.io/documentation_v3/les-bases-et-valeurs-tibillet/aspects-legaux-et-reglementaires/cgu-cgv/"
+               target="_blank"
+               rel="noopener"
+               data-testid="onboard-identity-cgu-link">
+                {% translate "conditions générales d'utilisation" %}
+                <i class="bi bi-box-arrow-up-right ms-1" aria-hidden="true"></i>
+            </a>.
         </label>
         {% if errors.cgu %}
             <div class="invalid-feedback d-block">

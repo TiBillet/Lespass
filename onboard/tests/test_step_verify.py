@@ -269,3 +269,62 @@ def test_resend_otp_regenerates(cleanup_waiting_configs):
     assert wc.otp_hash != initial_hash
     assert wc.otp_attempts == 0
     assert wc.otp_resend_count == 1
+    # `otp_sent_at` doit avoir ete mis a jour (sert au cooldown).
+    # / `otp_sent_at` must have been updated (used by cooldown).
+    assert wc.otp_sent_at is not None
+
+
+def test_resend_otp_cooldown_blocks_immediate_resend(cleanup_waiting_configs):
+    """
+    POST `/onboard/resend-otp/` deux fois de suite (sans laisser passer le
+    cooldown 60s) : la 2e demande renvoie 429 + partial cooldown, et NE
+    re-genere PAS l'OTP cote brouillon (otp_hash inchange).
+
+    Ce cooldown est COMPLEMENTAIRE au rate-limit IP (3/h) : il empeche un
+    user de double-cliquer accidentellement sur "Renvoyer".
+
+    / Two POSTs to `/onboard/resend-otp/` in less than 60s: the second
+    one returns 429 + cooldown partial, and does NOT regenerate the OTP
+    on the draft. This cooldown complements the per-IP rate-limit (3/h):
+    it prevents an accidental double-click on Resend.
+    """
+    from django.core.cache import cache
+    cache.delete("onboard:resend:127.0.0.1")
+    cache.delete("onboard:resend:unknown")
+
+    client = Client(HTTP_HOST=DEV_HOST)
+    wc = _create_wc_with_otp(client, "111111", cleanup=cleanup_waiting_configs)
+
+    # 1er resend : OK (otp_sent_at etait None, pas de cooldown).
+    # / 1st resend: OK (otp_sent_at was None, no cooldown).
+    with patch("onboard.tasks.onboard_otp_mailer.delay") as mock_mailer:
+        first_response = client.post("/onboard/resend-otp/")
+    assert first_response.status_code == 200
+    mock_mailer.assert_called_once()
+
+    with schema_context("meta"):
+        wc.refresh_from_db()
+    hash_after_first = wc.otp_hash
+
+    # 2e resend immediat : doit etre bloque par le cooldown 60s.
+    # / Immediate 2nd resend: must be blocked by the 60s cooldown.
+    with patch("onboard.tasks.onboard_otp_mailer.delay") as mock_mailer_2:
+        second_response = client.post("/onboard/resend-otp/")
+    assert second_response.status_code == 429, (
+        f"Expected 429 (cooldown), got {second_response.status_code}. "
+        f"Body excerpt: {second_response.content[:300]!r}"
+    )
+    assert b"onboard-verify-resend-cooldown" in second_response.content
+    # Le mailer ne doit PAS avoir ete appele lors du 2e resend.
+    # / Mailer must NOT have been called on the 2nd resend.
+    assert not mock_mailer_2.called, (
+        "Mailer should NOT be enqueued during cooldown."
+    )
+
+    # Le hash en base ne doit PAS avoir change (pas de regeneration).
+    # / The stored hash must NOT have changed (no regeneration).
+    with schema_context("meta"):
+        wc.refresh_from_db()
+    assert wc.otp_hash == hash_after_first, (
+        "OTP hash must stay unchanged when cooldown blocks the resend."
+    )

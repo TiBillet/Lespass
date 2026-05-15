@@ -164,7 +164,57 @@ except Exception:
 
 ---
 
-## 7. Liens utiles
+## 7. Session du 2026-05-15 (suite) — Refacto N1 + N3
+
+Session courte de cleanup pendant qu'on est encore proche du code.
+Préparation pour s'attaquer aux bloquants prod (F1+F2+F3) plus sereinement.
+
+### N1 — Helpers de session (`onboard/views.py`)
+
+Pattern dupliqué 6× éliminé :
+```python
+wc = _get_or_none_wc(request)
+if wc is None or not wc.email_confirmed:
+    return redirect("onboard-identity")
+```
+
+Devient (deux helpers explicites — choix FALC plutôt qu'un seul avec paramètre) :
+- `_get_confirmed_wc_or_redirect(request)` → 4 vues navigationnelles (place GET/POST, descriptions GET/POST, events finalize, launch GET).
+- `_get_confirmed_wc_or_404(request)` → 2 actions HTMX (events_add, events_remove) où un redirect 302 ne marche pas côté client.
+
+Usage : `wc, redirect_response = _get_confirmed_wc_or_redirect(request); if redirect_response: return redirect_response`. Plus verbeux que le pattern original mais source unique de vérité pour la règle d'authentification du wizard.
+
+### N3 — Templatetag `onboard_steps`
+
+Création du module `onboard/templatetags/__init__.py` + `onboard_steps.py`. Deux `simple_tag` :
+- `is_step_done(current_step, target_step)` — comparaison via `STEP_ORDER.index()`.
+- `is_step_current(current_step, target_step)` — sucre syntaxique cohérent.
+
+Constante `STEP_ORDER = ["identity", "verify", "place", "descriptions", "events", "launch"]` = source unique de vérité (à garder alignée sur `WaitingConfiguration.STEP_*` et `STEP_TO_URL_NAME`).
+
+`progress_panel.html` refactoré : flags pré-calculés en haut du template (`{% is_step_current step 'identity' as identity_current %}` × 6 + `{% is_step_done %}` × 5), plus de chaînes `step == 'X' or step == 'Y' or ...` dans chaque `<li>`. Si on ajoute une étape demain, on touche **uniquement** `STEP_ORDER` + une `<li>`, plus 6 chaînes `or` à maintenir.
+
+### Piège rencontré
+
+Django scanne les `templatetags/` à l'init des apps, **pas à chaud**. La création d'un nouveau dossier `templatetags/` ne déclenche pas la re-collection des tag libraries par `runserver_plus` même avec auto-reload. Symptôme : `TemplateSyntaxError: 'onboard_steps' is not a registered tag library` sur la première requête après modif. Fix : restart manuel du serveur dev. Pytest n'a pas le problème (process neuf à chaque run).
+
+### Tests
+
+- `manage.py check` : 0 issue.
+- `pytest onboard/tests/` : **52 passed / 2 skipped** (identique baseline, ~78s).
+
+### Fichiers modifiés / créés
+
+| Fichier | Type | Changement |
+|---|---|---|
+| `onboard/views.py` | Modifié | +2 helpers, 6 patterns refactorés |
+| `onboard/templatetags/__init__.py` | NOUVEAU | (vide, requis par Django) |
+| `onboard/templatetags/onboard_steps.py` | NOUVEAU | 2 simple_tags + STEP_ORDER |
+| `onboard/templates/onboard/partials/progress_panel.html` | Modifié | Flags pré-calculés en haut, plus de chaînes `or` |
+
+---
+
+## 8. Liens utiles
 
 - Plan d'implémentation détaillé : `02-implementation-plan.md`
 - Spec design originale : `01-design-spec.md`

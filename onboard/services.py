@@ -23,6 +23,7 @@ import requests
 
 from django.contrib.auth.hashers import check_password, make_password
 from django.core.cache import cache
+from django.utils.translation import get_language
 from django.utils import timezone
 
 
@@ -85,17 +86,39 @@ NOMINATIM_TIMEOUT = 5  # secondes / seconds
 GEOCODE_CACHE_TTL = 24 * 60 * 60  # 24h en secondes / 24h in seconds
 
 
-def _geocode_cache_key(query):
+def _geocode_cache_key(query, lang):
     """
     Construit une cle de cache Redis courte et deterministe a partir d'une
-    query (SHA256 tronque). Evite les caracteres exotiques dans la cle.
-    / Build a short deterministic Redis cache key from a query
-    (truncated SHA256). Avoids exotic chars in the key.
+    query + une langue (SHA256 tronque). On inclut la langue dans la cle
+    parce que Nominatim renvoie des `display_name` differents selon la
+    langue demandee (ex: "Brussels" en EN vs "Bruxelles" en FR).
+
+    / Build a short deterministic Redis cache key from a query + language
+    (truncated SHA256). Language is part of the key because Nominatim
+    returns localized `display_name` values per language (e.g. "Brussels"
+    EN vs "Bruxelles" FR).
     """
     # SHA256 pour rester court et eviter les caracteres exotiques.
     # / SHA256 for short key and no exotic chars.
     h = hashlib.sha256(query.encode("utf-8")).hexdigest()
-    return f"onboard:geocode:{h[:32]}"
+    return f"onboard:geocode:{lang}:{h[:32]}"
+
+
+def _get_user_language():
+    """
+    Retourne le code langue ISO 2 lettres a passer a Nominatim
+    (`accept-language=...`). On lit la langue active de Django via
+    `get_language()` (mise par `LocaleMiddleware`) et on tronque la
+    region pour ne garder que la langue : "fr-fr" / "fr-FR" -> "fr".
+    Defaut "fr" si aucune langue n'est detectee.
+
+    / Returns the 2-letter ISO language code for Nominatim
+    (`accept-language=...`). Reads Django's active language via
+    `get_language()` (set by `LocaleMiddleware`) and strips the region:
+    "fr-fr" / "fr-FR" -> "fr". Falls back to "fr" if none.
+    """
+    lang_complete = get_language() or "fr"
+    return lang_complete.split("-")[0].lower()
 
 
 def geocode(query):
@@ -115,7 +138,15 @@ def geocode(query):
     if not query or len(query.strip()) < 3:
         return None
 
-    cache_key = _geocode_cache_key(query)
+    # Langue active de l'utilisateur (mise par `LocaleMiddleware`). Sert
+    # a localiser les `display_name` retournes par Nominatim (ex: noms de
+    # villes etrangeres traduits) ET a separer le cache par langue.
+    # / Active user language (set by `LocaleMiddleware`). Used both to
+    # localize Nominatim `display_name` values (e.g. translated foreign
+    # city names) AND to namespace the cache per language.
+    user_language = _get_user_language()
+
+    cache_key = _geocode_cache_key(query, user_language)
     cached = cache.get(cache_key)
     if cached is not None:
         # `cached` peut etre un dict OU le sentinel "no-result".
@@ -133,7 +164,19 @@ def geocode(query):
     try:
         response = requests.get(
             NOMINATIM_URL,
-            params={"q": query, "format": "json", "limit": 1},
+            params={
+                "q": query,
+                "format": "json",
+                "limit": 1,
+                # `accept-language` : demande explicitement les noms de
+                # lieux dans la langue de l'utilisateur. Sans ce param,
+                # Nominatim renvoie souvent des noms en anglais ou en
+                # langue d'origine non latinisee.
+                # / `accept-language`: explicitly asks for place names in
+                # the user's language. Without it, Nominatim often returns
+                # English or untranslated original-script names.
+                "accept-language": user_language,
+            },
             headers={"User-Agent": NOMINATIM_USER_AGENT},
             timeout=NOMINATIM_TIMEOUT,
         )

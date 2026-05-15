@@ -52,36 +52,53 @@ DEV_HOST = "lespass.tibillet.localhost"
 
 def test_identity_get_renders_form():
     """
-    GET `/onboard/identity/` retourne 200 et un HTML contenant le titre
-    "Cr..." (intl : "Creer" en FR, "Create" en EN).
-    / GET `/onboard/identity/` returns 200 + HTML title starting with
-    "Cr..." (i18n: "Creer" FR, "Create" EN).
+    GET `/onboard/identity/` retourne 200 et un HTML contenant le formulaire
+    identifie par `data-testid="onboard-identity-form"`.
+
+    NOTE 2026-05-15 : avant on cherchait `b"Cr"` (debut de "Creer"/"Create").
+    Le titre principal a ete retire du content (deja porte par l'eyebrow du
+    panneau gauche), donc on assert maintenant sur le data-testid du form
+    qui est plus stable et plus specifique.
+
+    / GET `/onboard/identity/` returns 200 + HTML containing the form
+    identified by `data-testid="onboard-identity-form"`. The previous
+    `b"Cr"` assert was tied to the main title (now removed because already
+    shown in the left panel eyebrow); we now assert on the form's
+    data-testid which is more stable and specific.
     """
     client = Client(HTTP_HOST=DEV_HOST)
     response = client.get("/onboard/identity/")
 
     assert response.status_code == 200
-    # On verifie que le titre commence bien par "Cr" : couvre les deux
-    # langues du template (Creer / Create) et ne casse pas si le projet
-    # ajoute d'autres traductions plus tard.
-    # / Title starts with "Cr": covers FR/EN templates and won't break
-    # if more translations are added later.
-    assert b"Cr" in response.content
+    # data-testid stable : `onboard-identity-form` est l'identifiant E2E
+    # du <form> principal (cf. djc skill : data-testid sur tout element
+    # interactif). / Stable testid: identifies the main form (cf. djc).
+    assert b'data-testid="onboard-identity-form"' in response.content
 
 
 def test_identity_post_creates_wc_and_redirects_to_verify(cleanup_waiting_configs):
     """
     POST valide cree un WaitingConfiguration en schema `meta` et redirige
     vers `/onboard/verify/`. Le brouillon est marque `current_step=verify`,
-    `email_confirmed=False`, et un `otp_hash` non vide est persiste.
-    / Valid POST creates a draft and redirects to `/onboard/verify/`.
-    Draft has `current_step=verify`, `email_confirmed=False`, non-empty
-    `otp_hash`.
+    `email_confirmed=False`, et un `otp_hash` non vide est persiste +
+    le mailer Celery est appele.
 
     Le mailer Celery est patche : on ne veut pas spammer un vrai SMTP
     en tests. La methode `.delay(...)` est juste interceptee.
-    / Celery mailer is patched: we don't want to hit real SMTP in tests.
-    `.delay(...)` is intercepted.
+
+    HISTORIQUE : avant le refacto 2026-05-15 (Mod 1), `identity` POST
+    n'envoyait PAS d'OTP — l'utilisateur devait cliquer "Recevoir le
+    code" sur Verify. Friction UX. On a re-active l'envoi automatique,
+    avec garde-fous serveur (cooldown 60s + rate-limit IP) sur le
+    bouton "Renvoyer".
+
+    / Valid POST creates a draft and redirects to `/onboard/verify/`.
+    Draft has `current_step=verify`, `email_confirmed=False`, non-empty
+    `otp_hash` AND the Celery mailer is called.
+
+    HISTORY: before the 2026-05-15 refactor (Mod 1), `identity` POST did
+    NOT send an OTP — user had to click "Receive code" on Verify. UX
+    friction. We re-enabled auto-send with server guards on Resend.
     """
     client = Client(HTTP_HOST=DEV_HOST)
 
@@ -91,14 +108,6 @@ def test_identity_post_creates_wc_and_redirects_to_verify(cleanup_waiting_config
     import time
     unique_email = f"new-{int(time.time() * 1000)}@example.com"
 
-    # Mod 1 (feedback mainteneur 2026-05-15) : `identity` POST n'enqueue
-    # PLUS le mailer OTP. L'utilisateur doit cliquer "Recevoir le code"
-    # sur la step Verify. On verifie donc :
-    #   - WC cree avec `current_step=verify`, `email_confirmed=False`.
-    #   - `otp_hash` reste VIDE a ce stade (pas de code genere).
-    #   - Le mailer N'EST PAS appele.
-    # / Mod 1 (maintainer feedback): `identity` POST NO LONGER enqueues
-    # the OTP mailer. User must click "Receive the code" on Verify.
     with patch("onboard.tasks.onboard_otp_mailer.delay") as mock_mailer:
         response = client.post("/onboard/identity/", data={
             "email": unique_email,
@@ -123,18 +132,30 @@ def test_identity_post_creates_wc_and_redirects_to_verify(cleanup_waiting_config
         assert wc is not None, "WaitingConfiguration not created."
         cleanup_waiting_configs(wc)
         assert wc.current_step == "verify"
-        # Mod 1 : otp_hash reste vide tant que l'user n'a pas clique resend.
-        # / Mod 1: otp_hash stays empty until user clicks resend.
-        assert wc.otp_hash == "", (
-            "OTP hash should be empty (Mod 1: no auto-send)."
+        # OTP envoye automatiquement : hash + expires_at + sent_at remplis.
+        # / OTP auto-sent: hash + expires_at + sent_at populated.
+        assert wc.otp_hash != "", (
+            "OTP hash should be populated (auto-send after identity POST)."
+        )
+        assert wc.otp_expires_at is not None, (
+            "otp_expires_at should be set (auto-send)."
+        )
+        assert wc.otp_sent_at is not None, (
+            "otp_sent_at should be set (anti-spam cooldown tracking)."
         )
         assert wc.email_confirmed is False
+        # Premier envoi : ne doit PAS incrementer otp_resend_count
+        # (qui est reserve aux resends explicites via le bouton).
+        # / First send: must NOT bump otp_resend_count (reserved for
+        # explicit resends via the Resend button).
+        assert wc.otp_resend_count == 0
 
-    # Mod 1 : le mailer ne doit PAS avoir ete appele a ce stade.
-    # / Mod 1: mailer must NOT have been called at this point.
-    assert not mock_mailer.called, (
-        "OTP mailer should NOT be auto-enqueued by identity (Mod 1)."
-    )
+    # Le mailer Celery doit avoir ete enqueue avec le wc_uuid + un OTP clair.
+    # / Celery mailer must have been enqueued with the wc_uuid + clear OTP.
+    mock_mailer.assert_called_once()
+    call_kwargs = mock_mailer.call_args.kwargs
+    assert call_kwargs["wc_uuid"] == str(wc.uuid)
+    assert call_kwargs["otp_clair"]  # 6 chiffres non vide / 6-digit non-empty
 
 
 def test_identity_post_with_invitation_attaches_it(

@@ -31,9 +31,12 @@ from rest_framework import serializers
 # Choix des suffixes DNS proposes a l'utilisateur. / DNS suffix choices.
 # On les declare en tuple immuable au top du module : `ChoiceField` exige
 # un iterable de choix, et un tuple en constante module evite la duplication.
-# / Declared at module top as an immutable tuple: `ChoiceField` needs an
-# iterable of choices, and a module-level constant avoids duplication.
-DNS_CHOICES = ("tibillet.coop", "tibillet.re", "tibillet.fr")
+# Feedback mainteneur 2026-05-15 : `tibillet.fr` retire du choix utilisateur
+# (on ne garde que les domaines coop/re actifs en prod).
+# / Declared at module top as an immutable tuple. Maintainer feedback
+# 2026-05-15: `tibillet.fr` removed from the user choices (only the active
+# coop/re domains remain).
+DNS_CHOICES = ("tibillet.coop", "tibillet.re")
 
 
 class OnboardIdentitySerializer(serializers.Serializer):
