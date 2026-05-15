@@ -105,6 +105,13 @@ def _make_wc_at_events(client, cleanup=None):
     session = client.session
     session["onboard_wc_uuid"] = str(wc.uuid)
     session.save()
+
+    # Login Django : depuis 2026-05-15 les steps post-verify exigent
+    # `is_authenticated` (cf. _get_confirmed_wc_or_redirect dans views.py).
+    # / Django login: post-verify steps require `is_authenticated`.
+    from onboard.tests.helpers import login_test_user_for_email
+    login_test_user_for_email(client, unique_email)
+
     return wc
 
 

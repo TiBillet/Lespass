@@ -34,6 +34,8 @@ from django.utils.translation import gettext_lazy as _
 from django_tenants.utils import schema_context
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
+from rest_framework.throttling import AnonRateThrottle
+
 from MetaBillet.models import WaitingConfiguration
 
 logger = logging.getLogger(__name__)
@@ -48,6 +50,33 @@ logger = logging.getLogger(__name__)
 # ROOT and tenants). Short but prefixed with `onboard_` to avoid collisions
 # with other apps using the session.
 SESSION_KEY = "onboard_wc_uuid"
+
+
+# Rate-limit anti-spam sur identity POST : 5 creations de WC par minute
+# par IP. Friction ZERO pour un user normal (qui POST 1 fois identity).
+# Bloque silencieusement (HTTP 429) un bot single-IP qui itere vite.
+# `rate` declare directement sur la classe car le projet n'a pas active
+# `DEFAULT_THROTTLE_RATES` dans REST_FRAMEWORK (cf. settings.py:300-310).
+# `allow_request` filtre : on n'applique le throttle qu'au POST. Sans
+# ca un user qui refresh la page (GET) consommerait son quota et
+# resterait bloque apres 5 GET innocents.
+# / Anti-spam rate-limit on identity POST: 5 WC/min/IP. ZERO friction
+# for normal users (who POST identity once). Silently blocks (429) a
+# single-IP bot iterating fast. `allow_request` filter: throttle only
+# POST (a refresh of GET shouldn't burn the user's quota).
+class IdentityPostRateThrottle(AnonRateThrottle):
+    """5 POST/minute/IP — anti-spam creation WC + envoi OTP."""
+
+    rate = "5/minute"
+    # `scope` doit etre unique pour ne pas partager le compteur DRF avec
+    # d'autres throttles (ex: WidgetReverseGeocodeRateThrottle si re-introduit).
+    # / Unique `scope` to avoid sharing the DRF counter with other throttles.
+    scope = "onboard_identity_post"
+
+    def allow_request(self, request, view):
+        if request.method != "POST":
+            return True
+        return super().allow_request(request, view)
 
 
 # Table de routage des steps : `WaitingConfiguration.current_step` (chaine
@@ -128,10 +157,17 @@ def _get_confirmed_wc_or_redirect(request):
     Garde de session pour les vues "navigationnelles" du wizard (steps
     place / descriptions / events GET / launch GET).
 
-    Verifie qu'il y a un brouillon en session ET que l'email a ete
-    confirme par OTP. Si OK -> retourne `(wc, None)`. Si KO -> retourne
+    Verifie 3 conditions :
+      1. Un brouillon est present en session.
+      2. L'email du brouillon a ete confirme par OTP (`email_confirmed`).
+      3. L'utilisateur Django est `is_authenticated` (login fait au moment
+         du verify success — defense en profondeur en cas de logout
+         silencieux entre 2 steps).
+
+    Si OK -> retourne `(wc, None)`. Si KO -> retourne
     `(None, redirect("onboard-identity"))` : l'utilisateur ne doit pas
-    pouvoir sauter l'OTP.
+    pouvoir sauter l'OTP ni se "deconnecter" en cours de wizard sans
+    refaire la verification.
 
     Usage attendu dans une action :
         wc, redirect_response = _get_confirmed_wc_or_redirect(request)
@@ -139,12 +175,21 @@ def _get_confirmed_wc_or_redirect(request):
             return redirect_response
         # ... suite de la vue, `wc` est garanti non-None et confirme.
 
-    / Session guard for navigational wizard views. Returns `(wc, None)`
-    if a draft is in session AND email is confirmed; otherwise returns
-    `(None, redirect("onboard-identity"))` so the user cannot bypass OTP.
+    / Session guard for navigational wizard views. Three checks:
+      1. Draft in session.
+      2. Email confirmed by OTP.
+      3. Django user is authenticated (login set at verify success —
+         defense in depth in case of silent logout between steps).
+    Returns `(wc, None)` if OK; otherwise `(None, redirect("onboard-identity"))`.
     """
     wc = _get_or_none_wc(request)
     if wc is None or not wc.email_confirmed:
+        return None, redirect("onboard-identity")
+    if not request.user.is_authenticated:
+        # Logout silencieux entre 2 steps (cookie expire, admin force_logout,
+        # nettoyage manuel). On force la re-verification : retour identity
+        # qui re-creera un WC + OTP.
+        # / Silent logout between 2 steps. Force re-verification.
         return None, redirect("onboard-identity")
     return wc, None
 
@@ -157,12 +202,16 @@ def _get_confirmed_wc_or_404(request):
     renvoie `(None, HttpResponse(status=404))` qui se traduit cote
     navigateur par une erreur HTMX visible.
 
+    Memes 3 conditions que `_get_confirmed_wc_or_redirect` (WC en session
+    + email_confirmed + user authentifie).
+
     / Same as `_get_confirmed_wc_or_redirect` but for HTMX actions:
-    returns a 404 response instead of a redirect, since HTMX cannot
-    follow a 302 to a full page cleanly.
+    returns a 404 response instead of a redirect.
     """
     wc = _get_or_none_wc(request)
     if wc is None or not wc.email_confirmed:
+        return None, HttpResponse(status=404)
+    if not request.user.is_authenticated:
         return None, HttpResponse(status=404)
     return wc, None
 
@@ -310,6 +359,30 @@ class OnboardViewSet(viewsets.ViewSet):
     # Step 1 — Identity (Task 10).
     # ------------------------------------------------------------------
 
+    def get_throttles(self):
+        """
+        Throttle dynamique selon `self.action`.
+
+        Nécessaire car le ViewSet est expose via `OnboardViewSet.as_view(
+        {"post": "identity"})` direct dans `urls.py` (pas via DefaultRouter
+        ni via le routing automatique de `@action`). Du coup l'argument
+        `throttle_classes=[...]` du decorateur `@action` est ignore par
+        DRF (il n'est consulte que par le routing auto).
+
+        On override `get_throttles()` pour restaurer ce comportement.
+        Pour l'instant : seul `identity` a un throttle (anti-spam creation
+        WC). Ajouter ici si d'autres actions ont besoin.
+
+        / Dynamic throttle by `self.action`. Required because the ViewSet
+        is exposed via direct `as_view({"post": "identity"})` in urls.py
+        (not via DefaultRouter or `@action` auto-routing). DRF only reads
+        the `@action` `throttle_classes` argument from auto-routing.
+        Override `get_throttles()` to restore the behavior.
+        """
+        if getattr(self, "action", None) == "identity":
+            return [IdentityPostRateThrottle()]
+        return super().get_throttles()
+
     @action(detail=False, methods=["GET", "POST"], url_path="identity")
     def identity(self, request):
         """
@@ -358,17 +431,35 @@ class OnboardViewSet(viewsets.ViewSet):
 
         if request.method == "GET":
             initial = {}
+            # Priorite 1 : pre-remplit depuis le brouillon en session (cas
+            # resume / retour en arriere). / Priority 1: pre-fill from
+            # the in-session draft (resume / back nav).
             if wc:
-                # Pre-remplit le formulaire si un brouillon existe deja.
-                # / Pre-fill form with existing draft data, if any.
                 initial = {
                     "email": wc.email,
-                "has_pending_otp": bool(wc.otp_hash),
                     "first_name": wc.first_name,
                     "last_name": wc.last_name,
                     "name": wc.organisation,
                     "dns_choice": wc.dns_choice,
                 }
+            # Priorite 2 : si l'utilisateur est deja authentifie (cas user
+            # qui reviennt sur le wizard apres avoir deja un compte TiBillet),
+            # on pre-remplit email/first_name/last_name depuis son profil
+            # SANS ecraser un eventuel brouillon (priorite 1 garde le focus).
+            # Si email_valid + email matchant, le `skip_otp` du POST
+            # bypassera la verification — l'utilisateur ne re-tape pas l'OTP.
+            # / Priority 2: if the user is already authenticated, pre-fill
+            # email/first_name/last_name from their profile WITHOUT
+            # overwriting an existing draft. If email_valid + matching email,
+            # the POST `skip_otp` branch will bypass verification.
+            if request.user.is_authenticated and not wc:
+                initial.setdefault("email", request.user.email)
+                initial.setdefault(
+                    "first_name", getattr(request.user, "first_name", "") or "",
+                )
+                initial.setdefault(
+                    "last_name", getattr(request.user, "last_name", "") or "",
+                )
             return render(request, "onboard/steps/01_identity.html", {
                 "step": "identity",
                 "initial": initial,
@@ -631,14 +722,59 @@ class OnboardViewSet(viewsets.ViewSet):
                 otp_expires_at=None,
             )
 
-        # Cree le TibilletUser si absent (idempotent : `get_or_create_user`
-        # ne fait rien si l'utilisateur existe deja). On passe `send_mail=False`
-        # car le mail de validation TiBillet n'a pas a etre envoye ici : la
-        # confirmation d'email a deja eu lieu via l'OTP.
-        # / Create the TibilletUser if absent (idempotent). `send_mail=False`
-        # because the email confirmation already happened via the OTP.
+        # Cree le TibilletUser si absent (idempotent) puis logue l'utilisateur
+        # via Django auth. Raison : les steps suivantes (place/descriptions/
+        # events/launch) sont desormais protegees par `is_authenticated` (cf.
+        # `_get_confirmed_wc_or_redirect`). Le succes de l'OTP est la PREUVE
+        # que l'utilisateur controle l'email -> on peut le logger sans risque.
+        # / Create TibilletUser if absent (idempotent), then log the user in
+        # via Django auth. Reason: post-verify steps now require
+        # `is_authenticated` (cf. `_get_confirmed_wc_or_redirect`). OTP
+        # success proves email control -> safe to log in.
+        from django.contrib.auth import login
+
         from AuthBillet.utils import get_or_create_user
-        get_or_create_user(wc.email, send_mail=False)
+
+        # `send_mail=False` : pas de mail TiBillet (confirmation deja faite via OTP).
+        # `set_active=True` aurait suffi mais get_or_create_user passe par defaut
+        # en `is_active=False` cote create — on force activation explicite ici.
+        # / `send_mail=False` (OTP already confirmed). Force is_active=True since
+        # default `get_or_create_user` creates inactive users.
+        user = get_or_create_user(wc.email, send_mail=False)
+        if user is None:
+            # Cas extreme : email_error sur un user existant (cf. utils.py).
+            # On bloque ici plutot qu'au step suivant. / Edge case: email_error
+            # on existing user — block here rather than next step.
+            return render(request, "onboard/steps/02_verify.html", {
+                "step": "verify",
+                "email": wc.email,
+                "has_pending_otp": bool(wc.otp_hash),
+                "errors": {"otp": [_("Email error on user account.")]},
+            }, status=422)
+
+        # Marquer email_valid (preuve OTP) + activer le compte si pas deja.
+        # `update_fields` evite les writes inutiles sur les autres champs.
+        # / Mark email_valid (OTP proof) + activate. update_fields scope.
+        update_fields = []
+        if not user.email_valid:
+            user.email_valid = True
+            update_fields.append("email_valid")
+        if not user.is_active:
+            user.is_active = True
+            update_fields.append("is_active")
+        if update_fields:
+            user.save(update_fields=update_fields)
+
+        # Login Django : pose le cookie session auth. Backend explicite
+        # car le projet a peut-etre plusieurs AUTHENTICATION_BACKENDS et
+        # `login()` exige de specifier lequel sans `authenticate()` prealable.
+        # / Login Django: set auth session cookie. Explicit backend because
+        # the project may have multiple AUTHENTICATION_BACKENDS and `login()`
+        # requires an explicit backend without prior `authenticate()`.
+        login(
+            request, user,
+            backend="django.contrib.auth.backends.ModelBackend",
+        )
 
         return redirect("onboard-place")
 

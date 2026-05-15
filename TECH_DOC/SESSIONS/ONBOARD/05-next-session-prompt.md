@@ -21,10 +21,14 @@ Le wizard d'onboarding TiBillet est **fonctionnel end-to-end** sur la branche `m
 On reprend le travail sur le wizard d'onboard TiBillet.
 
 ## Contexte
-- Branche : `main-wizard`. Dernier commit : `bf062a6a` (wizard complet end-to-end).
-- 22 tasks sur 24 du plan original sont faites. Tests : 52 pytest passing / 2 skipped.
+- Branche : `main-wizard`. Dernière session marathon (2026-05-15) : ~9h de polish + features manquantes.
+- 22 tasks sur 24 du plan original + ~30 tasks supplémentaires de polish/UX/refacto faites.
+- Tests : **56 pytest onboard passing / 2 skipped** + 6 widget form_field. Migrations : MetaBillet 0014 (otp_sent_at) + 0015 (events_creation_warnings).
+- Widget GPS réutilisable créé dans `templates/widgets/` + `static/widgets/` (full client, leaflet-geosearch + reverse Nominatim direct browser).
+- Step 03_place complètement refondue (search bar live + drag marqueur + auto-fill 4 champs adresse).
 - Pattern de tests : pytest + pytest-django + `django_db_setup = pass` (DB dev partagée).
 - Skill djc : compliance vérifiée sur tout le code livré.
+- Pour pytest : `docker exec -e API_KEY=dummy lespass_django bash -c "cd /DjangoFiles && poetry run python -m pytest ..."`
 
 ## Skills obligatoires à charger en début de session
 /using-superpowers
@@ -45,38 +49,44 @@ keys avec tenant_id, i18n (makemessages/compilemessages) à la fin.
 
 ## Travail à faire cette session
 
-Choisir une de ces options (à confirmer avec moi dès le départ) :
+**État** : il reste **~5-6h de travail** pour passer prod. Détail dans `04-followups.md` section "Synthèse priorités". 4 items bloquants restants (F1 Fedow validé non-bloquant après audit code 2026-05-15) :
 
-**Option A — Bloquants prod (F1+F2+F3)**
-Régler en priorité ce qui empêche d'ouvrir le wizard au public :
-1. F1 : capturer l'exception Fedow non configuré dans `create_tenant_from_draft`
-   ou pre-configurer FedowConfig dans `create_empty_tenant`.
-2. F2 : écrire les 3 tests Playwright E2E (golden / invitation / resume).
-3. F3 : générer le CHANGELOG.md + `A TESTER et DOCUMENTER/onboard-wizard.md`
-   + `makemessages -l fr -l en` + `compilemessages`.
+| # | Item | Effort |
+|---|---|---|
+| **F2** | Tests Playwright E2E (8 scénarios listés dans followups F2) | ~3-4h |
+| **F3** | i18n `makemessages -l fr -l en` + `compilemessages` (strings session étendue) | ~30 min |
+| **S6** | Captcha anti-abuse sur identity POST (`django-simple-captcha`) | ~1h |
+| **S7** | Rate-limit identity POST (`AnonRateThrottle 5/min/IP`) | ~30 min |
 
-**Option B — Sécurité / abuse (S1+S6+S7)**
-Hardening prod :
-1. S1 : ajouter un heartbeat Celery worker (banner dev si absent).
-2. S6 : captcha sur identity POST pour anonymous users.
-3. S7 : DRF AnonRateThrottle sur identity POST (5/min/IP via `get_client_ip`).
+**Prérequis infra prod** : lancer `./manage.py root_fedow` une fois pour générer la `create_place_apikey` du tenant root. Sans ça, le `PlaceFedow.create_place()` (auto-déclenché à chaque nouveau tenant) plantera. Pas du code onboard, juste un setup ops.
 
-**Option C — UX brouillon (S4+S5)**
-Améliorer l'expérience continue :
-1. S4 : reprise du brouillon depuis identity (page intercalaire "Brouillon trouvé").
-2. S5 : preview du tenant avant launch.
+Choisir une option ou un mix raisonné :
 
-**Option D — Observabilité (M3)**
-Outillage prod :
-1. Sentry integration (capture exceptions Celery + 502 launch/status + erreurs Nominatim).
+**Option PROD (recommandée) — F3+S6+S7+i18n**
+Tout ce qui est bloquant prod sauf les Playwright E2E (qui peuvent attendre une session dédiée). ~2h total.
+1. F3 : workflow i18n complet (vérifier qu'aucune string session étendue n'est en français hardcodé en EN).
+2. S6 : captcha sur identity POST (`django-simple-captcha` déjà dans pyproject).
+3. S7 : rate-limit identity POST (`AnonRateThrottle 5/min/IP` via `get_client_ip`).
+
+**Option E2E — F2 seul**
+Session dédiée Playwright, 8 scénarios listés dans followups F2.
+1. Setup Playwright (`docker exec lespass_django poetry run playwright install chromium`).
+2. Écrire les 8 scénarios un à un, vérifier visuellement chacun.
+3. Documenter les pièges Playwright dans `tests/PIEGES.md` au fur et à mesure.
+
+**Option UX — S4+S5**
+Confort utilisateur post-prod :
+1. S4 : reprise du brouillon depuis identity.
+2. S5 : preview tenant avant launch.
+
+**Option WIDGET 2e usage — Event admin + frontend ajout event**
+Mettre à profit le widget GPS créé dans cette session pour 2 usages supplémentaires :
+1. Intégrer dans `Event admin` Unfold.
+2. Intégrer dans le sous-form "ajouter un event" frontend (step 5 wizard).
+
+**Option OBSERVABILITÉ — M3**
+1. Sentry integration (Celery exceptions + 502 launch/status).
 2. Audit log table dédiée.
-3. Metrics Prometheus si infra ready.
-
-**Option E — Refactor dette technique (N1+N2+N3)**
-Cleanup :
-1. N1 : décorateur `@require_confirmed_draft` pour factoriser le pattern dupliqué 6×.
-2. N2 : refactor `events_draft` JSONField → modèle `OnboardEventDraft`.
-3. N3 : templatetag `is_step_done` pour simplifier `progress_panel.html`.
 
 ## Méthode
 
@@ -119,7 +129,7 @@ message de commit suggéré dans le rapport final et STOP.
 - Admin test user : `admin@admin.com`.
 - DEBUG=1 en dev : le wizard bypass la vérification OTP côté `verify`.
 
-## Pièges à éviter (vécus en session précédente)
+## Pièges à éviter (vécus en sessions précédentes)
 
 1. **bcrypt absent** sur main-wizard → on hash via `django.contrib.auth.hashers`
    (PBKDF2). Pas besoin d'installer bcrypt.
@@ -141,6 +151,32 @@ message de commit suggéré dans le rapport final et STOP.
    valeurs du form parent à un `hx-get` enfant. Utiliser `hx-include`.
 10. **CSS Tailwind custom classes invisibles dans Unfold admin** : utiliser
     inline styles ou CSS variables.
+11. **Conftest `tests/pytest/` exige `API_KEY=dummy`** env var.
+    `docker exec -e API_KEY=dummy lespass_django bash -c "cd /DjangoFiles && poetry run python -m pytest ..."`
+12. **`django.test.Client(HTTP_HOST=...)` triggers django-tenants middleware DB lookup**
+    → "Database access not allowed" sur tests endpoint pure DRF.
+    Utiliser `APIRequestFactory` + appel direct au ViewSet.
+13. **Django ne re-scanne pas les `templatetags/` ni les routes URL à chaud.**
+    Restart `runserver_plus` requis après ajout d'un nouveau module templatetags
+    ou d'une nouvelle URL.
+14. **`Client.save()` (django-tenants) échoue hors du schema `public`** :
+    `Can't create tenant outside the public schema`. Wrap avec
+    `with schema_context("public"):` dans les tests.
+15. **`BaseBillet/urls.py` est inclus QUE dans `urls_tenants.py`** (tenants),
+    PAS dans `urls_public.py` (ROOT). Une feature qui doit marcher sur ROOT
+    (cas wizard onboard) doit avoir sa route ailleurs ou via duplication.
+    Cf. revert architecture widget GPS (full client au lieu de proxy serveur).
+16. **`events_draft` JSONField stocke datetime en string ISO 8601** :
+    `Event.objects.create(datetime="...")` ne convertit PAS la string.
+    `Event.save()` plante avec `'str' has no attribute 'astimezone'`.
+    Toujours `datetime.fromisoformat(...)` avant.
+17. **leaflet-geosearch crée 2 instances `.leaflet-control-geosearch`** :
+    1 placeholder Leaflet invisible (0x0) + 1 visible (style "bar"). Normal.
+    La navbar TiBillet a son propre input search vers `/explorer/` qui peut
+    être visuellement confondu avec la search bar du widget.
+18. **Browser bloque les fetch POST avec X-CSRFToken via `claude-in-chrome.javascript_tool`**
+    pour raisons de sécurité MCP. Tester l'endpoint avec `curl` côté serveur
+    plutôt qu'en console JS browser.
 
 ## Démarrage
 

@@ -205,3 +205,18 @@ def cleanup_invitations():
 
     if tracked_ids:
         OnboardInvitation.objects.filter(pk__in=tracked_ids).delete()
+
+
+@pytest.fixture
+def login_user_for_wc():
+    """
+    Fixture pour les tests qui creent un WC manuellement (sans passer
+    par les helpers `_create_wc_at_*` qui logguent deja). Wraps
+    `onboard.tests.helpers.login_test_user_for_email`.
+
+    / Fixture for tests that create a WC manually (not via the
+    `_create_wc_at_*` helpers which already login). Wraps
+    `onboard.tests.helpers.login_test_user_for_email`.
+    """
+    from onboard.tests.helpers import login_test_user_for_email
+    return login_test_user_for_email

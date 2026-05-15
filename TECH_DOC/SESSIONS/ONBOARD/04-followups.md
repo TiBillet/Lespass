@@ -8,18 +8,26 @@ Classé par priorité d'attaque.
 
 ## 🔴 Bloquants prod (à régler avant ouverture publique)
 
-### F1. Fedow non configuré → boucle retry
-**Status** : noté en code, pas fixé.
-**Source** : audit code critique (S2).
+### F1. ~~Fedow non configuré~~ ✅ RÉSOLU (audit 2026-05-15) — pas un bloquant code
 
-`wc.create_tenant()` raise si `FedowConfig.can_fedow()` est False (cf. `BaseBillet/validators.py:1026`). Sur un nouveau tenant fraîchement provisionné via le pool, `FedowConfig` est solo et n'a pas encore été configuré → exception → `autoretry_for=(Exception,)` × 3 → `wc.error_message` set → UI "Réessayer" en boucle infinie.
+**Status** : non bloquant après vérification code.
 
-**Pistes** :
-- Option A : capturer cette exception spécifique dans `create_tenant_from_draft`, écrire un `error_message` clair "Configuration Fedow manquante — contactez un admin" et **ne pas** retry (pas un cas qui se résout tout seul).
-- Option B : pre-configurer `FedowConfig` lors de la création des tenants du pool (`create_empty_tenant` management command).
-- Option C : retarder l'appel `can_fedow()` au premier usage réel (paresseux).
+**Audit code (2026-05-15)** : `BaseBillet/validators.py:1025` appelle `FedowAPI()` qui instancie `PlaceFedow`. Le constructeur `PlaceFedow.__init__` (`fedow_connect/fedow_api.py:659-661`) détecte si `can_fedow()` est False et appelle **automatiquement** `create_place(admin)` qui fait le handshake avec le serveur Fedow et remplit les 3 champs (`fedow_place_uuid` / `fedow_place_wallet_uuid` / `fedow_place_admin_apikey`).
 
-**Décision recommandée** : Option B (pool slots déjà configurés Fedow). Plus simple, supprime la dépendance.
+```python
+class PlaceFedow():
+    def __init__(self, fedow_config, admin=None):
+        ...
+        if not fedow_config.can_fedow():
+            # Premier contact entre une nouvelle place (nouveau tenant) et Fedow
+            self.create_place(admin=admin)
+```
+
+Donc le code gère déjà le cas tenant fraîchement créé. L'erreur `can_fedow = False` observée en dev venait sûrement d'un env où :
+- Le serveur Fedow root était injoignable (réseau / Docker compose pas démarré).
+- Ou `fedow_create_place_apikey` du tenant root n'était pas configurée (`./manage.py root_fedow` jamais exécuté).
+
+**À vérifier en prod** : `./manage.py root_fedow` lancé une fois pour générer la create_place_apikey ROOT. Sinon tous les nouveaux tenants planteront. Pas un bug onboard — un prérequis infra.
 
 ---
 
@@ -40,15 +48,19 @@ Scénarios critiques à couvrir :
 
 ---
 
-### F3. CHANGELOG.md + A TESTER + i18n
-**Status** : Task 24 du plan, reportée.
+### F3. ~~CHANGELOG.md + A TESTER~~ ✅ FAIT (2026-05-15) — i18n reste partielle
 
-À faire :
-1. **CHANGELOG.md** : entrée formatée (FR/EN, fichiers modifiés, migrations).
-2. **`A TESTER et DOCUMENTER/onboard-wizard.md`** : checklist de tests manuels pour le mainteneur (golden path, dark mode, mobile, reduce-motion, screen reader, invitation flow).
-3. **`makemessages -l fr -l en`** + remplir les `msgstr` manquants + `compilemessages`.
-   - Toutes les strings `_()` Python + `{% translate %}` / `{% blocktranslate %}` templates.
-   - Vérifier qu'aucune fuzzy traduction n'est insérée par erreur.
+**Status partiel** :
+1. ✅ **CHANGELOG.md** : entrée widget carte adresse + entrées intermédiaires faites en cours de session.
+2. ✅ **`A TESTER et DOCUMENTER/widget_carte_adresse.md`** : 9 scénarios manuels documentés.
+3. ⚠️ **i18n onboard wizard** : pas encore lancé `makemessages -l fr -l en` + `compilemessages` pour TOUTES les nouvelles strings de la session étendue (vouvoiement, validation unicité, cooldown 60s, warnings events, etc.). À faire avant prod.
+
+**Action restante** :
+```bash
+docker exec lespass_django poetry run django-admin makemessages -l fr -l en
+# Editer locale/{fr,en}/LC_MESSAGES/django.po
+docker exec lespass_django poetry run django-admin compilemessages
+```
 
 ---
 
@@ -249,41 +261,79 @@ Quand fedow_core mergera (cf. F1), retirer toutes les références "FK federatio
 
 ## Synthèse priorités
 
-```
-Priorité 1 (avant prod publique) :
-  F1 Fedow exception → tenants pool pre-configurés
-  F2 Tests Playwright E2E (3-6 scénarios)
-  F3 CHANGELOG + i18n compilemessages
-  S1 Heartbeat Celery
-  S6 Captcha anti-abuse identity
-  S7 Rate-limit identity POST
-  M17 axe-core a11y audit
+### 🔴 Avant prod publique (bloquants restants)
 
-Priorité 2 (premier mois post-prod) :
-  S2 Audit logs PII
-  S4 Reprise brouillon depuis email
-  S5 Preview tenant avant launch
-  M3 Sentry + metrics
-  M5 Analytics drop-off funnel
-  M10 Tests email Litmus
+| Item | Effort | Risque si omis |
+|---|---|---|
+| **F2 Tests Playwright E2E** (8 scénarios listés ci-dessus) | ~3-4h | Régressions invisibles à chaque modif onboard |
+| **F3 i18n compilemessages** (strings session étendue) | ~30 min | Page wizard mi-FR mi-EN si user en locale EN |
+| **S6 Captcha anti-abuse identity** (`django-simple-captcha`) | ~1h | Bot peut spammer création WC + envoi OTP |
+| **S7 Rate-limit identity POST** (`AnonRateThrottle 5/min/IP`) | ~30 min | Idem S6 |
 
-Priorité 3 (3-6 mois) :
-  M1 Magic link login
-  M6 Autosave temps réel
-  M8 Geocoder amélioré
-  M12 Stripe Connect dans wizard
-  M16 CI tests anti-régression
-  N2 Refactor events_draft modèle
+**Total estimé pour passer prod : ~5-6h**.
 
-Priorité 4 (exploration) :
-  M4 A/B testing
-  M7 Pré-validation IA
-  M11 Choix thème
-  M13 Try-first temporaire
-  M15 PWA notifications
-  M20 i18n extended
+**Prérequis infra (pas du code onboard)** : `./manage.py root_fedow` lancé une fois sur l'env prod pour générer la `create_place_apikey` ROOT. Sans ça, tous les nouveaux tenants planteront avec `can_fedow = False`. Cf. F1 ci-dessus.
 
-✅ FAIT (2026-05-15) :
-  N1 Helpers _get_confirmed_wc_or_redirect / _or_404 (cf. recap §7)
-  N3 Templatetag is_step_done + is_step_current (cf. recap §7)
-```
+### 🟠 Premier mois post-prod
+
+| Item | Détail bref |
+|---|---|
+| S1 Heartbeat Celery | Banner UI dev si worker absent |
+| S2 Audit logs PII | Vérifier qu'aucun email/IP n'est loggé en clair |
+| S4 Reprise brouillon depuis identity | Page "Brouillon trouvé, le reprendre ?" |
+| S5 Preview tenant avant launch | Mini-vignette page d'accueil future |
+| M3 Sentry + metrics | Capture exceptions Celery + 502 |
+| M5 Analytics drop-off funnel | Tracking étape abandon |
+| M10 Tests email Litmus | Mailpit/Mailtrap multi-clients |
+| M17 axe-core a11y audit | 0 violation critical/serious |
+
+### 🟡 3-6 mois
+
+| Item | Détail bref |
+|---|---|
+| M1 Magic link login | Pattern Slack/Notion/Linear |
+| M6 Autosave temps réel | Sync 30s ou onblur |
+| M8 Geocoder amélioré | Reverse au place direct sur la carte (bonus M2) |
+| M12 Stripe Connect dans wizard | Step Paiements optionnelle |
+| M16 CI tests anti-régression | Bloquer merge si <90% pass |
+| N2 Refactor events_draft modèle | JSONField → `OnboardEventDraft` model |
+
+### 🔵 Exploration
+
+| Item | Détail bref |
+|---|---|
+| M4 A/B testing flux 1page vs 6 steps | Mesure conversion |
+| M7 Pré-validation IA | Modération propos + suggestion reformulation |
+| M11 Choix thème | reunion / faire_festival / htmlskin |
+| M13 Try-first temporaire | Espace 4h sans email vérifié |
+| M15 PWA notifications | Push "Espace prêt" |
+| M20 i18n étendu | ES, PT, DE |
+
+### Bonus widget GPS futur
+
+- Intégration `Event admin` (Unfold)
+- Intégration frontend "Ajouter un event"
+- Cache mutualisé reverse si volume augmente (revert architecture sur server-side)
+
+---
+
+## ✅ FAIT (2026-05-15)
+
+### Refactos
+- N1 Helpers `_get_confirmed_wc_or_redirect` / `_or_404` (cf. recap §7)
+- N3 Templatetag `is_step_done` + `is_step_current` (cf. recap §7)
+
+### Session étendue 2026-05-15 (cf. recap §8)
+- ✅ UI : mobile sans toggle, CGU switch, domaine radios, alignement desktop, retrait h1 dupliqué
+- ✅ OTP refacto : envoi auto sur identity POST (annule Mod 1) + cooldown 60s + champ `otp_sent_at` (migration MetaBillet 0014)
+- ✅ Timer JS sur bouton "Renvoyer le code"
+- ✅ Vouvoiement complet (8 fichiers, audit grep zero résiduel)
+- ✅ Locale Nominatim FR (`accept-language` param + cache key par langue)
+- ✅ Widget carte adresse réutilisable full client (spec + plan dans `WIDGET_GEO/`)
+- ✅ Refonte step 03_place avec widget + suppression ancien map_widget + endpoint geocode
+- ✅ Validation unicité nom tenant step 1 (case-insensitive) + 2 tests régression (step 1 + race condition)
+- ✅ Fix critique : events_draft datetime string (le `try/except` swallowait l'erreur silencieusement)
+- ✅ Champ `events_creation_warnings` (migration MetaBillet 0015) + UI status_done.html + log.error détaillé
+- ✅ Fix overflow `status_error.html` (white-space + word-break + max-height + scroll)
+- ✅ CHANGELOG.md à jour
+- ✅ A TESTER et DOCUMENTER/widget_carte_adresse.md (9 scénarios)

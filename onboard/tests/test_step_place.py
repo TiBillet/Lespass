@@ -57,6 +57,57 @@ DEV_HOST = "lespass.tibillet.localhost"
 # ---------------------------------------------------------------------------
 
 
+def test_place_get_kicks_out_unauthenticated_user_to_identity(cleanup_waiting_configs):
+    """
+    Regression : si l'utilisateur a un brouillon `email_confirmed=True`
+    en session MAIS n'est PAS Django-authenticated (cas : logout silencieux,
+    cookie expire, etc.), GET `/onboard/place/` redirige vers
+    `/onboard/identity/`. Defense en profondeur du
+    `_get_confirmed_wc_or_redirect` (refacto 2026-05-15).
+
+    Sans le check `is_authenticated`, un attaquant qui pourrait restaurer
+    la session WC d'un autre user (cookie hijack) accederait aux steps
+    sans avoir prouve l'email. Le double check (WC + auth) durcit le flow.
+
+    / Regression: a draft `email_confirmed=True` in session WITHOUT a
+    Django-authenticated user (silent logout, expired cookie) must still
+    redirect to identity. Defense in depth.
+    """
+    import time
+
+    client = Client(HTTP_HOST=DEV_HOST)
+
+    # Cree un WC confirme + pose la session SANS faire de login.
+    # / Create a confirmed WC + set session WITHOUT login.
+    unique_email = f"kickout-{int(time.time() * 1000000)}@example.com"
+    with schema_context("meta"):
+        wc = WaitingConfiguration.objects.create(
+            organisation="Kickout Test",
+            email=unique_email,
+            dns_choice="tibillet.coop",
+            email_confirmed=True,
+            current_step=WaitingConfiguration.STEP_PLACE,
+            phone="",
+        )
+    cleanup_waiting_configs(wc)
+
+    session = client.session
+    session["onboard_wc_uuid"] = str(wc.uuid)
+    session.save()
+    # Pas de force_login -> user reste anonymous.
+
+    response = client.get("/onboard/place/")
+
+    assert response.status_code in (302, 303), (
+        f"Expected redirect, got {response.status_code}. "
+        f"Body excerpt: {response.content[:300]!r}"
+    )
+    assert response["Location"] == "/onboard/identity/", (
+        f"Expected redirect to /onboard/identity/, got {response['Location']!r}. "
+        f"Sans auth, le user doit etre kick out vers identity."
+    )
+
+
 def _create_wc_at_place(client, cleanup=None):
     """
     Cree un WaitingConfiguration en schema `meta` deja pre-positionne sur
@@ -96,6 +147,13 @@ def _create_wc_at_place(client, cleanup=None):
     session = client.session
     session["onboard_wc_uuid"] = str(wc.uuid)
     session.save()
+
+    # Login Django : depuis 2026-05-15 les steps post-verify exigent
+    # `is_authenticated` (cf. _get_confirmed_wc_or_redirect dans views.py).
+    # / Django login: post-verify steps require `is_authenticated`.
+    from onboard.tests.helpers import login_test_user_for_email
+    login_test_user_for_email(client, unique_email)
+
     return wc
 
 

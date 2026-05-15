@@ -290,3 +290,76 @@ def test_identity_post_existing_tenant_name_returns_422(cleanup_waiting_configs)
     assert not mock_mailer.called, (
         "OTP mailer should NOT be enqueued when serializer validation fails."
     )
+
+
+def test_identity_post_rate_limit_429_after_5_calls_per_minute(cleanup_waiting_configs):
+    """
+    Regression : `IdentityPostRateThrottle` (5/min/IP) bloque silencieusement
+    le 6e POST identity dans la meme minute depuis la meme IP. Friction zero
+    pour user normal (qui POST 1 fois). Bloque un bot single-IP qui itere.
+
+    Le throttle ne s applique qu au POST (cf. `allow_request` du throttle) :
+    un user qui refresh le GET ne consomme pas le quota.
+
+    / Regression: `IdentityPostRateThrottle` (5/min/IP) silently blocks
+    the 6th identity POST in the same minute from the same IP. Zero
+    friction for normal user, blocks single-IP bot.
+    """
+    from django.core.cache import cache
+    # Reset compteur DRF (cle cache interne basee sur scope + IP).
+    # / Reset DRF counter (cache key based on scope + IP).
+    cache.clear()
+
+    client = Client(HTTP_HOST=DEV_HOST)
+
+    import time
+    base_email = f"throttle-{int(time.time() * 1000)}"
+
+    # 5 POST consecutifs depuis la meme IP : doivent passer (avec validation
+    # qui peut faire 422 ou 302 mais PAS 429). On utilise un email/nom valide
+    # pour un succes complet (302 vers verify) sur les 5 premiers.
+    # / 5 consecutive POSTs from same IP: must NOT hit 429.
+    with patch("onboard.tasks.onboard_otp_mailer.delay"):
+        first_5_statuses = []
+        for i in range(5):
+            unique_email = f"{base_email}-{i}@example.com"
+            response = client.post("/onboard/identity/", data={
+                "email": unique_email,
+                "email_confirm": unique_email,
+                "first_name": "Bot",
+                "last_name": f"Number{i}",
+                "name": f"BotLieu-{base_email}-{i}",
+                "dns_choice": "tibillet.coop",
+                "cgu": "on",
+            })
+            first_5_statuses.append(response.status_code)
+
+            # Cleanup au fur et a mesure pour eviter pollution dev DB.
+            with schema_context("meta"):
+                wc = WaitingConfiguration.objects.filter(email=unique_email).first()
+                if wc:
+                    cleanup_waiting_configs(wc)
+
+        # Aucun des 5 ne doit etre 429 (sous le quota).
+        # / None of the first 5 should be 429 (under quota).
+        assert all(s != 429 for s in first_5_statuses), (
+            f"Aucun des 5 premiers POST ne doit etre throttle. Statuses: {first_5_statuses}"
+        )
+
+        # 6e POST : doit etre 429 (over quota).
+        # / 6th POST: must be 429 (over quota).
+        response_6 = client.post("/onboard/identity/", data={
+            "email": f"{base_email}-6@example.com",
+            "email_confirm": f"{base_email}-6@example.com",
+            "first_name": "Bot",
+            "last_name": "Number6",
+            "name": f"BotLieu-{base_email}-6",
+            "dns_choice": "tibillet.coop",
+            "cgu": "on",
+        })
+
+    assert response_6.status_code == 429, (
+        f"6e POST identity dans la meme minute doit etre throttled (429), "
+        f"recu {response_6.status_code}."
+    )
+

@@ -125,13 +125,16 @@ def test_verify_correct_otp_passes_to_place(cleanup_waiting_configs):
       - `email_confirmed=True`
       - `current_step="place"`
       - `otp_hash=""` (purge)
+    Et l'utilisateur Django est LOGGUE (refacto 2026-05-15) :
+      - `request.user.is_authenticated` apres la requete.
+      - User TibilletUser cree avec `email_valid=True` + `is_active=True`.
 
     / POST `/onboard/verify/` with the correct OTP redirects (302/303) to
-    `/onboard/place/`. The draft is updated:
-      - `email_confirmed=True`
-      - `current_step="place"`
-      - `otp_hash=""` (purged)
+    `/onboard/place/`. Updates draft fields AND logs the user in
+    (2026-05-15 refactor): post-verify steps require `is_authenticated`.
     """
+    from django.contrib.auth import get_user_model
+
     client = Client(HTTP_HOST=DEV_HOST)
     wc = _create_wc_with_otp(client, "123456", cleanup=cleanup_waiting_configs)
 
@@ -148,6 +151,32 @@ def test_verify_correct_otp_passes_to_place(cleanup_waiting_configs):
     assert wc.email_confirmed is True
     assert wc.current_step == WaitingConfiguration.STEP_PLACE
     assert wc.otp_hash == ""
+
+    # User TibilletUser doit avoir ete cree avec email_valid=True + is_active=True.
+    # / TibilletUser must have been created with email_valid=True + is_active=True.
+    User = get_user_model()
+    user = User.objects.filter(email=wc.email).first()
+    assert user is not None, (
+        "TibilletUser doit etre cree au verify success."
+    )
+    assert user.email_valid is True, (
+        "user.email_valid doit passer a True (preuve OTP)."
+    )
+    assert user.is_active is True, (
+        "user.is_active doit passer a True (sinon login impossible)."
+    )
+
+    # Login Django : la session client doit avoir le cookie auth.
+    # On verifie via une 2e requete : si on lance un GET sur /onboard/place/
+    # apres verify success, on doit etre authentifie (status != redirect identity).
+    # / Verify Django session has auth cookie: a follow-up GET to /onboard/place/
+    # after verify success should be authenticated (no redirect to identity).
+    response_place = client.get("/onboard/place/")
+    assert response_place.status_code == 200, (
+        f"Apres verify success, GET /onboard/place/ doit etre 200 (user "
+        f"loggue), recu {response_place.status_code}. Si redirect identity, "
+        f"login post-verify a echoue."
+    )
 
 
 @override_settings(DEBUG=False)
