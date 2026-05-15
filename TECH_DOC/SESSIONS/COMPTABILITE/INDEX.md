@@ -12,7 +12,7 @@
 
 | # | Chantier | Statut | Spec |
 |---|---|---|---|
-| 01 | Port partiel V2 (clôture caisse + plan comptable + exports CSV/FEC/Excel/PDF) | 🟡 S1 ✅ — S2-S6 à venir | [`SPEC.md`](SPEC.md) |
+| 01 | Port partiel V2 (clôture caisse + plan comptable + exports CSV/FEC/Excel/PDF) | 🟡 S1+S2+S3 ✅ — S4-S6 à venir | [`SPEC.md`](SPEC.md) |
 | 02 | (à venir) | — | — |
 
 ---
@@ -175,6 +175,8 @@ L'app `comptabilite/` reste sur disque, peut être ré-activée plus tard.
 - [x] 0.3 Rédaction SPEC.md
 - [x] 0.4 Validation maintainer (décisions clés tranchées 2026-05-15)
 - [x] S1 — Modèle + admin minimal (fait le 2026-05-15)
+- [x] S2 — Service rapport + management command + tests (fait le 2026-05-15)
+- [x] S3 — Templates admin (rapport visuel) + vue temps réel (fait le 2026-05-15)
 - [ ] S2 — Service rapport + management command + tests
 - [ ] S3 — Templates admin + vue temps réel
 - [ ] S4 — Exports CSV/Excel/PDF/FEC

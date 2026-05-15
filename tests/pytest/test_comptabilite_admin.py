@@ -210,3 +210,87 @@ def test_admin_pas_de_bouton_add(admin_client):
     assert "/comptabilite/cloturecaisse/add/" not in contenu, (
         "Le bouton Add ne devrait pas etre present pour ClotureCaisse"
     )
+
+
+# ============================================================================
+# Tests S3 — fiche detail cloture
+# ============================================================================
+
+def test_admin_changeform_affiche_rapport(admin_client):
+    """
+    GET /admin/comptabilite/cloturecaisse/<uuid>/change/ retourne 200 et
+    contient les sections du rapport (totaux par moyen, TVA, etc.).
+    / The cloture detail page returns 200 and contains the 8 report sections.
+    """
+    from django_tenants.utils import tenant_context
+    from Customers.models import Client as TenantClient
+    from django.utils import timezone
+    from datetime import timedelta
+
+    client, _ = admin_client
+    tenant = TenantClient.objects.exclude(schema_name="public").first()
+    fin = timezone.now() - timedelta(days=180)
+    debut = fin - timedelta(days=1)
+
+    with tenant_context(tenant):
+        from comptabilite.models import ClotureCaisse
+        from comptabilite.tasks import generer_cloture_pour_tenant
+
+        # Cleanup at start
+        ClotureCaisse.objects.filter(
+            datetime_debut=debut, datetime_fin=fin
+        ).delete()
+
+        cloture_uuid = generer_cloture_pour_tenant(
+            schema_name=tenant.schema_name,
+            niveau="J",
+            datetime_debut_iso=debut.isoformat(),
+            datetime_fin_iso=fin.isoformat(),
+        )
+
+    url = f"/admin/comptabilite/cloturecaisse/{cloture_uuid}/change/"
+    response = client.get(url)
+    contenu = response.content.decode("utf-8")
+
+    assert response.status_code == 200, f"Status {response.status_code}"
+    # data-testid pour reperer les sections rendues
+    assert 'data-testid="comptabilite-section-totaux-par-moyen"' in contenu
+    assert 'data-testid="comptabilite-section-tva"' in contenu
+    assert 'data-testid="comptabilite-section-infos-legales"' in contenu
+
+    # Cleanup
+    with tenant_context(tenant):
+        ClotureCaisse.objects.filter(uuid=cloture_uuid).delete()
+
+
+# ============================================================================
+# Tests S3 B2 — vue temps reel + bandeau changelist
+# ============================================================================
+
+def test_admin_changelist_contient_lien_temps_reel(admin_client):
+    """
+    La page liste contient un lien vers /admin/comptabilite/cloturecaisse/rapport-temps-reel/.
+    / The changelist contains a link to the real-time report view.
+    """
+    client, _ = admin_client
+    response = client.get("/admin/comptabilite/cloturecaisse/")
+    contenu = response.content.decode("utf-8")
+    assert response.status_code == 200
+    assert 'data-testid="comptabilite-bouton-temps-reel"' in contenu
+    assert "/admin/comptabilite/cloturecaisse/rapport-temps-reel/" in contenu
+
+
+def test_admin_rapport_temps_reel_se_charge(admin_client):
+    """
+    GET /admin/comptabilite/cloturecaisse/rapport-temps-reel/ retourne 200
+    avec la zone HTMX et l'attribut aria-live.
+    / The real-time report view returns 200 with HTMX + a11y attributes.
+    """
+    client, _ = admin_client
+    response = client.get("/admin/comptabilite/cloturecaisse/rapport-temps-reel/")
+    assert response.status_code == 200
+    contenu = response.content.decode("utf-8")
+    assert 'data-testid="comptabilite-rapport-temps-reel-zone"' in contenu
+    assert 'aria-live="polite"' in contenu
+    # HTMX poll : every 30s
+    assert 'hx-trigger="every 30s"' in contenu
