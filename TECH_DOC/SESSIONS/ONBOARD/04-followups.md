@@ -26,13 +26,15 @@ Classé par priorité d'attaque.
 ### F2. Tests Playwright E2E manquants
 **Status** : Task 23 du plan, reportée.
 
-3 scénarios critiques à couvrir :
-1. **Golden path** : identity → verify (DEBUG bypass) → place → descriptions → events → launch → status done.
+Scénarios critiques à couvrir :
+1. **Golden path** : identity → verify (DEBUG bypass) → place (widget GPS) → descriptions → events → launch → status done.
 2. **Invitation** : `/onboard/?invite=<code>` → WC attaché à `wc.invitation`.
 3. **Resume magic link** : envoyer un email avec lien signé, retrouver le brouillon.
 4. **Double-click finalize** : tester que la race condition B1 est bien fixée (le claim Redis empêche le double tenant).
 5. **OTP paste** : copier "123456" dans la 1e case → vérifier que les 6 cases sont remplies.
-6. **Carte Leaflet** : tile loading + marker drag + click.
+6. **Widget carte adresse** : search live leaflet-geosearch + drag marqueur + reverse geocode Nominatim → champs adresse séparés auto-remplis.
+7. **Validation unicité nom step 1** : POST identity avec nom déjà pris → erreur visible immédiatement.
+8. **Cooldown OTP resend** : 2 clics rapides sur "Renvoyer" → 2e en 429 + timer JS visible.
 
 **Notes** : ne pas relancer `runserver_plus` (le mainteneur le tient dans byobu). Tests doivent tourner contre le port 8002 / Traefik.
 
