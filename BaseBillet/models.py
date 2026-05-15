@@ -554,6 +554,38 @@ class Configuration(SingletonModel):
         verbose_name=_("Federation module"),
     )
 
+    ######### COMPTABILITE — RAPPORTS PERIODIQUES #########
+    # / Periodic reports — accounting app
+
+    PERIODICITE_NONE = "NONE"
+    PERIODICITE_JOURNALIER = "J"
+    PERIODICITE_HEBDOMADAIRE = "H"
+    PERIODICITE_MENSUEL = "M"
+    PERIODICITE_ANNUEL = "A"
+    PERIODICITE_CHOICES = [
+        (PERIODICITE_NONE, _("No email")),
+        (PERIODICITE_JOURNALIER, _("Daily")),
+        (PERIODICITE_HEBDOMADAIRE, _("Weekly")),
+        (PERIODICITE_MENSUEL, _("Monthly")),
+        (PERIODICITE_ANNUEL, _("Yearly")),
+    ]
+
+    rapport_emails = models.TextField(
+        blank=True,
+        default="",
+        verbose_name=_("Recipient emails for closure reports"),
+        help_text=_(
+            "Comma-separated emails. Leave empty to disable automatic sending."
+        ),
+    )
+
+    rapport_periodicite = models.CharField(
+        max_length=4,
+        choices=PERIODICITE_CHOICES,
+        default=PERIODICITE_NONE,
+        verbose_name=_("Closure report sending frequency"),
+    )
+
     # FROM V2 : UNUSED
     module_monnaie_locale = models.BooleanField(
         default=False,

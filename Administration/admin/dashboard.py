@@ -549,6 +549,14 @@ def get_sidebar_navigation(request):
             "collapsible": True,
             "items": [
                 {
+                    "title": _("Cash closure"),
+                    "icon": "lock",
+                    "link": reverse_lazy(
+                        "staff_admin:comptabilite_cloturecaisse_changelist"
+                    ),
+                    "permission": admin_permission,
+                },
+                {
                     "title": _("Entries"),
                     "icon": "receipt_long",
                     "link": reverse_lazy(
