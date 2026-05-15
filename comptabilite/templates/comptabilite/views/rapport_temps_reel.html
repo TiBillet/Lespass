@@ -1,0 +1,53 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static unfold %}
+
+{# Page autonome : rapport temps reel de la cloture en cours. #}
+{# / Standalone page: real-time report for the current shift. #}
+{# LOCALISATION : comptabilite/templates/comptabilite/views/rapport_temps_reel.html #}
+
+{% block title %}{% translate "Real-time report" %} | {{ site_title|default:_('TiBillet admin') }}{% endblock %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
+{% endblock %}
+
+{% block breadcrumbs %}
+    <div class="breadcrumbs">
+        <a href="{% url 'staff_admin:index' %}">{% translate "Home" %}</a>
+        &rsaquo;
+        <a href="{% url 'staff_admin:comptabilite_cloturecaisse_changelist' %}">{% translate "Cash closures" %}</a>
+        &rsaquo;
+        {% translate "Real-time report" %}
+    </div>
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-4">
+
+    {% component "unfold/components/card.html" with title=_("Real-time report") %}
+        <p class="text-base-500 text-sm m-0">
+            {% blocktrans with debut=datetime_debut|date:"d/m/Y H:i" fin=datetime_fin|date:"d/m/Y H:i" %}
+            Period: from {{ debut }} to {{ fin }} — auto-refresh every 30 seconds.
+            {% endblocktrans %}
+            <br>
+            <strong>{% translate "Transactions" %}:</strong> {{ nb_transactions }}
+        </p>
+    {% endcomponent %}
+
+    {# Zone refresh HTMX every 30s. hx-select recupere uniquement cette zone depuis la reponse, #}
+    {# pour eviter de re-injecter la page complete. #}
+    {# / HTMX refresh every 30s. hx-select extracts only this zone from the response. #}
+    <div id="rapport-temps-reel-zone"
+         data-testid="comptabilite-rapport-temps-reel-zone"
+         aria-live="polite"
+         hx-get="{% url 'staff_admin:comptabilite_cloturecaisse_temps_reel' %}"
+         hx-trigger="every 30s"
+         hx-target="this"
+         hx-swap="outerHTML"
+         hx-select="#rapport-temps-reel-zone">
+        {% include "comptabilite/admin/_sections_rapport.html" %}
+    </div>
+
+</div>
+{% endblock %}
