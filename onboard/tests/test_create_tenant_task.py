@@ -99,7 +99,16 @@ def _make_pool_slot(cleanup_clients):
         categorie=Client.WAITING_CONFIG,
     )
     slot.auto_create_schema = False  # IMPORTANT: skip schema creation
-    slot.save()
+    # django-tenants exige que Client.save() s'execute dans le schema
+    # public. Si un test precedent a laisse le schema courant sur un
+    # tenant (via le middleware HTTP_HOST=lespass.tibillet.localhost
+    # par exemple), on force explicitement le retour pour eviter un
+    # `Can't create tenant outside the public schema` au save().
+    # / django-tenants requires Client.save() to run in the public
+    # schema. Force return if a previous test (e.g. an HTTP-based one
+    # using HTTP_HOST=<tenant>) left us on a tenant schema.
+    with schema_context("public"):
+        slot.save()
     cleanup_clients(slot)
     return slot
 
@@ -261,6 +270,224 @@ def test_create_tenant_from_draft_calls_ready_mailer_on_success(
         create_tenant_from_draft(wc_uuid=wc_uuid)
 
         mock_mailer.assert_called_once_with(wc_uuid=wc_uuid)
+
+
+@pytest.mark.onboard
+def test_create_tenant_from_draft_creates_events_from_drafts_with_iso_datetime(
+    lespass_tenant, cleanup_waiting_configs, cleanup_clients,
+):
+    """
+    Regression : `events_draft` est un JSONField -> les datetimes sont
+    stockes en string ISO 8601 ("2026-06-15T19:00:00+02:00"). Avant fix,
+    `Event.objects.create(datetime="...")` ne convertissait PAS la string,
+    et `Event.save()` plantait silencieusement avec
+    `'str' object has no attribute 'astimezone'` quand le post_save signal
+    tentait de generer le slug. Le `try/except Exception` swallow l'erreur
+    -> 0 events crees, sans trace evidente pour l'utilisateur.
+
+    Le fix parse `datetime.fromisoformat()` avant create. Ce test verifie
+    qu'un draft avec datetime ISO string aboutit bien a un Event en DB
+    dans le schema du nouveau tenant.
+
+    / Regression: `events_draft` JSONField stores datetimes as ISO 8601
+    strings. Before the fix, `Event.objects.create(datetime="...")` did
+    NOT convert, and the post_save signal crashed silently. The except
+    swallowed the error -> 0 events created. Fix parses fromisoformat()
+    before create.
+    """
+    from BaseBillet.models import Event
+    from onboard.tasks import create_tenant_from_draft
+
+    wc = _make_wc(cleanup_waiting_configs)
+    _make_pool_slot(cleanup_clients)
+
+    # Suffix unique pour ne pas hitter le `unique_together = ('name', 'datetime')`
+    # de Event si plusieurs runs du test laissent des Events orphelins dans
+    # le tenant `lespass` partage. / Unique suffix to avoid hitting the
+    # `unique_together = ('name', 'datetime')` constraint on shared tenant.
+    nom_event_unique = f"EventTest-{uuid.uuid4().hex[:8]}"
+
+    # Un draft d'event avec datetime SOUS FORME DE STRING ISO (ce que
+    # produit DRF/Django quand il serialise une DateTime -> JSON pour le
+    # JSONField events_draft). / Draft with ISO string datetime (DRF/Django
+    # output when serializing DateTime -> JSON for the events_draft field).
+    iso_datetime_str = "2099-06-15T19:00:00+02:00"
+    with schema_context("meta"):
+        wc.events_draft = [{
+            "name": nom_event_unique,
+            "datetime": iso_datetime_str,
+            "description": "Test regression datetime string",
+        }]
+        wc.save(update_fields=["events_draft"])
+
+    with patch.object(
+        WaitingConfiguration, "create_tenant",
+        autospec=True,
+        side_effect=_fake_create_tenant_factory(lespass_tenant),
+    ):
+        create_tenant_from_draft(wc_uuid=str(wc.uuid))
+
+    # On verifie que l'event a bien ete cree dans le schema du tenant
+    # (lespass_tenant ici, qui sert de tenant cible mock).
+    # / Verify the event exists in the tenant schema (lespass_tenant
+    # serves as the mock target tenant here).
+    from django_tenants.utils import tenant_context
+    with tenant_context(lespass_tenant):
+        evt = Event.objects.filter(name=nom_event_unique).first()
+        assert evt is not None, (
+            "Event devrait avoir ete cree dans le tenant. "
+            "Si None: bug datetime str / parse fromisoformat regressif."
+        )
+        # Cleanup explicit pour ne pas polluer le tenant lespass partage.
+        # / Explicit cleanup to keep shared lespass tenant clean.
+        evt_name = evt.name
+        evt_dt = evt.datetime
+        evt.delete()
+        assert evt_dt.year == 2099, f"Annee attendue 2099, recu {evt_dt.year}"
+        assert evt_name == nom_event_unique
+
+
+@pytest.mark.onboard
+def test_create_tenant_from_draft_accumulates_warnings_for_broken_drafts(
+    lespass_tenant, cleanup_waiting_configs, cleanup_clients,
+):
+    """
+    Quand un draft d'event est mal forme (datetime non parsable, image
+    invalide, etc.), la task le skip ET accumule un warning lisible dans
+    `wc.events_creation_warnings`. Le tenant est cree normalement, le
+    drafts valides sont ajoutes — seul le draft cassé est ignore.
+
+    L'utilisateur voit ces warnings sur `/onboard/launch/` (rendu par
+    `status_done.html`) et peut recreer les events manuellement dans
+    son admin.
+
+    / When an event draft is malformed (unparseable datetime, broken
+    image), the task skips it AND accumulates a readable warning in
+    `wc.events_creation_warnings`. Tenant is created normally, valid
+    drafts processed — only the broken one is ignored. The user sees
+    the warnings on `/onboard/launch/` (status_done.html).
+    """
+    from BaseBillet.models import Event
+    from onboard.tasks import create_tenant_from_draft
+
+    wc = _make_wc(cleanup_waiting_configs)
+    _make_pool_slot(cleanup_clients)
+
+    # 2 drafts : 1 valide + 1 mal forme (datetime "not-a-date" -> raise
+    # ValueError dans fromisoformat). Suffix unique pour eviter les
+    # collisions sur unique_together (name, datetime) du tenant lespass
+    # partage. / 2 drafts: 1 valid + 1 broken (datetime "not-a-date"
+    # raises ValueError in fromisoformat). Unique suffix to avoid
+    # collisions in shared lespass tenant.
+    suffix = uuid.uuid4().hex[:8]
+    nom_valide = f"EventValide-{suffix}"
+    nom_casse = f"EventCasse-{suffix}"
+    with schema_context("meta"):
+        wc.events_draft = [
+            {
+                "name": nom_valide,
+                "datetime": "2099-07-14T20:00:00+02:00",
+                "description": "Draft valide, doit etre cree.",
+            },
+            {
+                "name": nom_casse,
+                "datetime": "not-a-date",  # invalide -> raise au parse
+                "description": "Draft casse, doit etre skip + warning.",
+            },
+        ]
+        wc.save(update_fields=["events_draft"])
+
+    with patch.object(
+        WaitingConfiguration, "create_tenant",
+        autospec=True,
+        side_effect=_fake_create_tenant_factory(lespass_tenant),
+    ):
+        create_tenant_from_draft(wc_uuid=str(wc.uuid))
+
+    # Verif 1 : le draft valide est cree, le draft casse est skip.
+    # / Check 1: valid draft created, broken draft skipped.
+    from django_tenants.utils import tenant_context
+    with tenant_context(lespass_tenant):
+        evt_valide = Event.objects.filter(name=nom_valide).first()
+        evt_casse = Event.objects.filter(name=nom_casse).first()
+        assert evt_valide is not None, "Le draft valide doit etre cree."
+        assert evt_casse is None, "Le draft casse doit etre skip."
+        # Cleanup pour ne pas polluer le tenant lespass partage.
+        # / Cleanup to keep shared lespass tenant clean.
+        evt_valide.delete()
+
+    # Verif 2 : le warning est accumule dans wc.events_creation_warnings,
+    # mentionne le nom du draft casse + une trace lisible (classe d'exc).
+    # / Check 2: warning is accumulated in wc.events_creation_warnings,
+    # mentions the broken draft name + readable trace (exception class).
+    with schema_context("meta"):
+        wc.refresh_from_db()
+        warnings_text = wc.events_creation_warnings
+        assert warnings_text, (
+            "events_creation_warnings doit etre non-vide quand un draft est skip."
+        )
+        assert nom_casse in warnings_text, (
+            f"Le nom du draft casse '{nom_casse}' doit apparaitre dans les warnings, "
+            f"recu: {warnings_text!r}"
+        )
+        # Le valide ne doit PAS apparaitre (puisqu'il a reussi).
+        # / Valid one must NOT appear (it succeeded).
+        assert nom_valide not in warnings_text, (
+            "Le draft valide ne doit PAS apparaitre dans les warnings."
+        )
+
+
+@pytest.mark.onboard
+def test_create_tenant_from_draft_writes_error_when_name_taken_async(
+    cleanup_waiting_configs, cleanup_clients,
+):
+    """
+    Race condition : entre la validation step 1 (nom libre) et la creation
+    async, un autre user prend le meme nom -> `TenantCreateValidator.
+    create_tenant` raise `Exception("The name 'X' is already taken.")`.
+
+    On verifie que la task :
+      - capture l'exception et l'inscrit dans `wc.error_message`,
+      - laisse `wc.tenant` a None (rien n'a abouti),
+      - re-raise pour permettre l'autoretry Celery (catch via pytest.raises).
+
+    L'utilisateur verra alors dans `/onboard/launch/` (rendu par
+    `status_error.html`) le message d'erreur, avec le bouton "Reessayer"
+    qui appellera retry mais aboutira au meme echec tant que le nom est
+    pris -> il devra revenir step 1 changer de nom.
+
+    / Race condition: between step-1 validation (name available) and async
+    creation, another user grabs the same name -> create_tenant() raises.
+    The task captures it in `wc.error_message`, leaves `wc.tenant=None`,
+    and re-raises for Celery autoretry. The user sees the error on
+    `/onboard/launch/` and must change the name in step 1.
+    """
+    from onboard.tasks import create_tenant_from_draft
+
+    wc = _make_wc(cleanup_waiting_configs)
+    _make_pool_slot(cleanup_clients)
+
+    def _raise_name_taken(self_wc):
+        raise Exception(f"The name '{self_wc.organisation}' is already taken.")
+
+    with patch.object(
+        WaitingConfiguration, "create_tenant",
+        autospec=True,
+        side_effect=_raise_name_taken,
+    ):
+        with pytest.raises(Exception, match="already taken"):
+            create_tenant_from_draft(wc_uuid=str(wc.uuid))
+
+    with schema_context("meta"):
+        wc.refresh_from_db()
+        assert wc.tenant is None, (
+            "wc.tenant doit rester None quand create_tenant raise."
+        )
+        error = (wc.error_message or "").lower()
+        assert "already taken" in error, (
+            f"error_message doit mentionner 'already taken', "
+            f"recu: {wc.error_message!r}"
+        )
 
 
 @pytest.mark.onboard

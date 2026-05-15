@@ -43,3 +43,34 @@ Expected context: wc, domain, admin_url.
         {% translate "Accéder à mon espace" %} →
     </a>
 </div>
+
+{# Warnings non-bloquants accumules pendant la creation du tenant.       #}
+{# Cas typique : un draft d'event mal forme (datetime invalide, image    #}
+{# corrompue) skip silencieusement par la task. Le tenant existe et le   #}
+{# user peut y acceder, mais on lui signale clairement quels events      #}
+{# n'ont pas pu etre crees pour qu'il les recree manuellement dans son   #}
+{# admin. Affiche uniquement si non-vide.                                #}
+{# / Non-blocking warnings from tenant creation. Typical: malformed event#}
+{# draft silently skipped. The tenant exists and the user can access it, #}
+{# but we surface which events failed so they can recreate them manually.#}
+{# Shown only if non-empty.                                              #}
+{% if wc.events_creation_warnings %}
+<div class="alert alert-warning small mt-3 mb-0"
+     role="status"
+     data-testid="onboard-status-done-warnings">
+    <strong>
+        <i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>
+        {% translate "Certains événements n'ont pas pu être créés automatiquement :" %}
+    </strong>
+    {# white-space: pre-wrap pour preserver les sauts de ligne entre   #}
+    {# warnings, word-break pour ne pas deborder horizontalement.      #}
+    {# / pre-wrap to keep line breaks between warnings; word-break to  #}
+    {# avoid horizontal overflow.                                      #}
+    <pre class="mb-1 mt-2 small bg-light p-2 rounded"
+         style="white-space: pre-wrap; word-break: break-word; max-height: 150px; overflow-y: auto;"
+         data-testid="onboard-status-done-warnings-list">{{ wc.events_creation_warnings }}</pre>
+    <span class="text-muted">
+        {% translate "Vous pourrez les recréer manuellement depuis l'administration de votre espace." %}
+    </span>
+</div>
+{% endif %}

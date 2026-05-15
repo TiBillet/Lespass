@@ -214,9 +214,96 @@ Django scanne les `templatetags/` à l'init des apps, **pas à chaud**. La créa
 
 ---
 
-## 8. Liens utiles
+## 8. Session du 2026-05-15 (suite étendue) — Polish prod-ready
+
+Session marathon de polish + features manquantes. ~9h de travail. **56 tests onboard passing / 2 skipped** (vs 52 au début).
+
+### 8.1 UI / UX
+| Item | Détail |
+|---|---|
+| Mobile : panneau étapes toujours visible | Suppression du `<details>` toggle dans `base_wizard.html`. CSS responsive : hints masqués sur mobile, padding réduit. |
+| CGU : checkbox → switch Bootstrap 5 | `form-check form-switch` + `role="switch"` + lien `target_blank` vers la doc CGU/CGV |
+| Domaine : select → boutons radios | Pattern Bootstrap `btn-check` × 2 (`tibillet.coop` / `tibillet.re`). Retrait `tibillet.fr` du serializer (`DNS_CHOICES`). JS adapté pour lire le radio coché. |
+| Desktop : helper aligné au bouton Continuer | CSS flex column sur `.onboard-panel-wrapper` + `flex: 1` sur `.onboard-panel` |
+| Step 1 : retrait du h1 dupliqué | Le titre "Créer votre espace TiBillet" était déjà dans l'eyebrow gauche. Test `b"Cr"` mis à jour vers `data-testid="onboard-identity-form"`. |
+| Vouvoiement | Audit complet 8 fichiers : tous les `tu/ton/ta/tes` corrigés en `vous/votre/vos`. Bonus : "marker" → "marqueur". |
+
+### 8.2 OTP refacto (annule Mod 1)
+- **Décision inverse de Mod 1** : OTP envoyé automatiquement par `identity` POST (au lieu d'un clic explicite). UX standard Slack/Linear/Stripe.
+- Helper centralisé `_generate_and_send_otp_for_wc(wc, is_resend=False)` réutilisé par `identity` POST + `resend_otp` action.
+- Champ ajouté : `WaitingConfiguration.otp_sent_at` (DateTimeField nullable). Migration `MetaBillet 0014`.
+- **Cooldown 60s** côté serveur : `resend_otp` rejette en 429 + partial `resend_cooldown.html` si `now - otp_sent_at < 60s`.
+- **Timer JS** sur le bouton "Renvoyer le code" : décompte visuel "(60s)" → "(59s)" → ... avec icône `bi-hourglass-split`. Réagit à `htmx:afterRequest` (200 OU 429).
+- Template `02_verify.html` simplifié : plus de branche `has_pending_otp` (label fixe "Renvoyer le code", message fixe "Un code à 6 chiffres a été envoyé à `<email>`").
+
+### 8.3 Locale Nominatim FR
+- `onboard/services.py::geocode` : ajout du param `accept-language=<lang>` (lit `get_language()` Django, fallback `"fr"`).
+- Helper `_resoudre_langue_utilisateur(lang_explicite=None)` (FALC : split région).
+- Cache key inclut maintenant la langue (évite collisions FR vs EN sur même query).
+
+### 8.4 Widget carte adresse réutilisable (full client)
+- **Spec + plan + implémentation** : voir `TECH_DOC/SESSIONS/WIDGET_GEO/01-design-spec.md` + `02-implementation-plan.md`.
+- 3 fichiers nouveaux dans `templates/widgets/`, `static/widgets/` (`.html` + `.css` + `.js` vanilla IIFE).
+- Helper validation : `BaseBillet/form_fields.py::AdresseGeolocaliseeField.extraire_depuis()`.
+- Refonte step 03_place : utilise `{% include "widgets/widget_carte_adresse.html" with identifiant_widget="place" %}`. Suppression `map_widget.html`, `geocode_result.html`, action `geocode` + URL.
+- **Architecture revert** : initialement spec validée en "Hybride" (search client + reverse via endpoint serveur). Bascule en **full client** après découverte d'un problème multi-tenant routing (route `BaseBillet/urls.py` pas dans `urls_public.py` → 404 sur ROOT). Suppression de `views_widgets.py` + `services_geocode.py` + 2 fichiers de tests. Trade-off : pas de cache mutualisé serveur, OK pour notre volume.
+- Settings.py : `BASE_DIR / "templates"` ajouté à `TEMPLATES[0]['DIRS']`, `BASE_DIR / "static"` ajouté à `STATICFILES_DIRS`.
+
+### 8.5 Validation unicité nom tenant (les 2 niveaux)
+- **Step 1 (identity)** : `OnboardIdentitySerializer.validate_name` enrichi → `Client.objects.filter(name__iexact=...).exists()` dans `schema_context("public")`. UX : l'utilisateur apprend dès la step 1 que le nom est pris.
+- **Step 6 (launch async)** : déjà couvert par `BaseBillet/validators.py::TenantCreateValidator.create_tenant` (ligne 952). Ajout de 2 tests régression pour assurer le no-regression.
+- Tests :
+  - `test_identity_post_existing_tenant_name_returns_422` : POST avec "LESPASS" (case différent du tenant existant `lespass`) → 422 + erreur sur `name`.
+  - `test_create_tenant_from_draft_writes_error_when_name_taken_async` : race condition simulée → `wc.error_message` rempli.
+
+### 8.6 Bug fixé : events_draft datetime string
+- **Symptôme** : event saisi step 5 → tenant créé OK → 0 events dans le tenant admin.
+- **Cause** : `events_draft` est un JSONField → `datetime` stocké en string ISO 8601. `Event.objects.create(datetime="...")` ne convertit PAS la string. `Event.save()` plante avec `'str' object has no attribute 'astimezone'` quand le post_save signal génère le slug. Le `try/except Exception` swallow l'erreur silencieusement.
+- **Fix** : `datetime.fromisoformat(ev_datetime_brut)` AVANT `Event.objects.create(datetime=ev_datetime, ...)`.
+- **Test** : `test_create_tenant_from_draft_creates_events_from_drafts_with_iso_datetime`.
+
+### 8.7 Visibilité warnings creation events
+- Champ ajouté : `WaitingConfiguration.events_creation_warnings` (TextField). Migration `MetaBillet 0015`.
+- `onboard/tasks.py` : `logger.warning` → `logger.error` + inclut le contenu du draft dans le log + accumule dans `wc.events_creation_warnings`.
+- `status_done.html` : alert orange sous le success message si warnings non-vides, avec liste des events skipped + suggestion de les recréer manuellement dans l'admin.
+- Test : `test_create_tenant_from_draft_accumulates_warnings_for_broken_drafts` (1 valide + 1 cassé `datetime="not-a-date"`).
+
+### 8.8 Fix overflow status_error
+- `status_error.html` : ajout `white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; max-height: 200px; overflow-y: auto` sur le `<pre>` qui affiche `wc.error_message`. Évite le débordement horizontal sur tracebacks longs.
+
+### 8.9 Refacto N1 + N3 (cf. session précédente même jour)
+Voir section 7 ci-dessus — déjà documenté.
+
+### 8.10 Pièges découverts (à capitaliser)
+
+| # | Piège | Détail |
+|---|---|---|
+| P1 | Conftest `tests/pytest/` exige `API_KEY=dummy` env var | Sinon `docker exec` interne échoue. Pour tests qui n'utilisent pas l'API : `docker exec -e API_KEY=dummy lespass_django bash -c "cd /DjangoFiles && poetry run python -m pytest ..."` |
+| P2 | `django.test.Client(HTTP_HOST=...)` triggers django-tenants middleware DB lookup | Erreur "Database access not allowed" → utiliser `APIRequestFactory` pour les tests d'endpoint pure DRF |
+| P3 | Django ne re-scanne pas les `templatetags/` ni les routes URL à chaud | Restart `runserver_plus` requis après ajout d'un nouveau templatetag ou d'une nouvelle URL |
+| P4 | `Client.save()` (django-tenants) échoue hors du schema `public` | `_make_pool_slot` doit faire `with schema_context("public"): slot.save()` pour rester robuste après un test qui a posé un schema tenant |
+| P5 | Browser bloque les fetch POST avec X-CSRFToken via `claude-in-chrome.javascript_tool` | Sécurité MCP. Tester l'endpoint avec curl côté serveur, ou simuler le flow via JS sans CSRF |
+| P6 | URLs `BaseBillet/urls.py` ne sont accessibles QUE sur tenants (`urls_tenants.py`), pas ROOT (`urls_public.py`) | Si une feature doit être accessible sur ROOT (cas wizard onboard), ajouter explicitement la route dans `urls_public.py` OU mettre le ViewSet ailleurs. Cf. revert architecture widget. |
+| P7 | `events_draft` JSONField stocke datetime en string ISO | `Event.objects.create(datetime="...")` ne convertit pas. Toujours `datetime.fromisoformat(...)` avant. |
+| P8 | leaflet-geosearch crée 2 instances `.leaflet-control-geosearch` (1 placeholder invisible + 1 visible) | Normal, pas un bug. La navbar TiBillet a son propre input search vers `/explorer/` qui peut être visuellement confondu avec la search bar du widget. |
+
+### 8.11 Métriques session
+
+| Métrique | Avant | Après |
+|---|---|---|
+| Tests pytest onboard | 52 / 2 skipped | **56 / 2 skipped** |
+| Tests pytest widget | 0 | 6 (form_field) — les 9 tests endpoint+service supprimés au revert architecture |
+| Migrations | onboard 0001 + MetaBillet 0013 | + MetaBillet 0014 (otp_sent_at) + MetaBillet 0015 (events_creation_warnings) |
+| Fichiers créés/modifiés | (cf. CHANGELOG.md) | ~30 |
+| Bugs UX résolus | n/a | 12+ (overflow, OTP friction, mobile toggle, vouvoiement, etc.) |
+
+---
+
+## 9. Liens utiles
 
 - Plan d'implémentation détaillé : `02-implementation-plan.md`
 - Spec design originale : `01-design-spec.md`
 - Follow-ups & must-have à explorer : `04-followups.md`
 - Prompt prochaine session : `05-next-session-prompt.md`
+- Spec widget GPS réutilisable : `../WIDGET_GEO/01-design-spec.md`
+- Plan d'impl widget GPS : `../WIDGET_GEO/02-implementation-plan.md`

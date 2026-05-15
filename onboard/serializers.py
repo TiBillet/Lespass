@@ -73,14 +73,47 @@ class OnboardIdentitySerializer(serializers.Serializer):
     def validate_name(self, value):
         """
         Le nom du lieu doit avoir au moins 3 caracteres significatifs
-        (strip pour ignorer espaces de bord). / The venue name must have
-        at least 3 meaningful chars (strip to ignore edge whitespace).
+        (strip pour ignorer espaces de bord). On verifie aussi qu'il n'est
+        pas deja pris par un tenant existant (check case-insensitive pour
+        eviter les ambiguites visuelles "MonLieu" vs "monlieu", meme si la
+        contrainte DB sur Client.name est case-sensitive). Sans ce check,
+        l'utilisateur ne decouvrirait le conflit qu'a la step Launch quand
+        TenantCreateValidator.create_tenant raise — friction UX.
+
+        / The venue name must have at least 3 meaningful chars. Also checks
+        the name is not already taken by an existing tenant (case-insensitive
+        for visual UX clarity, even though the DB constraint on Client.name
+        is case-sensitive). Without this check, the user would only discover
+        the conflict at the Launch step.
         """
-        if len(value.strip()) < 3:
+        valeur_nettoyee = value.strip()
+        if len(valeur_nettoyee) < 3:
             raise serializers.ValidationError(
                 _("Name must be at least 3 characters."),
             )
-        return value.strip()
+
+        # Imports locaux : evitent la dependance au chargement du module
+        # onboard.serializers vers Customers (SHARED_APPS).
+        # / Local imports: avoid load-time dependency on Customers.
+        from django_tenants.utils import schema_context
+
+        from Customers.models import Client
+
+        # `Client` (= tenant) vit dans le schema `public` (TENANT_MODEL).
+        # On force le contexte pour ne pas planter si le serializer est
+        # appele depuis un schema tenant.
+        # / `Client` lives in `public` schema; force context to avoid crash
+        # when the serializer is called from a tenant schema.
+        with schema_context("public"):
+            nom_deja_pris = Client.objects.filter(
+                name__iexact=valeur_nettoyee,
+            ).exists()
+        if nom_deja_pris:
+            raise serializers.ValidationError(
+                _("This venue name is already taken. Please choose another."),
+            )
+
+        return valeur_nettoyee
 
     def validate(self, attrs):
         """

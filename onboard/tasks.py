@@ -322,14 +322,50 @@ def create_tenant_from_draft(self, wc_uuid):
         from django.core.files import File
         from django.core.files.storage import default_storage
 
+        # Parser de datetime : `events_draft` est un JSONField -> les datetimes
+        # sont stockes en string ISO 8601 (ex: "2026-06-15T19:00:00+02:00").
+        # `Event.objects.create(datetime="...")` ne convertit PAS la string en
+        # objet datetime (les DateTimeField.to_python ne sont appeles qu'au
+        # full_clean() ou via les forms). Du coup `Event.save()` plante avec
+        # `'str' object has no attribute 'astimezone'` quand le post_save signal
+        # tente de generer le slug/full_url. Le `try/except Exception` ci-dessous
+        # avale l'erreur silencieusement -> 0 events crees, sans trace evidente.
+        # On parse explicitement la string en datetime aware avant create().
+        # / `events_draft` is a JSONField -> datetimes are ISO 8601 strings.
+        # `Event.objects.create(datetime="...")` does NOT auto-convert (only
+        # forms/full_clean call DateTimeField.to_python). The post_save signal
+        # then crashes on `.astimezone()`. Parse explicitly here.
+        from datetime import datetime as datetime_module
+
+        # Accumulateur de warnings pour les drafts skip. Chaque ligne
+        # contient le nom du draft + la classe d'exception + le message.
+        # Persiste dans `wc.events_creation_warnings` a la fin pour que
+        # l'utilisateur le voie sur `/onboard/launch/` (status_done.html).
+        # / Accumulator for skipped drafts. Each line: draft name + exception
+        # class + message. Persisted to `wc.events_creation_warnings` at the
+        # end so the user sees it on `/onboard/launch/`.
+        warnings_drafts = []
+
         with tenant_context(new_tenant):
             from BaseBillet.models import Event
             for ev in drafts:
                 image_path = ev.get("image") if isinstance(ev, dict) else None
                 try:
+                    ev_datetime_brut = ev.get("datetime")
+                    if isinstance(ev_datetime_brut, str):
+                        # `fromisoformat` accepte le format ISO 8601 standard
+                        # (depuis Python 3.7) — celui utilise par DRF /
+                        # Django pour serialiser un DateTimeField vers JSON.
+                        # / `fromisoformat` accepts standard ISO 8601 — the
+                        # format used by DRF / Django when serializing a
+                        # DateTimeField to JSON.
+                        ev_datetime = datetime_module.fromisoformat(ev_datetime_brut)
+                    else:
+                        ev_datetime = ev_datetime_brut
+
                     new_event = Event.objects.create(
                         name=(ev.get("name") or "Sans titre")[:200],
-                        datetime=ev.get("datetime"),
+                        datetime=ev_datetime,
                         short_description=(ev.get("description") or "")[:250],
                         # L'admin relira et publiera manuellement.
                         # / Admin reviews and publishes manually.
@@ -372,14 +408,36 @@ def create_tenant_from_draft(self, wc_uuid):
                                 image_path, del_exc,
                             )
                 except Exception as exc:
-                    # On loggue et on continue : un draft mal forme ne doit
-                    # pas faire echouer toute la task (les autres drafts
-                    # peuvent etre OK et le tenant est deja cree).
-                    # / Log and continue: a malformed draft must not fail the
-                    # whole task (the tenant already exists).
-                    logger.warning(
-                        "Skipping event draft for WC %s: %s", wc_uuid, exc,
+                    # On loggue ERROR (pas warning) avec le contenu du draft
+                    # pour debug, et on accumule un message lisible dans
+                    # `warnings_drafts` qui sera persiste apres la boucle.
+                    # On ne raise PAS : un draft mal forme ne doit pas tuer
+                    # la creation du tenant (deja faite) ni les autres drafts.
+                    # / Log ERROR (not warning) with the draft content for
+                    # debug, and accumulate a readable message in
+                    # `warnings_drafts` to be persisted after the loop.
+                    # Don't raise: a malformed draft must not kill the tenant
+                    # (already created) nor the other drafts.
+                    nom_draft = (ev.get("name") if isinstance(ev, dict) else None) or "(sans nom)"
+                    logger.error(
+                        "create_tenant_from_draft: skipping event draft for WC %s. "
+                        "Draft content: %r. Error: %s: %s",
+                        wc_uuid, ev, type(exc).__name__, exc,
                     )
+                    warnings_drafts.append(
+                        f"« {nom_draft} » : {type(exc).__name__}: {exc}"
+                    )
+
+        # Persistance des warnings dans wc.events_creation_warnings.
+        # On le fait UNE FOIS apres la boucle pour minimiser les writes.
+        # Si la liste est vide, on ne touche pas le champ (defaut "").
+        # / Persist warnings to wc.events_creation_warnings ONCE after the
+        # loop to minimize writes. If empty, don't touch the field.
+        if warnings_drafts:
+            with schema_context("meta"):
+                wc.refresh_from_db()
+                wc.events_creation_warnings = "\n".join(warnings_drafts)
+                wc.save(update_fields=["events_creation_warnings"])
 
     # === 5. Federation handling — SKIPPED on main-wizard ===
     # fedow_core n'est pas mergee sur cette branche. La FK

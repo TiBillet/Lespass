@@ -251,6 +251,22 @@ class WaitingConfiguration(models.Model):
         verbose_name=_("OTP last sent at"),
         help_text=_("Timestamp of the last OTP send (used for cooldown)."),
     )
+    # Warnings non-bloquants accumules pendant la creation du tenant.
+    # Cas typique : un draft d'event mal forme (datetime invalide, image
+    # corrompue, etc.) qui est skip silencieusement par la task pour ne
+    # pas tuer la creation entiere. Le user voit ces warnings sur la page
+    # `/onboard/launch/` (status_done.html) pour pouvoir corriger
+    # manuellement dans son admin.
+    # / Non-blocking warnings accumulated during tenant creation. Typical
+    # case: a malformed event draft (invalid datetime, broken image, etc.)
+    # silently skipped by the task to avoid killing the whole creation.
+    # The user sees these warnings on `/onboard/launch/` (status_done.html)
+    # to fix them manually in their admin.
+    events_creation_warnings = models.TextField(
+        blank=True, default="",
+        verbose_name=_("Events creation warnings"),
+        help_text=_("Non-blocking warnings from event draft processing during tenant creation."),
+    )
 
     # Etapes du wizard. / Wizard steps.
     STEP_IDENTITY = "identity"

@@ -225,3 +225,68 @@ def test_identity_post_with_invitation_attaches_it(
             f"Expected invitation_id={inv.pk}, got {wc.invitation_id}."
         )
         assert wc.invitation.code == inv.code
+
+
+def test_identity_post_existing_tenant_name_returns_422(cleanup_waiting_configs):
+    """
+    POST `/onboard/identity/` avec un nom (`name`) qui matche deja un
+    tenant existant (case-insensitive) -> 422 + erreur sur `name`.
+
+    On verifie l'UX : l'utilisateur apprend des la step 1 que le nom est
+    pris, sans avoir a parcourir les 6 etapes pour decouvrir l'echec en
+    Launch (ou TenantCreateValidator.create_tenant raise).
+
+    On utilise un tenant existant en DB dev (`lespass`) qui est toujours
+    la. Le check serializer fait `iexact` -> on tape "LESPASS" (casse
+    differente) pour valider que le check est case-insensitive. Le mailer
+    OTP est patche par defense (ne devrait pas etre appele si validation
+    echoue, mais on assure).
+
+    / POST identity with a `name` matching an existing tenant (case-
+    insensitive) -> 422 + error on `name`. UX: user learns at step 1, no
+    need to walk through 6 steps before discovering at Launch. We hit the
+    always-present `lespass` tenant with mixed case "LESPASS" to verify
+    the iexact lookup. Mailer is patched defensively.
+    """
+    client = Client(HTTP_HOST=DEV_HOST)
+
+    import time
+    unique_email = f"taken-{int(time.time() * 1000)}@example.com"
+
+    with patch("onboard.tasks.onboard_otp_mailer.delay") as mock_mailer:
+        response = client.post("/onboard/identity/", data={
+            "email": unique_email,
+            "email_confirm": unique_email,
+            "first_name": "Jonas",
+            "last_name": "Test",
+            "name": "LESPASS",  # Case differente du tenant existant `lespass`.
+            "dns_choice": "tibillet.coop",
+            "cgu": "on",
+        })
+
+    assert response.status_code == 422, (
+        f"Expected 422 (name taken), got {response.status_code}. "
+        f"Body excerpt: {response.content[:300]!r}"
+    )
+
+    # L'erreur doit pointer specifiquement le champ `name`.
+    # / Error must specifically target the `name` field.
+    assert b"name" in response.content, (
+        "Response should mention the `name` field error."
+    )
+
+    # Aucun WC ne doit avoir ete cree (validation a echoue avant create()).
+    # / No WC should have been created (validation failed before create()).
+    with schema_context("meta"):
+        wc_cree = WaitingConfiguration.objects.filter(email=unique_email).first()
+        if wc_cree:
+            cleanup_waiting_configs(wc_cree)
+        assert wc_cree is None, (
+            "WC should NOT be created when name validation fails."
+        )
+
+    # Defense : le mailer OTP n'a pas ete enqueue puisque validation a echoue.
+    # / Defensive: mailer OTP not enqueued since validation failed.
+    assert not mock_mailer.called, (
+        "OTP mailer should NOT be enqueued when serializer validation fails."
+    )

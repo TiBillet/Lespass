@@ -30,11 +30,18 @@ Expected context: wc.
             <strong>{% translate "Une erreur est survenue" %}</strong>
             <p class="small mb-2 mt-1">
                 {% blocktranslate trimmed %}
-                    Nous avons reçu une alerte. Tu peux réessayer ou
+                    Nous avons reçu une alerte. Vous pouvez réessayer ou
                     nous contacter à contact@tibillet.coop.
                 {% endblocktranslate %}
             </p>
+            {# `<pre>` : white-space:pre-wrap + word-break:break-word pour ne pas #}
+            {# deborder horizontalement quand l'erreur est longue (traceback,    #}
+            {# stack Python, exception Fedow). max-height + scroll vertical pour #}
+            {# garder un container raisonnable sans tronquer l'info utile.      #}
+            {# / `<pre>` wrapping rules so long error messages (Python traceback,#}
+            {# Fedow exception) don't overflow horizontally; max-height + scroll.#}
             <pre class="small bg-light p-2 mb-2 rounded"
+                 style="white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; max-height: 200px; overflow-y: auto;"
                  data-testid="onboard-status-error-message">{{ wc.error_message }}</pre>
             <form hx-post="{% url 'onboard-launch-retry' %}"
                   hx-target="#status"
