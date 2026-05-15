@@ -1,0 +1,11 @@
+{% load i18n %}<!doctype html>
+<html>
+<body style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#1f2937;max-width:560px;margin:0 auto;padding:24px">
+  <p style="margin:0 0 16px">{% translate "Hello," %}</p>
+  <p style="margin:0 0 16px">{% translate "Your verification code to create your TiBillet space is:" %}</p>
+  <p style="font-size:32px;font-weight:700;letter-spacing:8px;text-align:center;background:#f3f4f6;padding:18px;border-radius:12px;margin:24px 0">{{ otp }}</p>
+  <p style="margin:0 0 8px">{% translate "It expires in 10 minutes." %}</p>
+  <p style="color:#6b7280;font-size:13px;margin:24px 0 0">{% translate "If you did not request this, you can ignore this email." %}</p>
+  <p style="margin:16px 0 0">— {% translate "The TiBillet team" %}</p>
+</body>
+</html>

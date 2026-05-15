@@ -1,0 +1,57 @@
+{% extends "seo/base.html" %}
+{% load i18n static %}
+
+{% comment %}
+  Base layout pour le wizard d'onboarding (6 etapes).
+  / Base layout for the onboarding wizard (6 steps).
+
+  - Colonne gauche : panneau pedagogique (progress + invitation + reprendre plus tard).
+  - Colonne droite : contenu de l'etape courante (block `step_content`).
+  - Sur mobile, le panneau gauche se replie via <details> (collapse natif).
+  - aria-live="polite" sur le contenu : les lecteurs d'ecran annoncent les changements
+    d'etape sans interrompre la lecture en cours.
+
+  / - Left column: pedagogical panel (progress + invitation + resume later).
+  / - Right column: current step content (block `step_content`).
+  / - On mobile, the left panel collapses via a native <details> element.
+  / - aria-live="polite" on content: screen readers announce step changes
+  /   without interrupting the current reading.
+{% endcomment %}
+
+{% block extra_head %}
+{# HTMX : utilise par les boutons resend (step 2), add/remove events (step 5), #}
+{# polling status (step 6), geocode (step 3). Charge ici car `seo/base.html` #}
+{# ne l'inclut pas par defaut (cf. Task 16). #}
+{# / HTMX: used by resend buttons (step 2), add/remove events (step 5), #}
+{# status polling (step 6), geocode (step 3). Loaded here because #}
+{# `seo/base.html` doesn't include it by default (cf. Task 16). #}
+<script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}" defer></script>
+<link rel="stylesheet" href="{% static 'onboard/wizard.css' %}">
+{% endblock %}
+
+{% block main_wrapper %}
+<main class="onboard-wizard container-lg my-4" data-testid="onboard-wizard">
+    <div class="row g-4">
+        {# Panneau gauche (orientation) — collapse mobile via <details> #}
+        {# / Left panel (orientation) — mobile collapse via <details> #}
+        <aside class="col-lg-5 onboard-panel-wrapper">
+            <details open class="onboard-panel-collapse d-lg-none">
+                <summary class="btn btn-outline-primary w-100 mb-3">
+                    {% translate "Voir les étapes" %}
+                </summary>
+                {% include "onboard/partials/progress_panel.html" %}
+            </details>
+            <div class="d-none d-lg-block">
+                {% include "onboard/partials/progress_panel.html" %}
+            </div>
+        </aside>
+
+        {# Formulaire / etape courante #}
+        {# / Form / current step #}
+        <section class="col-lg-7" id="wizard-content" aria-live="polite">
+            {% block step_content %}{% endblock %}
+        </section>
+    </div>
+</main>
+<script src="{% static 'onboard/wizard.js' %}" defer></script>
+{% endblock main_wrapper %}

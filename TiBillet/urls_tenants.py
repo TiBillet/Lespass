@@ -46,6 +46,10 @@ urlpatterns = [
     re_path(r'crowd/', include('crowds.urls')),
     re_path(r'contrib/', include('crowds.urls')),
 
+    # Wizard d'onboarding nouveau tenant (SHARED : accessible aussi sur ROOT).
+    # / Onboarding wizard for new tenants (SHARED: also reachable on ROOT).
+    path('', include('onboard.urls')),
+
     # pour carte GEN1 Bisik
     # re_path(r'(?P<numero_carte>^[qsdf974]{5}$)', include('QrcodeCashless.urls')),
 

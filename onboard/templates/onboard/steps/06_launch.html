@@ -1,0 +1,153 @@
+{% extends "onboard/base_wizard.html" %}
+{% load i18n %}
+
+{% comment %}
+  LOCALISATION: onboard/templates/onboard/steps/06_launch.html
+
+  Step 6 du wizard d'onboarding (Task 19) : ecran d'attente pendant la
+  creation asynchrone du tenant. Affiche :
+    - un message d'accueil personnalise ("Bienvenue ! Ton espace X arrive..."),
+    - un container `#status` polled toutes les 2s via HTMX (rend l'un des
+      3 partials : progress / done / error),
+    - un carrousel d'inspirations (6 cards, rotation auto 5s gere par
+      `wizard.js`) pour faire patienter l'utilisateur.
+
+  Pattern HTMX :
+    - `#status` porte `hx-get + hx-trigger="load, every 2s" + hx-swap="innerHTML"`.
+    - Le partial `status_progress.html` inclut ego un `hx-trigger="every 2s"`
+      a l'interieur pour que le polling perdure tant qu'il est rendu.
+    - Quand la vue renvoie `status_done.html` (pas de hx-trigger), le
+      polling s'arrete naturellement.
+
+  Contexte attendu :
+    - `wc`           : instance WaitingConfiguration (pour `organisation`).
+    - `events_count` : nombre d'events draft (deja calcule par la vue).
+    - `step`         : "launch" (utilise par le progress panel).
+
+  Choix : le carrousel rend les 6 cards en HTML. Le JS dans
+  `wizard.js` ajoute `.is-active` sur la card courante toutes les 5s
+  (CSS `display:none` par defaut, `display:block` pour `.is-active`).
+
+  / Step 6 of the onboarding wizard (Task 19): waiting screen during
+  async tenant creation. Displays:
+    - a personalized welcome message,
+    - a `#status` container polled every 2s via HTMX (renders one of
+      3 partials: progress / done / error),
+    - an inspiration carousel (6 cards, 5s auto-rotation by
+      `wizard.js`) to keep the user busy.
+
+  HTMX pattern:
+    - `#status` carries `hx-get + hx-trigger="load, every 2s" + hx-swap="innerHTML"`.
+    - The `status_progress.html` partial itself includes `hx-trigger="every 2s"`
+      so polling persists while it's rendered.
+    - When the view returns `status_done.html` (no hx-trigger), polling
+      stops naturally.
+
+  Expected context:
+    - `wc`           : WaitingConfiguration instance.
+    - `events_count` : number of event drafts (already computed by view).
+    - `step`         : "launch" (used by the progress panel).
+
+  Choice: the carousel renders all 6 cards in HTML. The JS in
+  `wizard.js` toggles `.is-active` on the current card every 5s (CSS
+  hides cards by default, shows `.is-active`).
+{% endcomment %}
+
+{% block page_title %}{% translate "Création de votre espace TiBillet" %}{% endblock %}
+
+{% block step_content %}
+<header class="mb-4" data-testid="onboard-launch-page">
+    <p class="onboard-step-counter mb-1">{% translate "Étape 6 / 6" %}</p>
+    <h1 class="onboard-h1 mb-2">
+        🎉
+        {% blocktranslate trimmed with name=wc.organisation %}
+            Bienvenue ! Ton espace {{ name }} arrive...
+        {% endblocktranslate %}
+    </h1>
+    <p class="text-muted">
+        {% blocktranslate trimmed %}
+            Nous préparons votre espace TiBillet. Cela prend généralement
+            quelques secondes. Vous pouvez fermer cet onglet : un email
+            vous sera envoyé dès que tout sera prêt.
+        {% endblocktranslate %}
+    </p>
+</header>
+
+{# ============================================================ #}
+{# Container `#status` polled toutes les 2s par HTMX. On inclut #}
+{# directement `status_progress.html` au 1er render pour que la  #}
+{# zone ne soit pas vide. `aria-live="polite"` annonce les       #}
+{# transitions (progress -> done / error) aux lecteurs d'ecran.  #}
+{# / `#status` container polled every 2s by HTMX. We include     #}
+{# `status_progress.html` on first render so the zone isn't      #}
+{# empty. `aria-live="polite"` announces transitions.            #}
+{# ============================================================ #}
+<section class="mb-4">
+    <div id="status"
+         aria-live="polite"
+         data-testid="onboard-launch-status"
+         hx-get="{% url 'onboard-launch-status' %}"
+         hx-trigger="load, every 2s"
+         hx-swap="innerHTML">
+        {% include "onboard/partials/status_progress.html" %}
+    </div>
+</section>
+
+{# ============================================================ #}
+{# Carrousel d'inspirations (6 cards rotantes, 5s par card).    #}
+{# Le mot "carrousel" doit apparaitre dans le HTML pour le test  #}
+{# `test_launch_get_renders_page_with_carousel` (regex case-     #}
+{# insensitive sur `carrousel` ou `carousel`). Le `data-testid`  #}
+{# `onboard-info-carousel` contient le mot — OK pour le test.    #}
+{# / Inspiration carousel (6 rotating cards, 5s per card). The   #}
+{# word "carrousel" must appear in HTML for the test (regex      #}
+{# case-insensitive on `carrousel` or `carousel`).                #}
+{# ============================================================ #}
+<section data-testid="onboard-launch-carousel">
+    <h2 class="h4 mb-3">{% translate "Pendant ce temps, découvre TiBillet" %}</h2>
+    <div class="onboard-carousel" data-testid="onboard-info-carousel">
+        <div class="onboard-carousel-card">
+            <h3 class="h5">{% translate "Adhésions et abonnements" %}</h3>
+            <p>{% translate "Tu pourras gérer les adhésions à ton association et proposer des abonnements à tes membres." %}</p>
+            <a href="https://tibillet.github.io/documentation_v3/" target="_blank" rel="noopener">
+                {% translate "Documentation" %} →
+            </a>
+        </div>
+        <div class="onboard-carousel-card">
+            <h3 class="h5">{% translate "Budget contributif" %}</h3>
+            <p>{% translate "Lance des campagnes de financement participatif avec contribution adaptive et cascade multi-asset." %}</p>
+            <a href="https://tibillet.github.io/documentation_v3/" target="_blank" rel="noopener">
+                {% translate "Documentation" %} →
+            </a>
+        </div>
+        <div class="onboard-carousel-card">
+            <h3 class="h5">{% translate "Booking de salle ou ressource" %}</h3>
+            <p>{% translate "Permets à tes membres et au public de réserver tes salles ou ton matériel." %}</p>
+            <a href="https://tibillet.github.io/documentation_v3/" target="_blank" rel="noopener">
+                {% translate "Documentation" %} →
+            </a>
+        </div>
+        <div class="onboard-carousel-card">
+            <h3 class="h5">{% translate "Mesure d'impact social via Grist" %}</h3>
+            <p>{% translate "Connecte ton espace à la base ouverte du comité data des tiers-lieux pour mesurer ton impact." %}</p>
+            <a href="https://tibillet.github.io/documentation_v3/" target="_blank" rel="noopener">
+                {% translate "En savoir plus" %} →
+            </a>
+        </div>
+        <div class="onboard-carousel-card">
+            <h3 class="h5">{% translate "Encaisser avec Stripe" %}</h3>
+            <p>{% translate "Active Stripe Connect dans ton admin pour vendre des billets et adhésions en ligne." %}</p>
+            <a href="https://tibillet.github.io/documentation_v3/" target="_blank" rel="noopener">
+                {% translate "Documentation" %} →
+            </a>
+        </div>
+        <div class="onboard-carousel-card">
+            <h3 class="h5">{% translate "Fédération de lieux" %}</h3>
+            <p>{% translate "Ton lieu peut rejoindre le réseau coopératif TiBillet et partager son agenda avec d'autres structures." %}</p>
+            <a href="https://tibillet.github.io/documentation_v3/" target="_blank" rel="noopener">
+                {% translate "Documentation" %} →
+            </a>
+        </div>
+    </div>
+</section>
+{% endblock step_content %}

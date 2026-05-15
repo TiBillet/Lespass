@@ -1,0 +1,12 @@
+{% load i18n %}<!doctype html>
+<html>
+<body style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#1f2937;max-width:560px;margin:0 auto;padding:24px">
+  <p style="margin:0 0 16px">{% translate "Hello," %}</p>
+  <p style="margin:0 0 24px">{% blocktranslate with name=organisation %}Your TiBillet space "{{ name }}" is ready!{% endblocktranslate %}</p>
+  <p style="text-align:center;margin:24px 0">
+    <a href="{{ admin_url }}" style="display:inline-block;background:#22c55e;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600">{% translate "Access your admin" %}</a>
+  </p>
+  <p style="color:#6b7280;font-size:13px;margin:24px 0 0">{% translate "You can configure your modules, connect Stripe, and publish your first events." %}</p>
+  <p style="margin:16px 0 0">— {% translate "The TiBillet team" %}</p>
+</body>
+</html>

@@ -1,0 +1,45 @@
+{% load i18n %}
+{% comment %}
+LOCALISATION: onboard/templates/onboard/partials/status_done.html
+
+Partial HTMX rendu par `OnboardViewSet.launch_status` quand le tenant
+est finalise (`wc.tenant` non null). CRUCIAL : on NE met PAS de
+`hx-trigger="every 2s"` ici — le polling doit s'arreter une fois cet
+ecran affiche (sinon on continue de pinger inutilement).
+
+Contexte attendu :
+  - `wc`       : instance WaitingConfiguration (pour `organisation`).
+  - `domain`   : nom de domaine primaire du tenant (string).
+  - `admin_url`: URL absolue vers l'admin du tenant.
+
+`data-testid="onboard-status-done"` pour les tests Playwright. Le lien
+"Accéder à mon espace" porte `onboard-launch-go` (testid commun avec
+le bouton "Préparation..." du partial progress, pour permettre aux
+E2E de cibler "le bouton de la phase de fin" sans dependre de l'etat).
+
+/ HTMX partial rendered by `OnboardViewSet.launch_status` when the
+tenant is finalized. CRUCIAL: NO `hx-trigger="every 2s"` — polling
+must stop once this screen is displayed.
+
+Expected context: wc, domain, admin_url.
+{% endcomment %}
+<div class="alert alert-success d-flex align-items-center mb-0"
+     data-testid="onboard-status-done">
+    <span class="me-2" aria-hidden="true">✓</span>
+    <div class="flex-grow-1">
+        <strong>
+            {% blocktranslate trimmed with name=wc.organisation %}
+                Espace {{ name }} prêt — tu peux y aller !
+            {% endblocktranslate %}
+        </strong>
+        <div class="small text-muted">
+            {% translate "Adresse de votre espace :" %}
+            <code data-testid="onboard-status-done-domain">{{ domain }}</code>
+        </div>
+    </div>
+    <a href="{{ admin_url }}"
+       class="btn btn-primary ms-2"
+       data-testid="onboard-launch-go">
+        {% translate "Accéder à mon espace" %} →
+    </a>
+</div>

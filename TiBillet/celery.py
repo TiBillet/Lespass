@@ -70,6 +70,21 @@ def setup_periodic_tasks(sender, **kwargs):
         cron_refresh_seo_cache.s(),
     )
 
+    # Purge hebdomadaire des brouillons d'onboarding non finalises
+    # (Lundi 3h UTC). On passe par un wrapper @app.task local pour eviter
+    # la race entre on_after_configure et autodiscover_tasks (meme pattern
+    # que cron_refresh_seo_cache).
+    # / Weekly cleanup of unfinalized onboarding drafts (Monday 3am UTC).
+    # We go through a local @app.task wrapper to avoid the
+    # on_after_configure vs autodiscover_tasks race (same pattern as
+    # cron_refresh_seo_cache).
+    # cf. onboard/tasks.py::purge_stale_onboard_drafts
+    logger.info(f'setup_periodic_tasks cron_purge_stale_onboard_drafts at Monday 3AM UTC')
+    sender.add_periodic_task(
+        crontab(day_of_week=1, hour=3, minute=0),
+        cron_purge_stale_onboard_drafts.s(),
+    )
+
     logger.info(f'setup_periodic_tasks DONE')
 
 
@@ -101,3 +116,24 @@ def cron_refresh_seo_cache():
     logger.info(f'call_command refresh_seo_cache START')
     call_command('refresh_seo_cache')
     logger.info(f'call_command refresh_seo_cache END')
+
+
+@app.task
+def cron_purge_stale_onboard_drafts():
+    """
+    Wrapper local pour la task purge_stale_onboard_drafts (app onboard).
+    On passe par un wrapper @app.task local pour eviter la race entre
+    on_after_configure et autodiscover_tasks (meme pattern que
+    cron_refresh_seo_cache).
+    / Local wrapper for purge_stale_onboard_drafts (onboard app).
+    Local @app.task wrapper avoids the on_after_configure vs
+    autodiscover_tasks race (same pattern as cron_refresh_seo_cache).
+    """
+    # Import local pour eviter de tirer onboard.tasks au chargement du module
+    # celery (qui est tres precoce dans le boot Django).
+    # / Local import to avoid pulling onboard.tasks at celery module load
+    # time (very early in Django boot).
+    from onboard.tasks import purge_stale_onboard_drafts
+    logger.info(f'purge_stale_onboard_drafts START')
+    deleted = purge_stale_onboard_drafts()
+    logger.info(f'purge_stale_onboard_drafts END (deleted={deleted})')

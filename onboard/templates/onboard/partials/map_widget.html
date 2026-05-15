@@ -1,0 +1,27 @@
+{% load i18n %}
+{% comment %}
+  LOCALISATION: onboard/templates/onboard/partials/map_widget.html
+
+  Bloc HTML hote pour la carte Leaflet de la step 3. Sert dans deux contextes :
+    1. Rendu initial (template `03_place.html` GET) — container vide, le JS
+       Leaflet attache la carte au div `#onboard-leaflet-map` (au-dessous).
+    2. Apres HTMX swap par `geocode_result.html` — le partial inclut ce meme
+       widget et y ajoute des inputs hidden `#geocode-lat/lng`. Le script
+       Leaflet reagit a `htmx:afterSwap` pour recreer la map.
+
+  / Host HTML block for the step 3 Leaflet map. Used in two contexts:
+    1. Initial render (`03_place.html` GET) — empty container, Leaflet JS
+       attaches the map to `#onboard-leaflet-map` below.
+    2. After HTMX swap by `geocode_result.html` — the partial re-includes
+       this widget and adds hidden `#geocode-lat/lng` inputs. The Leaflet
+       script listens for `htmx:afterSwap` to rebuild the map.
+{% endcomment %}
+<div class="onboard-map-container"
+     style="height: 300px; max-width: 100%; border-radius: 0.625rem; overflow: hidden;">
+    <div id="onboard-leaflet-map"
+         style="height: 100%; width: 100%;"
+         data-testid="onboard-leaflet-map"></div>
+</div>
+<small class="text-muted d-block mt-1">
+    {% translate "Tape ton adresse au-dessus, la carte se centre automatiquement. Tu peux ensuite déplacer le marker pour ajuster." %}
+</small>

@@ -1,0 +1,88 @@
+{% load i18n %}
+{% comment %}
+LOCALISATION: onboard/templates/onboard/partials/events_list.html
+
+Partial HTMX qui rend la liste des brouillons d'events (step 5,
+finalise par la Task 19). Inclus initialement dans `05_events.html`,
+remplace dynamiquement par les vues `events_add` et `events_remove`
+(target `#events-list`, swap `innerHTML`).
+
+Contexte attendu :
+  - `events` : liste de dicts. Chaque dict contient au minimum `name`,
+    optionnellement `datetime` (ISO 8601 string) et `description`.
+
+Style Bootstrap 5 : card-mb-2 pour chaque event, bouton remove a droite.
+Empty state texte : "Aucun événement pour l'instant. C'est optionnel !".
+
+/ HTMX partial rendering the event drafts list (step 5, finalized by
+Task 19). Initially included by `05_events.html`, dynamically
+replaced by the `events_add` and `events_remove` views (target
+`#events-list`, swap `innerHTML`).
+
+Expected context:
+  - `events`: list of dicts. Each dict has `name`, optionally `datetime`
+    (ISO 8601 string) and `description`.
+
+Bootstrap 5 styling: card mb-2 per event, remove button on the right.
+Empty state text: "No event yet. It's optional!".
+{% endcomment %}
+{% for event in events %}
+<div class="card mb-2"
+     data-testid="onboard-event-{{ forloop.counter0 }}">
+    <div class="card-body d-flex justify-content-between align-items-start">
+        {# Vignette de l'image draft si elle existe. Affichee a gauche,    #}
+        {# pas de placeholder si absente. URL = `MEDIA_URL` (=`/media/`     #}
+        {# par defaut dans settings.py) + chemin relatif stocke dans le    #}
+        {# JSON (cf. `events_add`). On hardcode `/media/` pour eviter de   #}
+        {# dependre du context processor `media` non active par defaut    #}
+        {# (cf. settings.TEMPLATES.context_processors).                    #}
+        {# / Draft image thumbnail when present (left side, no placeholder #}
+        {# otherwise). URL = MEDIA_URL (`/media/` per settings.py) + JSON  #}
+        {# relative path. Hardcoded `/media/` to avoid relying on the      #}
+        {# `media` context processor which isn't enabled by default.       #}
+        {% if event.image %}
+        <img src="/media/{{ event.image }}"
+             alt=""
+             class="rounded me-3 flex-shrink-0"
+             style="max-width: 80px; max-height: 80px; object-fit: cover;"
+             data-testid="onboard-event-{{ forloop.counter0 }}-thumb">
+        {% endif %}
+        <div class="me-3 flex-grow-1">
+            <strong>{{ event.name }}</strong>
+            {% if event.datetime %}
+                {# `event.datetime` est une chaine ISO 8601 (cf. events_add qui    #}
+                {# stocke `.isoformat()`). On extrait la date et l'heure via       #}
+                {# slice pour rester FALC (pas de templatetag custom requis).     #}
+                {# / `event.datetime` is an ISO 8601 string. Slice date + time    #}
+                {# for FALC simplicity (no custom templatetag needed).            #}
+                <small class="text-muted d-block">
+                    <time datetime="{{ event.datetime }}">
+                        {{ event.datetime|slice:":10" }} {% translate "à" %} {{ event.datetime|slice:"11:16" }}
+                    </time>
+                </small>
+            {% endif %}
+            {% if event.description %}
+                <p class="mb-0 small">{{ event.description|truncatechars:100 }}</p>
+            {% endif %}
+        </div>
+        {# Bouton remove HTMX. forloop.counter0 = index 0-based         #}
+        {# correspondant a la position dans la liste cote serveur.     #}
+        {# / HTMX remove button. forloop.counter0 = 0-based index       #}
+        {# matching the server-side list position.                      #}
+        <button type="button"
+                class="btn btn-sm btn-outline-danger"
+                hx-post="{% url 'onboard-events-remove' idx=forloop.counter0 %}"
+                hx-target="#events-list"
+                hx-swap="innerHTML"
+                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                data-testid="onboard-event-{{ forloop.counter0 }}-remove"
+                aria-label="{% blocktranslate with name=event.name %}Supprimer l'événement {{ name }}{% endblocktranslate %}">
+            × <span class="visually-hidden">{% translate "Supprimer" %}</span>
+        </button>
+    </div>
+</div>
+{% empty %}
+<p class="text-muted small mb-0" data-testid="onboard-events-empty">
+    {% translate "Aucun événement pour l'instant. C'est optionnel !" %}
+</p>
+{% endfor %}

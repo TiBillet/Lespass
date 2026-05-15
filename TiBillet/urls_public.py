@@ -12,6 +12,11 @@ urlpatterns = [
 
     re_path(r'api/user/', include('AuthBillet.urls')),
     path('i18n/', include('django.conf.urls.i18n')),
+
+    # Wizard d'onboarding nouveau tenant (SHARED : accessible aussi sur tenants).
+    # / Onboarding wizard for new tenants (SHARED: also reachable on tenants).
+    path('', include('onboard.urls')),
+
     # Landing page ROOT : app seo (cf. TECH DOC/SESSIONS/M-To-V2/02-app-seo.md)
     # Remplace la redirection MetaBillet vers tibillet.org par une vraie home.
     # / ROOT landing page: seo app. Replaces MetaBillet redirect to tibillet.org.

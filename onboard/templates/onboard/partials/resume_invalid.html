@@ -1,0 +1,58 @@
+{% extends "onboard/base_wizard.html" %}
+{% load i18n %}
+
+{% comment %}
+LOCALISATION: onboard/templates/onboard/partials/resume_invalid.html
+
+Page rendue par `OnboardViewSet.resume` quand le magic link est expire,
+invalide (signature `TimestampSigner` cassee, lien > 7 jours, etc.) ou
+quand le brouillon associe n'existe plus en base (purge cron).
+
+Contexte attendu : aucun.
+
+`data-testid="onboard-resume-invalid"` pour les tests automatises. On
+fournit un lien clair vers `/onboard/` pour relancer le wizard depuis
+zero. Page heritee de `base_wizard.html` pour rester coherente
+visuellement (panneau de progression + header TiBillet).
+
+/ Page rendered by `OnboardViewSet.resume` when the magic link is
+expired or invalid, OR when the linked draft no longer exists.
+Extends `base_wizard.html` for visual consistency.
+{% endcomment %}
+
+{% block page_title %}{% translate "Lien expiré — TiBillet" %}{% endblock %}
+
+{% block step_content %}
+<header class="mb-4">
+    <p class="onboard-step-counter mb-1">{% translate "Lien expiré" %}</p>
+    <h1 class="onboard-h1 mb-2">{% translate "Ce lien n'est plus valide" %}</h1>
+    <p class="onboard-subtitle">
+        {% blocktranslate trimmed %}
+            Le lien de reprise que tu as suivi a peut-être expiré
+            (durée de vie : 7 jours) ou son contenu a été altéré.
+            Tu peux recommencer la création de ton espace ci-dessous.
+        {% endblocktranslate %}
+    </p>
+</header>
+
+<div class="alert alert-warning d-flex align-items-start gap-2"
+     role="alert"
+     data-testid="onboard-resume-invalid">
+    <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+    <div>
+        {% blocktranslate trimmed %}
+            Si tu pensais retrouver un brouillon en cours, il a peut-être
+            été supprimé automatiquement après 30 jours d'inactivité.
+        {% endblocktranslate %}
+    </div>
+</div>
+
+<div class="pt-2">
+    <a href="{% url 'onboard-root' %}"
+       class="btn btn-primary"
+       data-testid="onboard-resume-invalid-restart">
+        {% translate "Recommencer la création d'espace" %}
+        <i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>
+    </a>
+</div>
+{% endblock step_content %}

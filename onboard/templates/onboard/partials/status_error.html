@@ -1,0 +1,53 @@
+{% load i18n %}
+{% comment %}
+LOCALISATION: onboard/templates/onboard/partials/status_error.html
+
+Partial HTMX rendu par `OnboardViewSet.launch_status` quand
+`wc.error_message` est non vide. CRUCIAL : on NE met PAS de
+`hx-trigger="every 2s"` ici — le polling automatique s'arrete, mais
+l'utilisateur peut relancer manuellement la creation via le bouton
+"Réessayer" (HTMX POST vers `onboard-launch-retry`).
+
+Contexte attendu :
+  - `wc` : instance WaitingConfiguration (lue pour `error_message`).
+
+`data-testid="onboard-status-error"` pour les tests Playwright. Le
+bouton retry porte `data-testid="onboard-launch-retry"`.
+
+/ HTMX partial rendered by `OnboardViewSet.launch_status` when
+`wc.error_message` is non-empty. CRUCIAL: NO `hx-trigger="every 2s"`
+— auto polling stops, but the user can re-trigger creation via the
+"Retry" button (HTMX POST to `onboard-launch-retry`).
+
+Expected context: wc.
+{% endcomment %}
+<div class="alert alert-danger mb-0"
+     role="alert"
+     data-testid="onboard-status-error">
+    <div class="d-flex align-items-start">
+        <span class="me-2" aria-hidden="true">⚠️</span>
+        <div class="flex-grow-1">
+            <strong>{% translate "Une erreur est survenue" %}</strong>
+            <p class="small mb-2 mt-1">
+                {% blocktranslate trimmed %}
+                    Nous avons reçu une alerte. Tu peux réessayer ou
+                    nous contacter à contact@tibillet.coop.
+                {% endblocktranslate %}
+            </p>
+            <pre class="small bg-light p-2 mb-2 rounded"
+                 data-testid="onboard-status-error-message">{{ wc.error_message }}</pre>
+            <form hx-post="{% url 'onboard-launch-retry' %}"
+                  hx-target="#status"
+                  hx-swap="innerHTML"
+                  hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                  class="mb-0">
+                {% csrf_token %}
+                <button type="submit"
+                        class="btn btn-sm btn-outline-danger"
+                        data-testid="onboard-launch-retry">
+                    {% translate "Réessayer" %}
+                </button>
+            </form>
+        </div>
+    </div>
+</div>

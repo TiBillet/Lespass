@@ -1,0 +1,174 @@
+{% extends "onboard/base_wizard.html" %}
+{% load i18n %}
+
+{% comment %}
+  LOCALISATION: onboard/templates/onboard/steps/04_descriptions.html
+
+  Step 4 du wizard d'onboarding : "Presentation".
+  Description courte (accroche publique, obligatoire) + description longue
+  (optionnelle) + upload logo (optionnel).
+  Form `enctype="multipart/form-data"` (obligatoire pour le file upload).
+
+  NOTE : la description courte etait initialement sur la step "Place"
+  (03_place.html) mais a ete deplacee ici (feedback mainteneur 2026-05-14)
+  pour regrouper toutes les info de presentation sur la meme page.
+
+  Soumet a `onboard-descriptions` (POST). En cas d'erreur (422), la vue
+  re-rend ce template avec `errors` et `initial` (le fichier `logo` n'est
+  PAS re-injectable — un input type=file ne peut pas etre pre-rempli en
+  HTML, mais les descriptions courte et longue sont conservees).
+
+  Le logo est un `StdImageField` : si `wc.logo` est deja set (resume ou
+  retour en arriere), on affiche un apercu de l'image actuelle.
+
+  / Step 4 of the onboarding wizard: "Presentation".
+  Short description (public pitch, required) + long description (optional)
+  + logo upload (optional).
+  Form is `enctype="multipart/form-data"` (mandatory for file upload).
+
+  NOTE: the short description initially lived on the "Place" step but was
+  moved here so all presentation fields sit on the same page.
+
+  Submits to `onboard-descriptions` (POST). On 422, the view re-renders
+  with `errors` and `initial` (the `logo` file CANNOT be echoed back —
+  HTML file inputs can't be pre-filled, but both descriptions are kept).
+
+  Logo is a `StdImageField`: if `wc.logo` is already set (resume or back
+  nav), we display a preview of the current image.
+{% endcomment %}
+
+{% block page_title %}{% translate "Créer votre espace TiBillet — Présentation" %}{% endblock %}
+
+{% block step_content %}
+<header class="mb-4">
+    <p class="onboard-step-counter mb-1">{% translate "Étape 4 / 6" %}</p>
+    <h1 class="onboard-h1 mb-2">{% translate "Présentation et logo" %}</h1>
+    <p class="text-muted">
+        {% translate "Présente ton lieu : une accroche courte pour l'aperçu sur le réseau, un texte long pour la page publique, et un logo pour l'en-tête du site." %}
+    </p>
+</header>
+
+{% if errors %}
+    {# Recapitulatif global d'erreurs. / Global error recap. #}
+    <div class="alert alert-danger"
+         role="alert"
+         data-testid="onboard-descriptions-errors">
+        <strong>{% translate "Merci de corriger les erreurs ci-dessous." %}</strong>
+        <ul class="mb-0 mt-1">
+            {% for field, msgs in errors.items %}
+                <li>
+                    <strong>{{ field }}</strong> :
+                    {% for msg in msgs %}{{ msg }}{% if not forloop.last %} / {% endif %}{% endfor %}
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+{% endif %}
+
+{# enctype="multipart/form-data" OBLIGATOIRE pour le file upload. #}
+{# / enctype="multipart/form-data" MANDATORY for file upload. #}
+<form method="post"
+      action="{% url 'onboard-descriptions' %}"
+      enctype="multipart/form-data"
+      novalidate
+      data-testid="onboard-descriptions-form"
+      class="vstack gap-3">
+    {% csrf_token %}
+
+    {# Description courte (accroche) : obligatoire, max 280 chars. #}
+    {# / Short description (pitch): required, max 280 chars. #}
+    <div>
+        <label for="onboard-descriptions-short" class="form-label">
+            {% translate "Description courte" %} *
+        </label>
+        <textarea id="onboard-descriptions-short"
+                  name="short_description"
+                  rows="3"
+                  required
+                  maxlength="280"
+                  class="form-control{% if errors.short_description %} is-invalid{% endif %}"
+                  data-testid="onboard-descriptions-short">{{ initial.short_description|default:wc.short_description|default:'' }}</textarea>
+        <div class="form-text">
+            {% translate "280 caractères max. Cette phrase apparaîtra en aperçu sur le réseau." %}
+        </div>
+        {% if errors.short_description %}
+            <div class="invalid-feedback">
+                {% for msg in errors.short_description %}{{ msg }}{% endfor %}
+            </div>
+        {% endif %}
+    </div>
+
+    {# Description longue : optionnelle (feedback mainteneur 2026-05-14). #}
+    {# Pas d'attribut `required` sur le textarea — l'utilisateur peut lancer #}
+    {# son espace sans avoir encore redige sa presentation longue. #}
+    {# / Long description: optional. No `required` attribute — the user can #}
+    {# launch the space without writing the long pitch yet. #}
+    <div>
+        <label for="onboard-descriptions-long" class="form-label">
+            {% translate "Description longue (optionnelle)" %}
+        </label>
+        <textarea id="onboard-descriptions-long"
+                  name="long_description"
+                  rows="8"
+                  maxlength="5000"
+                  class="form-control{% if errors.long_description %} is-invalid{% endif %}"
+                  data-testid="onboard-descriptions-long">{{ initial.long_description|default:wc.long_description|default:'' }}</textarea>
+        <div class="form-text">
+            {% translate "5000 caractères max. Décris ton lieu, son ambiance, ses valeurs. Tu pourras compléter plus tard." %}
+        </div>
+        {% if errors.long_description %}
+            <div class="invalid-feedback">
+                {% for msg in errors.long_description %}{{ msg }}{% endfor %}
+            </div>
+        {% endif %}
+    </div>
+
+    <div>
+        <label for="onboard-descriptions-logo" class="form-label">
+            {% translate "Logo (optionnel)" %}
+        </label>
+        <input id="onboard-descriptions-logo"
+               type="file"
+               name="logo"
+               accept="image/jpeg,image/png,image/webp"
+               class="form-control{% if errors.logo %} is-invalid{% endif %}"
+               data-testid="onboard-descriptions-logo">
+        <div class="form-text">
+            {% translate "JPG, PNG ou WebP. Carré de préférence." %}
+        </div>
+        {% if errors.logo %}
+            <div class="invalid-feedback">
+                {% for msg in errors.logo %}{{ msg }}{% endfor %}
+            </div>
+        {% endif %}
+    </div>
+
+    {% if wc.logo %}
+        {# Apercu du logo deja uploade (cas resume / retour en arriere). #}
+        {# / Preview of the already-uploaded logo (resume / back nav). #}
+        <div class="onboard-logo-preview">
+            <small class="text-success d-block mb-1">
+                <i class="bi bi-check-circle me-1" aria-hidden="true"></i>
+                {% translate "Logo actuel :" %}
+            </small>
+            <img src="{{ wc.logo.url }}"
+                 alt="{% translate 'Logo actuel' %}"
+                 style="max-width: 200px; height: auto; border-radius: 0.5rem; border: 1px solid #ccc;"
+                 data-testid="onboard-descriptions-logo-preview">
+        </div>
+    {% endif %}
+
+    <div class="d-flex justify-content-between pt-2">
+        <a href="{% url 'onboard-place' %}"
+           class="btn btn-link"
+           data-testid="onboard-descriptions-prev">
+            <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> {% translate "Précédent" %}
+        </a>
+        <button type="submit"
+                class="btn btn-primary btn-lg"
+                data-testid="onboard-descriptions-submit">
+            {% translate "Continuer" %} <i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>
+        </button>
+    </div>
+</form>
+{% endblock step_content %}

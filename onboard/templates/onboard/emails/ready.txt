@@ -1,0 +1,9 @@
+{% load i18n %}{% blocktranslate with name=organisation url=admin_url %}Hello,
+
+Your TiBillet space "{{ name }}" is ready!
+
+Access your admin: {{ url }}
+
+You can now configure your modules, connect Stripe to start selling tickets, and publish your first events.
+
+— The TiBillet team{% endblocktranslate %}
