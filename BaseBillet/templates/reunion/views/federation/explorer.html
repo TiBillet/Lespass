@@ -19,13 +19,6 @@
 {% block twitter_description %}{% blocktranslate with tenant=config.organisation %}Découvrez le réseau coopératif de {{ tenant }} : lieux fédérés, événements partagés.{% endblocktranslate %}{% endblock %}
 
 {% block extra_meta %}
-    {# Leaflet vendore (meme source que le public /explorer/) #}
-    {# / Vendored Leaflet (same source as public /explorer/) #}
-    <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/leaflet.css' %}">
-    <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/MarkerCluster.css' %}">
-    <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/MarkerCluster.Default.css' %}">
-    <link rel="stylesheet" href="{% static 'seo/explorer.css' %}">
-
     {# JSON-LD federation : declare la structure du reseau pour Google et les LLMs. #}
     {# Sans ce schema, les crawlers no-JS (GPTBot, ClaudeBot, PerplexityBot, CommonCrawl) #}
     {# ne voient que le shell vide de la page rendue cote JS. #}
@@ -43,6 +36,26 @@
 {% endblock %}
 
 {% block main %}
+    {# Feuilles de style Leaflet + explorer charges DANS le body. #}
+    {# Raison : la navbar utilise hx-target="body" + hx-swap="innerHTML" pour #}
+    {# naviguer entre les pages. HTMX ne remplace QUE le contenu du body, jamais #}
+    {# le head. Si on place ces <link> dans extra_meta (head), ils ne sont charges #}
+    {# qu'au full reload (F5 ou URL directe). Sur une navigation HTMX depuis une #}
+    {# autre page du tenant, les CSS manquent et la carte casse tout le layout. #}
+    {# Les <link> dans le body sont valides en HTML5 : le navigateur les parse et #}
+    {# applique les styles des qu'ils apparaissent dans le DOM swappé. #}
+    {# / Leaflet + explorer stylesheets loaded INSIDE the body. #}
+    {# Reason: the navbar uses hx-target="body" + hx-swap="innerHTML". HTMX only #}
+    {# replaces the body content, never the head. <link> tags in extra_meta would #}
+    {# only load on full reload. On HTMX navigation from another tenant page, the #}
+    {# CSS would be missing and the map would break the whole layout. #}
+    {# <link> inside <body> is valid HTML5: the browser parses and applies styles #}
+    {# as soon as they appear in the swapped DOM. #}
+    <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/leaflet.css' %}">
+    <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/MarkerCluster.css' %}">
+    <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/MarkerCluster.Default.css' %}">
+    <link rel="stylesheet" href="{% static 'seo/explorer.css' %}">
+
     {# H1 visually-hidden : visible des screen readers + Google, mais ne perturbe #}
     {# pas l'UI (la toolbar de l'explorer reste l'element visuel dominant). #}
     {# / H1 visually-hidden: visible to screen readers + Google, but does not #}

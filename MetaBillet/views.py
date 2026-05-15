@@ -10,7 +10,7 @@ class index(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        return HttpResponseRedirect('https://tibillet.org/')
+        return HttpResponseRedirect('https://tibillet.coop/')
 
 
 
