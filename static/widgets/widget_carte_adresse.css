@@ -52,31 +52,67 @@
 
 /* Bouton "Rechercher" (loupe) injecté par notre JS à côté de l'input,
    pour pallier l'absence de bouton submit dans le mode "bar" de
-   leaflet-geosearch. Sans bouton visible, l'utilisateur ne sait pas
-   comment déclencher la recherche.
-   / "Search" button (magnifying glass) injected by our JS next to the
-   input, to compensate for the missing submit button in `style: "bar"`. */
+   leaflet-geosearch. Alignement optique vertical : on matche la
+   `box` height de l'input (même `padding` vertical + `border` 1px + même
+   `font-size`) pour que les deux éléments aient EXACTEMENT la même
+   hauteur en `align-items: stretch`. Padding horizontal généreux pour un
+   bouton confortable au clic / touch.
+   / "Search" button (magnifying glass) injected next to the input. Match
+   the input's vertical metrics (same padding + border + font-size) so
+   both have the same height under `align-items: stretch`. */
 .leaflet-control-geosearch .widget-search-submit {
-    margin-left: 0.25rem;
-    padding: 0 0.6rem;
+    padding: 0.5rem 0.9rem;
     border-radius: 0.5rem;
     border: 1px solid #16a34a;
     background-color: #16a34a;
     color: #ffffff;
-    font-size: 1rem;
-    line-height: 2rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: background-color 120ms ease;
+    flex: 0 0 auto;
+    transition: background-color 120ms ease, border-color 120ms ease;
 }
 .leaflet-control-geosearch .widget-search-submit:hover {
     background-color: #15803d;
+    border-color: #15803d;
 }
 .leaflet-control-geosearch .widget-search-submit:focus-visible {
     outline: 2px solid #16a34a;
     outline-offset: 2px;
+}
+
+/* Message d'erreur "Aucun résultat" affiché sous la search bar quand
+   Nominatim ne retourne rien. `aria-live="polite"` côté JS → lu par les
+   lecteurs d'écran sans interrompre. Position absolue par rapport au
+   `.leaflet-control-container` pour rester aligné sous la search bar
+   sans déranger les autres controls Leaflet (zoom, attribution).
+   / "No result" message under the search bar when Nominatim returns
+   nothing. `aria-live="polite"` (set in JS) for screen readers. Absolute
+   positioning under the search bar without disturbing other Leaflet
+   controls. */
+.widget-search-no-result {
+    position: absolute;
+    top: 3.25rem;  /* sous la search bar (qui fait ~2.5rem + margin) */
+    left: 0.5rem;
+    z-index: 1000;  /* au-dessus des tuiles Leaflet */
+    background-color: #fef3c7;  /* amber-100 */
+    border: 1px solid #fcd34d;  /* amber-300 */
+    color: #78350f;  /* amber-900 */
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    box-shadow: 0 4px 6px -2px rgba(15, 23, 42, 0.12);
+    max-width: calc(100% - 1rem);
+}
+.widget-search-no-result:empty {
+    /* Caché tant qu'il n'y a pas de message. Évite un bloc vide flottant
+       au chargement de la carte.
+       / Hidden while empty — avoids a floating empty block at load. */
+    display: none;
 }
 
 /* leaflet-geosearch form : layout flex pour aligner input + bouton submit
@@ -113,17 +149,19 @@
     outline: none !important;
 }
 
-/* Bouton reset (×) : leaflet-geosearch l'affiche en permanence par défaut.
-   Quand l'input est vide, la croix sert à rien et confond l'utilisateur.
-   On la masque tant que l'input n'est pas focus + non-vide.
-   / Reset button (×): hidden by default; shown only when input has value
-   or is focused (otherwise it's noise). */
+/* Bouton reset (×) : leaflet-geosearch positionne ce bouton en
+   `position: absolute` à droite du form. Comme on a injecté notre propre
+   bouton "Rechercher" (loupe) à droite, la croix vient se superposer
+   visuellement par-dessus la loupe dès que l'input est focus + non-vide.
+   On la masque TOTALEMENT : l'utilisateur peut vider l'input en sélectionnant
+   le texte (Ctrl+A ou triple-clic) puis Delete — comportement HTML natif
+   suffisant pour un input mono-ligne.
+   / Reset button (×): leaflet-geosearch absolutely positions it on the
+   right edge of the form, where it overlaps our injected "Search"
+   button. We hide it entirely — users can clear the input with native
+   keyboard shortcuts (Ctrl+A + Delete). */
 .leaflet-control-geosearch .reset {
     display: none !important;
-}
-.leaflet-control-geosearch form input:not(:placeholder-shown) ~ .reset,
-.leaflet-control-geosearch form input:focus ~ .reset {
-    display: block !important;
 }
 
 /* Liste de suggestions : style cohérent avec la palette TiBillet. */

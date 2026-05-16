@@ -2336,5 +2336,85 @@ Decouvert Session 37, lie au bug 8.
 
 ---
 
+### Widget carte adresse + leaflet-geosearch (onboard wizard, mai 2026)
+
+Pieges decouverts en integrant le widget reutilisable
+`templates/widgets/widget_carte_adresse.html` dans la step 2 "Votre lieu"
+du wizard d'onboard. La lib leaflet-geosearch (v4.4.0) est puissante mais
+piegeuse a integrer dans un formulaire — quatre bugs UX/securite consecutifs.
+
+**P.WIDGET.1 — `<form>` HTML5 imbrique : boucle infinie au submit.**
+
+leaflet-geosearch en `style: "bar"` cree son propre `<form>` autour de
+l'input de recherche. Si le widget est inclus dans un `<form>` parent
+(cas wizard onboard), HTML5 INTERDIT l'imbrication des forms.
+Les navigateurs gerent l'ambiguite differemment :
+- Chromium : ferme le form externe prematurement au tag `<form>` interne.
+- Firefox : ignore le form interne, l'input se retrouve dans le form externe.
+
+Consequence : `champ_recherche.closest("form")` depuis l'input search
+remonte au form ONBOARD au lieu du form leaflet-geosearch interne. Si on
+appelle `form.requestSubmit()` dessus pour declencher la recherche
+(pattern naturel), on soumet en realite le wizard onboard avec lat/lng
+vides → 422 → HTMX swap re-rend la page → init du widget → re-submit →
+**boucle infinie**.
+
+**Fix** : ne JAMAIS appeler `requestSubmit()` sur le form interne. A la
+place, fetch direct vers Nominatim (`/search?q=...&addressdetails=1`) et
+appeler les handlers de placement de marqueur en interne.
+Pour intercepter la touche Entree, `preventDefault()` + `stopPropagation()`
+sur le keydown — sans ca, le browser cherche le form ancetre et soumet
+le wizard.
+
+Pour les boutons injectes dans le form leaflet : TOUJOURS `type="button"`.
+Un `<button>` sans `type` est `type="submit"` par defaut → soumet le form
+ancetre (le wizard).
+
+**P.WIDGET.2 — Double instance `.leaflet-control-geosearch` qui decale le zoom.**
+
+La lib cree DEUX nodes `.leaflet-control-geosearch` meme en mode "bar" :
+1. Un placeholder vide `.pending` ajoute dans `.leaflet-top.leaflet-left`
+   (meme conteneur que le zoom Leaflet par defaut). Invisible mais OCCUPE
+   l'espace → pousse le zoom vers le bas.
+2. La vraie search bar (avec form + input) ajoutee directement a
+   `.leaflet-control-container`.
+
+Sans intervention, le zoom est cache derriere le placeholder vide.
+
+**Fix** :
+1. CSS : `.leaflet-control-geosearch.pending { display: none !important; }`
+2. JS : deplacer le zoom en topright pour ne pas dependre du fix CSS —
+   `map.zoomControl.setPosition("topright")` apres creation de la map.
+
+**P.WIDGET.3 — Bouton reset (`×`) en `position: absolute` qui chevauche tout.**
+
+leaflet-geosearch ajoute un bouton `.reset` (croix pour vider l'input)
+positionne en `position: absolute` au coin droit du form. Si on injecte
+un bouton submit a droite (notre cas : icone loupe), la croix vient se
+superposer dessus des que l'input est focus + non-vide.
+
+**Fix** : cacher totalement la croix via CSS
+`.leaflet-control-geosearch .reset { display: none !important; }`.
+L'utilisateur peut vider l'input avec Ctrl+A + Delete (raccourcis natifs).
+
+**P.WIDGET.4 — `autoComplete: true` par defaut viole la politique Nominatim.**
+
+`GeoSearchControl({ autoComplete: true })` (defaut leaflet-geosearch v4)
+declenche une requete Nominatim a CHAQUE frappe utilisateur, apres 250ms
+de debounce. La politique d'usage Nominatim INTERDIT explicitement
+l'autocomplete client-side
+(https://operations.osmfoundation.org/policies/nominatim/ : "Auto-complete
+search ... must not implement such a service on the client side using
+the API"). Risque : bannissement de l'IP du serveur ou de l'utilisateur.
+
+**Fix** : `autoComplete: false` dans la config GeoSearchControl. La
+recherche se declenche uniquement au submit explicite (Entree ou clic
+sur le bouton search).
+
+Decouverts session widget onboard, 2026-05-16. Cf. `static/widgets/widget_carte_adresse.js`
++ `static/widgets/widget_carte_adresse.css`.
+
+---
+
 *Ce document est un commun numerique. Prenez-en soin !*
 *This document is a digital common. Take care of it!*

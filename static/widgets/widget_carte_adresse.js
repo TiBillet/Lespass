@@ -333,6 +333,9 @@
             if (!requete) {
                 return;
             }
+            // Réinitialise la zone d'erreur avant chaque recherche.
+            // / Clear the error zone before each search.
+            effacer_message_no_result();
             const params_search = new URLSearchParams({
                 q: requete,
                 format: "json",
@@ -349,14 +352,26 @@
                         "widget_carte_adresse: Nominatim search status",
                         reponse.status,
                     );
+                    afficher_message_no_result(
+                        "Le service de géolocalisation est indisponible. "
+                        + "Cliquez directement sur la carte pour positionner le lieu.",
+                    );
                     return null;
                 }
                 return reponse.json();
             }).then(function (donnees) {
-                if (!donnees || donnees.length === 0) {
-                    // Aucun match Nominatim : on laisse l'input rempli,
-                    // l'utilisateur peut affiner sa recherche.
-                    // / No Nominatim match: keep input filled, user can refine.
+                if (!donnees) {
+                    // Cas ok=false plus haut : on a déjà affiché un message
+                    // d'indisponibilité. / Already handled above.
+                    return;
+                }
+                if (donnees.length === 0) {
+                    // Aucun match Nominatim : message inline pour l'user.
+                    // / No Nominatim match: inline message for the user.
+                    afficher_message_no_result(
+                        "Adresse introuvable. Affinez votre recherche "
+                        + "ou cliquez directement sur la carte.",
+                    );
                     return;
                 }
                 const premier_resultat = donnees[0];
@@ -370,13 +385,43 @@
                 );
                 map.setView([latitude, longitude], ZOOM_DETAIL);
             }).catch(function (erreur) {
-                // Réseau coupé / Nominatim down : on log sans bloquer.
-                // / Network down / Nominatim down: log without blocking.
+                // Réseau coupé / Nominatim down : on log + message inline.
+                // / Network down / Nominatim down: log + inline message.
                 console.warn(
                     "widget_carte_adresse: recherche échouée",
                     erreur,
                 );
+                afficher_message_no_result(
+                    "Le service de géolocalisation est indisponible. "
+                    + "Cliquez directement sur la carte pour positionner le lieu.",
+                );
             });
+        }
+
+        /**
+         * Affiche un message inline sous la search bar (zone `aria-live`).
+         * `zone_message_no_result` est créé plus bas dans cette fonction
+         * d'init — closure capture la référence au moment de l'appel.
+         * Defensive : if absent (e.g. timing), no-op.
+         * / Display an inline message under the search bar.
+         */
+        function afficher_message_no_result(texte) {
+            const zone = container.querySelector(".widget-search-no-result");
+            if (zone !== null) {
+                zone.textContent = texte;
+            }
+        }
+
+        /**
+         * Vide la zone d'erreur (appelé avant chaque nouvelle recherche
+         * et au succès). Le CSS `:empty` la cache automatiquement.
+         * / Clear the error zone (called before each new search and on success).
+         */
+        function effacer_message_no_result() {
+            const zone = container.querySelector(".widget-search-no-result");
+            if (zone !== null) {
+                zone.textContent = "";
+            }
         }
 
         // Recherche manuelle : on attache nos propres handlers (keydown Enter
@@ -438,6 +483,21 @@
                 formulaire_leaflet.appendChild(bouton_recherche);
             }
         }
+
+        // Bandeau d'erreur "Adresse introuvable" — injecté en JS dans le
+        // container Leaflet pour pouvoir être affiché/caché par
+        // `lancer_recherche_nominatim()` selon le résultat. `aria-live="polite"`
+        // pour annonce screen reader sans interrompre. On le crée vide :
+        // le CSS `&:empty { display: none; }` le cache tant qu'il n'a pas
+        // de contenu.
+        // / "Address not found" banner — injected in the Leaflet container
+        // so `lancer_recherche_nominatim()` can show/hide it. aria-live for
+        // screen readers. Empty by default, hidden via CSS `:empty`.
+        const zone_message_no_result = document.createElement("div");
+        zone_message_no_result.className = "widget-search-no-result";
+        zone_message_no_result.setAttribute("aria-live", "polite");
+        zone_message_no_result.setAttribute("role", "status");
+        container.appendChild(zone_message_no_result);
 
         // Si on a des coords initiales, on place le marqueur tout de suite.
         // / If initial coords exist, place the marker immediately.
