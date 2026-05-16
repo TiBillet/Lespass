@@ -284,6 +284,96 @@ def _generate_and_send_otp_for_wc(wc, is_resend=False):
     return sent_at
 
 
+def _finalize_otp_success(request, wc):
+    """
+    Finalise une verification OTP reussie : avance le brouillon, cree/active
+    le TibilletUser, et logue l'utilisateur dans la session Django.
+
+    Appele a 2 endroits dans `verify` POST :
+      1. Branche DEBUG (bypass : tout code 6 chiffres accepte en dev local).
+      2. Branche prod (apres `verify_otp(saisie, wc.otp_hash)` OK).
+
+    Les deux branches doivent faire EXACTEMENT le meme travail post-succes,
+    sinon le user ne sera pas authentifie sur la step suivante et le garde
+    `_get_confirmed_wc_or_redirect` le renverra a `onboard-identity`.
+    C'est le bug qui a motive cette factorisation (DEBUG bypass faisait
+    update WC + get_or_create_user mais sautait l'activation et `login()`).
+
+    Etapes :
+      - Update WC en schema `meta` : `email_confirmed=True`,
+        `current_step=PLACE`, purge OTP (`otp_hash=""`, `otp_expires_at=None`).
+      - get_or_create_user(wc.email) : idempotent, cree si absent.
+      - Si retour None (cas `email_error` sur user existant) -> on retourne
+        None pour signaler l'echec a l'appelant qui rendra son template.
+      - Force `email_valid=True` (preuve OTP) + `is_active=True` (les
+        nouveaux users sortent inactifs de get_or_create_user).
+      - `login(request, user, backend=...)` : pose le cookie session auth.
+
+    / Finalise a successful OTP verification: advance the draft, create/
+    activate the TibilletUser, and log the user in via Django session.
+    Called from both DEBUG-bypass and prod branches of `verify` POST.
+    Both branches must do the SAME post-success work, otherwise the user
+    won't be authenticated on the next step and `_get_confirmed_wc_or_redirect`
+    will send them back to `onboard-identity`.
+
+    Returns the user object on success, or `None` on failure (caller
+    renders its own 422 template).
+    """
+    # Imports locaux : evite la dependance circulaire au chargement du
+    # module et le cout d'import sur les requetes qui ne passent pas par
+    # ici. / Local imports to avoid circular dep + load cost.
+    from django.contrib.auth import login
+
+    from AuthBillet.utils import get_or_create_user
+
+    # 1. Avance du brouillon. Atomique via `.update()` (pas besoin de re-fetch).
+    # / 1. Advance the draft. Atomic via `.update()` (no re-fetch).
+    with schema_context("meta"):
+        WaitingConfiguration.objects.filter(uuid=wc.uuid).update(
+            email_confirmed=True,
+            current_step=WaitingConfiguration.STEP_PLACE,
+            otp_hash="",
+            otp_expires_at=None,
+        )
+
+    # 2. Cree ou recupere le user (idempotent). `send_mail=False` car la
+    # confirmation email est deja faite via l'OTP.
+    # / 2. Create-or-get user (idempotent). `send_mail=False` since OTP
+    # already confirmed the email.
+    user = get_or_create_user(wc.email, send_mail=False)
+    if user is None:
+        # Cas extreme : `email_error` positionne sur un user existant.
+        # On signale l'echec a l'appelant.
+        # / Edge case: `email_error` set on existing user — signal failure.
+        return None
+
+    # 3. Force `email_valid` + `is_active`. `get_or_create_user` cree les
+    # users avec `is_active=False` par defaut ; sans activation, certains
+    # backends refuseraient l'auth. `update_fields` evite les writes inutiles.
+    # / 3. Force email_valid + is_active. `update_fields` scopes the write.
+    update_fields = []
+    if not user.email_valid:
+        user.email_valid = True
+        update_fields.append("email_valid")
+    if not user.is_active:
+        user.is_active = True
+        update_fields.append("is_active")
+    if update_fields:
+        user.save(update_fields=update_fields)
+
+    # 4. Login Django : pose le cookie session auth. Backend explicite car
+    # le projet a plusieurs AUTHENTICATION_BACKENDS et `login()` l'exige
+    # sans `authenticate()` prealable.
+    # / 4. Django login: set auth session cookie. Explicit backend required
+    # because the project has several AUTHENTICATION_BACKENDS and `login()`
+    # needs one when called without a prior `authenticate()`.
+    login(
+        request, user,
+        backend="django.contrib.auth.backends.ModelBackend",
+    )
+    return user
+
+
 class OnboardViewSet(viewsets.ViewSet):
     """
     Wizard d'onboarding en 6 etapes pour creer un nouveau tenant.
@@ -627,22 +717,29 @@ class OnboardViewSet(viewsets.ViewSet):
                 return render(request, "onboard/steps/02_verify.html", {
                     "step": "verify",
                     "email": wc.email,
-                "has_pending_otp": bool(wc.otp_hash),
+                    "has_pending_otp": bool(wc.otp_hash),
                     "errors": serializer.errors,
                 }, status=422)
             logger.warning(
                 "DEBUG: OTP check bypassed for WC %s (settings.DEBUG=True)",
                 wc.uuid,
             )
-            with schema_context("meta"):
-                WaitingConfiguration.objects.filter(uuid=wc.uuid).update(
-                    email_confirmed=True,
-                    current_step=WaitingConfiguration.STEP_PLACE,
-                    otp_hash="",
-                    otp_expires_at=None,
-                )
-            from AuthBillet.utils import get_or_create_user
-            get_or_create_user(wc.email, send_mail=False)
+            # Meme finalisation que la branche prod (helper partage) : update
+            # WC + creation/activation user + login Django. Sans login() ici,
+            # `place` GET redirigeait vers identity car le garde
+            # `_get_confirmed_wc_or_redirect` exige `request.user.is_authenticated`.
+            # / Same post-success finalisation as the prod branch (shared
+            # helper): update WC + create/activate user + Django login.
+            # Without login() here, `place` GET would redirect to identity
+            # because `_get_confirmed_wc_or_redirect` requires authentication.
+            user = _finalize_otp_success(request, wc)
+            if user is None:
+                return render(request, "onboard/steps/02_verify.html", {
+                    "step": "verify",
+                    "email": wc.email,
+                    "has_pending_otp": bool(wc.otp_hash),
+                    "errors": {"otp": [_("Email error on user account.")]},
+                }, status=422)
             return redirect("onboard-place")
 
         serializer = OnboardVerifySerializer(data=request.data)
@@ -711,36 +808,15 @@ class OnboardViewSet(viewsets.ViewSet):
             }, status=422)
 
         # === Succes ===
-        # On marque l'email comme confirme, on purge le hash (usage unique),
-        # et on avance le brouillon vers la step suivante.
-        # / Mark email confirmed, purge hash (single-use), advance step.
-        with schema_context("meta"):
-            WaitingConfiguration.objects.filter(uuid=wc.uuid).update(
-                email_confirmed=True,
-                current_step=WaitingConfiguration.STEP_PLACE,
-                otp_hash="",
-                otp_expires_at=None,
-            )
-
-        # Cree le TibilletUser si absent (idempotent) puis logue l'utilisateur
-        # via Django auth. Raison : les steps suivantes (place/descriptions/
-        # events/launch) sont desormais protegees par `is_authenticated` (cf.
-        # `_get_confirmed_wc_or_redirect`). Le succes de l'OTP est la PREUVE
-        # que l'utilisateur controle l'email -> on peut le logger sans risque.
-        # / Create TibilletUser if absent (idempotent), then log the user in
-        # via Django auth. Reason: post-verify steps now require
-        # `is_authenticated` (cf. `_get_confirmed_wc_or_redirect`). OTP
-        # success proves email control -> safe to log in.
-        from django.contrib.auth import login
-
-        from AuthBillet.utils import get_or_create_user
-
-        # `send_mail=False` : pas de mail TiBillet (confirmation deja faite via OTP).
-        # `set_active=True` aurait suffi mais get_or_create_user passe par defaut
-        # en `is_active=False` cote create — on force activation explicite ici.
-        # / `send_mail=False` (OTP already confirmed). Force is_active=True since
-        # default `get_or_create_user` creates inactive users.
-        user = get_or_create_user(wc.email, send_mail=False)
+        # Finalisation : update WC + creation/activation user + login Django.
+        # Helper partage avec la branche DEBUG pour garantir un comportement
+        # identique (sinon le garde `_get_confirmed_wc_or_redirect` de la
+        # step suivante echoue et l'utilisateur est renvoye sur identity).
+        # / Post-success finalisation: update WC + create/activate user +
+        # Django login. Shared helper with the DEBUG branch to guarantee
+        # identical behaviour (otherwise `_get_confirmed_wc_or_redirect`
+        # of the next step fails and the user is sent back to identity).
+        user = _finalize_otp_success(request, wc)
         if user is None:
             # Cas extreme : email_error sur un user existant (cf. utils.py).
             # On bloque ici plutot qu'au step suivant. / Edge case: email_error
@@ -751,30 +827,6 @@ class OnboardViewSet(viewsets.ViewSet):
                 "has_pending_otp": bool(wc.otp_hash),
                 "errors": {"otp": [_("Email error on user account.")]},
             }, status=422)
-
-        # Marquer email_valid (preuve OTP) + activer le compte si pas deja.
-        # `update_fields` evite les writes inutiles sur les autres champs.
-        # / Mark email_valid (OTP proof) + activate. update_fields scope.
-        update_fields = []
-        if not user.email_valid:
-            user.email_valid = True
-            update_fields.append("email_valid")
-        if not user.is_active:
-            user.is_active = True
-            update_fields.append("is_active")
-        if update_fields:
-            user.save(update_fields=update_fields)
-
-        # Login Django : pose le cookie session auth. Backend explicite
-        # car le projet a peut-etre plusieurs AUTHENTICATION_BACKENDS et
-        # `login()` exige de specifier lequel sans `authenticate()` prealable.
-        # / Login Django: set auth session cookie. Explicit backend because
-        # the project may have multiple AUTHENTICATION_BACKENDS and `login()`
-        # requires an explicit backend without prior `authenticate()`.
-        login(
-            request, user,
-            backend="django.contrib.auth.backends.ModelBackend",
-        )
 
         return redirect("onboard-place")
 
