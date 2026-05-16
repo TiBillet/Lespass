@@ -299,7 +299,157 @@ Voir section 7 ci-dessus — déjà documenté.
 
 ---
 
-## 9. Liens utiles
+## 9. Session du 2026-05-16 — Cleanup legacy + migration Stripe
+
+Session de cleanup approfondi : suppression complète du flow legacy
+`/tenant/new/` (remplacé par l'app `onboard/`), migration des 2 méthodes
+Stripe Connect du tenant existant vers l'app dédiée `PaiementStripe/`,
+et migration de l'admin Unfold `WaitingConfigAdmin` dans `onboard/admin.py`.
+
+### 9.1 Audit préalable
+
+Avant toute suppression : audit exhaustif via subagent Explore pour
+identifier TOUT ce qui touche au flow legacy. Listing organisé en 11
+sections (A–K) couvrant routes, vues, templates, tasks, admin,
+management commands, signaux, tests, liens templates, modèles, validators.
+Sortie : matrice "uniquement legacy / partagé / uniquement onboard /
+ailleurs" pour chaque élément. Cette étape a évité 2 régressions :
+- Le `Tenant` ViewSet contenait DEUX responsabilités disjointes : création
+  tenant (legacy) + onboarding Stripe d'un tenant existant. Ne pas
+  supprimer la classe entière en bloc.
+- `send_to_ghost_email` task est utilisée AILLEURS que dans le flow
+  legacy (inscription user normale) : à garder.
+
+### 9.2 Migration Stripe `_from_config` → `PaiementStripe/`
+
+| Avant | Après |
+|---|---|
+| `BaseBillet/views.py::Tenant.onboard_stripe_from_config()` | `PaiementStripe/views.py::StripeConnectOnboardingViewSet.onboard_from_config()` |
+| `BaseBillet/views.py::Tenant.onboard_stripe_return_from_config()` | `PaiementStripe/views.py::StripeConnectOnboardingViewSet.onboard_return_from_config()` |
+| URL `/tenant/onboard_stripe_from_config` | URL `/stripe/onboard/from_config/` |
+| URL `/tenant/<id>/onboard_stripe_return_from_config/` | URL `/stripe/onboard/return_from_config/<id>/` |
+| Template `reunion/views/tenant/after_onboard_stripe.html` | `PaiementStripe/templates/paiementstripe/after_onboard_stripe.html` |
+
+URL branchée dans `TiBillet/urls_tenants.py` : `path('stripe/', include('PaiementStripe.urls'))`.
+
+Mises à jour des références :
+- `Administration/templates/admin/product/checkstripe_component.html:15`
+  → `<a href="/stripe/onboard/from_config/">` (avant : `/tenant/onboard_stripe_from_config`).
+- `BaseBillet/models.py::Configuration.onboard_stripe()` (ligne 757)
+  → `https://{tenant_url}/stripe/onboard/from_config/`.
+
+Spec du chantier futur (refacto large multi-providers, etc.) :
+[`../MOYENS_PAIEMENT/01-stripe-migration-spec.md`](../MOYENS_PAIEMENT/01-stripe-migration-spec.md).
+
+### 9.3 Migration `WaitingConfigAdmin` → `onboard/admin.py`
+
+Déplacement complet de la classe `WaitingConfigAdmin` depuis
+`Administration/admin_tenant.py:3402-3469` vers `onboard/admin.py` (à
+côté de `OnboardInvitationAdmin` existant). Conservation de l'action
+custom `create_tenant` (filet de sécurité : permet à un ROOT admin de
+finaliser manuellement un brouillon bloqué).
+
+Permissions inchangées : `RootPermissionWithRequest` (les `WaitingConfiguration`
+vivent dans le schema `meta` partagé et contiennent des données
+sensibles — OTP hashes, emails).
+
+### 9.4 Suppressions
+
+**Vues (`BaseBillet/views.py`)** :
+- Classe `Tenant(viewsets.ViewSet)` entière (lignes 3623-3913, ~290 lignes).
+  Contenait : `new`, `create_waiting_configuration`, `emailconfirmation_tenant`,
+  `onboard_stripe`, `onboard_stripe_return`, `onboard_stripe_from_config`,
+  `onboard_stripe_return_from_config`.
+- Import correspondant retiré dans `BaseBillet/urls.py:14`
+  (`router.register(r'tenant', base_view.Tenant)`).
+- Import `new_tenant_mailer` et `new_tenant_after_stripe_mailer` retiré
+  de l'import block de `BaseBillet/views.py:53`.
+
+**Tasks Celery (`BaseBillet/tasks.py`)** :
+- `new_tenant_mailer` (envoyait le magic-link de confirmation tenant).
+- `new_tenant_after_stripe_mailer` (notifiait les superadmins post-Stripe
+  onboarding).
+
+**Validators (`BaseBillet/validators.py`)** :
+- Partie `Serializer` de `TenantCreateValidator` (champs email,
+  emailConfirmation, name, cgu, dns_choice, short_description, captcha
+  x/y/answer + méthodes `validate_*`). La classe est désormais un simple
+  conteneur pour la staticmethod `create_tenant()`, **toujours appelée**
+  par `WaitingConfiguration.create_tenant()` → `onboard.tasks.create_tenant_from_draft`
+  et `onboard.admin.WaitingConfigAdmin.create_tenant`.
+
+**Templates** :
+- Dossier complet `BaseBillet/templates/reunion/views/tenant/` :
+  `new_tenant.html`, `create_waiting_configuration_THANKS.html`,
+  `create_waiting_configuration_MAIL_CONFIRMED.html`,
+  `after_onboard_stripe.html`, et `emails/welcome_email.html`,
+  `emails/after_onboard_stripe_for_superadmin.html`, `emails/onboard_stripe.html`.
+- Dossier complet `BaseBillet/templates/htmx/views/tenant/`
+  (`new.html`, `onboard_stripe_return.html`).
+- `BaseBillet/templates/htmx/forms/tenant_areas.html` + `_informations.html` + `_summary.html`
+  (prototype HTMX 3-step jamais routé).
+- `BaseBillet/templates/htmx/views/create_tenant.html` (parent du
+  prototype HTMX, pointait vers les routes mortes `/tenant/areas/` etc.).
+- `ApiBillet/templates/mails/creation_tenant.html` (vestige HTML 2015,
+  non utilisé).
+
+### 9.5 Audit final liens résiduels
+
+`grep -rn '/tenant/'` après cleanup : **0 lien actif résiduel** dans les
+templates / JS / Python. Les seules occurrences restantes sont des
+commentaires/docstrings explicatifs documentant la migration (avec
+référence à cette session et au chantier MOYENS_PAIEMENT).
+
+### 9.6 À conserver (volontairement)
+
+- `WaitingConfiguration` model (utilisé par `onboard/`).
+- `TenantCreateValidator.create_tenant()` staticmethod (chaîne provisioning
+  tenant, partagée entre onboard et l'admin manuel).
+- `create_empty_tenant` management command (pool replenishment via cron
+  hebdomadaire).
+- `batch_new_tenant` management command (création batch CSV, indépendante).
+- `send_to_ghost_email` task (utilisée aussi par inscription user normale).
+- Champs orphelins de `WaitingConfiguration` (`id_acc_connect`,
+  `laboutik_wanted`, `payment_wanted`, `site_web`, `twitter`, `facebook`,
+  `instagram`, `map_img`, `carte_restaurant`, `img`, `fuseau_horaire`,
+  `legal_documents`, `onboard_stripe_finished`) : laissés en place pour ne
+  pas casser une éventuelle migration data ultérieure. Pourront être
+  supprimés dans une migration dédiée.
+
+### 9.7 Tests
+
+- `manage.py check` : 0 issue.
+- `pytest onboard/tests/` : **58 passed / 2 skipped** (baseline conservée).
+- Aucun test pytest sur le flow legacy `/tenant/new/` (audit confirmé).
+
+### 9.8 Fichiers modifiés / supprimés
+
+| Action | Fichier |
+|---|---|
+| Créé | `PaiementStripe/templates/paiementstripe/after_onboard_stripe.html` |
+| Modifié | `PaiementStripe/views.py` (+ `StripeConnectOnboardingViewSet`) |
+| Modifié | `PaiementStripe/urls.py` (peuplé, branché) |
+| Modifié | `TiBillet/urls_tenants.py` (+ include PaiementStripe) |
+| Modifié | `Administration/templates/admin/product/checkstripe_component.html` |
+| Modifié | `BaseBillet/models.py` (URL Stripe dans onboard_stripe()) |
+| Modifié | `onboard/admin.py` (+ WaitingConfigAdmin migré) |
+| Modifié | `Administration/admin_tenant.py` (suppression WaitingConfigAdmin) |
+| Modifié | `BaseBillet/views.py` (suppression classe Tenant + import) |
+| Modifié | `BaseBillet/urls.py` (suppression router.register tenant) |
+| Modifié | `BaseBillet/tasks.py` (suppression 2 tasks legacy) |
+| Modifié | `BaseBillet/validators.py` (slim TenantCreateValidator) |
+| Créé | `TECH_DOC/SESSIONS/MOYENS_PAIEMENT/01-stripe-migration-spec.md` |
+| Supprimé | `BaseBillet/templates/reunion/views/tenant/` (dossier complet) |
+| Supprimé | `BaseBillet/templates/htmx/views/tenant/` (dossier complet) |
+| Supprimé | `BaseBillet/templates/htmx/views/create_tenant.html` |
+| Supprimé | `BaseBillet/templates/htmx/forms/tenant_areas.html` |
+| Supprimé | `BaseBillet/templates/htmx/forms/tenant_informations.html` |
+| Supprimé | `BaseBillet/templates/htmx/forms/tenant_summary.html` |
+| Supprimé | `ApiBillet/templates/mails/creation_tenant.html` |
+
+---
+
+## 10. Liens utiles
 
 - Plan d'implémentation détaillé : `02-implementation-plan.md`
 - Spec design originale : `01-design-spec.md`
@@ -307,3 +457,4 @@ Voir section 7 ci-dessus — déjà documenté.
 - Prompt prochaine session : `05-next-session-prompt.md`
 - Spec widget GPS réutilisable : `../WIDGET_GEO/01-design-spec.md`
 - Plan d'impl widget GPS : `../WIDGET_GEO/02-implementation-plan.md`
+- **Spec chantier Stripe future** : `../MOYENS_PAIEMENT/01-stripe-migration-spec.md`

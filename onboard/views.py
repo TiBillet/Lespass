@@ -374,6 +374,51 @@ def _finalize_otp_success(request, wc):
     return user
 
 
+def forge_admin_magic_link(user, tenant, next_path="/admin/"):
+    """
+    Forge une URL magic-link qui logue `user` sur `tenant` et redirige
+    vers `next_path` (par defaut `/admin/`).
+
+    Reutilise le pattern existant du projet :
+      - `user.get_connect_token()` -> TimestampSigner(user.pk), TTL 72h
+        (cf. `AuthBillet/models.py::TibilletUser.get_connect_token`).
+      - Vue `/emailconfirmation/<token>` -> `activate(request, token)` qui
+        fait `login(request, user)` puis redirect vers `?next=<signed>`
+        (cf. `BaseBillet/views.py::emailconfirmation`).
+      - `signing.dumps(next_path)` : le param `?next=` est SIGNED cote
+        emetteur et VERIFIE cote recepteur (`signing.loads`) — empeche
+        un attaquant de detourner le redirect vers un site externe.
+
+    Securite : on ne hardcode pas /admin/ — le code de la vue
+    `emailconfirmation` re-deserialise via `signing.loads(next_url)`,
+    donc la signature suffit pour bloquer toute redirection malicieuse.
+
+    / Forge a magic-link URL that logs `user` in on `tenant` and redirects
+    to `next_path` (default `/admin/`). Reuses the project's existing
+    pattern: `user.get_connect_token()` (TimestampSigner, 72h TTL) +
+    `signing.dumps(next_path)` (the receiver verifies via `signing.loads`,
+    which prevents redirect tampering).
+
+    LOCALISATION: onboard/views.py::forge_admin_magic_link
+
+    :param user: instance TibilletUser cible.
+    :param tenant: instance Client (tenant) cible.
+    :param next_path: chemin a atteindre apres login (str, defaut "/admin/").
+    :return: str URL absolue (`https://...`) avec token + next signed.
+    """
+    # Imports locaux : evitent de charger AuthBillet au top du module.
+    # / Local imports: avoid loading AuthBillet at module-top.
+    from django.core import signing
+
+    primary_domain = tenant.get_primary_domain().domain
+    token = user.get_connect_token()
+    next_signed = signing.dumps(next_path)
+    return (
+        f"https://{primary_domain}/emailconfirmation/{token}"
+        f"?next={next_signed}"
+    )
+
+
 # --- SSO transitoire tenant -> ROOT --------------------------------------
 # Quand un utilisateur deja authentifie sur un tenant est redirige vers le
 # wizard servi par ROOT (cf. `_redirect_to_root_if_tenant`), on perd la
@@ -1982,7 +2027,36 @@ class OnboardViewSet(viewsets.ViewSet):
             # AttributeError.
             primary = wc.tenant.get_primary_domain()
             domain = primary.domain if primary else ""
+            # Magic-link admin : on logue l'utilisateur sur le nouveau
+            # tenant SANS qu'il ait a re-taper email/OTP. Sans ce mecanisme,
+            # le bouton pointait sur `https://<tenant>/admin/` direct,
+            # mais le cookie de session vit sur ROOT (domaine different) :
+            # l'utilisateur atterrissait sur la page de login admin.
+            # `forge_admin_magic_link` reutilise `user.get_connect_token()`
+            # (TimestampSigner 72h, pattern existant du projet) + un
+            # `?next=` signed vers `/admin/`. Cf. onboard/views.py.
+            #
+            # On fallback sur le lien direct si la generation echoue
+            # (utilisateur supprime ou tenant sans domain) — l'utilisateur
+            # arrivera juste sur la page de login.
+            # / Admin magic-link: log the user in on the new tenant without
+            # re-typing email/OTP. Without this, the button pointed to
+            # `https://<tenant>/admin/` direct, but the session cookie is
+            # on ROOT (different domain) → user landed on the admin login.
+            # `forge_admin_magic_link` reuses `user.get_connect_token()`
+            # (TimestampSigner 72h) + signed `?next=` to `/admin/`.
             admin_url = f"https://{domain}/admin/" if domain else "/admin/"
+            if domain and request.user.is_authenticated:
+                try:
+                    admin_url = forge_admin_magic_link(
+                        request.user, wc.tenant, next_path="/admin/",
+                    )
+                except Exception as forge_exc:
+                    logger.error(
+                        "launch_status: forge_admin_magic_link failed for "
+                        "WC %s, falling back to direct admin URL: %s",
+                        wc.uuid, forge_exc,
+                    )
             return render(request, "onboard/partials/status_done.html", {
                 "wc": wc,
                 "domain": domain,

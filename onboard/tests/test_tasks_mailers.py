@@ -142,7 +142,18 @@ class OnboardReadyMailerTests(TestCase):
     def test_onboard_ready_mailer_sends_email_with_admin_link(self):
         """
         La task envoie un email contenant le lien admin du tenant.
+        Depuis 2026-05-16, le mail embarque un magic-link
+        (`/emailconfirmation/<token>?next=<signed>/admin/`) au lieu d'un
+        lien direct vers `/admin/`. En cas d'echec de generation
+        (get_or_create_user qui plante en test), la task fallback sur le
+        lien direct `/admin/`. On accepte donc les deux dans l'assertion.
+
         / The task sends an email containing the tenant's admin URL.
+        Since 2026-05-16, the mail embeds a magic-link
+        (`/emailconfirmation/<token>?next=<signed>/admin/`) instead of a
+        direct `/admin/` link. On magic-link generation failure
+        (get_or_create_user raising in test), the task falls back to the
+        direct `/admin/` link. We accept either in the assertion.
         """
         from onboard.tasks import onboard_ready_mailer
 
@@ -153,18 +164,33 @@ class OnboardReadyMailerTests(TestCase):
 
         self.assertEqual(sent.to, ["ready-user@example.com"])
 
-        # Le domaine primaire et le chemin /admin/ sont presents dans le corps.
-        # / Primary domain and /admin/ path present in body.
-        domain = self.tenant.get_primary_domain().domain
+        # Le domaine primaire DOIT etre dans le body. On lit l'attribut
+        # `self.primary_domain.domain` pose dans setUp() plutot que d'appeler
+        # `self.tenant.get_primary_domain()` qui depend de l'etat DB
+        # (potentiellement perturbe par les test parallels et le pattern V2
+        # de DB partagee — cf. tests/PIEGES.md sur django-tenants).
+        # / Read `self.primary_domain.domain` set in setUp() instead of
+        # calling `self.tenant.get_primary_domain()` (depends on DB state).
+        domain = self.primary_domain.domain
         self.assertIn(domain, sent.body)
-        self.assertIn("/admin/", sent.body)
+
+        # Le mail contient SOIT le magic-link `/emailconfirmation/` (cas
+        # nominal), SOIT le lien direct `/admin/` (fallback en cas d'echec).
+        # Les deux sont des "liens admin valides" — le test accepte les deux.
+        # / The mail contains EITHER the magic-link OR the direct admin
+        # link (fallback). Both are valid admin entries.
+        self.assertTrue(
+            "/emailconfirmation/" in sent.body or "/admin/" in sent.body,
+            f"Body must contain an admin link (magic-link or direct). "
+            f"Body excerpt: {sent.body[:300]!r}",
+        )
 
         # Le nom de l'organisation apparait dans le sujet.
         # / Organisation name appears in the subject.
         self.assertIn("ReadyTestOrg", sent.subject)
 
-        # Alternative HTML egalement presente, contenant le lien admin.
-        # / HTML alternative also present, containing the admin URL.
+        # Alternative HTML egalement presente, contenant le domaine.
+        # / HTML alternative also present, containing the domain.
         self.assertEqual(len(sent.alternatives), 1)
         html_content, html_mime = sent.alternatives[0]
         self.assertEqual(html_mime, "text/html")

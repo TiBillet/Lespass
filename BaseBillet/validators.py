@@ -898,47 +898,38 @@ class MembershipValidator(serializers.Serializer):
         return attrs
 
 
-class TenantCreateValidator(serializers.Serializer):
-    email = serializers.EmailField()
-    emailConfirmation = serializers.EmailField()
-    name = serializers.CharField(max_length=200)
-    cgu = serializers.BooleanField(required=True)
-    dns_choice = serializers.ChoiceField(choices=["tibillet.coop", "tibillet.re"])
-    short_description = serializers.CharField(max_length=250)
-    # Anti-spam très léger (même mécanisme que le formulaire de contact): x + y == answer
-    x = serializers.IntegerField(required=True, min_value=0)
-    y = serializers.IntegerField(required=True, min_value=0)
-    answer = serializers.IntegerField(required=True)
+class TenantCreateValidator:
+    """
+    Conteneur de la chaine de creation de tenant. La staticmethod
+    `create_tenant(wc)` est l'API publique : elle prend une
+    `WaitingConfiguration` et provisionne un tenant (Client, Domain,
+    admin User, Configuration, Fedow API, Product FREERES).
 
-    def validate_cgu(self, value):
-        if not value:
-            raise serializers.ValidationError(_('Please accept terms and conditions.'))
-        return value
+    HISTORIQUE 2026-05-16 : cette classe etait initialement un
+    `serializers.Serializer` qui validait le formulaire legacy
+    `/tenant/new/` (email + emailConfirmation + name + cgu + dns_choice +
+    captcha x+y=answer). La partie validation a ete SUPPRIMEE avec le
+    cleanup du flow legacy — la validation se fait maintenant cote
+    `onboard.serializers` (chaque step du wizard a son propre serializer).
+    On garde le nom de classe `TenantCreateValidator` pour ne pas casser
+    `WaitingConfiguration.create_tenant()` (cf. MetaBillet/models.py:314)
+    qui delegue ici.
 
-    def validate_name(self, value):
-        if WaitingConfiguration.objects.filter(slug=slugify(value)).exists():
-            raise serializers.ValidationError(f"{value}. " + _('This name is not available'))
-        if Client.objects.filter(name=value).exists():
-            raise serializers.ValidationError(f"{value}. " + _('This name is not available'))
-        if Domain.objects.filter(domain__icontains=f'{slugify(value)}').exists():
-            raise serializers.ValidationError(f"{value}. " + _('This name is not available'))
+    APPELE PAR :
+      - `WaitingConfiguration.create_tenant()` (MetaBillet/models.py)
+        → utilisee par `onboard.tasks.create_tenant_from_draft`
+        → utilisee par `onboard.admin.WaitingConfigAdmin.create_tenant`
+          (action manuelle ROOT).
 
-        return value
-
-    def validate(self, attrs):
-        # Validation anti-spam: vérifier que answer == x + y (identique à ContactValidator)
-        try:
-            x = int(attrs.get('x', 0))
-            y = int(attrs.get('y', 0))
-            answer = int(attrs.get('answer', -1))
-        except (TypeError, ValueError):
-            raise serializers.ValidationError({'answer': [_('Please answer the anti-spam question.')]})
-
-        if x + y != answer:
-            raise serializers.ValidationError({'answer': [_('Wrong answer to the anti-spam question.')]})
-
-        return attrs
-
+    / Container for the tenant creation chain. The staticmethod
+    `create_tenant(wc)` is the public API: takes a WaitingConfiguration
+    and provisions a tenant (Client, Domain, admin user, Configuration,
+    Fedow API, FREERES product). The Serializer validation part was
+    removed on 2026-05-16 alongside the legacy `/tenant/new/` cleanup —
+    validation now lives in `onboard.serializers`. Class name kept to
+    avoid breaking `WaitingConfiguration.create_tenant()` which delegates
+    here. Cf. `TECH_DOC/SESSIONS/ONBOARD/`.
+    """
 
     @staticmethod
     def create_tenant(waiting_config: WaitingConfiguration):

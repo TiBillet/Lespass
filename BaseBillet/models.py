@@ -754,7 +754,12 @@ class Configuration(SingletonModel):
                 tenant = connection.tenant
                 tenant_url = tenant.get_primary_domain().domain
                 msg = _('Link your stripe account to accept payment')
-                return format_html(f"<a href='https://{tenant_url}/tenant/onboard_stripe_from_config'>{msg}</a>")
+                # URL migree 2026-05-16 : /tenant/onboard_stripe_from_config ->
+                # /stripe/onboard/from_config/ (app PaiementStripe). Cf.
+                # TECH_DOC/SESSIONS/MOYENS_PAIEMENT/01-stripe-migration-spec.md.
+                # / URL migrated 2026-05-16: /tenant/onboard_stripe_from_config
+                # -> /stripe/onboard/from_config/ (PaiementStripe app).
+                return format_html(f"<a href='https://{tenant_url}/stripe/onboard/from_config/'>{msg}</a>")
             return _("Stripe connected")
         except Exception as e:
             logger.error(_("Stripe error, check admin"))

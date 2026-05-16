@@ -19,11 +19,15 @@ This admin only lists/inspects existing invitations (created via tests
 or a future invitation tool).
 """
 
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.shortcuts import redirect
+from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin
+from unfold.decorators import action
 
 from Administration.admin.site import staff_admin_site
-from ApiBillet.permissions import TenantAdminPermissionWithRequest
+from ApiBillet.permissions import RootPermissionWithRequest, TenantAdminPermissionWithRequest
+from MetaBillet.models import WaitingConfiguration
 from onboard.models import OnboardInvitation
 
 
@@ -84,3 +88,110 @@ class OnboardInvitationAdmin(ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
+
+
+@admin.register(WaitingConfiguration, site=staff_admin_site)
+class WaitingConfigAdmin(ModelAdmin):
+    """
+    Admin Unfold pour WaitingConfiguration (brouillons du wizard onboard).
+
+    Migre depuis `Administration/admin_tenant.py` le 2026-05-16 dans le
+    cadre du cleanup du flow legacy `/tenant/new/`. Avant cette migration,
+    cet admin etait melange avec tous les autres admins de tenant.
+
+    Cas d'usage : le ROOT admin peut visualiser les brouillons en cours,
+    leur etat (`current_step`, `email_confirmed`, `created`, `tenant`),
+    et finaliser manuellement la creation tenant pour un brouillon bloque
+    (via l'action `create_tenant`). En pratique, la creation se fait
+    deja automatiquement via `onboard.tasks.create_tenant_from_draft`
+    avec retry — cette action manuelle est un filet de securite.
+
+    Permissions : ROOT only (`RootPermissionWithRequest`). Les brouillons
+    vivent dans le schema `meta` partage et contiennent des donnees
+    sensibles (emails, OTP hashes) qui ne doivent pas etre exposees aux
+    admins de tenant.
+
+    / Unfold admin for WaitingConfiguration (onboard wizard drafts).
+    Migrated from `Administration/admin_tenant.py` on 2026-05-16 as part
+    of the legacy `/tenant/new/` cleanup. ROOT-only: drafts live in the
+    shared `meta` schema and contain sensitive data (emails, OTP hashes).
+    """
+
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
+
+    list_display = (
+        "organisation",
+        "email",
+        "datetime",
+        "site_web",
+        "short_description",
+        "laboutik_wanted",
+        "payment_wanted",
+        "email_confirmed",
+        "created",
+    )
+
+    fields = list_display
+    readonly_fields = (
+        "datetime",
+    )
+
+    ordering = ('-datetime',)
+
+    list_filter = ["datetime", "created"]
+    search_fields = ["email", "organisation", "datetime"]
+
+    actions_detail = ["create_tenant"]
+
+    @action(
+        description=_("Create instance"),
+        url_path="create_tenant",
+        permissions=["custom_actions_detail"],
+    )
+    def create_tenant(self, request, object_id):
+        """
+        Action manuelle pour finaliser la creation d'un tenant a partir
+        d'un brouillon `WaitingConfiguration`. Utilisee comme filet de
+        securite quand `onboard.tasks.create_tenant_from_draft` a echoue
+        et n'a pas pu retry (ex: pool de tenants vides epuise).
+
+        / Manual action to finalize tenant creation from a draft. Safety
+        net when `create_tenant_from_draft` failed and couldn't retry.
+        """
+        wc = WaitingConfiguration.objects.get(pk=object_id)
+        if wc.email_confirmed:
+            try:
+                wc.create_tenant()
+                messages.add_message(
+                    request, messages.SUCCESS,
+                    _("Tenant created."),
+                )
+            except Exception as e:
+                messages.add_message(
+                    request, messages.ERROR,
+                    _("%(name)s tenant create error: %(err)s") % {
+                        "name": wc.organisation, "err": e,
+                    },
+                )
+        else:
+            messages.add_message(
+                request, messages.WARNING,
+                _("Email not confirmed"),
+            )
+        return redirect(request.META["HTTP_REFERER"])
+
+    def has_custom_actions_detail_permission(self, request, object_id):
+        return RootPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return RootPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return RootPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return RootPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return RootPermissionWithRequest(request)

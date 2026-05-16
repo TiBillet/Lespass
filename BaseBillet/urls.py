@@ -11,7 +11,12 @@ import BaseBillet.views_scan as views_scan
 router = routers.DefaultRouter()
 router.register(r'memberships', base_view.MembershipMVT, basename='membership_mvt')
 router.register(r'badge', base_view.Badge, basename='badge')
-router.register(r'tenant', base_view.Tenant, basename='tenant')
+# NOTE 2026-05-16 : `Tenant` ViewSet supprime. Le flow legacy `/tenant/new/`
+# est remplace par l'app `onboard/` (wizard multi-step). Les 2 actions
+# Stripe `_from_config` ont ete migrees dans `PaiementStripe/`. Cf.
+# `TECH_DOC/SESSIONS/ONBOARD/` et `TECH_DOC/SESSIONS/MOYENS_PAIEMENT/`.
+# / `Tenant` ViewSet removed. Legacy `/tenant/new/` replaced by `onboard/`.
+# Stripe `_from_config` actions moved to `PaiementStripe/`.
 router.register(r'federation', base_view.FederationViewset, basename='federation')
 
 router.register(r'my_account', base_view.MyAccount, basename='my_account')

@@ -1263,74 +1263,13 @@ def connexion_celery_mailer(self, user_email,
         raise Exception
 
 
-@app.task
-def new_tenant_mailer(waiting_config_uuid: str):
-    try:
-        time.sleep(2)  # Attendre que la db soit bien a jour
-
-        # Génération du lien qui va créer la redirection vers l'url onboard
-        waiting_config = WaitingConfiguration.objects.get(uuid=waiting_config_uuid)
-        signer = TimestampSigner()
-        token = urlsafe_base64_encode(signer.sign(f"{waiting_config.uuid}").encode('utf8'))
-
-        ### VERIFICATION SIGNATURE AVANT D'ENVOYER
-        wc_pk = signer.unsign(urlsafe_base64_decode(token).decode('utf8'), max_age=(3600 * 72))  # 3 jours
-        wv_wanted = WaitingConfiguration.objects.get(uuid=wc_pk)
-        if not waiting_config == wv_wanted:
-            raise Exception("signature check error")
-
-        p_domain = connection.tenant.get_primary_domain().domain
-        connexion_url = f"https://{p_domain}/tenant/{token}/emailconfirmation_tenant"
-
-        # on indique la future adresse :
-        future_url = f"https://{waiting_config.slug}.{waiting_config.dns_choice}/"
-
-        config = Configuration.get_solo()
-        activate(config.language)
-
-        mail = CeleryMailerClass(
-            waiting_config.email,
-            _("TiBillet : Creation of a new instance."),
-            template='reunion/views/tenant/emails/welcome_email.html',
-            context={
-                'waiting_config': waiting_config,
-                'orga_name': f"{waiting_config.organisation.capitalize()}",
-                'connexion_url': connexion_url,
-                'future_url': future_url,
-            }
-        )
-        mail.send()
-        logger.info(f"mail.sended : {mail.sended}")
-
-    except smtplib.SMTPRecipientsRefused as e:
-        logger.error(
-            f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour new_tenant_mailer : {e}")
-        raise e
-
-
-@app.task
-def new_tenant_after_stripe_mailer(waiting_config_uuid: str):
-    # Mail qui prévient l'administrateur ROOT de l'instance TiBillet qu'un nouveau tenant souhaite se créer.
-    try:
-        # Génération du lien qui va créer la redirection vers l'url onboard
-        waiting_config = WaitingConfiguration.objects.get(uuid=waiting_config_uuid)
-        logger.info(f"new_tenant_after_stripe_mailer : {waiting_config.organisation}")
-        super_admin_root = [user.email for user in TibilletUser.objects.filter(is_superuser=True)]
-        mail = CeleryMailerClass(
-            super_admin_root,
-            _(f"{waiting_config.organisation} & TiBillet : Lespass tenant creation request. ROOT admin action requested"),
-            template='reunion/views/tenant/emails/after_onboard_stripe_for_superadmin.html',
-            context={
-                'waiting_config': waiting_config,
-            }
-        )
-        mail.send()
-        logger.info(f"mail.sended : {mail.sended}")
-
-    except smtplib.SMTPRecipientsRefused as e:
-        logger.error(
-            f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour new_tenant_after_stripe_mailer : {e}")
-        raise e
+# NOTE 2026-05-16 : les tasks `new_tenant_mailer` et
+# `new_tenant_after_stripe_mailer` ont ete SUPPRIMEES.
+# Elles servaient au flow legacy `/tenant/new/` (creation de tenant via
+# magic-link mail + notif superadmin post-Stripe), remplace par l'app
+# `onboard/` (wizard OTP + SSO magic-link + mail "espace pret").
+# Cf. `TECH_DOC/SESSIONS/ONBOARD/03-session-recap.md`.
+# / Removed: legacy tenant-creation mail tasks. Replaced by `onboard/`.
 
 
 """
