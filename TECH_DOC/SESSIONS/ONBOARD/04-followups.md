@@ -337,3 +337,100 @@ Quand fedow_core mergera (cf. F1), retirer toutes les références "FK federatio
 - ✅ Fix overflow `status_error.html` (white-space + word-break + max-height + scroll)
 - ✅ CHANGELOG.md à jour
 - ✅ A TESTER et DOCUMENTER/widget_carte_adresse.md (9 scénarios)
+
+---
+
+## ✅ FAIT (2026-05-16) — Marathon multi-axes
+
+Cf. `03-session-recap.md` section 9 pour le détail complet.
+
+### Cleanup legacy `/tenant/new/`
+- ✅ Suppression classe `BaseBillet.views.Tenant` (~290 lignes, 7 actions @action)
+- ✅ Suppression tasks `new_tenant_mailer` + `new_tenant_after_stripe_mailer`
+- ✅ Suppression partie `Serializer` de `TenantCreateValidator` (staticmethod conservée)
+- ✅ Suppression templates legacy : `reunion/views/tenant/*` (7 fichiers) + `htmx/views/tenant/*` + `htmx/forms/tenant_*` + `ApiBillet/templates/mails/creation_tenant.html`
+- ✅ Migration `WaitingConfigAdmin` → `onboard/admin.py` (avec action `create_tenant` filet de sécurité)
+- ✅ 0 lien `/tenant/new/` résiduel actif (`grep -rn` confirmé)
+
+### Migration Stripe `_from_config`
+- ✅ Nouveau `StripeConnectOnboardingViewSet` dans `PaiementStripe/views.py`
+- ✅ URLs `/stripe/onboard/from_config/` + `/stripe/onboard/return_from_config/<id>/`
+- ✅ Template `PaiementStripe/templates/paiementstripe/after_onboard_stripe.html`
+- ✅ Update `Administration/templates/admin/product/checkstripe_component.html` + `BaseBillet/models.py::Configuration.onboard_stripe()`
+- ✅ Doc : `TECH_DOC/SESSIONS/MOYENS_PAIEMENT/01-stripe-migration-spec.md` (spec chantier futur) + `02-migration-2026-05-16.md` (récap migration)
+
+### Mail "espace prêt" + magic-link SSO admin
+- ✅ Helper `forge_admin_magic_link(user, tenant, next_path)` dans `onboard/views.py`
+- ✅ `launch_status` génère un magic-link pour le bouton "Accéder à mon espace"
+- ✅ `onboard_ready_mailer` génère un magic-link dans le body du mail
+- ✅ Fallback sur URL directe en cas d'échec generation
+
+### Bascule mailers sur `CeleryMailerClass`
+- ✅ `onboard_otp_mailer` + `onboard_ready_mailer` utilisent `BaseBillet.tasks.CeleryMailerClass`
+- ✅ Apporte `List-Unsubscribe` header + gestion SMTPRecipientsRefused centralisée
+- ✅ Sujet OTP : code à 6 chiffres EN PREMIER ("123456 – your TiBillet code") pour meilleur affichage notif mobile
+
+### Ghost newsletter
+- ✅ Ajout `send_to_ghost_email.delay(email, name)` dans `tenant_context(META)` après `wc.create_tenant()`
+- ✅ Wrappé try/except — Ghost down ne fait PAS échouer la création tenant
+
+### Adresse postale principale
+- ✅ Création `PostalAddress(is_main=True)` dans le schema du nouveau tenant
+- ✅ Lien `Configuration.postal_address` + champs adresse remplis depuis WC
+- ✅ Try/except + `logger.error(exc_info=True)` (Sentry) si échec — admin créera manuellement
+- ✅ Skip si `wc.street_address` vide (ancien flow)
+
+### SSO transitoire tenant → ROOT
+- ✅ Helpers `_generate_onboard_sso_token` + `_consume_onboard_sso_token`
+- ✅ TTL court 120s + one-shot via Redis (`cache.add` + SHA256 du token comme clé) + scope `onboard_sso:` + check `espece == TYPE_HUM`
+- ✅ Branché dans `dispatch()` du ViewSet : `_consume_sso_in_request_if_present` puis `_redirect_to_root_if_tenant`
+- ✅ Wizard ne tourne plus que sur ROOT (`schema_name == "public"`) — redirect transparent depuis tenants
+
+### Widget carte adresse
+- ✅ Skip leaflet-geosearch côté autocomplete (politique Nominatim violée)
+- ✅ Fetch direct Nominatim avec `addressdetails=1`
+- ✅ Pré-remplissage input search avec `wc.organisation` au load + search auto
+- ✅ Bouton submit (loupe) injecté en JS avec `type="button"` (évite submit du form parent)
+- ✅ Listener `keydown Enter` avec `preventDefault` + `stopPropagation`
+- ✅ Message "Adresse introuvable" inline (`aria-live`)
+- ✅ CSS final : pas de double border (container avec shadow + input/bouton sans border), `width: fit-content`, alignement hauteur 40.79px
+
+### Domaine ROOT primary
+- ✅ Fix `install.py` : `www.{DOMAIN}` passé `is_primary=False` (apex seul est primary)
+- ✅ Fix DB dev manuel : `www.tibillet.localhost` → `is_primary=False`, apex restauré primary
+- ✅ DEV_HOST tests aligné sur `tibillet.localhost` (apex)
+
+### Audit critique post-cleanup
+- ✅ BUG #3 — PostalAddress crash → try/except + logger.error Sentry (évite idempotence early-return)
+- ✅ BUG #4 — Claim Redis libéré sur succès (`launch_retry` fonctionne)
+- ✅ BUG #5 — Import `from django.db import transaction` retiré (inutilisé)
+
+### Champs orphelins commentés
+- ✅ Commentaires `# LEGACY 2026-05-16 — ...` sur tous les champs orphelins de `MetaBillet.WaitingConfiguration` (id_acc_connect, laboutik_wanted, payment_wanted, site_web, legal_documents, twitter, facebook, instagram, map_img, carte_restaurant, img, fuseau_horaire, onboard_stripe_finished)
+
+### Pièges documentés
+- ✅ 4 nouveaux pièges ajoutés dans `tests/PIEGES.md` section "Widget carte adresse + leaflet-geosearch"
+- ✅ Pièges SSO + magic-link nested form documentés en docstrings
+
+### Tests
+- ✅ `manage.py check` ✅
+- ✅ `pytest onboard/tests/` → **58 passed / 2 skipped** (baseline conservée)
+
+---
+
+## 🔴 Follow-ups post-2026-05-16
+
+### Must-fix (avant prod)
+- F4 — Tests pytest SSO (generate + consume + replay refusé + TYPE_HUM refusé) : aucun test actuellement, faille de couverture.
+- F5 — Tests pytest `forge_admin_magic_link` (génération + structure URL + `?next=` signé).
+- F6 — Tests pytest `StripeConnectOnboardingViewSet` (mock `stripe.AccountLink.create` + `stripe.Account.retrieve`).
+
+### Should-fix (1-2 mois)
+- S8 — Migration data cleanup des champs orphelins `WaitingConfiguration` (cf. commentaires LEGACY dans `MetaBillet/models.py`).
+- S9 — Tests E2E Playwright du flow complet onboard (lien depuis tenant → SSO → ROOT → wizard → magic-link → admin).
+- S10 — i18n complet : `makemessages` + `compilemessages` sur tous les nouveaux strings (mailers, status_done, widget no-result).
+
+### Nice-to-have
+- N4 — Form auto-submit POST au lieu de GET dans URL pour le token SSO (token ne fuit pas dans history/Referer).
+- N5 — Doc utilisateur dans `A TESTER et DOCUMENTER/` pour le flow SSO + magic-link.
+- N6 — Renommer `TenantCreateValidator` (classe-conteneur) en `TenantCreator` ou similaire (le nom "Validator" n'a plus de sens après suppression du Serializer).

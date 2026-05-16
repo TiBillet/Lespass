@@ -447,6 +447,73 @@ référence à cette session et au chantier MOYENS_PAIEMENT).
 | Supprimé | `BaseBillet/templates/htmx/forms/tenant_summary.html` |
 | Supprimé | `ApiBillet/templates/mails/creation_tenant.html` |
 
+### 9.9 Audit critique post-cleanup + fixes
+
+Apres le cleanup, audit de TOUT le code ecrit lors de la session
+(verifications de bugs potentiels). 9 points identifies, 3 critiques
++ 1 moyen fixes immediatement.
+
+**Fixes appliques (cf. `onboard/tasks.py`)** :
+
+| BUG | Severite | Fix |
+|---|---|---|
+| #3 — PostalAddress crash propageait dans Celery autoretry → adresse jamais creee (idempotence early-return) | 🔴 CRITIQUE | `try/except` autour du bloc PostalAddress + `logger.error(exc_info=True)` (Sentry alerte). Admin doit creer manuellement si echec. |
+| #4 — Claim Redis pas libere apres succes (5min) → `launch_retry` semblait sans effet | 🟠 MOYEN | `cache.delete(claim_key)` en fin de fonction succes. Idempotence reste assuree par `wc.tenant_id is not None` au debut. |
+| #5 — `from django.db import transaction` jamais utilise | 🟡 FAIBLE | Import retire. |
+
+**Points NON-fixes (audit confirme = pas un bug)** :
+
+| Point | Verdict |
+|---|---|
+| SSO cross-tenant (lien tenant -> tenant) | Pattern OK pour usage futur cross-tenant. L'user finit bien loggue sur ROOT via 2 redirects (consume + re-generate sur tenant). |
+| Primary domain garanti | `BaseBillet/validators.py:969-973` cree le Domain avec `is_primary=True`. `tenant.get_primary_domain()` ne peut pas retourner None apres `create_tenant()`. |
+| User admin sur son tenant | `validators.py:990-994` fait `user.client_admin.add(tenant)` + `is_staff=True`. Magic-link logue correctement. |
+| `email_valid=False` + loggue | Toutes les voies (`activate`, `_finalize_otp_success`) forcent email_valid=True. Cas pathologique tres rare. |
+| `_finalize_otp_success` ne refresh pas `wc` | Pas d'impact : on retourne `user`, l'appelant fait `redirect()` immediat. |
+
+### 9.10 Champs orphelins commentes
+
+Sur demande mainteneur : ajout de blocs `# LEGACY 2026-05-16 — ...` sur
+chaque champ orphelin de `MetaBillet.WaitingConfiguration`. Permet une
+suppression propre via migration data future sans repasser par un audit.
+
+Champs commentes :
+- `id_acc_connect` (Stripe Connect ID, jadis rempli par Tenant.onboard_stripe)
+- `laboutik_wanted`, `payment_wanted` (flags formulaire legacy)
+- `site_web`, `legal_documents`, `twitter`, `facebook`, `instagram`
+- `map_img`, `carte_restaurant`, `img` (images jamais uploadees)
+- `fuseau_horaire`
+- `onboard_stripe_finished`
+
+Tous ces champs sont nullable / blank ou ont un default → la migration
+data future pourra les retirer sans risque (sauf si du code accede a ces
+champs ailleurs — `grep -rn` confirme : aucun acces actif).
+
+### 9.11 Widget carte adresse — CSS final
+
+Apres audit visuel + retours mainteneur sur le rendu, refonte du CSS
+de `.leaflet-control-geosearch.leaflet-geosearch-bar` :
+
+| Avant | Apres |
+|---|---|
+| Double encadrement (container + border interne input) | Un seul encadrement (container avec shadow) — input et bouton sans border |
+| `width: 400px` (force par leaflet-geosearch) | `width: fit-content` + `min-width: 16rem` |
+| `padding: 0.25rem` interne, gap entre input/bouton | `padding: 0` + `gap: 0` — input et bouton remplissent le container |
+| Input + bouton de tailles differentes (30px vs 40px) | Aligne (40.79px tous les deux) via `height: auto !important` + `line-height: 1.5` |
+| Bouton submit avec `border-radius: 0.5rem` independant | `border-radius: 0` — coins clippes par `overflow: hidden` du parent |
+| Focus input : border verte | Focus input : `box-shadow: inset 0 0 0 2px #16a34a` (visuel propre sans border) |
+
+Resultat visuel : container blanc compact, ombre douce, input gris clair
+sans bord interne, bouton vert plein colle au bord droit. Plus de double
+border, plus de zone blanche vide.
+
+**Pieges decouverts** (ajoutes a `tests/PIEGES.md` section "Widget carte
+adresse + leaflet-geosearch") :
+- P.WIDGET.1 — `<form>` HTML5 imbrique cause boucle infinie au submit
+- P.WIDGET.2 — Double instance `.leaflet-control-geosearch.pending` decale le zoom
+- P.WIDGET.3 — Bouton `.reset` (×) en position absolute chevauche tout
+- P.WIDGET.4 — `autoComplete: true` viole la politique Nominatim
+
 ---
 
 ## 10. Liens utiles

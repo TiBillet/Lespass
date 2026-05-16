@@ -405,10 +405,29 @@ class StripeConnectOnboardingViewSet(viewsets.ViewSet):
                 type="account_onboarding",
             )
         except InvalidRequestError:
-            # Compte Stripe invalide : on vide cote tenant et on relance
-            # une creation propre via `get_stripe_connect_account()`.
-            # / Stripe account invalid: clear locally and retry.
-            config.stripe_connect_account = None
+            # Compte Stripe invalide : l'ID stocke ne correspond pas a la
+            # plateforme actuelle (compte supprime cote Stripe, ou compte
+            # cree avec une autre cle API). On vide LE BON champ selon le
+            # mode (test / prod), puis on relance — `get_stripe_connect_account`
+            # creera un nouveau compte avec la cle API actuelle.
+            #
+            # PIEGE corrige 2026-05-16 : l'ancien code (legacy
+            # `Tenant.onboard_stripe_from_config`) vidait TOUJOURS
+            # `stripe_connect_account` (champ PROD) meme en mode test, du
+            # coup `get_stripe_connect_account` continuait a renvoyer
+            # l'ancien `stripe_connect_account_test` invalide → Stripe
+            # re-rejetait. `Configuration` a 2 champs separes
+            # (`stripe_connect_account` pour prod, `stripe_connect_account_test`
+            # pour test) — il faut vider le bon selon `stripe_mode_test`.
+            #
+            # / Stripe account invalid: clear the RIGHT field based on mode
+            # (test vs prod), then retry. The legacy code always cleared
+            # the PROD field even in test mode, causing infinite "account
+            # not connected" errors in test mode.
+            if config.stripe_mode_test:
+                config.stripe_connect_account_test = None
+            else:
+                config.stripe_connect_account = None
             config.save()
             id_acc_connect = config.get_stripe_connect_account()
             url_retour = (
