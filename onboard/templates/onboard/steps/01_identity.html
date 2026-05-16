@@ -89,6 +89,7 @@
                    type="text"
                    name="first_name"
                    required
+                   maxlength="60"
                    autocomplete="given-name"
                    class="form-control{% if errors.first_name %} is-invalid{% endif %}"
                    value="{{ initial.first_name|default:'' }}"
@@ -107,6 +108,7 @@
                    type="text"
                    name="last_name"
                    required
+                   maxlength="60"
                    autocomplete="family-name"
                    class="form-control{% if errors.last_name %} is-invalid{% endif %}"
                    value="{{ initial.last_name|default:'' }}"
@@ -166,10 +168,14 @@
         <label for="onboard-id-name" class="form-label">
             {% translate "Nom du collectif / lieu" %}
         </label>
+        {# `maxlength="50"` aligne sur la contrainte DB de    #}
+        {# `WaitingConfiguration.organisation` (CharField max_length=50).    #}
+        {# / `maxlength="50"` matches the DB constraint of `organisation`. #}
         <input id="onboard-id-name"
                type="text"
                name="name"
                required
+               maxlength="50"
                class="form-control{% if errors.name %} is-invalid{% endif %}"
                value="{{ initial.name|default:'' }}"
                data-testid="onboard-identity-name">

@@ -53,8 +53,19 @@ class OnboardIdentitySerializer(serializers.Serializer):
     last_name = serializers.CharField(
         max_length=60, required=True, allow_blank=False,
     )
+    # `max_length=50` : aligne sur la contrainte DB du modele
+    # `MetaBillet.WaitingConfiguration.organisation` (CharField max_length=50).
+    # Sans cet alignement, un nom > 50 chars passait la validation serializer
+    # puis crashait en INSERT PostgreSQL ("value too long for type character
+    # varying(50)"). On limite aussi cote HTML via `maxlength="50"` sur
+    # l'input #onboard-id-name pour empecher la saisie en amont.
+    # / `max_length=50`: aligned on the DB constraint of
+    # `WaitingConfiguration.organisation` (CharField max_length=50). Without
+    # this alignment, a >50 char name passed serializer validation then crashed
+    # on the PostgreSQL INSERT. The HTML input also has `maxlength="50"` to
+    # prevent over-typing client-side.
     name = serializers.CharField(
-        max_length=120, required=True, allow_blank=False,
+        max_length=50, required=True, allow_blank=False,
     )
     dns_choice = serializers.ChoiceField(
         choices=DNS_CHOICES, default="tibillet.coop",
