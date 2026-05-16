@@ -45,10 +45,15 @@ to use the reusable widget (GPS pattern with leaflet-geosearch).
     {% csrf_token %}
 
     {# Widget réutilisable carte adresse. Préfixe "place" pour les name=. #}
-    {# Pré-remplissage depuis WC si on a déjà des coords (resume / 422). #}
-    {# / Reusable address map widget. "place" prefix for name=. Pre-fills #}
-    {# from WC if coords exist (resume / 422). #}
-    {% include "widgets/widget_carte_adresse.html" with identifiant_widget="place" latitude_initiale=initial.place_latitude|default:wc.latitude longitude_initiale=initial.place_longitude|default:wc.longitude adresse_initiale=initial.place_adresse|default:wc.street_address hauteur_carte="350px" champs_adresse_separes=True required=True %}
+    {# Pré-remplissage : 1) si l'user a déjà soumis (422), on remet ses    #}
+    {# valeurs ; 2) sinon si le WC a une adresse (resume / retour), on   #}
+    {# la met ; 3) fallback FALC : le nom du collectif (`wc.organisation`) #}
+    {# pour aider le geosearch Nominatim à trouver le lieu (ex: "TiBillet  #}
+    {# Saint-Pierre" matchera potentiellement un POI référencé).         #}
+    {# / Reusable address map widget. Pre-fill priority: 1) re-submitted   #}
+    {# values (422), 2) WC street_address (resume), 3) wc.organisation as  #}
+    {# FALC fallback to help the Nominatim geosearch find the venue.      #}
+    {% include "widgets/widget_carte_adresse.html" with identifiant_widget="place" latitude_initiale=initial.place_latitude|default:wc.latitude longitude_initiale=initial.place_longitude|default:wc.longitude adresse_initiale=initial.place_adresse|default:wc.street_address|default:wc.organisation hauteur_carte="350px" champs_adresse_separes=True required=True %}
 
     <div class="d-flex justify-content-between pt-2">
         <a href="{% url 'onboard-identity' %}" class="btn btn-link"

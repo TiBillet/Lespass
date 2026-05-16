@@ -55,6 +55,7 @@ expected to be reaped by `purge_stale_onboard_drafts`.
 
 import io
 import time
+from unittest.mock import patch
 
 import pytest
 from django.test import Client
@@ -69,9 +70,9 @@ from MetaBillet.models import WaitingConfiguration
 pytestmark = pytest.mark.onboard
 
 
-# Hote HTTP de dev par defaut (cf. pattern V2 du projet).
-# / Default dev HTTP host (V2 project pattern).
-DEV_HOST = "lespass.tibillet.localhost"
+# Hote HTTP de dev : ROOT (cf. test_step_verify pour la justification).
+# / Dev host: ROOT (see test_step_verify for rationale).
+DEV_HOST = "tibillet.localhost"
 
 
 # ---------------------------------------------------------------------------
@@ -156,43 +157,54 @@ def _make_test_image_bytes():
 def test_descriptions_post_saves_long_desc_and_logo(cleanup_waiting_configs):
     """
     POST `/onboard/descriptions/` avec donnees valides + logo :
-      - retourne 302/303 vers `/onboard/events/`,
+      - retourne 302/303 vers `/onboard/launch/` (la step Evenements est
+        masquee du parcours par defaut depuis 2026-05-16 — descriptions
+        finalise directement le wizard et enqueue la creation tenant),
       - persiste `short_description` dans le brouillon,
       - persiste `long_description` dans le brouillon,
       - persiste `logo` (fichier non vide),
-      - avance `current_step` vers "events".
+      - avance `current_step` vers "launch",
+      - appelle `create_tenant_from_draft.delay(wc_uuid=str(wc.uuid))`.
+
+    On patche `onboard.tasks.create_tenant_from_draft.delay` pour ne PAS
+    enqueuer reellement dans Celery (sinon le worker tenterait de creer
+    un vrai tenant en DB dev).
 
     / POST `/onboard/descriptions/` with valid data + logo:
-      - returns 302/303 to `/onboard/events/`,
-      - persists `short_description` on the draft,
-      - persists `long_description` on the draft,
-      - persists `logo` (non-empty file),
-      - moves `current_step` to "events".
+      - returns 302/303 to `/onboard/launch/` (Events step is hidden from
+        the default flow since 2026-05-16 — descriptions finalises the
+        wizard directly and enqueues tenant creation),
+      - persists short_desc / long_desc / logo,
+      - moves `current_step` to "launch",
+      - calls `create_tenant_from_draft.delay(wc_uuid=str(wc.uuid))`.
+
+    We patch the task so it isn't actually enqueued.
     """
     client = Client(HTTP_HOST=DEV_HOST)
     wc = _create_wc_at_descriptions(client, cleanup=cleanup_waiting_configs)
 
     short_desc = "Un lieu de test pour l'accroche publique."
     long_desc = "Voici une description longue de notre lieu accueillant."
-    response = client.post(
-        "/onboard/descriptions/",
-        data={
-            "short_description": short_desc,
-            "long_description": long_desc,
-            "logo": _make_test_image_bytes(),
-        },
-        format="multipart",
-    )
+    with patch("onboard.tasks.create_tenant_from_draft.delay") as mock_delay:
+        response = client.post(
+            "/onboard/descriptions/",
+            data={
+                "short_description": short_desc,
+                "long_description": long_desc,
+                "logo": _make_test_image_bytes(),
+            },
+            format="multipart",
+        )
 
     assert response.status_code in (302, 303), (
         f"Expected 302/303, got {response.status_code}. "
         f"Body excerpt: {response.content[:300]!r}"
     )
-    assert response["Location"] == "/onboard/events/"
+    assert response["Location"] == "/onboard/launch/"
 
     with schema_context("meta"):
         wc.refresh_from_db()
-    assert wc.current_step == WaitingConfiguration.STEP_EVENTS
+    assert wc.current_step == WaitingConfiguration.STEP_LAUNCH
     assert wc.short_description == short_desc
     assert wc.long_description == long_desc
     # Le logo doit etre persiste : FieldFile non vide + nom de fichier set.
@@ -200,16 +212,21 @@ def test_descriptions_post_saves_long_desc_and_logo(cleanup_waiting_configs):
     assert wc.logo, f"Logo should be set, got {wc.logo!r}"
     assert wc.logo.name, f"Logo should have a name, got {wc.logo.name!r}"
 
+    # La task doit avoir ete enqueuee une fois avec le bon UUID en string.
+    # / The task must have been enqueued once with the right UUID as string.
+    mock_delay.assert_called_once_with(wc_uuid=str(wc.uuid))
+
 
 def test_descriptions_post_without_logo_is_ok(cleanup_waiting_configs):
     """
     POST `/onboard/descriptions/` avec seulement `short_description`
     (long_description et logo sont optionnels) :
-      - retourne 302/303 vers `/onboard/events/`,
+      - retourne 302/303 vers `/onboard/launch/` (la step Evenements est
+        masquee depuis 2026-05-16),
       - persiste `short_description`,
       - `wc.long_description` reste vide,
       - `wc.logo` reste vide,
-      - avance `current_step` vers "events".
+      - avance `current_step` vers "launch".
 
     Verifie que le serializer accepte bien l'absence de logo
     (`required=False, allow_null=True`) ET l'absence de long_description
@@ -217,11 +234,11 @@ def test_descriptions_post_without_logo_is_ok(cleanup_waiting_configs):
 
     / POST with only `short_description` (long_description and logo are
     optional):
-      - returns 302/303 to `/onboard/events/`,
+      - returns 302/303 to `/onboard/launch/`,
       - persists `short_description`,
       - `wc.long_description` stays empty,
       - `wc.logo` stays empty,
-      - moves `current_step` to "events".
+      - moves `current_step` to "launch".
 
     Checks the serializer accepts a missing logo AND a missing
     long_description.
@@ -230,22 +247,24 @@ def test_descriptions_post_without_logo_is_ok(cleanup_waiting_configs):
     wc = _create_wc_at_descriptions(client, cleanup=cleanup_waiting_configs)
 
     short_desc = "Accroche minimale, juste ce qu'il faut."
-    response = client.post(
-        "/onboard/descriptions/",
-        data={"short_description": short_desc},
-        format="multipart",
-    )
+    with patch("onboard.tasks.create_tenant_from_draft.delay") as mock_delay:
+        response = client.post(
+            "/onboard/descriptions/",
+            data={"short_description": short_desc},
+            format="multipart",
+        )
 
     assert response.status_code in (302, 303), (
         f"Expected 302/303, got {response.status_code}. "
         f"Body excerpt: {response.content[:300]!r}"
     )
-    assert response["Location"] == "/onboard/events/"
+    assert response["Location"] == "/onboard/launch/"
 
     with schema_context("meta"):
         wc.refresh_from_db()
-    assert wc.current_step == WaitingConfiguration.STEP_EVENTS
+    assert wc.current_step == WaitingConfiguration.STEP_LAUNCH
     assert wc.short_description == short_desc
+    mock_delay.assert_called_once_with(wc_uuid=str(wc.uuid))
     # `wc.long_description` doit etre vide (champ optionnel non envoye).
     # / `wc.long_description` must be empty (optional field, not sent).
     assert not wc.long_description, (

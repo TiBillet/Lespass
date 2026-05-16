@@ -374,17 +374,383 @@ def _finalize_otp_success(request, wc):
     return user
 
 
+# --- SSO transitoire tenant -> ROOT --------------------------------------
+# Quand un utilisateur deja authentifie sur un tenant est redirige vers le
+# wizard servi par ROOT (cf. `_redirect_to_root_if_tenant`), on perd la
+# session cross-domain (cookie scope au domaine du tenant). Pour eviter de
+# lui redemander OTP / login a froid, on lui forge un token tres court qui
+# transporte son identite jusqu'a ROOT.
+#
+# Securite (durcissement vs `TibilletUser.get_connect_token` qui sert pour
+# les magic-link mail) :
+#   - Scope explicite `onboard_sso:` dans le payload signe : un token vole
+#     ailleurs (mail de connexion) ne marche PAS ici, et inversement.
+#   - TTL court (`ONBOARD_SSO_TTL_SECONDS`) : 120s suffit pour un redirect
+#     HTTP automatique, vs 72h pour le mail de connexion.
+#   - One-shot via Redis : `cache.add()` est atomique ; une 2e tentative
+#     avec le meme token (rejeu, capture) est refusee.
+#   - Cle Redis derivee d'un SHA256 du token : on ne stocke jamais le
+#     token brut en cache pour eviter sa fuite en cas de dump Redis.
+#
+# Le token transite en query string `?sso=<token>` lors du 302 ; sur ROOT,
+# `dispatch()` le consomme immediatement et fait un 2e 302 vers le meme
+# path SANS le param, pour nettoyer l'URL (history navigateur, Referer).
+#
+# / Transient SSO from tenant to ROOT. We mint a short-lived signed token
+# when the user is authenticated on a tenant and we redirect to ROOT, so
+# they don't have to re-OTP. Hardened vs the mail magic-link token:
+# explicit `onboard_sso:` scope, 120s TTL, one-shot via Redis (cache.add),
+# Redis key derived from SHA256 of the token (never the raw value).
+ONBOARD_SSO_SCOPE = "onboard_sso"
+ONBOARD_SSO_TTL_SECONDS = 120
+ONBOARD_SSO_QUERY_PARAM = "sso"
+
+
+def _hash_for_cache(token):
+    """
+    Renvoie un SHA256 hex du token, utilise comme cle Redis. On ne stocke
+    jamais le token brut en cache.
+    / Returns the token's SHA256 (hex), used as Redis key. We never store
+    the raw token in the cache.
+    """
+    import hashlib
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _generate_onboard_sso_token(user):
+    """
+    Forge un token SSO signe et scope, lie a `user.pk`.
+
+    Format : `urlsafe_base64( TimestampSigner().sign("onboard_sso:<pk>") )`.
+    Le scope `onboard_sso:` est inclus DANS le payload signe — un token
+    forge sans la `SECRET_KEY` Django est impossible, et un token venant
+    d'un autre scope (mail magic-link) ne passe pas le check de scope.
+
+    SECURITE : on ne genere un token QUE pour un user humain
+    (`espece == TYPE_HUM`). Un terminal (POS, borne) ou un android n'a
+    aucune raison de creer un tenant via le wizard. Retourne `None` si
+    l'utilisateur n'est pas humain — l'appelant decide quoi faire (en
+    pratique : ne pas ajouter le param `sso` au redirect).
+
+    Le timestamp est embarque par `TimestampSigner` (verifie via `max_age`
+    au moment du `unsign`), donc pas besoin de le serialiser nous-memes.
+
+    / Mint a signed, scoped SSO token bound to `user.pk`. Format:
+    `urlsafe_base64(TimestampSigner.sign("onboard_sso:<pk>"))`. The scope
+    is part of the signed payload, preventing cross-scope reuse.
+    SECURITY: only mint a token for human users (`espece == TYPE_HUM`).
+    Terminals (POS) and android terminals have no business creating a
+    tenant via the wizard. Returns `None` if user is not human.
+    """
+    from AuthBillet.models import TibilletUser
+    from django.core.signing import TimestampSigner
+    from django.utils.http import urlsafe_base64_encode
+
+    # Garde 1 — type d'utilisateur. Un terminal compromis ne doit pas
+    # pouvoir creer un tenant en se faisant passer pour un humain via SSO.
+    # / Guard 1 — user type. A compromised terminal must not be able to
+    # create a tenant by SSO-ing as a human.
+    if getattr(user, "espece", None) != TibilletUser.TYPE_HUM:
+        logger.warning(
+            "Onboard SSO: refus de generer un token pour user pk=%s "
+            "(espece=%s, attendu=HU).",
+            getattr(user, "pk", None),
+            getattr(user, "espece", "?"),
+        )
+        return None
+
+    signer = TimestampSigner()
+    payload = f"{ONBOARD_SSO_SCOPE}:{user.pk}"
+    signed = signer.sign(payload)
+    return urlsafe_base64_encode(signed.encode("utf-8"))
+
+
+def _consume_onboard_sso_token(token):
+    """
+    Verifie le token SSO et renvoie l'instance `TibilletUser` cible, ou
+    `None` en cas d'echec (signature, expiration, scope incorrect, user
+    introuvable, deja consomme).
+
+    Quatre garde-fous :
+      1. `signer.unsign(..., max_age=120)` -> rejette signature invalide
+         ET expiration > 120s.
+      2. Scope : le payload demuxe doit commencer par `onboard_sso:`.
+         Un token magic-link mail (scope different) est refuse.
+      3. One-shot : `cache.add(redis_key, 1, timeout=120)` est atomique ;
+         si la cle existe deja, c'est un rejeu, on refuse.
+      4. User : on charge `User.objects.get(pk=user_pk)`. Si supprime
+         entre-temps, on refuse.
+
+    / Verifies the SSO token and returns the matching `TibilletUser`, or
+    `None` on any failure (signature, expiry, wrong scope, missing user,
+    already-consumed). Four guards: TimestampSigner with max_age=120s,
+    scope check, atomic one-shot via cache.add(), user existence check.
+    """
+    # Imports locaux : on n'a besoin d'eux que sur le chemin SSO.
+    # / Local imports: only needed on the SSO path.
+    from django.contrib.auth import get_user_model
+    from django.core.cache import cache
+    from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
+    from django.utils.http import urlsafe_base64_decode
+
+    if not token:
+        return None
+
+    # Decode base64 -> string signe.
+    # / Decode base64 -> signed string.
+    try:
+        signed = urlsafe_base64_decode(token).decode("utf-8")
+    except (UnicodeDecodeError, ValueError):
+        logger.info("Onboard SSO: token base64 invalide.")
+        return None
+
+    # Verifie signature + TTL.
+    # / Verify signature + TTL.
+    signer = TimestampSigner()
+    try:
+        payload = signer.unsign(signed, max_age=ONBOARD_SSO_TTL_SECONDS)
+    except SignatureExpired:
+        logger.info("Onboard SSO: token expire (TTL %ss).", ONBOARD_SSO_TTL_SECONDS)
+        return None
+    except BadSignature:
+        logger.warning("Onboard SSO: signature invalide (tentative de forge ?).")
+        return None
+
+    # Verifie scope : le payload doit commencer par `onboard_sso:`. Sans
+    # ce check, un token magic-link mail (scope different) pourrait servir.
+    # / Scope check: payload must start with `onboard_sso:`. Without this,
+    # a mail magic-link token (different scope) could be reused.
+    prefix = f"{ONBOARD_SSO_SCOPE}:"
+    if not payload.startswith(prefix):
+        logger.warning(
+            "Onboard SSO: scope invalide (payload='%s', attendu='%s*').",
+            payload[:30], prefix,
+        )
+        return None
+
+    user_pk_str = payload[len(prefix):]
+    if not user_pk_str:
+        logger.warning("Onboard SSO: pk vide dans le payload.")
+        return None
+
+    # One-shot via cache.add() — atomique entre workers. Si la cle existe
+    # deja, c'est un rejeu (replay attack ou refresh trop tardif).
+    # / Atomic one-shot via cache.add(). Existing key = replay attempt.
+    cache_key = f"onboard:sso:consumed:{_hash_for_cache(token)}"
+    got_lock = cache.add(cache_key, "1", timeout=ONBOARD_SSO_TTL_SECONDS)
+    if not got_lock:
+        logger.warning(
+            "Onboard SSO: token deja consomme (rejeu user_pk=%s).",
+            user_pk_str,
+        )
+        return None
+
+    # Charge l'utilisateur. Si supprime entre-temps : refuse.
+    # / Load the user. If deleted in the meantime: refuse.
+    User = get_user_model()
+    try:
+        user = User.objects.get(pk=user_pk_str)
+    except (User.DoesNotExist, ValueError):
+        logger.warning("Onboard SSO: user pk=%s introuvable.", user_pk_str)
+        return None
+
+    # Garde 5 — type d'utilisateur (defense en profondeur). Si jamais un
+    # terminal a reussi a forger / capturer un token humain et que la
+    # garde cote `_generate_onboard_sso_token` est buggee, on bloque ici
+    # aussi. Le wizard ne sert qu'a creer un tenant, ce n'est jamais un
+    # terminal qui le fait.
+    # / Guard 5 — user type (defense in depth). Even if the generation-time
+    # guard were buggy and a terminal got a human token, we block here.
+    # Only humans create tenants via the wizard.
+    from AuthBillet.models import TibilletUser
+
+    if user.espece != TibilletUser.TYPE_HUM:
+        logger.warning(
+            "Onboard SSO: refus de consommer un token pour user pk=%s "
+            "(espece=%s, attendu=HU).",
+            user.pk, user.espece,
+        )
+        return None
+
+    return user
+
+
+def _consume_sso_in_request_if_present(request):
+    """
+    Sur ROOT, si la query string contient `?sso=<token>` :
+      - consomme le token et logue l'utilisateur via Django session ;
+      - retourne un `HttpResponseRedirect` vers le meme path mais SANS le
+        param `sso` (URL propre dans l'history navigateur et le Referer).
+
+    Renvoie `None` si :
+      - pas de `sso=` en query (cas nominal) ;
+      - token invalide (logge le motif, mais ne bloque pas le wizard :
+        l'utilisateur sera juste considere comme anonyme).
+
+    / On ROOT, if the query string contains `?sso=<token>`: consume +
+    Django login, then return a 302 to the same path WITHOUT the `sso`
+    param (clean URL). Returns `None` if no `sso=` or invalid token (we
+    log the reason but don't block the wizard — user just stays anonymous).
+    """
+    token = request.GET.get(ONBOARD_SSO_QUERY_PARAM, "").strip()
+    if not token:
+        return None
+
+    user = _consume_onboard_sso_token(token)
+    if user is None:
+        # Token invalide / expire / rejeu : on ne bloque pas, on retire
+        # juste le param de l'URL pour ne pas le re-tenter en boucle.
+        # / Invalid/expired/replayed token: don't block, just strip the
+        # param to avoid retrying it in a loop.
+        return _redirect_stripping_sso_param(request)
+
+    # Login Django : backend explicite (cf. _finalize_otp_success).
+    # / Django login: explicit backend (cf. _finalize_otp_success).
+    from django.contrib.auth import login
+
+    login(
+        request, user,
+        backend="django.contrib.auth.backends.ModelBackend",
+    )
+    logger.info(
+        "Onboard SSO: user pk=%s logue via token transitoire (tenant -> ROOT).",
+        user.pk,
+    )
+    return _redirect_stripping_sso_param(request)
+
+
+def _redirect_stripping_sso_param(request):
+    """
+    Renvoie un 302 vers le path courant, query string nettoyee du param
+    `sso`. Si la query string devient vide, on supprime aussi le `?`.
+
+    / Returns a 302 to the current path with the `sso` param stripped.
+    """
+    from django.http import HttpResponseRedirect
+
+    # `request.GET` est un QueryDict immuable ; on en fait une copie mutable.
+    # / `request.GET` is immutable; copy it to mutate.
+    params_copies = request.GET.copy()
+    params_copies.pop(ONBOARD_SSO_QUERY_PARAM, None)
+    suffix = f"?{params_copies.urlencode()}" if params_copies else ""
+    target = f"{request.path}{suffix}"
+    return HttpResponseRedirect(target)
+
+
+def _redirect_to_root_if_tenant(request):
+    """
+    Si l'utilisateur accede au wizard depuis un tenant (subdomain d'un lieu),
+    on le renvoie vers le meme path sur le tenant ROOT (tibillet.org).
+
+    Pourquoi : le wizard `base_wizard.html` etend `seo/base.html`, dont la
+    navbar est codee pour le contexte ROOT (Explorer / Documentation / logo
+    TiBillet). Sur un tenant, on heritait de cette navbar ROOT au lieu de
+    celle du lieu — incoherent visuellement. Choix mainteneur 2026-05-16 :
+    plutot que de fabriquer un base wizard double-skin (ROOT/tenant), on
+    redirige tout simplement vers ROOT. Le wizard vit toujours sur le meme
+    domaine, et le bouton "Creer son espace" des footers tenant pointe en
+    fait vers la meme experience.
+
+    Renvoie `None` si on est deja sur ROOT (schema `public`), sinon un
+    `HttpResponseRedirect` vers `https://<root_domain><path_complet>`.
+    Le path complet est preserve (identity / verify / ...) ainsi que la
+    query string (`?invite=<code>`) pour ne pas casser les invitations.
+
+    / If the user reaches the wizard from a tenant (venue subdomain), we
+    redirect to the same path on the ROOT tenant (tibillet.org).
+    Reason: `base_wizard.html` extends `seo/base.html` whose navbar is
+    hardcoded for the ROOT context. On a tenant, we'd inherit the ROOT
+    navbar instead of the venue's — visually inconsistent. Maintainer
+    choice 2026-05-16: simpler to redirect than to build a dual-skin base.
+    Returns `None` if already on ROOT (`public` schema), otherwise an
+    `HttpResponseRedirect` preserving full path + query string.
+    """
+    # Import local : evite de charger django.db.connection au top du module.
+    # / Local import: avoid loading django.db.connection at module top.
+    from django.db import connection
+    from django.http import HttpResponseRedirect
+
+    if connection.schema_name == "public":
+        # Deja sur ROOT, rien a faire. / Already on ROOT, nothing to do.
+        return None
+
+    # Recupere le domaine primary du tenant ROOT. Le Client ROOT vit dans
+    # SHARED_APPS, donc visible depuis n'importe quel schema, mais on force
+    # le contexte `public` par defense en profondeur (au cas ou le futur).
+    # / Lookup ROOT tenant's primary domain. SHARED_APPS so visible from
+    # anywhere, but we still scope to `public` for defense in depth.
+    from Customers.models import Client
+
+    with schema_context("public"):
+        try:
+            root = Client.objects.get(categorie=Client.ROOT)
+        except Client.DoesNotExist:
+            # Cas d'installation incomplete : pas de fallback possible, on
+            # laisse le wizard se charger sur le tenant courant (skin
+            # incoherent mais au moins l'utilisateur peut avancer).
+            # / Incomplete install: no fallback, let the wizard load on the
+            # current tenant (inconsistent skin but at least the user can
+            # proceed).
+            logger.warning(
+                "No ROOT tenant found (Client.ROOT). Wizard will load on "
+                "current tenant '%s' with inconsistent skin.",
+                connection.schema_name,
+            )
+            return None
+        root_domain = root.get_primary_domain().domain
+
+    # Construit la query string cible : on conserve TOUS les params actuels
+    # (ex: `?invite=abc`) et on injecte `?sso=<token>` si l'utilisateur est
+    # authentifie. Cela permet de transporter son identite cross-domain
+    # sans qu'il refasse OTP / login.
+    # / Build the target query string: keep all current params (e.g.
+    # `?invite=abc`) and add `?sso=<token>` if the user is authenticated.
+    # This transports identity cross-domain without re-OTP / re-login.
+    params_pour_root = request.GET.copy()
+    if request.user.is_authenticated:
+        # Token a TTL court (120s), one-shot, scope `onboard_sso:`. Cf.
+        # `_generate_onboard_sso_token` pour le detail securite.
+        # `_generate_onboard_sso_token` retourne `None` si l'utilisateur
+        # n'est pas humain (terminal POS, android) : dans ce cas on ne
+        # met pas de param `sso` -> l'utilisateur arrivera anonyme sur
+        # ROOT et devra refaire le flow d'identite + OTP (normal).
+        # / Short-TTL (120s), one-shot, scoped token. Returns None for
+        # non-human users (terminals) — in which case we skip the param
+        # and the user lands anonymous on ROOT.
+        token = _generate_onboard_sso_token(request.user)
+        if token is not None:
+            params_pour_root[ONBOARD_SSO_QUERY_PARAM] = token
+            logger.info(
+                "Onboard: user authenticated on tenant '%s', issuing SSO "
+                "token for ROOT redirect.",
+                connection.schema_name,
+            )
+
+    query_string = params_pour_root.urlencode()
+    suffix = f"?{query_string}" if query_string else ""
+    target_url = f"https://{root_domain}{request.path}{suffix}"
+    logger.info(
+        "Onboard: redirecting from tenant '%s' to ROOT.",
+        connection.schema_name,
+    )
+    return HttpResponseRedirect(target_url)
+
+
 class OnboardViewSet(viewsets.ViewSet):
     """
     Wizard d'onboarding en 6 etapes pour creer un nouveau tenant.
-    Toutes les actions sont SHARED — accessibles depuis le schema public
-    (ROOT) et depuis n'importe quel tenant.
-    / 6-step onboarding wizard to create a new tenant. All actions are
-    SHARED — reachable from the public schema (ROOT) and from any tenant.
 
-    Voir le plan `TECH_DOC/SESSIONS/ONBOARD/02-implementation-plan.md`.
-    Pour l'instant (Task 10) : `identity` est implementee, les autres
-    steps sont des placeholders en attente de leurs propres tasks.
+    Routing tenant -> ROOT (decision mainteneur 2026-05-16) : le wizard
+    est techniquement SHARED (URLs branchees dans urls_public ET dans les
+    schemas tenants), mais on ne le SERT que depuis ROOT. Si un utilisateur
+    arrive depuis un tenant (lien footer "Creer son espace"), `dispatch()`
+    le redirige vers le meme path sur `https://<root_domain>/onboard/...`.
+    Cf. helper `_redirect_to_root_if_tenant`.
+
+    / 6-step onboarding wizard. Tenant -> ROOT routing (maintainer choice
+    2026-05-16): the wizard is technically SHARED but only SERVED from ROOT.
+    A user landing from a tenant is redirected to the same path on ROOT
+    via `dispatch()`. See `_redirect_to_root_if_tenant` helper.
     """
 
     # Le wizard est public : pas d'authentification requise pour commencer
@@ -392,6 +758,41 @@ class OnboardViewSet(viewsets.ViewSet):
     # / The wizard is public: no auth required to start a draft. The user
     # authenticates via the OTP at step 2.
     permission_classes = [permissions.AllowAny]
+
+    def dispatch(self, request, *args, **kwargs):
+        """
+        Garde commune a toutes les actions du ViewSet.
+
+        Sequence :
+          1. Sur ROOT, si la query contient `?sso=<token>`, on consomme le
+             token, on logue l'utilisateur, puis 302 vers le meme path
+             SANS le param `sso` (nettoie l'URL navigateur). Cf.
+             `_consume_sso_in_request_if_present`.
+          2. Sur un tenant, on redirige vers ROOT (avec un token SSO en
+             query string si l'utilisateur etait deja authentifie). Cf.
+             `_redirect_to_root_if_tenant`.
+          3. Sinon, on laisse passer vers l'action demandee.
+
+        / Common guard. Order matters:
+          1. On ROOT with `?sso=<token>`: consume + login + clean redirect.
+          2. On tenant: redirect to ROOT (with SSO if authenticated).
+          3. Otherwise pass through.
+        """
+        # 1. Consommation du token SSO si present (uniquement sur ROOT,
+        # le helper retourne None si pas de param `sso=`).
+        # / 1. Consume SSO token if present (only on ROOT — returns None
+        # if no `sso=` param).
+        sso_redirect = _consume_sso_in_request_if_present(request)
+        if sso_redirect is not None:
+            return sso_redirect
+
+        # 2. Redirect tenant -> ROOT si on n'est pas deja sur ROOT.
+        # / 2. Redirect tenant -> ROOT if we're not already on ROOT.
+        redirect_to_root = _redirect_to_root_if_tenant(request)
+        if redirect_to_root is not None:
+            return redirect_to_root
+
+        return super().dispatch(request, *args, **kwargs)
 
     # ------------------------------------------------------------------
     # Root : redirige vers la step courante (Task 9 + refactor Task 10).
@@ -1096,6 +1497,18 @@ class OnboardViewSet(viewsets.ViewSet):
         # StdImage du logo. / Persist in the `meta` schema via
         # `instance.save()` (NOT `.update()`) to trigger StdImage
         # variations generation for the logo.
+        #
+        # NOTE 2026-05-16 : la step "Evenements" a ete masquee du parcours
+        # par defaut (decision mainteneur — wizard trop long). On passe
+        # directement `current_step=LAUNCH` et on enqueue la task de
+        # creation tenant ici (au lieu d'attendre le POST de la step
+        # events). Le code et les routes `events_*` restent en place pour
+        # un usage futur ; on peut revenir au flow d'origine en remettant
+        # `STEP_EVENTS` + `redirect("onboard-events")`.
+        # / NOTE 2026-05-16: the "Events" step is hidden from the default
+        # flow (wizard was too long). We jump straight to LAUNCH and
+        # enqueue tenant creation here (previously in `events` POST). The
+        # `events_*` routes are kept in code for future reuse.
         with schema_context("meta"):
             wc_db = WaitingConfiguration.objects.get(uuid=wc.uuid)
             # short_description : obligatoire dans le serializer, toujours
@@ -1115,10 +1528,18 @@ class OnboardViewSet(viewsets.ViewSet):
             # `validated_data` won't have the key. Only assign when uploaded.
             if "logo" in data and data["logo"] is not None:
                 wc_db.logo = data["logo"]
-            wc_db.current_step = WaitingConfiguration.STEP_EVENTS
+            wc_db.current_step = WaitingConfiguration.STEP_LAUNCH
             wc_db.save()
 
-        return redirect("onboard-events")
+        # Enqueue la task asynchrone qui cree le tenant final. On passe
+        # `wc_uuid` en str (Celery serialise mal les UUID en JSON par defaut).
+        # Idempotent : la task verifie `wc.tenant_id is None` au demarrage.
+        # / Enqueue the async task creating the final tenant. We pass
+        # `wc_uuid` as str. Idempotent: the task checks `wc.tenant_id is None`.
+        from onboard.tasks import create_tenant_from_draft
+
+        create_tenant_from_draft.delay(wc_uuid=str(wc.uuid))
+        return redirect("onboard-launch")
 
     # ------------------------------------------------------------------
     # Step 5 — Events drafts (Task 14).

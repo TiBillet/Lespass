@@ -36,14 +36,74 @@
     margin-left: 0.5rem !important;
 }
 
-/* leaflet-geosearch input : harmonise le style avec les form-control Bootstrap. */
-/* / leaflet-geosearch input: harmonize style with Bootstrap form-control. */
+/* PIEGE leaflet-geosearch (cf. tests/PIEGES.md P8) : la lib crée DEUX
+   instances `.leaflet-control-geosearch`. La première (`.pending`) est
+   un placeholder vide ajouté dans `.leaflet-top.leaflet-left` (même
+   conteneur que le zoom control) — elle reste invisible mais OCCUPE
+   l'espace, ce qui décale le zoom vers le bas. La deuxième est la vraie
+   search bar en `style: "bar"` (avec form + input), ajoutée à
+   `.leaflet-control-container` directement. On masque la première.
+   / leaflet-geosearch pitfall: the lib creates TWO `.leaflet-control-geosearch`
+   nodes. The first (`.pending`) is an empty placeholder in `.leaflet-top.leaflet-left`
+   that pushes the zoom control down. We hide it. */
+.leaflet-control-geosearch.pending {
+    display: none !important;
+}
+
+/* Bouton "Rechercher" (loupe) injecté par notre JS à côté de l'input,
+   pour pallier l'absence de bouton submit dans le mode "bar" de
+   leaflet-geosearch. Sans bouton visible, l'utilisateur ne sait pas
+   comment déclencher la recherche.
+   / "Search" button (magnifying glass) injected by our JS next to the
+   input, to compensate for the missing submit button in `style: "bar"`. */
+.leaflet-control-geosearch .widget-search-submit {
+    margin-left: 0.25rem;
+    padding: 0 0.6rem;
+    border-radius: 0.5rem;
+    border: 1px solid #16a34a;
+    background-color: #16a34a;
+    color: #ffffff;
+    font-size: 1rem;
+    line-height: 2rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 120ms ease;
+}
+.leaflet-control-geosearch .widget-search-submit:hover {
+    background-color: #15803d;
+}
+.leaflet-control-geosearch .widget-search-submit:focus-visible {
+    outline: 2px solid #16a34a;
+    outline-offset: 2px;
+}
+
+/* leaflet-geosearch form : layout flex pour aligner input + bouton submit
+   sur la même ligne. Par défaut le form est `display: block` → notre
+   bouton injecté tombait sur une 2e ligne sous l'input.
+   / leaflet-geosearch form: flex layout to align input + submit button on
+   the same row. Default is `display: block` → our injected button fell
+   onto a 2nd row below the input. */
+.leaflet-control-geosearch.leaflet-geosearch-bar form {
+    display: flex !important;
+    align-items: stretch;
+    gap: 0.25rem;
+}
+
+/* leaflet-geosearch input : harmonise le style avec les form-control Bootstrap.
+   `flex: 1` + `min-width: 0` : l'input occupe tout l'espace disponible et
+   peut rétrécir si nécessaire (sans `min-width: 0`, un flex item refuse
+   de descendre sous sa largeur intrinsèque). */
+/* / leaflet-geosearch input: Bootstrap form-control look + flex sizing. */
 .leaflet-control-geosearch form input {
     border-radius: 0.5rem !important;
     border: 1px solid #cbd5e1 !important;
     padding: 0.5rem 0.75rem !important;
     font-size: 0.95rem !important;
     background-color: #ffffff !important;
+    flex: 1;
+    min-width: 0;
 }
 .leaflet-control-geosearch form input:focus {
     border-color: #16a34a !important;
