@@ -730,15 +730,18 @@ def _redirect_to_root_if_tenant(request):
         try:
             root = Client.objects.get(categorie=Client.ROOT)
         except Client.DoesNotExist:
-            # Cas d'installation incomplete : pas de fallback possible, on
-            # laisse le wizard se charger sur le tenant courant (skin
-            # incoherent mais au moins l'utilisateur peut avancer).
-            # / Incomplete install: no fallback, let the wizard load on the
-            # current tenant (inconsistent skin but at least the user can
-            # proceed).
-            logger.warning(
-                "No ROOT tenant found (Client.ROOT). Wizard will load on "
-                "current tenant '%s' with inconsistent skin.",
+            # Installation incomplete : pas de fallback possible. ERROR level
+            # (PAS warning) car sans tenant ROOT, la plateforme est cassee
+            # dans son setup de base. Sentry doit alerter ops pour qu'ils
+            # lancent `manage.py install` ou creent le ROOT a la main.
+            # / Incomplete install. ERROR level (not warning): without ROOT
+            # tenant, the platform is broken at its base setup. Sentry must
+            # alert ops to run install.
+            logger.error(
+                "Onboard: ROOT tenant (Client.categorie=ROOT) introuvable. "
+                "Wizard servi sur tenant '%s' avec skin incoherent. "
+                "Action ops : lancer `manage.py install` ou creer le tenant "
+                "ROOT manuellement.",
                 connection.schema_name,
             )
             return None

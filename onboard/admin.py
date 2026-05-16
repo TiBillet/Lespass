@@ -19,6 +19,8 @@ This admin only lists/inspects existing invitations (created via tests
 or a future invitation tool).
 """
 
+import logging
+
 from django.contrib import admin, messages
 from django.shortcuts import redirect
 from django.utils.translation import gettext_lazy as _
@@ -29,6 +31,8 @@ from Administration.admin.site import staff_admin_site
 from ApiBillet.permissions import RootPermissionWithRequest, TenantAdminPermissionWithRequest
 from MetaBillet.models import WaitingConfiguration
 from onboard.models import OnboardInvitation
+
+logger = logging.getLogger(__name__)
 
 
 @admin.register(OnboardInvitation, site=staff_admin_site)
@@ -168,6 +172,22 @@ class WaitingConfigAdmin(ModelAdmin):
                     _("Tenant created."),
                 )
             except Exception as e:
+                # logger.exception (PAS error) : on capture la stack trace
+                # complete pour Sentry. Sans ce log, l'admin voyait juste
+                # le message d'erreur dans l'UI Unfold mais Sentry n'etait
+                # PAS alertee. C'est une action manuelle ROOT-only declenchee
+                # apres un echec de `create_tenant_from_draft` automatique ;
+                # si elle echoue aussi, c'est probablement un bug serieux
+                # (pool epuise, Fedow KO, contrainte DB...) qui merite
+                # l'attention ops.
+                # / logger.exception (NOT error): capture full stack trace
+                # for Sentry. Without this log, admin only saw the error
+                # in the UI but Sentry was NOT alerted.
+                logger.exception(
+                    "WaitingConfigAdmin.create_tenant manual action failed "
+                    "for WC %s (org=%s): %s",
+                    wc.pk, wc.organisation, e,
+                )
                 messages.add_message(
                     request, messages.ERROR,
                     _("%(name)s tenant create error: %(err)s") % {

@@ -404,7 +404,19 @@ class StripeConnectOnboardingViewSet(viewsets.ViewSet):
                 return_url=url_retour,
                 type="account_onboarding",
             )
-        except InvalidRequestError:
+        except InvalidRequestError as exc_premiere_tentative:
+            # WARNING niveau Sentry (breadcrumb) : c'est attendu si l'ID
+            # stocke devient invalide, mais utile pour debug. Le `exc_info`
+            # permet de voir le message Stripe complet en cas d'enquete.
+            # / WARNING level for Sentry breadcrumb: expected when stored
+            # ID becomes invalid, but useful for diagnosis.
+            logger.warning(
+                "Stripe onboard: AccountLink.create failed (first attempt), "
+                "clearing stored ID and retrying. tenant=%s mode_test=%s "
+                "id_acc_connect=%s error=%s",
+                connection.schema_name, config.stripe_mode_test,
+                id_acc_connect, exc_premiere_tentative,
+            )
             # Compte Stripe invalide : l'ID stocke ne correspond pas a la
             # plateforme actuelle (compte supprime cote Stripe, ou compte
             # cree avec une autre cle API). On vide LE BON champ selon le
