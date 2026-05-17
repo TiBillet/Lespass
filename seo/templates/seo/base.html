@@ -29,6 +29,12 @@
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="675">
     <meta property="og:image:alt" content="TiBillet">
+    {# og:locale au format "fr_FR" / "en_US" attendu par Facebook, LinkedIn, #}
+    {# etc. Permet aux scrapers OG de servir la variante regionale adaptee. #}
+    {# Mapping simple : le projet n'a pas d'i18n_patterns, on couvre FR/EN. #}
+    {# / og:locale format "fr_FR" / "en_US" expected by FB, LinkedIn etc.    #}
+    {# Lets OG scrapers serve the right regional variant. Simple FR/EN map.  #}
+    <meta property="og:locale" content="{% if LANGUAGE_CODE == 'en' %}en_US{% else %}fr_FR{% endif %}">
 
     {# Twitter #}
     <meta name="twitter:card" content="summary_large_image">

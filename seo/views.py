@@ -112,11 +112,42 @@ def landing(request):
         description="Cooperative de lieux culturels et associatifs",
     )
 
+    # JSON-LD WebSite + SearchAction : permet a Google de proposer un
+    # sitelinks searchbox dans les resultats de recherche (l'utilisateur
+    # peut chercher directement dans TiBillet depuis la SERP). Cible le
+    # formulaire de recherche `/explorer/?q=...` deja en place dans la
+    # navbar. Cf. https://developers.google.com/search/docs/appearance/structured-data/sitelinks-searchbox
+    # / JSON-LD WebSite + SearchAction: lets Google offer a sitelinks
+    # searchbox in SERP results. Targets the existing `/explorer/?q=...`
+    # search form already wired in the navbar.
+    json_ld_website = {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "TiBillet",
+        "url": request.build_absolute_uri("/"),
+        "potentialAction": {
+            "@type": "SearchAction",
+            "target": {
+                "@type": "EntryPoint",
+                "urlTemplate": request.build_absolute_uri("/explorer/") + "?q={search_term_string}",
+            },
+            "query-input": "required name=search_term_string",
+        },
+    }
+
     context = {
         "lieux_pour_bandeau": lieux_pour_bandeau,
         "marquee_lieux_duration_sec": marquee_lieux_duration_sec,
         "top_events": top_events,
-        "json_ld": json_for_html(json_ld_org),
+        # Deux JSON-LD distincts : `json_ld` = WebSite (searchbox SERP),
+        # `json_ld_org` = Organization. Le template `base.html` injecte les
+        # deux dans <head> via des balises <script type="application/ld+json">
+        # separees (pattern valide schema.org).
+        # / Two JSON-LD blocks: `json_ld` = WebSite (SERP searchbox),
+        # `json_ld_org` = Organization. `base.html` injects both as separate
+        # <script type="application/ld+json"> tags (valid schema.org pattern).
+        "json_ld": json_for_html(json_ld_website),
+        "json_ld_org": json_for_html(json_ld_org),
         "page_title": "TiBillet — Billetterie coopérative et lieux culturels",
         "page_description": (
             "TiBillet : billetterie en ligne libre et coopérative pour les lieux "

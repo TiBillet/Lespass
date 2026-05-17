@@ -214,6 +214,15 @@
 {# Chevron rotates via CSS on `details[open]`.                       #}
 {# ================================================================ #}
 <section class="roadmap-section" data-testid="roadmap-section">
+    {# Le <h2> est visuellement masque (la section utilise un <summary> comme #}
+    {# titre cliquable), mais il donne aux bots de recherche la hierarchie    #}
+    {# semantique manquante (h1 hero > h2 features > h2 roadmap > h3 cards).  #}
+    {# Sans ce h2, Google voit des h3 orphelins apres le h2 features et       #}
+    {# dilue la pertinence semantique de la section roadmap.                  #}
+    {# / Visually hidden h2 — the section uses a <summary> as its clickable   #}
+    {# heading, but search bots need this h2 to keep the heading hierarchy    #}
+    {# coherent (h1 hero > h2 features > h2 roadmap > h3 cards).              #}
+    <h2 class="visually-hidden">{% translate "Futur de TiBillet — chantiers en cours" %}</h2>
     <details class="roadmap-details" data-testid="roadmap-details">
         <summary class="roadmap-summary" data-testid="roadmap-toggle">
             <span class="roadmap-summary-label">
