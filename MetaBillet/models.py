@@ -297,6 +297,22 @@ class WaitingConfiguration(models.Model):
         verbose_name=_("OTP last sent at"),
         help_text=_("Timestamp of the last OTP send (used for cooldown)."),
     )
+    # Langue preferee de l'utilisateur, captee depuis la session au POST
+    # identity (`get_language()`). Sert aux tasks Celery `onboard_otp_mailer`
+    # et `onboard_ready_mailer` qui n'ont pas de `request` pour deduire la
+    # langue : sans ce champ, les sujets de mail sont rendus dans la langue
+    # par defaut du worker (souvent 'en' via LANGUAGE_CODE settings) meme si
+    # l'utilisateur a navigue tout le wizard en francais.
+    # / Preferred user language captured from session at identity POST
+    # (`get_language()`). Used by Celery tasks `onboard_otp_mailer` and
+    # `onboard_ready_mailer` which have no `request` to infer the language:
+    # without this field, email subjects fall back to the worker's default
+    # locale (often 'en') even if the user filled the wizard in French.
+    language = models.CharField(
+        max_length=10, blank=True, default="",
+        verbose_name=_("Preferred language"),
+        help_text=_("BCP47 language code captured during the onboarding wizard."),
+    )
     # Warnings non-bloquants accumules pendant la creation du tenant.
     # Cas typique : un draft d'event mal forme (datetime invalide, image
     # corrompue, etc.) qui est skip silencieusement par la task pour ne

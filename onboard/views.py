@@ -347,10 +347,19 @@ def _finalize_otp_success(request, wc):
         # / Edge case: `email_error` set on existing user — signal failure.
         return None
 
-    # 3. Force `email_valid` + `is_active`. `get_or_create_user` cree les
-    # users avec `is_active=False` par defaut ; sans activation, certains
-    # backends refuseraient l'auth. `update_fields` evite les writes inutiles.
-    # / 3. Force email_valid + is_active. `update_fields` scopes the write.
+    # 3. Force `email_valid` + `is_active` + report first_name / last_name.
+    # `get_or_create_user` cree les users avec `is_active=False` par defaut ;
+    # sans activation, certains backends refuseraient l'auth. Les champs
+    # first_name / last_name viennent du wizard step 1 (wc.first_name /
+    # wc.last_name) et n'ont jamais ete persistes sur le TibilletUser
+    # auparavant — bug observe 2026-05-17 : un user nouvellement cree
+    # arrive sans prenom ni nom dans son profil admin. On ne re-ecrit que
+    # si le user n'a pas deja un nom (on ne ecrase pas un user existant
+    # qui aurait deja change son nom dans son admin).
+    # / Force email_valid + is_active + report first_name / last_name from
+    # the wizard. We only overwrite empty fields to respect a user who has
+    # already updated their name from their admin. `update_fields` scopes
+    # the write.
     update_fields = []
     if not user.email_valid:
         user.email_valid = True
@@ -358,6 +367,12 @@ def _finalize_otp_success(request, wc):
     if not user.is_active:
         user.is_active = True
         update_fields.append("is_active")
+    if wc.first_name and not user.first_name:
+        user.first_name = wc.first_name
+        update_fields.append("first_name")
+    if wc.last_name and not user.last_name:
+        user.last_name = wc.last_name
+        update_fields.append("last_name")
     if update_fields:
         user.save(update_fields=update_fields)
 
@@ -371,6 +386,29 @@ def _finalize_otp_success(request, wc):
         request, user,
         backend="django.contrib.auth.backends.ModelBackend",
     )
+
+    # 5. RE-ECRIT `onboard_wc_uuid` dans la session APRES le login.
+    # Django `login()` appelle `request.session.cycle_key()` (anonyme ->
+    # authentifie) ou `request.session.flush()` (changement d'user). En
+    # theorie cycle_key() preserve les donnees ; en pratique, on a observe
+    # 2026-05-17 une perte de la clef `onboard_wc_uuid` apres verify success
+    # (probablement liee a `SESSION_SAVE_EVERY_REQUEST=True` + cycle_key qui
+    # interagissent mal cote backend session DB). Symptome : verify OK ->
+    # redirect vers `onboard-place` -> `_get_or_none_wc()` retourne None ->
+    # `_get_confirmed_wc_or_redirect` renvoie sur `onboard-identity`, qui
+    # tombe sur la branche "Priorite 2" (user authentifie + pas de wc) et
+    # pre-remplit email depuis `request.user` mais laisse first_name /
+    # last_name vides. L'utilisateur croit avoir perdu sa saisie.
+    # Le re-set ici est defensif : si la session a survecu, c'est un no-op
+    # (meme valeur). Sinon, on restaure le pointeur vers le brouillon.
+    # / 5. RE-WRITE `onboard_wc_uuid` after login. Django `login()` calls
+    # cycle_key() (anon -> auth) or flush() (user change). In theory
+    # cycle_key preserves data; in practice we observed 2026-05-17 a loss
+    # of the `onboard_wc_uuid` key after verify success — leading the next
+    # `place` GET to redirect to identity with empty first_name/last_name.
+    # Defensive re-set: no-op if session survived, restore otherwise.
+    _set_session_wc(request, wc)
+
     return user
 
 
@@ -1041,6 +1079,17 @@ class OnboardViewSet(viewsets.ViewSet):
             and request.user.email.lower() == data["email"].lower()
         )
 
+        # Capture la langue UI au POST pour la reutiliser dans les mailers
+        # Celery (qui n'ont pas de `request` pour deduire la langue). Sans
+        # ce snapshot, le sujet du mail OTP / ready est rendu dans la langue
+        # par defaut du worker (LANGUAGE_CODE='en' par defaut dans
+        # settings.py) meme si l'utilisateur a fait tout le wizard en FR.
+        # / Capture UI language at POST so Celery mailers can re-activate it
+        # later — workers have no `request` to infer language. Without this,
+        # OTP/ready email subjects fall back to the worker's default locale.
+        from django.utils.translation import get_language
+        ui_language = get_language() or "fr"
+
         # Persistance du brouillon dans le schema `meta`.
         # / Persist the draft in the `meta` schema.
         with schema_context("meta"):
@@ -1058,6 +1107,7 @@ class OnboardViewSet(viewsets.ViewSet):
                 # empty (filled later). CharField without NOT NULL
                 # constraint accepts an empty string.
                 phone="",
+                language=ui_language,
                 email_confirmed=skip_otp,
                 current_step=(
                     WaitingConfiguration.STEP_PLACE if skip_otp
