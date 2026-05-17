@@ -1,17 +1,88 @@
-{% extends "admin/base_site.html" %}
-{% load i18n %}
+{% extends "base.html" %}
+{% load i18n static %}
 {% block title %}Calibration — {{ tireuse.nom_tireuse }}{% endblock %}
+
+{% block nav_right %}
+  <a href="{% url 'staff_admin:controlvanne_tireusebec_change' tireuse.uuid %}"
+     class="btn btn-sm btn-outline-light">
+    ← Admin
+  </a>
+{% endblock %}
+
+{% block head %}
+  <script src="{% static 'django_htmx/htmx.min.js' %}"></script>
+  <script>
+    /* CSRF global pour toutes les requêtes HTMX */
+    /* / Global CSRF for all HTMX requests */
+    document.addEventListener('htmx:configRequest', function (evt) {
+      evt.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
+    });
+
+    /*
+     * Gestion des lignes ignorées.
+     * window.ignoredSessions persiste entre les rechargements de polling
+     * (le polling remplace seulement le innerHTML de #sessions-poll,
+     *  pas la page entière — donc les variables window.* survivent).
+     * / Ignored rows management.
+     * window.ignoredSessions persists between polling reloads
+     * (polling only replaces innerHTML of #sessions-poll,
+     *  not the whole page — so window.* variables survive).
+     */
+    window.ignoredSessions = window.ignoredSessions || new Set();
+
+    function ignorerLigne(sessionPk) {
+      window.ignoredSessions.add(String(sessionPk));
+      appliquerIgnores();
+    }
+
+    /* Grise et désactive toutes les lignes dans ignoredSessions */
+    /* / Grays out and disables all rows in ignoredSessions */
+    function appliquerIgnores() {
+      window.ignoredSessions.forEach(function (pk) {
+        var row = document.getElementById('row-' + pk);
+        var input = document.querySelector('[name="vol_' + pk + '"]');
+        if (input) { input.value = ''; input.disabled = true; }
+        if (row) { row.style.opacity = '0.3'; row.style.pointerEvents = 'none'; }
+      });
+    }
+
+    /* Re-applique après chaque swap HTMX (polling ou réponse d'erreur) */
+    /* / Re-applies after each HTMX swap (polling or error response) */
+    document.addEventListener('htmx:afterSettle', appliquerIgnores);
+  </script>
+{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center" data-testid="calibration-page">
   <div class="col-12 col-md-10 col-lg-8">
 
     {# En-tête #}
-    <div class="d-flex align-items-center mb-4 gap-3 flex-wrap">
-      <h2 class="mb-0 text-white">Calibration — {{ tireuse.nom_tireuse }}</h2>
+    <div class="d-flex align-items-center justify-content-between mb-4 gap-3 flex-wrap">
+      <h2 class="mb-0">Calibration — {{ tireuse.nom_tireuse }}</h2>
+      {# Timestamp calculé au moment du CLIC (pas du chargement de la page) #}
+      {# pour que les sessions créées pendant la visite ne soient pas incluses #}
+      {# / Timestamp computed at CLICK time (not page load) #}
+      {# so sessions created during the visit are not included #}
+      <button type="button"
+              class="btn btn-warning"
+              data-testid="btn-nouvelle-serie"
+              onclick="window.ignoredSessions = new Set(); window.location.href='?depuis='+Math.floor(Date.now()/1000);">
+        ↺ Nouvelle série
+      </button>
     </div>
 
-    {# Info débitmètre + état de la tireuse #}
+    {# Bandeau série en cours #}
+    {% if depuis %}
+    <div class="alert alert-info py-2 mb-4">
+      Série en cours — seules les mesures effectuées depuis le début de cette série sont affichées.
+    </div>
+    {% else %}
+    <div class="alert alert-secondary py-2 mb-4">
+      Toutes les mesures passées sont affichées. Cliquez <strong>↺ Nouvelle série</strong> pour repartir à zéro.
+    </div>
+    {% endif %}
+
+    {# Info débitmètre + état maintenance #}
     <div class="card mb-4">
       <div class="card-body" style="color:#111">
         {% if tireuse.debimetre %}
@@ -19,11 +90,11 @@
           <p class="mb-0">
             <strong>Facteur actuel :</strong>
             <span class="badge bg-secondary fs-6">{{ tireuse.debimetre.flow_calibration_factor }}</span>
-            <span class="text-muted small ms-1">Hz·L⁻¹·min⁻¹ &nbsp;(1 L = facteur × 60 impulsions)</span>
+            <span class="text-muted small ms-1">Hz·L⁻¹·min⁻¹</span>
           </p>
         {% else %}
           <div class="alert alert-warning mb-0">
-            Aucun débitmètre associé à cette tireuse. Veuillez en affecter un dans l'admin avant de calibrer.
+            Aucun débitmètre associé. Affectez-en un dans l'admin avant de calibrer.
           </div>
         {% endif %}
 
@@ -32,9 +103,8 @@
         {% else %}
           <div class="alert alert-danger mt-2 mb-0">
             ⚠️ La tireuse doit être <strong>désactivée</strong> (mode maintenance) pour pouvoir calibrer.
-            <a href="{% url 'staff_admin:controlvanne_tireusebec_change' tireuse.uuid %}" class="alert-link ms-1">
-              Désactiver dans l'admin →
-            </a>
+            <a href="{% url 'staff_admin:controlvanne_tireusebec_change' tireuse.uuid %}"
+               class="alert-link ms-1">Désactiver dans l'admin →</a>
           </div>
         {% endif %}
       </div>
@@ -46,81 +116,35 @@
       <div class="card-body" style="color:#111">
         <ol class="mb-0">
           <li>Désactivez la tireuse dans l'admin <em>(si pas déjà fait)</em></li>
+          <li>Cliquez <strong>↺ Nouvelle série</strong> pour repartir à zéro</li>
           <li>Connectez un tuyau propre sur la tireuse</li>
           <li>Présentez une <strong>carte maintenance</strong> → la vanne s'ouvre</li>
           <li>Versez dans un <strong>verre gradué</strong> jusqu'à ~50 cl</li>
           <li>Retirez la carte → la vanne se ferme</li>
-          <li>Revenez sur cette page et saisissez le volume lu sur le verre ci-dessous</li>
-          <li>Répétez 2 à 3 fois puis cliquez <strong>Appliquer le facteur</strong></li>
+          <li>Répétez les étapes 4–6 au moins 3 fois — les versements apparaissent automatiquement ci-dessous</li>
+          <li>Saisissez les volumes lus sur le verre pour chaque versement</li>
+          <li>Cliquez <strong>✓ Calculer et appliquer le facteur</strong></li>
+          <li>Présentez à nouveau votre <strong>carte maintenance</strong> sur le lecteur puis retirez-la — le Pi récupère immédiatement le nouveau facteur de calibration</li>
         </ol>
       </div>
     </div>
 
-    {# Sessions en attente de saisie #}
-    {% if sessions_en_attente %}
-    <div class="card mb-4 border-warning">
-      <div class="card-header bg-warning text-dark">
-        <strong>{% translate "Measurements awaiting input" %} ({{ sessions_en_attente|length }})</strong>
-      </div>
-      <div class="card-body p-0">
-        <table class="table table-sm mb-0" style="color:#111" data-testid="calibration-sessions">
-          <thead class="table-light">
-            <tr>
-              <th>Date</th>
-              <th>Carte</th>
-              <th>Mesuré par Django</th>
-              <th>Volume réel dans le verre</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for session in sessions_en_attente %}
-            <tr id="mesure-{{ session.pk }}">
-              <td>{{ session.started_at|date:"d/m H:i" }}</td>
-              <td class="text-muted small">{{ session.label_snapshot|default:session.uid }}</td>
-              <td><strong>{{ session.volume_delta_ml|floatformat:0 }} ml</strong></td>
-              <td>
-                <div class="d-flex gap-2 align-items-center flex-wrap">
-                  <form hx-post="{% url 'calibration_soumettre' uuid=tireuse.uuid session_id=session.pk %}"
-                        hx-target="#mesure-{{ session.pk }}"
-                        hx-swap="outerHTML"
-                        class="d-flex gap-2 align-items-center">
-                    {% csrf_token %}
-                    <input type="number" name="volume_reel_ml"
-                           min="1" max="2000" step="1"
-                           placeholder="ex : 487"
-                           class="form-control form-control-sm" style="width:110px" required>
-                    <button type="submit" class="btn btn-sm btn-primary">Calculer</button>
-                  </form>
-                  <form hx-post="{% url 'calibration_supprimer' uuid=tireuse.uuid session_id=session.pk %}"
-                        hx-target="#mesure-{{ session.pk }}"
-                        hx-swap="outerHTML"
-                        hx-confirm="Supprimer cette mesure ?"
-                        class="d-inline">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-sm btn-outline-danger">✕</button>
-                  </form>
-                </div>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-    {% else %}
-    <div class="alert alert-info mb-4">
-      {% translate "No measurements pending." %}
-      {% if tireuse.enabled %}
-        Désactivez d'abord la tireuse puis passez une carte maintenance pour verser du liquide.
-      {% else %}
-        Passez une carte maintenance pour verser du liquide dans un verre gradué, puis revenez ici.
-      {% endif %}
-    </div>
-    {% endif %}
-
-    {# Récap des mesures calibrées + bouton Appliquer #}
-    <div id="recap">
-      {% include "calibration/partial_recap.html" %}
+    {# Zone principale : formulaire de saisie (polling HTMX 8s) #}
+    {# La div #sessions-poll porte les attributs de polling. #}
+    {# Quand le formulaire est soumis, hx-swap="outerHTML" remplace cette div #}
+    {# par le résultat — supprimant ainsi le polling automatiquement. #}
+    {# / Main zone: input form (HTMX polling 8s) #}
+    {# The #sessions-poll div carries the polling attributes. #}
+    {# When the form is submitted, hx-swap="outerHTML" replaces this div #}
+    {# with the result — automatically stopping the poll. #}
+    <div id="sessions-poll"
+         hx-get="{% url 'calibration_sessions_partial' uuid=tireuse.uuid %}?depuis={{ depuis }}"
+         hx-trigger="load, every 8s"
+         hx-swap="innerHTML">
+      <p class="text-center text-muted py-4">
+        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+        Chargement des versements...
+      </p>
     </div>
 
   </div>

@@ -91,19 +91,33 @@ class RFIDReader:
         return None
 
     def _read_rc522(self):
-        """Lecture spécifique RC522."""
+        """Lecture spécifique RC522 via PICC_REQIDL (détecte les cartes en état IDLE).
+        Le problème de détection continue (vanne qui se ferme après ~3s carte posée)
+        n'est PAS un problème de protocole logiciel : les tests montrent que le RC522
+        rate la carte la grande majorité du temps sur certains Pi (gaps de plusieurs
+        minutes même avec sleep(1)), alors qu'il lit normalement sur d'autres Pi avec
+        le même lecteur et le même code. Cause : problème physique/électronique côté Pi
+        (alimentation 3.3V instable, connexion SPI/RST mal plantée, masse défaillante).
+        REQALL (0x52) et SELECT+HALT ont été testés sans amélioration — le problème
+        est en dessous de la couche protocolaire.
+        / RC522 read via PICC_REQIDL (detects cards in IDLE state).
+        The continuous-detection issue (valve closing after ~3s with card present)
+        is NOT a software protocol problem: tests show the RC522 misses the card
+        most of the time on some Pis (gaps of several minutes even with sleep(1)),
+        while it reads normally on other Pis with the same reader and same code.
+        Cause: physical/electrical issue on the Pi side (unstable 3.3V supply,
+        loose SPI/RST connection, bad ground). REQALL (0x52) and SELECT+HALT
+        were tested with no improvement — the issue is below the protocol layer.
+        """
         try:
-            # 1. Requête
             (status, TagType) = self.reader.MFRC522_Request(self.reader.PICC_REQIDL)
 
             if status == self.reader.MI_OK:
-                # 2. Anticollision
                 (status, uid) = self.reader.MFRC522_Anticoll()
 
                 if status == self.reader.MI_OK:
                     return self._uid_to_hex(uid)
         except Exception as e:
-            # On évite de spammer les logs sur des erreurs de lecture VIDES
             pass
         return None
 

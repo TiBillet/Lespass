@@ -1,0 +1,85 @@
+{# Partial HTMX — résultat après application du facteur de la série #}
+{# Remplace #sessions-poll en outerHTML → le polling s'arrête automatiquement. #}
+{# / HTMX partial — result after series factor application #}
+{# Replaces #sessions-poll as outerHTML → polling stops automatically. #}
+
+<div id="serie-result" data-testid="calibration-serie-result">
+
+  <div class="card mb-4 border-success">
+    <div class="card-header bg-success text-white">
+      <strong>✓ Facteur appliqué avec succès</strong>
+    </div>
+
+    <div class="card-body" style="color:#111">
+
+      {# Résumé facteur ancien → nouveau #}
+      <div class="mb-3 fs-5">
+        <span class="text-muted small">Facteur ancien :</span>
+        <strong>{{ facteur_ancien }}</strong>
+        &nbsp;→&nbsp;
+        <span class="text-muted small">Nouveau facteur :</span>
+        <span class="badge bg-primary fs-5">{{ facteur_applique }}</span>
+        <span class="text-muted small ms-1">Hz·L⁻¹·min⁻¹</span>
+      </div>
+
+      {# Détail des mesures #}
+      <table class="table table-sm mb-3" data-testid="calibration-mesures-result">
+        <thead class="table-light">
+          <tr>
+            <th>Date</th>
+            <th>Django (ml)</th>
+            <th>Verre (ml)</th>
+            <th>Écart</th>
+            <th>Facteur calculé</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in mesures %}
+          <tr>
+            <td>{{ m.session.started_at|date:"d/m H:i" }}</td>
+            <td>{{ m.session.volume_delta_ml|floatformat:0 }}</td>
+            <td>{{ m.session.volume_reel_ml|floatformat:0 }}</td>
+            <td>
+              <span class="badge
+                {% if m.ecart_pct > 0 %}bg-danger
+                {% elif m.ecart_pct < 0 %}bg-warning text-dark
+                {% else %}bg-success{% endif %}">
+                {% if m.ecart_pct > 0 %}+{% endif %}{{ m.ecart_pct }}%
+              </span>
+            </td>
+            <td><strong>{{ m.facteur_corrige }}</strong></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      {# Avertissement si une seule mesure #}
+      {% if mesures|length == 1 %}
+      <div class="alert alert-warning mb-3">
+        ⚠ Résultat basé sur 1 seule mesure.
+        Faites une nouvelle série avec 2 ou 3 versements pour plus de fiabilité.
+      </div>
+      {% endif %}
+
+      {# Note sur la mise à jour du Pi #}
+      <p class="text-muted small mb-3">
+        Le Pi récupèrera ce facteur automatiquement au retrait de la prochaine carte maintenance.
+      </p>
+
+      {# Actions #}
+      <div class="d-flex gap-2 flex-wrap">
+        <a href="{% url 'calibration_page' uuid=tireuse.uuid %}?depuis={{ maintenant }}"
+           class="btn btn-primary"
+           data-testid="btn-verifier-serie">
+          ↺ Vérifier avec une nouvelle série
+        </a>
+        <a href="{% url 'staff_admin:controlvanne_tireusebec_change' tireuse.uuid %}"
+           class="btn btn-outline-secondary">
+          ← Retour admin
+        </a>
+      </div>
+
+    </div>
+  </div>
+
+</div>

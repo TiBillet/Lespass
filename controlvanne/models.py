@@ -232,12 +232,17 @@ class TireuseBec(models.Model):
 
     # --- Volume / jauge ---
 
+    reservoir_illimite = models.BooleanField(
+        default=True,
+        verbose_name=_("Unlimited reservoir"),
+        help_text=_("If checked, the empty-keg check is bypassed (no volume tracking)."),
+    )
     reservoir_ml = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         default=Decimal("0.00"),
         verbose_name=_("Remaining volume"),
-        help_text=_("Current volume in ml (decremented in real time)."),
+        help_text=_("Current volume in ml (decremented in real time). Ignored if unlimited."),
     )
     # --- Proprietes calculees ---
 

@@ -24,6 +24,10 @@ SERVER_URL = os.getenv("SERVER_URL", "https://localhost")
 API_KEY = os.getenv("API_KEY", "changeme")
 TIREUSE_UUID = os.getenv("TIREUSE_UUID", "")
 
+# Mettre a False pour un serveur de dev avec certificat auto-signe.
+# Set to False for a dev server with a self-signed certificate.
+SSL_VERIFY = os.getenv("SSL_VERIFY", "True").lower() != "false"
+
 # --- RFID ---
 RFID_TYPE = os.getenv("RFID_TYPE", "RC522")
 RC522_SPI_DEVICE = int(os.getenv("RC522_SPI_DEVICE", "0"))
@@ -35,7 +39,7 @@ RFID_BAUDRATE = int(os.getenv("RFID_BAUDRATE", "9600"))
 GPIO_VANNE = int(os.getenv("GPIO_VANNE", "18"))
 GPIO_FLOW_SENSOR = int(os.getenv("GPIO_FLOW_SENSOR", "23"))
 FLOW_CALIBRATION_FACTOR = float(os.getenv("FLOW_CALIBRATION_FACTOR", "6.5"))
-VALVE_ACTIVE_HIGH = os.getenv("VALVE_ACTIVE_HIGH", "False").lower() == "true"
+VALVE_ACTIVE_HIGH = os.getenv("VALVE_ACTIVE_HIGH", "True").lower() == "true"
 
 # --- Logs ---
 BASE_DIR = Path(__file__).resolve().parent.parent

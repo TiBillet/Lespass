@@ -12,7 +12,7 @@ Endpoints appeles :
 """
 
 import requests
-from config.settings import SERVER_URL, API_KEY, TIREUSE_UUID
+from config.settings import SERVER_URL, API_KEY, TIREUSE_UUID, SSL_VERIFY
 from utils.logger import logger
 from utils.exceptions import BackendError
 
@@ -46,7 +46,7 @@ class BackendClient:
         payload = {"tireuse_uuid": self.tireuse_uuid}
 
         try:
-            response = requests.post(url, json=payload, headers=self.headers, timeout=5.0, verify=True)
+            response = requests.post(url, json=payload, headers=self.headers, timeout=5.0, verify=SSL_VERIFY)
             if response.status_code == 200:
                 return response.json()
             else:
@@ -73,7 +73,7 @@ class BackendClient:
         }
 
         try:
-            response = requests.post(url, json=payload, headers=self.headers, timeout=2.0, verify=True)
+            response = requests.post(url, json=payload, headers=self.headers, timeout=2.0, verify=SSL_VERIFY)
             data = response.json()
 
             if response.status_code == 200:
@@ -111,7 +111,7 @@ class BackendClient:
         timeout = 1.0 if event_type == "pour_update" else 3.0
 
         try:
-            response = requests.post(url, json=payload, headers=self.headers, timeout=timeout, verify=True)
+            response = requests.post(url, json=payload, headers=self.headers, timeout=timeout, verify=SSL_VERIFY)
             if response.status_code == 200:
                 return response.json()
             else:
@@ -124,21 +124,26 @@ class BackendClient:
     def auth_kiosk(self):
         """
         POST /controlvanne/auth-kiosk/
-        Obtient un cookie session Django pour le kiosk Chromium.
-        / Gets a Django session cookie for the Chromium kiosk.
+        Obtient un token à usage unique pour l'auth kiosk.
+        Le Pi ouvre Chromium sur /controlvanne/kiosk-token/<token>/?next=<kiosk_url>
+        Django pose le cookie de session via HTTP et redirige vers le kiosk.
+        / Gets a one-time token for kiosk auth.
+        The Pi opens Chromium on /controlvanne/kiosk-token/<token>/?next=<kiosk_url>
+        Django sets the session cookie via HTTP and redirects to the kiosk.
 
-        :return: str — session_key
+        :return: tuple (session_key, kiosk_token)
         :raises BackendError: si le serveur est injoignable
         """
         url = f"{self.server_url}/controlvanne/auth-kiosk/"
 
         try:
-            response = requests.post(url, json={}, headers=self.headers, timeout=5.0, verify=True)
+            response = requests.post(url, json={}, headers=self.headers, timeout=5.0, verify=SSL_VERIFY)
             if response.status_code == 200:
                 data = response.json()
                 session_key = data.get("session_key", "")
-                logger.info(f"Auth kiosk OK — session_key obtenue")
-                return session_key
+                kiosk_token = data.get("kiosk_token", "")
+                logger.info(f"Auth kiosk OK — token obtenu")
+                return session_key, kiosk_token
             else:
                 logger.error(f"Auth kiosk: HTTP {response.status_code}")
                 raise BackendError(f"Auth kiosk echoue: HTTP {response.status_code}")

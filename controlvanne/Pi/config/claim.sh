@@ -18,7 +18,8 @@ TARGET_DIR="/home/sysop/tibeer/controlvanne/Pi"
 [ -n "$SERVER"   ] || { echo "SERVER manquant."; exit 1; }
 
 echo "Appairage en cours avec $SERVER..."
-RESPONSE=$(curl -sf -X POST "${SERVER}/api/discovery/claim/" \
+# -k : ignore SSL auto-signe en dev / ignore self-signed SSL in dev
+RESPONSE=$(curl -skf -X POST "${SERVER}/api/discovery/claim/" \
     -H "Content-Type: application/json" \
     -d "{\"pin_code\": \"${PIN_CODE}\"}")
 

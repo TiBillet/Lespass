@@ -177,11 +177,17 @@ def tireusebec_post_save(sender, instance, created, **kwargs):
             if tenant_est_un_vrai_client:
                 from discovery.models import PairingDevice
 
+                from AuthBillet.models import TibilletUser
                 pin_genere = PairingDevice.generate_unique_pin()
                 pairing_device_cree = PairingDevice.objects.create(
                     name=instance.nom_tireuse,
                     tenant=tenant_courant,
                     pin_code=pin_genere,
+                    # IMPORTANT : role TI (Tireuse) — sans ça le claim retourne
+                    # une clé LaBoutik et tireuse_uuid reste vide.
+                    # / IMPORTANT: role TI (Tireuse) — without this, claim returns
+                    # a LaBoutik key and tireuse_uuid stays empty.
+                    terminal_role=TibilletUser.ROLE_TIREUSE,
                 )
                 champs_a_mettre_a_jour["pairing_device"] = pairing_device_cree
                 instance.pairing_device = pairing_device_cree
