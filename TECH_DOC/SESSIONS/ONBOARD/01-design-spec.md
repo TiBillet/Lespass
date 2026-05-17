@@ -154,7 +154,7 @@ created_at       : DateTimeField(auto_now_add=True)
 - **`/onboard/launch/status/`** (GET, polling endpoint) :
   - Si `wc.tenant_id is None` → retourne partial `status-progress.html` (⏳ + bouton disabled + `hx-trigger="every 2s"` pour continuer le polling).
   - Si `wc.tenant_id` set → retourne partial `status-done.html` (✓ + bouton actif avec href, **sans `hx-trigger`** → arrêt naturel du polling). Header `HX-Trigger: onboard-ready` pour permettre à du JS optionnel d'arrêter le carrousel ou autre.
-  - Si la task a échoué (`wc.error_message` set par la task) → retourne partial `status-error.html` (FALC : "Une erreur est survenue, on a reçu une alerte. Tu peux réessayer ou nous contacter à `contact@tibillet.coop`.") + bouton "Réessayer" qui re-enqueue la task.
+  - Si la task a échoué (`wc.error_message` set par la task) → retourne partial `status-error.html` (FALC : "Une erreur est survenue, on a reçu une alerte. Tu peux réessayer ou nous contacter à `contact@tibillet.re`.") + bouton "Réessayer" qui re-enqueue la task.
 
 ## 3. UX — Layout C (validé)
 
@@ -210,7 +210,7 @@ created_at       : DateTimeField(auto_now_add=True)
 - `resend-otp` : 3 / h / IP
 - `launch` : 5 / h / IP
 
-**Nominatim** : proxy serveur uniquement, User-Agent `TiBillet-Onboard/1.0 (contact@tibillet.coop)`, timeout 5s, cache Redis 24h sur SHA256 de la query, 1 req/s/IP côté serveur.
+**Nominatim** : proxy serveur uniquement, User-Agent `TiBillet-Onboard/1.0 (contact@tibillet.re)`, timeout 5s, cache Redis 24h sur SHA256 de la query, 1 req/s/IP côté serveur.
 
 **Multi-tenant** : viewset SHARED, écritures WC dans META tenant via `tenant_context(meta)`. Pas de fuite cross-tenant.
 

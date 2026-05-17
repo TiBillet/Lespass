@@ -9974,10 +9974,10 @@ msgstr "Une erreur est survenue"
 #: onboard/templates/onboard/partials/status_error.html:32
 msgid ""
 "Nous avons reçu une alerte. Vous pouvez réessayer ou nous contacter à "
-"contact@tibillet.coop."
+"contact@tibillet.re."
 msgstr ""
 "Nous avons reçu une alerte. Vous pouvez réessayer ou nous contacter à "
-"contact@tibillet.coop."
+"contact@tibillet.re."
 
 #: onboard/templates/onboard/partials/status_error.html:55
 #: onboard/templates/onboard/partials/status_timeout.html:44
@@ -10010,11 +10010,11 @@ msgstr "La création prend plus de temps que prévu"
 msgid ""
 "Pas de panique : on a peut-être rencontré un imprévu côté serveur. Tu peux "
 "relancer la création maintenant. Si le problème persiste, contacte-nous à "
-"contact@tibillet.coop."
+"contact@tibillet.re."
 msgstr ""
 "Pas de panique : on a peut-être rencontré un imprévu côté serveur. Vous "
 "pouvez relancer la création maintenant. Si le problème persiste, "
-"contactez-nous à contact@tibillet.coop."
+"contactez-nous à contact@tibillet.re."
 
 #: onboard/templates/onboard/steps/01_identity.html:26
 msgid "Créer votre espace TiBillet"

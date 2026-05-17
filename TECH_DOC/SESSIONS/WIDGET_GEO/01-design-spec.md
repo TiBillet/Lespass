@@ -198,7 +198,7 @@ def reverse_geocode(latitude, longitude, lang=None):
 ```
 
 **Logique reprise de `onboard/services.py::geocode`** :
-- User-Agent `"TiBillet-Widget/1.0 (contact@tibillet.coop)"`.
+- User-Agent `"TiBillet-Widget/1.0 (contact@tibillet.re)"`.
 - Timeout 5s.
 - Logs warning sur erreur réseau / status non-200.
 - `accept-language` du user actuel (`get_language()`) si `lang=None`.
