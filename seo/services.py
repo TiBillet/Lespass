@@ -356,6 +356,55 @@ def build_tenant_config_data(client):
 
 
 # ---------------------------------------------------------------------------
+# AGGREGATE_POINTS helper / Helper pour les points d'agregat
+# ---------------------------------------------------------------------------
+
+
+def get_postal_addresses_for_tenants(tenant_schemas):
+    """
+    Pour chaque tenant donne, recupere toutes les PostalAddress avec coords.
+    / For each given tenant, fetches all PostalAddress with coords.
+
+    Parametres / Parameters:
+        tenant_schemas: list[tuple[str, str]] — liste de (tenant_uuid, schema_name)
+
+    Retourne / Returns:
+        dict[str, list[dict]] — {tenant_uuid: [pa_dict, ...]}
+        chaque pa_dict contient pa_id, latitude, longitude, name,
+        street_address, postal_code, address_locality, address_country.
+    """
+    from BaseBillet.models import PostalAddress
+    from django_tenants.utils import tenant_context
+    from Customers.models import Client
+
+    resultat = {}
+    for tenant_uuid, schema_name in tenant_schemas:
+        try:
+            tenant = Client.objects.get(schema_name=schema_name)
+        except Client.DoesNotExist:
+            continue
+        with tenant_context(tenant):
+            pa_list = []
+            queryset = PostalAddress.objects.exclude(
+                latitude__isnull=True
+            ).exclude(longitude__isnull=True)
+            for pa in queryset:
+                pa_list.append({
+                    "pa_id": pa.pk,
+                    "latitude": float(pa.latitude),
+                    "longitude": float(pa.longitude),
+                    "name": pa.name or "",
+                    "street_address": pa.street_address or "",
+                    "postal_code": pa.postal_code or "",
+                    "address_locality": pa.address_locality or "",
+                    "address_country": pa.address_country or "",
+                })
+            if pa_list:
+                resultat[tenant_uuid] = pa_list
+    return resultat
+
+
+# ---------------------------------------------------------------------------
 # Explorer data builder / Constructeur de donnees explorer
 # ---------------------------------------------------------------------------
 

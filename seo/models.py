@@ -23,6 +23,7 @@ class SEOCache(models.Model):
     TENANT_EVENTS = "tenant_events"
     AGGREGATE_EVENTS = "aggregate_events"
     AGGREGATE_LIEUX = "aggregate_lieux"
+    AGGREGATE_POINTS = "aggregate_points"
     SITEMAP_INDEX = "sitemap_index"
     GLOBAL_COUNTS = "global_counts"
     FEDERATION_INCOMING = "federation_incoming"
@@ -32,6 +33,7 @@ class SEOCache(models.Model):
         (TENANT_EVENTS, _("Published events for tenant")),
         (AGGREGATE_EVENTS, _("Aggregated events for network (ROOT)")),
         (AGGREGATE_LIEUX, _("Aggregated active venues (ROOT)")),
+        (AGGREGATE_POINTS, _("Aggregated PostalAddress points for explorer map (ROOT)")),
         (SITEMAP_INDEX, _("Cross-tenant sitemap index (ROOT)")),
         (GLOBAL_COUNTS, _("Global counts: events, lieux (ROOT)")),
         (FEDERATION_INCOMING, _("Incoming FederatedPlace edges by target tenant")),
