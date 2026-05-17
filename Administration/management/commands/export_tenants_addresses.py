@@ -122,6 +122,37 @@ def serialiser_postal_address(postal_address, tenant_schema, is_main_address):
     }
 
 
+def stub_name_only_pour_configuration(configuration, tenant_schema):
+    """
+    Stub minimaliste pour un tenant qui n'a NI FK postal_address NI champ
+    legacy adress. On exporte juste son nom d'organisation pour que le
+    backfill puisse tenter une recherche Nominatim par nom (bucket name_only,
+    confidence low, needs_review obligatoire).
+    / Minimal stub for a tenant with NO FK postal_address AND no legacy adress.
+    We export just the organisation name so the backfill can try a Nominatim
+    name search (name_only bucket, low confidence, mandatory needs_review).
+
+    Renvoie None si meme le nom d'organisation est vide (tenant fantome).
+    / Returns None if even the organisation name is empty (ghost tenant).
+    """
+    if not configuration.organisation:
+        return None
+    return {
+        "tenant_schema": tenant_schema,
+        "postgres_id": None,  # NULL = stub a creer en import
+        # is_main_address=True : ce stub deviendra l'adresse principale du tenant.
+        # / is_main_address=True: this stub will become the tenant's main address.
+        "is_main_address": True,
+        "name": configuration.organisation,
+        "street_address": None,
+        "address_locality": None,
+        "postal_code": None,
+        "address_country": None,
+        "latitude": None,
+        "longitude": None,
+    }
+
+
 def stub_legacy_pour_configuration(configuration, tenant_schema):
     """
     Si Configuration n'a pas de FK PostalAddress mais a un champ legacy adress,
