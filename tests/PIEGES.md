@@ -2416,5 +2416,199 @@ Decouverts session widget onboard, 2026-05-16. Cf. `static/widgets/widget_carte_
 
 ---
 
+### Onboarding wizard + cron pool (session 2026-05-17)
+
+**P.ONBOARD.1 — `DecimalField` pour coordonnees GPS : max_digits - decimal_places >= 3.**
+
+`PostalAddress.latitude/longitude` etaient `DecimalField(max_digits=18, decimal_places=16)`.
+Le calcul `18 - 16 = 2` donne deux chiffres avant la virgule, donc maximum
+absolu `99.999...` → **toute longitude hors [-99, +99] crashe** avec
+`NumericValueOutOfRange: numeric field overflow` (Pekin 116°, Tokyo 139°,
+New York -74°, ...). Symptome remonte par Sentry en prod sur un tenant
+chinois.
+
+**Fix** : `DecimalField(max_digits=9, decimal_places=6)` (precision ~11 cm,
+range +/-999.999999, standard schema.org). Migration `BaseBillet/0207_fix_postaladdress_latlng_precision.py`
+(2 AlterField, no-data-migration, troncature precision uniquement).
+
+**Regle** : pour des coordonnees GPS, vérifier `max_digits - decimal_places >= 3`
+(latitude max 90, longitude max 180, donc 3 chiffres avant la virgule).
+
+**P.ONBOARD.2 — Polling HTMX double-couche : parent + child trigger.**
+
+Pattern bugue dans `onboard/templates/onboard/steps/06_launch.html` :
+```html
+<!-- BUG : double polling -->
+<div id="status" hx-get="..." hx-trigger="load, every 2s" hx-swap="innerHTML">
+    {% include "partials/status_progress.html" %}  <!-- contient aussi hx-trigger="every 2s" -->
+</div>
+```
+
+`hx-swap="innerHTML"` remplace le contenu mais **PAS les attributs** du
+parent. Quand le partial enfant est swap vers `status_error.html` (sans
+`hx-trigger`), le polling **continue indefiniment** parce que les
+attributs `hx-trigger="every 2s"` du parent restent intacts.
+
+**Symptome** : utilisateur voit l'erreur s'afficher, mais le serveur recoit
+`GET /onboard/launch/status/` toutes les 2s pendant des heures (jusqu'a
+fermeture de l'onglet).
+
+**Fix** : retirer `hx-get/hx-trigger/hx-swap` du parent, laisser le partial
+enfant porter son propre polling. Quand on swap vers un partial sans
+`hx-trigger`, le polling stop naturellement.
+
+**Regle** : un `<div>` avec `hx-swap="innerHTML"` est un CONTAINER passif.
+Le polling doit etre porte par le CONTENU enfant (qui est swap, donc qui
+peut etre remplace par un contenu sans trigger pour arreter).
+
+**P.ONBOARD.3 — `login()` peut perdre les clefs de session custom.**
+
+Django `login()` appelle `request.session.cycle_key()` (anonyme → authentifie)
+ou `request.session.flush()` (changement d'user). En theorie cycle_key()
+preserve les donnees. **En pratique** observe avec
+`SESSION_SAVE_EVERY_REQUEST=True` : la clef `onboard_wc_uuid` ecrite avant
+le login() peut etre perdue apres.
+
+**Symptome** : POST verify OK → `login(request, user)` → `redirect("onboard-place")`
+→ `_get_or_none_wc()` retourne None → redirect identity → user revoit son
+formulaire 1 avec email pre-rempli mais prenom/nom vides (un user fraichement
+cree n'a pas first_name/last_name).
+
+**Fix defensif** : reecrire la clef custom dans la session APRES `login()` :
+```python
+login(request, user, backend="...")
+request.session["onboard_wc_uuid"] = str(wc.uuid)  # no-op si survecu, restaure sinon
+request.session.modified = True
+```
+
+**Regle** : si une vue depend d'une clef session custom et appelle `login()`
+dans la meme requete, **toujours re-ecrire la clef apres le login**.
+
+**P.ONBOARD.4 — `wc.create_tenant()` ne transfere PAS automatiquement les champs metier wizard.**
+
+La chaine `BaseBillet/validators.py::TenantCreateValidator.create_tenant()`
+date du flow legacy `/tenant/new/` (supprime 2026-05-16) qui n'avait que :
+email, nom, dns_choice. Les champs ajoutes par le wizard onboard
+(`long_description`, `logo`, `street_address`, etc., `first_name`,
+`last_name`) **ne sont PAS transferes** vers le tenant nouvellement cree.
+
+**Solution** : faire le transfert APRES `wc.create_tenant()` dans
+`onboard/tasks.py::create_tenant_from_draft`, **chaque bloc protege par
+try/except sans re-raise** (cf. piege #23 : autoretry Celery + idempotence).
+
+Champs a transferer manuellement :
+- `wc.street_address/postal_code/...` → `PostalAddress` (bloc "3bis")
+- `wc.long_description` → `Configuration.long_description` (bloc "3ter")
+- `wc.logo` → `Configuration.img` via `default_storage.open()` + `config.img.save(...)`
+- `wc.first_name/last_name` → `TibilletUser.first_name/last_name` (dans `_finalize_otp_success`, defensif : ne pas ecraser un user existant)
+
+**P.ONBOARD.5 — gettext dans tasks Celery sans `LocaleMiddleware`.**
+
+Les workers Celery ne passent pas par `LocaleMiddleware` (pas de request).
+Du coup, `gettext` (`_()`) tombe sur `settings.LANGUAGE_CODE` (typiquement
+`'en'` dans ce projet) au lieu de la locale UI choisie par le user.
+
+**Symptome** : sujet mail OTP `"%(code)s – your TiBillet verification code"`
+en anglais alors que l'utilisateur a navigue tout le wizard en francais.
+
+**Solution structurelle** :
+1. Snapshot de la langue UI dans le modele :
+   ```python
+   # views.py POST identity
+   from django.utils.translation import get_language
+   wc.language = get_language() or "fr"
+   ```
+2. Activation dans la task Celery :
+   ```python
+   # tasks.py
+   from django.utils import translation
+   with translation.override(wc.language or "fr"):
+       subject = _("Your TiBillet space is ready!")
+       text_body = render_to_string("emails/...", context)
+       mail.send()
+   ```
+
+**Regle** : toute task Celery qui rend du texte traduit doit **activer
+explicitement la locale** via `translation.override()`. Sinon fallback
+silencieux sur `settings.LANGUAGE_CODE`.
+
+**P.ONBOARD.6 — `cron_morning` : `raise` global laisse le pool WAITING_CONFIG dans un etat hybride.**
+
+`Administration/management/commands/cron_morning.py::run_waiting_migrations`
+itere sur les nouveaux schemas crees et lance `migrate_schemas --schema <X>`
+en subprocess. Si UN seul subprocess echoue, `raise e` global stoppe la
+boucle → **les schemas suivants restent vides** (0 tables, CREATE SCHEMA OK
+mais migrate jamais applique).
+
+**Symptome** : pool de 20 slots WAITING_CONFIG dont 4 a `0 tables`. Quand
+`wc.create_tenant()` consomme un de ces slots, ca plante avec
+`relation "BaseBillet_configuration" does not exist`.
+
+**Diagnostic** :
+```python
+from django.db import connection
+from Customers.models import Client
+for tenant in Client.objects.filter(categorie='W'):
+    with connection.cursor() as c:
+        c.execute("SELECT count(*) FROM information_schema.tables WHERE table_schema=%s", [tenant.schema_name])
+        print(tenant.schema_name, c.fetchone()[0], 'tables')
+```
+
+**Fix propose** (a appliquer) : remplacer le `raise e` global par un
+`try/except` par schema + accumulateur :
+```python
+schemas_failed = []
+for schema_name in new_schema_names:
+    try:
+        subprocess.run(..., check=True)
+    except subprocess.CalledProcessError as e:
+        logger.error("Migration failed for schema %s: %s", schema_name, e)
+        schemas_failed.append(schema_name)
+        # On continue avec les autres
+if schemas_failed:
+    logger.error("cron_morning: %d schemas failed: %s", len(schemas_failed), schemas_failed)
+```
+
+**Fix immediat** : drop des slots vides + recreer via `create_empty_tenant --count N`.
+
+**P.ONBOARD.7 — Migration fantome : `.pyc` ou `django_migrations` orphelins apres switch de branche.**
+
+`django-tenants` stocke `django_migrations` **par schema** (pas seulement
+sur public). Si une migration a ete appliquee sur la branche A (ex:
+`main-compta` avec `0207_configuration_rapport_emails_and_more`) puis qu'on
+checkout sur la branche B (`main` qui n'a pas ce fichier `.py`), la base
+locale garde :
+- La colonne `rapport_emails NOT NULL` dans chaque schema
+- L'entree dans `django_migrations` de chaque schema
+
+**Symptome** : `IntegrityError: null value in column "rapport_emails"` au
+prochain `Configuration.get_solo()`. Le code Python n'inclut pas le champ
+dans l'INSERT (puisqu'il n'existe pas dans le modele de la branche B), donc
+PostgreSQL refuse.
+
+**Diagnostic** :
+```python
+# Verifier les migrations BD vs sources
+with connection.cursor() as c:
+    c.execute("SELECT name FROM django_migrations WHERE app='BaseBillet' AND name LIKE '%rapport%'")
+    print(c.fetchall())
+# Verifier la colonne
+c.execute("SELECT column_name FROM information_schema.columns WHERE table_name='BaseBillet_configuration' AND column_name LIKE 'rapport%'")
+```
+
+**Fix** : rollback manuel cote BD (DROP COLUMN + DELETE FROM django_migrations
+sur chaque schema tenant). PAS de fichier `.py` a recreer cote code (puisque
+la branche B ne veut PAS ce champ).
+
+**Piege bonus** : les `__pycache__/*.pyc` de la branche A peuvent rester sur
+le disque local apres checkout B. Ils ne sont pas executes par Django
+(qui se fie aux `.py`), mais peuvent semer la confusion en grep.
+`find . -name "__pycache__" -exec rm -rf {} +` au besoin.
+
+Decouverts session onboard hotfix prod, 2026-05-17. Cf. `TECH_DOC/SESSIONS/ONBOARD/03-session-recap.md`
+section 10 pour le contexte complet.
+
+---
+
 *Ce document est un commun numerique. Prenez-en soin !*
 *This document is a digital common. Take care of it!*

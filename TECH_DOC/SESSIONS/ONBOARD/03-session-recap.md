@@ -516,7 +516,244 @@ adresse + leaflet-geosearch") :
 
 ---
 
-## 10. Liens utiles
+## 10. Session du 2026-05-17 — Hotfix prod + polish landing + fix wizard
+
+Session marathon avant push prod. **6 axes en parallèle**, tous bloquants ou
+dégradants UX. Audit critique final : SAFE TO SHIP.
+
+### 10.1 Hotfix prod : PostalAddress overflow longitude (Sentry #7486299113)
+
+**Symptôme** : `DataError: numeric field overflow` sur création tenant pour
+Xai (Pékin), longitude `116.364992`.
+
+**Cause** : `PostalAddress.latitude/longitude` définis `DecimalField(max_digits=18, decimal_places=16)`.
+18 - 16 = 2 chiffres avant la virgule, donc max ±99.99... → **toute longitude
+hors [-99, +99] casse** (Asie, Pacifique, Amériques).
+
+**Fix** : `DecimalField(max_digits=9, decimal_places=6)` (précision ~11 cm,
+range ±999, cohérent avec `WaitingConfiguration.latitude/longitude` existant).
+Migration `BaseBillet/0207_fix_postaladdress_latlng_precision.py`. Pas de perte
+de données (toutes les valeurs déjà stockées tiennent forcément dans 9/6).
+
+### 10.2 Réécriture mails OTP + ready
+
+**Contexte** : `welcome_email.html` legacy (`/tenant/new/` flow supprimé
+2026-05-16) avait un wording riche jamais réutilisé. Les mails `ready.html`
+et `otp_code.html` du wizard étaient minimalistes ("Hello, your code is X").
+
+**Fix `ready.html`** : reprise du wording chaleureux (super méga trop ravis,
+liste "Informations importantes" avec URL publique + Stripe + canaux support,
+liste "Voici ce que vous pouvez faire avec TiBillet", CTA documentation,
+signature équipe coopérative). Adapté au contexte post-création : bouton
+"ACCÉDER À MON ESPACE" (magic-link admin) au lieu de "CONFIRMER MA DEMANDE".
+
+**Fix `otp_code.html`** : style aligné sur ready (table imbriquée, palette
+`#009058`, Arial, eyebrow "Bienvenue dans la communauté TiBillet"). Capsule
+vert clair encadrée avec code PIN en `Courier New 36px` letter-spacing 12px
+(lisibilité mobile + copier-coller facile).
+
+**Nouveau context var `instance_url`** dans `onboard_ready_mailer` : URL
+publique du tenant (sans `/admin/`) affichée dans la liste "Informations
+importantes".
+
+### 10.3 Bug 1 : long_description + logo non transférés au tenant
+
+**Symptôme** : utilisateur saisit description longue + upload logo dans le
+wizard, mais après création du tenant, la `Configuration.long_description`
+contient le texte par défaut "Bienvenue dans votre nouvel espace..." et
+`Configuration.img` est vide.
+
+**Cause** : `wc.create_tenant()` (chaîne BaseBillet legacy) ne copie PAS ces
+champs (ils n'existaient pas dans `/tenant/new/`).
+
+**Fix** : nouveau bloc "3ter" dans `create_tenant_from_draft` après le bloc
+PostalAddress. Override `Configuration.long_description` avec `wc.long_description`
++ copie `wc.logo` (StdImageField sur `media/onboard_drafts/<wc_uuid>/`) vers
+`Configuration.img` via `default_storage.open()` + `config.img.save()`
+(régénère les variations StdImage). `try/except` sans re-raise (piège #23
+idempotence Celery).
+
+### 10.4 Bug 2 : first_name / last_name non répercutés sur le TibilletUser
+
+**Symptôme** : user créé via `get_or_create_user(wc.email)` arrive sans
+prénom ni nom dans son profil admin, alors qu'ils ont été saisis step 1.
+
+**Fix** : dans `_finalize_otp_success`, après get_or_create_user + activation,
+report `wc.first_name` → `user.first_name` et `wc.last_name` → `user.last_name`
+SI le user n'a pas déjà ces champs (ne pas écraser un user existant qui
+aurait personnalisé son profil).
+
+### 10.5 Bug 3 : sujet mails OTP + ready en anglais non traduit
+
+**Symptôme** : sujet mail OTP "%(code)s – your TiBillet verification code"
+toujours en anglais, même pour un user FR.
+
+**Cause** : workers Celery n'ont pas de `LocaleMiddleware`, donc `gettext`
+tombe sur `settings.LANGUAGE_CODE` (`'en'` dans ce projet) au lieu de la
+locale UI choisie par le user.
+
+**Fix structurel** :
+1. Nouveau champ `WaitingConfiguration.language` (CharField max 10).
+   Migration `MetaBillet/0016_add_wc_language.py`.
+2. POST identity capture `get_language()` → `wc.language`.
+3. Mailers wrappent le rendu (subject + templates `.txt` / `.html`) dans
+   `with translation.override(wc.language or "fr")`.
+
+### 10.6 Bug 4 : retour formulaire 1 après OTP avec prénom/nom vides
+
+**Symptôme** : après saisie OTP correcte, redirect vers step 1 (identity)
+avec email pré-rempli mais prénom/nom vides — l'utilisateur croit avoir
+perdu sa saisie.
+
+**Cause** : `login()` dans `_finalize_otp_success` perd la clé
+`onboard_wc_uuid` de la session (probablement `SESSION_SAVE_EVERY_REQUEST=True`
++ `cycle_key()` qui se marchent dessus côté backend session DB). Cascade :
+1. POST verify OK → `login(request, user)` → **`onboard_wc_uuid` perdu**
+2. Redirect `onboard-place` → `_get_or_none_wc()` retourne None → redirect
+   `onboard-identity`
+3. GET identity branche "Priorité 2" (user authentifié + pas de wc) →
+   pré-remplit email depuis `request.user.email` mais first_name/last_name
+   vides (user fraîchement créé n'a jamais ces champs).
+
+**Fix défensif** : ré-écrire `_set_session_wc(request, wc)` après le
+`login()`. No-op si la session a survécu, restaure le pointeur sinon.
+
+### 10.7 Bug 5 : polling infini après status_error
+
+**Symptôme** : page `/onboard/launch/` affichait bien le `status_error.html`
+mais le polling continuait à tourner toutes les 2s indéfiniment.
+
+**Cause** : double-couche de polling. Le parent `#status` portait
+`hx-trigger="load, every 2s"` ET le partial enfant `status_progress.html`
+portait aussi `hx-trigger="every 2s"`. Comme `hx-swap="innerHTML"` ne touche
+PAS les attributs du parent, le polling parent continuait même quand le
+partial swapped n'en avait plus.
+
+**Fix** : retrait de `hx-get`, `hx-trigger`, `hx-swap` du parent `#status`.
+Le polling est désormais entièrement piloté par le partial enfant
+(`status_progress.html` inclus initialement en server-side via `{% include %}`).
+Quand on swap vers `status_done`/`status_error`/`status_timeout` (sans
+trigger), polling stop net.
+
+### 10.8 Landing root : 4 nouvelles features + section roadmap
+
+**Ajouts** dans la grille `features-grid` :
+- **Données ouvertes** (`bi-database`) : API + schema.org / JSON-LD + licence ouverte
+- **Logiciel libre AGPLv3** (`bi-code-slash`) : commun numérique, Coopérative Code Commun
+- **Agenda participatif** (`bi-people`) : formulaire ouvert + fédération
+- **Référencement et SEO** (`bi-search`) : JSON-LD + sitemap + métadonnées
+
+**Nouvelle section roadmap** (accordéon `<details>` HTML5 natif, zéro JS) :
+- Newsletter intégrée (`bi-envelope-paper`)
+- Réseaux sociaux unifiés (`bi-megaphone`) avec lien Postiz
+- Fédiverse et Mobilizon (`bi-globe2`)
+- Économie en cascade (`bi-droplet-half`) avec lien cascade.coop
+- CTA contrib vers `codecommun.tibillet.coop/contrib`
+
+**CSS** : nouvelle section ROADMAP/FUTURE (~85 lignes), palette orange pour
+icônes "futur" (vs vert pour features actuelles), chevron rotate sur
+`details[open]`, `prefers-reduced-motion` respecté.
+
+**Philo réécrite** : Coopérative Code Commun + travaux d'Elinor Ostrom
+(ressource partagée + communauté vivante + gouvernance organisée). Wording
+piochée dans Atomic (README V2 TiBillet, charte Code Commun).
+
+### 10.9 SEO audit landing (3 fix critique/warning/opportunity)
+
+- **Hiérarchie headings roadmap** : ajout `<h2 class="visually-hidden">`
+  avant `<details>` (le `<summary>` est rôle `button`, pas heading → bots
+  voyaient des `<h3>` orphelins après `<h2>` features)
+- **`og:locale` manquant** : ajout `<meta property="og:locale" content="...">`
+  avec mapping FR/EN (Facebook/LinkedIn servent maintenant la bonne variante
+  régionale)
+- **JSON-LD WebSite + SearchAction** : nouveau bloc qui pointe sur
+  `/explorer/?q={search_term_string}` → éligible au **sitelinks searchbox**
+  Google (zone de recherche directement dans les SERP)
+
+**Hors scope** : `hreflang` non applicable (pas de `i18n_patterns`, toutes
+les langues servent le même chemin).
+
+### 10.10 Diagnostic pool WAITING_CONFIG
+
+**Symptôme** : `relation "BaseBillet_configuration" does not exist` au moment
+du `wc.create_tenant()`.
+
+**Cause** : 4 slots du pool étaient à 0 tables (`CREATE SCHEMA` réussi mais
+`migrate_schemas` jamais appliqué). Origine : `cron_morning` (Administration/management/commands/cron_morning.py)
+fait `create_waiting_tenant()` puis `run_waiting_migrations()`. Si une
+migration échoue, le `raise e` global bloque tous les schémas suivants → ils
+restent vides.
+
+**Fix proposé** (non appliqué, en attente arbitrage maintainer) : remplacer
+le `raise` global par un `try/except` par schéma + accumulateur
+`schemas_failed`. Action immédiate : drop des 4 slots vides + recréation via
+`create_empty_tenant --count 4`.
+
+### 10.11 Migration fantôme `0207_configuration_rapport_emails_and_more`
+
+**Symptôme** : `IntegrityError: null value in column "rapport_emails"` lors
+de `Configuration.get_solo()`.
+
+**Cause** : DB locale dev avait été migrée à un moment sur la branche
+`main-compta` (chantier COMPTABILITE) qui a une migration `0207_configuration_rapport_emails_and_more.py`.
+Le checkout vers `main` a supprimé le fichier `.py` source mais a laissé la
+colonne `rapport_emails NOT NULL` en BD + l'entrée dans `django_migrations`
+de chaque schéma tenant. Donc `Configuration.get_solo()` génère un INSERT
+sans valeur pour `rapport_emails` → viol contrainte NOT NULL.
+
+**Fix appliqué par le maintainer** (côté BD, pas code) : rollback de la
+migration fantôme sur tous les schémas tenant.
+
+**Conflit numéro** : ma migration `0207_fix_postaladdress_latlng_precision`
+prend le numéro 0207 — pas de conflit puisque `main-compta` est une branche
+abandonnée (confirmé maintainer). Si elle redevient active, il faudra
+renommer ma migration en 0208.
+
+### 10.12 Audit critique final avant push prod
+
+Subagent Explore (œil neuf) a relu les 15 fichiers modifiés. Verdict :
+**SAFE TO SHIP**. Une seule remarque mineure non bloquante : le fallback
+`get_language() or "fr"` privilégie le FR si LocaleMiddleware est
+misconfiguré (acceptable, le FR est le marché primaire de TiBillet).
+
+### 10.13 Fichiers modifiés (synthèse)
+
+| Domaine | Fichier | Lignes touchées |
+|---|---|---|
+| Hotfix prod | `BaseBillet/models.py` | 261-281 |
+| Hotfix prod | `BaseBillet/migrations/0207_fix_postaladdress_latlng_precision.py` | NEW |
+| i18n mailers | `MetaBillet/models.py` | + champ `language` (lignes 295+) |
+| i18n mailers | `MetaBillet/migrations/0016_add_wc_language.py` | NEW |
+| Wizard | `onboard/views.py::_finalize_otp_success` | +25 lignes |
+| Wizard | `onboard/views.py` POST identity | +10 lignes |
+| Wizard | `onboard/tasks.py::onboard_otp_mailer` | translation.override |
+| Wizard | `onboard/tasks.py::onboard_ready_mailer` | translation.override + instance_url |
+| Wizard | `onboard/tasks.py::create_tenant_from_draft` | +80 lignes bloc 3ter |
+| Wizard | `onboard/templates/onboard/steps/06_launch.html` | 75-105 (fix polling) |
+| Mails | `onboard/templates/onboard/emails/ready.html` | full rewrite |
+| Mails | `onboard/templates/onboard/emails/ready.txt` | full rewrite |
+| Mails | `onboard/templates/onboard/emails/otp_code.html` | full rewrite |
+| Mails | `onboard/templates/onboard/emails/otp_code.txt` | full rewrite |
+| Landing | `seo/templates/seo/landing.html` | 3 sections |
+| Landing | `seo/templates/seo/base.html` | + og:locale |
+| Landing | `seo/views.py::landing` | + JSON-LD WebSite |
+| Landing | `seo/static/seo/seo.css` | +85 lignes ROADMAP |
+
+### 10.14 Tâches restantes pour le maintainer
+
+1. **Appliquer les 2 migrations** :
+   ```bash
+   docker exec lespass_django poetry run python /DjangoFiles/manage.py migrate_schemas --executor=multiprocessing
+   ```
+2. **Workflow i18n** (le maintainer le gère lui-même) : `makemessages -l fr -l en` + traduire les nouvelles strings dans `django.po` + `compilemessages`. Strings nouvelles principales :
+   - Templates emails : Bienvenue dans la communauté TiBillet, Votre code de vérification, Vous avez demandé la création..., Votre espace TiBillet ... est prêt !, ACCÉDER À MON ESPACE, etc.
+   - Landing : Données ouvertes, Logiciel libre AGPLv3, Agenda participatif, Référencement et SEO, Futur de TiBillet — chantiers en cours, Newsletter intégrée, Réseaux sociaux unifiés, Fédiverse et Mobilizon, Économie en cascade.
+3. **Nettoyer le pool WAITING_CONFIG** : drop les 4 slots vides + relancer `create_empty_tenant --count 4`.
+4. **Décider du fix `cron_morning`** : remplacer `raise` global par `try/except` par schéma (proposé section 10.10).
+
+---
+
+## 11. Liens utiles
 
 - Plan d'implémentation détaillé : `02-implementation-plan.md`
 - Spec design originale : `01-design-spec.md`
