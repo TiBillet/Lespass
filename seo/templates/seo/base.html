@@ -10,7 +10,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta name="description" content="{{ page_description|default:'TiBillet — Logiciel libre de billetterie et lieux culturels' }}">
-    <meta name="robots" content="{% block meta_robots %}index, follow{% endblock %}">
+    <meta name="robots" content="{% block meta_robots %}{% if noindex_seo %}noindex, nofollow{% else %}index, follow{% endif %}{% endblock %}">
     <title>{{ page_title|default:"TiBillet" }}</title>
 
     {# Social card : image par defaut pour Open Graph et Twitter. #}

@@ -1,5 +1,66 @@
 # Changelog / Journal des modifications
 
+## SEO Chantier 01 : desindexer les instances DEV / DEMO / TEST / SEO Chantier 01: deindex DEV / DEMO / TEST instances
+
+**Date :** 2026-05-17
+**Migration :** Non
+**Contributeurs / Contributors :** JonasFW13 (Jonas) + Claude Opus 4.7
+
+**Quoi / What :** Les instances de dev / demo / test (filaos.re, devtib.fr)
+etaient publiquement indexees sur Google et Bing alors qu'elles ne
+devraient pas l'etre. Mise en place d'une regle metier simple :
+`noindex, nofollow` (via `robots.txt` ET `<meta name="robots">`) quand
+au moins un flag d'environnement est a `1` :
+- `DEBUG=1` ou `TEST=1` ou `DEMO=1` ou `STRIPE_TEST=1`.
+
+**Pourquoi / Why :** Aligne le projet sur le **Google AI Optimization
+Guide** publie le 15 mai 2026 (cf. `TECH_DOC/SESSIONS/SEO/SPEC.md` et
+Atomic atom `491b2fe3-049c-4b2d-86bf-ae2fc41b6b31`). Les instances dev
+qui apparaissent dans la SERP volent la place du tenant principal sur
+les requetes "TiBillet" et brouillent la marque. Une regle
+supplementaire sur le host (DOMAIN / ADDITIONAL_DOMAINS) a ete
+envisagee puis ecartee : redondante en pratique avec les 4 flags +
+Django bloque deja les hosts inconnus via `ALLOWED_HOSTS`.
+
+### Fichiers modifies / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `TiBillet/seo_indexing.py` | NOUVEAU. Helper `should_noindex(request) -> bool` (regle metier complete, FALC bilingue) + context processor `noindex_context` |
+| `TiBillet/settings.py` | +1 ligne dans `TEMPLATES.OPTIONS.context_processors` (`'TiBillet.seo_indexing.noindex_context'`) |
+| `seo/views_common.py::robots_txt` | Branche sur `should_noindex(request)` : si True, sert `Disallow: /`. Sinon : `Allow: /` + sitemap |
+| `BaseBillet/views_robots.py::robots_txt` | Meme logique cote tenant. Supprime imports inutiles (`connection`, `get_current_site`) |
+| `seo/templates/seo/base.html` | Block `meta_robots` etend la logique : `noindex_seo` -> `noindex, nofollow`, sinon `index, follow` |
+| `BaseBillet/templates/reunion/base.html` | Idem |
+| `BaseBillet/templates/faire_festival/base.html` | Idem |
+| `BaseBillet/templates/htmx/base.html` | NOUVEAU bloc `meta_robots` (n'en avait pas) + commentaire FALC bilingue |
+| `tests/pytest/test_seo_indexing.py` | NOUVEAU. 5 tests unitaires : 4 flags d'env + 1 cas indexable |
+| `TECH_DOC/SESSIONS/SEO/INDEX.md` | NOUVEAU. Hub du chantier SEO sur plusieurs sessions |
+| `TECH_DOC/SESSIONS/SEO/SPEC.md` | NOUVEAU. Vision globale, principes Google 2026, etat actuel, anti-patterns |
+| `TECH_DOC/SESSIONS/SEO/CHANTIER-01-noindex-dev.md` | NOUVEAU. Spec actionable de ce chantier |
+| `A TESTER et DOCUMENTER/seo-noindex-dev.md` | NOUVEAU. Scenarios de test manuel |
+
+### Migrations
+
+- **Migration necessaire / Migration required :** Non
+
+### Tests
+
+```bash
+docker exec lespass_django poetry run pytest tests/pytest/test_seo_indexing.py --api-key dummy -v
+# 5 passed in 0.27s
+```
+
+### Note importante
+
+Pour faire desindexer effectivement filaos.re et devtib.fr (deja
+presents dans la SERP), il faut **en plus** soumettre une demande
+de suppression via Google Search Console + Bing Webmaster apres le
+deploiement. Sinon Google peut mettre plusieurs semaines a les
+oublier tout seul.
+
+---
+
 ## Session marathon onboard + landing : hotfix prod + UX + i18n / Onboard marathon: prod hotfix + UX + i18n
 
 **Date :** 2026-05-17

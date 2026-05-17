@@ -12,6 +12,7 @@ from django.http import HttpResponse
 
 from seo.models import SEOCache
 from seo.services import get_memcached_l1, set_memcached_l1
+from TiBillet.seo_indexing import should_noindex
 
 logger = logging.getLogger(__name__)
 
@@ -278,18 +279,34 @@ def build_json_ld_item_list(items):
 
 def robots_txt(request):
     """
-    Genere un robots.txt dynamique avec l'URL du sitemap.
+    Genere un robots.txt dynamique.
     Sert sur le schema public (ROOT). Les tenants gardent leur propre
     robots_txt dans BaseBillet/views_robots.py.
-    / Generate a dynamic robots.txt with the sitemap URL.
+    / Generate a dynamic robots.txt.
     Serves on the public schema (ROOT). Tenants keep their own
     robots_txt in BaseBillet/views_robots.py.
 
     URL d'acces / Access URL: https://yourdomain.com/robots.txt
-    """
-    domain = request.get_host()
 
-    # Ajouter le protocole si absent / Add protocol if missing
+    Si l'instance est marquee noindex (au moins un flag d'env
+    DEBUG/TEST/DEMO/STRIPE_TEST a 1), on sert `Disallow: /` pour
+    bloquer le crawl. Sinon : `Allow: /` + sitemap.
+    Voir TiBillet/seo_indexing.py pour la regle complete.
+    / If the instance is marked noindex (at least one env flag
+    DEBUG/TEST/DEMO/STRIPE_TEST is 1), we serve `Disallow: /`.
+    Otherwise: `Allow: /` + sitemap reference.
+    """
+    if should_noindex():
+        # Instance non indexable : on bloque le crawl entier.
+        # / Non-indexable instance: block all crawling.
+        return HttpResponse(
+            "User-agent: *\nDisallow: /\n",
+            content_type="text/plain",
+        )
+
+    # Instance prod : crawl autorise + reference du sitemap
+    # / Prod instance: crawling allowed + sitemap reference
+    domain = request.get_host()
     if not domain.startswith("http"):
         domain = f"https://{domain}"
 

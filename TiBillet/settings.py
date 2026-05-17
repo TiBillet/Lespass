@@ -253,6 +253,11 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                # Expose `noindex_seo: bool` aux bases templates pour
+                # le rendu de <meta name="robots">. Voir
+                # TiBillet/seo_indexing.py et SESSIONS/SEO/CHANTIER-01.
+                # / Expose `noindex_seo: bool` to base templates.
+                'TiBillet.seo_indexing.noindex_context',
             ],
         },
     }

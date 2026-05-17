@@ -17,7 +17,7 @@
     <meta name="description" content="{% block meta_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
 
     <!-- Instructions pour les robots d'indexation -->
-    <meta name="robots" content="{% block meta_robots %}index, follow{% endblock %}">
+    <meta name="robots" content="{% block meta_robots %}{% if noindex_seo %}noindex, nofollow{% else %}index, follow{% endif %}{% endblock %}">
 
     <!-- Titre de la page affiché dans l'onglet du navigateur -->
     <title>{% block title %}{% translate 'Home' %}{% endblock %} | {{ config.organisation }}</title>
