@@ -66,19 +66,19 @@
             </p>
             <p>
                 {% blocktranslate %}
-                Aujourd'hui, c'est une boîte à outils complète — billetterie, cashless, caisse enregistreuse, monnaie locale, budget contributif — conçue pour et par des associations culturelles. Zéro dark pattern, remboursement garanti, open source.
+                Aujourd'hui c'est une boîte à outils complète — billetterie, cashless NFC multi-lieux, caisse enregistreuse, monnaie locale, monnaie temps, budget contributif — pensée pour et par les associations culturelles. Zéro dark pattern, zéro commission cachée, code source libre.
                 {% endblocktranslate %}
             </p>
         </div>
         <div class="philo-col">
             <p>
                 {% blocktranslate %}
-                TiBillet est porté par une SCIC — une coopérative d'intérêt collectif. Les décisions sont prises ensemble, lors de réunions ouvertes. Le code est libre (licence AGPLv3), mais ce qui fait un commun numérique, ce n'est pas juste la licence : c'est la communauté et la gouvernance qui l'entourent.
+                TiBillet est porté par la <strong>Coopérative Code Commun</strong> (SCIC à trois collèges égaux : animateur·ices, contributeur·ices, utilisateur·ices). Le code est libre — mais ce qui fait un commun numérique, c'est la communauté qui l'entoure et la gouvernance partagée qui le pilote.
                 {% endblocktranslate %}
             </p>
             <p>
                 {% blocktranslate %}
-                Le principe fédératif est simple : chaque lieu garde son autonomie (son agenda, sa caisse, ses adhésions) et choisit avec qui se connecter. Une seule carte pour plusieurs lieux. Un réseau qui grandit par le bouche-à-oreille, pas par le marketing.
+                Inspirés des travaux d'Elinor Ostrom : un dépôt Git avec une licence libre ne suffit pas. Il faut une <strong>ressource partagée</strong>, une <strong>communauté vivante</strong>, une <strong>gouvernance organisée</strong>. Le principe fédératif est simple — chaque lieu garde son autonomie (son agenda, sa caisse, ses adhésions) et choisit avec qui se connecter. Une seule carte pour plusieurs lieux. Un réseau qui grandit par la rencontre, pas par le marketing.
                 {% endblocktranslate %}
             </p>
         </div>
@@ -160,7 +160,125 @@
             </p>
         </div>
 
+        <div class="feature-card" data-testid="feature-open-data">
+            <div class="feature-icon">
+                <i class="bi bi-database" aria-hidden="true"></i>
+            </div>
+            <h3 class="feature-title">{% translate "Données ouvertes" %}</h3>
+            <p class="feature-desc">
+                {% translate "Toutes les données non personnelles de votre lieu sont accessibles par API, dans un vocabulaire standard (schema.org / JSON-LD), sous licence ouverte. Vos événements, votre programmation : libres de circuler." %}
+            </p>
+        </div>
+
+        <div class="feature-card" data-testid="feature-libre">
+            <div class="feature-icon">
+                <i class="bi bi-code-slash" aria-hidden="true"></i>
+            </div>
+            <h3 class="feature-title">{% translate "Logiciel libre AGPLv3" %}</h3>
+            <p class="feature-desc">
+                {% translate "Le code de TiBillet est publié sous licence AGPLv3. Personne ne peut le verrouiller, le fermer, le privatiser. C'est la première brique d'un commun numérique — la coopérative Code Commun fait le reste." %}
+            </p>
+        </div>
+
+        <div class="feature-card" data-testid="feature-agenda-participatif">
+            <div class="feature-icon">
+                <i class="bi bi-people" aria-hidden="true"></i>
+            </div>
+            <h3 class="feature-title">{% translate "Agenda participatif" %}</h3>
+            <p class="feature-desc">
+                {% translate "Recevez les propositions d'événements de votre réseau via un formulaire ouvert. Pour chaque proposition, vous choisissez : publier sur votre agenda, ou inviter l'organisateur·ice à créer son espace et rejoindre votre fédération." %}
+            </p>
+        </div>
+
+        <div class="feature-card" data-testid="feature-seo">
+            <div class="feature-icon">
+                <i class="bi bi-search" aria-hidden="true"></i>
+            </div>
+            <h3 class="feature-title">{% translate "Référencement et SEO" %}</h3>
+            <p class="feature-desc">
+                {% translate "Chaque page de lieu et chaque événement sont structurés en JSON-LD (schema.org) pour être correctement indexés par Google, Bing et les agendas culturels. Sitemap auto-généré, métadonnées propres." %}
+            </p>
+        </div>
+
     </div>
+</section>
+
+{# ================================================================ #}
+{# ROADMAP — accordeon <details> "Futur de TiBillet"                 #}
+{# Utilise l'element HTML5 natif <details>/<summary> : zero JS,      #}
+{# accessible par defaut (clavier + lecteur d'ecran), pas de         #}
+{# dependance Bootstrap JS. Le chevron pivote via CSS sur            #}
+{# `details[open]`. Cf. seo.css section "ROADMAP / FUTURE".          #}
+{# / ROADMAP — native <details> accordion. Zero JS, accessible       #}
+{# by default (keyboard + screen reader), no Bootstrap JS dep.       #}
+{# Chevron rotates via CSS on `details[open]`.                       #}
+{# ================================================================ #}
+<section class="roadmap-section" data-testid="roadmap-section">
+    <details class="roadmap-details" data-testid="roadmap-details">
+        <summary class="roadmap-summary" data-testid="roadmap-toggle">
+            <span class="roadmap-summary-label">
+                <i class="bi bi-rocket-takeoff me-2" aria-hidden="true"></i>
+                {% translate "Futur de TiBillet" %}
+            </span>
+            <span class="roadmap-summary-chevron" aria-hidden="true">
+                <i class="bi bi-chevron-down"></i>
+            </span>
+        </summary>
+
+        <div class="roadmap-content">
+            <p class="roadmap-intro text-center">
+                {% translate "Ce qu'on construit maintenant — venez en discuter, contribuer ou simplement déclarer votre intérêt." %}
+            </p>
+
+            <div class="features-grid roadmap-grid">
+
+                <div class="feature-card roadmap-card" data-testid="roadmap-newsletter">
+                    <div class="feature-icon roadmap-icon">
+                        <i class="bi bi-envelope-paper" aria-hidden="true"></i>
+                    </div>
+                    <h3 class="feature-title">{% translate "Newsletter intégrée" %}</h3>
+                    <p class="feature-desc">
+                        {% translate "Envoyez des emails ciblés à vos adhérent·es à jour, en retard de cotisation, ou aux personnes présentes à un événement précis. Une communication directement reliée à votre agenda et à votre base de membres — sans Mailchimp, sans tracking tiers." %}
+                    </p>
+                </div>
+
+                <div class="feature-card roadmap-card" data-testid="roadmap-reseaux">
+                    <div class="feature-icon roadmap-icon">
+                        <i class="bi bi-megaphone" aria-hidden="true"></i>
+                    </div>
+                    <h3 class="feature-title">{% translate "Réseaux sociaux unifiés" %}</h3>
+                    <p class="feature-desc">
+                        {% blocktranslate %}Rédigez un message, publiez partout. Nous branchons progressivement des outils libres de gestion multicanal comme <a href="https://github.com/gitroomhq/postiz-app" target="_blank" rel="noopener">Postiz</a> pour éviter d'ouvrir cinq onglets à chaque annonce.{% endblocktranslate %}
+                    </p>
+                </div>
+
+                <div class="feature-card roadmap-card" data-testid="roadmap-fediverse">
+                    <div class="feature-icon roadmap-icon">
+                        <i class="bi bi-globe2" aria-hidden="true"></i>
+                    </div>
+                    <h3 class="feature-title">{% translate "Fédiverse et Mobilizon" %}</h3>
+                    <p class="feature-desc">
+                        {% translate "Vos événements remontent vers Mobilizon et le Fédiverse pour atteindre les agendas publics et les comptes Mastodon de votre territoire. Une seule saisie, une diffusion ouverte et décentralisée, indépendante des plateformes propriétaires." %}
+                    </p>
+                </div>
+
+                <div class="feature-card roadmap-card" data-testid="roadmap-cascade">
+                    <div class="feature-icon roadmap-icon">
+                        <i class="bi bi-droplet-half" aria-hidden="true"></i>
+                    </div>
+                    <h3 class="feature-title">{% translate "Économie en cascade" %}</h3>
+                    <p class="feature-desc">
+                        {% blocktranslate %}En partenariat avec <a href="https://www.cascade.coop/modele-economique-non-lucratif" target="_blank" rel="noopener">cascade.coop</a> : les surplus de financement participatif ruissellent vers d'autres cascades du réseau. Pas de capture, pas de perte — une économie contributive entre lieux solidaires.{% endblocktranslate %}
+                    </p>
+                </div>
+
+            </div>
+
+            <p class="roadmap-cta text-center">
+                {% blocktranslate %}Ces idées vous parlent ? Pour en savoir plus sur les chantiers en cours, venez discuter avec nous et déclarer votre intérêt sur <a href="https://codecommun.tibillet.coop/contrib" target="_blank" rel="noopener"><strong>codecommun.tibillet.coop/contrib</strong></a>.{% endblocktranslate %}
+            </p>
+        </div>
+    </details>
 </section>
 
 {# Pas de "chiffres cles" (X lieux, Y events) volontairement : ce sont des  #}

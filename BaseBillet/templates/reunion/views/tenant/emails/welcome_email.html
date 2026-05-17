@@ -1,25 +1,6 @@
 {% extends 'emails/base.html' %}
 {% load humanize static i18n %}
 
-{#
-Mail "Votre espace est pret" envoye par onboard.tasks.onboard_ready_mailer.
-/ "Your space is ready" email sent by onboard.tasks.onboard_ready_mailer.
-
-LOCALISATION : onboard/templates/onboard/emails/ready.html
-
-Reprise du wording riche du welcome_email.html legacy (flow /tenant/new/
-supprime 2026-05-16), adapte au contexte wizard onboard ou le tenant est
-deja cree avant l'envoi du mail. Differences cles :
-  - Plus de "Confirmation de votre demande" : le tenant existe deja.
-  - Bouton principal "Acceder a mon espace" (magic-link admin), pas
-    "Confirmer ma demande".
-
-Variables :
-  - organisation : nom du lieu (wc.organisation)
-  - admin_url    : magic-link vers l'admin du nouveau tenant
-  - instance_url : URL publique du tenant (https://<primary_domain>/)
-#}
-
 {% block content %}
     <tr>
         <td class="pt-28 td_content"
@@ -42,14 +23,14 @@ Variables :
 
                     <tr>
                         <h1 style="font-weight:400;style:regular;color:#1d1d1b;font:24px/32px Arial, Helvetica, sans-serif;margin: 30px 0 30px;">
-                            {% blocktrans with name=organisation %}Votre espace TiBillet {{ name }} est prêt !{% endblocktrans %}</h1><span
+                            {% trans "Confirmation de votre demande pour " %}{{ orga_name }}</h1><span
                             style="color:transparent;display:none;height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden;width:0;">&nbsp;|&nbsp;</span>
                         <td style="padding: 24px 0 24px 0; ">
                             <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 24px 0;">
                                 {% trans "Nous sommes vraiment super mega trop ravis de vous accueillir dans l'écosystème TiBillet ! Vous venez de rejoindre une communauté engagée dans les communs numériques et la coopération." %}
                             </p>
                             <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 16px 0;">
-                                {% trans "Votre espace est prêt à l'emploi. Pour y accéder et finaliser votre configuration, cliquez sur le bouton suivant :" %}
+                                {% trans "Votre demande de création est bien prise en compte. Pour la valider, merci de cliquer sur le bouton suivant :" %}
                             </p>
                             <table style="width:100%;border-spacing: 0px;padding: 0px;">
                                 <tr>
@@ -57,7 +38,7 @@ Variables :
                                         style="background:#009058;font:13px/16px Arial, Helvetica, sans-serif;border-radius:3px;height:48px;">
                                         <a style="color:#ffffff; text-decoration:none; display:block; padding:16px 10px;"
                                            target="_blank"
-                                           href="{{ admin_url }}">{% trans "ACCÉDER À MON ESPACE" %}</a>
+                                           href="{{ connexion_url }}">{% trans "CONFIRMER MA DEMANDE" %}</a>
                                     </td>
                                 </tr>
                             </table>
@@ -70,10 +51,10 @@ Variables :
                             </h2>
                             <ul style="color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 24px 0;">
                                 <li style="margin-bottom: 8px;">
-                                    {% trans "L'adresse publique de votre instance : " %}<a href="{{ instance_url }}" target="_blank">{{ instance_url }}</a>
+                                    {% trans "Une fois validé, l'adresse de votre instance sera : " %}<a href="{{ future_url }}" target="_blank">{{ future_url }}</a>
                                 </li>
                                 <li style="margin-bottom: 8px;">
-                                    {% trans "Si vous souhaitez récolter de l'argent, il vous faudra créer un compte Stripe depuis la page d'administration de votre instance." %}
+                                    {% trans "Si vous souhaitez récolter de l'argent, il vous faudra créer un compte Stripe depuis la page d'administration de votre future instance." %}
                                 </li>
                                 <li style="margin-bottom: 8px;">
                                     {% trans "Pour toute demande d'aide, n'hésitez pas à venir rencontrer la communauté autour des outils TiBillet :" %}

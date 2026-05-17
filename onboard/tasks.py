@@ -174,12 +174,23 @@ def onboard_ready_mailer(wc_uuid):
 
     subject = _("Your TiBillet space %(name)s is ready!") % {"name": organisation}
 
+    # URL publique du tenant (sans /admin/). Affichee dans la liste
+    # "Informations importantes" du mail pour rappeler a l'utilisateur
+    # l'adresse publique de son lieu, distincte du magic-link admin.
+    # / Public tenant URL (without /admin/). Shown in the "Important info"
+    # list to remind users of their public-facing address, distinct from
+    # the admin magic-link.
+    instance_url = f"https://{primary_domain}/"
+
+    context = {
+        "organisation": organisation,
+        "admin_url": admin_url,
+        "instance_url": instance_url,
+    }
+
     # Pre-render le texte brut (le HTML est rendu par CeleryMailerClass).
     # / Pre-render the text body (HTML is rendered by CeleryMailerClass).
-    text_body = render_to_string(
-        "onboard/emails/ready.txt",
-        {"organisation": organisation, "admin_url": admin_url},
-    )
+    text_body = render_to_string("onboard/emails/ready.txt", context)
 
     # Import local : evite la dependance lourde au chargement du module.
     # / Local import: avoids the heavy dep at module load time.
@@ -190,7 +201,7 @@ def onboard_ready_mailer(wc_uuid):
         title=subject,
         text=text_body,
         template="onboard/emails/ready.html",
-        context={"organisation": organisation, "admin_url": admin_url},
+        context=context,
     )
     mail.send()
 

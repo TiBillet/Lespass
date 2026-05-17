@@ -74,21 +74,31 @@
 </header>
 
 {# ============================================================ #}
-{# Container `#status` polled toutes les 2s par HTMX. On inclut #}
-{# directement `status_progress.html` au 1er render pour que la  #}
-{# zone ne soit pas vide. `aria-live="polite"` annonce les       #}
-{# transitions (progress -> done / error) aux lecteurs d'ecran.  #}
-{# / `#status` container polled every 2s by HTMX. We include     #}
-{# `status_progress.html` on first render so the zone isn't      #}
-{# empty. `aria-live="polite"` announces transitions.            #}
+{# Container `#status` : simple target HTMX. Le polling est      #}
+{# pilote par le PARTIAL ENFANT (status_progress.html) qui porte #}
+{# lui-meme `hx-trigger="every 2s"` + `hx-target="#status"`.     #}
+{# Quand le partial swap vers status_done/error/timeout (sans    #}
+{# hx-trigger), le polling s'arrete naturellement.               #}
+{#                                                               #}
+{# IMPORTANT : ne PAS mettre de `hx-trigger="every 2s"` ici sur  #}
+{# le parent — innerHTML swap ne touche pas les attributs du     #}
+{# parent, donc le polling continuerait a l'infini meme apres    #}
+{# une erreur (bug observe 2026-05-17).                          #}
+{#                                                               #}
+{# / `#status` container: simple HTMX target. Polling is driven  #}
+{# by the CHILD partial (status_progress.html) which carries its #}
+{# own `hx-trigger="every 2s"` + `hx-target="#status"`. When the #}
+{# swap replaces it with status_done/error/timeout (no trigger), #}
+{# polling stops naturally.                                      #}
+{#                                                               #}
+{# IMPORTANT: do NOT put `hx-trigger="every 2s"` on the parent — #}
+{# innerHTML swaps don't touch parent attributes, so polling     #}
+{# would loop forever even after an error (bug seen 2026-05-17). #}
 {# ============================================================ #}
 <section class="mb-4">
     <div id="status"
          aria-live="polite"
-         data-testid="onboard-launch-status"
-         hx-get="{% url 'onboard-launch-status' %}"
-         hx-trigger="load, every 2s"
-         hx-swap="innerHTML">
+         data-testid="onboard-launch-status">
         {% include "onboard/partials/status_progress.html" %}
     </div>
 </section>
