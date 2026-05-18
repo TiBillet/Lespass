@@ -891,7 +891,8 @@ class ProductAdmin(ModelAdmin):
     actions_row = [
         "duplicate_product",
         "archive",
-    ]
+        "desarchive"
+   ] # Now handled in 'get_actions_row' (see below) BUT action must be added here too, else it will crash
 
     formfield_overrides = {
         models.TextField: {
@@ -1058,6 +1059,19 @@ class ProductAdmin(ModelAdmin):
         messages.success(request, _(f"{obj.name} Archived"))
         return redirect(request.META["HTTP_REFERER"])
 
+    @action(
+        description=_("Desarchive"),
+        url_path="desarchive",
+        permissions=["changelist_row_action"],
+    )
+    def desarchive(self, request, object_id):
+        logger.error(self.actions_row)
+        obj = get_object_or_404(Product, pk=object_id)
+        obj.archive = False
+        obj.save()
+        messages.success(request, _(f"{obj.name} Unarchived"))
+        return redirect(request.META["HTTP_REFERER"])
+
     def get_queryset(self, request):
         # On retire les recharges cashless et l'article Don
         # Pas besoin de les afficher, ils se créent automatiquement.
@@ -1106,6 +1120,32 @@ class ProductAdmin(ModelAdmin):
         # Sanitize all TextField inputs to avoid XSS via WysiwYG/TextField
         sanitize_textfields(obj)
         super().save_model(request, obj, form, change)
+
+    def get_actions_row(self, request):
+        """
+        Create the "actions_row" dynamically. The action MUST also be added to the "actions_row" above else it will crash
+        """
+        default_action_row = [
+            "duplicate_product",
+        ]
+
+        # Get the archived filter value
+        filter_param = request.GET.get(ProductArchiveFilter.parameter_name, None)
+
+        # Check the archived filter status
+        if filter_param == "yes":
+            default_action_row.append("desarchive")
+        elif filter_param == "all":
+            default_action_row.append("desarchive")
+            default_action_row.append("archive")
+        else:
+            default_action_row.append("archive")
+
+        # Set actions_row to our dynamic actions
+        self.actions_row = default_action_row
+
+        # And return super res
+        return super().get_actions_row(request)
 
     def has_changelist_row_action_permission(
         self, request: HttpRequest, *args, **kwargs
@@ -1180,7 +1220,7 @@ class TicketProductAdmin(ProductAdmin):
         TicketPriceInline
     ]  # Pas de ProductFormFieldInline (champs dynamiques = adhesions)
 
-    list_filter = ["publish"]  # categorie_article inutile, deja filtre
+    list_filter = ["publish", ProductArchiveFilter]  # categorie_article inutile, deja filtre
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -1196,7 +1236,7 @@ class MembershipProductAdmin(ProductAdmin):
     inlines = [MembershipPriceInline, ProductFormFieldInline]
     change_form_after_template = "admin/product/inline_conditional_fields.html"
 
-    list_filter = ["publish"]  # categorie_article inutile, deja filtre
+    list_filter = ["publish", ProductArchiveFilter]  # categorie_article inutile, deja filtre
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
