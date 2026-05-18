@@ -13,7 +13,8 @@
 | # | Chantier | Statut | Spec |
 |---|---|---|---|
 | 01 | Port partiel V2 (clôture caisse + plan comptable + exports CSV/FEC/Excel/PDF) | ✅ **TERMINÉ** (S1→S6, 2026-05-15) | [`SPEC.md`](SPEC.md) |
-| 02 | (à venir) | — | — |
+| 02 | Démo data — ventes comptables (Option A, 13 cas créables) | ✅ **TERMINÉ** (2026-05-18) | [`CHANTIER-02-demo-data-ventes.md`](CHANTIER-02-demo-data-ventes.md) |
+| — | (futur) Versements bancaires inter-tenants + monnaies locales | 📋 SPEC EN ATTENTE Fedow V2 | [`../TODO/COMPTABILITE-inter-tenants.md`](../TODO/COMPTABILITE-inter-tenants.md) |
 
 ---
 
