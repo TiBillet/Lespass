@@ -321,7 +321,7 @@ def test_calculer_adhesions_avec_membership(tenant_lespass, periode_test):
         suffix = uuid.uuid4().hex[:8]
         user, _ = TibilletUser.objects.get_or_create(
             email=f"test_adh_{suffix}@example.com",
-            defaults={"is_active": True},
+            defaults={"is_active": True, "username": f"test_adh_{suffix}"},
         )
         product, _ = Product.objects.get_or_create(
             name=f"Adh_{suffix}",
@@ -389,7 +389,7 @@ def test_calculer_billets_avec_reservation(tenant_lespass, periode_test):
         suffix = uuid.uuid4().hex[:8]
         user, _ = TibilletUser.objects.get_or_create(
             email=f"test_bil_{suffix}@example.com",
-            defaults={"is_active": True},
+            defaults={"is_active": True, "username": f"test_bil_{suffix}"},
         )
         event = Event.objects.create(
             name=f"Concert_{suffix}",
@@ -536,7 +536,7 @@ def test_calculer_synthese_operations(tenant_lespass, periode_test):
         suffix = uuid.uuid4().hex[:8]
         user, _ = TibilletUser.objects.get_or_create(
             email=f"test_syn_{suffix}@example.com",
-            defaults={"is_active": True},
+            defaults={"is_active": True, "username": f"test_syn_{suffix}"},
         )
         event = Event.objects.create(
             name=f"E_{suffix}",

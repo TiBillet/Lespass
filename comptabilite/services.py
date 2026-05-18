@@ -188,40 +188,61 @@ class RapportComptableService:
         """
         Lignes liees a une Membership. Groupage par (produit_uuid, tarif_uuid, moyen).
         / Lines linked to a Membership. Grouped by (product_uuid, tarif_uuid, payment).
+
+        Implementation : un seul SQL avec values() + annotate(), pas de boucle
+        Python sur les lignes (eviterait un N+1 sur produit/tarif).
+        / Single SQL with values() + annotate(), no Python loop over rows.
         """
         from BaseBillet.models import PaymentMethod
 
-        qs = self.queryset.filter(membership__isnull=False)
-
         labels = dict(PaymentMethod.choices)
+
+        # Une seule requete SQL : on groupe directement en base par tuple
+        # (produit_uuid, tarif_uuid, payment_method), nom du produit, nom du tarif.
+        # / Single SQL: GROUP BY (product_uuid, price_uuid, payment_method).
+        rows = (
+            self.queryset
+            .filter(membership__isnull=False)
+            .values(
+                "pricesold__productsold__product__uuid",
+                "pricesold__productsold__product__name",
+                "pricesold__price__uuid",
+                "pricesold__price__name",
+                "payment_method",
+            )
+            .annotate(
+                total=Coalesce(Sum(F("amount") * F("qty")), Decimal("0")),
+                nb=Count("pk"),
+            )
+        )
+
         detail = {}
         total_global = 0
         nb_global = 0
 
-        for ligne in qs:
-            if not ligne.pricesold:
-                continue
-            produit = ligne.pricesold.productsold.product if ligne.pricesold.productsold else None
-            tarif = ligne.pricesold.price if ligne.pricesold else None
-            produit_uuid = str(produit.uuid) if produit else "_"
-            tarif_uuid = str(tarif.uuid) if tarif else "_"
-            moyen = ligne.payment_method or PaymentMethod.UNKNOWN
+        for row in rows:
+            produit_uuid = (
+                str(row["pricesold__productsold__product__uuid"])
+                if row["pricesold__productsold__product__uuid"] else "_"
+            )
+            tarif_uuid = (
+                str(row["pricesold__price__uuid"])
+                if row["pricesold__price__uuid"] else "_"
+            )
+            moyen = row["payment_method"] or PaymentMethod.UNKNOWN
             key = f"{produit_uuid}__{tarif_uuid}__{moyen}"
-            ligne_total = int(ligne.amount * ligne.qty)
+            ligne_total = int(row["total"])
 
-            if key not in detail:
-                detail[key] = {
-                    "nom_produit": produit.name if produit else "—",
-                    "nom_tarif": tarif.name if tarif else "—",
-                    "moyen_paiement": moyen,
-                    "moyen_paiement_label": str(labels.get(moyen, moyen)),
-                    "total": 0,
-                    "nb": 0,
-                }
-            detail[key]["total"] += ligne_total
-            detail[key]["nb"] += 1
+            detail[key] = {
+                "nom_produit": row["pricesold__productsold__product__name"] or "—",
+                "nom_tarif": row["pricesold__price__name"] or "—",
+                "moyen_paiement": moyen,
+                "moyen_paiement_label": str(labels.get(moyen, moyen)),
+                "total": ligne_total,
+                "nb": row["nb"],
+            }
             total_global += ligne_total
-            nb_global += 1
+            nb_global += row["nb"]
 
         return {
             "detail": detail,
@@ -236,43 +257,61 @@ class RapportComptableService:
         """
         Lignes liees a une Reservation. Groupage par (event, produit, tarif).
         / Lines linked to a Reservation. Grouped by (event, product, tarif).
+
+        Une seule requete SQL groupee (pas de N+1 sur reservation/event/produit).
+        / Single grouped SQL (no N+1 on reservation/event/product).
         """
-        qs = self.queryset.filter(reservation__isnull=False)
+        rows = (
+            self.queryset
+            .filter(reservation__isnull=False)
+            .values(
+                "reservation__event__uuid",
+                "reservation__event__name",
+                "reservation__event__datetime",
+                "pricesold__productsold__product__uuid",
+                "pricesold__productsold__product__name",
+                "pricesold__price__uuid",
+                "pricesold__price__name",
+            )
+            .annotate(
+                total=Coalesce(Sum(F("amount") * F("qty")), Decimal("0")),
+                nb=Count("pk"),
+            )
+        )
 
         detail = {}
         total_global = 0
         nb_global = 0
 
-        for ligne in qs:
-            event = ligne.reservation.event if ligne.reservation else None
-            produit = (
-                ligne.pricesold.productsold.product
-                if ligne.pricesold and ligne.pricesold.productsold
-                else None
+        for row in rows:
+            event_uuid = (
+                str(row["reservation__event__uuid"])
+                if row["reservation__event__uuid"] else "_"
             )
-            tarif = ligne.pricesold.price if ligne.pricesold else None
-            event_uuid = str(event.uuid) if event else "_"
-            produit_uuid = str(produit.uuid) if produit else "_"
-            tarif_uuid = str(tarif.uuid) if tarif else "_"
+            produit_uuid = (
+                str(row["pricesold__productsold__product__uuid"])
+                if row["pricesold__productsold__product__uuid"] else "_"
+            )
+            tarif_uuid = (
+                str(row["pricesold__price__uuid"])
+                if row["pricesold__price__uuid"] else "_"
+            )
             key = f"{event_uuid}__{produit_uuid}__{tarif_uuid}"
-            ligne_total = int(ligne.amount * ligne.qty)
+            ligne_total = int(row["total"])
 
-            if key not in detail:
-                detail[key] = {
-                    "nom_event": event.name if event else "—",
-                    "date_event": (
-                        event.datetime.strftime("%Y-%m-%d %H:%M")
-                        if event and event.datetime else "—"
-                    ),
-                    "nom_produit": produit.name if produit else "—",
-                    "nom_tarif": tarif.name if tarif else "—",
-                    "nb": 0,
-                    "total": 0,
-                }
-            detail[key]["nb"] += 1
-            detail[key]["total"] += ligne_total
+            event_dt = row["reservation__event__datetime"]
+            detail[key] = {
+                "nom_event": row["reservation__event__name"] or "—",
+                "date_event": (
+                    event_dt.strftime("%Y-%m-%d %H:%M") if event_dt else "—"
+                ),
+                "nom_produit": row["pricesold__productsold__product__name"] or "—",
+                "nom_tarif": row["pricesold__price__name"] or "—",
+                "nb": row["nb"],
+                "total": ligne_total,
+            }
             total_global += ligne_total
-            nb_global += 1
+            nb_global += row["nb"]
 
         return {
             "detail": detail,
@@ -289,36 +328,67 @@ class RapportComptableService:
         Detail des ventes groupe par Product.categorie_article (BILLET, ADHESION,
         FREERES, etc.). Pour chaque categorie : liste d'articles avec qty
         payants/offerts/total + HT/TVA/TTC + taux_tva.
-        """
-        from BaseBillet.models import PaymentMethod
 
-        qs = self.queryset
+        Une seule requete SQL groupee par (categorie, nom_produit, vat, offert).
+        / Single SQL grouped by (category, product_name, vat, offert).
+        """
+        from BaseBillet.models import Product, PaymentMethod
+        from django.db.models import Case, When, Value, CharField
+
+        # Choices code -> label de Product.CATEGORIE_ARTICLE_CHOICES (utilisees pour le rendu)
+        # / Code -> label of Product.CATEGORIE_ARTICLE_CHOICES (for rendering)
+        try:
+            categorie_labels = dict(Product.CATEGORIE_ARTICLE_CHOICES)
+        except AttributeError:
+            categorie_labels = {}
+
+        # Annote chaque ligne avec un flag 'offert' (payment_method = FREE),
+        # puis groupe en base.
+        # / Annotate each row with an 'offert' flag, then group in DB.
+        rows = (
+            self.queryset
+            .annotate(
+                offert_flag=Case(
+                    When(payment_method=PaymentMethod.FREE, then=Value("Y")),
+                    default=Value("N"),
+                    output_field=CharField(max_length=1),
+                )
+            )
+            .values(
+                "pricesold__productsold__product__categorie_article",
+                "pricesold__productsold__product__name",
+                "vat",
+                "offert_flag",
+            )
+            .annotate(
+                total_ttc=Coalesce(Sum(F("amount") * F("qty")), Decimal("0")),
+                qty_total=Coalesce(Sum("qty"), Decimal("0")),
+            )
+        )
+
         par_categorie = {}
 
-        for ligne in qs:
-            if not ligne.pricesold or not ligne.pricesold.productsold:
+        for row in rows:
+            nom_produit = row["pricesold__productsold__product__name"]
+            if not nom_produit:
+                # Aucune ligne sans produit n'a de sens dans le rapport
+                # / No rows without a product make sense in the report
                 continue
-            produit = ligne.pricesold.productsold.product
-            if not produit:
-                continue
-            categorie = produit.categorie_article or "ZZZ"
-            nom_produit = produit.name
-            ligne_total_ttc = int(ligne.amount * ligne.qty)
-            offert = ligne.payment_method == PaymentMethod.FREE
-            qty_decimal = float(ligne.qty)
+
+            categorie = row["pricesold__productsold__product__categorie_article"] or "ZZZ"
+            ttc = int(row["total_ttc"])
+            qty = float(row["qty_total"])
+            offert = row["offert_flag"] == "Y"
+            vat = float(row["vat"] or 0)
 
             par_categorie.setdefault(categorie, {
-                "nom_categorie": (
-                    produit.get_categorie_article_display()
-                    if hasattr(produit, "get_categorie_article_display")
-                    else categorie
-                ),
+                "nom_categorie": str(categorie_labels.get(categorie, categorie)),
                 "articles": {},
                 "total_ttc": 0,
             })
 
             articles = par_categorie[categorie]["articles"]
-            articles.setdefault(nom_produit, {
+            article = articles.setdefault(nom_produit, {
                 "nom_produit": nom_produit,
                 "qty_payants": 0.0,
                 "qty_offerts": 0.0,
@@ -326,28 +396,33 @@ class RapportComptableService:
                 "total_ttc": 0,
                 "total_ht": 0,
                 "total_tva": 0,
-                "taux_tva": float(ligne.vat or 0),
+                "taux_tva": vat,
             })
 
-            a = articles[nom_produit]
+            # Calcul HT/TVA a partir du TTC et du taux
+            # / HT/TVA computation from TTC and rate
+            if vat > 0 and ttc != 0:
+                ht = int(round(ttc * 100 / (100 + vat)))
+            else:
+                ht = ttc
+
             if offert:
-                a["qty_offerts"] += qty_decimal
+                article["qty_offerts"] += qty
             else:
-                a["qty_payants"] += qty_decimal
-            a["qty_total"] += qty_decimal
-            a["total_ttc"] += ligne_total_ttc
+                article["qty_payants"] += qty
+            article["qty_total"] += qty
+            article["total_ttc"] += ttc
+            article["total_ht"] += ht
+            article["total_tva"] += ttc - ht
+            # Si le produit a plusieurs taux (cas rare), on garde le plus eleve
+            # / If a product has several rates (rare), keep the highest
+            if vat > article["taux_tva"]:
+                article["taux_tva"] = vat
 
-            vat = float(ligne.vat or 0)
-            if vat > 0 and ligne_total_ttc != 0:
-                ht = int(round(ligne_total_ttc * 100 / (100 + vat)))
-            else:
-                ht = ligne_total_ttc
-            a["total_ht"] += ht
-            a["total_tva"] += ligne_total_ttc - ht
+            par_categorie[categorie]["total_ttc"] += ttc
 
-            par_categorie[categorie]["total_ttc"] += ligne_total_ttc
-
-        # Conversion articles dict -> list
+        # Conversion dict articles -> list
+        # / dict articles -> list
         for cat in par_categorie.values():
             cat["articles"] = list(cat["articles"].values())
 

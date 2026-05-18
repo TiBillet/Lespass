@@ -257,11 +257,19 @@ def envoyer_email_cloture(schema_name, cloture_uuid):
             f"#{cloture.numero_sequentiel}"
         )
 
+        # Montant total pre-formate en euros pour eviter floatformat:0 (cents)
+        # / Pre-formatted total in euros (template can't divide)
+        total_general_euros = f"{cloture.total_general / 100:.2f}"
+
         mailer = CeleryMailerClass(
             email=emails,
             title=subject,
             template="comptabilite/email/cloture_rapport_email.html",
-            context={"config": config, "cloture": cloture},
+            context={
+                "config": config,
+                "cloture": cloture,
+                "total_general_euros": total_general_euros,
+            },
             attached_files={pdf_filename: pdf_bytes},
         )
         result = mailer.send()
