@@ -85,7 +85,35 @@ def _push_ws_kiosk(tireuse, payload):
         {"type": "state_update", "payload": payload},
     )
 
+def _push_refus(tireuse, message: str, **extra):
+      """
+      Pousse un payload minimal de refus vers le kiosk via WebSocket.
+      Utilisé pour tous les cas où authorize() refuse une carte connue.
 
+      Payload intentionnellement minimaliste : le kiosk a déjà l'état complet
+      de la tireuse depuis le payload initial — inutile de reconstruire via
+      3 requêtes SQL (pas d'appel à _construire_payload_session).
+      / Pushes a minimal refusal payload to the kiosk via WebSocket.
+      Used for all cases where authorize() refuses a known card.
+
+      Intentionally minimal payload: the kiosk already has the full tap state
+      from the initial payload — no need to rebuild via 3 SQL queries
+      (no call to _construire_payload_session).
+
+      :param tireuse: TireuseBec — la tireuse concernée
+      :param message: str — message d'erreur lisible par l'utilisateur
+      """
+      _push_ws_kiosk(
+        tireuse,
+        {
+            "tireuse_bec_uuid": str(tireuse.uuid),
+            "authorized": False,
+            "vanne_ouverte": False,
+            "present": True,   # ← déclenche CAS 1 dans le JS → affiche le message 4s
+            "message": message,
+            **extra,
+        },
+    )
 def _construire_payload_session(tireuse, session, **extras):
     """
     Construit le payload WebSocket pour un événement de session NFC.
@@ -214,6 +242,7 @@ class TireuseViewSet(viewsets.ViewSet):
 
         carte = CarteCashless.objects.filter(tag_id=uid).first()
         if not carte:
+            _push_refus(tireuse, "Carte non reconnue.")
             return Response({"authorized": False, "message": "Unknown card."})
 
         # Vérifier si c'est une carte de maintenance / Check if it's a maintenance card
@@ -242,6 +271,7 @@ class TireuseViewSet(viewsets.ViewSet):
         # / Maintenance: only allowed when the tap is out of service (enabled=False).
         # A maintenance card must not work during normal service — it would bypass billing.
         if is_maintenance and tireuse.enabled:
+            _push_refus(tireuse, "Carte maintenance refusée : tireuse en service.")
             return Response(
                 {
                     "authorized": False,
@@ -299,16 +329,7 @@ class TireuseViewSet(viewsets.ViewSet):
 
         contexte = obtenir_contexte_cashless(carte)
         if not contexte:
-            _push_ws_kiosk(
-                tireuse,
-                {
-                    **_construire_payload_session(tireuse, None),
-                    "authorized": False,
-                    "present": True,
-                    "uid": uid,
-                    "message": "Cashless non configuré pour ce lieu.",
-                },
-            )
+            _push_refus(tireuse, "Cashless non configuré pour ce lieu.")
             return Response(
                 {
                     "authorized": False,
@@ -324,16 +345,7 @@ class TireuseViewSet(viewsets.ViewSet):
 
         prix_litre = tireuse.prix_litre
         if prix_litre <= 0:
-            _push_ws_kiosk(
-                tireuse,
-                {
-                    **_construire_payload_session(tireuse, None),
-                    "authorized": False,
-                    "present": True,
-                    "uid": uid,
-                    "message": "Prix non configuré pour ce fût.",
-                },
-            )
+            _push_refus(tireuse, "Prix non configuré pour ce fût.")
             return Response(
                 {
                     "authorized": False,
@@ -353,16 +365,7 @@ class TireuseViewSet(viewsets.ViewSet):
             reservoir_disponible = float(tireuse.reservoir_ml)
 
         if not tireuse.reservoir_illimite and reservoir_disponible <= 0:
-            _push_ws_kiosk(
-                tireuse,
-                {
-                    **_construire_payload_session(tireuse, None),
-                    "authorized": False,
-                    "present": True,
-                    "uid": uid,
-                    "message": "Fût vide.",
-                },
-            )
+            _push_refus(tireuse, "Fût vide.")
             return Response(
                 {
                     "authorized": False,
@@ -375,17 +378,7 @@ class TireuseViewSet(viewsets.ViewSet):
         )
 
         if allowed_ml <= 0:
-            _push_ws_kiosk(
-                tireuse,
-                {
-                    **_construire_payload_session(tireuse, None),
-                    "authorized": False,
-                    "present": True,
-                    "uid": uid,
-                    "message": "Solde insuffisant.",
-                    "balance": f"{solde_centimes / 100:.2f}",
-                },
-            )
+            _push_refus(tireuse, "Solde insuffisant.", balance=f"{solde_centimes / 100:.2f}")
             return Response(
                 {
                     "authorized": False,
