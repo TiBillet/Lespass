@@ -49,6 +49,13 @@ urlpatterns = [
     path('laboutik/', include('laboutik.urls')),
     path('booking/', include('booking.urls')),
 
+    # Appairage PIN des terminaux (LaBoutik Pi, tireuses) / Terminal PIN pairing
+    # Endpoint public : POST /api/discovery/claim/ — reçoit PIN 6 chiffres, renvoie URL + clé API
+    # Doit être déclaré AVANT controlvanne/ pour éviter un conflit de préfixe.
+    # / Public endpoint: POST /api/discovery/claim/ — receives 6-digit PIN, returns URL + API key
+    # Must be declared BEFORE controlvanne/ to avoid prefix conflict.
+    path('api/discovery/', include('discovery.urls')),
+
     # Tireuses connectees (controlvanne) — API Pi + kiosk + calibration
     # / Connected beer taps (controlvanne) — Pi API + kiosk + calibration
     path('controlvanne/', include('controlvanne.urls')),
