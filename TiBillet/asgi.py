@@ -12,21 +12,27 @@ FLUX des connexions WebSocket :
 
 FLUX des connexions HTTP :
 1. django_asgi_app — traite par le middleware WSGI classique (TenantMainMiddleware inclus)
+
+IMPORTANT : os.environ.setdefault + get_asgi_application() AVANT tout import applicatif.
+Les imports wsocket/controlvanne chargent des modèles Django — si le registre d'apps
+n'est pas encore initialisé au moment de l'import, Django lève AppRegistryNotReady.
+Ce bug se manifeste uniquement avec Daphne/Uvicorn (ASGI), pas avec runserver (WSGI).
 """
+
 import os
 
-from channels.auth import AuthMiddlewareStack
-from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.security.websocket import AllowedHostsOriginValidator
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "TiBillet.settings")
 from django.core.asgi import get_asgi_application
 
-from wsocket.middlewares import WebSocketTenantMiddleware
-from wsocket.routing import websocket_urlpatterns
-from controlvanne.routing import websocket_urlpatterns as controlvanne_ws_urlpatterns
-
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "TiBillet.settings")
-
 django_asgi_app = get_asgi_application()
+
+from channels.auth import AuthMiddlewareStack  # noqa: E402
+from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
+from channels.security.websocket import AllowedHostsOriginValidator  # noqa: E402
+
+from controlvanne.routing import websocket_urlpatterns as controlvanne_ws_urlpatterns  # noqa: E402
+from wsocket.middlewares import WebSocketTenantMiddleware  # noqa: E402
+from wsocket.routing import websocket_urlpatterns  # noqa: E402
 
 application = ProtocolTypeRouter(
     {
