@@ -1,5 +1,7 @@
 {% load unfold i18n %}
 
+{% include "admin/help/help_display_before_template.html" %}
+
 <div class="grid gap-4 mb-4 md:grid-cols-2 lg:grid-cols-3">
     {% component "unfold/components/card.html" %}
         {% component "unfold/components/text.html" %}
@@ -27,5 +29,4 @@
             </a>
         </div>
     {% endcomponent %}
-
 </div>

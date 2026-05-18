@@ -7,6 +7,8 @@ from Administration.admin import (
     products,
     prices
 )
+from Administration.admin.help_messages_dictionnary import HELP_MESSAGES_DICT
+from Administration.admin.mixins import HelpDisplayMixin
 
 from Administration.admin.site import staff_admin_site, sanitize_textfields
 
@@ -122,7 +124,6 @@ from fedow_public.models import AssetFedowPublic as Asset, AssetFedowPublic
 from stripe._error import InvalidRequestError
 
 logger = logging.getLogger(__name__)
-
 
 
 @admin.register(ExternalApiKey, site=staff_admin_site)
@@ -1357,7 +1358,8 @@ class LigneArticleInline(TabularInline):
 
 
 @admin.register(Membership, site=staff_admin_site)
-class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
+class MembershipAdmin(HelpDisplayMixin, ModelAdmin, ImportExportModelAdmin):
+
     inlines = [LigneArticleInline]
     # Expandable section to display custom form answers in changelist
     list_sections = [MembershipCustomFormSection]
@@ -1371,6 +1373,10 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     import_form_class = ImportForm
 
     list_before_template = "admin/membership/membership_list_before.html"  # appelle le MembershipComponent plus haut pour le contexte
+
+    # Help info for HelpModelAdmin
+    help_text = HELP_MESSAGES_DICT["ADHESION"]["help_text"]
+    help_url = HELP_MESSAGES_DICT["ADHESION"]["help_url"]
 
     # Formulaire de modification
     form = MembershipChangeForm

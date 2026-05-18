@@ -1,0 +1,64 @@
+{% load unfold i18n %}
+
+<style>
+    .arrow {
+        border: solid black;
+        border-width: 0 3px 3px 0;
+        display: inline-block;
+        padding: 3px;
+        transition: 0.2s;
+        vertical-align: center;
+    }
+    .dark .arrow{
+        border: solid white;
+        border-width: 0 3px 3px 0;
+    }
+
+    .right {
+        transform: rotate(-45deg);
+        -webkit-transform: rotate(-45deg);
+    }
+
+    .left {
+        transform: rotate(135deg);
+        -webkit-transform: rotate(135deg);
+    }
+
+    .up {
+        transform: rotate(-135deg);
+        -webkit-transform: rotate(-135deg);
+    }
+
+    .down {
+        transform: rotate(45deg);
+        -webkit-transform: rotate(45deg);
+    }
+</style>
+<div class="bg-white block flex flex-col grow overflow-hidden p-3 relative rounded-default shadow-xs dark:bg-base-900 dark:border-base-800 border border-base-200 mb-4">
+    <div x-data="{ open: false }">
+        <h2 class="text-lg font-semibold" @click="open = !open">
+            <span class="material-symbols-outlined" style="vertical-align: center">help</span>
+            {% trans "Need help ? Click here !" %}
+            <span class="arrow ml-1" x-bind:class="! open ? 'down' : 'up'"></span>
+        </h2>
+
+        <div x-show="open">
+            {% component "unfold/components/text.html" with class="mt-2 mb-2" %}
+                {{ help_text }}
+            {% endcomponent %}
+
+            <div class="border border-base-300 border-dashed p-2 rounded dark:border-base-700">
+                {% component "unfold/components/text.html" %}
+                    {% component "unfold/components/link.html" with href=help_url icon="language" external=1 %}
+                        {% trans "Complete documentation" %}
+                        {# Documentation complète #}
+                    {% endcomponent %}
+                {% endcomponent %}
+            </div>
+        </div>
+    </div>
+
+    {% component "unfold/components/title.html" with icon="help" %}
+
+    {% endcomponent %}
+</div>

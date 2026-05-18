@@ -21,6 +21,8 @@ from unfold.widgets import (
     UnfoldAdminColorInputWidget,
 )
 
+from Administration.admin.help_messages_dictionnary import HELP_MESSAGES_DICT
+from Administration.admin.mixins import HelpDisplayMixin
 from Administration.admin.site import staff_admin_site, sanitize_textfields
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from BaseBillet.models import (
@@ -1228,13 +1230,16 @@ class TicketProductAdmin(ProductAdmin):
 
 
 @admin.register(MembershipProduct, site=staff_admin_site)
-class MembershipProductAdmin(ProductAdmin):
+class MembershipProductAdmin(HelpDisplayMixin, ProductAdmin):
     """Vue admin filtree : uniquement les produits adhesion.
     Filtered admin view: only membership products."""
 
     form = MembershipProductForm
     inlines = [MembershipPriceInline, ProductFormFieldInline]
     change_form_after_template = "admin/product/inline_conditional_fields.html"
+
+    help_text = HELP_MESSAGES_DICT["ADHESION_PRODUIT"]["help_text"]
+    help_url = HELP_MESSAGES_DICT["ADHESION_PRODUIT"]["help_url"]
 
     list_filter = ["publish", ProductArchiveFilter]  # categorie_article inutile, deja filtre
 
