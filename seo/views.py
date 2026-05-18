@@ -319,20 +319,21 @@ def explorer(request):
     explorer_data = build_explorer_data()
 
     # JSON-LD reseau : racine = TiBillet, subOrganization = tous les tenants.
-    # Permet aux LLMs et a Google de comprendre l'ensemble du reseau cooperatif.
-    # / Network JSON-LD: root = TiBillet, subOrganization = all tenants.
-    # Lets LLMs and Google understand the whole cooperative network.
+    # Iteration sur explorer_data["tenants"] : 1 entree par tenant vivant
+    # (independamment du nombre de PostalAddress qu'il a). Le JSON-LD
+    # decrit l'organisation, pas chaque adresse.
+    # / Network JSON-LD: iterate over tenants (1 per alive tenant).
     federation_members = []
-    for lieu in explorer_data.get("lieux", []):
-        domain = lieu.get("domain", "")
+    for tenant_lieu in explorer_data.get("tenants", []):
+        domain = tenant_lieu.get("domain", "")
         member_url = f"https://{domain}/" if domain else ""
         federation_members.append({
-            "name": lieu.get("name", ""),
+            "name": tenant_lieu.get("name", ""),
             "url": member_url,
-            "short_description": lieu.get("short_description", ""),
-            "locality": lieu.get("locality", ""),
-            "country": lieu.get("country", ""),
-            "logo_url": lieu.get("logo_url") or "",
+            "short_description": tenant_lieu.get("short_description", ""),
+            "locality": tenant_lieu.get("locality", ""),
+            "country": tenant_lieu.get("country", ""),
+            "logo_url": tenant_lieu.get("logo_url") or "",
         })
 
     federation_json_ld_dict = build_json_ld_federation(

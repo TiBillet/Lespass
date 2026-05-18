@@ -217,9 +217,11 @@ def get_events_for_tenants(tenant_schemas):
         # pour construire les URLs des vignettes dans tasks.py.
         # / Also fetch the `img` field (relative StdImageField path)
         # to build thumbnail URLs in tasks.py.
+        # `postal_address_id` est la FK vers PostalAddress (sert a AGGREGATE_POINTS).
+        # / `postal_address_id` is the FK to PostalAddress (used for AGGREGATE_POINTS).
         parts.append(
             f"SELECT %s AS tenant_id, name, slug, short_description, "
-            f"datetime, end_datetime, img "
+            f"datetime, end_datetime, img, postal_address_id "
             f'FROM "{schema_name}"."BaseBillet_event" '
             f"WHERE published = true AND datetime >= %s"
         )
@@ -240,6 +242,7 @@ def get_events_for_tenants(tenant_schemas):
                     "datetime": row[4].isoformat() if row[4] else None,
                     "end_datetime": row[5].isoformat() if row[5] else None,
                     "img": row[6] or "",
+                    "postal_address_id": row[7],
                 }
             )
 
@@ -279,6 +282,7 @@ def build_tenant_config_data(client):
         "country": None,
         "latitude": None,
         "longitude": None,
+        "postal_address_id": None,
     }
 
     # Domaine principal du tenant / Tenant primary domain
@@ -404,6 +408,78 @@ def get_postal_addresses_for_tenants(tenant_schemas):
     return resultat
 
 
+def build_aggregate_points(tenant_schemas, configs_by_tenant, events_by_tenant):
+    """
+    Construit la liste des points (1 par PA active) pour AGGREGATE_POINTS.
+    / Builds the list of points (1 per active PA) for AGGREGATE_POINTS.
+
+    Filtre "tenant vivant" : si le tenant n'est pas dans configs_by_tenant,
+    on le skip (= l'appelant a deja filtre par vivacite).
+    / "Alive tenant" filter: skip if not in configs_by_tenant.
+
+    Limite events par PA : top 5, et events_futurs_count_total a le total.
+    / Events per PA limit: top 5, total in events_futurs_count_total.
+    """
+    LIMIT_EVENTS_DANS_POPUP = 5
+
+    tenants_vivants = [
+        (uuid, schema) for uuid, schema in tenant_schemas if uuid in configs_by_tenant
+    ]
+    pa_par_tenant = get_postal_addresses_for_tenants(tenants_vivants)
+
+    points = []
+    for tenant_uuid, _schema in tenants_vivants:
+        config = configs_by_tenant.get(tenant_uuid, {})
+        pa_list = pa_par_tenant.get(tenant_uuid, [])
+        events_du_tenant = events_by_tenant.get(tenant_uuid, [])
+
+        # Index events par pa_id (1 event est sur 1 seule PA)
+        # / Index events by pa_id (1 event lives on 1 PA)
+        events_par_pa = {}
+        for event in events_du_tenant:
+            pa_id = event.get("postal_address_id")
+            if pa_id is None:
+                continue
+            events_par_pa.setdefault(pa_id, []).append(event)
+
+        main_address_id = config.get("postal_address_id")
+        for pa in pa_list:
+            events_lies = events_par_pa.get(pa["pa_id"], [])
+            # Champ "datetime" dans get_events_for_tenants (ISO string).
+            # On expose datetime_iso cote sortie pour clarte JS.
+            # / Field is "datetime" in get_events_for_tenants; expose as datetime_iso.
+            events_tries = sorted(events_lies, key=lambda e: e.get("datetime") or "")
+            events_pour_popup = []
+            for ev in events_tries[:LIMIT_EVENTS_DANS_POPUP]:
+                events_pour_popup.append({
+                    "uuid": ev.get("uuid", ""),
+                    "name": ev.get("name", ""),
+                    "datetime_iso": ev.get("datetime", ""),
+                    "slug": ev.get("slug", ""),
+                })
+
+            address_morceaux = [pa["street_address"], pa["postal_code"], pa["address_locality"]]
+            address_morceaux_nettoyes = [m for m in address_morceaux if m]
+            address_display = ", ".join(address_morceaux_nettoyes)
+
+            points.append({
+                "pa_id": pa["pa_id"],
+                "latitude": pa["latitude"],
+                "longitude": pa["longitude"],
+                "pa_name": pa["name"] or pa["street_address"] or pa["address_locality"] or config.get("organisation", ""),
+                "address_display": address_display,
+                "is_main_address": (pa["pa_id"] == main_address_id),
+                "tenant_id": tenant_uuid,
+                "tenant_organisation": config.get("organisation", ""),
+                "tenant_domain": config.get("domain", ""),
+                "tenant_logo_url": config.get("logo_url"),
+                "events_futurs": events_pour_popup,
+                "events_futurs_count_total": len(events_tries),
+            })
+
+    return {"points": points}
+
+
 # ---------------------------------------------------------------------------
 # Explorer data builder / Constructeur de donnees explorer
 # ---------------------------------------------------------------------------
@@ -411,81 +487,60 @@ def get_postal_addresses_for_tenants(tenant_schemas):
 
 def build_explorer_data_for_tenants(tenant_uuids):
     """
-    Construit les donnees structurees pour la page explorer (carte + liste),
-    en filtrant sur la liste d'UUIDs fournie.
-    / Build structured data for the explorer page (map + list),
-    filtering on the provided UUID list.
+    Renvoie les donnees pour la page explorer ROOT :
+    - points : 1 par PA active (pour les markers carte)
+    - tenants : 1 par tenant vivant (pour le JSON-LD federation, infos
+      tenant-level type locality/country/short_description qui n'ont pas
+      de sens au niveau PA).
+    / Returns data for the ROOT explorer page:
+    - points: 1 per active PA (map markers)
+    - tenants: 1 per alive tenant (federation JSON-LD, tenant-level fields)
 
     Parametres / Parameters:
         tenant_uuids: list[str] — UUIDs des tenants a inclure.
-                                  Si vide, retourne {"lieux": [], "events": []}.
-
-    Retourne / Returns: dict avec cles lieux, events
+                                  Si vide, retourne {"points": [], "tenants": []}.
     """
     from seo.models import SEOCache
     from seo.views_common import get_seo_cache
 
     if not tenant_uuids:
-        return {"lieux": [], "events": []}
+        return {"points": [], "tenants": []}
 
-    # Convertir en set pour lookup O(1) / Convert to set for O(1) lookup
     uuids_set = set(tenant_uuids)
+    points_data = get_seo_cache(SEOCache.AGGREGATE_POINTS) or {}
+    points_filtres = [
+        p for p in points_data.get("points", []) if p.get("tenant_id") in uuids_set
+    ]
 
-    # Lire les 2 agregats depuis le cache L1/L2
-    # / Read the 2 aggregates from L1/L2 cache
+    # AGGREGATE_LIEUX reste lue ici uniquement pour les infos tenant-level
+    # (locality, country, short_description, logo_url) consommees par le
+    # JSON-LD federation. Le cache AGGREGATE_LIEUX est maintenu intact par
+    # refresh_seo_cache, pas de redondance.
+    # / AGGREGATE_LIEUX is still read here only for tenant-level fields
+    # consumed by the federation JSON-LD.
     lieux_data = get_seo_cache(SEOCache.AGGREGATE_LIEUX) or {}
-    events_data = get_seo_cache(SEOCache.AGGREGATE_EVENTS) or {}
+    tenants_filtres = [
+        lieu for lieu in lieux_data.get("lieux", []) if lieu.get("tenant_id") in uuids_set
+    ]
 
-    raw_lieux = lieux_data.get("lieux", [])
-    raw_events = events_data.get("events", [])
-
-    # Filtrer + indexer les lieux par tenant_id, en excluant ceux sans coords GPS
-    # / Filter + index lieux by tenant_id, excluding those without GPS coords
-    lieux_by_tenant = {}
-    for lieu in raw_lieux:
-        if lieu["tenant_id"] not in uuids_set:
-            continue
-        if lieu.get("latitude") is None or lieu.get("longitude") is None:
-            continue
-        lieu_copy = dict(lieu)
-        lieu_copy["events"] = []
-        lieux_by_tenant[lieu["tenant_id"]] = lieu_copy
-
-    # Construire la liste plate d'events avec infos du lieu parent
-    # / Build flat event list with parent lieu info
-    flat_events = []
-    for event in raw_events:
-        tenant_id = event.get("tenant_id")
-        if tenant_id not in uuids_set:
-            continue
-        lieu = lieux_by_tenant.get(tenant_id)
-        if lieu is None:
-            continue
-        event_copy = dict(event)
-        event_copy["lieu_id"] = tenant_id
-        event_copy["lieu_name"] = lieu.get("name", "")
-        event_copy["lieu_domain"] = lieu.get("domain", "")
-        flat_events.append(event_copy)
-        # Imbriquer sous le lieu parent / Nest under parent lieu
-        lieu["events"].append(event)
-
-    return {
-        "lieux": list(lieux_by_tenant.values()),
-        "events": flat_events,
-    }
+    return {"points": points_filtres, "tenants": tenants_filtres}
 
 
 def build_explorer_data():
     """
-    Compatibilite retro : appelle build_explorer_data_for_tenants() avec
-    l'ensemble des tenant_ids presents dans AGGREGATE_LIEUX.
-    Comportement identique a la version d'avant le refactor.
-    / Backward compat: calls build_explorer_data_for_tenants() with all
-    tenant_ids from AGGREGATE_LIEUX. Identical behavior to pre-refactor.
+    Wrapper sans filtre : tous les tenants presents dans AGGREGATE_POINTS
+    et AGGREGATE_LIEUX.
+    / Unfiltered wrapper: all tenants from AGGREGATE_POINTS and AGGREGATE_LIEUX.
     """
     from seo.models import SEOCache
     from seo.views_common import get_seo_cache
 
+    points_data = get_seo_cache(SEOCache.AGGREGATE_POINTS) or {}
     lieux_data = get_seo_cache(SEOCache.AGGREGATE_LIEUX) or {}
-    all_uuids = [lieu["tenant_id"] for lieu in lieux_data.get("lieux", [])]
-    return build_explorer_data_for_tenants(all_uuids)
+    # Union des tenant_ids vus dans l'un ou l'autre cache
+    # / Union of tenant_ids seen in either cache
+    tenant_uuids = list(
+        {p.get("tenant_id") for p in points_data.get("points", []) if p.get("tenant_id")}
+        | {l.get("tenant_id") for l in lieux_data.get("lieux", []) if l.get("tenant_id")}
+    )
+    return build_explorer_data_for_tenants(tenant_uuids)

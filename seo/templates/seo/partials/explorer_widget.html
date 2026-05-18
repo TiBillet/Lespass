@@ -6,12 +6,16 @@
 {# Single HTML source: changing this file affects both views simultaneously. #}
 {#                                                                                                #}
 {# Variables de contexte attendues :                                                              #}
-{#   - explorer_data : dict {lieux: [...], events: [...]} retourne par                            #}
+{#   - explorer_data : dict {points: [...], tenants: [...]} retourne par                          #}
 {#     seo.services.build_explorer_data_for_tenants()                                             #}
+{#     points = 1 entree par PostalAddress active (markers carte)                                 #}
+{#     tenants = 1 entree par tenant vivant (infos tenant-level)                                  #}
 {#   - current_tenant_uuid : str — UUID du tenant courant, ou "" sur le public                    #}
 {# / Expected context variables:                                                                  #}
-{#   - explorer_data: dict {lieux: [...], events: [...]} from                                     #}
+{#   - explorer_data: dict {points: [...], tenants: [...]} from                                   #}
 {#     seo.services.build_explorer_data_for_tenants()                                             #}
+{#     points = 1 entry per active PostalAddress (map markers)                                    #}
+{#     tenants = 1 entry per alive tenant (tenant-level info)                                     #}
 {#   - current_tenant_uuid: str — current tenant UUID, or "" on public                            #}
 
 <div id="explorer-root"

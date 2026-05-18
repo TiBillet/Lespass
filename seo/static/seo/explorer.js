@@ -18,9 +18,11 @@
  *   4. Click carte/liste → focusOnLieu() : zoom + popup + accordéon
  *
  * STATE (encapsulé, jamais sur window) :
- *   - state.data : { lieux: [...], events: [...] }  (immutable après init)
+ *   - state.data : { points: [...], tenants: [...] }  (immutable après init)
+ *     points  = 1 entry per PostalAddress active (markers carte)
+ *     tenants = 1 entry per alive tenant (cards liste)
  *   - state.filters : { text: '', category: 'all' }  (muable)
- *   - state.map, state.markers, state.markerCluster : objets Leaflet
+ *   - state.map, state.markers (indexes par pa_id), state.markerCluster
  *
  * DEPENDANCES :
  *   - Leaflet 1.9.x  (vendoré dans /static/seo/vendor/leaflet/)
@@ -226,28 +228,48 @@
     function applyFilters() {
         if (!state.data) return;
 
-        const lieux = filterCategory(state.data.lieux, 'lieu');
-        const events = filterCategory(state.data.events, 'event');
+        // Cards liste : 1 par tenant. Si pill='event', on ne garde que les
+        // tenants qui ont au moins 1 event futur sur l'une de leurs PA.
+        // / List cards: 1 per tenant. If pill='event', keep only tenants
+        // that have at least 1 future event on one of their PAs.
+        let tenantsVisibles = filterCategory(state.data.tenants, 'lieu');
+        if (state.filters.category === 'event') {
+            const tenantsAvecEvent = collectTenantsWithFutureEvents();
+            tenantsVisibles = state.data.tenants.filter(function (t) {
+                return tenantsAvecEvent[t.tenant_id] && matchesText(t);
+            });
+        }
 
-        renderList(lieux, events);
-        updateCounters(lieux.length, events.length);
+        // Compteur events futurs visibles (sur les tenants visibles)
+        // / Visible future events count
+        const visibleTenantIds = {};
+        for (let i = 0; i < tenantsVisibles.length; i++) {
+            visibleTenantIds[tenantsVisibles[i].tenant_id] = true;
+        }
+        let eventsCount = 0;
+        for (let j = 0; j < state.data.points.length; j++) {
+            const pt = state.data.points[j];
+            if (visibleTenantIds[pt.tenant_id]) {
+                eventsCount += (pt.events_futurs_count_total || 0);
+            }
+        }
+
+        renderList(tenantsVisibles, []);
+        updateCounters(tenantsVisibles.length, eventsCount);
 
         if (state.mapInitialized) {
-            const lieuxOnMap = collectLieuxFromResults(lieux, events);
-            updateMapMarkers(lieuxOnMap);
+            updateMapMarkers(visibleTenantIds);
         }
     }
 
-    function collectLieuxFromResults(lieux, events) {
-        const visibleIds = {};
-        for (let i = 0; i < lieux.length; i++) visibleIds[lieux[i].tenant_id] = true;
-        for (let j = 0; j < events.length; j++) {
-            if (events[j].lieu_id) visibleIds[events[j].lieu_id] = true;
-        }
-        const result = [];
-        for (let k = 0; k < state.data.lieux.length; k++) {
-            if (visibleIds[state.data.lieux[k].tenant_id]) {
-                result.push(state.data.lieux[k]);
+    function collectTenantsWithFutureEvents() {
+        // Renvoie un dict {tenant_id: true} pour tenants ayant >=1 event futur
+        // / Returns dict of tenant_ids that have >=1 future event
+        const result = {};
+        for (let i = 0; i < state.data.points.length; i++) {
+            const pt = state.data.points[i];
+            if ((pt.events_futurs_count_total || 0) > 0) {
+                result[pt.tenant_id] = true;
             }
         }
         return result;
@@ -486,7 +508,7 @@
         state.markerCluster = L.markerClusterGroup();
         state.map.addLayer(state.markerCluster);
 
-        addMarkers(state.data.lieux);
+        addMarkers(state.data.points);
         state.mapInitialized = true;
 
         applyFilters();
@@ -503,38 +525,57 @@
         }, 250);
     }
 
-    function addMarkers(lieux) {
+    function addMarkers(points) {
+        // 1 marker par point (= 1 par PostalAddress active).
+        // Indexes state.markers par pa_id (clé unique). state.markersByTenant
+        // garde une vue inverse pour focusOnLieu(tenantId).
+        // / 1 marker per point (= 1 per active PostalAddress).
+        // state.markers indexed by pa_id; state.markersByTenant for reverse lookup.
         if (!state.map || !state.markerCluster) return;
         state.markerCluster.clearLayers();
         state.markers = {};
+        state.markersByTenant = {};
         const bounds = [];
 
-        for (let i = 0; i < lieux.length; i++) {
-            const lieu = lieux[i];
-            const lat = parseFloat(lieu.latitude);
-            const lng = parseFloat(lieu.longitude);
+        for (let i = 0; i < points.length; i++) {
+            const point = points[i];
+            const lat = parseFloat(point.latitude);
+            const lng = parseFloat(point.longitude);
             if (isNaN(lat) || isNaN(lng)) continue;
 
-            const isCurrent = lieu.tenant_id === config.currentTenantUuid;
+            const isCurrent = point.tenant_id === config.currentTenantUuid;
             const pinClass = 'explorer-pin' + (isCurrent ? ' explorer-pin--current' : '');
+            // Label du pin = nom de l'adresse (pa_name). Fallback nom du tenant.
+            // / Pin label = PA name. Fallback to tenant name.
+            const labelTexte = point.pa_name || point.tenant_organisation || '';
             const icon = L.divIcon({
                 className: '',
-                html: '<div class="' + pinClass + '" data-lieu-id="' + escapeHtml(lieu.tenant_id) + '">'
-                    + escapeHtml(lieu.name) + '</div>',
+                html: '<div class="' + pinClass + '" data-pa-id="' + escapeHtml(String(point.pa_id))
+                    + '" data-tenant-id="' + escapeHtml(point.tenant_id || '') + '">'
+                    + escapeHtml(labelTexte) + '</div>',
                 iconSize: null,
                 iconAnchor: [0, 0],
             });
 
-            const marker = L.marker([lat, lng], { icon: icon });
-            marker.bindPopup(buildPopupContent(lieu), { maxWidth: 280 });
+            const marker = L.marker([lat, lng], { icon: icon, title: labelTexte });
+            marker.bindPopup(buildPopupContent(point), { maxWidth: 320 });
 
-            // Closure pour capturer tenant_id
-            // / Closure to capture tenant_id
             (function (tenantId) {
                 marker.on('click', function () { scrollToCard(tenantId); });
-            })(lieu.tenant_id);
+            })(point.tenant_id);
 
-            state.markers[lieu.tenant_id] = marker;
+            state.markers[point.pa_id] = marker;
+            // Reverse lookup tenant_id -> [pa_id...] pour focusOnLieu()
+            if (!state.markersByTenant[point.tenant_id]) {
+                state.markersByTenant[point.tenant_id] = [];
+            }
+            state.markersByTenant[point.tenant_id].push(point.pa_id);
+            // Priorite : si is_main_address, on l'utilise comme premier ancre
+            // / Priority: main_address goes first in the lookup list
+            if (point.is_main_address) {
+                state.markersByTenant[point.tenant_id].unshift(point.pa_id);
+            }
+
             state.markerCluster.addLayer(marker);
             bounds.push([lat, lng]);
         }
@@ -543,47 +584,72 @@
         else state.map.setView([46.603354, 1.888334], 6);
     }
 
-    function buildPopupContent(lieu) {
-        const href = lieu.domain ? 'https://' + lieu.domain + '/' : '#';
+    function buildPopupContent(point) {
+        // Popup riche : nom PA + adresse + tenant + events futurs (top 5).
+        // / Rich popup: PA name + address + tenant + future events (top 5).
+        const tenantHref = point.tenant_domain ? 'https://' + point.tenant_domain + '/' : '#';
         let html = '<div class="explorer-popup">'
-            + '<h4 class="explorer-popup-title">' + escapeHtml(lieu.name) + '</h4>';
-        if (lieu.short_description) {
-            html += '<p class="explorer-popup-desc">' + escapeHtml(lieu.short_description) + '</p>';
+            + '<h4 class="explorer-popup-title">' + escapeHtml(point.pa_name) + '</h4>';
+        if (point.address_display) {
+            html += '<p class="explorer-popup-address">' + escapeHtml(point.address_display) + '</p>';
         }
-        if (lieu.locality) {
-            html += '<p class="explorer-popup-stats">\u{1F4CD} ' + escapeHtml(lieu.locality)
-                + (lieu.country ? ', ' + escapeHtml(lieu.country) : '') + '</p>';
+        // Lien tenant (avec logo si dispo)
+        // / Tenant link (with logo if available)
+        if (point.tenant_domain) {
+            const logoImg = point.tenant_logo_url
+                ? '<img src="' + escapeHtml(point.tenant_logo_url) + '" alt="" class="explorer-popup-logo">'
+                : '';
+            html += '<p class="explorer-popup-tenant">' + logoImg
+                + '<a href="' + escapeHtml(tenantHref) + '" target="_blank" rel="noopener">'
+                + escapeHtml(point.tenant_organisation || '') + ' ↗</a></p>';
         }
-        const events = lieu.events || [];
+        // Events futurs (top 5)
+        // / Future events (top 5)
+        const events = point.events_futurs || [];
+        const totalEvents = point.events_futurs_count_total || events.length;
         if (events.length > 0) {
-            html += '<div class="explorer-popup-events"><strong>' + escapeHtml(config.i18n.nextEvents) + '</strong><ul style="margin:4px 0;padding-left:16px;">';
-            const n = Math.min(events.length, 3);
-            for (let i = 0; i < n; i++) {
+            html += '<div class="explorer-popup-events"><strong>'
+                + escapeHtml(config.i18n.nextEvents) + ' (' + totalEvents + ')</strong>'
+                + '<ul class="explorer-popup-events-list">';
+            for (let i = 0; i < events.length; i++) {
                 const ev = events[i];
-                html += '<li>' + escapeHtml(ev.name)
-                    + (ev.datetime ? ' — ' + escapeHtml(formatShortDate(ev.datetime)) : '') + '</li>';
+                const evUrl = (point.tenant_domain && ev.slug)
+                    ? 'https://' + point.tenant_domain + '/event/' + ev.slug + '/'
+                    : tenantHref;
+                html += '<li><a href="' + escapeHtml(evUrl) + '" target="_blank" rel="noopener">'
+                    + escapeHtml(ev.name)
+                    + (ev.datetime_iso ? ' — ' + escapeHtml(formatShortDate(ev.datetime_iso)) : '')
+                    + '</a></li>';
             }
             html += '</ul>';
-            if (events.length > 3) {
-                html += '<span style="font-size:11px;color:#999;">+ ' + (events.length - 3) + ' ' + escapeHtml(config.i18n.more) + '</span>';
+            if (totalEvents > events.length) {
+                html += '<span class="explorer-popup-events-more">+ '
+                    + (totalEvents - events.length) + ' ' + escapeHtml(config.i18n.more) + '</span>';
             }
             html += '</div>';
         }
-        html += '<a class="explorer-popup-link" href="' + escapeHtml(href) + '" target="_blank" rel="noopener">'
+        html += '<a class="explorer-popup-link" href="' + escapeHtml(tenantHref) + '" target="_blank" rel="noopener">'
             + escapeHtml(config.i18n.visit) + ' →</a></div>';
         return html;
     }
 
-    function updateMapMarkers(filteredLieux) {
+    function updateMapMarkers(visibleTenantIds) {
+        // Garde tous les markers des tenants visibles, cache les autres.
+        // visibleTenantIds = dict {tenant_id: true}.
+        // / Keep markers for visible tenants, hide others.
         if (!state.mapInitialized) return;
-        const keep = {};
-        for (let i = 0; i < filteredLieux.length; i++) keep[filteredLieux[i].tenant_id] = true;
 
-        for (const tenantId in state.markers) {
-            const marker = state.markers[tenantId];
+        for (const paId in state.markers) {
+            const marker = state.markers[paId];
+            // Recupere tenant_id via icon data-tenant-id (mis dans addMarkers)
+            // / Get tenant_id via icon data-tenant-id (set in addMarkers)
+            const el = marker.getIcon().options.html;
+            const matchTenantId = el && el.match(/data-tenant-id="([^"]*)"/);
+            const tenantId = matchTenantId ? matchTenantId[1] : '';
+            const keep = !!visibleTenantIds[tenantId];
             const isVisible = state.markerCluster.hasLayer(marker);
-            if (keep[tenantId] && !isVisible) state.markerCluster.addLayer(marker);
-            else if (!keep[tenantId] && isVisible) state.markerCluster.removeLayer(marker);
+            if (keep && !isVisible) state.markerCluster.addLayer(marker);
+            else if (!keep && isVisible) state.markerCluster.removeLayer(marker);
         }
     }
 
@@ -595,7 +661,13 @@
     function focusOnLieu(tenantId) {
         if (window.innerWidth < 992 && state.currentView === 'list') toggleView();
         if (!state.mapInitialized) initMap();
-        const marker = state.markers[tenantId];
+        // 1 tenant peut avoir N markers (N PA). On prend le premier de la liste
+        // inversee (qui place is_main_address en tete, cf. addMarkers).
+        // / 1 tenant may have N markers (N PAs). Take the first from the reverse
+        // lookup list (which places is_main_address first, cf. addMarkers).
+        const paIds = (state.markersByTenant && state.markersByTenant[tenantId]) || [];
+        if (paIds.length === 0) return;
+        const marker = state.markers[paIds[0]];
         if (!marker) return;
 
         state.map.setView(marker.getLatLng(), 15, { animate: true });

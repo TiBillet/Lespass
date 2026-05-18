@@ -1,5 +1,52 @@
 # Changelog / Journal des modifications
 
+## SEO Chantier 05 : carte explorer ROOT — 1 marker par PostalAddress / SEO Chantier 05: 1 marker per PostalAddress on ROOT explorer map
+
+**Date :** 2026-05-17
+**Migration :** Non (juste une nouvelle valeur dans CharField choices)
+**Contributeurs / Contributors :** JonasFW13 (Jonas) + Claude Opus 4.7
+
+**Quoi / What :** Refonte de la carte `/explorer/` du tenant ROOT. Avant :
+1 marker par tenant (positionne sur Configuration.postal_address). Apres :
+1 marker par PostalAddress active, avec popup riche listant le nom du lieu,
+l'adresse, le tenant + un lien, et les 5 prochains events futurs.
+
+**Pourquoi / Why :** Suite a l'import de 327 PostalAddress geolocalisees
+(via outil nominatim-review), les tenants comme l'Universite Populaire de
+Villeurbanne (24 lieux d'evenements differents) etaient invisibles. La carte
+ROOT devient une vraie cartographie des lieux du reseau, pas juste des sieges.
+
+### Fichiers modifies / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/models.py` | +constante `SEOCache.AGGREGATE_POINTS` |
+| `seo/services.py` | +`get_postal_addresses_for_tenants`, +`build_aggregate_points`, refacto `build_explorer_data_for_tenants` (retourne `{points, tenants}`) |
+| `seo/tasks.py` | +Etape 6 dans `refresh_seo_cache` (ecriture `AGGREGATE_POINTS`) |
+| `seo/views.py` | `explorer()` itere sur `explorer_data["tenants"]` pour federation JSON-LD |
+| `seo/templates/seo/partials/explorer_widget.html` | Commentaires mis a jour |
+| `seo/static/seo/explorer.js` | Boucle sur `state.data.points` (1 marker par PA), popup riche avec `events_futurs`, `state.markers` indexes par `pa_id` |
+| `seo/static/seo/explorer.css` | +styles popup riche (.explorer-popup-address, -tenant, -logo, -events-list, -events-more) |
+| `tests/pytest/test_seo_aggregate_points.py` | +6 tests unitaires (mocks, sans DB) |
+| `tests/playwright/tests/35-explorer-markers-per-pa.spec.ts` | +2 tests E2E (structure JSON + markers visibles) |
+| `TECH_DOC/SESSIONS/SEO/CHANTIER-05-explorer-markers-per-pa.md` | Spec |
+| `TECH_DOC/SESSIONS/SEO/PLAN-05-explorer-markers-per-pa.md` | Plan d'implementation |
+
+### Decisions cles / Key decisions
+- **1 marker par PA** : popup riche listant tout (vs. markers superposes)
+- **Filtre "tenant vivant"** : PA incluse si tenant a >=1 event futur OU >=1 produit publie
+- **Cache dedie** `AGGREGATE_POINTS` : zero impact sur `AGGREGATE_LIEUX` (utilise par les autres vues `/lieu/<slug>/`, `/lieux/`, recherche)
+- **Top 5 events** par popup + `events_futurs_count_total` pour afficher "+ N autres"
+
+### Compatibilite / Compatibility
+- `AGGREGATE_LIEUX` reste maintenu en parallele -> vues `/lieu/<slug>/`, `/lieux/`, recherche ROOT, JSON-LD federation continuent de fonctionner comme avant.
+- **Activation** : prochain cycle Celery Beat de `refresh_seo_cache` (4h max), ou manuel :
+  ```bash
+  docker exec lespass_django poetry run python manage.py shell -c \
+    "from seo.tasks import refresh_seo_cache; refresh_seo_cache()"
+  ```
+
+
 ## SEO Chantier 01 : desindexer les instances DEV / DEMO / TEST / SEO Chantier 01: deindex DEV / DEMO / TEST instances
 
 **Date :** 2026-05-17

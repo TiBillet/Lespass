@@ -721,3 +721,76 @@
     }
 
 }
+
+
+/* ============================================================
+   Popup riche par PostalAddress (CHANTIER-05)
+   Styles pour les classes ajoutees par buildPopupContent() dans explorer.js
+   ============================================================ */
+
+.explorer-popup-address {
+    color: #666;
+    font-size: 0.85rem;
+    margin: 0 0 8px;
+    line-height: 1.4;
+}
+
+.explorer-popup-tenant {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    margin: 8px 0;
+    padding-top: 8px;
+    border-top: 1px solid #eee;
+}
+
+.explorer-popup-logo {
+    width: 22px;
+    height: 22px;
+    border-radius: 3px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.explorer-popup-tenant a {
+    color: #2a5d9f;
+    text-decoration: none;
+}
+
+.explorer-popup-tenant a:hover {
+    text-decoration: underline;
+}
+
+.explorer-popup-events-list {
+    list-style: none;
+    padding: 0;
+    margin: 4px 0;
+    font-size: 0.82rem;
+}
+
+.explorer-popup-events-list li {
+    padding: 3px 0;
+    border-bottom: 1px dashed #eee;
+}
+
+.explorer-popup-events-list li:last-child {
+    border-bottom: none;
+}
+
+.explorer-popup-events-list a {
+    color: #2a5d9f;
+    text-decoration: none;
+}
+
+.explorer-popup-events-list a:hover {
+    text-decoration: underline;
+}
+
+.explorer-popup-events-more {
+    display: block;
+    color: #888;
+    font-size: 0.78rem;
+    font-style: italic;
+    margin: 4px 0 0;
+}

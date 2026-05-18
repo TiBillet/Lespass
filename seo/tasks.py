@@ -238,6 +238,51 @@ def refresh_seo_cache():
     )
     set_memcached_l1(SEOCache.AGGREGATE_LIEUX, None, aggregate_lieux_data)
 
+    # ------------------------------------------------------------------
+    # Etape 6 : AGGREGATE_POINTS (1 entree par PA active)
+    # Construit la liste des points geo (1 par PostalAddress avec coords,
+    # pour chaque tenant vivant) avec les events futurs lies en popup.
+    # / Step 6: AGGREGATE_POINTS (1 entry per active PA).
+    # Builds the geo points list (1 per PA with coords, for alive tenants)
+    # with future events linked for the popup.
+    # ------------------------------------------------------------------
+    from seo.services import build_aggregate_points
+
+    # Filtre "tenant vivant" : meme regle que pour AGGREGATE_LIEUX
+    # (au moins 1 event futur OU 1 produit publie).
+    # / Alive filter: same rule as AGGREGATE_LIEUX.
+    tenants_vivants_schemas = [
+        (tenant_id, schema)
+        for tenant_id, schema in tenant_schemas
+        if (
+            counts_by_tenant.get(tenant_id, {}).get("event_count", 0) > 0
+            or counts_by_tenant.get(tenant_id, {}).get("product_count", 0) > 0
+        )
+    ]
+    configs_vivants = {
+        tid: configs_by_tenant[tid]
+        for tid, _s in tenants_vivants_schemas
+        if tid in configs_by_tenant
+    }
+    events_vivants = {
+        tid: events_by_tenant.get(tid, [])
+        for tid, _s in tenants_vivants_schemas
+    }
+    points_data = build_aggregate_points(
+        tenants_vivants_schemas, configs_vivants, events_vivants
+    )
+    SEOCache.objects.update_or_create(
+        cache_type=SEOCache.AGGREGATE_POINTS,
+        tenant=None,
+        defaults={"data": points_data},
+    )
+    set_memcached_l1(SEOCache.AGGREGATE_POINTS, None, points_data)
+    logger.info(
+        "AGGREGATE_POINTS ecrit : %d points / written: %d points",
+        len(points_data["points"]),
+        len(points_data["points"]),
+    )
+
     # sitemap_index : MEME filtre que aggregate_lieux. Inutile de pointer
     # un crawler Google ou un LLM (GPTBot, ClaudeBot) vers un sitemap
     # tenant qui ne contient rien d'autre que la page d'accueil — ca
