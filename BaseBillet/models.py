@@ -258,17 +258,24 @@ class PostalAddress(models.Model):
         help_text=_("Full name or ISO code.")
     )
 
+    # max_digits=9, decimal_places=6 = precision ~11cm, range +/-999.999999
+    # / max_digits=9, decimal_places=6 = ~11cm precision, +/-999.999999 range
+    # Aligne sur MetaBillet.WaitingConfiguration.latitude/longitude.
+    # Anciennement 18/16 (bug : 2 chiffres avant la virgule -> overflow pour
+    # toute longitude hors [-99, +99], i.e. Asie/Pacifique/Ameriques).
+    # / Was previously 18/16 (only 2 digits before decimal -> overflow for any
+    # longitude outside [-99, +99], i.e. most of Asia/Pacific/Americas).
     latitude = models.DecimalField(
-        max_digits=18,
-        decimal_places=16,
+        max_digits=9,
+        decimal_places=6,
         blank=True,
         null=True,
         verbose_name=_("Latitude"),
         help_text=_("GPS coordinate: latitude.")
     )
     longitude = models.DecimalField(
-        max_digits=18,
-        decimal_places=16,
+        max_digits=9,
+        decimal_places=6,
         blank=True,
         null=True,
         verbose_name=_("Longitude"),
@@ -786,7 +793,12 @@ class Configuration(SingletonModel):
                 tenant = connection.tenant
                 tenant_url = tenant.get_primary_domain().domain
                 msg = _('Link your stripe account to accept payment')
-                return format_html(f"<a href='https://{tenant_url}/tenant/onboard_stripe_from_config'>{msg}</a>")
+                # URL migree 2026-05-16 : /tenant/onboard_stripe_from_config ->
+                # /stripe/onboard/from_config/ (app PaiementStripe). Cf.
+                # TECH_DOC/SESSIONS/MOYENS_PAIEMENT/01-stripe-migration-spec.md.
+                # / URL migrated 2026-05-16: /tenant/onboard_stripe_from_config
+                # -> /stripe/onboard/from_config/ (PaiementStripe app).
+                return format_html(f"<a href='https://{tenant_url}/stripe/onboard/from_config/'>{msg}</a>")
             return _("Stripe connected")
         except Exception as e:
             logger.error(_("Stripe error, check admin"))

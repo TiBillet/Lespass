@@ -652,7 +652,7 @@ Append à la fin de `onboard/services.py` :
 # === Geocode Nominatim ===
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-NOMINATIM_USER_AGENT = "TiBillet-Onboard/1.0 (contact@tibillet.coop)"
+NOMINATIM_USER_AGENT = "TiBillet-Onboard/1.0 (contact@tibillet.re)"
 NOMINATIM_TIMEOUT = 5  # seconds
 GEOCODE_CACHE_TTL = 24 * 60 * 60  # 24h
 
@@ -3188,7 +3188,7 @@ git commit -m "feat(onboard): templates steps 3 (place + Leaflet draggable) + 4 
 <!-- status_error.html -->
 {% load i18n %}
 <div id="launch-status" class="alert alert-danger" data-testid="onboard-launch-status-error">
-  ⚠️ {% translate "Une erreur est survenue, on a reçu une alerte. Tu peux réessayer ou nous contacter à contact@tibillet.coop." %}
+  ⚠️ {% translate "Une erreur est survenue, on a reçu une alerte. Tu peux réessayer ou nous contacter à contact@tibillet.re." %}
   <pre class="small mt-2">{{ wc.error_message }}</pre>
   <form method="post" action="{% url 'onboard-launch-retry' %}" class="mt-2">
     {% csrf_token %}

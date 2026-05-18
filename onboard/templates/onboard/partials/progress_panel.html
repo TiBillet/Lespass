@@ -32,16 +32,20 @@
 
 {# Calcul des flags is-current / is-done une seule fois en haut du template #}
 {# / Compute is-current / is-done flags once at the top of the template #}
+{# Note : on fusionne identity + verify dans une seule entree de panel    #}
+{# "Identite" — la verification OTP est invisible si l'user est deja      #}
+{# loggue (skip_otp) et reste un sous-flow technique sinon. Cf. decision  #}
+{# mainteneur 2026-05-16.                                                  #}
+{# / We merge identity + verify into a single "Identite" panel entry —    #}
+{# OTP verification is invisible to a logged-in user (skip_otp) and stays  #}
+{# a technical sub-flow otherwise. Maintainer decision 2026-05-16.        #}
 {% is_step_current step 'identity' as identity_current %}
-{% is_step_done step 'identity' as identity_done %}
 {% is_step_current step 'verify' as verify_current %}
 {% is_step_done step 'verify' as verify_done %}
 {% is_step_current step 'place' as place_current %}
 {% is_step_done step 'place' as place_done %}
 {% is_step_current step 'descriptions' as descriptions_current %}
 {% is_step_done step 'descriptions' as descriptions_done %}
-{% is_step_current step 'events' as events_current %}
-{% is_step_done step 'events' as events_done %}
 {% is_step_current step 'launch' as launch_current %}
 
 <div class="onboard-panel" data-testid="onboard-progress-panel">
@@ -59,10 +63,16 @@
     non-clickable: no forward skip.
     {% endcomment %}
     <ol class="onboard-panel-steps">
-        {# Etape 1 : Identite / Step 1: Identity #}
-        <li class="onboard-step {% if identity_current %}is-current{% elif identity_done %}is-done{% endif %}"
-            {% if identity_current %}aria-current="step"{% endif %}>
-            {% if identity_done %}
+        {# Etape 1 : Identite (englobe la verification OTP qui est un       #}
+        {# sous-flow technique). L'etape reste "current" tant qu'on est sur #}
+        {# identity OU verify. Elle est "done" quand on a depasse verify    #}
+        {# (la vue verify ayant fait `current_step=place` apres OTP OK).    #}
+        {# / Step 1: Identity (encompasses OTP verification as a technical  #}
+        {# sub-flow). It stays "current" while on identity OR verify, and   #}
+        {# becomes "done" once past verify (verify view sets step=place).   #}
+        <li class="onboard-step {% if identity_current or verify_current %}is-current{% elif verify_done %}is-done{% endif %}"
+            {% if identity_current or verify_current %}aria-current="step"{% endif %}>
+            {% if verify_done %}
                 <a href="{% url 'onboard-identity' %}" class="onboard-step-link" data-testid="onboard-progress-1">
                     <span class="onboard-step-num">1</span> {% translate "Identité" %}
                     <small class="onboard-step-hint">{% translate "Qui êtes-vous et comment s'appelle votre lieu ?" %}</small>
@@ -72,62 +82,41 @@
                 <small class="onboard-step-hint">{% translate "Qui êtes-vous et comment s'appelle votre lieu ?" %}</small>
             {% endif %}
         </li>
-        {# Etape 2 : Verification / Step 2: Verification #}
-        <li class="onboard-step {% if verify_current %}is-current{% elif verify_done %}is-done{% endif %}"
-            {% if verify_current %}aria-current="step"{% endif %}>
-            {% if verify_done %}
-                <a href="{% url 'onboard-verify' %}" class="onboard-step-link" data-testid="onboard-progress-2">
-                    <span class="onboard-step-num">2</span> {% translate "Vérification" %}
-                    <small class="onboard-step-hint">{% translate "Nous vous envoyons un code par email." %}</small>
-                </a>
-            {% else %}
-                <span class="onboard-step-num">2</span> {% translate "Vérification" %}
-                <small class="onboard-step-hint">{% translate "Nous vous envoyons un code par email." %}</small>
-            {% endif %}
-        </li>
-        {# Etape 3 : Lieu / Step 3: Place #}
+        {# Etape 2 : Lieu / Step 2: Place #}
         <li class="onboard-step {% if place_current %}is-current{% elif place_done %}is-done{% endif %}"
             {% if place_current %}aria-current="step"{% endif %}>
             {% if place_done %}
-                <a href="{% url 'onboard-place' %}" class="onboard-step-link" data-testid="onboard-progress-3">
-                    <span class="onboard-step-num">3</span> {% translate "Votre lieu" %}
+                <a href="{% url 'onboard-place' %}" class="onboard-step-link" data-testid="onboard-progress-2">
+                    <span class="onboard-step-num">2</span> {% translate "Votre lieu" %}
                     <small class="onboard-step-hint">{% translate "Nous localisons votre lieu sur la carte." %}</small>
                 </a>
             {% else %}
-                <span class="onboard-step-num">3</span> {% translate "Votre lieu" %}
+                <span class="onboard-step-num">2</span> {% translate "Votre lieu" %}
                 <small class="onboard-step-hint">{% translate "Nous localisons votre lieu sur la carte." %}</small>
             {% endif %}
         </li>
-        {# Etape 4 : Presentation / Step 4: Presentation #}
+        {# Etape 3 : Presentation / Step 3: Presentation #}
         <li class="onboard-step {% if descriptions_current %}is-current{% elif descriptions_done %}is-done{% endif %}"
             {% if descriptions_current %}aria-current="step"{% endif %}>
             {% if descriptions_done %}
-                <a href="{% url 'onboard-descriptions' %}" class="onboard-step-link" data-testid="onboard-progress-4">
-                    <span class="onboard-step-num">4</span> {% translate "Présentation" %}
+                <a href="{% url 'onboard-descriptions' %}" class="onboard-step-link" data-testid="onboard-progress-3">
+                    <span class="onboard-step-num">3</span> {% translate "Présentation" %}
                     <small class="onboard-step-hint">{% translate "Accroche, texte long et logo." %}</small>
                 </a>
             {% else %}
-                <span class="onboard-step-num">4</span> {% translate "Présentation" %}
+                <span class="onboard-step-num">3</span> {% translate "Présentation" %}
                 <small class="onboard-step-hint">{% translate "Accroche, texte long et logo." %}</small>
             {% endif %}
         </li>
-        {# Etape 5 : Evenements / Step 5: Events #}
-        <li class="onboard-step {% if events_current %}is-current{% elif events_done %}is-done{% endif %}"
-            {% if events_current %}aria-current="step"{% endif %}>
-            {% if events_done %}
-                <a href="{% url 'onboard-events' %}" class="onboard-step-link" data-testid="onboard-progress-5">
-                    <span class="onboard-step-num">5</span> {% translate "Événements" %}
-                    <small class="onboard-step-hint">{% translate "Optionnel : déclare 0 à N événements." %}</small>
-                </a>
-            {% else %}
-                <span class="onboard-step-num">5</span> {% translate "Événements" %}
-                <small class="onboard-step-hint">{% translate "Optionnel : déclare 0 à N événements." %}</small>
-            {% endif %}
-        </li>
-        {# Etape 6 : Launch / Step 6: Launch (jamais cliquable depuis la sidebar) #}
+        {# Etape 4 : Launch (jamais cliquable depuis la sidebar)            #}
+        {# L'etape "Evenements" est volontairement masquee du parcours      #}
+        {# par defaut (decision mainteneur 2026-05-16). Le code et les      #}
+        {# routes `/onboard/events/*` restent en place pour un usage        #}
+        {# futur. / Step 4: Launch. The "Events" step is hidden from the   #}
+        {# default flow (kept in code for future reuse).                    #}
         <li class="onboard-step {% if launch_current %}is-current{% endif %}"
             {% if launch_current %}aria-current="step"{% endif %}>
-            <span class="onboard-step-num">6</span> {% translate "C'est parti !" %}
+            <span class="onboard-step-num">4</span> {% translate "C'est parti !" %}
             <small class="onboard-step-hint">{% translate "Découverte de TiBillet pendant la création." %}</small>
         </li>
     </ol>

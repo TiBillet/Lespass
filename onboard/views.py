@@ -284,17 +284,559 @@ def _generate_and_send_otp_for_wc(wc, is_resend=False):
     return sent_at
 
 
+def _finalize_otp_success(request, wc):
+    """
+    Finalise une verification OTP reussie : avance le brouillon, cree/active
+    le TibilletUser, et logue l'utilisateur dans la session Django.
+
+    Appele a 2 endroits dans `verify` POST :
+      1. Branche DEBUG (bypass : tout code 6 chiffres accepte en dev local).
+      2. Branche prod (apres `verify_otp(saisie, wc.otp_hash)` OK).
+
+    Les deux branches doivent faire EXACTEMENT le meme travail post-succes,
+    sinon le user ne sera pas authentifie sur la step suivante et le garde
+    `_get_confirmed_wc_or_redirect` le renverra a `onboard-identity`.
+    C'est le bug qui a motive cette factorisation (DEBUG bypass faisait
+    update WC + get_or_create_user mais sautait l'activation et `login()`).
+
+    Etapes :
+      - Update WC en schema `meta` : `email_confirmed=True`,
+        `current_step=PLACE`, purge OTP (`otp_hash=""`, `otp_expires_at=None`).
+      - get_or_create_user(wc.email) : idempotent, cree si absent.
+      - Si retour None (cas `email_error` sur user existant) -> on retourne
+        None pour signaler l'echec a l'appelant qui rendra son template.
+      - Force `email_valid=True` (preuve OTP) + `is_active=True` (les
+        nouveaux users sortent inactifs de get_or_create_user).
+      - `login(request, user, backend=...)` : pose le cookie session auth.
+
+    / Finalise a successful OTP verification: advance the draft, create/
+    activate the TibilletUser, and log the user in via Django session.
+    Called from both DEBUG-bypass and prod branches of `verify` POST.
+    Both branches must do the SAME post-success work, otherwise the user
+    won't be authenticated on the next step and `_get_confirmed_wc_or_redirect`
+    will send them back to `onboard-identity`.
+
+    Returns the user object on success, or `None` on failure (caller
+    renders its own 422 template).
+    """
+    # Imports locaux : evite la dependance circulaire au chargement du
+    # module et le cout d'import sur les requetes qui ne passent pas par
+    # ici. / Local imports to avoid circular dep + load cost.
+    from django.contrib.auth import login
+
+    from AuthBillet.utils import get_or_create_user
+
+    # 1. Avance du brouillon. Atomique via `.update()` (pas besoin de re-fetch).
+    # / 1. Advance the draft. Atomic via `.update()` (no re-fetch).
+    with schema_context("meta"):
+        WaitingConfiguration.objects.filter(uuid=wc.uuid).update(
+            email_confirmed=True,
+            current_step=WaitingConfiguration.STEP_PLACE,
+            otp_hash="",
+            otp_expires_at=None,
+        )
+
+    # 2. Cree ou recupere le user (idempotent). `send_mail=False` car la
+    # confirmation email est deja faite via l'OTP.
+    # / 2. Create-or-get user (idempotent). `send_mail=False` since OTP
+    # already confirmed the email.
+    user = get_or_create_user(wc.email, send_mail=False)
+    if user is None:
+        # Cas extreme : `email_error` positionne sur un user existant.
+        # On signale l'echec a l'appelant.
+        # / Edge case: `email_error` set on existing user — signal failure.
+        return None
+
+    # 3. Force `email_valid` + `is_active` + report first_name / last_name.
+    # `get_or_create_user` cree les users avec `is_active=False` par defaut ;
+    # sans activation, certains backends refuseraient l'auth. Les champs
+    # first_name / last_name viennent du wizard step 1 (wc.first_name /
+    # wc.last_name) et n'ont jamais ete persistes sur le TibilletUser
+    # auparavant — bug observe 2026-05-17 : un user nouvellement cree
+    # arrive sans prenom ni nom dans son profil admin. On ne re-ecrit que
+    # si le user n'a pas deja un nom (on ne ecrase pas un user existant
+    # qui aurait deja change son nom dans son admin).
+    # / Force email_valid + is_active + report first_name / last_name from
+    # the wizard. We only overwrite empty fields to respect a user who has
+    # already updated their name from their admin. `update_fields` scopes
+    # the write.
+    update_fields = []
+    if not user.email_valid:
+        user.email_valid = True
+        update_fields.append("email_valid")
+    if not user.is_active:
+        user.is_active = True
+        update_fields.append("is_active")
+    if wc.first_name and not user.first_name:
+        user.first_name = wc.first_name
+        update_fields.append("first_name")
+    if wc.last_name and not user.last_name:
+        user.last_name = wc.last_name
+        update_fields.append("last_name")
+    if update_fields:
+        user.save(update_fields=update_fields)
+
+    # 4. Login Django : pose le cookie session auth. Backend explicite car
+    # le projet a plusieurs AUTHENTICATION_BACKENDS et `login()` l'exige
+    # sans `authenticate()` prealable.
+    # / 4. Django login: set auth session cookie. Explicit backend required
+    # because the project has several AUTHENTICATION_BACKENDS and `login()`
+    # needs one when called without a prior `authenticate()`.
+    login(
+        request, user,
+        backend="django.contrib.auth.backends.ModelBackend",
+    )
+
+    # 5. RE-ECRIT `onboard_wc_uuid` dans la session APRES le login.
+    # Django `login()` appelle `request.session.cycle_key()` (anonyme ->
+    # authentifie) ou `request.session.flush()` (changement d'user). En
+    # theorie cycle_key() preserve les donnees ; en pratique, on a observe
+    # 2026-05-17 une perte de la clef `onboard_wc_uuid` apres verify success
+    # (probablement liee a `SESSION_SAVE_EVERY_REQUEST=True` + cycle_key qui
+    # interagissent mal cote backend session DB). Symptome : verify OK ->
+    # redirect vers `onboard-place` -> `_get_or_none_wc()` retourne None ->
+    # `_get_confirmed_wc_or_redirect` renvoie sur `onboard-identity`, qui
+    # tombe sur la branche "Priorite 2" (user authentifie + pas de wc) et
+    # pre-remplit email depuis `request.user` mais laisse first_name /
+    # last_name vides. L'utilisateur croit avoir perdu sa saisie.
+    # Le re-set ici est defensif : si la session a survecu, c'est un no-op
+    # (meme valeur). Sinon, on restaure le pointeur vers le brouillon.
+    # / 5. RE-WRITE `onboard_wc_uuid` after login. Django `login()` calls
+    # cycle_key() (anon -> auth) or flush() (user change). In theory
+    # cycle_key preserves data; in practice we observed 2026-05-17 a loss
+    # of the `onboard_wc_uuid` key after verify success — leading the next
+    # `place` GET to redirect to identity with empty first_name/last_name.
+    # Defensive re-set: no-op if session survived, restore otherwise.
+    _set_session_wc(request, wc)
+
+    return user
+
+
+def forge_admin_magic_link(user, tenant, next_path="/admin/"):
+    """
+    Forge une URL magic-link qui logue `user` sur `tenant` et redirige
+    vers `next_path` (par defaut `/admin/`).
+
+    Reutilise le pattern existant du projet :
+      - `user.get_connect_token()` -> TimestampSigner(user.pk), TTL 72h
+        (cf. `AuthBillet/models.py::TibilletUser.get_connect_token`).
+      - Vue `/emailconfirmation/<token>` -> `activate(request, token)` qui
+        fait `login(request, user)` puis redirect vers `?next=<signed>`
+        (cf. `BaseBillet/views.py::emailconfirmation`).
+      - `signing.dumps(next_path)` : le param `?next=` est SIGNED cote
+        emetteur et VERIFIE cote recepteur (`signing.loads`) — empeche
+        un attaquant de detourner le redirect vers un site externe.
+
+    Securite : on ne hardcode pas /admin/ — le code de la vue
+    `emailconfirmation` re-deserialise via `signing.loads(next_url)`,
+    donc la signature suffit pour bloquer toute redirection malicieuse.
+
+    / Forge a magic-link URL that logs `user` in on `tenant` and redirects
+    to `next_path` (default `/admin/`). Reuses the project's existing
+    pattern: `user.get_connect_token()` (TimestampSigner, 72h TTL) +
+    `signing.dumps(next_path)` (the receiver verifies via `signing.loads`,
+    which prevents redirect tampering).
+
+    LOCALISATION: onboard/views.py::forge_admin_magic_link
+
+    :param user: instance TibilletUser cible.
+    :param tenant: instance Client (tenant) cible.
+    :param next_path: chemin a atteindre apres login (str, defaut "/admin/").
+    :return: str URL absolue (`https://...`) avec token + next signed.
+    """
+    # Imports locaux : evitent de charger AuthBillet au top du module.
+    # / Local imports: avoid loading AuthBillet at module-top.
+    from django.core import signing
+
+    primary_domain = tenant.get_primary_domain().domain
+    token = user.get_connect_token()
+    next_signed = signing.dumps(next_path)
+    return (
+        f"https://{primary_domain}/emailconfirmation/{token}"
+        f"?next={next_signed}"
+    )
+
+
+# --- SSO transitoire tenant -> ROOT --------------------------------------
+# Quand un utilisateur deja authentifie sur un tenant est redirige vers le
+# wizard servi par ROOT (cf. `_redirect_to_root_if_tenant`), on perd la
+# session cross-domain (cookie scope au domaine du tenant). Pour eviter de
+# lui redemander OTP / login a froid, on lui forge un token tres court qui
+# transporte son identite jusqu'a ROOT.
+#
+# Securite (durcissement vs `TibilletUser.get_connect_token` qui sert pour
+# les magic-link mail) :
+#   - Scope explicite `onboard_sso:` dans le payload signe : un token vole
+#     ailleurs (mail de connexion) ne marche PAS ici, et inversement.
+#   - TTL court (`ONBOARD_SSO_TTL_SECONDS`) : 120s suffit pour un redirect
+#     HTTP automatique, vs 72h pour le mail de connexion.
+#   - One-shot via Redis : `cache.add()` est atomique ; une 2e tentative
+#     avec le meme token (rejeu, capture) est refusee.
+#   - Cle Redis derivee d'un SHA256 du token : on ne stocke jamais le
+#     token brut en cache pour eviter sa fuite en cas de dump Redis.
+#
+# Le token transite en query string `?sso=<token>` lors du 302 ; sur ROOT,
+# `dispatch()` le consomme immediatement et fait un 2e 302 vers le meme
+# path SANS le param, pour nettoyer l'URL (history navigateur, Referer).
+#
+# / Transient SSO from tenant to ROOT. We mint a short-lived signed token
+# when the user is authenticated on a tenant and we redirect to ROOT, so
+# they don't have to re-OTP. Hardened vs the mail magic-link token:
+# explicit `onboard_sso:` scope, 120s TTL, one-shot via Redis (cache.add),
+# Redis key derived from SHA256 of the token (never the raw value).
+ONBOARD_SSO_SCOPE = "onboard_sso"
+ONBOARD_SSO_TTL_SECONDS = 120
+ONBOARD_SSO_QUERY_PARAM = "sso"
+
+
+def _hash_for_cache(token):
+    """
+    Renvoie un SHA256 hex du token, utilise comme cle Redis. On ne stocke
+    jamais le token brut en cache.
+    / Returns the token's SHA256 (hex), used as Redis key. We never store
+    the raw token in the cache.
+    """
+    import hashlib
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _generate_onboard_sso_token(user):
+    """
+    Forge un token SSO signe et scope, lie a `user.pk`.
+
+    Format : `urlsafe_base64( TimestampSigner().sign("onboard_sso:<pk>") )`.
+    Le scope `onboard_sso:` est inclus DANS le payload signe — un token
+    forge sans la `SECRET_KEY` Django est impossible, et un token venant
+    d'un autre scope (mail magic-link) ne passe pas le check de scope.
+
+    SECURITE : on ne genere un token QUE pour un user humain
+    (`espece == TYPE_HUM`). Un terminal (POS, borne) ou un android n'a
+    aucune raison de creer un tenant via le wizard. Retourne `None` si
+    l'utilisateur n'est pas humain — l'appelant decide quoi faire (en
+    pratique : ne pas ajouter le param `sso` au redirect).
+
+    Le timestamp est embarque par `TimestampSigner` (verifie via `max_age`
+    au moment du `unsign`), donc pas besoin de le serialiser nous-memes.
+
+    / Mint a signed, scoped SSO token bound to `user.pk`. Format:
+    `urlsafe_base64(TimestampSigner.sign("onboard_sso:<pk>"))`. The scope
+    is part of the signed payload, preventing cross-scope reuse.
+    SECURITY: only mint a token for human users (`espece == TYPE_HUM`).
+    Terminals (POS) and android terminals have no business creating a
+    tenant via the wizard. Returns `None` if user is not human.
+    """
+    from AuthBillet.models import TibilletUser
+    from django.core.signing import TimestampSigner
+    from django.utils.http import urlsafe_base64_encode
+
+    # Garde 1 — type d'utilisateur. Un terminal compromis ne doit pas
+    # pouvoir creer un tenant en se faisant passer pour un humain via SSO.
+    # / Guard 1 — user type. A compromised terminal must not be able to
+    # create a tenant by SSO-ing as a human.
+    if getattr(user, "espece", None) != TibilletUser.TYPE_HUM:
+        logger.warning(
+            "Onboard SSO: refus de generer un token pour user pk=%s "
+            "(espece=%s, attendu=HU).",
+            getattr(user, "pk", None),
+            getattr(user, "espece", "?"),
+        )
+        return None
+
+    signer = TimestampSigner()
+    payload = f"{ONBOARD_SSO_SCOPE}:{user.pk}"
+    signed = signer.sign(payload)
+    return urlsafe_base64_encode(signed.encode("utf-8"))
+
+
+def _consume_onboard_sso_token(token):
+    """
+    Verifie le token SSO et renvoie l'instance `TibilletUser` cible, ou
+    `None` en cas d'echec (signature, expiration, scope incorrect, user
+    introuvable, deja consomme).
+
+    Quatre garde-fous :
+      1. `signer.unsign(..., max_age=120)` -> rejette signature invalide
+         ET expiration > 120s.
+      2. Scope : le payload demuxe doit commencer par `onboard_sso:`.
+         Un token magic-link mail (scope different) est refuse.
+      3. One-shot : `cache.add(redis_key, 1, timeout=120)` est atomique ;
+         si la cle existe deja, c'est un rejeu, on refuse.
+      4. User : on charge `User.objects.get(pk=user_pk)`. Si supprime
+         entre-temps, on refuse.
+
+    / Verifies the SSO token and returns the matching `TibilletUser`, or
+    `None` on any failure (signature, expiry, wrong scope, missing user,
+    already-consumed). Four guards: TimestampSigner with max_age=120s,
+    scope check, atomic one-shot via cache.add(), user existence check.
+    """
+    # Imports locaux : on n'a besoin d'eux que sur le chemin SSO.
+    # / Local imports: only needed on the SSO path.
+    from django.contrib.auth import get_user_model
+    from django.core.cache import cache
+    from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
+    from django.utils.http import urlsafe_base64_decode
+
+    if not token:
+        return None
+
+    # Decode base64 -> string signe.
+    # / Decode base64 -> signed string.
+    try:
+        signed = urlsafe_base64_decode(token).decode("utf-8")
+    except (UnicodeDecodeError, ValueError):
+        logger.info("Onboard SSO: token base64 invalide.")
+        return None
+
+    # Verifie signature + TTL.
+    # / Verify signature + TTL.
+    signer = TimestampSigner()
+    try:
+        payload = signer.unsign(signed, max_age=ONBOARD_SSO_TTL_SECONDS)
+    except SignatureExpired:
+        logger.info("Onboard SSO: token expire (TTL %ss).", ONBOARD_SSO_TTL_SECONDS)
+        return None
+    except BadSignature:
+        logger.warning("Onboard SSO: signature invalide (tentative de forge ?).")
+        return None
+
+    # Verifie scope : le payload doit commencer par `onboard_sso:`. Sans
+    # ce check, un token magic-link mail (scope different) pourrait servir.
+    # / Scope check: payload must start with `onboard_sso:`. Without this,
+    # a mail magic-link token (different scope) could be reused.
+    prefix = f"{ONBOARD_SSO_SCOPE}:"
+    if not payload.startswith(prefix):
+        logger.warning(
+            "Onboard SSO: scope invalide (payload='%s', attendu='%s*').",
+            payload[:30], prefix,
+        )
+        return None
+
+    user_pk_str = payload[len(prefix):]
+    if not user_pk_str:
+        logger.warning("Onboard SSO: pk vide dans le payload.")
+        return None
+
+    # One-shot via cache.add() — atomique entre workers. Si la cle existe
+    # deja, c'est un rejeu (replay attack ou refresh trop tardif).
+    # / Atomic one-shot via cache.add(). Existing key = replay attempt.
+    cache_key = f"onboard:sso:consumed:{_hash_for_cache(token)}"
+    got_lock = cache.add(cache_key, "1", timeout=ONBOARD_SSO_TTL_SECONDS)
+    if not got_lock:
+        logger.warning(
+            "Onboard SSO: token deja consomme (rejeu user_pk=%s).",
+            user_pk_str,
+        )
+        return None
+
+    # Charge l'utilisateur. Si supprime entre-temps : refuse.
+    # / Load the user. If deleted in the meantime: refuse.
+    User = get_user_model()
+    try:
+        user = User.objects.get(pk=user_pk_str)
+    except (User.DoesNotExist, ValueError):
+        logger.warning("Onboard SSO: user pk=%s introuvable.", user_pk_str)
+        return None
+
+    # Garde 5 — type d'utilisateur (defense en profondeur). Si jamais un
+    # terminal a reussi a forger / capturer un token humain et que la
+    # garde cote `_generate_onboard_sso_token` est buggee, on bloque ici
+    # aussi. Le wizard ne sert qu'a creer un tenant, ce n'est jamais un
+    # terminal qui le fait.
+    # / Guard 5 — user type (defense in depth). Even if the generation-time
+    # guard were buggy and a terminal got a human token, we block here.
+    # Only humans create tenants via the wizard.
+    from AuthBillet.models import TibilletUser
+
+    if user.espece != TibilletUser.TYPE_HUM:
+        logger.warning(
+            "Onboard SSO: refus de consommer un token pour user pk=%s "
+            "(espece=%s, attendu=HU).",
+            user.pk, user.espece,
+        )
+        return None
+
+    return user
+
+
+def _consume_sso_in_request_if_present(request):
+    """
+    Sur ROOT, si la query string contient `?sso=<token>` :
+      - consomme le token et logue l'utilisateur via Django session ;
+      - retourne un `HttpResponseRedirect` vers le meme path mais SANS le
+        param `sso` (URL propre dans l'history navigateur et le Referer).
+
+    Renvoie `None` si :
+      - pas de `sso=` en query (cas nominal) ;
+      - token invalide (logge le motif, mais ne bloque pas le wizard :
+        l'utilisateur sera juste considere comme anonyme).
+
+    / On ROOT, if the query string contains `?sso=<token>`: consume +
+    Django login, then return a 302 to the same path WITHOUT the `sso`
+    param (clean URL). Returns `None` if no `sso=` or invalid token (we
+    log the reason but don't block the wizard — user just stays anonymous).
+    """
+    token = request.GET.get(ONBOARD_SSO_QUERY_PARAM, "").strip()
+    if not token:
+        return None
+
+    user = _consume_onboard_sso_token(token)
+    if user is None:
+        # Token invalide / expire / rejeu : on ne bloque pas, on retire
+        # juste le param de l'URL pour ne pas le re-tenter en boucle.
+        # / Invalid/expired/replayed token: don't block, just strip the
+        # param to avoid retrying it in a loop.
+        return _redirect_stripping_sso_param(request)
+
+    # Login Django : backend explicite (cf. _finalize_otp_success).
+    # / Django login: explicit backend (cf. _finalize_otp_success).
+    from django.contrib.auth import login
+
+    login(
+        request, user,
+        backend="django.contrib.auth.backends.ModelBackend",
+    )
+    logger.info(
+        "Onboard SSO: user pk=%s logue via token transitoire (tenant -> ROOT).",
+        user.pk,
+    )
+    return _redirect_stripping_sso_param(request)
+
+
+def _redirect_stripping_sso_param(request):
+    """
+    Renvoie un 302 vers le path courant, query string nettoyee du param
+    `sso`. Si la query string devient vide, on supprime aussi le `?`.
+
+    / Returns a 302 to the current path with the `sso` param stripped.
+    """
+    from django.http import HttpResponseRedirect
+
+    # `request.GET` est un QueryDict immuable ; on en fait une copie mutable.
+    # / `request.GET` is immutable; copy it to mutate.
+    params_copies = request.GET.copy()
+    params_copies.pop(ONBOARD_SSO_QUERY_PARAM, None)
+    suffix = f"?{params_copies.urlencode()}" if params_copies else ""
+    target = f"{request.path}{suffix}"
+    return HttpResponseRedirect(target)
+
+
+def _redirect_to_root_if_tenant(request):
+    """
+    Si l'utilisateur accede au wizard depuis un tenant (subdomain d'un lieu),
+    on le renvoie vers le meme path sur le tenant ROOT (tibillet.org).
+
+    Pourquoi : le wizard `base_wizard.html` etend `seo/base.html`, dont la
+    navbar est codee pour le contexte ROOT (Explorer / Documentation / logo
+    TiBillet). Sur un tenant, on heritait de cette navbar ROOT au lieu de
+    celle du lieu — incoherent visuellement. Choix mainteneur 2026-05-16 :
+    plutot que de fabriquer un base wizard double-skin (ROOT/tenant), on
+    redirige tout simplement vers ROOT. Le wizard vit toujours sur le meme
+    domaine, et le bouton "Creer son espace" des footers tenant pointe en
+    fait vers la meme experience.
+
+    Renvoie `None` si on est deja sur ROOT (schema `public`), sinon un
+    `HttpResponseRedirect` vers `https://<root_domain><path_complet>`.
+    Le path complet est preserve (identity / verify / ...) ainsi que la
+    query string (`?invite=<code>`) pour ne pas casser les invitations.
+
+    / If the user reaches the wizard from a tenant (venue subdomain), we
+    redirect to the same path on the ROOT tenant (tibillet.org).
+    Reason: `base_wizard.html` extends `seo/base.html` whose navbar is
+    hardcoded for the ROOT context. On a tenant, we'd inherit the ROOT
+    navbar instead of the venue's — visually inconsistent. Maintainer
+    choice 2026-05-16: simpler to redirect than to build a dual-skin base.
+    Returns `None` if already on ROOT (`public` schema), otherwise an
+    `HttpResponseRedirect` preserving full path + query string.
+    """
+    # Import local : evite de charger django.db.connection au top du module.
+    # / Local import: avoid loading django.db.connection at module top.
+    from django.db import connection
+    from django.http import HttpResponseRedirect
+
+    if connection.schema_name == "public":
+        # Deja sur ROOT, rien a faire. / Already on ROOT, nothing to do.
+        return None
+
+    # Recupere le domaine primary du tenant ROOT. Le Client ROOT vit dans
+    # SHARED_APPS, donc visible depuis n'importe quel schema, mais on force
+    # le contexte `public` par defense en profondeur (au cas ou le futur).
+    # / Lookup ROOT tenant's primary domain. SHARED_APPS so visible from
+    # anywhere, but we still scope to `public` for defense in depth.
+    from Customers.models import Client
+
+    with schema_context("public"):
+        try:
+            root = Client.objects.get(categorie=Client.ROOT)
+        except Client.DoesNotExist:
+            # Installation incomplete : pas de fallback possible. ERROR level
+            # (PAS warning) car sans tenant ROOT, la plateforme est cassee
+            # dans son setup de base. Sentry doit alerter ops pour qu'ils
+            # lancent `manage.py install` ou creent le ROOT a la main.
+            # / Incomplete install. ERROR level (not warning): without ROOT
+            # tenant, the platform is broken at its base setup. Sentry must
+            # alert ops to run install.
+            logger.error(
+                "Onboard: ROOT tenant (Client.categorie=ROOT) introuvable. "
+                "Wizard servi sur tenant '%s' avec skin incoherent. "
+                "Action ops : lancer `manage.py install` ou creer le tenant "
+                "ROOT manuellement.",
+                connection.schema_name,
+            )
+            return None
+        root_domain = root.get_primary_domain().domain
+
+    # Construit la query string cible : on conserve TOUS les params actuels
+    # (ex: `?invite=abc`) et on injecte `?sso=<token>` si l'utilisateur est
+    # authentifie. Cela permet de transporter son identite cross-domain
+    # sans qu'il refasse OTP / login.
+    # / Build the target query string: keep all current params (e.g.
+    # `?invite=abc`) and add `?sso=<token>` if the user is authenticated.
+    # This transports identity cross-domain without re-OTP / re-login.
+    params_pour_root = request.GET.copy()
+    if request.user.is_authenticated:
+        # Token a TTL court (120s), one-shot, scope `onboard_sso:`. Cf.
+        # `_generate_onboard_sso_token` pour le detail securite.
+        # `_generate_onboard_sso_token` retourne `None` si l'utilisateur
+        # n'est pas humain (terminal POS, android) : dans ce cas on ne
+        # met pas de param `sso` -> l'utilisateur arrivera anonyme sur
+        # ROOT et devra refaire le flow d'identite + OTP (normal).
+        # / Short-TTL (120s), one-shot, scoped token. Returns None for
+        # non-human users (terminals) — in which case we skip the param
+        # and the user lands anonymous on ROOT.
+        token = _generate_onboard_sso_token(request.user)
+        if token is not None:
+            params_pour_root[ONBOARD_SSO_QUERY_PARAM] = token
+            logger.info(
+                "Onboard: user authenticated on tenant '%s', issuing SSO "
+                "token for ROOT redirect.",
+                connection.schema_name,
+            )
+
+    query_string = params_pour_root.urlencode()
+    suffix = f"?{query_string}" if query_string else ""
+    target_url = f"https://{root_domain}{request.path}{suffix}"
+    logger.info(
+        "Onboard: redirecting from tenant '%s' to ROOT.",
+        connection.schema_name,
+    )
+    return HttpResponseRedirect(target_url)
+
+
 class OnboardViewSet(viewsets.ViewSet):
     """
     Wizard d'onboarding en 6 etapes pour creer un nouveau tenant.
-    Toutes les actions sont SHARED — accessibles depuis le schema public
-    (ROOT) et depuis n'importe quel tenant.
-    / 6-step onboarding wizard to create a new tenant. All actions are
-    SHARED — reachable from the public schema (ROOT) and from any tenant.
 
-    Voir le plan `TECH_DOC/SESSIONS/ONBOARD/02-implementation-plan.md`.
-    Pour l'instant (Task 10) : `identity` est implementee, les autres
-    steps sont des placeholders en attente de leurs propres tasks.
+    Routing tenant -> ROOT (decision mainteneur 2026-05-16) : le wizard
+    est techniquement SHARED (URLs branchees dans urls_public ET dans les
+    schemas tenants), mais on ne le SERT que depuis ROOT. Si un utilisateur
+    arrive depuis un tenant (lien footer "Creer son espace"), `dispatch()`
+    le redirige vers le meme path sur `https://<root_domain>/onboard/...`.
+    Cf. helper `_redirect_to_root_if_tenant`.
+
+    / 6-step onboarding wizard. Tenant -> ROOT routing (maintainer choice
+    2026-05-16): the wizard is technically SHARED but only SERVED from ROOT.
+    A user landing from a tenant is redirected to the same path on ROOT
+    via `dispatch()`. See `_redirect_to_root_if_tenant` helper.
     """
 
     # Le wizard est public : pas d'authentification requise pour commencer
@@ -302,6 +844,41 @@ class OnboardViewSet(viewsets.ViewSet):
     # / The wizard is public: no auth required to start a draft. The user
     # authenticates via the OTP at step 2.
     permission_classes = [permissions.AllowAny]
+
+    def dispatch(self, request, *args, **kwargs):
+        """
+        Garde commune a toutes les actions du ViewSet.
+
+        Sequence :
+          1. Sur ROOT, si la query contient `?sso=<token>`, on consomme le
+             token, on logue l'utilisateur, puis 302 vers le meme path
+             SANS le param `sso` (nettoie l'URL navigateur). Cf.
+             `_consume_sso_in_request_if_present`.
+          2. Sur un tenant, on redirige vers ROOT (avec un token SSO en
+             query string si l'utilisateur etait deja authentifie). Cf.
+             `_redirect_to_root_if_tenant`.
+          3. Sinon, on laisse passer vers l'action demandee.
+
+        / Common guard. Order matters:
+          1. On ROOT with `?sso=<token>`: consume + login + clean redirect.
+          2. On tenant: redirect to ROOT (with SSO if authenticated).
+          3. Otherwise pass through.
+        """
+        # 1. Consommation du token SSO si present (uniquement sur ROOT,
+        # le helper retourne None si pas de param `sso=`).
+        # / 1. Consume SSO token if present (only on ROOT — returns None
+        # if no `sso=` param).
+        sso_redirect = _consume_sso_in_request_if_present(request)
+        if sso_redirect is not None:
+            return sso_redirect
+
+        # 2. Redirect tenant -> ROOT si on n'est pas deja sur ROOT.
+        # / 2. Redirect tenant -> ROOT if we're not already on ROOT.
+        redirect_to_root = _redirect_to_root_if_tenant(request)
+        if redirect_to_root is not None:
+            return redirect_to_root
+
+        return super().dispatch(request, *args, **kwargs)
 
     # ------------------------------------------------------------------
     # Root : redirige vers la step courante (Task 9 + refactor Task 10).
@@ -502,6 +1079,17 @@ class OnboardViewSet(viewsets.ViewSet):
             and request.user.email.lower() == data["email"].lower()
         )
 
+        # Capture la langue UI au POST pour la reutiliser dans les mailers
+        # Celery (qui n'ont pas de `request` pour deduire la langue). Sans
+        # ce snapshot, le sujet du mail OTP / ready est rendu dans la langue
+        # par defaut du worker (LANGUAGE_CODE='en' par defaut dans
+        # settings.py) meme si l'utilisateur a fait tout le wizard en FR.
+        # / Capture UI language at POST so Celery mailers can re-activate it
+        # later — workers have no `request` to infer language. Without this,
+        # OTP/ready email subjects fall back to the worker's default locale.
+        from django.utils.translation import get_language
+        ui_language = get_language() or "fr"
+
         # Persistance du brouillon dans le schema `meta`.
         # / Persist the draft in the `meta` schema.
         with schema_context("meta"):
@@ -519,6 +1107,7 @@ class OnboardViewSet(viewsets.ViewSet):
                 # empty (filled later). CharField without NOT NULL
                 # constraint accepts an empty string.
                 phone="",
+                language=ui_language,
                 email_confirmed=skip_otp,
                 current_step=(
                     WaitingConfiguration.STEP_PLACE if skip_otp
@@ -627,22 +1216,29 @@ class OnboardViewSet(viewsets.ViewSet):
                 return render(request, "onboard/steps/02_verify.html", {
                     "step": "verify",
                     "email": wc.email,
-                "has_pending_otp": bool(wc.otp_hash),
+                    "has_pending_otp": bool(wc.otp_hash),
                     "errors": serializer.errors,
                 }, status=422)
             logger.warning(
                 "DEBUG: OTP check bypassed for WC %s (settings.DEBUG=True)",
                 wc.uuid,
             )
-            with schema_context("meta"):
-                WaitingConfiguration.objects.filter(uuid=wc.uuid).update(
-                    email_confirmed=True,
-                    current_step=WaitingConfiguration.STEP_PLACE,
-                    otp_hash="",
-                    otp_expires_at=None,
-                )
-            from AuthBillet.utils import get_or_create_user
-            get_or_create_user(wc.email, send_mail=False)
+            # Meme finalisation que la branche prod (helper partage) : update
+            # WC + creation/activation user + login Django. Sans login() ici,
+            # `place` GET redirigeait vers identity car le garde
+            # `_get_confirmed_wc_or_redirect` exige `request.user.is_authenticated`.
+            # / Same post-success finalisation as the prod branch (shared
+            # helper): update WC + create/activate user + Django login.
+            # Without login() here, `place` GET would redirect to identity
+            # because `_get_confirmed_wc_or_redirect` requires authentication.
+            user = _finalize_otp_success(request, wc)
+            if user is None:
+                return render(request, "onboard/steps/02_verify.html", {
+                    "step": "verify",
+                    "email": wc.email,
+                    "has_pending_otp": bool(wc.otp_hash),
+                    "errors": {"otp": [_("Email error on user account.")]},
+                }, status=422)
             return redirect("onboard-place")
 
         serializer = OnboardVerifySerializer(data=request.data)
@@ -711,36 +1307,15 @@ class OnboardViewSet(viewsets.ViewSet):
             }, status=422)
 
         # === Succes ===
-        # On marque l'email comme confirme, on purge le hash (usage unique),
-        # et on avance le brouillon vers la step suivante.
-        # / Mark email confirmed, purge hash (single-use), advance step.
-        with schema_context("meta"):
-            WaitingConfiguration.objects.filter(uuid=wc.uuid).update(
-                email_confirmed=True,
-                current_step=WaitingConfiguration.STEP_PLACE,
-                otp_hash="",
-                otp_expires_at=None,
-            )
-
-        # Cree le TibilletUser si absent (idempotent) puis logue l'utilisateur
-        # via Django auth. Raison : les steps suivantes (place/descriptions/
-        # events/launch) sont desormais protegees par `is_authenticated` (cf.
-        # `_get_confirmed_wc_or_redirect`). Le succes de l'OTP est la PREUVE
-        # que l'utilisateur controle l'email -> on peut le logger sans risque.
-        # / Create TibilletUser if absent (idempotent), then log the user in
-        # via Django auth. Reason: post-verify steps now require
-        # `is_authenticated` (cf. `_get_confirmed_wc_or_redirect`). OTP
-        # success proves email control -> safe to log in.
-        from django.contrib.auth import login
-
-        from AuthBillet.utils import get_or_create_user
-
-        # `send_mail=False` : pas de mail TiBillet (confirmation deja faite via OTP).
-        # `set_active=True` aurait suffi mais get_or_create_user passe par defaut
-        # en `is_active=False` cote create — on force activation explicite ici.
-        # / `send_mail=False` (OTP already confirmed). Force is_active=True since
-        # default `get_or_create_user` creates inactive users.
-        user = get_or_create_user(wc.email, send_mail=False)
+        # Finalisation : update WC + creation/activation user + login Django.
+        # Helper partage avec la branche DEBUG pour garantir un comportement
+        # identique (sinon le garde `_get_confirmed_wc_or_redirect` de la
+        # step suivante echoue et l'utilisateur est renvoye sur identity).
+        # / Post-success finalisation: update WC + create/activate user +
+        # Django login. Shared helper with the DEBUG branch to guarantee
+        # identical behaviour (otherwise `_get_confirmed_wc_or_redirect`
+        # of the next step fails and the user is sent back to identity).
+        user = _finalize_otp_success(request, wc)
         if user is None:
             # Cas extreme : email_error sur un user existant (cf. utils.py).
             # On bloque ici plutot qu'au step suivant. / Edge case: email_error
@@ -751,30 +1326,6 @@ class OnboardViewSet(viewsets.ViewSet):
                 "has_pending_otp": bool(wc.otp_hash),
                 "errors": {"otp": [_("Email error on user account.")]},
             }, status=422)
-
-        # Marquer email_valid (preuve OTP) + activer le compte si pas deja.
-        # `update_fields` evite les writes inutiles sur les autres champs.
-        # / Mark email_valid (OTP proof) + activate. update_fields scope.
-        update_fields = []
-        if not user.email_valid:
-            user.email_valid = True
-            update_fields.append("email_valid")
-        if not user.is_active:
-            user.is_active = True
-            update_fields.append("is_active")
-        if update_fields:
-            user.save(update_fields=update_fields)
-
-        # Login Django : pose le cookie session auth. Backend explicite
-        # car le projet a peut-etre plusieurs AUTHENTICATION_BACKENDS et
-        # `login()` exige de specifier lequel sans `authenticate()` prealable.
-        # / Login Django: set auth session cookie. Explicit backend because
-        # the project may have multiple AUTHENTICATION_BACKENDS and `login()`
-        # requires an explicit backend without prior `authenticate()`.
-        login(
-            request, user,
-            backend="django.contrib.auth.backends.ModelBackend",
-        )
 
         return redirect("onboard-place")
 
@@ -1044,6 +1595,18 @@ class OnboardViewSet(viewsets.ViewSet):
         # StdImage du logo. / Persist in the `meta` schema via
         # `instance.save()` (NOT `.update()`) to trigger StdImage
         # variations generation for the logo.
+        #
+        # NOTE 2026-05-16 : la step "Evenements" a ete masquee du parcours
+        # par defaut (decision mainteneur — wizard trop long). On passe
+        # directement `current_step=LAUNCH` et on enqueue la task de
+        # creation tenant ici (au lieu d'attendre le POST de la step
+        # events). Le code et les routes `events_*` restent en place pour
+        # un usage futur ; on peut revenir au flow d'origine en remettant
+        # `STEP_EVENTS` + `redirect("onboard-events")`.
+        # / NOTE 2026-05-16: the "Events" step is hidden from the default
+        # flow (wizard was too long). We jump straight to LAUNCH and
+        # enqueue tenant creation here (previously in `events` POST). The
+        # `events_*` routes are kept in code for future reuse.
         with schema_context("meta"):
             wc_db = WaitingConfiguration.objects.get(uuid=wc.uuid)
             # short_description : obligatoire dans le serializer, toujours
@@ -1063,10 +1626,18 @@ class OnboardViewSet(viewsets.ViewSet):
             # `validated_data` won't have the key. Only assign when uploaded.
             if "logo" in data and data["logo"] is not None:
                 wc_db.logo = data["logo"]
-            wc_db.current_step = WaitingConfiguration.STEP_EVENTS
+            wc_db.current_step = WaitingConfiguration.STEP_LAUNCH
             wc_db.save()
 
-        return redirect("onboard-events")
+        # Enqueue la task asynchrone qui cree le tenant final. On passe
+        # `wc_uuid` en str (Celery serialise mal les UUID en JSON par defaut).
+        # Idempotent : la task verifie `wc.tenant_id is None` au demarrage.
+        # / Enqueue the async task creating the final tenant. We pass
+        # `wc_uuid` as str. Idempotent: the task checks `wc.tenant_id is None`.
+        from onboard.tasks import create_tenant_from_draft
+
+        create_tenant_from_draft.delay(wc_uuid=str(wc.uuid))
+        return redirect("onboard-launch")
 
     # ------------------------------------------------------------------
     # Step 5 — Events drafts (Task 14).
@@ -1509,7 +2080,36 @@ class OnboardViewSet(viewsets.ViewSet):
             # AttributeError.
             primary = wc.tenant.get_primary_domain()
             domain = primary.domain if primary else ""
+            # Magic-link admin : on logue l'utilisateur sur le nouveau
+            # tenant SANS qu'il ait a re-taper email/OTP. Sans ce mecanisme,
+            # le bouton pointait sur `https://<tenant>/admin/` direct,
+            # mais le cookie de session vit sur ROOT (domaine different) :
+            # l'utilisateur atterrissait sur la page de login admin.
+            # `forge_admin_magic_link` reutilise `user.get_connect_token()`
+            # (TimestampSigner 72h, pattern existant du projet) + un
+            # `?next=` signed vers `/admin/`. Cf. onboard/views.py.
+            #
+            # On fallback sur le lien direct si la generation echoue
+            # (utilisateur supprime ou tenant sans domain) — l'utilisateur
+            # arrivera juste sur la page de login.
+            # / Admin magic-link: log the user in on the new tenant without
+            # re-typing email/OTP. Without this, the button pointed to
+            # `https://<tenant>/admin/` direct, but the session cookie is
+            # on ROOT (different domain) → user landed on the admin login.
+            # `forge_admin_magic_link` reuses `user.get_connect_token()`
+            # (TimestampSigner 72h) + signed `?next=` to `/admin/`.
             admin_url = f"https://{domain}/admin/" if domain else "/admin/"
+            if domain and request.user.is_authenticated:
+                try:
+                    admin_url = forge_admin_magic_link(
+                        request.user, wc.tenant, next_path="/admin/",
+                    )
+                except Exception as forge_exc:
+                    logger.error(
+                        "launch_status: forge_admin_magic_link failed for "
+                        "WC %s, falling back to direct admin URL: %s",
+                        wc.uuid, forge_exc,
+                    )
             return render(request, "onboard/partials/status_done.html", {
                 "wc": wc,
                 "domain": domain,

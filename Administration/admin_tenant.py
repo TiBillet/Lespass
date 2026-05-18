@@ -3399,74 +3399,10 @@ class FormbricksFormsAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
 
-@admin.register(WaitingConfiguration, site=staff_admin_site)
-class WaitingConfigAdmin(ModelAdmin):
-    compressed_fields = True  # Default: False
-    warn_unsaved_form = True  # Default: False
-
-    list_display = (
-        "organisation",
-        "email",
-        "datetime",
-        "site_web",
-        "short_description",
-        "laboutik_wanted",
-        "payment_wanted",
-        "email_confirmed",
-        "created",
-    )
-
-    fields = list_display
-    readonly_fields = (
-        "datetime",
-    )
-
-    ordering = ('-datetime',)
-
-    list_filter = ["datetime", "created"]
-    search_fields = ["email", "organisation", "datetime"]
-
-    actions_detail = ["create_tenant", ]
-
-    @action(description=_("Create instance"),
-            url_path="create_tenant",
-            permissions=["custom_actions_detail"])
-    def create_tenant(self, request, object_id):
-        wc = WaitingConfiguration.objects.get(pk=object_id)
-        if wc.email_confirmed:
-            try:
-                tenant = wc.create_tenant()
-                messages.add_message(
-                    request, messages.SUCCESS,
-                    _(f"creation OK")
-                )
-            except Exception as e:
-                messages.add_message(
-                    request, messages.ERROR,
-                    _(f"{wc.organisation} tenant create error : {e} not confirmed")
-                )
-
-        else:
-            messages.add_message(
-                request, messages.WARNING,
-                _(f"Email not confirmed")
-            )
-        return redirect(request.META["HTTP_REFERER"])
-
-    def has_custom_actions_detail_permission(self, request, object_id):
-        return RootPermissionWithRequest(request)
-
-    def has_view_permission(self, request, obj=None):
-        return RootPermissionWithRequest(request)
-
-    def has_add_permission(self, request, obj=None):
-        return RootPermissionWithRequest(request)
-
-    def has_change_permission(self, request, obj=None):
-        return RootPermissionWithRequest(request)
-
-    def has_delete_permission(self, request, obj=None):
-        return RootPermissionWithRequest(request)
+# NOTE : `WaitingConfigAdmin` a ete migre vers `onboard/admin.py` lors
+# de la session de cleanup legacy 2026-05-16. Cf.
+# `TECH_DOC/SESSIONS/ONBOARD/03-session-recap.md`.
+# / WaitingConfigAdmin moved to `onboard/admin.py` on 2026-05-16.
 
 
 # Deux formulaires, un qui s'affiche si l'api est vide (ou supprimé)

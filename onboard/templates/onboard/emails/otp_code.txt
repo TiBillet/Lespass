@@ -1,11 +1,14 @@
-{% load i18n %}{% blocktranslate %}Hello,
+{% load i18n %}{% blocktranslate with name=organisation code=otp %}Bonjour,
 
-Your verification code to create your TiBillet space is:
+Vous avez demandé la création de l'espace TiBillet « {{ name }} ».
 
-{{ otp }}
+Voici votre code de vérification à saisir dans le wizard :
 
-It expires in 10 minutes.
+    {{ code }}
 
-If you did not request this, you can ignore this email.
+Ce code est valable 10 minutes. Au-delà, vous devrez en demander un nouveau depuis la page d'inscription.
 
-— The TiBillet team{% endblocktranslate %}
+Vous n'êtes pas à l'origine de cette demande ? Vous pouvez ignorer ce message en toute sécurité — sans validation du code, aucun espace ne sera créé sous votre adresse.
+
+À bientôt sur TiBillet,
+— L'équipe de la Coopérative Code Commun{% endblocktranslate %}

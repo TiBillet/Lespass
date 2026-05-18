@@ -23,9 +23,8 @@ Security:
 import logging
 
 from celery import shared_task
-from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
+from django.utils import translation
 from django.utils.translation import gettext as _
 from django_tenants.utils import schema_context, tenant_context
 
@@ -33,10 +32,6 @@ from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
 
 logger = logging.getLogger(__name__)
-
-# Adresse d'expedition par defaut, utilisee si DEFAULT_FROM_EMAIL non configure.
-# / Fallback sender address when DEFAULT_FROM_EMAIL is not configured.
-FALLBACK_FROM_EMAIL = "noreply@tibillet.coop"
 
 
 @shared_task(name="onboard.tasks.onboard_otp_mailer")
@@ -67,28 +62,51 @@ def onboard_otp_mailer(wc_uuid, otp_clair):
         # toute lazy-load surprise. / Snapshot fields before leaving the scope.
         destinataire = wc.email
         organisation = wc.organisation
+        # Langue captee au POST identity (cf. WaitingConfiguration.language).
+        # Sans ce snapshot, gettext serait evalue dans la locale par defaut
+        # du worker Celery (LANGUAGE_CODE='en' typiquement) — sujet en anglais.
+        # / Language captured at identity POST. Without this snapshot,
+        # gettext falls back to the worker's default locale (usually 'en').
+        langue_utilisateur = wc.language or "fr"
 
-    # Sujet contenant le code (rend les apercus mobiles utiles).
-    # / Subject includes the code (handy in mobile previews).
-    subject = _("Your TiBillet verification code: %(code)s") % {"code": otp_clair}
+    # `translation.override` active la locale pour TOUT le bloc : sujet,
+    # render des templates `.txt` / `.html`. Restaure la locale precedente
+    # en sortie (context manager). Indispensable cote Celery ou il n'y a
+    # pas de LocaleMiddleware pour le faire automatiquement.
+    # / `translation.override` activates the locale for the whole block:
+    # subject + .txt/.html template renders. Restores the previous locale
+    # on exit. Required server-side in Celery (no LocaleMiddleware).
+    with translation.override(langue_utilisateur):
+        # Sujet : code en TETE pour que la notification mobile (qui tronque
+        # souvent apres ~30 caracteres) reste lisible — l'utilisateur lit le
+        # code sans avoir a ouvrir le mail. Ex iOS / Android : "123456 –
+        # votre code TiBillet" affiche les 6 chiffres meme apres troncature.
+        # / Subject: code FIRST so the mobile notification (often truncated
+        # after ~30 chars) stays useful — user reads the code without opening
+        # the mail. iOS / Android: "123456 – your TiBillet code" survives the cut.
+        subject = _("%(code)s – your TiBillet verification code") % {"code": otp_clair}
 
-    text_body = render_to_string(
-        "onboard/emails/otp_code.txt",
-        {"otp": otp_clair, "organisation": organisation},
-    )
-    html_body = render_to_string(
-        "onboard/emails/otp_code.html",
-        {"otp": otp_clair, "organisation": organisation},
-    )
+        # Pre-render le texte brut (le HTML est rendu par CeleryMailerClass).
+        # / Pre-render the text body (HTML is rendered by CeleryMailerClass).
+        text_body = render_to_string(
+            "onboard/emails/otp_code.txt",
+            {"otp": otp_clair, "organisation": organisation},
+        )
 
-    msg = EmailMultiAlternatives(
-        subject=subject,
-        body=text_body,
-        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None) or FALLBACK_FROM_EMAIL,
-        to=[destinataire],
-    )
-    msg.attach_alternative(html_body, "text/html")
-    msg.send(fail_silently=False)
+        # Import local pour eviter de charger BaseBillet.tasks (et toutes ses
+        # dependances Stripe / Fedow / Brevo / Ghost) tant qu'on n'envoie pas
+        # de mail. / Local import to avoid loading BaseBillet.tasks (and all
+        # its Stripe/Fedow/Brevo/Ghost deps) until we actually send a mail.
+        from BaseBillet.tasks import CeleryMailerClass
+
+        mail = CeleryMailerClass(
+            email=destinataire,
+            title=subject,
+            text=text_body,
+            template="onboard/emails/otp_code.html",
+            context={"otp": otp_clair, "organisation": organisation},
+        )
+        mail.send()
 
     # IMPORTANT : ne JAMAIS logger otp_clair. / IMPORTANT: never log otp_clair.
     logger.info("OTP mail sent to %s for WC %s", destinataire, wc_uuid)
@@ -119,6 +137,11 @@ def onboard_ready_mailer(wc_uuid):
         tenant = wc.tenant
         destinataire = wc.email
         organisation = wc.organisation
+        # Langue captee au POST identity (cf. WaitingConfiguration.language).
+        # Cf. commentaire dans onboard_otp_mailer pour la justification du
+        # snapshot + translation.override en bas de fonction.
+        # / Captured language. See onboard_otp_mailer comment for rationale.
+        langue_utilisateur = wc.language or "fr"
 
     if tenant is None:
         # On loggue mais on ne raise pas : cette task peut etre appelee comme
@@ -131,27 +154,84 @@ def onboard_ready_mailer(wc_uuid):
         return
 
     primary_domain = tenant.get_primary_domain().domain
+
+    # Magic-link admin : on cree l'admin user (idempotent) puis on forge un
+    # lien `https://<tenant>/emailconfirmation/<token>?next=<signed_admin>`
+    # qui logue l'utilisateur sur le nouveau tenant sans re-saisie email/OTP.
+    # Si l'utilisateur a ferme l'onglet pendant la creation tenant, le mail
+    # lui permet de revenir et atterrir directement loggue sur l'admin.
+    # Le helper `forge_admin_magic_link` reutilise `user.get_connect_token()`
+    # (TimestampSigner 72h — TTL aligne sur la duree de vie d'un mail recent).
+    #
+    # Fallback sur lien direct si la generation echoue (cas exotique :
+    # l'admin a supprime le user entre create_tenant et le mailer).
+    # / Magic-link: create the admin user (idempotent) then forge a link
+    # that logs them in on the new tenant without re-typing email/OTP.
+    # Fallback to direct admin URL on failure.
     admin_url = f"https://{primary_domain}/admin/"
+    try:
+        # Import locaux pour eviter une dependance circulaire au chargement
+        # du module onboard.tasks. / Local imports to avoid circular deps.
+        from AuthBillet.utils import get_or_create_user
 
-    subject = _("Your TiBillet space %(name)s is ready!") % {"name": organisation}
+        from onboard.views import forge_admin_magic_link
 
-    text_body = render_to_string(
-        "onboard/emails/ready.txt",
-        {"organisation": organisation, "admin_url": admin_url},
-    )
-    html_body = render_to_string(
-        "onboard/emails/ready.html",
-        {"organisation": organisation, "admin_url": admin_url},
-    )
+        # `send_mail=False` : l'utilisateur est deja confirme via OTP.
+        # / `send_mail=False`: already confirmed via OTP.
+        admin_user = get_or_create_user(destinataire, send_mail=False)
+        if admin_user is not None:
+            admin_url = forge_admin_magic_link(
+                admin_user, tenant, next_path="/admin/",
+            )
+    except Exception as forge_exc:
+        # Log + fallback direct admin URL : l'utilisateur arrivera juste
+        # sur la page de login admin. / Log + fallback to direct URL.
+        logger.error(
+            "onboard_ready_mailer: forge_admin_magic_link failed for WC %s, "
+            "falling back to direct admin URL: %s",
+            wc_uuid, forge_exc,
+        )
 
-    msg = EmailMultiAlternatives(
-        subject=subject,
-        body=text_body,
-        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None) or FALLBACK_FROM_EMAIL,
-        to=[destinataire],
-    )
-    msg.attach_alternative(html_body, "text/html")
-    msg.send(fail_silently=False)
+    # URL publique du tenant (sans /admin/). Affichee dans la liste
+    # "Informations importantes" du mail pour rappeler a l'utilisateur
+    # l'adresse publique de son lieu, distincte du magic-link admin.
+    # / Public tenant URL (without /admin/). Shown in the "Important info"
+    # list to remind users of their public-facing address, distinct from
+    # the admin magic-link.
+    instance_url = f"https://{primary_domain}/"
+
+    context = {
+        "organisation": organisation,
+        "admin_url": admin_url,
+        "instance_url": instance_url,
+    }
+
+    # `translation.override` active la locale pour le rendu du sujet et des
+    # templates `.txt` / `.html`. Indispensable cote Celery (pas de
+    # LocaleMiddleware). Sans ca, le sujet "Your TiBillet space ... is ready!"
+    # sort tel quel en anglais meme pour un utilisateur FR.
+    # / Activates locale for subject + template renders. Required in Celery
+    # (no LocaleMiddleware). Without it, the subject is rendered in the
+    # worker's default locale (often 'en').
+    with translation.override(langue_utilisateur):
+        subject = _("Your TiBillet space %(name)s is ready!") % {"name": organisation}
+
+        # Pre-render le texte brut (le HTML est rendu par CeleryMailerClass).
+        # / Pre-render the text body (HTML is rendered by CeleryMailerClass).
+        text_body = render_to_string("onboard/emails/ready.txt", context)
+
+        # Import local : evite la dependance lourde au chargement du module.
+        # / Local import: avoids the heavy dep at module load time.
+        from BaseBillet.tasks import CeleryMailerClass
+
+        mail = CeleryMailerClass(
+            email=destinataire,
+            title=subject,
+            text=text_body,
+            template="onboard/emails/ready.html",
+            context=context,
+        )
+        mail.send()
 
     logger.info(
         "Ready mail sent to %s for tenant %s (WC %s)",
@@ -219,7 +299,6 @@ def create_tenant_from_draft(self, wc_uuid):
     # Import local pour eviter une dependance circulaire au chargement de
     # l'app onboard (BaseBillet.models tire pas mal de monde).
     # / Local import to avoid a circular dependency at app load.
-    from django.db import transaction
     from django.utils import timezone  # noqa: F401  # used in skipped federation block
 
     # === 1. Idempotence : claim Redis distribue ===
@@ -310,6 +389,147 @@ def create_tenant_from_draft(self, wc_uuid):
             wc_uuid,
         )
         raise
+
+    # === 3bis. Adresse principale du tenant (PostalAddress) ===
+    # La step "Votre lieu" du wizard collecte une adresse (rue, code postal,
+    # ville, pays, lat, lng). `wc.create_tenant()` (chaine BaseBillet) NE
+    # transferait PAS ces donnees vers le tenant nouvellement cree —
+    # l'ancien flux `/tenant/new/` n'avait pas ces champs. On le fait ici
+    # pour ne pas modifier la chaine partagee. On cree un `PostalAddress`
+    # dans le schema du nouveau tenant, avec `is_main=True`, et on le lie
+    # via `Configuration.postal_address`.
+    #
+    # Skip si `wc.street_address` est vide : peut arriver pour l'ancien
+    # flow (le widget GPS n'etait pas obligatoire) ou si l'admin manipule
+    # le WC en base. / Skip if `wc.street_address` is empty.
+    #
+    # / "Place" step collects an address. `wc.create_tenant()` doesn't copy
+    # it (legacy `/tenant/new/` didn't have these fields). We do it here
+    # without modifying the shared chain: create a PostalAddress in the new
+    # tenant schema with `is_main=True` and link Configuration.postal_address.
+    if wc.street_address:
+        # Try/except IMPORTANT : si la creation PostalAddress raise (cas
+        # pathologique, ex: contrainte DB exotique), on NE doit PAS re-lever
+        # l'exception. Sinon le `autoretry_for=(Exception,)` Celery relance
+        # la task, qui voit `wc.tenant_id is not None` au prochain passage
+        # (idempotence) et early-return → l'adresse ne serait JAMAIS creee.
+        # L'admin peut toujours la saisir manuellement dans l'admin Unfold.
+        # `logger.error` remonte sur Sentry (alerte ops).
+        # / Try/except CRITICAL: a PostalAddress failure must NOT re-raise,
+        # otherwise Celery autoretry sees `wc.tenant_id is not None` and
+        # early-returns idempotently → address would never be created.
+        # Admin can fill it manually. `logger.error` surfaces to Sentry.
+        try:
+            with tenant_context(new_tenant):
+                from BaseBillet.models import Configuration, PostalAddress
+
+                postal_address = PostalAddress.objects.create(
+                    name=wc.organisation,
+                    street_address=wc.street_address,
+                    postal_code=wc.postal_code or "",
+                    address_locality=wc.address_locality or "",
+                    address_country=wc.address_country or "",
+                    latitude=wc.latitude,
+                    longitude=wc.longitude,
+                    is_main=True,
+                )
+                config = Configuration.get_solo()
+                config.postal_address = postal_address
+                config.save(update_fields=["postal_address"])
+            logger.info(
+                "create_tenant_from_draft: PostalAddress (is_main=True) "
+                "created for WC %s -> tenant %s",
+                wc_uuid, new_tenant.schema_name,
+            )
+        except Exception as addr_exc:
+            # ERROR niveau Sentry — admin doit creer l'adresse a la main.
+            # / ERROR level for Sentry — admin must create the address manually.
+            logger.error(
+                "create_tenant_from_draft: PostalAddress creation FAILED "
+                "for WC %s on tenant %s (admin must create manually): %s",
+                wc_uuid, new_tenant.schema_name, addr_exc,
+                exc_info=True,
+            )
+
+    # === 3ter. Transfert long_description + logo du wizard vers Configuration ===
+    # La step "Presentation" du wizard collecte une description longue et un
+    # logo. La chaine BaseBillet `wc.create_tenant()` ne les copie PAS (elle
+    # ecrit un texte par defaut "Bienvenue dans votre nouvel espace..." sur
+    # `config.long_description`). On les transfere ici pour que le tenant ait
+    # bien le contenu saisi par l'utilisateur.
+    #
+    # Memes precautions que pour PostalAddress (cf. piege #23 : try/except
+    # sans re-raise pour ne pas casser l'idempotence Celery).
+    # / Transfer wizard long_description + logo to Configuration. The
+    # BaseBillet chain `wc.create_tenant()` doesn't copy them (writes a
+    # default welcome text). Same try/except precaution as PostalAddress
+    # to preserve Celery autoretry idempotence.
+    if wc.long_description or wc.logo:
+        try:
+            with tenant_context(new_tenant):
+                from BaseBillet.models import Configuration
+                from django.core.files import File
+                from django.core.files.storage import default_storage
+                import os as _os
+
+                config = Configuration.get_solo()
+                config_fields_modifies = []
+
+                # Long description : on override le texte par defaut ecrit
+                # par BaseBillet/validators.py:992 SI le user a saisi qqch.
+                # / Long description: override the default welcome text if
+                # the user actually wrote something.
+                if wc.long_description:
+                    config.long_description = wc.long_description
+                    config_fields_modifies.append("long_description")
+
+                # Logo : `wc.logo` est un FieldFile (StdImageField) qui
+                # pointe sur `media/onboard_drafts/<wc_uuid>/...`. On copie
+                # le fichier source via `default_storage` (S3 compatible)
+                # vers le champ `config.img` du tenant. `FieldFile.save()`
+                # avec `save=False` evite un save() premature — on appelle
+                # `config.save(update_fields=...)` une seule fois en bas.
+                # / Logo: `wc.logo` is a FieldFile on draft storage. Copy
+                # via default_storage to `config.img`. `save=False` defers
+                # the model save to the consolidated call below.
+                if wc.logo and default_storage.exists(wc.logo.name):
+                    original_name = _os.path.basename(wc.logo.name)
+                    with default_storage.open(wc.logo.name, "rb") as src:
+                        # `save=True` declenche `Configuration.save()` qui
+                        # regenere les variations StdImage (med, hdr, fhd,
+                        # thumbnail). Plus simple et plus fiable que
+                        # gerer manuellement les variations.
+                        # / `save=True` triggers Configuration.save() which
+                        # regenerates StdImage variations.
+                        config.img.save(
+                            original_name, File(src), save=True,
+                        )
+                    # On garde le draft original pour debug / rollback ; la
+                    # purge des fichiers orphelins est faite par
+                    # `purge_stale_onboard_drafts` (cron hebdo).
+                    # / Keep the draft for debug/rollback; orphan cleanup
+                    # is handled by the weekly purge cron.
+                    config_fields_modifies.append("img (StdImage)")
+                elif config_fields_modifies:
+                    # Pas de logo a copier mais long_description a save.
+                    # / No logo but long_description to save.
+                    config.save(update_fields=["long_description"])
+
+            logger.info(
+                "create_tenant_from_draft: Configuration enrichie pour WC %s "
+                "-> tenant %s (champs: %s)",
+                wc_uuid, new_tenant.schema_name, config_fields_modifies,
+            )
+        except Exception as conf_exc:
+            # ERROR niveau Sentry — admin pourra completer manuellement
+            # depuis l'admin Unfold du tenant. / ERROR for Sentry — admin
+            # will complete manually from the tenant's Unfold admin.
+            logger.error(
+                "create_tenant_from_draft: Configuration long_description/logo "
+                "FAILED for WC %s on tenant %s (admin must complete manually): %s",
+                wc_uuid, new_tenant.schema_name, conf_exc,
+                exc_info=True,
+            )
 
     # === 4. Insertion des events brouillons dans le schema du nouveau tenant ===
     # `events_draft` est un JSONField (liste) — defense en cas de None.
@@ -457,12 +677,57 @@ def create_tenant_from_draft(self, wc_uuid):
     #         inv.used_at = timezone.now()
     #         inv.save(update_fields=["used_at"])
 
-    # === 6. Envoi de l'email "espace pret" ===
+    # === 6. Ghost newsletter — abonnement du nouvel admin ===
+    # On replique le pattern de l'ancien flux `BaseBillet/views.py:3697-3702` :
+    # ajouter l'email du createur a la newsletter Ghost (configuree au niveau
+    # META). On le fait DANS le contexte du tenant META car `GhostConfig.get_solo()`
+    # est tenant-scoped et la config Ghost vit historiquement sur META.
+    # Idempotent cote Ghost (verifie si membre existe deja). On wrap dans
+    # try/except : un Ghost down ne doit PAS faire echouer la creation tenant.
+    # / Ghost newsletter — subscribe the new admin. Replicates the old flow.
+    # Wrapped in try/except: Ghost downtime must not fail tenant creation.
+    try:
+        from BaseBillet.tasks import send_to_ghost_email
+
+        # Re-read WC (schema "meta") pour avoir les valeurs a jour.
+        # / Re-read WC (schema "meta") for fresh values.
+        with schema_context("meta"):
+            wc.refresh_from_db()
+            email_admin = wc.email
+            nom_organisation = wc.organisation
+
+        meta_tenant = Client.objects.filter(categorie=Client.META).first()
+        if meta_tenant is not None:
+            with tenant_context(meta_tenant):
+                send_to_ghost_email.delay(email_admin, name=nom_organisation)
+    except Exception as ghost_exc:
+        # On log mais on n'interrompt PAS le flow : Ghost est optionnel.
+        # / Log only — Ghost is optional.
+        logger.error(
+            "create_tenant_from_draft: send_to_ghost_email failed for WC %s: %s",
+            wc_uuid, ghost_exc,
+        )
+
+    # === 7. Envoi de l'email "espace pret" ===
     # `wc.tenant` a deja ete persiste par `create_tenant()` (cf. validator).
     # Le mailer pourra donc relire wc.tenant et envoyer le bon admin_url.
     # / `wc.tenant` is already persisted by `create_tenant()` (cf. validator).
     # The mailer can read wc.tenant and send the correct admin_url.
     onboard_ready_mailer.delay(wc_uuid=wc_uuid)
+
+    # Liberation du claim Redis apres succes : permet a un `launch_retry`
+    # ulterieur (clic admin) d'enqueuer une nouvelle execution. La
+    # protection idempotence reste assuree par le check `wc.tenant_id
+    # is not None` au debut de la task. Sans cette liberation, l'admin
+    # qui clique "Reessayer" dans les 5min suivant le succes voyait
+    # "already being processed, skipping" et pensait que l'action
+    # n'avait pas fait effet.
+    # / Release Redis claim after success: lets a future `launch_retry`
+    # (admin click) enqueue a new run. Idempotency is still guaranteed by
+    # the `wc.tenant_id is not None` check at task start. Without this
+    # release, admin clicking "Retry" within 5min saw "already being
+    # processed" and thought their action had no effect.
+    cache.delete(claim_key)
 
     logger.info(
         "create_tenant_from_draft: success for WC %s -> %s",

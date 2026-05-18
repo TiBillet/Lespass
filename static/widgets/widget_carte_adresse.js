@@ -39,6 +39,7 @@
     // multi-tenant routing issue, fewer moving parts. Cons: no shared
     // cache (each user hits Nominatim) — fine for our volume.
     const URL_NOMINATIM_REVERSE = "https://nominatim.openstreetmap.org/reverse";
+    const URL_NOMINATIM_SEARCH = "https://nominatim.openstreetmap.org/search";
     const URL_TUILES_CARTODB = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png";
     const ATTRIBUTION_TUILES = "&copy; OpenStreetMap &copy; CARTO";
     const CENTRE_FRANCE = [46.6, 2.5];
@@ -105,6 +106,18 @@
             maxZoom: 20,
         }).addTo(map);
 
+        // Déplace le zoom control en haut à droite : par défaut Leaflet le
+        // pose en `topleft`, où vit aussi la search bar leaflet-geosearch.
+        // Sans ce déplacement, le zoom et le placeholder vide
+        // `.leaflet-control-geosearch.pending` se chevauchent visuellement
+        // (cf. tests/PIEGES.md P8).
+        // / Move zoom control to top-right (default is top-left, where the
+        // search bar also sits — visual collision with the `.pending`
+        // placeholder).
+        if (map.zoomControl) {
+            map.zoomControl.setPosition("topright");
+        }
+
         // Provider Nominatim (recherche live côté navigateur). Locale auto :
         // leaflet-geosearch lit `<html lang>` ; on force fallback "fr".
         // / Nominatim provider (browser-side live search). Locale auto:
@@ -124,6 +137,23 @@
             showPopup: false,
             autoClose: true,
             keepResult: true,
+            // IMPORTANT : `autoComplete: false` désactive la recherche
+            // pendant la frappe. La politique d'usage Nominatim INTERDIT
+            // explicitement l'autocomplete client-side (cf.
+            // https://operations.osmfoundation.org/policies/nominatim/
+            // "Auto-complete search ... must not implement such a service
+            // on the client side using the API"). Avec `autoComplete: true`
+            // (défaut leaflet-geosearch), CHAQUE frappe utilisateur émettait
+            // une requête Nominatim après 250ms de debounce. Désormais : 1
+            // seule requête, au submit (touche Entrée ou clic sur le bouton
+            // search bar). Cohérent avec notre fetch initial au load
+            // (pré-fill nom collectif) et le reverse geocode au drag.
+            // / IMPORTANT: `autoComplete: false` disables search-while-typing.
+            // Nominatim's usage policy EXPLICITLY forbids client-side
+            // autocomplete. With the default (true), every keystroke fired
+            // a Nominatim request after a 250ms debounce. Now: one request
+            // per explicit submit (Enter or search-bar button click).
+            autoComplete: false,
             searchLabel: container.dataset.adresseInitiale
                 || "Saisissez une adresse ou un lieu",
             notFoundMessage: "Adresse introuvable.",
@@ -279,6 +309,196 @@
             recuperer_coordonnees_apres_deplacement_du_marqueur(fake_drag_event);
         });
 
+        /**
+         * Lance une recherche Nominatim avec la chaîne donnée et applique
+         * le 1er résultat (marqueur + champs adresse + recentrage carte).
+         * Utilisé par : (1) la recherche automatique au load avec le nom
+         * du collectif ; (2) le keydown Enter sur l'input search ; (3) le
+         * clic sur le bouton submit "Rechercher" injecté dans la search bar.
+         *
+         * Fetch direct vers `/search` avec `addressdetails=1` pour garantir
+         * un dict `address` structuré. On évite `provider.search()` de
+         * leaflet-geosearch car selon les versions, `result.raw.address`
+         * n'est pas toujours peuplé. Même approche que pour le reverse au
+         * drag du marqueur.
+         *
+         * / Run a Nominatim search with the given query and apply the first
+         * result (marker + address fields + recentered map). Used by:
+         * (1) auto-search at load with the collective name, (2) keydown
+         * Enter on the search input, (3) click on the injected "Search"
+         * submit button. Direct fetch to /search with addressdetails=1.
+         */
+        function lancer_recherche_nominatim(query) {
+            const requete = (query || "").trim();
+            if (!requete) {
+                return;
+            }
+            // Réinitialise la zone d'erreur avant chaque recherche.
+            // / Clear the error zone before each search.
+            effacer_message_no_result();
+            const params_search = new URLSearchParams({
+                q: requete,
+                format: "json",
+                addressdetails: "1",
+                limit: "1",
+                "accept-language": langue_html,
+            });
+            fetch(URL_NOMINATIM_SEARCH + "?" + params_search.toString(), {
+                method: "GET",
+                headers: { "Accept": "application/json" },
+            }).then(function (reponse) {
+                if (!reponse.ok) {
+                    console.warn(
+                        "widget_carte_adresse: Nominatim search status",
+                        reponse.status,
+                    );
+                    afficher_message_no_result(
+                        "Le service de géolocalisation est indisponible. "
+                        + "Cliquez directement sur la carte pour positionner le lieu.",
+                    );
+                    return null;
+                }
+                return reponse.json();
+            }).then(function (donnees) {
+                if (!donnees) {
+                    // Cas ok=false plus haut : on a déjà affiché un message
+                    // d'indisponibilité. / Already handled above.
+                    return;
+                }
+                if (donnees.length === 0) {
+                    // Aucun match Nominatim : message inline pour l'user.
+                    // / No Nominatim match: inline message for the user.
+                    afficher_message_no_result(
+                        "Adresse introuvable. Affinez votre recherche "
+                        + "ou cliquez directement sur la carte.",
+                    );
+                    return;
+                }
+                const premier_resultat = donnees[0];
+                const latitude = parseFloat(premier_resultat.lat);
+                const longitude = parseFloat(premier_resultat.lon);
+                placer_marqueur_et_remplir_champs(
+                    latitude,
+                    longitude,
+                    premier_resultat.display_name || "",
+                    premier_resultat.address || {},
+                );
+                map.setView([latitude, longitude], ZOOM_DETAIL);
+            }).catch(function (erreur) {
+                // Réseau coupé / Nominatim down : on log + message inline.
+                // / Network down / Nominatim down: log + inline message.
+                console.warn(
+                    "widget_carte_adresse: recherche échouée",
+                    erreur,
+                );
+                afficher_message_no_result(
+                    "Le service de géolocalisation est indisponible. "
+                    + "Cliquez directement sur la carte pour positionner le lieu.",
+                );
+            });
+        }
+
+        /**
+         * Affiche un message inline sous la search bar (zone `aria-live`).
+         * `zone_message_no_result` est créé plus bas dans cette fonction
+         * d'init — closure capture la référence au moment de l'appel.
+         * Defensive : if absent (e.g. timing), no-op.
+         * / Display an inline message under the search bar.
+         */
+        function afficher_message_no_result(texte) {
+            const zone = container.querySelector(".widget-search-no-result");
+            if (zone !== null) {
+                zone.textContent = texte;
+            }
+        }
+
+        /**
+         * Vide la zone d'erreur (appelé avant chaque nouvelle recherche
+         * et au succès). Le CSS `:empty` la cache automatiquement.
+         * / Clear the error zone (called before each new search and on success).
+         */
+        function effacer_message_no_result() {
+            const zone = container.querySelector(".widget-search-no-result");
+            if (zone !== null) {
+                zone.textContent = "";
+            }
+        }
+
+        // Recherche manuelle : on attache nos propres handlers (keydown Enter
+        // sur l'input + clic sur un bouton submit injecté) plutôt que de
+        // s'appuyer sur le submit natif du form leaflet-geosearch. Raison :
+        // ce <form> est imbriqué dans le <form> onboard parent, ce que
+        // HTML5 interdit — les navigateurs gèrent l'ambiguïté de façon
+        // imprévisible (cf. boucle infinie constatée 2026-05-16). En
+        // appelant `lancer_recherche_nominatim()` directement, on contourne
+        // tout le mécanisme de form submit. Un `preventDefault` sur la
+        // touche Entrée évite que le browser remonte au form onboard.
+        //
+        // / Manual search: we wire our own handlers (keydown Enter on the
+        // input + click on an injected submit button) instead of relying on
+        // the native form submit. Reason: the leaflet-geosearch <form> is
+        // nested inside the onboard <form>, which HTML5 forbids — browsers
+        // handle the ambiguity unpredictably. We bypass form submit
+        // entirely by calling `lancer_recherche_nominatim()` directly.
+        const champ_recherche = container.querySelector(
+            ".leaflet-control-geosearch form input, .leaflet-control-geosearch input[type='text']",
+        );
+        if (champ_recherche !== null) {
+            // Listener keydown Enter : déclenche la recherche sans
+            // soumettre le form (preventDefault bloque la remontée).
+            // / Enter keydown listener: triggers search without bubbling
+            // to the parent form (preventDefault stops propagation).
+            champ_recherche.addEventListener("keydown", function (evt) {
+                if (evt.key === "Enter") {
+                    evt.preventDefault();
+                    evt.stopPropagation();
+                    lancer_recherche_nominatim(champ_recherche.value);
+                }
+            });
+
+            // Injection d'un bouton submit visible (icône loupe). Le mode
+            // `style: "bar"` de leaflet-geosearch n'en crée pas, et sans
+            // bouton l'utilisateur ne sait pas comment déclencher la
+            // recherche (la touche Entrée seule n'est pas découvrable).
+            // `type="button"` IMPORTANT : sinon le browser interprète comme
+            // submit du form parent (le form onboard) → POST /onboard/place/
+            // avec lat/lng vides → 422.
+            // / Inject a visible submit button (magnifier icon). `style: "bar"`
+            // doesn't provide one and Enter alone isn't discoverable.
+            // `type="button"` is CRITICAL — otherwise the browser submits
+            // the parent onboard form (lat/lng empty → 422).
+            const formulaire_leaflet = champ_recherche.closest("form");
+            if (formulaire_leaflet !== null
+                && formulaire_leaflet.querySelector(".widget-search-submit") === null) {
+                const bouton_recherche = document.createElement("button");
+                bouton_recherche.type = "button";
+                bouton_recherche.className = "widget-search-submit";
+                bouton_recherche.setAttribute("aria-label", "Rechercher");
+                bouton_recherche.textContent = "🔍";
+                bouton_recherche.addEventListener("click", function (evt) {
+                    evt.preventDefault();
+                    evt.stopPropagation();
+                    lancer_recherche_nominatim(champ_recherche.value);
+                });
+                formulaire_leaflet.appendChild(bouton_recherche);
+            }
+        }
+
+        // Bandeau d'erreur "Adresse introuvable" — injecté en JS dans le
+        // container Leaflet pour pouvoir être affiché/caché par
+        // `lancer_recherche_nominatim()` selon le résultat. `aria-live="polite"`
+        // pour annonce screen reader sans interrompre. On le crée vide :
+        // le CSS `&:empty { display: none; }` le cache tant qu'il n'a pas
+        // de contenu.
+        // / "Address not found" banner — injected in the Leaflet container
+        // so `lancer_recherche_nominatim()` can show/hide it. aria-live for
+        // screen readers. Empty by default, hidden via CSS `:empty`.
+        const zone_message_no_result = document.createElement("div");
+        zone_message_no_result.className = "widget-search-no-result";
+        zone_message_no_result.setAttribute("aria-live", "polite");
+        zone_message_no_result.setAttribute("role", "status");
+        container.appendChild(zone_message_no_result);
+
         // Si on a des coords initiales, on place le marqueur tout de suite.
         // / If initial coords exist, place the marker immediately.
         if (a_des_coords_initiales) {
@@ -288,6 +508,18 @@
                 container.dataset.adresseInitiale || "",
                 {},  // pas d'address dict initial — on ne re-geocode pas au load.
             );
+        } else if (container.dataset.adresseInitiale) {
+            // Pas de coords mais on a une chaîne de recherche initiale (ex:
+            // nom du collectif). On pré-remplit l'input search ET on lance
+            // la recherche Nominatim auto (via le helper partagé avec
+            // l'Enter + le clic bouton).
+            // / No initial coords but we have an initial search string.
+            // Pre-fill the search input AND auto-trigger the Nominatim
+            // search (via the helper shared with Enter + button click).
+            if (champ_recherche !== null) {
+                champ_recherche.value = container.dataset.adresseInitiale;
+            }
+            lancer_recherche_nominatim(container.dataset.adresseInitiale);
         }
     }
 

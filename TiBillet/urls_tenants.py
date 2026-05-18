@@ -50,6 +50,18 @@ urlpatterns = [
     # / Onboarding wizard for new tenants (SHARED: also reachable on ROOT).
     path('', include('onboard.urls')),
 
+    # Stripe Connect — onboarding pour tenant EXISTANT (depuis l'admin Unfold).
+    # Routes :
+    #   - /stripe/onboard/from_config/
+    #   - /stripe/onboard/return_from_config/<id_acc_connect>/
+    # Migration 2026-05-16 : ces routes vivaient sous /tenant/onboard_stripe_*
+    # avec le flow legacy de creation de tenant (supprime). Cf.
+    # TECH_DOC/SESSIONS/MOYENS_PAIEMENT/.
+    # / Stripe Connect onboarding for an EXISTING tenant (from Unfold admin).
+    # Migrated 2026-05-16 from `/tenant/onboard_stripe_*` (legacy tenant
+    # creation flow, removed).
+    path('stripe/', include('PaiementStripe.urls')),
+
     # pour carte GEN1 Bisik
     # re_path(r'(?P<numero_carte>^[qsdf974]{5}$)', include('QrcodeCashless.urls')),
 

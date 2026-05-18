@@ -7,6 +7,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    {# Meta robots : controle l'indexation par les moteurs (Google, Bing, IA). #}
+    {# `noindex_seo` est expose par le context processor TiBillet.seo_indexing. #}
+    {# / Meta robots: controls indexing by search engines (Google, Bing, AI). #}
+    {# `noindex_seo` is exposed by the TiBillet.seo_indexing context processor. #}
+    <meta name="robots" content="{% block meta_robots %}{% if noindex_seo %}noindex, nofollow{% else %}index, follow{% endif %}{% endblock %}">
     <link rel="icon" type="image/png" href="{% static 'mvt_htmx/images/favicon.png' %}">
     <title>{{ config.organisation }} | TiBillet</title>
 

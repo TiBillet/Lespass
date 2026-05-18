@@ -81,7 +81,7 @@ def verify_otp(saisi, otp_hash):
 # Proxy serveur vers Nominatim (OpenStreetMap) avec cache Redis 24h.
 # / Server-side proxy to Nominatim (OpenStreetMap) with 24h Redis cache.
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-NOMINATIM_USER_AGENT = "TiBillet-Onboard/1.0 (contact@tibillet.coop)"
+NOMINATIM_USER_AGENT = "TiBillet-Onboard/1.0 (contact@tibillet.re)"
 NOMINATIM_TIMEOUT = 5  # secondes / seconds
 GEOCODE_CACHE_TTL = 24 * 60 * 60  # 24h en secondes / 24h in seconds
 

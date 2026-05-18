@@ -42,12 +42,13 @@ from MetaBillet.models import WaitingConfiguration
 pytestmark = pytest.mark.onboard
 
 
-# Hote HTTP de dev par defaut (cf. pattern V2 du projet). Le wizard est
-# accessible depuis ROOT et depuis tous les tenants — on tape le tenant
-# `lespass` qui est toujours present en DB dev.
-# / Default dev HTTP host (cf. V2 project pattern). The wizard is reachable
-# from ROOT and any tenant — we hit `lespass`, always present in dev DB.
-DEV_HOST = "lespass.tibillet.localhost"
+# Hote HTTP de dev : on cible le tenant ROOT car le wizard ne tourne plus
+# que depuis ROOT (decision mainteneur 2026-05-16, dispatch() du ViewSet
+# redirige tout acces depuis un tenant). Le domaine ROOT en dev est
+# `www.tibillet.localhost` (cf. fixture install.py).
+# / Dev host: target ROOT tenant since the wizard only runs on ROOT
+# (maintainer decision 2026-05-16). ROOT dev domain is `www.tibillet.localhost`.
+DEV_HOST = "tibillet.localhost"
 
 
 def test_identity_get_renders_form():

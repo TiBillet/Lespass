@@ -50,8 +50,8 @@ from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, Product, Event, Tag, Paiement_stripe, Membership, Reservation, \
     FormbricksConfig, FormbricksForms, FederatedPlace, Carrousel, LigneArticle, PriceSold, \
     Price, ProductSold, PaymentMethod, PostalAddress, SaleOrigin, ProductFormField
-from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
-    contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email, send_sale_to_laboutik, \
+from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, \
+    contact_mailer, send_to_ghost_email, send_sale_to_laboutik, \
     send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, \
     send_ticket_cancellation_user, send_email_generique, \
     send_membership_pending_admin, send_membership_pending_user, send_membership_payment_link_user
@@ -3620,293 +3620,27 @@ class MembershipMVT(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
-class Tenant(viewsets.ViewSet):
-    authentication_classes = [SessionAuthentication, ]
-    # Tout le monde peut créer un tenant, sous reserve d'avoir validé son compte stripe
-    permission_classes = [permissions.AllowAny, ]
-
-    @action(detail=False, methods=['GET', 'POST'])
-    def new(self, request, *args, **kwargs):
-        """
-        Le formulaire de création de nouveau tenant
-        """
-        context = get_context(request)
-        context['email_query_params'] = request.query_params.get('email') if request.query_params.get('email') else ""
-        context['name_query_params'] = request.query_params.get('name') if request.query_params.get('name') else ""
-
-        return render(request, "reunion/views/tenant/new_tenant.html", context=context)
-
-    @action(detail=False, methods=['POST'])
-    def create_waiting_configuration(self, request, *args, **kwargs):
-        """
-        Reception du formulaire de création de nouveau tenant
-        Création d'un objet waiting configuration
-        Envoi du mail qui invite à la création d'un compte Stripe
-        """
-        new_tenant = TenantCreateValidator(data=request.data, context={'request': request})
-        logger.info(new_tenant.initial_data)
-        if not new_tenant.is_valid():
-            # Construire une liste d'erreurs FALC par champ pour le partial `field_errors.html`
-            errors = []
-            try:
-                for field, msgs in new_tenant.errors.items():
-                    if isinstance(msgs, (list, tuple)):
-                        for msg in msgs:
-                            errors.append({'id': field, 'msg': str(msg)})
-                    else:
-                        errors.append({'id': field, 'msg': str(msgs)})
-            except Exception:
-                # En cas d'erreur inattendue, on met un message générique
-                errors.append({'id': 'form', 'msg': _('An error occurred. Please try again.')})
-
-            # Pré-remplissage des champs avec les valeurs envoyées
-            form_values = {
-                'email': request.POST.get('email', ''),
-                'emailConfirmation': request.POST.get('emailConfirmation', ''),
-                'name': request.POST.get('name', ''),
-                'short_description': request.POST.get('short_description', ''),
-                'dns_choice': request.POST.get('dns_choice', 'tibillet.coop'),
-                'cgu': request.POST.get('cgu') in ['true', 'True', 'on', '1'],
-                # On ne pré-remplit pas answer volontairement (captcha), il sera régénéré côté JS
-            }
-
-            context = get_context(request)
-            context.update({
-                'errors': errors,
-                'form_values': form_values,
-                # Conserver les query params existants si présents pour compat
-                'email_query_params': request.query_params.get('email') if request.query_params.get('email') else "",
-                'name_query_params': request.query_params.get('name') if request.query_params.get('name') else "",
-            })
-
-            # Réponse partielle HTMX: on renvoie le même template avec les erreurs et valeurs pré-remplies
-            return render(request, "reunion/views/tenant/new_tenant.html", context=context)
-
-        # Création d'un objet waiting_configuration
-        validated_data = new_tenant.validated_data
-        waiting_configuration = WaitingConfiguration.objects.create(
-            organisation=validated_data['name'],
-            email=validated_data['email'],
-            dns_choice=validated_data['dns_choice'],
-            short_description=validated_data['short_description'],
-        )
-        # Envoi d'un mail pour vérifier le compte. Un lien vers stripe sera créé
-        # new_tenant_mailer.delay(waiting_config_uuid=str(waiting_configuration.uuid))
-        new_tenant_mailer.delay(waiting_config_uuid=str(waiting_configuration.uuid))
-
-        try:
-            meta = Client.objects.filter(categorie=Client.META).first()
-            with tenant_context(meta):
-                send_to_ghost_email.delay(validated_data['email'], name=validated_data['name'])
-        except Exception as e:
-            logger.error(f"new_tenant send_to_ghost_email ERROR : {e}")
-
-        return render(request, "reunion/views/tenant/create_waiting_configuration_THANKS.html", context={})
-
-    @action(detail=True, methods=['GET'])
-    def emailconfirmation_tenant(self, request, pk):
-        """
-        Lien de vérification de demande de création de nouveau tenant
-        Mail envoyé par tasks.new_tenant_mailer
-        """
-        signer = TimestampSigner()
-        try:
-            wc_pk = signer.unsign(urlsafe_base64_decode(pk).decode('utf8'), max_age=(3600 * 24 * 30))  # 30 jours
-            wc = WaitingConfiguration.objects.get(uuid=wc_pk)
-            wc.email_confirmed = True
-            wc.save()
-
-            # Idempotent behavior: if the tenant was already created, redirect directly
-            if wc.tenant:
-                primary_domain = f"https://{wc.tenant.get_primary_domain().domain}"
-                # Le tenant existe déja, on envoi un mail de connection
-                get_or_create_user(wc.email, send_mail=True)
-                return redirect(primary_domain)
-
-            # Si assez de tenant en attentent de création existent :
-            if Client.objects.filter(categorie=Client.WAITING_CONFIG).exists():
-                try:
-                    tenant = wc.create_tenant()
-                except Exception as e:
-                    logger.error(f"Error creating tenant for {wc.organisation}: {e}")
-                    # Try to redirect to existing tenant if it's a name conflict
-                    existing_client = Client.objects.filter(name=wc.organisation).first()
-                    if existing_client:
-                        try:
-                            # Repare la liaison manquante pour les prochains clics
-                            # Fix the missing link for future clicks
-                            if not wc.tenant:
-                                wc.tenant = existing_client
-                                wc.save()
-                            primary_domain = f"https://{existing_client.get_primary_domain().domain}"
-                            messages.info(request, _("This space already exists. Redirecting you to it."))
-                            return redirect(primary_domain)
-                        except Exception:
-                            pass
-
-                    messages.error(request,
-                                   _("An error occurred while creating your space. It might be because the name is already taken or no free slot is available. Please contact us."))
-                    return redirect('/')
-
-                primary_domain = f"https://{tenant.get_primary_domain().domain}"
-                user = get_or_create_user(wc.email, send_mail=False)
-                token = user.get_connect_token()
-                connexion_url = f"{primary_domain}/emailconfirmation/{token}"
-                return redirect(connexion_url)
-
-            else:
-                context = get_context(request)
-                return render(request, "reunion/views/tenant/create_waiting_configuration_MAIL_CONFIRMED.html",
-                              context=context)
-        except UnicodeDecodeError as e:
-            messages.error(request, _("Invalid token. Please request a new confirmation email."))
-            return redirect('/')
-
-    @action(detail=True, methods=['GET'])
-    def onboard_stripe(self, request, pk):
-        """
-        Requete provenant du mail envoyé après la création d'une configuration en attente
-        Fabrication du lien stripe onboard
-        """
-        waiting_config = get_object_or_404(WaitingConfiguration, pk=pk)
-        tenant = connection.tenant
-        tenant_url = tenant.get_primary_domain().domain
-
-        rootConf = RootConfiguration.get_solo()
-        stripe.api_key = rootConf.get_stripe_api()
-
-        if not waiting_config.id_acc_connect:
-            acc_connect = stripe.Account.create(
-                type="standard",
-                country="FR",
-            )
-            id_acc_connect = acc_connect.get('id')
-            waiting_config.id_acc_connect = id_acc_connect
-            waiting_config.save()
-
-        account_link = stripe.AccountLink.create(
-            account=waiting_config.id_acc_connect,
-            refresh_url=f"https://{tenant_url}/tenant/{waiting_config.id_acc_connect}/onboard_stripe_return/",
-            return_url=f"https://{tenant_url}/tenant/{waiting_config.id_acc_connect}/onboard_stripe_return/",
-            type="account_onboarding",
-        )
-
-        url_onboard = account_link.get('url')
-        return redirect(url_onboard)
-
-    @action(detail=True, methods=['GET'])
-    def onboard_stripe_return(self, request, pk):
-        """
-        Return url après avoir terminé le onboard sur stripe
-        Vérification que le mail soit bien le même (cela nous confirme qu'il existe bien, Stripe impose une double auth)
-        Vérification que le formulaire a bien été complété (detail submitted)
-        Envoi un mail à l'administrateur ROOT de l'insatnce TiBillet pour prévenir, vérifier, et lancer la création du tenant à la main.
-        """
-        details_submitted, waiting_config = False, False
-        id_acc_connect = pk
-        # La clé du compte principal stripe connect
-        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-        # Récupération des info lié au lieu via sont id account connec
-        try:
-            info_stripe = stripe.Account.retrieve(id_acc_connect)
-            details_submitted = info_stripe.details_submitted
-        except Exception as e:
-            logger.error(f"onboard_stripe_return. id_acc_connect : {id_acc_connect}, erreur stripe : {e}")
-            raise Http404
-
-        if details_submitted:
-            waiting_config = WaitingConfiguration.objects.get(id_acc_connect=id_acc_connect)
-            waiting_config.onboard_stripe_finished = True
-            waiting_config.save()
-            # Envoie du mail aux superadmins
-            new_tenant_after_stripe_mailer.delay(waiting_config.pk)
-
-        context = get_context(request)
-        context["details_submitted"] = details_submitted
-        return render(request, "reunion/views/tenant/after_onboard_stripe.html", context=context)
-
-        #     _("Your Stripe account does not seem to be valid. "
-        #       "\nPlease complete your Stripe.com registration before creating a new TiBillet space."))
-        # return redirect('/tenant/new/')
-
-    '''
-    @action(detail=False, methods=['GET'])
-    def emailconfirmation(self, request, pk):
-        """
-        Requete provenant du mail envoyé après la création d'un tenant
-        """
-        wc = WaitingConfiguration.objects.get(pk=pk)
-        wc.email_confirmed = True
-        wc.save()
-        context = get_context(request)
-        return render(request, "reunion/views/tenant/create_waiting_configuration_MAIL_CONFIRMED.html", context=context)
-    '''
-
-    @action(detail=False, methods=['GET'])
-    def onboard_stripe_from_config(self, request):
-        """
-        Requete provenant du mail envoyé après la création d'une configuration en attente
-        Fabrication du lien stripe onboard
-        """
-        config = Configuration.get_solo()
-        id_acc_connect = config.get_stripe_connect_account()
-        tenant = connection.tenant
-        tenant_url = tenant.get_primary_domain().domain
-
-        rootConf = RootConfiguration.get_solo()
-        stripe.api_key = rootConf.get_stripe_api()
-
-        try:
-            account_link = stripe.AccountLink.create(
-                account=id_acc_connect,
-                refresh_url=f"https://{tenant_url}/tenant/{id_acc_connect}/onboard_stripe_return_from_config/",
-                return_url=f"https://{tenant_url}/tenant/{id_acc_connect}/onboard_stripe_return_from_config/",
-                type="account_onboarding",
-            )
-
-        except stripe._error.InvalidRequestError:
-            # Stripe account not valid, on le vide et on relance
-            config.stripe_connect_account = None
-            config.save()
-            id_acc_connect = config.get_stripe_connect_account()
-            account_link = stripe.AccountLink.create(
-                account=id_acc_connect,
-                refresh_url=f"https://{tenant_url}/tenant/{id_acc_connect}/onboard_stripe_return_from_config/",
-                return_url=f"https://{tenant_url}/tenant/{id_acc_connect}/onboard_stripe_return_from_config/",
-                type="account_onboarding",
-            )
-
-        url_onboard = account_link.get('url')
-        return redirect(url_onboard)
-
-    @action(detail=True, methods=['GET'])
-    def onboard_stripe_return_from_config(self, request, pk):
-        """
-        Return url après avoir terminé le onboard sur stripe
-        Vérification que le mail soit bien le même (cela nous confirme qu'il existe bien, Stripe impose une double auth)
-        Vérification que le formulaire a bien été complété (detail submitted)
-        Envoi un mail à l'administrateur ROOT de l'insatnce TiBillet pour prévenir, vérifier, et lancer la création du tenant à la main.
-        """
-        details_submitted, waiting_config = False, False
-        id_acc_connect = pk
-        # La clé du compte principal stripe connect
-        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-        # Récupération des infos liées au lieu via son id account connec
-        try:
-            info_stripe = stripe.Account.retrieve(id_acc_connect)
-            details_submitted = info_stripe.details_submitted
-        except Exception as e:
-            logger.error(f"onboard_stripe_return. id_acc_connect : {id_acc_connect}, erreur stripe : {e}")
-            raise Http404
-
-        config = Configuration.get_solo()
-        if info_stripe and info_stripe.get('payouts_enabled'):
-            config.stripe_payouts_enabled = info_stripe.get('payouts_enabled')
-            config.save()
-
-        context = get_context(request)
-        context["details_submitted"] = details_submitted
-        return render(request, "reunion/views/tenant/after_onboard_stripe.html", context=context)
-
-        #     _("Your Stripe account does not seem to be valid. "
-        #       "\nPlease complete your Stripe.com registration before creating a new TiBillet space.")
+# =============================================================================
+# Classe `Tenant` (ViewSet) — SUPPRIMEE lors de la session 2026-05-16.
+# / Class `Tenant` (ViewSet) — REMOVED during the 2026-05-16 session.
+# =============================================================================
+#
+# Cette classe melangeait deux responsabilites disjointes :
+#
+# 1. Creation de tenant via le flow legacy `/tenant/new/`. Remplace par
+#    l'app `onboard/` (wizard multi-step avec OTP, magic-link et SSO).
+#    Methodes supprimees : `new`, `create_waiting_configuration`,
+#    `emailconfirmation_tenant`, `onboard_stripe`, `onboard_stripe_return`.
+#
+# 2. Onboarding Stripe Connect d'un tenant EXISTANT (depuis l'admin
+#    Unfold). Migre vers `PaiementStripe/views.py::StripeConnectOnboardingViewSet`.
+#    Methodes deplacees : `onboard_stripe_from_config`,
+#    `onboard_stripe_return_from_config`.
+#
+# / This class mixed two disjoint responsibilities: (1) legacy tenant
+# creation flow, now in `onboard/`; (2) Stripe Connect onboarding for
+# an existing tenant, moved to `PaiementStripe/views.py::StripeConnectOnboardingViewSet`.
+#
+# References :
+#   - `TECH_DOC/SESSIONS/ONBOARD/03-session-recap.md`
+#   - `TECH_DOC/SESSIONS/MOYENS_PAIEMENT/01-stripe-migration-spec.md`

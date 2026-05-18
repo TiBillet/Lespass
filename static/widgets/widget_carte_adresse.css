@@ -21,49 +21,190 @@
 /* leaflet-geosearch : container — fond blanc opaque + ombre marquée pour
    bien le distinguer visuellement de la navbar TiBillet (qui a son propre
    input de recherche en haut de page). Sans ce contraste, l'utilisateur
-   peut confondre les deux barres de recherche. */
-/* / leaflet-geosearch: opaque white bg + strong shadow to visually stand
-   out from the TiBillet navbar (which has its own search input). */
+   peut confondre les deux barres de recherche.
+   `padding: 0` : pas de padding interne — l'input et le bouton remplissent
+   completement le container (pas de double "boite dans boite"). Le
+   container fait office d'encadrement unique grace au shadow.
+   `overflow: hidden` : clippe les coins de l'input/bouton sur le
+   border-radius du parent (visuel propre coins arrondis sans matcher
+   chaque radius enfant).
+   / `padding: 0`: no inner padding — input and button fill the container
+   (no "box-in-box" effect). `overflow: hidden`: clips children corners
+   to the parent's border-radius. */
 .leaflet-control-geosearch.leaflet-geosearch-bar {
     background: #ffffff;
     border-radius: 0.5rem;
-    padding: 0.25rem;
+    padding: 0;
+    overflow: hidden;
     box-shadow:
         0 0 0 1px rgba(15, 23, 42, 0.08),
         0 4px 6px -2px rgba(15, 23, 42, 0.12),
         0 10px 15px -3px rgba(15, 23, 42, 0.10);
     margin-top: 0.5rem !important;  /* éloigne légèrement du bord de la carte */
     margin-left: 0.5rem !important;
+    /* leaflet-geosearch impose un `width: 400px` en dur sur cette classe.
+       On l'override avec `fit-content` pour que le container se reduise
+       a la largeur reelle de ses enfants (input + bouton) — plus de
+       zone blanche vide a droite du bouton.
+       `min-width: 16rem` evite que le container se reduise tellement
+       qu'il ne reste plus de place pour saisir une adresse normale.
+       / Override leaflet-geosearch hard-coded `width: 400px`. Use
+       `fit-content` so the container shrinks to its actual children
+       width. `min-width: 16rem` keeps a usable typing surface. */
+    width: fit-content !important;
+    min-width: 16rem;
 }
 
-/* leaflet-geosearch input : harmonise le style avec les form-control Bootstrap. */
-/* / leaflet-geosearch input: harmonize style with Bootstrap form-control. */
+/* PIEGE leaflet-geosearch (cf. tests/PIEGES.md P8) : la lib crée DEUX
+   instances `.leaflet-control-geosearch`. La première (`.pending`) est
+   un placeholder vide ajouté dans `.leaflet-top.leaflet-left` (même
+   conteneur que le zoom control) — elle reste invisible mais OCCUPE
+   l'espace, ce qui décale le zoom vers le bas. La deuxième est la vraie
+   search bar en `style: "bar"` (avec form + input), ajoutée à
+   `.leaflet-control-container` directement. On masque la première.
+   / leaflet-geosearch pitfall: the lib creates TWO `.leaflet-control-geosearch`
+   nodes. The first (`.pending`) is an empty placeholder in `.leaflet-top.leaflet-left`
+   that pushes the zoom control down. We hide it. */
+.leaflet-control-geosearch.pending {
+    display: none !important;
+}
+
+/* Bouton "Rechercher" (loupe) injecté par notre JS à côté de l'input,
+   pour pallier l'absence de bouton submit dans le mode "bar" de
+   leaflet-geosearch. Alignement optique vertical : on matche la
+   `box` height de l'input (même `padding` vertical + `border` 1px + même
+   `font-size`) pour que les deux éléments aient EXACTEMENT la même
+   hauteur en `align-items: stretch`. Padding horizontal généreux pour un
+   bouton confortable au clic / touch.
+   / "Search" button (magnifying glass) injected next to the input. Match
+   the input's vertical metrics (same padding + border + font-size) so
+   both have the same height under `align-items: stretch`. */
+/* Bouton submit : meme philosophie que l'input — pas de border ni de
+   border-radius internes. Le container parent clippe via overflow hidden,
+   et le bouton vert touche directement le bord droit (visuel propre).
+   / Submit button: same philosophy as the input — no inner border or
+   radius. Parent container clips via overflow hidden. */
+.leaflet-control-geosearch .widget-search-submit {
+    padding: 0.5rem 0.9rem;
+    border-radius: 0;
+    border: none;
+    background-color: #16a34a;
+    color: #ffffff;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    transition: background-color 120ms ease;
+}
+.leaflet-control-geosearch .widget-search-submit:hover {
+    background-color: #15803d;
+}
+/* Focus visible (a11y clavier) : outline inset vert plus fonce pour ne
+   pas casser le layout (le bouton est colle au bord du container).
+   / Focus visible (keyboard a11y): inset outline so it stays inside
+   the container bounds. */
+.leaflet-control-geosearch .widget-search-submit:focus-visible {
+    outline: 2px solid #166534;
+    outline-offset: -2px;
+}
+
+/* Message d'erreur "Aucun résultat" affiché sous la search bar quand
+   Nominatim ne retourne rien. `aria-live="polite"` côté JS → lu par les
+   lecteurs d'écran sans interrompre. Position absolue par rapport au
+   `.leaflet-control-container` pour rester aligné sous la search bar
+   sans déranger les autres controls Leaflet (zoom, attribution).
+   / "No result" message under the search bar when Nominatim returns
+   nothing. `aria-live="polite"` (set in JS) for screen readers. Absolute
+   positioning under the search bar without disturbing other Leaflet
+   controls. */
+.widget-search-no-result {
+    position: absolute;
+    top: 3.25rem;  /* sous la search bar (qui fait ~2.5rem + margin) */
+    left: 0.5rem;
+    z-index: 1000;  /* au-dessus des tuiles Leaflet */
+    background-color: #fef3c7;  /* amber-100 */
+    border: 1px solid #fcd34d;  /* amber-300 */
+    color: #78350f;  /* amber-900 */
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    box-shadow: 0 4px 6px -2px rgba(15, 23, 42, 0.12);
+    max-width: calc(100% - 1rem);
+}
+.widget-search-no-result:empty {
+    /* Caché tant qu'il n'y a pas de message. Évite un bloc vide flottant
+       au chargement de la carte.
+       / Hidden while empty — avoids a floating empty block at load. */
+    display: none;
+}
+
+/* leaflet-geosearch form : layout flex pour aligner input + bouton submit
+   sur la même ligne. Par défaut le form est `display: block` → notre
+   bouton injecté tombait sur une 2e ligne sous l'input.
+   `gap: 0` : on colle l'input et le bouton (le bouton vert touche
+   directement la fin de l'input, plus de double border visible).
+   / leaflet-geosearch form: flex layout to align input + submit button on
+   the same row. `gap: 0` so the green button touches the input edge
+   directly (no visible inner border seam). */
+.leaflet-control-geosearch.leaflet-geosearch-bar form {
+    display: flex !important;
+    align-items: stretch;
+    gap: 0;
+}
+
+/* leaflet-geosearch input : pas de border interne (le container parent
+   `.leaflet-geosearch-bar` fournit deja l'encadrement via son box-shadow).
+   Sans `border: none`, on avait un double-encadrement visuel : la box du
+   container + la border de l'input → effet "boite dans boite" peu propre.
+   `border-radius: 0` car le container parent a deja un radius + overflow
+   hidden qui clippe les coins de l'input.
+   `flex: 1` + `min-width: 0` : l'input occupe toute la largeur dispo.
+   `line-height: 1.5` + `height: auto` : aligne la hauteur sur le bouton
+   submit (sans ca, l'input ferait 30px contre 40px pour le bouton — cf.
+   piege documente plus bas).
+   / Input has NO border (parent container provides the visual frame
+   via its shadow). NO border-radius (parent clips via overflow hidden).
+   `flex: 1` + `min-width: 0` for full-width sizing. `line-height: 1.5`
+   + `height: auto` to match the submit button's height under flex stretch. */
 .leaflet-control-geosearch form input {
-    border-radius: 0.5rem !important;
-    border: 1px solid #cbd5e1 !important;
+    border-radius: 0 !important;
+    border: none !important;
     padding: 0.5rem 0.75rem !important;
     font-size: 0.95rem !important;
+    line-height: 1.5 !important;
     background-color: #ffffff !important;
+    height: auto !important;
+    flex: 1;
+    min-width: 0;
 }
+/* Focus : on garde un indicateur visuel ACCESSIBLE (clavier, screen
+   reader). Pas de border (retire plus haut) — on utilise un `box-shadow`
+   inset vert sur les bords pour signaler le focus sans casser le layout.
+   `outline: none` desactive l'outline browser, le box-shadow le remplace.
+   / Focus indicator (a11y): inset green shadow instead of a border,
+   keeping the no-double-frame look. */
 .leaflet-control-geosearch form input:focus {
-    border-color: #16a34a !important;
-    box-shadow:
-        0 0 0 1px #16a34a,
-        0 0 0 4px rgba(22, 163, 74, 0.15) !important;
+    box-shadow: inset 0 0 0 2px #16a34a !important;
     outline: none !important;
 }
 
-/* Bouton reset (×) : leaflet-geosearch l'affiche en permanence par défaut.
-   Quand l'input est vide, la croix sert à rien et confond l'utilisateur.
-   On la masque tant que l'input n'est pas focus + non-vide.
-   / Reset button (×): hidden by default; shown only when input has value
-   or is focused (otherwise it's noise). */
+/* Bouton reset (×) : leaflet-geosearch positionne ce bouton en
+   `position: absolute` à droite du form. Comme on a injecté notre propre
+   bouton "Rechercher" (loupe) à droite, la croix vient se superposer
+   visuellement par-dessus la loupe dès que l'input est focus + non-vide.
+   On la masque TOTALEMENT : l'utilisateur peut vider l'input en sélectionnant
+   le texte (Ctrl+A ou triple-clic) puis Delete — comportement HTML natif
+   suffisant pour un input mono-ligne.
+   / Reset button (×): leaflet-geosearch absolutely positions it on the
+   right edge of the form, where it overlaps our injected "Search"
+   button. We hide it entirely — users can clear the input with native
+   keyboard shortcuts (Ctrl+A + Delete). */
 .leaflet-control-geosearch .reset {
     display: none !important;
-}
-.leaflet-control-geosearch form input:not(:placeholder-shown) ~ .reset,
-.leaflet-control-geosearch form input:focus ~ .reset {
-    display: block !important;
 }
 
 /* Liste de suggestions : style cohérent avec la palette TiBillet. */

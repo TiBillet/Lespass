@@ -169,7 +169,7 @@ logger = logging.getLogger(__name__)
 # Politique d'usage Nominatim : User-Agent identifiable, max 1 req/s par IP.
 # / Nominatim usage policy: identifiable User-Agent, max 1 req/s per IP.
 NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
-NOMINATIM_USER_AGENT = "TiBillet-Widget/1.0 (contact@tibillet.coop)"
+NOMINATIM_USER_AGENT = "TiBillet-Widget/1.0 (contact@tibillet.re)"
 NOMINATIM_TIMEOUT = 5  # secondes / seconds
 GEOCODE_CACHE_TTL = 24 * 60 * 60  # 24h en secondes / 24h in seconds
 

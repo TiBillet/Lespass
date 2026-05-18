@@ -245,6 +245,117 @@ body {
 }
 
 
+/* ================================================================ */
+/* ROADMAP / FUTURE — accordeon <details> "Futur de TiBillet"        */
+/* HTML5 natif : zero JS, accessible clavier + lecteur d'ecran.      */
+/* / ROADMAP — native <details> accordion: zero JS, accessible.      */
+/* ================================================================ */
+
+.roadmap-section {
+    margin-bottom: 3rem;
+}
+
+.roadmap-details {
+    border-radius: 12px;
+    overflow: hidden;
+    /* Bordure douce + ombre subtile pour distinguer du flux normal. */
+    /* / Soft border + subtle shadow to stand out from the flow.     */
+    box-shadow:
+        0 0 0 1px rgba(37, 157, 73, 0.18),
+        0 2px 8px -2px rgba(0, 0, 0, 0.06);
+}
+
+.roadmap-summary {
+    /* Reset le triangle natif de <summary> et style en bouton plein. */
+    /* / Reset native <summary> triangle and style as a full button.  */
+    list-style: none;
+    cursor: pointer;
+    padding: 1.1rem 1.5rem;
+    background: linear-gradient(135deg, rgba(37, 157, 73, 0.08) 0%, rgba(66, 150, 204, 0.08) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--bs-body-color, #212529);
+    transition: background 200ms ease;
+    user-select: none;
+}
+
+.roadmap-summary::-webkit-details-marker {
+    display: none;
+}
+
+.roadmap-summary:hover {
+    background: linear-gradient(135deg, rgba(37, 157, 73, 0.14) 0%, rgba(66, 150, 204, 0.14) 100%);
+}
+
+.roadmap-summary:focus-visible {
+    outline: 2px solid #259d49;
+    outline-offset: -2px;
+}
+
+.roadmap-summary-label {
+    display: inline-flex;
+    align-items: center;
+    color: #259d49;
+}
+
+.roadmap-summary-chevron {
+    transition: transform 250ms ease;
+    color: #259d49;
+    font-size: 1.2rem;
+    line-height: 1;
+}
+
+/* Chevron pivote quand le <details> est ouvert. */
+/* / Chevron rotates when <details> is open.    */
+.roadmap-details[open] .roadmap-summary-chevron {
+    transform: rotate(180deg);
+}
+
+.roadmap-content {
+    padding: 2rem 1.5rem 1.5rem;
+    background: var(--bs-body-bg, #fff);
+}
+
+.roadmap-intro {
+    color: var(--bs-secondary-color, #6c757d);
+    margin-bottom: 2rem;
+    max-width: 640px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* La grille roadmap utilise les memes regles que .features-grid    */
+/* (responsive 3/2/1 colonnes deja gere par les @media plus haut),  */
+/* on ne surcharge que la couleur d'accent des icones.              */
+/* / Roadmap grid reuses .features-grid rules; we only override the */
+/* icon accent color (orange "futur" instead of green "actuel").    */
+.roadmap-card .feature-icon.roadmap-icon {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(217, 119, 6, 0.12) 100%);
+    color: #d97706;
+}
+
+.roadmap-cta {
+    margin-top: 1.5rem;
+    margin-bottom: 0;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--bs-border-color-translucent, rgba(0, 0, 0, 0.08));
+    color: var(--bs-secondary-color, #6c757d);
+}
+
+/* Reduce-motion : pas de rotation animee du chevron. */
+/* / Reduce-motion: disable chevron rotation.         */
+@media (prefers-reduced-motion: reduce) {
+    .roadmap-summary,
+    .roadmap-summary-chevron {
+        transition: none;
+    }
+}
+
+
 /* Chiffres tabulaires pour les compteurs (largeur egale, pas de "saut") */
 /* / Tabular numbers for counters (equal width, no "jump") */
 .stat-number {

@@ -56,9 +56,9 @@ from MetaBillet.models import WaitingConfiguration
 pytestmark = pytest.mark.onboard
 
 
-# Hote HTTP de dev par defaut (cf. pattern V2 du projet).
-# / Default dev HTTP host (V2 project pattern).
-DEV_HOST = "lespass.tibillet.localhost"
+# Hote HTTP de dev : ROOT (cf. test_step_verify pour la justification).
+# / Dev host: ROOT (see test_step_verify for rationale).
+DEV_HOST = "tibillet.localhost"
 
 
 # ---------------------------------------------------------------------------

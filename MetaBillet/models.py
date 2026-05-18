@@ -35,8 +35,23 @@ class WaitingConfiguration(models.Model):
     email = models.EmailField()
     organisation = models.CharField(db_index=True, max_length=50, verbose_name=_("Collective name"))
 
+    # LEGACY 2026-05-16 — champ orphelin du flow `/tenant/new/` supprime.
+    # Etait rempli par `Tenant.onboard_stripe()` (BaseBillet/views.py) avec
+    # le `id` du compte Stripe Connect cree apres confirmation email.
+    # Aujourd'hui Stripe Connect se configure depuis l'admin Unfold du
+    # tenant existant (cf. PaiementStripe/views.py::StripeConnectOnboardingViewSet)
+    # et l'id_acc_connect vit sur `Configuration.stripe_connect_account*`,
+    # pas sur WaitingConfiguration. A SUPPRIMER lors d'une migration data
+    # de cleanup (cf. TECH_DOC/SESSIONS/ONBOARD/03-session-recap.md section 9.6).
+    # / LEGACY — orphan field from removed `/tenant/new/` flow. To remove
+    # via a future data migration.
     id_acc_connect = models.CharField(max_length=21, blank=True, null=True, verbose_name=_("Stripe connect ID"))
 
+    # LEGACY 2026-05-16 — flags orphelins du formulaire `/tenant/new/`.
+    # Etaient remplis par le serializer `TenantCreateValidator` (supprime).
+    # Le wizard onboard ne demande pas ces choix — l'activation des modules
+    # se fait dans le dashboard Unfold post-creation (cf. Configuration.module_*).
+    # / LEGACY — orphan flags from the removed `/tenant/new/` form.
     laboutik_wanted = models.BooleanField(default=False)
     payment_wanted = models.BooleanField(default=False)
     email_confirmed = models.BooleanField(default=False)
@@ -55,6 +70,15 @@ class WaitingConfiguration(models.Model):
 
     phone = models.CharField(max_length=20, verbose_name=_("Phone number"))
 
+    # LEGACY 2026-05-16 — champs orphelins du formulaire `/tenant/new/`.
+    # `site_web` etait pre-rempli depuis Stripe (`info_stripe.business_profile.url`)
+    # par `TenantCreateValidator.create_tenant`. `legal_documents`, `twitter`,
+    # `facebook`, `instagram` n'etaient remplis nulle part en pratique
+    # (jamais expose dans le formulaire legacy non plus). Le wizard onboard
+    # ne demande aucun de ces champs — l'admin les saisira plus tard dans
+    # son admin Unfold (`Configuration.site_web` etc.).
+    # / LEGACY — orphan URL fields from `/tenant/new/`. Onboard wizard doesn't
+    # collect these; admin fills them later in Unfold Configuration.
     site_web = models.URLField(blank=True, null=True)
     legal_documents = models.URLField(blank=True, null=True, verbose_name='By-laws')
 
@@ -65,6 +89,16 @@ class WaitingConfiguration(models.Model):
     # adhesion_obligatoire = models.BooleanField(default=False, verbose_name="Proposer l'adhésion lors d'un scan de QRCode de carte NFC")
     # button_adhesion = models.BooleanField(default=False)
 
+    # LEGACY 2026-05-16 — champs images orphelins du formulaire `/tenant/new/`.
+    # `map_img`, `carte_restaurant`, `img` n'etaient en pratique JAMAIS
+    # uploades par le legacy (pas de champ image dans `new_tenant.html`).
+    # Le wizard onboard utilise un seul champ `logo` (StdImageField, declare
+    # plus bas dans ce modele). Les 3 champs ci-dessous sont dead-code en
+    # base, conserves pour ne pas casser une migration data eventuelle —
+    # a SUPPRIMER via une migration de cleanup.
+    # / LEGACY — orphan image fields. Never uploaded by legacy in practice.
+    # Onboard uses a single `logo` StdImageField. To remove via a future
+    # cleanup data migration.
     map_img = JPEGField(upload_to='images/',
                             null=True, blank=True,
                             validators=[MaxSizeValidator(1920, 1920)],
@@ -114,6 +148,11 @@ class WaitingConfiguration(models.Model):
         (TZ_PARIS, _('Europe/Paris')),
     ]
 
+    # LEGACY 2026-05-16 — champ orphelin. Le wizard onboard ne demande
+    # pas la timezone (deduite de la locale browser et/ou settings projet).
+    # Etait remplit par TenantCreateValidator legacy. A SUPPRIMER via
+    # migration data future.
+    # / LEGACY — orphan timezone field, never set by onboard.
     fuseau_horaire = models.CharField(default=TZ_REUNION,
                                       max_length=50,
                                       choices=TZ_CHOICES,
@@ -173,6 +212,13 @@ class WaitingConfiguration(models.Model):
                                          verbose_name=_("Category"))
 
     datetime = models.DateTimeField(auto_now_add=True)
+    # LEGACY 2026-05-16 — flag orphelin du flow `/tenant/new/`. Etait
+    # passe a True par `Tenant.onboard_stripe_return` apres validation
+    # Stripe Connect. Aujourd'hui Stripe se configure post-creation (cf.
+    # PaiementStripe/views.py), donc le flag n'est plus jamais mis a jour
+    # pendant l'onboard. A SUPPRIMER via migration data future.
+    # / LEGACY — orphan flag from `/tenant/new/`. Stripe is now configured
+    # post-creation, this flag is never set anymore.
     onboard_stripe_finished = models.BooleanField(default=False)
     created = models.BooleanField(default=False)
     tenant = models.ForeignKey(Client, on_delete=models.CASCADE, verbose_name=_('Tenant'), related_name='waiting_config', blank=True, null=True)
@@ -250,6 +296,22 @@ class WaitingConfiguration(models.Model):
         null=True, blank=True,
         verbose_name=_("OTP last sent at"),
         help_text=_("Timestamp of the last OTP send (used for cooldown)."),
+    )
+    # Langue preferee de l'utilisateur, captee depuis la session au POST
+    # identity (`get_language()`). Sert aux tasks Celery `onboard_otp_mailer`
+    # et `onboard_ready_mailer` qui n'ont pas de `request` pour deduire la
+    # langue : sans ce champ, les sujets de mail sont rendus dans la langue
+    # par defaut du worker (souvent 'en' via LANGUAGE_CODE settings) meme si
+    # l'utilisateur a navigue tout le wizard en francais.
+    # / Preferred user language captured from session at identity POST
+    # (`get_language()`). Used by Celery tasks `onboard_otp_mailer` and
+    # `onboard_ready_mailer` which have no `request` to infer the language:
+    # without this field, email subjects fall back to the worker's default
+    # locale (often 'en') even if the user filled the wizard in French.
+    language = models.CharField(
+        max_length=10, blank=True, default="",
+        verbose_name=_("Preferred language"),
+        help_text=_("BCP47 language code captured during the onboarding wizard."),
     )
     # Warnings non-bloquants accumules pendant la creation du tenant.
     # Cas typique : un draft d'event mal forme (datetime invalide, image

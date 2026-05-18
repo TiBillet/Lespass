@@ -4,14 +4,30 @@ Prompt prêt-à-coller pour Claude Code quand on reprend le travail sur le wizar
 
 ---
 
-## Contexte rapide
+## Contexte rapide (mis à jour 2026-05-16)
 
-Le wizard d'onboarding TiBillet est **fonctionnel end-to-end** sur la branche `main-wizard` (commit `bf062a6a`). 22 tasks sur 24 du plan original sont faites. Tests : **52 passing / 2 skipped**.
+Le wizard d'onboarding TiBillet est **fonctionnel end-to-end** sur la
+branche `main-wizard`. Tests : **58 pytest onboard passing / 2 skipped**.
 
-**Ce qui reste** (cf. `04-followups.md` pour le détail) :
-- Bloquants prod : F1 Fedow exception, F2 Playwright E2E, F3 CHANGELOG + i18n.
-- Should-fix : captcha, rate-limit identity, heartbeat Celery, reprise brouillon.
-- Must-have d'app moderne : Sentry, analytics, autosave, geocoder amélioré, accessibility audit.
+**Session marathon 2026-05-16** (cf. `03-session-recap.md` section 9) :
+- Cleanup complet du flow legacy `/tenant/new/` (suppression classe Tenant
+  ViewSet, tasks legacy, templates, etc.).
+- Migration Stripe Connect `_from_config` → app dédiée `PaiementStripe/`.
+- Magic-link admin (`forge_admin_magic_link`) sur le bouton page launch + dans le mail.
+- SSO transitoire tenant → ROOT (token signé scoped TTL 120s + one-shot Redis).
+- Adresse postale principale créée à partir des données wizard.
+- Bascule mailers sur `CeleryMailerClass`.
+- Ghost newsletter branché.
+- Widget carte adresse : refonte CSS finale (pas de double border, fit-content).
+- Champs orphelins `WaitingConfiguration` commentés pour cleanup migration future.
+
+**Ce qui reste** (cf. `04-followups.md` section "Follow-ups post-2026-05-16") :
+- **Must-fix** : F4 tests SSO, F5 tests magic-link, F6 tests Stripe ViewSet.
+- **Should-fix** : S8 migration data cleanup champs orphelins, S9 tests E2E Playwright, S10 i18n complet.
+- **Nice-to-have** : N4 SSO via POST auto-submit, N5 doc utilisateur, N6 rename `TenantCreateValidator`.
+
+**Nouveau dossier** : `TECH_DOC/SESSIONS/MOYENS_PAIEMENT/` documente la
+migration Stripe (récap + spec ouverte chantier futur multi-providers).
 
 ---
 
@@ -21,9 +37,8 @@ Le wizard d'onboarding TiBillet est **fonctionnel end-to-end** sur la branche `m
 On reprend le travail sur le wizard d'onboard TiBillet.
 
 ## Contexte
-- Branche : `main-wizard`. Dernière session marathon (2026-05-15) : ~9h de polish + features manquantes.
-- 22 tasks sur 24 du plan original + ~30 tasks supplémentaires de polish/UX/refacto faites.
-- Tests : **56 pytest onboard passing / 2 skipped** + 6 widget form_field. Migrations : MetaBillet 0014 (otp_sent_at) + 0015 (events_creation_warnings).
+- Branche : `main-wizard`. Dernière session marathon (2026-05-16) : cleanup legacy + Stripe migration + magic-link + SSO + widget polish.
+- Tests : **58 pytest onboard passing / 2 skipped**. Migrations : MetaBillet 0014 (otp_sent_at) + 0015 (events_creation_warnings).
 - Widget GPS réutilisable créé dans `templates/widgets/` + `static/widgets/` (full client, leaflet-geosearch + reverse Nominatim direct browser).
 - Step 03_place complètement refondue (search bar live + drag marqueur + auto-fill 4 champs adresse).
 - Pattern de tests : pytest + pytest-django + `django_db_setup = pass` (DB dev partagée).
@@ -42,23 +57,40 @@ sur tout élément interactif, `aria-live` sur zones HTMX dynamiques, cache
 keys avec tenant_id, i18n (makemessages/compilemessages) à la fin.
 
 ## Documentation de référence
-- Récap session précédente : `TECH_DOC/SESSIONS/ONBOARD/03-session-recap.md`
+- Récap session précédente : `TECH_DOC/SESSIONS/ONBOARD/03-session-recap.md` ← **section 9 (2026-05-16) lecture obligatoire**
 - Spec design : `TECH_DOC/SESSIONS/ONBOARD/01-design-spec.md`
 - Plan d'implémentation : `TECH_DOC/SESSIONS/ONBOARD/02-implementation-plan.md`
-- **Liste des follow-ups** : `TECH_DOC/SESSIONS/ONBOARD/04-followups.md` ← **LIRE EN ENTIER**
+- **Liste des follow-ups** : `TECH_DOC/SESSIONS/ONBOARD/04-followups.md` ← **LIRE EN ENTIER section "Follow-ups post-2026-05-16"**
+- **Migration Stripe (nouveau)** : `TECH_DOC/SESSIONS/MOYENS_PAIEMENT/02-migration-2026-05-16.md` (récap) + `01-stripe-migration-spec.md` (chantier futur)
 
 ## Travail à faire cette session
 
-**État** : il reste **~5-6h de travail** pour passer prod. Détail dans `04-followups.md` section "Synthèse priorités". 4 items bloquants restants (F1 Fedow validé non-bloquant après audit code 2026-05-15) :
+**État après 2026-05-16** : code en production-ready, cleanup legacy fait,
+migration Stripe propre. Reste essentiellement de la couverture tests +
+i18n + cleanup migration data.
+
+### Bloquants prod restants
 
 | # | Item | Effort |
 |---|---|---|
-| **F2** | Tests Playwright E2E (8 scénarios listés dans followups F2) | ~3-4h |
-| **F3** | i18n `makemessages -l fr -l en` + `compilemessages` (strings session étendue) | ~30 min |
-| **S6** | Captcha anti-abuse sur identity POST (`django-simple-captcha`) | ~1h |
-| **S7** | Rate-limit identity POST (`AnonRateThrottle 5/min/IP`) | ~30 min |
+| **F2** | Tests Playwright E2E (flow complet, 8+ scénarios) | ~3-4h |
+| **F3** | i18n `makemessages -l fr -l en` + `compilemessages` (mailers, status_done, widget no-result) | ~30 min |
+| **F4** | Tests pytest SSO (generate + consume + replay refusé + TYPE_HUM refusé) | ~1h |
+| **F5** | Tests pytest `forge_admin_magic_link` (génération URL + `?next=` signé) | ~30 min |
+| **F6** | Tests pytest `StripeConnectOnboardingViewSet` (mock Stripe API) | ~1h |
 
-**Prérequis infra prod** : lancer `./manage.py root_fedow` une fois pour générer la `create_place_apikey` du tenant root. Sans ça, le `PlaceFedow.create_place()` (auto-déclenché à chaque nouveau tenant) plantera. Pas du code onboard, juste un setup ops.
+### Bonus (1-2 mois)
+
+| # | Item | Effort |
+|---|---|---|
+| **S8** | Migration data cleanup champs orphelins `WaitingConfiguration` (cf. commentaires `LEGACY 2026-05-16` dans `MetaBillet/models.py`) | ~1h + migration test |
+| **S10** | Captcha anti-abuse + rate-limit identity POST (ex-S6/S7) | ~1h |
+| **N6** | Rename `TenantCreateValidator` → `TenantCreator` (le nom "Validator" n'a plus de sens après suppression du Serializer) | ~30 min |
+
+**Prérequis infra prod** : lancer `./manage.py root_fedow` une fois pour
+générer la `create_place_apikey` du tenant root. Sans ça,
+`PlaceFedow.create_place()` (auto-déclenché à chaque nouveau tenant)
+plantera. Pas du code onboard, juste un setup ops.
 
 Choisir une option ou un mix raisonné :
 
@@ -177,6 +209,29 @@ message de commit suggéré dans le rapport final et STOP.
 18. **Browser bloque les fetch POST avec X-CSRFToken via `claude-in-chrome.javascript_tool`**
     pour raisons de sécurité MCP. Tester l'endpoint avec `curl` côté serveur
     plutôt qu'en console JS browser.
+19. **Wizard onboard ne tourne QUE sur ROOT** (`schema_name == "public"`)
+    depuis 2026-05-16. `dispatch()` du `OnboardViewSet` redirige tout accès
+    depuis un tenant vers ROOT (avec SSO si user authentifié). DEV_HOST des
+    tests : `tibillet.localhost` (apex), pas `lespass.tibillet.localhost`.
+20. **`<form>` HTML5 nested cause boucle infinie au `requestSubmit()`**.
+    Le `<form>` du widget leaflet-geosearch est imbriqué dans le `<form>`
+    onboard parent. Browsers gèrent imprévisiblement. Ne JAMAIS appeler
+    `form.requestSubmit()` sur des forms imbriqués — préférer un fetch
+    direct ou un `<button type="button">` + handler explicite.
+21. **Nominatim INTERDIT l'autocomplete client-side**
+    (https://operations.osmfoundation.org/policies/nominatim/). Toujours
+    `autoComplete: false` sur `GeoSearchControl` + une seule requête par
+    soumission explicite. Bannissement de l'IP du serveur sinon.
+22. **`get_primary_domain()` peut retourner None en django-tenants v3.10**
+    si aucun Domain avec `is_primary=True` pour le tenant. En théorie
+    impossible après `wc.create_tenant()` (Domain créé `is_primary=True`),
+    mais à protéger avec un guard `if primary is None:` pour le défensif.
+    Cf. fix `install.py` 2026-05-16 (apex seul est primary).
+23. **`autoretry_for=(Exception,)` Celery + idempotence**
+    `wc.tenant_id is not None` : si une étape POST-création (ex: PostalAddress)
+    raise, Celery relance la task, mais elle voit le tenant déjà créé et
+    early-return → l'étape ne s'exécute jamais. **Toujours envelopper les
+    étapes post-création dans try/except + log.error** (sans re-raise).
 
 ## Démarrage
 
