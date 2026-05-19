@@ -20,7 +20,8 @@ Dépendances :
 - BaseBillet.models : LigneArticle, ProductSold, PriceSold, PaymentMethod, SaleOrigin
 - inventaire.services : StockService
 - QrcodeCashless.models : CarteCashless
-- AuthBillet.models : Wallet
+- laboutik.views : ORDRE_CASCADE_FIDUCIAIRE,                              
+  MAPPING_ASSET_CATEGORY_PAYMENT_METHOD, _obtenir_ou_creer_wallet, _calculer_qty_partielles
 """
 
 import logging
@@ -30,20 +31,6 @@ from decimal import Decimal
 from django.db import connection, transaction
 
 logger = logging.getLogger(__name__)
-
-# Ordre de débit fiduciaire : cadeau → local → fédéré.
-# Identique à ORDRE_CASCADE_FIDUCIAIRE dans laboutik/views.py.
-# / Fiduciary debit order: gift → local → federated.
-# Identical to ORDRE_CASCADE_FIDUCIAIRE in laboutik/views.py.
-ORDRE_CASCADE_FIDUCIAIRE = None  # résolu dynamiquement après import Asset / resolved dynamically after Asset import
-
-
-def _ordre_cascade():
-    """Retourne la liste des catégories d'assets dans l'ordre de cascade.
-    / Returns the list of asset categories in cascade order."""
-    from fedow_core.models import Asset
-    return [Asset.TNF, Asset.TLF, Asset.FED]
-
 
 def obtenir_contexte_cashless(carte):
     """
@@ -56,29 +43,13 @@ def obtenir_contexte_cashless(carte):
     :param carte: CarteCashless
     :return: dict avec wallet_client, cascade_assets (liste ordonnée). None si aucun asset.
     """
-    from AuthBillet.models import Wallet
+    from laboutik.views import ORDRE_CASCADE_FIDUCIAIRE, _obtenir_ou_creer_wallet
     from fedow_core.models import Asset
-    from fedow_core.services import AssetService, WalletService
+    from fedow_core.services import AssetService
 
     # --- Résoudre le wallet du client ---
-    # / Resolve client wallet
-    # Priorité : user.wallet > wallet_ephemere > créer éphémère
-    # / Priority: user.wallet > wallet_ephemere > create ephemeral
-    wallet_client = None
-
-    if carte.user and hasattr(carte.user, "wallet") and carte.user.wallet:
-        wallet_client = carte.user.wallet
-    elif carte.wallet_ephemere:
-        wallet_client = carte.wallet_ephemere
-    else:
-        # Créer un wallet éphémère pour cette carte anonyme
-        # / Create an ephemeral wallet for this anonymous card
-        wallet_client = Wallet.objects.create(
-            origin=connection.tenant,
-            name=f"Éphémère - {carte.tag_id}",
-        )
-        carte.wallet_ephemere = wallet_client
-        carte.save(update_fields=["wallet_ephemere"])
+    # déléguer à laboutik (logique identique, source unique)
+    wallet_client = _obtenir_ou_creer_wallet(carte)
 
     # --- Construire la cascade d'assets accessibles ---
     # / Build the cascade of accessible assets
@@ -87,7 +58,7 @@ def obtenir_contexte_cashless(carte):
     assets_accessibles = AssetService.obtenir_assets_accessibles(connection.tenant)
 
     cascade_assets = []
-    for categorie in _ordre_cascade():
+    for categorie in ORDRE_CASCADE_FIDUCIAIRE:
         asset = assets_accessibles.filter(category=categorie).first()
         if asset is not None:
             cascade_assets.append(asset)
@@ -167,10 +138,11 @@ def facturer_tirage(
 
     Cascade : débit TNF en premier (cadeau/gift), puis TLF (local), puis FED (fédéré).
     Une Transaction fedow_core est créée par asset débité.
-    Une seule LigneArticle est créée pour le montant total.
+    N LigneArticle créées (une par asset débité) avec qty proportionnelle et
+        payment_method correct (TNF→LOCAL_GIFT, TLF/FED→LOCAL_EURO).
     / Cascade: debit TNF first (gift), then TLF (local), then FED (federated).
     One fedow_core Transaction is created per debited asset.
-    A single LigneArticle is created for the total amount.
+    
 
     :param session: RfidSession — la session de service
     :param tireuse: TireuseBec — la tireuse
@@ -232,7 +204,7 @@ def facturer_tirage(
         # / Debit in cascade TNF → TLF → FED
         restant_centimes = montant_centimes
         transactions_creees = []
-        asset_principal = None  # asset le plus utilisé (pour la LigneArticle)
+        debits_par_asset = []
 
         for asset in cascade_assets:
             if restant_centimes <= 0:
@@ -258,10 +230,8 @@ def facturer_tirage(
                 ),
             )
             transactions_creees.append(tx)
+            debits_par_asset.append((asset, montant_asset))
             restant_centimes -= montant_asset
-
-            if asset_principal is None:
-                asset_principal = asset
 
         if restant_centimes > 0:
             # Solde insuffisant pour couvrir le montant total — ne devrait pas
@@ -271,7 +241,9 @@ def facturer_tirage(
             raise SoldeInsuffisant(
                 f"Solde insuffisant au pour_end: manque {restant_centimes} centimes"
             )
-
+        # Volume en centilitres pour weight_quantity (unité stock = cl)
+        # / Volume in centiliters for weight_quantity (stock unit = cl)
+        volume_cl = int(round(float(volume_ml) / 10))
         # 2. Snapshots ProductSold / PriceSold
         # / ProductSold / PriceSold snapshots
         produit = tireuse.fut_actif
@@ -289,31 +261,51 @@ def facturer_tirage(
             defaults={"prix": prix_obj.prix},
         )
 
-        # 3. Créer la LigneArticle (montant total, asset principal)
-        # / Create LigneArticle (total amount, primary asset)
-        # Volume en centilitres pour weight_quantity (unité stock = cl)
-        # / Volume in centiliters for weight_quantity (stock unit = cl)
-        volume_cl = int(round(float(volume_ml) / 10))
+        # 3. Créer N LigneArticle (1 par asset débité) — conformité LNE rapports clôture.
+        # Pinte mixte 1€ TNF + 3€ TLF → 2 lignes : qty 0.25 LOCAL_GIFT + qty 0.75 LOCAL_EURO.
+        # qty proportionnelle via _calculer_qty_partielles (laboutik) sur qty_totale=1 tirage.
+        # weight_quantity identique sur toutes les lignes — stock décrémenté 1 seule fois.
+        # / Create N LigneArticle (1 per debited asset) — LNE closing report compliance.
 
+        from laboutik.views import MAPPING_ASSET_CATEGORY_PAYMENT_METHOD, _calculer_qty_partielles
+        
         uuid_transaction = uuid_module.uuid4()
 
-        ligne = LigneArticle.objects.create(
-            pricesold=price_sold,
-            qty=1,
-            amount=montant_centimes,
-            sale_origin=SaleOrigin.TIREUSE,
-            payment_method=PaymentMethod.LOCAL_EURO,
-            status=LigneArticle.VALID,
-            asset=asset_principal.uuid,
-            carte=carte,
-            wallet=wallet_client,
-            point_de_vente=tireuse.point_de_vente,
-            weight_quantity=volume_cl,
-            uuid_transaction=uuid_transaction,
+        lignes_amounts = [{"amount_centimes": montant_a} for _, montant_a in debits_par_asset]
+        lignes_avec_qty = _calculer_qty_partielles(
+            lignes_amounts, montant_centimes, Decimal("1")
         )
 
-        # 4. Lier la session à la ligne / Link session to line
-        session.ligne_article = ligne
+        lignes_creees = []
+        premiere_ligne = None
+
+        for i, (asset, montant_a) in enumerate(debits_par_asset):
+            payment_method = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD.get(
+                asset.category, PaymentMethod.LOCAL_EURO
+            )
+            qty_partielle = lignes_avec_qty[i]["qty"]
+
+            ligne = LigneArticle.objects.create(
+                pricesold=price_sold,
+                qty=qty_partielle,
+                amount=montant_a,
+                sale_origin=SaleOrigin.TIREUSE,
+                payment_method=payment_method,
+                status=LigneArticle.VALID,
+                asset=asset.uuid,
+                carte=carte,
+                wallet=wallet_client,
+                point_de_vente=tireuse.point_de_vente,
+                weight_quantity=volume_cl,
+                uuid_transaction=uuid_transaction,
+            )
+            lignes_creees.append(ligne)
+            if premiere_ligne is None:
+                premiere_ligne = ligne
+
+        # 4.Session liée à la première LigneArticle (même convention que laboutik).
+        # / Session linked to the first LigneArticle (same convention as laboutik).
+        session.ligne_article = premiere_ligne
         session.save(update_fields=["ligne_article"])
 
         # 5. Décrémenter le stock inventaire si le produit en a un
@@ -326,7 +318,7 @@ def facturer_tirage(
                 stock=stock_du_produit,
                 contenance=volume_cl,
                 qty=1,
-                ligne_article=ligne,
+                ligne_article=premiere_ligne,  # 1 seul mouvement de stock quel que soit le nb d'assets
             )
         except Exception:
             # Pas de stock géré — comportement normal
@@ -339,7 +331,8 @@ def facturer_tirage(
 
     logger.info(
         f"Facturation cascade: tireuse={tireuse.nom_tireuse} volume={float(volume_ml):.0f}ml "
-        f"montant={montant_centimes}cts assets=[{assets_debites_str}] ligne={ligne.uuid}"
+        f"montant={montant_centimes}cts assets=[{assets_debites_str}] "
+        f"lignes={len(lignes_creees)} premiere_ligne={premiere_ligne.uuid if premiere_ligne else 'None'}"
     )
 
     return {
@@ -347,6 +340,11 @@ def facturer_tirage(
         # Compatibilité avec le code existant qui lit ["transaction"]
         # / Backward compatibility with existing code reading ["transaction"]
         "transaction": transactions_creees[0] if transactions_creees else None,
-        "ligne_article": ligne,
+        # Compatibilité avec le code existant qui lit ["ligne_article"]
+        # / Backward compatibility with existing code reading ["ligne_article"]
+        "ligne_article": premiere_ligne,
+        # Liste complète des N LigneArticle créées
+        # / Full list of N created LigneArticle
+        "lignes_articles": lignes_creees,
         "montant_centimes": montant_centimes,
     }
