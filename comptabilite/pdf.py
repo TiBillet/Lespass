@@ -7,7 +7,7 @@ LOCALISATION : comptabilite/pdf.py
 Template HTML standalone (styles inline obligatoires pour WeasyPrint —
 pas de CSS externe fiable). Format A4, marges 1.5cm.
 / Standalone HTML template (inline styles mandatory for WeasyPrint).
-A4, 1.5cm margins.
+A4 paysage, 1.2cm margins (9 colonnes dans le tableau detail ventes).
 """
 import io
 
