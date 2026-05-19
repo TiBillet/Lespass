@@ -17,7 +17,7 @@ import logging
 from decimal import Decimal
 
 from django.db import connection
-from django.db.models import Sum, Count, F
+from django.db.models import Sum, Count, F, Q
 from django.db.models.functions import Coalesce
 
 logger = logging.getLogger(__name__)
@@ -182,145 +182,7 @@ class RapportComptableService:
         }
 
     # ------------------------------------------------------------------
-    # 4. Adhesions / Memberships
-    # ------------------------------------------------------------------
-    def calculer_adhesions(self) -> dict:
-        """
-        Lignes liees a une Membership. Groupage par (produit_uuid, tarif_uuid, moyen).
-        / Lines linked to a Membership. Grouped by (product_uuid, tarif_uuid, payment).
-
-        Implementation : un seul SQL avec values() + annotate(), pas de boucle
-        Python sur les lignes (eviterait un N+1 sur produit/tarif).
-        / Single SQL with values() + annotate(), no Python loop over rows.
-        """
-        from BaseBillet.models import PaymentMethod
-
-        labels = dict(PaymentMethod.choices)
-
-        # Une seule requete SQL : on groupe directement en base par tuple
-        # (produit_uuid, tarif_uuid, payment_method), nom du produit, nom du tarif.
-        # / Single SQL: GROUP BY (product_uuid, price_uuid, payment_method).
-        rows = (
-            self.queryset
-            .filter(membership__isnull=False)
-            .values(
-                "pricesold__productsold__product__uuid",
-                "pricesold__productsold__product__name",
-                "pricesold__price__uuid",
-                "pricesold__price__name",
-                "payment_method",
-            )
-            .annotate(
-                total=Coalesce(Sum(F("amount") * F("qty")), Decimal("0")),
-                nb=Count("pk"),
-            )
-        )
-
-        detail = {}
-        total_global = 0
-        nb_global = 0
-
-        for row in rows:
-            produit_uuid = (
-                str(row["pricesold__productsold__product__uuid"])
-                if row["pricesold__productsold__product__uuid"] else "_"
-            )
-            tarif_uuid = (
-                str(row["pricesold__price__uuid"])
-                if row["pricesold__price__uuid"] else "_"
-            )
-            moyen = row["payment_method"] or PaymentMethod.UNKNOWN
-            key = f"{produit_uuid}__{tarif_uuid}__{moyen}"
-            ligne_total = int(row["total"])
-
-            detail[key] = {
-                "nom_produit": row["pricesold__productsold__product__name"] or "—",
-                "nom_tarif": row["pricesold__price__name"] or "—",
-                "moyen_paiement": moyen,
-                "moyen_paiement_label": str(labels.get(moyen, moyen)),
-                "total": ligne_total,
-                "nb": row["nb"],
-            }
-            total_global += ligne_total
-            nb_global += row["nb"]
-
-        return {
-            "detail": detail,
-            "total": total_global,
-            "nb": nb_global,
-        }
-
-    # ------------------------------------------------------------------
-    # 5. Billets / Tickets (reservations event)
-    # ------------------------------------------------------------------
-    def calculer_billets(self) -> dict:
-        """
-        Lignes liees a une Reservation. Groupage par (event, produit, tarif).
-        / Lines linked to a Reservation. Grouped by (event, product, tarif).
-
-        Une seule requete SQL groupee (pas de N+1 sur reservation/event/produit).
-        / Single grouped SQL (no N+1 on reservation/event/product).
-        """
-        rows = (
-            self.queryset
-            .filter(reservation__isnull=False)
-            .values(
-                "reservation__event__uuid",
-                "reservation__event__name",
-                "reservation__event__datetime",
-                "pricesold__productsold__product__uuid",
-                "pricesold__productsold__product__name",
-                "pricesold__price__uuid",
-                "pricesold__price__name",
-            )
-            .annotate(
-                total=Coalesce(Sum(F("amount") * F("qty")), Decimal("0")),
-                nb=Count("pk"),
-            )
-        )
-
-        detail = {}
-        total_global = 0
-        nb_global = 0
-
-        for row in rows:
-            event_uuid = (
-                str(row["reservation__event__uuid"])
-                if row["reservation__event__uuid"] else "_"
-            )
-            produit_uuid = (
-                str(row["pricesold__productsold__product__uuid"])
-                if row["pricesold__productsold__product__uuid"] else "_"
-            )
-            tarif_uuid = (
-                str(row["pricesold__price__uuid"])
-                if row["pricesold__price__uuid"] else "_"
-            )
-            key = f"{event_uuid}__{produit_uuid}__{tarif_uuid}"
-            ligne_total = int(row["total"])
-
-            event_dt = row["reservation__event__datetime"]
-            detail[key] = {
-                "nom_event": row["reservation__event__name"] or "—",
-                "date_event": (
-                    event_dt.strftime("%Y-%m-%d %H:%M") if event_dt else "—"
-                ),
-                "nom_produit": row["pricesold__productsold__product__name"] or "—",
-                "nom_tarif": row["pricesold__price__name"] or "—",
-                "nb": row["nb"],
-                "total": ligne_total,
-            }
-            total_global += ligne_total
-            nb_global += row["nb"]
-
-        return {
-            "detail": detail,
-            "nb": nb_global,
-            "total": total_global,
-        }
-
-    # ------------------------------------------------------------------
-    # 6. Detail des ventes par categorie d'article
+    # 4. Detail des ventes par categorie d'article
     # / Sales detail grouped by article category
     # ------------------------------------------------------------------
     def calculer_detail_ventes(self) -> dict:
@@ -342,14 +204,24 @@ class RapportComptableService:
         except AttributeError:
             categorie_labels = {}
 
-        # Annote chaque ligne avec un flag 'offert' (payment_method = FREE),
-        # puis groupe en base.
-        # / Annotate each row with an 'offert' flag, then group in DB.
+        # Annote chaque ligne avec un flag 'offert'. Une ligne est offerte si :
+        # - le moyen de paiement est FREE (cas adhesion prix libre = 0)
+        # - OU le montant est zero (cas billet prix libre = 0, qui garde
+        #   payment_method=STRIPE_NOFED car la ligne est creee avant le webhook).
+        # Le OR est evalue cote SQL dans un CASE WHEN ; ne genere PAS de N+1.
+        # / Annotate each row with an 'offert' flag. A row is offered if:
+        # - payment_method is FREE (free-priced membership at 0)
+        # - OR amount is zero (free-priced ticket at 0, which keeps
+        #   payment_method=STRIPE_NOFED because the line is created before the webhook).
+        # The OR is evaluated server-side in a CASE WHEN — no N+1.
         rows = (
             self.queryset
             .annotate(
                 offert_flag=Case(
-                    When(payment_method=PaymentMethod.FREE, then=Value("Y")),
+                    When(
+                        Q(payment_method=PaymentMethod.FREE) | Q(amount=0),
+                        then=Value("Y"),
+                    ),
                     default=Value("N"),
                     output_field=CharField(max_length=1),
                 )
@@ -429,41 +301,7 @@ class RapportComptableService:
         return par_categorie
 
     # ------------------------------------------------------------------
-    # 7. Synthese des operations (tableau croise type x moyen)
-    # / Cross table operation type x payment method
-    # ------------------------------------------------------------------
-    def calculer_synthese_operations(self) -> dict:
-        """
-        3 sections : vente_billets, vente_adhesions, remboursements.
-        Chaque section : dict {payment_method_code: total_centimes}.
-        / 3 sections, each a dict {payment_code: total_cents}.
-        """
-        from BaseBillet.models import LigneArticle, PaymentMethod
-
-        def _agrege_par_moyen(qs):
-            result = {}
-            rows = qs.values("payment_method").annotate(
-                total=Coalesce(Sum(F("amount") * F("qty")), Decimal("0")),
-            )
-            for r in rows:
-                code = r["payment_method"] or PaymentMethod.UNKNOWN
-                result[code] = int(r["total"])
-            return result
-
-        return {
-            "vente_billets": _agrege_par_moyen(
-                self.queryset.filter(reservation__isnull=False)
-            ),
-            "vente_adhesions": _agrege_par_moyen(
-                self.queryset.filter(membership__isnull=False)
-            ),
-            "remboursements": _agrege_par_moyen(
-                self.queryset.filter(status=LigneArticle.CREDIT_NOTE)
-            ),
-        }
-
-    # ------------------------------------------------------------------
-    # 8. Infos legales du tenant / Legal info from tenant Configuration
+    # 6. Infos legales du tenant / Legal info from tenant Configuration
     # ------------------------------------------------------------------
     def calculer_infos_legales(self) -> dict:
         """
@@ -495,7 +333,7 @@ class RapportComptableService:
         }
 
     # ------------------------------------------------------------------
-    # 9. Hash chain SHA-256 des lignes (filet de securite)
+    # 7. Hash chain SHA-256 des lignes (filet de securite)
     # / SHA-256 hash chain of lines (safety net)
     # ------------------------------------------------------------------
     def calculer_hash_lignes(self) -> str:
@@ -516,8 +354,8 @@ class RapportComptableService:
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     # ------------------------------------------------------------------
-    # 10. Rapport complet (assemblage 8 sections + meta)
-    # / Full report (8 sections + meta assembly)
+    # 8. Rapport complet (assemblage 6 sections + meta)
+    # / Full report (6 sections + meta assembly)
     # ------------------------------------------------------------------
     def generer_rapport_complet(self) -> dict:
         """
@@ -527,12 +365,9 @@ class RapportComptableService:
         """
         return {
             "totaux_par_moyen": self.calculer_totaux_par_moyen(),
-            "detail_ventes": self.calculer_detail_ventes(),
             "tva": self.calculer_tva(),
-            "adhesions": self.calculer_adhesions(),
-            "billets": self.calculer_billets(),
+            "detail_ventes": self.calculer_detail_ventes(),
             "remboursements": self.calculer_remboursements(),
-            "synthese_operations": self.calculer_synthese_operations(),
             "infos_legales": self.calculer_infos_legales(),
             "meta": {
                 "datetime_debut": self.datetime_debut.isoformat(),

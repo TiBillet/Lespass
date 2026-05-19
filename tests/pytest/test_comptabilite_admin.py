@@ -489,7 +489,7 @@ def test_admin_changeform_injecte_cloture_et_rapport(admin_request_factory):
 def test_template_sections_rapport_rend_sans_erreur(admin_request_factory):
     """
     Le partial _sections_rapport.html se rend sans erreur avec un rapport
-    pre-formate. Verifie que les 8 sections + leurs data-testid sont presents.
+    pre-formate. Verifie que les 5 sections + leurs data-testid sont presents.
     / The _sections_rapport.html partial renders with a pre-formatted report.
     """
     from django.template.loader import render_to_string
@@ -507,14 +507,9 @@ def test_template_sections_rapport_rend_sans_erreur(admin_request_factory):
             "20.00": {"taux": 20.0, "total_ttc": 1500, "total_ht": 1250, "total_tva": 250},
         },
         "detail_ventes": {},
-        "adhesions": {"detail": {}, "total": 0, "nb": 0},
-        "billets": {"detail": {}, "total": 0, "nb": 0},
         "remboursements": {
             "credit_notes": {"total": 0, "nb": 0},
             "refunded": {"total": 0, "nb": 0},
-        },
-        "synthese_operations": {
-            "vente_billets": {}, "vente_adhesions": {}, "remboursements": {},
         },
         "infos_legales": {"organisation": "Test"},
     }
@@ -524,11 +519,11 @@ def test_template_sections_rapport_rend_sans_erreur(admin_request_factory):
         {"rapport": rapport_enrichi},
     )
 
-    # Les 8 sections doivent etre presentes (par data-testid)
-    # / All 8 sections must be present (via data-testid)
+    # Les 5 sections doivent etre presentes (par data-testid)
+    # / All 5 sections must be present (via data-testid)
     for slug in [
-        "totaux-par-moyen", "tva", "detail-ventes", "adhesions",
-        "billets", "remboursements", "synthese-operations", "infos-legales",
+        "totaux-par-moyen", "tva", "detail-ventes",
+        "remboursements", "infos-legales",
     ]:
         assert f'data-testid="comptabilite-section-{slug}"' in contenu, (
             f"Section {slug} manquante dans le rendu"

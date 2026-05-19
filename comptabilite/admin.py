@@ -44,11 +44,11 @@ def _format_euros(centimes: int) -> str:
 # The stored rapport_json keeps the 12 raw values intact ; aggregation happens
 # only at render time.
 CATEGORIES_PAIEMENT_AFFICHAGE = [
-    ("especes", _("Cash"), ["CA"]),
-    ("cb", _("Credit card (POS terminal)"), ["CC"]),
-    ("en_ligne", _("Online payments"), ["SF", "SN", "SP", "SR", "TR"]),
-    ("cashless", _("Cashless (NFC / local currency)"), ["LE", "LG", "QR"]),
-    ("autres", _("Other"), ["CH", "NA", "UK"]),
+    ("especes", _("Espèces"), ["CA"]),
+    ("cb", _("Carte bancaire (terminal POS)"), ["CC"]),
+    ("en_ligne", _("Paiements en ligne"), ["SF", "SN", "SP", "SR", "TR"]),
+    ("cashless", _("Cashless (NFC / monnaie locale)"), ["LE", "LG", "QR"]),
+    ("autres", _("Autres"), ["CH", "NA", "UK"]),
 ]
 
 
@@ -153,16 +153,6 @@ def _enrichir_rapport_pour_template(rapport: dict) -> dict:
                 v["total_ht_euros"] = f"{v.get('total_ht', 0) / 100:.2f}"
                 v["total_tva_euros"] = f"{v.get('total_tva', 0) / 100:.2f}"
 
-    # adhesions / billets : total + detail
-    for section_key in ("adhesions", "billets"):
-        if section_key in r and isinstance(r[section_key], dict):
-            section = r[section_key]
-            if "total" in section:
-                section["total_euros"] = f"{section['total'] / 100:.2f}"
-            for v in section.get("detail", {}).values():
-                if "total" in v:
-                    v["total_euros"] = f"{v['total'] / 100:.2f}"
-
     # detail_ventes : enrichit chaque article ET chaque categorie avec leurs euros
     # / detail_ventes: enrich each article AND each category with euros strings
     if "detail_ventes" in r and isinstance(r["detail_ventes"], dict):
@@ -183,15 +173,6 @@ def _enrichir_rapport_pour_template(rapport: dict) -> dict:
         for k, v in r["remboursements"].items():
             if isinstance(v, dict) and "total" in v:
                 v["total_euros"] = f"{v['total'] / 100:.2f}"
-
-    # synthese_operations : valeurs en euros (transforme int en dict {total, total_euros})
-    if "synthese_operations" in r:
-        for section, moyens in r["synthese_operations"].items():
-            if isinstance(moyens, dict):
-                r["synthese_operations"][section] = {
-                    code: {"total": val, "total_euros": f"{val / 100:.2f}"}
-                    for code, val in moyens.items()
-                }
 
     return r
 
@@ -395,7 +376,7 @@ class ClotureCaisseAdmin(ModelAdmin):
 
         context = {
             **self.admin_site.each_context(request),
-            "title": _("Real-time report"),
+            "title": _("Rapport temps réel"),
             "rapport": rapport,
             "datetime_debut": datetime_debut,
             "datetime_fin": datetime_fin,
@@ -498,7 +479,7 @@ class MappingMoyenDePaiementAdmin(ModelAdmin):
     ordering = ("payment_method",)
     autocomplete_fields = ("compte",)
 
-    @admin.display(description=_("Payment method"), ordering="payment_method")
+    @admin.display(description=_("Moyen de paiement"), ordering="payment_method")
     def payment_method_label(self, obj):
         """
         Affiche le libelle humain de PaymentMethod (ex: 'Cash' pour 'CA').

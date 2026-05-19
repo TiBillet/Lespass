@@ -533,6 +533,56 @@ def seed_ventes_demo(*, reset=False):
         stats["cas_couverts"].append("12c) Sandwich monnaie locale gift (LG) TVA 5.5% - 60.00 EUR")
         stats["total_ttc_centimes"] += 10 * 600
 
+        # --- 3bis. PRIX LIBRE A 0 EUR (deux cas distincts pour valider la
+        # colonne "Offerts" du rapport). Ces ventes ont amount=0 mais NE sont
+        # PAS toutes en payment_method=FREE : c'est exactement ce que le patch
+        # offert_flag = (payment_method=FREE OR amount=0) regle.
+        #
+        # / Open price = 0 EUR (two cases) — validates the "Offerts" column
+        # / under the patch offert_flag = (payment_method=FREE OR amount=0).
+
+        prix_adh_libre = _prix_demo(
+            _produit_demo("Adhesion prix libre", Product.ADHESION),
+            "Prix libre a partir de 0", Decimal("0.00"), vat=Decimal("0"),
+        )
+        prix_atelier_libre = _prix_demo(
+            _produit_demo("Atelier - Prix libre", Product.BILLET),
+            "Prix libre", Decimal("0.00"), vat=Decimal("10.00"),
+        )
+
+        # === Cas 13 : Adhesion prix libre payee 0 EUR -> payment_method=FREE
+        # (cf. BaseBillet/validators.py:875 — adhesion a 0 EUR est routee vers FREE).
+        # Doit apparaitre en colonne "Offerts" via la branche FREE du CASE WHEN.
+        # / Case 13: Free-priced membership paid 0 EUR -> payment_method=FREE.
+        # / Lands in "Offerts" via the FREE branch of the CASE WHEN.
+        mb_libre = _membership_demo(user, prix_adh_libre.price, PaymentMethod.FREE)
+        l13 = _creer_lignearticle(
+            pricesold=prix_adh_libre, qty=Decimal("1"), amount_centimes=0,
+            vat=Decimal("0"), payment_method=PaymentMethod.FREE,
+            status=LigneArticle.VALID, sale_origin=SaleOrigin.LESPASS, membership=mb_libre,
+        )
+        lignes_creees_uuids.append(l13.uuid)
+        stats["cas_couverts"].append("13) Adhesion prix libre a 0 EUR (FREE) - 0.00 EUR -> Offerts")
+
+        # === Cas 14 : Reservation prix libre payee 0 EUR avec payment_method=STRIPE_NOFED.
+        # C'est le cas reel pour les billets prix libre : la LigneArticle est creee
+        # avant le checkout Stripe avec payment_method=STRIPE_NOFED par defaut
+        # (cf. BaseBillet/validators.py:294), meme quand l'utilisateur paye 0 EUR.
+        # Sans le patch Q(amount=0), cette ligne apparait en "Payants" a 0 EUR.
+        # Avec le patch : elle apparait en "Offerts".
+        # / Case 14: Free-priced ticket paid 0 EUR with payment_method=STRIPE_NOFED
+        # / (line is created before Stripe checkout with this default — see
+        # / validators.py:294). Without the Q(amount=0) patch, it would land in
+        # / "Payants" at 0 EUR. With the patch: it lands in "Offerts".
+        resa_libre = _reservation_demo(user, event_atelier)
+        l14 = _creer_lignearticle(
+            pricesold=prix_atelier_libre, qty=Decimal("1"), amount_centimes=0,
+            vat=Decimal("10.00"), payment_method=PaymentMethod.STRIPE_NOFED,
+            status=LigneArticle.VALID, sale_origin=SaleOrigin.LESPASS, reservation=resa_libre,
+        )
+        lignes_creees_uuids.append(l14.uuid)
+        stats["cas_couverts"].append("14) Reservation prix libre a 0 EUR (SN+amount=0) - 0.00 EUR -> Offerts")
+
         # --- 4. AVOIR (CREDIT_NOTE) sur 1 billet Plein -> -20 EUR
         # / Credit note on 1 Full ticket -> -20 EUR
         # On simule l'avoir comme une 2e ligne avec qty=-1 et status=CREDIT_NOTE.

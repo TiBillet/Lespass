@@ -58,7 +58,7 @@ def _construire_ecritures(cloture):
 
     date_ecriture = cloture.datetime_fin
     piece_ref = f"CLOT-{cloture.numero_sequentiel}"
-    libelle_base = f"Cloture {cloture.get_niveau_display()} #{cloture.numero_sequentiel}"
+    libelle_base = f"Clôture {cloture.get_niveau_display()} #{cloture.numero_sequentiel}"
 
     # --- Debits : 1 ligne par moyen de paiement non nul
     # / Debits: 1 line per non-zero payment method
@@ -80,10 +80,10 @@ def _construire_ecritures(cloture):
             compte_lib = compte.libelle
         else:
             avertissements.append(
-                f"Aucun mapping pour PaymentMethod '{code}' — compte 512000 utilise par defaut."
+                f"Aucun mapping pour PaymentMethod '{code}' — compte 512000 utilisé par défaut."
             )
             compte_num = COMPTES_DEFAUT["banque"]
-            compte_lib = "Banque (defaut)"
+            compte_lib = "Banque (défaut)"
 
         lignes.append({
             "compte_num": compte_num,
@@ -93,9 +93,18 @@ def _construire_ecritures(cloture):
             "credit_centimes": 0,
         })
 
-    # --- Credit 706 (ventes billets HT)
-    # / Credit 706 (HT ticket sales)
-    total_billets_ttc = (rapport.get("billets") or {}).get("total", 0)
+    # Totaux billets/adhesions depuis detail_ventes (par categorie d'article).
+    # 706 (Prestations) : BILLET 'B', FREERES 'F', BADGE 'G', QRCODE_MA 'Q'
+    # 756 (Cotisations) : ADHESION 'A'
+    # / Compute totals from detail_ventes (per article category).
+    detail = rapport.get("detail_ventes") or {}
+    total_billets_ttc = sum(
+        detail.get(c, {}).get("total_ttc", 0) for c in ("B", "F", "G", "Q")
+    )
+    total_adhesions_ttc = detail.get("A", {}).get("total_ttc", 0)
+
+    # --- Credit 706 (ventes billets/prestations HT)
+    # / Credit 706 (services/tickets HT)
     if total_billets_ttc:
         # Estimer HT billets : (billets TTC / total_general TTC) * total_ht
         # Si total_general est 0 on evite la division par zero avec "or 1".
@@ -115,17 +124,16 @@ def _construire_ecritures(cloture):
 
     # --- Credit 756 (ventes adhesions HT)
     # / Credit 756 (HT memberships)
-    total_adhesions_ttc = (rapport.get("adhesions") or {}).get("total", 0)
     if total_adhesions_ttc:
         ratio = total_adhesions_ttc / (cloture.total_general or 1) if cloture.total_general else 1
         ht_adhesions = int(round(cloture.total_ht * ratio)) if cloture.total_ht else total_adhesions_ttc
         compte = CompteComptable.objects.filter(numero=COMPTES_DEFAUT["ventes_adhesions"]).first()
         compte_num = compte.numero if compte else COMPTES_DEFAUT["ventes_adhesions"]
-        compte_lib = compte.libelle if compte else "Cotisations - Adhesions"
+        compte_lib = compte.libelle if compte else "Cotisations - Adhésions"
         lignes.append({
             "compte_num": compte_num,
             "compte_lib": compte_lib,
-            "libelle": f"{libelle_base} - Adhesions HT",
+            "libelle": f"{libelle_base} - Adhésions HT",
             "debit_centimes": 0,
             "credit_centimes": ht_adhesions,
         })
@@ -147,7 +155,7 @@ def _construire_ecritures(cloture):
             compte_key = "tva_20"
         compte = CompteComptable.objects.filter(numero=COMPTES_DEFAUT[compte_key]).first()
         compte_num = compte.numero if compte else COMPTES_DEFAUT[compte_key]
-        compte_lib = compte.libelle if compte else f"TVA collectee {taux_float}%"
+        compte_lib = compte.libelle if compte else f"TVA collectée {taux_float}%"
         lignes.append({
             "compte_num": compte_num,
             "compte_lib": compte_lib,

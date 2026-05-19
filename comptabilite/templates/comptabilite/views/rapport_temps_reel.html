@@ -8,15 +8,15 @@
 {# Pas de polling (couteux serveur) : l'utilisateur fait F5 ou clique 'Refresh'. #}
 {# / No polling (server-expensive): user presses F5 or clicks 'Refresh'. #}
 
-{% block title %}{% translate "Real-time report" %} | {{ site_title|default:_('TiBillet admin') }}{% endblock %}
+{% block title %}{% translate "Rapport temps réel" %} | {{ site_title|default:_('Administration TiBillet') }}{% endblock %}
 
 {% block breadcrumbs %}
     <div class="breadcrumbs">
-        <a href="{% url 'staff_admin:index' %}">{% translate "Home" %}</a>
+        <a href="{% url 'staff_admin:index' %}">{% translate "Accueil" %}</a>
         &rsaquo;
-        <a href="{% url 'staff_admin:comptabilite_cloturecaisse_changelist' %}">{% translate "Cash closures" %}</a>
+        <a href="{% url 'staff_admin:comptabilite_cloturecaisse_changelist' %}">{% translate "Clôtures de caisse" %}</a>
         &rsaquo;
-        {% translate "Real-time report" %}
+        {% translate "Rapport temps réel" %}
     </div>
 {% endblock %}
 
@@ -25,11 +25,11 @@
 
     {# --- Formulaire de selection de periode (GET params datetime_debut/fin) --- #}
     {# --- Period selection form (GET params datetime_debut/fin) --- #}
-    {% component "unfold/components/card.html" with title=_("Custom period report") %}
+    {% component "unfold/components/card.html" with title=_("Rapport sur période personnalisée") %}
         <form method="get" action="" class="flex flex-col md:flex-row gap-3 items-end flex-wrap">
             <div class="flex flex-col">
                 <label for="datetime_debut" class="text-sm font-medium mb-1">
-                    {% translate "Start" %}
+                    {% translate "Début" %}
                 </label>
                 <input type="datetime-local"
                        name="datetime_debut"
@@ -40,7 +40,7 @@
             </div>
             <div class="flex flex-col">
                 <label for="datetime_fin" class="text-sm font-medium mb-1">
-                    {% translate "End" %}
+                    {% translate "Fin" %}
                 </label>
                 <input type="datetime-local"
                        name="datetime_fin"
@@ -52,19 +52,19 @@
             <button type="submit"
                     data-testid="comptabilite-bouton-actualiser"
                     class="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-md font-medium">
-                {% translate "Refresh" %}
+                {% translate "Actualiser" %}
             </button>
             <a href="{% url 'staff_admin:comptabilite_cloturecaisse_temps_reel' %}"
                data-testid="comptabilite-lien-reset-periode"
                class="text-sm text-base-500 hover:text-base-700 underline ml-1">
-                {% translate "Reset (today 04:00 → now)" %}
+                {% translate "Réinitialiser (aujourd'hui 04:00 → maintenant)" %}
             </a>
         </form>
         <p class="text-base-500 text-sm mt-3 mb-0">
             {% blocktrans with debut=datetime_debut|date:"d/m/Y H:i" fin=datetime_fin|date:"d/m/Y H:i" %}
-            Selected period: from {{ debut }} to {{ fin }}.
+            Période sélectionnée : du {{ debut }} au {{ fin }}.
             {% endblocktrans %}
-            <strong>{% translate "Transactions" %}:</strong> {{ nb_transactions }}
+            <strong>{% translate "Transactions" %} :</strong> {{ nb_transactions }}
         </p>
     {% endcomponent %}
 

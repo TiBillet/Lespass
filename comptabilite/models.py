@@ -29,10 +29,10 @@ class ClotureCaisse(models.Model):
     NIVEAU_MENSUEL = "M"
     NIVEAU_ANNUEL = "A"
     NIVEAU_CHOICES = [
-        (NIVEAU_JOURNALIER, _("Daily")),
-        (NIVEAU_HEBDOMADAIRE, _("Weekly")),
-        (NIVEAU_MENSUEL, _("Monthly")),
-        (NIVEAU_ANNUEL, _("Yearly")),
+        (NIVEAU_JOURNALIER, _("Journalière")),
+        (NIVEAU_HEBDOMADAIRE, _("Hebdomadaire")),
+        (NIVEAU_MENSUEL, _("Mensuelle")),
+        (NIVEAU_ANNUEL, _("Annuelle")),
     ]
 
     uuid = models.UUIDField(
@@ -45,28 +45,28 @@ class ClotureCaisse(models.Model):
         max_length=1,
         choices=NIVEAU_CHOICES,
         default=NIVEAU_JOURNALIER,
-        verbose_name=_("Periodicity"),
+        verbose_name=_("Périodicité"),
         help_text=_(
-            "Daily closure aggregates one day. "
-            "Weekly/monthly/yearly aggregate the matching daily closures."
+            "La clôture journalière agrège une journée. "
+            "Les clôtures hebdomadaire, mensuelle et annuelle agrègent les clôtures journalières correspondantes."
         ),
     )
 
     numero_sequentiel = models.PositiveIntegerField(
         unique=True,
-        verbose_name=_("Sequential number"),
+        verbose_name=_("Numéro séquentiel"),
         help_text=_(
-            "Continuous global counter per tenant (LNE compliance). "
-            "Shared across all periodicities (daily, weekly, monthly, yearly)."
+            "Compteur continu global par tenant (conformité LNE). "
+            "Partagé entre toutes les périodicités (journalière, hebdomadaire, mensuelle, annuelle)."
         ),
     )
 
     datetime_debut = models.DateTimeField(
-        verbose_name=_("Period start"),
+        verbose_name=_("Début de la période"),
     )
 
     datetime_fin = models.DateTimeField(
-        verbose_name=_("Period end"),
+        verbose_name=_("Fin de la période"),
     )
 
     responsable = models.ForeignKey(
@@ -75,53 +75,53 @@ class ClotureCaisse(models.Model):
         null=True,
         blank=True,
         related_name="clotures_caisse",
-        verbose_name=_("Operator"),
-        help_text=_("User who triggered a manual closure. Null if Celery auto."),
+        verbose_name=_("Opérateur"),
+        help_text=_("Utilisateur ayant déclenché une clôture manuelle. Vide si déclenchement automatique par Celery."),
     )
 
     total_general = models.IntegerField(
         default=0,
-        verbose_name=_("Total TTC (cents)"),
+        verbose_name=_("Total TTC (centimes)"),
     )
     total_ht = models.IntegerField(
         default=0,
-        verbose_name=_("Total HT (cents)"),
+        verbose_name=_("Total HT (centimes)"),
     )
     total_tva = models.IntegerField(
         default=0,
-        verbose_name=_("Total VAT (cents)"),
+        verbose_name=_("Total TVA (centimes)"),
     )
 
     nombre_transactions = models.IntegerField(
         default=0,
-        verbose_name=_("Number of transactions"),
+        verbose_name=_("Nombre de transactions"),
     )
 
     total_perpetuel = models.IntegerField(
         default=0,
-        verbose_name=_("Perpetual total (cents)"),
+        verbose_name=_("Total perpétuel (centimes)"),
         help_text=_(
-            "Sum of total_general of all daily closures since tenant creation. "
-            "Safety check against retroactive modification."
+            "Somme des total_general de toutes les clôtures journalières depuis la création du tenant. "
+            "Filet de sécurité contre toute modification rétroactive."
         ),
     )
 
     hash_lignes = models.CharField(
         max_length=64,
         blank=True,
-        verbose_name=_("Lines hash"),
+        verbose_name=_("Empreinte des lignes"),
         help_text=_(
-            "SHA-256 of sorted (pk, amount, qty, status) tuples of every "
-            "LigneArticle covered. Changes if any line is altered post-closure."
+            "SHA-256 des tuples (pk, montant, qte, statut) triés de chaque "
+            "LigneArticle couverte. Change si une ligne est altérée après clôture."
         ),
     )
 
     rapport_json = models.JSONField(
         default=dict,
-        verbose_name=_("Report payload"),
+        verbose_name=_("Contenu du rapport"),
         help_text=_(
-            "Full report sections (totals by payment method, sales by category, "
-            "VAT breakdown, memberships, tickets, refunds, synthesis, legal info)."
+            "Sections complètes du rapport (totaux par moyen de paiement, ventes par catégorie, "
+            "ventilation TVA, adhésions, billets, remboursements, synthèse, informations légales)."
         ),
     )
 
@@ -129,8 +129,8 @@ class ClotureCaisse(models.Model):
 
     class Meta:
         ordering = ["-datetime_fin", "-numero_sequentiel"]
-        verbose_name = _("Cash closure")
-        verbose_name_plural = _("Cash closures")
+        verbose_name = _("Clôture de caisse")
+        verbose_name_plural = _("Clôtures de caisse")
         indexes = [
             models.Index(fields=["niveau", "-datetime_fin"]),
             models.Index(fields=["-numero_sequentiel"]),
@@ -165,29 +165,29 @@ class CompteComptable(models.Model):
     TYPE_CLIENT = "C"
     TYPE_AUTRE = "X"
     TYPE_CHOICES = [
-        (TYPE_VENTE, _("Sales")),
-        (TYPE_TVA, _("VAT collected")),
-        (TYPE_TRESORERIE, _("Cash / Bank")),
-        (TYPE_CLIENT, _("Customers")),
-        (TYPE_AUTRE, _("Other")),
+        (TYPE_VENTE, _("Ventes")),
+        (TYPE_TVA, _("TVA collectée")),
+        (TYPE_TRESORERIE, _("Trésorerie (banque / caisse)")),
+        (TYPE_CLIENT, _("Clients")),
+        (TYPE_AUTRE, _("Autre")),
     ]
 
     uuid = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
     numero = models.CharField(
         max_length=12, unique=True,
-        verbose_name=_("Account number"),
+        verbose_name=_("Numéro de compte"),
     )
-    libelle = models.CharField(max_length=120, verbose_name=_("Label"))
+    libelle = models.CharField(max_length=120, verbose_name=_("Libellé"))
     type_compte = models.CharField(
         max_length=1, choices=TYPE_CHOICES,
-        verbose_name=_("Account type"),
+        verbose_name=_("Type de compte"),
     )
-    actif = models.BooleanField(default=True, verbose_name=_("Active"))
+    actif = models.BooleanField(default=True, verbose_name=_("Actif"))
 
     class Meta:
         ordering = ["numero"]
-        verbose_name = _("Accounting account")
-        verbose_name_plural = _("Accounting accounts")
+        verbose_name = _("Compte comptable")
+        verbose_name_plural = _("Comptes comptables")
 
     def __str__(self):
         return f"{self.numero} — {self.libelle}"
@@ -203,20 +203,20 @@ class MappingMoyenDePaiement(models.Model):
 
     payment_method = models.CharField(
         max_length=2, unique=True,
-        verbose_name=_("Payment method"),
-        help_text=_("PaymentMethod code from BaseBillet (CC, CA, CH, TR, SF, ...)"),
+        verbose_name=_("Moyen de paiement"),
+        help_text=_("Code PaymentMethod de BaseBillet (CC, CA, CH, TR, SF, ...)"),
     )
     compte = models.ForeignKey(
         CompteComptable,
         on_delete=models.PROTECT,
-        verbose_name=_("Accounting account"),
+        verbose_name=_("Compte comptable"),
         limit_choices_to={"type_compte__in": ["B", "C"]},
     )
 
     class Meta:
         ordering = ["payment_method"]
-        verbose_name = _("Payment method mapping")
-        verbose_name_plural = _("Payment method mappings")
+        verbose_name = _("Mapping moyen de paiement")
+        verbose_name_plural = _("Mappings moyens de paiement")
 
     def __str__(self):
         return f"{self.get_payment_method_display()} → {self.compte}"

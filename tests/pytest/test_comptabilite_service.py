@@ -46,10 +46,23 @@ pytestmark = pytest.mark.django_db
 
 @pytest.fixture
 def tenant_lespass():
-    """Retourne le tenant 'lespass' (ou le premier non-public)."""
+    """
+    Retourne le tenant 'lespass' (le tenant principal en environnement de dev).
+    On filtre EXPLICITEMENT sur schema_name : sans ca, .first() peut renvoyer
+    un tenant 'waiting_config' (categorie 'W') qui n'a pas de Domain primary,
+    et les tests qui creent un Event crashent sur
+    `connection.tenant.get_primary_domain().domain` -> None.
+    / Returns the 'lespass' tenant. We MUST filter by schema_name; otherwise
+    .first() may return a waiting_config tenant which has no primary Domain,
+    breaking any test that creates an Event (Event.save() reads
+    `connection.tenant.get_primary_domain().domain`).
+    """
     from Customers.models import Client
-    t = Client.objects.exclude(schema_name="public").first()
-    assert t is not None, "Aucun tenant disponible pour le test"
+    t = Client.objects.filter(schema_name="lespass").first()
+    assert t is not None, (
+        "Tenant 'lespass' introuvable. Lancer 'install' + 'demo_data_v2' "
+        "pour preparer l'environnement de test."
+    )
     return t
 
 
@@ -355,19 +368,20 @@ def test_calculer_adhesions_avec_membership(tenant_lespass, periode_test):
         )
 
         from comptabilite.services import RapportComptableService
-        rapport = RapportComptableService(debut, fin).calculer_adhesions()
+        rapport = RapportComptableService(debut, fin).calculer_detail_ventes()
 
-        assert rapport["total"] == 1500
-        assert rapport["nb"] == 1
-        assert len(rapport["detail"]) == 1
-        # cle = produit_uuid__tarif_uuid__moyen
-        key = f"{product.uuid}__{price.uuid}__SF"
-        assert key in rapport["detail"]
-        assert rapport["detail"][key]["nom_produit"] == product.name
-        assert rapport["detail"][key]["nom_tarif"] == price.name
-        assert rapport["detail"][key]["moyen_paiement"] == "SF"
-        assert rapport["detail"][key]["total"] == 1500
-        assert rapport["detail"][key]["nb"] == 1
+        # Structure detail_ventes : cat_code -> {nom_categorie, articles: [{...}], total_ttc}
+        # / detail_ventes structure: cat_code -> {nom_categorie, articles, total_ttc}
+        assert "A" in rapport, "La categorie ADHESION (A) doit etre presente"
+        cat_adh = rapport["A"]
+        assert cat_adh["total_ttc"] == 1500
+        # On retrouve notre produit dans la liste d'articles de la categorie
+        # / Locate our product in the category's articles list
+        articles_du_produit = [a for a in cat_adh["articles"] if a["nom_produit"] == product.name]
+        assert len(articles_du_produit) == 1
+        article = articles_du_produit[0]
+        assert article["total_ttc"] == 1500
+        assert article["qty_total"] == 1.0
 
         ligne.delete()
         membership.delete()
@@ -424,17 +438,18 @@ def test_calculer_billets_avec_reservation(tenant_lespass, periode_test):
         )
 
         from comptabilite.services import RapportComptableService
-        rapport = RapportComptableService(debut, fin).calculer_billets()
+        rapport = RapportComptableService(debut, fin).calculer_detail_ventes()
 
-        assert rapport["nb"] == 1
-        assert rapport["total"] == 2000
-        key = f"{event.uuid}__{product.uuid}__{price.uuid}"
-        assert key in rapport["detail"]
-        assert rapport["detail"][key]["nom_event"] == event.name
-        assert rapport["detail"][key]["nom_produit"] == product.name
-        assert rapport["detail"][key]["nom_tarif"] == price.name
-        assert rapport["detail"][key]["nb"] == 1
-        assert rapport["detail"][key]["total"] == 2000
+        # Structure detail_ventes : cat_code -> {nom_categorie, articles, total_ttc}
+        # / detail_ventes structure: cat_code -> {nom_categorie, articles, total_ttc}
+        assert "B" in rapport, "La categorie BILLET (B) doit etre presente"
+        cat_billet = rapport["B"]
+        assert cat_billet["total_ttc"] == 2000
+        articles_du_produit = [a for a in cat_billet["articles"] if a["nom_produit"] == product.name]
+        assert len(articles_du_produit) == 1
+        article = articles_du_produit[0]
+        assert article["total_ttc"] == 2000
+        assert article["qty_total"] == 1.0
 
         ligne.delete()
         reservation.delete()
@@ -511,93 +526,79 @@ def test_calculer_detail_ventes_groupe_par_categorie(tenant_lespass, periode_tes
         l_offert.delete()
 
 
-# ---------------------------------------------------------------------------
-# Tests B3 — synthese, infos legales, hash, rapport complet
-# ---------------------------------------------------------------------------
-
-def test_calculer_synthese_operations(tenant_lespass, periode_test):
+def test_calculer_detail_ventes_prix_libre_amount_zero_compte_comme_offert(
+    tenant_lespass, periode_test, django_assert_num_queries,
+):
     """
-    Tableau croise : type d'operation x moyen de paiement.
-    / Cross table: operation type x payment method.
+    Cas du tarif "prix libre a partir de 0" : un user paye 10€, un autre 20€,
+    un troisieme 0€. Tous gardent payment_method=STRIPE_NOFED car le code
+    de creation de LigneArticle (validators.py:294) assigne ce mode par defaut
+    pour TOUTES les lignes de reservation, meme a 0€.
+
+    Sans le patch Q(amount=0) sur offert_flag, la vente a 0€ apparaitrait
+    en "payants" (et serait invisible : qty=3, total=30€, offerts=0).
+    Avec le patch : qty_payants=2, qty_offerts=1, total_ttc=30€.
+
+    Verifie egalement qu'on reste sur UNE SEULE requete SQL (pas de N+1)
+    grace a la fixture django_assert_num_queries.
+
+    / Free-priced tariff at 0: 3 sales (10€, 20€, 0€) all with STRIPE_NOFED.
+    / Without the Q(amount=0) patch, the 0€ sale would land in 'payants' and
+    / be invisible. With the patch: payants=2, offerts=1.
+    / Also asserts only ONE SQL query (no N+1).
     """
     debut, fin = periode_test
     with tenant_context(tenant_lespass):
-        from BaseBillet.models import PaymentMethod
-        # 1 billet en STRIPE_FED, 1 adhesion en CASH
-        # Pour eviter le piege Event/stdimage, on cree directement les
-        # objets Reservation/Membership via factories minimales.
-        from BaseBillet.models import (
-            Reservation, Membership, Event, Product, Price, PriceSold, ProductSold,
-            LigneArticle,
-        )
-        from AuthBillet.models import TibilletUser
-        from django.db.models.signals import post_delete
+        from BaseBillet.models import Product, PaymentMethod, LigneArticle
 
-        suffix = uuid.uuid4().hex[:8]
-        user, _ = TibilletUser.objects.get_or_create(
-            email=f"test_syn_{suffix}@example.com",
-            defaults={"is_active": True, "username": f"test_syn_{suffix}"},
+        # 3 lignes sur le MEME pricesold (meme tarif prix libre)
+        # / 3 lines on the SAME pricesold (same open-price tariff)
+        l_10 = _creer_ligne(
+            tenant_lespass, amount=1000, qty=Decimal("1"),
+            payment_method=PaymentMethod.STRIPE_NOFED, vat=Decimal("0"),
         )
-        event = Event.objects.create(
-            name=f"E_{suffix}",
-            datetime=timezone.now() + timedelta(days=1),
+        l_20 = _creer_ligne(
+            tenant_lespass, amount=2000, qty=Decimal("1"),
+            payment_method=PaymentMethod.STRIPE_NOFED, vat=Decimal("0"),
+            pricesold=l_10.pricesold,
         )
-        product, _ = Product.objects.get_or_create(
-            name=f"P_{suffix}",
-            defaults={"categorie_article": Product.BILLET},
-        )
-        price, _ = Price.objects.get_or_create(
-            product=product, name=f"T_{suffix}",
-            defaults={"prix": Decimal("10.00")},
-        )
-        productsold, _ = ProductSold.objects.get_or_create(
-            product=product, categorie_article=product.categorie_article,
-        )
-        pricesold, _ = PriceSold.objects.get_or_create(
-            productsold=productsold, price=price,
-            defaults={"prix": Decimal("10.00")},
-        )
-        reservation = Reservation.objects.create(user_commande=user, event=event)
-        membership = Membership.objects.create(user=user, price=price,
-                                                contribution_value=Decimal("10.00"))
-
-        l_billet = LigneArticle.objects.create(
-            amount=1000, qty=Decimal("1"), status=LigneArticle.VALID,
-            payment_method=PaymentMethod.STRIPE_FED, pricesold=pricesold,
-            reservation=reservation,
-        )
-        l_adh = LigneArticle.objects.create(
-            amount=500, qty=Decimal("1"), status=LigneArticle.VALID,
-            payment_method=PaymentMethod.CASH, pricesold=pricesold,
-            membership=membership,
+        l_0 = _creer_ligne(
+            tenant_lespass, amount=0, qty=Decimal("1"),
+            payment_method=PaymentMethod.STRIPE_NOFED, vat=Decimal("0"),
+            pricesold=l_10.pricesold,
         )
 
         from comptabilite.services import RapportComptableService
-        rapport = RapportComptableService(debut, fin).calculer_synthese_operations()
+        service = RapportComptableService(debut, fin)
 
-        assert "vente_billets" in rapport
-        assert "vente_adhesions" in rapport
-        assert "remboursements" in rapport
-        assert rapport["vente_billets"].get("SF") == 1000
-        assert rapport["vente_adhesions"].get("CA") == 500
-        # Pas de remboursement cree → vide ou pas de cle
-        assert rapport["remboursements"] in ({}, {None: 0})
+        # On verifie qu'une seule requete SQL est emise par calculer_detail_ventes
+        # (le CASE WHEN reste cote serveur — pas de N+1)
+        # / Assert only one SQL query is emitted (CASE WHEN stays server-side)
+        with django_assert_num_queries(1):
+            rapport = service.calculer_detail_ventes()
 
-        l_billet.delete()
-        l_adh.delete()
-        # Cleanup Event (stdimage workaround)
-        receivers_to_restore = []
-        for sender_key, receiver_dict in list(post_delete.receivers):
-            if sender_key[1] == id(Event):
-                receivers_to_restore.append((sender_key, receiver_dict))
-                post_delete.receivers.remove((sender_key, receiver_dict))
-        try:
-            reservation.delete()
-            event.delete()
-            membership.delete()
-        finally:
-            post_delete.receivers.extend(receivers_to_restore)
+        # 1 seul article (meme produit), 1 seule entree dans la categorie
+        assert Product.BILLET in rapport
+        cat = rapport[Product.BILLET]
+        assert len(cat["articles"]) == 1
+        article = cat["articles"][0]
 
+        # 2 payants (10€ + 20€), 1 offert (0€)
+        # / 2 paid (10€ + 20€), 1 offered (0€)
+        assert article["qty_payants"] == 2.0
+        assert article["qty_offerts"] == 1.0
+        assert article["qty_total"] == 3.0
+        # TTC = 30€ (la vente a 0 n'apporte rien)
+        assert article["total_ttc"] == 3000
+
+        l_10.delete()
+        l_20.delete()
+        l_0.delete()
+
+
+# ---------------------------------------------------------------------------
+# Tests B3 — synthese, infos legales, hash, rapport complet
+# ---------------------------------------------------------------------------
 
 def test_calculer_infos_legales_depuis_configuration(tenant_lespass, periode_test):
     """
@@ -642,8 +643,8 @@ def test_calculer_hash_lignes_stable_et_change_avec_modif(tenant_lespass, period
 
 def test_generer_rapport_complet_structure(tenant_lespass, periode_test):
     """
-    generer_rapport_complet() retourne dict avec EXACTEMENT 9 cles racine.
-    / Returns dict with EXACTLY 9 root keys.
+    generer_rapport_complet() retourne dict avec EXACTEMENT 6 cles racine.
+    / Returns dict with EXACTLY 6 root keys.
     """
     debut, fin = periode_test
     with tenant_context(tenant_lespass):
@@ -651,9 +652,8 @@ def test_generer_rapport_complet_structure(tenant_lespass, periode_test):
         rapport = RapportComptableService(debut, fin).generer_rapport_complet()
 
         cles_attendues = {
-            "totaux_par_moyen", "detail_ventes", "tva",
-            "adhesions", "billets", "remboursements",
-            "synthese_operations", "infos_legales", "meta",
+            "totaux_par_moyen", "tva", "detail_ventes",
+            "remboursements", "infos_legales", "meta",
         }
         assert set(rapport.keys()) == cles_attendues, (
             f"Cles inattendues. Reel : {set(rapport.keys())}"
@@ -721,8 +721,9 @@ def test_generer_cloture_pour_tenant_cree_une_cloture(tenant_lespass):
         assert cloture.datetime_debut == debut
         assert cloture.datetime_fin == fin
         assert isinstance(cloture.rapport_json, dict)
-        # 8 sections + meta = 9 cles
-        assert len(cloture.rapport_json.keys()) == 9
+        # 5 sections de rapport + meta = 6 cles
+        # / 5 report sections + meta = 6 keys
+        assert len(cloture.rapport_json.keys()) == 6
         assert "totaux_par_moyen" in cloture.rapport_json
         assert len(cloture.hash_lignes) == 64
 

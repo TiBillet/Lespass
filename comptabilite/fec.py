@@ -21,12 +21,12 @@ COMPTES_PAR_DEFAUT = {
     "client": ("411000", "Clients"),
     "banque": ("512000", "Banque"),
     "caisse": ("530000", "Caisse"),
-    "cheques": ("511000", "Cheques a encaisser"),
-    "tva_55": ("4457100", "TVA collectee 5.5%"),
-    "tva_10": ("4457200", "TVA collectee 10%"),
-    "tva_20": ("4457300", "TVA collectee 20%"),
+    "cheques": ("511000", "Chèques à encaisser"),
+    "tva_55": ("4457100", "TVA collectée 5,5%"),
+    "tva_10": ("4457200", "TVA collectée 10%"),
+    "tva_20": ("4457300", "TVA collectée 20%"),
     "ventes_billets": ("706000", "Prestations - Billets"),
-    "ventes_adhesions": ("756000", "Cotisations - Adhesions"),
+    "ventes_adhesions": ("756000", "Cotisations - Adhésions"),
 }
 
 # Mapping PaymentMethod -> compte de tresorerie (clef de COMPTES_PAR_DEFAUT).
@@ -122,9 +122,18 @@ def generer_fec_cloture(cloture) -> tuple:
             ValidDate=valid_date,
         ))
 
-    # --- Credit ventes billets (706)
-    # / Ticket sales credit (706)
-    total_billets = (rapport.get("billets") or {}).get("total", 0)
+    # --- Calcul des totaux par grande famille comptable depuis detail_ventes.
+    # / Compute totals per accounting family from detail_ventes.
+    # 706 (Prestations) : BILLET 'B', FREERES 'F', BADGE 'G', QRCODE_MA 'Q'
+    # 756 (Cotisations) : ADHESION 'A'
+    detail = rapport.get("detail_ventes") or {}
+    total_billets = sum(
+        detail.get(c, {}).get("total_ttc", 0) for c in ("B", "F", "G", "Q")
+    )
+    total_adhesions = detail.get("A", {}).get("total_ttc", 0)
+
+    # --- Credit ventes billets/prestations (706)
+    # / Ticket/services sales credit (706)
     if total_billets:
         num, lib = COMPTES_PAR_DEFAUT["ventes_billets"]
         lignes.append(_ligne_fec(
@@ -139,7 +148,6 @@ def generer_fec_cloture(cloture) -> tuple:
 
     # --- Credit adhesions (756)
     # / Memberships credit (756)
-    total_adhesions = (rapport.get("adhesions") or {}).get("total", 0)
     if total_adhesions:
         num, lib = COMPTES_PAR_DEFAUT["ventes_adhesions"]
         lignes.append(_ligne_fec(

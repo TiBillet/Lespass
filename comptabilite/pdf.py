@@ -62,23 +62,20 @@ def generer_pdf_cloture(cloture) -> tuple:
             for taux, item in (rapport.get("tva") or {}).items()
             if isinstance(item, dict)
         ],
-        "adhesions_items": [
+        # Detail des ventes par categorie : structure aplatie pour le template
+        # / Sales detail per category: flattened structure for the template
+        "ventes_items": [
             {
-                "nom_produit": item.get("nom_produit", ""),
-                "nom_tarif": item.get("nom_tarif", ""),
-                "total_euros": _euros(item.get("total")),
-                "nb": item.get("nb", 0),
+                "categorie": cat.get("nom_categorie", ""),
+                "produit": article.get("nom_produit", ""),
+                "qty": article.get("qty_total", 0),
+                "ht": _euros(article.get("total_ht")),
+                "tva": _euros(article.get("total_tva")),
+                "ttc": _euros(article.get("total_ttc")),
             }
-            for item in (rapport.get("adhesions") or {}).get("detail", {}).values()
-        ],
-        "billets_items": [
-            {
-                "nom_event": item.get("nom_event", ""),
-                "nom_produit": item.get("nom_produit", ""),
-                "total_euros": _euros(item.get("total")),
-                "nb": item.get("nb", 0),
-            }
-            for item in (rapport.get("billets") or {}).get("detail", {}).values()
+            for cat in (rapport.get("detail_ventes") or {}).values()
+            if isinstance(cat, dict)
+            for article in cat.get("articles", [])
         ],
         "infos_legales": rapport.get("infos_legales") or {},
         "cloture_total_ttc_euros": _euros(cloture.total_general),

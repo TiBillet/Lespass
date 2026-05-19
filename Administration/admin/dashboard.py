@@ -548,7 +548,7 @@ def get_sidebar_navigation(request):
             "collapsible": True,
             "items": [
                 {
-                    "title": _("Cash closure"),
+                    "title": _("Rapports"),
                     "icon": "lock",
                     "link": reverse_lazy(
                         "staff_admin:comptabilite_cloturecaisse_changelist"
@@ -570,22 +570,22 @@ def get_sidebar_navigation(request):
                 #     "link": reverse_lazy("staff_admin:laboutik_journaloperation_changelist"),
                 #     "permission": admin_permission,
                 # },
-                {
-                    "title": _("Accounting accounts"),
-                    "icon": "account_balance",
-                    "link": reverse_lazy(
-                        "staff_admin:comptabilite_comptecomptable_changelist"
-                    ),
-                    "permission": admin_permission,
-                },
-                {
-                    "title": _("Payment method mapping"),
-                    "icon": "swap_horiz",
-                    "link": reverse_lazy(
-                        "staff_admin:comptabilite_mappingmoyendepaiement_changelist"
-                    ),
-                    "permission": admin_permission,
-                },
+                # {
+                #     "title": _("Accounting accounts"),
+                #     "icon": "account_balance",
+                #     "link": reverse_lazy(
+                #         "staff_admin:comptabilite_comptecomptable_changelist"
+                #     ),
+                #     "permission": admin_permission,
+                # },
+                # {
+                #     "title": _("Payment method mapping"),
+                #     "icon": "swap_horiz",
+                #     "link": reverse_lazy(
+                #         "staff_admin:comptabilite_mappingmoyendepaiement_changelist"
+                #     ),
+                #     "permission": admin_permission,
+                # },
             ],
         }
     )

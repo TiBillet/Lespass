@@ -82,17 +82,17 @@ def generer_excel_cloture(cloture) -> tuple:
 
     # Titre + meta
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
-    cell = ws.cell(row=row, column=1, value=f"Cloture #{cloture.numero_sequentiel} - {cloture.get_niveau_display()}")
+    cell = ws.cell(row=row, column=1, value=f"Clôture #{cloture.numero_sequentiel} - {cloture.get_niveau_display()}")
     cell.font = _FONT_TITRE
     cell.fill = _FILL_TITRE
     row += 1
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
-    ws.cell(row=row, column=1, value=f"Debut : {cloture.datetime_debut:%Y-%m-%d %H:%M} - Fin : {cloture.datetime_fin:%Y-%m-%d %H:%M}").font = Font(italic=True)
+    ws.cell(row=row, column=1, value=f"Début : {cloture.datetime_debut:%Y-%m-%d %H:%M} - Fin : {cloture.datetime_fin:%Y-%m-%d %H:%M}").font = Font(italic=True)
     row += 2
 
     # Totaux par moyen
     row = _ecrire_section_header(ws, row, "Totaux par moyen de paiement")
-    row = _ecrire_ligne_header(ws, row, ["Code", "Libelle", "Total (EUR)", "Nb"])
+    row = _ecrire_ligne_header(ws, row, ["Code", "Libellé", "Total (EUR)", "Nombre"])
     for code, item in (rapport.get("totaux_par_moyen") or {}).items():
         if code in ("total", "currency_code"):
             continue
@@ -119,41 +119,40 @@ def generer_excel_cloture(cloture) -> tuple:
             )
     row += 1
 
-    # Adhesions
-    row = _ecrire_section_header(ws, row, "Adhesions")
-    row = _ecrire_ligne_header(ws, row, ["Produit", "Tarif", "Total (EUR)", "Nb"])
-    for item in (rapport.get("adhesions") or {}).get("detail", {}).values():
-        row = _ecrire_ligne_donnees(
-            ws, row,
-            [item.get("nom_produit", ""), item.get("nom_tarif", ""),
-             _euros(item.get("total")), item.get("nb", 0)],
-            montants_indices=[3],
-        )
-    row += 1
-
-    # Billets
-    row = _ecrire_section_header(ws, row, "Billets evenements")
-    row = _ecrire_ligne_header(ws, row, ["Evenement", "Produit", "Total (EUR)", "Nb"])
-    for item in (rapport.get("billets") or {}).get("detail", {}).values():
-        row = _ecrire_ligne_donnees(
-            ws, row,
-            [item.get("nom_event", ""), item.get("nom_produit", ""),
-             _euros(item.get("total")), item.get("nb", 0)],
-            montants_indices=[3],
-        )
+    # Detail des ventes par categorie (depuis detail_ventes)
+    # / Sales detail per category (from detail_ventes)
+    row = _ecrire_section_header(ws, row, "Détail des ventes par catégorie")
+    row = _ecrire_ligne_header(ws, row, ["Catégorie", "Produit", "Quantité", "HT", "TVA", "TTC"])
+    for cat in (rapport.get("detail_ventes") or {}).values():
+        if not isinstance(cat, dict):
+            continue
+        for article in cat.get("articles", []):
+            row = _ecrire_ligne_donnees(
+                ws, row,
+                [
+                    cat.get("nom_categorie", ""),
+                    article.get("nom_produit", ""),
+                    float(article.get("qty_total", 0)),
+                    _euros(article.get("total_ht")),
+                    _euros(article.get("total_tva")),
+                    _euros(article.get("total_ttc")),
+                ],
+                montants_indices=[3, 4, 5, 6],
+            )
     row += 1
 
     # Remboursements
     row = _ecrire_section_header(ws, row, "Remboursements et avoirs")
-    row = _ecrire_ligne_header(ws, row, ["Type", "Total (EUR)", "Nb", ""])
+    row = _ecrire_ligne_header(ws, row, ["Type", "Total (EUR)", "Nombre", ""])
     rb = rapport.get("remboursements") or {}
     cn = rb.get("credit_notes", {})
     rf = rb.get("refunded", {})
     row = _ecrire_ligne_donnees(ws, row, ["Avoirs", _euros(cn.get("total")), cn.get("nb", 0), ""], montants_indices=[2])
     row = _ecrire_ligne_donnees(ws, row, ["Remboursements", _euros(rf.get("total")), rf.get("nb", 0), ""], montants_indices=[2])
 
-    # Largeurs de colonnes fixes
-    for col_idx in range(1, 5):
+    # Largeurs de colonnes fixes (5 colonnes pour la section produit/tarif)
+    # / Fixed column widths (5 cols for product/tariff section)
+    for col_idx in range(1, 6):
         ws.column_dimensions[get_column_letter(col_idx)].width = 22
 
     buffer = io.BytesIO()

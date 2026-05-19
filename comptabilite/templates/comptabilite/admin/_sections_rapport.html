@@ -9,13 +9,13 @@
 
     {# --- 1. Totaux par moyen de paiement / Totals by payment method --- #}
     <section data-testid="comptabilite-section-totaux-par-moyen">
-        {% component "unfold/components/card.html" with title=_("Totals by payment method") %}
+        {% component "unfold/components/card.html" with title=_("Totaux par moyen de paiement") %}
             <table class="w-full">
                 <thead>
                     <tr class="text-left text-font-important-light dark:text-font-important-dark border-b border-base-200 dark:border-base-800">
-                        <th class="py-2 px-3 font-semibold">{% translate "Method" %}</th>
+                        <th class="py-2 px-3 font-semibold">{% translate "Moyen" %}</th>
                         <th class="py-2 px-3 font-semibold text-right">{% translate "Total" %}</th>
-                        <th class="py-2 px-3 font-semibold text-right">{% translate "Count" %}</th>
+                        <th class="py-2 px-3 font-semibold text-right">{% translate "Nombre" %}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -32,7 +32,7 @@
                     {% empty %}
                         <tr>
                             <td class="py-2 px-3 text-base-500 italic" colspan="3">
-                                {% translate "No payment for this period." %}
+                                {% translate "Aucun paiement sur cette période." %}
                             </td>
                         </tr>
                     {% endfor %}
@@ -48,15 +48,15 @@
 
     {# --- 2. TVA par taux / VAT breakdown --- #}
     <section data-testid="comptabilite-section-tva">
-        {% component "unfold/components/card.html" with title=_("VAT breakdown") %}
+        {% component "unfold/components/card.html" with title=_("TVA par taux") %}
             {% if rapport.tva %}
                 <table class="w-full">
                     <thead>
                         <tr class="text-left text-font-important-light dark:text-font-important-dark border-b border-base-200 dark:border-base-800">
-                            <th class="py-2 px-3 font-semibold">{% translate "Rate" %}</th>
-                            <th class="py-2 px-3 font-semibold text-right">{% translate "Excl. tax" %}</th>
-                            <th class="py-2 px-3 font-semibold text-right">{% translate "VAT" %}</th>
-                            <th class="py-2 px-3 font-semibold text-right">{% translate "Incl. tax" %}</th>
+                            <th class="py-2 px-3 font-semibold">{% translate "Taux" %}</th>
+                            <th class="py-2 px-3 font-semibold text-right">{% translate "HT" %}</th>
+                            <th class="py-2 px-3 font-semibold text-right">{% translate "TVA" %}</th>
+                            <th class="py-2 px-3 font-semibold text-right">{% translate "TTC" %}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -71,14 +71,14 @@
                     </tbody>
                 </table>
             {% else %}
-                <p class="text-base-500 italic">{% translate "No VAT data for this period." %}</p>
+                <p class="text-base-500 italic">{% translate "Aucune TVA collectée sur cette période." %}</p>
             {% endif %}
         {% endcomponent %}
     </section>
 
     {# --- 3. Detail des ventes par categorie / Sales detail by category --- #}
     <section data-testid="comptabilite-section-detail-ventes">
-        {% component "unfold/components/card.html" with title=_("Sales detail by category") %}
+        {% component "unfold/components/card.html" with title=_("Détail des ventes par catégorie") %}
             {% if rapport.detail_ventes %}
                 {% for cat_code, cat in rapport.detail_ventes.items %}
                     <div class="mb-4">
@@ -88,14 +88,14 @@
                         <table class="w-full text-sm">
                             <thead>
                                 <tr class="text-left text-base-500 border-b border-base-200 dark:border-base-800">
-                                    <th class="py-1 px-2 font-medium">{% translate "Product" %}</th>
-                                    <th class="py-1 px-2 font-medium text-right">{% translate "Paid" %}</th>
-                                    <th class="py-1 px-2 font-medium text-right">{% translate "Free" %}</th>
-                                    <th class="py-1 px-2 font-medium text-right">{% translate "Total qty" %}</th>
-                                    <th class="py-1 px-2 font-medium text-right">{% translate "VAT rate" %}</th>
-                                    <th class="py-1 px-2 font-medium text-right">{% translate "Excl. tax" %}</th>
-                                    <th class="py-1 px-2 font-medium text-right">{% translate "VAT" %}</th>
-                                    <th class="py-1 px-2 font-medium text-right">{% translate "Incl. tax" %}</th>
+                                    <th class="py-1 px-2 font-medium">{% translate "Produit" %}</th>
+                                    <th class="py-1 px-2 font-medium text-right">{% translate "Payants" %}</th>
+                                    <th class="py-1 px-2 font-medium text-right">{% translate "Offerts" %}</th>
+                                    <th class="py-1 px-2 font-medium text-right">{% translate "Qté totale" %}</th>
+                                    <th class="py-1 px-2 font-medium text-right">{% translate "Taux TVA" %}</th>
+                                    <th class="py-1 px-2 font-medium text-right">{% translate "HT" %}</th>
+                                    <th class="py-1 px-2 font-medium text-right">{% translate "TVA" %}</th>
+                                    <th class="py-1 px-2 font-medium text-right">{% translate "TTC" %}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -116,104 +116,30 @@
                     </div>
                 {% endfor %}
             {% else %}
-                <p class="text-base-500 italic">{% translate "No sales for this period." %}</p>
+                <p class="text-base-500 italic">{% translate "Aucune vente sur cette période." %}</p>
             {% endif %}
         {% endcomponent %}
     </section>
 
-    {# --- 4. Adhesions / Memberships --- #}
-    <section data-testid="comptabilite-section-adhesions">
-        {% component "unfold/components/card.html" with title=_("Memberships") %}
-            {% if rapport.adhesions.detail %}
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="text-left border-b border-base-200 dark:border-base-800">
-                            <th class="py-2 px-3 font-semibold">{% translate "Product" %}</th>
-                            <th class="py-2 px-3 font-semibold">{% translate "Tariff" %}</th>
-                            <th class="py-2 px-3 font-semibold">{% translate "Method" %}</th>
-                            <th class="py-2 px-3 font-semibold text-right">{% translate "Total" %}</th>
-                            <th class="py-2 px-3 font-semibold text-right">{% translate "Count" %}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for key, item in rapport.adhesions.detail.items %}
-                            <tr class="border-b border-base-100 dark:border-base-800">
-                                <td class="py-2 px-3">{{ item.nom_produit }}</td>
-                                <td class="py-2 px-3">{{ item.nom_tarif }}</td>
-                                <td class="py-2 px-3">{{ item.moyen_paiement_label }}</td>
-                                <td class="py-2 px-3 text-right font-mono">{{ item.total_euros }} €</td>
-                                <td class="py-2 px-3 text-right">{{ item.nb }}</td>
-                            </tr>
-                        {% endfor %}
-                        <tr class="font-semibold bg-base-50 dark:bg-base-900">
-                            <td class="py-2 px-3" colspan="3">{% translate "Total" %}</td>
-                            <td class="py-2 px-3 text-right font-mono">{{ rapport.adhesions.total_euros|default:"0.00" }} €</td>
-                            <td class="py-2 px-3 text-right">{{ rapport.adhesions.nb|default:0 }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            {% else %}
-                <p class="text-base-500 italic">{% translate "No memberships for this period." %}</p>
-            {% endif %}
-        {% endcomponent %}
-    </section>
-
-    {# --- 5. Billets / Tickets --- #}
-    <section data-testid="comptabilite-section-billets">
-        {% component "unfold/components/card.html" with title=_("Event tickets") %}
-            {% if rapport.billets.detail %}
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="text-left border-b border-base-200 dark:border-base-800">
-                            <th class="py-2 px-3 font-semibold">{% translate "Event" %}</th>
-                            <th class="py-2 px-3 font-semibold">{% translate "Date" %}</th>
-                            <th class="py-2 px-3 font-semibold">{% translate "Tariff" %}</th>
-                            <th class="py-2 px-3 font-semibold text-right">{% translate "Total" %}</th>
-                            <th class="py-2 px-3 font-semibold text-right">{% translate "Count" %}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for key, item in rapport.billets.detail.items %}
-                            <tr class="border-b border-base-100 dark:border-base-800">
-                                <td class="py-2 px-3">{{ item.nom_event }}</td>
-                                <td class="py-2 px-3">{{ item.date_event }}</td>
-                                <td class="py-2 px-3">{{ item.nom_tarif }}</td>
-                                <td class="py-2 px-3 text-right font-mono">{{ item.total_euros }} €</td>
-                                <td class="py-2 px-3 text-right">{{ item.nb }}</td>
-                            </tr>
-                        {% endfor %}
-                        <tr class="font-semibold bg-base-50 dark:bg-base-900">
-                            <td class="py-2 px-3" colspan="3">{% translate "Total" %}</td>
-                            <td class="py-2 px-3 text-right font-mono">{{ rapport.billets.total_euros|default:"0.00" }} €</td>
-                            <td class="py-2 px-3 text-right">{{ rapport.billets.nb|default:0 }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            {% else %}
-                <p class="text-base-500 italic">{% translate "No tickets for this period." %}</p>
-            {% endif %}
-        {% endcomponent %}
-    </section>
-
-    {# --- 6. Remboursements / Refunds --- #}
+    {# --- 4. Remboursements / Refunds --- #}
     <section data-testid="comptabilite-section-remboursements">
-        {% component "unfold/components/card.html" with title=_("Refunds and credit notes") %}
+        {% component "unfold/components/card.html" with title=_("Remboursements et avoirs") %}
             <table class="w-full text-sm">
                 <thead>
                     <tr class="text-left border-b border-base-200 dark:border-base-800">
                         <th class="py-2 px-3 font-semibold">{% translate "Type" %}</th>
                         <th class="py-2 px-3 font-semibold text-right">{% translate "Total" %}</th>
-                        <th class="py-2 px-3 font-semibold text-right">{% translate "Count" %}</th>
+                        <th class="py-2 px-3 font-semibold text-right">{% translate "Nombre" %}</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr class="border-b border-base-100 dark:border-base-800">
-                        <td class="py-2 px-3">{% translate "Credit notes" %}</td>
+                        <td class="py-2 px-3">{% translate "Avoirs" %}</td>
                         <td class="py-2 px-3 text-right font-mono">{{ rapport.remboursements.credit_notes.total_euros|default:"0.00" }} €</td>
                         <td class="py-2 px-3 text-right">{{ rapport.remboursements.credit_notes.nb|default:0 }}</td>
                     </tr>
                     <tr>
-                        <td class="py-2 px-3">{% translate "Refunded" %}</td>
+                        <td class="py-2 px-3">{% translate "Remboursements" %}</td>
                         <td class="py-2 px-3 text-right font-mono">{{ rapport.remboursements.refunded.total_euros|default:"0.00" }} €</td>
                         <td class="py-2 px-3 text-right">{{ rapport.remboursements.refunded.nb|default:0 }}</td>
                     </tr>
@@ -222,53 +148,18 @@
         {% endcomponent %}
     </section>
 
-    {# --- 7. Synthese des operations / Operations summary --- #}
-    <section data-testid="comptabilite-section-synthese-operations">
-        {% component "unfold/components/card.html" with title=_("Operations summary by payment method") %}
-            {% if rapport.synthese_operations %}
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="text-left border-b border-base-200 dark:border-base-800">
-                            <th class="py-2 px-3 font-semibold">{% translate "Operation" %}</th>
-                            <th class="py-2 px-3 font-semibold">{% translate "Method" %}</th>
-                            <th class="py-2 px-3 font-semibold text-right">{% translate "Total" %}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for op_name, par_moyen in rapport.synthese_operations.items %}
-                            {% for moyen_code, item in par_moyen.items %}
-                                <tr class="border-b border-base-100 dark:border-base-800">
-                                    <td class="py-2 px-3">{{ op_name }}</td>
-                                    <td class="py-2 px-3">{{ moyen_code }}</td>
-                                    <td class="py-2 px-3 text-right font-mono">{{ item.total_euros }} €</td>
-                                </tr>
-                            {% empty %}
-                                <tr class="border-b border-base-100 dark:border-base-800">
-                                    <td class="py-2 px-3">{{ op_name }}</td>
-                                    <td class="py-2 px-3 text-base-500 italic" colspan="2">{% translate "No data" %}</td>
-                                </tr>
-                            {% endfor %}
-                        {% endfor %}
-                    </tbody>
-                </table>
-            {% else %}
-                <p class="text-base-500 italic">{% translate "No operations for this period." %}</p>
-            {% endif %}
-        {% endcomponent %}
-    </section>
-
-    {# --- 8. Infos legales / Legal info --- #}
+    {# --- 5. Infos legales / Legal info --- #}
     <section data-testid="comptabilite-section-infos-legales">
-        {% component "unfold/components/card.html" with title=_("Legal info") %}
+        {% component "unfold/components/card.html" with title=_("Informations légales") %}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                <div><strong>{% translate "Organization" %}:</strong> {{ rapport.infos_legales.organisation|default:"—" }}</div>
-                <div><strong>{% translate "Address" %}:</strong> {{ rapport.infos_legales.adresse|default:"—" }}</div>
-                <div><strong>{% translate "Postal code" %}:</strong> {{ rapport.infos_legales.code_postal|default:"—" }}</div>
-                <div><strong>{% translate "City" %}:</strong> {{ rapport.infos_legales.ville|default:"—" }}</div>
-                <div><strong>SIREN:</strong> {{ rapport.infos_legales.siren|default:"—" }}</div>
-                <div><strong>{% translate "VAT number" %}:</strong> {{ rapport.infos_legales.tva_number|default:"—" }}</div>
-                <div><strong>Email:</strong> {{ rapport.infos_legales.email|default:"—" }}</div>
-                <div><strong>{% translate "Phone" %}:</strong> {{ rapport.infos_legales.phone|default:"—" }}</div>
+                <div><strong>{% translate "Organisation" %} :</strong> {{ rapport.infos_legales.organisation|default:"—" }}</div>
+                <div><strong>{% translate "Adresse" %} :</strong> {{ rapport.infos_legales.adresse|default:"—" }}</div>
+                <div><strong>{% translate "Code postal" %} :</strong> {{ rapport.infos_legales.code_postal|default:"—" }}</div>
+                <div><strong>{% translate "Ville" %} :</strong> {{ rapport.infos_legales.ville|default:"—" }}</div>
+                <div><strong>SIREN :</strong> {{ rapport.infos_legales.siren|default:"—" }}</div>
+                <div><strong>{% translate "Numéro de TVA" %} :</strong> {{ rapport.infos_legales.tva_number|default:"—" }}</div>
+                <div><strong>Email :</strong> {{ rapport.infos_legales.email|default:"—" }}</div>
+                <div><strong>{% translate "Téléphone" %} :</strong> {{ rapport.infos_legales.phone|default:"—" }}</div>
             </div>
         {% endcomponent %}
     </section>
