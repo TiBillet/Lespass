@@ -19,6 +19,21 @@ def adhesion_badge_callback(request):
     return f"+ {Membership.objects.filter(last_contribution__gte=timezone.localtime() - timedelta(days=7)).count()}"
 
 
+# Badge "+ N" sur le menu Events si des propositions publiques attendent moderation
+# / "+ N" badge on Events menu if public proposals are pending moderation
+def event_proposals_badge_callback(request):
+    """
+    Compte des propositions d'event en attente de validation.
+    / Count of pending event proposals.
+
+    Affiche un badge "+ N" sur le menu "Events" si des propositions
+    publiques attendent moderation (is_proposal=True, published=False).
+    """
+    from BaseBillet.models import Event
+    count = Event.objects.filter(is_proposal=True, published=False).count()
+    return f"+ {count}" if count else None
+
+
 def get_sidebar_navigation(request):
     """Sidebar dynamique : masque les sections liees aux modules inactifs.
     Appelee par Unfold via SIDEBAR.navigation (string importable)."""
@@ -148,6 +163,7 @@ def get_sidebar_navigation(request):
                         "title": _("Events"),
                         "icon": "event",
                         "link": reverse_lazy("staff_admin:BaseBillet_event_changelist"),
+                        "badge": "Administration.admin.dashboard.event_proposals_badge_callback",
                         "permission": admin_permission,
                     },
                     {

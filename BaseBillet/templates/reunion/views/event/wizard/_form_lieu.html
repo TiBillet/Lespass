@@ -1,0 +1,103 @@
+{% load i18n %}
+{% comment %}
+LOCALISATION: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html
+
+Partial reutilisable pour la step "Lieu" des wizards admin et public.
+Toggle radio CSS-only entre "Adresse existante" et "Nouveau lieu".
+/ Reusable partial for the "Place" step (admin + public wizards).
+CSS-only radio toggle between "Existing address" and "New place".
+
+Variables attendues :
+  - form_action_url (str)
+  - addresses (queryset PostalAddress)
+  - default_address_pk (uuid?) : adresse pre-selectionnee si mode existant
+  - initial (dict) : valeurs re-injectees apres une 422
+  - errors (dict) : erreurs par champ
+  - next_step_label (str) : libelle du bouton submit
+{% endcomment %}
+
+<style>
+    /* Toggle CSS-only : on cache les blocs non actifs.
+       / CSS-only toggle: hide non-active blocks. */
+    .wizard-mode-existing-fields,
+    .wizard-mode-new-fields { display: none; }
+    .wizard-mode-toggle input[value="existing"]:checked ~ .wizard-mode-existing-fields,
+    .wizard-mode-toggle input[value="new"]:checked ~ .wizard-mode-new-fields {
+        display: block;
+    }
+</style>
+
+{% if errors %}
+<div class="alert alert-danger mb-3" role="alert" data-testid="wizard-place-errors">
+    <strong>{% translate "Merci de corriger les erreurs ci-dessous." %}</strong>
+    <ul class="mb-0 mt-1 small">
+        {% for field, msgs in errors.items %}
+            {% if field != "_mode" %}
+            <li><strong>{{ field }}</strong> :
+                {% for msg in msgs %}{{ msg }}{% if not forloop.last %} / {% endif %}{% endfor %}
+            </li>
+            {% endif %}
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<form method="post" action="{{ form_action_url }}" enctype="multipart/form-data"
+      novalidate data-testid="wizard-place-form" class="vstack gap-3">
+    {% csrf_token %}
+
+    <div class="wizard-mode-toggle">
+        <div class="btn-group mb-3" role="group" aria-label="{% translate 'Mode de saisie' %}">
+            <input type="radio" class="btn-check" name="_form_mode" id="mode-existing" value="existing"
+                   {% if not initial.new_address_name %}checked{% endif %}>
+            <label class="btn btn-outline-primary" for="mode-existing">
+                {% translate "Utiliser une adresse existante" %}
+            </label>
+
+            <input type="radio" class="btn-check" name="_form_mode" id="mode-new" value="new"
+                   {% if initial.new_address_name %}checked{% endif %}>
+            <label class="btn btn-outline-primary" for="mode-new">
+                {% translate "Creer un nouveau lieu" %}
+            </label>
+        </div>
+
+        <div class="wizard-mode-existing-fields">
+            <label for="postal_address" class="form-label">{% translate "Adresse" %}</label>
+            <select id="postal_address" name="postal_address" class="form-select"
+                    data-testid="wizard-place-select">
+                <option value="">{% translate "-- Choisir --" %}</option>
+                {% for a in addresses %}
+                    <option value="{{ a.pk }}"
+                        {% if initial.postal_address|stringformat:"s" == a.pk|stringformat:"s" %}selected
+                        {% elif default_address_pk and not initial.postal_address and default_address_pk|stringformat:"s" == a.pk|stringformat:"s" %}selected
+                        {% endif %}>
+                        {{ a.name|default:a.address_locality }}{% if a.postal_code %} ({{ a.postal_code }}){% endif %}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="wizard-mode-new-fields">
+            <div class="mb-3">
+                <label for="new_address_name" class="form-label">
+                    {% translate "Nom du lieu" %} <span class="text-danger">*</span>
+                </label>
+                <input type="text" id="new_address_name" name="new_address_name"
+                       class="form-control" maxlength="200"
+                       value="{{ initial.new_address_name|default:'' }}"
+                       data-testid="wizard-place-new-name">
+                <div class="form-text">{% translate "Exemple : Grande salle, Salle du bas, Accueil..." %}</div>
+            </div>
+
+            {% include "widgets/widget_carte_adresse.html" with identifiant_widget="place" hauteur_carte="350px" champs_adresse_separes=True latitude_initiale=initial.place_latitude longitude_initiale=initial.place_longitude adresse_initiale=initial.place_adresse %}
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-end pt-2">
+        <button type="submit" class="btn btn-primary btn-lg"
+                data-testid="wizard-place-submit">
+            {{ next_step_label|default:_("Continuer") }}
+            <i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>
+        </button>
+    </div>
+</form>

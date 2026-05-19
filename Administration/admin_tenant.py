@@ -2037,6 +2037,33 @@ class EventResource(resources.ModelResource):
         report_skipped = True
 
 
+class IsProposalFilter(admin.SimpleListFilter):
+    """
+    Filtre sidebar Unfold pour distinguer propositions publiques en
+    attente, propositions approuvees et events normaux.
+    / Unfold sidebar filter for pending proposals, approved proposals
+    and regular events.
+    """
+    title = _("Proposal status")
+    parameter_name = "proposal_status"
+
+    def lookups(self, request, model_admin):
+        return [
+            ("pending", _("Proposals pending")),
+            ("approved", _("Proposals approved")),
+            ("regular", _("Regular events")),
+        ]
+
+    def queryset(self, request, queryset):
+        if self.value() == "pending":
+            return queryset.filter(is_proposal=True, published=False)
+        if self.value() == "approved":
+            return queryset.filter(is_proposal=True, published=True)
+        if self.value() == "regular":
+            return queryset.filter(is_proposal=False)
+        return queryset
+
+
 @admin.register(Event, site=staff_admin_site)
 class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     form = EventForm
@@ -2122,11 +2149,14 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
 
     search_fields = ['name']
     list_filter = [
+        IsProposalFilter,
         EventArchiveFilter,
         ('datetime', RangeDateTimeFilterWithTimeZone),
         'published',
     ]
     list_filter_submit = True
+
+    actions = ["approuver_propositions"]
 
     autocomplete_fields = [
         "tag",
@@ -2388,6 +2418,23 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
             child_duplicate.carrousel.set(child.carrousel.all())
 
         return duplicate
+
+    @admin.action(description=_("Approve and publish selected proposals"))
+    def approuver_propositions(self, request, queryset):
+        """
+        Action bulk : pour chaque event selectionne qui est une proposition
+        en attente, set is_proposal=False + published=True.
+        / Bulk action: approve and publish selected pending proposals.
+        """
+        nb_approuvees = queryset.filter(is_proposal=True, published=False).update(
+            is_proposal=False,
+            published=True,
+        )
+        self.message_user(
+            request,
+            _("%(n)s proposal(s) approved.") % {"n": nb_approuvees},
+            messages.SUCCESS,
+        )
 
 
 class ReservationValidFilter(admin.SimpleListFilter):

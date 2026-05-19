@@ -1,0 +1,52 @@
+{% extends "reunion/views/event/wizard/_base.html" %}
+{% load i18n %}
+
+{% block step_content %}
+<p class="text-muted mb-3">
+    {% blocktranslate with email=email %}Un code a 6 chiffres a ete envoye a <strong>{{ email }}</strong>. Saisissez-le ci-dessous.{% endblocktranslate %}
+</p>
+
+{% if errors.otp %}
+<div class="alert alert-danger mb-3" role="alert" data-testid="propose-verify-error">
+    {{ errors.otp|join:" / " }}
+    {% if attempts_remaining %}
+        <br><small>{% blocktranslate with n=attempts_remaining %}Tentatives restantes : {{ n }}.{% endblocktranslate %}</small>
+    {% endif %}
+</div>
+{% endif %}
+
+{# Form principal de verification du code. #}
+{# / Main verify form. #}
+<form method="post" action="{% url 'event-propose-verify' %}"
+      novalidate data-testid="propose-verify-form" class="vstack gap-3">
+    {% csrf_token %}
+    <div>
+        <label for="otp" class="form-label">{% translate "Code a 6 chiffres" %} <span class="text-danger">*</span></label>
+        <input type="text" id="otp" name="otp" required pattern="\d{6}" maxlength="6"
+               inputmode="numeric" autocomplete="one-time-code"
+               class="form-control form-control-lg text-center"
+               style="font-family: monospace; letter-spacing: 0.5em;"
+               data-testid="propose-otp-input">
+    </div>
+
+    <div class="d-flex justify-content-end pt-2">
+        <button type="submit" class="btn btn-primary btn-lg" data-testid="propose-verify-submit">
+            {% translate "Verifier" %} <i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>
+        </button>
+    </div>
+</form>
+
+{# Form separe pour le renvoi du code (un <form> imbrique est HTML invalide). #}
+{# / Separate form for resend (nested <form> is invalid HTML). #}
+<form method="post" action="{% url 'event-propose-resend' %}" class="mt-3 text-center">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-link btn-sm" data-testid="propose-resend"
+            {% if not can_resend %}disabled{% endif %}>
+        {% if can_resend %}
+            {% translate "Renvoyer le code" %}
+        {% else %}
+            {% blocktranslate with s=seconds_before_resend %}Renvoyer dans {{ s }}s{% endblocktranslate %}
+        {% endif %}
+    </button>
+</form>
+{% endblock %}

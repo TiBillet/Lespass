@@ -1,0 +1,39 @@
+{% extends base_template %}
+{% load i18n %}
+
+{% comment %}
+LOCALISATION: BaseBillet/templates/reunion/views/event/wizard/_base.html
+
+Layout de base reutilisable par tous les wizards event.
+/ Reusable base layout for all event wizards.
+
+Variables attendues :
+  - wizard_title (str) : titre principal de la page
+  - wizard_step_label (str) : "Etape 1 / 2"
+  - wizard_back_url (str?) : URL du bouton "Precedent" si applicable
+{% endcomment %}
+
+{% block title %}{{ wizard_title|default:_("Wizard") }}{% endblock %}
+
+{% block main %}
+<section class="container" style="max-width: 720px;">
+    <header class="mb-4 pt-4">
+        {% if wizard_step_label %}
+            <p class="text-muted small mb-1">{{ wizard_step_label }}</p>
+        {% endif %}
+        <h1 class="h3 mb-0">{{ wizard_title }}</h1>
+    </header>
+
+    {% block step_content %}{% endblock %}
+
+    {% if wizard_back_url %}
+        <div class="mt-3">
+            <a href="{{ wizard_back_url }}" class="btn btn-link"
+               data-testid="wizard-back">
+                <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>
+                {% translate "Precedent" %}
+            </a>
+        </div>
+    {% endif %}
+</section>
+{% endblock %}

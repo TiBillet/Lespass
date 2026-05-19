@@ -1317,3 +1317,139 @@ class PaiementHorsLigneSerializer(serializers.Serializer):
                 _("Impossible d'utiliser 'Offert' avec un montant positif.")
             )
         return donnees_validees
+
+
+# ---------------------------------------------------------------------------
+# Wizard event admin (S3 EVENT_WIZARD)
+# / Admin event wizard serializers (S3 EVENT_WIZARD)
+# ---------------------------------------------------------------------------
+
+class WizardPlaceSerializer(serializers.Serializer):
+    """
+    Step "Lieu" des wizards event admin/public.
+    / "Place" step for admin/public event wizards.
+
+    Soit `postal_address` (pk d'une PostalAddress existante),
+    soit le bloc nouvelle adresse complet (name + 4 champs + lat/lng).
+    / Either `postal_address` (pk of an existing PostalAddress),
+    or the full new-address block (name + 4 fields + lat/lng).
+    """
+
+    # Cas "adresse existante" / "existing address" case
+    postal_address = serializers.CharField(required=False, allow_blank=True)
+
+    # Cas "nouveau lieu" / "new place" case
+    new_address_name = serializers.CharField(
+        required=False, allow_blank=True, max_length=200,
+    )
+    street_address = serializers.CharField(
+        required=False, allow_blank=True, max_length=255,
+    )
+    postal_code = serializers.CharField(
+        required=False, allow_blank=True, max_length=20,
+    )
+    address_locality = serializers.CharField(
+        required=False, allow_blank=True, max_length=120,
+    )
+    address_country = serializers.CharField(
+        required=False, allow_blank=True, max_length=80, default="France",
+    )
+    # Champs prefixes par le widget carte / Fields prefixed by the map widget
+    place_latitude = serializers.FloatField(
+        required=False, min_value=-90, max_value=90, allow_null=True,
+    )
+    place_longitude = serializers.FloatField(
+        required=False, min_value=-180, max_value=180, allow_null=True,
+    )
+    place_adresse = serializers.CharField(
+        required=False, allow_blank=True, max_length=500,
+    )
+
+    def validate(self, attrs):
+        # On determine le mode : pk fourni OU bloc nouvelle adresse.
+        # / Determine mode: pk provided OR new address block.
+        pk_value = (attrs.get("postal_address") or "").strip()
+
+        if pk_value:
+            # Mode "existante" : verifier que le pk existe.
+            # / "Existing" mode: verify pk exists.
+            if not PostalAddress.objects.filter(pk=pk_value).exists():
+                raise serializers.ValidationError({
+                    "postal_address": _("Adresse selectionnee introuvable."),
+                })
+            attrs["_mode"] = "existing"
+            return attrs
+
+        # Mode "nouveau" : tous les champs sont requis.
+        # / "New" mode: all fields required.
+        manquants = []
+        for champ in ("new_address_name", "street_address", "postal_code",
+                      "address_locality"):
+            if not (attrs.get(champ) or "").strip():
+                manquants.append(champ)
+        if attrs.get("place_latitude") is None:
+            manquants.append("place_latitude")
+        if attrs.get("place_longitude") is None:
+            manquants.append("place_longitude")
+
+        if manquants:
+            erreurs = {champ: [_("Ce champ est obligatoire.")] for champ in manquants}
+            raise serializers.ValidationError(erreurs)
+
+        attrs["_mode"] = "new"
+        return attrs
+
+
+class WizardEventAdminSerializer(serializers.Serializer):
+    """
+    Step "Event" du wizard admin : mini-form + jauge_max + tags.
+    / Admin event wizard "Event" step: mini-form + jauge_max + tags.
+    """
+
+    name = serializers.CharField(max_length=200)
+    datetime = serializers.DateTimeField()
+    long_description = serializers.CharField(
+        required=False, allow_blank=True, max_length=5000,
+    )
+    image = serializers.ImageField(required=False, allow_null=True)
+    jauge_max = serializers.IntegerField(
+        required=False, allow_null=True, min_value=1,
+    )
+    tags = serializers.CharField(required=False, allow_blank=True)
+
+
+class EventProposalEmailSerializer(serializers.Serializer):
+    """
+    Step 0 du wizard public : email + confirmation + honeypot.
+    / Step 0 of public wizard: email + confirm + honeypot.
+    """
+    email = serializers.EmailField(required=True)
+    email_confirm = serializers.EmailField(required=True)
+    # Honeypot : doit etre vide. Si rempli -> bot.
+    # / Honeypot: must be empty. If filled -> bot.
+    website = serializers.CharField(required=False, allow_blank=True)
+
+    def validate_website(self, value):
+        if value:
+            raise serializers.ValidationError(_("Spam detected."))
+        return value
+
+    def validate(self, attrs):
+        if attrs["email"].lower() != attrs["email_confirm"].lower():
+            raise serializers.ValidationError({
+                "email_confirm": _("Les emails ne correspondent pas."),
+            })
+        return attrs
+
+
+class WizardEventPublicSerializer(serializers.Serializer):
+    """
+    Step 2 du wizard public : strict mini-form.
+    / Public wizard step 2: strict mini-form.
+    """
+    name = serializers.CharField(max_length=200)
+    datetime = serializers.DateTimeField()
+    long_description = serializers.CharField(
+        required=False, allow_blank=True, max_length=5000,
+    )
+    image = serializers.ImageField(required=False, allow_null=True)

@@ -39,6 +39,7 @@ from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
 from ApiBillet.permissions import TenantAdminPermission, CanInitiatePaymentPermission, CanCreateEventPermission
@@ -57,7 +58,9 @@ from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invo
     send_membership_pending_admin, send_membership_pending_user, send_membership_payment_link_user
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
     ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator, EventQuickCreateSerializer, \
-    PaiementHorsLigneSerializer
+    PaiementHorsLigneSerializer, WizardPlaceSerializer, WizardEventAdminSerializer, \
+    EventProposalEmailSerializer, WizardEventPublicSerializer
+from Administration.utils import clean_html as admin_clean_html
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from TiBillet import settings
@@ -1773,12 +1776,10 @@ class EventMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
     def get_permissions(self):
-        # Permissions spécifiques pour les actions d'administration (création d'évènement simple)
-        if self.action in ['simple_add_event', 'simple_create_event', 'address_add_form', 'address_create']:
-            permission_classes = [CanCreateEventPermission]
-        else:
-            permission_classes = [permissions.AllowAny]
-        return [permission() for permission in permission_classes]
+        # EventMVT n'expose plus que des vues publiques (list/retrieve).
+        # Les actions admin de creation d'evenement vivent dans EventWizardAdmin (S3).
+        # / EventMVT now only exposes public views. Admin create actions live in EventWizardAdmin.
+        return [permissions.AllowAny()]
 
     def federated_events_get(self, slug):
         for place in FederatedPlace.objects.all().select_related('tenant'):
@@ -2306,164 +2307,6 @@ class EventMVT(viewsets.ViewSet):
         if request.user.is_authenticated:
             return redirect('/my_account/my_reservations/')
         return redirect('/event/')
-
-    ### Simple add event
-
-    @action(detail=False, methods=['GET'])
-    def simple_add_event(self, request: HttpRequest):
-        """
-        Offcanvas de création rapide d'un évènement SANS billetterie (gratuit ou sans réservation payante).
-        - Accessible uniquement aux admins du tenant
-        - Préremplit l'adresse avec la valeur par défaut de la Configuration
-        - Propose l'autocomplétion des tags (datalist), avec création automatique côté serveur
-        """
-        context = get_context(request)
-        config = Configuration.get_solo()
-        context.update({
-            'default_address': config.postal_address,
-            'addresses': PostalAddress.objects.all().order_by('name', 'address_locality', 'postal_code'),
-        })
-        return render(request, "reunion/views/event/partial/simple_add_event.html", context=context)
-
-    @action(detail=False, methods=['POST'])
-    def simple_create_event(self, request: HttpRequest):
-        """
-        Crée un évènement simple à partir du formulaire Offcanvas (HTMX).
-        Champs supportés:
-        - name, datetime_start, datetime_end, short_description, long_description
-        - postal_address (pk) optionnel
-        - img (image) optionnelle
-        - tags (liste séparée par des virgules)
-        """
-
-        # Aide à l'affichage des erreurs du formulaire avec pré-remplissage des champs
-        def render_form_error(errors_list):
-            context = get_context(request)
-            context.update({
-                'form_errors': errors_list,
-                'default_address': Configuration.get_solo().postal_address,
-                'addresses': PostalAddress.objects.all().order_by('name', 'address_locality', 'postal_code'),
-                'all_tags': Tag.objects.all().order_by('name'),
-                'prefill': {
-                    'name': request.POST.get('name', ''),
-                    'datetime_start': request.POST.get('datetime_start', ''),
-                    'datetime_end': request.POST.get('datetime_end', ''),
-                    'short_description': request.POST.get('short_description', ''),
-                    'long_description': request.POST.get('long_description', ''),
-                    'postal_address': request.POST.get('postal_address', ''),
-                    'tags': request.POST.get('tags', ''),
-                    'jauge_max': request.POST.get('jauge_max', ''),
-                }
-            })
-            return render(request, "reunion/views/event/partial/simple_add_event.html", context=context)
-
-        # Utilise un Serializer DRF pour valider, nettoyer et créer l'évènement
-        serializer = EventQuickCreateSerializer(data=request.POST, context={'request': request})
-        if not serializer.is_valid():
-            # On transforme les erreurs DRF en une liste simple de messages pour le template
-            form_errors = []
-            for field, msgs in serializer.errors.items():
-                if isinstance(msgs, (list, tuple)):
-                    for msg in msgs:
-                        form_errors.append(str(msg))
-                else:
-                    form_errors.append(str(msgs))
-            return render_form_error(form_errors)
-
-        # Sauvegarde de l'évènement avec gestion des erreurs d'intégrité (doublons)
-        try:
-            event = serializer.save()
-        except IntegrityError:
-            # Si un doublon a été créé entre-temps, on renvoie une erreur explicite
-            return render_form_error([_("Un évènement avec ce nom et cette date existe déjà.")])
-
-        # Message succès utilisateur
-        try:
-            messages.add_message(request, messages.SUCCESS, _("Évènement créé !"))
-        except MessageFailure:
-            pass
-
-        context = get_context(request)
-        context.update({'event': event})
-        # Réponse HTMX: après création, on reste dans le flux offcanvas et on recharge
-        # Réponse HTMX: remplace le contenu de l'offcanvas par un message de succès
-        # return render(request, "reunion/views/event/partial/admin_add_success.html", context=context)
-        return HttpResponseClientRedirect("/event/")
-
-    @action(detail=False, methods=['GET'])
-    def address_add_form(self, request: HttpRequest):
-        """
-        Formulaire HTMX pour créer une nouvelle adresse (lieu) depuis l'ajout rapide d'évènement.
-        - Champs simples et noms FALC.
-        - Affiche les textes d'aide du modèle.
-        """
-        context = get_context(request)
-        # Passer un dict d'erreurs vide par défaut pour simplifier le template
-        context.update({'errors': {}, 'prefill': {}})
-        return render(request, "reunion/views/event/partial/address_simple_add.html", context=context)
-
-    @action(detail=False, methods=['POST'])
-    def address_create(self, request: HttpRequest):
-        """
-        Création d'une `PostalAddress` via HTMX avec champs FALC.
-        - Utilise le serializer schema.org existant en mappant nos noms de champs.
-        - En cas d'erreur: renvoie le même formulaire avec les erreurs (400).
-        - En cas de succès: redirige vers le formulaire d'ajout d'évènement.
-        """
-
-        # Mapping FALC -> schema.org pour réutiliser PostalAddressCreateSerializer de api_v2
-        data = {
-            'name': request.POST.get('name') or None,
-            'streetAddress': request.POST.get('street_address', ''),
-            'addressLocality': request.POST.get('address_locality', ''),
-            'postalCode': request.POST.get('postal_code', ''),
-            # Pays: si absent, on emprunte celui de l'adresse par défaut ou "FR"
-            'addressCountry': (getattr(Configuration.get_solo().postal_address, 'address_country', None) or 'FR'),
-        }
-
-        # Import tardif pour éviter les imports circulaires au chargement du module
-        from api_v2.serializers import PostalAddressCreateSerializer
-
-        pa_serializer = PostalAddressCreateSerializer(data=data, context={'request': request})
-        if not pa_serializer.is_valid():
-            # On renvoie le formulaire avec les erreurs structurées par champ
-            context = get_context(request)
-            context.update({
-                'errors': pa_serializer.errors,
-                'prefill': {
-                    'name': request.POST.get('name', ''),
-                    'street_address': request.POST.get('street_address', ''),
-                    'address_locality': request.POST.get('address_locality', ''),
-                    'postal_code': request.POST.get('postal_code', ''),
-                    'is_main': request.POST.get('is_main', ''),
-                }
-            })
-            return render(request, "reunion/views/event/partial/address_simple_add.html", context=context)
-
-        addr = pa_serializer.save()
-
-        # Gestion des fichiers images optionnels (img), et du flag is_main
-        updated_fields = []
-        if hasattr(request, 'FILES'):
-            f = request.FILES.get('img')
-            if f:
-                addr.img = f
-                updated_fields.append('img')
-        # Champ simple booléen
-        is_main_val = request.POST.get('is_main')
-        if is_main_val in ['on', 'true', 'True', '1']:
-            addr.is_main = True
-            updated_fields.append('is_main')
-        if updated_fields:
-            addr.save(update_fields=updated_fields)
-
-        try:
-            messages.add_message(request, messages.SUCCESS, _("Adresse créée !"))
-        except MessageFailure:
-            pass
-
-        # Redirige l'offcanvas vers le formulaire d'évènement
-        return self.simple_add_event(request)
 
 
 '''
@@ -3644,3 +3487,467 @@ class MembershipMVT(viewsets.ViewSet):
 # References :
 #   - `TECH_DOC/SESSIONS/ONBOARD/03-session-recap.md`
 #   - `TECH_DOC/SESSIONS/MOYENS_PAIEMENT/01-stripe-migration-spec.md`
+
+
+class EventWizardAdmin(viewsets.ViewSet):
+    """
+    Wizard admin de creation d'evenement. 2 etapes, full pages.
+    / Admin wizard for event creation. 2 steps, full pages.
+
+    Step 1 : Lieu (adresse existante ou creation via widget carte).
+    Step 2 : Event (mini-form + jauge_max + tags).
+    """
+
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [CanCreateEventPermission]
+
+    SESSION_PREFIX = "event_wizard_admin"
+
+    def _session_key(self, suffix: str) -> str:
+        return f"{self.SESSION_PREFIX}_{suffix}"
+
+    @action(detail=False, methods=["GET", "POST"], url_path="place")
+    def step1_place(self, request):
+        """
+        GET  : rend la page step1.
+        POST : valide + cree l'adresse si necessaire + redirige step2.
+        / GET: renders step1. POST: validates + creates address if needed.
+        """
+        addresses = PostalAddress.objects.all().order_by("name", "address_locality")
+        config = Configuration.get_solo()
+
+        ctx_commun = {
+            "wizard_title": _("Ajouter un evenement"),
+            "wizard_step_label": _("Etape 1 / 2 — Lieu"),
+            "addresses": addresses,
+            "default_address_pk": config.postal_address.pk if config.postal_address else None,
+            "form_action_url": reverse("event-admin-wizard-place"),
+            "next_step_label": _("Continuer vers les details"),
+        }
+
+        if request.method == "GET":
+            context = get_context(request)
+            context.update(ctx_commun)
+            context.update({"initial": {}, "errors": {}})
+            return render(request, "reunion/views/event/wizard/admin_step1_place.html",
+                          context=context)
+
+        # POST
+        serializer = WizardPlaceSerializer(data=request.POST)
+        if not serializer.is_valid():
+            context = get_context(request)
+            context.update(ctx_commun)
+            context.update({
+                "initial": request.POST.dict(),
+                "errors": serializer.errors,
+            })
+            return render(request, "reunion/views/event/wizard/admin_step1_place.html",
+                          context=context, status=422)
+
+        data = serializer.validated_data
+        if data["_mode"] == "existing":
+            postal_address_pk = data["postal_address"]
+        else:
+            # Creation d'une PostalAddress via le serializer schema.org existant.
+            # / Create a PostalAddress via the existing schema.org serializer.
+            from api_v2.serializers import PostalAddressCreateSerializer
+            payload = {
+                "name": data["new_address_name"],
+                "streetAddress": data["street_address"],
+                "addressLocality": data["address_locality"],
+                "postalCode": data["postal_code"],
+                "addressCountry": data.get("address_country") or "France",
+            }
+            pa_ser = PostalAddressCreateSerializer(data=payload, context={"request": request})
+            pa_ser.is_valid(raise_exception=True)
+            addr = pa_ser.save()
+            # Ajouter lat/lng (non gere par le serializer schema.org).
+            # / Add lat/lng (not handled by the schema.org serializer).
+            addr.latitude = data["place_latitude"]
+            addr.longitude = data["place_longitude"]
+            addr.save(update_fields=["latitude", "longitude"])
+            postal_address_pk = str(addr.pk)
+
+        request.session[self._session_key("postal_address_pk")] = postal_address_pk
+        return redirect("event-admin-wizard-event")
+
+    @action(detail=False, methods=["GET", "POST"], url_path="event")
+    def step2_event(self, request):
+        """
+        Garde : postal_address_pk en session sinon redirect step1.
+        GET : rend le mini-form. POST : cree l'event publie.
+        / Guard: needs postal_address_pk in session. GET: renders form. POST: creates event.
+        """
+        postal_address_pk = request.session.get(self._session_key("postal_address_pk"))
+        if not postal_address_pk:
+            return redirect("event-admin-wizard-place")
+
+        try:
+            postal_address = PostalAddress.objects.get(pk=postal_address_pk)
+        except PostalAddress.DoesNotExist:
+            request.session.pop(self._session_key("postal_address_pk"), None)
+            return redirect("event-admin-wizard-place")
+
+        all_tags = Tag.objects.all().order_by("name")
+
+        ctx_commun = {
+            "wizard_title": _("Ajouter un evenement"),
+            "wizard_step_label": _("Etape 2 / 2 — Details"),
+            "postal_address": postal_address,
+            "all_tags": all_tags,
+        }
+
+        if request.method == "GET":
+            context = get_context(request)
+            context.update(ctx_commun)
+            context.update({"initial": {}, "errors": {}})
+            return render(request, "reunion/views/event/wizard/admin_step2_event.html",
+                          context=context)
+
+        # POST
+        # Note : pour les ImageField on doit donner request.POST + request.FILES.
+        # / For ImageField support: pass request.POST + request.FILES.
+        data_combined = request.POST.copy()
+        for f_key in request.FILES:
+            data_combined[f_key] = request.FILES[f_key]
+        serializer = WizardEventAdminSerializer(data=data_combined)
+        if not serializer.is_valid():
+            context = get_context(request)
+            context.update(ctx_commun)
+            context.update({
+                "initial": request.POST.dict(),
+                "errors": serializer.errors,
+            })
+            return render(request, "reunion/views/event/wizard/admin_step2_event.html",
+                          context=context, status=422)
+
+        validated = serializer.validated_data
+        event = Event(
+            name=validated["name"].strip(),
+            datetime=validated["datetime"],
+            long_description=admin_clean_html(validated.get("long_description") or ""),
+            postal_address=postal_address,
+            created_by=request.user if request.user.is_authenticated else None,
+            published=True,
+            is_proposal=False,
+        )
+        if validated.get("image"):
+            event.img = validated["image"]
+        if validated.get("jauge_max"):
+            event.jauge_max = validated["jauge_max"]
+            event.show_gauge = True
+        event.save()
+
+        # Tags : split virgule/point-virgule, get_or_create chaque.
+        # / Tags: split by comma/semicolon, get_or_create each.
+        tags_input = validated.get("tags", "")
+        if tags_input:
+            for tname in re.split(r"[,;]", tags_input):
+                tname = tname.strip()
+                if not tname:
+                    continue
+                # Ne pas utiliser "_" pour eviter d'ecraser _() de traduction.
+                # / Avoid bare "_" which would shadow gettext _.
+                tag_obj, _tag_created = Tag.objects.get_or_create(name=tname)
+                event.tag.add(tag_obj)
+
+        # Rattacher le produit FREERES si jauge_max
+        # / Attach FREERES product if jauge_max
+        if validated.get("jauge_max"):
+            free_res = Product.objects.filter(
+                categorie_article=Product.FREERES, publish=True, archive=False
+            ).first()
+            if free_res:
+                event.products.add(free_res)
+
+        # Nettoyer la session / Clear session
+        for suffix in ("postal_address_pk",):
+            request.session.pop(self._session_key(suffix), None)
+
+        messages.add_message(request, messages.SUCCESS, _("Evenement cree !"))
+        return redirect(reverse("event-detail", kwargs={"pk": event.slug or event.uuid}))
+
+
+class EventWizardPublic(viewsets.ViewSet):
+    """
+    Wizard public anonyme de proposition d'evenement.
+    OTP email + 2 steps (place, event) + done.
+
+    L'event est cree avec published=False, is_proposal=True, soumis a
+    moderation admin (badge sidebar + filtre + action bulk).
+
+    / Public anonymous event proposal wizard.
+    OTP email + 2 steps + done.
+    """
+
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    SESSION_PREFIX = "event_proposal"
+    OTP_PREFIX = "event_proposal"  # cle session OTP
+
+    def _session_key(self, suffix: str) -> str:
+        return f"{self.SESSION_PREFIX}_{suffix}"
+
+    def _otp(self, request):
+        from AuthBillet.otp_session import OtpSession
+        return OtpSession(request, prefix=self.OTP_PREFIX)
+
+    def _require_otp_confirmed(self, request):
+        """Garde : retourne un Redirect si OTP non confirme, None sinon.
+        / Guard: returns Redirect if OTP not confirmed, None otherwise."""
+        if not self._otp(request).is_confirmed():
+            return redirect("event-propose-email")
+        return None
+
+    @action(detail=False, methods=["GET", "POST"], url_path="email",
+            throttle_classes=[AnonRateThrottle])
+    def step0_email(self, request):
+        if request.method == "GET":
+            context = get_context(request)
+            context.update({
+                "wizard_title": _("Proposer un evenement"),
+                "wizard_step_label": _("Etape 1 — Votre email"),
+                "initial": {}, "errors": {},
+            })
+            return render(request, "reunion/views/event/wizard/public_step0_email.html",
+                          context=context)
+
+        # POST
+        serializer = EventProposalEmailSerializer(data=request.POST)
+        if not serializer.is_valid():
+            context = get_context(request)
+            context.update({
+                "wizard_title": _("Proposer un evenement"),
+                "wizard_step_label": _("Etape 1 — Votre email"),
+                "initial": request.POST.dict(),
+                "errors": serializer.errors,
+            })
+            return render(request, "reunion/views/event/wizard/public_step0_email.html",
+                          context=context, status=422)
+
+        config = Configuration.get_solo()
+        self._otp(request).start(
+            email=serializer.validated_data["email"],
+            libelle_action=str(_("Proposer un evenement")),
+            nom_organisation=config.organisation,
+        )
+        return redirect("event-propose-verify")
+
+    @action(detail=False, methods=["GET", "POST"], url_path="verify")
+    def step0_verify(self, request):
+        otp = self._otp(request)
+        if not otp.email():
+            return redirect("event-propose-email")
+
+        if request.method == "GET":
+            context = get_context(request)
+            context.update({
+                "wizard_title": _("Proposer un evenement"),
+                "wizard_step_label": _("Etape 2 — Code de verification"),
+                "email": otp.email(),
+                "attempts_remaining": otp.attempts_remaining(),
+                "can_resend": otp.can_resend(),
+                "seconds_before_resend": otp.seconds_before_resend(),
+                "errors": {},
+            })
+            return render(request, "reunion/views/event/wizard/public_step0_verify.html",
+                          context=context)
+
+        # POST
+        if otp.verify(request.POST.get("otp", "").strip()):
+            return redirect("event-propose-place")
+
+        # Echec : si max attempts atteint, reset + retour step0
+        # / Failure: if max attempts reached, reset + back to step0
+        if otp.attempts_remaining() == 0:
+            otp.reset()
+            messages.add_message(request, messages.ERROR,
+                _("Trop de tentatives. Recommencez avec votre email."))
+            return redirect("event-propose-email")
+
+        context = get_context(request)
+        context.update({
+            "wizard_title": _("Proposer un evenement"),
+            "wizard_step_label": _("Etape 2 — Code de verification"),
+            "email": otp.email(),
+            "attempts_remaining": otp.attempts_remaining(),
+            "can_resend": otp.can_resend(),
+            "seconds_before_resend": otp.seconds_before_resend(),
+            "errors": {"otp": [_("Code incorrect ou expire.")]},
+        })
+        return render(request, "reunion/views/event/wizard/public_step0_verify.html",
+                      context=context, status=422)
+
+    @action(detail=False, methods=["POST"], url_path="resend",
+            throttle_classes=[AnonRateThrottle])
+    def step0_resend(self, request):
+        otp = self._otp(request)
+        if not otp.email():
+            return redirect("event-propose-email")
+        if not otp.can_resend():
+            messages.add_message(request, messages.WARNING,
+                _("Patientez %(s)s secondes avant de redemander un code.") % {
+                    "s": otp.seconds_before_resend(),
+                })
+            return redirect("event-propose-verify")
+
+        config = Configuration.get_solo()
+        otp.start(
+            email=otp.email(),
+            libelle_action=str(_("Proposer un evenement")),
+            nom_organisation=config.organisation,
+        )
+        messages.add_message(request, messages.SUCCESS,
+            _("Nouveau code envoye."))
+        return redirect("event-propose-verify")
+
+    @action(detail=False, methods=["GET", "POST"], url_path="place")
+    def step1_place(self, request):
+        guard = self._require_otp_confirmed(request)
+        if guard:
+            return guard
+
+        # Logique identique a EventWizardAdmin.step1_place sauf URL et
+        # cle session. On factorise via une fonction _handle_place.
+        # / Same logic as admin step1 except URL + session prefix.
+        return self._handle_place(request,
+            template="reunion/views/event/wizard/public_step1_place.html",
+            form_action_url=reverse("event-propose-place"),
+            next_step_url=reverse("event-propose-event"),
+            wizard_step_label=_("Etape 3 / 4 — Lieu"),
+        )
+
+    def _handle_place(self, request, template, form_action_url,
+                       next_step_url, wizard_step_label):
+        """
+        Factorisation de la logique step "Lieu" entre admin et public.
+        / Shared "Place" step logic between admin and public wizards.
+        """
+        addresses = PostalAddress.objects.all().order_by("name", "address_locality")
+        config = Configuration.get_solo()
+
+        if request.method == "GET":
+            context = get_context(request)
+            context.update({
+                "wizard_title": _("Proposer un evenement"),
+                "wizard_step_label": wizard_step_label,
+                "addresses": addresses,
+                "default_address_pk": config.postal_address.pk if config.postal_address else None,
+                "form_action_url": form_action_url,
+                "next_step_label": _("Continuer"),
+                "initial": {}, "errors": {},
+            })
+            return render(request, template, context=context)
+
+        serializer = WizardPlaceSerializer(data=request.POST)
+        if not serializer.is_valid():
+            context = get_context(request)
+            context.update({
+                "wizard_title": _("Proposer un evenement"),
+                "wizard_step_label": wizard_step_label,
+                "addresses": addresses,
+                "default_address_pk": config.postal_address.pk if config.postal_address else None,
+                "form_action_url": form_action_url,
+                "next_step_label": _("Continuer"),
+                "initial": request.POST.dict(),
+                "errors": serializer.errors,
+            })
+            return render(request, template, context=context, status=422)
+
+        data = serializer.validated_data
+        if data["_mode"] == "existing":
+            postal_address_pk = data["postal_address"]
+        else:
+            from api_v2.serializers import PostalAddressCreateSerializer
+            payload = {
+                "name": data["new_address_name"],
+                "streetAddress": data["street_address"],
+                "addressLocality": data["address_locality"],
+                "postalCode": data["postal_code"],
+                "addressCountry": data.get("address_country") or "France",
+            }
+            pa_ser = PostalAddressCreateSerializer(data=payload, context={"request": request})
+            pa_ser.is_valid(raise_exception=True)
+            addr = pa_ser.save()
+            addr.latitude = data["place_latitude"]
+            addr.longitude = data["place_longitude"]
+            addr.save(update_fields=["latitude", "longitude"])
+            postal_address_pk = str(addr.pk)
+
+        request.session[self._session_key("postal_address_pk")] = postal_address_pk
+        return redirect(next_step_url)
+
+    @action(detail=False, methods=["GET", "POST"], url_path="event")
+    def step2_event(self, request):
+        guard = self._require_otp_confirmed(request)
+        if guard:
+            return guard
+
+        postal_address_pk = request.session.get(self._session_key("postal_address_pk"))
+        if not postal_address_pk:
+            return redirect("event-propose-place")
+
+        try:
+            postal_address = PostalAddress.objects.get(pk=postal_address_pk)
+        except PostalAddress.DoesNotExist:
+            return redirect("event-propose-place")
+
+        if request.method == "GET":
+            context = get_context(request)
+            context.update({
+                "wizard_title": _("Proposer un evenement"),
+                "wizard_step_label": _("Etape 4 / 4 — Details"),
+                "postal_address": postal_address,
+                "initial": {}, "errors": {},
+            })
+            return render(request, "reunion/views/event/wizard/public_step2_event.html",
+                          context=context)
+
+        # POST
+        data_combined = request.POST.copy()
+        for fkey in request.FILES:
+            data_combined[fkey] = request.FILES[fkey]
+        serializer = WizardEventPublicSerializer(data=data_combined)
+        if not serializer.is_valid():
+            context = get_context(request)
+            context.update({
+                "wizard_title": _("Proposer un evenement"),
+                "wizard_step_label": _("Etape 4 / 4 — Details"),
+                "postal_address": postal_address,
+                "initial": request.POST.dict(),
+                "errors": serializer.errors,
+            })
+            return render(request, "reunion/views/event/wizard/public_step2_event.html",
+                          context=context, status=422)
+
+        validated = serializer.validated_data
+        event = Event(
+            name=validated["name"].strip(),
+            datetime=validated["datetime"],
+            long_description=admin_clean_html(validated.get("long_description") or ""),
+            postal_address=postal_address,
+            created_by=None,
+            published=False,
+            is_proposal=True,
+        )
+        if validated.get("image"):
+            event.img = validated["image"]
+        event.save()
+
+        # Reset complet : on libere toute la session du wizard public
+        # / Full reset: release all wizard session keys
+        request.session.pop(self._session_key("postal_address_pk"), None)
+        self._otp(request).reset()
+
+        return redirect("event-propose-done")
+
+    @action(detail=False, methods=["GET"], url_path="done")
+    def done(self, request):
+        context = get_context(request)
+        context.update({
+            "wizard_title": _("Merci !"),
+            "wizard_step_label": "",
+        })
+        return render(request, "reunion/views/event/wizard/public_done.html",
+                      context=context)

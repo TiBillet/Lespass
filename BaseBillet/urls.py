@@ -1,3 +1,4 @@
+from django.shortcuts import redirect
 from django.templatetags.static import static
 from django.urls import path, include
 from django.views.generic import RedirectView
@@ -26,6 +27,37 @@ router.register(r'event', base_view.EventMVT, basename='event')
 router.register(r'home', base_view.HomeViewset, basename='home')
 router.register(r'login', base_view.TiBilletLogin, basename='login-viewset')
 router.register(r'specialadminaction', base_view.SpecialAdminAction, basename='specialadminaction')
+
+# Wizard admin de creation d'evenement (S3 EVENT_WIZARD).
+# / Admin event creation wizard.
+event_wizard_admin_step1 = base_view.EventWizardAdmin.as_view({
+    "get": "step1_place", "post": "step1_place",
+})
+event_wizard_admin_step2 = base_view.EventWizardAdmin.as_view({
+    "get": "step2_event", "post": "step2_event",
+})
+
+# Wizard public anonyme de proposition d'evenement (S4 EVENT_WIZARD).
+# / Public anonymous event proposal wizard.
+event_wizard_public_email = base_view.EventWizardPublic.as_view({
+    "get": "step0_email", "post": "step0_email",
+})
+event_wizard_public_verify = base_view.EventWizardPublic.as_view({
+    "get": "step0_verify", "post": "step0_verify",
+})
+event_wizard_public_resend = base_view.EventWizardPublic.as_view({
+    "post": "step0_resend",
+})
+event_wizard_public_place = base_view.EventWizardPublic.as_view({
+    "get": "step1_place", "post": "step1_place",
+})
+event_wizard_public_event = base_view.EventWizardPublic.as_view({
+    "get": "step2_event", "post": "step2_event",
+})
+event_wizard_public_done = base_view.EventWizardPublic.as_view({
+    "get": "done",
+})
+
 urlpatterns = [
     # Dynamic robots.txt - Access at: https://yourdomain.com/robots.txt
     # This automatically includes a reference to the sitemap at: https://yourdomain.com/sitemap.xml
@@ -92,6 +124,20 @@ urlpatterns = [
     # path("tenant/informations/", base_view.tenant_informations, name='tenant_informations'),
     # path("tenant/summary/", base_view.tenant_summary, name='tenant_summary'),
     # path('test_jinja/', base_view.test_jinja, name='test_jinja'),
+    # Wizard admin event (S3 EVENT_WIZARD).
+    path("event/admin/wizard/place/", event_wizard_admin_step1, name="event-admin-wizard-place"),
+    path("event/admin/wizard/event/", event_wizard_admin_step2, name="event-admin-wizard-event"),
+
+    # Wizard public anonyme de proposition d'evenement (S4 EVENT_WIZARD).
+    # / Public anonymous event proposal wizard.
+    path("event/propose/", lambda r: redirect("event-propose-email"), name="event-propose"),
+    path("event/propose/email/", event_wizard_public_email, name="event-propose-email"),
+    path("event/propose/verify/", event_wizard_public_verify, name="event-propose-verify"),
+    path("event/propose/resend/", event_wizard_public_resend, name="event-propose-resend"),
+    path("event/propose/place/", event_wizard_public_place, name="event-propose-place"),
+    path("event/propose/event/", event_wizard_public_event, name="event-propose-event"),
+    path("event/propose/done/", event_wizard_public_done, name="event-propose-done"),
+
     path('', base_view.index, name="index"),
 ]
 

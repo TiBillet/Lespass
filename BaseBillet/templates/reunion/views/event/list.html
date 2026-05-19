@@ -46,20 +46,26 @@
                                 aria-controls="tagFiltersCollapse">
                             <i class="bi bi-sliders"></i> {% translate 'Filtres' %}
                         </button>
+
+                        {# Bouton admin (admin uniquement) — wizard 2 etapes #}
+                        {# / Admin button (admin only) — 2-step wizard #}
                         {% if user|can_create_event_tag %}
-                            <button
-                                class="btn btn-sm btn-success"
-                                type="button"
-                                hx-get="/event/simple_add_event/"
-                                hx-target="#offcanvas-event-admin"
-                                hx-swap="innerHTML"
-                                data-bs-toggle="offcanvas"
-                                data-bs-target="#adminAddEventPanel"
-                                aria-controls="adminAddEventPanel">
-                                <i class="bi bi-plus-circle"></i>
+                            <a class="btn btn-sm btn-success"
+                               href="{% url 'event-admin-wizard-place' %}"
+                               data-testid="btn-event-admin-add">
+                                <i class="bi bi-plus-circle" aria-hidden="true"></i>
                                 {% translate 'Ajouter un évènement' %}
-                            </button>
+                            </a>
                         {% endif %}
+
+                        {# Bouton public (tout le monde) — wizard avec OTP #}
+                        {# / Public button (everyone) — wizard with OTP #}
+                        <a class="btn btn-sm btn-outline-secondary"
+                           href="{% url 'event-propose-email' %}"
+                           data-testid="btn-event-public-propose">
+                            <i class="bi bi-megaphone" aria-hidden="true"></i>
+                            {% translate 'Proposer un évènement' %}
+                        </a>
                     </div>
                 </div>
 
@@ -94,20 +100,5 @@
     <!-- event list -->
     <div class="container-lg" id="event_list">
         {% include "reunion/views/event/partial/list.html" %}
-    </div>
-
-    {# Offcanvas admin pour la création rapide d'évènements #}
-    <style>
-        #adminAddEventPanel { --bs-offcanvas-width: 100vw; }
-        @media (min-width: 992px) { #adminAddEventPanel { --bs-offcanvas-width: 800px; } }
-    </style>
-    <div class="offcanvas-start offcanvas" tabindex="-1" id="adminAddEventPanel" aria-labelledby="adminAddEventPanelLabel">
-        <div class="offcanvas-header">
-            <h5 class="offcanvas-title" id="adminAddEventPanelLabel">{% translate 'Ajouter un évènement' %}</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% trans 'Close' %}"></button>
-        </div>
-        <div class="offcanvas-body" id="offcanvas-event-admin">
-            {# Le contenu du formulaire est chargé ici via HTMX #}
-        </div>
     </div>
 {% endblock %}

@@ -1,0 +1,10 @@
+{% extends "reunion/views/event/wizard/_base.html" %}
+{% load i18n %}
+
+{% block step_content %}
+<p class="text-muted mb-3">
+    {% translate "Choisissez l'adresse de l'evenement, ou creez un nouveau lieu via la carte." %}
+</p>
+
+{% include "reunion/views/event/wizard/_form_lieu.html" %}
+{% endblock %}

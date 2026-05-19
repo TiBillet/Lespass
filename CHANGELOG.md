@@ -1,5 +1,63 @@
 # Changelog / Journal des modifications
 
+## Wizards de création et proposition d'évènement / Event creation & proposal wizards
+
+**Date :** 2026-05-19
+**Migration :** Oui (`BaseBillet/migrations/0209_event_is_proposal.py`, additive, default=False)
+**Contributeurs / Contributors :** JonasFW13 (Jonas) + Claude Opus 4.7
+
+**Quoi / What :** Refonte de la création d'évènement en wizard 2 étapes (admin)
+avec carte interactive Leaflet pour les nouvelles adresses. Ajout d'un wizard
+public anonyme protégé par OTP email permettant à tout visiteur de proposer un
+évènement soumis à modération admin (badge sidebar Unfold + filtre + action bulk).
+
+**Pourquoi / Why :** Améliorer l'UX admin (offcanvas → wizard plus FALC) et
+ouvrir la plateforme aux contributions publiques avec modération. Mettre en
+place un service OTP DRY (`AuthBillet/otp_service.py`) réutilisable pour de
+futurs flows (login OTP, SSO).
+
+### Fichiers modifiés / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `AuthBillet/otp_service.py` | NOUVEAU — service OTP stateless DRY |
+| `AuthBillet/otp_session.py` | NOUVEAU — helper session HTTP |
+| `AuthBillet/templates/auth/emails/otp_code.{html,txt}` | NOUVEAU — templates email génériques |
+| `BaseBillet/models.py` | +`Event.is_proposal` (BooleanField default=False) |
+| `BaseBillet/migrations/0209_event_is_proposal.py` | NOUVEAU — migration additive |
+| `BaseBillet/views.py` | +`EventWizardAdmin`, +`EventWizardPublic` ViewSets. Suppression `EventMVT.simple_*` |
+| `BaseBillet/validators.py` | +4 serializers wizard |
+| `BaseBillet/urls.py` | +8 routes (admin + public) |
+| `BaseBillet/templates/reunion/views/event/wizard/` | NOUVEAU (9 templates) |
+| `BaseBillet/templates/reunion/views/event/list.html` | Suppression offcanvas, ajout 2 boutons (admin + public) |
+| `BaseBillet/templates/faire_festival/views/event/list.html` | Adaptation skin Faire Festival |
+| `BaseBillet/templates/reunion/views/event/partial/simple_add_event.html` | supprimé |
+| `BaseBillet/templates/reunion/views/event/partial/address_simple_add.html` | supprimé |
+| `Administration/admin/dashboard.py` | +`event_proposals_badge_callback` + badge sur item Events |
+| `Administration/admin_tenant.py` | +`IsProposalFilter` + action `approuver_propositions` sur `EventAdmin` |
+| `tests/pytest/test_otp_service.py` | NOUVEAU — 16 tests |
+| `tests/pytest/test_otp_session.py` | NOUVEAU — 12 tests |
+| `tests/pytest/test_event_is_proposal_field.py` | NOUVEAU — 2 tests |
+| `tests/pytest/test_event_wizard_admin.py` | NOUVEAU — 9 tests |
+| `tests/pytest/test_event_wizard_public.py` | NOUVEAU — 12 tests |
+| `tests/pytest/test_event_proposal_admin.py` | NOUVEAU — 5 tests |
+| `TECH_DOC/SESSIONS/EVENT_WIZARD/` | NOUVEAU hub : INDEX + SPEC + PLAN |
+| `TECH_DOC/SESSIONS/OTP/` | NOUVEAU hub : INDEX + SPEC |
+| `A TESTER et DOCUMENTER/event-wizards.md` | NOUVEAU — scénarios de test manuel |
+
+### Décisions clés / Key decisions
+
+- **Service OTP DRY** : `OtpService` stateless + `OtpSession` HTTP helper, réutilisable (login OTP, SSO, migration onboard future).
+- **Anti-spam** : Throttle DRF (3 demandes/heure/IP) + honeypot champ `website` + garde de session entre les étapes.
+- **Modération** : `Event.is_proposal=True, published=False` → badge sidebar Unfold + filtre `Proposals pending` + action bulk `Approve and publish`.
+- **Compatibilité** : onboard inchangé (logique OTP custom conservée), events existants restent `is_proposal=False` (défaut migration).
+
+### Migration
+
+- **Migration nécessaire / Migration required:** Oui
+- `BaseBillet/migrations/0209_event_is_proposal.py` (additive, default=False, aucune data migration)
+
+
 ## SEO Chantier 05 : carte explorer ROOT — 1 marker par PostalAddress / SEO Chantier 05: 1 marker per PostalAddress on ROOT explorer map
 
 **Date :** 2026-05-17

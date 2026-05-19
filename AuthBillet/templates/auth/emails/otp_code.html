@@ -1,0 +1,33 @@
+{% load i18n %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ libelle_action }}</title>
+</head>
+<body style="font-family: Arial, sans-serif; background-color: #f8f9fa; margin: 0; padding: 24px;">
+    <div style="max-width: 480px; margin: 0 auto; background-color: #ffffff; padding: 32px; border-radius: 8px; border: 1px solid #dee2e6;">
+        <h1 style="margin: 0 0 16px; font-size: 20px; color: #212529;">
+            {{ libelle_action }}
+        </h1>
+        <p style="margin: 0 0 16px; color: #495057; font-size: 14px;">
+            {% translate "Voici votre code de verification :" %}
+        </p>
+        <div style="font-family: 'Courier New', monospace; font-size: 32px; letter-spacing: 8px; text-align: center; background-color: #f1f3f5; padding: 20px; border-radius: 6px; color: #212529; font-weight: bold;">
+            {{ code }}
+        </div>
+        <p style="margin: 16px 0 0; color: #6c757d; font-size: 13px;">
+            {% blocktranslate with minutes=expires_minutes %}Ce code est valable {{ minutes }} minutes.{% endblocktranslate %}
+        </p>
+        <p style="margin: 8px 0 0; color: #6c757d; font-size: 13px;">
+            {% translate "Si vous n'avez pas demande ce code, ignorez ce message." %}
+        </p>
+        {% if nom_organisation %}
+        <hr style="border: none; border-top: 1px solid #dee2e6; margin: 24px 0 16px;">
+        <p style="margin: 0; color: #adb5bd; font-size: 12px; text-align: center;">
+            {{ nom_organisation }}
+        </p>
+        {% endif %}
+    </div>
+</body>
+</html>

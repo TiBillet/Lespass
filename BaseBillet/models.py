@@ -1470,6 +1470,14 @@ class Event(models.Model):
     full_url = models.URLField(blank=True, null=True)
 
     published = models.BooleanField(default=True, verbose_name=_("Publish"))
+    is_proposal = models.BooleanField(
+        default=False,
+        verbose_name=_("Public proposal"),
+        help_text=_(
+            "Event submitted via the public proposal wizard, "
+            "awaiting admin validation."
+        ),
+    )
     archived = models.BooleanField(default=False, verbose_name=_("Archive"))
     private = models.BooleanField(default=False, verbose_name=_("Non-federable event"),
                                   help_text=_("Will not be displayed on shared calendars."))

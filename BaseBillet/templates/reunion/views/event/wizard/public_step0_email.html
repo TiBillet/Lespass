@@ -1,0 +1,49 @@
+{% extends "reunion/views/event/wizard/_base.html" %}
+{% load i18n %}
+
+{% block step_content %}
+<p class="text-muted mb-3">
+    {% translate "Pour proposer un evenement, indiquez votre email. Vous recevrez un code a 6 chiffres pour confirmer." %}
+</p>
+
+{% if errors %}
+<div class="alert alert-danger mb-3" role="alert">
+    <ul class="mb-0 small">
+        {% for field, msgs in errors.items %}
+            {% if field != "website" %}<li><strong>{{ field }}</strong> : {{ msgs|join:" / " }}</li>{% endif %}
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<form method="post" action="{% url 'event-propose-email' %}"
+      novalidate data-testid="propose-email-form" class="vstack gap-3">
+    {% csrf_token %}
+
+    {# Honeypot : invisible pour les humains, visible pour les bots. #}
+    {# / Honeypot: invisible to humans, visible to bots. #}
+    <div style="position:absolute; left:-9999px;" aria-hidden="true">
+        <label for="website">Website</label>
+        <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
+    </div>
+
+    <div>
+        <label for="email" class="form-label">{% translate "Email" %} <span class="text-danger">*</span></label>
+        <input type="email" id="email" name="email" required class="form-control"
+               value="{{ initial.email|default:'' }}" data-testid="propose-email">
+    </div>
+
+    <div>
+        <label for="email_confirm" class="form-label">{% translate "Confirmer l'email" %} <span class="text-danger">*</span></label>
+        <input type="email" id="email_confirm" name="email_confirm" required class="form-control"
+               value="{{ initial.email_confirm|default:'' }}" data-testid="propose-email-confirm">
+    </div>
+
+    <div class="d-flex justify-content-between pt-2">
+        <a href="{% url 'event-list' %}" class="btn btn-link">{% translate "Annuler" %}</a>
+        <button type="submit" class="btn btn-primary btn-lg" data-testid="propose-email-submit">
+            {% translate "Envoyer le code" %} <i class="bi bi-envelope ms-1" aria-hidden="true"></i>
+        </button>
+    </div>
+</form>
+{% endblock %}
