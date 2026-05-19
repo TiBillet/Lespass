@@ -754,7 +754,9 @@ class Configuration(SingletonModel):
                 tenant = connection.tenant
                 tenant_url = tenant.get_primary_domain().domain
                 msg = _('Link your stripe account to accept payment')
-                return format_html(f"<a href='https://{tenant_url}/tenant/onboard_stripe_from_config'>{msg}</a>")
+                return format_html(f"<a href='https://{tenant_url}/tenant/onboard_stripe_from_config' class='font-medium inline-flex group items-center gap-1 relative rounded-default justify-center whitespace-nowrap cursor-pointer px-3 py-2 border border-base-200 bg-primary-600 border-transparent text-white hover:bg-primary-600/80 w-full lg:w-auto'>"
+                                   f"{msg}<span class='material-symbols-outlined text-icon text-sm align-center text-white'>link</span>"
+                                   f"</a>")
             return _("Stripe connected")
         except Exception as e:
             logger.error(_("Stripe error, check admin"))
@@ -956,7 +958,7 @@ class Product(models.Model):
 
     NONE, BILLET, PACK, RECHARGE_CASHLESS = 'N', 'B', 'P', 'R'
     RECHARGE_FEDERATED, VETEMENT, MERCH, ADHESION, BADGE = 'S', 'T', 'M', 'A', 'G'
-    DON, FREERES, NEED_VALIDATION = 'D', 'F', 'V'
+    DON, FREERES, NEED_VALIDATION = 'D', 'F', 'V' # DON / Reservation gratuite / Besoin de validation
     QRCODE_MA = 'Q'
 
     # FROM V2 : TODO

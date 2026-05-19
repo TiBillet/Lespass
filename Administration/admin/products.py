@@ -757,13 +757,8 @@ class ProductAdminCustomForm(ModelForm):
         label=_("Product type"),
     )
 
-    def clean_categorie_article(self):
-        cleaned_data = self.cleaned_data
-        categorie = cleaned_data.get("categorie_article")
-        if categorie == Product.NONE:
-            raise forms.ValidationError(
-                _("Please add at least one category to this product.")
-            )
+    def clean(self):
+        categorie = self.data.get("categorie_article")
 
         # Vérification que la clé Stripe est opérationnelle :
         if categorie != Product.FREERES:
@@ -774,11 +769,9 @@ class ProductAdminCustomForm(ModelForm):
                         "Your Stripe account is not activated. To create paid items, please go to Settings/Stripe/Onboard."
                     )
                 )
-        return categorie
 
-    def clean(self):
         # Vérification qu'il existe au moins un tarif si produit payant
-        if self.data.get("categorie_article") not in [Product.FREERES, Product.BADGE]:
+        if categorie not in [Product.FREERES, Product.BADGE]:
             try:
                 # récupération du dictionnaire data pour vérifier qu'on a bien au moin un tarif dans le inline :
                 if int(self.data.getlist("prices-TOTAL_FORMS")[0]) > 0:
@@ -1238,8 +1231,11 @@ class MembershipProductAdmin(HelpDisplayMixin, ProductAdmin):
     inlines = [MembershipPriceInline, ProductFormFieldInline]
     change_form_after_template = "admin/product/inline_conditional_fields.html"
 
-    help_text = HELP_MESSAGES_DICT["ADHESION_PRODUIT"]["help_text"]
-    help_url = HELP_MESSAGES_DICT["ADHESION_PRODUIT"]["help_url"]
+    list_help_text = HELP_MESSAGES_DICT["ADHESION_PRODUIT"]["list_help_text"]
+    list_help_url = HELP_MESSAGES_DICT["ADHESION_PRODUIT"]["list_help_url"]
+
+    changeform_help_text = HELP_MESSAGES_DICT["ADHESION_PRODUIT"]["changeform_help_text"]
+    changeform_help_url = HELP_MESSAGES_DICT["ADHESION_PRODUIT"]["changeform_help_url"]
 
     list_filter = ["publish", ProductArchiveFilter]  # categorie_article inutile, deja filtre
 
