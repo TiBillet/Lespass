@@ -23,6 +23,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.throttling import AnonRateThrottle
 
 from controlvanne.models import (
     CarteMaintenance,
@@ -655,6 +656,10 @@ class TireuseViewSet(viewsets.ViewSet):
 # AuthKioskView — POST token API → cookie session Django
 # ──────────────────────────────────────────────────────────────────────
 
+class KioskBridgeThrottle(AnonRateThrottle):
+    """Anti-brute-force sur le kiosk auth : 10 req/min par IP. / Brute-force protection on kiosk auth: 10 req/min per IP."""
+    rate = "10/min"
+    scope = "controlvanne_kiosk_bridge"
 
 class AuthKioskView(APIView):
     """
@@ -673,6 +678,7 @@ class AuthKioskView(APIView):
     """
 
     permission_classes = [HasTireuseAccess]
+    throttle_classes = [KioskBridgeThrottle]
 
     def post(self, request):
         # La permission HasTireuseAccess a déjà vérifié la clé API
@@ -686,6 +692,7 @@ class AuthKioskView(APIView):
         # The Pi uses this session for WebSocket and kiosk
         if not request.session.session_key:
             request.session.create()
+            request.session.set_expiry(60 * 60 * 12)   # 12h — aligné avec laboutik
 
         # Marquer la session comme authentifiée pour le kiosk
         # / Mark the session as authenticated for the kiosk
@@ -704,10 +711,22 @@ class AuthKioskView(APIView):
         kiosk_token = str(uuid_module.uuid4())
         # Stocker le token dans le cache comme autorisation valide (TTL 5 minutes)
         # La valeur True indique simplement que le token est valide.
-        # Chromium navigue vers /kiosk-token/<token>/ → Django valide, marque la session, redirige.
+        # Le token est consommé soit par KioskTokenView (échange /kiosk-token/<token>/),
+        # soit par _verifier_authentification_kiosk (query string ?kiosk_token=<token>
+        # sur la page kiosk — c'est le path utilisé par le Pi en main.py:81).
         # / Store the token in cache as a valid authorization (TTL 5 minutes)
-        # The True value simply indicates the token is valid.
-        # Chromium navigates to /kiosk-token/<token>/ → Django validates, marks session, redirects.
+        # The True value simply ind
+        # icates the token is valid.
+        # The token is consumed either by KioskTokenView or by _verifier_authentification_kiosk
+        # (?kiosk_token=<token> query string — actual path used by the Pi).
+        #
+        # IMPORTANT : ce cache doit être partagé entre tous les workers (Redis ou PgCache).
+        # Avec LocMemCache (default Django sans config), le token créé par un worker
+        # ne sera pas trouvé par un autre worker — résultat : 403 silencieux en prod multi-worker.
+        # Vérifier que CACHES["default"] pointe sur Redis dans les settings de prod.
+        # / IMPORTANT: this cache must be shared across all workers (Redis or PgCache).
+        # With LocMemCache (Django default without config), a token created by worker A
+        # will not be found by worker B — silent 403 in multi-worker prod.
         cache.set(f"kiosk_token:{kiosk_token}", True, timeout=300)
 
         return Response(
@@ -768,6 +787,7 @@ class KioskTokenView(APIView):
         # Django's SessionMiddleware will send Set-Cookie: sessionid=... in the HTTP response
         # Chromium stores this cookie natively — no more SQLite injection needed
         request.session["controlvanne_authenticated"] = True
+        request.session.set_expiry(60 * 60 * 12)   # 12h — aligné avec laboutik
         request.session.save()
 
         # Retourner une page HTML avec meta-refresh plutôt qu'un 302
@@ -779,18 +799,21 @@ class KioskTokenView(APIView):
         # in the next request. With 200 + meta-refresh, the cookie is stored first,
         # then the navigation to next_url sends it correctly.
         from django.http import HttpResponse
+        from django.utils.encoding import iri_to_uri
+        from django.utils.html import escape
 
         next_url = request.GET.get("next", "/controlvanne/kiosk/")
+        safe_url = escape(iri_to_uri(next_url))
         html = f"""<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="refresh" content="0; url={next_url}">
+  <meta http-equiv="refresh" content="0; url={safe_url}">
   <title>Authentification kiosk…</title>
 </head>
 <body>
-  <script>window.location.replace('{next_url}');</script>
-  <p>Redirection en cours… <a href="{next_url}">Cliquez ici si la page ne se charge pas.</a></p>
+  <script>window.location.replace('{safe_url}');</script>
+  <p>Redirection en cours… <a href="{safe_url}">Cliquez ici si la page ne se charge pas.</a></p>
 </body>
 </html>"""
         return HttpResponse(html, content_type="text/html")
