@@ -14,6 +14,8 @@ import io
 from django.template.loader import render_to_string
 from weasyprint import HTML
 
+from comptabilite.services import aplatir_detail_ventes, enrichir_rapport_pour_affichage
+
 
 def _euros(centimes):
     """Convertit centimes (int) en string '12.34' (jamais None).
@@ -35,6 +37,14 @@ def generer_pdf_cloture(cloture) -> tuple:
     to avoid creating custom Django filters.
     """
     rapport = cloture.rapport_json or {}
+
+    # Enrichissement partage avec l'admin : meme code source, memes formats.
+    # `rapport` passe au template contient maintenant les cles _euros + la
+    # vue 'categories' agregee + les remboursements.total_euros.
+    # / Shared enrichment with the admin: one source, same formats. The
+    # `rapport` passed to the template now has _euros keys + aggregated
+    # 'categories' view + remboursements.total_euros.
+    rapport = enrichir_rapport_pour_affichage(rapport)
 
     # Build template context with pre-formatted euro strings.
     # / Build the template context with pre-formatted euro strings.
@@ -62,20 +72,21 @@ def generer_pdf_cloture(cloture) -> tuple:
             for taux, item in (rapport.get("tva") or {}).items()
             if isinstance(item, dict)
         ],
-        # Detail des ventes par categorie : structure aplatie pour le template
-        # / Sales detail per category: flattened structure for the template
+        # Detail des ventes : memes colonnes que le tableau admin (helper partage).
+        # / Sales detail: same columns as the admin table (shared helper).
         "ventes_items": [
             {
-                "categorie": cat.get("nom_categorie", ""),
-                "produit": article.get("nom_produit", ""),
-                "qty": article.get("qty_total", 0),
-                "ht": _euros(article.get("total_ht")),
-                "tva": _euros(article.get("total_tva")),
-                "ttc": _euros(article.get("total_ttc")),
+                "categorie": ligne["categorie_nom"],
+                "produit": ligne["nom_produit"],
+                "qty_payants": ligne["qty_payants"],
+                "qty_offerts": ligne["qty_offerts"],
+                "qty_total": ligne["qty_total"],
+                "taux_tva": ligne["taux_tva"],
+                "ht": _euros(ligne["total_ht"]),
+                "tva": _euros(ligne["total_tva"]),
+                "ttc": _euros(ligne["total_ttc"]),
             }
-            for cat in (rapport.get("detail_ventes") or {}).values()
-            if isinstance(cat, dict)
-            for article in cat.get("articles", [])
+            for ligne in aplatir_detail_ventes(rapport)
         ],
         "infos_legales": rapport.get("infos_legales") or {},
         "cloture_total_ttc_euros": _euros(cloture.total_general),

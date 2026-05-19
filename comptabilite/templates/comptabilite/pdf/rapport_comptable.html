@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>Clôture {{ cloture.numero_sequentiel }}</title>
     <style>
-        @page { size: A4; margin: 1.5cm; }
+        @page { size: A4 landscape; margin: 1.2cm; }
         body { font-family: "Helvetica", "Arial", sans-serif; font-size: 10pt; color: #222; }
         h1 { font-size: 16pt; margin: 0 0 8px 0; }
         h2 { font-size: 12pt; margin: 18px 0 8px 0; padding: 6px 10px; background: #333; color: #fff; }
@@ -62,20 +62,50 @@
 
     <h2>Détail des ventes par catégorie</h2>
     <table>
-        <thead><tr><th>Catégorie</th><th>Produit</th><th>Quantité</th><th>HT (EUR)</th><th>TVA (EUR)</th><th>TTC (EUR)</th></tr></thead>
+        <thead><tr>
+            <th>Catégorie</th>
+            <th>Produit</th>
+            <th>Payants</th>
+            <th>Offerts</th>
+            <th>Quantité totale</th>
+            <th>Taux TVA %</th>
+            <th>HT (EUR)</th>
+            <th>TVA (EUR)</th>
+            <th>TTC (EUR)</th>
+        </tr></thead>
         <tbody>
             {% for item in ventes_items %}
                 <tr>
                     <td>{{ item.categorie }}</td>
                     <td>{{ item.produit }}</td>
-                    <td class="amount">{{ item.qty }}</td>
+                    <td class="amount">{{ item.qty_payants }}</td>
+                    <td class="amount">{{ item.qty_offerts }}</td>
+                    <td class="amount">{{ item.qty_total }}</td>
+                    <td class="amount">{{ item.taux_tva }}</td>
                     <td class="amount">{{ item.ht }}</td>
                     <td class="amount">{{ item.tva }}</td>
                     <td class="amount">{{ item.ttc }}</td>
                 </tr>
             {% empty %}
-                <tr><td colspan="6">Aucune vente sur la période.</td></tr>
+                <tr><td colspan="9">Aucune vente sur la période.</td></tr>
             {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Remboursements et avoirs</h2>
+    <table>
+        <thead><tr><th>Type</th><th>Total (EUR)</th><th>Nombre</th></tr></thead>
+        <tbody>
+            <tr>
+                <td>Avoirs</td>
+                <td class="amount">{{ rapport.remboursements.credit_notes.total_euros|default:"0.00" }}</td>
+                <td class="amount">{{ rapport.remboursements.credit_notes.nb|default:0 }}</td>
+            </tr>
+            <tr>
+                <td>Remboursements</td>
+                <td class="amount">{{ rapport.remboursements.refunded.total_euros|default:"0.00" }}</td>
+                <td class="amount">{{ rapport.remboursements.refunded.nb|default:0 }}</td>
+            </tr>
         </tbody>
     </table>
 
@@ -85,6 +115,8 @@
         {% if infos_legales.code_postal %}{{ infos_legales.code_postal }} {{ infos_legales.ville }}{% endif %}<br>
         {% if infos_legales.siren %}SIREN : {{ infos_legales.siren }}{% endif %}
         {% if infos_legales.tva_number %}— TVA : {{ infos_legales.tva_number }}{% endif %}<br>
+        {% if infos_legales.email %}Email : {{ infos_legales.email }}{% endif %}
+        {% if infos_legales.phone %}— Téléphone : {{ infos_legales.phone }}{% endif %}<br>
         Empreinte : <code>{{ cloture.hash_lignes|default:"—" }}</code>
     </div>
 </body>

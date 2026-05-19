@@ -88,15 +88,21 @@ def test_modele_cloturecaisse_creation_minimale():
         debut = timezone.now() - timedelta(days=1)
         fin = timezone.now()
 
+        # Numero libre dynamique : evite la collision avec les clotures de
+        # demo (fixture demo_data_v2 cree #1 et #2). On prend max+1.
+        # / Pick max+1 to avoid collision with demo fixture closures.
+        derniere = ClotureCaisse.objects.order_by("-numero_sequentiel").first()
+        prochain_numero = (derniere.numero_sequentiel + 1) if derniere else 1
+
         cloture = ClotureCaisse.objects.create(
             niveau=ClotureCaisse.NIVEAU_JOURNALIER,
-            numero_sequentiel=1,
+            numero_sequentiel=prochain_numero,
             datetime_debut=debut,
             datetime_fin=fin,
         )
 
         assert cloture.pk is not None
-        assert cloture.numero_sequentiel == 1
+        assert cloture.numero_sequentiel == prochain_numero
         assert cloture.niveau == "J"
         assert cloture.total_general == 0
         assert cloture.rapport_json == {}
@@ -493,7 +499,7 @@ def test_template_sections_rapport_rend_sans_erreur(admin_request_factory):
     / The _sections_rapport.html partial renders with a pre-formatted report.
     """
     from django.template.loader import render_to_string
-    from comptabilite.admin import _enrichir_rapport_pour_template
+    from comptabilite.services import enrichir_rapport_pour_affichage
 
     # Mini rapport realiste
     # / Realistic mini report
@@ -513,7 +519,7 @@ def test_template_sections_rapport_rend_sans_erreur(admin_request_factory):
         },
         "infos_legales": {"organisation": "Test"},
     }
-    rapport_enrichi = _enrichir_rapport_pour_template(rapport)
+    rapport_enrichi = enrichir_rapport_pour_affichage(rapport)
     contenu = render_to_string(
         "comptabilite/admin/_sections_rapport.html",
         {"rapport": rapport_enrichi},

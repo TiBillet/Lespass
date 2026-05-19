@@ -12,6 +12,7 @@ Adapte de laboutik/reports.py (V2) pour le perimetre V1 :
 Tous les montants sont en CENTIMES (int). Jamais de float.
 / All amounts are in CENTS (int). Never float.
 """
+import copy
 import hashlib
 import logging
 from decimal import Decimal
@@ -19,6 +20,7 @@ from decimal import Decimal
 from django.db import connection
 from django.db.models import Sum, Count, F, Q
 from django.db.models.functions import Coalesce
+from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger(__name__)
 
@@ -375,3 +377,190 @@ class RapportComptableService:
                 "schema": connection.schema_name,
             },
         }
+
+
+# ============================================================================
+# Helpers de presentation partages par tous les exports (CSV, Tableur, PDF).
+# Le rapport admin (template _sections_rapport.html) consomme directement
+# detail_ventes (structure hierarchique). Les exports ont besoin d'une
+# liste APLATIE : c'est ce que produit aplatir_detail_ventes().
+# / Presentation helpers shared by every export (CSV, Spreadsheet, PDF).
+# The admin report consumes the hierarchical structure directly ; exports
+# need a FLATTENED list with the same columns as the admin display.
+# ============================================================================
+
+# Colonnes du tableau "Detail des ventes par categorie" telles qu'affichees
+# dans l'admin. Les exports doivent rendre EXACTEMENT les memes colonnes.
+# / Columns of the "Sales detail by category" table as shown in the admin.
+# Exports MUST render EXACTLY the same columns.
+COLONNES_DETAIL_VENTES = [
+    "Categorie",
+    "Produit",
+    "Payants",
+    "Offerts",
+    "Quantite totale",
+    "Taux TVA %",
+    "HT",
+    "TVA",
+    "TTC",
+]
+
+
+def aplatir_detail_ventes(rapport_json: dict) -> list:
+    """
+    Aplatit la structure hierarchique detail_ventes en une liste de dicts.
+    Chaque element correspond a UNE ligne du tableau "Detail des ventes
+    par categorie" tel qu'affiche dans l'admin.
+
+    / Flatten the hierarchical detail_ventes into a list of dicts. Each
+    item is ONE row of the admin "Sales detail by category" table.
+
+    Cles retournees pour chaque ligne (montants en centimes) :
+      categorie_code  -- 'A', 'B', 'F', 'G', 'Q' (ou autre)
+      categorie_nom   -- libelle FR de la categorie
+      nom_produit     -- nom du produit
+      qty_payants     -- float
+      qty_offerts     -- float
+      qty_total       -- float
+      taux_tva        -- float (%)
+      total_ht        -- int (centimes)
+      total_tva       -- int (centimes)
+      total_ttc       -- int (centimes)
+    """
+    lignes = []
+    detail = rapport_json.get("detail_ventes") or {}
+    for cat_code, cat in detail.items():
+        if not isinstance(cat, dict):
+            continue
+        nom_categorie = cat.get("nom_categorie", cat_code)
+        for article in cat.get("articles", []):
+            if not isinstance(article, dict):
+                continue
+            lignes.append({
+                "categorie_code": cat_code,
+                "categorie_nom": nom_categorie,
+                "nom_produit": article.get("nom_produit", ""),
+                "qty_payants": float(article.get("qty_payants", 0)),
+                "qty_offerts": float(article.get("qty_offerts", 0)),
+                "qty_total": float(article.get("qty_total", 0)),
+                "taux_tva": float(article.get("taux_tva", 0)),
+                "total_ht": int(article.get("total_ht", 0)),
+                "total_tva": int(article.get("total_tva", 0)),
+                "total_ttc": int(article.get("total_ttc", 0)),
+            })
+    return lignes
+
+
+# Mapping des 12 PaymentMethod V1 vers 4 categories d'affichage + "Autres".
+# Le rapport_json stocke les 12 valeurs brutes ; l'agregation n'est faite
+# qu'au moment du rendu (admin + exports). Pour ajouter/modifier une
+# categorie, editer ce mapping en un seul endroit.
+# / Mapping of 12 V1 PaymentMethod codes to 4 display categories + "Other".
+# Aggregation happens at render time only. Edit this mapping in one place.
+CATEGORIES_PAIEMENT_AFFICHAGE = [
+    ("especes", _("Espèces"), ["CA"]),
+    ("cb", _("Carte bancaire (terminal POS)"), ["CC"]),
+    ("en_ligne", _("Paiements en ligne"), ["SF", "SN", "SP", "SR", "TR"]),
+    ("cashless", _("Cashless (NFC / monnaie locale)"), ["LE", "LG", "QR"]),
+    ("autres", _("Autres"), ["CH", "NA", "UK"]),
+]
+
+
+def agreger_paiements_par_categorie(totaux_par_moyen: dict) -> list:
+    """
+    Agrege les totaux_par_moyen (12 codes PaymentMethod) en 4 categories
+    d'affichage + "Autres". Retourne une liste de dict pretes a afficher.
+    / Aggregate 12 PaymentMethod codes into 4 display categories + "Other".
+
+    Une categorie est INCLUSE dans le retour uniquement si elle a au moins
+    une transaction (total != 0 ou nb > 0).
+    """
+    if not totaux_par_moyen:
+        return []
+    categories = []
+    for slug, label, codes in CATEGORIES_PAIEMENT_AFFICHAGE:
+        total = 0
+        nb = 0
+        for code in codes:
+            item = totaux_par_moyen.get(code)
+            if isinstance(item, dict):
+                total += item.get("total", 0)
+                nb += item.get("nb", 0)
+        if total == 0 and nb == 0:
+            # On masque les categories vides pour ne pas alourdir l'affichage
+            # / Skip empty categories to keep the display compact
+            continue
+        categories.append({
+            "slug": slug,
+            "label": str(label),
+            "total": total,
+            "total_euros": f"{total / 100:.2f}",
+            "nb": nb,
+        })
+    return categories
+
+
+def enrichir_rapport_pour_affichage(rapport: dict) -> dict:
+    """
+    Ajoute des cles formatees (_euros suffixe) au rapport pour eviter les
+    filtres custom dans les templates. Modifie une copie, pas l'original.
+
+    Cette fonction est partagee par TOUS les consommateurs d'affichage :
+    - admin (template _sections_rapport.html, vue temps reel)
+    - export PDF (template pdf/rapport_comptable.html)
+    Cela garantit que les exports affichent EXACTEMENT les memes donnees
+    et formats que le rapport admin.
+
+    / Adds _euros-suffixed keys to the report. Shared by every display
+    consumer (admin templates + PDF export) so they show EXACTLY the same
+    data and formats.
+    """
+    if not rapport:
+        return {}
+    r = copy.deepcopy(rapport)
+
+    # totaux_par_moyen : ajoute total_euros pour chaque code + le grand total
+    # + cle additionnelle 'categories' = 4 categories agregees pour l'affichage.
+    # / totaux_par_moyen: add total_euros + aggregated 4-category view.
+    if "totaux_par_moyen" in r and isinstance(r["totaux_par_moyen"], dict):
+        for k, v in r["totaux_par_moyen"].items():
+            if isinstance(v, dict) and "total" in v:
+                v["total_euros"] = f"{v['total'] / 100:.2f}"
+        if "total" in r["totaux_par_moyen"]:
+            r["totaux_par_moyen"]["total_euros"] = f"{r['totaux_par_moyen']['total'] / 100:.2f}"
+        r["totaux_par_moyen"]["categories"] = agreger_paiements_par_categorie(
+            r["totaux_par_moyen"]
+        )
+
+    # tva : HT/TVA/TTC en euros
+    # / vat: HT/VAT/incl. tax in euros
+    if "tva" in r and isinstance(r["tva"], dict):
+        for taux, v in r["tva"].items():
+            if isinstance(v, dict):
+                v["total_ttc_euros"] = f"{v.get('total_ttc', 0) / 100:.2f}"
+                v["total_ht_euros"] = f"{v.get('total_ht', 0) / 100:.2f}"
+                v["total_tva_euros"] = f"{v.get('total_tva', 0) / 100:.2f}"
+
+    # detail_ventes : enrichit chaque categorie + chaque article
+    # / detail_ventes: enrich each category and article
+    if "detail_ventes" in r and isinstance(r["detail_ventes"], dict):
+        for cat in r["detail_ventes"].values():
+            if not isinstance(cat, dict):
+                continue
+            if "total_ttc" in cat:
+                cat["total_ttc_euros"] = f"{cat['total_ttc'] / 100:.2f}"
+            for article in cat.get("articles", []):
+                if not isinstance(article, dict):
+                    continue
+                article["total_ttc_euros"] = f"{article.get('total_ttc', 0) / 100:.2f}"
+                article["total_ht_euros"] = f"{article.get('total_ht', 0) / 100:.2f}"
+                article["total_tva_euros"] = f"{article.get('total_tva', 0) / 100:.2f}"
+
+    # remboursements : credit_notes + refunded en euros
+    # / refunds: credit notes + refunded amounts in euros
+    if "remboursements" in r and isinstance(r["remboursements"], dict):
+        for k, v in r["remboursements"].items():
+            if isinstance(v, dict) and "total" in v:
+                v["total_euros"] = f"{v['total'] / 100:.2f}"
+
+    return r

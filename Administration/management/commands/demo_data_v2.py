@@ -140,7 +140,7 @@ class Command(BaseCommand):
         """
         from Customers.models import Client as TenantClient
         from Administration.management.commands._demo_data_v2_ventes import (
-            seed_ventes_demo, afficher_warning_cas_non_couverts,
+            seed_ventes_demo, seed_clotures_demo, afficher_warning_cas_non_couverts,
         )
 
         tenant = TenantClient.objects.filter(schema_name='lespass').first()
@@ -171,6 +171,23 @@ class Command(BaseCommand):
             self.stdout.write("\nCas skippes :")
             for cas in stats["cas_skippes"]:
                 self.stdout.write(f"  - {cas}")
+
+        # Generation des clotures comptables (J + H) pour tester PDF/CSV/Excel/FEC.
+        # / Generate accounting closures (J + H) to test PDF/CSV/Excel/FEC.
+        self.stdout.write(
+            f"\nGeneration de 2 clotures comptables de demo (J + H)..."
+        )
+        clotures = seed_clotures_demo(schema_name=tenant.schema_name)
+        for niveau, uuid_str in clotures.items():
+            if uuid_str:
+                self.stdout.write(self.style.SUCCESS(
+                    f"  + Cloture {niveau} : uuid={uuid_str}"
+                ))
+            else:
+                self.stdout.write(self.style.WARNING(
+                    f"  - Cloture {niveau} : skip (modules billetterie/adhesion off)"
+                ))
+
         afficher_warning_cas_non_couverts(self.stdout)
 
     # Chemin du dump SQL généré par le mode full, utilisé par --quick pour restaurer la base

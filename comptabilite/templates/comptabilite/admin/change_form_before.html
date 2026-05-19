@@ -17,22 +17,23 @@
 
     {% if cloture %}
         <div class="flex flex-row gap-2 flex-wrap" data-testid="comptabilite-bandeau-exports">
-            <a href="exporter-csv/"
+            {# URLs en ../ car les routes sont a /<uuid>/exporter-xxx/, pas dans /change/ #}
+            <a href="../exporter-csv/"
                data-testid="comptabilite-export-csv"
                class="bg-base-100 hover:bg-base-200 dark:bg-base-800 dark:hover:bg-base-700 px-3 py-2 rounded-md text-sm font-medium no-underline border border-base-200 dark:border-base-700">
                 📄 {% translate "CSV" %}
             </a>
-            <a href="exporter-excel/"
-               data-testid="comptabilite-export-excel"
+            <a href="../exporter-excel/"
+               data-testid="comptabilite-export-tableur"
                class="bg-base-100 hover:bg-base-200 dark:bg-base-800 dark:hover:bg-base-700 px-3 py-2 rounded-md text-sm font-medium no-underline border border-base-200 dark:border-base-700">
-                📊 {% translate "Excel" %}
+                📊 {% translate "Tableur" %}
             </a>
-            <a href="exporter-pdf/"
+            <a href="../exporter-pdf/"
                data-testid="comptabilite-export-pdf"
                class="bg-base-100 hover:bg-base-200 dark:bg-base-800 dark:hover:bg-base-700 px-3 py-2 rounded-md text-sm font-medium no-underline border border-base-200 dark:border-base-700">
                 🖨️ {% translate "PDF" %}
             </a>
-            <a href="exporter-fec/"
+            <a href="../exporter-fec/"
                data-testid="comptabilite-export-fec"
                class="bg-base-100 hover:bg-base-200 dark:bg-base-800 dark:hover:bg-base-700 px-3 py-2 rounded-md text-sm font-medium no-underline border border-base-200 dark:border-base-700"
                title="{% translate 'Fichier des Écritures Comptables (format légal français)' %}">
@@ -40,7 +41,7 @@
             </a>
             <button type="button"
                     data-testid="comptabilite-bouton-csv-comptable"
-                    hx-get="exporter-csv-comptable/"
+                    hx-get="../exporter-csv-comptable/"
                     hx-target="#zone-csv-comptable"
                     hx-swap="innerHTML"
                     class="bg-base-100 hover:bg-base-200 dark:bg-base-800 dark:hover:bg-base-700 px-3 py-2 rounded-md text-sm font-medium border border-base-200 dark:border-base-700 cursor-pointer">

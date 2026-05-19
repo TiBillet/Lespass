@@ -62,21 +62,27 @@ def generer_csv_cloture(cloture) -> tuple:
             ])
     writer.writerow([])
 
+    # Detail des ventes : memes colonnes que le tableau admin, via le helper
+    # partage `aplatir_detail_ventes` (cf. comptabilite/services.py).
+    # / Sales detail: same columns as the admin table, via the shared helper.
+    from comptabilite.services import aplatir_detail_ventes
     writer.writerow(["[Détail des ventes par catégorie]"])
-    writer.writerow(["Catégorie", "Produit", "Quantité", "HT (EUR)", "TVA (EUR)", "TTC (EUR)", "Taux TVA %"])
-    for cat in (rapport.get("detail_ventes") or {}).values():
-        if not isinstance(cat, dict):
-            continue
-        for article in cat.get("articles", []):
-            writer.writerow([
-                cat.get("nom_categorie", ""),
-                article.get("nom_produit", ""),
-                article.get("qty_total", 0),
-                _euros(article.get("total_ht")),
-                _euros(article.get("total_tva")),
-                _euros(article.get("total_ttc")),
-                article.get("taux_tva", 0),
-            ])
+    writer.writerow([
+        "Catégorie", "Produit", "Payants", "Offerts", "Quantité totale",
+        "Taux TVA %", "HT (EUR)", "TVA (EUR)", "TTC (EUR)",
+    ])
+    for ligne in aplatir_detail_ventes(rapport):
+        writer.writerow([
+            ligne["categorie_nom"],
+            ligne["nom_produit"],
+            ligne["qty_payants"],
+            ligne["qty_offerts"],
+            ligne["qty_total"],
+            ligne["taux_tva"],
+            _euros(ligne["total_ht"]),
+            _euros(ligne["total_tva"]),
+            _euros(ligne["total_ttc"]),
+        ])
     writer.writerow([])
 
     writer.writerow(["[Remboursements et avoirs]"])

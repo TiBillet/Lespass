@@ -119,26 +119,30 @@ def generer_excel_cloture(cloture) -> tuple:
             )
     row += 1
 
-    # Detail des ventes par categorie (depuis detail_ventes)
-    # / Sales detail per category (from detail_ventes)
-    row = _ecrire_section_header(ws, row, "Détail des ventes par catégorie")
-    row = _ecrire_ligne_header(ws, row, ["Catégorie", "Produit", "Quantité", "HT", "TVA", "TTC"])
-    for cat in (rapport.get("detail_ventes") or {}).values():
-        if not isinstance(cat, dict):
-            continue
-        for article in cat.get("articles", []):
-            row = _ecrire_ligne_donnees(
-                ws, row,
-                [
-                    cat.get("nom_categorie", ""),
-                    article.get("nom_produit", ""),
-                    float(article.get("qty_total", 0)),
-                    _euros(article.get("total_ht")),
-                    _euros(article.get("total_tva")),
-                    _euros(article.get("total_ttc")),
-                ],
-                montants_indices=[3, 4, 5, 6],
-            )
+    # Detail des ventes : memes colonnes que le tableau admin (helper partage).
+    # / Sales detail: same columns as the admin table (shared helper).
+    from comptabilite.services import aplatir_detail_ventes
+    row = _ecrire_section_header(ws, row, "Détail des ventes par catégorie", span=9)
+    row = _ecrire_ligne_header(ws, row, [
+        "Catégorie", "Produit", "Payants", "Offerts", "Quantité totale",
+        "Taux TVA %", "HT", "TVA", "TTC",
+    ])
+    for ligne in aplatir_detail_ventes(rapport):
+        row = _ecrire_ligne_donnees(
+            ws, row,
+            [
+                ligne["categorie_nom"],
+                ligne["nom_produit"],
+                ligne["qty_payants"],
+                ligne["qty_offerts"],
+                ligne["qty_total"],
+                ligne["taux_tva"],
+                _euros(ligne["total_ht"]),
+                _euros(ligne["total_tva"]),
+                _euros(ligne["total_ttc"]),
+            ],
+            montants_indices=[7, 8, 9],
+        )
     row += 1
 
     # Remboursements
@@ -150,10 +154,13 @@ def generer_excel_cloture(cloture) -> tuple:
     row = _ecrire_ligne_donnees(ws, row, ["Avoirs", _euros(cn.get("total")), cn.get("nb", 0), ""], montants_indices=[2])
     row = _ecrire_ligne_donnees(ws, row, ["Remboursements", _euros(rf.get("total")), rf.get("nb", 0), ""], montants_indices=[2])
 
-    # Largeurs de colonnes fixes (5 colonnes pour la section produit/tarif)
-    # / Fixed column widths (5 cols for product/tariff section)
-    for col_idx in range(1, 6):
-        ws.column_dimensions[get_column_letter(col_idx)].width = 22
+    # Largeurs de colonnes : 2 premieres larges (libelles), 7 suivantes plus
+    # etroites (nombres). Couvre les 9 colonnes du detail des ventes.
+    # / Column widths: first 2 wide (labels), next 7 narrower (numbers).
+    ws.column_dimensions[get_column_letter(1)].width = 26  # Catégorie
+    ws.column_dimensions[get_column_letter(2)].width = 32  # Produit
+    for col_idx in range(3, 10):
+        ws.column_dimensions[get_column_letter(col_idx)].width = 14
 
     buffer = io.BytesIO()
     wb.save(buffer)
