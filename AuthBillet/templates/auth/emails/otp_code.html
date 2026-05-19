@@ -11,7 +11,7 @@
             {{ libelle_action }}
         </h1>
         <p style="margin: 0 0 16px; color: #495057; font-size: 14px;">
-            {% translate "Voici votre code de verification :" %}
+            {% translate "Voici votre code de vérification :" %}
         </p>
         <div style="font-family: 'Courier New', monospace; font-size: 32px; letter-spacing: 8px; text-align: center; background-color: #f1f3f5; padding: 20px; border-radius: 6px; color: #212529; font-weight: bold;">
             {{ code }}
@@ -20,7 +20,7 @@
             {% blocktranslate with minutes=expires_minutes %}Ce code est valable {{ minutes }} minutes.{% endblocktranslate %}
         </p>
         <p style="margin: 8px 0 0; color: #6c757d; font-size: 13px;">
-            {% translate "Si vous n'avez pas demande ce code, ignorez ce message." %}
+            {% translate "Si vous n'avez pas demandé ce code, ignorez ce message." %}
         </p>
         {% if nom_organisation %}
         <hr style="border: none; border-top: 1px solid #dee2e6; margin: 24px 0 16px;">

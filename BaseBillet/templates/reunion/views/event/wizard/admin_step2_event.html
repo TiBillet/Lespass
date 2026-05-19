@@ -29,7 +29,7 @@
 
     <div>
         <label for="name" class="form-label">
-            {% translate "Nom de l'evenement" %} <span class="text-danger">*</span>
+            {% translate "Nom de l'évènement" %} <span class="text-danger">*</span>
         </label>
         <input type="text" id="name" name="name" required maxlength="200"
                value="{{ initial.name|default:'' }}" class="form-control"
@@ -60,16 +60,16 @@
     </div>
 
     <div>
-        <label for="jauge_max" class="form-label">{% translate "Jauge maximale (capacite)" %}</label>
+        <label for="jauge_max" class="form-label">{% translate "Jauge maximale (capacité)" %}</label>
         <input type="number" id="jauge_max" name="jauge_max" min="1" step="1"
                inputmode="numeric"
                value="{{ initial.jauge_max|default:'' }}" class="form-control"
                data-testid="wizard-admin-event-jauge">
-        <div class="form-text">{% translate "Laissez vide si pas besoin de reservation." %}</div>
+        <div class="form-text">{% translate "Laissez vide si pas besoin de réservation." %}</div>
     </div>
 
     <div>
-        <label for="tags" class="form-label">{% translate "Tags (separes par des virgules)" %}</label>
+        <label for="tags" class="form-label">{% translate "Tags (séparés par des virgules)" %}</label>
         <input type="text" id="tags" name="tags" list="tags-list"
                value="{{ initial.tags|default:'' }}" class="form-control"
                data-testid="wizard-admin-event-tags">
@@ -81,12 +81,12 @@
     <div class="d-flex justify-content-between pt-2">
         <a href="{% url 'event-admin-wizard-place' %}" class="btn btn-link"
            data-testid="wizard-admin-event-prev">
-            <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> {% translate "Precedent" %}
+            <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> {% translate "Précédent" %}
         </a>
         <button type="submit" class="btn btn-success btn-lg"
                 data-testid="wizard-admin-event-submit">
             <i class="bi bi-check2-circle me-1" aria-hidden="true"></i>
-            {% translate "Creer l'evenement" %}
+            {% translate "Créer l'évènement" %}
         </button>
     </div>
 </form>

@@ -3517,12 +3517,12 @@ class EventWizardAdmin(viewsets.ViewSet):
         config = Configuration.get_solo()
 
         ctx_commun = {
-            "wizard_title": _("Ajouter un evenement"),
-            "wizard_step_label": _("Etape 1 / 2 — Lieu"),
+            "wizard_title": _("Ajouter un évènement"),
+            "wizard_step_label": _("Étape 1 / 2 — Lieu"),
             "addresses": addresses,
             "default_address_pk": config.postal_address.pk if config.postal_address else None,
             "form_action_url": reverse("event-admin-wizard-place"),
-            "next_step_label": _("Continuer vers les details"),
+            "next_step_label": _("Continuer vers les détails"),
         }
 
         if request.method == "GET":
@@ -3591,8 +3591,8 @@ class EventWizardAdmin(viewsets.ViewSet):
         all_tags = Tag.objects.all().order_by("name")
 
         ctx_commun = {
-            "wizard_title": _("Ajouter un evenement"),
-            "wizard_step_label": _("Etape 2 / 2 — Details"),
+            "wizard_title": _("Ajouter un évènement"),
+            "wizard_step_label": _("Étape 2 / 2 — Détails"),
             "postal_address": postal_address,
             "all_tags": all_tags,
         }
@@ -3664,7 +3664,7 @@ class EventWizardAdmin(viewsets.ViewSet):
         for suffix in ("postal_address_pk",):
             request.session.pop(self._session_key(suffix), None)
 
-        messages.add_message(request, messages.SUCCESS, _("Evenement cree !"))
+        messages.add_message(request, messages.SUCCESS, _("Évènement créé !"))
         return redirect(reverse("event-detail", kwargs={"pk": event.slug or event.uuid}))
 
 
@@ -3706,8 +3706,8 @@ class EventWizardPublic(viewsets.ViewSet):
         if request.method == "GET":
             context = get_context(request)
             context.update({
-                "wizard_title": _("Proposer un evenement"),
-                "wizard_step_label": _("Etape 1 — Votre email"),
+                "wizard_title": _("Proposer un évènement"),
+                "wizard_step_label": _("Étape 1 — Votre email"),
                 "initial": {}, "errors": {},
             })
             return render(request, "reunion/views/event/wizard/public_step0_email.html",
@@ -3718,8 +3718,8 @@ class EventWizardPublic(viewsets.ViewSet):
         if not serializer.is_valid():
             context = get_context(request)
             context.update({
-                "wizard_title": _("Proposer un evenement"),
-                "wizard_step_label": _("Etape 1 — Votre email"),
+                "wizard_title": _("Proposer un évènement"),
+                "wizard_step_label": _("Étape 1 — Votre email"),
                 "initial": request.POST.dict(),
                 "errors": serializer.errors,
             })
@@ -3729,7 +3729,7 @@ class EventWizardPublic(viewsets.ViewSet):
         config = Configuration.get_solo()
         self._otp(request).start(
             email=serializer.validated_data["email"],
-            libelle_action=str(_("Proposer un evenement")),
+            libelle_action=str(_("Proposer un évènement")),
             nom_organisation=config.organisation,
         )
         return redirect("event-propose-verify")
@@ -3743,8 +3743,8 @@ class EventWizardPublic(viewsets.ViewSet):
         if request.method == "GET":
             context = get_context(request)
             context.update({
-                "wizard_title": _("Proposer un evenement"),
-                "wizard_step_label": _("Etape 2 — Code de verification"),
+                "wizard_title": _("Proposer un évènement"),
+                "wizard_step_label": _("Étape 2 — Code de vérification"),
                 "email": otp.email(),
                 "attempts_remaining": otp.attempts_remaining(),
                 "can_resend": otp.can_resend(),
@@ -3768,13 +3768,13 @@ class EventWizardPublic(viewsets.ViewSet):
 
         context = get_context(request)
         context.update({
-            "wizard_title": _("Proposer un evenement"),
-            "wizard_step_label": _("Etape 2 — Code de verification"),
+            "wizard_title": _("Proposer un évènement"),
+            "wizard_step_label": _("Étape 2 — Code de vérification"),
             "email": otp.email(),
             "attempts_remaining": otp.attempts_remaining(),
             "can_resend": otp.can_resend(),
             "seconds_before_resend": otp.seconds_before_resend(),
-            "errors": {"otp": [_("Code incorrect ou expire.")]},
+            "errors": {"otp": [_("Code incorrect ou expiré.")]},
         })
         return render(request, "reunion/views/event/wizard/public_step0_verify.html",
                       context=context, status=422)
@@ -3795,11 +3795,11 @@ class EventWizardPublic(viewsets.ViewSet):
         config = Configuration.get_solo()
         otp.start(
             email=otp.email(),
-            libelle_action=str(_("Proposer un evenement")),
+            libelle_action=str(_("Proposer un évènement")),
             nom_organisation=config.organisation,
         )
         messages.add_message(request, messages.SUCCESS,
-            _("Nouveau code envoye."))
+            _("Nouveau code envoyé."))
         return redirect("event-propose-verify")
 
     @action(detail=False, methods=["GET", "POST"], url_path="place")
@@ -3815,7 +3815,7 @@ class EventWizardPublic(viewsets.ViewSet):
             template="reunion/views/event/wizard/public_step1_place.html",
             form_action_url=reverse("event-propose-place"),
             next_step_url=reverse("event-propose-event"),
-            wizard_step_label=_("Etape 3 / 4 — Lieu"),
+            wizard_step_label=_("Étape 3 / 4 — Lieu"),
         )
 
     def _handle_place(self, request, template, form_action_url,
@@ -3830,7 +3830,7 @@ class EventWizardPublic(viewsets.ViewSet):
         if request.method == "GET":
             context = get_context(request)
             context.update({
-                "wizard_title": _("Proposer un evenement"),
+                "wizard_title": _("Proposer un évènement"),
                 "wizard_step_label": wizard_step_label,
                 "addresses": addresses,
                 "default_address_pk": config.postal_address.pk if config.postal_address else None,
@@ -3844,7 +3844,7 @@ class EventWizardPublic(viewsets.ViewSet):
         if not serializer.is_valid():
             context = get_context(request)
             context.update({
-                "wizard_title": _("Proposer un evenement"),
+                "wizard_title": _("Proposer un évènement"),
                 "wizard_step_label": wizard_step_label,
                 "addresses": addresses,
                 "default_address_pk": config.postal_address.pk if config.postal_address else None,
@@ -3896,8 +3896,8 @@ class EventWizardPublic(viewsets.ViewSet):
         if request.method == "GET":
             context = get_context(request)
             context.update({
-                "wizard_title": _("Proposer un evenement"),
-                "wizard_step_label": _("Etape 4 / 4 — Details"),
+                "wizard_title": _("Proposer un évènement"),
+                "wizard_step_label": _("Étape 4 / 4 — Détails"),
                 "postal_address": postal_address,
                 "initial": {}, "errors": {},
             })
@@ -3912,8 +3912,8 @@ class EventWizardPublic(viewsets.ViewSet):
         if not serializer.is_valid():
             context = get_context(request)
             context.update({
-                "wizard_title": _("Proposer un evenement"),
-                "wizard_step_label": _("Etape 4 / 4 — Details"),
+                "wizard_title": _("Proposer un évènement"),
+                "wizard_step_label": _("Étape 4 / 4 — Détails"),
                 "postal_address": postal_address,
                 "initial": request.POST.dict(),
                 "errors": serializer.errors,

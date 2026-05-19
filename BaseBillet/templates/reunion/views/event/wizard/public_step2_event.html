@@ -24,7 +24,7 @@
     {% csrf_token %}
 
     <div>
-        <label for="name" class="form-label">{% translate "Nom de l'evenement" %} <span class="text-danger">*</span></label>
+        <label for="name" class="form-label">{% translate "Nom de l'évènement" %} <span class="text-danger">*</span></label>
         <input type="text" id="name" name="name" required maxlength="200"
                value="{{ initial.name|default:'' }}" class="form-control"
                data-testid="propose-event-name">
@@ -58,7 +58,7 @@
 
     <div class="d-flex justify-content-between pt-2">
         <a href="{% url 'event-propose-place' %}" class="btn btn-link">
-            <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> {% translate "Precedent" %}
+            <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> {% translate "Précédent" %}
         </a>
         <button type="submit" class="btn btn-primary btn-lg" data-testid="propose-event-submit">
             {% translate "Envoyer ma proposition" %}

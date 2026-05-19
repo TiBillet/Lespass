@@ -86,34 +86,53 @@ class TestConstantes:
 
 
 class TestEnvoyerEmailOtp:
-    @patch("AuthBillet.otp_service.send_mail")
-    def test_appelle_send_mail_avec_destinataire(self, mock_send):
+    """
+    Le service OTP delegue l'envoi a `BaseBillet.tasks.CeleryMailerClass`
+    (pattern projet, cf. onboard/tasks.py). On mocke la classe au point
+    d'utilisation pour verifier les arguments passes et l'appel a `.send()`.
+    / The OTP service delegates sending to CeleryMailerClass (project
+    pattern). We mock the class at usage point and verify args + .send().
+    """
+
+    @patch("BaseBillet.tasks.CeleryMailerClass")
+    def test_appelle_celery_mailer_avec_destinataire(self, MockMailer):
         envoyer_email_otp("user@example.com", "123456", "Connexion")
-        assert mock_send.called
-        _args, kwargs = mock_send.call_args
-        assert kwargs["recipient_list"] == ["user@example.com"]
+        assert MockMailer.called
+        _args, kwargs = MockMailer.call_args
+        assert kwargs["email"] == "user@example.com"
+        MockMailer.return_value.send.assert_called_once()
 
-    @patch("AuthBillet.otp_service.send_mail")
-    def test_inclut_le_code_dans_le_corps_texte(self, mock_send):
+    @patch("BaseBillet.tasks.CeleryMailerClass")
+    def test_inclut_le_code_dans_le_corps_texte(self, MockMailer):
         envoyer_email_otp("u@x.fr", "987654", "Connexion")
-        _args, kwargs = mock_send.call_args
-        assert "987654" in kwargs["message"]
+        _args, kwargs = MockMailer.call_args
+        # Le texte brut est pre-rendu avant l'instanciation.
+        # / Plain text is pre-rendered before instantiation.
+        assert "987654" in kwargs["text"]
 
-    @patch("AuthBillet.otp_service.send_mail")
-    def test_inclut_le_code_dans_le_corps_html(self, mock_send):
+    @patch("BaseBillet.tasks.CeleryMailerClass")
+    def test_passe_template_html_avec_code_dans_le_contexte(self, MockMailer):
+        # Le HTML est rendu cote CeleryMailerClass via le template +
+        # contexte. On verifie ici qu'on passe bien le code dans le ctx.
+        # / HTML rendered by CeleryMailerClass from template + context.
         envoyer_email_otp("u@x.fr", "987654", "Connexion")
-        _args, kwargs = mock_send.call_args
-        assert "987654" in kwargs["html_message"]
+        _args, kwargs = MockMailer.call_args
+        assert kwargs["template"] == "auth/emails/otp_code.html"
+        assert kwargs["context"]["code"] == "987654"
 
-    @patch("AuthBillet.otp_service.send_mail")
-    def test_sujet_contient_libelle_action(self, mock_send):
+    @patch("BaseBillet.tasks.CeleryMailerClass")
+    def test_sujet_contient_libelle_action(self, MockMailer):
         envoyer_email_otp("u@x.fr", "123456", "Proposer un evenement")
-        _args, kwargs = mock_send.call_args
-        assert "Proposer un evenement" in str(kwargs["subject"])
+        _args, kwargs = MockMailer.call_args
+        assert "Proposer un evenement" in str(kwargs["title"])
 
-    @patch("AuthBillet.otp_service.send_mail")
-    def test_footer_contient_nom_organisation_si_fourni(self, mock_send):
+    @patch("BaseBillet.tasks.CeleryMailerClass")
+    def test_footer_contient_nom_organisation_si_fourni(self, MockMailer):
         envoyer_email_otp("u@x.fr", "123456", "Test", nom_organisation="Mon Lieu")
-        _args, kwargs = mock_send.call_args
-        assert "Mon Lieu" in kwargs["message"]
-        assert "Mon Lieu" in kwargs["html_message"]
+        _args, kwargs = MockMailer.call_args
+        # Le texte brut contient le nom (template .txt rendu en amont).
+        # Le HTML est rendu cote CeleryMailerClass ; on verifie via ctx.
+        # / Plain text rendered upstream contains the name. HTML rendered
+        # by CeleryMailerClass; we verify via the passed context.
+        assert "Mon Lieu" in kwargs["text"]
+        assert kwargs["context"]["nom_organisation"] == "Mon Lieu"

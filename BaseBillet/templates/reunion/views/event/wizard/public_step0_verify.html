@@ -3,7 +3,7 @@
 
 {% block step_content %}
 <p class="text-muted mb-3">
-    {% blocktranslate with email=email %}Un code a 6 chiffres a ete envoye a <strong>{{ email }}</strong>. Saisissez-le ci-dessous.{% endblocktranslate %}
+    {% blocktranslate with email=email %}Un code à 6 chiffres a été envoyé à <strong>{{ email }}</strong>. Saisissez-le ci-dessous.{% endblocktranslate %}
 </p>
 
 {% if errors.otp %}
@@ -21,7 +21,7 @@
       novalidate data-testid="propose-verify-form" class="vstack gap-3">
     {% csrf_token %}
     <div>
-        <label for="otp" class="form-label">{% translate "Code a 6 chiffres" %} <span class="text-danger">*</span></label>
+        <label for="otp" class="form-label">{% translate "Code à 6 chiffres" %} <span class="text-danger">*</span></label>
         <input type="text" id="otp" name="otp" required pattern="\d{6}" maxlength="6"
                inputmode="numeric" autocomplete="one-time-code"
                class="form-control form-control-lg text-center"
@@ -31,7 +31,7 @@
 
     <div class="d-flex justify-content-end pt-2">
         <button type="submit" class="btn btn-primary btn-lg" data-testid="propose-verify-submit">
-            {% translate "Verifier" %} <i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>
+            {% translate "Vérifier" %} <i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>
         </button>
     </div>
 </form>

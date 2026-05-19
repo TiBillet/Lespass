@@ -1375,7 +1375,7 @@ class WizardPlaceSerializer(serializers.Serializer):
             # / "Existing" mode: verify pk exists.
             if not PostalAddress.objects.filter(pk=pk_value).exists():
                 raise serializers.ValidationError({
-                    "postal_address": _("Adresse selectionnee introuvable."),
+                    "postal_address": _("Adresse sélectionnée introuvable."),
                 })
             attrs["_mode"] = "existing"
             return attrs

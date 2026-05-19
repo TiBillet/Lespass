@@ -1,10 +1,10 @@
 {{ libelle_action }}
 
-Votre code de verification : {{ code }}
+Votre code de vérification : {{ code }}
 
 Ce code est valable {{ expires_minutes }} minutes.
 
-Si vous n'avez pas demande ce code, ignorez ce message.
+Si vous n'avez pas demandé ce code, ignorez ce message.
 
 {% if nom_organisation %}--
 {{ nom_organisation }}{% endif %}
