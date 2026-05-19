@@ -16,7 +16,7 @@ Gère la lecture NFC, le contrôle de vanne et la communication avec le serveur 
 Un seul prérequis côté serveur : créer une `TireuseBec` dans **Admin → Tireuses → Taps** — le code PIN à 6 chiffres s'affiche directement dans la colonne **PIN code** de la liste.
 
 ```bash
-wget https://raw.githubusercontent.com/TiBillet/Lespass/dev_vps/controlvanne/Pi/install_pi.sh && chmod +x install_pi.sh && ./install_pi.sh
+wget https://raw.githubusercontent.com/TiBillet/Lespass/V2/controlvanne/Pi/install_pi.sh && chmod +x install_pi.sh && ./install_pi.sh
 ```
 
 Le script pose quelques questions puis délègue à `make`. À la fin, redémarrer le Pi.
@@ -103,7 +103,7 @@ Généré par `make claim`, jamais modifié manuellement. Variables principales 
 | `GPIO_FLOW_SENSOR` | Pin GPIO du débitmètre (défaut : 23) |
 | `VALVE_ACTIVE_HIGH` | `True` si GPIO HIGH = vanne ouverte (défaut : `True`) |
 | `SSL_VERIFY` | `True` pour vérifier le certificat TLS (défaut : `True`, mettre `False` en dev local) |
-| `GIT_BRANCH` | Branche git tirée au démarrage du service (ex: `dev_vps`, `V2`) |
+| `GIT_BRANCH` | Branche git tirée au démarrage du service (ex: `V2`, `main`) |
 | `GIT_REPO` | URL du dépôt git (défaut : `https://github.com/TiBillet/Lespass`) |
 
 ## Dépannage
@@ -130,6 +130,23 @@ make claim PIN=<code> SERVER=https://votre-domaine.tld
 ```bash
 journalctl -u tibeer | grep "Auth kiosk"
 ```
+
+**Kiosk en erreur 403 après 12h de fonctionnement :**
+
+La session côté serveur expire après 12h (sécurité — alignement `LaBoutikAuthBridgeView`).
+Solutions :
+- Restart manuel : `sudo systemctl restart tibeer.service kiosk.service`
+- Timer systemd quotidien à mettre en place (voir `V2 Pi.md` → Action 1)
+
+**Erreur 429 sur `/auth-kiosk/` au démarrage :**
+
+Limite 10 requêtes/min par IP (`KioskBridgeThrottle`). Si le service `tibeer` crash en
+boucle (`Restart=always` + `RestartSec=2`), il peut dépasser cette limite et tomber en
+429 silencieux. Diagnostic :
+```bash
+journalctl -u tibeer -n 50 | grep "Auth kiosk"
+```
+Attendre 1 minute avant le boot suivant, ou stabiliser la cause du crash.
 
 **Vanne qui se ferme ~3 secondes après le badge :**
 

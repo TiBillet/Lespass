@@ -40,7 +40,7 @@ Le module reutilise les modeles existants de Lespass :
 ```
 controlvanne/
   models.py           Modeles (voir tableau ci-dessus)
-  viewsets.py          TireuseViewSet (ping, authorize, event) + AuthKioskView
+  viewsets.py          TireuseViewSet (ping, authorize, event) + AuthKioskView/KioskTokenView + KioskBridgeThrottle
   permissions.py       HasTireuseAccess (cle API tireuse OU session admin)
   serializers.py       PingSerializer, AuthorizeSerializer, EventSerializer
   billing.py           Facturation : wallet check, Transaction, LigneArticle, Stock
@@ -173,7 +173,7 @@ A la sauvegarde, un `PairingDevice` et un `PointDeVente` de type TIREUSE sont cr
 Puis sur le Raspberry Pi en SSH, lancer le script d'installation avec ce PIN :
 
 ```bash
-wget https://raw.githubusercontent.com/TiBillet/Lespass/dev_vps/controlvanne/Pi/install_pi.sh \
+wget https://raw.githubusercontent.com/TiBillet/Lespass/V2/controlvanne/Pi/install_pi.sh \
   && chmod +x install_pi.sh && ./install_pi.sh
 ```
 
@@ -242,6 +242,12 @@ Le JS est dans `controlvanne/static/controlvanne/js/panel_kiosk.js`.
 
 Le Pi appelle `POST /controlvanne/auth-kiosk/` (cle API dans le header) et recoit un token a usage unique. Ce token est passe en parametre URL (`?kiosk_token=<token>`) au demarrage de Chromium. Django valide le token, ouvre une session, et redirige vers le kiosk authentifie.
 
+**Protections de sécurité** :
+- Throttle anti-brute-force : 10 requêtes/min par IP (classe `KioskBridgeThrottle`)
+- Session 12h (`request.session.set_expiry`) — aligné avec `LaBoutikAuthBridgeView`
+- `next_url` échappé avec `iri_to_uri` + `escape` pour parer le XSS reflectif
+- Token UUID stocké en cache 5 min — nécessite un cache partagé (Redis) en multi-worker
+
 ---
 
 ## Installation du Raspberry Pi
@@ -259,7 +265,7 @@ Le Pi appelle `POST /controlvanne/auth-kiosk/` (cle API dans le header) et recoi
 Connectez-vous en SSH au Pi puis executez :
 
 ```bash
-wget https://raw.githubusercontent.com/TiBillet/Lespass/dev_vps/controlvanne/Pi/install_pi.sh \
+wget https://raw.githubusercontent.com/TiBillet/Lespass/V2/controlvanne/Pi/install_pi.sh \
   && chmod +x install_pi.sh && ./install_pi.sh
 ```
 
@@ -311,16 +317,11 @@ sudo systemctl restart tibeer.service kiosk.service
 sudo systemctl stop tibeer.service kiosk.service
 
 # Editer la configuration
-nano /home/sysop/tibeer/.env
+nano /home/sysop/tibeer/controlvanne/Pi/.env
 
-# Re-appairer (nouveau PIN)
-cd /home/sysop/tibeer && python3 -c "
-import requests, json
-url = input('URL publique TiBillet: ')
-pin = input('PIN 6 chiffres: ')
-r = requests.post(f'{url}/api/discovery/claim/', json={'pin_code': pin})
-print(json.dumps(r.json(), indent=2))
-"
+# Re-appairer (nouveau PIN visible dans Admin → Tireuses → Taps)
+cd /home/sysop/tibeer/controlvanne/Pi
+make claim PIN=<code> SERVER=https://votre-domaine.tld
 ```
 
 ### Demarrage automatique
@@ -329,7 +330,7 @@ Au demarrage du Pi, la sequence est :
 1. `pigpiod` demarre (GPIO)
 2. `tibeer.service` demarre :
    - Ping serveur (verif connectivite + calibration)
-   - Auth kiosk (cookie session)
+   - Auth kiosk (token usage unique → `?kiosk_token=` dans URL Chromium → cookie session pose par Django)
    - Lance Chromium kiosk en arriere-plan
    - Boucle controleur (RFID + vanne + API)
 3. `kiosk.service` demarre (X11 + Chromium plein ecran)
