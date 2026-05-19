@@ -548,6 +548,14 @@ def get_sidebar_navigation(request):
             "collapsible": True,
             "items": [
                 {
+                    "title": _("Rapports"),
+                    "icon": "lock",
+                    "link": reverse_lazy(
+                        "staff_admin:comptabilite_cloturecaisse_changelist"
+                    ),
+                    "permission": admin_permission,
+                },
+                {
                     "title": _("Entries"),
                     "icon": "receipt_long",
                     "link": reverse_lazy(
@@ -555,7 +563,7 @@ def get_sidebar_navigation(request):
                     ),
                     "permission": admin_permission,
                 },
-                # FROM V2 : TO ADD LATER
+                # FROM V2 : TO ADD LATER (laboutik viendra plus tard)
                 # {
                 #     "title": _("Operation logs"),
                 #     "icon": "history",
@@ -563,10 +571,10 @@ def get_sidebar_navigation(request):
                 #     "permission": admin_permission,
                 # },
                 # {
-                #     "title": _("Accounting codes"),
+                #     "title": _("Accounting accounts"),
                 #     "icon": "account_balance",
                 #     "link": reverse_lazy(
-                #         "staff_admin:laboutik_comptecomptable_changelist"
+                #         "staff_admin:comptabilite_comptecomptable_changelist"
                 #     ),
                 #     "permission": admin_permission,
                 # },
@@ -574,7 +582,7 @@ def get_sidebar_navigation(request):
                 #     "title": _("Payment method mapping"),
                 #     "icon": "swap_horiz",
                 #     "link": reverse_lazy(
-                #         "staff_admin:laboutik_mappingmoyendepaiement_changelist"
+                #         "staff_admin:comptabilite_mappingmoyendepaiement_changelist"
                 #     ),
                 #     "permission": admin_permission,
                 # },

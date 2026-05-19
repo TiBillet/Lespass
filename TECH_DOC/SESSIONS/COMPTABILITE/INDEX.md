@@ -12,8 +12,10 @@
 
 | # | Chantier | Statut | Spec |
 |---|---|---|---|
-| 01 | Port partiel V2 (clôture caisse + plan comptable + exports CSV/FEC/Excel/PDF) | 🟡 Spec rédigée, en attente de S1 | [`SPEC.md`](SPEC.md) |
-| 02 | (à venir) | — | — |
+| 01 | Port partiel V2 (clôture caisse + plan comptable + exports CSV/FEC/Excel/PDF) | ✅ **TERMINÉ** (S1→S6, 2026-05-15) | [`SPEC.md`](SPEC.md) |
+| 02 | Démo data — ventes comptables (Option A, 13 cas créables) | ✅ **TERMINÉ** (2026-05-18) | [`CHANTIER-02-demo-data-ventes.md`](CHANTIER-02-demo-data-ventes.md) |
+| 03 | Exports admin (remplacer `django-import-export` par Tableur + PDF custom sur 4 ModelAdmin) | 📋 **SPEC RÉDIGÉE** (2026-05-19) | [`CHANTIER-03-exports-admin.md`](CHANTIER-03-exports-admin.md) |
+| — | (futur) Versements bancaires inter-tenants + monnaies locales | 📋 SPEC EN ATTENTE Fedow V2 | [`../TODO/COMPTABILITE-inter-tenants.md`](../TODO/COMPTABILITE-inter-tenants.md) |
 
 ---
 
@@ -174,7 +176,14 @@ L'app `comptabilite/` reste sur disque, peut être ré-activée plus tard.
 - [x] 0.2 Exploration code V1 (LigneArticle, sidebar, Celery beat, deps)
 - [x] 0.3 Rédaction SPEC.md
 - [x] 0.4 Validation maintainer (décisions clés tranchées 2026-05-15)
-- [ ] S1 — Modèle + admin minimal
+- [x] S1 — Modèle + admin minimal (fait le 2026-05-15)
+- [x] S2 — Service rapport + management command + tests (fait le 2026-05-15)
+- [x] S3 — Templates admin (rapport visuel) + vue temps réel (fait le 2026-05-15)
+- [x] S4 — Exports CSV/Excel/PDF/FEC (fait le 2026-05-15)
+- [x] S5 — Celery beat + email + plan comptable + 3 profils CSV (fait le 2026-05-15)
+- [x] S6 — 5 profils CSV restants + verify_clotures + doc utilisateur (fait le 2026-05-15)
+
+**Chantier 01 ✅ TERMINÉ le 2026-05-15.**
 - [ ] S2 — Service rapport + management command + tests
 - [ ] S3 — Templates admin + vue temps réel
 - [ ] S4 — Exports CSV/Excel/PDF/FEC

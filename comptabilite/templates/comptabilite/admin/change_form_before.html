@@ -1,0 +1,97 @@
+{% load i18n unfold %}
+
+{# Vue detail d'une cloture comptable — rapport visuel complet. #}
+{# / Cloture detail view — full visual report. #}
+{# LOCALISATION : comptabilite/templates/comptabilite/admin/change_form_before.html #}
+
+{# Masquer les fieldsets standard du form (modele immuable, pas d'edition). #}
+{# / Hide the standard form fieldsets (immutable model, no edit). #}
+<style>
+    /* Cache les fieldsets et le submit-row residuels de Unfold pour ne montrer que le rapport. */
+    .aligned, fieldset.module, .submit-row, fieldset.fieldset {
+        display: none !important;
+    }
+</style>
+
+<div class="flex flex-col gap-4">
+
+    {% if cloture %}
+        <div class="flex flex-row gap-2 flex-wrap" data-testid="comptabilite-bandeau-exports">
+            {# URLs en ../ car les routes sont a /<uuid>/exporter-xxx/, pas dans /change/ #}
+            <a href="../exporter-csv/"
+               data-testid="comptabilite-export-csv"
+               class="bg-base-100 hover:bg-base-200 dark:bg-base-800 dark:hover:bg-base-700 px-3 py-2 rounded-md text-sm font-medium no-underline border border-base-200 dark:border-base-700">
+                📄 {% translate "CSV" %}
+            </a>
+            <a href="../exporter-excel/"
+               data-testid="comptabilite-export-tableur"
+               class="bg-base-100 hover:bg-base-200 dark:bg-base-800 dark:hover:bg-base-700 px-3 py-2 rounded-md text-sm font-medium no-underline border border-base-200 dark:border-base-700">
+                📊 {% translate "Tableur" %}
+            </a>
+            <a href="../exporter-pdf/"
+               data-testid="comptabilite-export-pdf"
+               class="bg-base-100 hover:bg-base-200 dark:bg-base-800 dark:hover:bg-base-700 px-3 py-2 rounded-md text-sm font-medium no-underline border border-base-200 dark:border-base-700">
+                🖨️ {% translate "PDF" %}
+            </a>
+            <a href="../exporter-fec/"
+               data-testid="comptabilite-export-fec"
+               class="bg-base-100 hover:bg-base-200 dark:bg-base-800 dark:hover:bg-base-700 px-3 py-2 rounded-md text-sm font-medium no-underline border border-base-200 dark:border-base-700"
+               title="{% translate 'Fichier des Écritures Comptables (format légal français)' %}">
+                ⚖️ {% translate "FEC" %}
+            </a>
+            <button type="button"
+                    data-testid="comptabilite-bouton-csv-comptable"
+                    hx-get="../exporter-csv-comptable/"
+                    hx-target="#zone-csv-comptable"
+                    hx-swap="innerHTML"
+                    class="bg-base-100 hover:bg-base-200 dark:bg-base-800 dark:hover:bg-base-700 px-3 py-2 rounded-md text-sm font-medium border border-base-200 dark:border-base-700 cursor-pointer">
+                📑 {% translate "CSV comptable" %}
+            </button>
+        </div>
+        <div id="zone-csv-comptable" class="mt-2"></div>
+    {% endif %}
+
+    {% if cloture %}
+        {% component "unfold/components/card.html" with title=_("Synthèse de la clôture") %}
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                <div>
+                    <strong>{% translate "Numéro séquentiel" %} :</strong>
+                    <span class="font-mono">#{{ cloture.numero_sequentiel }}</span>
+                </div>
+                <div>
+                    <strong>{% translate "Périodicité" %} :</strong>
+                    {{ cloture.get_niveau_display }}
+                </div>
+                <div>
+                    <strong>{% translate "Début" %} :</strong>
+                    {{ cloture.datetime_debut|date:"d/m/Y H:i" }}
+                </div>
+                <div>
+                    <strong>{% translate "Fin" %} :</strong>
+                    {{ cloture.datetime_fin|date:"d/m/Y H:i" }}
+                </div>
+                <div>
+                    <strong>{% translate "Transactions" %} :</strong>
+                    {{ cloture.nombre_transactions }}
+                </div>
+                <div>
+                    <strong>{% translate "Total TTC" %} :</strong>
+                    <span class="font-mono">{{ cloture_total_general_euros }} €</span>
+                </div>
+                <div class="col-span-2 md:col-span-2">
+                    <strong>{% translate "Empreinte des lignes" %} :</strong>
+                    <code class="text-xs text-base-500 break-all">{{ cloture.hash_lignes|default:"—" }}</code>
+                </div>
+            </div>
+        {% endcomponent %}
+    {% endif %}
+
+    {% if rapport %}
+        {% include "comptabilite/admin/_sections_rapport.html" %}
+    {% else %}
+        {% component "unfold/components/card.html" with title=_("Rapport") %}
+            <p class="text-base-500 italic">{% translate "Aucun rapport disponible." %}</p>
+        {% endcomponent %}
+    {% endif %}
+
+</div>
