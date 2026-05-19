@@ -1,0 +1,139 @@
+{% load i18n %}
+{% load onboard_steps %}
+{% comment %}
+  Panneau de progression du wizard onboarding (6 etapes).
+  / Onboarding wizard progress panel (6 steps).
+
+  LOCALISATION: onboard/templates/onboard/partials/progress_panel.html
+
+  Variables de contexte :
+    - `step` (string) : valeur de `WaitingConfiguration.STEP_*` indiquant
+      la step courante ("identity", "verify", "place", "descriptions",
+      "events", "launch").
+    - `invitation` (OnboardInvitation, optionnel) : si present, affiche le
+      badge "Invite·e par <name>".
+
+  Refacto N3 (2026-05-15) : les chaines `step == 'X' or step == 'Y' or ...`
+  ont ete remplacees par les templatetags `{% is_step_current %}` et
+  `{% is_step_done %}` (cf. onboard/templatetags/onboard_steps.py).
+  Source unique de verite pour l'ordre des etapes : `STEP_ORDER` dans le
+  templatetag.
+
+  / Refactor N3 (2026-05-15): replaced brittle `step == 'X' or ...`
+  chains with `{% is_step_current %}` / `{% is_step_done %}` template
+  tags. Single source of truth for step order: `STEP_ORDER` in the
+  templatetag module.
+
+  Context variables:
+    - `step` (string): one of `WaitingConfiguration.STEP_*` values.
+    - `invitation` (OnboardInvitation, optional): renders an "invited by"
+      badge if provided.
+{% endcomment %}
+
+{# Calcul des flags is-current / is-done une seule fois en haut du template #}
+{# / Compute is-current / is-done flags once at the top of the template #}
+{# Note : on fusionne identity + verify dans une seule entree de panel    #}
+{# "Identite" — la verification OTP est invisible si l'user est deja      #}
+{# loggue (skip_otp) et reste un sous-flow technique sinon. Cf. decision  #}
+{# mainteneur 2026-05-16.                                                  #}
+{# / We merge identity + verify into a single "Identite" panel entry —    #}
+{# OTP verification is invisible to a logged-in user (skip_otp) and stays  #}
+{# a technical sub-flow otherwise. Maintainer decision 2026-05-16.        #}
+{% is_step_current step 'identity' as identity_current %}
+{% is_step_current step 'verify' as verify_current %}
+{% is_step_done step 'verify' as verify_done %}
+{% is_step_current step 'place' as place_current %}
+{% is_step_done step 'place' as place_done %}
+{% is_step_current step 'descriptions' as descriptions_current %}
+{% is_step_done step 'descriptions' as descriptions_done %}
+{% is_step_current step 'launch' as launch_current %}
+
+<div class="onboard-panel" data-testid="onboard-progress-panel">
+    <div class="onboard-panel-header">
+        <span class="onboard-panel-eyebrow">{% translate "CRÉER MON ESPACE" %}</span>
+    </div>
+    {% comment %}
+    Mod 3 (feedback mainteneur 2026-05-15) : les etapes deja parcourues
+    (`is-done`) sont des liens cliquables — l'utilisateur peut revenir
+    pour modifier ses informations. L'etape courante reste un span
+    (non-cliquable). Les etapes futures sont en grise non-cliquable :
+    on ne peut pas sauter une etape vers l'avant.
+    / Done steps are clickable links — the user can go back to edit.
+    The current step is a non-clickable span. Future steps are grey
+    non-clickable: no forward skip.
+    {% endcomment %}
+    <ol class="onboard-panel-steps">
+        {# Etape 1 : Identite (englobe la verification OTP qui est un       #}
+        {# sous-flow technique). L'etape reste "current" tant qu'on est sur #}
+        {# identity OU verify. Elle est "done" quand on a depasse verify    #}
+        {# (la vue verify ayant fait `current_step=place` apres OTP OK).    #}
+        {# / Step 1: Identity (encompasses OTP verification as a technical  #}
+        {# sub-flow). It stays "current" while on identity OR verify, and   #}
+        {# becomes "done" once past verify (verify view sets step=place).   #}
+        <li class="onboard-step {% if identity_current or verify_current %}is-current{% elif verify_done %}is-done{% endif %}"
+            {% if identity_current or verify_current %}aria-current="step"{% endif %}>
+            {% if verify_done %}
+                <a href="{% url 'onboard-identity' %}" class="onboard-step-link" data-testid="onboard-progress-1">
+                    <span class="onboard-step-num">1</span> {% translate "Identité" %}
+                    <small class="onboard-step-hint">{% translate "Qui êtes-vous et comment s'appelle votre lieu ?" %}</small>
+                </a>
+            {% else %}
+                <span class="onboard-step-num">1</span> {% translate "Identité" %}
+                <small class="onboard-step-hint">{% translate "Qui êtes-vous et comment s'appelle votre lieu ?" %}</small>
+            {% endif %}
+        </li>
+        {# Etape 2 : Lieu / Step 2: Place #}
+        <li class="onboard-step {% if place_current %}is-current{% elif place_done %}is-done{% endif %}"
+            {% if place_current %}aria-current="step"{% endif %}>
+            {% if place_done %}
+                <a href="{% url 'onboard-place' %}" class="onboard-step-link" data-testid="onboard-progress-2">
+                    <span class="onboard-step-num">2</span> {% translate "Votre lieu" %}
+                    <small class="onboard-step-hint">{% translate "Nous localisons votre lieu sur la carte." %}</small>
+                </a>
+            {% else %}
+                <span class="onboard-step-num">2</span> {% translate "Votre lieu" %}
+                <small class="onboard-step-hint">{% translate "Nous localisons votre lieu sur la carte." %}</small>
+            {% endif %}
+        </li>
+        {# Etape 3 : Presentation / Step 3: Presentation #}
+        <li class="onboard-step {% if descriptions_current %}is-current{% elif descriptions_done %}is-done{% endif %}"
+            {% if descriptions_current %}aria-current="step"{% endif %}>
+            {% if descriptions_done %}
+                <a href="{% url 'onboard-descriptions' %}" class="onboard-step-link" data-testid="onboard-progress-3">
+                    <span class="onboard-step-num">3</span> {% translate "Présentation" %}
+                    <small class="onboard-step-hint">{% translate "Accroche, texte long et logo." %}</small>
+                </a>
+            {% else %}
+                <span class="onboard-step-num">3</span> {% translate "Présentation" %}
+                <small class="onboard-step-hint">{% translate "Accroche, texte long et logo." %}</small>
+            {% endif %}
+        </li>
+        {# Etape 4 : Launch (jamais cliquable depuis la sidebar)            #}
+        {# L'etape "Evenements" est volontairement masquee du parcours      #}
+        {# par defaut (decision mainteneur 2026-05-16). Le code et les      #}
+        {# routes `/onboard/events/*` restent en place pour un usage        #}
+        {# futur. / Step 4: Launch. The "Events" step is hidden from the   #}
+        {# default flow (kept in code for future reuse).                    #}
+        <li class="onboard-step {% if launch_current %}is-current{% endif %}"
+            {% if launch_current %}aria-current="step"{% endif %}>
+            <span class="onboard-step-num">4</span> {% translate "C'est parti !" %}
+            <small class="onboard-step-hint">{% translate "Découverte de TiBillet pendant la création." %}</small>
+        </li>
+    </ol>
+
+    {# Badge invitation (si l'utilisateur a ete invite par un autre tenant) #}
+    {# / Invitation badge (if the user has been invited by another tenant) #}
+    {% if invitation %}
+    <div class="onboard-panel-invite" data-testid="onboard-invitation-badge">
+        🎉 {% blocktranslate with name=invitation.invited_by_tenant.name %}Invité·e par {{ name }}{% endblocktranslate %}
+    </div>
+    {% endif %}
+
+    {# Bouton "Reprendre plus tard" retire (feedback mainteneur 2026-05-14) :  #}
+    {# l'action n'etait pas implementee cote serveur et risquait de tromper    #}
+    {# l'utilisateur. La reprise se fait via le magic link envoye par email  #}
+    {# (cf. onboard.views.resume) et la session navigateur.                  #}
+    {# / "Resume later" button removed (maintainer feedback): the action was  #}
+    {# not server-side implemented and could mislead the user. Resume is now  #}
+    {# only via the email magic link (cf. onboard.views.resume) + session.    #}
+</div>

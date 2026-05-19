@@ -1,25 +1,38 @@
-from django.db import connection
 from django.http import HttpResponse
-from django.contrib.sites.shortcuts import get_current_site
+
+from TiBillet.seo_indexing import should_noindex
 
 
 # The robots.txt file is accessible at: https://yourdomain.com/robots.txt
 # It automatically includes a reference to the sitemap at: https://yourdomain.com/sitemap.xml
 def robots_txt(request):
     """
-    Generate a dynamic robots.txt file with the correct sitemap URL.
+    Genere un robots.txt dynamique pour le tenant courant.
+    / Generate a dynamic robots.txt for the current tenant.
 
-    This view is mapped to /robots.txt in BaseBillet/urls.py and generates
-    a robots.txt file that:
-    1. Allows all search engines to access all content
-    2. Includes a reference to the sitemap.xml file with the correct domain
+    LOCALISATION : BaseBillet/views_robots.py
+
+    Si l'instance est marquee noindex (au moins un flag d'env
+    DEBUG/TEST/DEMO/STRIPE_TEST a 1), on sert `Disallow: /` pour
+    bloquer le crawl. Sinon : `Allow: /` + sitemap.
+    Voir TiBillet/seo_indexing.py pour la regle complete.
+    / If the instance is marked noindex (at least one env flag
+    DEBUG/TEST/DEMO/STRIPE_TEST is 1), we serve `Disallow: /`.
+    Otherwise: `Allow: /` + sitemap reference.
 
     Access URL: https://yourdomain.com/robots.txt
     """
-    # Try to get the domain from the current site
-    domain = request.get_host()
+    if should_noindex():
+        # Instance non indexable : on bloque le crawl entier.
+        # / Non-indexable instance: block all crawling.
+        return HttpResponse(
+            "User-agent: *\nDisallow: /\n",
+            content_type="text/plain",
+        )
 
-    # If domain doesn't include protocol, add it
+    # Instance prod : crawl autorise + reference du sitemap
+    # / Prod instance: crawling allowed + sitemap reference
+    domain = request.get_host()
     if not domain.startswith('http'):
         domain = f"https://{domain}"
 

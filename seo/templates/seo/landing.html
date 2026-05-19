@@ -1,0 +1,401 @@
+{% extends "seo/base.html" %}
+{% load i18n seo_tags static %}
+
+{# Le hero est HORS du container (full-width via main_wrapper). #}
+{# Le reste du contenu est DANS le container (block content). #}
+{# / Hero is OUTSIDE the container (full-width via main_wrapper). #}
+{# Rest of content is INSIDE the container (block content). #}
+{% block main_wrapper %}
+
+{# ================================================================ #}
+{# HERO — style tibillet.org : gradient sur mots-cles + logo         #}
+{# Le H1 porte les mots-cles principaux pour le SEO.                 #}
+{# / HERO — tibillet.org style: gradient on keywords + logo          #}
+{# The H1 carries the main SEO keywords.                             #}
+{# ================================================================ #}
+<section class="hero-section" data-testid="hero-section">
+    <div class="hero-layout">
+        <div class="hero-text">
+            <h1 class="hero-title">
+                <span class="hero-kw">{% translate "Adhésion" %}</span>,
+                {% translate "billetterie," %}
+                <br>
+                <span class="hero-kw">{% translate "caisse enregistreuse" %}</span>
+                {% translate "et" %}
+                <br>
+                <span class="hero-kw">{% translate "outils" %}</span>
+                {% translate "libres et fédérés." %}
+            </h1>
+            <div class="hero-cta">
+                <a href="/explorer/" class="btn btn-lg hero-btn-primary" data-testid="hero-cta-explore">
+                    {% translate "Explorer le réseau" %}
+                </a>
+                <a href="https://tibillet.github.io/documentation_v3/" target="_blank" rel="noopener"
+                   class="btn btn-lg hero-btn-secondary" data-testid="hero-cta-docs">
+                    {% translate "Documentation" %}
+                </a>
+                <a href="/onboard/"
+                   class="btn btn-lg hero-btn-secondary" data-testid="hero-cta-create">
+                    {% translate "Créer son espace" %}
+                </a>
+            </div>
+        </div>
+        <div class="hero-logo" aria-hidden="true">
+            <img src="{% static 'seo/tibillet-logo-couleur.svg' %}"
+                 alt=""
+                 class="hero-logo-img">
+        </div>
+    </div>
+</section>
+
+{# Le reste du contenu est dans un container / Rest of content in a container #}
+<main class="container-lg my-4">
+
+{# ================================================================ #}
+{# PHILOSOPHIE — texte de fond sur TiBillet                          #}
+{# / PHILOSOPHY — background text about TiBillet                     #}
+{# ================================================================ #}
+<section class="philo-section" data-testid="philo-section">
+    <h2 class="philo-title">{% translate "Un commun numérique coopératif" %}</h2>
+    <div class="philo-columns">
+        <div class="philo-col">
+            <p>
+                {% blocktranslate %}
+                TiBillet est né sur le terrain, dans les festivals et les cafés associatifs de La Réunion. Pas dans un bureau d'études, mais dans les besoins concrets des lieux qui accueillent du public : vendre des billets sans frais cachés, gérer les adhésions, encaisser au bar, et fédérer les agendas entre structures voisines.
+                {% endblocktranslate %}
+            </p>
+            <p>
+                {% blocktranslate %}
+                Aujourd'hui c'est une boîte à outils complète — billetterie, cashless NFC multi-lieux, caisse enregistreuse, monnaie locale, monnaie temps, budget contributif — pensée pour et par les associations culturelles. Zéro dark pattern, zéro commission cachée, code source libre.
+                {% endblocktranslate %}
+            </p>
+        </div>
+        <div class="philo-col">
+            <p>
+                {% blocktranslate %}
+                TiBillet est porté par la <strong>Coopérative Code Commun</strong> (SCIC à trois collèges égaux : animateur·ices, contributeur·ices, utilisateur·ices). Le code est libre — mais ce qui fait un commun numérique, c'est la communauté qui l'entoure et la gouvernance partagée qui le pilote.
+                {% endblocktranslate %}
+            </p>
+            <p>
+                {% blocktranslate %}
+                Inspirés des travaux d'Elinor Ostrom : un dépôt Git avec une licence libre ne suffit pas. Il faut une <strong>ressource partagée</strong>, une <strong>communauté vivante</strong>, une <strong>gouvernance organisée</strong>. Le principe fédératif est simple — chaque lieu garde son autonomie (son agenda, sa caisse, ses adhésions) et choisit avec qui se connecter. Une seule carte pour plusieurs lieux. Un réseau qui grandit par la rencontre, pas par le marketing.
+                {% endblocktranslate %}
+            </p>
+        </div>
+    </div>
+</section>
+
+{# ================================================================ #}
+{# FONCTIONNALITES — grille 3x2 comme tibillet.org                   #}
+{# / FEATURES — 3x2 grid like tibillet.org                           #}
+{# ================================================================ #}
+<section class="features-section" data-testid="features-section">
+    <h2 class="features-heading">{% translate "Fonctionnalités" %}</h2>
+    <p class="features-subheading text-center">
+        {% translate "Une solution complète pour les lieux culturels et associatifs." %}
+    </p>
+    <div class="features-grid">
+
+        <div class="feature-card" data-testid="feature-adhesion">
+            <div class="feature-icon">
+                <i class="bi bi-person-check" aria-hidden="true"></i>
+            </div>
+            <h3 class="feature-title">{% translate "Adhésions et abonnements" %}</h3>
+            <p class="feature-desc">
+                {% translate "Gérez les adhésions à votre association et proposez des abonnements. Suivez les renouvellements et offrez des avantages exclusifs aux membres." %}
+            </p>
+        </div>
+
+        <div class="feature-card" data-testid="feature-billetterie">
+            <div class="feature-icon">
+                <i class="bi bi-ticket-perforated" aria-hidden="true"></i>
+            </div>
+            <h3 class="feature-title">{% translate "Billetterie" %}</h3>
+            <p class="feature-desc">
+                {% translate "Événements gratuits et payants avec prix préférentiels pour les adhérents. Sans frais cachés, sans commission surprise." %}
+            </p>
+        </div>
+
+        <div class="feature-card" data-testid="feature-agenda">
+            <div class="feature-icon">
+                <i class="bi bi-calendar2-week" aria-hidden="true"></i>
+            </div>
+            <h3 class="feature-title">{% translate "Agenda fédéré" %}</h3>
+            <p class="feature-desc">
+                {% translate "Créez un agenda partagé et choisissez les lieux avec qui partager vos événements. Fédérez votre programmation avec d'autres structures." %}
+            </p>
+        </div>
+
+        <div class="feature-card" data-testid="feature-caisse">
+            <div class="feature-icon">
+                <i class="bi bi-shop" aria-hidden="true"></i>
+            </div>
+            <h3 class="feature-title">{% translate "Caisse enregistreuse" %}</h3>
+            <p class="feature-desc">
+                {% translate "Solution complète pour gérer vos ventes sur place, avec imprimantes de préparation en cuisine et gestion des stocks." %}
+            </p>
+        </div>
+
+        <div class="feature-card" data-testid="feature-cashless">
+            <div class="feature-icon">
+                {# bi-contactless n'existe pas dans Bootstrap Icons 1.11.3.        #}
+                {# On utilise bi-credit-card-2-front (carte bancaire avec puce). #}
+                {# / bi-contactless missing from Bootstrap Icons 1.11.3.            #}
+                {# Using bi-credit-card-2-front instead (credit card with chip).    #}
+                <i class="bi bi-credit-card-2-front" aria-hidden="true"></i>
+            </div>
+            <h3 class="feature-title">{% translate "Cashless et carte NFC" %}</h3>
+            <p class="feature-desc">
+                {% translate "Système cashless comme en festival, avec vérification de l'adhésion sur la carte. Une seule carte pour plusieurs lieux du réseau." %}
+            </p>
+        </div>
+
+        <div class="feature-card" data-testid="feature-monnaie">
+            <div class="feature-icon">
+                <i class="bi bi-coin" aria-hidden="true"></i>
+            </div>
+            <h3 class="feature-title">{% translate "Monnaie locale et temps" %}</h3>
+            <p class="feature-desc">
+                {% translate "Monnaie temps, cadeaux et valorisation de bénévoles. Multi-monnaies sur une seule carte : euros, cadeaux, temps." %}
+            </p>
+        </div>
+
+        <div class="feature-card" data-testid="feature-open-data">
+            <div class="feature-icon">
+                <i class="bi bi-database" aria-hidden="true"></i>
+            </div>
+            <h3 class="feature-title">{% translate "Données ouvertes" %}</h3>
+            <p class="feature-desc">
+                {% translate "Toutes les données non personnelles de votre lieu sont accessibles par API, dans un vocabulaire standard (schema.org / JSON-LD), sous licence ouverte. Vos événements, votre programmation : libres de circuler." %}
+            </p>
+        </div>
+
+        <div class="feature-card" data-testid="feature-libre">
+            <div class="feature-icon">
+                <i class="bi bi-code-slash" aria-hidden="true"></i>
+            </div>
+            <h3 class="feature-title">{% translate "Logiciel libre AGPLv3" %}</h3>
+            <p class="feature-desc">
+                {% translate "Le code de TiBillet est publié sous licence AGPLv3. Personne ne peut le verrouiller, le fermer, le privatiser. C'est la première brique d'un commun numérique — la coopérative Code Commun fait le reste." %}
+            </p>
+        </div>
+
+        <div class="feature-card" data-testid="feature-agenda-participatif">
+            <div class="feature-icon">
+                <i class="bi bi-people" aria-hidden="true"></i>
+            </div>
+            <h3 class="feature-title">{% translate "Agenda participatif" %}</h3>
+            <p class="feature-desc">
+                {% translate "Recevez les propositions d'événements de votre réseau via un formulaire ouvert. Pour chaque proposition, vous choisissez : publier sur votre agenda, ou inviter l'organisateur·ice à créer son espace et rejoindre votre fédération." %}
+            </p>
+        </div>
+
+        <div class="feature-card" data-testid="feature-seo">
+            <div class="feature-icon">
+                <i class="bi bi-search" aria-hidden="true"></i>
+            </div>
+            <h3 class="feature-title">{% translate "Référencement et SEO" %}</h3>
+            <p class="feature-desc">
+                {% translate "Chaque page de lieu et chaque événement sont structurés en JSON-LD (schema.org) pour être correctement indexés par Google, Bing et les agendas culturels. Sitemap auto-généré, métadonnées propres." %}
+            </p>
+        </div>
+
+    </div>
+</section>
+
+{# ================================================================ #}
+{# ROADMAP — accordeon <details> "Futur de TiBillet"                 #}
+{# Utilise l'element HTML5 natif <details>/<summary> : zero JS,      #}
+{# accessible par defaut (clavier + lecteur d'ecran), pas de         #}
+{# dependance Bootstrap JS. Le chevron pivote via CSS sur            #}
+{# `details[open]`. Cf. seo.css section "ROADMAP / FUTURE".          #}
+{# / ROADMAP — native <details> accordion. Zero JS, accessible       #}
+{# by default (keyboard + screen reader), no Bootstrap JS dep.       #}
+{# Chevron rotates via CSS on `details[open]`.                       #}
+{# ================================================================ #}
+<section class="roadmap-section" data-testid="roadmap-section">
+    {# Le <h2> est visuellement masque (la section utilise un <summary> comme #}
+    {# titre cliquable), mais il donne aux bots de recherche la hierarchie    #}
+    {# semantique manquante (h1 hero > h2 features > h2 roadmap > h3 cards).  #}
+    {# Sans ce h2, Google voit des h3 orphelins apres le h2 features et       #}
+    {# dilue la pertinence semantique de la section roadmap.                  #}
+    {# / Visually hidden h2 — the section uses a <summary> as its clickable   #}
+    {# heading, but search bots need this h2 to keep the heading hierarchy    #}
+    {# coherent (h1 hero > h2 features > h2 roadmap > h3 cards).              #}
+    <h2 class="visually-hidden">{% translate "Futur de TiBillet — chantiers en cours" %}</h2>
+    <details class="roadmap-details" data-testid="roadmap-details">
+        <summary class="roadmap-summary" data-testid="roadmap-toggle">
+            <span class="roadmap-summary-label">
+                <i class="bi bi-rocket-takeoff me-2" aria-hidden="true"></i>
+                {% translate "Futur de TiBillet" %}
+            </span>
+            <span class="roadmap-summary-chevron" aria-hidden="true">
+                <i class="bi bi-chevron-down"></i>
+            </span>
+        </summary>
+
+        <div class="roadmap-content">
+            <p class="roadmap-intro text-center">
+                {% translate "Ce qu'on construit maintenant — venez en discuter, contribuer ou simplement déclarer votre intérêt." %}
+            </p>
+
+            <div class="features-grid roadmap-grid">
+
+                <div class="feature-card roadmap-card" data-testid="roadmap-newsletter">
+                    <div class="feature-icon roadmap-icon">
+                        <i class="bi bi-envelope-paper" aria-hidden="true"></i>
+                    </div>
+                    <h3 class="feature-title">{% translate "Newsletter intégrée" %}</h3>
+                    <p class="feature-desc">
+                        {% translate "Envoyez des emails ciblés à vos adhérent·es à jour, en retard de cotisation, ou aux personnes présentes à un événement précis. Une communication directement reliée à votre agenda et à votre base de membres — sans Mailchimp, sans tracking tiers." %}
+                    </p>
+                </div>
+
+                <div class="feature-card roadmap-card" data-testid="roadmap-reseaux">
+                    <div class="feature-icon roadmap-icon">
+                        <i class="bi bi-megaphone" aria-hidden="true"></i>
+                    </div>
+                    <h3 class="feature-title">{% translate "Réseaux sociaux unifiés" %}</h3>
+                    <p class="feature-desc">
+                        {% blocktranslate %}Rédigez un message, publiez partout. Nous branchons progressivement des outils libres de gestion multicanal comme <a href="https://github.com/gitroomhq/postiz-app" target="_blank" rel="noopener">Postiz</a> pour éviter d'ouvrir cinq onglets à chaque annonce.{% endblocktranslate %}
+                    </p>
+                </div>
+
+                <div class="feature-card roadmap-card" data-testid="roadmap-fediverse">
+                    <div class="feature-icon roadmap-icon">
+                        <i class="bi bi-globe2" aria-hidden="true"></i>
+                    </div>
+                    <h3 class="feature-title">{% translate "Fédiverse et Mobilizon" %}</h3>
+                    <p class="feature-desc">
+                        {% translate "Vos événements remontent vers Mobilizon et le Fédiverse pour atteindre les agendas publics et les comptes Mastodon de votre territoire. Une seule saisie, une diffusion ouverte et décentralisée, indépendante des plateformes propriétaires." %}
+                    </p>
+                </div>
+
+                <div class="feature-card roadmap-card" data-testid="roadmap-cascade">
+                    <div class="feature-icon roadmap-icon">
+                        <i class="bi bi-droplet-half" aria-hidden="true"></i>
+                    </div>
+                    <h3 class="feature-title">{% translate "Économie en cascade" %}</h3>
+                    <p class="feature-desc">
+                        {% blocktranslate %}En partenariat avec <a href="https://www.cascade.coop/modele-economique-non-lucratif" target="_blank" rel="noopener">cascade.coop</a> : les surplus de financement participatif ruissellent vers d'autres cascades du réseau. Pas de capture, pas de perte — une économie contributive entre lieux solidaires.{% endblocktranslate %}
+                    </p>
+                </div>
+
+            </div>
+
+            <p class="roadmap-cta text-center">
+                {% blocktranslate %}Ces idées vous parlent ? Pour en savoir plus sur les chantiers en cours, venez discuter avec nous et déclarer votre intérêt sur <a href="https://codecommun.tibillet.coop/contrib" target="_blank" rel="noopener"><strong>codecommun.tibillet.coop/contrib</strong></a>.{% endblocktranslate %}
+            </p>
+        </div>
+    </details>
+</section>
+
+{# Pas de "chiffres cles" (X lieux, Y events) volontairement : ce sont des  #}
+{# vanity metrics typiques d'une plateforme SaaS, et ca jure avec le ton    #}
+{# coop / commun numerique. Les marquees ci-dessous (lieux vivants +        #}
+{# prochains events) suffisent a montrer que le reseau est actif.           #}
+{# / No "key figures" (X venues, Y events) on purpose: SaaS-style vanity    #}
+{# metrics clash with the cooperative tone. The marquees below (active      #}
+{# venues + upcoming events) already prove the network is alive.            #}
+
+{# Bandeau deferoulant "Nos lieux vivants" — marquee CSS infini.            #}
+{# La duree d'animation est passee via la CSS variable --marquee-duration   #}
+{# pour garder une vitesse de defilement constante quel que soit le nombre  #}
+{# de lieux (calculee dans seo.views.landing).                              #}
+{# / Scrolling marquee "Nos lieux vivants" — infinite CSS marquee.          #}
+{# Animation duration passed via the --marquee-duration CSS variable to     #}
+{# keep scroll speed constant regardless of how many lieux there are.       #}
+{% if lieux_pour_bandeau %}
+<section class="marquee-section mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>{% translate "Nos lieux vivants" %}</h2>
+        {# "Voir tous" pointe vers /explorer/ (UX) plutot que /lieux/  #}
+        {# (page indexable conservee pour le SEO mais peu interessante #}
+        {# en navigation humaine).                                     #}
+        {# / "See all" points to /explorer/ (UX) instead of /lieux/    #}
+        {# (kept indexable for SEO ranking, not great for humans).     #}
+        <a href="/explorer/" class="btn btn-outline-primary btn-sm">{% translate "Voir tous" %}</a>
+    </div>
+    <div class="marquee-track"
+         style="--marquee-duration: {{ marquee_lieux_duration_sec }}s"
+         aria-label="{% translate 'Lieux du réseau TiBillet' %}">
+        {% for copy in "ab" %}
+        <div class="marquee-content" aria-hidden="{% if copy == 'b' %}true{% else %}false{% endif %}">
+            {% for lieu in lieux_pour_bandeau %}
+            <a href="https://{{ lieu.domain }}/"
+               class="marquee-item"
+               title="{{ lieu.name }}{% if lieu.locality %} — {{ lieu.locality }}{% endif %}">
+                {% if lieu.logo_url %}
+                <img src="{{ lieu.logo_url }}"
+                     alt="{{ lieu.name }}"
+                     class="marquee-logo"
+                     loading="lazy">
+                {% else %}
+                <span class="marquee-initiale" data-index="{{ forloop.counter0 }}">
+                    {{ lieu.initiale }}
+                </span>
+                {% endif %}
+                <span class="marquee-name">{{ lieu.name }}</span>
+            </a>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{# Bandeau deferoulant "Prochains evenements" — marquee avec vignettes #}
+{# / Scrolling marquee "Upcoming events" — marquee with thumbnails #}
+{% if top_events %}
+<section class="marquee-section mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>{% translate "Prochains événements" %}</h2>
+        {# Idem : "Voir tous" envoie sur /explorer/, vue interactive       #}
+        {# avec carte + filtres. /evenements/ reste indexable pour le SEO. #}
+        {# / Same: "See all" goes to /explorer/, interactive map + filters. #}
+        {# /evenements/ stays indexable for SEO ranking.                    #}
+        <a href="/explorer/" class="btn btn-outline-primary btn-sm">{% translate "Voir tous" %}</a>
+    </div>
+    <div class="marquee-track marquee-track--events" aria-label="{% translate 'Prochains événements du réseau TiBillet' %}">
+        {% for copy in "ab" %}
+        <div class="marquee-content marquee-content--events" aria-hidden="{% if copy == 'b' %}true{% else %}false{% endif %}">
+            {% for event in top_events %}
+            <a href="{{ event.canonical_url|default:'#' }}"
+               class="event-marquee-card"
+               title="{{ event.name }}{% if event.tenant_name %} — {{ event.tenant_name }}{% endif %}"
+               data-testid="event-marquee-card-{{ forloop.counter }}">
+                {% if event.image_url %}
+                <div class="event-marquee-img-wrapper">
+                    <img src="{{ event.image_url }}"
+                         alt="{{ event.name }}"
+                         class="event-marquee-img"
+                         loading="lazy">
+                </div>
+                {% else %}
+                <div class="event-marquee-img-wrapper event-marquee-img-placeholder" data-index="{{ forloop.counter0 }}">
+                    <i class="bi bi-calendar-event" aria-hidden="true"></i>
+                </div>
+                {% endif %}
+                <div class="event-marquee-body">
+                    <span class="event-marquee-name">{{ event.name }}</span>
+                    <span class="event-marquee-date">
+                        <i class="bi bi-calendar3" aria-hidden="true"></i>
+                        {{ event.datetime|format_iso_date }}
+                    </span>
+                    {% if event.tenant_name %}
+                    <span class="event-marquee-lieu">
+                        <i class="bi bi-geo-alt" aria-hidden="true"></i>
+                        {{ event.tenant_name }}
+                    </span>
+                    {% endif %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+</main>
+{% endblock main_wrapper %}

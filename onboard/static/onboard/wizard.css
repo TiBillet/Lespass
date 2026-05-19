@@ -1,0 +1,738 @@
+/*
+ * Wizard onboarding — styles polish (mobile-first).
+ * / Onboarding wizard — polished styles (mobile-first).
+ *
+ * LOCALISATION : onboard/static/onboard/wizard.css
+ *
+ * Principes appliques (skills /ui + /ui-ux-pro-max) :
+ *  - Border-radius concentriques : panel 16px, items 10px, inputs 8px.
+ *  - Box-shadow a 3 couches au lieu de borders seches.
+ *  - text-wrap: balance sur titres (evite mot orphelin sur derniere ligne).
+ *  - tabular-nums sur compteurs ("ETAPE 1 / 6").
+ *  - Antialiased pour rendu net sur macOS.
+ *  - Stagger animations a l'entree (--ordre via inline style).
+ *  - Focus rings visibles, respect prefers-reduced-motion.
+ *  - Couleur primaire vert TiBillet (cohesion gradient panel).
+ *
+ * / Applied principles (skills /ui + /ui-ux-pro-max):
+ * /  - Concentric border-radius: panel 16px, items 10px, inputs 8px.
+ * /  - 3-layer box-shadow instead of flat borders.
+ * /  - text-wrap: balance on headings (no orphan words on last line).
+ * /  - tabular-nums on counters ("STEP 1 / 6").
+ * /  - antialiased rendering on macOS.
+ * /  - Stagger entry animations (--ordre via inline style).
+ * /  - Visible focus rings, respects prefers-reduced-motion.
+ * /  - Green TiBillet primary color (matches panel gradient).
+ *
+ * Roles :
+ * 1. Panneau gauche (`.onboard-panel`) : degrade vert TiBillet, etapes empilees.
+ * 2. Etats des etapes : `.is-current` (opaque, gras, glow) + `.is-done` (check).
+ * 3. Badge invitation et bouton "Reprendre plus tard" (icone + texte).
+ * 4. Form inputs polish (shadow + focus + radius coherent).
+ * 5. Carrousel d'info (`.onboard-carousel`) pour l'etape Launch.
+ */
+
+
+/* ===========================================================
+ * Variables locales (cohesion couleurs + spacing TiBillet)
+ * / Local variables (TiBillet color + spacing cohesion)
+ * =========================================================== */
+.onboard-wizard {
+    /* Vert TiBillet — coherent avec le gradient du panneau.
+       / TiBillet green — matches the panel gradient. */
+    --tb-green-500: #16a34a;
+    --tb-green-600: #15803d;
+    --tb-green-700: #166534;
+
+    /* Rayons concentriques. /  Concentric radius scale. */
+    --tb-radius-panel: 1rem;      /* 16px — conteneur panel/card. */
+    --tb-radius-item: 0.625rem;   /* 10px — items dans panel. */
+    --tb-radius-input: 0.5rem;    /* 8px — inputs / petits boutons. */
+
+    /* Ombres a 3 couches — adaptees a tous fonds (transparence).
+       / 3-layer shadows — works on any background (uses rgba). */
+    --tb-shadow-sm:
+        0 0 0 1px rgba(15, 23, 42, 0.04),
+        0 1px 2px -1px rgba(15, 23, 42, 0.06),
+        0 2px 4px 0 rgba(15, 23, 42, 0.04);
+    --tb-shadow-md:
+        0 0 0 1px rgba(15, 23, 42, 0.06),
+        0 4px 6px -2px rgba(15, 23, 42, 0.08),
+        0 10px 15px -3px rgba(15, 23, 42, 0.05);
+    --tb-shadow-focus:
+        0 0 0 1px var(--tb-green-500),
+        0 0 0 4px rgba(22, 163, 74, 0.15);
+
+    /* Antialiased pour rendu net (macOS/iOS).
+       / Antialiased rendering for crisp text. */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+
+/* ===========================================================
+ * Panneau gauche (orientation utilisateur)
+ * / Left panel (user orientation)
+ * =========================================================== */
+.onboard-panel {
+    /* Gradient diagonal + leger halo radial superpose (effet moderne).
+       / Diagonal gradient + subtle radial halo overlay (modern feel). */
+    background:
+        radial-gradient(ellipse at top left, rgba(255, 255, 255, 0.12), transparent 60%),
+        linear-gradient(160deg, #1e7c43 0%, #15803d 45%, #166534 100%);
+    color: #fff;
+    border-radius: var(--tb-radius-panel);
+    padding: 1.75rem 1.5rem;
+    /* Ombre douce qui sort du gradient (vert teinte).
+       / Soft shadow tinted with the panel color. */
+    box-shadow:
+        0 1px 2px rgba(20, 83, 45, 0.06),
+        0 10px 30px -10px rgba(20, 83, 45, 0.35);
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Petit motif lumineux discret en haut a droite (decoration subtile).
+   / Subtle light spot top-right (subtle decoration). */
+.onboard-panel::after {
+    content: "";
+    position: absolute;
+    top: -40%;
+    right: -20%;
+    width: 60%;
+    aspect-ratio: 1 / 1;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.08), transparent 70%);
+    pointer-events: none;
+}
+
+.onboard-panel-eyebrow {
+    font-size: 0.75rem;
+    opacity: 0.85;
+    letter-spacing: 0.15em;
+    font-weight: 600;
+    /* Petite ligne avant l'eyebrow pour le visuel.
+       / Tiny line before the eyebrow for visual rhythm. */
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.onboard-panel-eyebrow::before {
+    content: "";
+    width: 1.5rem;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 1px;
+}
+
+.onboard-panel-steps {
+    list-style: none;
+    padding: 0;
+    margin: 1.25rem 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.onboard-step {
+    padding: 0.625rem 0.75rem;
+    opacity: 0.45;
+    display: flex;
+    flex-direction: column;
+    border-radius: var(--tb-radius-item);
+    /* Transition douce — interruptible (skill /ui regle 7).
+       / Smooth transition — interruptible (skill /ui rule 7). */
+    transition: opacity 200ms ease, background-color 200ms ease;
+}
+
+.onboard-step.is-current {
+    opacity: 1;
+    font-weight: 600;
+    /* Fond legerement plus clair pour mettre en valeur l'etape courante.
+       / Slightly lighter background to highlight the current step. */
+    background: rgba(255, 255, 255, 0.12);
+    /* Halo subtil — donne l'impression d'un "glow" sans surcharger.
+       / Subtle halo — gives a "glow" effect without overdoing it. */
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.onboard-step.is-done {
+    opacity: 0.7;
+}
+
+/* Mod 3 : les etapes deja parcourues sont des liens cliquables.
+   Pas de soulignement, hover subtil pour signaler l'interaction.
+   Le bloc entier (numero + label + hint) est cliquable.
+   / Done steps are clickable links: no underline, subtle hover.
+   The whole block (number + label + hint) is the click target. */
+.onboard-step-link {
+    display: block;
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+}
+.onboard-step.is-done:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.06);
+}
+.onboard-step-link:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.6);
+    outline-offset: 2px;
+    border-radius: var(--tb-radius-item);
+}
+
+.onboard-step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5em;
+    height: 1.5em;
+    text-align: center;
+    margin-right: 0.5em;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15);
+    font-size: 0.75rem;
+    font-weight: 700;
+    /* Tabular nums pour que les chiffres soient parfaitement alignes.
+       / Tabular nums so digits align perfectly. */
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+
+/* Etape courante : numero plus opaque + scale subtil.
+   / Current step: more opaque number + subtle scale. */
+.onboard-step.is-current .onboard-step-num {
+    background: #fff;
+    color: var(--tb-green-700);
+}
+
+/* Etape passee : remplace le numero par un check (CSS pur).
+   / Past step: replace number with a check (pure CSS). */
+.onboard-step.is-done .onboard-step-num {
+    background: rgba(255, 255, 255, 0.25);
+    /* On remplace le contenu textuel par un "v" stylise.
+       / Replace text content with a styled check. */
+    color: transparent;
+    position: relative;
+}
+.onboard-step.is-done .onboard-step-num::after {
+    content: "";
+    position: absolute;
+    width: 0.45em;
+    height: 0.75em;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg) translate(-0.05em, -0.1em);
+}
+
+.onboard-step-hint {
+    display: block;
+    font-size: 0.8rem;
+    opacity: 0.85;
+    margin-left: calc(1.5em + 0.5em);
+    font-weight: 400;
+    line-height: 1.45;
+    text-wrap: balance;
+}
+
+.onboard-panel-invite {
+    margin-top: 1.25rem;
+    background: rgba(255, 255, 255, 0.15);
+    padding: 0.625rem 0.875rem;
+    border-radius: var(--tb-radius-item);
+    font-size: 0.85rem;
+    text-wrap: balance;
+}
+
+/* Bouton "Reprendre plus tard" — plus discret, ressemble a un footer-action.
+   / "Resume later" button — discreet, footer-action style. */
+.onboard-resume-later {
+    color: rgba(255, 255, 255, 0.85);
+    margin-top: 1.25rem;
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.625rem;
+    border-radius: var(--tb-radius-input);
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    transition: background-color 200ms ease, color 200ms ease;
+}
+.onboard-resume-later:hover,
+.onboard-resume-later:focus-visible {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+.onboard-resume-later:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.6);
+    outline-offset: 2px;
+}
+
+
+/* ===========================================================
+ * Contenu droit (step content)
+ * / Right content (step content)
+ * =========================================================== */
+
+/* Le badge "ETAPE X / 6" au-dessus du titre.
+   / The "STEP X / 6" badge above the title. */
+.onboard-step-counter {
+    display: inline-block;
+    color: var(--tb-green-600);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 0.5rem;
+}
+
+/* Titres : balance pour eviter mots orphelins (skill /ui regle 1).
+   / Headings: balance to avoid orphan words (skill /ui rule 1). */
+.onboard-h1 {
+    font-size: clamp(1.5rem, 4vw, 2rem);
+    font-weight: 700;
+    line-height: 1.2;
+    text-wrap: balance;
+    margin-bottom: 0.5rem;
+}
+
+.onboard-subtitle {
+    color: var(--bs-secondary-color, #6c757d);
+    text-wrap: balance;
+    max-width: 60ch;
+    margin-bottom: 1.5rem;
+}
+
+
+/* ===========================================================
+ * Form polish : inputs + buttons + focus states
+ * / Form polish: inputs + buttons + focus states
+ * =========================================================== */
+
+/* Overrides Bootstrap form-control : radius coherent + bordure visible.
+   On combine une vraie bordure (contraste WCAG AA) avec une shadow douce
+   pour le relief. Sans la bordure solide, les inputs sont quasi invisibles
+   sur fond clair (feedback mainteneur 2026-05-14).
+   / Override Bootstrap form-control: coherent radius + visible border.
+   We combine a real border (WCAG AA contrast) with a soft shadow for
+   depth. Without the solid border, inputs are nearly invisible on light
+   backgrounds. */
+.onboard-wizard .form-control,
+.onboard-wizard .form-select {
+    border-radius: var(--tb-radius-input);
+    /* Bordure 1px solid avec couleur slate-300 : visible mais discret.
+       Contraste 3.5:1 sur fond blanc — suffisant pour les bords d'input
+       (WCAG AA pour composants UI non textuels). */
+    border: 1px solid #cbd5e1;
+    background-color: #fff;
+    box-shadow: var(--tb-shadow-sm);
+    transition: box-shadow 200ms ease, border-color 200ms ease;
+}
+
+.onboard-wizard .form-control:hover,
+.onboard-wizard .form-select:hover {
+    border-color: #94a3b8;
+}
+
+.onboard-wizard .form-control:focus,
+.onboard-wizard .form-select:focus {
+    border-color: var(--tb-green-500);
+    box-shadow: var(--tb-shadow-focus);
+    outline: none;
+}
+
+/* Placeholders : contraste suffisant mais subordonne au texte saisi.
+   / Placeholders: visible but subordinate to user input. */
+.onboard-wizard .form-control::placeholder {
+    color: #94a3b8;
+    opacity: 1;
+}
+
+/* Inputs invalides : meme ombre mais rouge (Bootstrap danger).
+   / Invalid inputs: same shadow shape but red. */
+.onboard-wizard .form-control.is-invalid,
+.onboard-wizard .form-select.is-invalid {
+    border-color: var(--bs-danger);
+    box-shadow:
+        0 0 0 1px var(--bs-danger),
+        0 0 0 4px rgba(220, 53, 69, 0.12);
+}
+
+/* Bouton primaire : vert TiBillet (cohesion gradient panel).
+   / Primary button: TiBillet green (matches panel gradient). */
+.onboard-wizard .btn-primary {
+    background: linear-gradient(180deg, var(--tb-green-500), var(--tb-green-600));
+    border-color: var(--tb-green-600);
+    border-radius: var(--tb-radius-input);
+    font-weight: 600;
+    padding: 0.625rem 1.25rem;
+    box-shadow:
+        0 1px 2px rgba(22, 101, 52, 0.2),
+        0 4px 8px -2px rgba(22, 101, 52, 0.18);
+    transition: transform 100ms ease, box-shadow 200ms ease, filter 200ms ease;
+}
+.onboard-wizard .btn-primary:hover,
+.onboard-wizard .btn-primary:focus-visible {
+    background: linear-gradient(180deg, var(--tb-green-500), var(--tb-green-700));
+    border-color: var(--tb-green-700);
+    filter: brightness(1.03);
+    box-shadow:
+        0 1px 2px rgba(22, 101, 52, 0.25),
+        0 8px 16px -4px rgba(22, 101, 52, 0.28);
+}
+.onboard-wizard .btn-primary:active {
+    /* Subtle scale 0.97 sur press — skill /ui-ux-pro-max scale-feedback.
+       / Subtle scale 0.97 on press — UX press feedback. */
+    transform: scale(0.97);
+    filter: brightness(0.96);
+}
+
+/* Bouton outline-secondary (Renvoyer le code, etc.).
+   / Outline-secondary button (Resend code, etc.). */
+.onboard-wizard .btn-outline-secondary {
+    border-radius: var(--tb-radius-input);
+    border-width: 1px;
+    transition: background-color 200ms ease, color 200ms ease;
+}
+
+
+/* ===========================================================
+ * OTP inputs (etape 2)
+ * / OTP inputs (step 2)
+ * =========================================================== */
+
+/* Cellules OTP : carre, monospace, focus visible.
+   / OTP cells: square, monospace digits, visible focus. */
+.onboard-wizard .form-control[data-testid^="onboard-verify-otp-"] {
+    width: 3rem;
+    height: 3.5rem;
+    font-size: 1.5rem;
+    font-weight: 700;
+    text-align: center;
+    padding: 0;
+    font-variant-numeric: tabular-nums;
+}
+.onboard-wizard .form-control[data-testid^="onboard-verify-otp-"]:focus {
+    /* Focus plus marque (ring vert) car c'est une etape critique.
+       / Stronger focus ring (green) because this is a critical step. */
+    transform: translateY(-1px);
+}
+
+
+/* ===========================================================
+ * Cards (events_list, carrousel cards) : shadow concentric.
+ * / Cards (events_list, carousel cards): concentric shadow.
+ * =========================================================== */
+
+.onboard-wizard .card {
+    border-radius: var(--tb-radius-item);
+    border: none;
+    box-shadow: var(--tb-shadow-sm);
+    transition: box-shadow 200ms ease, transform 100ms ease;
+}
+.onboard-wizard .card:hover {
+    box-shadow: var(--tb-shadow-md);
+}
+
+
+/* ===========================================================
+ * Carrousel info (etape 6 Launch)
+ * / Info carousel (step 6 Launch)
+ * =========================================================== */
+.onboard-carousel {
+    background: var(--bs-tertiary-bg, #f8f9fa);
+    border-radius: var(--tb-radius-panel);
+    padding: 1.75rem;
+    min-height: 220px;
+    position: relative;
+    box-shadow: var(--tb-shadow-sm);
+}
+
+.onboard-carousel-card {
+    display: none;
+    /* Animation d'entree subtile quand la card devient active.
+       / Subtle entry animation when the card becomes active. */
+    animation: onboard-fadein 400ms ease both;
+}
+
+.onboard-carousel-card.is-active {
+    display: block;
+}
+
+
+/* ===========================================================
+ * Animations : stagger d'entree + sortie courte (skill /ui regle 8 + 9)
+ * / Animations: stagger entry + short exit (skill /ui rule 8 + 9)
+ * =========================================================== */
+
+@keyframes onboard-fadein {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+        filter: blur(2px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+        filter: blur(0);
+    }
+}
+
+.onboard-stagger {
+    animation: onboard-fadein 500ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+    animation-delay: calc(60ms * var(--ordre, 0));
+}
+
+
+/* ===========================================================
+ * Reduce motion : pas d'animation pour les utilisateurs sensibles.
+ * / Reduce motion: no animation for sensitive users.
+ * =========================================================== */
+@media (prefers-reduced-motion: reduce) {
+    .onboard-wizard *,
+    .onboard-wizard *::before,
+    .onboard-wizard *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+
+/* ===========================================================
+ * Map widget (etape 3 Place) : radius coherent avec les cards.
+ * / Map widget (step 3 Place): radius coherent with cards.
+ * =========================================================== */
+.onboard-map-container {
+    border-radius: var(--tb-radius-item);
+    overflow: hidden;
+    box-shadow: var(--tb-shadow-sm);
+}
+
+
+/* ===========================================================
+ * Mobile-first : sur mobile le panneau passe au-dessus, plus compact.
+ * Feedback mainteneur 2026-05-15 : pas de toggle <details>, le panel est
+ * toujours visible. On masque les `onboard-step-hint` pour eviter qu'il
+ * prenne toute la hauteur de l'ecran (6 etapes x 2-3 lignes de hint
+ * ferait 1 ecran complet avant le formulaire).
+ * / Mobile-first: panel always stacks on top, no <details> toggle. We
+ * hide step hints to avoid filling the whole screen before the form.
+ * =========================================================== */
+@media (max-width: 991.98px) {
+    .onboard-panel {
+        padding: 1rem 1.25rem;
+    }
+    .onboard-panel::after {
+        display: none;
+    }
+    /* Etapes plus compactes sur mobile : pas de hint, padding reduit.
+       Le numero + le label suffisent pour s'orienter sur petit ecran.
+       / More compact on mobile: no hint, reduced padding. The number +
+       label is enough to navigate. */
+    .onboard-panel-steps {
+        margin-top: 0.75rem;
+        gap: 0.125rem;
+    }
+    .onboard-step {
+        padding: 0.4rem 0.6rem;
+    }
+    .onboard-step-hint {
+        display: none;
+    }
+}
+
+
+/* ===========================================================
+ * Desktop : alignement helper gauche / formulaire droite.
+ * Le row Bootstrap a `align-items: stretch` par defaut. On rend
+ * `.onboard-panel-wrapper` (le <aside>) en flex column et son enfant
+ * `.onboard-panel` flex:1 pour qu'il occupe toute la hauteur disponible
+ * (alignement avec le bouton "Continuer" du formulaire).
+ * Feedback mainteneur 2026-05-15 : sans ce flex, le panel finissait sa
+ * hauteur naturelle (en haut du col) et laissait un espace vide en bas.
+ * / Desktop: align left helper with the form's "Continuer" button. The
+ * Bootstrap row uses `align-items: stretch`; we make the aside a flex
+ * column with the panel `flex:1` so it stretches to the full column
+ * height.
+ * =========================================================== */
+@media (min-width: 992px) {
+    .onboard-panel-wrapper {
+        display: flex;
+        flex-direction: column;
+    }
+    .onboard-panel-wrapper > .onboard-panel {
+        flex: 1;
+    }
+}
+
+
+/* ===========================================================
+ * Switch CGU (etape 1) : toggle slider vert TiBillet, label avec lien.
+ * Feedback mainteneur 2026-05-15 : on remplace la checkbox carree par un
+ * switch `form-switch` Bootstrap 5 — plus moderne pour un "j'accepte".
+ * / CGU switch (step 1): TiBillet green slider toggle with linked label.
+ * =========================================================== */
+.onboard-cgu-switch {
+    /* Padding-left assez large pour un toggle confortable. Sans `padding`,
+       le switch chevauche le label. / Wide left padding for the slider
+       to breathe; without it, it overlaps the label. */
+    padding-left: 3rem;
+    margin-top: 0.5rem;
+}
+.onboard-cgu-switch .form-check-input {
+    /* Toggle un peu plus grand que le defaut Bootstrap : meilleure
+       affordance tactile (mobile). / Slightly larger than default for
+       better touch affordance on mobile. */
+    width: 2.75em;
+    height: 1.5em;
+    margin-left: -3rem;
+    cursor: pointer;
+    border-color: #cbd5e1;
+}
+.onboard-cgu-switch .form-check-input:checked {
+    background-color: var(--tb-green-600);
+    border-color: var(--tb-green-600);
+}
+.onboard-cgu-switch .form-check-input:focus {
+    box-shadow: var(--tb-shadow-focus);
+    border-color: var(--tb-green-500);
+}
+.onboard-cgu-switch .form-check-label {
+    cursor: pointer;
+    line-height: 1.6;
+}
+.onboard-cgu-switch a {
+    color: var(--tb-green-600);
+    font-weight: 500;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.onboard-cgu-switch a:hover {
+    color: var(--tb-green-700);
+}
+
+
+/* ===========================================================
+ * Radios DNS (etape 1) : pills btn-check, vert TiBillet quand coche.
+ * Feedback mainteneur 2026-05-15 : remplace le <select> par 2 boutons
+ * visibles (tibillet.coop / tibillet.re) — plus parlant qu'un dropdown.
+ * / DNS radios (step 1): btn-check pills, green when checked.
+ * =========================================================== */
+.onboard-dns-fieldset {
+    border: 0;
+    padding: 0;
+    margin: 0;
+}
+.onboard-dns-radios {
+    display: flex;
+    gap: 0.625rem;
+    flex-wrap: wrap;
+}
+.onboard-dns-radio {
+    border-radius: var(--tb-radius-input);
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    border: 1px solid #cbd5e1;
+    color: var(--bs-body-color);
+    background-color: #fff;
+    box-shadow: var(--tb-shadow-sm);
+    transition: all 200ms ease;
+}
+.onboard-dns-radio:hover {
+    border-color: var(--tb-green-500);
+    color: var(--tb-green-700);
+}
+.btn-check:checked + .onboard-dns-radio {
+    background: linear-gradient(180deg, var(--tb-green-500), var(--tb-green-600));
+    border-color: var(--tb-green-700);
+    color: #fff;
+    box-shadow:
+        0 1px 2px rgba(22, 101, 52, 0.2),
+        0 4px 8px -2px rgba(22, 101, 52, 0.18);
+}
+.btn-check:checked + .onboard-dns-radio:hover {
+    color: #fff;
+    filter: brightness(1.03);
+}
+.btn-check:focus-visible + .onboard-dns-radio {
+    outline: none;
+    box-shadow: var(--tb-shadow-focus);
+}
+
+
+/* ===========================================================
+ * Dark mode (Bootstrap 5 `data-bs-theme="dark"`)
+ * Inputs, cards, carrousel : palette slate avec contrastes WCAG AA.
+ * Le panneau gauche reste vert (le gradient est deja sombre).
+ * / Dark mode (Bootstrap 5 `data-bs-theme="dark"`).
+ * Inputs, cards, carousel: slate palette with WCAG AA contrasts.
+ * The left panel stays green (its gradient is already dark).
+ * =========================================================== */
+
+/* On cible le selector Bootstrap 5 ET prefers-color-scheme: dark pour
+   les sites qui n'ont pas active le theme switcher.
+   / Target Bootstrap 5 selector AND prefers-color-scheme: dark for sites
+   without an active theme switcher. */
+[data-bs-theme="dark"] .onboard-wizard,
+[data-bs-theme="dark"].onboard-wizard {
+    /* Couleurs de base palette slate-dark.
+       / Base colors slate-dark palette. */
+    --tb-input-bg: #1e293b;
+    --tb-input-border: #475569;
+    --tb-input-border-hover: #64748b;
+    --tb-input-text: #f1f5f9;
+    --tb-input-placeholder: #94a3b8;
+    --tb-card-bg: #1e293b;
+    --tb-subtitle-color: #94a3b8;
+}
+
+[data-bs-theme="dark"] .onboard-wizard .form-control,
+[data-bs-theme="dark"] .onboard-wizard .form-select,
+[data-bs-theme="dark"].onboard-wizard .form-control,
+[data-bs-theme="dark"].onboard-wizard .form-select {
+    background-color: var(--tb-input-bg);
+    border-color: var(--tb-input-border);
+    color: var(--tb-input-text);
+}
+
+[data-bs-theme="dark"] .onboard-wizard .form-control:hover,
+[data-bs-theme="dark"] .onboard-wizard .form-select:hover,
+[data-bs-theme="dark"].onboard-wizard .form-control:hover,
+[data-bs-theme="dark"].onboard-wizard .form-select:hover {
+    border-color: var(--tb-input-border-hover);
+}
+
+[data-bs-theme="dark"] .onboard-wizard .form-control::placeholder,
+[data-bs-theme="dark"].onboard-wizard .form-control::placeholder {
+    color: var(--tb-input-placeholder);
+}
+
+[data-bs-theme="dark"] .onboard-wizard .card,
+[data-bs-theme="dark"].onboard-wizard .card {
+    background-color: var(--tb-card-bg);
+    color: var(--tb-input-text);
+}
+
+[data-bs-theme="dark"] .onboard-wizard .onboard-carousel,
+[data-bs-theme="dark"].onboard-wizard .onboard-carousel {
+    background-color: var(--tb-card-bg);
+    color: var(--tb-input-text);
+}
+
+[data-bs-theme="dark"] .onboard-wizard .onboard-subtitle,
+[data-bs-theme="dark"].onboard-wizard .onboard-subtitle {
+    color: var(--tb-subtitle-color);
+}
+
+/* Le badge "ETAPE X / 6" reste vert vif sur fond sombre (contraste 5.4:1).
+   / Step counter stays bright green on dark (contrast 5.4:1). */
+[data-bs-theme="dark"] .onboard-wizard .onboard-step-counter,
+[data-bs-theme="dark"].onboard-wizard .onboard-step-counter {
+    color: #4ade80;
+}

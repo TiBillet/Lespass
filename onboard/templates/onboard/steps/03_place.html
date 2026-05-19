@@ -1,0 +1,71 @@
+{% extends "onboard/base_wizard.html" %}
+{% load i18n %}
+
+{% comment %}
+LOCALISATION: onboard/templates/onboard/steps/03_place.html
+
+Step 3 du wizard onboarding : adresse + carte. Refondue 2026-05-15
+pour utiliser le widget réutilisable `templates/widgets/widget_carte_adresse.html`
+(pattern GPS avec leaflet-geosearch).
+
+Soumet à `onboard-place` (POST). En cas d'erreur (422), la vue re-rend
+ce template avec `errors` et `initial` (qui re-pré-remplit le widget
+via `latitude_initiale` / `longitude_initiale` / `adresse_initiale`).
+
+/ Step 3 of the onboarding wizard: address + map. Refactored 2026-05-15
+to use the reusable widget (GPS pattern with leaflet-geosearch).
+{% endcomment %}
+
+{% block page_title %}{% translate "Créer votre espace TiBillet — Lieu" %}{% endblock %}
+
+{% block step_content %}
+<header class="mb-4">
+    <p class="onboard-step-counter mb-1">{% translate "Étape 3 / 6" %}</p>
+    <p class="text-muted mb-0">
+        {% translate "Cherchez votre adresse dans la barre de recherche, ou cliquez directement sur la carte. Le marqueur peut être déplacé pour ajuster la position." %}
+    </p>
+</header>
+
+{% if errors %}
+<div class="alert alert-danger" role="alert" data-testid="onboard-place-errors">
+    <strong>{% translate "Merci de corriger les erreurs ci-dessous." %}</strong>
+    <ul class="mb-0 mt-1">
+        {% for field, msgs in errors.items %}
+        <li>
+            <strong>{{ field }}</strong> :
+            {% for msg in msgs %}{{ msg }}{% if not forloop.last %} / {% endif %}{% endfor %}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<form method="post" action="{% url 'onboard-place' %}" novalidate
+      data-testid="onboard-place-form" class="vstack gap-3">
+    {% csrf_token %}
+
+    {# Widget réutilisable carte adresse. Préfixe "place" pour les name=. #}
+    {# Pré-remplissage : 1) si l'user a déjà soumis (422), on remet ses    #}
+    {# valeurs ; 2) sinon si le WC a une adresse (resume / retour), on   #}
+    {# la met ; 3) fallback FALC : le nom du collectif (`wc.organisation`) #}
+    {# pour aider le geosearch Nominatim à trouver le lieu (ex: "TiBillet  #}
+    {# Saint-Pierre" matchera potentiellement un POI référencé).         #}
+    {# / Reusable address map widget. Pre-fill priority: 1) re-submitted   #}
+    {# values (422), 2) WC street_address (resume), 3) wc.organisation as  #}
+    {# FALC fallback to help the Nominatim geosearch find the venue.      #}
+    {% include "widgets/widget_carte_adresse.html" with identifiant_widget="place" latitude_initiale=initial.place_latitude|default:wc.latitude longitude_initiale=initial.place_longitude|default:wc.longitude adresse_initiale=initial.place_adresse|default:wc.street_address|default:wc.organisation hauteur_carte="350px" champs_adresse_separes=True required=True %}
+
+    <div class="d-flex justify-content-between pt-2">
+        <a href="{% url 'onboard-identity' %}" class="btn btn-link"
+           data-testid="onboard-place-prev">
+            <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>
+            {% translate "Précédent" %}
+        </a>
+        <button type="submit" class="btn btn-primary btn-lg"
+                data-testid="onboard-place-submit">
+            {% translate "Continuer" %}
+            <i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>
+        </button>
+    </div>
+</form>
+{% endblock step_content %}

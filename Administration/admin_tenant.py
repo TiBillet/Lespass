@@ -464,21 +464,32 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         setattr(configuration, field_name, not current_value)
         new_value = getattr(configuration, field_name)
 
-        if field_name == "module_monnaie_locale" and new_value is False and configuration.module_caisse is True:
+        if field_name == "module_monnaie_locale" and not new_value and configuration.module_caisse:
             messages.add_message(request, messages.ERROR, _("The \"POS & restaurant\" module required this module. You must disable it before disabling "))
             setattr(configuration, field_name, current_value)
 
-        logger.error(field_name is "module_caisse")
-
-        if field_name == "module_caisse" and new_value is True and configuration.module_monnaie_locale is False:
+        if field_name == "module_caisse" and new_value and not configuration.module_monnaie_locale:
             messages.add_message(request, messages.ERROR, _("The \"Local currency & cashless\" module is required by this module. You must enabled it before"))
             setattr(configuration, field_name, current_value)
 
 
         configuration.clean()
-        configuration.save()
+
+        # Configuration.save() peut lever ValidationError (ex: SEPA pas actif cote Stripe).
+        # Sans ce try/except, l'exception remonte en 500 silencieux cote HTMX.
+        # On capture comme ConfigurationAdmin.save_model() le fait deja plus haut.
+        # / Configuration.save() may raise ValidationError (e.g. SEPA not active on Stripe).
+        # / Without this guard, the exception bubbles up as a silent 500 over HTMX.
+        try:
+            configuration.save()
+        except ValidationError as e:
+            error_message = e.message if hasattr(e, "message") else str(e)
+            messages.error(request, error_message)
 
         # HX-Refresh force un reload complet : la sidebar se met a jour
+        # et les messages d'erreur eventuels apparaissent en toast.
+        # / HX-Refresh forces a full reload: sidebar updates and any error
+        # / messages show up as toast notifications.
         response = HttpResponse("")
         response["HX-Refresh"] = "true"
         return response
@@ -3397,74 +3408,10 @@ class FormbricksFormsAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
 
-@admin.register(WaitingConfiguration, site=staff_admin_site)
-class WaitingConfigAdmin(ModelAdmin):
-    compressed_fields = True  # Default: False
-    warn_unsaved_form = True  # Default: False
-
-    list_display = (
-        "organisation",
-        "email",
-        "datetime",
-        "site_web",
-        "short_description",
-        "laboutik_wanted",
-        "payment_wanted",
-        "email_confirmed",
-        "created",
-    )
-
-    fields = list_display
-    readonly_fields = (
-        "datetime",
-    )
-
-    ordering = ('-datetime',)
-
-    list_filter = ["datetime", "created"]
-    search_fields = ["email", "organisation", "datetime"]
-
-    actions_detail = ["create_tenant", ]
-
-    @action(description=_("Create instance"),
-            url_path="create_tenant",
-            permissions=["custom_actions_detail"])
-    def create_tenant(self, request, object_id):
-        wc = WaitingConfiguration.objects.get(pk=object_id)
-        if wc.email_confirmed:
-            try:
-                tenant = wc.create_tenant()
-                messages.add_message(
-                    request, messages.SUCCESS,
-                    _(f"creation OK")
-                )
-            except Exception as e:
-                messages.add_message(
-                    request, messages.ERROR,
-                    _(f"{wc.organisation} tenant create error : {e} not confirmed")
-                )
-
-        else:
-            messages.add_message(
-                request, messages.WARNING,
-                _(f"Email not confirmed")
-            )
-        return redirect(request.META["HTTP_REFERER"])
-
-    def has_custom_actions_detail_permission(self, request, object_id):
-        return RootPermissionWithRequest(request)
-
-    def has_view_permission(self, request, obj=None):
-        return RootPermissionWithRequest(request)
-
-    def has_add_permission(self, request, obj=None):
-        return RootPermissionWithRequest(request)
-
-    def has_change_permission(self, request, obj=None):
-        return RootPermissionWithRequest(request)
-
-    def has_delete_permission(self, request, obj=None):
-        return RootPermissionWithRequest(request)
+# NOTE : `WaitingConfigAdmin` a ete migre vers `onboard/admin.py` lors
+# de la session de cleanup legacy 2026-05-16. Cf.
+# `TECH_DOC/SESSIONS/ONBOARD/03-session-recap.md`.
+# / WaitingConfigAdmin moved to `onboard/admin.py` on 2026-05-16.
 
 
 # Deux formulaires, un qui s'affiche si l'api est vide (ou supprimé)

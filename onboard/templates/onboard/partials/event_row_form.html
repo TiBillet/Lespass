@@ -1,0 +1,147 @@
+{% load i18n %}
+{% comment %}
+LOCALISATION: onboard/templates/onboard/partials/event_row_form.html
+
+Sous-form HTMX pour ajouter un brouillon d'event a la liste de la step 5
+(Task 19). POST `/onboard/events/add/` -> rend `events_list.html` qui
+remplace le contenu de `#events-list`. Le sous-form lui-meme n'est pas
+remplace : il reste affiche pour permettre d'ajouter un autre event.
+
+Si la vue renvoie des erreurs (`errors`), on les affiche dans une region
+`aria-live="polite"` au-dessus du form. Les valeurs saisies sont
+re-injectees via `initial` pour ne pas perdre le travail de l'utilisateur.
+
+Champs :
+  - `name` (CharField max 200) : nom de l'event.
+  - `datetime` (datetime-local) : date et heure.
+  - `description` (textarea optionnel, max 2000) : description courte.
+
+Style : card Bootstrap (cohérence avec `events_list.html`) avec
+layout col-md-6 / col-md-6 / col-12 pour les champs.
+
+/ HTMX sub-form to add an event draft to the step 5 list (Task 19).
+POST `/onboard/events/add/` -> renders `events_list.html`, which
+replaces `#events-list`. The sub-form stays visible so the user can
+add another event.
+
+If the view returns `errors`, we display them in an `aria-live="polite"`
+region above the form. Submitted values are re-injected via `initial`.
+
+Style: Bootstrap card (consistency with `events_list.html`) with
+col-md-6 / col-md-6 / col-12 grid layout.
+{% endcomment %}
+<form data-testid="onboard-event-row-form"
+      hx-post="{% url 'onboard-events-add' %}"
+      hx-target="#events-list"
+      hx-swap="innerHTML"
+      hx-encoding="multipart/form-data"
+      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+      enctype="multipart/form-data"
+      class="card mb-2">
+    {% csrf_token %}
+    <div class="card-body">
+        {% if errors %}
+            {# Region aria-live pour annoncer les erreurs aux lecteurs d'ecran. #}
+            {# / aria-live region to announce errors to screen readers.         #}
+            <div class="alert alert-danger small mb-3"
+                 role="alert"
+                 data-testid="onboard-events-add-errors"
+                 aria-live="polite">
+                <ul class="mb-0 ps-3">
+                    {% for field, msgs in errors.items %}
+                        <li>
+                            <strong>{{ field }}</strong> :
+                            {% for msg in msgs %}{{ msg }}{% if not forloop.last %} / {% endif %}{% endfor %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+
+        <div class="row g-2">
+            <div class="col-md-6">
+                <label for="onboard-events-add-name" class="form-label small">
+                    {% translate "Nom" %} *
+                </label>
+                <input id="onboard-events-add-name"
+                       type="text"
+                       name="name"
+                       required
+                       maxlength="200"
+                       value="{{ initial.name|default:'' }}"
+                       class="form-control{% if errors.name %} is-invalid{% endif %}"
+                       placeholder="{% translate 'Nom de l\'événement' %}"
+                       data-testid="onboard-events-add-name">
+                {% if errors.name %}
+                    <div class="invalid-feedback">
+                        {% for msg in errors.name %}{{ msg }}{% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="col-md-6">
+                <label for="onboard-events-add-datetime" class="form-label small">
+                    {% translate "Date et heure" %} *
+                </label>
+                <input id="onboard-events-add-datetime"
+                       type="datetime-local"
+                       name="datetime"
+                       required
+                       value="{{ initial.datetime|default:'' }}"
+                       class="form-control{% if errors.datetime %} is-invalid{% endif %}"
+                       data-testid="onboard-events-add-datetime">
+                {% if errors.datetime %}
+                    <div class="invalid-feedback">
+                        {% for msg in errors.datetime %}{{ msg }}{% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="col-12">
+                <label for="onboard-events-add-description" class="form-label small">
+                    {% translate "Description (optionnel)" %}
+                </label>
+                <textarea id="onboard-events-add-description"
+                          name="description"
+                          rows="2"
+                          maxlength="2000"
+                          class="form-control"
+                          placeholder="{% translate 'Quelques mots pour présenter l\'événement.' %}"
+                          data-testid="onboard-events-add-description">{{ initial.description|default:'' }}</textarea>
+            </div>
+
+            {# Image (optionnelle). On ne pre-remplit pas un input type=file #}
+            {# (HTML ne le permet pas). Validation cote serveur via le      #}
+            {# serializer (5 Mo max, jpeg/png/webp).                        #}
+            {# / Optional image. HTML does NOT allow pre-filling a file      #}
+            {# input. Validation server-side (5 MB max, jpeg/png/webp).      #}
+            <div class="col-12">
+                <label for="onboard-events-add-image" class="form-label small">
+                    {% translate "Image (optionnelle)" %}
+                </label>
+                <input id="onboard-events-add-image"
+                       type="file"
+                       name="image"
+                       accept="image/jpeg,image/png,image/webp"
+                       class="form-control{% if errors.image %} is-invalid{% endif %}"
+                       data-testid="onboard-event-image">
+                {% if errors.image %}
+                    <div class="invalid-feedback">
+                        {% for msg in errors.image %}{{ msg }}{% endfor %}
+                    </div>
+                {% endif %}
+                <div class="form-text small">
+                    {% translate "JPEG, PNG ou WebP — 5 Mo maximum." %}
+                </div>
+            </div>
+
+            <div class="col-12 text-end">
+                <button type="submit"
+                        class="btn btn-sm btn-primary"
+                        data-testid="onboard-events-add">
+                    {% translate "Enregistrer" %}
+                </button>
+            </div>
+        </div>
+    </div>
+</form>

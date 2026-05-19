@@ -1,0 +1,125 @@
+{% extends "onboard/base_wizard.html" %}
+{% load i18n %}
+
+{% comment %}
+  LOCALISATION: onboard/templates/onboard/steps/05_events.html
+
+  Step 5 du wizard d'onboarding (Task 19) : ajout/retrait HTMX des
+  brouillons d'events + finalisation qui enqueue la creation tenant.
+
+  Pattern :
+    - `#events-list` : rendu serveur initial via le partial
+      `events_list.html`. Cible des hx-target des boutons add/remove
+      (swap innerHTML).
+    - Sous-form HTMX (`event_row_form.html`) : toujours affiche, juste
+      au-dessus de la liste. Apres un add reussi, la vue re-render
+      `events_list.html` (la liste se met a jour), le sous-form reste
+      en place pour permettre un nouvel ajout.
+    - Form final : POST `/onboard/events/` -> finalize (avance step
+      a "launch" + enqueue `create_tenant_from_draft.delay`).
+
+  Choix FALC : pas de revelation conditionnelle du sous-form. On le
+  laisse visible en permanence, c'est plus simple et plus accessible
+  (pas de toggle JS, pas de risque de form cache invisible). L'ajout
+  d'evenement est OPTIONNEL — l'utilisateur peut sauter cette etape
+  en cliquant directement sur "Lancer mon espace".
+
+  Contexte attendu :
+    - `wc`     : instance WaitingConfiguration.
+    - `events` : liste de dicts (passee par la vue, alias de
+                 `wc.events_draft`).
+    - `step`   : "events" (utilise par le progress panel).
+
+  / Step 5 of the onboarding wizard (Task 19): HTMX add/remove of event
+  drafts + finalize that enqueues tenant creation.
+
+  Pattern:
+    - `#events-list`: initial server-rendered via the
+      `events_list.html` partial. Targeted by add/remove hx-target
+      (innerHTML swap).
+    - HTMX sub-form (`event_row_form.html`): always visible, just
+      above the list. After a successful add, the view re-renders
+      `events_list.html` (list updates), the sub-form stays in place
+      to allow another add.
+    - Final form: POST `/onboard/events/` -> finalize (advance step to
+      "launch" + enqueue `create_tenant_from_draft.delay`).
+
+  FALC choice: no conditional reveal of the sub-form. We leave it
+  permanently visible — simpler and more accessible (no JS toggle, no
+  risk of hidden invisible form). Adding events is OPTIONAL — the
+  user can skip this step by clicking "Launch my space" directly.
+
+  Expected context:
+    - `wc`     : WaitingConfiguration instance.
+    - `events` : list of dicts (passed by the view, alias of
+                 `wc.events_draft`).
+    - `step`   : "events" (used by the progress panel).
+{% endcomment %}
+
+{% block page_title %}{% translate "Créer votre espace TiBillet — Événements" %}{% endblock %}
+
+{% block step_content %}
+<header class="mb-4">
+    <p class="onboard-step-counter mb-1">{% translate "Étape 5 / 6" %}</p>
+    <h1 class="onboard-h1 mb-2">{% translate "Premiers événements" %}</h1>
+    <p class="text-muted">
+        {% blocktranslate trimmed %}
+            Ajoutez 0 ou plusieurs événements à publier dans votre espace.
+            Vous pourrez toujours en ajouter plus tard depuis l'admin.
+        {% endblocktranslate %}
+    </p>
+</header>
+
+{# ============================================================ #}
+{# Liste des events deja saisis (rendue dynamiquement par HTMX). #}
+{# `aria-live="polite"` annonce les changements aux lecteurs    #}
+{# d'ecran lors d'un add/remove.                                 #}
+{# / List of events already added (HTMX-rendered).               #}
+{# `aria-live="polite"` announces changes to screen readers.    #}
+{# ============================================================ #}
+<section class="mb-3">
+    <h2 class="h5 mb-2">{% translate "Événements ajoutés" %}</h2>
+    <div id="events-list"
+         aria-live="polite"
+         data-testid="onboard-events-list">
+        {% include "onboard/partials/events_list.html" %}
+    </div>
+</section>
+
+{# ============================================================ #}
+{# Sous-form HTMX d'ajout : toujours visible, posera autant     #}
+{# d'events qu'on veut. Apres POST, la vue rend                 #}
+{# `events_list.html` qui remplace `#events-list` (innerHTML).  #}
+{# / HTMX add sub-form: always visible, can add as many events   #}
+{# as needed. After POST, the view renders `events_list.html`    #}
+{# replacing `#events-list` (innerHTML).                         #}
+{# ============================================================ #}
+<section class="mb-4">
+    <h2 class="h5 mb-2">{% translate "Ajouter un événement" %}</h2>
+    {% include "onboard/partials/event_row_form.html" %}
+</section>
+
+{# ============================================================ #}
+{# Form final : finalise la step et enqueue la creation tenant.  #}
+{# Action vide => meme URL (POST `/onboard/events/`) traitee     #}
+{# par la vue `events` (branche POST -> finalize).               #}
+{# / Final form: finalize step + enqueue tenant creation.        #}
+{# ============================================================ #}
+<form method="post"
+      action="{% url 'onboard-events' %}"
+      data-testid="onboard-events-finalize-form">
+    {% csrf_token %}
+    <div class="d-flex justify-content-between pt-2">
+        <a href="{% url 'onboard-descriptions' %}"
+           class="btn btn-link"
+           data-testid="onboard-events-prev">
+            <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> {% translate "Précédent" %}
+        </a>
+        <button type="submit"
+                class="btn btn-primary btn-lg"
+                data-testid="onboard-events-finalize">
+            {% translate "Lancer mon espace" %} <i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>
+        </button>
+    </div>
+</form>
+{% endblock step_content %}

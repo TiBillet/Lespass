@@ -1,0 +1,92 @@
+{% extends 'emails/base.html' %}
+{% load humanize static i18n %}
+
+{#
+Mail OTP envoye par onboard.tasks.onboard_otp_mailer.
+/ OTP email sent by onboard.tasks.onboard_otp_mailer.
+
+LOCALISATION : onboard/templates/onboard/emails/otp_code.html
+
+Design aligne sur ready.html (et welcome_email.html legacy) : table imbriquee,
+palette TiBillet (vert #009058, gris #70706d, noir #1d1d1b), Arial / Helvetica.
+Pas de bouton CTA — a la place, capsule visuelle qui met en valeur le code
+a 6 chiffres (letter-spacing genereux pour lisibilite et copier-coller).
+
+Variables :
+  - organisation : nom du lieu en cours de creation (wc.organisation)
+  - otp          : code OTP en clair (6 chiffres)
+
+Securite : ne JAMAIS logger `otp` cote serveur. Voir
+onboard/tasks.py::onboard_otp_mailer.
+#}
+
+{% block content %}
+    <tr>
+        <td class="pt-28 td_content"
+            style="background:#fff; padding:44px 64px 57px; border:1px solid #dcdcd9; border-radius:8px;">
+            <table align="center" cellpadding="0" cellspacing="0" class="w-100p"
+                   style="max-width:472px; margin:0 auto;" width="472">
+                <table style="">
+                    <tr>
+                        <td>
+                            <table style="border-spacing: 0px;">
+                                <tr>
+                                    <td valign="middle"><span
+                                            style="font-weight:bold;color:#636360;font:10px Arial-Bold, Helvetica-Bold, sans-serif;text-transform:uppercase;">{% trans "Bienvenue dans la communauté TiBillet" %}</span><span
+                                            style="color:transparent;display:none;height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden;width:0;">&nbsp;|&nbsp;</span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <h1 style="font-weight:400;style:regular;color:#1d1d1b;font:24px/32px Arial, Helvetica, sans-serif;margin: 30px 0 30px;">
+                            {% trans "Votre code de vérification" %}</h1><span
+                            style="color:transparent;display:none;height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden;width:0;">&nbsp;|&nbsp;</span>
+                        <td style="padding: 24px 0 24px 0; ">
+                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 16px 0;">
+                                {% blocktrans with name=organisation %}Vous avez demandé la création de l'espace TiBillet « {{ name }} ». Pour confirmer votre adresse email et continuer la configuration, saisissez le code ci-dessous dans la page d'inscription :{% endblocktrans %}
+                            </p>
+
+                            {# Capsule code PIN — encadre vert clair, code en grand pour lisibilite mobile + copier-coller facile. #}
+                            {# / PIN code capsule — light green frame, large font for mobile readability + easy copy-paste. #}
+                            <table style="width:100%;border-spacing: 0px;padding: 0px;margin: 24px 0;">
+                                <tr>
+                                    <td align="center"
+                                        style="background:#e8f5ee;border:1px solid #009058;border-radius:8px;padding:24px 16px;">
+                                        <div style="font:bold 36px/44px 'Courier New', Courier, monospace;color:#009058;letter-spacing:12px;">
+                                            {{ otp }}
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 16px 0;">
+                                {% trans "Ce code est valable 10 minutes. Au-delà, vous devrez en demander un nouveau depuis le wizard." %}
+                            </p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="padding: 0 0 24px 0;">
+                            <h2 style="font-weight:600;color:#009058;font:18px/24px Arial, Helvetica, sans-serif;margin: 0 0 16px 0;">
+                                {% trans "Vous n'êtes pas à l'origine de cette demande ?" %}
+                            </h2>
+                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0;">
+                                {% trans "Vous pouvez ignorer ce message en toute sécurité — sans validation du code, aucun espace ne sera créé sous votre adresse." %}
+                            </p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td>
+                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;padding-top:32px;">
+                                {% trans "À bientôt sur TiBillet" %},<br/>{% trans "L'équipe de la Coopérative Code Commun : Axel, Adrienne, Nicolas, Kaya, Mike et Jonas." %}
+                            </p></td>
+                    </tr>
+                </table>
+            </table>
+        </td>
+    </tr>
+{% endblock %}

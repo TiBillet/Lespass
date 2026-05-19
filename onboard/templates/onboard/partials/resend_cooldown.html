@@ -1,0 +1,25 @@
+{% load i18n %}{% comment %}
+LOCALISATION: onboard/templates/onboard/partials/resend_cooldown.html
+
+Partial HTMX renvoye en status 429 par `resend_otp` quand le cooldown
+WC (60s entre 2 envois pour le meme brouillon) n'est pas encore ecoule.
+Cible : #resend-status (innerHTML).
+
+Variable : `seconds_remaining` (int) — secondes restantes avant le
+prochain envoi possible.
+
+/ HTMX partial returned at status 429 by `resend_otp` when the WC
+cooldown (60s between two sends for the same draft) hasn't elapsed yet.
+Variable: `seconds_remaining` (int) — seconds before next allowed send.
+{% endcomment %}
+<div class="alert alert-warning d-flex align-items-start gap-2 mb-0"
+     role="alert"
+     data-testid="onboard-verify-resend-cooldown">
+    <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+    <div>
+        {% blocktranslate trimmed with seconds=seconds_remaining %}
+            Un code vient d'être envoyé. Patientez encore {{ seconds }} seconde(s)
+            avant d'en redemander un.
+        {% endblocktranslate %}
+    </div>
+</div>

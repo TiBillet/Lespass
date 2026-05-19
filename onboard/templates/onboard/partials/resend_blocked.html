@@ -1,0 +1,18 @@
+{% load i18n %}{% comment %}
+LOCALISATION: onboard/templates/onboard/partials/resend_blocked.html
+
+Partial HTMX renvoye en status 429 par `resend_otp` quand le rate-limit
+Redis (3 envois / heure / IP) est atteint. Cible : #resend-status (innerHTML).
+/ HTMX partial returned at status 429 by `resend_otp` when the Redis
+rate-limit (3 sends / hour / IP) is reached. Target: #resend-status (innerHTML).
+{% endcomment %}
+<div class="alert alert-warning d-flex align-items-start gap-2 mb-0"
+     role="alert"
+     data-testid="onboard-verify-resend-blocked">
+    <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+    <div>
+        {% blocktranslate trimmed %}
+            Trop de demandes. Veuillez patienter avant d'en redemander un.
+        {% endblocktranslate %}
+    </div>
+</div>

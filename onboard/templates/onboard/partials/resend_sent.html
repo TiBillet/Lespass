@@ -1,0 +1,16 @@
+{% load i18n %}{% comment %}
+LOCALISATION: onboard/templates/onboard/partials/resend_sent.html
+
+Partial HTMX renvoye en status 200 par `resend_otp` apres regeneration
++ envoi du nouveau code via Celery. Cible : #resend-status (innerHTML).
+/ HTMX partial returned at status 200 by `resend_otp` after regenerating
++ sending the new code via Celery. Target: #resend-status (innerHTML).
+{% endcomment %}
+<div class="alert alert-success d-flex align-items-start gap-2 mb-0"
+     role="status"
+     data-testid="onboard-verify-resend-sent">
+    <i class="bi bi-envelope-check" aria-hidden="true"></i>
+    <div>
+        {% translate "Un nouveau code a été envoyé. Vérifiez votre boîte mail." %}
+    </div>
+</div>

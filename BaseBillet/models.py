@@ -258,17 +258,24 @@ class PostalAddress(models.Model):
         help_text=_("Full name or ISO code.")
     )
 
+    # max_digits=9, decimal_places=6 = precision ~11cm, range +/-999.999999
+    # / max_digits=9, decimal_places=6 = ~11cm precision, +/-999.999999 range
+    # Aligne sur MetaBillet.WaitingConfiguration.latitude/longitude.
+    # Anciennement 18/16 (bug : 2 chiffres avant la virgule -> overflow pour
+    # toute longitude hors [-99, +99], i.e. Asie/Pacifique/Ameriques).
+    # / Was previously 18/16 (only 2 digits before decimal -> overflow for any
+    # longitude outside [-99, +99], i.e. most of Asia/Pacific/Americas).
     latitude = models.DecimalField(
-        max_digits=18,
-        decimal_places=16,
+        max_digits=9,
+        decimal_places=6,
         blank=True,
         null=True,
         verbose_name=_("Latitude"),
         help_text=_("GPS coordinate: latitude.")
     )
     longitude = models.DecimalField(
-        max_digits=18,
-        decimal_places=16,
+        max_digits=9,
+        decimal_places=6,
         blank=True,
         null=True,
         verbose_name=_("Longitude"),
@@ -554,6 +561,38 @@ class Configuration(SingletonModel):
         verbose_name=_("Federation module"),
     )
 
+    ######### COMPTABILITE — RAPPORTS PERIODIQUES #########
+    # / Periodic reports — accounting app
+
+    PERIODICITE_NONE = "NONE"
+    PERIODICITE_JOURNALIER = "J"
+    PERIODICITE_HEBDOMADAIRE = "H"
+    PERIODICITE_MENSUEL = "M"
+    PERIODICITE_ANNUEL = "A"
+    PERIODICITE_CHOICES = [
+        (PERIODICITE_NONE, _("No email")),
+        (PERIODICITE_JOURNALIER, _("Daily")),
+        (PERIODICITE_HEBDOMADAIRE, _("Weekly")),
+        (PERIODICITE_MENSUEL, _("Monthly")),
+        (PERIODICITE_ANNUEL, _("Yearly")),
+    ]
+
+    rapport_emails = models.TextField(
+        blank=True,
+        default="",
+        verbose_name=_("Recipient emails for closure reports"),
+        help_text=_(
+            "Comma-separated emails. Leave empty to disable automatic sending."
+        ),
+    )
+
+    rapport_periodicite = models.CharField(
+        max_length=4,
+        choices=PERIODICITE_CHOICES,
+        default=PERIODICITE_NONE,
+        verbose_name=_("Closure report sending frequency"),
+    )
+
     # FROM V2 : UNUSED
     module_monnaie_locale = models.BooleanField(
         default=False,
@@ -754,7 +793,7 @@ class Configuration(SingletonModel):
                 tenant = connection.tenant
                 tenant_url = tenant.get_primary_domain().domain
                 msg = _('Link your stripe account to accept payment')
-                return format_html(f"<a href='https://{tenant_url}/tenant/onboard_stripe_from_config' class='font-medium inline-flex group items-center gap-1 relative rounded-default justify-center whitespace-nowrap cursor-pointer px-3 py-2 border border-base-200 bg-primary-600 border-transparent text-white hover:bg-primary-600/80 w-full lg:w-auto'>"
+                return format_html(f"<a href='https://{tenant_url}/stripe/onboard/from_config/' class='font-medium inline-flex group items-center gap-1 relative rounded-default justify-center whitespace-nowrap cursor-pointer px-3 py-2 border border-base-200 bg-primary-600 border-transparent text-white hover:bg-primary-600/80 w-full lg:w-auto'>"
                                    f"{msg}<span class='material-symbols-outlined text-icon text-sm align-center text-white'>link</span>"
                                    f"</a>")
             return _("Stripe connected")

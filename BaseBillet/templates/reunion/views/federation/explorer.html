@@ -1,0 +1,82 @@
+{% extends base_template %}
+{% load static i18n %}
+
+{# Wrapper tenant : plug le widget explorer dans le skin reunion. #}
+{# Source du widget : seo/templates/seo/partials/explorer_widget.html #}
+{# / Tenant wrapper: plugs the explorer widget into the reunion skin. #}
+{# Widget source: seo/templates/seo/partials/explorer_widget.html #}
+
+{% block title %}{% translate 'Réseau local' %}{% endblock %}
+{% block meta_description %}{{ config.short_description|striptags|default:config.organisation }} - {% translate 'Réseau local' %}{% endblock %}
+
+{# Override des Open Graph + Twitter tags : par defaut le base.html retombe sur #}
+{# "Accueil | <tenant>" qui n'est pas adapte a cette page Reseau local. #}
+{# / Override Open Graph + Twitter tags: base.html defaults to "Home | <tenant>" #}
+{# which is not appropriate for this Local Network page. #}
+{% block og_title %}{% translate 'Réseau local' %} | {{ config.organisation }}{% endblock %}
+{% block og_description %}{% blocktranslate with tenant=config.organisation %}Découvrez le réseau coopératif de {{ tenant }} : lieux fédérés, événements partagés.{% endblocktranslate %}{% endblock %}
+{% block twitter_title %}{% translate 'Réseau local' %} | {{ config.organisation }}{% endblock %}
+{% block twitter_description %}{% blocktranslate with tenant=config.organisation %}Découvrez le réseau coopératif de {{ tenant }} : lieux fédérés, événements partagés.{% endblocktranslate %}{% endblock %}
+
+{% block extra_meta %}
+    {# JSON-LD federation : declare la structure du reseau pour Google et les LLMs. #}
+    {# Sans ce schema, les crawlers no-JS (GPTBot, ClaudeBot, PerplexityBot, CommonCrawl) #}
+    {# ne voient que le shell vide de la page rendue cote JS. #}
+    {# / Federation JSON-LD: declares the network structure for Google and LLMs. #}
+    {# Without this schema, no-JS crawlers see only the empty page shell. #}
+    {% if federation_json_ld %}
+    <script type="application/ld+json">{{ federation_json_ld|safe }}</script>
+    {% endif %}
+
+    {# Breadcrumb pour rich snippets Google : Accueil > Reseau local #}
+    {# / Breadcrumb for Google rich snippets: Home > Local network #}
+    {% if breadcrumb_json_ld %}
+    <script type="application/ld+json">{{ breadcrumb_json_ld|safe }}</script>
+    {% endif %}
+{% endblock %}
+
+{% block main %}
+    {# Feuilles de style Leaflet + explorer charges DANS le body. #}
+    {# Raison : la navbar utilise hx-target="body" + hx-swap="innerHTML" pour #}
+    {# naviguer entre les pages. HTMX ne remplace QUE le contenu du body, jamais #}
+    {# le head. Si on place ces <link> dans extra_meta (head), ils ne sont charges #}
+    {# qu'au full reload (F5 ou URL directe). Sur une navigation HTMX depuis une #}
+    {# autre page du tenant, les CSS manquent et la carte casse tout le layout. #}
+    {# Les <link> dans le body sont valides en HTML5 : le navigateur les parse et #}
+    {# applique les styles des qu'ils apparaissent dans le DOM swappé. #}
+    {# / Leaflet + explorer stylesheets loaded INSIDE the body. #}
+    {# Reason: the navbar uses hx-target="body" + hx-swap="innerHTML". HTMX only #}
+    {# replaces the body content, never the head. <link> tags in extra_meta would #}
+    {# only load on full reload. On HTMX navigation from another tenant page, the #}
+    {# CSS would be missing and the map would break the whole layout. #}
+    {# <link> inside <body> is valid HTML5: the browser parses and applies styles #}
+    {# as soon as they appear in the swapped DOM. #}
+    <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/leaflet.css' %}">
+    <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/MarkerCluster.css' %}">
+    <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/MarkerCluster.Default.css' %}">
+    <link rel="stylesheet" href="{% static 'seo/explorer.css' %}">
+
+    {# H1 visually-hidden : visible des screen readers + Google, mais ne perturbe #}
+    {# pas l'UI (la toolbar de l'explorer reste l'element visuel dominant). #}
+    {# / H1 visually-hidden: visible to screen readers + Google, but does not #}
+    {# disturb the UI (the explorer toolbar stays the dominant visual element). #}
+    <h1 class="visually-hidden">{% translate "Réseau local" %} — {{ config.organisation }}</h1>
+
+    {# Message d'etat vide : si le tenant n'a aucune autre place federee. #}
+    {# / Empty-state message: if the tenant has no other federated place. #}
+    {% if not has_other_federated_places %}
+    <div class="alert alert-info text-center my-3 mx-auto" style="max-width: 800px;"
+         role="status" data-testid="federation-empty-state">
+        <i class="bi bi-info-circle" aria-hidden="true"></i>
+        {% translate "Aucune autre place fédérée pour le moment." %}
+    </div>
+    {% endif %}
+
+    {% include "seo/partials/explorer_widget.html" %}
+{% endblock %}
+
+{% block scripts %}
+    <script src="{% static 'seo/vendor/leaflet/leaflet.js' %}"></script>
+    <script src="{% static 'seo/vendor/leaflet/markercluster.js' %}"></script>
+    <script src="{% static 'seo/explorer.js' %}"></script>
+{% endblock %}

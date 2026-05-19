@@ -1,4 +1,6 @@
+from django.templatetags.static import static
 from django.urls import path, include
+from django.views.generic import RedirectView
 from rest_framework import routers
 from BaseBillet import views as base_view
 from BaseBillet.views_robots import robots_txt
@@ -9,7 +11,12 @@ import BaseBillet.views_scan as views_scan
 router = routers.DefaultRouter()
 router.register(r'memberships', base_view.MembershipMVT, basename='membership_mvt')
 router.register(r'badge', base_view.Badge, basename='badge')
-router.register(r'tenant', base_view.Tenant, basename='tenant')
+# NOTE 2026-05-16 : `Tenant` ViewSet supprime. Le flow legacy `/tenant/new/`
+# est remplace par l'app `onboard/` (wizard multi-step). Les 2 actions
+# Stripe `_from_config` ont ete migrees dans `PaiementStripe/`. Cf.
+# `TECH_DOC/SESSIONS/ONBOARD/` et `TECH_DOC/SESSIONS/MOYENS_PAIEMENT/`.
+# / `Tenant` ViewSet removed. Legacy `/tenant/new/` replaced by `onboard/`.
+# Stripe `_from_config` actions moved to `PaiementStripe/`.
 router.register(r'federation', base_view.FederationViewset, basename='federation')
 
 router.register(r'my_account', base_view.MyAccount, basename='my_account')
@@ -27,6 +34,17 @@ urlpatterns = [
     # Dynamic humans.txt - Access at: https://yourdomain.com/humans.txt
     # Standard humanstxt.org : credits the Cooperative Code Commun team
     path('humans.txt', humans_txt, name='humans_txt'),
+
+    # /favicon.ico est demande automatiquement par les navigateurs sur toutes
+    # les pages, y compris non-HTML (sitemap.xml, robots.txt). On evite le 404
+    # en redirigeant vers le favicon du skin reunion (PNG).
+    # / Browsers auto-request /favicon.ico on all pages including non-HTML.
+    # Redirect to the reunion skin favicon (PNG) to avoid 404s.
+    path(
+        'favicon.ico',
+        RedirectView.as_view(url=static('reunion/img/favicon.png'), permanent=True),
+        name='favicon_ico',
+    ),
 
     ### SCAN TICKET API
     path('scan/check_api_scan/', views_scan.check_api_scan.as_view(), name='check_api_scan'),

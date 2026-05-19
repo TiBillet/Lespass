@@ -1,0 +1,181 @@
+{% extends "onboard/base_wizard.html" %}
+{% load i18n %}
+
+{% comment %}
+  LOCALISATION: onboard/templates/onboard/steps/02_verify.html
+
+  Step 2 du wizard : verification du code OTP envoye par email a l'etape 1.
+  Soumet a `onboard-verify` (POST, name="otp"). Re-rendu en 422 sur erreur :
+    - errors : dict {field: [msg, ...]} renvoye par le serializer ou par la vue ;
+    - email  : adresse a laquelle le code a ete envoye (rappel) ;
+    - locked : True quand l'utilisateur a depasse 5 tentatives ratees.
+
+  / Step 2 of the wizard: verify the OTP code sent by email in step 1.
+  Submits to `onboard-verify` (POST, name="otp"). Re-rendered with 422 on
+  error: errors dict, email reminder, optional `locked: True` flag after 5
+  failed attempts.
+
+  IMPORTANT (test guard) : le message d'erreur "Account locked: too many
+  wrong attempts." est rendu via {{ errors.otp }} et contient le mot
+  "locked" -> satisfait `test_verify_locks_after_5_attempts` qui cherche
+  `b"locked"` ou `b"verrou"` dans la reponse.
+  / The error message contains "locked", which satisfies
+  `test_verify_locks_after_5_attempts`.
+
+  6 inputs OTP separes : auto-tab gere par `onboard/static/onboard/wizard.js`
+  (detecte les inputs avec `data-testid` prefixe `onboard-verify-otp-`).
+  Un input cache `name="otp"` concatene les 6 chiffres a la volee, le serveur
+  recoit donc bien un champ `otp` de 6 chiffres comme attendu par le serializer.
+  / 6 separated OTP inputs: auto-tab handled by `wizard.js`. A hidden
+  `name="otp"` input concatenates the 6 digits on the fly, so the server
+  receives a single `otp` field of 6 digits as expected by the serializer.
+{% endcomment %}
+
+{% block page_title %}{% translate "Vérification — Créer votre espace TiBillet" %}{% endblock %}
+
+{% block step_content %}
+{# Refacto 2026-05-15 : l'OTP est maintenant envoye automatiquement par     #}
+{# `identity` POST. Pas besoin de discriminer `has_pending_otp` : le code  #}
+{# vient TOUJOURS d'etre envoye quand l'utilisateur arrive ici. La branche #}
+{# "Recevoir le code" disparait, le bouton reste pour les renvois.         #}
+{# / Refactor 2026-05-15: OTP is now auto-sent by `identity` POST. No need #}
+{# to branch on `has_pending_otp`: the code was JUST sent when the user    #}
+{# lands here. The "Receive code" branch is gone, the button stays for     #}
+{# resends.                                                                 #}
+<header class="mb-4">
+    <p class="onboard-step-counter mb-1">{% translate "Étape 2 / 6" %}</p>
+    <h1 class="onboard-h1 mb-2">{% translate "Vérifiez votre adresse email" %}</h1>
+    <p class="text-muted">
+        {% blocktranslate trimmed with email=email %}
+            Un code à 6 chiffres a été envoyé à <strong>{{ email }}</strong>.
+            Saisissez-le ci-dessous pour continuer.
+        {% endblocktranslate %}
+    </p>
+</header>
+
+{% if locked %}
+    {# Bandeau verrouillage : le mot "locked" doit apparaitre dans le HTML #}
+    {# pour satisfaire `test_verify_locks_after_5_attempts`. #}
+    {# / Lock banner: the word "locked" must appear in HTML to satisfy #}
+    {# `test_verify_locks_after_5_attempts`. #}
+    <div class="alert alert-danger d-flex align-items-start gap-2"
+         role="alert"
+         data-testid="onboard-verify-locked">
+        <i class="bi bi-shield-lock" aria-hidden="true"></i>
+        <div>
+            <strong>{% translate "Account locked." %}</strong>
+            {% translate "Trop de tentatives incorrectes. Demandez un nouveau code ou contactez le support." %}
+        </div>
+    </div>
+{% endif %}
+
+{% if errors.otp %}
+    {# Erreurs sur le champ OTP (contient le message "locked" en cas de verrou). #}
+    {# / OTP field errors (contains the "locked" message on lockout). #}
+    <div class="alert alert-danger"
+         role="alert"
+         aria-live="polite"
+         data-testid="onboard-verify-errors">
+        {% for msg in errors.otp %}{{ msg }}{% if not forloop.last %}<br>{% endif %}{% endfor %}
+    </div>
+{% endif %}
+
+<form method="post"
+      action="{% url 'onboard-verify' %}"
+      novalidate
+      data-testid="onboard-verify-form"
+      class="vstack gap-3">
+    {% csrf_token %}
+
+    <fieldset>
+        <legend class="form-label">
+            {% translate "Code de vérification (6 chiffres)" %}
+        </legend>
+
+        {# 6 inputs separes — auto-tab via wizard.js. Chaque input maxlength=1 #}
+        {# et pattern=\d. L'input cache `id_otp_hidden` concatene les 6 chiffres #}
+        {# au format attendu par le serializer (`name="otp"`). #}
+        {# / 6 separate inputs — auto-tab via wizard.js. Hidden input #}
+        {# `id_otp_hidden` concatenates the 6 digits into the `name="otp"` field. #}
+        <div class="d-flex flex-wrap gap-2 align-items-center"
+             role="group"
+             aria-label="{% translate 'Saisie du code à 6 chiffres' %}">
+            {% for i in "012345" %}
+                <input type="text"
+                       inputmode="numeric"
+                       pattern="\d"
+                       maxlength="1"
+                       autocomplete="one-time-code"
+                       required
+                       class="form-control form-control-lg text-center fw-bold onboard-otp-cell"
+                       style="width: 3rem;"
+                       {# Le blocktranslate doit recevoir la variable via `with` pour       #}
+                       {# capturer la position dans la chaine traduisible.               #}
+                       {# / blocktranslate needs `with` to capture the digit position.    #}
+                       aria-label="{% blocktranslate with position=forloop.counter %}Chiffre {{ position }}{% endblocktranslate %}"
+                       data-testid="onboard-verify-otp-{{ i }}">
+            {% endfor %}
+        </div>
+
+        {# Input reel envoye au serveur : concatenation des 6 chiffres. #}
+        {# Le JS dans `wizard.js` met a jour cette valeur via setupOtpAutoTab #}
+        {# (sinon on bind un listener ici). #}
+        {# / Real input sent to the server: concatenation of the 6 digits. #}
+        <input type="hidden"
+               id="id_otp_hidden"
+               name="otp"
+               value=""
+               data-testid="onboard-verify-otp">
+    </fieldset>
+
+    <div class="d-flex justify-content-between align-items-center pt-2">
+        {# "Precedent" pointe vers identity : l'user peut corriger son email     #}
+        {# avant de recevoir un nouveau code (feedback mainteneur 2026-05-15).   #}
+        {# / "Previous" -> identity: lets the user fix their email before        #}
+        {# requesting a new code (maintainer feedback 2026-05-15).               #}
+        <a href="{% url 'onboard-identity' %}"
+           class="btn btn-link"
+           data-testid="onboard-verify-prev">
+            <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>
+            {% translate "Précédent" %}
+        </a>
+        <button type="submit"
+                class="btn btn-primary btn-lg"
+                data-testid="onboard-verify-submit">
+            <i class="bi bi-check2-circle me-1" aria-hidden="true"></i>
+            {% translate "Vérifier" %}
+        </button>
+    </div>
+</form>
+
+{# Section "Renvoyer le code" — bouton HTMX qui appelle `onboard-resend-otp`. #}
+{# Refacto 2026-05-15 : label fixe "Renvoyer le code" (l'OTP est toujours    #}
+{# deja envoye par `identity` POST). Garde-fous serveur : cooldown 60s WC + #}
+{# rate-limit IP 3/h (cf. resend_otp dans views.py).                         #}
+{# / "Resend code" section — fixed label since the OTP is always already    #}
+{# sent by `identity` POST. Server guards: 60s WC cooldown + 3/h IP RL.     #}
+<section class="mt-4 pt-3 border-top">
+    <p class="text-muted small mb-2">
+        {% translate "Vous n'avez pas reçu le code ?" %}
+    </p>
+    <button type="button"
+            class="btn btn-outline-secondary"
+            hx-post="{% url 'onboard-resend-otp' %}"
+            hx-target="#resend-status"
+            hx-swap="innerHTML"
+            hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+            data-testid="onboard-verify-resend">
+        <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>
+        {% translate "Renvoyer le code" %}
+    </button>
+    <div id="resend-status"
+         class="mt-2"
+         aria-live="polite"
+         data-testid="onboard-verify-resend-status"></div>
+</section>
+
+{# Toute la logique OTP (auto-tab, backspace, paste 6-chiffres, sync hidden) #}
+{# est consolidee dans `onboard/static/onboard/wizard.js::setupOtpAutoTab`. #}
+{# / All OTP logic (auto-tab, backspace, 6-digit paste, hidden sync) lives #}
+{# in `onboard/static/onboard/wizard.js::setupOtpAutoTab`. #}
+{% endblock step_content %}

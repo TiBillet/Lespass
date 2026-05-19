@@ -152,6 +152,8 @@ SHARED_APPS = (
     'wsocket',
     'fedow_public',
     'discovery',
+    'seo',
+    'onboard',
 
     'django_extensions',
     'solo',
@@ -182,6 +184,7 @@ TENANT_APPS = (
     'tibrss',
     'fedow_connect',
     'crowds',
+    'comptabilite',
 )
 
 INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]
@@ -221,11 +224,28 @@ MIDDLEWARE = [
 if DEBUG and not TEST :
     MIDDLEWARE += ['django_browser_reload.middleware.BrowserReloadMiddleware', ]
 
+# Detection HTTPS derriere proxy (Traefik termine TLS et forwarde HTTP au container).
+# Sans ce reglage, request.scheme = 'http' → canonical URLs et JSON-LD contiennent
+# http://... au lieu de https://... ce qui penalise le SEO.
+# Le header X-Forwarded-Proto doit etre setting cote Traefik (par defaut dans
+# le mode HTTPS auto, mais a verifier). En dev local, le browser accepte http
+# meme si on tape https:// donc le canonical http:// reste cosmetique.
+# / HTTPS detection behind proxy (Traefik terminates TLS, forwards HTTP to container).
+# Without this, request.scheme = 'http' → canonical URLs and JSON-LD contain
+# http://... instead of https://... which hurts SEO.
+# The X-Forwarded-Proto header must be set on Traefik side (default in
+# HTTPS auto mode, but worth checking). In local dev, browsers accept http
+# even if typed as https://, so http:// canonical stays cosmetic.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         # 'DIRS': [],
-        'DIRS': [BASE_DIR / "Administration/templates"],  # Pour le dashboard d'admin unfold
+        'DIRS': [
+            BASE_DIR / "Administration/templates",  # Pour le dashboard d'admin unfold
+            BASE_DIR / "templates",  # Templates réutilisables projet (widgets, etc.)
+        ],
         'APP_DIRS': True,
 
         'OPTIONS': {
@@ -234,6 +254,11 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                # Expose `noindex_seo: bool` aux bases templates pour
+                # le rendu de <meta name="robots">. Voir
+                # TiBillet/seo_indexing.py et SESSIONS/SEO/CHANTIER-01.
+                # / Expose `noindex_seo: bool` to base templates.
+                'TiBillet.seo_indexing.noindex_context',
             ],
         },
     }
@@ -353,8 +378,12 @@ LOCALE_PATHS = (
 STATIC_ROOT = os.path.join(BASE_DIR, "www", "static")
 STATIC_URL = '/static/'
 
-STATICFILES_DIRS = ['BaseBillet/static', 'MetaBillet/static', 'QrcodeCashless/static', ]
-# STATICFILES_DIRS = [BASE_DIR / "static"]
+STATICFILES_DIRS = [
+    'BaseBillet/static',
+    'MetaBillet/static',
+    'QrcodeCashless/static',
+    BASE_DIR / "static",  # Fichiers statiques projet (widgets, etc.)
+]
 
 MEDIA_ROOT = os.path.join(BASE_DIR, "www", "media")
 MEDIA_URL = '/media/'

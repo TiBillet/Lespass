@@ -1,0 +1,13 @@
+{% load i18n %}{% blocktranslate with name=organisation admin=admin_url instance=instance_url %}Bonjour,
+
+Votre espace TiBillet "{{ name }}" est prêt !
+
+Accédez à votre administration : {{ admin }}
+
+L'adresse publique de votre instance : {{ instance }}
+
+Vous pouvez maintenant configurer vos modules, connecter Stripe pour vendre vos billets, et publier vos premiers événements.
+
+Besoin d'aide ? Email : contact@tibillet.re — Discord : https://discord.gg/7FJvtYx
+
+— L'équipe de la Coopérative Code Commun{% endblocktranslate %}

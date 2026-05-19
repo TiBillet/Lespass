@@ -43,6 +43,10 @@ services:
     restart: unless-stopped
     env_file: .env
     user: fedow
+    environment:
+      # Override DOMAIN pour LaBoutik : sous-domaine du service, pas le wildcard tenant.
+      # Resolu par compose via le .env (DOMAIN=tibillet.localhost) -> laboutik.tibillet.localhost.
+      DOMAIN: fedow.$DOMAIN
     links:
       - fedow_memcached:memcached
     volumes:
@@ -75,6 +79,7 @@ services:
       - traefik.http.routers.fedow_nginx.tls=true
       - traefik.http.routers.fedow_nginx.rule=Host(`fedow.$DOMAIN`)
       - traefik.http.services.fedow_nginx.loadbalancer.server.port=80
+      - traefik.http.routers.fedow_nginx.priority=100
 
     networks:
       - frontend
@@ -181,7 +186,8 @@ services:
       - traefik.enable=true
       - traefik.docker.network=frontend
       - traefik.http.routers.lespass_nginx.tls=true
-      - traefik.http.routers.lespass_nginx.rule=Host(`$DOMAIN`) || Host(`www.$DOMAIN`) || Host(`agenda.$DOMAIN`) || Host(`lespass.$DOMAIN`) || Host(`linterupteur.$DOMAIN`) || Host(`demo.$DOMAIN`) || Host(`bis.domainbis.localhost`) || Host(`domainbis.localhost`) || Host(`chantefrein.$DOMAIN`)  || Host(`la-lowcow-motiv.$DOMAIN`)
+#      - traefik.http.routers.lespass_nginx.rule=Host(`$DOMAIN`) || Host(`www.$DOMAIN`) || Host(`agenda.$DOMAIN`) || Host(`lespass.$DOMAIN`) || Host(`linterupteur.$DOMAIN`) || Host(`demo.$DOMAIN`) || Host(`bis.domainbis.localhost`) || Host(`domainbis.localhost`) || Host(`chantefrein.$DOMAIN`)  || Host(`la-lowcow-motiv.$DOMAIN`)
+      - traefik.http.routers.lespass_nginx.rule=Host(`$DOMAIN`) || HostRegexp(`${DOMAIN_REGEX}`)
       - traefik.http.services.lespass_nginx.loadbalancer.server.port=80
     networks:
       - backend

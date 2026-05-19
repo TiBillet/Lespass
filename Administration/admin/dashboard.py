@@ -2,6 +2,7 @@ import logging
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db import connection
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
@@ -547,6 +548,14 @@ def get_sidebar_navigation(request):
             "collapsible": True,
             "items": [
                 {
+                    "title": _("Rapports"),
+                    "icon": "lock",
+                    "link": reverse_lazy(
+                        "staff_admin:comptabilite_cloturecaisse_changelist"
+                    ),
+                    "permission": admin_permission,
+                },
+                {
                     "title": _("Entries"),
                     "icon": "receipt_long",
                     "link": reverse_lazy(
@@ -554,7 +563,7 @@ def get_sidebar_navigation(request):
                     ),
                     "permission": admin_permission,
                 },
-                # FROM V2 : TO ADD LATER
+                # FROM V2 : TO ADD LATER (laboutik viendra plus tard)
                 # {
                 #     "title": _("Operation logs"),
                 #     "icon": "history",
@@ -562,10 +571,10 @@ def get_sidebar_navigation(request):
                 #     "permission": admin_permission,
                 # },
                 # {
-                #     "title": _("Accounting codes"),
+                #     "title": _("Accounting accounts"),
                 #     "icon": "account_balance",
                 #     "link": reverse_lazy(
-                #         "staff_admin:laboutik_comptecomptable_changelist"
+                #         "staff_admin:comptabilite_comptecomptable_changelist"
                 #     ),
                 #     "permission": admin_permission,
                 # },
@@ -573,7 +582,7 @@ def get_sidebar_navigation(request):
                 #     "title": _("Payment method mapping"),
                 #     "icon": "swap_horiz",
                 #     "link": reverse_lazy(
-                #         "staff_admin:laboutik_mappingmoyendepaiement_changelist"
+                #         "staff_admin:comptabilite_mappingmoyendepaiement_changelist"
                 #     ),
                 #     "permission": admin_permission,
                 # },
@@ -789,6 +798,74 @@ def _build_modules_context(configuration):
     return modules
 
 
+def _build_integrations_context(configuration):
+    """Construit la liste des cartes d'integration (lecture seule).
+    / Builds the integrations card list (read-only).
+
+    Ces cartes ne sont pas des toggles utilisateur : elles affichent juste un
+    etat de connexion (LaBoutik V1 actif/inactif) ou un teaser (LaBoutik V2
+    en developpement). Pas de bouton, pas de POST possible.
+    / These cards are not user toggles: they just show a connection state
+    (LaBoutik V1 online/offline) or a teaser (LaBoutik V2 in development).
+    """
+    integrations = []
+
+    # --- LaBoutik V1 : connecte si check_serveur_cashless() repond OK ---
+    # / --- LaBoutik V1: connected if check_serveur_cashless() responds OK ---
+    #
+    # Le check fait un appel HTTP de timeout 10s — on cache 60s par tenant
+    # pour ne pas bloquer chaque load du dashboard. Le tenant.pk est inclus
+    # dans la cle de cache (isolation multi-tenant).
+    # / The check is a 10s HTTP call — we cache 60s per tenant to avoid
+    # / blocking each dashboard load. tenant.pk is in the cache key.
+    laboutik_v1_url = configuration.server_cashless or ""
+    laboutik_v1_active = False
+
+    if configuration.server_cashless and configuration.key_cashless:
+        cache_key = f"dashboard:laboutik_v1_status:{connection.tenant.pk}"
+        cached_status = cache.get(cache_key)
+        if cached_status is None:
+            try:
+                cached_status = configuration.check_serveur_cashless()
+            except Exception as exc:
+                # Erreur reseau (timeout, DNS, etc.) — on logge, on considere inactif
+                # / Network error — log and consider offline
+                logger.warning(f"LaBoutik V1 health check failed: {exc}")
+                cached_status = False
+            cache.set(cache_key, cached_status, timeout=60)
+        laboutik_v1_active = bool(cached_status)
+
+    integrations.append({
+        "field": "laboutik_v1",
+        "name": _("LaBoutik V1"),
+        "description": _("Cashless cash register, historical interface."),
+        "testid": "dashboard-card-laboutik-v1",
+        "active": laboutik_v1_active,
+        "info_only": True,
+        "external_link": laboutik_v1_url if laboutik_v1_url else None,
+        "external_link_label": _("Open LaBoutik V1") if laboutik_v1_url else None,
+    })
+
+    # --- LaBoutik V2 : en developpement, lien vers la sandbox ---
+    # / --- LaBoutik V2: in development, link to sandbox ---
+    integrations.append({
+        "field": "laboutik_v2",
+        "name": _("LaBoutik V2"),
+        "description": _(
+            "Development in progress. You can try it on https://lespass.devtib.fr/ "
+            "by signing in with the email admin@admin.com."
+        ),
+        "testid": "dashboard-card-laboutik-v2",
+        "active": False,
+        "info_only": True,
+        "disabled": True,
+        "external_link": "https://lespass.devtib.fr/",
+        "external_link_label": _("Try LaBoutik V2"),
+    })
+
+    return integrations
+
+
 def dashboard_callback(request, context):
 
     configuration = Configuration.get_solo()
@@ -796,6 +873,7 @@ def dashboard_callback(request, context):
     context.update(
         {
             "modules": _build_modules_context(configuration),
+            "integrations": _build_integrations_context(configuration),
         }
     )
 

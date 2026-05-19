@@ -50,8 +50,8 @@ from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, Product, Event, Tag, Paiement_stripe, Membership, Reservation, \
     FormbricksConfig, FormbricksForms, FederatedPlace, Carrousel, LigneArticle, PriceSold, \
     Price, ProductSold, PaymentMethod, PostalAddress, SaleOrigin, ProductFormField
-from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
-    contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email, send_sale_to_laboutik, \
+from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, \
+    contact_mailer, send_to_ghost_email, send_sale_to_laboutik, \
     send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, \
     send_ticket_cancellation_user, send_email_generique, \
     send_membership_pending_admin, send_membership_pending_user, send_membership_payment_link_user
@@ -215,13 +215,24 @@ def get_context(request):
             'icon': 'calendar-date'
         })
 
-    agenda_federation_active = FederatedPlace.objects.exists()
-    asset_federation_active = AssetFedowPublic.objects.filter(federated_with__isnull=False).exists()
-    if (agenda_federation_active or asset_federation_active) and config.module_federation:
+    # Activation du menu "Réseau local" : pilotee UNIQUEMENT par le flag
+    # config.module_federation. Le test d'existence de FederatedPlace est
+    # devenu superflu depuis le support des entrantes : un tenant sans
+    # FederatedPlace sortante peut quand meme avoir des voisins entrants
+    # (autres tenants qui le federent), donc afficher /federation/ a du sens.
+    # Si jamais le tenant n'a vraiment aucun voisin, la vue affiche le
+    # message "Aucune autre place federee pour le moment.".
+    # / "Local network" menu activation: driven ONLY by the
+    # config.module_federation flag. The existence test on FederatedPlace
+    # became superfluous when we added incoming-edge support: a tenant with
+    # no outgoing FederatedPlace can still have incoming neighbors, so
+    # showing /federation/ makes sense. If the tenant has no neighbor at
+    # all, the view shows the "No other federated place" message.
+    if config.module_federation:
         navbar.append({
             'name': 'federation',
             'url': '/federation/',
-            'label': 'Local network',
+            'label': _('Local network'),
             'icon': 'diagram-2-fill'
         })
 
@@ -1584,94 +1595,149 @@ class FederationViewset(viewsets.ViewSet):
     permission_classes = [permissions.AllowAny]
 
     def list(self, request):
+        """
+        Affiche l'explorer (carte + liste) restreint au tenant courant
+        et a ses lieux federes via FederatedPlace.
+        / Renders the explorer (map + list) restricted to the current tenant
+        and its federated places via FederatedPlace.
+
+        LOCALISATION : BaseBillet/views.py — FederationViewset.list
+
+        Reprend la meme source de donnees que le public /explorer/
+        (SEOCache via build_explorer_data_for_tenants) en filtrant
+        sur les UUIDs des FederatedPlace + le tenant courant.
+
+        Reuses the same data source as the public /explorer/
+        (SEOCache via build_explorer_data_for_tenants) by filtering
+        on FederatedPlace UUIDs + the current tenant.
+        """
+        from seo.services import build_explorer_data_for_tenants
+        from seo.models import SEOCache
+        from seo.views_common import (
+            get_seo_cache,
+            build_json_ld_federation,
+            build_json_ld_breadcrumb,
+            json_for_html,
+        )
+
+        config = Configuration.get_solo()
+        current_uuid = str(connection.tenant.uuid)
+
+        # Arretes SORTANTES : les FederatedPlace dans le schema du tenant courant.
+        # = "les lieux avec lesquels JE federe (declaration de mon cote)".
+        # / OUTGOING edges: FederatedPlace in current tenant's schema.
+        # = "places I federate with (my declaration)".
+        outgoing_uuids = {
+            str(fp.tenant.uuid)
+            for fp in FederatedPlace.objects.select_related('tenant').all()
+        }
+
+        # Arretes ENTRANTES : les FederatedPlace d'AUTRES tenants pointant vers moi.
+        # Pre-calcule par le Celery task refresh_seo_cache (UNION ALL cross-schema).
+        # = "les lieux qui federent AVEC moi (declaration de leur cote)".
+        # / INCOMING edges: FederatedPlace from OTHER tenants pointing to me.
+        # Pre-computed by refresh_seo_cache Celery task (cross-schema UNION ALL).
+        # = "places that federate WITH me (their declaration)".
+        incoming_data = get_seo_cache(SEOCache.FEDERATION_INCOMING) or {}
+        incoming_uuids = set(
+            incoming_data.get("by_tenant", {}).get(current_uuid, [])
+        )
+
+        # Union des deux directions = mes voisins directs dans le graphe de federation.
+        # / Union of both directions = my direct neighbors in the federation graph.
+        other_federated_uuids = (outgoing_uuids | incoming_uuids)
+        other_federated_uuids.discard(current_uuid)
+
+        # Ensemble final pour l'explorer : voisins + tenant courant.
+        # / Final set for the explorer: neighbors + current tenant.
+        all_uuids = other_federated_uuids | {current_uuid}
+        sorted_uuids = sorted(all_uuids)
+        explorer_data = build_explorer_data_for_tenants(sorted_uuids)
+
+        # Etat vide : a-t-on AUTRE chose que le tenant courant sur la carte ?
+        # / Empty state: do we have something OTHER than the current tenant on the map?
+        has_other_federated_places = bool(other_federated_uuids)
+
+        # JSON-LD federation : declare la structure du reseau pour les LLMs et
+        # les moteurs de recherche. Le tenant courant = racine, les autres lieux
+        # de la liste = subOrganization. memberOf pointe vers le reseau TiBillet.
+        # / Federation JSON-LD: declares the network structure to LLMs and
+        # search engines. Current tenant = root, other lieux = subOrganization.
+        # memberOf points to the global TiBillet network.
+        federation_members = []
+        self_lieu_data = None
+        for lieu in explorer_data.get("lieux", []):
+            domain = lieu.get("domain", "")
+            member_url = f"https://{domain}/" if domain else ""
+            member_dict = {
+                "name": lieu.get("name", ""),
+                "url": member_url,
+                "short_description": lieu.get("short_description", ""),
+                "locality": lieu.get("locality", ""),
+                "country": lieu.get("country", ""),
+                "logo_url": lieu.get("logo_url") or "",
+            }
+            if lieu.get("tenant_id") == current_uuid:
+                self_lieu_data = member_dict
+            else:
+                federation_members.append(member_dict)
+
+        # Racine du JSON-LD = tenant courant. Si le SEOCache n'a pas encore
+        # de donnees pour le tenant courant (refresh non encore lance), on
+        # utilise les valeurs courantes de config en fallback.
+        # / JSON-LD root = current tenant. If SEOCache has no data yet for
+        # current tenant, fall back to current config values.
+        root_url = request.build_absolute_uri("/")
+        if self_lieu_data:
+            root_name = self_lieu_data["name"] or config.organisation
+            root_description = self_lieu_data.get("short_description") or ""
+            root_address = {}
+            if self_lieu_data.get("locality"):
+                root_address["addressLocality"] = self_lieu_data["locality"]
+            if self_lieu_data.get("country"):
+                root_address["addressCountry"] = self_lieu_data["country"]
+        else:
+            # Fallback : config.organisation peut etre une chaine vide.
+            # / Fallback: config.organisation can be an empty string.
+            root_name = config.organisation or connection.tenant.name
+            root_description = (config.short_description or "")
+            root_address = {}
+
+        federation_json_ld_dict = build_json_ld_federation(
+            root_name=root_name,
+            root_url=root_url,
+            federation_members=federation_members,
+            root_description=root_description,
+            root_address=root_address or None,
+            member_of={
+                "name": "TiBillet — Réseau coopératif de lieux culturels",
+                "url": "https://tibillet.org/",
+            },
+        )
+        federation_json_ld = json_for_html(federation_json_ld_dict)
+
+        # BreadcrumbList : Accueil > Reseau local. Pour les rich snippets SERP.
+        # / BreadcrumbList: Home > Local network. For SERP rich snippets.
+        breadcrumb_json_ld_dict = build_json_ld_breadcrumb([
+            {"name": str(config.organisation), "url": root_url},
+            {"name": str(_("Réseau local")), "url": request.build_absolute_uri()},
+        ])
+        breadcrumb_json_ld = json_for_html(breadcrumb_json_ld_dict)
+
+        # Contexte standard du skin + variables specifiques a l'explorer
+        # / Standard skin context + explorer-specific variables
         template_context = get_context(request)
+        template_context.update({
+            'explorer_data': explorer_data,
+            'current_tenant_uuid': current_uuid,
+            'has_other_federated_places': has_other_federated_places,
+            'federation_json_ld': federation_json_ld,
+            'breadcrumb_json_ld': breadcrumb_json_ld,
+            'page_title': _('Réseau local'),
+        })
 
-        def build_federated_places():
-            results = list()
-            tenants = list()
-            assets = list()
-
-            actual_tenant: Client = connection.tenant
-            tenants.append(actual_tenant)
-            # Les lieux fédéré en agenda
-            for fed in FederatedPlace.objects.all().select_related('tenant'):
-                if fed.tenant not in tenants:
-                    tenants.append(fed.tenant)
-
-            for asset in AssetFedowPublic.objects.filter(
-                    origin=actual_tenant, archive=False
-            ).exclude(category=AssetFedowPublic.STRIPE_FED_FIAT).select_related('origin').prefetch_related(
-                'federated_with'):
-                assets.append(asset)
-
-            for asset in AssetFedowPublic.objects.filter(
-                    federated_with=actual_tenant, archive=False
-            ).exclude(category=AssetFedowPublic.STRIPE_FED_FIAT).select_related('origin').prefetch_related(
-                'federated_with'):
-                assets.append(asset)
-
-            # Les lieux fédéré en Asset
-            for asset in assets:
-                tenant_origin = asset.origin
-                if tenant_origin not in tenants:
-                    tenants.append(tenant_origin)
-                for tenant in asset.federated_with.all():
-                    if tenant not in tenants:
-                        tenants.append(tenant)
-
-            for tenant in tenants:
-                if tenant.categorie == Client.ROOT:
-                    tenants.remove(tenant)
-            # logger.info(f"Tenants: {tenants}")
-
-            for client in list(set(tenants)):
-                with tenant_context(client):
-                    # logger.info(f"with tenant_context(client): {client}")
-                    # logger.info(f"with tenant: {client}")
-                    # logger.info(f"with categorie: {client.categorie}")
-
-                    config = Configuration.get_solo()
-
-                    assets = list()
-
-                    # les assets fédérés
-                    for asset in client.federated_assets_fedow_public.exclude(
-                            category__in=[
-                                AssetFedowPublic.BADGE,
-                                AssetFedowPublic.SUBSCRIPTION,
-                            ], archive=False):
-                        assets.append(asset)
-
-                    # Les assets créés
-                    for asset in client.assets_fedow_public.exclude(
-                            category__in=[
-                                AssetFedowPublic.BADGE,
-                                AssetFedowPublic.SUBSCRIPTION,
-                            ], archive=False):
-                        if asset not in assets:
-                            assets.append(asset)
-
-                    results.append({
-                        "organisation": config.organisation,
-                        "slug": config.slug,
-                        "short_description": config.short_description,
-                        "long_description": config.long_description,
-                        "img": config.get_med_img,
-                        "assets": [{"name": f"{asset.name}", "category": f"{asset.category}"} for asset in assets],
-                        "url": config.full_url(),
-                    })
-
-            logger.info(f"Mse en cache : federated places: {results}")
-            return results
-
-        # federated_places = None
-        federated_places = cache.get(f'federated_places_{connection.tenant.uuid}')
-        if not federated_places:
-            federated_places = build_federated_places()
-            cache.set(f'federated_places_{connection.tenant.uuid}', federated_places, 60)
-
-        template_context['federated_places'] = federated_places
-        return render(request, "reunion/views/federation/list.html", context=template_context)
+        template_path = get_skin_template(config, "views/federation/explorer.html")
+        return render(request, template_path, context=template_context)
 
 
 class HomeViewset(viewsets.ViewSet):
@@ -3554,293 +3620,27 @@ class MembershipMVT(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
-class Tenant(viewsets.ViewSet):
-    authentication_classes = [SessionAuthentication, ]
-    # Tout le monde peut créer un tenant, sous reserve d'avoir validé son compte stripe
-    permission_classes = [permissions.AllowAny, ]
-
-    @action(detail=False, methods=['GET', 'POST'])
-    def new(self, request, *args, **kwargs):
-        """
-        Le formulaire de création de nouveau tenant
-        """
-        context = get_context(request)
-        context['email_query_params'] = request.query_params.get('email') if request.query_params.get('email') else ""
-        context['name_query_params'] = request.query_params.get('name') if request.query_params.get('name') else ""
-
-        return render(request, "reunion/views/tenant/new_tenant.html", context=context)
-
-    @action(detail=False, methods=['POST'])
-    def create_waiting_configuration(self, request, *args, **kwargs):
-        """
-        Reception du formulaire de création de nouveau tenant
-        Création d'un objet waiting configuration
-        Envoi du mail qui invite à la création d'un compte Stripe
-        """
-        new_tenant = TenantCreateValidator(data=request.data, context={'request': request})
-        logger.info(new_tenant.initial_data)
-        if not new_tenant.is_valid():
-            # Construire une liste d'erreurs FALC par champ pour le partial `field_errors.html`
-            errors = []
-            try:
-                for field, msgs in new_tenant.errors.items():
-                    if isinstance(msgs, (list, tuple)):
-                        for msg in msgs:
-                            errors.append({'id': field, 'msg': str(msg)})
-                    else:
-                        errors.append({'id': field, 'msg': str(msgs)})
-            except Exception:
-                # En cas d'erreur inattendue, on met un message générique
-                errors.append({'id': 'form', 'msg': _('An error occurred. Please try again.')})
-
-            # Pré-remplissage des champs avec les valeurs envoyées
-            form_values = {
-                'email': request.POST.get('email', ''),
-                'emailConfirmation': request.POST.get('emailConfirmation', ''),
-                'name': request.POST.get('name', ''),
-                'short_description': request.POST.get('short_description', ''),
-                'dns_choice': request.POST.get('dns_choice', 'tibillet.coop'),
-                'cgu': request.POST.get('cgu') in ['true', 'True', 'on', '1'],
-                # On ne pré-remplit pas answer volontairement (captcha), il sera régénéré côté JS
-            }
-
-            context = get_context(request)
-            context.update({
-                'errors': errors,
-                'form_values': form_values,
-                # Conserver les query params existants si présents pour compat
-                'email_query_params': request.query_params.get('email') if request.query_params.get('email') else "",
-                'name_query_params': request.query_params.get('name') if request.query_params.get('name') else "",
-            })
-
-            # Réponse partielle HTMX: on renvoie le même template avec les erreurs et valeurs pré-remplies
-            return render(request, "reunion/views/tenant/new_tenant.html", context=context)
-
-        # Création d'un objet waiting_configuration
-        validated_data = new_tenant.validated_data
-        waiting_configuration = WaitingConfiguration.objects.create(
-            organisation=validated_data['name'],
-            email=validated_data['email'],
-            dns_choice=validated_data['dns_choice'],
-            short_description=validated_data['short_description'],
-        )
-        # Envoi d'un mail pour vérifier le compte. Un lien vers stripe sera créé
-        # new_tenant_mailer.delay(waiting_config_uuid=str(waiting_configuration.uuid))
-        new_tenant_mailer.delay(waiting_config_uuid=str(waiting_configuration.uuid))
-
-        try:
-            meta = Client.objects.filter(categorie=Client.META).first()
-            with tenant_context(meta):
-                send_to_ghost_email.delay(validated_data['email'], name=validated_data['name'])
-        except Exception as e:
-            logger.error(f"new_tenant send_to_ghost_email ERROR : {e}")
-
-        return render(request, "reunion/views/tenant/create_waiting_configuration_THANKS.html", context={})
-
-    @action(detail=True, methods=['GET'])
-    def emailconfirmation_tenant(self, request, pk):
-        """
-        Lien de vérification de demande de création de nouveau tenant
-        Mail envoyé par tasks.new_tenant_mailer
-        """
-        signer = TimestampSigner()
-        try:
-            wc_pk = signer.unsign(urlsafe_base64_decode(pk).decode('utf8'), max_age=(3600 * 24 * 30))  # 30 jours
-            wc = WaitingConfiguration.objects.get(uuid=wc_pk)
-            wc.email_confirmed = True
-            wc.save()
-
-            # Idempotent behavior: if the tenant was already created, redirect directly
-            if wc.tenant:
-                primary_domain = f"https://{wc.tenant.get_primary_domain().domain}"
-                # Le tenant existe déja, on envoi un mail de connection
-                get_or_create_user(wc.email, send_mail=True)
-                return redirect(primary_domain)
-
-            # Si assez de tenant en attentent de création existent :
-            if Client.objects.filter(categorie=Client.WAITING_CONFIG).exists():
-                try:
-                    tenant = wc.create_tenant()
-                except Exception as e:
-                    logger.error(f"Error creating tenant for {wc.organisation}: {e}")
-                    # Try to redirect to existing tenant if it's a name conflict
-                    existing_client = Client.objects.filter(name=wc.organisation).first()
-                    if existing_client:
-                        try:
-                            # Repare la liaison manquante pour les prochains clics
-                            # Fix the missing link for future clicks
-                            if not wc.tenant:
-                                wc.tenant = existing_client
-                                wc.save()
-                            primary_domain = f"https://{existing_client.get_primary_domain().domain}"
-                            messages.info(request, _("This space already exists. Redirecting you to it."))
-                            return redirect(primary_domain)
-                        except Exception:
-                            pass
-
-                    messages.error(request,
-                                   _("An error occurred while creating your space. It might be because the name is already taken or no free slot is available. Please contact us."))
-                    return redirect('/')
-
-                primary_domain = f"https://{tenant.get_primary_domain().domain}"
-                user = get_or_create_user(wc.email, send_mail=False)
-                token = user.get_connect_token()
-                connexion_url = f"{primary_domain}/emailconfirmation/{token}"
-                return redirect(connexion_url)
-
-            else:
-                context = get_context(request)
-                return render(request, "reunion/views/tenant/create_waiting_configuration_MAIL_CONFIRMED.html",
-                              context=context)
-        except UnicodeDecodeError as e:
-            messages.error(request, _("Invalid token. Please request a new confirmation email."))
-            return redirect('/')
-
-    @action(detail=True, methods=['GET'])
-    def onboard_stripe(self, request, pk):
-        """
-        Requete provenant du mail envoyé après la création d'une configuration en attente
-        Fabrication du lien stripe onboard
-        """
-        waiting_config = get_object_or_404(WaitingConfiguration, pk=pk)
-        tenant = connection.tenant
-        tenant_url = tenant.get_primary_domain().domain
-
-        rootConf = RootConfiguration.get_solo()
-        stripe.api_key = rootConf.get_stripe_api()
-
-        if not waiting_config.id_acc_connect:
-            acc_connect = stripe.Account.create(
-                type="standard",
-                country="FR",
-            )
-            id_acc_connect = acc_connect.get('id')
-            waiting_config.id_acc_connect = id_acc_connect
-            waiting_config.save()
-
-        account_link = stripe.AccountLink.create(
-            account=waiting_config.id_acc_connect,
-            refresh_url=f"https://{tenant_url}/tenant/{waiting_config.id_acc_connect}/onboard_stripe_return/",
-            return_url=f"https://{tenant_url}/tenant/{waiting_config.id_acc_connect}/onboard_stripe_return/",
-            type="account_onboarding",
-        )
-
-        url_onboard = account_link.get('url')
-        return redirect(url_onboard)
-
-    @action(detail=True, methods=['GET'])
-    def onboard_stripe_return(self, request, pk):
-        """
-        Return url après avoir terminé le onboard sur stripe
-        Vérification que le mail soit bien le même (cela nous confirme qu'il existe bien, Stripe impose une double auth)
-        Vérification que le formulaire a bien été complété (detail submitted)
-        Envoi un mail à l'administrateur ROOT de l'insatnce TiBillet pour prévenir, vérifier, et lancer la création du tenant à la main.
-        """
-        details_submitted, waiting_config = False, False
-        id_acc_connect = pk
-        # La clé du compte principal stripe connect
-        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-        # Récupération des info lié au lieu via sont id account connec
-        try:
-            info_stripe = stripe.Account.retrieve(id_acc_connect)
-            details_submitted = info_stripe.details_submitted
-        except Exception as e:
-            logger.error(f"onboard_stripe_return. id_acc_connect : {id_acc_connect}, erreur stripe : {e}")
-            raise Http404
-
-        if details_submitted:
-            waiting_config = WaitingConfiguration.objects.get(id_acc_connect=id_acc_connect)
-            waiting_config.onboard_stripe_finished = True
-            waiting_config.save()
-            # Envoie du mail aux superadmins
-            new_tenant_after_stripe_mailer.delay(waiting_config.pk)
-
-        context = get_context(request)
-        context["details_submitted"] = details_submitted
-        return render(request, "reunion/views/tenant/after_onboard_stripe.html", context=context)
-
-        #     _("Your Stripe account does not seem to be valid. "
-        #       "\nPlease complete your Stripe.com registration before creating a new TiBillet space."))
-        # return redirect('/tenant/new/')
-
-    '''
-    @action(detail=False, methods=['GET'])
-    def emailconfirmation(self, request, pk):
-        """
-        Requete provenant du mail envoyé après la création d'un tenant
-        """
-        wc = WaitingConfiguration.objects.get(pk=pk)
-        wc.email_confirmed = True
-        wc.save()
-        context = get_context(request)
-        return render(request, "reunion/views/tenant/create_waiting_configuration_MAIL_CONFIRMED.html", context=context)
-    '''
-
-    @action(detail=False, methods=['GET'])
-    def onboard_stripe_from_config(self, request):
-        """
-        Requete provenant du mail envoyé après la création d'une configuration en attente
-        Fabrication du lien stripe onboard
-        """
-        config = Configuration.get_solo()
-        id_acc_connect = config.get_stripe_connect_account()
-        tenant = connection.tenant
-        tenant_url = tenant.get_primary_domain().domain
-
-        rootConf = RootConfiguration.get_solo()
-        stripe.api_key = rootConf.get_stripe_api()
-
-        try:
-            account_link = stripe.AccountLink.create(
-                account=id_acc_connect,
-                refresh_url=f"https://{tenant_url}/tenant/{id_acc_connect}/onboard_stripe_return_from_config/",
-                return_url=f"https://{tenant_url}/tenant/{id_acc_connect}/onboard_stripe_return_from_config/",
-                type="account_onboarding",
-            )
-
-        except stripe._error.InvalidRequestError:
-            # Stripe account not valid, on le vide et on relance
-            config.stripe_connect_account = None
-            config.save()
-            id_acc_connect = config.get_stripe_connect_account()
-            account_link = stripe.AccountLink.create(
-                account=id_acc_connect,
-                refresh_url=f"https://{tenant_url}/tenant/{id_acc_connect}/onboard_stripe_return_from_config/",
-                return_url=f"https://{tenant_url}/tenant/{id_acc_connect}/onboard_stripe_return_from_config/",
-                type="account_onboarding",
-            )
-
-        url_onboard = account_link.get('url')
-        return redirect(url_onboard)
-
-    @action(detail=True, methods=['GET'])
-    def onboard_stripe_return_from_config(self, request, pk):
-        """
-        Return url après avoir terminé le onboard sur stripe
-        Vérification que le mail soit bien le même (cela nous confirme qu'il existe bien, Stripe impose une double auth)
-        Vérification que le formulaire a bien été complété (detail submitted)
-        Envoi un mail à l'administrateur ROOT de l'insatnce TiBillet pour prévenir, vérifier, et lancer la création du tenant à la main.
-        """
-        details_submitted, waiting_config = False, False
-        id_acc_connect = pk
-        # La clé du compte principal stripe connect
-        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-        # Récupération des infos liées au lieu via son id account connec
-        try:
-            info_stripe = stripe.Account.retrieve(id_acc_connect)
-            details_submitted = info_stripe.details_submitted
-        except Exception as e:
-            logger.error(f"onboard_stripe_return. id_acc_connect : {id_acc_connect}, erreur stripe : {e}")
-            raise Http404
-
-        config = Configuration.get_solo()
-        if info_stripe and info_stripe.get('payouts_enabled'):
-            config.stripe_payouts_enabled = info_stripe.get('payouts_enabled')
-            config.save()
-
-        context = get_context(request)
-        context["details_submitted"] = details_submitted
-        return render(request, "reunion/views/tenant/after_onboard_stripe.html", context=context)
-
-        #     _("Your Stripe account does not seem to be valid. "
-        #       "\nPlease complete your Stripe.com registration before creating a new TiBillet space.")
+# =============================================================================
+# Classe `Tenant` (ViewSet) — SUPPRIMEE lors de la session 2026-05-16.
+# / Class `Tenant` (ViewSet) — REMOVED during the 2026-05-16 session.
+# =============================================================================
+#
+# Cette classe melangeait deux responsabilites disjointes :
+#
+# 1. Creation de tenant via le flow legacy `/tenant/new/`. Remplace par
+#    l'app `onboard/` (wizard multi-step avec OTP, magic-link et SSO).
+#    Methodes supprimees : `new`, `create_waiting_configuration`,
+#    `emailconfirmation_tenant`, `onboard_stripe`, `onboard_stripe_return`.
+#
+# 2. Onboarding Stripe Connect d'un tenant EXISTANT (depuis l'admin
+#    Unfold). Migre vers `PaiementStripe/views.py::StripeConnectOnboardingViewSet`.
+#    Methodes deplacees : `onboard_stripe_from_config`,
+#    `onboard_stripe_return_from_config`.
+#
+# / This class mixed two disjoint responsibilities: (1) legacy tenant
+# creation flow, now in `onboard/`; (2) Stripe Connect onboarding for
+# an existing tenant, moved to `PaiementStripe/views.py::StripeConnectOnboardingViewSet`.
+#
+# References :
+#   - `TECH_DOC/SESSIONS/ONBOARD/03-session-recap.md`
+#   - `TECH_DOC/SESSIONS/MOYENS_PAIEMENT/01-stripe-migration-spec.md`

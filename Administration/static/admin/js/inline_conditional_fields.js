@@ -329,11 +329,25 @@
 
         // Brancher les listeners sur tous les champs source
         // / Attach listeners to all source fields
+        //
+        // GUARD : on marque chaque <input> source avec data-conditional-listener-bound="1"
+        // pour eviter d'empiler des listeners en doublon. Le MutationObserver appelle
+        // initialiser_formset() sur chaque mutation DOM (frappe utilisateur incluse) ;
+        // sans ce guard, les listeners s'accumulent et chaque frappe declenche N
+        // recalculs/animations.
+        // / GUARD: mark each source <input> with data-conditional-listener-bound="1"
+        // / to prevent stacking duplicate listeners. The MutationObserver re-runs on
+        // / every DOM mutation (including user typing); without this guard, listeners
+        // / accumulate and each keystroke triggers N redundant recalc/animations.
         for (var nom_source in elements_source_uniques) {
             if (!elements_source_uniques.hasOwnProperty(nom_source)) {
                 continue;
             }
             var el = elements_source_uniques[nom_source];
+            if (el.dataset.conditionalListenerBound === "1") {
+                continue;
+            }
+            el.dataset.conditionalListenerBound = "1";
             el.addEventListener("change", recalculer_toutes_les_regles);
             el.addEventListener("input", recalculer_toutes_les_regles);
         }
@@ -373,6 +387,14 @@
 
             // Observer les nouvelles lignes ajoutees dynamiquement
             // / Observe dynamically added new rows
+            //
+            // SCOPE : subtree=false suffit car Django admin ajoute les nouvelles
+            // lignes inline en enfants directs de #<prefixe>-group. Mettre subtree=true
+            // ferait re-tourner initialiser_formset a chaque frappe utilisateur dans
+            // un input — boucle inutile (et amplifie le risque d'effets de bord).
+            // / SCOPE: subtree=false is enough — Django admin adds new inline rows as
+            // / direct children of #<prefixe>-group. subtree=true would re-run the
+            // / initialiser on every user keystroke inside an input — wasteful loop.
             (function (prefixe, regles_locales) {
                 var conteneur = document.getElementById(prefixe + "-group");
                 if (conteneur) {
@@ -381,7 +403,7 @@
                     });
                     observateur.observe(conteneur, {
                         childList: true,
-                        subtree: true,
+                        subtree: false,
                     });
                 }
             })(prefixe_formset, regles);
