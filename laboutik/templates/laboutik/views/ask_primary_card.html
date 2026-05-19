@@ -15,7 +15,7 @@
 	<h1>{% translate "Attente carte primaire" %}</h1>
 	<h3 class="message-nfc" aria-live="polite">{{msg}}</h3>
 </c-read-nfc>
-<script src="{% static 'js/ask_primary_card.js' %}"></script>
+<script type="module" src="{% static 'js/ask_primary_card.js' %}"></script>
 {% endblock content %}
 
 {% block css %}{% endblock css %}

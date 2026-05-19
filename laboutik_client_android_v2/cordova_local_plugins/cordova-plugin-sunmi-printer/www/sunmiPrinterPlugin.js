@@ -17,9 +17,9 @@ module.exports = {
   },
 
   // Imprimer du texte
-  printText(content, size = 24, isBold = false, isUnderLine = false) {
+  printText(content, size = 24, isBold = false, isUnderLine = false, align = 0) {
     return new Promise((resolve, reject) => {
-      exec(resolve, reject, 'SunmiPrinterPlugin', 'printText', [content, size, isBold, isUnderLine]);
+      exec(resolve, reject, 'SunmiPrinterPlugin', 'printText', [content, size, isBold, isUnderLine, align]);
     });
   },
 
@@ -31,16 +31,16 @@ module.exports = {
   },
 
   // Imprimer un QR code
-  printQr(data, modulesize = 8, errorlevel = 0) {
+  printQr(data, modulesize = 8, errorlevel = 0, align = 0) {
     return new Promise((resolve, reject) => {
-      exec(resolve, reject, 'SunmiPrinterPlugin', 'printQr', [data, modulesize, errorlevel]);
+      exec(resolve, reject, 'SunmiPrinterPlugin', 'printQr', [data, modulesize, errorlevel, align]);
     });
   },
 
   // Imprimer un code-barres
-  printBarCode(data, symbology = 8, height = 162, width = 2, textPosition = 2) {
+  printBarCode(data, symbology = 8, height = 162, width = 2, textPosition = 2, align = 0) {
     return new Promise((resolve, reject) => {
-      exec(resolve, reject, 'SunmiPrinterPlugin', 'printBarCode', [data, symbology, height, width, textPosition]);
+      exec(resolve, reject, 'SunmiPrinterPlugin', 'printBarCode', [data, symbology, height, width, textPosition, align]);
     });
   },
 
@@ -86,10 +86,14 @@ module.exports = {
     });
   },
 
-  // Imprimer un Bitmap à partir d'une image Base64
-  printBitmap(base64) {
+  /**
+   * Imprimer un Bitmap à partir d'une image Base64
+   * @param {string} base64 
+   * @returns 
+   */
+  printBitmap(base64, width = 384, align = 0) {
     return new Promise((resolve, reject) => {
-      exec(resolve, reject, 'SunmiPrinterPlugin', 'printBitmap', [base64]);
+      exec(resolve, reject, 'SunmiPrinterPlugin', 'printBitmap', [base64, width, align]);
     });
   }
 };

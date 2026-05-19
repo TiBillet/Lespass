@@ -1399,6 +1399,12 @@ class CaisseViewSet(viewsets.ViewSet):
         # Global POS interface configuration (singleton, get_or_create)
         laboutik_config = LaboutikConfiguration.get_solo()
 
+        # récupération de l'imprimante du pv
+        state["printer"] = {
+            "uuid": str(pv.printer.uuid),
+            "name": pv.printer.name,
+        } if pv.printer else None
+
         context = {
             "hostname_client": "",
             "state": state,

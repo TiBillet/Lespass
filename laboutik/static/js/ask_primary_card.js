@@ -2,6 +2,7 @@
  * récupération du type d'application cordova/pi/desktop par l'url de la page 
  * pour toute l'aplication
  */
+
 state.typeApp = location.search.toString().split('&').find(item => item.includes('type_app')).split('=')[1]
 
 // port socketIo pour application pi et desktop
