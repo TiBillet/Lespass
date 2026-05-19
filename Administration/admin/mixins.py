@@ -15,19 +15,41 @@ class HelpDisplayMixin:
     # list_before_template = (
     #     "admin/help/help_display_before_template.html"
     # )
-    help_text = ""
-    help_url = ""
+    list_help_text = ""
+    list_help_url = ""
 
-    def changelist_view(self, request, extra_context= None):
+    changeform_help_text = ""
+    changeform_help_url = ""
+    change_form_template = 'admin/help/change_form_with_help.html'
+
+    def check_configuration(self):
+        if (not self.list_help_text or not self.list_help_url) and (not self.changeform_help_text or not self.changeform_help_url):
+            raise Exception(f"L'aide a été mal configuré dans la classe : {self.__class__}. Quand vous implémentez 'HelpDisplayMixin', il faut définir 'list_help_text' et 'list_help_url' dans la classe parente.")
+
+
+    def changelist_view(self, request, extra_context = None):
         if extra_context is None:
             extra_context = {}
 
-        if not self.help_text or not self.help_url:
-            raise Exception(f"L'aide a été mal configuré dans la classe : {self.__class__}. Quand vous implémentez 'HelpDisplayMixin', il faut définir 'help_url' et 'help_text' dans la classe parente.")
+        self.check_configuration()
 
         extra_context.update({
-            "help_text":self.help_text,
-            "help_url":self.help_url,
+            "help_text":self.list_help_text,
+            "help_url":self.list_help_url,
         })
 
-        return  super().changelist_view(request, extra_context=extra_context)
+        return super().changelist_view(request, extra_context=extra_context)
+
+    def changeform_view(self, request, object_id= None, form_url = "",extra_context = None):
+        if extra_context is None:
+            extra_context = {}
+
+        self.check_configuration()
+
+        extra_context.update({
+            "help_text":self.changeform_help_text,
+            "help_url":self.changeform_help_url,
+        })
+        logger.error("YEAH ?")
+
+        return super().changeform_view(request, object_id, form_url, extra_context=extra_context)

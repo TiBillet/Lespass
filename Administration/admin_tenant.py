@@ -1375,8 +1375,11 @@ class MembershipAdmin(HelpDisplayMixin, ModelAdmin, ImportExportModelAdmin):
     list_before_template = "admin/membership/membership_list_before.html"  # appelle le MembershipComponent plus haut pour le contexte
 
     # Help info for HelpModelAdmin
-    help_text = HELP_MESSAGES_DICT["ADHESION"]["help_text"]
-    help_url = HELP_MESSAGES_DICT["ADHESION"]["help_url"]
+    list_help_text = HELP_MESSAGES_DICT["ADHESION"]["list_help_text"]
+    list_help_url = HELP_MESSAGES_DICT["ADHESION"]["list_help_url"]
+
+    changeform_help_text = HELP_MESSAGES_DICT["ADHESION"]["changeform_help_text"]
+    changeform_help_url = HELP_MESSAGES_DICT["ADHESION"]["changeform_help_url"]
 
     # Formulaire de modification
     form = MembershipChangeForm
