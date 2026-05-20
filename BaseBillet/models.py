@@ -1886,10 +1886,14 @@ class Event(models.Model):
         cache.delete(f'event_get_sticker_img_{self.pk}')
         cache.delete(f'event_get_social_card_{self.pk}')
 
-        # Supprime le cache de la page principale des events de ce tenant
-        # La clé est construite avec l'uuid du tenant (voir EventMVT.federated_events_filter)
-        # / Delete the main event list cache for this tenant
-        cache.delete(f'event_list_{connection.tenant.uuid}')
+        # Invalide TOUTES les variantes du cache de la liste des évènements de ce tenant :
+        # la page principale ET chaque page filtrée par date.
+        # On réécrit un jeton de version aléatoire : les clés construites avec l'ancien jeton
+        # ne sont plus lues et expirent seules (TTL). Pas de cache.incr (piège memcached).
+        # Voir EventMVT.federated_events_filter pour la construction des clés.
+        # / Invalidate ALL event-list cache variants (main page + every per-date page) by
+        # / rewriting a random version token. Old keys are abandoned and expire via TTL.
+        cache.set(f'event_list_version_{connection.tenant.uuid}', uuid4().hex, None)
 
     # def get_absolute_url(self):
     #     return reverse("event-detail", args=[self.slug])

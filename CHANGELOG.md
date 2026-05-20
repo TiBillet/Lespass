@@ -156,6 +156,68 @@ ROOT devient une vraie cartographie des lieux du reseau, pas juste des sieges.
   ```
 
 
+## Liste des évènements : filtre par date en SQL + filtres conservés à la pagination / Event list: date filter in SQL + filters kept on pagination
+
+**Quoi / What :** Correction d'un bug de la page liste des évènements (`EventMVT`)
+visible sur les gros agendas (festival > 300 évènements). Le filtre par date
+était appliqué en Python **après** la pagination (100 évènements/page) : filtrer
+un jour situé au-delà de la page 1 (ex : samedi d'un festival jeu/ven/sam) ne
+renvoyait rien. Désormais le filtre par date est appliqué en base (SQL) et,
+quand un jour est sélectionné, **tous** les évènements de ce jour s'affichent
+sans pagination. De plus, le bouton « CHARGER PLUS » conserve maintenant tous
+les filtres actifs (recherche, thématique, tags multiples), au lieu du seul
+premier tag — la recherche ne « perdait » plus son filtre après un chargement
+supplémentaire.
+
+Les pages filtrées par **date seule** sont désormais mises en cache (1 h), comme
+la page principale — c'est l'action la plus fréquente sur un festival. Le cache
+de la liste utilise un **jeton de version par tenant** réécrit dans `Event.save()` :
+modifier un évènement invalide d'un coup la page principale ET toutes les pages
+par date (pas de `cache.incr`, qui est piégeux avec memcached).
+
+**Pourquoi / Why :** Sur un festival, la pagination s'arrêtait au milieu et le
+filtre par jour affichait « aucun résultat » pour les jours non encore chargés.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/views.py` | `federated_events_filter` : param `date_filter`, filtre SQL `datetime__date`, pagination désactivée si date filtrée. Cache versionné (page principale + page par date seule). Helpers `_parse_date_filter` + `_querystring_filtres`. `list()` : filtre date en SQL (suppression du filtrage Python post-pagination). `partial_list()` : lecture/propagation du filtre date. Querystring des filtres actifs exposée au contexte. |
+| `BaseBillet/models.py` | `Event.save()` : invalidation du cache liste par réécriture d'un jeton de version (`event_list_version_{tenant.uuid}`) au lieu de la suppression d'une clé unique. |
+| `BaseBillet/templates/faire_festival/views/event/list.html` | Bouton CHARGER PLUS : `{{ querystring_filtres }}` au lieu de `&tag={{ tags.0 }}`. |
+| `BaseBillet/templates/faire_festival/views/event/partial/list_append.html` | Idem bouton CHARGER PLUS. |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+
+## Home publique : section « Ils contribuent » + mention France 2030 dans le footer / Public home: "They contribute" section + France 2030 footer mention
+
+**Quoi / What :** Ajout d'une section « Ils contribuent » sur la landing
+page du tenant public (app `seo`), à la suite des bandeaux lieux et
+événements de la fédération : panneau gris doux, grille de tuiles
+blanches (logo + nom dessous), logos cliquables, pilotée par une liste
+explicite dans la vue. Un logo blanc sur transparent (CoopCircuit) a été
+inversé pour rester visible sur tuile blanche. Ajout aussi de la mention
+obligatoire de financement France 2030 dans le footer de la home publique
+(séparateur + texte à gauche / logo aligné à droite), qui en était
+dépourvue alors que les footers des tenants l'affichent déjà.
+
+**Pourquoi / Why :** Valoriser les contributeurs du commun sur la page
+d'accueil du réseau, et homogénéiser la mention légale France 2030
+(« Solutions de billetteries innovantes », Caisse des Dépôts) présente
+sur les footers tenants mais absente du footer ROOT.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/views.py` | Constante `CONTRIBUTEURS` (nom + logo + url) + ajout au contexte de `landing` |
+| `seo/templates/seo/landing.html` | Section `contributeurs-section` (grille de logos cliquables, masquée si liste vide) |
+| `seo/static/seo/seo.css` | Styles `.contributeurs-*` (grille auto-fit centrée, logos couleur, relief au survol) |
+| `seo/templates/seo/base.html` | Mention France 2030 + logo `reunion/img/france_2030.png` dans le footer |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+- **i18n :** Nouvelles chaînes (`Ils contribuent`, sous-titre, mention France 2030…) — lancer `makemessages` + `compilemessages` (à la charge du mainteneur).
+
 ## SEO Chantier 01 : desindexer les instances DEV / DEMO / TEST / SEO Chantier 01: deindex DEV / DEMO / TEST instances
 
 **Date :** 2026-05-17

@@ -1211,9 +1211,7 @@ class TicketProductAdmin(ProductAdmin):
     Filtered admin view: only ticket products (Ticket booking, Free booking)."""
 
     form = TicketProductForm
-    inlines = [
-        TicketPriceInline
-    ]  # Pas de ProductFormFieldInline (champs dynamiques = adhesions)
+    inlines = [TicketPriceInline, ProductFormFieldInline]
 
     list_filter = ["publish", ProductArchiveFilter]  # categorie_article inutile, deja filtre
 

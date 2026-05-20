@@ -1817,18 +1817,28 @@ class EventMVT(viewsets.ViewSet):
 
         return None
 
-    def federated_events_filter(self, tags=None, search=None, page=1, thematique=None):
-        # Cache simple : on cache uniquement la page principale (sans filtres, page 1)
-        # Les requêtes avec filtres (tags, recherche, thématique) ne sont pas cachées
-        # car elles sont rares et rapides à exécuter
-        # Clé = uuid du tenant. Invalidé dans Event.save()
-        # / Simple cache: only cache the main page (no filters, page 1)
-        # / Filtered requests are not cached (rare and fast)
-        # / Key = tenant uuid. Invalidated in Event.save()
-        page_sans_filtres = (page == 1 and not tags and not search and not thematique)
+    def federated_events_filter(self, tags=None, search=None, page=1, thematique=None, date_filter=None):
+        # Cache : on cache les deux cas les plus fréquents sur un gros agenda (festival) :
+        #   1) la page principale (page 1, aucun filtre)
+        #   2) une page filtrée par date seule (un jour précis, sans autre filtre)
+        # Les filtres combinés (tags, recherche, thématique) restent NON cachés : ils sont rares.
+        # La clé inclut un jeton de version par tenant, réécrit à chaque Event.save().
+        # Quand le jeton change, la page principale ET toutes les pages par date sont
+        # invalidées d'un coup (les anciennes clés ne sont plus lues et expirent via le TTL).
+        # / Cache the two frequent cases (main page + single-date page). Combined filters stay
+        # / uncached. Keys embed a per-tenant version token, rewritten in Event.save().
+        page_principale = (page == 1 and not tags and not search and not thematique and not date_filter)
+        date_seule = bool(date_filter) and not tags and not search and not thematique
+
         cache_key = None
-        if page_sans_filtres:
-            cache_key = f'event_list_{connection.tenant.uuid}'
+        if page_principale or date_seule:
+            # Jeton de version du cache liste pour ce tenant (défaut 'v0' si jamais écrit)
+            # / List-cache version token for this tenant (default 'v0' if never written)
+            version = cache.get(f'event_list_version_{connection.tenant.uuid}', 'v0')
+            if date_seule:
+                cache_key = f'event_list_{connection.tenant.uuid}_{version}_date_{date_filter.isoformat()}'
+            else:
+                cache_key = f'event_list_{connection.tenant.uuid}_{version}'
             cached = cache.get(cache_key)
             if cached:
                 return cached
@@ -1922,12 +1932,33 @@ class EventMVT(viewsets.ViewSet):
                     if th.slug not in all_thematiques_by_slug:
                         all_thematiques_by_slug[th.slug] = th
 
-                # Pagination : 100 évènements par page par tenant
-                paginator = Paginator(events.order_by('datetime').distinct(), 100)
-                paginated_events = paginator.get_page(page)
-                paginated_info['page'] = page
-                paginated_info['has_next'] = paginated_events.has_next()
-                paginated_info['has_previous'] = paginated_events.has_previous()
+                # Filtre par date : on restreint les évènements affichés au jour choisi.
+                # Important : on filtre APRÈS la collecte des dates/tags ci-dessus,
+                # pour que les menus déroulants restent complets (changer de jour reste possible).
+                # / Date filter: restrict displayed events to the chosen day.
+                # / Applied AFTER collecting dates/tags so dropdowns stay complete.
+                events_a_afficher = events
+                if date_filter:
+                    events_a_afficher = events_a_afficher.filter(datetime__date=date_filter)
+
+                events_tries = events_a_afficher.order_by('datetime').distinct()
+
+                if date_filter:
+                    # Un jour précis est sélectionné : on affiche TOUS les évènements de ce jour,
+                    # sans pagination (un festival a rarement plus de 100 évènements sur une journée).
+                    # / A specific day is selected: show ALL its events, no pagination.
+                    paginated_events = events_tries
+                    paginated_info['page'] = page
+                    paginated_info['has_next'] = False
+                    paginated_info['has_previous'] = False
+                else:
+                    # Pagination : 200 évènements par page par tenant
+                    # / Pagination: 200 events per page per tenant
+                    paginator = Paginator(events_tries, 200)
+                    paginated_events = paginator.get_page(page)
+                    paginated_info['page'] = page
+                    paginated_info['has_next'] = paginated_events.has_next()
+                    paginated_info['has_previous'] = paginated_events.has_previous()
 
                 for event in paginated_events:
                     # On va chercher les urls d'images :
@@ -1957,13 +1988,58 @@ class EventMVT(viewsets.ViewSet):
 
         result = (sorted_dict_by_date, paginated_info, sorted_all_dates, sorted_all_tags, sorted_all_thematiques)
 
-        # On met en cache seulement la page principale (sans filtres)
-        # Durée : 1 heure. Invalidé dans Event.save()
-        # / Only cache the main page (no filters). Duration: 1 hour.
+        # On met en cache la page principale OU la page filtrée par date seule
+        # (cache_key n'est défini que dans ces deux cas, voir le haut de la méthode).
+        # Durée : 1 heure. Invalidé dans Event.save() via le jeton de version.
+        # / Cache the main page OR the single-date page (cache_key set only in those cases).
+        # / Duration: 1 hour. Invalidated in Event.save() via the version token.
         if cache_key:
             cache.set(cache_key, result, 3600)
 
         return result
+
+    def _parse_date_filter(self, raw_date):
+        """
+        Convertit un paramètre date ISO ("2025-03-15") en objet date.
+        Retourne None si le paramètre est absent ou invalide.
+        / Parse an ISO date param into a date object. None if missing/invalid.
+
+        LOCALISATION : BaseBillet/views.py — EventMVT
+        Utilisé par list() et partial_list() pour le filtre par jour.
+        """
+        if not raw_date:
+            return None
+        try:
+            return date_type.fromisoformat(raw_date)
+        except (ValueError, TypeError):
+            # Paramètre invalide : on ignore et on affiche tout
+            # / Invalid param: ignore and show everything
+            return None
+
+    def _querystring_filtres(self, search=None, tags=None, thematique=None):
+        """
+        Construit la querystring des filtres actifs (recherche, tags, thématique)
+        pour les conserver dans le bouton "charger plus".
+        / Build active-filters querystring to keep them in the "load more" button.
+
+        LOCALISATION : BaseBillet/views.py — EventMVT
+
+        Le filtre par date est volontairement exclu : quand une date est choisie,
+        on affiche tous les évènements du jour sans pagination, donc pas de bouton.
+        / Date filter is excluded on purpose: a chosen day shows everything, no button.
+        """
+        from urllib.parse import urlencode
+
+        filtres_actifs = {}
+        if search:
+            filtres_actifs['search'] = search
+        if thematique:
+            filtres_actifs['thematique'] = thematique
+        if tags:
+            filtres_actifs['tag'] = tags
+        # doseq=True : gère la liste de tags (tag=a&tag=b)
+        # / doseq=True: handles the list of tags (tag=a&tag=b)
+        return urlencode(filtres_actifs, doseq=True)
 
     @action(detail=False, methods=['POST', 'GET'])
     def partial_list(self, request):
@@ -1982,9 +2058,19 @@ class EventMVT(viewsets.ViewSet):
         logger.info(f"request.GET : {request.GET}")
 
         thematique_slug = request.GET.get('thematique')
+        # Filtre par date (format ISO "2025-03-15") — None si absent/invalide
+        # / Date filter (ISO format) — None if missing/invalid
+        date_filter = self._parse_date_filter(request.GET.get('date'))
+
         ctx = {}  # le dict de context pour template
         ctx['dated_events'], ctx['paginated_info'], _dates, _tags, _thematiques = self.federated_events_filter(
-            tags=tags, search=search, page=page, thematique=thematique_slug
+            tags=tags, search=search, page=page, thematique=thematique_slug, date_filter=date_filter
+        )
+
+        # On conserve les filtres actifs (recherche, tags, thématique) dans le bouton "charger plus"
+        # / Keep active filters in the "load more" button
+        ctx['querystring_filtres'] = self._querystring_filtres(
+            search=search, tags=tags, thematique=thematique_slug
         )
 
         # Résolution du template avec fallback vers reunion
@@ -2009,22 +2095,28 @@ class EventMVT(viewsets.ViewSet):
             search = str(search)
         page = request.GET.get('page', 1)
         thematique_slug = request.GET.get('thematique')
-        # Paramètre de filtre par date (format ISO : "2025-03-15")
-        # / Date filter param (ISO format: "2025-03-15")
-        date_filter = request.GET.get('date')
+        # Paramètre de filtre par date (format ISO : "2025-03-15"), validé en objet date.
+        # Le filtrage se fait en base (SQL), pas après la pagination.
+        # / Date filter param (ISO), validated to a date object. Filtered in SQL, not after pagination.
+        date_filter = self._parse_date_filter(request.GET.get('date'))
 
-        # Données pour les filtres (tags, thématiques, recherche)
-        # / Data for filter UI (tags, thematiques, search)
+        # Données pour les filtres (tags, thématiques, recherche, date)
+        # / Data for filter UI (tags, thematiques, search, date)
         context['active_tag'] = Tag.objects.filter(slug=tags[0]).first() if tags else None
         context['tags'] = tags
         context['search'] = search
         context['active_thematique'] = thematique_slug
-        context['active_date'] = date_filter
+        # active_date : string ISO (URL/affichage) ; active_date_obj : objet date (libellé du dropdown)
+        # / active_date: ISO string (URL/display) ; active_date_obj: date object (dropdown label)
+        context['active_date'] = date_filter.isoformat() if date_filter else None
+        context['active_date_obj'] = date_filter
 
-        # federated_events_filter retourne aussi TOUTES les dates et tags (avant pagination)
-        # / federated_events_filter also returns ALL dates and tags (before pagination)
+        # federated_events_filter applique le filtre date en SQL et désactive la pagination ce jour-là.
+        # Il retourne aussi TOUTES les dates et tags (menus déroulants complets).
+        # / federated_events_filter applies the date filter in SQL and disables pagination for that day.
+        # / It also returns ALL dates and tags (complete dropdowns).
         context['dated_events'], context['paginated_info'], all_dates_list, all_tags_list, all_thematiques_list = self.federated_events_filter(
-            tags=tags, search=search, page=page, thematique=thematique_slug
+            tags=tags, search=search, page=page, thematique=thematique_slug, date_filter=date_filter
         )
 
         # Toutes les dates disponibles pour le dropdown filtre (pas limité à la pagination)
@@ -2039,21 +2131,11 @@ class EventMVT(viewsets.ViewSet):
         # / All thematiques from visible events
         context['all_thematiques'] = all_thematiques_list
 
-        # Filtre par date : on ne garde que la date sélectionnée pour l'affichage des cartes
-        # / Date filter: keep only the selected date for card display
-        if date_filter:
-            try:
-                selected_date = date_type.fromisoformat(date_filter)
-                dated_events_filtered = {}
-                for event_date, event_list in context['dated_events'].items():
-                    if event_date == selected_date:
-                        dated_events_filtered[event_date] = event_list
-                context['dated_events'] = dated_events_filtered
-                context['active_date_obj'] = selected_date
-            except (ValueError, TypeError):
-                # Paramètre invalide → on ignore, on affiche tout
-                # / Invalid param → ignore, show all
-                context['active_date'] = None
+        # On conserve les filtres actifs (recherche, tags, thématique) dans le bouton "charger plus"
+        # / Keep active filters in the "load more" button
+        context['querystring_filtres'] = self._querystring_filtres(
+            search=search, tags=tags, thematique=thematique_slug
+        )
 
         # Résolution du template avec fallback vers reunion
         config = Configuration.get_solo()

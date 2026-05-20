@@ -193,7 +193,7 @@ class OnboardDescriptionsSerializer(serializers.Serializer):
     Step "Presentation" — description courte (obligatoire) + description
     longue (optionnelle) + logo (optionnel).
 
-    `short_description` est l'accroche publique (max 280 chars, requise) :
+    `short_description` est l'accroche publique (max 250 chars, requise) :
     elle apparait en apercu sur le reseau. Elle a ete regroupee ici avec
     la description longue et le logo (feedback mainteneur 2026-05-14) pour
     rassembler toutes les info de presentation sur une seule page.
@@ -210,7 +210,7 @@ class OnboardDescriptionsSerializer(serializers.Serializer):
 
     / Step "Presentation" — short description (required) + long description
     (optional) + logo (optional).
-    `short_description` is the public pitch (max 280 chars, required).
+    `short_description` is the public pitch (max 250 chars, required).
     `long_description` is `required=False`: a venue can launch its space
     without writing the long pitch yet.
     `logo` is validated server-side (size <=5MB, content_type whitelist).
@@ -222,7 +222,7 @@ class OnboardDescriptionsSerializer(serializers.Serializer):
     ALLOWED_LOGO_TYPES = ("image/jpeg", "image/png", "image/webp")
 
     short_description = serializers.CharField(
-        max_length=280, required=True, allow_blank=False,
+        max_length=250, required=True, allow_blank=False,
     )
     long_description = serializers.CharField(
         max_length=5000,

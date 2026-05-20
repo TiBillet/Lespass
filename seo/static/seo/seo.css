@@ -670,3 +670,120 @@ body {
         font-size: 0.82rem;
     }
 }
+
+
+/* ================================================================ */
+/* ILS CONTRIBUENT — grille statique de logos cliquables + noms      */
+/* / THEY CONTRIBUTE — static grid of clickable logos + names        */
+/* ================================================================ */
+
+/* Panneau gris doux sur toute la section : un cadre "joli" qui       */
+/* detache la section du fond de page et fait ressortir les tuiles    */
+/* blanches des logos. var(--bs-secondary-bg) s'adapte au theme       */
+/* clair/sombre (gris clair en clair, gris fonce en sombre).          */
+/* / Soft gray panel over the whole section: a tasteful frame that    */
+/* separates it from the page background and makes the white logo     */
+/* tiles stand out. var(--bs-secondary-bg) adapts to light/dark.      */
+.contributeurs-section {
+    margin-bottom: 3rem;
+    padding: 2.5rem 1.5rem;
+    background: var(--bs-secondary-bg, #e9ecef);
+    border-radius: 1rem;
+}
+
+.contributeurs-heading {
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.contributeurs-subheading {
+    color: var(--bs-secondary-color, #6c757d);
+    margin-bottom: 2.5rem;
+}
+
+/* Grille auto-fit centree : s'adapte au nombre de logos sans qu'on   */
+/* fixe un nombre de colonnes.                                        */
+/* / Auto-fit centered grid: adapts to the number of logos.           */
+.contributeurs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1.75rem 1rem;
+    align-items: start;
+    justify-items: center;
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+/* Une cellule = la tuile du logo + le nom dessous, empiles verticalement. */
+/* / One cell = the logo tile + the name below, stacked vertically.        */
+.contributeur-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    text-decoration: none;
+    color: var(--bs-body-color);
+}
+
+/* Tuile blanche : les logos a fond blanc (JPG) s'y fondent et les    */
+/* logos colores ou sombres ressortent nettement.                     */
+/* / White tile: white-background logos (JPG) blend in and colored or */
+/* dark logos stand out clearly.                                      */
+.contributeur-logo-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 96px;
+    padding: 0.9rem 1rem;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 0.75rem;
+    transition: box-shadow 200ms ease, transform 200ms ease;
+}
+
+/* Relief uniquement sur les logos cliquables (les <a>), pas les <span>) */
+/* / Hover lift only on clickable logos (the <a>), not the <span>)       */
+a.contributeur-item:hover .contributeur-logo-box {
+    box-shadow:
+        0 0 0 1px rgba(0, 0, 0, 0.08),
+        0 6px 16px rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+}
+
+/* Logo en couleur, contenu sans deformation.                         */
+/* / Color logo, contained without distortion.                       */
+.contributeur-logo {
+    max-width: 100%;
+    max-height: 60px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}
+
+/* Nom du contributeur sous la tuile (texte lisible, contraste AA).   */
+/* / Contributor name below the tile (readable text, AA contrast).    */
+.contributeur-nom {
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1.25;
+    text-align: center;
+    color: var(--bs-body-color);
+}
+
+/* Responsive : tuiles un peu plus petites sur mobile */
+/* / Responsive: slightly smaller tiles on mobile */
+@media (max-width: 575.98px) {
+    .contributeurs-grid {
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 1.25rem 0.75rem;
+    }
+    .contributeur-logo-box {
+        height: 80px;
+        padding: 0.6rem;
+    }
+    .contributeur-logo {
+        max-height: 48px;
+    }
+}

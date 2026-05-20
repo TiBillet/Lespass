@@ -191,6 +191,25 @@
                 </div>
             </div>
         </div>
+
+        {# Mention obligatoire du financement France 2030. Separateur au-dessus,  #}
+        {# texte a gauche, logo aligne a droite (bord du conteneur) et centre     #}
+        {# verticalement. Le logo vit dans BaseBillet/static/reunion, servi aussi #}
+        {# sur le schema public.                                                  #}
+        {# / Mandatory France 2030 funding statement. Separator above, text on    #}
+        {# the left, logo right-aligned (container edge), vertically centered.    #}
+        {# The logo lives in BaseBillet/static/reunion, served on public too.     #}
+        <hr class="mt-5 mb-4">
+        <div class="row fs-6 text-secondary align-items-center g-3">
+            <div class="col-md-8">
+                <p class="mb-0">
+                    {% blocktranslate %}Opération soutenue par l’État dans le cadre du dispositif « Solutions de billetteries innovantes » de France 2030, opéré par la Caisse des Dépôts.{% endblocktranslate %}
+                </p>
+            </div>
+            <div class="col-md-4 text-md-end">
+                <img src="{% static 'reunion/img/france_2030.png' %}" alt="{% translate 'Logo France 2030' %}" height="64">
+            </div>
+        </div>
     </div>
 </footer>
 

@@ -84,7 +84,7 @@
     <div class="col-12" id="paginator">
         <div class="text-center py-5">
             <button class="bouton-charger-plus"
-                    hx-get="/event/partial_list/?page={{ paginated_info.page|add:1 }}{% if tags %}&tag={{ tags.0 }}{% endif %}"
+                    hx-get="/event/partial_list/?page={{ paginated_info.page|add:1 }}{% if querystring_filtres %}&{{ querystring_filtres }}{% endif %}"
                     hx-target="#paginator"
                     hx-swap="outerHTML">
                 {% translate 'CHARGER PLUS' %}

@@ -69,7 +69,16 @@ def get_sidebar_navigation(request):
                     "icon": "person_add",
                     "link": reverse_lazy("staff_admin:AuthBillet_humanuser_changelist"),
                     "permission": admin_permission,
-                }
+                },
+                # This menu option is here only for debug purpose
+                # {
+                #     "title": _("Produit"),
+                #     "icon": "sports_bar",
+                #     "link": reverse_lazy(
+                #         "staff_admin:BaseBillet_product_changelist"
+                #     ),
+                #     "permission": admin_permission,
+                # }
             ],
         },
     ]

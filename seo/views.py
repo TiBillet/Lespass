@@ -36,6 +36,43 @@ from seo.views_common import (
 logger = logging.getLogger(__name__)
 
 
+# Liste des contributeurs affiches dans la section "Ils contribuent" de la home.
+# Chaque entree est un dict avec trois cles :
+#   - "nom" : nom du contributeur (sert d'attribut alt de l'image et de title du lien)
+#   - "logo": chemin du fichier dans le dossier static, ex. "contributeurs/mon-logo.svg"
+#   - "url" : adresse du site du contributeur (le logo devient un lien cliquable)
+# Pour ajouter un contributeur : deposer son logo dans seo/static/contributeurs/
+# puis ajouter une ligne ici. La section reste masquee tant que la liste est vide.
+# / Contributors shown in the "They contribute" section of the home page.
+# Each entry is a dict with three keys:
+#   - "nom" : contributor name (used as image alt and link title)
+#   - "logo": file path in the static folder, e.g. "contributeurs/my-logo.svg"
+#   - "url" : contributor website (the logo becomes a clickable link)
+# To add a contributor: drop the logo in seo/static/contributeurs/ then add a
+# line here. The section stays hidden while the list is empty.
+CONTRIBUTEURS = [
+    # Lieux culturels de La Réunion / Réunion cultural venues
+    {"nom": "3 Peaks", "logo": "contributeurs/3peaks-ori.png", "url": ""},  # à vérifier : URL / to verify: URL
+    {"nom": "La Raffinerie", "logo": "contributeurs/raffinerie1.jpg", "url": "https://www.laraffinerie.re/"},
+    {"nom": "Demeter", "logo": "contributeurs/Demeter.png", "url": ""},  # à vérifier : nom + URL / to verify: name + URL
+    # Réseaux de tiers-lieux et coopération / Maker spaces & cooperation networks
+    {"nom": "La Réunion des Tiers-Lieux", "logo": "contributeurs/Logo-RTL.png", "url": "https://www.communecter.org/costum/co/index/slug/LaReunionDesTiersLieux/"},
+    {"nom": "ANTL", "logo": "contributeurs/antl.png", "url": ""},  # à vérifier : nom complet + URL / to verify: full name + URL
+    {"nom": "La Rosée", "logo": "contributeurs/larosee.jpg", "url": ""},  # à vérifier : URL (réseau tiers-lieux d'Occitanie) / to verify: URL
+    {"nom": "France Tiers-Lieux", "logo": "contributeurs/ftl.png", "url": ""},  # à vérifier : nom + URL / to verify: name + URL
+    {"nom": "La Compagnie des Tiers-Lieux", "logo": "contributeurs/Compagnie des tiers lieux.svg", "url": ""},  # à vérifier : URL / to verify: URL
+    {"nom": "Circa", "logo": "contributeurs/circa.png", "url": ""},  # à vérifier : URL / to verify: URL
+    # Logo CoopCircuit fourni en blanc sur transparent (invisible sur tuile claire) :
+    # on pointe vers une version inversee (RGB negatif, transparence conservee).
+    # / CoopCircuit logo shipped as white-on-transparent (invisible on a light tile):
+    # we point to an inverted version (negative RGB, alpha preserved).
+    {"nom": "CoopCircuit", "logo": "contributeurs/coopcircuit-noir.png", "url": "https://coopcircuit.org/"},
+    # Soutiens institutionnels / Institutional support
+    {"nom": "JetBrains", "logo": "contributeurs/jet_brain_beam.png", "url": "https://jb.gg/OpenSourceSupport"},
+    {"nom": "France 2030", "logo": "contributeurs/france_2030.png", "url": "https://www.economie.gouv.fr/france-2030"},
+]
+
+
 def landing(request):
     """
     Page d'accueil ROOT : chiffres cles, bandeau lieux, bandeau evenements.
@@ -139,6 +176,9 @@ def landing(request):
         "lieux_pour_bandeau": lieux_pour_bandeau,
         "marquee_lieux_duration_sec": marquee_lieux_duration_sec,
         "top_events": top_events,
+        # Contributeurs de TiBillet — section "Ils contribuent" (logos cliquables).
+        # / TiBillet contributors — "They contribute" section (clickable logos).
+        "contributeurs": CONTRIBUTEURS,
         # Deux JSON-LD distincts : `json_ld` = WebSite (searchbox SERP),
         # `json_ld_org` = Organization. Le template `base.html` injecte les
         # deux dans <head> via des balises <script type="application/ld+json">

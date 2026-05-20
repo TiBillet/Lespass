@@ -75,8 +75,8 @@
       class="vstack gap-3">
     {% csrf_token %}
 
-    {# Description courte (accroche) : obligatoire, max 280 chars. #}
-    {# / Short description (pitch): required, max 280 chars. #}
+    {# Description courte (accroche) : obligatoire, max 250 chars. #}
+    {# / Short description (pitch): required, max 250 chars. #}
     <div>
         <label for="onboard-descriptions-short" class="form-label">
             {% translate "Description courte" %} *
@@ -85,11 +85,11 @@
                   name="short_description"
                   rows="3"
                   required
-                  maxlength="280"
+                  maxlength="250"
                   class="form-control{% if errors.short_description %} is-invalid{% endif %}"
                   data-testid="onboard-descriptions-short">{{ initial.short_description|default:wc.short_description|default:'' }}</textarea>
         <div class="form-text">
-            {% translate "280 caractères max. Cette phrase apparaîtra en aperçu sur le réseau." %}
+            {% translate "250 caractères max. Cette phrase apparaîtra en aperçu sur le réseau." %}
         </div>
         {% if errors.short_description %}
             <div class="invalid-feedback">
