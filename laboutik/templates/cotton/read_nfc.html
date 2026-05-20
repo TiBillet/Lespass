@@ -15,7 +15,7 @@
       console.log('-> initNfc')
       try {
         state['nfc'] = null
-        state.nfc = new NfcReader(3000, state.typeApp)
+        state.nfc = new NfcReader(state.socketIoPort, state.typeApp)
         // start read nfc
         await state.nfc.start({ eventManageForm: '{{ event_manage_form }}', submitUrl: '{{ submit_url }}' })
       } catch (error) {
@@ -40,7 +40,7 @@
         initNfc(state.typeApp)
       })
     } else {
-
+       // lance quand on est dans une application pi/desktop
       // lancé une fois que la page contenant "c-read-nfc" est chargée
       document.addEventListener("DOMContentLoaded", () => {
         console.log(`-> App ${state.typeApp} chargée !`)
