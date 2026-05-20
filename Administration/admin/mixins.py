@@ -50,6 +50,5 @@ class HelpDisplayMixin:
             "help_text":self.changeform_help_text,
             "help_url":self.changeform_help_url,
         })
-        logger.error("YEAH ?")
 
         return super().changeform_view(request, object_id, form_url, extra_context=extra_context)

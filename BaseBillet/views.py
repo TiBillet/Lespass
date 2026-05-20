@@ -1951,8 +1951,8 @@ class EventMVT(viewsets.ViewSet):
                     paginated_info['has_next'] = False
                     paginated_info['has_previous'] = False
                 else:
-                    # Pagination : 100 évènements par page par tenant
-                    # / Pagination: 100 events per page per tenant
+                    # Pagination : 200 évènements par page par tenant
+                    # / Pagination: 200 events per page per tenant
                     paginator = Paginator(events_tries, 200)
                     paginated_events = paginator.get_page(page)
                     paginated_info['page'] = page
@@ -1987,9 +1987,11 @@ class EventMVT(viewsets.ViewSet):
 
         result = (sorted_dict_by_date, paginated_info, sorted_all_dates, sorted_all_tags, sorted_all_thematiques)
 
-        # On met en cache seulement la page principale (sans filtres)
-        # Durée : 1 heure. Invalidé dans Event.save()
-        # / Only cache the main page (no filters). Duration: 1 hour.
+        # On met en cache la page principale OU la page filtrée par date seule
+        # (cache_key n'est défini que dans ces deux cas, voir le haut de la méthode).
+        # Durée : 1 heure. Invalidé dans Event.save() via le jeton de version.
+        # / Cache the main page OR the single-date page (cache_key set only in those cases).
+        # / Duration: 1 hour. Invalidated in Event.save() via the version token.
         if cache_key:
             cache.set(cache_key, result, 3600)
 
