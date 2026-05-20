@@ -1,5 +1,56 @@
 # Changelog / Journal des modifications
 
+## Carte explorer ROOT : pills exclusives, tag chips, URL partageable / Exclusive pills, tag chips, shareable URL
+
+**Date :** 2026-05-19
+**Migration :** Non
+**Contributeurs / Contributors :** JonasFW13 (Jonas) + Claude Opus 4.7
+
+**Quoi / What :** Refonte UX de la carte explorer ROOT (`/explorer/`). La pill
+"Tous" est supprimée — il reste "Lieux" et "Événements" exclusives. En mode
+Événements, la liste affiche 1 card par event futur (au lieu de cards lieu).
+Une nouvelle barre de tag chips (top 10 par fréquence parmi les events visibles)
+permet de filtrer par tag, avec bouton "+ N tags" pour le reste. Les filtres
+(`v`, `q`, `tag`) sont synchronisés dans l'URL via `history.replaceState`,
+ce qui rend la carte partageable. L'accordéon "Prochains événements" sur les
+cards lieu est réparé (régression CHANTIER-05 résolue). Un bug 1-ligne sur
+le JSON-LD federation des explorers tenant est corrigé en parallèle.
+
+**Pourquoi / Why :** Suite à CHANTIER-05, le filtre "Événements" ne changeait
+plus visuellement la vue, et la liste d'événements avait disparu. En parallèle,
+l'arrivée de tenants type "réseau régional" ou "agenda culturel régional"
+(200+ PostalAddress) demandait une UX de filtrage par thématique pour rester
+navigable. Les tags `Event.tag` existaient en DB depuis longtemps mais
+n'étaient pas exposés côté SEO.
+
+### Fichiers modifiés / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/services.py` | +`get_event_tags_for_tenants` (helper SQL cross-schema), propagation `tags` dans `events_pour_popup`, `get_events_for_tenants` retourne aussi `uuid` |
+| `seo/tasks.py` | Enrichissement events avec tags dans `refresh_seo_cache` (1 requête SQL supplémentaire) |
+| `BaseBillet/views.py` | Fix bug 1-ligne : `lieux` → `tenants` dans le JSON-LD federation des explorers tenant |
+| `seo/templates/seo/partials/explorer_widget.html` | Suppression pill "Tous", ajout `#explorer-tags`, data-i18n |
+| `seo/static/seo/explorer.js` | Refonte `applyFilters`, chips top 10, URL sync, accordéon réparé |
+| `seo/static/seo/explorer.css` | +Styles `.explorer-tag-chip*`, `.explorer-empty-state`, `.explorer-card-tags` |
+| `tests/pytest/test_seo_event_tags.py` | NOUVEAU — tests unitaires (3) du nouveau helper |
+| `tests/pytest/test_seo_aggregate_points.py` | +2 tests propagation tags |
+| `tests/e2e/test_explorer_ux_pills_tags.py` | NOUVEAU — 8 tests Playwright (pills, chips, URL, empty state) |
+| `tests/e2e/conftest.py` | NOUVEAU sur la branche — fixtures Playwright (page, browser) |
+| `pytest.ini` | +marker `e2e` |
+| `CHANGELOG.md` | Cette entrée |
+| `A TESTER et DOCUMENTER/explorer-ux-pills-tags.md` | NOUVEAU — scénarios test manuel |
+
+### Activation
+
+Aucune migration DB. Le nouveau format de cache (events avec `tags`) est rétro-
+compatible : le JS lit avec `.tags || []`. Activation au prochain cycle Celery
+Beat de `refresh_seo_cache` (4h max), ou refresh manuel :
+
+```bash
+docker exec lespass_django poetry run python manage.py shell -c "from seo.tasks import refresh_seo_cache; refresh_seo_cache()"
+```
+
 ## Wizards de création et proposition d'évènement / Event creation & proposal wizards
 
 **Date :** 2026-05-19

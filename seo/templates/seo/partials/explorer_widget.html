@@ -25,7 +25,6 @@
       data-i18n-visit="{% translate 'Visiter le lieu' %}"
       data-i18n-lieu="{% translate 'Lieu' %}"
       data-i18n-event="{% translate 'Événement' %}"
-      data-i18n-all="{% translate 'Tous' %}"
       data-i18n-current="{% translate 'Vous êtes ici' %}"
       data-i18n-lieu-singular="{% translate 'lieu' %}"
       data-i18n-lieu-plural="{% translate 'lieux' %}"
@@ -34,7 +33,10 @@
       data-i18n-next-events="{% translate 'Prochains événements :' %}"
       data-i18n-more="{% translate 'autre(s)' %}"
       data-i18n-list="{% translate 'Liste' %}"
-      data-i18n-map="{% translate 'Carte' %}">
+      data-i18n-map="{% translate 'Carte' %}"
+      data-i18n-clear-tag="{% translate 'Effacer le filtre' %}"
+      data-i18n-tag-empty="{% translate 'Aucun événement « {tag} » dans la zone visible.' %}"
+      data-i18n-more-tags="{% translate '+ {count} tags' %}">
 
     {# Barre de recherche + pills / Search bar + category pills #}
     <div class="explorer-toolbar">
@@ -49,9 +51,7 @@
                    placeholder="{% translate 'Rechercher un lieu ou un événement...' %}"
                    aria-label="{% translate 'Rechercher' %}">
             <div class="explorer-pills" id="explorer-pills" role="tablist">
-                <button class="explorer-pill active" type="button" data-category="all" role="tab"
-                        data-testid="explorer-pill-all">{% translate "Tous" %}</button>
-                <button class="explorer-pill" type="button" data-category="lieu" role="tab"
+                <button class="explorer-pill active" type="button" data-category="lieu" role="tab"
                         data-testid="explorer-pill-lieu">{% translate "Lieux" %}</button>
                 <button class="explorer-pill" type="button" data-category="event" role="tab"
                         data-testid="explorer-pill-event">{% translate "Événements" %}</button>
@@ -59,6 +59,17 @@
         </div>
         <div class="explorer-counter" id="explorer-counter" aria-live="polite"></div>
     </div>
+
+    {# Barre tag chips : top 10 par fréquence parmi events visibles. #}
+    {# Rendu par JS, masquée tant qu'il n'y a pas de tags à afficher. #}
+    {# / Tag chip bar: top 10 by frequency among visible events. #}
+    {# Rendered by JS, hidden while no tags to display. #}
+    <div class="explorer-tags"
+         id="explorer-tags"
+         role="group"
+         aria-label="{% translate 'Filtrer par tag' %}"
+         data-testid="explorer-tags"
+         hidden></div>
 
     {# Split view : liste + carte / Split view: list + map #}
     <div class="explorer-container">

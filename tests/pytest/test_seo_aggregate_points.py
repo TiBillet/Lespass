@@ -191,3 +191,69 @@ def test_build_explorer_data_for_tenants_liste_vide_renvoie_points_et_tenants_vi
     """Liste vide -> {"points": [], "tenants": []} sans appel cache."""
     from seo.services import build_explorer_data_for_tenants
     assert build_explorer_data_for_tenants([]) == {"points": [], "tenants": []}
+
+
+def test_build_aggregate_points_propage_tags_dans_events_pour_popup():
+    """
+    Le champ `tags` est present dans les events_pour_popup quand l'event d'entree
+    en a. Forme : list[dict{slug, name, color}].
+    / Field `tags` is propagated into events_pour_popup when input event has them.
+    """
+    from seo.services import build_aggregate_points
+
+    fake_pa = {
+        "pa_id": 1, "latitude": 1.0, "longitude": 1.0,
+        "name": "PA", "street_address": "", "postal_code": "",
+        "address_locality": "", "address_country": "",
+    }
+    fake_event_avec_tags = {
+        "uuid": "ev-1",
+        "name": "Soiree Jazz",
+        "datetime": "2026-06-15T20:00:00+00:00",
+        "postal_address_id": 1,
+        "slug": "soiree-jazz",
+        "tags": [{"slug": "jazz", "name": "Jazz", "color": "#0dcaf0"}],
+    }
+    with patch("seo.services.get_postal_addresses_for_tenants",
+               return_value={"uuid-A": [fake_pa]}):
+        result = build_aggregate_points(
+            [("uuid-A", "schema-A")],
+            configs_by_tenant={"uuid-A": {"organisation": "Org", "domain": "a.test"}},
+            events_by_tenant={"uuid-A": [fake_event_avec_tags]},
+        )
+    point = result["points"][0]
+    assert len(point["events_futurs"]) == 1
+    event = point["events_futurs"][0]
+    assert "tags" in event
+    assert event["tags"] == [{"slug": "jazz", "name": "Jazz", "color": "#0dcaf0"}]
+
+
+def test_build_aggregate_points_tags_vide_si_event_sans_tag():
+    """
+    Un event sans tags d'entree -> events_pour_popup[i].tags = [].
+    / Event without tags -> events_pour_popup[i].tags = [].
+    """
+    from seo.services import build_aggregate_points
+
+    fake_pa = {
+        "pa_id": 1, "latitude": 1.0, "longitude": 1.0,
+        "name": "PA", "street_address": "", "postal_code": "",
+        "address_locality": "", "address_country": "",
+    }
+    fake_event_sans_tags = {
+        "uuid": "ev-2",
+        "name": "Atelier",
+        "datetime": "2026-07-01T18:00:00+00:00",
+        "postal_address_id": 1,
+        "slug": "atelier",
+        # Pas de cle "tags" du tout
+    }
+    with patch("seo.services.get_postal_addresses_for_tenants",
+               return_value={"uuid-A": [fake_pa]}):
+        result = build_aggregate_points(
+            [("uuid-A", "schema-A")],
+            configs_by_tenant={"uuid-A": {"organisation": "Org", "domain": "a.test"}},
+            events_by_tenant={"uuid-A": [fake_event_sans_tags]},
+        )
+    event = result["points"][0]["events_futurs"][0]
+    assert event["tags"] == []

@@ -794,3 +794,81 @@
     font-style: italic;
     margin: 4px 0 0;
 }
+
+/* --- Tag chips (CHANTIER-06) --- */
+.explorer-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 12px 0;
+    align-items: center;
+}
+.explorer-tag-chip {
+    --chip-color: #0dcaf0;
+    background: var(--chip-color);
+    color: #fff;
+    border: 2px solid transparent;
+    border-radius: 12px;
+    padding: 3px 10px;
+    font-size: 0.82rem;
+    cursor: pointer;
+    font-weight: 500;
+    line-height: 1.3;
+    white-space: nowrap;
+    transition: filter 0.15s, border-color 0.15s, transform 0.05s;
+}
+.explorer-tag-chip:hover {
+    filter: brightness(1.1);
+}
+.explorer-tag-chip:active {
+    transform: scale(0.97);
+}
+.explorer-tag-chip--active {
+    border-color: #222;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6) inset;
+}
+.explorer-tag-chip-more {
+    background: transparent;
+    color: #555;
+    border: 1px dashed #aaa;
+    border-radius: 12px;
+    padding: 3px 10px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+.explorer-tag-chip-more:hover {
+    background: #eee;
+}
+.explorer-tag-chip-rest {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+    width: 100%;
+    padding-top: 6px;
+    border-top: 1px solid #eee;
+}
+
+/* --- Empty state action --- */
+.explorer-empty-state {
+    padding: 16px 12px;
+}
+.explorer-empty-state .btn-link {
+    text-decoration: underline;
+    color: #2a5d9f;
+}
+
+/* --- Card event : tags inline --- */
+.explorer-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+.explorer-card-tag {
+    color: #fff;
+    font-size: 0.72rem;
+    padding: 1px 7px;
+    border-radius: 8px;
+    line-height: 1.3;
+}

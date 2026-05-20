@@ -97,7 +97,15 @@ def envoyer_email_otp(
         "libelle_action": libelle_action,
         "nom_organisation": nom_organisation or "",
     }
-    sujet = _("%(action)s : votre code de vérification") % {"action": libelle_action}
+    # Sujet : code en TETE pour que la notification mobile (souvent
+    # tronquee apres ~30 caracteres) reste utile — le destinataire lit le
+    # code sans avoir a ouvrir le mail. Pattern aligne sur onboard.
+    # / Subject: code FIRST so the mobile notification (often truncated)
+    # stays useful — user reads code without opening the email.
+    sujet = _("%(code)s – votre code de vérification (%(action)s)") % {
+        "code": code_otp,
+        "action": libelle_action,
+    }
     # Pre-render du texte brut. Le HTML est rendu par `CeleryMailerClass`
     # via le couple `template` + `context`.
     # / Pre-render plain text body. HTML rendered by CeleryMailerClass.

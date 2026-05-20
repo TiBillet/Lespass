@@ -220,7 +220,7 @@ def get_events_for_tenants(tenant_schemas):
         # `postal_address_id` est la FK vers PostalAddress (sert a AGGREGATE_POINTS).
         # / `postal_address_id` is the FK to PostalAddress (used for AGGREGATE_POINTS).
         parts.append(
-            f"SELECT %s AS tenant_id, name, slug, short_description, "
+            f"SELECT %s AS tenant_id, uuid::text AS uuid, name, slug, short_description, "
             f"datetime, end_datetime, img, postal_address_id "
             f'FROM "{schema_name}"."BaseBillet_event" '
             f"WHERE published = true AND datetime >= %s"
@@ -236,17 +236,75 @@ def get_events_for_tenants(tenant_schemas):
             results.append(
                 {
                     "tenant_id": row[0],
-                    "name": row[1],
-                    "slug": row[2],
-                    "short_description": row[3],
-                    "datetime": row[4].isoformat() if row[4] else None,
-                    "end_datetime": row[5].isoformat() if row[5] else None,
-                    "img": row[6] or "",
-                    "postal_address_id": row[7],
+                    "uuid": row[1],
+                    "name": row[2],
+                    "slug": row[3],
+                    "short_description": row[4],
+                    "datetime": row[5].isoformat() if row[5] else None,
+                    "end_datetime": row[6].isoformat() if row[6] else None,
+                    "img": row[7] or "",
+                    "postal_address_id": row[8],
                 }
             )
 
     return results
+
+
+def get_event_tags_for_tenants(tenant_schemas):
+    """
+    Récupère tous les tags des events publiés et futurs pour les schémas donnés.
+    1 seule requête SQL UNION ALL avec JOIN sur la table M2M event_tag.
+    / Fetch all tags for published future events across given schemas.
+    Single UNION ALL SQL query with JOIN on the event_tag M2M table.
+
+    Paramètres / Parameters:
+        tenant_schemas: list[tuple(uuid, schema_name)]
+    Retourne / Returns:
+        dict[event_uuid_str, list[dict]] — {event_uuid: [{slug, name, color}, ...]}
+        Les events sans tag ne figurent pas dans le dict (JOIN strict).
+        / Events without tags are absent from the dict (strict JOIN).
+
+    SÉCURITÉ / SECURITY : schema_name vient de Client.schema_name (DB, admin-only),
+    jamais d'input utilisateur. Pattern identique aux autres helpers du fichier.
+    """
+    if not tenant_schemas:
+        return {}
+
+    parts = []
+    params = []
+    now = timezone.now()
+
+    for tenant_uuid, schema_name in tenant_schemas:
+        # JOIN entre Event, table M2M (BaseBillet_event_tag) et Tag.
+        # On caste event_id en text pour pouvoir comparer aux UUIDs cote Python.
+        # / JOIN between Event, M2M table (BaseBillet_event_tag) and Tag.
+        # Cast event_id to text for cross-Python UUID comparison.
+        parts.append(
+            f"SELECT e.uuid::text AS event_uuid, "
+            f"t.slug, t.name, t.color "
+            f'FROM "{schema_name}"."BaseBillet_event" e '
+            f'JOIN "{schema_name}"."BaseBillet_event_tag" et ON et.event_id = e.uuid '
+            f'JOIN "{schema_name}"."BaseBillet_tag" t ON t.uuid = et.tag_id '
+            f"WHERE e.published = true AND e.datetime >= %s"
+        )
+        params.append(now)
+
+    sql = " UNION ALL ".join(parts)
+
+    resultat = {}
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params)
+        for row in cursor.fetchall():
+            event_uuid, slug, name, color = row
+            if event_uuid not in resultat:
+                resultat[event_uuid] = []
+            resultat[event_uuid].append({
+                "slug": slug,
+                "name": name,
+                "color": color,
+            })
+
+    return resultat
 
 
 def build_tenant_config_data(client):
@@ -456,6 +514,7 @@ def build_aggregate_points(tenant_schemas, configs_by_tenant, events_by_tenant):
                     "name": ev.get("name", ""),
                     "datetime_iso": ev.get("datetime", ""),
                     "slug": ev.get("slug", ""),
+                    "tags": ev.get("tags", []),
                 })
 
             address_morceaux = [pa["street_address"], pa["postal_code"], pa["address_locality"]]

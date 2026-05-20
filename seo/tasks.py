@@ -88,6 +88,17 @@ def refresh_seo_cache():
     # ------------------------------------------------------------------
     all_events = get_events_for_tenants(tenant_schemas)
 
+    # Enrichir chaque event avec ses tags (1 requete SQL cross-schema).
+    # Un event sans tag recoit tags=[] (defaut). On modifie all_events in-place
+    # pour que events_by_tenant herite des tags automatiquement.
+    # / Enrich each event with its tags (1 cross-schema SQL query).
+    # Events without tags get tags=[]. Mutate all_events in-place so that
+    # events_by_tenant inherits tags automatically.
+    from seo.services import get_event_tags_for_tenants
+    tags_par_event = get_event_tags_for_tenants(tenant_schemas)
+    for event in all_events:
+        event["tags"] = tags_par_event.get(event.get("uuid", ""), [])
+
     # Grouper par tenant_id / Group by tenant_id
     events_by_tenant = {}
     for event in all_events:

@@ -17,14 +17,11 @@ Variables attendues :
 {% endcomment %}
 
 <style>
-    /* Toggle CSS-only : on cache les blocs non actifs.
-       / CSS-only toggle: hide non-active blocks. */
+    /* Etat initial : les deux blocs sont caches, le JS ci-dessous reveille
+       le bon block selon le radio coche au chargement.
+       / Initial state: both blocks hidden, JS below shows the right one. */
     .wizard-mode-existing-fields,
     .wizard-mode-new-fields { display: none; }
-    .wizard-mode-toggle input[value="existing"]:checked ~ .wizard-mode-existing-fields,
-    .wizard-mode-toggle input[value="new"]:checked ~ .wizard-mode-new-fields {
-        display: block;
-    }
 </style>
 
 {% if errors %}
@@ -47,6 +44,14 @@ Variables attendues :
     {% csrf_token %}
 
     <div class="wizard-mode-toggle">
+        {# Pattern Bootstrap btn-check standard : inputs adjacents aux labels #}
+        {# dans `.btn-group` pour que le style "checked = fond plein" marche. #}
+        {# Le toggle d'affichage des blocs `.wizard-mode-*-fields` est gere   #}
+        {# par le mini JS en bas du form (pas en CSS sibling — les inputs    #}
+        {# sont dans un descendant, le selector `~` ne traverse pas).         #}
+        {# / Standard Bootstrap btn-check pattern: inputs adjacent to labels  #}
+        {# inside `.btn-group`. The visibility toggle uses the small JS at   #}
+        {# the bottom — CSS `~` doesn't cross nested divs.                    #}
         <div class="btn-group mb-3" role="group" aria-label="{% translate 'Mode de saisie' %}">
             <input type="radio" class="btn-check" name="_form_mode" id="mode-existing" value="existing"
                    {% if not initial.new_address_name %}checked{% endif %}>
@@ -101,3 +106,44 @@ Variables attendues :
         </button>
     </div>
 </form>
+
+<script>
+    // Toggle wizard-mode : applique display:block au bloc correspondant au
+    // radio actif (`existing` ou `new`). Le CSS sibling `~` ne marche pas
+    // ici car les inputs sont dans `.btn-group` (descendants), pas siblings
+    // directs de `.wizard-mode-*-fields`. Ce JS gere le toggle proprement.
+    // / Wizard-mode toggle: shows the right block based on the active radio.
+    // CSS `~` doesn't work here (inputs are nested in .btn-group, not siblings).
+    (function() {
+        function appliquer_mode(toggle) {
+            var radio_coche = toggle.querySelector('input[type="radio"]:checked');
+            if (!radio_coche) return;
+            var mode_actif = radio_coche.value;
+            toggle.querySelectorAll('.wizard-mode-existing-fields, .wizard-mode-new-fields')
+                .forEach(function(bloc) { bloc.style.display = 'none'; });
+            var bloc_cible = toggle.querySelector('.wizard-mode-' + mode_actif + '-fields');
+            if (bloc_cible) bloc_cible.style.display = 'block';
+
+            // Desactive les inputs des blocs caches pour qu'ils ne soient PAS
+            // postes au serveur. Sans ca, le <select> du mode "existing" reste
+            // submit avec sa valeur par defaut et le serializer prend ce mode
+            // au lieu du mode "new" choisi par l'utilisateur.
+            // / Disable inputs of hidden blocks so they aren't POSTed. Without
+            // this, the hidden <select> still submits its default value and the
+            // serializer picks the wrong mode.
+            toggle.querySelectorAll('.wizard-mode-existing-fields, .wizard-mode-new-fields')
+                .forEach(function(bloc) {
+                    var est_visible = bloc.style.display !== 'none';
+                    bloc.querySelectorAll('input, select, textarea').forEach(function(champ) {
+                        champ.disabled = !est_visible;
+                    });
+                });
+        }
+        document.querySelectorAll('.wizard-mode-toggle').forEach(function(toggle) {
+            appliquer_mode(toggle);
+            toggle.addEventListener('change', function(evenement) {
+                if (evenement.target.matches('input[type="radio"]')) appliquer_mode(toggle);
+            });
+        });
+    })();
+</script>

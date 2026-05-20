@@ -46,7 +46,6 @@
             visit: 'Visiter le lieu',
             lieu: 'Lieu',
             event: 'Événement',
-            all: 'Tous',
             current: 'Vous êtes ici',
             lieuSingular: 'lieu',
             lieuPlural: 'lieux',
@@ -56,6 +55,9 @@
             more: 'autre(s)',
             list: 'Liste',
             map: 'Carte',
+            clearTag: 'Effacer le filtre',
+            tagEmpty: 'Aucun événement « {tag} » dans la zone visible.',
+            moreTags: '+ {count} tags',
         },
     };
 
@@ -65,7 +67,7 @@
     // ============================================================
     const state = {
         data: null,
-        filters: { text: '', category: 'all' },
+        filters: { text: '', view: 'lieu', tag: null },
         map: null,
         markers: {},
         markerCluster: null,
@@ -86,6 +88,7 @@
         pills: null,
         counter: null,
         fab: null,
+        tags: null,   // conteneur chips tags / tag chips container
     };
 
     // ============================================================
@@ -123,7 +126,6 @@
         if (ds.i18nVisit) config.i18n.visit = ds.i18nVisit;
         if (ds.i18nLieu) config.i18n.lieu = ds.i18nLieu;
         if (ds.i18nEvent) config.i18n.event = ds.i18nEvent;
-        if (ds.i18nAll) config.i18n.all = ds.i18nAll;
         if (ds.i18nCurrent) config.i18n.current = ds.i18nCurrent;
         if (ds.i18nLieuSingular) config.i18n.lieuSingular = ds.i18nLieuSingular;
         if (ds.i18nLieuPlural) config.i18n.lieuPlural = ds.i18nLieuPlural;
@@ -133,6 +135,9 @@
         if (ds.i18nMore) config.i18n.more = ds.i18nMore;
         if (ds.i18nList) config.i18n.list = ds.i18nList;
         if (ds.i18nMap) config.i18n.map = ds.i18nMap;
+        if (ds.i18nClearTag) config.i18n.clearTag = ds.i18nClearTag;
+        if (ds.i18nTagEmpty) config.i18n.tagEmpty = ds.i18nTagEmpty;
+        if (ds.i18nMoreTags) config.i18n.moreTags = ds.i18nMoreTags;
     }
 
     // ============================================================
@@ -150,6 +155,7 @@
         dom.pills = document.getElementById('explorer-pills');
         dom.counter = document.getElementById('explorer-counter');
         dom.fab = document.getElementById('explorer-fab');
+        dom.tags = document.getElementById('explorer-tags');
 
         // Garde-fou : si les elements essentiels manquent, abandonner
         // / Guard: if essential elements are missing, abort
@@ -164,6 +170,8 @@
             renderEmptyState();
             return;
         }
+
+        bootFromURL();   // pré-remplit state.filters depuis l'URL / pre-fills state.filters from URL
 
         bindControls();
         applyFilters();
@@ -218,61 +226,213 @@
         return false;
     }
 
-    function filterCategory(sourceArray, categoryName) {
-        if (state.filters.category !== 'all' && state.filters.category !== categoryName) {
-            return [];
+    // ============================================================
+    // FILTERS — helpers PA-level + event-level
+    // / FILTERS — PA-level + event-level helpers
+    // ============================================================
+
+    function paMatchesText(point) {
+        // Match sur nom PA, nom du tenant, OU nom d'au moins 1 event futur.
+        // / Match on PA name, tenant name, OR at least 1 future event name.
+        if (!state.filters.text) return true;
+        const q = state.filters.text;
+        const champs = [
+            point.pa_name,
+            point.tenant_organisation,
+            point.address_display,
+        ];
+        for (let i = 0; i < champs.length; i++) {
+            if ((champs[i] || '').toLowerCase().indexOf(q) !== -1) return true;
         }
-        return (sourceArray || []).filter(matchesText);
+        const events = point.events_futurs || [];
+        for (let j = 0; j < events.length; j++) {
+            if ((events[j].name || '').toLowerCase().indexOf(q) !== -1) return true;
+        }
+        return false;
+    }
+
+    function paMatchesTag(point) {
+        // Si pas de tag actif, tout passe. Sinon, au moins 1 event de la PA
+        // doit porter le tag.
+        // / If no active tag, pass. Otherwise, at least 1 event must carry it.
+        if (!state.filters.tag) return true;
+        const events = point.events_futurs || [];
+        for (let i = 0; i < events.length; i++) {
+            const tags = events[i].tags || [];
+            for (let j = 0; j < tags.length; j++) {
+                if (tags[j].slug === state.filters.tag) return true;
+            }
+        }
+        return false;
+    }
+
+    function filterPAsByTextAndTag(points) {
+        const result = [];
+        for (let i = 0; i < points.length; i++) {
+            const point = points[i];
+            if (paMatchesText(point) && paMatchesTag(point)) {
+                result.push(point);
+            }
+        }
+        return result;
+    }
+
+    function collectVisibleEvents(paVisibles) {
+        // Aplatit les events futurs de toutes les PA visibles.
+        // Si tag actif, ne garde que les events qui portent ce tag.
+        // Si text actif, ne garde que les events dont le nom matche (ou la PA matche).
+        // / Flatten future events of all visible PAs.
+        // Filter by tag and text accordingly.
+        const events = [];
+        const q = state.filters.text;
+        const tagSlug = state.filters.tag;
+        for (let i = 0; i < paVisibles.length; i++) {
+            const point = paVisibles[i];
+            const evList = point.events_futurs || [];
+            for (let j = 0; j < evList.length; j++) {
+                const ev = evList[j];
+                if (tagSlug) {
+                    const tags = ev.tags || [];
+                    let porteTag = false;
+                    for (let k = 0; k < tags.length; k++) {
+                        if (tags[k].slug === tagSlug) { porteTag = true; break; }
+                    }
+                    if (!porteTag) continue;
+                }
+                if (q) {
+                    // Conserver si nom d'event matche OU nom de PA/tenant matche
+                    // (la PA est déjà filtrée, mais on filtre encore en mode event).
+                    const evMatch = (ev.name || '').toLowerCase().indexOf(q) !== -1;
+                    const paMatch = paMatchesText(point);
+                    if (!evMatch && !paMatch) continue;
+                }
+                events.push({
+                    uuid: ev.uuid,
+                    name: ev.name,
+                    datetime_iso: ev.datetime_iso,
+                    slug: ev.slug,
+                    tags: ev.tags || [],
+                    pa_id: point.pa_id,
+                    pa_name: point.pa_name,
+                    address_display: point.address_display,
+                    tenant_id: point.tenant_id,
+                    tenant_organisation: point.tenant_organisation,
+                    tenant_domain: point.tenant_domain,
+                    tenant_logo_url: point.tenant_logo_url,
+                });
+            }
+        }
+        events.sort(function (a, b) {
+            return (a.datetime_iso || '').localeCompare(b.datetime_iso || '');
+        });
+        return events;
+    }
+
+    function buildLieuCardsFromPAs(paVisibles) {
+        // Regroupe les PA visibles par tenant_id. Renvoie liste de "lieu cards"
+        // au meme format que state.data.tenants, mais enrichi avec eventsAggregated.
+        // / Group visible PAs by tenant_id. Returns "lieu cards" matching
+        // state.data.tenants format, enriched with eventsAggregated.
+        const parTenant = {};
+        for (let i = 0; i < paVisibles.length; i++) {
+            const point = paVisibles[i];
+            const tid = point.tenant_id;
+            if (!parTenant[tid]) parTenant[tid] = { pas: [], events: [] };
+            parTenant[tid].pas.push(point);
+            const evList = point.events_futurs || [];
+            for (let j = 0; j < evList.length; j++) {
+                parTenant[tid].events.push(evList[j]);
+            }
+        }
+        // Index des tenants depuis state.data.tenants pour récupérer infos tenant-level
+        // / Tenant index from state.data.tenants for tenant-level info
+        const tenantsById = {};
+        for (let k = 0; k < (state.data.tenants || []).length; k++) {
+            const t = state.data.tenants[k];
+            tenantsById[t.tenant_id] = t;
+        }
+        const cards = [];
+        for (const tid in parTenant) {
+            const t = tenantsById[tid];
+            if (!t) continue;
+            // Tri events agrégés par date asc, dédoublonné par uuid
+            // / Sort aggregated events asc, dedup by uuid
+            const seen = {};
+            const eventsUniques = [];
+            for (let m = 0; m < parTenant[tid].events.length; m++) {
+                const ev = parTenant[tid].events[m];
+                if (!seen[ev.uuid]) {
+                    seen[ev.uuid] = true;
+                    eventsUniques.push(ev);
+                }
+            }
+            eventsUniques.sort(function (a, b) {
+                return (a.datetime_iso || '').localeCompare(b.datetime_iso || '');
+            });
+            cards.push({
+                tenant_id: t.tenant_id,
+                name: t.name,
+                domain: t.domain,
+                slug: t.slug || '',
+                short_description: t.short_description,
+                locality: t.locality,
+                country: t.country,
+                logo_url: t.logo_url,
+                events: eventsUniques,
+            });
+        }
+        return cards;
     }
 
     function applyFilters() {
         if (!state.data) return;
 
-        // Cards liste : 1 par tenant. Si pill='event', on ne garde que les
-        // tenants qui ont au moins 1 event futur sur l'une de leurs PA.
-        // / List cards: 1 per tenant. If pill='event', keep only tenants
-        // that have at least 1 future event on one of their PAs.
-        let tenantsVisibles = filterCategory(state.data.tenants, 'lieu');
-        if (state.filters.category === 'event') {
-            const tenantsAvecEvent = collectTenantsWithFutureEvents();
-            tenantsVisibles = state.data.tenants.filter(function (t) {
-                return tenantsAvecEvent[t.tenant_id] && matchesText(t);
-            });
+        // 1. Filtre les PA selon text + tag (independamment du mode view).
+        // / Filter PAs by text + tag (independent of view mode).
+        const paVisibles = filterPAsByTextAndTag(state.data.points || []);
+
+        // 2. Construit la liste affichee selon le mode pill.
+        // / Build displayed list according to pill mode.
+        let lieuxCards = [];
+        let eventCards = [];
+        if (state.filters.view === 'lieu') {
+            lieuxCards = buildLieuCardsFromPAs(paVisibles);
+        } else {
+            eventCards = collectVisibleEvents(paVisibles);
         }
 
-        // Compteur events futurs visibles (sur les tenants visibles)
-        // / Visible future events count
-        const visibleTenantIds = {};
-        for (let i = 0; i < tenantsVisibles.length; i++) {
-            visibleTenantIds[tenantsVisibles[i].tenant_id] = true;
-        }
-        let eventsCount = 0;
-        for (let j = 0; j < state.data.points.length; j++) {
-            const pt = state.data.points[j];
-            if (visibleTenantIds[pt.tenant_id]) {
-                eventsCount += (pt.events_futurs_count_total || 0);
-            }
-        }
+        renderList(lieuxCards, eventCards);
+        updateCounters(lieuxCards.length, eventCards.length || countEventsInPAs(paVisibles));
 
-        renderList(tenantsVisibles, []);
-        updateCounters(tenantsVisibles.length, eventsCount);
-
+        // 3. Markers visibles = PA visibles. Dict pa_id -> true pour update map.
+        // / Visible markers = visible PAs. Dict pa_id -> true for map update.
+        const visiblePaIds = {};
+        for (let i = 0; i < paVisibles.length; i++) {
+            visiblePaIds[paVisibles[i].pa_id] = true;
+        }
         if (state.mapInitialized) {
-            updateMapMarkers(visibleTenantIds);
+            updateMapMarkersByPA(visiblePaIds);
+        }
+
+        // 4. Recalculer les chips (Task 8 ajoutera updateChips).
+        // / Recompute chips (Task 8 will add updateChips).
+        if (typeof updateChips === 'function') {
+            updateChips(paVisibles);
+        }
+
+        // 5. Synchroniser l'URL (Task 9 ajoutera syncURL).
+        // / Sync URL (Task 9 will add syncURL).
+        if (typeof syncURL === 'function') {
+            syncURL();
         }
     }
 
-    function collectTenantsWithFutureEvents() {
-        // Renvoie un dict {tenant_id: true} pour tenants ayant >=1 event futur
-        // / Returns dict of tenant_ids that have >=1 future event
-        const result = {};
-        for (let i = 0; i < state.data.points.length; i++) {
-            const pt = state.data.points[i];
-            if ((pt.events_futurs_count_total || 0) > 0) {
-                result[pt.tenant_id] = true;
-            }
+    function countEventsInPAs(paVisibles) {
+        let n = 0;
+        for (let i = 0; i < paVisibles.length; i++) {
+            n += ((paVisibles[i].events_futurs || []).length);
         }
-        return result;
+        return n;
     }
 
     function updateCounters(lieuxN, eventsN) {
@@ -294,12 +454,19 @@
         bindPills();
         bindFAB();
         bindListDelegation();
+        bindTagChips();
     }
 
     function bindSearch() {
         if (!dom.search) return;
-        const initialValue = dom.search.value.trim().toLowerCase();
-        if (initialValue) state.filters.text = initialValue;
+        // Priorité au state (déjà rempli par bootFromURL), sinon valeur du DOM.
+        // / state takes priority (filled by bootFromURL), otherwise DOM value.
+        if (state.filters.text) {
+            dom.search.value = state.filters.text;
+        } else {
+            const initialValue = dom.search.value.trim().toLowerCase();
+            if (initialValue) state.filters.text = initialValue;
+        }
 
         let timer = null;
         dom.search.addEventListener('input', function () {
@@ -313,13 +480,22 @@
 
     function bindPills() {
         if (!dom.pills) return;
+        // Synchroniser la pill active avec state.filters.view (depuis URL).
+        // / Sync active pill with state.filters.view (from URL).
+        const allPills = dom.pills.querySelectorAll('.explorer-pill');
+        for (let i = 0; i < allPills.length; i++) {
+            allPills[i].classList.toggle(
+                'active',
+                allPills[i].getAttribute('data-category') === state.filters.view
+            );
+        }
         dom.pills.addEventListener('click', function (ev) {
             const pill = ev.target.closest('.explorer-pill');
             if (!pill) return;
             const allPills = dom.pills.querySelectorAll('.explorer-pill');
             allPills.forEach(function (p) { p.classList.remove('active'); });
             pill.classList.add('active');
-            state.filters.category = pill.getAttribute('data-category') || 'all';
+            state.filters.view = pill.getAttribute('data-category') || 'lieu';
             applyFilters();
         });
     }
@@ -327,6 +503,33 @@
     function bindFAB() {
         if (!dom.fab) return;
         dom.fab.addEventListener('click', toggleView);
+    }
+
+    function bindTagChips() {
+        if (!dom.tags) return;
+        dom.tags.addEventListener('click', function (ev) {
+            const moreBtn = ev.target.closest('.explorer-tag-chip-more');
+            if (moreBtn) {
+                const rest = dom.tags.querySelector('.explorer-tag-chip-rest');
+                if (rest) {
+                    const willOpen = rest.hidden;
+                    rest.hidden = !willOpen;
+                    moreBtn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+                }
+                return;
+            }
+            const chip = ev.target.closest('.explorer-tag-chip');
+            if (!chip) return;
+            const clickedSlug = chip.getAttribute('data-tag-slug');
+            // Toggle exclusif : si déjà actif -> désactiver, sinon -> activer (et désactiver les autres).
+            // / Exclusive toggle: if active -> deactivate, otherwise activate (and deactivate others).
+            if (state.filters.tag === clickedSlug) {
+                state.filters.tag = null;
+            } else {
+                state.filters.tag = clickedSlug;
+            }
+            applyFilters();
+        });
     }
 
     /**
@@ -337,6 +540,14 @@
      */
     function bindListDelegation() {
         dom.list.addEventListener('click', function (ev) {
+            // Bouton "Effacer le filtre tag" (empty state)
+            // / "Clear tag filter" button (empty state)
+            const clearBtn = ev.target.closest('#explorer-clear-tag');
+            if (clearBtn) {
+                state.filters.tag = null;
+                applyFilters();
+                return;
+            }
             // Toggle accordeon (a tester en premier — plus specifique)
             // / Accordion toggle (check first — more specific)
             const toggle = ev.target.closest('.explorer-accordion-toggle');
@@ -378,7 +589,41 @@
         let html = '';
         for (let i = 0; i < lieux.length; i++) html += buildLieuCard(lieux[i]);
         for (let j = 0; j < events.length; j++) html += buildEventCard(events[j]);
-        dom.list.innerHTML = html || ('<p class="text-muted text-center py-4">' + escapeHtml(config.i18n.empty) + '</p>');
+        if (!html) {
+            html = buildEmptyStateHtml();
+        }
+        dom.list.innerHTML = html;
+    }
+
+    function buildEmptyStateHtml() {
+        // Si tag actif et 0 résultat : message + lien "Effacer le filtre".
+        // / If tag is active and 0 results: message + "Clear filter" link.
+        if (state.filters.tag) {
+            const activeTagName = findTagNameBySlug(state.filters.tag) || state.filters.tag;
+            const msg = config.i18n.tagEmpty.replace('{tag}', activeTagName);
+            return '<div class="explorer-empty-state" data-testid="explorer-empty-state">'
+                + '<p class="text-muted text-center py-3">' + escapeHtml(msg) + '</p>'
+                + '<p class="text-center">'
+                + '<button type="button" class="btn btn-link"'
+                + ' id="explorer-clear-tag" data-testid="explorer-clear-tag">'
+                + escapeHtml(config.i18n.clearTag) + '</button></p></div>';
+        }
+        return '<p class="text-muted text-center py-4">' + escapeHtml(config.i18n.empty) + '</p>';
+    }
+
+    function findTagNameBySlug(slug) {
+        // Cherche dans les events de state.data.points.
+        // / Search in events of state.data.points.
+        for (let i = 0; i < (state.data.points || []).length; i++) {
+            const evs = state.data.points[i].events_futurs || [];
+            for (let j = 0; j < evs.length; j++) {
+                const tags = evs[j].tags || [];
+                for (let k = 0; k < tags.length; k++) {
+                    if (tags[k].slug === slug) return tags[k].name;
+                }
+            }
+        }
+        return null;
     }
 
     function buildLieuCard(lieu) {
@@ -427,6 +672,9 @@
     }
 
     function buildLieuAccordion(lieu, domain) {
+        // Source : lieu.events injecté par buildLieuCardsFromPAs (Task 6).
+        // Forme : [{uuid, name, datetime_iso, slug, tags}, ...]
+        // / Source: lieu.events injected by buildLieuCardsFromPAs (Task 6).
         const events = lieu.events || [];
         if (events.length === 0) return '';
         const label = pluralize(events.length, config.i18n.eventSingular, config.i18n.eventPlural);
@@ -434,11 +682,12 @@
         for (let i = 0; i < events.length; i++) {
             const ev = events[i];
             const evHref = domain && ev.slug ? 'https://' + domain + '/event/' + ev.slug + '/' : '#';
+            const dateLabel = ev.datetime_iso ? formatShortDate(ev.datetime_iso) : '';
             items += ''
                 + '<a class="explorer-accordion-item" href="' + escapeHtml(evHref) + '" target="_blank" rel="noopener">'
                     + '<span class="explorer-accordion-icon">\u{1F3B6}</span>'
                     + '<span class="explorer-accordion-name">' + escapeHtml(ev.name) + '</span>'
-                    + (ev.datetime ? '<span class="explorer-accordion-date">' + escapeHtml(formatShortDate(ev.datetime)) + '</span>' : '')
+                    + (dateLabel ? '<span class="explorer-accordion-date">' + escapeHtml(dateLabel) + '</span>' : '')
                 + '</a>';
         }
         return ''
@@ -452,25 +701,50 @@
     }
 
     function buildEventCard(event) {
-        const lieuId = escapeHtml(event.lieu_id || '');
-        const datePart = event.datetime ? '\u{1F4C5} ' + escapeHtml(formatShortDate(event.datetime)) + ' · ' : '';
-        const metaText = datePart + escapeHtml(event.lieu_name || '');
-        const desc = event.short_description
-            ? '<div class="explorer-card-desc">' + escapeHtml(event.short_description) + '</div>'
+        const tenantId = escapeHtml(event.tenant_id || '');
+        const evUrl = (event.tenant_domain && event.slug)
+            ? 'https://' + event.tenant_domain + '/event/' + event.slug + '/'
+            : '#';
+        const datePart = event.datetime_iso
+            ? '\u{1F4C5} ' + escapeHtml(formatShortDate(event.datetime_iso))
             : '';
-        const lieuAttr = lieuId ? ' data-lieu-id="' + lieuId + '"' : '';
+        const lieuPart = event.pa_name ? ' · \u{1F4CD} ' + escapeHtml(event.pa_name) : '';
+        const tenantPart = event.tenant_organisation
+            ? ' — ' + escapeHtml(event.tenant_organisation)
+            : '';
+        const metaText = datePart + lieuPart + tenantPart;
+
+        // Tags inline : max 3 affichés.
+        // / Inline tags: max 3 displayed.
+        let tagsHtml = '';
+        const tags = (event.tags || []).slice(0, 3);
+        if (tags.length > 0) {
+            tagsHtml = '<div class="explorer-card-tags">';
+            for (let i = 0; i < tags.length; i++) {
+                const t = tags[i];
+                tagsHtml += '<span class="explorer-card-tag" style="background-color:'
+                    + escapeHtml(t.color || '#0dcaf0') + '">'
+                    + escapeHtml(t.name || t.slug) + '</span>';
+            }
+            tagsHtml += '</div>';
+        }
 
         return ''
-            + '<div class="explorer-card"' + lieuAttr + ' data-type="event"'
+            + '<div class="explorer-card explorer-card--event"'
+            + ' data-event-uuid="' + escapeHtml(event.uuid || '') + '"'
+            + ' data-tenant-id="' + tenantId + '"'
+            + ' data-type="event"'
             + ' data-testid="explorer-card-event">'
                 + '<div class="explorer-card-icon event">\u{1F3B6}</div>'
                 + '<div class="explorer-card-body">'
                     + '<div class="explorer-card-header">'
-                        + '<h3 class="explorer-card-title">' + escapeHtml(event.name) + '</h3>'
+                        + '<h3 class="explorer-card-title">'
+                            + '<a href="' + escapeHtml(evUrl) + '" target="_blank" rel="noopener">'
+                            + escapeHtml(event.name) + '</a></h3>'
                         + '<span class="explorer-badge event">' + escapeHtml(config.i18n.event) + '</span>'
                     + '</div>'
                     + '<div class="explorer-card-meta">' + metaText + '</div>'
-                    + desc
+                    + tagsHtml
                 + '</div>'
             + '</div>';
     }
@@ -479,6 +753,93 @@
         if (!dom.list) return;
         dom.list.innerHTML = '<p class="text-muted text-center py-4">' + escapeHtml(config.i18n.empty) + '</p>';
         hideMapLoadingSpinner();
+    }
+
+    // ============================================================
+    // TAG CHIPS — top 10 par fréquence parmi events visibles
+    // / TAG CHIPS — top 10 by frequency among visible events
+    // ============================================================
+
+    function computeVisibleTagsTop10(paVisibles) {
+        // Agrege les tags des events visibles (mode lieu : events de toutes les PA
+        // visibles ; mode event : meme chose, le filtre tag s'applique ailleurs).
+        // Ne tient pas compte de state.filters.tag (sinon on cacherait le chip actif).
+        // / Aggregate tags of visible events. Ignores state.filters.tag (otherwise
+        // the active chip would disappear).
+        const compteur = {};   // slug -> {slug, name, color, count}
+        for (let i = 0; i < paVisibles.length; i++) {
+            const evList = paVisibles[i].events_futurs || [];
+            for (let j = 0; j < evList.length; j++) {
+                const tags = evList[j].tags || [];
+                for (let k = 0; k < tags.length; k++) {
+                    const t = tags[k];
+                    if (!compteur[t.slug]) {
+                        compteur[t.slug] = {
+                            slug: t.slug, name: t.name, color: t.color, count: 0,
+                        };
+                    }
+                    compteur[t.slug].count += 1;
+                }
+            }
+        }
+        const liste = Object.keys(compteur).map(function (k) { return compteur[k]; });
+        liste.sort(function (a, b) {
+            if (b.count !== a.count) return b.count - a.count;
+            return a.name.localeCompare(b.name);
+        });
+        return {
+            top: liste.slice(0, 10),
+            rest: liste.slice(10),
+        };
+    }
+
+    function updateChips(paVisibles) {
+        if (!dom.tags) return;
+        const grouped = computeVisibleTagsTop10(paVisibles);
+        const activeSlug = state.filters.tag;
+
+        // Cache le conteneur si aucun tag a afficher
+        // / Hide container if no tag to display
+        if (grouped.top.length === 0 && grouped.rest.length === 0) {
+            dom.tags.innerHTML = '';
+            dom.tags.hidden = true;
+            return;
+        }
+        dom.tags.hidden = false;
+
+        let html = '';
+        for (let i = 0; i < grouped.top.length; i++) {
+            const t = grouped.top[i];
+            html += buildChipHtml(t, t.slug === activeSlug);
+        }
+        if (grouped.rest.length > 0) {
+            const moreLabel = config.i18n.moreTags.replace('{count}', grouped.rest.length);
+            html += '<button type="button" class="explorer-tag-chip-more"'
+                + ' data-testid="explorer-tag-chip-more"'
+                + ' aria-haspopup="true" aria-expanded="false">'
+                + escapeHtml(moreLabel) + '</button>'
+                + '<div class="explorer-tag-chip-rest" hidden>';
+            for (let j = 0; j < grouped.rest.length; j++) {
+                html += buildChipHtml(grouped.rest[j], grouped.rest[j].slug === activeSlug);
+            }
+            html += '</div>';
+        }
+        dom.tags.innerHTML = html;
+    }
+
+    function buildChipHtml(tag, isActive) {
+        // Chip bouton : fond = tag.color, état actif = bordure + check.
+        // / Chip button: background = tag.color, active state = border + check.
+        const cls = 'explorer-tag-chip' + (isActive ? ' explorer-tag-chip--active' : '');
+        const check = isActive
+            ? '<i class="bi bi-check2" aria-hidden="true"></i> '
+            : '';
+        return '<button type="button" class="' + cls + '"'
+            + ' data-tag-slug="' + escapeHtml(tag.slug) + '"'
+            + ' data-testid="explorer-tag-chip-' + escapeHtml(tag.slug) + '"'
+            + ' style="--chip-color:' + escapeHtml(tag.color || '#0dcaf0') + '"'
+            + ' aria-pressed="' + (isActive ? 'true' : 'false') + '">'
+            + check + escapeHtml(tag.name || tag.slug) + '</button>';
     }
 
     // ============================================================
@@ -633,20 +994,15 @@
         return html;
     }
 
-    function updateMapMarkers(visibleTenantIds) {
-        // Garde tous les markers des tenants visibles, cache les autres.
-        // visibleTenantIds = dict {tenant_id: true}.
-        // / Keep markers for visible tenants, hide others.
+    function updateMapMarkersByPA(visiblePaIds) {
+        // Garde les markers des PA visibles, cache les autres.
+        // visiblePaIds = dict {pa_id: true}.
+        // / Keep visible PA markers, hide others.
         if (!state.mapInitialized) return;
 
         for (const paId in state.markers) {
             const marker = state.markers[paId];
-            // Recupere tenant_id via icon data-tenant-id (mis dans addMarkers)
-            // / Get tenant_id via icon data-tenant-id (set in addMarkers)
-            const el = marker.getIcon().options.html;
-            const matchTenantId = el && el.match(/data-tenant-id="([^"]*)"/);
-            const tenantId = matchTenantId ? matchTenantId[1] : '';
-            const keep = !!visibleTenantIds[tenantId];
+            const keep = !!visiblePaIds[paId];
             const isVisible = state.markerCluster.hasLayer(marker);
             if (keep && !isVisible) state.markerCluster.addLayer(marker);
             else if (!keep && isVisible) state.markerCluster.removeLayer(marker);
@@ -786,6 +1142,64 @@
             document.body.classList.remove('explorer-map-active');
             if (label) label.textContent = config.i18n.map;
             state.currentView = 'list';
+        }
+    }
+
+    // ============================================================
+    // URL STATE — sync filters <-> URL via history.replaceState
+    // / URL STATE — sync filters <-> URL via history.replaceState
+    // ============================================================
+
+    let urlSyncTimer = null;
+
+    function syncURL() {
+        // Debounce 300ms pour eviter les rafales lors de la saisie texte.
+        // / Debounce 300ms to avoid bursts during text input.
+        clearTimeout(urlSyncTimer);
+        urlSyncTimer = setTimeout(function () {
+            const params = new URLSearchParams();
+            if (state.filters.view && state.filters.view !== 'lieu') {
+                params.set('v', state.filters.view);
+            }
+            if (state.filters.text) {
+                params.set('q', state.filters.text);
+            }
+            if (state.filters.tag) {
+                params.set('tag', state.filters.tag);
+            }
+            const qs = params.toString();
+            const newUrl = window.location.pathname + (qs ? ('?' + qs) : '');
+            try {
+                window.history.replaceState({}, '', newUrl);
+            } catch (err) {
+                // Silently fail si l'historique est restreint (file://, etc.)
+                // / Silent fail if history is restricted.
+            }
+        }, 300);
+    }
+
+    function bootFromURL() {
+        // Lit les params URL au chargement et pré-sélectionne state.filters.
+        // / Read URL params at load, pre-select state.filters.
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const v = params.get('v');
+            if (v === 'event' || v === 'lieu') {
+                state.filters.view = v;
+            }
+            const q = params.get('q');
+            if (q) {
+                state.filters.text = q.toLowerCase();
+            }
+            const tag = params.get('tag');
+            if (tag) {
+                // On valide plus tard : si aucun event ne porte ce tag, applyFilters
+                // affichera l'empty state — pas de plantage.
+                // / Validate later: if no event carries it, applyFilters shows empty state.
+                state.filters.tag = tag;
+            }
+        } catch (err) {
+            console.warn('explorer: cannot parse URL params', err);
         }
     }
 

@@ -66,7 +66,16 @@ class OtpSession:
         """
         Verifie le code soumis. Incremente le compteur de tentatives.
         / Verifies the submitted code. Increments attempts counter.
+
+        En mode DEBUG, n'importe quel code a 6 chiffres est accepte (raccourci
+        de dev pour ne pas avoir a ouvrir le mail). Hors DEBUG (= prod), la
+        verification reelle s'applique : hash, expiration, max attempts.
+        / In DEBUG mode any 6-digit code is accepted (dev shortcut, avoids
+        opening the mailbox). Outside DEBUG (= prod) the real verification
+        applies: hash, expiration, max attempts.
         """
+        from django.conf import settings
+
         hash_stocke = self.request.session.get(self._cle_session("hash"))
         expires_at_iso = self.request.session.get(self._cle_session("expires_at"))
         attempts = self.request.session.get(self._cle_session("attempts"), 0)
@@ -77,6 +86,18 @@ class OtpSession:
             return False
         if timezone.now() > datetime.fromisoformat(expires_at_iso):
             return False
+
+        # Mode DEBUG : on accepte tout code a 6 chiffres pour faciliter
+        # les tests manuels en dev (le mail reel part quand meme, mais le
+        # developpeur peut taper "000000" sans aller le chercher).
+        # / DEBUG mode: accept any 6-digit code so manual dev testing
+        # doesn't require opening the email inbox.
+        if settings.DEBUG:
+            code_propre = (code_soumis or "").strip()
+            if len(code_propre) == 6 and code_propre.isdigit():
+                self.request.session[self._cle_session("attempts")] = attempts + 1
+                self.request.session[self._cle_session("confirmed")] = True
+                return True
 
         self.request.session[self._cle_session("attempts")] = attempts + 1
         if verifier_code_otp(code_soumis, hash_stocke):

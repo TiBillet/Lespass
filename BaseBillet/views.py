@@ -1669,7 +1669,7 @@ class FederationViewset(viewsets.ViewSet):
         # memberOf points to the global TiBillet network.
         federation_members = []
         self_lieu_data = None
-        for lieu in explorer_data.get("lieux", []):
+        for lieu in explorer_data.get("tenants", []):
             domain = lieu.get("domain", "")
             member_url = f"https://{domain}/" if domain else ""
             member_dict = {
@@ -3727,11 +3727,49 @@ class EventWizardPublic(viewsets.ViewSet):
                           context=context, status=422)
 
         config = Configuration.get_solo()
-        self._otp(request).start(
-            email=serializer.validated_data["email"],
-            libelle_action=str(_("Proposer un évènement")),
-            nom_organisation=config.organisation,
-        )
+        # Try/except autour de l'envoi du mail : SMTP peut refuser une adresse
+        # invalide ou un domaine inexistant. Sans catch, l'utilisateur voit
+        # une 500. On convertit en 422 avec un message lisible. En DEBUG, on
+        # continue malgre l'echec (le bypass DEBUG du `verify` permet de
+        # tester le flow sans mail reel).
+        # / Catch SMTP errors: invalid email or unknown domain crashes Django.
+        # Convert to a 422 with a readable message. In DEBUG, ignore the error
+        # and continue (the DEBUG bypass in `verify` lets us test without mail).
+        try:
+            self._otp(request).start(
+                email=serializer.validated_data["email"],
+                libelle_action=str(_("Proposer un évènement")),
+                nom_organisation=config.organisation,
+            )
+        except Exception as erreur_envoi:
+            from django.conf import settings as django_settings
+            import logging as _logging
+            _logger = _logging.getLogger(__name__)
+            if django_settings.DEBUG:
+                _logger.warning(
+                    "OTP mail send failed in DEBUG (flow continues): %s",
+                    erreur_envoi,
+                )
+                return redirect("event-propose-verify")
+            # En prod : on nettoie la session OTP partielle et on remet
+            # l'utilisateur sur la step email avec un message clair.
+            # / Production: clear partial OTP session, return user to email step.
+            self._otp(request).reset()
+            context = get_context(request)
+            context.update({
+                "wizard_title": _("Proposer un évènement"),
+                "wizard_step_label": _("Étape 1 — Votre email"),
+                "initial": request.POST.dict(),
+                "errors": {"email": [_(
+                    "Impossible d'envoyer le mail a cette adresse. "
+                    "Verifiez votre adresse email puis reessayez."
+                )]},
+            })
+            return render(
+                request,
+                "reunion/views/event/wizard/public_step0_email.html",
+                context=context, status=422,
+            )
         return redirect("event-propose-verify")
 
     @action(detail=False, methods=["GET", "POST"], url_path="verify")
