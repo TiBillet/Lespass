@@ -18,6 +18,7 @@
                 <p class="lead fs-4">{{ config.short_description | default:"" }}</p>
                 <p class="lead">{{ config.long_description | safe | default:"" }}</p>
                 <div class="row" data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
+                {% if config.module_billetterie %}
                     <div class="col-md mb-3">
                         <a class="btn btn-lg btn-primary d-block my-3"
                            href="/event/" hx-get="/event/" hx-target="body" hx-push-url="true">
@@ -25,12 +26,15 @@
                             {% if config.event_menu_name %}{{ config.event_menu_name }}{% else %}{% trans 'Calendar' %}{% endif %}
                         </a>
                     </div>
+                {% endif %}
+                {% if config.module_adhesion %}
                     <div class="col-md">
                         <a class="btn btn-lg btn-primary d-block my-3"
                            href="/memberships/" hx-get="/memberships/" hx-target="body" hx-push-url="true">
                             <i class="bi bi-person-badge"></i>{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% trans 'Subscriptions' %}{% endif %}
                         </a>
                     </div>
+                {% endif %}
                     {% comment %} HIDE: page fédération
                 <div class="col-md">
                     <a class="btn btn-lg btn-primary d-block my-3"
