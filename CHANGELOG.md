@@ -1,5 +1,31 @@
 # Changelog / Journal des modifications
 
+## Liste des évènements : filtre par date en SQL + filtres conservés à la pagination / Event list: date filter in SQL + filters kept on pagination
+
+**Quoi / What :** Correction d'un bug de la page liste des évènements (`EventMVT`)
+visible sur les gros agendas (festival > 300 évènements). Le filtre par date
+était appliqué en Python **après** la pagination (100 évènements/page) : filtrer
+un jour situé au-delà de la page 1 (ex : samedi d'un festival jeu/ven/sam) ne
+renvoyait rien. Désormais le filtre par date est appliqué en base (SQL) et,
+quand un jour est sélectionné, **tous** les évènements de ce jour s'affichent
+sans pagination. De plus, le bouton « CHARGER PLUS » conserve maintenant tous
+les filtres actifs (recherche, thématique, tags multiples), au lieu du seul
+premier tag — la recherche ne « perdait » plus son filtre après un chargement
+supplémentaire.
+
+**Pourquoi / Why :** Sur un festival, la pagination s'arrêtait au milieu et le
+filtre par jour affichait « aucun résultat » pour les jours non encore chargés.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/views.py` | `federated_events_filter` : param `date_filter`, filtre SQL `datetime__date`, pagination désactivée si date filtrée, exclusion du cache. Helpers `_parse_date_filter` + `_querystring_filtres`. `list()` : filtre date en SQL (suppression du filtrage Python post-pagination). `partial_list()` : lecture/propagation du filtre date. Querystring des filtres actifs exposée au contexte. |
+| `BaseBillet/templates/faire_festival/views/event/list.html` | Bouton CHARGER PLUS : `{{ querystring_filtres }}` au lieu de `&tag={{ tags.0 }}`. |
+| `BaseBillet/templates/faire_festival/views/event/partial/list_append.html` | Idem bouton CHARGER PLUS. |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+
 ## Home publique : section « Ils contribuent » + mention France 2030 dans le footer / Public home: "They contribute" section + France 2030 footer mention
 
 **Quoi / What :** Ajout d'une section « Ils contribuent » sur la landing
