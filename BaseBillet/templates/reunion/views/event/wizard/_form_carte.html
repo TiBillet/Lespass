@@ -1,0 +1,64 @@
+{% load i18n %}
+{% comment %}
+LOCALISATION: BaseBillet/templates/reunion/views/event/wizard/_form_carte.html
+
+Page 2 du choix de lieu (creation d'un nouveau lieu, wizards admin + public).
+Le nom du lieu a ete saisi en page 1 ; on le passe au widget carte via
+`adresse_initiale` : le widget pre-remplit la barre de recherche ET lance la
+recherche Nominatim automatiquement (comportement deja code dans
+widget_carte_adresse.js — cf. onboard step 03). L'utilisateur ajuste le
+marqueur si besoin ; les champs adresse se remplissent par geocodage inverse.
+
+/ Page 2 of place selection (new place creation). The place name was entered
+on page 1 and is passed to the map widget via `adresse_initiale`: the widget
+pre-fills the search bar AND auto-runs the Nominatim search (already coded in
+widget_carte_adresse.js — see onboard step 03).
+
+Variables attendues :
+  - form_action_url (str)
+  - new_address_name (str) : nom du lieu saisi en page 1
+  - initial (dict) : valeurs re-injectees apres une 422 (lat/lng)
+  - errors (dict) : erreurs par champ
+  - next_step_label (str) : libelle du bouton submit
+{% endcomment %}
+
+{% if errors %}
+<div class="alert alert-danger mb-3" role="alert" data-testid="wizard-map-errors">
+    <strong>{% translate "Merci de corriger les erreurs ci-dessous." %}</strong>
+    <ul class="mb-0 mt-1 small">
+        {% for field, msgs in errors.items %}
+            <li>{% for msg in msgs %}{{ msg }}{% if not forloop.last %} / {% endif %}{% endfor %}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{# Rappel du lieu en cours de creation (saisi en page 1). #}
+{# / Reminder of the place being created (entered on page 1). #}
+<div class="alert alert-light border d-flex align-items-center gap-2 mb-3"
+     role="status" data-testid="wizard-map-place-name">
+    <i class="bi bi-geo-alt-fill text-success fs-5" aria-hidden="true"></i>
+    <span>{% translate "Nouveau lieu :" %} <strong>{{ new_address_name }}</strong></span>
+</div>
+
+<p class="text-muted mb-3">
+    {% translate "La recherche a été lancée avec le nom du lieu. Vérifiez l'emplacement et déplacez le marqueur si besoin, ou cliquez directement sur la carte." %}
+</p>
+
+<form method="post" action="{{ form_action_url }}" novalidate
+      data-testid="wizard-map-form" class="vstack gap-3">
+    {% csrf_token %}
+
+    {# Widget carte reutilisable. `adresse_initiale` = nom du lieu -> le JS du #}
+    {# widget pre-remplit la recherche et la lance automatiquement.            #}
+    {# / Reusable map widget. `adresse_initiale` = place name -> the widget JS #}
+    {# pre-fills and auto-runs the search.                                     #}
+    {% include "widgets/widget_carte_adresse.html" with identifiant_widget="place" hauteur_carte="350px" champs_adresse_separes=True adresse_initiale=new_address_name latitude_initiale=initial.place_latitude longitude_initiale=initial.place_longitude required=True %}
+
+    <div class="d-flex justify-content-end pt-2">
+        <button type="submit" class="btn btn-primary btn-lg" data-testid="wizard-map-submit">
+            {{ next_step_label|default:_("Continuer") }}
+            <i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>
+        </button>
+    </div>
+</form>

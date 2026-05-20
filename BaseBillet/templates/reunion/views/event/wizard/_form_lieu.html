@@ -2,26 +2,85 @@
 {% comment %}
 LOCALISATION: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html
 
-Partial reutilisable pour la step "Lieu" des wizards admin et public.
-Toggle radio CSS-only entre "Adresse existante" et "Nouveau lieu".
-/ Reusable partial for the "Place" step (admin + public wizards).
-CSS-only radio toggle between "Existing address" and "New place".
+Page 1 du choix de lieu (wizards admin + public).
+Toggle pleine largeur entre deux modes :
+  - "Adresse existante" : liste filtrable (recherche JS, pas d'HTMX).
+  - "Nouveau lieu"      : uniquement le nom (la carte arrive en page 2).
+Continuer si l'un OU l'autre est renseigne.
+
+/ Page 1 of place selection (admin + public wizards). Full-width toggle:
+existing address (JS-filtered list) OR new place (name only — map is page 2).
 
 Variables attendues :
   - form_action_url (str)
   - addresses (queryset PostalAddress)
-  - default_address_pk (uuid?) : adresse pre-selectionnee si mode existant
+  - default_address_pk (uuid?) : adresse pre-cochee si mode existant
   - initial (dict) : valeurs re-injectees apres une 422
   - errors (dict) : erreurs par champ
   - next_step_label (str) : libelle du bouton submit
 {% endcomment %}
 
 <style>
-    /* Etat initial : les deux blocs sont caches, le JS ci-dessous reveille
-       le bon block selon le radio coche au chargement.
-       / Initial state: both blocks hidden, JS below shows the right one. */
+    /* Etat initial : les deux blocs caches, le JS reveille le bon selon
+       le radio coche au chargement.
+       / Initial state: both blocks hidden, JS shows the right one. */
     .wizard-mode-existing-fields,
     .wizard-mode-new-fields { display: none; }
+
+    /* Liste d'adresses filtrable : scrollable, items selectionnables.
+       / Filterable address list: scrollable, selectable items. */
+    .wizard-place-list {
+        max-height: 18rem;
+        overflow-y: auto;
+        border: 1px solid var(--bs-border-color, #dee2e6);
+        border-radius: var(--tb-radius-input, .5rem);
+        padding: .375rem;
+        display: flex;
+        flex-direction: column;
+        gap: .25rem;
+    }
+
+    /* Un item = label cliquable (radio + nom + meta). Toute la ligne est
+       une cible tactile (>= 44px de haut).
+       / One item = clickable label (radio + name + meta). Full-row touch
+       target (>= 44px tall). */
+    .wizard-place-item {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        margin: 0;
+        padding: .625rem .75rem;
+        min-height: 44px;
+        border: 1px solid transparent;
+        border-radius: var(--tb-radius-item, .5rem);
+        cursor: pointer;
+        transition: background-color 150ms ease, border-color 150ms ease;
+    }
+    .wizard-place-item:hover {
+        background-color: var(--bs-tertiary-bg, #f1f3f5);
+    }
+    /* Etat selectionne : accent vert TiBillet (cohesion onboard).
+       / Selected state: TiBillet green accent (matches onboard). */
+    .wizard-place-item.is-selected {
+        background-color: rgba(34, 197, 94, .08);
+        border-color: var(--tb-green-500, #22c55e);
+    }
+    .wizard-place-item .form-check-input {
+        margin: 0;
+        flex: 0 0 auto;
+    }
+    .wizard-place-item-body {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.25;
+        min-width: 0;
+    }
+    .wizard-place-item-name { font-weight: 600; }
+    .wizard-place-item-meta { font-size: .8125rem; }
+
+    /* Message "aucun resultat" : cache tant qu'il y a des resultats.
+       / "No result" message: hidden while there are results. */
+    .wizard-place-no-result { display: none; }
 </style>
 
 {% if errors %}
@@ -30,77 +89,103 @@ Variables attendues :
     <ul class="mb-0 mt-1 small">
         {% for field, msgs in errors.items %}
             {% if field != "_mode" %}
-            <li><strong>{{ field }}</strong> :
-                {% for msg in msgs %}{{ msg }}{% if not forloop.last %} / {% endif %}{% endfor %}
-            </li>
+            <li>{% for msg in msgs %}{{ msg }}{% if not forloop.last %} / {% endif %}{% endfor %}</li>
             {% endif %}
         {% endfor %}
     </ul>
 </div>
 {% endif %}
 
-<form method="post" action="{{ form_action_url }}" enctype="multipart/form-data"
-      novalidate data-testid="wizard-place-form" class="vstack gap-3">
+<form method="post" action="{{ form_action_url }}" novalidate
+      data-testid="wizard-place-form" class="vstack gap-3">
     {% csrf_token %}
 
     <div class="wizard-mode-toggle">
-        {# Pattern Bootstrap btn-check standard : inputs adjacents aux labels #}
-        {# dans `.btn-group` pour que le style "checked = fond plein" marche. #}
-        {# Le toggle d'affichage des blocs `.wizard-mode-*-fields` est gere   #}
-        {# par le mini JS en bas du form (pas en CSS sibling — les inputs    #}
-        {# sont dans un descendant, le selector `~` ne traverse pas).         #}
-        {# / Standard Bootstrap btn-check pattern: inputs adjacent to labels  #}
-        {# inside `.btn-group`. The visibility toggle uses the small JS at   #}
-        {# the bottom — CSS `~` doesn't cross nested divs.                    #}
-        <div class="btn-group mb-3" role="group" aria-label="{% translate 'Mode de saisie' %}">
+        {# Toggle pleine largeur : `btn-group w-100` repartit les 2 boutons. #}
+        {# / Full-width toggle: `btn-group w-100` splits the 2 buttons. #}
+        <div class="btn-group w-100 mb-3" role="group" aria-label="{% translate 'Mode de saisie du lieu' %}">
             <input type="radio" class="btn-check" name="_form_mode" id="mode-existing" value="existing"
                    {% if not initial.new_address_name %}checked{% endif %}>
             <label class="btn btn-outline-primary" for="mode-existing">
+                <i class="bi bi-geo-alt me-1" aria-hidden="true"></i>
                 {% translate "Utiliser une adresse existante" %}
             </label>
 
             <input type="radio" class="btn-check" name="_form_mode" id="mode-new" value="new"
                    {% if initial.new_address_name %}checked{% endif %}>
             <label class="btn btn-outline-primary" for="mode-new">
+                <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>
                 {% translate "Créer un nouveau lieu" %}
             </label>
         </div>
 
+        {# ---- Mode "adresse existante" : recherche + liste filtrable ---- #}
         <div class="wizard-mode-existing-fields">
-            <label for="postal_address" class="form-label">{% translate "Adresse" %}</label>
-            <select id="postal_address" name="postal_address" class="form-select"
-                    data-testid="wizard-place-select">
-                <option value="">{% translate "-- Choisir --" %}</option>
-                {% for a in addresses %}
-                    <option value="{{ a.pk }}"
-                        {% if initial.postal_address|stringformat:"s" == a.pk|stringformat:"s" %}selected
-                        {% elif default_address_pk and not initial.postal_address and default_address_pk|stringformat:"s" == a.pk|stringformat:"s" %}selected
-                        {% endif %}>
-                        {{ a.name|default:a.address_locality }}{% if a.postal_code %} ({{ a.postal_code }}){% endif %}
-                    </option>
-                {% endfor %}
-            </select>
-        </div>
-
-        <div class="wizard-mode-new-fields">
-            <div class="mb-3">
-                <label for="new_address_name" class="form-label">
-                    {% translate "Nom du lieu" %} <span class="text-danger">*</span>
-                </label>
-                <input type="text" id="new_address_name" name="new_address_name"
-                       class="form-control" maxlength="200"
-                       value="{{ initial.new_address_name|default:'' }}"
-                       data-testid="wizard-place-new-name">
-                <div class="form-text">{% translate "Exemple : Grande salle, Salle du bas, Accueil..." %}</div>
+            <label for="wizard-place-search" class="form-label">
+                {% translate "Rechercher une adresse" %}
+            </label>
+            <div class="input-group mb-2">
+                <span class="input-group-text" aria-hidden="true">
+                    <i class="bi bi-search"></i>
+                </span>
+                <input type="text" id="wizard-place-search" class="form-control"
+                       placeholder="{% translate 'Filtrer par nom, ville ou code postal…' %}"
+                       autocomplete="off" aria-controls="wizard-place-list"
+                       data-testid="wizard-place-search">
             </div>
 
-            {% include "widgets/widget_carte_adresse.html" with identifiant_widget="place" hauteur_carte="350px" champs_adresse_separes=True latitude_initiale=initial.place_latitude longitude_initiale=initial.place_longitude adresse_initiale=initial.place_adresse %}
+            <div id="wizard-place-list" class="wizard-place-list" role="radiogroup"
+                 aria-label="{% translate 'Adresses disponibles' %}"
+                 data-testid="wizard-place-list">
+                {% for a in addresses %}
+                <label class="wizard-place-item"
+                       data-search="{{ a.name|default:a.address_locality|lower }} {{ a.address_locality|lower }} {{ a.postal_code }}">
+                    <input type="radio" name="postal_address" value="{{ a.pk }}"
+                           class="form-check-input"
+                           {% if initial.postal_address|stringformat:"s" == a.pk|stringformat:"s" %}checked
+                           {% elif default_address_pk and not initial.postal_address and default_address_pk|stringformat:"s" == a.pk|stringformat:"s" %}checked
+                           {% endif %}
+                           data-testid="wizard-place-radio">
+                    <span class="wizard-place-item-body">
+                        <span class="wizard-place-item-name">{{ a.name|default:a.address_locality }}</span>
+                        {% if a.postal_code or a.address_locality %}
+                        <span class="wizard-place-item-meta text-muted">
+                            {% if a.postal_code %}{{ a.postal_code }} {% endif %}{{ a.address_locality }}
+                        </span>
+                        {% endif %}
+                    </span>
+                </label>
+                {% empty %}
+                <p class="text-muted mb-0 p-3 text-center">
+                    {% translate "Aucune adresse enregistrée pour le moment. Créez un nouveau lieu." %}
+                </p>
+                {% endfor %}
+            </div>
+            <p id="wizard-place-no-result" class="wizard-place-no-result text-muted small mt-2"
+               role="status" aria-live="polite">
+                {% translate "Aucune adresse ne correspond à votre recherche." %}
+            </p>
+        </div>
+
+        {# ---- Mode "nouveau lieu" : seulement le nom (carte = page 2) ---- #}
+        <div class="wizard-mode-new-fields">
+            <label for="new_address_name" class="form-label">
+                {% translate "Nom du nouveau lieu" %} <span class="text-danger">*</span>
+            </label>
+            <input type="text" id="new_address_name" name="new_address_name"
+                   class="form-control form-control-lg" maxlength="200"
+                   value="{{ initial.new_address_name|default:'' }}"
+                   placeholder="{% translate 'Ex : Salle des fêtes, Café du commerce…' %}"
+                   data-testid="wizard-place-new-name">
+            <div class="form-text">
+                <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+                {% translate "À l'étape suivante, vous placerez ce lieu sur la carte." %}
+            </div>
         </div>
     </div>
 
     <div class="d-flex justify-content-end pt-2">
-        <button type="submit" class="btn btn-primary btn-lg"
-                data-testid="wizard-place-submit">
+        <button type="submit" class="btn btn-primary btn-lg" data-testid="wizard-place-submit">
             {{ next_step_label|default:_("Continuer") }}
             <i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>
         </button>
@@ -108,42 +193,81 @@ Variables attendues :
 </form>
 
 <script>
-    // Toggle wizard-mode : applique display:block au bloc correspondant au
-    // radio actif (`existing` ou `new`). Le CSS sibling `~` ne marche pas
-    // ici car les inputs sont dans `.btn-group` (descendants), pas siblings
-    // directs de `.wizard-mode-*-fields`. Ce JS gere le toggle proprement.
-    // / Wizard-mode toggle: shows the right block based on the active radio.
-    // CSS `~` doesn't work here (inputs are nested in .btn-group, not siblings).
-    (function() {
-        function appliquer_mode(toggle) {
-            var radio_coche = toggle.querySelector('input[type="radio"]:checked');
-            if (!radio_coche) return;
-            var mode_actif = radio_coche.value;
-            toggle.querySelectorAll('.wizard-mode-existing-fields, .wizard-mode-new-fields')
-                .forEach(function(bloc) { bloc.style.display = 'none'; });
-            var bloc_cible = toggle.querySelector('.wizard-mode-' + mode_actif + '-fields');
-            if (bloc_cible) bloc_cible.style.display = 'block';
+    // Page 1 du choix de lieu : 3 comportements JS, aucun HTMX.
+    //   1. Toggle : affiche le bloc du mode actif + desactive les champs des
+    //      blocs caches pour qu'ils ne soient PAS postes (sinon le serveur
+    //      verrait les deux modes).
+    //   2. Filtre : la barre de recherche masque les items de la liste qui ne
+    //      correspondent pas au terme saisi.
+    //   3. Selection : surligne l'item dont le radio est coche.
+    // / Place selection page 1: 3 JS behaviors, no HTMX. (1) mode toggle +
+    // disable hidden inputs, (2) JS search filter, (3) selected-item highlight.
+    (function () {
+        var toggle = document.querySelector('.wizard-mode-toggle');
+        if (!toggle) { return; }
 
-            // Desactive les inputs des blocs caches pour qu'ils ne soient PAS
-            // postes au serveur. Sans ca, le <select> du mode "existing" reste
-            // submit avec sa valeur par defaut et le serializer prend ce mode
-            // au lieu du mode "new" choisi par l'utilisateur.
-            // / Disable inputs of hidden blocks so they aren't POSTed. Without
-            // this, the hidden <select> still submits its default value and the
-            // serializer picks the wrong mode.
-            toggle.querySelectorAll('.wizard-mode-existing-fields, .wizard-mode-new-fields')
-                .forEach(function(bloc) {
-                    var est_visible = bloc.style.display !== 'none';
-                    bloc.querySelectorAll('input, select, textarea').forEach(function(champ) {
-                        champ.disabled = !est_visible;
-                    });
+        // 1. Toggle de mode.
+        // / Mode toggle.
+        function appliquer_mode() {
+            var radio_coche = toggle.querySelector('input[name="_form_mode"]:checked');
+            if (!radio_coche) { return; }
+            var mode_actif = radio_coche.value;
+            var blocs = toggle.querySelectorAll('.wizard-mode-existing-fields, .wizard-mode-new-fields');
+            blocs.forEach(function (bloc) {
+                var est_visible = bloc.classList.contains('wizard-mode-' + mode_actif + '-fields');
+                bloc.style.display = est_visible ? 'block' : 'none';
+                // Desactive les champs des blocs caches (non postes au serveur).
+                // / Disable inputs of hidden blocks (not POSTed).
+                bloc.querySelectorAll('input, select, textarea').forEach(function (champ) {
+                    champ.disabled = !est_visible;
                 });
-        }
-        document.querySelectorAll('.wizard-mode-toggle').forEach(function(toggle) {
-            appliquer_mode(toggle);
-            toggle.addEventListener('change', function(evenement) {
-                if (evenement.target.matches('input[type="radio"]')) appliquer_mode(toggle);
             });
+        }
+
+        // 2. Filtre de la liste d'adresses (recherche cote client).
+        // / Address list filter (client-side search).
+        var champ_recherche = document.getElementById('wizard-place-search');
+        var liste = document.getElementById('wizard-place-list');
+        var message_aucun = document.getElementById('wizard-place-no-result');
+
+        function filtrer_liste() {
+            if (!liste) { return; }
+            var terme = (champ_recherche.value || '').trim().toLowerCase();
+            var items = liste.querySelectorAll('.wizard-place-item');
+            var nombre_visibles = 0;
+            items.forEach(function (item) {
+                var contenu = item.getAttribute('data-search') || '';
+                var correspond = contenu.indexOf(terme) !== -1;
+                item.style.display = correspond ? 'flex' : 'none';
+                if (correspond) { nombre_visibles += 1; }
+            });
+            if (message_aucun) {
+                var aucun_resultat = (nombre_visibles === 0 && items.length > 0);
+                message_aucun.style.display = aucun_resultat ? 'block' : 'none';
+            }
+        }
+
+        // 3. Surlignage de l'item selectionne.
+        // / Highlight the selected item.
+        function maj_selection() {
+            if (!liste) { return; }
+            liste.querySelectorAll('.wizard-place-item').forEach(function (item) {
+                var radio = item.querySelector('input[type="radio"]');
+                item.classList.toggle('is-selected', !!(radio && radio.checked));
+            });
+        }
+
+        // Cablage des evenements.
+        // / Wire up events.
+        toggle.addEventListener('change', function (evenement) {
+            if (evenement.target.matches('input[name="_form_mode"]')) { appliquer_mode(); }
+            if (evenement.target.matches('input[name="postal_address"]')) { maj_selection(); }
         });
+        if (champ_recherche) { champ_recherche.addEventListener('input', filtrer_liste); }
+
+        // Etat initial au chargement.
+        // / Initial state on load.
+        appliquer_mode();
+        maj_selection();
     })();
 </script>

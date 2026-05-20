@@ -58,8 +58,8 @@ from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invo
     send_membership_pending_admin, send_membership_pending_user, send_membership_payment_link_user
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
     ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator, EventQuickCreateSerializer, \
-    PaiementHorsLigneSerializer, WizardPlaceSerializer, WizardEventAdminSerializer, \
-    EventProposalEmailSerializer, WizardEventPublicSerializer
+    PaiementHorsLigneSerializer, WizardPlaceSelectSerializer, WizardPlaceMapSerializer, \
+    WizardEventAdminSerializer, EventProposalEmailSerializer, WizardEventPublicSerializer
 from Administration.utils import clean_html as admin_clean_html
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
@@ -3571,13 +3571,150 @@ class MembershipMVT(viewsets.ViewSet):
 #   - `TECH_DOC/SESSIONS/MOYENS_PAIEMENT/01-stripe-migration-spec.md`
 
 
+# =============================================================================
+# Helpers communs du choix de lieu (wizards admin + public).
+# Le choix de lieu se fait en 2 pages, comme l'onboarding :
+#   Page 1 (choix)  : adresse existante (liste filtrable) OU nom d'un nouveau lieu.
+#   Page 2 (carte)  : carte pre-remplie avec le nom -> recherche auto + adresse.
+# Les deux wizards partagent la logique ; seuls changent les URLs, le prefixe
+# de session et les templates. On factorise ici au niveau module.
+# / Shared place-selection helpers (admin + public wizards). Two pages like the
+# onboarding flow: page 1 picks an existing address (filterable list) or a new
+# place name; page 2 shows the map pre-filled with that name (auto-search). Both
+# wizards share this logic; only URLs, session prefix and templates differ.
+# =============================================================================
+
+def _wizard_lieu_session_key(session_prefix, suffix):
+    """Construit la cle de session prefixee pour le choix de lieu.
+    / Build the prefixed session key for the place selection."""
+    return f"{session_prefix}_{suffix}"
+
+
+def _wizard_etape_choix_lieu(request, *, template, contexte_commun,
+                             session_prefix, map_url_name, event_url_name):
+    """
+    Page 1 commune (admin + public) : choix du lieu.
+
+    GET  : affiche le toggle (adresse existante filtrable / nouveau lieu).
+    POST :
+      - adresse existante -> on memorise le pk et on file a l'etape event.
+      - nouveau lieu       -> on memorise le nom et on file a la page carte.
+
+    / Shared step 1 (admin + public): place selection. GET shows the toggle;
+    POST routes to the event step (existing) or to the map page (new).
+    """
+    addresses = PostalAddress.objects.all().order_by("name", "address_locality")
+    config = Configuration.get_solo()
+
+    contexte_page = dict(contexte_commun)
+    contexte_page.update({
+        "addresses": addresses,
+        "default_address_pk": config.postal_address.pk if config.postal_address else None,
+    })
+
+    if request.method == "GET":
+        context = get_context(request)
+        context.update(contexte_page)
+        context.update({"initial": {}, "errors": {}})
+        return render(request, template, context=context)
+
+    # POST
+    serializer = WizardPlaceSelectSerializer(data=request.POST)
+    if not serializer.is_valid():
+        context = get_context(request)
+        context.update(contexte_page)
+        context.update({"initial": request.POST.dict(), "errors": serializer.errors})
+        return render(request, template, context=context, status=422)
+
+    data = serializer.validated_data
+    if data["_mode"] == "existing":
+        # Adresse existante : on garde le pk et on nettoie un eventuel nom.
+        # / Existing address: keep the pk, clear any pending new-place name.
+        request.session[_wizard_lieu_session_key(session_prefix, "postal_address_pk")] = data["postal_address"]
+        request.session.pop(_wizard_lieu_session_key(session_prefix, "new_address_name"), None)
+        return redirect(event_url_name)
+
+    # Nouveau lieu : on garde le nom et on va sur la page carte.
+    # / New place: keep the name and go to the map page.
+    request.session[_wizard_lieu_session_key(session_prefix, "new_address_name")] = data["new_address_name"]
+    request.session.pop(_wizard_lieu_session_key(session_prefix, "postal_address_pk"), None)
+    return redirect(map_url_name)
+
+
+def _wizard_etape_carte_lieu(request, *, template, contexte_commun,
+                             session_prefix, choix_url_name, event_url_name):
+    """
+    Page 2 commune (admin + public) : carte du nouveau lieu.
+
+    Le nom du lieu a ete saisi en page 1 et vit en session ; on s'en sert pour
+    pre-remplir la recherche de la carte (le widget lance la recherche tout
+    seul). POST -> cree la PostalAddress et file a l'etape event.
+
+    / Shared step 2 (admin + public): new-place map. The place name lives in
+    session (entered on page 1) and pre-fills the map search (the widget
+    auto-runs it). POST creates the PostalAddress and goes to the event step.
+    """
+    nom_nouveau_lieu = request.session.get(
+        _wizard_lieu_session_key(session_prefix, "new_address_name")
+    )
+    if not nom_nouveau_lieu:
+        # Pas de nom en session (acces direct) -> retour au choix du lieu.
+        # / No name in session (direct access) -> back to place selection.
+        return redirect(choix_url_name)
+
+    contexte_page = dict(contexte_commun)
+    contexte_page.update({"new_address_name": nom_nouveau_lieu})
+
+    if request.method == "GET":
+        context = get_context(request)
+        context.update(contexte_page)
+        context.update({"initial": {}, "errors": {}})
+        return render(request, template, context=context)
+
+    # POST
+    serializer = WizardPlaceMapSerializer(data=request.POST)
+    if not serializer.is_valid():
+        context = get_context(request)
+        context.update(contexte_page)
+        context.update({"initial": request.POST.dict(), "errors": serializer.errors})
+        return render(request, template, context=context, status=422)
+
+    data = serializer.validated_data
+    # Creation de la PostalAddress via le serializer schema.org existant.
+    # / Create the PostalAddress via the existing schema.org serializer.
+    from api_v2.serializers import PostalAddressCreateSerializer
+    payload = {
+        "name": nom_nouveau_lieu,
+        "streetAddress": data["street_address"],
+        "addressLocality": data["address_locality"],
+        "postalCode": data["postal_code"],
+        "addressCountry": data.get("address_country") or "France",
+    }
+    pa_ser = PostalAddressCreateSerializer(data=payload, context={"request": request})
+    pa_ser.is_valid(raise_exception=True)
+    addr = pa_ser.save()
+    # Ajout lat/lng (non gere par le serializer schema.org).
+    # / Add lat/lng (not handled by the schema.org serializer).
+    addr.latitude = data["place_latitude"]
+    addr.longitude = data["place_longitude"]
+    addr.save(update_fields=["latitude", "longitude"])
+
+    request.session[_wizard_lieu_session_key(session_prefix, "postal_address_pk")] = str(addr.pk)
+    request.session.pop(_wizard_lieu_session_key(session_prefix, "new_address_name"), None)
+    return redirect(event_url_name)
+
+
 class EventWizardAdmin(viewsets.ViewSet):
     """
-    Wizard admin de creation d'evenement. 2 etapes, full pages.
-    / Admin wizard for event creation. 2 steps, full pages.
+    Wizard admin de creation d'evenement.
+    / Admin wizard for event creation.
 
-    Step 1 : Lieu (adresse existante ou creation via widget carte).
-    Step 2 : Event (mini-form + jauge_max + tags).
+    Choix du lieu en 2 pages (comme l'onboarding) :
+      Step 1 : choix du lieu (adresse existante filtrable OU nom d'un nouveau lieu).
+      Step 2 : carte du nouveau lieu (si nouveau lieu), pre-remplie + recherche auto.
+      Step 3 : event (mini-form + jauge_max + tags).
+    / Place selection in 2 pages (like onboarding): step 1 picks the place,
+    step 2 is the new-place map (if new), step 3 is the event form.
     """
 
     authentication_classes = [SessionAuthentication]
@@ -3588,72 +3725,50 @@ class EventWizardAdmin(viewsets.ViewSet):
     def _session_key(self, suffix: str) -> str:
         return f"{self.SESSION_PREFIX}_{suffix}"
 
-    @action(detail=False, methods=["GET", "POST"], url_path="place")
+    @action(detail=False, methods=["GET", "POST"], url_path="place", url_name="place")
     def step1_place(self, request):
         """
-        GET  : rend la page step1.
-        POST : valide + cree l'adresse si necessaire + redirige step2.
-        / GET: renders step1. POST: validates + creates address if needed.
+        Page 1 : choix du lieu (adresse existante filtrable OU nom d'un nouveau lieu).
+        / Step 1: place selection (filterable existing address OR new place name).
         """
-        addresses = PostalAddress.objects.all().order_by("name", "address_locality")
-        config = Configuration.get_solo()
-
-        ctx_commun = {
+        contexte_commun = {
             "wizard_title": _("Ajouter un évènement"),
-            "wizard_step_label": _("Étape 1 / 2 — Lieu"),
-            "addresses": addresses,
-            "default_address_pk": config.postal_address.pk if config.postal_address else None,
+            "wizard_step_label": _("Lieu"),
             "form_action_url": reverse("event-admin-wizard-place"),
-            "next_step_label": _("Continuer vers les détails"),
+            "next_step_label": _("Continuer"),
         }
+        return _wizard_etape_choix_lieu(
+            request,
+            template="reunion/views/event/wizard/admin_step1_place.html",
+            contexte_commun=contexte_commun,
+            session_prefix=self.SESSION_PREFIX,
+            map_url_name="event-admin-wizard-map",
+            event_url_name="event-admin-wizard-event",
+        )
 
-        if request.method == "GET":
-            context = get_context(request)
-            context.update(ctx_commun)
-            context.update({"initial": {}, "errors": {}})
-            return render(request, "reunion/views/event/wizard/admin_step1_place.html",
-                          context=context)
+    @action(detail=False, methods=["GET", "POST"], url_path="map", url_name="map")
+    def step_map(self, request):
+        """
+        Page 2 : carte du nouveau lieu, pre-remplie avec le nom saisi en page 1.
+        / Step 2: new-place map, pre-filled with the name entered on page 1.
+        """
+        contexte_commun = {
+            "wizard_title": _("Ajouter un évènement"),
+            "wizard_step_label": _("Localiser le nouveau lieu"),
+            "form_action_url": reverse("event-admin-wizard-map"),
+            "next_step_label": _("Continuer"),
+            "wizard_back_url": reverse("event-admin-wizard-place"),
+        }
+        return _wizard_etape_carte_lieu(
+            request,
+            template="reunion/views/event/wizard/admin_step_map.html",
+            contexte_commun=contexte_commun,
+            session_prefix=self.SESSION_PREFIX,
+            choix_url_name="event-admin-wizard-place",
+            event_url_name="event-admin-wizard-event",
+        )
 
-        # POST
-        serializer = WizardPlaceSerializer(data=request.POST)
-        if not serializer.is_valid():
-            context = get_context(request)
-            context.update(ctx_commun)
-            context.update({
-                "initial": request.POST.dict(),
-                "errors": serializer.errors,
-            })
-            return render(request, "reunion/views/event/wizard/admin_step1_place.html",
-                          context=context, status=422)
-
-        data = serializer.validated_data
-        if data["_mode"] == "existing":
-            postal_address_pk = data["postal_address"]
-        else:
-            # Creation d'une PostalAddress via le serializer schema.org existant.
-            # / Create a PostalAddress via the existing schema.org serializer.
-            from api_v2.serializers import PostalAddressCreateSerializer
-            payload = {
-                "name": data["new_address_name"],
-                "streetAddress": data["street_address"],
-                "addressLocality": data["address_locality"],
-                "postalCode": data["postal_code"],
-                "addressCountry": data.get("address_country") or "France",
-            }
-            pa_ser = PostalAddressCreateSerializer(data=payload, context={"request": request})
-            pa_ser.is_valid(raise_exception=True)
-            addr = pa_ser.save()
-            # Ajouter lat/lng (non gere par le serializer schema.org).
-            # / Add lat/lng (not handled by the schema.org serializer).
-            addr.latitude = data["place_latitude"]
-            addr.longitude = data["place_longitude"]
-            addr.save(update_fields=["latitude", "longitude"])
-            postal_address_pk = str(addr.pk)
-
-        request.session[self._session_key("postal_address_pk")] = postal_address_pk
-        return redirect("event-admin-wizard-event")
-
-    @action(detail=False, methods=["GET", "POST"], url_path="event")
+    @action(detail=False, methods=["GET", "POST"], url_path="event", url_name="event")
     def step2_event(self, request):
         """
         Garde : postal_address_pk en session sinon redirect step1.
@@ -3814,7 +3929,7 @@ class EventWizardPublic(viewsets.ViewSet):
             return redirect("event-propose-email")
         return None
 
-    @action(detail=False, methods=["GET", "POST"], url_path="email",
+    @action(detail=False, methods=["GET", "POST"], url_path="email", url_name="email",
             throttle_classes=[AnonRateThrottle])
     def step0_email(self, request):
         """
@@ -3837,7 +3952,7 @@ class EventWizardPublic(viewsets.ViewSet):
             return guard
         return redirect("event-propose-place")
 
-    @action(detail=False, methods=["GET", "POST"], url_path="verify")
+    @action(detail=False, methods=["GET", "POST"], url_path="verify", url_name="verify")
     def step0_verify(self, request):
         otp = self._otp(request)
         if not otp.email():
@@ -3882,7 +3997,7 @@ class EventWizardPublic(viewsets.ViewSet):
         return render(request, "reunion/views/event/wizard/public_step0_verify.html",
                       context=context, status=422)
 
-    @action(detail=False, methods=["POST"], url_path="resend",
+    @action(detail=False, methods=["POST"], url_path="resend", url_name="resend",
             throttle_classes=[AnonRateThrottle])
     def step0_resend(self, request):
         otp = self._otp(request)
@@ -3905,83 +4020,59 @@ class EventWizardPublic(viewsets.ViewSet):
             _("Nouveau code envoyé."))
         return redirect("event-propose-verify")
 
-    @action(detail=False, methods=["GET", "POST"], url_path="place")
+    @action(detail=False, methods=["GET", "POST"], url_path="place", url_name="place")
     def step1_place(self, request):
+        """
+        Page 1 : choix du lieu. Connexion classique requise (garde).
+        / Step 1: place selection. Classic login required (guard).
+        """
         guard = self._require_login_or_redirect(request)
         if guard:
             return guard
 
-        # Logique identique a EventWizardAdmin.step1_place sauf URL et
-        # cle session. On factorise via une fonction _handle_place.
-        # / Same logic as admin step1 except URL + session prefix.
-        return self._handle_place(request,
+        contexte_commun = {
+            "wizard_title": _("Proposer un évènement"),
+            "wizard_step_label": _("Lieu"),
+            "form_action_url": reverse("event-propose-place"),
+            "next_step_label": _("Continuer"),
+        }
+        return _wizard_etape_choix_lieu(
+            request,
             template="reunion/views/event/wizard/public_step1_place.html",
-            form_action_url=reverse("event-propose-place"),
-            next_step_url=reverse("event-propose-event"),
-            wizard_step_label=_("Étape 1 / 2 — Lieu"),
+            contexte_commun=contexte_commun,
+            session_prefix=self.SESSION_PREFIX,
+            map_url_name="event-propose-map",
+            event_url_name="event-propose-event",
         )
 
-    def _handle_place(self, request, template, form_action_url,
-                       next_step_url, wizard_step_label):
+    @action(detail=False, methods=["GET", "POST"], url_path="map", url_name="map")
+    def step_map(self, request):
         """
-        Factorisation de la logique step "Lieu" entre admin et public.
-        / Shared "Place" step logic between admin and public wizards.
+        Page 2 : carte du nouveau lieu, pre-remplie avec le nom saisi en page 1.
+        Connexion classique requise (garde).
+        / Step 2: new-place map, pre-filled with the name from page 1. Login required.
         """
-        addresses = PostalAddress.objects.all().order_by("name", "address_locality")
-        config = Configuration.get_solo()
+        guard = self._require_login_or_redirect(request)
+        if guard:
+            return guard
 
-        if request.method == "GET":
-            context = get_context(request)
-            context.update({
-                "wizard_title": _("Proposer un évènement"),
-                "wizard_step_label": wizard_step_label,
-                "addresses": addresses,
-                "default_address_pk": config.postal_address.pk if config.postal_address else None,
-                "form_action_url": form_action_url,
-                "next_step_label": _("Continuer"),
-                "initial": {}, "errors": {},
-            })
-            return render(request, template, context=context)
+        contexte_commun = {
+            "wizard_title": _("Proposer un évènement"),
+            "wizard_step_label": _("Localiser le nouveau lieu"),
+            "form_action_url": reverse("event-propose-map"),
+            "next_step_label": _("Continuer"),
+            "wizard_back_url": reverse("event-propose-place"),
+        }
+        return _wizard_etape_carte_lieu(
+            request,
+            template="reunion/views/event/wizard/public_step_map.html",
+            contexte_commun=contexte_commun,
+            session_prefix=self.SESSION_PREFIX,
+            choix_url_name="event-propose-place",
+            event_url_name="event-propose-event",
+        )
 
-        serializer = WizardPlaceSerializer(data=request.POST)
-        if not serializer.is_valid():
-            context = get_context(request)
-            context.update({
-                "wizard_title": _("Proposer un évènement"),
-                "wizard_step_label": wizard_step_label,
-                "addresses": addresses,
-                "default_address_pk": config.postal_address.pk if config.postal_address else None,
-                "form_action_url": form_action_url,
-                "next_step_label": _("Continuer"),
-                "initial": request.POST.dict(),
-                "errors": serializer.errors,
-            })
-            return render(request, template, context=context, status=422)
-
-        data = serializer.validated_data
-        if data["_mode"] == "existing":
-            postal_address_pk = data["postal_address"]
-        else:
-            from api_v2.serializers import PostalAddressCreateSerializer
-            payload = {
-                "name": data["new_address_name"],
-                "streetAddress": data["street_address"],
-                "addressLocality": data["address_locality"],
-                "postalCode": data["postal_code"],
-                "addressCountry": data.get("address_country") or "France",
-            }
-            pa_ser = PostalAddressCreateSerializer(data=payload, context={"request": request})
-            pa_ser.is_valid(raise_exception=True)
-            addr = pa_ser.save()
-            addr.latitude = data["place_latitude"]
-            addr.longitude = data["place_longitude"]
-            addr.save(update_fields=["latitude", "longitude"])
-            postal_address_pk = str(addr.pk)
-
-        request.session[self._session_key("postal_address_pk")] = postal_address_pk
-        return redirect(next_step_url)
-
-    @action(detail=False, methods=["GET", "POST"], url_path="event")
+    @action(detail=False, methods=["GET", "POST"], url_path="event", url_name="event")
     def step2_event(self, request):
         guard = self._require_login_or_redirect(request)
         if guard:
@@ -4047,7 +4138,7 @@ class EventWizardPublic(viewsets.ViewSet):
 
         return redirect("event-propose-done")
 
-    @action(detail=False, methods=["GET"], url_path="done")
+    @action(detail=False, methods=["GET"], url_path="done", url_name="done")
     def done(self, request):
         context = get_context(request)
         context.update({

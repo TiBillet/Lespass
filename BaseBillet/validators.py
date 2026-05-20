@@ -1324,24 +1324,72 @@ class PaiementHorsLigneSerializer(serializers.Serializer):
 # / Admin event wizard serializers (S3 EVENT_WIZARD)
 # ---------------------------------------------------------------------------
 
-class WizardPlaceSerializer(serializers.Serializer):
+class WizardPlaceSelectSerializer(serializers.Serializer):
     """
-    Step "Lieu" des wizards event admin/public.
-    / "Place" step for admin/public event wizards.
-
-    Soit `postal_address` (pk d'une PostalAddress existante),
-    soit le bloc nouvelle adresse complet (name + 4 champs + lat/lng).
-    / Either `postal_address` (pk of an existing PostalAddress),
-    or the full new-address block (name + 4 fields + lat/lng).
+    Page 1 du choix de lieu (wizards event admin + public).
+    L'utilisateur choisit SOIT une adresse existante (via une liste
+    filtrable), SOIT la creation d'un nouveau lieu en saisissant juste
+    son nom. La carte (coordonnees GPS + adresse postale) arrive en page 2.
+    / Step 1 of the place selection (admin + public event wizards).
+    The user picks EITHER an existing address (filterable list) OR creates
+    a new place by entering just its name. The map (GPS + postal address)
+    comes on page 2.
     """
 
-    # Cas "adresse existante" / "existing address" case
+    # Cas "adresse existante" : pk d'une PostalAddress.
+    # / "Existing address" case: pk of a PostalAddress.
     postal_address = serializers.CharField(required=False, allow_blank=True)
 
-    # Cas "nouveau lieu" / "new place" case
+    # Cas "nouveau lieu" : seulement le nom (la carte vient en page 2).
+    # / "New place" case: only the name (the map comes on page 2).
     new_address_name = serializers.CharField(
         required=False, allow_blank=True, max_length=200,
     )
+
+    def validate(self, attrs):
+        # On determine le mode selon ce qui est soumis : un pk d'adresse
+        # existante OU un nom de nouveau lieu. Le JS du toggle desactive les
+        # champs du bloc cache, donc un seul des deux arrive ici.
+        # / Mode is decided by what is submitted: an existing pk OR a new name.
+        # The toggle JS disables hidden-block inputs, so only one arrives.
+        pk_value = (attrs.get("postal_address") or "").strip()
+        nom_value = (attrs.get("new_address_name") or "").strip()
+
+        if pk_value:
+            if not PostalAddress.objects.filter(pk=pk_value).exists():
+                raise serializers.ValidationError({
+                    "postal_address": _("Adresse sélectionnée introuvable."),
+                })
+            attrs["_mode"] = "existing"
+            attrs["postal_address"] = pk_value
+            return attrs
+
+        if nom_value:
+            attrs["_mode"] = "new"
+            attrs["new_address_name"] = nom_value
+            return attrs
+
+        # Ni adresse existante ni nom de nouveau lieu : on bloque.
+        # / Neither an existing address nor a new place name: block.
+        raise serializers.ValidationError({
+            "postal_address": _(
+                "Choisissez une adresse existante ou saisissez le nom "
+                "d'un nouveau lieu."
+            ),
+        })
+
+
+class WizardPlaceMapSerializer(serializers.Serializer):
+    """
+    Page 2 du choix de lieu (creation d'un nouveau lieu).
+    Le nom du lieu est deja en session (saisi en page 1) ; ici on valide la
+    position issue de la carte (lat/lng obligatoires) et les champs adresse
+    auto-remplis par le geocodage inverse.
+    / Step 2 of the place selection (new place creation). The place name is
+    already in session (entered on page 1); here we validate the map position
+    (lat/lng required) and the address fields auto-filled by reverse geocoding.
+    """
+
     street_address = serializers.CharField(
         required=False, allow_blank=True, max_length=255,
     )
@@ -1366,25 +1414,14 @@ class WizardPlaceSerializer(serializers.Serializer):
     )
 
     def validate(self, attrs):
-        # On determine le mode : pk fourni OU bloc nouvelle adresse.
-        # / Determine mode: pk provided OR new address block.
-        pk_value = (attrs.get("postal_address") or "").strip()
-
-        if pk_value:
-            # Mode "existante" : verifier que le pk existe.
-            # / "Existing" mode: verify pk exists.
-            if not PostalAddress.objects.filter(pk=pk_value).exists():
-                raise serializers.ValidationError({
-                    "postal_address": _("Adresse sélectionnée introuvable."),
-                })
-            attrs["_mode"] = "existing"
-            return attrs
-
-        # Mode "nouveau" : tous les champs sont requis.
-        # / "New" mode: all fields required.
+        # La carte fait foi pour la position : lat/lng obligatoires.
+        # L'adresse postale (rue, CP, ville) est auto-remplie mais requise
+        # pour creer une PostalAddress exploitable.
+        # / The map is the source of truth for the position: lat/lng required.
+        # The postal address is auto-filled but required to create a usable
+        # PostalAddress.
         manquants = []
-        for champ in ("new_address_name", "street_address", "postal_code",
-                      "address_locality"):
+        for champ in ("street_address", "postal_code", "address_locality"):
             if not (attrs.get(champ) or "").strip():
                 manquants.append(champ)
         if attrs.get("place_latitude") is None:
@@ -1396,7 +1433,6 @@ class WizardPlaceSerializer(serializers.Serializer):
             erreurs = {champ: [_("Ce champ est obligatoire.")] for champ in manquants}
             raise serializers.ValidationError(erreurs)
 
-        attrs["_mode"] = "new"
         return attrs
 
 
