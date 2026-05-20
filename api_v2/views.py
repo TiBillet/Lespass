@@ -1,4 +1,7 @@
+import datetime
+
 from django.db import connection
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
 from rest_framework.response import Response
@@ -8,7 +11,8 @@ from django.core.cache import cache
 
 from ApiBillet.permissions import TenantAdminApiPermission
 from ApiBillet.views import get_permission_Api_ALL_Admin
-from BaseBillet.models import Event, PostalAddress, LigneArticle, Product, Reservation, Membership
+from BaseBillet.models import Event, PostalAddress, LigneArticle, Product, Reservation, Membership, logger, \
+    Configuration
 from crowds.models import Initiative, BudgetItem, Participation, Vote
 from .permissions import SemanticApiKeyPermission
 from .serializers import (
@@ -133,7 +137,30 @@ class EventViewSet(viewsets.ViewSet):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def list(self, request):
+        only_futur = request.GET.get("only_futur", None)
+        filter = request.GET.get("filter", None)
+
         queryset = Event.objects.filter(published=True)
+        if only_futur:
+            timezone = Configuration.get_solo().get_tzinfo()
+
+            # Get the timezone
+            now = datetime.now()
+            # Convert it to the tenant configured timezone
+            now = now.astimezone(timezone)
+            # Remove one day to it to also show recent events
+            now = now.replace(day=now.day-1)
+
+            queryset = queryset.filter(end_datetime__gte=now)
+
+        if filter:
+            # Filter by name and descriptions
+            queryset = queryset.filter(
+                Q(name__icontains=filter) |
+                Q(short_description__icontains=filter) |
+                Q(long_description__icontains=filter)
+            )
+
         serializer = EventSchemaSerializer(queryset, many=True)
         # Non-paginated wrapper for consistency with tests
         return Response({"results": serializer.data})
