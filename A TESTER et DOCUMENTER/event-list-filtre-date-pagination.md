@@ -20,6 +20,8 @@ Sur un gros agenda (festival > 300 évènements sur 3 jours), la page liste des
 | `BaseBillet/views.py` — `federated_events_filter` | Nouveau param `date_filter`. Filtre SQL `events.filter(datetime__date=date_filter)` appliqué **après** la collecte des dates/tags (menus déroulants restent complets) et **avant** la pagination. Si une date est filtrée : pagination désactivée, tous les évènements du jour affichés, `has_next=False`. Exclusion du cache si date filtrée. |
 | `BaseBillet/views.py` — `_parse_date_filter` | Helper : valide une string ISO `"2025-03-15"` → objet `date` ou `None`. |
 | `BaseBillet/views.py` — `_querystring_filtres` | Helper : construit `search=…&thematique=…&tag=a&tag=b` pour le bouton CHARGER PLUS. |
+| `BaseBillet/views.py` — cache | Cache versionné : on cache la page principale ET les pages filtrées par **date seule** (1 h). Clé = `event_list_{tenant.uuid}_{jeton}[_date_{iso}]`. |
+| `BaseBillet/models.py` — `Event.save()` | Réécrit `event_list_version_{tenant.uuid}` (jeton aléatoire) → invalide page principale + toutes les pages par date d'un coup. |
 | `BaseBillet/views.py` — `list()` | Parse + passe `date_filter`, expose `querystring_filtres`. Suppression du filtrage Python post-pagination. |
 | `BaseBillet/views.py` — `partial_list()` | Lit `?date=`, le propage, expose `querystring_filtres`. |
 | `faire_festival/.../event/list.html` + `partial/list_append.html` | Bouton CHARGER PLUS : `{{ querystring_filtres }}` au lieu de `&tag={{ tags.0 }}`. |
@@ -50,6 +52,13 @@ Sur un gros agenda (festival > 300 évènements sur 3 jours), la page liste des
 ### Test 4 : paramètre date invalide
 1. Aller sur `/event/?date=pas-une-date`.
 2. **Attendu** : pas d'erreur 500, on affiche tout (filtre ignoré).
+
+### Test 5 : fraîcheur du cache par date
+1. Filtrer un jour (ex : samedi) → noter les évènements affichés.
+2. Dans l'admin, modifier/publier/dépublier un évènement de ce jour.
+3. Recharger `/event/?date=<samedi>`.
+4. **Attendu** : la liste reflète immédiatement la modification (le cache par
+   date est invalidé par `Event.save()` via le jeton de version).
 
 ## Vérification en base / debug (optionnel)
 

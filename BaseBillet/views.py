@@ -1817,17 +1817,27 @@ class EventMVT(viewsets.ViewSet):
         return None
 
     def federated_events_filter(self, tags=None, search=None, page=1, thematique=None, date_filter=None):
-        # Cache simple : on cache uniquement la page principale (sans filtres, page 1)
-        # Les requêtes avec filtres (tags, recherche, thématique, date) ne sont pas cachées
-        # car elles sont rares et rapides à exécuter
-        # Clé = uuid du tenant. Invalidé dans Event.save()
-        # / Simple cache: only cache the main page (no filters, page 1)
-        # / Filtered requests are not cached (rare and fast)
-        # / Key = tenant uuid. Invalidated in Event.save()
-        page_sans_filtres = (page == 1 and not tags and not search and not thematique and not date_filter)
+        # Cache : on cache les deux cas les plus fréquents sur un gros agenda (festival) :
+        #   1) la page principale (page 1, aucun filtre)
+        #   2) une page filtrée par date seule (un jour précis, sans autre filtre)
+        # Les filtres combinés (tags, recherche, thématique) restent NON cachés : ils sont rares.
+        # La clé inclut un jeton de version par tenant, réécrit à chaque Event.save().
+        # Quand le jeton change, la page principale ET toutes les pages par date sont
+        # invalidées d'un coup (les anciennes clés ne sont plus lues et expirent via le TTL).
+        # / Cache the two frequent cases (main page + single-date page). Combined filters stay
+        # / uncached. Keys embed a per-tenant version token, rewritten in Event.save().
+        page_principale = (page == 1 and not tags and not search and not thematique and not date_filter)
+        date_seule = bool(date_filter) and not tags and not search and not thematique
+
         cache_key = None
-        if page_sans_filtres:
-            cache_key = f'event_list_{connection.tenant.uuid}'
+        if page_principale or date_seule:
+            # Jeton de version du cache liste pour ce tenant (défaut 'v0' si jamais écrit)
+            # / List-cache version token for this tenant (default 'v0' if never written)
+            version = cache.get(f'event_list_version_{connection.tenant.uuid}', 'v0')
+            if date_seule:
+                cache_key = f'event_list_{connection.tenant.uuid}_{version}_date_{date_filter.isoformat()}'
+            else:
+                cache_key = f'event_list_{connection.tenant.uuid}_{version}'
             cached = cache.get(cache_key)
             if cached:
                 return cached

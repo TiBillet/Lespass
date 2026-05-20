@@ -13,13 +13,20 @@ les filtres actifs (recherche, thématique, tags multiples), au lieu du seul
 premier tag — la recherche ne « perdait » plus son filtre après un chargement
 supplémentaire.
 
+Les pages filtrées par **date seule** sont désormais mises en cache (1 h), comme
+la page principale — c'est l'action la plus fréquente sur un festival. Le cache
+de la liste utilise un **jeton de version par tenant** réécrit dans `Event.save()` :
+modifier un évènement invalide d'un coup la page principale ET toutes les pages
+par date (pas de `cache.incr`, qui est piégeux avec memcached).
+
 **Pourquoi / Why :** Sur un festival, la pagination s'arrêtait au milieu et le
 filtre par jour affichait « aucun résultat » pour les jours non encore chargés.
 
 ### Fichiers modifiés / Modified files
 | Fichier / File | Changement / Change |
 |---|---|
-| `BaseBillet/views.py` | `federated_events_filter` : param `date_filter`, filtre SQL `datetime__date`, pagination désactivée si date filtrée, exclusion du cache. Helpers `_parse_date_filter` + `_querystring_filtres`. `list()` : filtre date en SQL (suppression du filtrage Python post-pagination). `partial_list()` : lecture/propagation du filtre date. Querystring des filtres actifs exposée au contexte. |
+| `BaseBillet/views.py` | `federated_events_filter` : param `date_filter`, filtre SQL `datetime__date`, pagination désactivée si date filtrée. Cache versionné (page principale + page par date seule). Helpers `_parse_date_filter` + `_querystring_filtres`. `list()` : filtre date en SQL (suppression du filtrage Python post-pagination). `partial_list()` : lecture/propagation du filtre date. Querystring des filtres actifs exposée au contexte. |
+| `BaseBillet/models.py` | `Event.save()` : invalidation du cache liste par réécriture d'un jeton de version (`event_list_version_{tenant.uuid}`) au lieu de la suppression d'une clé unique. |
 | `BaseBillet/templates/faire_festival/views/event/list.html` | Bouton CHARGER PLUS : `{{ querystring_filtres }}` au lieu de `&tag={{ tags.0 }}`. |
 | `BaseBillet/templates/faire_festival/views/event/partial/list_append.html` | Idem bouton CHARGER PLUS. |
 
