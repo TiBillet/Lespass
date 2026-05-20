@@ -4,11 +4,13 @@
 
 **Quoi / What :** Ajout d'une section « Ils contribuent » sur la landing
 page du tenant public (app `seo`), à la suite des bandeaux lieux et
-événements de la fédération : une grille statique de logos cliquables
-(en couleur), pilotée par une liste explicite dans la vue. Ajout aussi
-de la mention obligatoire de financement France 2030 dans le footer de
-la home publique, qui en était dépourvue alors que les footers des
-tenants l'affichent déjà.
+événements de la fédération : panneau gris doux, grille de tuiles
+blanches (logo + nom dessous), logos cliquables, pilotée par une liste
+explicite dans la vue. Un logo blanc sur transparent (CoopCircuit) a été
+inversé pour rester visible sur tuile blanche. Ajout aussi de la mention
+obligatoire de financement France 2030 dans le footer de la home publique
+(séparateur + texte à gauche / logo aligné à droite), qui en était
+dépourvue alors que les footers des tenants l'affichent déjà.
 
 **Pourquoi / Why :** Valoriser les contributeurs du commun sur la page
 d'accueil du réseau, et homogénéiser la mention légale France 2030

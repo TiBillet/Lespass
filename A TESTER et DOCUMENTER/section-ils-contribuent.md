@@ -35,12 +35,37 @@ Sur la landing page du tenant public (app `seo`), à la suite des bandeaux
    ```python
    {"nom": "Nom du contributeur", "logo": "contributeurs/mon-logo.svg", "url": "https://site-du-contributeur.org/"},
    ```
-   - `nom` : sert d'`alt` (accessibilité) et de `title` (infobulle).
+   - `nom` : affiché sous le logo + utilisé en `title` (infobulle). L'`alt` de
+     l'image est volontairement vide (le nom est déjà en texte → pas de doublon
+     pour les lecteurs d'écran).
    - `logo` : chemin **relatif au dossier static** (commence par `contributeurs/`).
-   - `url` : le logo devient un lien (`target="_blank"`, `rel="noopener"`).
+   - `url` : si renseignée, la tuile devient un lien (`target="_blank"`,
+     `rel="noopener"`). **Si `url` est vide (`""`)**, le logo s'affiche sans lien
+     (pas de lien cassé) — pratique en attendant l'URL.
 3. En production, lancer `collectstatic` pour que les nouveaux logos soient servis.
 
 Pour retirer un contributeur : supprimer sa ligne dans `CONTRIBUTEURS`.
+
+### Cas d'un logo blanc sur transparent (invisible sur tuile blanche)
+
+Les tuiles sont blanches. Un logo livré en **blanc sur fond transparent**
+(ex. CoopCircuit) disparaît. Générer une version inversée (RGB négatif,
+transparence conservée) avec Pillow, puis pointer `logo` vers ce fichier :
+
+```bash
+docker exec lespass_django poetry run python -c "
+from PIL import Image, ImageOps
+src='/DjangoFiles/seo/static/contributeurs/mon-logo.png'
+dst='/DjangoFiles/seo/static/contributeurs/mon-logo-noir.png'
+im=Image.open(src).convert('RGBA'); r,g,b,a=im.split()
+inv=ImageOps.invert(Image.merge('RGB',(r,g,b))); ri,gi,bi=inv.split()
+Image.merge('RGBA',(ri,gi,bi,a)).save(dst)
+"
+```
+
+⚠️ N'inverser **que** les logos monochromes blancs transparents. Un logo
+**opaque** (fond blanc baked, ex. JPG ou PNG sans alpha) deviendrait un
+rectangle noir — le laisser tel quel ou fournir une autre version.
 
 ## Tests à réaliser
 
