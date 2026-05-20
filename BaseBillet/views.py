@@ -3704,6 +3704,246 @@ def _wizard_etape_carte_lieu(request, *, template, contexte_commun,
     return redirect(event_url_name)
 
 
+# =============================================================================
+# Helpers communs des brouillons d'evenements (etape "events" des 2 wizards).
+# On peut ajouter PLUSIEURS evenements avant de finaliser (repris du formulaire
+# multi-events de l'onboarding). Les brouillons vivent en session HTTP (liste
+# de dicts) ; les images uploadees sont stockees en `default_storage` et seul
+# leur chemin relatif est garde dans la session. La finalisation (propre a
+# chaque wizard) cree N `Event` partageant le lieu choisi a l'etape 1.
+# / Shared event-draft helpers (the "events" step of both wizards). The user
+# can add SEVERAL events before finalizing (mirrors the onboarding multi-event
+# form). Drafts live in the HTTP session (list of dicts); uploaded images go to
+# default_storage and only their relative path is kept in the session. Finalize
+# (per-wizard) creates N Events sharing the place chosen at step 1.
+# =============================================================================
+
+def _wizard_drafts_key(session_prefix):
+    """Cle de session de la liste des brouillons d'events.
+    / Session key of the event drafts list."""
+    return f"{session_prefix}_event_drafts"
+
+
+def _wizard_get_drafts(request, session_prefix):
+    """Liste des brouillons (jamais None).
+    / Drafts list (never None)."""
+    return request.session.get(_wizard_drafts_key(session_prefix), [])
+
+
+def _wizard_set_drafts(request, session_prefix, drafts):
+    """Ecrit la liste des brouillons en session.
+    / Persist the drafts list in session."""
+    request.session[_wizard_drafts_key(session_prefix)] = drafts
+    request.session.modified = True
+
+
+def _wizard_store_draft_image(image_file, session_prefix):
+    """
+    Stocke une image de brouillon dans `default_storage` et renvoie son
+    chemin relatif (gardable en session JSON, compatible S3). Meme approche
+    que l'onboarding (cf. onboard/views.py events_add).
+    / Store a draft image in default_storage and return its relative path
+    (JSON-session friendly, S3-compatible). Same approach as onboarding.
+    """
+    import os
+    import uuid as uuid_module
+
+    from django.core.files.storage import default_storage
+
+    _, extension = os.path.splitext(image_file.name or "")
+    extension = (extension or ".bin").lower()
+    chemin_cible = (
+        f"event_wizard_drafts/{session_prefix}/"
+        f"{uuid_module.uuid4().hex}{extension}"
+    )
+    return default_storage.save(chemin_cible, image_file)
+
+
+def _wizard_render_events_inner(request, *, session_prefix, inner_context, status=200):
+    """
+    Rend le partial HTMX `_events_inner.html` (liste des brouillons + sous-form
+    d'ajout). Cible des swaps add/remove. `inner_context` porte les variables
+    propres au wizard (add_url, remove_url_name, show_admin_fields, all_tags).
+    / Render the HTMX partial `_events_inner.html` (drafts list + add sub-form).
+    Target of the add/remove swaps. `inner_context` carries wizard-specific
+    variables (add_url, remove_url_name, show_admin_fields, all_tags).
+    """
+    contexte = dict(inner_context)
+    contexte.setdefault("errors", {})
+    contexte.setdefault("initial", {})
+    contexte["events"] = _wizard_get_drafts(request, session_prefix)
+    return render(
+        request,
+        "reunion/views/event/wizard/_events_inner.html",
+        context=contexte,
+        status=status,
+    )
+
+
+def _wizard_events_add_generic(request, *, serializer_class, session_prefix,
+                               build_draft, inner_context):
+    """
+    Ajoute un brouillon d'event (commun admin + public).
+    Valide le sous-form, stocke l'image eventuelle, append le brouillon en
+    session, puis re-rend le partial liste+form. En cas d'erreur : re-rend
+    avec les erreurs et les valeurs saisies (status 422), liste inchangee.
+    / Add an event draft (shared admin + public). Validate, store optional
+    image, append to session, re-render the list+form partial. On error:
+    re-render with errors + submitted values (422), list unchanged.
+    """
+    # Pour les ImageField : fusionner POST + FILES.
+    # / For ImageField support: merge POST + FILES.
+    data_combined = request.POST.copy()
+    for f_key in request.FILES:
+        data_combined[f_key] = request.FILES[f_key]
+
+    serializer = serializer_class(data=data_combined)
+    if not serializer.is_valid():
+        # On renvoie 200 (et NON 422) volontairement : HTMX ne swappe pas les
+        # reponses 4xx par defaut, et le skin reunion n'a pas de config
+        # `htmx:beforeOnLoad` pour forcer le swap sur erreur. Renvoyer 200 avec
+        # le partial re-rendu (erreurs + valeurs saisies) garantit l'affichage.
+        # Meme choix que le multi-events de l'onboarding.
+        # / Return 200 (NOT 422) on purpose: HTMX won't swap 4xx by default and
+        # the reunion skin has no swap-on-error config. 200 + the re-rendered
+        # partial (errors + submitted values) guarantees display. Same choice
+        # as the onboarding multi-event form.
+        return _wizard_render_events_inner(
+            request,
+            session_prefix=session_prefix,
+            inner_context={
+                **inner_context,
+                "errors": serializer.errors,
+                "initial": request.POST.dict(),
+            },
+        )
+
+    validated = serializer.validated_data
+    image_path = None
+    if validated.get("image"):
+        image_path = _wizard_store_draft_image(validated["image"], session_prefix)
+
+    # Le wizard decide quels champs garder dans le brouillon (public vs admin).
+    # / The wizard decides which fields to keep in the draft (public vs admin).
+    draft = build_draft(validated, image_path)
+
+    drafts = _wizard_get_drafts(request, session_prefix)
+    drafts.append(draft)
+    _wizard_set_drafts(request, session_prefix, drafts)
+
+    return _wizard_render_events_inner(
+        request, session_prefix=session_prefix, inner_context=inner_context,
+    )
+
+
+def _wizard_events_remove_generic(request, idx, *, session_prefix, inner_context):
+    """
+    Retire le brouillon a l'index `idx` (commun admin + public) et supprime
+    son image temporaire eventuelle. Re-rend le partial liste+form.
+    / Remove the draft at index `idx` (shared) and delete its temp image if
+    any. Re-render the list+form partial.
+    """
+    drafts = _wizard_get_drafts(request, session_prefix)
+    try:
+        index = int(idx)
+    except (TypeError, ValueError):
+        index = -1
+
+    if 0 <= index < len(drafts):
+        brouillon_retire = drafts.pop(index)
+        # Nettoyage de l'image temporaire (si presente).
+        # / Clean up the temp image (if any).
+        if brouillon_retire.get("image"):
+            from django.core.files.storage import default_storage
+            try:
+                default_storage.delete(brouillon_retire["image"])
+            except Exception as erreur_suppression:
+                logger.warning(
+                    "Suppression image brouillon échouée: %s", erreur_suppression
+                )
+        _wizard_set_drafts(request, session_prefix, drafts)
+
+    return _wizard_render_events_inner(
+        request, session_prefix=session_prefix, inner_context=inner_context,
+    )
+
+
+def _creer_event_admin_depuis_brouillon(draft, postal_address, user):
+    """
+    Cree un Event PUBLIE a partir d'un brouillon admin (jauge + tags + FREERES).
+    L'image temporaire (chemin en session) devient l'image de l'Event : on
+    pointe `event.img.name` dessus (pas de recopie, une seule sauvegarde donc
+    les signaux ne se declenchent qu'une fois).
+    / Create a PUBLISHED Event from an admin draft (gauge + tags + FREERES).
+    The temp image becomes the Event's image by pointing `event.img.name` at it
+    (no copy, single save -> signals fire once).
+    """
+    from django.utils.dateparse import parse_datetime
+
+    event = Event(
+        name=(draft.get("name") or "").strip(),
+        datetime=parse_datetime(draft["datetime"]),
+        long_description=admin_clean_html(draft.get("long_description") or ""),
+        postal_address=postal_address,
+        created_by=user if user.is_authenticated else None,
+        published=True,
+        is_proposal=False,
+    )
+    if draft.get("image"):
+        event.img.name = draft["image"]
+    jauge = draft.get("jauge_max")
+    if jauge:
+        event.jauge_max = jauge
+        event.show_gauge = True
+    event.save()
+
+    # Tags : split virgule/point-virgule, get_or_create chaque.
+    # / Tags: split by comma/semicolon, get_or_create each.
+    tags_input = draft.get("tags") or ""
+    if tags_input:
+        for tname in re.split(r"[,;]", tags_input):
+            tname = tname.strip()
+            if not tname:
+                continue
+            tag_obj, _tag_created = Tag.objects.get_or_create(name=tname)
+            event.tag.add(tag_obj)
+
+    # Rattacher le produit FREERES si jauge_max.
+    # / Attach FREERES product if jauge_max.
+    if jauge:
+        free_res = Product.objects.filter(
+            categorie_article=Product.FREERES, publish=True, archive=False
+        ).first()
+        if free_res:
+            event.products.add(free_res)
+
+    return event
+
+
+def _creer_event_public_depuis_brouillon(draft, postal_address, user):
+    """
+    Cree un Event de PROPOSITION (published=False, is_proposal=True) a partir
+    d'un brouillon public. Soumis a moderation admin.
+    / Create a PROPOSAL Event (published=False, is_proposal=True) from a public
+    draft. Subject to admin moderation.
+    """
+    from django.utils.dateparse import parse_datetime
+
+    event = Event(
+        name=(draft.get("name") or "").strip(),
+        datetime=parse_datetime(draft["datetime"]),
+        long_description=admin_clean_html(draft.get("long_description") or ""),
+        postal_address=postal_address,
+        created_by=user if user.is_authenticated else None,
+        published=False,
+        is_proposal=True,
+    )
+    if draft.get("image"):
+        event.img.name = draft["image"]
+    event.save()
+    return event
+
+
 class EventWizardAdmin(viewsets.ViewSet):
     """
     Wizard admin de creation d'evenement.
@@ -3768,101 +4008,131 @@ class EventWizardAdmin(viewsets.ViewSet):
             event_url_name="event-admin-wizard-event",
         )
 
+    def _postal_address_ou_redirect(self, request):
+        """
+        Garde lieu : renvoie (postal_address, None) si le lieu choisi a
+        l'etape 1 est en session, sinon (None, redirect vers le choix de lieu).
+        / Place guard: returns (postal_address, None) if the step-1 place is in
+        session, else (None, redirect to the place step).
+        """
+        pk = request.session.get(self._session_key("postal_address_pk"))
+        if not pk:
+            return None, redirect("event-admin-wizard-place")
+        try:
+            return PostalAddress.objects.get(pk=pk), None
+        except PostalAddress.DoesNotExist:
+            request.session.pop(self._session_key("postal_address_pk"), None)
+            return None, redirect("event-admin-wizard-place")
+
+    def _inner_context_events(self, postal_address):
+        """Contexte du partial liste+form (HTMX) pour le wizard admin.
+        / Context of the list+form HTMX partial for the admin wizard."""
+        return {
+            "add_url": reverse("event-admin-wizard-events-add"),
+            "remove_url_name": "event-admin-wizard-events-remove",
+            "show_admin_fields": True,
+            "all_tags": Tag.objects.all().order_by("name"),
+            "postal_address": postal_address,
+        }
+
+    def _build_draft(self, validated, image_path):
+        """Brouillon admin : name/datetime/description + jauge + tags (+image).
+        `datetime` stocke en ISO 8601 (JSON-safe), reparse au finalize.
+        / Admin draft: name/datetime/description + gauge + tags (+image).
+        `datetime` stored as ISO 8601 (JSON-safe), reparsed at finalize."""
+        draft = {
+            "name": validated["name"].strip(),
+            "datetime": validated["datetime"].isoformat(),
+            "long_description": validated.get("long_description") or "",
+            "jauge_max": validated.get("jauge_max"),
+            "tags": validated.get("tags", ""),
+        }
+        if image_path:
+            draft["image"] = image_path
+        return draft
+
     @action(detail=False, methods=["GET", "POST"], url_path="event", url_name="event")
     def step2_event(self, request):
         """
-        Garde : postal_address_pk en session sinon redirect step1.
-        GET : rend le mini-form. POST : cree l'event publie.
-        / Guard: needs postal_address_pk in session. GET: renders form. POST: creates event.
+        Etape evenements (multi). GET : liste des brouillons + sous-form d'ajout.
+        POST : FINALISE -> cree N evenements publies partageant le lieu de l'etape 1.
+        / Events step (multi). GET: drafts list + add sub-form. POST: FINALIZE
+        -> create N published events sharing the step-1 place.
         """
-        postal_address_pk = request.session.get(self._session_key("postal_address_pk"))
-        if not postal_address_pk:
-            return redirect("event-admin-wizard-place")
-
-        try:
-            postal_address = PostalAddress.objects.get(pk=postal_address_pk)
-        except PostalAddress.DoesNotExist:
-            request.session.pop(self._session_key("postal_address_pk"), None)
-            return redirect("event-admin-wizard-place")
-
-        all_tags = Tag.objects.all().order_by("name")
-
-        ctx_commun = {
-            "wizard_title": _("Ajouter un évènement"),
-            "wizard_step_label": _("Étape 2 / 2 — Détails"),
-            "postal_address": postal_address,
-            "all_tags": all_tags,
-        }
+        postal_address, redirection = self._postal_address_ou_redirect(request)
+        if redirection:
+            return redirection
 
         if request.method == "GET":
             context = get_context(request)
-            context.update(ctx_commun)
-            context.update({"initial": {}, "errors": {}})
+            context.update({
+                "wizard_title": _("Ajouter des évènements"),
+                "wizard_step_label": _("Évènements"),
+                "finalize_url": reverse("event-admin-wizard-event"),
+                "finalize_label": _("Créer les évènements"),
+                "events": _wizard_get_drafts(request, self.SESSION_PREFIX),
+                "errors": {}, "initial": {},
+            })
+            context.update(self._inner_context_events(postal_address))
             return render(request, "reunion/views/event/wizard/admin_step2_event.html",
                           context=context)
 
-        # POST
-        # Note : pour les ImageField on doit donner request.POST + request.FILES.
-        # / For ImageField support: pass request.POST + request.FILES.
-        data_combined = request.POST.copy()
-        for f_key in request.FILES:
-            data_combined[f_key] = request.FILES[f_key]
-        serializer = WizardEventAdminSerializer(data=data_combined)
-        if not serializer.is_valid():
-            context = get_context(request)
-            context.update(ctx_commun)
-            context.update({
-                "initial": request.POST.dict(),
-                "errors": serializer.errors,
-            })
-            return render(request, "reunion/views/event/wizard/admin_step2_event.html",
-                          context=context, status=422)
+        # POST = finalisation : on cree tous les brouillons.
+        # / POST = finalize: create all drafts.
+        drafts = _wizard_get_drafts(request, self.SESSION_PREFIX)
+        if not drafts:
+            messages.add_message(request, messages.WARNING,
+                _("Ajoutez au moins un évènement avant de continuer."))
+            return redirect("event-admin-wizard-event")
 
-        validated = serializer.validated_data
-        event = Event(
-            name=validated["name"].strip(),
-            datetime=validated["datetime"],
-            long_description=admin_clean_html(validated.get("long_description") or ""),
-            postal_address=postal_address,
-            created_by=request.user if request.user.is_authenticated else None,
-            published=True,
-            is_proposal=False,
+        evenements_crees = []
+        for draft in drafts:
+            evenements_crees.append(
+                _creer_event_admin_depuis_brouillon(draft, postal_address, request.user)
+            )
+
+        # Nettoyage session (brouillons + lieu).
+        # / Clear session (drafts + place).
+        request.session.pop(_wizard_drafts_key(self.SESSION_PREFIX), None)
+        request.session.pop(self._session_key("postal_address_pk"), None)
+        request.session.modified = True
+
+        nombre = len(evenements_crees)
+        messages.add_message(request, messages.SUCCESS,
+            _("%(n)s évènement(s) créé(s).") % {"n": nombre})
+        # Un seul -> sa fiche ; plusieurs -> l'agenda.
+        # / Single -> its page; several -> the agenda.
+        if nombre == 1:
+            ev = evenements_crees[0]
+            return redirect(reverse("event-detail", kwargs={"pk": ev.slug or ev.uuid}))
+        return redirect("event-list")
+
+    @action(detail=False, methods=["POST"], url_path="events/add", url_name="events-add")
+    def events_add(self, request):
+        """Ajout HTMX d'un brouillon d'event (admin). / HTMX add of an event draft."""
+        postal_address, redirection = self._postal_address_ou_redirect(request)
+        if redirection:
+            return redirection
+        return _wizard_events_add_generic(
+            request,
+            serializer_class=WizardEventAdminSerializer,
+            session_prefix=self.SESSION_PREFIX,
+            build_draft=self._build_draft,
+            inner_context=self._inner_context_events(postal_address),
         )
-        if validated.get("image"):
-            event.img = validated["image"]
-        if validated.get("jauge_max"):
-            event.jauge_max = validated["jauge_max"]
-            event.show_gauge = True
-        event.save()
 
-        # Tags : split virgule/point-virgule, get_or_create chaque.
-        # / Tags: split by comma/semicolon, get_or_create each.
-        tags_input = validated.get("tags", "")
-        if tags_input:
-            for tname in re.split(r"[,;]", tags_input):
-                tname = tname.strip()
-                if not tname:
-                    continue
-                # Ne pas utiliser "_" pour eviter d'ecraser _() de traduction.
-                # / Avoid bare "_" which would shadow gettext _.
-                tag_obj, _tag_created = Tag.objects.get_or_create(name=tname)
-                event.tag.add(tag_obj)
-
-        # Rattacher le produit FREERES si jauge_max
-        # / Attach FREERES product if jauge_max
-        if validated.get("jauge_max"):
-            free_res = Product.objects.filter(
-                categorie_article=Product.FREERES, publish=True, archive=False
-            ).first()
-            if free_res:
-                event.products.add(free_res)
-
-        # Nettoyer la session / Clear session
-        for suffix in ("postal_address_pk",):
-            request.session.pop(self._session_key(suffix), None)
-
-        messages.add_message(request, messages.SUCCESS, _("Évènement créé !"))
-        return redirect(reverse("event-detail", kwargs={"pk": event.slug or event.uuid}))
+    @action(detail=False, methods=["POST"],
+            url_path=r"events/remove/(?P<idx>[0-9]+)", url_name="events-remove")
+    def events_remove(self, request, idx=None):
+        """Retrait HTMX d'un brouillon d'event (admin). / HTMX remove of a draft."""
+        postal_address, redirection = self._postal_address_ou_redirect(request)
+        if redirection:
+            return redirection
+        return _wizard_events_remove_generic(
+            request, idx,
+            session_prefix=self.SESSION_PREFIX,
+            inner_context=self._inner_context_events(postal_address),
+        )
 
 
 class EventWizardPublic(viewsets.ViewSet):
@@ -4072,71 +4342,121 @@ class EventWizardPublic(viewsets.ViewSet):
             event_url_name="event-propose-event",
         )
 
+    def _postal_address_ou_redirect(self, request):
+        """Garde lieu : (postal_address, None) ou (None, redirect choix lieu).
+        / Place guard: (postal_address, None) or (None, redirect place step)."""
+        pk = request.session.get(self._session_key("postal_address_pk"))
+        if not pk:
+            return None, redirect("event-propose-place")
+        try:
+            return PostalAddress.objects.get(pk=pk), None
+        except PostalAddress.DoesNotExist:
+            return None, redirect("event-propose-place")
+
+    def _inner_context_events(self, postal_address):
+        """Contexte du partial liste+form (HTMX) pour le wizard public.
+        Pas de jauge ni tags (champs reserves a l'admin).
+        / List+form HTMX partial context for the public wizard. No gauge/tags."""
+        return {
+            "add_url": reverse("event-propose-events-add"),
+            "remove_url_name": "event-propose-events-remove",
+            "show_admin_fields": False,
+            "postal_address": postal_address,
+        }
+
+    def _build_draft(self, validated, image_path):
+        """Brouillon public : name/datetime/description (+image). Pas de jauge/tags.
+        / Public draft: name/datetime/description (+image). No gauge/tags."""
+        draft = {
+            "name": validated["name"].strip(),
+            "datetime": validated["datetime"].isoformat(),
+            "long_description": validated.get("long_description") or "",
+        }
+        if image_path:
+            draft["image"] = image_path
+        return draft
+
     @action(detail=False, methods=["GET", "POST"], url_path="event", url_name="event")
     def step2_event(self, request):
+        """
+        Etape evenements (multi). GET : liste des brouillons + sous-form d'ajout.
+        POST : FINALISE -> cree N propositions partageant le lieu de l'etape 1.
+        / Events step (multi). GET: drafts list + add sub-form. POST: FINALIZE
+        -> create N proposals sharing the step-1 place.
+        """
         guard = self._require_login_or_redirect(request)
         if guard:
             return guard
-
-        postal_address_pk = request.session.get(self._session_key("postal_address_pk"))
-        if not postal_address_pk:
-            return redirect("event-propose-place")
-
-        try:
-            postal_address = PostalAddress.objects.get(pk=postal_address_pk)
-        except PostalAddress.DoesNotExist:
-            return redirect("event-propose-place")
+        postal_address, redirection = self._postal_address_ou_redirect(request)
+        if redirection:
+            return redirection
 
         if request.method == "GET":
             context = get_context(request)
             context.update({
-                "wizard_title": _("Proposer un évènement"),
-                "wizard_step_label": _("Étape 2 / 2 — Détails"),
-                "postal_address": postal_address,
-                "initial": {}, "errors": {},
+                "wizard_title": _("Proposer des évènements"),
+                "wizard_step_label": _("Évènements"),
+                "finalize_url": reverse("event-propose-event"),
+                "finalize_label": _("Envoyer ma proposition"),
+                "events": _wizard_get_drafts(request, self.SESSION_PREFIX),
+                "errors": {}, "initial": {},
             })
+            context.update(self._inner_context_events(postal_address))
             return render(request, "reunion/views/event/wizard/public_step2_event.html",
                           context=context)
 
-        # POST
-        data_combined = request.POST.copy()
-        for fkey in request.FILES:
-            data_combined[fkey] = request.FILES[fkey]
-        serializer = WizardEventPublicSerializer(data=data_combined)
-        if not serializer.is_valid():
-            context = get_context(request)
-            context.update({
-                "wizard_title": _("Proposer un évènement"),
-                "wizard_step_label": _("Étape 2 / 2 — Détails"),
-                "postal_address": postal_address,
-                "initial": request.POST.dict(),
-                "errors": serializer.errors,
-            })
-            return render(request, "reunion/views/event/wizard/public_step2_event.html",
-                          context=context, status=422)
+        # POST = finalisation : on cree toutes les propositions.
+        # / POST = finalize: create all proposals.
+        drafts = _wizard_get_drafts(request, self.SESSION_PREFIX)
+        if not drafts:
+            messages.add_message(request, messages.WARNING,
+                _("Ajoutez au moins un évènement avant d'envoyer."))
+            return redirect("event-propose-event")
 
-        validated = serializer.validated_data
-        event = Event(
-            name=validated["name"].strip(),
-            datetime=validated["datetime"],
-            long_description=admin_clean_html(validated.get("long_description") or ""),
-            postal_address=postal_address,
-            # L'auteur est l'utilisateur connecte (garde de connexion en amont).
-            # / Author is the logged-in user (login guard runs upstream).
-            created_by=request.user,
-            published=False,
-            is_proposal=True,
-        )
-        if validated.get("image"):
-            event.img = validated["image"]
-        event.save()
+        for draft in drafts:
+            _creer_event_public_depuis_brouillon(draft, postal_address, request.user)
 
-        # Reset complet : on libere toute la session du wizard public
-        # / Full reset: release all wizard session keys
+        # Reset complet : on libere toute la session du wizard public.
+        # / Full reset: release all public wizard session keys.
+        request.session.pop(_wizard_drafts_key(self.SESSION_PREFIX), None)
         request.session.pop(self._session_key("postal_address_pk"), None)
         self._otp(request).reset()
+        request.session.modified = True
 
         return redirect("event-propose-done")
+
+    @action(detail=False, methods=["POST"], url_path="events/add", url_name="events-add")
+    def events_add(self, request):
+        """Ajout HTMX d'un brouillon d'event (public). / HTMX add of an event draft."""
+        guard = self._require_login_or_redirect(request)
+        if guard:
+            return guard
+        postal_address, redirection = self._postal_address_ou_redirect(request)
+        if redirection:
+            return redirection
+        return _wizard_events_add_generic(
+            request,
+            serializer_class=WizardEventPublicSerializer,
+            session_prefix=self.SESSION_PREFIX,
+            build_draft=self._build_draft,
+            inner_context=self._inner_context_events(postal_address),
+        )
+
+    @action(detail=False, methods=["POST"],
+            url_path=r"events/remove/(?P<idx>[0-9]+)", url_name="events-remove")
+    def events_remove(self, request, idx=None):
+        """Retrait HTMX d'un brouillon d'event (public). / HTMX remove of a draft."""
+        guard = self._require_login_or_redirect(request)
+        if guard:
+            return guard
+        postal_address, redirection = self._postal_address_ou_redirect(request)
+        if redirection:
+            return redirection
+        return _wizard_events_remove_generic(
+            request, idx,
+            session_prefix=self.SESSION_PREFIX,
+            inner_context=self._inner_context_events(postal_address),
+        )
 
     @action(detail=False, methods=["GET"], url_path="done", url_name="done")
     def done(self, request):

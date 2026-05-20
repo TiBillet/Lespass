@@ -208,32 +208,33 @@
         }
 
         /**
-         * Geocodage inverse après drag du marqueur. GET direct vers
-         * nominatim.openstreetmap.org/reverse (CORS open) — pas de proxy
-         * serveur, meme approche que leaflet-geosearch pour le forward.
-         * Met à jour les hidden inputs lat/lng/adresse + les 4 champs
-         * adresse séparés.
-         * / Reverse geocoding after marker drag. Direct GET to Nominatim
-         * (CORS open) — no server proxy, same pattern as leaflet-geosearch
-         * uses for forward. Updates hidden inputs + separate address fields.
+         * Geocodage inverse sur des coordonnees : recupere une adresse postale
+         * structuree FIABLE et remplit les champs. GET direct vers
+         * nominatim.openstreetmap.org/reverse (CORS open) — pas de proxy.
+         *
+         * Mutualise par DEUX appelants :
+         *   1. le drag du marqueur (l'utilisateur deplace le point) ;
+         *   2. le repli de la recherche avant quand celle-ci renvoie une
+         *      adresse incomplete (cf. lancer_recherche_nominatim).
+         * Le reverse donne toujours rue + code postal + ville, la ou la
+         * recherche par NOM ne renvoie souvent qu'un centroide partiel.
+         *
+         * / Reverse geocoding on coordinates: fetch a RELIABLE structured
+         * address and fill fields. Shared by (1) marker drag and (2) the
+         * forward-search fallback when the forward result is incomplete.
+         * Reverse always yields road + postcode + city, whereas a NAME search
+         * often returns only a partial centroid.
          */
-        async function recuperer_coordonnees_apres_deplacement_du_marqueur(evenement_drag) {
-            const nouvelle_position = evenement_drag.target.getLatLng();
-            const latitude = nouvelle_position.lat;
-            const longitude = nouvelle_position.lng;
-
+        async function reverse_geocoder_et_remplir(latitude, longitude) {
             // Mise à jour immédiate des hidden lat/lng (UX réactive,
             // visible meme si le reverse echoue).
-            // / Immediate update of hidden lat/lng (responsive UX,
-            // visible even if reverse fails).
+            // / Immediate update of hidden lat/lng (responsive even on failure).
             input_latitude.value = latitude.toFixed(6);
             input_longitude.value = longitude.toFixed(6);
 
             // Construction de l'URL Nominatim avec params standards.
             // `addressdetails=1` pour avoir le dict `address` structuré.
-            // `accept-language` selon la locale de la page.
-            // / Build Nominatim URL with standard params. addressdetails=1
-            // to get structured `address` dict. accept-language from page.
+            // / Build Nominatim URL with standard params (addressdetails=1).
             const params = new URLSearchParams({
                 lat: latitude.toFixed(6),
                 lon: longitude.toFixed(6),
@@ -272,6 +273,13 @@
                 // updated, discreet warn. User can fill address fields manually.
                 console.warn("widget_carte_adresse: reverse fetch error", erreur);
             }
+        }
+
+        // Geocodage inverse apres drag du marqueur : delegue au helper partage.
+        // / Reverse geocode after marker drag: delegate to the shared helper.
+        async function recuperer_coordonnees_apres_deplacement_du_marqueur(evenement_drag) {
+            const nouvelle_position = evenement_drag.target.getLatLng();
+            await reverse_geocoder_et_remplir(nouvelle_position.lat, nouvelle_position.lng);
         }
 
         // Event leaflet-geosearch : l'utilisateur a cliqué sur une suggestion.
@@ -377,13 +385,30 @@
                 const premier_resultat = donnees[0];
                 const latitude = parseFloat(premier_resultat.lat);
                 const longitude = parseFloat(premier_resultat.lon);
+                const adresse = premier_resultat.address || {};
                 placer_marqueur_et_remplir_champs(
                     latitude,
                     longitude,
                     premier_resultat.display_name || "",
-                    premier_resultat.address || {},
+                    adresse,
                 );
                 map.setView([latitude, longitude], ZOOM_DETAIL);
+
+                // Repli : une recherche par NOM de lieu (ex: "Café Test")
+                // renvoie souvent un centroide flou, sans rue ni code postal.
+                // Si l'adresse avant est incomplete, on complete via un
+                // geocodage INVERSE sur les coordonnees trouvees (meme
+                // fiabilite que le drag du marqueur). Une recherche d'adresse
+                // reelle a deja rue+CP -> pas de requete supplementaire.
+                // / Fallback: a NAME search often returns a fuzzy centroid
+                // without road/postcode. If the forward address is incomplete,
+                // complete it via a REVERSE geocode on the found coordinates
+                // (as reliable as the marker drag). A real-address search
+                // already has road+postcode -> no extra request.
+                const adresse_incomplete = !adresse.road || !adresse.postcode;
+                if (adresse_incomplete) {
+                    reverse_geocoder_et_remplir(latitude, longitude);
+                }
             }).catch(function (erreur) {
                 // Réseau coupé / Nominatim down : on log + message inline.
                 // / Network down / Nominatim down: log + inline message.

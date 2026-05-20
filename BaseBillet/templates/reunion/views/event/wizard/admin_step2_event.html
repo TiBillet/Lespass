@@ -1,92 +1,54 @@
 {% extends "reunion/views/event/wizard/_base.html" %}
 {% load i18n %}
 
-{% block step_content %}
+{% comment %}
+LOCALISATION: BaseBillet/templates/reunion/views/event/wizard/admin_step2_event.html
+Etape evenements du wizard admin (multi). Liste + sous-form HTMX dans
+`#events-step-inner` (partial partage `_events_inner.html`) + form de
+finalisation qui cree tous les evenements.
+/ Admin wizard events step (multi). List + HTMX sub-form in `#events-step-inner`
+(shared `_events_inner.html`) + finalize form that creates all events.
+{% endcomment %}
 
-<div class="alert alert-info py-2 mb-3" role="status">
-    <i class="bi bi-geo-alt me-1" aria-hidden="true"></i>
-    {% blocktranslate with name=postal_address.name|default:postal_address.address_locality city=postal_address.address_locality %}Lieu choisi : <strong>{{ name }}</strong> — {{ city }}{% endblocktranslate %}
-    <a href="{% url 'event-admin-wizard-place' %}" class="ms-2 small text-decoration-none"
-       data-testid="wizard-event-change-place">
+{% block step_content %}
+<p class="text-muted mb-3">
+    {% translate "Ajoutez un ou plusieurs évènements à ce lieu, puis créez-les tous d'un coup." %}
+</p>
+
+{% if postal_address %}
+<div class="alert alert-light border d-flex align-items-center justify-content-between gap-2 mb-3"
+     role="status" data-testid="wizard-events-place">
+    <span>
+        <i class="bi bi-geo-alt-fill text-success me-1" aria-hidden="true"></i>
+        {% translate "Lieu :" %} <strong>{{ postal_address.name|default:postal_address.address_locality }}</strong>
+    </span>
+    <a href="{% url 'event-admin-wizard-place' %}" class="small text-decoration-none"
+       data-testid="wizard-events-change-place">
         <i class="bi bi-pencil" aria-hidden="true"></i> {% translate "Modifier" %}
     </a>
 </div>
-
-{% if errors %}
-<div class="alert alert-danger mb-3" role="alert" data-testid="wizard-event-errors">
-    <ul class="mb-0 small">
-        {% for field, msgs in errors.items %}
-        <li><strong>{{ field }}</strong> : {{ msgs|join:" / " }}</li>
-        {% endfor %}
-    </ul>
-</div>
 {% endif %}
 
-<form method="post" action="{% url 'event-admin-wizard-event' %}"
-      enctype="multipart/form-data" novalidate
-      data-testid="wizard-admin-event-form" class="vstack gap-3">
+{# Zone HTMX : liste des brouillons + sous-form d'ajout. Cible des swaps   #}
+{# add/remove (innerHTML). / HTMX zone: drafts list + add sub-form.        #}
+<div id="events-step-inner">
+    {% include "reunion/views/event/wizard/_events_inner.html" %}
+</div>
+
+{# Finalisation : POST plein page (pas HTMX) -> cree tous les evenements.  #}
+{# / Finalize: full-page POST (not HTMX) -> creates all events.            #}
+<form method="post" action="{{ finalize_url }}" class="mt-4"
+      data-testid="wizard-events-finalize-form">
     {% csrf_token %}
-
-    <div>
-        <label for="name" class="form-label">
-            {% translate "Nom de l'évènement" %} <span class="text-danger">*</span>
-        </label>
-        <input type="text" id="name" name="name" required maxlength="200"
-               value="{{ initial.name|default:'' }}" class="form-control"
-               data-testid="wizard-admin-event-name">
-    </div>
-
-    <div>
-        <label for="datetime" class="form-label">
-            {% translate "Date et heure" %} <span class="text-danger">*</span>
-        </label>
-        <input type="datetime-local" id="datetime" name="datetime" required
-               value="{{ initial.datetime|default:'' }}" class="form-control"
-               data-testid="wizard-admin-event-datetime">
-    </div>
-
-    <div>
-        <label for="long_description" class="form-label">{% translate "Description" %}</label>
-        <textarea id="long_description" name="long_description" rows="4"
-                  maxlength="5000" class="form-control"
-                  data-testid="wizard-admin-event-description">{{ initial.long_description|default:'' }}</textarea>
-    </div>
-
-    <div>
-        <label for="image" class="form-label">{% translate "Image (optionnel)" %}</label>
-        <input type="file" id="image" name="image" accept="image/jpeg,image/png,image/webp"
-               class="form-control" data-testid="wizard-admin-event-image">
-        <div class="form-text">{% translate "JPEG, PNG ou WebP — 5 Mo maximum." %}</div>
-    </div>
-
-    <div>
-        <label for="jauge_max" class="form-label">{% translate "Jauge maximale (capacité)" %}</label>
-        <input type="number" id="jauge_max" name="jauge_max" min="1" step="1"
-               inputmode="numeric"
-               value="{{ initial.jauge_max|default:'' }}" class="form-control"
-               data-testid="wizard-admin-event-jauge">
-        <div class="form-text">{% translate "Laissez vide si pas besoin de réservation." %}</div>
-    </div>
-
-    <div>
-        <label for="tags" class="form-label">{% translate "Tags (séparés par des virgules)" %}</label>
-        <input type="text" id="tags" name="tags" list="tags-list"
-               value="{{ initial.tags|default:'' }}" class="form-control"
-               data-testid="wizard-admin-event-tags">
-        <datalist id="tags-list">
-            {% for t in all_tags %}<option value="{{ t.name }}">{{ t.name }}</option>{% endfor %}
-        </datalist>
-    </div>
-
     <div class="d-flex justify-content-between pt-2">
         <a href="{% url 'event-admin-wizard-place' %}" class="btn btn-link"
-           data-testid="wizard-admin-event-prev">
+           data-testid="wizard-events-prev">
             <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> {% translate "Précédent" %}
         </a>
-        <button type="submit" class="btn btn-success btn-lg"
-                data-testid="wizard-admin-event-submit">
+        <button type="submit" class="btn btn-primary btn-lg"
+                data-testid="wizard-events-finalize">
             <i class="bi bi-check2-circle me-1" aria-hidden="true"></i>
-            {% translate "Créer l'évènement" %}
+            {{ finalize_label|default:_("Créer les évènements") }}
         </button>
     </div>
 </form>
