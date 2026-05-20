@@ -61,18 +61,22 @@ function ParseStringToObject(content) {
  */
 async function cordovaReadFile(pathFile) {
   // console.log('-> readFile')
+  showSpinner()
   return await new Promise((resolve) => {
     window.resolveLocalFileSystemURL(pathFile, function (fileEntry) {
       fileEntry.file(function (file) {
         const reader = new FileReader()
         reader.onloadend = function () {
+          hideSpinner()
           resolve(this.result)
         }
         reader.readAsText(file)
       }, () => {
+        hideSpinner()
         resolve(null)
       })
     }, () => {
+      hideSpinner()
       resolve(null)
     })
   })

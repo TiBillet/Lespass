@@ -23,6 +23,27 @@ function hideConfirmDeleteServer() {
   document.querySelector('.confirm-container').style.display = 'none'
 }
 
+
+document.addEventListener('DOMContentLoaded', () => {
+  // add method on icon menu burger
+  document.querySelector('.header-menu > svg').addEventListener('click', toggleClassMenuBurger)
+
+  // hide menu burger
+  document.querySelector('.menu-burger-container').addEventListener('click', hideMenu)
+
+  // validation du pincode
+  document.querySelector('#pin-code').addEventListener('keydown', managedPinCode)
+
+  // gestion bouton return
+  document.querySelector('.bt-input-return').addEventListener('click', hideContentInput)
+
+  // hide window confirm delete server, bt cancel
+  document.querySelector('.bt-delete-cancel').addEventListener('click', hideConfirmDeleteServer)
+
+  // validate delete server
+  document.querySelector('.bt-delete-validate').addEventListener('click', deleteServer)
+})
+
 /**
  * wait cordova (devices activation)
  */
@@ -46,25 +67,4 @@ document.addEventListener('deviceready', async () => {
   // listen devices status
   // étape 2 - listen devices status 
   initListenDevicesStatus()
-})
-
-
-document.addEventListener('DOMContentLoaded', () => {
-  // add method on icon menu burger
-  document.querySelector('.header-menu > svg').addEventListener('click', toggleClassMenuBurger)
-
-  // hide menu burger
-  document.querySelector('.menu-burger-container').addEventListener('click', hideMenu)
-
-  // validation du pincode
-  document.querySelector('#pin-code').addEventListener('keydown', managedPinCode)
-
-  // gestion bouton return
-  document.querySelector('.bt-input-return').addEventListener('click', hideContentInput)
-
-  // hide window confirm delete server, bt cancel
-  document.querySelector('.bt-delete-cancel').addEventListener('click', hideConfirmDeleteServer)
-
-  // validate delete server
-  document.querySelector('.bt-delete-validate').addEventListener('click', deleteServer)
 })

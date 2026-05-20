@@ -58,12 +58,14 @@ Note: 'tarifSelection' listener is on #articles-zone (tarif.js), not #messages.
     // écoute des commandes sur le formulaire "#form-nfc"
     document.querySelector('#form-check-nfc').addEventListener('checkCardManageForm', checkCardManageForm)
 
+    /*
     document.body.addEventListener('htmx:afterSwap', function (event) {
-      console.log('event.detail =', event.detail)
+      console.log('event.detail =', event.detail, '  --  ', new Date())
       // hx-get="/laboutik/paiement/verifier_carte/" du bouton "check carte"
       if (event.detail.pathInfo.requestPath === '/laboutik/paiement/verifier_carte/') {
         initNfc(state?.configFile?.type_app)
       }
-    });
+    })
+      */
   </script>
 </c-read-nfc>

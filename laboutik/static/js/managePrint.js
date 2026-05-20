@@ -56,7 +56,7 @@ async function sunmiInnerPrint(printUuid) {
   await SunmiPrinterPlugin.initSunmiPrinterService()
   // find current impression in queue
   const currentPrint = sunmiPrintQueue.find(imp => imp.printUuid === printUuid)
-  
+
   // commandes à imprimer
   for (const com of currentPrint.content) {
     // alignement 0 = gauche 1=centre 2=droite
@@ -93,7 +93,7 @@ async function sunmiInnerPrint(printUuid) {
       const height = com?.height === undefined ? 162 : com.height
       const width = com?.width === undefined ? 2 : com.width
       const textPosition = com?.textPosition === undefined ? 2 : com.textPosition
-      await SunmiPrinterPlugin.printBarCode(com.value,symbology, height, width, textPosition, align)
+      await SunmiPrinterPlugin.printBarCode(com.value, symbology, height, width, textPosition, align)
     }
 
     // image
@@ -179,6 +179,13 @@ async function initWebsocket() {
   }
 }
 
+
 document.addEventListener('deviceready', async () => {
-  initWebsocket()
+  try {
+    await initWebsocket()
+  } catch (error) {
+    console.log('-> initWebsocket,', error);
+
+  }
+
 })

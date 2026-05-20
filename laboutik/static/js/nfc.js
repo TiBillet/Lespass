@@ -16,6 +16,9 @@ const NfcReader = class {
     console.log('-> SendTagIdAndSubmit, conf =', conf)
     console.log('-> SendTagIdAndSubmit, tagId =', tagId)
 
+    // stop listening nfc
+    this.stop()
+
     // dispatch event - peuple le tagId dans un formulaire
     sendEvent('organizerMsg', '#event-organizer', {
       src: { file: 'nfc.js', method: 'SendTagIdAndSubmit' },
@@ -188,7 +191,7 @@ const NfcReader = class {
 
   async cordovaStopRead() {
     const result = await nfcPlugin.stopListening()
-    console.log('-> nfc.cordovaStopRead -', result)
+    console.log('-> nfc.cordovaStopRead -', result, '  --  ', new Date())
   }
 
   async start(conf) {
@@ -242,8 +245,12 @@ const NfcReader = class {
         if (this.typeApp === 'cordova') {
           console.log('mode : cordova')
           // lance la lecture, seul nfcPlugin.stopListening peut l'arréter
-          const result = await nfcPlugin.startListening()
-          this.verificationTagId(result.tagId, this.uuidConnexion)
+          try {
+            const result = await nfcPlugin.startListening()
+            this.verificationTagId(result.tagId, this.uuidConnexion)
+          } catch (error) {
+            console.log('Processus nfc.start :',error);
+          }
 
         }
       }
@@ -267,7 +274,7 @@ const NfcReader = class {
       }
       // cordova
       if (this.typeApp === 'cordova') {
-        this.cordovaStopRead()
+        await this.cordovaStopRead()
       }
     } catch (error) {
       console.log('nfc.stop, error:', error)

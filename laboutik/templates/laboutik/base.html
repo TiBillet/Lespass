@@ -28,7 +28,12 @@
 
 	<script>
 		const state = JSON.parse("{{stateJson|escapejs}}")
+		// le typeApp est recherché dans l'url de la page chargé
+		state.typeApp = location.search.toString().split('&').find(item => item.includes('type_app')).split('=')[1]
 	</script>
+	{% if type_app == "cordova" %}
+	<script src="http://localhost/cordova.js"></script>
+	{% endif %}
 	<!-- https://github.com/MikeMcl/big.js/tree/main -->
 	<script src="{% static 'js/big.js' %}"></script>
 	<!-- passing django values to javascript - ex : state.demo.active -->
@@ -130,9 +135,6 @@
 	-->
 	<div id="messages" aria-live="polite"></div>
 	<div id="confirm" aria-live="polite"></div>
-	{% if type_app == "cordova" %}
-	<script src="http://localhost/cordova.js"></script>
-	{% endif %}
 	<script src="{% static 'js/htmx@2.0.6.min.js' %}"></script>
 	<!-- Extension loading-states — spinner avec delai configurable (pas de blink si requete rapide)
 	     / loading-states extension — spinner with configurable delay (no blink on fast requests) -->
