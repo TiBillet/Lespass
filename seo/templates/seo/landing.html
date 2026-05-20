@@ -397,5 +397,56 @@
 </section>
 {% endif %}
 
+{# ================================================================ #}
+{# ILS CONTRIBUENT — grille statique de logos cliquables             #}
+{# La liste vient de seo/views.py (constante CONTRIBUTEURS).         #}
+{# La section reste masquee tant qu'aucun contributeur n'est declare.#}
+{# / THEY CONTRIBUTE — static grid of clickable logos.               #}
+{# The list comes from seo/views.py (CONTRIBUTEURS constant).        #}
+{# Section stays hidden while no contributor is declared.            #}
+{# ================================================================ #}
+{% if contributeurs %}
+<section class="contributeurs-section mb-5" data-testid="contributeurs-section">
+    <h2 class="contributeurs-heading text-center">{% translate "Ils contribuent" %}</h2>
+    <p class="contributeurs-subheading text-center">
+        {% translate "Les structures et les personnes qui font vivre le commun." %}
+    </p>
+    <div class="contributeurs-grid" role="list" aria-label="{% translate 'Contributeurs de TiBillet' %}">
+        {% for contributeur in contributeurs %}
+        {% if contributeur.url %}
+        {# URL connue : tuile logo + nom, le tout cliquable vers le site (nouvel onglet). #}
+        {# / URL known: logo tile + name, the whole cell links to the site (new tab). #}
+        <a href="{{ contributeur.url }}"
+           class="contributeur-item"
+           role="listitem"
+           target="_blank"
+           rel="noopener"
+           title="{{ contributeur.nom }}"
+           data-testid="contributeur-link-{{ forloop.counter }}">
+            <span class="contributeur-logo-box">
+                {# alt vide : le nom est deja affiche en texte juste dessous (pas de doublon lecteur d'ecran). #}
+                {# / empty alt: the name is shown as text right below (no screen-reader duplicate). #}
+                <img src="{% static contributeur.logo %}" alt="" class="contributeur-logo" loading="lazy">
+            </span>
+            <span class="contributeur-nom">{{ contributeur.nom }}</span>
+        </a>
+        {% else %}
+        {# Pas d'URL renseignee : tuile logo + nom, sans lien (pas de lien casse). #}
+        {# / No URL set: logo tile + name, without a link (avoids broken links). #}
+        <span class="contributeur-item"
+              role="listitem"
+              title="{{ contributeur.nom }}"
+              data-testid="contributeur-item-{{ forloop.counter }}">
+            <span class="contributeur-logo-box">
+                <img src="{% static contributeur.logo %}" alt="" class="contributeur-logo" loading="lazy">
+            </span>
+            <span class="contributeur-nom">{{ contributeur.nom }}</span>
+        </span>
+        {% endif %}
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
 </main>
 {% endblock main_wrapper %}

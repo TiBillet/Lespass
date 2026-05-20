@@ -1,5 +1,34 @@
 # Changelog / Journal des modifications
 
+## Home publique : section « Ils contribuent » + mention France 2030 dans le footer / Public home: "They contribute" section + France 2030 footer mention
+
+**Quoi / What :** Ajout d'une section « Ils contribuent » sur la landing
+page du tenant public (app `seo`), à la suite des bandeaux lieux et
+événements de la fédération : panneau gris doux, grille de tuiles
+blanches (logo + nom dessous), logos cliquables, pilotée par une liste
+explicite dans la vue. Un logo blanc sur transparent (CoopCircuit) a été
+inversé pour rester visible sur tuile blanche. Ajout aussi de la mention
+obligatoire de financement France 2030 dans le footer de la home publique
+(séparateur + texte à gauche / logo aligné à droite), qui en était
+dépourvue alors que les footers des tenants l'affichent déjà.
+
+**Pourquoi / Why :** Valoriser les contributeurs du commun sur la page
+d'accueil du réseau, et homogénéiser la mention légale France 2030
+(« Solutions de billetteries innovantes », Caisse des Dépôts) présente
+sur les footers tenants mais absente du footer ROOT.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/views.py` | Constante `CONTRIBUTEURS` (nom + logo + url) + ajout au contexte de `landing` |
+| `seo/templates/seo/landing.html` | Section `contributeurs-section` (grille de logos cliquables, masquée si liste vide) |
+| `seo/static/seo/seo.css` | Styles `.contributeurs-*` (grille auto-fit centrée, logos couleur, relief au survol) |
+| `seo/templates/seo/base.html` | Mention France 2030 + logo `reunion/img/france_2030.png` dans le footer |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+- **i18n :** Nouvelles chaînes (`Ils contribuent`, sous-titre, mention France 2030…) — lancer `makemessages` + `compilemessages` (à la charge du mainteneur).
+
 ## SEO Chantier 01 : desindexer les instances DEV / DEMO / TEST / SEO Chantier 01: deindex DEV / DEMO / TEST instances
 
 **Date :** 2026-05-17
