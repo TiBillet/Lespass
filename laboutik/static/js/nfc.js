@@ -13,8 +13,8 @@ const NfcReader = class {
 
 
   SendTagIdAndSubmit(tagId, conf) {
-    console.log('-> SendTagIdAndSubmit, conf =', conf)
-    console.log('-> SendTagIdAndSubmit, tagId =', tagId)
+    // console.log('-> SendTagIdAndSubmit, conf =', conf)
+    // console.log('-> SendTagIdAndSubmit, tagId =', tagId)
 
     // stop listening nfc
     this.stop()
@@ -79,8 +79,7 @@ const NfcReader = class {
   showUiSimu() {
     // compose l'interface de simulation à afficher
     let uiSimu = ''
-    console.log('-> nfc.toggleSimu')
-
+    // console.log('-> nfc.toggleSimu')
     this.simuData.forEach((item, i) => {
       uiSimu += `
         <div class="nfc-reader-simu-bt" tag-id="${item.tag_id}">${escapeHtml(item.name)}</div>
@@ -160,6 +159,8 @@ const NfcReader = class {
   }
 
   piDesktopStarRead() {
+    // console.log('-> piDesktopStarRead')
+    
     // déconnecte anciennes connexion sur le back, évite plusieurs écoutes
     // un appel front donne une seule réponse back
     if (this.socketIo) {
@@ -171,7 +172,7 @@ const NfcReader = class {
 
     // initialise la réception d'un tagId, méssage = 'nfcMessage'
     this.socketIo.on('nfcMessage', (retour) => {
-      console.log('réception du message "nfcMessage" - retour =', retour)
+      // console.log('réception du message "nfcMessage" - retour =', retour)
       if (retour.tagId) {
         this.piDesktopStopRead()
         this.verificationTagId(retour.tagId, retour.data.uuidConnexion)
@@ -195,7 +196,8 @@ const NfcReader = class {
   }
 
   async start(conf) {
-    console.log('-> nfc.start');
+    console.log('-> nfc.start')
+
     try {
       this.conf = conf
       this.uuidConnexion = crypto.randomUUID()
@@ -237,13 +239,14 @@ const NfcReader = class {
         this.showUiSimu()
       } else {
         this.hideUiSimu()
+
         // pi ou desktop
         if (this.typeApp === 'desktop' || this.typeApp === 'pi') {
           this.piDesktopStarRead()
         }
         // cordova
         if (this.typeApp === 'cordova') {
-          console.log('mode : cordova')
+          // console.log('mode : cordova')
           // lance la lecture, seul nfcPlugin.stopListening peut l'arréter
           try {
             const result = await nfcPlugin.startListening()
@@ -256,12 +259,13 @@ const NfcReader = class {
       }
     } catch (error) {
       console.log('nfc.start, error:', error)
-      this.cordovaStopRead()
+      this.stop()
     }
 
   }
 
   async stop() {
+    console.log('-> nfc.stop')
     try {
       // simu
       if (this.simuActivate) {

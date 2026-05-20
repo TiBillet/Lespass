@@ -11,17 +11,11 @@
   </div>
 
   <script>
-    async function initNfc(typeApp) {
-      console.log('-> initNfc');
+    async function initNfc() {
+      console.log('-> initNfc')
       try {
-        /*
-        if (!state.nfc) {
-          console.log('Première instanciations de nfc !')
-          state['nfc'] = new NfcReader(3000, typeApp)
-        }
-          */
         state['nfc'] = null
-        state.nfc = new NfcReader(3000, typeApp)
+        state.nfc = new NfcReader(3000, state.typeApp)
         // start read nfc
         await state.nfc.start({ eventManageForm: '{{ event_manage_form }}', submitUrl: '{{ submit_url }}' })
       } catch (error) {
@@ -29,70 +23,32 @@
       }
     }
 
+    function nfcAfterSwap(event) {
+      const inputTagId = event.target.querySelector('#nfc-tag-id')
+      // stop l'écoute de l'évènement 'htmx:afterSwap' pour ne pas en accumuler.
+      document.removeEventListener('htmx:afterSwap', nfcAfterSwap)
+      if (inputTagId) {
+        initNfc()
+      }
+    }
+
     if (state.typeApp === 'cordova') {
+      // lance quand on est dans une application cordova, à chaque swap "deviceready" est réémit
       // cordova attent que les périphériques soient pris en compte
       document.addEventListener('deviceready', async () => {
         console.log('-> cordova device ready');
-
         initNfc(state.typeApp)
       })
-    }
+    } else {
 
-    /*
-    // du moment que htmx est chargé dans une page, à chaque rechargement
-    // de la page ou après chaque injection de htmx l'évènement htmx:load sera émit
-    // l'évènement cordova sera émit si app cordova en derneir.
-    document.body.addEventListener('htmx:load', (event) => {
-      const element = event.target
-      console.log('- htmx-load  -- ', new Date())
-      console.log('élement =', element)
-       console.log('tag name =', element.tagName)
-      console.log('typeApp =', state.typeApp)
-      
-      const inpuTagId = element.querySelector('#nfc-tag-id')
-      console.log('inpuTagId =', inpuTagId)
-
-      if (inpuTagId !== null) {
-
-        // chargement initail d'une page
-        if (element.tagName === 'BODY') {          
-          if (state.typeApp !== 'cordova') {
-            // non cordova pas d'attente du hardware
-            initNfc(state.typeApp)
-          } else {
-            // cordova attent que les périphériques soient pris en compte
-            document.addEventListener('deviceready', async () => {
-              console.log('-> cordova device ready');
-              
-              initNfc(state.typeApp)
-            })
-          }
-        } else {
-
-          // chargement partiel
-          initNfc(state.typeApp)
-        }
-
-      }
-    })
-*/
-
-    /**
-     * Attend le chargement de la page
-     * si app cordova attent que les périphériques soient pris en compte
-     */
-    /*
-    document.addEventListener("DOMContentLoaded", () => {
-
-      if (state.typeApp !== 'cordova') {
+      // lancé une fois que la page contenant "c-read-nfc" est chargée
+      document.addEventListener("DOMContentLoaded", () => {
+        console.log(`-> App ${state.typeApp} chargée !`)
         initNfc(state.typeApp)
-      } else {
-        // cordova attent que les périphériques soient pris en compte
-        document.addEventListener('deviceready', async () => {
-          initNfc(state.typeApp)
-        })
-      }
-    })
-*/
+      })
+
+      // lancé après un swap
+      document.addEventListener('htmx:afterSwap', nfcAfterSwap)
+    }
   </script>
 </div>

@@ -1,10 +1,4 @@
-/** ask_primary_card.html et le point d'entrée front de l'application laboutik.
- * récupération du type d'application cordova/pi/desktop par l'url de la page 
- * pour toute l'aplication
- */
-
-// port socketIo pour application pi et desktop
-state.socketIoPort = 3000 
+/** ask_primary_card.html et le point d'entrée front de l'application laboutik. */
 
 /**
 * Read the configuration file
