@@ -99,3 +99,47 @@
         {% include 'reunion/forms/login.html' %}
     </div>
   </div>
+
+  {% comment %}
+  OUVERTURE AUTO DE L'OFFCANVAS DE CONNEXION
+  / Auto-open the login offcanvas
+
+  LOCALISATION : BaseBillet/templates/reunion/partials/navbar.html
+
+  Quand une vue serveur redirige un visiteur anonyme avec le parametre
+  `?login=1` (ex : tentative de proposer un evenement sans etre connecte,
+  cf. EventWizardPublic._require_login_or_redirect), on ouvre automatiquement
+  l'offcanvas de connexion #loginPanel via l'API Bootstrap deja chargee.
+  On nettoie ensuite l'URL pour qu'un rafraichissement ne le rouvre pas.
+
+  / When a server view redirects an anonymous visitor with `?login=1`, open the
+  login offcanvas automatically using the already-loaded Bootstrap API, then
+  clean the URL so a refresh won't reopen it.
+  {% endcomment %}
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      // On ne fait rien si le parametre ?login=1 est absent.
+      // / Do nothing if the ?login=1 param is absent.
+      const parametresUrl = new URLSearchParams(window.location.search);
+      if (!parametresUrl.has("login")) {
+        return;
+      }
+
+      // Ouvre l'offcanvas de connexion (meme mecanisme que les autres panneaux).
+      // / Open the login offcanvas (same mechanism as the other panels).
+      const panneauConnexion = document.getElementById("loginPanel");
+      if (panneauConnexion) {
+        bootstrap.Offcanvas.getOrCreateInstance(panneauConnexion).show();
+      }
+
+      // Retire ?login=1 de l'URL sans recharger la page.
+      // / Remove ?login=1 from the URL without reloading.
+      parametresUrl.delete("login");
+      const requete = parametresUrl.toString();
+      const nouvelleUrl =
+        window.location.pathname +
+        (requete ? "?" + requete : "") +
+        window.location.hash;
+      window.history.replaceState({}, "", nouvelleUrl);
+    });
+  </script>

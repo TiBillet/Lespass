@@ -163,7 +163,13 @@ def get_sidebar_navigation(request):
                         "title": _("Events"),
                         "icon": "event",
                         "link": reverse_lazy("staff_admin:BaseBillet_event_changelist"),
-                        "badge": "Administration.admin.dashboard.event_proposals_badge_callback",
+                        # Badge "+ N" uniquement s'il y a des propositions en attente.
+                        # On appelle le callback ici et on passe "" quand il n'y a rien.
+                        # Le template Unfold teste {% if item.badge %} : une chaine vide
+                        # masque completement le badge (sinon il affichait "None").
+                        # / "+ N" badge only when proposals are pending. Empty string
+                        # hides the badge entirely (Unfold tests {% if item.badge %}).
+                        "badge": event_proposals_badge_callback(request) or "",
                         "permission": admin_permission,
                     },
                     {

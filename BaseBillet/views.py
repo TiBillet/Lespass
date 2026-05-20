@@ -3680,7 +3680,15 @@ class EventWizardPublic(viewsets.ViewSet):
     OTP email + 2 steps + done.
     """
 
-    authentication_classes = []
+    # On garde l'authentification de session : un visiteur deja connecte de
+    # facon classique doit etre reconnu (sinon la navbar afficherait "Connexion"
+    # et on lui redemanderait une verification). `AllowAny` reste actif pour que
+    # les visiteurs anonymes atteignent quand meme la vue et soient rediriges
+    # vers la connexion (toast + offcanvas).
+    # / Keep session authentication so an already-logged-in visitor is
+    # recognised. `AllowAny` stays so anonymous visitors still reach the view
+    # and get redirected to login (toast + offcanvas).
+    authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.AllowAny]
 
     SESSION_PREFIX = "event_proposal"
@@ -3693,9 +3701,33 @@ class EventWizardPublic(viewsets.ViewSet):
         from AuthBillet.otp_session import OtpSession
         return OtpSession(request, prefix=self.OTP_PREFIX)
 
+    def _require_login_or_redirect(self, request):
+        """
+        Garde du parcours public : on exige une connexion classique.
+        Si le visiteur n'est pas connecte, on affiche un toast l'invitant a se
+        connecter et on le renvoie vers la liste des evenements, ou l'offcanvas
+        de connexion s'ouvre automatiquement (parametre `?login=1`).
+        / Public flow guard: require a classic login. If the visitor is not
+        authenticated, show a toast and redirect to the event list, where the
+        login offcanvas auto-opens (`?login=1` param).
+        """
+        if request.user.is_authenticated:
+            return None
+        messages.add_message(
+            request, messages.WARNING,
+            _("Merci de vous connecter d'abord."),
+        )
+        return redirect(f"{reverse('event-list')}?login=1")
+
     def _require_otp_confirmed(self, request):
         """Garde : retourne un Redirect si OTP non confirme, None sinon.
-        / Guard: returns Redirect if OTP not confirmed, None otherwise."""
+        / Guard: returns Redirect if OTP not confirmed, None otherwise.
+
+        NB : OTP mis de cote pour l'instant — cette garde n'est plus branchee
+        sur le parcours public (elle le sera quand l'OTP rejoindra l'offcanvas
+        de connexion, prochaine session). Conservee volontairement.
+        / OTP parked for now — no longer wired into the public flow. Kept on
+        purpose for the upcoming reintegration into the login offcanvas."""
         if not self._otp(request).is_confirmed():
             return redirect("event-propose-email")
         return None
@@ -3703,74 +3735,25 @@ class EventWizardPublic(viewsets.ViewSet):
     @action(detail=False, methods=["GET", "POST"], url_path="email",
             throttle_classes=[AnonRateThrottle])
     def step0_email(self, request):
-        if request.method == "GET":
-            context = get_context(request)
-            context.update({
-                "wizard_title": _("Proposer un évènement"),
-                "wizard_step_label": _("Étape 1 — Votre email"),
-                "initial": {}, "errors": {},
-            })
-            return render(request, "reunion/views/event/wizard/public_step0_email.html",
-                          context=context)
+        """
+        Entree du parcours public de proposition d'evenement.
 
-        # POST
-        serializer = EventProposalEmailSerializer(data=request.POST)
-        if not serializer.is_valid():
-            context = get_context(request)
-            context.update({
-                "wizard_title": _("Proposer un évènement"),
-                "wizard_step_label": _("Étape 1 — Votre email"),
-                "initial": request.POST.dict(),
-                "errors": serializer.errors,
-            })
-            return render(request, "reunion/views/event/wizard/public_step0_email.html",
-                          context=context, status=422)
+        Pour l'instant on s'appuie sur la connexion classique : l'etape OTP
+        email est mise de cote (elle reviendra dans l'offcanvas de connexion
+        lors d'une prochaine session).
+        - Visiteur connecte -> on passe directement au choix du lieu.
+        - Visiteur anonyme  -> toast + redirection vers la connexion.
 
-        config = Configuration.get_solo()
-        # Try/except autour de l'envoi du mail : SMTP peut refuser une adresse
-        # invalide ou un domaine inexistant. Sans catch, l'utilisateur voit
-        # une 500. On convertit en 422 avec un message lisible. En DEBUG, on
-        # continue malgre l'echec (le bypass DEBUG du `verify` permet de
-        # tester le flow sans mail reel).
-        # / Catch SMTP errors: invalid email or unknown domain crashes Django.
-        # Convert to a 422 with a readable message. In DEBUG, ignore the error
-        # and continue (the DEBUG bypass in `verify` lets us test without mail).
-        try:
-            self._otp(request).start(
-                email=serializer.validated_data["email"],
-                libelle_action=str(_("Proposer un évènement")),
-                nom_organisation=config.organisation,
-            )
-        except Exception as erreur_envoi:
-            from django.conf import settings as django_settings
-            import logging as _logging
-            _logger = _logging.getLogger(__name__)
-            if django_settings.DEBUG:
-                _logger.warning(
-                    "OTP mail send failed in DEBUG (flow continues): %s",
-                    erreur_envoi,
-                )
-                return redirect("event-propose-verify")
-            # En prod : on nettoie la session OTP partielle et on remet
-            # l'utilisateur sur la step email avec un message clair.
-            # / Production: clear partial OTP session, return user to email step.
-            self._otp(request).reset()
-            context = get_context(request)
-            context.update({
-                "wizard_title": _("Proposer un évènement"),
-                "wizard_step_label": _("Étape 1 — Votre email"),
-                "initial": request.POST.dict(),
-                "errors": {"email": [_(
-                    "Impossible d'envoyer le mail a cette adresse. "
-                    "Verifiez votre adresse email puis reessayez."
-                )]},
-            })
-            return render(
-                request,
-                "reunion/views/event/wizard/public_step0_email.html",
-                context=context, status=422,
-            )
-        return redirect("event-propose-verify")
+        / Public proposal flow entry. We rely on classic login for now; the
+        OTP email step is parked (it will move into the login offcanvas in a
+        later session).
+        - Logged-in visitor -> straight to the place step.
+        - Anonymous visitor -> toast + redirect to login.
+        """
+        guard = self._require_login_or_redirect(request)
+        if guard:
+            return guard
+        return redirect("event-propose-place")
 
     @action(detail=False, methods=["GET", "POST"], url_path="verify")
     def step0_verify(self, request):
@@ -3842,7 +3825,7 @@ class EventWizardPublic(viewsets.ViewSet):
 
     @action(detail=False, methods=["GET", "POST"], url_path="place")
     def step1_place(self, request):
-        guard = self._require_otp_confirmed(request)
+        guard = self._require_login_or_redirect(request)
         if guard:
             return guard
 
@@ -3853,7 +3836,7 @@ class EventWizardPublic(viewsets.ViewSet):
             template="reunion/views/event/wizard/public_step1_place.html",
             form_action_url=reverse("event-propose-place"),
             next_step_url=reverse("event-propose-event"),
-            wizard_step_label=_("Étape 3 / 4 — Lieu"),
+            wizard_step_label=_("Étape 1 / 2 — Lieu"),
         )
 
     def _handle_place(self, request, template, form_action_url,
@@ -3918,7 +3901,7 @@ class EventWizardPublic(viewsets.ViewSet):
 
     @action(detail=False, methods=["GET", "POST"], url_path="event")
     def step2_event(self, request):
-        guard = self._require_otp_confirmed(request)
+        guard = self._require_login_or_redirect(request)
         if guard:
             return guard
 
@@ -3935,7 +3918,7 @@ class EventWizardPublic(viewsets.ViewSet):
             context = get_context(request)
             context.update({
                 "wizard_title": _("Proposer un évènement"),
-                "wizard_step_label": _("Étape 4 / 4 — Détails"),
+                "wizard_step_label": _("Étape 2 / 2 — Détails"),
                 "postal_address": postal_address,
                 "initial": {}, "errors": {},
             })
@@ -3951,7 +3934,7 @@ class EventWizardPublic(viewsets.ViewSet):
             context = get_context(request)
             context.update({
                 "wizard_title": _("Proposer un évènement"),
-                "wizard_step_label": _("Étape 4 / 4 — Détails"),
+                "wizard_step_label": _("Étape 2 / 2 — Détails"),
                 "postal_address": postal_address,
                 "initial": request.POST.dict(),
                 "errors": serializer.errors,
@@ -3965,7 +3948,9 @@ class EventWizardPublic(viewsets.ViewSet):
             datetime=validated["datetime"],
             long_description=admin_clean_html(validated.get("long_description") or ""),
             postal_address=postal_address,
-            created_by=None,
+            # L'auteur est l'utilisateur connecte (garde de connexion en amont).
+            # / Author is the logged-in user (login guard runs upstream).
+            created_by=request.user,
             published=False,
             is_proposal=True,
         )
