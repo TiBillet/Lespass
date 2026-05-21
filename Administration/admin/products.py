@@ -392,7 +392,6 @@ class MembershipPriceInlineForm(BasePriceInlineForm):
             )
 
     def clean_subscription_type(self):
-        product = self.cleaned_data.get("product")
         subscription_type = self.cleaned_data.get("subscription_type")
         # Get the categorie_article of the product
         categorie_article = self.data.get("categorie_article")
