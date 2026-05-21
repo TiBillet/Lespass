@@ -118,8 +118,7 @@ services:
       - backend
 
   lespass_django:
-    build: .
-#    image: tibillet/lespass:latest
+    image: tibillet/lespass:latest
     restart: unless-stopped
     container_name: lespass_django
     hostname: lespass_django
@@ -145,8 +144,7 @@ services:
 
 
   lespass_celery:
-    build: .
-#    image: tibillet/lespass:latest
+    image: tibillet/lespass:latest
     container_name: lespass_celery
     restart: unless-stopped
     hostname: lespass_celery
