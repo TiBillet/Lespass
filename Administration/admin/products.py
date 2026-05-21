@@ -392,7 +392,6 @@ class MembershipPriceInlineForm(BasePriceInlineForm):
             )
 
     def clean_subscription_type(self):
-        product = self.cleaned_data.get("product")
         subscription_type = self.cleaned_data.get("subscription_type")
         # Get the categorie_article of the product
         categorie_article = self.data.get("categorie_article")
@@ -410,11 +409,9 @@ class MembershipPriceInlineForm(BasePriceInlineForm):
 
         # Verifier que le produit est bien une adhesion
         # / Verify the product is indeed a membership
-        if hasattr(self.instance, "product"):
-            categorie_product = self.instance.product.categorie_article
-        elif self.cleaned_data.get("product"):
-            categorie_product = self.cleaned_data["product"].categorie_article
-        else:
+
+        categorie_product = self.data.get("categorie_article", None)
+        if categorie_product is None:
             raise forms.ValidationError(_("No product ?"), code="invalid")
 
         if categorie_product and categorie_product != Product.ADHESION:
