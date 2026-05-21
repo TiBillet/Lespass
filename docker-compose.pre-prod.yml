@@ -171,6 +171,8 @@ services:
       - traefik.http.routers.lespass-simple.rule=Host(`${DOMAIN}`) || Host(`lespass.${DOMAIN}`)
       - traefik.http.routers.lespass-simple.middlewares=crowdsec@file
 
+
+
     networks:
       - backend
       - frontend
