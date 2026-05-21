@@ -432,7 +432,11 @@ class WalletRefillViewSet(viewsets.ViewSet):
             cache_key = f"api:gift_refill:idem:{connection.tenant.pk}:{idempotency_key}"
             cached = cache.get(cache_key)
             if cached is not None:
-                return Response(cached, status=status.HTTP_200_OK)
+                # Rejeu idempotent : la transaction a deja ete creee, on renvoie
+                # la reponse stockee sans recrediter. 208 = deja traite.
+                # / Idempotent replay: transaction already created, return the
+                # stored response without re-crediting. 208 = already reported.
+                return Response(cached, status=status.HTTP_208_ALREADY_REPORTED)
 
         # 8. User / User
         user = get_or_create_user(email)

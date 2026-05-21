@@ -61,9 +61,9 @@ Gift token wallet refill
 - Refillable asset categories (NOT euro-backed): `TNF` (gift / "Cadeau"), `TIM` (time currency), `FID` (loyalty points), `BDG` (clocking/badge). Excluded: fiat (`TLF`, `FED`) and subscription (`SUB`). Canonical list: `AssetFedowPublic.REFILLABLE_CATEGORIES`.
 - Permission: the API key must have a `gift_asset` set in the admin. This single field BOTH enables the `walletrefill` permission AND restricts the key to that one asset (no separate checkbox). The admin widget is filtered to the refillable categories.
 - Body: `{ "email": "<user email>", "asset": "<asset uuid>", "amount": <int raw unit> }`
-- Optional header `Idempotency-Key: <string>` — a repeat with the same key (same tenant) returns the stored transaction (200) instead of crediting again (best-effort cache, ~48h TTL).
+- Optional header `Idempotency-Key: <string>` — a repeat with the same key (same tenant) returns the stored transaction (208 Already Reported) instead of crediting again (best-effort cache, ~48h TTL).
 - Constraints: the asset must be in a refillable category AND must match the key's `gift_asset`; `amount` is a positive integer capped at `10000` (raw unit).
-- Response 201 (or 200 on idempotent replay): schema.org/MoneyTransfer
+- Response 201 (or 208 Already Reported on idempotent replay): schema.org/MoneyTransfer
 ```json
 {
   "@context": "https://schema.org",

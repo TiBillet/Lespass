@@ -19,7 +19,7 @@ sans paiement — réplique en API du trigger `Price.fedow_reward_*`.
 - Payload : `email` + `asset` (uuid TNF) + `amount` (entier, unité brute).
 - Plafond hardcodé par recharge : `GIFT_REFILL_MAX_AMOUNT = 10000`.
 - Header optionnel `Idempotency-Key` : anti double-crédit (cache best-effort,
-  TTL ~48 h ; renvoie la transaction stockée avec un 200).
+  TTL ~48 h ; renvoie la transaction stockée avec un `208 Already Reported`).
 - Réponse schema.org `MoneyTransfer`.
 
 **Pourquoi / Why :** Permettre à un service externe d'offrir des tokens cadeau

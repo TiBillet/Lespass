@@ -893,8 +893,8 @@ paths:
         enables the permission and restricts the key to that single asset). The
         requested asset must be in a refillable category and must match the
         key's gift_asset. Per-call cap: 10000 (raw unit). Pass an Idempotency-Key
-        header to avoid double credits on retry (best-effort cache, returns 200
-        with the stored transaction).
+        header to avoid double credits on retry (best-effort cache, returns 208
+        Already Reported with the stored transaction).
       security:
         - ApiKeyAuth: []
       parameters:
@@ -903,7 +903,7 @@ paths:
           required: false
           schema:
             type: string
-          description: Optional dedup key; a repeat returns the stored transaction (200).
+          description: Optional dedup key; a repeat returns the stored transaction (208).
       requestBody:
         required: true
         content:
@@ -933,7 +933,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MoneyTransfer'
-        '200':
+        '208':
           description: Idempotent replay; returns the previously stored MoneyTransfer
           content:
             application/json:
