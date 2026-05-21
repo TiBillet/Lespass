@@ -502,6 +502,7 @@ class MembershipPriceInline(BasePriceInline):
         ("iteration", "commitment"),
         ("stock", "max_per_user"),
         ("publish", "order"),
+        "manual_validation"
     )
 
     # Regles de visibilite conditionnelle, meme syntaxe que Unfold conditional_fields.
