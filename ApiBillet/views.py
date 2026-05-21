@@ -10,6 +10,7 @@ from cryptography.fernet import Fernet
 from django.contrib.auth import get_user_model
 
 from django.db import connection
+from django.db.models import Q
 from django.http import Http404, HttpResponse
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -241,10 +242,34 @@ class EventsViewSet(viewsets.ViewSet):
     permission_classes = [permissions.AllowAny]
 
     def list(self, request):
+        only_futur = request.GET.get("only_futur", None)
+        filter = request.GET.get("filter", None)
+
         events = Event.objects.filter(
             published=True,
             parent__isnull=True,
-        ).order_by('-datetime')
+        ).order_by('datetime')
+
+        if only_futur:
+            timezone = Configuration.get_solo().get_tzinfo()
+
+            # Get the timezone
+            now = datetime.now()
+            # Convert it to the tenant configured timezone
+            now = now.astimezone(timezone)
+            # Remove one day to it to also show recent events
+            now = now.replace(day=now.day-1)
+
+            events = events.filter(end_datetime__gte=now)
+
+        if filter:
+            # Filter by name and descriptions
+            events = events.filter(
+                Q(name__icontains=filter) |
+                Q(short_description__icontains=filter) |
+                Q(long_description__icontains=filter)
+            )
+
         serializer = EventSerializer(events, many=True)
         return Response(serializer.data)
 
