@@ -3,6 +3,7 @@ import datetime
 from django.db import connection
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
+from django.utils.translation import gettext_lazy as _
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
@@ -26,6 +27,7 @@ from .serializers import (
     ReservationSchemaSerializer,
     MembershipCreateSerializer,
     MembershipSchemaSerializer,
+    WalletRefillCreateSerializer,
     InitiativeSchemaSerializer,
     InitiativeCreateSerializer,
     BudgetItemSchemaSerializer,
@@ -352,6 +354,121 @@ class MembershipViewSet(viewsets.ViewSet):
         membership = get_object_or_404(Membership, uuid=uuid)
         serializer = MembershipSchemaSerializer(membership)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+# Plafond par recharge cadeau, en unite brute (cf SPEC API_GIFT_REFILL).
+# / Per-call gift refill cap, in raw unit.
+GIFT_REFILL_MAX_AMOUNT = 10000
+
+
+class WalletRefillViewSet(viewsets.ViewSet):
+    """
+    Recharge de tokens cadeau (TNF) sur la tirelire d'un user.
+    / Gift token (TNF) wallet refill.
+
+    LOCALISATION : api_v2/views.py
+
+    Header : Authorization: Api-Key <key> (cle restreinte a un asset cadeau via
+    ExternalApiKey.gift_asset).
+    Header optionnel : Idempotency-Key (anti double-credit, cache best-effort).
+
+    FLUX :
+    1. Recupere l'objet cle API pour connaitre l'asset cadeau autorise.
+    2. Valide le payload (email, asset uuid, amount entier positif).
+    3. Resout l'asset et verifie qu'il est de categorie cadeau (TNF).
+    4. Verifie que l'asset demande est bien celui autorise sur la cle.
+    5. Verifie le plafond.
+    6. Idempotence (cache par tenant).
+    7. Cree/recupere l'user, verifie Fedow, credite la tirelire.
+    """
+    permission_classes = [SemanticApiKeyPermission]
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+    def create(self, request):
+        from ApiBillet.permissions import get_apikey_valid
+        from fedow_public.models import AssetFedowPublic
+        from fedow_connect.models import FedowConfig
+        from fedow_connect.fedow_api import FedowAPI
+        from AuthBillet.utils import get_or_create_user
+
+        # 1. Recupere l'objet cle API pour connaitre l'asset autorise
+        # / Get the API key object to know the allowed asset
+        api_key = get_apikey_valid(self)
+        if not api_key or not api_key.gift_asset_id:
+            return Response({"detail": _("API key not allowed for gift refill.")},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        # 2. Validation du payload / Validate payload
+        input_serializer = WalletRefillCreateSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        email = input_serializer.validated_data["email"]
+        asset_uuid = input_serializer.validated_data["asset"]
+        amount = input_serializer.validated_data["amount"]
+
+        # 3. Resolution de l'asset / Resolve asset
+        asset = get_object_or_404(AssetFedowPublic, uuid=asset_uuid)
+
+        # 4. Categorie rechargeable obligatoire (non adossee a l'euro)
+        # / Refillable category required (not euro-backed)
+        if asset.category not in AssetFedowPublic.REFILLABLE_CATEGORIES:
+            return Response({"detail": _("This asset category cannot be topped up.")},
+                            status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        # 5. L'asset doit etre celui autorise sur la cle / Must match key asset
+        if asset.uuid != api_key.gift_asset_id:
+            return Response({"detail": _("Asset not allowed for this API key.")},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        # 6. Plafond / Cap
+        if amount > GIFT_REFILL_MAX_AMOUNT:
+            return Response({"detail": _("Amount above the maximum allowed.")},
+                            status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        # 7. Idempotence (cache best-effort, cle par tenant)
+        # / Idempotency (best-effort cache, per-tenant key)
+        idempotency_key = request.META.get("HTTP_IDEMPOTENCY_KEY")
+        cache_key = None
+        if idempotency_key:
+            cache_key = f"api:gift_refill:idem:{connection.tenant.pk}:{idempotency_key}"
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return Response(cached, status=status.HTTP_200_OK)
+
+        # 8. User / User
+        user = get_or_create_user(email)
+        if not user:
+            return Response({"detail": _("Invalid email.")},
+                            status=status.HTTP_406_NOT_ACCEPTABLE)
+
+        # 9. Fedow dispo ? / Fedow available?
+        if not FedowConfig.get_solo().can_fedow():
+            return Response({"detail": _("Fedow service unavailable.")},
+                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        # 10. Credit / Refill
+        fedowAPI = FedowAPI()
+        metadata = {
+            "reason": f"API gift refill: {amount} {asset.name}",
+            "api_key": api_key.name,
+        }
+        if idempotency_key:
+            metadata["idempotency_key"] = idempotency_key
+        reward_tx = fedowAPI.transaction.refill_from_lespass_to_user_wallet(
+            user=user, amount=amount, asset=asset, metadata=metadata,
+        )
+
+        # 11. Reponse schema.org MoneyTransfer
+        payload = {
+            "@context": "https://schema.org",
+            "@type": "MoneyTransfer",
+            "identifier": str(reward_tx.get("uuid")),
+            "amount": amount,
+            "asset": str(asset.uuid),
+            "recipient": {"@type": "Person", "email": email},
+        }
+        if cache_key:
+            cache.set(cache_key, payload, timeout=60 * 60 * 48)  # 48h
+        return Response(payload, status=status.HTTP_201_CREATED)
 
 
 class SaleViewSet(viewsets.ViewSet):

@@ -3357,6 +3357,27 @@ class ExternalApiKey(models.Model):
     sale = models.BooleanField(default=False, verbose_name=_("Sales"))
     crowd = models.BooleanField(default=False, verbose_name=_("Crowds"))
 
+    # Asset cadeau (TNF) que cette cle peut recharger via /api/v2/wallet-refills/.
+    # La presence de cet asset sert a la fois d'interrupteur du droit "walletrefill"
+    # et de restriction : la cle ne peut recharger QUE cet asset.
+    # / Gift asset (TNF) this key can top-up via the wallet-refill route.
+    # Its presence both enables the "walletrefill" permission and restricts it to this asset.
+    gift_asset = models.ForeignKey(
+        "fedow_public.AssetFedowPublic",
+        on_delete=models.SET_NULL, blank=True, null=True,
+        # Confort admin : filtre le widget sur les categories rechargeables.
+        # La source de verite est AssetFedowPublic.REFILLABLE_CATEGORIES, et la
+        # securite reelle est la validation dans la vue (cf api_v2/views.py).
+        # Monnaies NON adossees a l'euro : cadeau (TNF), temps (TIM),
+        # fidelite (FID), badgeuse (BDG).
+        # / Admin convenience filter; canonical set is
+        # AssetFedowPublic.REFILLABLE_CATEGORIES, enforced in the view.
+        limit_choices_to={"category__in": ["TNF", "TIM", "FID", "BDG"]},
+        related_name="api_keys_gift_refill",
+        verbose_name=_("Wallet refill (asset)"),
+        help_text=_("If set, this key can top-up this asset (gift, time, loyalty or badge — non-fiat) via /api/v2/wallet-refills/."),
+    )
+
     def api_permissions(self):
         return {
             # Basename ( regarder dans utils.py -> user_apikey_valid pour comprendre le mecanisme )
@@ -3372,6 +3393,9 @@ class ExternalApiKey(models.Model):
             # Basename de la route des ventes
             "sale": self.sale,
             "crowd": self.crowd,
+            # Recharge cadeau : autorisee seulement si un asset cadeau est defini
+            # / Gift refill: allowed only if a gift asset is set
+            "walletrefill": bool(self.gift_asset_id),
         }
 
     class Meta:

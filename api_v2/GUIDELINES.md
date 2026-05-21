@@ -15,6 +15,7 @@ These guidelines define how to build the v2 API with a strong focus on semantic,
   - Authentication by API key sent in header: `Authorization: Api-Key <key>`.
   - Granular authorization per resource/action with custom DRF permission classes defined in this folder.
   - Keys must be manageable from Django admin.
+  - Most permissions are booleans on `ExternalApiKey` mapped by basename in `api_permissions()`. Exception — the wallet-refill route: `api_permissions()["walletrefill"] = bool(self.gift_asset_id)`. The `gift_asset` FK (limited to the non-fiat categories in `AssetFedowPublic.REFILLABLE_CATEGORIES`: `TNF`/`TIM`/`FID`/`BDG`) acts as BOTH the on/off switch and the per-key asset restriction. The view re-checks that the requested asset is in a refillable category and equals the key's `gift_asset`.
 - Testing strategy
   - Use Poetry to run tests: `poetry install` then `poetry run pytest`.
   - Example: `poetry run pytest -q tests/pytest/test_events_list.py`.

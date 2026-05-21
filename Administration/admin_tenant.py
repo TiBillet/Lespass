@@ -151,6 +151,9 @@ class ExternalApiKeyAdmin(ModelAdmin):
         ('event', 'product',),
         ('reservation', 'ticket'),
         ('wallet', 'sale'),
+        # Recharge cadeau : asset TNF que cette cle peut crediter via l'API v2
+        # / Gift refill: TNF asset this key may top-up via API v2
+        'gift_asset',
         'user',
         'key',
     ]

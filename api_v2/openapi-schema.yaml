@@ -882,6 +882,71 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/v2/wallet-refills/:
+    post:
+      summary: Top up a user wallet with non-fiat tokens
+      description: >
+        Credit non-fiat tokens to a user's wallet from the place wallet, without
+        payment. Refillable asset categories: TNF (gift), TIM (time), FID
+        (loyalty), BDG (badge); fiat (TLF, FED) and subscription (SUB) are
+        excluded. The API key must have a gift_asset set in the admin (this both
+        enables the permission and restricts the key to that single asset). The
+        requested asset must be in a refillable category and must match the
+        key's gift_asset. Per-call cap: 10000 (raw unit). Pass an Idempotency-Key
+        header to avoid double credits on retry (best-effort cache, returns 200
+        with the stored transaction).
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema:
+            type: string
+          description: Optional dedup key; a repeat returns the stored transaction (200).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, asset, amount]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: alice@example.org
+                asset:
+                  type: string
+                  format: uuid
+                  description: UUID of the refillable asset (TNF/TIM/FID/BDG) authorized on the key
+                amount:
+                  type: integer
+                  minimum: 1
+                  maximum: 10000
+                  description: Token amount in raw unit (passed as-is to Fedow)
+                  example: 500
+      responses:
+        '201':
+          description: Tokens credited; returns a schema.org MoneyTransfer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneyTransfer'
+        '200':
+          description: Idempotent replay; returns the previously stored MoneyTransfer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneyTransfer'
+        '400':
+          description: Invalid payload
+        '403':
+          description: Key not allowed, or asset not authorized for this key
+        '422':
+          description: Asset category is not refillable (fiat/subscription), or amount above the cap
+        '503':
+          description: Fedow service unavailable
 components:
   securitySchemes:
     ApiKeyAuth:
@@ -1631,3 +1696,33 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Product'
+    MoneyTransfer:
+      type: object
+      properties:
+        '@context':
+          type: string
+          example: https://schema.org
+        '@type':
+          type: string
+          example: MoneyTransfer
+        identifier:
+          type: string
+          format: uuid
+          description: Fedow transaction UUID
+        amount:
+          type: integer
+          description: Credited token amount in raw unit
+          example: 500
+        asset:
+          type: string
+          format: uuid
+          description: Refillable asset UUID (TNF/TIM/FID/BDG)
+        recipient:
+          type: object
+          properties:
+            '@type':
+              type: string
+              example: Person
+            email:
+              type: string
+              format: email

@@ -8,6 +8,7 @@ from .views import (
     SaleViewSet,
     ReservationViewSet,
     MembershipViewSet,
+    WalletRefillViewSet,
     CrowdInitiativeViewSet,
 )
 
@@ -24,6 +25,8 @@ router.register(r'sales', SaleViewSet, basename='sale')
 router.register(r"reservations", ReservationViewSet, basename="reservation")
 # Membership endpoints (use basename 'membership' to map to ExternalApiKey.api_permissions)
 router.register(r"memberships", MembershipViewSet, basename="membership")
+# Wallet gift-refill endpoint (basename 'walletrefill' -> ExternalApiKey.gift_asset)
+router.register(r"wallet-refills", WalletRefillViewSet, basename="walletrefill")
 router.register(r"initiatives", CrowdInitiativeViewSet, basename="crowd")
 urlpatterns = [
     path("", include(router.urls)),

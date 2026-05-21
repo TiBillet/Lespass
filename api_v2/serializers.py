@@ -1455,3 +1455,18 @@ class ParticipationCreateSerializer(serializers.Serializer):
         if value is not None:
             self.amount = int(Decimal(value) * 100)
         return value
+
+
+class WalletRefillCreateSerializer(serializers.Serializer):
+    """
+    Entree pour recharger des tokens cadeau (TNF) sur la tirelire d'un user.
+    / Input serializer for gift token wallet refill (API v2).
+
+    LOCALISATION : api_v2/serializers.py
+
+    Le montant est en unite brute (entier) : il est transmis tel quel a Fedow.
+    / Amount is a raw integer unit, passed as-is to Fedow.
+    """
+    email = serializers.EmailField(required=True)
+    asset = serializers.UUIDField(required=True)
+    amount = serializers.IntegerField(required=True, min_value=1)

@@ -1,5 +1,56 @@
 # Changelog / Journal des modifications
 
+## API v2 — Recharge de tokens non fiduciaires / API v2 — non-fiat wallet refill
+
+**Date :** 2026-05-21
+**Migration :** Oui (`BaseBillet/0211_externalapikey_gift_asset`,
+`BaseBillet/0212_alter_externalapikey_gift_asset`)
+
+**Quoi / What :** Nouvelle route `POST /api/v2/wallet-refills/` qui crédite des
+tokens **non adossés à l'euro** sur la tirelire d'un user à partir de son email,
+sans paiement — réplique en API du trigger `Price.fedow_reward_*`.
+- Catégories rechargeables (`AssetFedowPublic.REFILLABLE_CATEGORIES`) : `TNF`
+  (cadeau), `TIM` (monnaie temps), `FID` (fidélité), `BDG` (badgeuse). Exclues :
+  fiduciaires (`TLF`, `FED`) et adhésion (`SUB`).
+- Authentification par clé API (`SemanticApiKeyPermission`).
+- Nouveau champ `ExternalApiKey.gift_asset` (FK → `fedow_public.AssetFedowPublic`,
+  `limit_choices_to={'category__in':['TNF','TIM','FID','BDG']}`). Sa présence
+  active le droit `walletrefill` **et** restreint la clé à ce seul asset.
+- Payload : `email` + `asset` (uuid TNF) + `amount` (entier, unité brute).
+- Plafond hardcodé par recharge : `GIFT_REFILL_MAX_AMOUNT = 10000`.
+- Header optionnel `Idempotency-Key` : anti double-crédit (cache best-effort,
+  TTL ~48 h ; renvoie la transaction stockée avec un 200).
+- Réponse schema.org `MoneyTransfer`.
+
+**Pourquoi / Why :** Permettre à un service externe d'offrir des tokens cadeau
+de façon contrôlée (un asset par clé, catégorie cadeau uniquement, plafond).
+La route v1 `/api/wallet/get_stripe_checkout_with_email/` (recharge **payante**
+Stripe) reste inchangée.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `fedow_public/models.py` | Constante `AssetFedowPublic.REFILLABLE_CATEGORIES` (TNF/TIM/FID/BDG) |
+| `BaseBillet/models.py` | Champ `gift_asset` sur `ExternalApiKey` + entrée `api_permissions()` |
+| `BaseBillet/migrations/0211_externalapikey_gift_asset.py` | Ajout du champ |
+| `BaseBillet/migrations/0212_alter_externalapikey_gift_asset.py` | Élargissement `limit_choices_to` + libellés |
+| `api_v2/serializers.py` | `WalletRefillCreateSerializer` |
+| `api_v2/views.py` | `WalletRefillViewSet` + `GIFT_REFILL_MAX_AMOUNT` + import `gettext` |
+| `api_v2/urls.py` | Route `wallet-refills` (basename `walletrefill`) |
+| `Administration/admin_tenant.py` | `gift_asset` dans `ExternalApiKeyAdmin.fields` |
+| `api_v2/openapi-schema.yaml` | Path + schéma `MoneyTransfer` |
+| `api_v2/README.md`, `api_v2/GUIDELINES.md` | Documentation de la route |
+| `tests/pytest/test_api_v2_wallet_refill.py` | 11 tests (FedowAPI mockée) |
+
+### Migration
+- **Migration nécessaire / Migration required :** Oui
+- `BaseBillet/0211_externalapikey_gift_asset` + `BaseBillet/0212_alter_externalapikey_gift_asset`
+- `manage.py migrate_schemas --executor=multiprocessing`
+
+### i18n
+Nouvelles chaînes `_()` côté serveur (messages d'erreur de la vue + `verbose_name`/
+`help_text` du champ `gift_asset`). Le mainteneur lance makemessages/compilemessages.
+
 ## Module « Agenda participatif » / "Participatory agenda" module
 
 **Date :** 2026-05-21
