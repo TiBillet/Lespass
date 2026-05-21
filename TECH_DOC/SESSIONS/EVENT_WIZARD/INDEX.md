@@ -13,7 +13,12 @@ Périmètre fonctionnel :
 
 | # | Chantier | Statut | Spec | Plan |
 |---|---|---|---|---|
-| 01 | Wizards admin + public + service OTP DRY | Plan rédigé, prêt à exécuter | [SPEC.md](SPEC.md) | [PLAN.md](PLAN.md) |
+| 01 | Wizards admin + public + service OTP DRY (MVP) | ✅ Implémenté (2026-05-19) | [SPEC.md](SPEC.md) | [PLAN.md](PLAN.md) |
+| 02 | Login classique, choix de lieu en 2 pages, multi-événements, routage DRF, plafond adresses, toggle mobile | ✅ Implémenté (2026-05-21) — tests pytch différés | [CHANTIER-02-login-place-split-multi-events.md](CHANTIER-02-login-place-split-multi-events.md) | — |
+
+> ⚠️ Le chantier 02 fait évoluer le MVP : **l'OTP du wizard public est mis de côté**
+> (code conservé) au profit de la connexion classique ; le choix de lieu passe à
+> 2 pages ; on peut proposer **plusieurs** événements. Voir CHANTIER-02 pour le détail.
 
 ## Comment ajouter un chantier futur
 

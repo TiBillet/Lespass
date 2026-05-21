@@ -4,7 +4,7 @@
 
 **Pré-requis :** CHANTIER-05 (1 marker par PostalAddress) terminé côté backend SEO et JS markers. Cette spec reprend la pile de PLAN-05 et corrige les régressions UX visibles : plus de liste d'événements, filtre "Événements" sans effet visuel, accordéon "Prochains événements" cassé.
 
-**Date :** 2026-05-19. **Auteur :** Jonas + Claude (brainstorming).
+**Date :** 2026-05-21. **Auteur :** Jonas + Claude (brainstorming).
 
 ---
 
@@ -203,3 +203,35 @@ PLAN-06 produit par writing-plans. Découpage indicatif :
 8. Frontend : CSS chips + empty state.
 9. Tests E2E.
 10. CHANGELOG + doc test manuel.
+
+## 10. Journal d'exécution (2026-05-21)
+
+Exécution via `superpowers:subagent-driven-development` (1 subagent par task,
+review entre chaque). Les 12 tasks de PLAN-06 sont implémentées. Tous les
+commits restent à faire par le mainteneur (aucune opération git côté agent).
+
+**Résultats backend (Tasks 1-3) :**
+- Task 1 : `get_event_tags_for_tenants` ajouté (`seo/services.py`), 3 tests unitaires verts.
+- Task 2 : propagation `tags` + `get_events_for_tenants` retourne désormais `uuid`.
+  Régression : 18/18 tests pytest verts. Refresh réel : 9 events tagués détectés en cache.
+- Task 3 : le bug était à la **ligne 1672** (pas 1669 comme estimé dans la spec — léger
+  décalage). `lieux` → `tenants`. Django check OK.
+
+**Résultats frontend (Tasks 4-10) :** appliqués sur `explorer_widget.html`,
+`explorer.js`, `explorer.css`. Django check OK à chaque étape. Refresh cache :
+7 points / 25 events publiés.
+
+**Écarts par rapport à la spec (à connaître) :**
+- **Tests E2E : 8 écrits au lieu de 4** (§6 prévoyait 4). Le subagent a sur-couvert
+  (pills = 3 tests, chips = 2, URL = 1, empty state = 2). Lisibles et isolés.
+- **`tests/e2e/conftest.py` créé** (846 lignes, copié depuis `lespass-main`) car le
+  dossier `tests/e2e/` n'existait pas sur la branche `main-pa-carto`. Non prévu dans
+  la spec — à arbitrer par le mainteneur (garder ou rapatrier proprement depuis main).
+- **`pytest.ini`** : +1 ligne (marker `e2e`). Lié au point précédent.
+- **Tests E2E non encore exécutés** : le serveur Django n'était pas actif au moment
+  de l'exécution. À valider par le mainteneur, serveur up (voir
+  `A TESTER et DOCUMENTER/explorer-ux-pills-tags.md`).
+
+**Fichiers untracked du working tree NON liés à ce chantier** (présents avant
+l'exécution) : `TECH_DOC/Unfold_docs/`, `step0-*.png`, et les modifs `AuthBillet/otp_*.py`
++ `BaseBillet/.../wizard/_base.html`.

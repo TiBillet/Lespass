@@ -18,7 +18,14 @@ Le service est conçu pour servir plusieurs cas d'usage :
 
 | # | Chantier | Statut | Spec | Plan |
 |---|---|---|---|---|
-| 01 | Service OTP DRY stateless + helper session HTTP | Plan rédigé, prêt à exécuter | [SPEC.md](SPEC.md) | [../EVENT_WIZARD/PLAN.md](../EVENT_WIZARD/PLAN.md) (session S1) |
+| 01 | Service OTP DRY stateless + helper session HTTP | ✅ Implémenté (2026-05-19) | [SPEC.md](SPEC.md) | [../EVENT_WIZARD/PLAN.md](../EVENT_WIZARD/PLAN.md) (session S1) |
+
+> ℹ️ **Statut d'usage (2026-05-21)** : le service OTP est **en place et testé**,
+> mais son **premier consommateur (wizard public d'évènement) a été basculé sur la
+> connexion classique** (cf. [EVENT_WIZARD/CHANTIER-02](../EVENT_WIZARD/CHANTIER-02-login-place-split-multi-events.md)).
+> L'OTP est donc **parqué** : le code (`otp_service.py`, `otp_session.py`, étapes
+> `step0_verify`/`step0_resend`) reste en place, prêt à être réintégré dans
+> l'**offcanvas de connexion** — ce qui rejoint le CHANTIER-02 « Login OTP » ci-dessous.
 
 ## Chantiers envisagés (non datés)
 

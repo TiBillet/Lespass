@@ -22,7 +22,8 @@ ou desindexation.
 | 02 | Enrichir le base template tenant (meta, OG, JSON-LD) | A faire | Eleve | _a creer_ |
 | 03 | Pages indexables ROOT pour sitelinks Google | A faire | Moyen | _a creer_ |
 | 04 | Breadcrumbs JSON-LD + `sameAs` Organization | A faire | Bas | _a creer_ |
-| 05 | Carte explorer ROOT : 1 marker par PostalAddress | Spec + Plan prets, en attente execution | Moyen | [CHANTIER-05-explorer-markers-per-pa.md](./CHANTIER-05-explorer-markers-per-pa.md) + [PLAN-05-explorer-markers-per-pa.md](./PLAN-05-explorer-markers-per-pa.md) |
+| 05 | Carte explorer ROOT : 1 marker par PostalAddress | Implemente (backend + frontend + cache), E2E Task 10 non ecrit | Moyen | [CHANTIER-05-explorer-markers-per-pa.md](./CHANTIER-05-explorer-markers-per-pa.md) + [PLAN-05-explorer-markers-per-pa.md](./PLAN-05-explorer-markers-per-pa.md) |
+| 06 | Carte explorer ROOT : pills exclusives, tag chips, URL partageable | Implemente — a tester / commiter (12 tasks faites, E2E a valider serveur up) | Moyen | [CHANTIER-06-explorer-ux-pills-tags.md](./CHANTIER-06-explorer-ux-pills-tags.md) + [PLAN-06-explorer-ux-pills-tags.md](./PLAN-06-explorer-ux-pills-tags.md) |
 
 ## Regles de fond (issues de Google AI Optimization Guide, 15 mai 2026)
 
