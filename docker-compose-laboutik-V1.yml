@@ -291,10 +291,10 @@ services:
       - laboutik_django
     links:
       - laboutik_django:laboutik_django
-    volumes:
-      - ../LaBoutik/www:/DjangoFiles/www
-      - ../LaBoutik/logs:/DjangoFiles/logs
-      - ../LaBoutik/nginx:/etc/nginx/conf.d
+#    volumes:
+#      - ../LaBoutik/www:/DjangoFiles/www
+#      - ../LaBoutik/logs:/DjangoFiles/logs
+#      - ../LaBoutik/nginx:/etc/nginx/conf.d
     labels:
       - traefik.enable=true
       - traefik.docker.network=frontend
