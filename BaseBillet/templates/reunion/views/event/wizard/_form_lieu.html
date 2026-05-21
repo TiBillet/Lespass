@@ -81,6 +81,29 @@ Variables attendues :
     /* Message "aucun resultat" : cache tant qu'il y a des resultats.
        / "No result" message: hidden while there are results. */
     .wizard-place-no-result { display: none; }
+
+    /* Mobile (< 576px) : le toggle passe en vertical. A 50% de largeur sur un
+       petit ecran, les libelles "Utiliser une adresse existante" / "Créer un
+       nouveau lieu" se coupent sur plusieurs lignes ; empiles, chaque bouton
+       prend toute la largeur et reste lisible. On annule les coins/marges
+       horizontaux de Bootstrap (btn-group) et on arrondit chaque bouton.
+       / Mobile (< 576px): stack the toggle vertically. At 50% width on a small
+       screen the labels wrap awkwardly; stacked, each button is full-width and
+       readable. We reset Bootstrap's horizontal radii/margins and round each. */
+    @media (max-width: 575.98px) {
+        .wizard-mode-toggle .btn-group {
+            flex-direction: column;
+            width: 100%;
+        }
+        .wizard-mode-toggle .btn-group > .btn {
+            width: 100%;
+            margin-left: 0;
+            border-radius: var(--tb-radius-input, .5rem) !important;
+        }
+        .wizard-mode-toggle .btn-group > .btn:not(:last-of-type) {
+            margin-bottom: .375rem;
+        }
+    }
 </style>
 
 {% if errors %}
@@ -165,6 +188,14 @@ Variables attendues :
                role="status" aria-live="polite">
                 {% translate "Aucune adresse ne correspond à votre recherche." %}
             </p>
+            {# Affiche quand il y a plus d'adresses que le plafond visible : #}
+            {# invite a taper pour filtrer (cf. JS, plafond LIMITE_VISIBLE). #}
+            {# / Shown when matches exceed the visible cap: prompts to filter. #}
+            <p id="wizard-place-cap" class="wizard-place-no-result text-muted small mt-2"
+               role="status" aria-live="polite">
+                <i class="bi bi-funnel me-1" aria-hidden="true"></i>
+                {% translate "Toutes les adresses ne sont pas affichées. Tapez ci-dessus pour filtrer." %}
+            </p>
         </div>
 
         {# ---- Mode "nouveau lieu" : seulement le nom (carte = page 2) ---- #}
@@ -229,21 +260,53 @@ Variables attendues :
         var champ_recherche = document.getElementById('wizard-place-search');
         var liste = document.getElementById('wizard-place-list');
         var message_aucun = document.getElementById('wizard-place-no-result');
+        var message_cap = document.getElementById('wizard-place-cap');
+
+        // Plafond d'affichage : avec beaucoup d'adresses (ex: 300), on garde
+        // TOUTES les adresses dans le DOM pour que la recherche fonctionne,
+        // mais on n'en AFFICHE qu'un nombre limite a la fois. L'utilisateur
+        // tape pour filtrer et reduire la liste ; l'item selectionne reste
+        // toujours visible meme au-dela du plafond.
+        // / Display cap: with many addresses (e.g. 300), keep ALL in the DOM so
+        // search works, but only SHOW a limited number at once. The user types
+        // to filter; the selected item stays visible beyond the cap.
+        var LIMITE_VISIBLE = 50;
 
         function filtrer_liste() {
             if (!liste) { return; }
             var terme = (champ_recherche.value || '').trim().toLowerCase();
             var items = liste.querySelectorAll('.wizard-place-item');
-            var nombre_visibles = 0;
+            var nombre_correspondants = 0;
+            var nombre_affiches = 0;
             items.forEach(function (item) {
                 var contenu = item.getAttribute('data-search') || '';
-                var correspond = contenu.indexOf(terme) !== -1;
-                item.style.display = correspond ? 'flex' : 'none';
-                if (correspond) { nombre_visibles += 1; }
+                var correspond = (terme === '') || (contenu.indexOf(terme) !== -1);
+                if (!correspond) {
+                    item.style.display = 'none';
+                    return;
+                }
+                nombre_correspondants += 1;
+                // On affiche les LIMITE_VISIBLE premiers correspondants, et
+                // toujours l'item selectionne (sinon l'utilisateur perdrait de
+                // vue son choix s'il est au-dela du plafond).
+                // / Show the first LIMITE_VISIBLE matches + always the selected
+                // item (so the user keeps sight of their choice).
+                var radio = item.querySelector('input[type="radio"]');
+                var est_selectionne = !!(radio && radio.checked);
+                var visible = (nombre_affiches < LIMITE_VISIBLE) || est_selectionne;
+                item.style.display = visible ? 'flex' : 'none';
+                if (visible) { nombre_affiches += 1; }
             });
+
+            // Messages de statut (un seul a la fois) : "aucun resultat" OU
+            // "liste plafonnee, affinez". / Status messages (one at a time).
+            var aucun_resultat = (nombre_correspondants === 0 && items.length > 0);
+            var liste_plafonnee = (nombre_correspondants > nombre_affiches);
             if (message_aucun) {
-                var aucun_resultat = (nombre_visibles === 0 && items.length > 0);
                 message_aucun.style.display = aucun_resultat ? 'block' : 'none';
+            }
+            if (message_cap) {
+                message_cap.style.display = liste_plafonnee ? 'block' : 'none';
             }
         }
 
@@ -265,9 +328,12 @@ Variables attendues :
         });
         if (champ_recherche) { champ_recherche.addEventListener('input', filtrer_liste); }
 
-        // Etat initial au chargement.
-        // / Initial state on load.
+        // Etat initial au chargement : applique le mode, le surlignage, et le
+        // plafond d'affichage (la liste s'ouvre deja limitee).
+        // / Initial state on load: apply mode, highlight, and the display cap
+        // (the list opens already capped).
         appliquer_mode();
         maj_selection();
+        filtrer_liste();
     })();
 </script>
