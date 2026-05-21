@@ -1,5 +1,57 @@
 # Changelog / Journal des modifications
 
+## Triggers Fedow dans les inlines de tarif (adhésion + billet) / Fedow triggers in price inlines (membership + ticket)
+
+**Date :** 2026-05-21
+**Migration :** Non
+**Contributeurs / Contributors :** JonasFW13 (Jonas) + Claude Opus 4.7
+
+**Quoi / What :** Depuis que les tarifs (`Price`) sont des inlines dans les proxys
+produit, l'onglet « Triggers » de l'ancienne vue `PriceAdmin` n'était plus
+atteignable (lien désactivé, absent de la sidebar). Les deux déclencheurs Fedow
+sont désormais exposés **directement dans l'inline du bon proxy** :
+- **Adhésion** (`MembershipPriceInline`) : `fedow_reward_enabled` → recharge le
+  wallet du membre à l'achat de l'adhésion.
+- **Billet** (`TicketPriceInline`) : `reward_on_ticket_scanned` → récompense le
+  wallet de l'acheteur au scan du billet.
+
+Dans les deux cas, `fedow_reward_asset` + `fedow_reward_amount` ne s'affichent que
+si le toggle est coché, via le mécanisme JS `inline_conditional_fields` existant.
+
+**Pourquoi / Why :** Redonner l'accès à un réglage rare (très peu de tenants) sans
+polluer l'inline du cas courant. Comme chaque proxy n'a qu'un seul toggle, la
+limite « une source par règle » du JS conditionnel n'est jamais atteinte (pas de
+`OU` à gérer). Le câblage conditionnel est remonté dans la base `ProductAdmin`
+pour que `TicketProductAdmin` en bénéficie aussi (avant : uniquement adhésion).
+
+### Fichiers modifiés / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/admin/products.py` | `BasePriceInline.formfield_for_foreignkey` (filtre `fedow_reward_asset` sur `AssetFedowPublic` local du tenant) ; `BasePriceInlineForm.__init__` désactive les boutons +/✎/🗑/👁 du dropdown asset (aucune création/édition/consultation d'asset depuis l'inline) ; champs trigger + règles conditionnelles ajoutés à `MembershipPriceInline` et `TicketPriceInline` (+ `Media.js`) ; `change_form_after_template` + `changeform_view` remontés dans `ProductAdmin` (base), retirés de `MembershipProductAdmin` (devenus redondants) ; **nettoyage** : correction i18n (`_(f"…")` → placeholders `%`) dans `duplicate_product`/`archive`/`desarchive`, suppression d'un `logger.error(self.actions_row)` de debug |
+| `Administration/admin_tenant.py` | **nettoyage** : suppression du code mort `PriceInlineChangeForm` + `PriceInline` (ancien inline orphelin, remplacé par le package `Administration/admin/`) |
+| `A TESTER et DOCUMENTER/triggers-fedow-inline-tarif.md` | NOUVEAU — scénarios de test manuel |
+
+> **i18n :** les correctifs `_(f"…")` → `_("…%(x)s…") % {…}` **changent les msgid** de
+> `duplicate_product`/`archive`/`desarchive`. Lancer le workflow traductions
+> (`makemessages` + `.po` + `compilemessages`) — non lancé ici (le mainteneur s'en charge).
+
+### Décisions clés / Key decisions
+
+- **Un toggle par proxy** : adhésion = `fedow_reward_enabled` (recharge à l'achat),
+  billet = `reward_on_ticket_scanned` (récompense au scan). Sémantique confirmée
+  dans le code consommateur (`tasks.py:refill_..._from_price_solded` vs
+  `signals.py:check_reward` → `tasks.py:refill_..._from_ticket_scanned`).
+- **JS inchangé** : la séparation par proxy évite le besoin d'un `OU` dans
+  `inline_conditional_fields.js`.
+- **`PriceAdmin` standalone conservé** (onglet Triggers intact) — sert toujours
+  d'autocomplete et de cible de redirection, mais n'est plus le chemin nominal.
+
+### Migration
+
+- **Migration nécessaire / Migration required:** Non (aucun changement de modèle ;
+  les 4 champs `Price` existent déjà depuis les migrations 0163 / 0180).
+
 ## Wizard évènement V2 : connexion classique, lieu en 2 pages, multi-évènements / Event wizard V2: classic login, 2-page place, multi-events
 
 **Date :** 2026-05-21

@@ -738,63 +738,6 @@ class OptionGeneraleAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 """
 
-class PriceInlineChangeForm(ModelForm):
-    # Le formulaire pour changer une adhésion
-    class Meta:
-        model = Price
-        fields = (
-            'name',
-            'product',
-            'prix',
-            'free_price',
-            'subscription_type',
-            'publish',
-        )
-
-    def clean_prix(self):
-        cleaned_data = self.cleaned_data
-        prix = cleaned_data.get('prix')
-        if 0 < prix < 1:
-            raise forms.ValidationError(_("A rate cannot be between 0€ and 1€"), code="invalid")
-        return prix
-
-    def clean_subscription_type(self):
-        cleaned_data = self.cleaned_data
-        product: Product = cleaned_data.get('product')
-        subscription_type = cleaned_data.get('subscription_type')
-        if product.categorie_article == Product.ADHESION:
-            if subscription_type == Price.NA:
-                raise forms.ValidationError(_("A subscription must have a duration"), code="invalid")
-        return subscription_type
-
-
-class PriceInline(TabularInline):
-    model = Price
-    fk_name = 'product'
-    form = PriceInlineChangeForm
-    # hide_title = True
-    # collapsible = True # usefull for StackedInline
-
-    # ordering_field = "weight"
-    # max_num = 1
-    extra = 0
-    show_change_link = True
-
-    # tab = True # don't set to false : comment or the tab title will be visible
-
-    # Surcharger la méthode pour désactiver la suppression
-    def has_delete_permission(self, request, obj=None):
-        return False
-
-    def has_add_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_change_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_view_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
 
 @admin.register(Paiement_stripe, site=staff_admin_site)
 class PaiementStripeAdmin(ModelAdmin):

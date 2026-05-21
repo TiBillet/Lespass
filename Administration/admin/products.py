@@ -303,6 +303,23 @@ class BasePriceInlineForm(ModelForm):
         # / Excluded fields: auto-managed or not relevant in inlines
         exclude = ("short_description", "long_description", "vat")
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # On interdit d'ajouter, modifier ou supprimer un asset depuis ce dropdown.
+        # L'admin choisit un asset existant ; sa creation/edition se fait ailleurs
+        # (vue Asset dediee). On retire donc les boutons +, crayon et corbeille.
+        # / Forbid add / change / delete of an asset from this dropdown.
+        # The admin picks an existing asset; managing it happens elsewhere.
+        if "fedow_reward_asset" in self.fields:
+            widget = self.fields["fedow_reward_asset"].widget
+            widget.can_add_related = False
+            widget.can_change_related = False
+            widget.can_delete_related = False
+            # On retire aussi le bouton "voir" (oeil) : aucun acces a la fiche
+            # asset depuis ce dropdown, ni creation, ni edition, ni consultation.
+            # / Also remove the "view" (eye) button: no access to the asset page.
+            widget.can_view_related = False
+
     def clean_prix(self):
         prix = self.cleaned_data.get("prix")
         if 0 < prix < 1:
@@ -354,6 +371,31 @@ class BasePriceInline(StackedInline):
 
     class Media:
         css = {"all": ("admin/css/price_inline.css",)}
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """
+        Filtre le dropdown du jeton de recompense (fedow_reward_asset) :
+        uniquement les assets locaux, temps et fidelite du lieu courant.
+        Meme logique que PriceChangeForm dans prices.py (modele V1 fedow_public).
+        / Filter the reward asset dropdown: only local, time and loyalty
+        assets of the current place. Same logic as PriceChangeForm (V1 fedow_public).
+        """
+        if db_field.name == "fedow_reward_asset":
+            from django.db import connection
+
+            from fedow_public.models import AssetFedowPublic
+
+            kwargs["queryset"] = AssetFedowPublic.objects.filter(
+                category__in=[
+                    AssetFedowPublic.TOKEN_LOCAL_FIAT,
+                    AssetFedowPublic.TOKEN_LOCAL_NOT_FIAT,
+                    AssetFedowPublic.TIME,
+                    AssetFedowPublic.FIDELITY,
+                ],
+                archive=False,
+                origin=connection.tenant,
+            )
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     def has_delete_permission(self, request, obj=None):
         return False
@@ -481,7 +523,23 @@ class TicketPriceInline(BasePriceInline):
         ("stock", "max_per_user"),
         "adhesions_obligatoires",
         ("publish", "order"),
+        # Trigger billet : recompense le wallet de l'acheteur au scan du billet
+        # (champ reward_on_ticket_scanned, consomme dans signals.py:check_reward
+        # puis tasks.py:refill_..._from_ticket_scanned)
+        # / Ticket trigger: reward the buyer wallet when the ticket is scanned
+        "reward_on_ticket_scanned",
+        ("fedow_reward_asset", "fedow_reward_amount"),
     )
+
+    # Jeton et montant visibles seulement si la recompense au scan est activee
+    # / Asset and amount visible only when the scan reward is enabled
+    inline_conditional_fields = {
+        "fedow_reward_asset": "reward_on_ticket_scanned == true",
+        "fedow_reward_amount": "reward_on_ticket_scanned == true",
+    }
+
+    class Media:
+        js = ("admin/js/inline_conditional_fields.js",)
 
 
 class MembershipPriceInline(BasePriceInline):
@@ -502,7 +560,12 @@ class MembershipPriceInline(BasePriceInline):
         ("iteration", "commitment"),
         ("stock", "max_per_user"),
         ("publish", "order"),
-        "manual_validation"
+        "manual_validation",
+        # Trigger adhesion : recharge le wallet du membre a l'achat de l'adhesion
+        # (champ fedow_reward_enabled, consomme dans tasks.py:refill_..._from_price_solded)
+        # / Membership trigger: top up the member wallet when the membership is purchased
+        "fedow_reward_enabled",
+        ("fedow_reward_asset", "fedow_reward_amount"),
     )
 
     # Regles de visibilite conditionnelle, meme syntaxe que Unfold conditional_fields.
@@ -512,6 +575,10 @@ class MembershipPriceInline(BasePriceInline):
     inline_conditional_fields = {
         "iteration": "recurring_payment == true",
         "commitment": "iteration > 0",
+        # Jeton et montant visibles seulement si la recharge est activee
+        # / Asset and amount visible only when the top-up is enabled
+        "fedow_reward_asset": "fedow_reward_enabled == true",
+        "fedow_reward_amount": "fedow_reward_enabled == true",
     }
 
     class Media:
@@ -841,6 +908,12 @@ class ProductAdmin(ModelAdmin):
 
     list_before_template = "admin/product/product_list_before.html"  # appelle le component CheckStripe plus haut pour le contexte
 
+    # Injecte les regles de champs conditionnels des inlines (voir changeform_view).
+    # Rendu par le JS generique inline_conditional_fields.js. Herite par les proxies.
+    # / Injects inline conditional field rules (see changeform_view).
+    # Rendered by the generic JS. Inherited by proxy admins.
+    change_form_after_template = "admin/product/inline_conditional_fields.html"
+
     form = ProductAdminCustomForm
 
     fieldsets = (
@@ -914,11 +987,14 @@ class ProductAdmin(ModelAdmin):
 
             # Message de succès à l'utilisateur
             # Success message to the user
+            # Placeholders %(...)s : la traduction doit voir le texte fixe,
+            # pas la chaine deja interpolee (sinon gettext ne trouve jamais le msgid).
+            # / Use %(...)s placeholders so gettext sees the fixed text, not the
+            # already-interpolated string.
             messages.success(
                 request,
-                _(
-                    f"Le produit '{produit_original.name}' a été dupliqué avec succès sous le nom '{produit_duplique.name}'"
-                ),
+                _("Le produit '%(source)s' a été dupliqué avec succès sous le nom '%(copie)s'")
+                % {"source": produit_original.name, "copie": produit_duplique.name},
             )
         except Exception as erreur:
             # En cas d'erreur, on logue et on informe l'utilisateur
@@ -926,7 +1002,10 @@ class ProductAdmin(ModelAdmin):
             logger.error(
                 f"Erreur lors de la duplication du produit {object_id}: {str(erreur)}"
             )
-            messages.error(request, _(f"Erreur lors de la duplication : {str(erreur)}"))
+            messages.error(
+                request,
+                _("Erreur lors de la duplication : %(err)s") % {"err": str(erreur)},
+            )
 
         # Redirection vers la page précédente (la liste des produits)
         # Redirect back to the previous page (product list)
@@ -1049,7 +1128,7 @@ class ProductAdmin(ModelAdmin):
         obj = get_object_or_404(Product, pk=object_id)
         obj.archive = True
         obj.save()
-        messages.success(request, _(f"{obj.name} Archived"))
+        messages.success(request, _("%(name)s archived") % {"name": obj.name})
         return redirect(request.META["HTTP_REFERER"])
 
     @action(
@@ -1058,12 +1137,32 @@ class ProductAdmin(ModelAdmin):
         permissions=["changelist_row_action"],
     )
     def desarchive(self, request, object_id):
-        logger.error(self.actions_row)
         obj = get_object_or_404(Product, pk=object_id)
         obj.archive = False
         obj.save()
-        messages.success(request, _(f"{obj.name} Unarchived"))
+        messages.success(request, _("%(name)s unarchived") % {"name": obj.name})
         return redirect(request.META["HTTP_REFERER"])
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        # Collecte les regles conditionnelles de chaque inline qui en declare.
+        # Injectees en JSON pour le JS generique (inline_conditional_fields.js).
+        # Definie sur la base : TicketProductAdmin et MembershipProductAdmin en heritent.
+        # / Collect conditional rules from each inline that declares them.
+        # Injected as JSON for the generic JS. Defined on the base so proxies inherit it.
+        extra_context = extra_context or {}
+        regles_conditionnelles = {}
+        for inline_class in self.inlines:
+            regles_inline = getattr(inline_class, "inline_conditional_fields", None)
+            if regles_inline:
+                # Cle = prefixe du formset inline (model._meta.model_name + "s" = "prices")
+                # / Key = inline formset prefix
+                prefixe = inline_class.model._meta.model_name + "s"
+                regles_conditionnelles[prefixe] = regles_inline
+        if regles_conditionnelles:
+            extra_context["inline_conditional_rules"] = json.dumps(
+                regles_conditionnelles
+            )
+        return super().changeform_view(request, object_id, form_url, extra_context)
 
     def get_queryset(self, request):
         # On retire les recharges cashless et l'article Don
@@ -1225,7 +1324,8 @@ class MembershipProductAdmin(HelpDisplayMixin, ProductAdmin):
 
     form = MembershipProductForm
     inlines = [MembershipPriceInline, ProductFormFieldInline]
-    change_form_after_template = "admin/product/inline_conditional_fields.html"
+    # change_form_after_template + changeform_view : herites de ProductAdmin (base)
+    # / change_form_after_template + changeform_view: inherited from ProductAdmin (base)
 
     list_help_text = HELP_MESSAGES_DICT["ADHESION_PRODUIT"]["list_help_text"]
     list_help_url = HELP_MESSAGES_DICT["ADHESION_PRODUIT"]["list_help_url"]
@@ -1238,24 +1338,6 @@ class MembershipProductAdmin(HelpDisplayMixin, ProductAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.filter(categorie_article=Product.ADHESION)
-
-    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
-        # Collecte les regles conditionnelles de chaque inline qui en declare
-        # / Collect conditional rules from each inline that declares them
-        extra_context = extra_context or {}
-        regles_conditionnelles = {}
-        for inline_class in self.inlines:
-            regles_inline = getattr(inline_class, "inline_conditional_fields", None)
-            if regles_inline:
-                # Cle = prefixe du formset inline (model._meta.model_name + "s" = "prices")
-                # / Key = inline formset prefix
-                prefixe = inline_class.model._meta.model_name + "s"
-                regles_conditionnelles[prefixe] = regles_inline
-        if regles_conditionnelles:
-            extra_context["inline_conditional_rules"] = json.dumps(
-                regles_conditionnelles
-            )
-        return super().changeform_view(request, object_id, form_url, extra_context)
 
 
 # ---------------------------------------------------------------------------
