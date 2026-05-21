@@ -260,7 +260,10 @@ class EventsViewSet(viewsets.ViewSet):
             # Remove one day to it to also show recent events
             now = now.replace(day=now.day-1)
 
-            events = events.filter(end_datetime__gte=now)
+            events = events.filter(
+                Q(datetime__gte=now) |
+                Q(end_datetime__gte=now)
+            )
 
         if filter:
             # Filter by name and descriptions
