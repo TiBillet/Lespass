@@ -79,6 +79,7 @@ services:
       - traefik.http.routers.fedow_nginx.tls=true
       - traefik.http.routers.fedow_nginx.rule=Host(`fedow.$DOMAIN`)
       - traefik.http.services.fedow_nginx.loadbalancer.server.port=80
+      - traefik.http.routers.fedow_nginx.priority=100 # plus c'est grand, plus c'est prioritaire
 
     networks:
       - frontend
@@ -185,8 +186,10 @@ services:
       - traefik.enable=true
       - traefik.docker.network=frontend
       - traefik.http.routers.lespass_nginx.tls=true
-      - traefik.http.routers.lespass_nginx.rule=Host(`$DOMAIN`) || Host(`www.$DOMAIN`) || Host(`agenda.$DOMAIN`) || Host(`lespass.$DOMAIN`) || Host(`linterupteur.$DOMAIN`) || Host(`demo.$DOMAIN`) || Host(`bis.domainbis.localhost`) || Host(`domainbis.localhost`) || Host(`chantefrein.$DOMAIN`)  || Host(`la-lowcow-motiv.$DOMAIN`)
+      - traefik.http.routers.lespass_nginx.rule=Host(`$DOMAIN`) || HostRegexp(`${DOMAIN_REGEX}`)
       - traefik.http.services.lespass_nginx.loadbalancer.server.port=80
+      - traefik.http.routers.lespass_nginx.priority=1 # plus c'est grand, plus c'est prioritaire
+
     networks:
       - backend
       - frontend
@@ -298,7 +301,8 @@ services:
       - traefik.enable=true
       - traefik.docker.network=frontend
       - traefik.http.routers.laboutik_nginx.tls.certresolver=myresolver
-      - traefik.http.routers.laboutik_nginx.rule=Host(`laboutik.$DOMAIN`) || Host(`cashless.$DOMAIN`)
+      - traefik.http.routers.laboutik_nginx.rule=Host(`laboutik.$DOMAIN`)
+      - traefik.http.routers.laboutik_nginx.priority=100 # plus c'est grand, plus c'est prioritaire
     networks:
       - frontend
       - backend
