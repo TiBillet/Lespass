@@ -152,7 +152,7 @@ services:
       - traefik.http.routers.lespass-ovh.tls.certresolver=le-ovh
       - traefik.http.routers.lespass-ovh.tls.domains[0].main=${DOMAIN}
       - traefik.http.routers.lespass-ovh.tls.domains[0].sans=*.${DOMAIN}
-      - traefik.http.routers.lespass-ovh.rule=Host(`${DOMAIN}`) || HostRegexp(`${DOMAIN_REGEX}`)
+      - traefik.http.routers.lespass-ovh.rule=Host(`${DOMAIN}`) || Host(`lespass.${DOMAIN}`) || HostRegexp(`${DOMAIN_REGEX}`)
       - traefik.http.routers.lespass-ovh.middlewares=crowdsec@file
 
       # Router B — wildcard Gandi : *.DOMAIN_GANDI + apex
