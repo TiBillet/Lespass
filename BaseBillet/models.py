@@ -561,6 +561,18 @@ class Configuration(SingletonModel):
         verbose_name=_("Federation module"),
     )
 
+    # Agenda participatif : un formulaire public permet a tout le monde de
+    # proposer un evenement sur la page agenda. Les propositions sont creees
+    # non publiees et doivent etre validees par un admin.
+    # Desactive par defaut.
+    # / Participatory agenda: a public form lets anyone propose an event on the
+    # agenda page. Proposals are created unpublished and must be validated by an
+    # admin. Disabled by default.
+    module_agenda_participatif = models.BooleanField(
+        default=False,
+        verbose_name=_("Participatory agenda module"),
+    )
+
     ######### COMPTABILITE — RAPPORTS PERIODIQUES #########
     # / Periodic reports — accounting app
 

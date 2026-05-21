@@ -1489,3 +1489,16 @@ class WizardEventPublicSerializer(serializers.Serializer):
         required=False, allow_blank=True, max_length=5000,
     )
     image = serializers.ImageField(required=False, allow_null=True)
+
+    def validate(self, attrs):
+        # Garde du module : la proposition publique n'est autorisee que si le
+        # module "Agenda participatif" est actif pour ce tenant. Sinon on refuse
+        # la creation, meme si quelqu'un atteint l'URL du wizard directement.
+        # / Module guard: public proposal is only allowed when the "Participatory
+        # agenda" module is enabled for this tenant. Otherwise we refuse creation,
+        # even if someone reaches the wizard URL directly.
+        if not Configuration.get_solo().module_agenda_participatif:
+            raise serializers.ValidationError(
+                _("La proposition d'évènement n'est pas activée.")
+            )
+        return attrs

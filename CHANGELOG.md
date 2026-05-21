@@ -1,5 +1,48 @@
 # Changelog / Journal des modifications
 
+## Module « Agenda participatif » / "Participatory agenda" module
+
+**Date :** 2026-05-21
+**Migration :** Oui (`BaseBillet/0210_configuration_module_agenda_participatif`)
+**Contributeurs / Contributors :** JonasFW13 (Jonas)
+
+**Quoi / What :** Le wizard public de proposition d'évènement est désormais
+piloté par un module Groupware dédié, désactivé par défaut.
+- Nouveau champ `Configuration.module_agenda_participatif` (`BooleanField`,
+  `default=False`).
+- Nouvelle carte « Agenda participatif » sur le dashboard admin (toggle HTMX),
+  avec le texte d'aide : « un formulaire pour que vos users puissent proposer
+  des évènements sur la page agenda ; évènements à valider dans l'admin ».
+- Sur la page agenda, le bouton « Proposer un évènement » ne s'affiche que si
+  le module est actif (`{% if config.module_agenda_participatif %}`).
+- `WizardEventPublicSerializer.validate()` refuse la création de proposition si
+  le module est désactivé (garde côté serveur, même en atteignant l'URL
+  directement).
+
+**Pourquoi / Why :** Permettre à chaque tenant d'activer ou non l'agenda
+participatif. Le parcours admin de création d'évènement reste inchangé.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | Champ `module_agenda_participatif` sur `Configuration` |
+| `BaseBillet/migrations/0210_configuration_module_agenda_participatif.py` | Migration du champ |
+| `Administration/admin/dashboard.py` | Entrée `MODULE_FIELDS` (carte + texte d'aide) |
+| `BaseBillet/templates/reunion/views/event/list.html` | Bouton public conditionné au module |
+| `BaseBillet/validators.py` | Garde module dans `WizardEventPublicSerializer.validate()` |
+
+### Migration
+- **Migration nécessaire / Migration required :** Oui
+- `BaseBillet/0210_configuration_module_agenda_participatif`
+- `manage.py migrate_schemas --executor=multiprocessing`
+
+### i18n
+Carte dashboard : texte source **en français** (« Agenda participatif » + texte
+d'aide), affichée directement sans attendre de traduction. Le mainteneur lance
+makemessages/compilemessages pour générer la traduction EN. Autres chaînes `_()` :
+`Participatory agenda module` (verbose_name modèle, EN),
+`La proposition d'évènement n'est pas activée.` (erreur serializer, FR).
+
 ## Triggers Fedow dans les inlines de tarif (adhésion + billet) / Fedow triggers in price inlines (membership + ticket)
 
 **Date :** 2026-05-21

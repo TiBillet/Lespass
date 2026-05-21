@@ -762,6 +762,14 @@ MODULE_FIELDS = {
         "description": _("Explore federation with other TiBillet instance"),
         "testid": "dashboard-card-federation",
     },
+    "module_agenda_participatif": {
+        "name": _("Agenda participatif"),
+        "description": _(
+            "un formulaire pour que vos users puissent proposer des évènements "
+            "sur la page agenda ; évènements à valider dans l'admin"
+        ),
+        "testid": "dashboard-card-agenda-participatif",
+    },
     # FROM V2 : TO IMPLEMENT LATER ON
     # "module_monnaie_locale": {
     #     "name": _("Local currency & cashless"),

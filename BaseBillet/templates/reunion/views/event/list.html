@@ -59,13 +59,17 @@
                         {% endif %}
 
                         {# Bouton public (tout le monde) — wizard avec OTP #}
+                        {# Affiche seulement si le module agenda participatif est actif #}
                         {# / Public button (everyone) — wizard with OTP #}
-                        <a class="btn btn-sm btn-outline-secondary"
-                           href="{% url 'event-propose-email' %}"
-                           data-testid="btn-event-public-propose">
-                            <i class="bi bi-megaphone" aria-hidden="true"></i>
-                            {% translate 'Proposer un évènement' %}
-                        </a>
+                        {# / Shown only when the participatory agenda module is enabled #}
+                        {% if config.module_agenda_participatif %}
+                            <a class="btn btn-sm btn-outline-secondary"
+                               href="{% url 'event-propose-email' %}"
+                               data-testid="btn-event-public-propose">
+                                <i class="bi bi-megaphone" aria-hidden="true"></i>
+                                {% translate 'Proposer un évènement' %}
+                            </a>
+                        {% endif %}
                     </div>
                 </div>
 
