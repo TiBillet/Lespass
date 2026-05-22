@@ -8,7 +8,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from BaseBillet.models import ScannerAPIKey, ScanApp, Ticket
+from BaseBillet.models import ScannerAPIKey, ScanApp, Ticket, Configuration
 from BaseBillet.permissions import HasScanApi
 from django.db.models import Q, CharField
 from django.db.models.functions import Cast
@@ -47,6 +47,7 @@ class Pair(APIView):
     def get(self, request, pk):
         try:
             signer = TimestampSigner()
+            config = Configuration.get_solo()
             scanapp_uuid = signer.unsign(urlsafe_base64_decode(pk).decode('utf8'), max_age=(300000))
             scannapp = get_object_or_404(ScanApp, uuid=scanapp_uuid, claimed=False)
 
@@ -57,6 +58,7 @@ class Pair(APIView):
             # Return success response with API key
             response = Response({
                 "success": True,
+                "tenant_name": config.organisation,
                 "message": "Device successfully paired",
                 "api_key": api_key_string,
                 "device_uuid": str(scannapp.uuid),
