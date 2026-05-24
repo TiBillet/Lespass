@@ -1470,3 +1470,23 @@ class WalletRefillCreateSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     asset = serializers.UUIDField(required=True)
     amount = serializers.IntegerField(required=True, min_value=1)
+
+
+class MembershipStatusSerializer(serializers.Serializer):
+    """
+    Sortie minimale du statut d'adhesion pour LaBoutik.
+    / Minimal membership status output for LaBoutik.
+    """
+    product_name = serializers.SerializerMethodField()
+    price_name = serializers.SerializerMethodField()
+    is_valid = serializers.SerializerMethodField()
+    deadline = serializers.DateTimeField()
+
+    def get_product_name(self, obj):
+        return obj.price.product.name if obj.price and obj.price.product else None
+
+    def get_price_name(self, obj):
+        return obj.price.name if obj.price else None
+
+    def get_is_valid(self, obj):
+        return obj.is_valid()

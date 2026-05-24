@@ -229,8 +229,8 @@ services:
     env_file: .env
     container_name: laboutik_django
     hostname: laboutik_django
-#    volumes:
-#      - ../LaBoutik:/DjangoFiles
+    volumes:
+      - ../LaBoutik:/DjangoFiles
     links:
       - laboutik_postgres:postgres
       - laboutik_redis:redis
@@ -262,8 +262,8 @@ services:
       # Override DOMAIN pour LaBoutik : sous-domaine du service, pas le wildcard tenant.
       # Resolu par compose via le .env (DOMAIN=tibillet.localhost) -> laboutik.tibillet.localhost.
       DOMAIN: laboutik.$DOMAIN
-#    volumes:
-#      - ../LaBoutik:/DjangoFiles
+    volumes:
+      - ../LaBoutik:/DjangoFiles
     links:
       - laboutik_postgres:postgres
       - laboutik_redis:redis

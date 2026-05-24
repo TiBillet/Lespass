@@ -12,6 +12,7 @@ from django.core.cache import cache
 
 from ApiBillet.permissions import TenantAdminApiPermission
 from ApiBillet.views import get_permission_Api_ALL_Admin
+from AuthBillet.models import TibilletUser
 from BaseBillet.models import Event, PostalAddress, LigneArticle, Product, Reservation, Membership, logger, \
     Configuration
 from crowds.models import Initiative, BudgetItem, Participation, Vote
@@ -27,6 +28,7 @@ from .serializers import (
     ReservationSchemaSerializer,
     MembershipCreateSerializer,
     MembershipSchemaSerializer,
+    MembershipStatusSerializer,
     WalletRefillCreateSerializer,
     InitiativeSchemaSerializer,
     InitiativeCreateSerializer,
@@ -354,6 +356,26 @@ class MembershipViewSet(viewsets.ViewSet):
         membership = get_object_or_404(Membership, uuid=uuid)
         serializer = MembershipSchemaSerializer(membership)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+    @action(detail=False, methods=["get"], url_path="by-wallet")
+    def by_wallet(self, request):
+        """
+        Liste les adhesions d'un porteur a partir de son wallet Fedow.
+        / Lists a holder's memberships from their Fedow wallet uuid.
+        Auth + IP + permission `membership` geres par SemanticApiKeyPermission.
+        """
+        wallet_uuid = request.query_params.get("wallet_uuid")
+        if not wallet_uuid:
+            return Response({"detail": "wallet_uuid is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = TibilletUser.objects.filter(wallet__uuid=wallet_uuid).first()
+        memberships = user.memberships.all() if user else Membership.objects.none()
+        serializer = MembershipStatusSerializer(memberships, many=True)
+        return Response(
+            {"wallet_uuid": wallet_uuid, "memberships": serializer.data},
+            status=status.HTTP_200_OK,
+        )
 
 
 # Plafond par recharge cadeau, en unite brute (cf SPEC API_GIFT_REFILL).
