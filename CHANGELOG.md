@@ -1,5 +1,128 @@
 # Changelog / Journal des modifications
 
+## Admin — Recherche par adhésion + renommage « Adhésion / Abonnement / Pass »
+
+**Date :** 2026-05-21
+**Migration :** Oui (`BaseBillet/0213_alter_membership_options` — options only, no-op DB)
+
+**Quoi / What :**
+- **Recherche users élargie** : la barre de recherche du changelist
+  `HumanUserAdmin` cherche désormais aussi dans les **nom/prénom saisis sur les
+  adhésions** (`memberships__first_name`, `memberships__last_name`), en plus du
+  nom/prénom/email de l'user. Permet de retrouver un compte par le nom de
+  l'adhérent·e (parfois différent du compte). Django ajoute `distinct()` au besoin.
+- **Renommage** du modèle `Membership` : `verbose_name` / `verbose_name_plural`
+  → **« Adhésion / Abonnement / Pass »** (titre de la page d'administration).
+- **Sidebar** : l'item de menu vers les adhésions → **« Adhésion / Pass »**.
+
+**Pourquoi / Why :** Accueil festival/forum/salon : retrouver vite un compte par
+le nom de l'adhésion ; libellés reflétant les trois usages (adhésion ponctuelle,
+abonnement récurrent, pass).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/admin_tenant.py` | `HumanUserAdmin.search_fields` : + `memberships__first_name`, `memberships__last_name` |
+| `BaseBillet/models.py` | `Membership.Meta` : `verbose_name`/`verbose_name_plural` = « Adhésion / Abonnement / Pass » |
+| `BaseBillet/migrations/0213_alter_membership_options.py` | Migration d'options (no-op DB) |
+| `Administration/admin/dashboard.py` | Item sidebar adhésions → « Adhésion / Pass » |
+
+### Migration
+- **Migration nécessaire / Migration required :** Oui (options only)
+- `BaseBillet/0213_alter_membership_options` · `manage.py migrate_schemas --executor=multiprocessing`
+
+### i18n
+Nouvelles chaînes (source FR) : `Adhésion / Abonnement / Pass`, `Adhésion / Pass`
+(remplacent les anciens `Subscription`/`Subscriptions`). makemessages/compilemessages
+par le mainteneur.
+
+## Admin — Évènements et adhésions sur la fiche user / Admin — bookings & memberships on user profile
+
+**Date :** 2026-05-21
+**Migration :** Non
+
+**Quoi / What :** La fiche utilisateur·ice de l'admin affiche deux encarts
+riches, alimentés **en local** (ORM, tenant courant — aucun appel Fedow),
+pensés pour l'accueil d'un festival / forum / salon :
+- **Évènements** : toutes les réservations de l'user, séparées « À venir » /
+  « Passés ». Colonnes : évènement (lien cliquable vers la réservation), date,
+  nombre de billets, montant payé, moyen(s) de paiement, statut (badge couleur).
+- **Adhésions** : séparées « En cours » / « Passées ». Colonnes : adhésion
+  (lien cliquable), montant (contribution), moyen de paiement, échéance, statut.
+- Montants alignés en chiffres tabulaires ; badges de statut en styles inline
+  (couleur **+** texte, lisibles en thème clair comme sombre).
+- **Performance** : `prefetch_related('tickets', 'lignearticles', 'paiements__lignearticles')`
+  + helper `_lignes_payees_prefetch` (montant + moyens calculés en mémoire) →
+  **nombre de requêtes SQL constant** quel que soit le nombre de réservations,
+  pas de N+1. Mesuré : 6 réservations + 13 adhésions = **5 requêtes**.
+- **Robustesse** : la collecte évènements/adhésions est isolée dans son propre
+  `try/except` (logge + dégrade) — un cas de données limite ne peut **jamais
+  faire planter (500)** la fiche utilisateur. Tri réservations en `NULLS LAST`
+  (les réservations sans évènement ne remontent plus en tête).
+- **Vérifié visuellement** (Chrome) : encarts remplis, liens cliquables, badges
+  de statut colorés (vert/bleu/ambre/rouge), montants alignés, toggles de droits
+  fonctionnels, bouton Tirelire OK, aucune erreur console.
+
+**Correctif au passage / Fix :** `HumanUserAdmin` contenait **deux**
+`changeform_view` (doublon préexistant) ; la 2ᵉ écrasait la 1ʳᵉ. Les deux sont
+fusionnées en une seule méthode (états des droits + évènements + adhésions),
+ce qui rend les encarts réellement alimentés.
+
+**Pourquoi / Why :** Donner à l'accueil une vue complète et scannable de
+l'activité de la personne, sans dépendre de Fedow.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/admin_tenant.py` | Helpers badges + `_admin_url_basebillet` (niveau module) ; fusion des deux `changeform_view` de `HumanUserAdmin` (droits + évènements + adhésions enrichis) ; import `NoReverseMatch` |
+| `Administration/templates/admin/human_user/right_and_wallet_info.html` | Encarts « Évènements » et « Adhésions » : tableaux enrichis (badges, montants tabulaires, liens cliquables) |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+
+### i18n
+Nouvelles chaînes, **texte source en français** : `Évènements`, `À venir`,
+`Passés`, `Évènement`, `Date`, `Billets`, `Payé`, `Paiement`, `Statut`,
+`Aucun évènement à venir`, `Aucun évènement passé`, `Adhésions`, `Adhésion`,
+`En cours`, `Passées`, `Montant`, `Échéance`, `Aucune adhésion en cours`,
+`Aucune adhésion passée`. Le mainteneur lance makemessages/compilemessages.
+
+## Admin — Dernières transactions Fedow (72 h) dans la fiche user / Admin — last 72h Fedow transactions in user profile
+
+**Date :** 2026-05-21
+**Migration :** Non
+
+**Quoi / What :** Le bloc « Tirelire » de la fiche utilisateur·ice de l'admin
+affiche désormais, en plus des cartes et du solde, les **transactions des
+72 dernières heures** récupérées depuis Fedow.
+- Vue `admin_my_cards` enrichie : appel `FedowAPI.transaction.paginated_list_by_wallet_signature(user)`
+  filtré sur 72 h. Encadré `try/except` : si Fedow est indisponible, le bloc
+  cartes/tokens reste affiché (les transactions sont simplement omises).
+- Nouveau bloc « Last transactions (72h) » dans `wallet_info.html` (style Unfold,
+  réutilise les filtres `dround` / `get_choice_string` / `naturaltime`).
+- L'historique inclut les transactions d'un éventuel **wallet éphémère fusionné**
+  (actions `FUS`), car la signature de l'user retrouve tout l'historique du wallet.
+- Les transactions d'**adhésion** (asset de catégorie `SUB` / SUBSCRIPTION) sont
+  **exclues** du bloc, par cohérence avec l'exclusion des adhésions du solde de tokens.
+
+**Pourquoi / Why :** Donner à l'admin une vue rapide de l'activité récente de la
+tirelire d'un membre (support, surveillance des abus).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/views.py` | `admin_my_cards` : transactions 72 h ajoutées au contexte (try/except Fedow) |
+| `Administration/templates/admin/membership/wallet_info.html` | Bloc « Last transactions (72h) » |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+
+### i18n
+Nouvelles chaînes, **texte source en français** : `Dernières transactions (72h)`,
+`Aucune transaction sur les 72 dernières heures`, `Valeur`, `Sens`.
+(`Action`, `Date` identiques FR/EN.) Le mainteneur lance makemessages/compilemessages
+(traduction EN générée depuis le FR).
+
 ## API v2 — Recharge de tokens non fiduciaires / API v2 — non-fiat wallet refill
 
 **Date :** 2026-05-21

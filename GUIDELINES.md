@@ -66,7 +66,7 @@ Pas de `ModelSerializer` sauf dans `api_v2/` pour les endpoints JSON semantiques
 - **Anti-blink** : navigation liste/detail via `hx-target="body"` + `hx-swap="innerHTML"` pour ne pas recharger le `<head>`.
 - **Toujours conserver `href`/`action`** pour le repli sans JS.
 - **CSRF** : `hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'` sur le `<body>`.
-- **i18n** : `{% translate %}` / `gettext` pour tout texte visible.
+- **i18n** : `{% translate %}` / `gettext` pour tout texte visible. **Texte source en français par defaut** : le libelle ecrit dans `{% translate "..." %}` / `_()` est en FR ; la traduction EN est generee *depuis* le FR (jamais l'inverse). Ne plus creer de nouveaux msgid en anglais. (Du code ancien a encore des msgid EN : ne pas les convertir hors session.)
 
 ### Loading overlay (extension `loading-states`)
 

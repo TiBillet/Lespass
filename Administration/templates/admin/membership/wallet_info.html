@@ -136,3 +136,69 @@
         </h2>
     </div>
 {% endif %}
+
+<br/>
+
+{# Dernieres transactions (72h) recuperees depuis Fedow / Last 72h transactions from Fedow #}
+{% if transactions %}
+    <div class="border flex flex-col flex-grow overflow-hidden p-6 relative rounded-md shadow-sm dark:border-gray-800 py-4">
+        <h2 class="bg-gray-50 border-b font-semibold mb-6 -mt-6 -mx-6 py-4 px-6 text-font-important-light dark:text-font-important-dark dark:border-gray-800 dark:bg-white/[.02]">
+            {% translate "Dernières transactions (72h)" %}
+        </h2>
+        <div class="flex-grow relative ">
+            <div class="-m-6 overflow-x-auto lg:dark:border-gray-800">
+                <table class="block border-gray-200 border-spacing-none border-separate w-full lg:table">
+
+                    <thead class="text-gray-900 dark:text-gray-100">
+                    <tr class="bg-gray-50 dark:bg-white/[.02]">
+                        <th class="align-middle font-semibold py-2 text-left text-sm whitespace-nowrap sortable column-description hidden px-3 lg:table-cell first:pl-6 last:pr-6">
+                            {% translate "Valeur" %}
+                        </th>
+                        <th class="align-middle font-semibold py-2 text-left text-sm whitespace-nowrap sortable column-description hidden px-3 lg:table-cell first:pl-6 last:pr-6">
+                            {% translate "Action" %}
+                        </th>
+                        <th class="align-middle font-semibold py-2 text-left text-sm whitespace-nowrap sortable column-description hidden px-3 lg:table-cell first:pl-6 last:pr-6">
+                            {% translate "Date" %}
+                        </th>
+                    </tr>
+                    </thead>
+
+                    {% for tr in transactions %}
+                        <tbody class="block lg:table-row-group">
+
+                        <tr class=" block border-t lg:table-row lg:border-none lg:mb-0 lg:shadow-none dark:border-gray-800">
+
+                            <td class="px-3 py-2 align-middle flex border-t border-gray-200 font-normal gap-4 min-w-0 overflow-hidden text-left before:flex before:capitalize before:content-[attr(data-label)] before:items-center before:mr-auto first:border-t-0 lg:before:hidden lg:first:border-t lg:py-3 lg:table-cell dark:border-gray-800 lg:first:pl-6 lg:last:pr-6"
+                                data-label="{% translate 'Valeur' %}">
+                                {% if tr.action != "FUS" %}
+                                    <strong>{{ tr.amount | dround }}</strong> {{ tr.serialized_asset.name }}
+                                {% endif %}
+                            </td>
+
+                            <td class="px-3 py-2 align-middle flex border-t border-gray-200 font-normal gap-4 min-w-0 overflow-hidden text-left before:flex before:capitalize before:content-[attr(data-label)] before:items-center before:mr-auto first:border-t-0 lg:before:hidden lg:first:border-t lg:py-3 lg:table-cell dark:border-gray-800 lg:first:pl-6 lg:last:pr-6"
+                                data-label="{% translate 'Action' %}">
+                                {{ tr.action|get_choice_string:actions_choices }}
+                            </td>
+
+                            <td class="px-3 py-2 align-middle flex border-t border-gray-200 font-normal gap-4 min-w-0 overflow-hidden text-left before:flex before:capitalize before:content-[attr(data-label)] before:items-center before:mr-auto first:border-t-0 lg:before:hidden lg:first:border-t lg:py-3 lg:table-cell dark:border-gray-800 lg:first:pl-6 lg:last:pr-6"
+                                data-label="{% translate 'Date' %}">
+                                {{ tr.datetime|naturaltime }}
+                            </td>
+
+                        </tr>
+
+                    {% endfor %}
+
+                    </tbody>
+
+                </table>
+            </div>
+        </div>
+    </div>
+{% else %}
+    <div class="border flex flex-col flex-grow overflow-hidden p-6 relative rounded-md shadow-sm dark:border-gray-800">
+        <h2 class="bg-gray-50 border-b font-semibold mb-6 -mt-6 -mx-6 py-4 px-6 text-font-important-light dark:text-font-important-dark dark:border-gray-800 dark:bg-white/[.02]">
+            {% translate "Aucune transaction sur les 72 dernières heures" %}
+        </h2>
+    </div>
+{% endif %}

@@ -24,7 +24,7 @@ from uuid import UUID, uuid4
 from unfold.utils import parse_datetime_str
 from django.core.validators import EMPTY_VALUES
 from collections.abc import Iterator
-from django.urls import path, reverse
+from django.urls import path, reverse, NoReverseMatch
 
 from django.contrib import admin
 from django.contrib.admin.options import ModelAdmin
@@ -47,7 +47,7 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.signing import TimestampSigner
 from django.db import models, connection, IntegrityError
-from django.db.models import Model, Count, Q, Prefetch
+from django.db.models import Model, Count, Q, Prefetch, F
 from django.forms import ModelForm, Form, HiddenInput
 from django.http import HttpResponse, HttpRequest, HttpResponseRedirect
 from django.template.response import TemplateResponse
@@ -875,6 +875,87 @@ class UserWithMembershipValid(admin.SimpleListFilter):
             ).distinct()
 
 
+# ---------------------------------------------------------------------------
+# Badges de statut pour la fiche utilisateur (évènements + adhésions).
+# Styles inline (hex) : le bundle Unfold n'inclut pas toutes les classes Tailwind ;
+# un fond saturé + texte blanc reste lisible en thème clair comme sombre.
+# Helpers AU NIVEAU MODULE (hors classe) — Unfold wrappe les méthodes des ModelAdmin.
+# / Status badges for the user profile. Inline hex styles, readable in light/dark.
+# Module-level helpers (NOT inside the admin class) — Unfold wraps ModelAdmin methods.
+# ---------------------------------------------------------------------------
+BADGE_VERT = ("#16a34a", "#ffffff")    # validé / payé
+BADGE_BLEU = ("#2563eb", "#ffffff")    # gratuit / en ligne
+BADGE_AMBRE = ("#d97706", "#ffffff")   # en attente / non payé
+BADGE_ROUGE = ("#dc2626", "#ffffff")   # annulé
+BADGE_GRIS = ("#6b7280", "#ffffff")    # autre
+
+
+def _badge_couleur_reservation(status_code):
+    """Couleur (fond, texte) du badge selon le statut de réservation.
+    / Badge color (bg, fg) for a booking status."""
+    if status_code in (Reservation.VALID, Reservation.PAID,
+                       Reservation.PAID_NOMAIL, Reservation.PAID_ERROR):
+        return BADGE_VERT
+    if status_code in (Reservation.FREERES, Reservation.FREERES_USERACTIV):
+        return BADGE_BLEU
+    if status_code in (Reservation.CREATED, Reservation.UNPAID):
+        return BADGE_AMBRE
+    if status_code == Reservation.CANCELED:
+        return BADGE_ROUGE
+    return BADGE_GRIS
+
+
+def _badge_couleur_adhesion(est_valide, status_code):
+    """Couleur (fond, texte) du badge selon l'état d'adhésion.
+    / Badge color (bg, fg) for a membership state."""
+    if est_valide:
+        return BADGE_VERT
+    if status_code in (Membership.CANCELED, Membership.ADMIN_CANCELED):
+        return BADGE_ROUGE
+    return BADGE_GRIS
+
+
+def _admin_url_basebillet(model_name, pk):
+    """URL admin de modification d'un objet BaseBillet, ou None si introuvable.
+    / Admin change URL for a BaseBillet object, or None if not found."""
+    try:
+        return reverse(f"staff_admin:BaseBillet_{model_name}_change", args=[pk])
+    except NoReverseMatch:
+        return None
+
+
+# Statuts de ligne considérés comme "payés" (cf Reservation.articles_paid).
+# / Line statuses considered "paid".
+LIGNE_PAYEE_STATUTS = (LigneArticle.PAID, LigneArticle.VALID, LigneArticle.REFUNDED)
+
+
+def _lignes_payees_prefetch(reservation):
+    """Lignes payées/confirmées/remboursées d'une réservation, en exploitant les
+    relations préchargées (prefetch_related) : zéro requête par réservation.
+    Réplique la logique de Reservation.articles_paid() mais en mémoire — la méthode
+    du modèle, elle, fait un .filter() (donc une requête) à chaque appel.
+    / Prefetch-aware version of Reservation.articles_paid() — no per-row query.
+    """
+    # Lignes liées directement à la réservation (données récentes)
+    # / Lines linked directly to the reservation (recent data)
+    lignes_directes = [
+        ligne for ligne in reservation.lignearticles.all()
+        if ligne.status in LIGNE_PAYEE_STATUTS
+    ]
+    if lignes_directes:
+        return lignes_directes
+
+    # Fallback : anciennes lignes liées via le paiement Stripe
+    # / Fallback: legacy lines linked via the Stripe payment
+    lignes_legacy = []
+    for paiement in reservation.paiements.all():
+        lignes_legacy += [
+            ligne for ligne in paiement.lignearticles.all()
+            if ligne.status in LIGNE_PAYEE_STATUTS
+        ]
+    return lignes_legacy
+
+
 # Tout les utilisateurs de type HUMAIN
 @admin.register(HumanUser, site=staff_admin_site)
 class HumanUserAdmin(ModelAdmin):
@@ -887,13 +968,6 @@ class HumanUserAdmin(ModelAdmin):
 
     change_form_after_template = "admin/human_user/right_and_wallet_info.html"
 
-    # changeform_view sert à donner le pk de l'user pour le bouton htmx
-    def changeform_view(self, request: HttpRequest, object_id: Optional[str] = None, form_url: str = "",
-                        extra_context: Optional[Dict[str, bool]] = None) -> Any:
-        extra_context = extra_context or {}
-        extra_context['object_id'] = object_id
-        return super().changeform_view(request, object_id, form_url, extra_context)
-
     list_display = [
         'email',
         'first_name',
@@ -902,9 +976,17 @@ class HumanUserAdmin(ModelAdmin):
     ]
 
     search_fields = [
+        # Nom / prénom / email portés par l'user lui-même
+        # / Name / first name / email carried by the user itself
         'email',
         'first_name',
         'last_name',
+        # Nom / prénom saisis sur les adhésions de l'user (souvent l'adhérent·e
+        # réel·le, parfois différent de l'user). Django ajoute distinct() au besoin.
+        # / Name / first name entered on the user's memberships (the actual member,
+        # sometimes different from the account user). Django adds distinct() if needed.
+        'memberships__first_name',
+        'memberships__last_name',
     ]
 
     fieldsets = (
@@ -935,12 +1017,13 @@ class HumanUserAdmin(ModelAdmin):
                         extra_context: Optional[Dict[str, bool]] = None) -> Any:
         extra_context = extra_context or {}
         extra_context['object_id'] = object_id
-        # Provide initial states for rights toggles
         if object_id:
+            # Bloc 1 — états initiaux des toggles de droits.
+            # Conserve le comportement existant : re-lève une erreur inattendue.
+            # / Rights toggles initial states. Keeps existing behaviour (re-raises).
             try:
                 user = TibilletUser.objects.get(pk=object_id)
                 tenant = connection.tenant
-                # Admin (client_admin) initial state
                 extra_context['is_client_admin'] = user.client_admin.filter(pk=tenant.pk).exists()
                 extra_context['can_initiate_payment'] = user.initiate_payment.filter(pk=tenant.pk).exists()
                 extra_context['can_create_event'] = user.create_event.filter(pk=tenant.pk).exists()
@@ -950,11 +1033,99 @@ class HumanUserAdmin(ModelAdmin):
                 extra_context['can_initiate_payment'] = False
                 extra_context['can_create_event'] = False
                 extra_context['can_manage_crowd'] = False
-            except ValidationError as e:
-                # c'est une requete post pour les actions
+            except ValidationError:
+                # Requete POST pour les actions (object_id pas un uuid) : on ignore.
+                # / POST for actions (object_id not a uuid): ignore.
                 pass
             except Exception as e:
                 raise e
+
+            # Bloc 2 — évènements + adhésions (tenant courant), préparés en listes de
+            # dictionnaires. ISOLÉ dans son propre try/except : un cas de données
+            # limite ne doit JAMAIS faire planter (500) la fiche utilisateur — on
+            # logge et on affiche la page sans (ou avec moins d') encarts.
+            # / Bookings + memberships. Isolated try/except: an edge case must never
+            # 500 the user change page; we log and render the page anyway.
+            try:
+                user = TibilletUser.objects.get(pk=object_id)
+                extra_context['devise'] = Configuration.get_solo().currency_code
+                maintenant = timezone.now()
+
+                # Prefetch des relations : nombre de requêtes constant (pas de N+1).
+                # Tri NULLS LAST : les réservations sans évènement ne remontent pas en tête.
+                # / Prefetch relations (no N+1); NULLS LAST so event-less bookings stay last.
+                reservations = (
+                    Reservation.objects
+                    .filter(user_commande=user)
+                    .select_related('event')
+                    .prefetch_related('tickets', 'lignearticles', 'paiements__lignearticles')
+                    .order_by(F('event__datetime').desc(nulls_last=True))
+                )
+                evenements_a_venir = []
+                evenements_passes = []
+                for reservation in reservations:
+                    badge_fond, badge_texte = _badge_couleur_reservation(reservation.status)
+                    # Lignes payées calculées UNE seule fois sur les relations préchargées.
+                    # / Paid lines computed once from prefetched relations.
+                    lignes_payees = _lignes_payees_prefetch(reservation)
+                    montant_paye = dround(sum(int(ligne.amount * ligne.qty) for ligne in lignes_payees))
+                    moyens_de_paiement = sorted({
+                        ligne.get_payment_method_display()
+                        for ligne in lignes_payees
+                        if ligne.payment_method
+                    })
+                    date_evenement = reservation.event.datetime if reservation.event else None
+                    if date_evenement and date_evenement >= maintenant:
+                        liste_cible = evenements_a_venir
+                    else:
+                        liste_cible = evenements_passes
+                    liste_cible.append({
+                        'nom': reservation.event.name if reservation.event else _("(évènement supprimé)"),
+                        'date': date_evenement,
+                        'nb_billets': len(reservation.tickets.all()),
+                        'montant': montant_paye,
+                        'moyens': ", ".join(moyens_de_paiement),
+                        'statut': reservation.get_status_display(),
+                        'badge_fond': badge_fond,
+                        'badge_texte': badge_texte,
+                        'url': _admin_url_basebillet('reservation', reservation.pk),
+                    })
+                extra_context['evenements_a_venir'] = evenements_a_venir
+                extra_context['evenements_passes'] = evenements_passes
+
+                adhesions = (
+                    Membership.objects
+                    .filter(user=user)
+                    .select_related('price', 'price__product')
+                    .order_by('-deadline')
+                )
+                adhesions_en_cours = []
+                adhesions_passees = []
+                for adhesion in adhesions:
+                    est_valide = adhesion.is_valid()
+                    badge_fond, badge_texte = _badge_couleur_adhesion(est_valide, adhesion.status)
+                    if est_valide:
+                        liste_cible = adhesions_en_cours
+                    else:
+                        liste_cible = adhesions_passees
+                    liste_cible.append({
+                        'produit': adhesion.product_name() or "—",
+                        'tarif': adhesion.price_name() or "",
+                        'montant': adhesion.contribution_value,
+                        'moyen': adhesion.get_payment_method_display() if adhesion.payment_method else "",
+                        'deadline': adhesion.deadline,
+                        'statut': _("En cours") if est_valide else adhesion.get_status_display(),
+                        'badge_fond': badge_fond,
+                        'badge_texte': badge_texte,
+                        'url': _admin_url_basebillet('membership', adhesion.pk),
+                    })
+                extra_context['adhesions_en_cours'] = adhesions_en_cours
+                extra_context['adhesions_passees'] = adhesions_passees
+            except Exception as erreur_encarts:
+                logger.error(
+                    f"HumanUserAdmin : encarts évènements/adhésions indisponibles "
+                    f"pour {object_id} : {erreur_encarts}"
+                )
 
         return super().changeform_view(request, object_id, form_url, extra_context)
 

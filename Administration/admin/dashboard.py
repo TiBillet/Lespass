@@ -102,7 +102,7 @@ def get_sidebar_navigation(request):
                         "permission": admin_permission,
                     },
                     {
-                        "title": _("Subscriptions"),
+                        "title": _("Adhésion / Pass"),
                         "icon": "card_membership",
                         "link": reverse_lazy(
                             "staff_admin:BaseBillet_membership_changelist"

@@ -810,9 +810,37 @@ class MyAccount(viewsets.ViewSet):
         wallet = fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
         tokens = [token for token in wallet.get('tokens') if token.get('asset_category') not in ['SUB', 'BDG']]
 
+        # Transactions des 72 dernieres heures, via la signature de l'user de la fiche.
+        # La signature retrouve tout l'historique du wallet (y compris les transactions
+        # d'un ancien wallet ephemere fusionne : elles apparaissent via les actions FUS).
+        # On encadre l'appel Fedow : s'il echoue, on n'affiche rien plutot que de casser la page.
+        # / Last 72h transactions via the profile user's signature. The signature returns the
+        # full wallet history (including a merged ephemeral wallet, shown as FUS actions).
+        # The Fedow call is wrapped: on failure we show nothing instead of breaking the page.
+        transactions_recentes = []
+        try:
+            transactions_paginees = fedowAPI.transaction.paginated_list_by_wallet_signature(user).validated_data
+            limite_72h = timezone.now() - timedelta(hours=72)
+            for transaction in transactions_paginees.get('results', []):
+                date_transaction = transaction.get('datetime')
+                if not (date_transaction and date_transaction >= limite_72h):
+                    continue
+                # On exclut les transactions d'adhesion (asset de categorie SUBSCRIPTION),
+                # comme on exclut deja les adhesions du solde de tokens plus haut.
+                # / Skip membership transactions (SUBSCRIPTION asset category), as we
+                # already exclude memberships from the token balance above.
+                asset_transaction = transaction.get('serialized_asset') or {}
+                if asset_transaction.get('category') == 'SUB':
+                    continue
+                transactions_recentes.append(transaction)
+        except Exception as erreur_fedow:
+            logger.error(f"admin_my_cards : transactions Fedow indisponibles pour {user} : {erreur_fedow}")
+
         context = {
             'cards': cards,
             'tokens': tokens,
+            'transactions': transactions_recentes,
+            'actions_choices': TransactionSimpleValidator.TYPE_ACTION,
             'user_pk': pk,
         }
         return render(request, "admin/membership/wallet_info.html", context=context)

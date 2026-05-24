@@ -1,6 +1,173 @@
 {% load i18n %}
 
 <div class="flex flex-col gap-8 py-3">
+
+    {# Fieldset : Évènements où la personne est inscrite (tenant courant) #}
+    {# Bookings the person is registered to (current tenant) #}
+    <fieldset class="module relative " x-show="activeTab == 'general'">
+        <h2 class="bg-base-100 font-semibold mb-6 px-4 py-3 rounded-default text-font-important-light text-sm @min-[1570px]:-mx-4 dark:bg-white/[.02] dark:text-font-important-dark ">
+            {% translate "Évènements" %}
+        </h2>
+        <div class="shadow-xs rounded-default aligned border-base-200 border dark:border-base-800 p-4">
+
+            <h3 class="font-semibold text-sm mb-3">{% translate "À venir" %}</h3>
+            {% if evenements_a_venir %}
+                <div class="overflow-x-auto mb-5">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-left border-b border-base-200 dark:border-base-800">
+                                <th class="py-2 pr-3 font-semibold">{% translate "Évènement" %}</th>
+                                <th class="py-2 pr-3 font-semibold whitespace-nowrap">{% translate "Date" %}</th>
+                                <th class="py-2 pr-3 font-semibold text-right">{% translate "Billets" %}</th>
+                                <th class="py-2 pr-3 font-semibold text-right">{% translate "Payé" %}</th>
+                                <th class="py-2 pr-3 font-semibold">{% translate "Paiement" %}</th>
+                                <th class="py-2 font-semibold">{% translate "Statut" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for ligne in evenements_a_venir %}
+                            <tr class="border-b border-base-200 dark:border-base-800">
+                                <td class="py-2 pr-3">{% if ligne.url %}<a href="{{ ligne.url }}" class="text-primary-600 hover:underline cursor-pointer">{{ ligne.nom }}</a>{% else %}{{ ligne.nom }}{% endif %}</td>
+                                <td class="py-2 pr-3 whitespace-nowrap">{{ ligne.date|date:"DATETIME_FORMAT" }}</td>
+                                <td class="py-2 pr-3 text-right" style="font-variant-numeric: tabular-nums;">{{ ligne.nb_billets }}</td>
+                                <td class="py-2 pr-3 text-right whitespace-nowrap" style="font-variant-numeric: tabular-nums;">{{ ligne.montant }}&nbsp;{{ devise }}</td>
+                                <td class="py-2 pr-3">{{ ligne.moyens|default:"—" }}</td>
+                                <td class="py-2"><span style="background-color: {{ ligne.badge_fond }}; color: {{ ligne.badge_texte }}; padding: 2px 10px; border-radius: 9999px; font-size: 12px; font-weight: 500; white-space: nowrap; display: inline-block;">{{ ligne.statut }}</span></td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-sm mb-5">{% translate "Aucun évènement à venir" %}</p>
+            {% endif %}
+
+            <h3 class="font-semibold text-sm mb-3">{% translate "Passés" %}</h3>
+            {% if evenements_passes %}
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-left border-b border-base-200 dark:border-base-800">
+                                <th class="py-2 pr-3 font-semibold">{% translate "Évènement" %}</th>
+                                <th class="py-2 pr-3 font-semibold whitespace-nowrap">{% translate "Date" %}</th>
+                                <th class="py-2 pr-3 font-semibold text-right">{% translate "Billets" %}</th>
+                                <th class="py-2 pr-3 font-semibold text-right">{% translate "Payé" %}</th>
+                                <th class="py-2 pr-3 font-semibold">{% translate "Paiement" %}</th>
+                                <th class="py-2 font-semibold">{% translate "Statut" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for ligne in evenements_passes %}
+                            <tr class="border-b border-base-200 dark:border-base-800">
+                                <td class="py-2 pr-3">{% if ligne.url %}<a href="{{ ligne.url }}" class="text-primary-600 hover:underline cursor-pointer">{{ ligne.nom }}</a>{% else %}{{ ligne.nom }}{% endif %}</td>
+                                <td class="py-2 pr-3 whitespace-nowrap">{{ ligne.date|date:"DATETIME_FORMAT" }}</td>
+                                <td class="py-2 pr-3 text-right" style="font-variant-numeric: tabular-nums;">{{ ligne.nb_billets }}</td>
+                                <td class="py-2 pr-3 text-right whitespace-nowrap" style="font-variant-numeric: tabular-nums;">{{ ligne.montant }}&nbsp;{{ devise }}</td>
+                                <td class="py-2 pr-3">{{ ligne.moyens|default:"—" }}</td>
+                                <td class="py-2"><span style="background-color: {{ ligne.badge_fond }}; color: {{ ligne.badge_texte }}; padding: 2px 10px; border-radius: 9999px; font-size: 12px; font-weight: 500; white-space: nowrap; display: inline-block;">{{ ligne.statut }}</span></td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-sm">{% translate "Aucun évènement passé" %}</p>
+            {% endif %}
+
+        </div>
+    </fieldset>
+
+    {# Fieldset : Adhésions de la personne (tenant courant) #}
+    {# The person's memberships (current tenant) #}
+    <fieldset class="module relative " x-show="activeTab == 'general'">
+        <h2 class="bg-base-100 font-semibold mb-6 px-4 py-3 rounded-default text-font-important-light text-sm @min-[1570px]:-mx-4 dark:bg-white/[.02] dark:text-font-important-dark ">
+            {% translate "Adhésions" %}
+        </h2>
+        <div class="shadow-xs rounded-default aligned border-base-200 border dark:border-base-800 p-4">
+
+            <h3 class="font-semibold text-sm mb-3">{% translate "En cours" %}</h3>
+            {% if adhesions_en_cours %}
+                <div class="overflow-x-auto mb-5">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-left border-b border-base-200 dark:border-base-800">
+                                <th class="py-2 pr-3 font-semibold">{% translate "Adhésion" %}</th>
+                                <th class="py-2 pr-3 font-semibold text-right">{% translate "Montant" %}</th>
+                                <th class="py-2 pr-3 font-semibold">{% translate "Paiement" %}</th>
+                                <th class="py-2 pr-3 font-semibold whitespace-nowrap">{% translate "Échéance" %}</th>
+                                <th class="py-2 font-semibold">{% translate "Statut" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for ligne in adhesions_en_cours %}
+                            <tr class="border-b border-base-200 dark:border-base-800">
+                                <td class="py-2 pr-3">{% if ligne.url %}<a href="{{ ligne.url }}" class="text-primary-600 hover:underline cursor-pointer">{{ ligne.produit }}{% if ligne.tarif %} — {{ ligne.tarif }}{% endif %}</a>{% else %}{{ ligne.produit }}{% if ligne.tarif %} — {{ ligne.tarif }}{% endif %}{% endif %}</td>
+                                <td class="py-2 pr-3 text-right whitespace-nowrap" style="font-variant-numeric: tabular-nums;">{% if ligne.montant != None %}{{ ligne.montant }}&nbsp;{{ devise }}{% else %}—{% endif %}</td>
+                                <td class="py-2 pr-3">{{ ligne.moyen|default:"—" }}</td>
+                                <td class="py-2 pr-3 whitespace-nowrap">{{ ligne.deadline|date:"DATE_FORMAT"|default:"—" }}</td>
+                                <td class="py-2"><span style="background-color: {{ ligne.badge_fond }}; color: {{ ligne.badge_texte }}; padding: 2px 10px; border-radius: 9999px; font-size: 12px; font-weight: 500; white-space: nowrap; display: inline-block;">{{ ligne.statut }}</span></td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-sm mb-5">{% translate "Aucune adhésion en cours" %}</p>
+            {% endif %}
+
+            <h3 class="font-semibold text-sm mb-3">{% translate "Passées" %}</h3>
+            {% if adhesions_passees %}
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-left border-b border-base-200 dark:border-base-800">
+                                <th class="py-2 pr-3 font-semibold">{% translate "Adhésion" %}</th>
+                                <th class="py-2 pr-3 font-semibold text-right">{% translate "Montant" %}</th>
+                                <th class="py-2 pr-3 font-semibold">{% translate "Paiement" %}</th>
+                                <th class="py-2 pr-3 font-semibold whitespace-nowrap">{% translate "Échéance" %}</th>
+                                <th class="py-2 font-semibold">{% translate "Statut" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for ligne in adhesions_passees %}
+                            <tr class="border-b border-base-200 dark:border-base-800">
+                                <td class="py-2 pr-3">{% if ligne.url %}<a href="{{ ligne.url }}" class="text-primary-600 hover:underline cursor-pointer">{{ ligne.produit }}{% if ligne.tarif %} — {{ ligne.tarif }}{% endif %}</a>{% else %}{{ ligne.produit }}{% if ligne.tarif %} — {{ ligne.tarif }}{% endif %}{% endif %}</td>
+                                <td class="py-2 pr-3 text-right whitespace-nowrap" style="font-variant-numeric: tabular-nums;">{% if ligne.montant != None %}{{ ligne.montant }}&nbsp;{{ devise }}{% else %}—{% endif %}</td>
+                                <td class="py-2 pr-3">{{ ligne.moyen|default:"—" }}</td>
+                                <td class="py-2 pr-3 whitespace-nowrap">{{ ligne.deadline|date:"DATE_FORMAT"|default:"—" }}</td>
+                                <td class="py-2"><span style="background-color: {{ ligne.badge_fond }}; color: {{ ligne.badge_texte }}; padding: 2px 10px; border-radius: 9999px; font-size: 12px; font-weight: 500; white-space: nowrap; display: inline-block;">{{ ligne.statut }}</span></td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-sm">{% translate "Aucune adhésion passée" %}</p>
+            {% endif %}
+
+        </div>
+    </fieldset>
+
+    {# Fieldset: Tirelire (wallet info button) #}
+    <fieldset class="module relative " x-show="activeTab == 'general'">
+        <h2 class="bg-base-100 font-semibold mb-6 px-4 py-3 rounded-default text-font-important-light text-sm @min-[1570px]:-mx-4 dark:bg-white/[.02] dark:text-font-important-dark ">
+            {% translate "Tirelire" %}
+        </h2>
+
+        <div class="shadow-xs rounded-default aligned border-base-200 border dark:border-base-800">
+            <div class="form-row field-row group/row last">
+                <div class="field-line border-b px-3 lg:first:border-l-0 lg:flex-row border-dashed lg:border-l group group-[.last]/row:border-b-0 border-base-200 grow dark:border-base-800 flex flex-col group/line py-2.5">
+                    <div class="grow relative">
+                        <button class="border font-medium px-3 py-2 rounded-default text-center whitespace-nowrap bg-primary-600 border-transparent text-white"
+                                hx-get="/my_account/{{ object_id }}/admin_my_cards/" hx-swap="outerHTML">
+                            {% translate "Get cards and wallet information" %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </fieldset>
+
     {# Fieldset: Right (Unfold layout) #}
     <fieldset class="module relative ">
         <h2 class="bg-base-100 font-semibold mb-6 px-4 py-3 rounded-default text-font-important-light text-sm @min-[1570px]:-mx-4 dark:bg-white/[.02] dark:text-font-important-dark ">
@@ -129,25 +296,4 @@
 {#            </form>#}
         </div>
     </fieldset>
-
-    {# Fieldset: Tirelire (wallet info button) #}
-    <fieldset class="module relative " x-show="activeTab == 'general'">
-        <h2 class="bg-base-100 font-semibold mb-6 px-4 py-3 rounded-default text-font-important-light text-sm @min-[1570px]:-mx-4 dark:bg-white/[.02] dark:text-font-important-dark ">
-            {% translate "Tirelire" %}
-        </h2>
-
-        <div class="shadow-xs rounded-default aligned border-base-200 border dark:border-base-800">
-            <div class="form-row field-row group/row last">
-                <div class="field-line border-b px-3 lg:first:border-l-0 lg:flex-row border-dashed lg:border-l group group-[.last]/row:border-b-0 border-base-200 grow dark:border-base-800 flex flex-col group/line py-2.5">
-                    <div class="grow relative">
-                        <button class="border font-medium px-3 py-2 rounded-default text-center whitespace-nowrap bg-primary-600 border-transparent text-white"
-                                hx-get="/my_account/{{ object_id }}/admin_my_cards/" hx-swap="outerHTML">
-                            {% translate "Get cards and wallet information" %}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </fieldset>
 </div>
-

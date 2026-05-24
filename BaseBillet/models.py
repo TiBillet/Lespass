@@ -3143,8 +3143,8 @@ class Membership(models.Model):
 
     class Meta:
         # unique_together = ('user', 'price')
-        verbose_name = _('Subscription')
-        verbose_name_plural = _('Subscriptions')
+        verbose_name = _('Adhésion / Abonnement / Pass')
+        verbose_name_plural = _('Adhésion / Abonnement / Pass')
 
     def email(self):
         self.user: "HumanUser"
