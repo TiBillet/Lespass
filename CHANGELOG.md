@@ -1,5 +1,50 @@
 # Changelog / Journal des modifications
 
+## API v2 — `GET /events/{id}/` accepte uuid OU slug front (+ 404 propre) / Event retrieve by uuid OR front slug
+
+**Date :** 2026-05-25
+**Migration :** Non
+
+**Quoi / What :**
+- **Résolution par slug.** `GET /api/v2/events/{id}/` accepte désormais, en plus
+  de l'uuid, le **slug** utilisé par le contrôleur front (ex :
+  `mon-evenement-260620-0900-7d51dee7`). Logique miroir d'`EventMVT.retrieve` :
+  les 8 derniers caractères hex du slug = début de l'uuid → `uuid__startswith`,
+  puis fallback `slug__startswith`. Nouvelle fonction
+  `get_event_par_identifiant_ou_404(identifiant)`.
+- **Plus de filtre `published`** sur la résolution `retrieve` (uuid **et** slug),
+  pour coller au comportement du front (`EventMVT.retrieve` ne filtre pas
+  `published`). ⚠️ Conséquence : un évènement non publié devient récupérable par
+  l'API v2 via son uuid/slug.
+- **404 propre sur identifiant inconnu/malformé.** Avant, un slug envoyé sur
+  `retrieve`/`destroy`/`link-address` faisait lever `ValidationError` à Django
+  (conversion `UUIDField`) → **HTTP 500**. `destroy` et `link-address` utilisent
+  un helper `get_objet_par_uuid_ou_404` (uuid-only → 404 si malformé) ; `retrieve`
+  résout uuid+slug et renvoie 404 si rien ne correspond.
+
+**Pourquoi / Why :** Issue Sentry 7504311969 — un client/crawler (clé API valide)
+appelait l'API avec le **slug** du front au lieu de l'uuid → 500. On rend l'API
+robuste (404, jamais 500) **et** on accepte le slug front pour que la même URL
+fonctionne des deux côtés. Même classe de bug que le piège 9.76 (`detail_vente`).
+
+**Périmètre / Scope :** Event uniquement. Les autres endpoints détail par uuid
+(Product, Reservation, Membership, Initiative) gardent le même défaut latent
+(500 sur slug) ; le helper `get_objet_par_uuid_ou_404` est prêt à y être appliqué.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `api_v2/views.py` | + `import re` ; + helpers `get_objet_par_uuid_ou_404` et `get_event_par_identifiant_ou_404` ; `retrieve` résout uuid+slug ; `destroy`/`link_address` migrés sur le helper uuid-only |
+| `tests/pytest/test_event_retrieve_invalid_uuid.py` | Test DB-only : retrieve par uuid → 200, par slug → 200, slug inconnu → 404, uuid inconnu → 404 |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+
+### Note appelant / Caller note
+Le « spider » Sentry possède une clé API valide et appelle avec un slug : il
+existe probablement une intégration qui construit des URLs `/api/v2/events/<slug>/`.
+Ce correctif rend l'API robuste et compatible, mais l'appelant peut être revu.
+
 ## Admin — Recherche par adhésion + renommage « Adhésion / Abonnement / Pass »
 
 **Date :** 2026-05-21

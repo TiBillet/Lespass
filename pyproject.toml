@@ -47,6 +47,7 @@ pytest = "^8.4.2"
 django-simple-captcha = "^0.6.2"
 djangorestframework-stubs = "^3.16.6"
 ruff = "^0.15.8"
+yamllint = "^1.38.0"
 
 [tool.poetry.group.dev.dependencies]
 django-debug-toolbar = "^4.2.0"

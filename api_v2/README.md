@@ -9,8 +9,18 @@ Authentication
 - API keys are managed in admin (ExternalApiKey). Ensure the `event` permission is enabled on the key.
 
 Endpoints
-- GET /api/v2/events/{uuid}/  → Retrieve a single Event
+- GET /api/v2/events/{id}/  → Retrieve a single Event
+  - `{id}` accepts **either** the Event UUID **or** the front-end slug
+    (e.g. `my-event-260620-0900-7d51dee7`), whose last 8 hex characters are the
+    start of the UUID. Mirrors the front controller (`EventMVT.retrieve`):
+    valid UUID → direct lookup; otherwise `uuid__startswith=<last 8 hex>`, then a
+    `slug__startswith` fallback.
+  - No `published` filter on retrieve (same behaviour as the front): an
+    unpublished Event is retrievable by its UUID/slug.
+  - Returns 404 (not 500) when the identifier matches no Event.
   - Response JSON-LD (schema.org/Event)
+  - Note: `DELETE /api/v2/events/{uuid}/` and `POST /api/v2/events/{uuid}/link-address/`
+    remain UUID-only (a non-UUID returns 404).
 - GET /api/v2/events/ → List all published Events (semantic list)
 
 OpenAPI / Auto‑generated docs (drf-spectacular)
@@ -22,6 +32,13 @@ OpenAPI / Auto‑generated docs (drf-spectacular)
 Export the schema file (with Poetry)
 - `poetry run python manage.py spectacular --color --file api_v2/openapi-schema.yaml`
 - Add `--validate` to also validate against the OpenAPI spec
+
+Lint the schema (yamllint)
+- `api_v2/openapi-schema.yaml` is maintained **by hand**, so lint it to catch
+  syntax / indentation / duplicate-key bugs (e.g. an over-indented child key).
+- `docker exec lespass_django poetry run yamllint api_v2/openapi-schema.yaml`
+- Config: `.yamllint` at the repo root — extends `relaxed`, **structural checks
+  only** (`line-length` and `document-start` disabled). Exit code `0` = clean.
 
 Example response
 ```

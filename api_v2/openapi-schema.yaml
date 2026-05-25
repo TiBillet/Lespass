@@ -99,7 +99,14 @@ paths:
   /api/v2/events/{uuid}/:
     get:
       operationId: retrieveEvent
-      summary: Retrieve a single Event
+      summary: Retrieve a single Event (by UUID or front slug)
+      description: |
+        Accepts either the Event UUID, or the front-end slug
+        (e.g. my-event-260620-0900-7d51dee7) whose last 8 hex characters are the
+        start of the UUID. Mirrors the front controller (EventMVT.retrieve):
+        valid UUID -> direct lookup; otherwise uuid__startswith=<last 8 hex>, then
+        a slug__startswith fallback. No `published` filter (an unpublished event is
+        retrievable). Returns 404 when nothing matches.
       tags: [Event]
       security:
         - ApiKeyAuth: []
@@ -107,9 +114,9 @@ paths:
         - in: path
           name: uuid
           required: true
+          description: Event UUID or front-end slug.
           schema:
             type: string
-            format: uuid
       responses:
         "200":
           description: OK
@@ -117,6 +124,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Event'
+        "404":
+          description: Not Found — no Event matches this UUID/slug
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     delete:
       operationId: deleteEvent
       summary: Delete an Event by UUID
@@ -1299,23 +1312,10 @@ components:
       properties:
         count:
           type: integer
-            properties:
-              '@type':
-                type: string
-                example: PropertyValue
-              name:
-                type: string
-                example: formFields
-              value:
-                oneOf:
-                  - type: array
-                    items:
-                      $ref: '#/components/schemas/ProductFormFieldInput'
-                  - $ref: '#/components/schemas/ProductFormFieldInput'
-          example:
-            - '@type': PropertyValue
-              name: maxPerUser
-              value: 1
+          description: Number of votes for the initiative
+        created:
+          type: boolean
+          description: True if this call created a new vote (POST only)
     ProductOfferInput:
       type: object
       description: Price definition used to create a Product offer

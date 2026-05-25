@@ -1,7 +1,10 @@
 import datetime
+import re
+import uuid as uuid_module
 
 from django.db import connection
 from django.db.models import Q
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from rest_framework import viewsets, status
@@ -37,6 +40,89 @@ from .serializers import (
     ParticipationSchemaSerializer,
     ParticipationCreateSerializer,
 )
+
+
+def get_objet_par_uuid_ou_404(model, uuid_recu, **filtres_supplementaires):
+    """
+    Recupere un objet via son uuid, ou leve Http404 si l'uuid est mal forme.
+    / Get an object by its uuid, or raise Http404 if the uuid is malformed.
+
+    LOCALISATION : api_v2/views.py
+
+    Pourquoi : le routeur DRF capture n'importe quelle chaine dans l'URL
+    (regex `[^/.]+`). Un robot peut appeler /api/v2/events/<slug>/ avec un
+    slug au lieu d'un uuid. Sans cette verification, Django essaie de
+    convertir le slug en UUID pour le filtre ORM, leve ValidationError,
+    et renvoie une 500. On veut une 404 propre : la ressource n'existe pas.
+    / The DRF router captures any string in the URL. A crawler may pass a
+    slug instead of a uuid. Without this guard Django raises ValidationError
+    on the UUIDField (-> HTTP 500). We want a clean 404 instead.
+
+    Voir piege 9.76 (tests/PIEGES.md) : meme correctif sur detail_vente().
+    / See pitfall 9.76: same fix applied to detail_vente().
+    """
+    # On verifie d'abord que la chaine recue est un uuid valide.
+    # / First check the received string is a valid uuid.
+    try:
+        uuid_module.UUID(str(uuid_recu))
+    except (ValueError, TypeError, AttributeError):
+        # uuid mal forme -> la ressource ne peut pas exister -> 404
+        # / malformed uuid -> resource cannot exist -> 404
+        raise Http404("Invalid identifier")
+
+    return get_object_or_404(model, uuid=uuid_recu, **filtres_supplementaires)
+
+
+def get_event_par_identifiant_ou_404(identifiant):
+    """
+    Resout un evenement a partir d'un identifiant qui peut etre un uuid OU le slug
+    utilise par le controleur front (EventMVT). Leve Http404 si rien ne correspond.
+    / Resolve an event from an identifier that can be a uuid OR the front slug.
+
+    LOCALISATION : api_v2/views.py
+
+    Deux formes acceptees, comme cote front (cf EventMVT.retrieve dans BaseBillet) :
+    - uuid complet (ex: 7d51dee7-1234-...) -> lookup direct par uuid ;
+    - slug (ex: mon-evenement-260620-0900-7d51dee7) -> les 8 derniers caracteres
+      hex sont le debut de l'uuid (Event.slug se termine par uuid.hex[:8]). On
+      cherche via uuid__startswith (un LIKE texte : pas de ValidationError), puis
+      en dernier recours via slug__startswith.
+    / Two accepted forms, like the front: a full uuid, or the slug whose last 8 hex
+      are the start of the uuid (uuid__startswith), with a slug__startswith fallback.
+
+    Pas de filtre `published` : on resout n'importe quel evenement, comme
+    EventMVT.retrieve. / No `published` filter: resolve any event, like the front.
+    """
+    identifiant = str(identifiant)
+
+    # 1. Identifiant deja sous forme d'uuid valide -> lookup direct.
+    # / Identifier is already a valid uuid -> direct lookup.
+    try:
+        uuid_module.UUID(identifiant)
+        event = Event.objects.filter(uuid=identifiant).first()
+        if event is None:
+            raise Http404("Event not found")
+        return event
+    except (ValueError, TypeError, AttributeError):
+        # Pas un uuid : on tente la resolution par slug.
+        # / Not a uuid: fall through to slug resolution.
+        pass
+
+    # 2. Slug front : les 8 derniers caracteres hex sont le debut de l'uuid.
+    # / Front slug: the last 8 hex characters are the start of the uuid.
+    correspondance_hex8 = re.search(r'([0-9a-fA-F]{8})$', identifiant)
+    if correspondance_hex8:
+        debut_uuid = correspondance_hex8.group(1)
+        event = Event.objects.filter(uuid__startswith=debut_uuid).first()
+        if event is not None:
+            return event
+
+    # 3. Dernier recours : recherche par slug complet.
+    # / Last resort: lookup by full slug.
+    event = Event.objects.filter(slug__startswith=identifiant).first()
+    if event is None:
+        raise Http404("Event not found")
+    return event
 
 
 class CrowdInitiativeViewSet(viewsets.ViewSet):
@@ -173,8 +259,9 @@ class EventViewSet(viewsets.ViewSet):
         return Response({"results": serializer.data})
 
     def retrieve(self, request, uuid=None):
-        # Router passes {pk}; our lookup is by uuid
-        event = get_object_or_404(Event, uuid=uuid, published=True)
+        # Accepte un uuid OU le slug du front (cf EventMVT.retrieve cote front).
+        # / Accepts a uuid OR the front slug (see EventMVT.retrieve on the front).
+        event = get_event_par_identifiant_ou_404(uuid)
         serializer = EventSchemaSerializer(event)
         return Response(serializer.data)
 
@@ -200,7 +287,7 @@ class EventViewSet(viewsets.ViewSet):
         return Response(output_serializer.data, status=status.HTTP_201_CREATED)
 
     def destroy(self, request, uuid=None):
-        event = get_object_or_404(Event, uuid=uuid)
+        event = get_objet_par_uuid_ou_404(Event, uuid)
         event.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -213,7 +300,7 @@ class EventViewSet(viewsets.ViewSet):
         - a schema.org PostalAddress payload to create & link on the fly.
         Returns the updated Event representation.
         """
-        event = get_object_or_404(Event, uuid=uuid)
+        event = get_objet_par_uuid_ou_404(Event, uuid)
         addr_id = request.data.get("postalAddressId")
         address = None
         if addr_id:
