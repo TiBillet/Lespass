@@ -1,5 +1,32 @@
 # Changelog / Journal des modifications
 
+## API v2 — Fix `retrieve` Product (lookup_field manquant) / Fix Product retrieve (missing lookup_field)
+
+**Date :** 2026-05-25
+**Migration :** Non
+
+**Quoi / What :**
+- `GET /api/v2/products/{uuid}/` levait `TypeError: retrieve() got an unexpected
+  keyword argument 'pk'` (**HTTP 500**), même avec un uuid valide. `ProductViewSet`
+  n'avait pas `lookup_field = "uuid"` : le routeur DRF passait `pk`, alors que
+  `retrieve(self, request, uuid=None)` attend `uuid`. L'endpoint détail Product
+  n'avait donc jamais fonctionné.
+- Ajout de `lookup_field = "uuid"` sur `ProductViewSet` (cohérent avec
+  Event/Reservation/Membership/Initiative ; aligne le code sur l'OpenAPI qui
+  documente déjà `/products/{uuid}/`).
+
+**Pourquoi / Why :** Issue Sentry 7368726717 (crawler appelant l'endpoint détail
+Product avec un uuid valide).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `api_v2/views.py` | `ProductViewSet` : + `lookup_field = "uuid"` |
+| `tests/pytest/test_product_retrieve.py` | Nouveau test DB-only : retrieve par uuid → 200, uuid inconnu → 404 |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+
 ## API v2 — `GET /events/{id}/` accepte uuid OU slug front (+ 404 propre) / Event retrieve by uuid OR front slug
 
 **Date :** 2026-05-25

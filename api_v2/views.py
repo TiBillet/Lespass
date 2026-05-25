@@ -378,6 +378,10 @@ class ProductViewSet(viewsets.ViewSet):
     """
 
     permission_classes = [SemanticApiKeyPermission]
+    # Le lookup detail se fait par uuid (le routeur passe `uuid`, pas `pk`).
+    # Sans ca, DRF utilise `pk` et `retrieve(uuid=...)` leve un TypeError.
+    # / Detail lookup is by uuid (the router passes `uuid`, not `pk`).
+    lookup_field = "uuid"
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def list(self, request):
