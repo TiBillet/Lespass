@@ -4876,6 +4876,7 @@ class PaiementViewSet(viewsets.ViewSet):
         # Si le panier contient des recharges, le template doit demander un scan NFC client
         # If the cart contains top-ups, the template must request a client NFC scan
         panier_a_recharges = _panier_contient_recharges(articles_panier)
+        # retouner template lecture nfc
 
         # Si le panier contient des adhésions, le template doit demander l'identification client
         # (scan NFC ou formulaire email/nom/prénom)

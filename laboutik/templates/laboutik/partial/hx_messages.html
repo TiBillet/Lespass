@@ -10,24 +10,23 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_messages.html
 
 Styles : .alerte-messages dans laboutik/static/css/overlay.css
 {% endcomment %}
-
-<div class="BF-col alerte-messages"
-     style="background-color: var(--{{ msg_type }});"
-     role="alert"
-     aria-live="assertive"
-     data-testid="alerte-messages">
-
-	{% if msg_type == "success" %}
-	<i class="fas fa-check-circle alerte-messages-icone" aria-hidden="true"></i>
-	{% elif msg_type == "info" %}
-	<i class="fas fa-info-circle alerte-messages-icone" aria-hidden="true"></i>
-	{% elif msg_type == "error" %}
-	<i class="fas fa-times-circle alerte-messages-icone" aria-hidden="true"></i>
-	{% else %}
-	<i class="fas fa-exclamation-triangle alerte-messages-icone" aria-hidden="true"></i>
-	{% endif %}
-
-	<p class="alerte-messages-texte" data-testid="alerte-messages-texte">{{ msg_content }}</p>
-
-	<c-bt.return />
+<div id="messages" aria-live="polite">
+  <div class="BF-col alerte-messages"
+       style="background-color: var(--{{ msg_type }})"
+       role="alert"
+       aria-live="assertive"
+       data-testid="alerte-messages">
+    {% if msg_type == "success" %}
+      <i class="fas fa-check-circle alerte-messages-icone" aria-hidden="true"></i>
+    {% elif msg_type == "info" %}
+      <i class="fas fa-info-circle alerte-messages-icone" aria-hidden="true"></i>
+    {% elif msg_type == "error" %}
+      <i class="fas fa-times-circle alerte-messages-icone" aria-hidden="true"></i>
+    {% else %}
+      <i class="fas fa-exclamation-triangle alerte-messages-icone"
+         aria-hidden="true"></i>
+    {% endif %}
+    <p class="alerte-messages-texte" data-testid="alerte-messages-texte">{{ msg_content }}</p>
+    <c-bt.return />
+  </div>
 </div>

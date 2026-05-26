@@ -36,8 +36,16 @@
  */
 function addArticle(uuid, price, name, currency) {
 	try {
+		let quantity = 0
+
 		const eleQuantity = document.querySelector(`#article-quantity-number-${uuid}`)
-		let quantity = Number(eleQuantity.innerText)
+
+		if (!eleQuantity && !eleQuantity.innerText) {
+			throw new Error("Quantity not found")
+		}
+
+		quantity = Number(eleQuantity.innerText)
+
 		quantity++
 		eleQuantity.innerText = quantity
 
@@ -54,6 +62,121 @@ function addArticle(uuid, price, name, currency) {
 	} catch (error) {
 		console.log('-> article.js - addArticle,', error)
 	}
+}
+
+function manageBtTarif(event) {
+	if (event.target.classList.contains('article-touch')) {
+		const touch = event.target
+		console.log('-> manageBtTarif - touch =', touch)
+		addArticleWithPrice(
+			touch.dataset.productUuid,
+			touch.dataset.priceUuid,
+			Number(touch.dataset.prixCentimes),
+			touch.dataset.displayName,
+			touch.dataset.currency
+		)
+	}
+}
+
+/**
+ * Affiche plusieurs tarifs
+ * @param {object} dataArticle 
+ */
+function tarifSelection2(dataArticle) {
+	const { uuid, name, tarifs, currency } = dataArticle
+	console.log('-> tarifSelection - dataArticle =', dataArticle)
+	let template = `
+		<div class="tarifs-overlay">
+			<div class="tarifs-container">`
+	for (let i = 0; i < tarifs.length; i++) {
+		const tarif = tarifs[i]
+		const prixAffiche = (tarif.prix_centimes / 100).toFixed(2)
+
+		// Echapper tous les textes dynamiques pour éviter les injections XSS.
+		// Les UUID et nombres ne sont pas échappés (pas de risque HTML).
+		// / Escape all dynamic text to prevent XSS injection.
+		// UUIDs and numbers are not escaped (no HTML risk).
+		console.log('-------------------------------------');
+		const nomTarifSafe = escapeHtml(tarif.name)
+		const currencySafe = escapeHtml(currency)
+		const prixAfficheSafe = escapeHtml(prixAffiche)
+		const nomCompletSafe = escapeHtml(name + ' (' + tarif.name + ')')
+		console.log('nomTarifSafe =', nomTarifSafe, '  --  currencySafe =', currencySafe);
+		console.log('prixAfficheSafe =', prixAfficheSafe, '  --  prixAfficheSafe =', prixAfficheSafe);
+
+		let btClass = ''
+		if (!tarif.free_price) {
+			btClass = 'class="tarif-article bt-tarif" '
+		} else {
+			btClass = 'class="tarif-article-libre" '
+		}
+
+		template += `<div ${btClass}>`
+
+		if (tarif.poids_mesure) {
+			// TODO:
+			console.log('poids')
+
+		}
+		if (tarif.free_price) {
+			console.log('libre')
+			template += `
+				<div class="tal-title">${nomTarifSafe}</div>
+				<div class="tal-value">
+				<input type="number" placeHolder="0.00"/>
+				</div>
+				<div class="tal-price">0.00€</div>
+				<div class="tal-validate">
+				<div>
+					<div>OK</div>
+					<div class="article-touch" 
+					data-product-uuid="${uuid}" 
+					data-price-uuid="${tarif.price_uuid}" 
+					data-prix-centimes="${tarif.prix_centimes}" 
+					data-display-name="${nomCompletSafe}" 
+					data-currency="${currencySafe}" 
+					data-testid="tarif-btn-${tarif.price_uuid}"></div>
+				</div>
+				</div>`
+		}
+
+		if (!tarif.poids_mesure && !tarif.free_price) {
+			console.log('fixe')
+			template += `
+					<div class="article-visual-layer">${nomTarifSafe}</div>
+					<div class="article-footer-layer">${prixAfficheSafe} ${currencySafe}</div>
+					<div class="article-touch" 
+					data-product-uuid="${uuid}" 
+					data-price-uuid="${tarif.price_uuid}" 
+					data-prix-centimes="${tarif.prix_centimes}" 
+					data-display-name="${nomCompletSafe}" 
+					data-currency="${currencySafe}" 
+					data-testid="tarif-btn-${tarif.price_uuid}"></div>`
+		}
+		template += `</div>`
+	}
+
+	template += `
+			</div>
+			<!-- Bt retour -->
+			<div id="bt-retour-layer1" class="bt-basic-container bt-basic-bg-return" onclick="hideAndEmptyElement('#messages');">
+				<div class="bt-basic-icon">
+					<i class="fas fa-undo-alt"></i>
+				</div>
+				<div class="bt-basic-text">
+					<div>RETOUR</div>
+				</div>
+			</div>
+		</div>`
+	const messages = document.querySelector('#messages')
+	// ajout du template dans #messages
+	messages.innerHTML = template
+	// afffichage de #messages
+	messages.classList.remove('hide')
+
+	// gère les boutons tarif
+	document.querySelector('#messages').addEventListener('click', manageBtTarif)
+
 }
 
 /**
@@ -74,39 +197,66 @@ function manageKey(event) {
 	const ele = event.target.parentNode
 
 	if (ele.classList.contains('article-container')) {
-		// Si le stock est bloquant (rupture + vente hors stock interdite),
-		// on ignore le clic — l'article est grisé visuellement.
-		// / If stock is blocking (out of stock + sales not allowed),
-		// ignore the click — the article is visually greyed out.
-		if (ele.dataset.stockBloquant === 'true') {
-			return
-		}
+		const methodeCaisse = ele?.dataset?.methodeCaisse
+		// RE = recharge monnaie / RC = recharge cadeau / TM = recharge temps / VT = vente (service direct)
+		// console.log('-> manageKey - methodeCaisse =', methodeCaisse)
 
-		const articleUuid = ele.dataset.uuid
-		const articlePrice = ele.dataset.price
-		const articleName = ele.dataset.name
-		const articleCurrency = ele.dataset.currency
-		const multiTarif = ele.dataset.multiTarif === 'true'
+		// articles "ordinaires"
+		if (methodeCaisse === 'VT' || methodeCaisse === 'RE' || methodeCaisse === 'TM') {
+			// Si le stock est bloquant (rupture + vente hors stock interdite),
+			// on ignore le clic — l'article est grisé visuellement.
+			// / If stock is blocking (out of stock + sales not allowed),
+			// ignore the click — the article is visually greyed out.
+			if (ele.dataset.stockBloquant === 'true') {
+				return
+			}
 
-		// Si l'article a plusieurs tarifs ou un prix libre → ouvrir la selection de tarif
-		// au lieu d'ajouter directement au panier.
-		// / If the article has multiple rates or free price → open rate selection
-		// instead of adding directly to cart.
-		if (multiTarif) {
-			sendEvent('organizerMsg', '#event-organizer', {
-				src: { file: 'articles.js', method: 'manageKey' },
-				msg: 'tarifSelection',
-				data: {
+			const articleUuid = ele.dataset.uuid
+			const articlePrice = ele.dataset.price
+			const articleName = ele.dataset.name
+			const articleCurrency = ele.dataset.currency
+			// transforme le mot 'true' en bouléen
+			const multiTarif = ele.dataset.multiTarif === 'true'
+
+			// Si l'article a plusieurs tarifs ou un prix libre → ouvrir la selection de tarif
+			// au lieu d'ajouter directement au panier.
+			// / If the article has multiple rates or free price → open rate selection
+			// instead of adding directly to cart.
+			if (multiTarif) {
+				tarifSelection2({
 					uuid: articleUuid,
 					name: articleName,
 					tarifs: JSON.parse(ele.dataset.tarifs),
 					currency: articleCurrency,
-				}
-			})
-			return
+				})
+			} else {
+				addArticle(articleUuid, articlePrice, articleName, articleCurrency)
+			}
 		}
 
-		addArticle(articleUuid, articlePrice, articleName, articleCurrency)
+		// remboursement carte
+		if (methodeCaisse === 'VC') {
+			// Recupere uuid_pv et tag_id_cm depuis #addition-form.
+			// Retrieves uuid_pv and tag_id_cm from #addition-form.
+			const form = document.querySelector('#addition-form')
+			const uuidPv = form.querySelector('input[name="uuid_pv"]').value
+			const tagIdCm = form.querySelector('input[name="tag_id_cm"]').value
+			const params = new URLSearchParams({ uuid_pv: uuidPv, tag_id_cm: tagIdCm })
+			console.clear()
+			console.log('uuidPv =', uuidPv)
+			console.log('tagIdCm =', tagIdCm)
+			console.log('params =', params.toString())
+			htmx.ajax('GET', '/laboutik/paiement/vider_carte/overlay/?' + params.toString(), {
+				target: '#messages',
+				swap: 'innerHTML'
+			})
+		}
+
+		// rechargement cadeau
+		if (methodeCaisse === 'RC') {
+			console.log('rechargement cadeau !');
+			
+		}
 	}
 }
 
@@ -124,7 +274,7 @@ function manageKey(event) {
  */
 function articlesRemove(event) {
 	const { uuid, quantity } = event.detail
-	
+
 	try {
 		const article = document.querySelector(`#products div[data-uuid="${uuid}"]`)
 		const eleQuantity = article.querySelector(`#article-quantity-number-${uuid}`)
@@ -296,7 +446,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 	// Long press sur un article → charger le panel contextuel via HTMX
 	// / Long press on article → load contextual panel via HTMX
-	document.querySelector('#products').addEventListener('longpress', function(e) {
+	document.querySelector('#products').addEventListener('longpress', function (e) {
 		const uuid = e.detail.productUuid
 		if (!uuid) return
 		htmx.ajax('GET', '/laboutik/article-panel/' + uuid + '/panel/', {

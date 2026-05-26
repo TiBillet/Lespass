@@ -15,10 +15,8 @@ class NfcPlugin : CordovaPlugin() {
   private var LOGTAG = "NfcPlugin"
   private var nfcAdapter: NfcAdapter? = null
   private var callbackContext: CallbackContext? = null
-  // Flag pour éviter les appels multiples
   private var isListening = false
 
-  // Cordova appelle cette méthode automatiquement quand le plugin est initialisé
   override fun initialize(cordova: CordovaInterface, webView: CordovaWebView) {
     super.initialize(cordova, webView)
     nfcAdapter = NfcAdapter.getDefaultAdapter(cordova.activity)
@@ -33,8 +31,7 @@ class NfcPlugin : CordovaPlugin() {
     return when (action) {
       "startListening" -> {
         if (isListening) {
-          callbackContext.error("Already listening for NFC tags")
-          return true
+          stopListeningInternal(notifyCallback = false)
         }
 
         this.callbackContext = callbackContext
@@ -56,30 +53,16 @@ class NfcPlugin : CordovaPlugin() {
       }
       
       "stopListening" -> {
-        // Si un startListening est en cours, résoudre/rejeter son callback
-        // avant de traiter le callback de stopListening
-        this.callbackContext?.let { oldCtx ->
-          oldCtx.error("Listening stopped by user")
-          this.callbackContext = null
-        }
-        isListening = false
-        disableThisForegroundDispatch()
-        callbackContext.success("stop listening nfc !")
+        stopListeningInternal(notifyCallback = true, successCallback = callbackContext)
         true
       }
 
       "available" -> {
         try {
-          if ( nfcAdapter == null) {
-            callbackContext.success("no nfc")
-          }
-          
-          if ( nfcAdapter?.isEnabled == false ) {
-            callbackContext.success("disable")
-          }
-          
-          if (nfcAdapter?.isEnabled == true ) {
-            callbackContext.success("available")
+          when {
+            nfcAdapter == null -> callbackContext.success("no nfc")
+            nfcAdapter?.isEnabled == false -> callbackContext.success("disable")
+            else -> callbackContext.success("available")
           }
         } catch (e: Exception) {
           callbackContext.error("Erreur Nfc: ${e.message}")
@@ -89,6 +72,18 @@ class NfcPlugin : CordovaPlugin() {
 
       else -> false
     }
+  }
+
+  private fun stopListeningInternal(notifyCallback: Boolean, successCallback: CallbackContext? = null) {
+    if (notifyCallback) {
+      this.callbackContext?.let { oldCtx ->
+        oldCtx.error("Listening stopped by user")
+      }
+    }
+    this.callbackContext = null
+    isListening = false
+    disableThisForegroundDispatch()
+    successCallback?.success("stop listening nfc !")
   }
     
   override fun onResume(multitasking: Boolean) {
@@ -112,19 +107,14 @@ class NfcPlugin : CordovaPlugin() {
     val result = JSONObject()
     result.put("tagId", uid)
     
-    // 1 scan = 1 réponse = 1 promesse résolue
-    // Si callbackContext existe, alors appelle success(result) dessus
     callbackContext?.let { ctx ->
       Log.d(LOGTAG, "Sending NFC tag to JS: $result")
       ctx.success(result)
       callbackContext = null
     } ?: Log.w(LOGTAG, "CallbackContext is null")
 
-    // Nettoyer l'état dans tous les cas
     isListening = false
     disableThisForegroundDispatch()
-
-    // Consommer l'Intent pour éviter une relecture
     intent.removeExtra(NfcAdapter.EXTRA_TAG)
   }
 
@@ -141,27 +131,21 @@ class NfcPlugin : CordovaPlugin() {
     } 
   }
 
-  // permet à cordova.activity de recevoir directement les Intents NFC
   private fun enableThisForegroundDispatch() {
     Log.d(LOGTAG, "enableThisForegroundDispatch called")
     val activity = cordova.activity
-    // val intent = Intent(activity, activity.javaClass) = nfcPlugin
-    // FLAG_ACTIVITY_SINGLE_TOP = si déjà lancer ne pas le relancer 
     val intent = Intent(activity, activity.javaClass).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-    // créer un Intent en attente, qui s’exécutera plus tard
     val pendingIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
       PendingIntent.getActivity(activity, 0, intent, PendingIntent.FLAG_MUTABLE)
     } else {
       PendingIntent.getActivity(activity, 0, intent, 0)
     }
     val filters = arrayOf(
-      IntentFilter(NfcAdapter.ACTION_TAG_DISCOVERED),  // tag basique
-      IntentFilter(NfcAdapter.ACTION_TECH_DISCOVERED), // tags utilisant des technologies spécifiques (IsoDep, NfcA…).
-      IntentFilter(NfcAdapter.ACTION_NDEF_DISCOVERED)  // tags contenant des messages NDEF
+      IntentFilter(NfcAdapter.ACTION_TAG_DISCOVERED),
+      IntentFilter(NfcAdapter.ACTION_TECH_DISCOVERED),
+      IntentFilter(NfcAdapter.ACTION_NDEF_DISCOVERED)
     )
     try {
-      // lors de la lecture d'un tag nfc , lancer le pendingIntent qui cible activity (plugin nfc)
-      // et dans le plugin nfc on réception pendingIntent par la méthode override fun onNewIntent. 
       nfcAdapter?.enableForegroundDispatch(activity, pendingIntent, filters, null)
       Log.d(LOGTAG, "Foreground dispatch enabled")
     } catch (e: Exception) {

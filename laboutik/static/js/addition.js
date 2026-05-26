@@ -288,9 +288,12 @@ function additionReset() {
  * Déclenché par clic VALIDER → 'additionDisplayPaymentTypes' → tibilletUtils.js → CETTE FONCTION
  */
 function additionDisplayPaymentTypes() {
+	console.log('-> additionDisplayPaymentTypes');
+	
 	let nbArticles = 0
 	const form = document.querySelector('#addition-form')
 
+	/*
 	// Fermer l'overlay tarif s'il est encore ouvert (vrac/multi-tarif).
 	// Sans ca, #products contient toujours l'overlay numpad au moment du paiement
 	// et le broadcast WebSocket post-vente ne trouve pas les badges stock cibles
@@ -301,6 +304,7 @@ function additionDisplayPaymentTypes() {
 	if (typeof tarifClose === 'function') {
 		tarifClose()
 	}
+	*/
 
 	// Compte les articles (inputs repid-*)
 	form.querySelectorAll('input').forEach(ele => {

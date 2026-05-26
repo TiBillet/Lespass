@@ -29,13 +29,13 @@ const logTypes = ['DANGER', 'WARNING', 'INFO']
  * @returns {boolean}
  */
 function isCordovaApp() {
-  try {
-    if (window.cordova) {
-      return true
-    }
-  } catch (error) {
-    return false
-  }
+	try {
+		if (window.cordova) {
+			return true
+		}
+	} catch (error) {
+		return false
+	}
 }
 
 /**
@@ -182,7 +182,7 @@ function askAdditionManageForm(actionType, selector, value) {
  * 
  * ROUTES DÉFINIES :
  * - articlesAdd → additionInsertArticle sur #addition (ajoute au panier)
- * - additionTotalChange → updateBtValider sur #bt-valider (maj total)
+ * - additionTotalChange → updateSumOfValidateButton sur #bt-valider (maj total)
  * - additionRemoveArticle → articlesRemove sur #products (maj quantité tuile)
  * - resetArticles → additionReset sur #addition + articlesReset sur #products (reset complet)
  * - additionDisplayPaymentTypes → additionDisplayPaymentTypes sur #addition (affiche paiements)
@@ -190,15 +190,17 @@ function askAdditionManageForm(actionType, selector, value) {
  */
 const switches = {
 	articlesAdd: [{ name: 'additionInsertArticle', selector: '#addition' }],
-	additionTotalChange: [{ name: 'updateBtValider', selector: '#bt-valider' }],
+	additionTotalChange: [{ name: 'updateSumOfValidateButton', selector: '#bt-valider' }],
 	additionRemoveArticle: [{ name: 'articlesRemove', selector: '#products' }],
 	resetArticles: [{ name: 'additionReset', selector: '#addition' }, { name: 'articlesReset', selector: '#products' }],
 	articlesDisplayCategory: [{ name: 'articlesDisplayCategory', selector: '#products' }],
-	additionDisplayPaymentTypes: [{ name: 'additionDisplayPaymentTypes', selector: '#addition' }],
+	footerAskAdditionDisplayPaymentTypes: [{ name: 'additionDisplayPaymentTypes', selector: '#addition' }],
 	additionManageForm: [{ name: 'additionManageForm', selector: '#addition' }],
 	primaryCardManageForm: [{ name: 'primaryCardManageForm', selector: '#form-nfc' }],
 	checkCardManageForm: [{ name: 'checkCardManageForm', selector: '#form-check-nfc' }],
 	tarifSelection: [{ name: 'tarifSelection', selector: '#products' }],
+	nfcSendEmptyCardManageForm: [{name:'emptyCardManageForm', selector: '#vider-carte-form'}],
+	nfcRechargeClientForm:[{name:'rechargeClientForm', selector: '#recharge-client-form'}]
 }
 
 /**
@@ -223,6 +225,9 @@ function eventsOrganizer(event) {
 		const src = event.detail.src
 		const msg = event.detail.msg
 
+		console.log('-> eventsOrganizer - msg =', msg);
+		
+
 		// keys of switches in array
 		const keys = Object.keys(switches)
 		if (!keys.includes(msg)) {
@@ -241,6 +246,47 @@ function eventsOrganizer(event) {
 		console.warn(error.message)
 	}
 }
+
+/**
+ * gestionnaire de formulaire :
+ * - peut modifier l'url
+ * - peut mettre à jour une valeur d'un input
+ * - submit le formulaire
+ * @param {Event} event 
+ * @param {String} formSelector 
+ */
+function globalManageForm(event, formSelector) {
+	console.log('-> globalManageForm - formSelector =', formSelector)
+	try {
+		const data = event.detail
+		console.log('data =', data);
+		
+		const form = document.querySelector(formSelector)
+
+		// update input
+		if (data.actionType === 'updateInput') {
+			form.querySelector(data.selector).value = data.value
+		}
+
+		// change post url
+		if (data.actionType === 'postUrl') {
+			form.setAttribute('hx-post', data.value)
+			htmx.process(form)
+		}
+
+		// submit form
+		if (data.actionType === 'submit') {
+			form.setAttribute('hx-trigger', 'click')
+			htmx.process(form)
+			// submit
+			form.click()
+		}
+
+	} catch (error) {
+		console.log('-> hx_check_card - checkCardManageForm,', error)
+	}
+}
+
 
 /**
  * INITIALISATION - Attache l'écouteur sur #event-organizer

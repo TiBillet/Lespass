@@ -28,10 +28,9 @@
    (pas d'espace/saut de ligne entre les balises) sinon :empty ne matche plus.
    / Empty overlay = invisible. When HTMX injects content,
    :empty no longer matches → overlay appears.
-   IMPORTANT: keep the div on a single line with no whitespace. */
-#messages:empty, #confirm:empty {
-	display: none;
-}
+   IMPORTANT: keep the div on a single line with no whitespace.
+	 #messages et #confirm on dès le départ la class = "hide"
+*/
 
 /* L'enfant direct de #messages doit remplir tout l'espace du parent
    pour que le flex layout fonctionne correctement.

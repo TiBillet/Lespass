@@ -37,7 +37,8 @@
  * @param {Object} event - Événement avec event.detail contenant uuid, name, tarifs, currency
  */
 function tarifSelection(event) {
-	const { uuid, name, tarifs, currency } = event.detail
+	// const { uuid, name, tarifs, currency } = event.detail
+	const { uuid, name, tarifs, currency } = event
 
 	// Construire les boutons : 3 types (fixe, prix libre, poids/mesure)
 	// / Build buttons: 3 types (fixed, free price, weight/measure)

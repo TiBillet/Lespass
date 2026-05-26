@@ -19,7 +19,7 @@ Les événements click sont attachés par la vue parente (common_user_interface.
 / Click events are attached by the parent view (common_user_interface.html).
 -->
 <footer style="position: relative;">
-	<!--
+  <!--
 	BOUTON RESET - ANNULER LA COMMANDE
 	Action : Réinitialise toute la commande en cours
 	- Vide la liste d'addition
@@ -29,13 +29,15 @@ Les événements click sont attachés par la vue parente (common_user_interface.
 	Déclencheur : Clic sur #bt-reset
 	Événement émis : 'resetArticles' → eventsOrganizer → additionReset + articlesReset
 	-->
-	<div id="bt-reset" class="BF-ligne footer-bt fond-retour test-reset" data-testid="footer-reset">
-		<i class="fas fa-trash md4px"></i>
-		<div class="BF-col-deb footer-bt-text mg4px">
-			<div>{% translate "RESET" %}</div>
-		</div>
-	</div>
-	<!--
+  <div id="bt-reset"
+       class="BF-ligne footer-bt fond-retour test-reset"
+       data-testid="footer-reset">
+    <i class="fas fa-trash md4px"></i>
+    <div class="BF-col-deb footer-bt-text mg4px">
+      <div>{% translate "RESET" %}</div>
+    </div>
+  </div>
+  <!--
 	BOUTON CHECK CARTE — VERIFIER LE SOLDE NFC/CASHLESS
 	/ Check card button — verify NFC/cashless balance
 
@@ -52,16 +54,20 @@ Les événements click sont attachés par la vue parente (common_user_interface.
 	not #messages. We keep innerHTML on #messages to preserve any other
 	listeners on that element.
 	-->
-	<div id="bt-check-card" class="BF-ligne footer-bt fond-normal test-check-carte" data-testid="footer-check-carte" hx-get="{% url 'laboutik-paiement-verifier_carte' %}"
-		hx-target="#messages" hx-swap="innerHTML" data-loading-disable>
-		<i class="fas fa-money-check-alt md4px"></i>
-		<div class="BF-col-deb footer-bt-text mg4px">
-			<div>{% translate "CHECK" %}</div>
-			<div>{% translate "CARTE" %}</div>
-		</div>
-	</div>
-
-	<!--
+  <div id="bt-check-card"
+       class="BF-ligne footer-bt fond-normal test-check-carte"
+       data-testid="footer-check-carte"
+       hx-get="{% url 'laboutik-paiement-verifier_carte' %}"
+       hx-target="#messages"
+       hx-swap="innerHTML"
+       data-loading-disable>
+    <i class="fas fa-money-check-alt md4px"></i>
+    <div class="BF-col-deb footer-bt-text mg4px">
+      <div>{% translate "CHECK" %}</div>
+      <div>{% translate "CARTE" %}</div>
+    </div>
+  </div>
+  <!--
 	BOUTON VALIDER - CONFIRMER LA VENTE
 	Action : Affiche les options de paiement pour finaliser la vente
 
@@ -82,25 +88,31 @@ Les événements click sont attachés par la vue parente (common_user_interface.
 	Le total affiché est mis à jour en temps réel via l'événement 'updateBtValider'
 	déclenché lors de chaque modification de l'addition (additionTotalChange)
 	-->
-	<div id="bt-valider" class="BF-ligne footer-bt fond-ok" data-testid="footer-valider">
-		<i class="fas fa-check-circle md4px"></i>
-		<div class="BF-col-deb footer-bt-text mg4px">
-			<div>{% translate "VALIDER" %}</div>
-			<div class="BF-ligne">
-				<!-- Affichage du total en temps réel (mis à jour par updateBtValider) -->
-				<div id="bt-valider-total" class="md4px">0.00</div>
-				<div> {{ currency_data.symbol }}</div>
-			</div>
-		</div>
-	</div>
-	<!-- Version du logiciel — texte discret en bas a droite (LNE exigence 21) -->
-	<!-- / Software version — small text bottom right (LNE requirement 21) -->
-	{% if version_logiciel %}
-	<div style="position: absolute; bottom: 2px; right: 6px; font-size: 0.55rem;
-	            color: rgba(255,255,255,0.2); font-family: 'Luciole-regular';
-	            pointer-events: none; font-variant-numeric: tabular-nums;"
-	     data-testid="footer-version">
-		v{{ version_logiciel }}
-	</div>
-	{% endif %}
+  <div id="bt-valider"
+       class="BF-ligne footer-bt fond-ok"
+       data-testid="footer-valider">
+    <i class="fas fa-check-circle md4px"></i>
+    <div class="BF-col-deb footer-bt-text mg4px">
+      <div>{% translate "VALIDER" %}</div>
+      <div class="BF-ligne">
+        <!-- Affichage du total en temps réel (mis à jour par updateBtValider) -->
+        <div id="bt-valider-total" class="md4px">0.00</div>
+        <div>{{ currency_data.symbol }}</div>
+      </div>
+    </div>
+  </div>
+  <!-- Version du logiciel — texte discret en bas a droite (LNE exigence 21) -->
+  <!-- / Software version — small text bottom right (LNE requirement 21) -->
+  {% if version_logiciel %}
+    <div style="position: absolute;
+                bottom: 2px;
+                right: 6px;
+                font-size: 0.55rem;
+                color: rgba(255,255,255,0.2);
+                font-family: 'Luciole-regular';
+                pointer-events: none;
+                font-variant-numeric: tabular-nums"
+         data-testid="footer-version">v{{ version_logiciel }}</div>
+  {% endif %}
+  <script src="{% static 'js/footer.js' %}"></script>
 </footer>
