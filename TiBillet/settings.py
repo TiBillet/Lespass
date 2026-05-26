@@ -54,13 +54,15 @@ if not DEBUG and os.environ.get('SENTRY_DNS'):
 
     sentry_sdk.init(
         dsn=os.environ.get('SENTRY_DNS'),
-        # Set traces_sample_rate to 1.0 to capture 100%
-        # of transactions for performance monitoring.
-        traces_sample_rate=0.3,
-        # Set profiles_sample_rate to 1.0 to profile 100%
-        # of sampled transactions.
-        # We recommend adjusting this value in production.
-        profiles_sample_rate=0.3,
+        # Tracing DESACTIVE (0.0) : le volume festival (4000 users + taches Celery)
+        # saturait le budget de spans Sentry. Les events d'erreur (issues) restent
+        # captures normalement ; seul le performance monitoring (spans/transactions)
+        # est coupe. Remonter PRUDEMMENT (ex. 0.01-0.05) si besoin de perf, en
+        # surveillant le budget spans.
+        # / Tracing DISABLED (0.0): festival volume exhausted the Sentry spans budget.
+        # Error events are still captured; only performance monitoring is off.
+        traces_sample_rate=0.0,
+        profiles_sample_rate=0.0,
     )
 
 DATETIME_INPUT_FORMATS = ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M', '%d/%m/%Y %H:%M:%S', '%d/%m/%Y %H:%M:%S.%f', '%d/%m/%Y %H:%M', '%d/%m/%y %H:%M:%S', '%d/%m/%y %H:%M:%S.%f', '%d/%m/%y %H:%M']

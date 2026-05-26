@@ -893,6 +893,7 @@ class MembershipValidator(serializers.Serializer):
                 status=LigneArticle.PAID,
                 metadata={"source": "api"},
             )
+            # Important pour lancer le triggers pre save qui envoie les mails
             line.save(update_fields=["status"])
 
         return attrs

@@ -53,8 +53,8 @@ services:
       # Bind-mount du code source Fedow pour le dev (comme ../LaBoutik cote Laboutik).
       - ../Fedow:/home/fedow/Fedow
       # Le volume nomme reste en sous-montage : la base SQLite est preservee.
-#      - fedow_database:/home/fedow/Fedow/database
-      - ../Fedow/database:/home/fedow/Fedow/database
+      - fedow_database:/home/fedow/Fedow/database
+#      - ../Fedow/database:/home/fedow/Fedow/database
     networks:
       - backend
     command: "bash start.sh"

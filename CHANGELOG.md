@@ -1,5 +1,88 @@
 # Changelog / Journal des modifications
 
+## Sentry — tracing désactivé (budget spans saturé) / Sentry tracing disabled
+
+**Date :** 2026-05-25
+**Migration :** Non · **Déploiement requis :** Oui (redémarrage prod)
+
+**Quoi / What :** `sentry_sdk.init` (settings) : `traces_sample_rate` et
+`profiles_sample_rate` passés de **0.3 → 0.0**. Le tracing/performance monitoring
+(spans) est coupé ; les **events d'erreur (issues) restent captés normalement**.
+/ Tracing/profiling sampling 0.3 → 0.0. Spans off, error events unaffected.
+
+**Pourquoi / Why :** le volume festival (4000 users + tâches Celery) avec 30 % de
+transactions tracées a **saturé le budget de spans** Sentry (100 % consommé → spans
+droppés). On coupe le tracing pour ne plus exploser le budget. Remonter prudemment
+(0.01–0.05) plus tard si besoin de perf.
+
+**Note :** ne restaure pas l'ingestion de la **période en cours** (déjà consommée) —
+ça nécessite un ajustement budget côté Sentry ou le reset de période. Prend effet
+**au déploiement** (l'init ne tourne qu'en prod : `not DEBUG and SENTRY_DNS`).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `TiBillet/settings.py` | `sentry_sdk.init` : `traces_sample_rate=0.0`, `profiles_sample_rate=0.0` |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+
+## API v1 — validation réservation loggée en `warning` (anti-bruit Sentry) / Reservation validation logged at warning
+
+**Date :** 2026-05-25
+**Migration :** Non
+
+**Quoi / What :** `ApiReservationViewset.create` (v1) loggeait les **échecs de validation
+(400 client)** en `logger.error` → events Sentry. Passé en **`logger.warning`** : la
+`LoggingIntegration` Sentry (défaut `event_level=ERROR`, aucune surcharge dans
+`settings.py`) ne crée **plus d'event** pour ces 400 (juste un breadcrumb). Le 400 + le
+corps d'erreur informent déjà l'appelant.
+/ v1 reservation `create` logged client 400 validation failures at `error` (Sentry events).
+Now `warning` → no Sentry event (default `event_level=ERROR`).
+
+**Pourquoi / Why :** une validation 400 côté client (payload incomplet) n'est pas une
+erreur applicative ; elle ne doit pas solliciter Sentry.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `ApiBillet/views.py` | `ApiReservationViewset.create` : `logger.error` → `logger.warning` sur `validator.errors` |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+
+## API v1 (ApiBillet) — en-têtes de dépréciation vers /api/v2/ / API v1 deprecation headers
+
+**Date :** 2026-05-25
+**Migration :** Non
+
+**Quoi / What :**
+- Les réponses des endpoints **consommateur** de l'API v1 (`ApiBillet`) portent
+  désormais des en-têtes HTTP **non bloquants** orientant vers v2 :
+  `Deprecation: true`, `Link: </api/v2/>; rel="successor-version"`,
+  `Warning: 299 - "TiBillet API v1 is deprecated, migrate to /api/v2/"`.
+- Mécanisme : mixin **`DeprecatedV1Mixin`** (override `finalize_response`) placé en
+  **première base** des viewsets/APIViews consommateur. Marche pour `ViewSet` **et**
+  `APIView` (les deux héritent `finalize_response` de DRF — vérifié).
+- 12 classes concernées : `ApiReservationViewset`, `EventsViewSet`, `EventsSlugViewSet`,
+  `ProductViewSet`, `TarifBilletViewSet`, `TicketViewset`, `Wallet`, `OptionTicket`,
+  `HereViewSet`, `Gauge`, `TicketPdf`, `CancelSubscription`.
+- **Exclus** (plomberie, pas de successeur v2) : `Webhook_stripe`, `Onboard_laboutik`,
+  `Onboard_stripe_return`, `Get_user_pub_pem`.
+- **Pas de `Sunset`** (aucune date de retrait décidée — à ajouter dans
+  `API_V1_DEPRECATION_HEADERS` le jour venu).
+
+**Pourquoi / Why :** orienter les intégrateurs (ex. client « codex-api » repéré sur le
+tenant `raffinerie`) vers l'API v2 sémantique, sans casser les clients v1 existants.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `ApiBillet/views.py` | + `API_V1_DEPRECATION_HEADERS` + `DeprecatedV1Mixin` ; mixin ajouté en 1ʳᵉ base de 12 classes consommateur |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+
 ## API v2 — Fix `retrieve` Product (lookup_field manquant) / Fix Product retrieve (missing lookup_field)
 
 **Date :** 2026-05-25
