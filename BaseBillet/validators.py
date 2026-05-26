@@ -890,7 +890,7 @@ class MembershipValidator(serializers.Serializer):
                 amount=dec_to_int(membership.contribution_value),
                 qty=1,
                 sale_origin=sale_origin,
-                status=LigneArticle.VALID,
+                status=LigneArticle.PAID,
                 metadata={"source": "api"},
             )
             line.save(update_fields=["status"])
