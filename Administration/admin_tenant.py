@@ -3415,9 +3415,20 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
             permissions=["custom_actions_detail"])
     def test_api_ghost_admin_button(self, request, object_id):
 
-        ghost_config = GhostConfig.get_solo()
-        ghost_url = ghost_config.ghost_url
-        ghost_key = ghost_config.get_api_key()
+        from sib_api_v3_sdk.rest import ApiException
+        try:
+            ghost_config = GhostConfig.get_solo()
+            ghost_url = ghost_config.ghost_url
+            ghost_key = ghost_config.get_api_key()
+        except ApiException as e:
+            ghost_config.last_log = f"{e}"
+            logger.warning("ApiException when calling AccountApi->get_account: %s\n" % e)
+            messages.error(request, _(f"Api not OK : {e}"))
+            return redirect(request.META["HTTP_REFERER"])
+        except Exception:
+            messages.error(request, _("La connexion à l'API Ghost a échoué. L'API a potentiellement mal été configuré "))
+            return redirect(request.META["HTTP_REFERER"])
+
 
         if not ghost_url or not ghost_key:
             messages.error(request, _("Ghost URL or API key is missing"))
@@ -3448,7 +3459,8 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
     def has_add_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
+        return False
+        #return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
