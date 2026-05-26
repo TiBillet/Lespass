@@ -34,7 +34,7 @@ CONTEXTE REQUIS (injecté par MembershipAdmin.changeform_view) :
 - renouveller_url         : URL du formulaire d'ajout pré-rempli (injecté dans le partial de confirmation)
 - statuts_attente_paiement : liste des statuts qui affichent le bouton paiement
 -->
-
+{% if membership %}
 <div class="p-4"
      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
 
@@ -303,3 +303,4 @@ CONTEXTE REQUIS (injecté par MembershipAdmin.changeform_view) :
 
     {% endcomponent %}
 </div>
+{% endif %}

@@ -1675,9 +1675,6 @@ class MembershipAdmin(HelpDisplayMixin, ModelAdmin, ImportExportModelAdmin):
 
             except Membership.DoesNotExist:
                 extra_context["show_validation_buttons"] = False
-        else:
-            # Remove the change_form_before_template if it is a creation form
-            self.change_form_before_template = None
 
         return super().changeform_view(request, object_id, form_url, extra_context)
 
