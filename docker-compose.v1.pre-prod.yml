@@ -277,8 +277,8 @@ services:
       - laboutik_django:laboutik_django
     volumes:
       - laboutik_www:/DjangoFiles/www
+      - nginx_laboutik_logs::/DjangoFiles/logs
       - ./nginx/laboutik_nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      #      - ../LaBoutik/logs:/DjangoFiles/logs
     labels:
       - traefik.enable=true
       - traefik.docker.network=frontend
@@ -300,6 +300,8 @@ volumes:
   fedow_dev_db:
   laboutik_postgres_data:
   laboutik_www:
+  nginx_laboutik_logs:
+
 
 
 # Données persistantes dans ./data/ (bind mounts)
