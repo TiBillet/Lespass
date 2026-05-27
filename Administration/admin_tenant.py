@@ -1209,7 +1209,7 @@ class MembershipAddForm(ModelForm):
     price = forms.ModelChoiceField(
         queryset=Price.objects.filter(
             product__categorie_article=Product.ADHESION, product__archive=False
-        ).select_related('product', 'fedow_reward_asset'),
+        ).select_related('product', 'fedow_reward_asset').order_by("-free_price","name"),
         # Remplis le champ select avec les objets Price
         # / Fills the select with Price objects
         empty_label=_("Select an subscription"),  # Texte affiché par défaut
