@@ -1,6 +1,7 @@
 > [!CAUTION]
-> The V2 branch is an alpha prototype : NOT FOR PROD 
-> Use main branch for production ( see VERSION )
+> La branche V2 est un propotype en ALPHA : Ne pas utiliser en production
+> 
+> Utilisez la branche main.
 
 <h1 align="center">
   <!-- CAPTURE : Logo TiBillet (le logo actuel ou un nouveau si vous en avez un) -->
@@ -32,18 +33,23 @@
 <!-- CAPTURE : screenshot_hero.png — La capture la plus parlante du projet. Je suggère l'agenda public d'un lieu avec des événements, ou un montage de 2-3 écrans (agenda + caisse + carte NFC). Format large, 1200px minimum. -->
 
 ---
+> **🇬🇧 English speakers:** TiBillet is a federated, open-source toolkit for ticketing, POS, NFC cashless payments, memberships, and local currencies — built as a digital commons by the [Code Commun Cooperative](https://codecommun.coop). [Read more in English →](./README.en.md)
+
+---
+
 
 ## TiBillet, c'est quoi ?
 
 TiBillet est un ensemble d'outils libres pour les lieux culturels, les festivals, les associations et les tiers-lieux : billetterie en ligne, caisse enregistreuse, cashless par carte NFC, gestion d'adhésions, monnaie locale et monnaie temps.
 
-Mais TiBillet n'est pas qu'un logiciel. C'est un **commun numérique**, construit par et pour les gens qui s'en servent. Plusieurs centaines de lieux et organisations, plus d'une vingtaine en contribution active, une coopérative pensé comme un commun juridiqu e, et l'idée simple que les outils qui font tourner nos lieux de vie ne devraient appartenir à personne d'autre qu'à ceux qui les utilisent.
+Mais TiBillet n'est pas qu'un logiciel. C'est un **commun numérique**, construit par et pour les gens qui s'en servent. Plusieurs centaines de lieux et organisations, plus d'une vingtaine en contribution active, une coopérative pensé comme un commun juridique, et l'idée simple que les outils qui font tourner nos lieux de vie ne devraient appartenir à personne d'autre qu'à ceux qui les utilisent.
 
-**Le principe :** Un outil de création de fédération a travers des agendas et billetteries, une caisse enregistreuse et carte NFC unique, valable dans tout le réseau. Pas de frais d'activation, pas de date d'expiration, pas de case à décocher. Vous rechargez quand vous voulez, vous dépensez où vous voulez, vous vous faites rembourser quand vous voulez. Et la carte sert aussi de carte d'adhésion, de porte-monnaie local et/ou de monnaie temps.
+**Le principe :** Un outil de création de fédération a travers des agendas et billetteries, une caisse enregistreuse et carte NFC unique, valable dans tout le réseau. Pas de frais d'activation, pas de date d'expiration, pas de dark pattern. Vous rechargez quand vous voulez, vous dépensez où vous voulez, vous vous faites rembourser quand vous voulez. Et la carte sert aussi de carte d'adhésion, de porte-monnaie local et/ou de monnaie temps.
 
-**Alternatives à :** Weezevent, HelloAsso, Cyclos, L'Addition, Ulule, Caisses et POS JVC... Mais TiBillet va encore plus loin car pensé pour créer des fédérations : Une billetterie peut se fédérer à d'autres pour créer des agendas communs. Des caisses peuvent lire les mêmes cartes NFC pour faire des monnaies locales. Des collectifs peuvent fédérér des producteurs pour créer une caisse sociale alimentaire.
+**Alternatives à :** Weezevent, HelloAsso, Cyclos, L'Addition, Ulule, Caisses et POS JVC... 
 
-> **🇬🇧 English speakers:** TiBillet is a federated, open-source toolkit for ticketing, POS, NFC cashless payments, memberships, and local currencies — built as a digital commons by the [Code Commun Cooperative](https://codecommun.coop). [Read more in English →](./README.en.md)
+Mais TiBillet va encore plus loin car pensé pour créer des fédérations : Une billetterie peut se fédérer à d'autres pour créer des agendas communs. Des caisses peuvent lire les mêmes cartes NFC pour faire des monnaies locales. Des collectifs peuvent fédérér des producteurs pour créer une caisse sociale alimentaire.
+
 
 ---
 
@@ -81,6 +87,12 @@ Optionnels mais impactants :
 
 ---
 
+Documentation en cours d'écriture collaborative et disponible en français sur : https://tibillet.org/
+
+L'ancienne documentation EN/FR est toujours disponible ici : https://tibillet.github.io/documentation_v2/
+
+---
+
 ## En production, pour de vrai
 
 TiBillet n'est pas un prototype. C'est un outil en production depuis 2018, né au [Manapany Festival](https://www.manapany-festival.re/) à La Réunion, aujourd'hui déployé sur plusieurs dizaines de lieux — des cafés associatifs aux festivals de 15 000 personnes.
@@ -102,16 +114,26 @@ TiBillet tourne dans Docker. Une seule commande pour lancer l'environnement de d
 git clone https://github.com/TiBillet/TiBillet.git
 cd TiBillet
 cp env_example .env        # Configurer les variables d'environnement
+
+# Lespass uniquement :
 docker compose up -d
+# Lespass + Laboutik
+docker compose -f docker-compose-laboutik-V1.yml up -d
 
 # pour les donnée de démo / dev
 docker exec -ti lespass_django bash
 ./flush.sh # la première fois, ça installe toute les fixtures et lance le serveur
 rsp # Si l'installation a déja été réalisé, lance le serveur de dev'
+
+#idem pour Laboutik :
+docker exec -ti laboutik_django bash
+./flush.sh # la première fois, ça installe toute les fixtures et lance le serveur
+rsp # Si l'installation a déja été réalisé, lance le serveur de dev'
 ```
 
-L'application est accessible sur `https://lespass.tibillet.localhost`.
-L'admin est sur `https://lespass.tibillet.localhost/admin/` (auto-login en mode développement).
+L'application est accessible sur 
+- `https://lespass.tibillet.localhost`
+- `https://laboutik.tibillet.localhost`
 
 > **Prérequis :** Docker, Docker Compose, et un reverse proxy Traefik (inclus dans le compose).
 
@@ -224,19 +246,6 @@ C'est ce qu'on appelle le **budget contributif** : pas de manager qui attribue l
 
 TiBillet est porté par la [Coopérative Code Commun](https://codecommun.coop), une SCIC (Société Coopérative d'Intérêt Collectif) basée à La Réunion.
 
-L'équipe permanente :
-
-- **Jonas Turbeaux** — Backend, DevOps, mainteneur. Ancien régisseur de festival et ingé son, bricoleur depuis toujours.
-- **Mike Caron** — Hardware, systèmes embarqués, NFC.
-- **Nicolas Dijoux** — Frontend senior.
-- **Axel Chabran** — Administration, gestion de projet.
-
-Et une vingtaine de contributeur·ices : développeur·euses, documentalistes, testeur·euses, bénévoles de lieux qui remontent des bugs et des idées.
-
-### Fabriqué avec et pour
-
-[La Raffinerie](https://www.laraffinerie.re/) · [Le Bisik](https://bisik.re) · [Le Manapany Festival](https://www.manapany-festival.re/) · [La Réunion des Tiers-Lieux](https://www.communecter.org/costum/co/index/slug/LaReunionDesTiersLieux/) · [Communecter](https://www.communecter.org/) · [CoopCircuit](https://coopcircuit.org/) · et tous les lieux qui utilisent, testent et transforment TiBillet au quotidien.
-
 ### Soutiens
 
 - Lauréat **France 2030** — Appel à projet "Billetterie innovante" du ministère de la Culture.
@@ -253,7 +262,7 @@ Et une vingtaine de contributeur·ices : développeur·euses, documentalistes, t
 ## Contact
 
 - **Discord** : [discord.gg/ecb5jtP7vY](https://discord.gg/ecb5jtP7vY)
-- **Matrix** : bientôt
+- **Matrix** : https://matrix.to/#/#tibillet:tiers-lieux.org
 - **Email** : [contact@tibillet.re](mailto:contact@tibillet.re)
 - **Site** : [tibillet.org](https://tibillet.org)
 - **Coopérative** : [codecommun.coop](https://codecommun.coop)
