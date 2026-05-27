@@ -1,5 +1,6 @@
 > [!CAUTION]
-> ALPHA V2 RELEASE, NOT FOR PROD (check main for production)
+> The V2 branch is an alpha prototype : NOT FOR PROD 
+> Use main branch for production ( see VERSION )
 
 <h1 align="center">
   <!-- CAPTURE : Logo TiBillet (le logo actuel ou un nouveau si vous en avez un) -->
