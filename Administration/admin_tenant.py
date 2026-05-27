@@ -108,7 +108,7 @@ from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
     FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp, ProductFormField, \
-    PromotionalCode, Tva
+    PromotionalCode, Tva, MembershipProduct
 from BaseBillet.tasks import webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
     send_reservation_cancellation_user, send_sale_to_laboutik, forge_connexion_url
@@ -1488,6 +1488,28 @@ class LigneArticleInline(TabularInline):
         return False
 
 
+class MembershipPublishedFilter(admin.SimpleListFilter):
+    """
+    Filter for filtering Membership by MembershipProduct that are not archived
+    """
+    title = _('Product')
+    parameter_name = 'price' # Get the product from the price
+
+    def lookups(self, request, model_admin):
+        # Return only product that are not archived to display in the filter
+        return [
+            (product.pk, product.name)
+            for product in MembershipProduct.objects.filter(categorie_article=Product.ADHESION,archive=False)
+        ]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            # Return only membership where the product correspond to the selected product
+            return queryset.filter(price__product=self.value())
+        return queryset
+
+
+
 @admin.register(Membership, site=staff_admin_site)
 class MembershipAdmin(HelpDisplayMixin, ModelAdmin, ImportExportModelAdmin):
 
@@ -1539,7 +1561,7 @@ class MembershipAdmin(HelpDisplayMixin, ModelAdmin, ImportExportModelAdmin):
     ordering = ('-date_added',)
     search_fields = ('user__email', 'user__first_name', 'user__last_name', 'card_number', 'last_contribution',
                      'custom_form')
-    list_filter = [MembershipStatusFilter, 'price__product', 'last_contribution', 'deadline', ]
+    list_filter = [MembershipStatusFilter, MembershipPublishedFilter, 'last_contribution', 'deadline', ]
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -1722,13 +1744,13 @@ class MembershipAdmin(HelpDisplayMixin, ModelAdmin, ImportExportModelAdmin):
 
 class LigneArticlePublishedFilter(admin.SimpleListFilter):
     """
-    Filter for filtering LigneArticle by Produc
+    Filter for filtering LigneArticle by Product that are not archived
     """
     title = _('Product')
     parameter_name = 'product'
 
     def lookups(self, request, model_admin):
-        # Return only product that are not archived
+        # Return only product that are not archived to display in the filter
         return [
             (product.pk, product.name)
             for product in Product.objects.filter(archive=False)
