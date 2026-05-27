@@ -1,21 +1,30 @@
 {% extends "laboutik/base.html" %}
 {% load static i18n %}
-
 {% block content %}
-<!-- not touch hx-triger="", it is handled by the script below and nfc.js -->
-<c-read-nfc id="nfc-container" event-manage-form="primaryCardManageForm"
-	submit-url="{% url 'laboutik-caisse-carte_primaire' %}">
-	<form id="form-nfc" class="hide" hx-post="{% url 'laboutik-caisse-carte_primaire' %}" hx-trigger=""
-		hx-target=".message-nfc" hx-swap="innerHTML" data-testid="caisse-carte-primaire-form" 
-		hx-on::after-request="initNfc()">
-		<input id="nfc-tag-id" name="tag_id" />
-		<!-- Continue de renseigner le back sur le type_app pour l'injection de cordova -->
-		<input name="type_app" />
-	</form>
-	<h1>{% translate "Attente carte primaire" %}</h1>
-	<h3 class="message-nfc" aria-live="polite">{{msg}}</h3>
-</c-read-nfc>
-<script type="module" src="{% static 'js/ask_primary_card.js' %}"></script>
+  <!--
+  Infos c-read-nfc : 
+    - input-selector = selector css(id unique) d'un input où nfc enverra le tagId lu
+    - form-selector = selector css(id unique) du formulaire qui écoute un évènement provenant du routeur d'évènement 
+    - submit-url = url à poussée dans hx-post
+    - not touch hx-triger="" and hx-post="", they are handled by the script below and nfc.js
+   -->
+  <c-read-nfc id="nfc-container" input-selector="#nfc-tag-id" form-selector="#form-nfc" submit-url="{% url 'laboutik-caisse-carte_primaire' %}">
+  <form id="form-nfc"
+        class="hide"
+        hx-post=""
+        hx-trigger=""
+        hx-target=".message-nfc"
+        hx-swap="innerHTML"
+        data-testid="caisse-carte-primaire-form"
+        hx-on::after-request="initNfc()">
+    <input id="nfc-tag-id" name="tag_id" />
+    <!-- Continue de renseigner le back sur le type_app pour l'injection de cordova -->
+    <input name="type_app" />
+  </form>
+  <h1>{% translate "Attente carte primaire" %}</h1>
+  <h3 class="message-nfc" aria-live="polite">{{ msg }}</h3>
+  </c-read-nfc>
+  <script type="module" src="{% static 'js/ask_primary_card.js' %}"></script>
 {% endblock content %}
-
-{% block css %}{% endblock css %}
+{% block css %}
+{% endblock css %}

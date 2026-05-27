@@ -52,7 +52,7 @@ async function loadConfigFile(typeApp) {
   let configFile = null
   if (typeApp !== 'cordova') {
     configFile = await readConfFile()
-  } else  {
+  } else {
     configFile = await cordovaReadConfFile()
   }
   state['configFile'] = configFile
@@ -60,44 +60,10 @@ async function loadConfigFile(typeApp) {
   localStorage.setItem("configFile", JSON.stringify(configFile));
 }
 
-// gestionnaire du formulaire
-function primaryCardManageForm(event) {
-  try {
-    const data = event.detail
-    const form = document.querySelector('#form-nfc')
-
-    // update input
-    if (data.actionType === 'updateInput') {
-      form.querySelector(data.selector).value = data.value
-    }
-
-    // change post url
-    if (data.actionType === 'postUrl') {
-      form.setAttribute('hx-post', data.value)
-      htmx.process(form)
-    }
-
-    // submit form
-    if (data.actionType === 'submit') {
-      form.setAttribute('hx-trigger', 'click')
-      htmx.process(form)
-      // submit
-      form.click()
-    }
-
-  } catch (error) {
-    console.log('-> addition.js - additionManageForm,', error)
-  }
-}
-
-
 /**
  * Attend le chargement de la page
  */
 document.addEventListener("DOMContentLoaded", () => {
-  // écoute des commandes/évènements sur le formulaire "#form-nfc"
-  document.querySelector('#form-nfc').addEventListener('primaryCardManageForm', primaryCardManageForm)
-
   // ajout du type_app dans le formulaire
   document.querySelector('input[name="type_app"]').value = state.typeApp
 

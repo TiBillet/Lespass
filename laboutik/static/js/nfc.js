@@ -20,24 +20,24 @@ const NfcReader = class {
     this.stop()
 
     // dispatch event - peuple le tagId dans un formulaire
-    sendEvent('organizerMsg', '#event-organizer', {
+    sendEventOrganizer({
       src: { file: 'nfc.js', method: 'SendTagIdAndSubmit' },
-      msg: conf.eventManageForm,
-      data: { actionType: 'updateInput', selector: '#nfc-tag-id', value: tagId }
+      msg: 'nfcAskManageForm',
+      data: { formSelector: conf.formSelector, actionType: 'updateInput', selector: conf.inputSelector, value: tagId }
     })
 
     // modifie l'url du post du formulaire
-    sendEvent('organizerMsg', '#event-organizer', {
+    sendEventOrganizer({
       src: { file: 'nfc.js', method: 'SendTagIdAndSubmit' },
-      msg: conf.eventManageForm,
-      data: { actionType: 'postUrl', selector: '', value: conf.submitUrl }
+      msg: 'nfcAskManageForm',
+      data: { formSelector: conf.formSelector, actionType: 'postUrl', selector: '', value: conf.submitUrl }
     })
 
     // submit le formulaire
-    sendEvent('organizerMsg', '#event-organizer', {
+    sendEventOrganizer({
       src: { file: 'nfc.js', method: 'SendTagIdAndSubmit' },
-      msg: conf.eventManageForm,
-      data: { actionType: 'submit' }
+      msg: 'nfcAskManageForm',
+      data: { formSelector: conf.formSelector, actionType: 'submit' }
     })
 
   }
@@ -160,7 +160,7 @@ const NfcReader = class {
 
   piDesktopStarRead() {
     // console.log('-> piDesktopStarRead')
-    
+
     // déconnecte anciennes connexion sur le back, évite plusieurs écoutes
     // un appel front donne une seule réponse back
     if (this.socketIo) {
@@ -252,7 +252,7 @@ const NfcReader = class {
             const result = await nfcPlugin.startListening()
             this.verificationTagId(result.tagId, this.uuidConnexion)
           } catch (error) {
-            console.log('Processus nfc.start :',error);
+            console.log('Processus nfc.start :', error);
           }
 
         }
@@ -265,7 +265,6 @@ const NfcReader = class {
   }
 
   async stop() {
-    console.log('-> nfc.stop')
     try {
       // simu
       if (this.simuActivate) {

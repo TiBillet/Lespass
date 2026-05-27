@@ -5,19 +5,29 @@
     {{ slot }}
     <!-- reference(id) for the insertion of simulation buttons -->
     <div id="nfc-simu-tag"></div>
-    {% if selector %}
-    <c-bt.return selector="{{selector}}" action="state.nfc.stop()" />
-    {% endif %}
+    {% if selector %}<c-bt.return selector="{{ selector }}" action="state.nfc.stop()" />{% endif %}
   </div>
-
   <script>
     async function initNfc() {
       console.log('-> initNfc')
+
       try {
         state['nfc'] = null
         state.nfc = new NfcReader(state.socketIoPort, state.typeApp)
+        const formSelector = '{{ form_selector }}'
+
+        // supprime l'écoute sur le formulaire associé au lecteur nfc si déjà écouté
+        document.querySelector(formSelector).removeEventListener(formSelector, globalManageForm)
+        // lance un écouteur sur le formulaire associé au lecteur nfc
+        document.querySelector(formSelector).addEventListener(formSelector, globalManageForm)
+
         // start read nfc
-        await state.nfc.start({ eventManageForm: '{{ event_manage_form }}', submitUrl: '{{ submit_url }}' })
+        await state.nfc.start({
+          //  eventManageForm: '{{ event_manage_form }}',
+           submitUrl: '{{ submit_url }}',
+           inputSelector: '{{ input_selector }}',
+           formSelector
+        })
       } catch (error) {
         console.log('-> Cotton - read_nfc.html - initNfc,', error)
       }

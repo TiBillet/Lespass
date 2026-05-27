@@ -36,7 +36,7 @@ FLUX :
       {# ================================================================== #}
     {% elif panier_necessite_client %}
       <!-- ici c-nfc_reader -->
-      <c-read-nfc selector="#messages" event-manage-form="nfcRechargeClientForm" submit-url="{% url 'laboutik-paiement-moyens_paiement' %}">
+      <c-read-nfc selector="#messages"  submit-url="{% url 'laboutik-paiement-moyens_paiement' %}">
         <!-- soucis nfc ne transmet le tagId qu'à nfc-tag-id -->
       <!-- ici c-nfc_reader -->
       {# --- Titre adaptatif selon le contenu du panier --- #}
@@ -83,16 +83,6 @@ FLUX :
       </p>
       {# --- Option 1 : Scanner une carte TiBillet (toujours disponible) --- #}
       <!-- fin c-nfc_reader -->
-      <script>
-        // Pour gérer le formulaire par nfc
-        // écoute des commandes sur le formulaire "#recharge-client-form"
-        document.querySelector('#recharge-client-form').addEventListener('rechargeClientForm', (event) => {
-          // gestionnaire de formulaire si-dessus
-          globalManageForm(event, '#recharge-client-form')
-          event.preventDefault()
-          event.stopPropagation()
-        })
-      </script>
       </c-read-nfc>
       <!-- fin c-nfc_reader -->
       {# --- Option 2 : Saisir email / nom (masque si recharges car carte physique requise) --- #}

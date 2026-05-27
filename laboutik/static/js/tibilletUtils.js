@@ -153,6 +153,22 @@ function hideAndEmptyElement(selector) {
 }
 
 /**
+ * Envoyer des datas à un élément html par 'event'
+ * @param {object} data  - Données(disponibles dans event.detail) à passer au routeur d 'évènements
+ */
+function sendEventOrganizer(data) {
+	// console.log('-> sendEvent - selector =', selector, '  --  data =', data);
+	data = data === undefined ? {} : data
+	try {
+		const event = new CustomEvent('organizerMsg', { detail: data })
+		document.querySelector('#event-organizer').dispatchEvent(event)
+	} catch (error) {
+		console.log('sendEventOrganizer,', error);
+	}
+}
+
+
+/**
  * Demande la mise à jour d'un champ du formulaire d'addition
  * / Requests update to addition form field
  * 
@@ -166,8 +182,8 @@ function hideAndEmptyElement(selector) {
  * @param {*} value - Valeur à assigner
  */
 function askAdditionManageForm(actionType, selector, value) {
-	sendEvent('organizerMsg', '#event-organizer', {
-		src: { file: 'hx_display_type_payement.html', method: 'additionUpdateForm' },
+	sendEventOrganizer({
+		src: { file: 'tibiletUtils.js', method: 'askAdditionManageForm' },
 		msg: 'additionManageForm',
 		data: { actionType, selector, value }
 	})
@@ -196,15 +212,15 @@ const switches = {
 	articlesDisplayCategory: [{ name: 'articlesDisplayCategory', selector: '#products' }],
 	footerAskAdditionDisplayPaymentTypes: [{ name: 'additionDisplayPaymentTypes', selector: '#addition' }],
 	additionManageForm: [{ name: 'additionManageForm', selector: '#addition' }],
-	primaryCardManageForm: [{ name: 'primaryCardManageForm', selector: '#form-nfc' }],
-	checkCardManageForm: [{ name: 'checkCardManageForm', selector: '#form-check-nfc' }],
+	nfcAskManageForm: [{ auto: true }],
 	tarifSelection: [{ name: 'tarifSelection', selector: '#products' }],
-	nfcSendEmptyCardManageForm: [{name:'emptyCardManageForm', selector: '#vider-carte-form'}],
-	nfcRechargeClientForm:[{name:'rechargeClientForm', selector: '#recharge-client-form'}]
+
+	nfcSendEmptyCardManageForm: [{ name: 'emptyCardManageForm', selector: '#vider-carte-form' }],
+	nfcRechargeClientForm: [{ name: 'rechargeClientForm', selector: '#recharge-client-form' }]
 }
 
 /**
- * ORGANISATEUR D'ÉVÉNEMENTS - RÉCEPTEUR CENTRAL
+ * ROUTEUE D'ÉVÉNEMENTS - RÉCEPTEUR CENTRAL
  * / Central event receiver and router
  * 
  * Reçoit tous les événements 'organizerMsg' sur #event-organizer et les route
@@ -226,7 +242,6 @@ function eventsOrganizer(event) {
 		const msg = event.detail.msg
 
 		console.log('-> eventsOrganizer - msg =', msg);
-		
 
 		// keys of switches in array
 		const keys = Object.keys(switches)
@@ -240,7 +255,12 @@ function eventsOrganizer(event) {
 		// Envoie l'événement vers chaque destination
 		for (let i = 0; i < eventSwitch.length; i++) {
 			const eventData = eventSwitch[i];
-			sendEvent(eventData.name, eventData.selector, data)
+			if (eventData?.auto) {
+				sendEvent(data.formSelector, data.formSelector, data)
+			} else {
+				sendEvent(eventData.name, eventData.selector, data)
+			}
+
 		}
 	} catch (error) {
 		console.warn(error.message)
@@ -255,13 +275,13 @@ function eventsOrganizer(event) {
  * @param {Event} event 
  * @param {String} formSelector 
  */
-function globalManageForm(event, formSelector) {
-	console.log('-> globalManageForm - formSelector =', formSelector)
+function globalManageForm(event) {
+	console.log('-> globalManageForm')
 	try {
 		const data = event.detail
-		console.log('data =', data);
-		
-		const form = document.querySelector(formSelector)
+		// console.log('data =', data);
+
+		const form = document.querySelector(data.formSelector)
 
 		// update input
 		if (data.actionType === 'updateInput') {
@@ -283,7 +303,7 @@ function globalManageForm(event, formSelector) {
 		}
 
 	} catch (error) {
-		console.log('-> hx_check_card - checkCardManageForm,', error)
+		console.log('-> globalManageForm,', error)
 	}
 }
 

@@ -1,5 +1,4 @@
 {% load static i18n %}
-
 <!--
 ECRAN ATTENTE LECTURE CARTE NFC (check carte)
 / NFC card read waiting screen (card check)
@@ -14,46 +13,22 @@ Note : le listener 'tarifSelection' est sur #articles-zone (tarif.js), pas #mess
 We do NOT set id="messages" on the read-nfc component because the #messages
 element already exists in base.html.
 Note: 'tarifSelection' listener is on #articles-zone (tarif.js), not #messages.
+
+Infos c-read-nfc : 
+- input-selector = selector css(id unique) d'un input où nfc enverra le tagId lu
+- form-selector = selector css(id unique) du formulaire qui écoute un évènement provenant du routeur d'évènement 
+- submit-url = url à poussée dans hx-post
+- not touch hx-triger="" and hx-post="", they are handled by the script below and nfc.js
 -->
-<c-read-nfc selector="#messages" event-manage-form="checkCardManageForm"
-  submit-url="{% url 'laboutik-paiement-retour_carte' %}">
-  <form id="form-check-nfc" class="hide" hx-post="{% url 'laboutik-paiement-retour_carte' %}" hx-trigger=""
-    hx-target="#messages" hx-swap="innerHTML">
-    {% csrf_token %}
-    <input id="nfc-tag-id" name="tag_id" />
-  </form>  
-  <h1>{% translate "Attente lecture carte" %}</h1>
-  <script>
-    // gestionnaire de formulaire
-    function checkCardManageForm(event) {
-      try {
-        const data = event.detail
-        const form = document.querySelector('#form-check-nfc')
-
-        // update input
-        if (data.actionType === 'updateInput') {
-          form.querySelector(data.selector).value = data.value
-        }
-
-        // change post url
-        if (data.actionType === 'postUrl') {
-          form.setAttribute('hx-post', data.value)
-          htmx.process(form)
-        }
-
-        // submit form
-        if (data.actionType === 'submit') {
-          form.setAttribute('hx-trigger', 'click')
-          htmx.process(form)
-          // submit
-          form.click()
-        }
-
-      } catch (error) {
-        console.log('-> hx_check_card - checkCardManageForm,', error)
-      }
-    }
-    // écoute des commandes sur le formulaire "#form-check-nfc"
-    document.querySelector('#form-check-nfc').addEventListener('checkCardManageForm', checkCardManageForm)
-  </script>
+<c-read-nfc selector="#messages" input-selector="#nfc-tag-id" form-selector="#form-check-nfc" submit-url="{% url 'laboutik-paiement-retour_carte' %}">
+<form id="form-check-nfc"
+      class="hide"
+      hx-post=""
+      hx-trigger=""
+      hx-target="#messages"
+      hx-swap="innerHTML">
+  {% csrf_token %}
+  <input id="nfc-tag-id" name="tag_id" />
+</form>
+<h1>{% translate "Attente lecture carte" %}</h1>
 </c-read-nfc>
