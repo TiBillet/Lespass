@@ -1,5 +1,7 @@
-import { showDevicesStatus, showMainContent } from './renderHtml.js'
+import { renderHtml } from './renderHtml.js'
 import { env } from '../../../env.js'
+// dev
+import './dev.js'
 
 export function putLog(typeMsg, msg, options) {
   let msgFinal = ''
@@ -40,91 +42,83 @@ function hideSpinner() {
   spinner.style.display = "none"
 }
 
-async function testNetWorkOk(url = "https://api.github.com", timeout = 3000, retries = 2) {
-  let test = false
-  async function tryFetch() {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout);
-
-    try {
-      showSpinner()
-      const response = await fetch(url, {
-        method: "HEAD",
-        signal: controller.signal,
-        cache: "no-store"
-      })
-      return true
-    } catch (error) {
-      return false
-    } finally {
-      clearTimeout(timer)
-      hideSpinner()
-    }
+/**
+ * Vérifie le parse
+ * @param {string} content 
+ * @returns 
+ */
+function ParseStringToObject(content) {
+  try {
+    return JSON.parse(content)
+  } catch (error) {
+    putLog('error', '-> ParseStringToObject,', error)
   }
-
-  for (let i = 0; i < retries; i++) {
-    test = await tryFetch()
-  }
-
-  return test
-}
-
-export async function getDevicesStatusAndShow() {
-  // console.log('-> getDevicesStatusAndShow')
-  // NFC : not_available / enabled / disabled
-  const nfcStatus = (await ConnectivityPlugin.getNfcStatus()).status
-  // réseau : true / false
-  const networkOK = await testNetWorkOk()
-  showDevicesStatus({ networkOK, nfcStatus })
-  return { nfcStatus, networkOK }
-}
-
-export async function awaitDevicesOk() {
-  return new Promise((resolve) => {
-    const testNetWorkOk = setInterval(async () => {
-      const result = await getDevicesStatusAndShow()
-      if (result.nfcStatus === 'enabled' && result.networkOK === true) {
-        clearInterval(testNetWorkOk)
-        resolve(result)
-      }
-    }, 3000)
-  })
 }
 
 /**
- * 
- * @returns {object} - configuration
+ * read file
+ * @returns {string} string content file
  */
-async function readConfFile() {
-  const pathFile = cordova.file.dataDirectory + 'configLaboutik.json'
+async function cordovaReadFile(pathFile) {
+  // console.log('-> readFile')
+  showSpinner()
   return await new Promise((resolve) => {
     window.resolveLocalFileSystemURL(pathFile, function (fileEntry) {
       fileEntry.file(function (file) {
         const reader = new FileReader()
         reader.onloadend = function () {
-          resolve(JSON.parse(this.result))
+          hideSpinner()
+          resolve(this.result)
         }
         reader.readAsText(file)
       }, () => {
-        putLog('error', `- info, read "configLaboutik.json" failed !`)
+        hideSpinner()
         resolve(null)
       })
     }, () => {
-      putLog('error', `- info, read "configLaboutik.json" failed !`)
+      hideSpinner()
       resolve(null)
     })
   })
 }
 
 /**
+ * Retourne le fichier de configuration si il existe, sinon env
+ * @returns {object|null} The configuration object | null
+ */
+export async function readConfFile() {
+  // console.log('-> readConfFile')
+  try {
+    let configFile
+    const pathFile = cordova.file.dataDirectory + 'configLaboutik.json'
+    const confFile = await cordovaReadFile(pathFile)
+
+    if (confFile !== null) {
+      configFile = ParseStringToObject(confFile)
+    } else {
+      configFile = env
+      configFile['version'] = env.version
+      // création du fichier de configuration
+      const result = await writeConfigFile(configFile)
+      if (result === false) {
+        throw new Error('update/create file - backup error.')
+      }
+    }
+    return configFile
+  } catch (error) {
+    putLog('error', 'readConfigFile,', error)
+    return null
+  }
+}
+
+/**
  * Write configuration file
- * @param {object} confFile
+ * @param {object} config file
  * @returns {boolean}
  */
-async function writeFile(confFile) {
-  // console.log('-> writeToFile, saveFileName =', state.saveFileName, '  --  basePath =', state.basePath)
+async function writeConfigFile(confFile) {
+  // console.log('2 -> writeConfigFile, confFile =', confFile)
   const data = JSON.stringify(confFile)
-
   return await new Promise((resolve) => {
     window.resolveLocalFileSystemURL(cordova.file.dataDirectory, function (directoryEntry) {
       directoryEntry.getFile('configLaboutik.json', { create: true },
@@ -136,7 +130,6 @@ async function writeFile(confFile) {
             }
             fileWriter.onerror = function (e) {
               // you could hook this up with our global error handler, or pass in an error callback
-              putLog('error', `- info, write "configLaboutik.json" failed: ${e.toString()}`)
               resolve(false)
             }
             const blob = new Blob([data], { type: 'text/plain' })
@@ -147,46 +140,93 @@ async function writeFile(confFile) {
   })
 }
 
-export async function getConfigurationAndSave() {
-  //confFile = fichier sauvegardé dans dossier app
-  let confFile = await readConfFile()
-  if (confFile === null) {
-    // confFile = fichier env.js dans www
-    confFile = env
 
-    /*
-    // dev mock
-    env.servers = [
-      { server_url: 'https://lespass.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini' },
-      { server_url: 'https://lespass1.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-1' },
-      { server_url: 'https://lespass2.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-2' },
-      { server_url: 'https://lespass3.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-3' },
-      { server_url: 'https://lespass4.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-4' },
-      { server_url: 'https://lespass5.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-5' },
-      { server_url: 'https://lespass6.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-6' },
-      { server_url: 'https://lespass7.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-7' },
-      { server_url: 'https://lespass8.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-8' },
-      { server_url: 'https://lespass9.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-9' },
-      { server_url: 'https://lespass10.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-10' },
-      { server_url: 'https://lespass11.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-11' },
-    ]
-    */
-
-    // création confFile
-    await writeFile(confFile)
-  }
-
-  return confFile
+/**
+ * Change background color of general status
+ * @param {string} status - error|success|info|warning
+ */
+export function setGeneralStatus(status) {
+  document.querySelector('.header-status').style.backgroundColor = `var(--${status})`
 }
 
+export async function testNetworkStatus(timeout = 5000) {
+  const urls = [
+    "https://httpbin.org/get",
+    "https://www.google.com/generate_204",
+    "https://postman-echo.com/get"
+  ]
+  const promises = urls.map(async (url) => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeout)
+    try {
+      const response = await fetch(url, {
+        method: "HEAD",
+        mode: "no-cors",
+        signal: controller.signal,
+        cache: "no-store"
+      })
+      clearTimeout(timer)
+      return response
+    } catch (error) {
+      clearTimeout(timer)
+      return null
+    }
+  })
+  const responses = await Promise.all(promises);
+
+  if (responses.filter(item => item !== null).length >= 1) {
+    return 'available'
+  }
+  return 'disable'
+}
+
+/**
+ * Listen required devices status
+ */
+export async function initListenDevicesStatus() {
+  // console.log('-> initListenDevicesStatus')
+  try {
+    // NFC : available / disabled
+    const nfcStatus = await nfcPlugin.available()
+    if (nfcStatus !== 'available') {
+      putLog('error', 'nfcStatus =', nfcStatus)
+      setGeneralStatus('error')
+    } else {
+      setGeneralStatus('success')
+    }
+    state['nfcStatus'] = nfcStatus
+
+    // network :available / disabled
+    const networkStatus = await testNetworkStatus()
+    if (networkStatus === 'disable') {
+      putLog('error', 'networkStatus =', networkStatus)
+      setGeneralStatus('error')
+    } else {
+      setGeneralStatus('success')
+    }
+    state['networkStatus'] = networkStatus
+  } catch (error) {
+    putLog('error', "-> initListenDevicesStatus,", error)
+    setGeneralStatus('error')
+  }
+
+  renderHtml(state)
+  // relance les écoutes dans 5 secondes
+  const timeoutId = setTimeout(initListenDevicesStatus, 5000)
+}
+
+
+/**
+ * Post le pinCode au serveur discovery pour récupérer
+ * @param {int} pinCode 
+ * @returns {object} 
+ */
 async function getServerInfos(pinCode) {
-  putLog('info', '-> getServerInfos  -- type pinCode =', pinCode)
-  const confFile = await readConfFile()
-  putLog('info','confFile = ', confFile)
+  // putLog('info', '-> getServerInfos  -- type pinCode =', pinCode, typeof (pinCode))
   try {
     // requête à l'app django discovery
     showSpinner()
-    const response = await fetch(confFile.server_pin_code + '/api/discovery/claim/', {
+    const response = await fetch(state.server_pin_code + '/api/discovery/claim/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -208,16 +248,19 @@ async function getServerInfos(pinCode) {
   }
 }
 
+/**
+ * Go server - post api_key and follow back redirection
+ * @param {object} event 
+ */
+export async function goServer(event) {
+  // console.log('-> goServer')
+  showSpinner()
 
-export async function updateCurrentServerAndGoServer(event) {
   const url = event.target.getAttribute('data-server')
-  const confFile = await readConfFile()
-  confFile.currentServer = url
-  // update conFile
-  const updateConfFile = await writeFile(confFile)
-  putLog('info', 'update config file, current server =', updateConfFile)
+  const data = state.servers.find(item => item.server_url === url)
+  // console.log('data =', data)
 
-  const data = confFile.servers.find(item => item.server_url === url)
+  // TODO: peut être ajouter le current server dans config file.
 
   // Soumission POST via formulaire natif pour éviter les restrictions CORS/fetch
   // et garantir la transmission du cookie session sur la redirection Django
@@ -230,22 +273,66 @@ export async function updateCurrentServerAndGoServer(event) {
   input.name = 'api_key'
   input.value = data.api_key
 
+  const input2 = document.createElement('input')
+  input2.type = 'hidden'
+  input2.name = 'type_app'
+  console.log('state.type_app =', state.type_app);
+
+  input2.value = state.type_app
+
   form.appendChild(input)
+  form.appendChild(input2)
   document.body.appendChild(form)
   form.submit()
 }
 
-export async function deleteServer(event) {
+/**
+ * Delete server in list after click button "Delete"
+ * @param {object} event 
+ */
+export async function confirmDeleteServer(event) {
+  console.log('-> confirmDeleteServer')
+  // show window confirmation
+  document.querySelector('.confirm-container').style.display = "flex"
+  // ajoute l'url du serveur cliqué dans le bouton valider
   const url = event.target.getAttribute('data-server')
-  let confFile = await readConfFile()
+  document.querySelector('.bt-delete-validate').setAttribute('data-server', url)
+}
+
+
+/**
+ * Delete server in list after click button "Delete"
+ * @param {object} event 
+ */
+export async function deleteServer(event) {
+  // console.log('-> deleteServer')
+
+  // hide window confirmation
+  document.querySelector('.confirm-container').style.display = "none"
+
+  const url = event.target.getAttribute('data-server')
+  let typeMsg = "success"
+
+  // copie l'ancien state
+  const oldState = structuredClone(state)
+
   // trouver tous les servers sauf url
-  const filterServers = confFile.servers.filter(item => item.server_url !== url)
-  confFile.servers = filterServers
+  const filterServers = state.servers.filter(item => item.server_url !== url)
+  state.servers = filterServers
+
   // update conFile
-  const updateConfFile = await writeFile(confFile)
-  putLog('info', 'update config file, after delete server =', updateConfFile)
+  const updateConfFile = await writeConfigFile(state)
+
+  // retour à l'ancien state si fichier pas sauvegardé
+  if (updateConfFile === false) {
+    state = structuredClone(oldState)
+    oldState = null
+    typeMsg = "error"
+  }
+  // putLog(typeMsg, 'update config file, after delete server =', updateConfFile)
+
   // render
-  showMainContent(confFile)
+  renderHtml(state)
 }
 
 /**
@@ -277,18 +364,31 @@ export async function managedPinCode(event) {
 
       // pinCode entré -> get server
       const result = await getServerInfos(parseInt(pinCode))
+      let typeMsg = "success"
 
       if (result.error === false) {
-        const confFile = await readConfFile()
         // cache la vue permettant d'entrer le pincode
         document.querySelector('.content-input').style.display = 'none'
+
+        // copie l'ancien state
+        const oldState = structuredClone(state)
+
         // add server in servers list
-        confFile.servers.push(result.server)
+        state.servers.push(result.server)
+
         // update conFile
-        const updateConfFile = await writeFile(confFile)
-        putLog('info', 'update config file, add server =', updateConfFile)
+        const updateConfFile = await writeConfigFile(state)
+
+        // retour à l'ancien state si fichier pas sauvegardé
+        if (updateConfFile === false) {
+          state = structuredClone(oldState)
+          oldState = null
+          typeMsg = "error"
+        }
+
+        putLog('typeMsg', 'update config file, add server =', updateConfFile)
         // render
-        showMainContent(confFile)
+        showMainContent(state)
 
       } else {
         result.msgs.forEach(msg => {

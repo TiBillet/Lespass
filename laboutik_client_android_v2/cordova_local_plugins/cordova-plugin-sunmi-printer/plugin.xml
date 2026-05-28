@@ -20,16 +20,7 @@
     <framework src="src/android/build-extras.gradle" custom="true" type="gradleReference" />
 
     <config-file target="AndroidManifest.xml" parent="/*">
-      <!-- Permissions -->
-      <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
-      <uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
-      <uses-permission android:name="android.permission.NFC" />
-      <uses-permission android:name="android.permission.BLUETOOTH" />
-      <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-      <!-- Déclaration d'une fonctionnalité matérielle -->
-      <uses-feature android:name="android.hardware.bluetooth" android:required="true" />
-
-       <queries>
+      <queries>
         <package android:name="woyou.aidlservice.jiuiv5"/>
       </queries>
     </config-file>

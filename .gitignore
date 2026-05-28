@@ -191,3 +191,7 @@ docker-compose-filaos.yml
 !laboutik_client_android_v2/mobile-app/www/
 !laboutik_client_android_v2/mobile-app/www/**
 env.js
+laboutik_client_pi_desktop_v2/package-lock.json
+laboutik_client_pi_desktop_v2/configLaboutik.json
+laboutik_client_android_v2/mobile-app/www/assets/js/modules/dev.js
+laboutik_client_android_v2/mobile-app/package-lock.json

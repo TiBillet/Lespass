@@ -23,10 +23,11 @@ export class MTE {
     logLevel = options.config.logLevel
   }
 
-  addRoute(route, fonction) {
+  addRoute(route, fonction, options) {
     this.routes.push({
       name: route,
-      fonction
+      fonction,
+      options
     })
   }
 
@@ -45,7 +46,7 @@ export class MTE {
 
   listen(callback) {
     const handler = async (req, res) => {
-      let url = req.url, useProxy = false
+      let url = req.url
 
       const origin = (req.headers.origin === undefined) ? `http://${this.config.HOST}:${this.config.HOST}` : req.headers.origin
       // console.log('url =', req.url, '  --  origin =', origin)
@@ -76,27 +77,22 @@ export class MTE {
 
         req.on("end", () => {
           // recherche dans les routes
-          if (route.name === url && useProxy === false) {
-            route.fonction.call(this, req, res, body, headers)
+          if (route.name === url) {
+            route.fonction.call(this, req, res, body, headers,route.options)
           }
         })
       }
 
       if (methode === 'GET') {
-        if (route?.name === url && useProxy === false) {
-          route.fonction.call(this, req, res, headers)
+        if (route?.name === url) {
+          route.fonction.call(this, req, res, headers, route.options)
         }
       }
 
       // vue gère la méthode "GET"
-      if (methode === 'GET' && route?.name !== url && useProxy === false) {
+      if (methode === 'GET' && route?.name !== url) {
         try {
           let fichier, posDerPoint, extention
-
-          // index_origine.html
-          if (url === '/' || url === '/index.html') {
-            url = '/index.html'
-          }
 
           fichier = this.config.PUBLIC + '/' + url.substring(1, url.length)
           posDerPoint = url.lastIndexOf('.')

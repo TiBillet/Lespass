@@ -4,6 +4,23 @@ import { env } from '../env.js'
 
 const root = process.cwd(), confFileName = 'configLaboutik.json'
 
+
+export function readfile(path) {
+  // console.log('-> readfile, path =', path)
+  try {
+    const fileExists = fs.existsSync(path)
+    if (fileExists) {
+      const data = fs.readFileSync(path, 'utf8')
+      return data
+    } else {
+      throw new Error("File doesn't exist.")
+    }
+  } catch (error) {
+    console.log(`Read file ${path} :`, error.message)
+    return null
+  }
+}
+
 function readJson(path) {
   // console.log('-> readJson, path =', path)
   try {
@@ -16,18 +33,28 @@ function readJson(path) {
       throw new Error("The file doesn't exist")
     }
   } catch (error) {
-    console.log("Lecture fichier de configuration,", error.message)
+    console.log("readJson -", error.message)
     return null
   }
 }
 
+/**
+ * 
+ * @param {string} path 
+ * @param {string} data 
+ * @returns {object} - object.stasus = true|false , object.msg ...success|...error
+ */
 export function writeJson(path, data) {
+  if (typeof (data) !== 'string') {
+    data = JSON.stringify(data)
+  }
   try {
-    fs.writeFileSync(path, JSON.stringify(data, null, 2), 'utf8')
-    return { status: true, msg: '' }
+    const content = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
+    fs.writeFileSync(path, content, 'utf8')
+    return { status: true, msg: 'Update/create file - backup success.' }
   } catch (error) {
     console.log("sauvegarde fichier de configuration,", error.message)
-    return { status: false, msg: error.message }
+    return { status: false, msg: 'Update/create file - backup error.' }
   }
 }
 
@@ -44,23 +71,24 @@ export function startBrowser(url) {
 
 export async function testNetworkStatus(timeout = 3000) {
   const urls = [
-    "https://clients3.google.com/generate_204",
-    "https://1.1.1.1",
-    "https://api.github.com"
+    "https://httpbin.org/get",
+    "https://www.google.com/generate_204",
+    "https://postman-echo.com/get"
   ]
   const promises = urls.map(async (url) => {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeout)
     try {
       const response = await fetch(url, {
-        method: "GET",
+        method: "HEAD",
+        mode: "no-cors",
         signal: controller.signal,
         cache: "no-store"
       })
       clearTimeout(timer)
       return response
     } catch (error) {
-      // console.log('-> testNetworkOk - fetch', error)
+      clearTimeout(timer)
       return null
     }
   })
@@ -72,15 +100,36 @@ export async function testNetworkStatus(timeout = 3000) {
   return 'disable'
 }
 
+/**
+ * Retour le fichier de configuration si il existe, sinon env
+ * @returns {object|null}
+ */
 export function readConfigFile() {
-  // console.log('-> readConfigFile, headers =', headers)
-  let configFile
-  const configFromFile = readJson(root + '/' + confFileName)
-  if (configFromFile !== null) {
-    configFile = JSON.parse(configFromFile)
-  } else {
-    configFile = env
+  try {
+    let configFile
+    const configFromFile = readJson(root + '/' + confFileName)
+    // console.log('-> readConfigFile - configFromFile =', configFromFile)
+
+    if (configFromFile !== null) {
+      configFile = configFromFile
+    } else {
+      configFile = env
+      configFile['version'] = env.version
+      // création du fichier de configuration
+      const result = writeJson(root + '/' + confFileName, env)
+      if (result.status === false) {
+        throw new Error(result.msg)
+      }
+    }
+    return configFile
+  } catch (error) {
+    console.log('readConfigFile,', error)
+    return null
   }
-  configFile['version'] = env.version
-  return configFile
+}
+
+
+export function writeConfigFile(content) {
+  console.log('-> writeConfigFile, content =', content)
+  return writeJson(root + '/' + confFileName, content)
 }

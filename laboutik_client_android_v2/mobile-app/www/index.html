@@ -14,21 +14,36 @@
 <body>
   <header>
     <img class="header-img" alt="TiBillet" src="assets/images/icon-complet-blanc.svg" />
+    <div class="header-status"></div>
     <div class="spinner"></div>
-    <svg class="logs-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-      <rect x="6" y="4" width="12" height="16" />
-      <line x1="8" y1="9" x2="16" y2="9" />
-      <line x1="8" y1="13" x2="16" y2="13" />
-      <line x1="8" y1="17" x2="13" y2="17" />
-    </svg>
+    <div class="header-menu">
+      <svg width="40" height="40" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <rect x="3" y="5" width="18" height="2" fill="currentColor" />
+        <rect x="3" y="11" width="18" height="2" fill="currentColor" />
+        <rect x="3" y="17" width="18" height="2" fill="currentColor" />
+      </svg>
+    </div>
   </header>
   <main></main>
   <div class="content-input">
-    <input type="number" id="pin-code" />
-    <!-- TODO afficher et gérer le clavier pour un pi -->
-     <label id="pin-code-message" style="color: var(--yellow00);"></label>
+    <input type="number" id="pin-code" placeholder="pin-code" />
+    <label id="pin-code-message" style="color: var(--yellow00);"></label>
+    <div class="bt bt-input-return">Return</div>
   </div>
   <div class="logs-content"></div>
+  <div class="menu-burger-container" aria-label="Menu principal">
+    <nav class="menu-burger-content"></nav>
+  </div>
+  <div class="confirm-container">
+    <div class="confirm-content">
+      <div class="confirm-title">Confirmation</div>
+      <div class="confirm-body">delete the server</div>
+      <div class="confirm-select">
+        <div class="bt bt-delete-cancel">Cancel</div>
+        <div data-server="" class="bt bt-delete-validate">validate</div>
+      </div>
+    </div>
+  </div>
   <script src="http://localhost/cordova.js"></script>
   <script type="module" src="assets/js/index.js"></script>
 </body>

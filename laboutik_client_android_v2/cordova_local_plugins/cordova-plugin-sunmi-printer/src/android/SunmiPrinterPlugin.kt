@@ -5,6 +5,8 @@ import org.apache.cordova.CordovaPlugin
 import org.apache.cordova.CallbackContext
 import org.json.JSONArray
 import org.json.JSONObject
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 
 class SunmiPrinterPlugin : CordovaPlugin() {
 
@@ -36,7 +38,8 @@ class SunmiPrinterPlugin : CordovaPlugin() {
                 val size = args.getDouble(1).toFloat()
                 val isBold = args.getBoolean(2)
                 val isUnderLine = args.getBoolean(3)
-                SunmiPrintHelper.printText(content, size, isBold, isUnderLine)
+                val align = args.getInt(4)
+                SunmiPrintHelper.printText(content, size, isBold, isUnderLine, align)
                 callbackContext.success("Text printed")
                 return true
             }
@@ -52,7 +55,8 @@ class SunmiPrinterPlugin : CordovaPlugin() {
                 val data = args.getString(0)
                 val modulesize = if (args.length() > 1) args.getInt(1) else 8
                 val errorlevel = if (args.length() > 2) args.getInt(2) else 0
-                SunmiPrintHelper.printQr(data, modulesize, errorlevel)
+                val align = if (args.length() > 3) args.getInt(3) else 0
+                SunmiPrintHelper.printQr(data, modulesize, errorlevel, align)
                 callbackContext.success("QR code printed")
                 return true
             }
@@ -63,7 +67,8 @@ class SunmiPrinterPlugin : CordovaPlugin() {
                 val height = if (args.length() > 2) args.getInt(2) else 162
                 val width = if (args.length() > 3) args.getInt(3) else 2
                 val textPosition = if (args.length() > 4) args.getInt(4) else 2
-                SunmiPrintHelper.printBarCode(data, symbology, height, width, textPosition)
+                val align = if (args.length() > 5) args.getInt(5) else 0
+                SunmiPrintHelper.printBarCode(data, symbology, height, width, textPosition, align)
                 callbackContext.success("BarCode printed")
                 return true
             }
@@ -107,14 +112,47 @@ class SunmiPrinterPlugin : CordovaPlugin() {
                 callbackContext.success(state)
                 return true
             }
-            
+
             "printBitmap" -> {
-              val base64 = args.getString(0)
-              val decodedBytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
-              val bitmap = android.graphics.BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
-              SunmiPrintHelper.printBitmap(bitmap)
-              callbackContext.success("Bitmap printed")
-              return true
+                var base64 = args.getString(0)
+
+                // Nettoyage si base64 contient header data:image/...
+                if (base64.contains(",")) {
+                    base64 = base64.substringAfter(",")
+                }
+                
+                val decodedBytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+                var bitmap = BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
+
+                // Vérifier que le décodage a réussi
+                if (bitmap == null) {
+                    callbackContext.error("Invalid image data")
+                    return true
+                }
+
+                // Largeur personnalisée ou défaut 384 (58mm)
+                val requestedWidth = if (args.length() > 1) args.getInt(1) else 384
+                val targetWidth = minOf(requestedWidth, 384)
+                if (targetWidth <= 0) {
+                    callbackContext.error("Width must be positive")
+                    return true
+                }
+
+                val ratio = bitmap.height.toFloat() / bitmap.width.toFloat()
+                val targetHeight = (targetWidth * ratio).toInt()
+
+                val align = if (args.length() > 2) args.getInt(2) else 0
+
+                bitmap = Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true)
+
+                // forcer multiple de 8 (important SUNMI)
+                val w = (bitmap.width / 8) * 8
+                val h = (bitmap.height / 8) * 8
+                bitmap = Bitmap.createScaledBitmap(bitmap, w, h, true)
+                
+                SunmiPrintHelper.printBitmap(bitmap, align)
+                callbackContext.success("Bitmap printed")
+                return true
             }
             
             else -> {

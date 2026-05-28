@@ -97,8 +97,9 @@ object SunmiPrintHelper {
         withPrinterService { it.printerInit(null) }
     }
 
-   fun printText(content: String, size: Float = 24f, isBold: Boolean = false, isUnderLine: Boolean = false) {
+   fun printText(content: String, size: Float = 24f, isBold: Boolean = false, isUnderLine: Boolean = false, align: Int = 0) {
     withPrinterService { service ->
+        service.setAlignment(align, null)
         service.setFontSize(size, null) // <--- Float direct
         service.setPrinterStyle(WoyouConsts.ENABLE_BOLD, if (isBold) WoyouConsts.ENABLE else WoyouConsts.DISABLE)
         service.setPrinterStyle(WoyouConsts.ENABLE_UNDERLINE, if (isUnderLine) WoyouConsts.ENABLE else WoyouConsts.DISABLE)
@@ -110,12 +111,19 @@ object SunmiPrintHelper {
         withPrinterService { it.setAlignment(align, null) }
     }
 
-    fun printQr(data: String, modulesize: Int = 8, errorlevel: Int = 0) {
-        withPrinterService { it.printQRCode(data, modulesize, errorlevel, null) }
+    fun printQr(data: String, modulesize: Int = 8, errorlevel: Int = 0, align: Int = 0) {
+         withPrinterService { 
+            it.setAlignment(align, null)
+            it.printQRCode(data, modulesize, errorlevel, null) 
+        }
     }
 
-    fun printBarCode(data: String, symbology: Int = 8, height: Int = 162, width: Int = 2, textposition: Int = 2) {
-        withPrinterService { it.printBarCode(data, symbology, height, width, textposition, null) }
+    // symbology = type de code-barres
+    fun printBarCode(data: String, symbology: Int = 8, height: Int = 162, width: Int = 2, textposition: Int = 2, align: Int = 0) {
+        withPrinterService { 
+            it.setAlignment(align, null)
+            it.printBarCode(data, symbology, height, width, textposition, null) 
+        }
     }
 
     fun printTable(txts: Array<String>, width: IntArray, align: IntArray) {
@@ -151,16 +159,10 @@ object SunmiPrintHelper {
         }
       }
 
-    fun printBitmap(bitmap: Bitmap) {
-      /* 
-      withPrinterService { service ->
-        try {
-            service.printBitmap(bitmap, null) // null = callback optionnel
-        } catch (e: RemoteException) {
-            e.printStackTrace()
-            Log.e(TAG, "Erreur lors de l'impression du bitmap")
+    fun printBitmap(bitmap: Bitmap, align: Int = 0) {
+        withPrinterService { service ->
+            service.setAlignment(align, null)
+            service.printBitmap(bitmap, null)
         }
-      }
-        */
     }
 }
