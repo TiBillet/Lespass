@@ -4,7 +4,7 @@
 /* http://luciole-vision.com/#top */
 @font-face {
   font-family: "Luciole-regular";
-  src: url("./fonts/Luciole-Regular.ttf") format("truetype");
+  src: url("./fonts/Luciole-Regular.woff") format("woff");
   font-weight: normal;
 }
 

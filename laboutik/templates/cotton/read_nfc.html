@@ -1,26 +1,64 @@
 {% load static %}
 <div {{ attrs }} class="nfc-container">
-	<c-spinner size="240" />
-	<div class="nfc-container-slot">
-		{{ slot }}
-		<!-- reference(id) for the insertion of simulation buttons -->
-		<div id="nfc-simu-tag"></div>
-		{% if selector %}
-		<c-bt.return selector="{{selector}}" />
-		{% endif %}
-	</div>
+  <c-spinner size="240" />
+  <div class="nfc-container-slot">
+    {{ slot }}
+    <!-- reference(id) for the insertion of simulation buttons -->
+    <div id="nfc-simu-tag"></div>
+    {% if selector %}<c-bt.return selector="{{ selector }}" action="state.nfc.stop()" />{% endif %}
+  </div>
+  <script>
+    async function initNfc() {
+      console.log('-> initNfc')
 
-	<script>
-		function initNfc() {
-			try {		
-			const nfc = new NfcReader()
-			// start read nfc
-			nfc.start({eventManageForm: '{{ event_manage_form }}', submitUrl: '{{ submit_url }}'})
-			} catch (error) {
-				console.log('-> Cotton - read_nfc.html - initNfc,', error)
-			}
-		}
-			initNfc()
-	</script>
+      try {
+        state['nfc'] = null
+        state.nfc = new NfcReader(state.socketIoPort, state.typeApp)
+        const formSelector = '{{ form_selector }}'
 
+        // supprime l'écoute sur le formulaire associé au lecteur nfc si déjà écouté
+        document.querySelector(formSelector).removeEventListener(formSelector, globalManageForm)
+        // lance un écouteur sur le formulaire associé au lecteur nfc
+        document.querySelector(formSelector).addEventListener(formSelector, globalManageForm)
+
+        // start read nfc
+        await state.nfc.start({
+          //  eventManageForm: '{{ event_manage_form }}',
+           submitUrl: '{{ submit_url }}',
+           inputSelector: '{{ input_selector }}',
+           formSelector
+        })
+      } catch (error) {
+        console.log('-> Cotton - read_nfc.html - initNfc,', error)
+      }
+    }
+
+    function nfcAfterSwap(event) {
+      const nfcElement = event.target.querySelector('.nfc-container')
+      // stop l'écoute de l'évènement 'htmx:afterSwap' pour ne pas en accumuler.
+      document.removeEventListener('htmx:afterSwap', nfcAfterSwap)
+      if (nfcElement) {
+        initNfc()
+      }
+    }
+
+    if (state.typeApp === 'cordova') {
+      // lance quand on est dans une application cordova, à chaque swap "deviceready" est réémit
+      // cordova attent que les périphériques soient pris en compte
+      document.addEventListener('deviceready', async () => {
+        console.log('-> cordova device ready');
+        initNfc(state.typeApp)
+      })
+    } else {
+       // lance quand on est dans une application pi/desktop
+      // lancé une fois que la page contenant "c-read-nfc" est chargée
+      document.addEventListener("DOMContentLoaded", () => {
+        console.log(`-> App ${state.typeApp} chargée !`)
+        initNfc(state.typeApp)
+      })
+
+      // lancé après un swap
+      document.addEventListener('htmx:afterSwap', nfcAfterSwap)
+    }
+  </script>
 </div>

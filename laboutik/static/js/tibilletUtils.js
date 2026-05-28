@@ -24,6 +24,21 @@ let currentConfiguration = null
 const logTypes = ['DANGER', 'WARNING', 'INFO']
 
 /**
+ * Is cordova application ?
+ * @public
+ * @returns {boolean}
+ */
+function isCordovaApp() {
+	try {
+		if (window.cordova) {
+			return true
+		}
+	} catch (error) {
+		return false
+	}
+}
+
+/**
  * Echappe les caractères spéciaux HTML pour éviter les injections XSS.
  * Utilisé pour tout texte dynamique injecté via innerHTML ou insertAdjacentHTML
  * (noms de produits, noms de tarifs, symboles monétaires).
@@ -117,6 +132,7 @@ function bigToFloat(value) {
  * @param {object} data - Données à passer (disponibles dans event.detail)
  */
 function sendEvent(name, selector, data) {
+	// console.log('-> sendEvent - selector =', selector, '  --  data =', data);
 	data = data === undefined ? {} : data
 	try {
 		const event = new CustomEvent(name, { detail: data })
@@ -137,6 +153,22 @@ function hideAndEmptyElement(selector) {
 }
 
 /**
+ * Envoyer des datas à un élément html par 'event'
+ * @param {object} data  - Données(disponibles dans event.detail) à passer au routeur d 'évènements
+ */
+function sendEventOrganizer(data) {
+	// console.log('-> sendEvent - selector =', selector, '  --  data =', data);
+	data = data === undefined ? {} : data
+	try {
+		const event = new CustomEvent('organizerMsg', { detail: data })
+		document.querySelector('#event-organizer').dispatchEvent(event)
+	} catch (error) {
+		console.log('sendEventOrganizer,', error);
+	}
+}
+
+
+/**
  * Demande la mise à jour d'un champ du formulaire d'addition
  * / Requests update to addition form field
  * 
@@ -150,8 +182,8 @@ function hideAndEmptyElement(selector) {
  * @param {*} value - Valeur à assigner
  */
 function askAdditionManageForm(actionType, selector, value) {
-	sendEvent('organizerMsg', '#event-organizer', {
-		src: { file: 'hx_display_type_payement.html', method: 'additionUpdateForm' },
+	sendEventOrganizer({
+		src: { file: 'tibiletUtils.js', method: 'askAdditionManageForm' },
 		msg: 'additionManageForm',
 		data: { actionType, selector, value }
 	})
@@ -166,7 +198,7 @@ function askAdditionManageForm(actionType, selector, value) {
  * 
  * ROUTES DÉFINIES :
  * - articlesAdd → additionInsertArticle sur #addition (ajoute au panier)
- * - additionTotalChange → updateBtValider sur #bt-valider (maj total)
+ * - additionTotalChange → updateSumOfValidateButton sur #bt-valider (maj total)
  * - additionRemoveArticle → articlesRemove sur #products (maj quantité tuile)
  * - resetArticles → additionReset sur #addition + articlesReset sur #products (reset complet)
  * - additionDisplayPaymentTypes → additionDisplayPaymentTypes sur #addition (affiche paiements)
@@ -174,19 +206,21 @@ function askAdditionManageForm(actionType, selector, value) {
  */
 const switches = {
 	articlesAdd: [{ name: 'additionInsertArticle', selector: '#addition' }],
-	additionTotalChange: [{ name: 'updateBtValider', selector: '#bt-valider' }],
+	additionTotalChange: [{ name: 'updateSumOfValidateButton', selector: '#bt-valider' }],
 	additionRemoveArticle: [{ name: 'articlesRemove', selector: '#products' }],
 	resetArticles: [{ name: 'additionReset', selector: '#addition' }, { name: 'articlesReset', selector: '#products' }],
 	articlesDisplayCategory: [{ name: 'articlesDisplayCategory', selector: '#products' }],
-	additionDisplayPaymentTypes: [{ name: 'additionDisplayPaymentTypes', selector: '#addition' }],
+	footerAskAdditionDisplayPaymentTypes: [{ name: 'additionDisplayPaymentTypes', selector: '#addition' }],
 	additionManageForm: [{ name: 'additionManageForm', selector: '#addition' }],
-	primaryCardManageForm: [{ name: 'primaryCardManageForm', selector: '#form-nfc' }],
-	checkCardManageForm: [{ name: 'checkCardManageForm', selector: '#form-check-nfc' }],
-	tarifSelection: [{ name: 'tarifSelection', selector: '#products' }]
+	nfcAskManageForm: [{ auto: true }],
+	tarifSelection: [{ name: 'tarifSelection', selector: '#products' }],
+
+	nfcSendEmptyCardManageForm: [{ name: 'emptyCardManageForm', selector: '#vider-carte-form' }],
+	nfcRechargeClientForm: [{ name: 'rechargeClientForm', selector: '#recharge-client-form' }]
 }
 
 /**
- * ORGANISATEUR D'ÉVÉNEMENTS - RÉCEPTEUR CENTRAL
+ * ROUTEUE D'ÉVÉNEMENTS - RÉCEPTEUR CENTRAL
  * / Central event receiver and router
  * 
  * Reçoit tous les événements 'organizerMsg' sur #event-organizer et les route
@@ -207,22 +241,72 @@ function eventsOrganizer(event) {
 		const src = event.detail.src
 		const msg = event.detail.msg
 
+		console.log('-> eventsOrganizer - msg =', msg);
+
+		// keys of switches in array
+		const keys = Object.keys(switches)
+		if (!keys.includes(msg)) {
+			throw new Error(`eventsOrganizer - message "${msg}" unknown !`);
+		}
+
 		// Récupère les routes depuis la table switches
 		const eventSwitch = switches[msg]
-		
-		// TODO : Si 'msg' n'existe pas dans 'switches', eventSwitch sera undefined
-		// et le forEach plantera. Ne devrait-on pas vérifier si eventSwitch existe
-		// ou logger un warning pour les événements non reconnus ?
 
 		// Envoie l'événement vers chaque destination
 		for (let i = 0; i < eventSwitch.length; i++) {
 			const eventData = eventSwitch[i];
-			sendEvent(eventData.name, eventData.selector, data)
+			if (eventData?.auto) {
+				sendEvent(data.formSelector, data.formSelector, data)
+			} else {
+				sendEvent(eventData.name, eventData.selector, data)
+			}
+
 		}
 	} catch (error) {
-		// Silencieux en production
+		console.warn(error.message)
 	}
 }
+
+/**
+ * gestionnaire de formulaire :
+ * - peut modifier l'url
+ * - peut mettre à jour une valeur d'un input
+ * - submit le formulaire
+ * @param {Event} event 
+ * @param {String} formSelector 
+ */
+function globalManageForm(event) {
+	console.log('-> globalManageForm')
+	try {
+		const data = event.detail
+		// console.log('data =', data);
+
+		const form = document.querySelector(data.formSelector)
+
+		// update input
+		if (data.actionType === 'updateInput') {
+			form.querySelector(data.selector).value = data.value
+		}
+
+		// change post url
+		if (data.actionType === 'postUrl') {
+			form.setAttribute('hx-post', data.value)
+			htmx.process(form)
+		}
+
+		// submit form
+		if (data.actionType === 'submit') {
+			form.setAttribute('hx-trigger', 'click')
+			htmx.process(form)
+			// submit
+			form.click()
+		}
+
+	} catch (error) {
+		console.log('-> globalManageForm,', error)
+	}
+}
+
 
 /**
  * INITIALISATION - Attache l'écouteur sur #event-organizer

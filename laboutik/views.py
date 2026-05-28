@@ -1188,6 +1188,10 @@ class CaisseViewSet(viewsets.ViewSet):
         tag_id_carte_manager = serializer.validated_data["tag_id"]
         logger.debug(f"carte_primaire: tag_id reçu = {tag_id_carte_manager}")
 
+        # TODO: à faire valider par le "serializer" ?
+        # "cordova" / "pi" / "desktop"
+        type_app = request.POST.get("type_app", "unknown").strip()
+
         # Chercher la carte primaire depuis le tag NFC
         # Look up the primary card from the NFC tag
         carte_primaire_obj, erreur = _charger_carte_primaire(tag_id_carte_manager)
@@ -1226,7 +1230,7 @@ class CaisseViewSet(viewsets.ViewSet):
         pv = pvs[0]
         url_point_de_vente = reverse("laboutik-caisse-point_de_vente")
         url_avec_params = (
-            f"{url_point_de_vente}?uuid_pv={pv.uuid}&tag_id_cm={tag_id_carte_manager}"
+            f"{url_point_de_vente}?uuid_pv={pv.uuid}&tag_id_cm={tag_id_carte_manager}&type_app={type_app}"
         )
         logger.debug(f"carte_primaire: Redirection vers {url_avec_params}")
         return HttpResponseClientRedirect(url_avec_params)
@@ -1250,6 +1254,7 @@ class CaisseViewSet(viewsets.ViewSet):
         """
         uuid_pv = request.GET.get("uuid_pv")
         tag_id_carte_manager = request.GET.get("tag_id_cm")
+        type_app = request.GET.get("type_app", "unknown")
 
         # Récupérer l'UUID de table (mode restaurant uniquement)
         # Get the table UUID (restaurant mode only)
@@ -1416,6 +1421,8 @@ class CaisseViewSet(viewsets.ViewSet):
             # Version du logiciel pour le footer (LNE exigence 21)
             # / Software version for the footer (LNE requirement 21)
             "version_logiciel": _lire_version(),
+            # Pour l'injection conditionnelle de cordova.js afin de récupérer les plugin
+            "type_app": type_app,
         }
         return render(request, template_name, context)
 
@@ -8833,6 +8840,9 @@ class LaBoutikAuthBridgeView(APIView):
         # / Extract key from POST form-data
         api_key_string = request.POST.get("api_key", "").strip()
 
+        # Pour l'injection conditionnelle de cordova.js afin de récupérer les plugin
+        type_app = request.POST.get("type_app", "unknown").strip()
+
         if not api_key_string:
             # Log : tentative d'accès sans api_key dans le POST
             # / Log: access attempt without api_key in POST body
@@ -8893,5 +8903,5 @@ class LaBoutikAuthBridgeView(APIView):
             "laboutik bridge: session opened for terminal %s",
             term_user.email,
         )
-
-        return HttpResponseRedirect("/laboutik/caisse/")
+        # ajout du paramètres de requête type_app afin d'être récupérer par le front et le back après redirection
+        return HttpResponseRedirect("/laboutik/caisse?type_app=" + type_app)
