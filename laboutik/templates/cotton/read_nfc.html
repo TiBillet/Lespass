@@ -29,7 +29,10 @@
            formSelector
         })
       } catch (error) {
-        console.log('-> Cotton - read_nfc.html - initNfc,', error)
+        console.log('Attention: cotton - read_nfc.html, renseigner obligatoirement :');
+        console.log("- form-selector : id du formulaire où nfc.js enverra le message contenant le tagId.")
+        console.log("- input-selector, selector css de l'input où nfc.js va insérer le tagId lu.");
+        console.log('-> initNfc,', error.message)
       }
     }
 

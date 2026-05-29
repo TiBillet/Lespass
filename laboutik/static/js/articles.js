@@ -46,7 +46,7 @@ function addArticle(uuid, price, name, currency) {
 		eleQuantity.classList.add('badge-visible')
 
 		// Envoie l'événement pour ajouter au panier
-		sendEvent('organizerMsg', '#event-organizer', {
+		sendEventOrganizer({
 			src: { file: 'articles.js', method: 'addArticle' },
 			msg: 'articlesAdd',
 			data: { uuid, price, quantity, name, currency }
@@ -124,7 +124,7 @@ function manageKey(event) {
  */
 function articlesRemove(event) {
 	const { uuid, quantity } = event.detail
-	
+
 	try {
 		const article = document.querySelector(`#products div[data-uuid="${uuid}"]`)
 		const eleQuantity = article.querySelector(`#article-quantity-number-${uuid}`)
@@ -296,7 +296,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 	// Long press sur un article → charger le panel contextuel via HTMX
 	// / Long press on article → load contextual panel via HTMX
-	document.querySelector('#products').addEventListener('longpress', function(e) {
+	document.querySelector('#products').addEventListener('longpress', function (e) {
 		const uuid = e.detail.productUuid
 		if (!uuid) return
 		htmx.ajax('GET', '/laboutik/article-panel/' + uuid + '/panel/', {

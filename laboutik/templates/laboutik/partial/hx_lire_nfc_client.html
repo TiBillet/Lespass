@@ -14,14 +14,12 @@ FLUX :
    (le NFC reader soumet #addition-form, pas les champs dans ce partial)
 4. Scan NFC → JS met tag_id dans #addition-form → POST identifier_client
 -->
-
 <div id="confirm">
-	<c-read-nfc selector="#confirm" event-manage-form="additionManageForm" submit-url="{% url 'laboutik-paiement-identifier_client' %}">
-		<h1>{% translate "Attente lecture carte" %}</h1>
-		<p style="opacity: 0.7; font-size: 1rem;">{% translate "Posez la carte du client sur le lecteur" %}</p>
-	</c-read-nfc>
-
-	<script>
+  <c-read-nfc selector="#confirm" input-selector="#nfc-tag-id" form-selector="#addition-form" submit-url="{% url 'laboutik-paiement-identifier_client' %}">
+  <h1>{% translate "Attente lecture carte" %}</h1>
+  <p style="opacity: 0.7; font-size: 1rem;">{% translate "Posez la carte du client sur le lecteur" %}</p>
+  </c-read-nfc>
+  <script>
 		/**
 		 * Injecte les flags du panier dans #addition-form au chargement.
 		 * Le NFC reader soumet #addition-form (pas les champs dans ce partial).
@@ -32,22 +30,49 @@ FLUX :
 		 *
 		 * LOCALISATION : hx_lire_nfc_client.html (inline)
 		 */
-		(function() {
-			var form = document.querySelector('#addition-form');
-			function setHiddenInput(name, value) {
-				var input = form.querySelector('[name="' + name + '"]');
-				if (!input) {
-					input = document.createElement('input');
-					input.type = 'hidden';
-					input.name = name;
-					form.appendChild(input);
-				}
-				input.value = value;
+
+		// add or update input name="panier_a_recharges"
+		sendEventOrganizer({
+			src: { file: 'hx_lire_nfc_client.html', method: 'sendEventOrganizer' },
+			msg: 'additionManageForm',
+			data: {
+				actionType: 'createAndPopInput',
+				name: 'panier_a_recharges',
+				value: '{{ panier_a_recharges|escapejs }}'
 			}
-			setHiddenInput('panier_a_recharges', '{{ panier_a_recharges|escapejs }}');
-			setHiddenInput('panier_a_adhesions', '{{ panier_a_adhesions|escapejs }}');
-			setHiddenInput('panier_a_billets', '{{ panier_a_billets|escapejs }}');
-			setHiddenInput('moyens_paiement', '{{ moyens_paiement_csv|escapejs }}');
-		})();
-	</script>
+		})
+
+		// add or update input name="panier_a_adhesions"
+		sendEventOrganizer({
+			src: { file: 'hx_lire_nfc_client.html', method: 'sendEventOrganizer' },
+			msg: 'additionManageForm',
+			data: {
+				actionType: 'createAndPopInput',
+				name: 'panier_a_adhesions',
+				value: '{{ panier_a_adhesions|escapejs }}'
+			}
+		})
+
+		// add or update input name="panier_a_billets"
+		sendEventOrganizer({
+			src: { file: 'hx_lire_nfc_client.html', method: 'sendEventOrganizer' },
+			msg: 'additionManageForm',
+			data: {
+				actionType: 'createAndPopInput',
+				name: 'panier_a_billets',
+				value: '{{ panier_a_billets|escapejs }}'
+			}
+		})
+
+		// add or update input name="moyens_paiement"
+		sendEventOrganizer({
+			src: { file: 'hx_lire_nfc_client.html', method: 'sendEventOrganizer' },
+			msg: 'additionManageForm',
+			data: {
+				actionType: 'createAndPopInput',
+				name: 'moyens_paiement',
+				value: '{{ moyens_paiement_csv|escapejs }}'
+			}
+		})	
+  </script>
 </div>

@@ -241,7 +241,9 @@ function eventsOrganizer(event) {
 		const src = event.detail.src
 		const msg = event.detail.msg
 
-		console.log('-> eventsOrganizer - msg =', msg);
+		// console.log('--- eventsOrganizer ----------------------------');
+		// console.log('-> eventsOrganizer - msg =', msg);
+		// console.log('-> eventsOrganizer - src =', src);
 
 		// keys of switches in array
 		const keys = Object.keys(switches)
@@ -273,28 +275,42 @@ function eventsOrganizer(event) {
  * - peut mettre à jour une valeur d'un input
  * - submit le formulaire
  * @param {Event} event 
- * @param {String} formSelector 
  */
 function globalManageForm(event) {
-	console.log('-> globalManageForm')
+	// console.log('-> globalManageForm')
 	try {
 		const data = event.detail
 		// console.log('data =', data);
 
 		const form = document.querySelector(data.formSelector)
 
+		// create,populate or update an input value from is attribute name
+		// data {actionType: 'createAndPopInput', name: 'panier_type', value: 'xxx'}
+		if (data.actionType === 'createAndPopInput') {
+			let input = form.querySelector(`input[name="${data.name}"]`)
+			if (!input) {
+				input = document.createElement('input')
+				input.name = data.name
+				form.appendChild(input)
+			}
+			input.value = data.value
+		}
+
 		// update input
+		// data {actionType: 'updateInput', selector: 'input[name="xxxx"]', value: 'xxx'}
 		if (data.actionType === 'updateInput') {
 			form.querySelector(data.selector).value = data.value
 		}
 
 		// change post url
+		// data {actionType: 'postUrl', value: 'xxx'}
 		if (data.actionType === 'postUrl') {
 			form.setAttribute('hx-post', data.value)
 			htmx.process(form)
 		}
 
 		// submit form
+		// data {actionType: 'submit'}
 		if (data.actionType === 'submit') {
 			form.setAttribute('hx-trigger', 'click')
 			htmx.process(form)

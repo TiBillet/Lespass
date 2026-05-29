@@ -148,7 +148,7 @@ function additionInsertArticle({ detail }) {
 	const totalAddition = calculateTotal()
 
 	// Met à jour le bouton VALIDER
-	sendEvent('organizerMsg', '#event-organizer', {
+	sendEventOrganizer({
 		src: { file: 'addition.js', method: 'additionInsertArticle' },
 		msg: 'additionTotalChange',
 		data: { totalAddition }
@@ -327,13 +327,13 @@ function additionDisplayPaymentTypes() {
 		 * SOLUTION : On ne touche PAS à hx-post, l'URL est déjà bonne dans le HTML.
 		 * On configure seulement hx-trigger='click' pour déclencher la requête.
 		 */
-		
+
 		// Active le déclenchement au clic
 		form.setAttribute('hx-trigger', 'click')
-		
+
 		// Processe HTMX pour prendre en compte le nouvel attribut hx-trigger
 		htmx.process(form)
-		
+
 		// Déclenche le formulaire pour charger partial/hx_display_type_payment.html
 		form.click()
 	}
@@ -355,9 +355,22 @@ function additionDisplayPaymentTypes() {
  * @param {Object} event - Événement avec event.detail contenant actionType, selector, value
  */
 function additionManageForm(event) {
+	console.log('-> additionManageForm - event.detail =', event.detail)
 	try {
 		const data = event.detail
 		const form = document.querySelector('#addition-form')
+
+		// create,populate or update an input value from is attribute name
+		// data {actionType: 'createAndPopInput', name: 'panier_type', value: 'xxx'}
+		if (data.actionType === 'createAndPopInput') {
+			let input = form.querySelector(`input[name="${data.name}"]`)
+			if (!input) {
+				input = document.createElement('input')
+				input.name = data.name
+				form.appendChild(input)
+			}
+			input.value = data.value
+		}
 
 		if (data.actionType === 'updateInput') {
 			form.querySelector(data.selector).value = data.value

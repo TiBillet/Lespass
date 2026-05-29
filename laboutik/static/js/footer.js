@@ -54,7 +54,7 @@ function displayPaymentTypes() {
   console.log('-> displayPaymentTypes');
 
   sendEvent('organizerMsg', '#event-organizer', {
-    src: { file: 'common_user_interface.html', method: 'displayPaymentTypes' },
+    src: { file: 'footer.js', method: 'displayPaymentTypes' },
     msg: 'footerAskAdditionDisplayPaymentTypes',
     data: {}
   })
