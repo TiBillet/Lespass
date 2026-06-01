@@ -1719,11 +1719,11 @@ Toujours verifier avec `manage.py show_urls | grep <basename>` avant d'ecrire le
 **10.7 — `Reservation.uuid_8()` n'existe pas (seuls `Commande`, `Paiement_stripe`, `LigneArticle` l'ont).**
 Fallback : `str(reservation.uuid)[:8]` dans les logs.
 
-**10.8 — Templates `htmx/views/event.html` et `htmx/components/cardTickets.html` sont morts (legacy).**
-La vraie page event utilise `reunion/views/event/retrieve.html` qui inclut
-`reunion/views/event/partial/booking_form.html`. Le skin `faire_festival` fait
-pareil via `{% include 'reunion/views/event/partial/booking_form.html' %}`. Pour
+**10.8 — La vraie page event vit dans `reunion/views/event/retrieve.html`.**
+Elle inclut `reunion/views/event/partial/booking_form.html`. Le skin `faire_festival`
+fait pareil via `{% include 'reunion/views/event/partial/booking_form.html' %}`. Pour
 toute modif visible en prod, viser `booking_form.html`.
+(Note : l'ancien skin `htmx/` a ete supprime — il etait entierement mort.)
 
 **10.9 — DRF router `url_path='promo_code'` genere `/panier/promo_code/`, pas `/panier/promo-code/`.**
 Le trailing slash et les underscores vs hyphens dependent de la chaine exacte

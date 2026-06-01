@@ -83,15 +83,12 @@ urlpatterns = [
     path('test-errors/500/', test_500, name='test_500'),
 
     path('ticket/<uuid:pk_uuid>/', base_view.Ticket_html_view.as_view()),
-    # path('event/<slug:slug>/', base_view.event, name='event'),
 
-    # path("validate_event/", base_view.validate_event, name='validate_event'),
     # path('create_event/', base_view.create_event, name='create_event'),
     # path('wiz_event/date/', base_view.event_date, name='event_date'),
     # path('wiz_event/presentation/', base_view.event_presentation, name='event_presentation'),
     # path('wiz_event/products/', base_view.event_products, name='event_products'),
     # path('home/', base_view.index, name='home'),
-    # path('agenda/', base_view.agenda, name='agenda'),
 
     # path("my_account/", base_view.my_account, name='my_account'),
     # path("my_account/wallet/", base_view.my_account_wallet, name='my_account_wallet'),
@@ -109,7 +106,6 @@ urlpatterns = [
     # path("tenant/areas/", base_view.tenant_areas, name='tenant_areas'),
     # path("tenant/informations/", base_view.tenant_informations, name='tenant_informations'),
     # path("tenant/summary/", base_view.tenant_summary, name='tenant_summary'),
-    # path('test_jinja/', base_view.test_jinja, name='test_jinja'),
     # Entree du wizard public : redirige vers la 1re etape. Les etapes
     # elles-memes (email/verify/resend/place/map/event/done) et le wizard
     # admin sont routes par `wizard_router` (cf. plus haut).

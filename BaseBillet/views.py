@@ -24,7 +24,6 @@ from django.db.models import Count, Q, Sum
 from django.http import HttpResponse, HttpRequest, Http404, HttpResponseRedirect
 from django.urls import reverse
 from django.shortcuts import render, redirect, get_object_or_404
-from django.template.response import TemplateResponse
 from django.utils import timezone
 from django.utils.encoding import force_str, force_bytes
 from django.utils.html import format_html
@@ -357,17 +356,6 @@ class Ticket_html_view(APIView):
 
         return render(request, "ticket/ticket.html", context=context)
         # return render(request, 'ticket/qrtest.html', context=context)
-
-
-def test_jinja(request):
-    context = {
-        "list": [1, 2, 3, 4, 5, 6],
-        "var1": "",
-        "var2": "",
-        "var3": "",
-        "var4": "hello",
-    }
-    return TemplateResponse(request, "htmx/views/test_jinja.html", context=context)
 
 
 def deconnexion(request):
@@ -2422,54 +2410,6 @@ class EventMVT(viewsets.ViewSet):
         if request.user.is_authenticated:
             return redirect('/my_account/my_reservations/')
         return redirect('/event/')
-
-
-'''
-@require_GET
-def agenda(request):
-    template_context = get_context(request)
-    template_context['events'] = Event.objects.all()
-    return render(request, "htmx/views/home.html", context=template_context)
-
-
-@require_GET
-def event(request: HttpRequest, slug) -> HttpResponse:
-    event = get_object_or_404(Event, slug=slug)
-    template_context = get_context(request)
-    template_context['event'] = event
-    return render(request, "htmx/views/event.html", context=template_context)
-
-
-def validate_event(request):
-    if request.method == 'POST':
-        print("-> validate_event, méthode POST !")
-        # range-start-index - range-end-index, date-index 
-        data = dict(request.POST.lists())
-        print(f"data = {data}")
-
-        # validé / pas validé retourner un message
-        dev_validation = True
-
-        if dev_validation == False:
-            messages.add_message(request, messages.WARNING, "Le message d'erreur !")
-
-        if dev_validation == True:
-            messages.add_message(request, messages.SUCCESS, "Réservation validée !")
-
-    return redirect('home')
-
-'''
-
-
-def modal(request, level="info", title='Information', content: str = None):
-    context = {
-        "modal_message": {
-            "type": level,
-            "title": title,
-            "content": content,
-        }
-    }
-    return render(request, "htmx/components/modal_message.html", context=context)
 
 
 class Badge(viewsets.ViewSet):
