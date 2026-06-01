@@ -1441,69 +1441,23 @@ class WizardPlaceMapSerializer(serializers.Serializer):
         return attrs
 
 
-class WizardEventAdminSerializer(serializers.Serializer):
+class WizardEventSerializer(serializers.Serializer):
     """
-    Step "Event" du wizard admin : mini-form + jauge_max + tags.
-    / Admin event wizard "Event" step: mini-form + jauge_max + tags.
-    """
+    Serializer unifie du wizard event (front, CHANTIER-03). Champs communs + tags
+    (commun a tous). `jauge_max` reservee au staff : le ViewSet ne l'applique que si
+    staff. Pas de garde "module" ici (elle vit dans EventWizard._garde_acces).
+    / Unified event wizard serializer. Common fields + tags (shared). jauge_max
+    applied by the ViewSet only when staff. Module guard lives in the ViewSet.
 
+    LOCALISATION : BaseBillet/validators.py
+    """
     name = serializers.CharField(max_length=200)
     datetime = serializers.DateTimeField()
     long_description = serializers.CharField(
         required=False, allow_blank=True, max_length=5000,
     )
     image = serializers.ImageField(required=False, allow_null=True)
+    tags = serializers.CharField(required=False, allow_blank=True)
     jauge_max = serializers.IntegerField(
         required=False, allow_null=True, min_value=1,
     )
-    tags = serializers.CharField(required=False, allow_blank=True)
-
-
-class EventProposalEmailSerializer(serializers.Serializer):
-    """
-    Step 0 du wizard public : email + confirmation + honeypot.
-    / Step 0 of public wizard: email + confirm + honeypot.
-    """
-    email = serializers.EmailField(required=True)
-    email_confirm = serializers.EmailField(required=True)
-    # Honeypot : doit etre vide. Si rempli -> bot.
-    # / Honeypot: must be empty. If filled -> bot.
-    website = serializers.CharField(required=False, allow_blank=True)
-
-    def validate_website(self, value):
-        if value:
-            raise serializers.ValidationError(_("Spam detected."))
-        return value
-
-    def validate(self, attrs):
-        if attrs["email"].lower() != attrs["email_confirm"].lower():
-            raise serializers.ValidationError({
-                "email_confirm": _("Les emails ne correspondent pas."),
-            })
-        return attrs
-
-
-class WizardEventPublicSerializer(serializers.Serializer):
-    """
-    Step 2 du wizard public : strict mini-form.
-    / Public wizard step 2: strict mini-form.
-    """
-    name = serializers.CharField(max_length=200)
-    datetime = serializers.DateTimeField()
-    long_description = serializers.CharField(
-        required=False, allow_blank=True, max_length=5000,
-    )
-    image = serializers.ImageField(required=False, allow_null=True)
-
-    def validate(self, attrs):
-        # Garde du module : la proposition publique n'est autorisee que si le
-        # module "Agenda participatif" est actif pour ce tenant. Sinon on refuse
-        # la creation, meme si quelqu'un atteint l'URL du wizard directement.
-        # / Module guard: public proposal is only allowed when the "Participatory
-        # agenda" module is enabled for this tenant. Otherwise we refuse creation,
-        # even if someone reaches the wizard URL directly.
-        if not Configuration.get_solo().module_agenda_participatif:
-            raise serializers.ValidationError(
-                _("La proposition d'évènement n'est pas activée.")
-            )
-        return attrs

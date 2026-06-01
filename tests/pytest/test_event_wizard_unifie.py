@@ -1,0 +1,206 @@
+"""
+Tests du formulaire event unifié (CHANTIER-03 / EVENT_WIZARD).
+/ Tests for the unified event wizard.
+
+LOCALISATION : tests/pytest/test_event_wizard_unifie.py
+Réutilise la base de dev (schema lespass) comme test_event_wizard_public.
+"""
+
+import io
+import uuid as uuidlib
+
+import pytest
+
+from Customers.models import Client
+
+
+@pytest.fixture(scope="session")
+def django_db_setup():
+    # Reutilise la base de dev (pas de creation de base de test).
+    # / Reuse dev DB (no test DB creation).
+    pass
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _enable_db_access(django_db_blocker):
+    django_db_blocker.unblock()
+
+
+def _vraie_image_jpeg():
+    """Petite vraie image JPEG (PIL) pour que StdImageField génère ses variations."""
+    from PIL import Image
+    buffer = io.BytesIO()
+    Image.new("RGB", (10, 10), (0, 100, 200)).save(buffer, format="JPEG")
+    return buffer.getvalue()
+
+
+@pytest.mark.django_db
+def test_attacher_image_brouillon_migre_vers_images_et_nettoie_le_temp():
+    """
+    Fix bug #1 : l'image temp du brouillon doit être MIGRÉE vers images/ (et plus
+    rester dans event_wizard_drafts/), puis le temp supprimé.
+    """
+    from django.core.files.base import ContentFile
+    from django.core.files.storage import default_storage
+    from django_tenants.utils import tenant_context
+    from BaseBillet.views import _attacher_image_brouillon
+    from BaseBillet.models import Event
+
+    lespass = Client.objects.get(schema_name="lespass")
+    with tenant_context(lespass):
+        chemin_temp = f"event_wizard_drafts/test/{uuidlib.uuid4().hex}.jpg"
+        default_storage.save(chemin_temp, ContentFile(_vraie_image_jpeg()))
+        assert default_storage.exists(chemin_temp)
+
+        # Event transient (on ne sauve pas en DB : on teste juste l'attachement image).
+        # / Transient Event (no DB save: we only test the image attachment).
+        event = Event(name="Test image wizard")
+        _attacher_image_brouillon(event, {"image": chemin_temp})
+
+        # L'image pointe vers images/ (vrai fichier), pas vers le dossier temp.
+        # / Image points to images/ (real file), not the temp draft folder.
+        assert event.img.name.startswith("images/"), event.img.name
+        assert default_storage.exists(event.img.name)
+        # Le fichier temporaire a été supprimé.
+        # / The temp file was deleted.
+        assert not default_storage.exists(chemin_temp)
+
+        # Cleanup du fichier créé par le test.
+        default_storage.delete(event.img.name)
+
+
+@pytest.mark.django_db
+def test_attacher_image_brouillon_sans_image_ne_fait_rien():
+    """Brouillon sans image -> event.img reste vide, pas d'erreur."""
+    from django_tenants.utils import tenant_context
+    from BaseBillet.views import _attacher_image_brouillon
+    from BaseBillet.models import Event
+
+    lespass = Client.objects.get(schema_name="lespass")
+    with tenant_context(lespass):
+        event = Event(name="Sans image")
+        _attacher_image_brouillon(event, {})  # pas de cle "image"
+        assert not event.img
+
+
+def _draft_minimal(nom, tags=""):
+    from django.utils import timezone
+    return {
+        "name": nom,
+        "datetime": (timezone.now() + timezone.timedelta(days=10)).isoformat(),
+        "long_description": "",
+        "tags": tags,
+        "jauge_max": None,
+    }
+
+
+@pytest.mark.django_db
+def test_creer_event_staff_cree_event_publie():
+    """est_staff=True -> event publie (is_proposal=False)."""
+    from django.contrib.auth.models import AnonymousUser
+    from django_tenants.utils import tenant_context
+    from BaseBillet.views import _creer_event_depuis_brouillon
+    from BaseBillet.models import Event, PostalAddress
+
+    lespass = Client.objects.get(schema_name="lespass")
+    with tenant_context(lespass):
+        pa = PostalAddress.objects.first()
+        event = _creer_event_depuis_brouillon(
+            _draft_minimal("Staff publie test"), pa, AnonymousUser(), est_staff=True)
+        try:
+            assert event.published is True
+            assert event.is_proposal is False
+        finally:
+            Event.objects.filter(pk=event.pk).delete()
+
+
+@pytest.mark.django_db
+def test_creer_event_public_est_proposition_avec_tag_auto():
+    """est_staff=False -> proposition (is_proposal=True) + tag_auto_proposition applique."""
+    from django.contrib.auth.models import AnonymousUser
+    from django_tenants.utils import tenant_context
+    from BaseBillet.views import _creer_event_depuis_brouillon
+    from BaseBillet.models import Event, PostalAddress, Tag, Configuration
+
+    lespass = Client.objects.get(schema_name="lespass")
+    with tenant_context(lespass):
+        pa = PostalAddress.objects.first()
+        tag_auto, _created = Tag.objects.get_or_create(name="Propose-auto-test")
+        config = Configuration.get_solo()
+        ancien_tag_id = config.tag_auto_proposition_id
+        config.tag_auto_proposition = tag_auto
+        config.save()
+        try:
+            event = _creer_event_depuis_brouillon(
+                _draft_minimal("Public proposition test"), pa, AnonymousUser(), est_staff=False)
+            assert event.published is False
+            assert event.is_proposal is True
+            assert tag_auto in event.tag.all()
+            Event.objects.filter(pk=event.pk).delete()
+        finally:
+            config.tag_auto_proposition_id = ancien_tag_id
+            config.save()
+
+
+@pytest.mark.django_db
+def test_tags_public_uniquement_existants_pas_de_creation():
+    """Public : un tag inexistant n'est PAS cree ; un tag existant est applique."""
+    from django.contrib.auth.models import AnonymousUser
+    from django_tenants.utils import tenant_context
+    from BaseBillet.views import _creer_event_depuis_brouillon
+    from BaseBillet.models import Event, PostalAddress, Tag
+
+    lespass = Client.objects.get(schema_name="lespass")
+    with tenant_context(lespass):
+        pa = PostalAddress.objects.first()
+        tag_existant, _created = Tag.objects.get_or_create(name="TagExistantTest")
+        nom_inexistant = "TagInexistantZZZ999"
+        Tag.objects.filter(name=nom_inexistant).delete()
+        nb_tags_avant = Tag.objects.count()
+
+        event = _creer_event_depuis_brouillon(
+            _draft_minimal("Public tags test", tags=f"TagExistantTest, {nom_inexistant}"),
+            pa, AnonymousUser(), est_staff=False)
+        try:
+            # Le tag inexistant n'a pas ete cree (anti-spam public).
+            assert Tag.objects.count() == nb_tags_avant
+            assert not Tag.objects.filter(name=nom_inexistant).exists()
+            # Le tag existant est applique.
+            assert tag_existant in event.tag.all()
+        finally:
+            Event.objects.filter(pk=event.pk).delete()
+
+
+@pytest.mark.django_db
+def test_garde_acces_anonyme_selon_config():
+    """Anonyme + module ON : refuse si anonyme OFF (redirect login), autorise si anonyme ON."""
+    from django.test.client import Client as DjangoClient
+    from django.urls import reverse
+    from django_tenants.utils import tenant_context
+    from BaseBillet.models import Configuration
+
+    lespass = Client.objects.get(schema_name="lespass")
+    domain = lespass.domains.first()
+    http = DjangoClient(HTTP_HOST=domain.domain)  # client anonyme
+
+    with tenant_context(lespass):
+        config = Configuration.get_solo()
+        module_avant = config.module_agenda_participatif
+        anonyme_avant = config.proposition_anonyme_autorisee
+        config.module_agenda_participatif = True
+        config.proposition_anonyme_autorisee = False
+        config.save()
+        try:
+            # Anonyme non autorise -> redirige vers la connexion.
+            resp = http.get(reverse("event-wizard-place"))
+            assert resp.status_code == 302
+
+            # Anonyme autorise -> acces OK (200).
+            config.proposition_anonyme_autorisee = True
+            config.save()
+            resp2 = http.get(reverse("event-wizard-place"))
+            assert resp2.status_code == 200
+        finally:
+            config.module_agenda_participatif = module_avant
+            config.proposition_anonyme_autorisee = anonyme_avant
+            config.save()

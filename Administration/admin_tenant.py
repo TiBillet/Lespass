@@ -394,6 +394,12 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 'additional_text_in_membership_mail',
             ),
         }),
+        (_('Agenda participatif'), {
+            'fields': (
+                'proposition_anonyme_autorisee',
+                'tag_auto_proposition',
+            ),
+        }),
         ('Stripe', {
             'fields': (
                 # 'vat_taxe',

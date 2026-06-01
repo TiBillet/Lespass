@@ -1,5 +1,54 @@
 # Changelog / Journal des modifications
 
+## Formulaire event unifié (front) + fix image + options config / Unified front event wizard
+
+**Date :** 2026-06-01
+**Migration :** Oui (`BaseBillet 0216` : 2 champs `Configuration`)
+
+**Quoi / What :** un **seul** formulaire/wizard event sur le front (`EventWizard`) remplace les
+deux boutons « Ajouter » (staff) et « Proposer » (public) de `/event`. Le formulaire s'adapte
+au contexte :
+- **Staff** (droits de création) → event **publié**, champs `jauge_max` + `tags`.
+- **Public** (connecté ou anonyme autorisé) → **proposition modérée** (`is_proposal=True`) +
+  **tag automatique** ; tags limités aux **tags existants** (anti-spam).
+- Champs communs : nom, date, description, image, **tags**. `jauge_max` reste staff-only.
+
+Corrige aussi le **bug image** (#1) : l'image uploadée n'apparaissait pas dans `/event` car le
+fichier temp n'était jamais migré (`event.img.name = draft["image"]`) → désormais recopié dans
+`images/` via `event.img.save(...)` puis temp supprimé.
+
+Ajoute le **flux « Envoyer »** (#4) : si un évènement est en cours de saisie (sous-form non
+ajouté), une popup SweetAlert propose « Ajouter d'abord / Envoyer sans / Annuler » — rien n'est
+perdu sans confirmation.
+
+**Config (« déplacer dans la config ») :** `proposition_anonyme_autorisee` (Bool, défaut False)
++ `tag_auto_proposition` (FK Tag), dans le fieldset « Agenda participatif ». L'admin Django
+**n'est pas touché**.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | `Configuration` : `proposition_anonyme_autorisee` + `tag_auto_proposition` |
+| `Administration/admin_tenant.py` | fieldset « Agenda participatif » |
+| `BaseBillet/views.py` | `EventWizard` (unifié) + helpers `_attacher_image_brouillon`, `_creer_event_depuis_brouillon` |
+| `BaseBillet/validators.py` | `WizardEventSerializer` (unifié) |
+| `BaseBillet/urls.py` | route `event-wizard-*` (remplace `event-propose`/`event-admin-wizard`) |
+| `.../event/list.html` | bouton unique vers le wizard |
+| `.../event/wizard/step2_event.html` (+ `_events_inner.html`) | template unifié + tags datalist + JS flux #4 |
+| `tests/pytest/test_event_wizard_unifie.py` | 6 tests (image, rôle, tag auto, tags public, garde accès) |
+
+### Migration
+- **Migration nécessaire / Migration required :** Oui (`BaseBillet/migrations/0216_*`)
+
+### Nettoyage effectué / Cleanup done
+Code mort de l'ancien flux **supprimé** : classes `EventWizardAdmin` + `EventWizardPublic`
+(`views.py`, 599 lignes), helpers `_creer_event_admin_depuis_brouillon` /
+`_creer_event_public_depuis_brouillon`, serializers `WizardEventAdminSerializer` /
+`WizardEventPublicSerializer` / `EventProposalEmailSerializer`, et templates
+`admin_step*.html`, `public_step0_*.html`, `public_step2_event.html`. Tests obsolètes
+(`test_event_wizard_admin.py`, `test_event_wizard_public.py`) supprimés (flux remplacé,
+couvert par `test_event_wizard_unifie.py`). Audit conformité djc : OK.
+
 ## Cache SEO — fragments par tenant + agrégats par recombinaison / Per-tenant SEO cache fragments
 
 **Date :** 2026-06-01

@@ -41,8 +41,9 @@ router.register(r'specialadminaction', base_view.SpecialAdminAction, basename='s
 # included BEFORE the main router so the wizard literal paths resolve before
 # EventMVT's `event/{pk}/` pattern.
 wizard_router = routers.SimpleRouter()
-wizard_router.register(r'event/propose', base_view.EventWizardPublic, basename='event-propose')
-wizard_router.register(r'event/admin/wizard', base_view.EventWizardAdmin, basename='event-admin-wizard')
+# Wizard event UNIFIE (CHANTIER-03) : remplace EventWizardAdmin + EventWizardPublic.
+# / Unified event wizard (replaces the admin + public wizards).
+wizard_router.register(r'event/wizard', base_view.EventWizard, basename='event-wizard')
 
 urlpatterns = [
     # Dynamic robots.txt - Access at: https://yourdomain.com/robots.txt
@@ -106,12 +107,9 @@ urlpatterns = [
     # path("tenant/areas/", base_view.tenant_areas, name='tenant_areas'),
     # path("tenant/informations/", base_view.tenant_informations, name='tenant_informations'),
     # path("tenant/summary/", base_view.tenant_summary, name='tenant_summary'),
-    # Entree du wizard public : redirige vers la 1re etape. Les etapes
-    # elles-memes (email/verify/resend/place/map/event/done) et le wizard
-    # admin sont routes par `wizard_router` (cf. plus haut).
-    # / Public wizard entry: redirects to step 1. The steps themselves and
-    # the admin wizard are routed by `wizard_router` (see above).
-    path("event/propose/", lambda r: redirect("event-propose-email"), name="event-propose"),
+    # Entree du wizard event unifie : redirige vers la 1re etape (lieu).
+    # / Unified event wizard entry: redirects to step 1 (place).
+    path("event/propose/", lambda r: redirect("event-wizard-place"), name="event-propose"),
 
     path('', base_view.index, name="index"),
 ]

@@ -572,6 +572,27 @@ class Configuration(SingletonModel):
         default=False,
         verbose_name=_("Participatory agenda module"),
     )
+    # Autorise les visiteurs NON connectes a proposer un evenement.
+    # Necessite module_agenda_participatif. Si False : connexion requise.
+    # / Allow anonymous (logged-out) visitors to propose an event.
+    # Requires module_agenda_participatif. If False: login required.
+    proposition_anonyme_autorisee = models.BooleanField(
+        default=False,
+        verbose_name=_("Autoriser les propositions anonymes"),
+        help_text=_("Si activé, les visiteurs non connectés peuvent proposer des évènements "
+                    "(nécessite le module Agenda participatif)."),
+    )
+    # Tag ajoute automatiquement aux evenements PROPOSES (is_proposal=True).
+    # / Tag automatically added to PROPOSED events.
+    tag_auto_proposition = models.ForeignKey(
+        "BaseBillet.Tag",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="config_tag_auto_proposition",
+        verbose_name=_("Tag automatique des évènements proposés"),
+        help_text=_("Tag ajouté automatiquement aux évènements proposés via l'agenda participatif."),
+    )
 
     ######### COMPTABILITE — RAPPORTS PERIODIQUES #########
     # / Periodic reports — accounting app

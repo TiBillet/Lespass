@@ -135,6 +135,7 @@ Contexte attendu :
                               data-testid="wizard-event-description">{{ initial.long_description|default:'' }}</textarea>
                 </div>
 
+                {# Jauge max : staff uniquement. / Gauge: staff only. #}
                 {% if show_admin_fields %}
                 <div class="col-md-6">
                     <label for="wizard-event-jauge" class="form-label small">
@@ -145,17 +146,30 @@ Contexte attendu :
                            class="form-control{% if errors.jauge_max %} is-invalid{% endif %}"
                            data-testid="wizard-event-jauge">
                 </div>
-                <div class="col-md-6">
+                {% endif %}
+
+                {# Tags : commun à tous. Staff = création libre ; public = uniquement #}
+                {# les tags EXISTANTS (filtré côté serveur). Le datalist propose l'existant. #}
+                {# / Tags: shared. Staff free-creates; public limited to existing (server-side). #}
+                <div class="{% if show_admin_fields %}col-md-6{% else %}col-12{% endif %}">
                     <label for="wizard-event-tags" class="form-label small">
                         {% translate "Tags (séparés par des virgules)" %}
                     </label>
                     <input id="wizard-event-tags" type="text" name="tags"
+                           list="wizard-tags-datalist"
                            value="{{ initial.tags|default:'' }}"
                            class="form-control"
                            placeholder="{% translate 'concert, gratuit' %}"
                            data-testid="wizard-event-tags">
+                    {% if not show_admin_fields %}
+                    <div class="form-text small">
+                        {% translate "Choisissez parmi les tags proposés." %}
+                    </div>
+                    {% endif %}
+                    <datalist id="wizard-tags-datalist">
+                        {% for tag in all_tags %}<option value="{{ tag.name }}"></option>{% endfor %}
+                    </datalist>
                 </div>
-                {% endif %}
 
                 <div class="col-12">
                     <label for="wizard-event-image" class="form-label small">
