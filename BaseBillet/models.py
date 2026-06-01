@@ -2809,7 +2809,13 @@ class Paiement_stripe(models.Model):
                         logger.info(f"lignearticles set to PaymentMethod.STRIPE_SEPA_NOFED : {self.lignearticles}")
 
                 # Pour subscription :
-                elif checkout_session.mode == 'subscription':
+                # On ne lit l'abonnement que s'il existe deja cote Stripe.
+                # Sur un retour navigateur trop precoce (F5, success_url avant
+                # finalisation de la session par Stripe), checkout_session.subscription
+                # vaut None : on saute cette passe, le webhook fera le traitement.
+                # / Only read the subscription if Stripe already created it.
+                # / On an early browser return it is None: skip, the webhook handles it.
+                elif checkout_session.mode == 'subscription' and checkout_session.subscription:
                     subscription_stripe = stripe.Subscription.retrieve(
                         checkout_session.subscription,
                         stripe_account=self.config.get_stripe_connect_account()
@@ -2831,15 +2837,40 @@ class Paiement_stripe(models.Model):
                 self.status = Paiement_stripe.EXPIRE
 
         elif checkout_session.payment_status == "paid":
-            self.status = Paiement_stripe.PAID
-            self.last_action = timezone.now()
-            self.traitement_en_cours = True
+            # Cas particulier abonnement : Stripe peut renvoyer payment_status="paid"
+            # alors que l'objet subscription n'est pas encore rattache a la session
+            # (retour navigateur trop precoce / micro-decalage de propagation Stripe).
+            # Il ne faut PAS figer le paiement dans ce cas : la garde
+            # "if self.traitement_en_cours: return" en tete de methode empecherait
+            # ensuite le webhook de finaliser, et self.subscription resterait vide a vie.
+            # / Stripe may report "paid" before the subscription object is attached.
+            # / Do not lock the payment then: the webhook must still be able to finalize it.
+            subscription_attendue_mais_absente = (
+                checkout_session.mode == 'subscription'
+                and not checkout_session.subscription
+            )
 
-            # Dans le cas d'un nouvel abonnement
-            # On va chercher le numéro de l'abonnement stripe
-            # Et sa facture
-            if checkout_session.mode == 'subscription':
-                if bool(checkout_session.subscription):
+            if subscription_attendue_mais_absente:
+                # On reste en attente : etat recuperable. Le webhook (ou un rechargement
+                # ulterieur de la page de retour) finalisera quand l'abonnement sera rattache.
+                # On loggue pour souligner l'anomalie sans bloquer l'utilisateur.
+                # / Stay pending: recoverable. The webhook will finalize once the sub exists.
+                logger.warning(
+                    f"Checkout {self.uuid} : payment_status=paid mais subscription "
+                    f"absente cote Stripe. Reste PENDING, le webhook finalisera."
+                )
+                self.status = Paiement_stripe.PENDING
+
+            else:
+                self.status = Paiement_stripe.PAID
+                self.last_action = timezone.now()
+                self.traitement_en_cours = True
+
+                # Dans le cas d'un nouvel abonnement, on enregistre le numero
+                # d'abonnement stripe et sa facture. On est ici certain que la
+                # subscription existe (sinon on serait dans la branche ci-dessus).
+                # / New subscription: store stripe subscription id and invoice.
+                if checkout_session.mode == 'subscription':
                     self.subscription = checkout_session.subscription
                     # La récurrence max est géré dans le webhook de renouvellement : BaseBillet.triggers.update_membership_state_after_stripe_paiement
                     # Ajout des metadata du checkout pour les futurs webhook de renouvellement
@@ -2849,8 +2880,6 @@ class Paiement_stripe(models.Model):
                         metadata=metadata,
                     )
                     self.invoice_stripe = subscription.latest_invoice
-
-                    # check si sepa ?
 
 
         else:
