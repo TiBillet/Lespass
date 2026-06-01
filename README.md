@@ -16,7 +16,7 @@
 
 <p align="center">
   <a href="https://codecommun.coop">Coopérative Code Commun</a> ·
-  <a href="https://tibillet.org">Documentation</a> ·
+  <a href="https://tibillet.coop">Documentation</a> ·
   <a href="https://codecommun.tibillet.coop/contrib">Budget contributif</a> ·
   <a href="https://discord.gg/ecb5jtP7vY">Discord</a> ·
   <a href="./README.en.md">🇬🇧 English</a>
@@ -87,7 +87,7 @@ Optionnels mais impactants :
 
 ---
 
-Documentation en cours d'écriture collaborative et disponible en français sur : https://tibillet.org/
+Documentation en cours d'écriture collaborative et disponible en français sur : https://tibillet.coop/
 
 L'ancienne documentation EN/FR est toujours disponible ici : https://tibillet.github.io/documentation_v2/
 
@@ -137,7 +137,7 @@ L'application est accessible sur
 
 > **Prérequis :** Docker, Docker Compose, et un reverse proxy Traefik (inclus dans le compose).
 
-Pour les détails d'installation, de configuration et de déploiement en production : [→ Documentation complète](https://tibillet.org)
+Pour les détails d'installation, de configuration et de déploiement en production : [→ Documentation complète](https://tibillet.coop)
 
 ---
 
@@ -264,5 +264,5 @@ TiBillet est porté par la [Coopérative Code Commun](https://codecommun.coop), 
 - **Discord** : [discord.gg/ecb5jtP7vY](https://discord.gg/ecb5jtP7vY)
 - **Matrix** : https://matrix.to/#/#tibillet:tiers-lieux.org
 - **Email** : [contact@tibillet.re](mailto:contact@tibillet.re)
-- **Site** : [tibillet.org](https://tibillet.org)
+- **Site** : [tibillet.coop](https://tibillet.coop)
 - **Coopérative** : [codecommun.coop](https://codecommun.coop)

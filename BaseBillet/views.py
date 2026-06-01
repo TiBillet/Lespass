@@ -1581,7 +1581,7 @@ def index(request):
     # On redirige vers la page d'adhésion en attendant que les events soient disponibles
     tenant: Client = connection.tenant
     if tenant.categorie in [Client.WAITING_CONFIG, Client.ROOT]:
-        return HttpResponseRedirect('https://tibillet.org/')
+        return HttpResponseRedirect('https://tibillet.coop/')
     template_context = get_context(request)
 
     # Résolution du template avec fallback vers reunion si le skin n'a pas de home.html
@@ -1742,7 +1742,7 @@ class FederationViewset(viewsets.ViewSet):
             root_address=root_address or None,
             member_of={
                 "name": "TiBillet — Réseau coopératif de lieux culturels",
-                "url": "https://tibillet.org/",
+                "url": "https://tibillet.coop/",
             },
         )
         federation_json_ld = json_for_html(federation_json_ld_dict)

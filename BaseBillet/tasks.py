@@ -222,7 +222,7 @@ def context_for_membership_email(membership: "Membership"):
     config = Configuration.get_solo()
     activate(config.language)
     domain = connection.tenant.get_primary_domain().domain
-    image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    image_url = "https://tibillet.coop/static/assets/logo-couleur.svg"
     if hasattr(config.img, 'med'):
         image_url = f"https://{domain}{config.img.med.url}"
 
@@ -336,7 +336,7 @@ def send_membership_pending_admin(membership_uuid: str):
     if not admin_emails and getattr(config, 'email', None):
         admin_emails = [config.email]
 
-    image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    image_url = "https://tibillet.coop/static/assets/logo-couleur.svg"
     try:
         if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
             image_url = f"https://{domain}{config.img.med.url}"
@@ -408,7 +408,7 @@ def send_membership_pending_user(membership_uuid: str):
         logger.warning("send_membership_pending_user: aucun destinataire")
         return False
 
-    image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    image_url = "https://tibillet.coop/static/assets/logo-couleur.svg"
     try:
         if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
             image_url = f"https://{domain}{config.img.med.url}"
@@ -517,7 +517,7 @@ def send_payment_error_user(paiement_stripe_uuid: str, reason: str = None):
     try:
         domain = tenant.get_primary_domain().domain
     except Exception:
-        domain = os.environ.get('DOMAIN', 'tibillet.org')
+        domain = os.environ.get('DOMAIN', 'tibillet.coop')
 
     # On essaye de récupérer l'utilisateur depuis le paiement, sinon depuis la première adhésion liée
     user = paiement.user
@@ -536,7 +536,7 @@ def send_payment_error_user(paiement_stripe_uuid: str, reason: str = None):
         return False
 
     # Logo: celui du lieu si disponible, sinon logo TiBillet
-    image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    image_url = "https://tibillet.coop/static/assets/logo-couleur.svg"
     try:
         if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
             image_url = f"https://{domain}{config.img.med.url}"
@@ -640,7 +640,7 @@ def send_payment_refused_user(paiement_stripe_uuid: str, reason: str = None):
     try:
         domain = tenant.get_primary_domain().domain
     except Exception:
-        domain = os.environ.get('DOMAIN', 'tibillet.org')
+        domain = os.environ.get('DOMAIN', 'tibillet.coop')
 
     # Utilisateur depuis le paiement, sinon depuis l'adhésion liée
     user = paiement.user
@@ -658,7 +658,7 @@ def send_payment_refused_user(paiement_stripe_uuid: str, reason: str = None):
         logger.warning("send_payment_refused_user: aucun destinataire")
         return False
 
-    image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    image_url = "https://tibillet.coop/static/assets/logo-couleur.svg"
     try:
         if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
             image_url = f"https://{domain}{config.img.med.url}"
@@ -742,7 +742,7 @@ def send_payment_refused_user(paiement_stripe_uuid: str, reason: str = None):
         return False
 
     # Logo: celui du lieu si disponible, sinon logo TiBillet
-    image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    image_url = "https://tibillet.coop/static/assets/logo-couleur.svg"
     try:
         if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
             image_url = f"https://{domain}{config.img.med.url}"
@@ -858,9 +858,14 @@ def send_membership_payment_link_user(membership_uuid: str):
 
 @shared_task(bind=True, max_retries=20)
 def send_stripe_bank_deposit_to_laboutik(self, payload):
-    # Le max de temps entre deux retries : 24 heures
-    # / Max time between two retries: 24 hours
-    MAX_RETRY_TIME = 86400  # 24 * 60 * 60 seconds = 24 h
+    # Plafond du delai entre deux retries.
+    # DOIT rester sous le visibility_timeout Redis (3600s, voir settings.py
+    # CELERY_BROKER_TRANSPORT_OPTIONS). Si le countdown depasse ce timeout,
+    # Redis croit la tache perdue et la redelivre en boucle (meme task_id)
+    # -> duplication exponentielle des taches -> RAM du VPS saturee.
+    # / Max delay between two retries. MUST stay below Redis visibility_timeout,
+    # otherwise Redis keeps redelivering the same task forever (memory blowup).
+    MAX_RETRY_TIME = 1800  # 30 min
     config = Configuration.get_solo()
     # On check si le serveur cashless est bien opérationnel :
     # / Check if the cashless server is operational:
@@ -916,9 +921,14 @@ def send_stripe_bank_deposit_to_laboutik(self, payload):
 
 @shared_task(bind=True, max_retries=20)
 def send_refund_to_laboutik(self, ligne_article_pk):
-    # Le max de temps entre deux retries : 24 heures
-    # / Max time between two retries: 24 hours
-    MAX_RETRY_TIME = 86400  # 24 * 60 * 60 seconds = 24 h
+    # Plafond du delai entre deux retries.
+    # DOIT rester sous le visibility_timeout Redis (3600s, voir settings.py
+    # CELERY_BROKER_TRANSPORT_OPTIONS). Si le countdown depasse ce timeout,
+    # Redis croit la tache perdue et la redelivre en boucle (meme task_id)
+    # -> duplication exponentielle des taches -> RAM du VPS saturee.
+    # / Max delay between two retries. MUST stay below Redis visibility_timeout,
+    # otherwise Redis keeps redelivering the same task forever (memory blowup).
+    MAX_RETRY_TIME = 1800  # 30 min
     logger.info(f"send_refund_to_laboutik - waiting for save: {ligne_article_pk}")
     time.sleep(5)
     config = Configuration.get_solo()
@@ -995,8 +1005,14 @@ def send_refund_to_laboutik(self, ligne_article_pk):
 # @app.task
 @shared_task(bind=True, max_retries=20)
 def send_sale_to_laboutik(self, ligne_article_pk):
-    # Le max de temps entre deux retries : 24 heures
-    MAX_RETRY_TIME = 86400  # 24 * 60 * 60 seconds = 24 h
+    # Plafond du delai entre deux retries.
+    # DOIT rester sous le visibility_timeout Redis (3600s, voir settings.py
+    # CELERY_BROKER_TRANSPORT_OPTIONS). Si le countdown depasse ce timeout,
+    # Redis croit la tache perdue et la redelivre en boucle (meme task_id)
+    # -> duplication exponentielle des taches -> RAM du VPS saturee.
+    # / Max delay between two retries. MUST stay below Redis visibility_timeout,
+    # otherwise Redis keeps redelivering the same task forever (memory blowup).
+    MAX_RETRY_TIME = 1800  # 30 min
     config = Configuration.get_solo()
 
     # Tache lancé sur un celery. Le save n'est peut être pas encore réalisé coté trigger.
@@ -1030,14 +1046,24 @@ def send_sale_to_laboutik(self, ligne_article_pk):
         retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
         raise self.retry(exc=exc, countdown=retry_delay)
 
-    # On va relancer la requete vers la db tant que ligne_article n’est pas valide
-    # / Keep polling the DB until ligne_article is valid
-    timed = 0
-    while ligne_article.status != LigneArticle.VALID and timed < 100:
-        time.sleep(1)
-        timed += 1
-        ligne_article.refresh_from_db()
-        logger.info(f"send_sale_to_laboutik -> Ligne Article is Valid ? : {ligne_article.get_status_display()}")
+    # La tache peut demarrer avant que le commit du statut VALID soit en base :
+    # le .delay() est lance dans un signal pre_save (cf. triggers.py trigger_B/A),
+    # donc le worker Celery peut lire la ligne avant que le VALID soit committe.
+    # Si la ligne n'est pas encore VALID, on relance la tache un peu plus tard
+    # au lieu de bloquer le worker (l'ancien while + time.sleep gelait le worker
+    # jusqu'a 100s par tache et saturait le pool sous charge).
+    # La validation de la vente ne depend pas de LaBoutik : seul le flag
+    # sended_to_laboutik traduit la synchro POS.
+    # / Task may start before the VALID status is committed (delay() fired in a
+    # pre_save signal). Retry shortly instead of blocking the worker.
+    ligne_article.refresh_from_db()
+    if ligne_article.status != LigneArticle.VALID:
+        logger.info(f"send_sale_to_laboutik -> ligne pas encore VALID ({ligne_article.get_status_display()}), retry court")
+        try:
+            raise self.retry(countdown=3)
+        except MaxRetriesExceededError:
+            logger.error(f"send_sale_to_laboutik : ligne {ligne_article_pk} jamais passee VALID apres retries — abandon")
+            return False
 
     serialized_ligne_article = LigneArticleSerializer(ligne_article).data
     json_data = json.dumps(serialized_ligne_article, cls=DjangoJSONEncoder)
@@ -1218,7 +1244,7 @@ def connexion_celery_mailer(self, user_email,
     if not organisation:
         organisation = "TiBillet"
 
-    image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    image_url = "https://tibillet.coop/static/assets/logo-couleur.svg"
     if hasattr(config.img, 'med'):
         image_url = f"{base_url}{config.img.med.url}"
 
@@ -1353,8 +1379,8 @@ def ticket_celery_mailer(reservation_uuid: str):
             sleep(1)
 
     domain = connection.tenant.get_primary_domain().domain
-    image_url_place = "https://tibillet.org/fr/img/design/logo-couleur.svg"
-    image_url_event = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    image_url_place = "https://tibillet.coop/static/assets/logo-couleur.svg"
+    image_url_event = "https://tibillet.coop/static/assets/logo-couleur.svg"
     if hasattr(config.img, 'med'):
         image_url_place = f"https://{domain}{config.img.med.url}"
     if reservation.event:
@@ -1655,7 +1681,7 @@ def send_welcome_email(email: str, username: str = None):
         'username': username or email.split('@')[0],
         'now': timezone.now(),
         'objet': _("Bienvenue"),
-        'image_url': "https://tibillet.org/fr/img/design/logo-couleur.svg",
+        'image_url': "https://tibillet.coop/static/assets/logo-couleur.svg",
     }
 
     try:
@@ -1706,7 +1732,7 @@ def membership_renewal_reminder():
                         'membership': membership,
                         'now': timezone.now(),
                         'objet': _(f"Votre adhésion {config.organisation} arrive à expiration"),
-                        'image_url': "https://tibillet.org/fr/img/design/logo-couleur.svg",
+                        'image_url': "https://tibillet.coop/static/assets/logo-couleur.svg",
                         'renewal_url': f"https://{tenant.get_primary_domain().domain}/memberships/"
                     }
 
@@ -1920,7 +1946,7 @@ def send_payment_success_admin(amount: int, payment_time_str: str, place: str, u
         'user_email': user_email,
         'organisation': config.organisation,
         'now': timezone.now(),
-        'image_url': "https://tibillet.org/fr/img/design/logo-couleur.svg",
+        'image_url': "https://tibillet.coop/static/assets/logo-couleur.svg",
         'currency_symbol': currency_symbol,
     }
     mail = CeleryMailerClass(
@@ -1958,7 +1984,7 @@ def send_payment_success_user(user_email: str, amount: int, payment_time_str: st
         'place': place,
         'organisation': config.organisation,
         'now': timezone.now(),
-        'image_url': "https://tibillet.org/fr/img/design/logo-couleur.svg",
+        'image_url': "https://tibillet.coop/static/assets/logo-couleur.svg",
         'currency_symbol': currency_symbol,
     }
     mail = CeleryMailerClass(
@@ -1996,7 +2022,7 @@ def send_reservation_cancellation_user(reservation_uuid: str):
     title = f"{config.organisation.capitalize()} - " + _("Your reservation has been cancelled.")
 
     # Image/logo du lieu
-    image_url_place = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    image_url_place = "https://tibillet.coop/static/assets/logo-couleur.svg"
     try:
         domain = connection.tenant.get_primary_domain().domain
         if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
@@ -2055,7 +2081,7 @@ def send_ticket_cancellation_user(ticket_uuid: str):
     title = f"{config.organisation.capitalize()} - " + _("Your ticket has been cancelled.")
 
     # Image/logo du lieu
-    image_url_place = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    image_url_place = "https://tibillet.coop/static/assets/logo-couleur.svg"
     try:
         domain = connection.tenant.get_primary_domain().domain
         if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:

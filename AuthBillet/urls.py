@@ -4,7 +4,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenVerifyView
 
 from AuthBillet import views as auth_view
 from AuthBillet.views import test_api_key
-# TokenRefreshViewCustom, OAauthApi, OAauthCallback, SetPasswordIfEmpty
+# TokenRefreshViewCustom, SetPasswordIfEmpty
 
 router = routers.DefaultRouter()
 router.register(r'me', auth_view.MeViewset, basename='me')
@@ -24,8 +24,6 @@ urlpatterns = [
 
     # path('token/verify/', TokenVerifyView.as_view(), name='token_verify'),
     # path('create/', create_user.as_view(), name='create_user'),
-    # path('requestoauth/', OAauthApi.as_view(), name='requestoauth'),
-    # path('oauth/', OAauthCallback.as_view(), name='oauth'),
     # uniquement pour tenant public :
     # path('terminal/', create_terminal_user.as_view(), name='create_terminal_user'),
 

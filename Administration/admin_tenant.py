@@ -1177,7 +1177,7 @@ class HumanUserAdmin(ModelAdmin):
             domain = tenant.get_primary_domain().domain
             base_url = f"https://{domain}"
         except Exception:
-            base_url = "https://tibillet.org"
+            base_url = "https://tibillet.coop"
 
         connexion_url = forge_connexion_url(user, base_url)
         return redirect(connexion_url)
