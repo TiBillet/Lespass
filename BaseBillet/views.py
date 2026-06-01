@@ -2682,8 +2682,11 @@ class MembershipMVT(viewsets.ViewSet):
 
             context['prefill'] = prefill
 
-            # Add a flag to the context to check if a newsletter has been configured
-            context["newsletter_active"] =(GhostConfig.get_solo().ghost_key is not None) or (BrevoConfig.get_solo().api_key is not None)
+            # On teste la presence reelle d'une cle (truthiness) et pas "is not None" :
+            # un CharField vide via le form admin vaut '' (pas None), ce qui passerait
+            # "is not None" a tort et afficherait le switch newsletter sans config.
+            # / Truthiness check: an empty CharField is '' (not None) when blanked via admin.
+            context["newsletter_active"] = bool(GhostConfig.get_solo().ghost_key) or bool(BrevoConfig.get_solo().api_key)
 
             return render(request, "reunion/views/membership/form.html", context=context)
 
