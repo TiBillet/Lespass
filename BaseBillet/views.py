@@ -2509,7 +2509,11 @@ class MembershipMVT(viewsets.ViewSet):
         logger.info(f"new membership : {request.data}")
         membership_validator = MembershipValidator(data=request.data, context={'request': request})
         if not membership_validator.is_valid():
-            logger.warning(f"MembershipViewset CREATE ERROR : {membership_validator.errors}")
+            # Validation d'entree echouee (souvent un bot qui POST le formulaire vide ou partiel).
+            # Ce n'est pas une erreur serveur : on logge en info, pas en warning, pour ne pas
+            # generer de bruit dans Sentry sur une soumission invalide attendue.
+            # / Failed input validation (often a bot posting an empty/partial form). Not a server error.
+            logger.info(f"Membership create — validation refusee : {membership_validator.errors}")
             error_messages = [str(item) for sublist in membership_validator.errors.values() for item in sublist]
             messages.add_message(request, messages.ERROR, error_messages)
             return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
