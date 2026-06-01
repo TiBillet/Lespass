@@ -575,12 +575,14 @@
             })();
         </script>
 
-        <!-- newsletter opt-out -->
-        <div class="form-check form-switch mb-3">
-            <input class="form-check-input" type="checkbox" role="switch" id="newsletter" name="newsletter" data-testid="membership-newsletter">
-            <label class="form-check-label"
-                   for="newsletter">{% translate "I do not want to receive the newsletter." %}</label>
-        </div>
+        {% if newsletter_active %}
+            <!-- newsletter opt-out -->
+            <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" role="switch" id="newsletter" name="newsletter" data-testid="membership-newsletter">
+                <label class="form-check-label"
+                       for="newsletter">{% translate "I do not want to receive the newsletter." %}</label>
+            </div>
+        {% endif %}
 
         {% if product.legal_link %}
             <div class="form-check form-switch mb-3">

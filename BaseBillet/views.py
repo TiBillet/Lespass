@@ -50,7 +50,7 @@ from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, Product, Event, Tag, Paiement_stripe, Membership, Reservation, \
     FormbricksConfig, FormbricksForms, FederatedPlace, Carrousel, LigneArticle, PriceSold, \
-    Price, ProductSold, PaymentMethod, PostalAddress, SaleOrigin, ProductFormField
+    Price, ProductSold, PaymentMethod, PostalAddress, SaleOrigin, ProductFormField, GhostConfig, BrevoConfig
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, \
     contact_mailer, send_to_ghost_email, send_sale_to_laboutik, \
     send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, \
@@ -2681,6 +2681,9 @@ class MembershipMVT(viewsets.ViewSet):
                             prefill[field.name] = stored_data[label_key]
 
             context['prefill'] = prefill
+
+            # Add a flag to the context to check if a newsletter has been configured
+            context["newsletter_active"] =(GhostConfig.get_solo().ghost_key is not None) or (BrevoConfig.get_solo().api_key is not None)
 
             return render(request, "reunion/views/membership/form.html", context=context)
 
