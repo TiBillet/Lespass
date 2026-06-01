@@ -1144,11 +1144,16 @@ class CaisseViewSet(viewsets.ViewSet):
         Affiche la page d'attente de la carte primaire (carte du responsable de caisse).
         Displays the primary card waiting page (cash register manager's card).
         """
+
+        # pour le chargement de cordova
+        type_app = request.GET.get("type_app", "unknown")
+        
         state = _construire_state()
         context = {
             "state": state,
             "stateJson": dumps(state),
             "method": request.method,
+            "type_app": type_app,
         }
         return render(request, "laboutik/views/ask_primary_card.html", context)
 
@@ -1395,6 +1400,12 @@ class CaisseViewSet(viewsets.ViewSet):
         # Configuration globale de l'interface caisse (singleton, get_or_create)
         # Global POS interface configuration (singleton, get_or_create)
         laboutik_config = LaboutikConfiguration.get_solo()
+
+        # récupération de l'imprimante du pv
+        state["printer"] = {
+            "uuid": str(pv.printer.uuid),
+            "name": pv.printer.name,
+        } if pv.printer else None
 
         context = {
             "hostname_client": "",

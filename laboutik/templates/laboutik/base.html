@@ -33,7 +33,12 @@
 		state['typeApp'] = location.search.toString().split('&').find(item => item.includes('type_app')).split('=')[1]
 		state['socketIoPort'] = 3000
     </script>
-    {% if type_app == "cordova" %}<script src="http://localhost/cordova.js"></script>{% endif %}
+    {% if type_app == "cordova" %}
+		<!-- Attention, url specifique à cordova-->
+		<script src="http://localhost/cordova.js"></script>
+
+		<script src="{% static 'js/manageSunmiPrint.js' %}"></script>
+		{% endif %}
     <!-- https://github.com/MikeMcl/big.js/tree/main -->
     <script src="{% static 'js/big.js' %}"></script>
 		<script src="{% static 'js/socket.io.min.js' %}"></script>

@@ -74,39 +74,79 @@ function manageKey(event) {
 	const ele = event.target.parentNode
 
 	if (ele.classList.contains('article-container')) {
-		// Si le stock est bloquant (rupture + vente hors stock interdite),
-		// on ignore le clic — l'article est grisé visuellement.
-		// / If stock is blocking (out of stock + sales not allowed),
-		// ignore the click — the article is visually greyed out.
-		if (ele.dataset.stockBloquant === 'true') {
-			return
-		}
+		const methodeCaisse = ele?.dataset?.methodeCaisse
+		// RE = recharge monnaie / RC = recharge cadeau / TM = recharge temps / VT = vente (service direct)
 
-		const articleUuid = ele.dataset.uuid
-		const articlePrice = ele.dataset.price
-		const articleName = ele.dataset.name
-		const articleCurrency = ele.dataset.currency
-		const multiTarif = ele.dataset.multiTarif === 'true'
+		// articles "ordinaires"
+		if (methodeCaisse !== 'VC') {
+			// Si le stock est bloquant (rupture + vente hors stock interdite),
+			// on ignore le clic — l'article est grisé visuellement.
+			// / If stock is blocking (out of stock + sales not allowed),
+			// ignore the click — the article is visually greyed out.
+			if (ele.dataset.stockBloquant === 'true') {
+				return
+			}
 
-		// Si l'article a plusieurs tarifs ou un prix libre → ouvrir la selection de tarif
-		// au lieu d'ajouter directement au panier.
-		// / If the article has multiple rates or free price → open rate selection
-		// instead of adding directly to cart.
-		if (multiTarif) {
-			sendEvent('organizerMsg', '#event-organizer', {
-				src: { file: 'articles.js', method: 'manageKey' },
-				msg: 'tarifSelection',
-				data: {
-					uuid: articleUuid,
-					name: articleName,
-					tarifs: JSON.parse(ele.dataset.tarifs),
-					currency: articleCurrency,
-				}
+			const articleUuid = ele.dataset.uuid
+			const articlePrice = ele.dataset.price
+			const articleName = ele.dataset.name
+			const articleCurrency = ele.dataset.currency
+			const multiTarif = ele.dataset.multiTarif === 'true'
+
+			// Si l'article a plusieurs tarifs ou un prix libre → ouvrir la selection de tarif
+			// au lieu d'ajouter directement au panier.
+			// / If the article has multiple rates or free price → open rate selection
+			// instead of adding directly to cart.
+			if (multiTarif) {
+				sendEvent('organizerMsg', '#event-organizer', {
+					src: { file: 'articles.js', method: 'manageKey' },
+					msg: 'tarifSelection',
+					data: {
+						uuid: articleUuid,
+						name: articleName,
+						tarifs: JSON.parse(ele.dataset.tarifs),
+						currency: articleCurrency,
+					}
+				})
+				return
+			}
+
+			addArticle(articleUuid, articlePrice, articleName, articleCurrency)
+		} else {
+			// remboursement carte
+			// Recupere uuid_pv et tag_id_cm depuis #addition-form.
+			// Retrieves uuid_pv and tag_id_cm from #addition-form.
+			const form = document.querySelector('#addition-form')
+			const uuidPv = form.querySelector('input[name="uuid_pv"]').value
+			const tagIdCm = form.querySelector('input[name="tag_id_cm"]').value
+			const params = new URLSearchParams({ uuid_pv: uuidPv, tag_id_cm: tagIdCm })
+			console.clear()
+			console.log('uuidPv =', uuidPv)
+			console.log('tagIdCm =', tagIdCm)
+			console.log('params =', params.toString())
+			htmx.ajax('GET', '/laboutik/paiement/vider_carte/overlay/?' + params.toString(), {
+				target: '#messages',
+				swap: 'innerHTML'
 			})
-			return
 		}
 
-		addArticle(articleUuid, articlePrice, articleName, articleCurrency)
+		// remboursement carte
+		if (methodeCaisse === 'VC') {
+			// Recupere uuid_pv et tag_id_cm depuis #addition-form.
+			// Retrieves uuid_pv and tag_id_cm from #addition-form.
+			const form = document.querySelector('#addition-form')
+			const uuidPv = form.querySelector('input[name="uuid_pv"]').value
+			const tagIdCm = form.querySelector('input[name="tag_id_cm"]').value
+			const params = new URLSearchParams({ uuid_pv: uuidPv, tag_id_cm: tagIdCm })
+			console.clear()
+			console.log('uuidPv =', uuidPv)
+			console.log('tagIdCm =', tagIdCm)
+			console.log('params =', params.toString())
+			htmx.ajax('GET', '/laboutik/paiement/vider_carte/overlay/?' + params.toString(), {
+				target: '#messages',
+				swap: 'innerHTML'
+			})
+		}
 	}
 }
 
