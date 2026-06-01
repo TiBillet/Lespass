@@ -108,7 +108,7 @@ from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
     FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp, ProductFormField, \
-    PromotionalCode, Tva, MembershipProduct
+    PromotionalCode, Tva, MembershipProduct, FederationConfiguration
 from BaseBillet.tasks import webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
     send_reservation_cancellation_user, send_sale_to_laboutik, forge_connexion_url
@@ -3295,6 +3295,46 @@ class TenantAdmin(ModelAdmin):
 
 
 ### Connect
+
+@admin.register(FederationConfiguration, site=staff_admin_site)
+class FederationConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
+    compressed_fields = True
+    warn_unsaved_form = True
+
+    fieldsets = (
+        (_("Affichage des lieux"), {"fields": (
+            "afficher_lieux_sans_adresse",
+            "afficher_seulement_lieux_avec_event",
+            "afficher_lieux_entrants",
+            "tri_des_lieux",
+        )}),
+        (_("Présentation"), {"fields": ("texte_introduction",)}),
+    )
+
+    formfield_overrides = {
+        models.TextField: {
+            "widget": WysiwygWidget,
+        }
+    }
+
+    def save_model(self, request, obj, form, change):
+        # Sanitize les TextField pour eviter le XSS via WYSIWYG
+        # / Sanitize TextFields to avoid XSS via WYSIWYG
+        sanitize_textfields(obj)
+        super().save_model(request, obj, form, change)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 
 @admin.register(FederatedPlace, site=staff_admin_site)
 class FederatedPlaceAdmin(ModelAdmin):

@@ -3455,6 +3455,75 @@ class Webhook(models.Model):
 
 ### Fédérations
 
+class FederationConfiguration(SingletonModel):
+    """
+    Options d'affichage de la page Réseau local (/federation/) pour ce tenant.
+    Singleton tenant : 1 instance par schema. Lu par FederationViewset.list.
+    / Display options for this tenant's Local network page (/federation/).
+    Tenant singleton: 1 row per schema. Read by FederationViewset.list.
+
+    LOCALISATION : BaseBillet/models.py
+
+    Toutes les options s'appliquent à la CONSOMMATION (la vue), pas au cache
+    SEO pré-calculé (refresh_seo_cache). Additif, zéro migration de cache.
+    / All options apply at CONSUMPTION time (the view), not to the pre-computed
+    SEO cache. Additive, no cache migration.
+    """
+
+    # Tri de la liste des lieux / Sort order of the venues list
+    TRI_ALPHABETIQUE = "alpha"
+    TRI_EVENTS_A_VENIR = "events"
+    TRI_CHOICES = [
+        (TRI_ALPHABETIQUE, _("Alphabétique")),
+        (TRI_EVENTS_A_VENIR, _("Par prochain événement")),
+    ]
+
+    afficher_lieux_sans_adresse = models.BooleanField(
+        default=True,
+        verbose_name=_("Afficher les lieux sans adresse"),
+        help_text=_(
+            "Si activé, la liste inclut aussi les lieux du réseau sans adresse "
+            "géolocalisée (ils apparaissent dans la liste mais pas sur la carte)."
+        ),
+    )
+    afficher_seulement_lieux_avec_event = models.BooleanField(
+        default=False,
+        verbose_name=_("Afficher seulement les lieux avec un événement à venir"),
+        help_text=_(
+            "Si activé, seuls les lieux ayant au moins un événement publié à venir "
+            "sont affichés."
+        ),
+    )
+    afficher_lieux_entrants = models.BooleanField(
+        default=True,
+        verbose_name=_("Afficher les lieux qui me fédèrent"),
+        help_text=_(
+            "Si activé, affiche aussi les lieux qui m'ont ajouté à leur réseau, "
+            "même si je ne les ai pas ajoutés au mien."
+        ),
+    )
+    texte_introduction = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name=_("Texte d'introduction"),
+        help_text=_("Texte affiché en haut de la page Réseau local."),
+    )
+    tri_des_lieux = models.CharField(
+        max_length=10,
+        choices=TRI_CHOICES,
+        default=TRI_ALPHABETIQUE,
+        verbose_name=_("Tri des lieux"),
+        help_text=_("Ordre d'affichage de la liste des lieux."),
+    )
+
+    class Meta:
+        verbose_name = _("Options de fédération")
+        verbose_name_plural = _("Options de fédération")
+
+    def __str__(self):
+        return str(_("Options de fédération"))
+
+
 class FederatedPlace(models.Model):
     tenant = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="Collective")
     tag_filter = models.ManyToManyField(Tag, blank=True, related_name="filtred", verbose_name=_("Tag filters"),

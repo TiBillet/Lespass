@@ -1,5 +1,121 @@
 # Changelog / Journal des modifications
 
+## Cache SEO — fragments par tenant + agrégats par recombinaison / Per-tenant SEO cache fragments
+
+**Date :** 2026-06-01
+**Migration :** Oui (`seo 0004`, `alter cache_type`, no-op DB) · **Régénération cache :** au prochain beat ou `refresh_seo_cache()`
+
+**Quoi / What :** refonte de `seo/tasks.py` pour la scalabilité (≈ 500 tenants). Le cache SEO
+est désormais produit par **fragments par tenant** puis **recombiné** en agrégats :
+- `refresh_tenant_seo_cache(tenant_id)` — recalcule les fragments d'**un** tenant
+  (`TENANT_SUMMARY`, `TENANT_EVENTS`, nouveau `TENANT_POINTS`). 1 schema.
+- `rebuild_seo_aggregates()` — recompose `AGGREGATE_EVENTS/LIEUX/POINTS` + `SITEMAP_INDEX`
+  par lecture des fragments + concat (**zéro cross-schema**).
+- `refresh_seo_cache()` — orchestrateur du beat 4 h (tous fragments + rebuild +
+  `FEDERATION_INCOMING` cross-schema + nettoyage stale).
+
+**Pourquoi / Why :** l'ancien recalcul intégral faisait un `UNION ALL` sur tous les schemas à
+chaque exécution — ingérable à 500 tenants, et impossible à déclencher sur chaque modif.
+
+**Comment / How :** le signal `post_save`/`post_delete` Event/PostalAddress déclenche
+**uniquement** `refresh_tenant_seo_cache` du tenant courant (1 schema, débounce **par tenant**
+60 s) + `rebuild_seo_aggregates` (débounce **global** 180 s qui **borne la charge**
+indépendamment du volume de modifs). Jamais de recalcul des schemas des autres tenants. Les
+vues consommatrices sont **inchangées** (mêmes `AGGREGATE_*`). Équivalence vérifiée : agrégats
+identiques à l'ancienne version (20 events / 5 lieux / 4 points, 0 collision `pa_id`).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/models.py` | + `cache_type` `TENANT_POINTS` (migration `0004`) |
+| `seo/services.py` | + `get_counts_for_tenant(schema_name)` (counts 1-tenant) |
+| `seo/tasks.py` | refonte : `refresh_tenant_seo_cache`, `rebuild_seo_aggregates`, `refresh_seo_cache` orchestrateur |
+| `BaseBillet/signals.py` | signal → refresh **ciblé tenant** + rebuild débouncés (remplace le refresh complet) |
+| `tests/pytest/test_seo_cache_fragments.py` | 4 tests (fragments, recombinaison, unicité pa_id, incoming au beat) |
+| `tests/pytest/test_seo_aggregate_points.py` | maj test `is_main_address` (pa_id préfixé) |
+
+### Migration
+- **Migration nécessaire / Migration required :** Oui (`seo/migrations/0004_alter_seocache_cache_type.py`, no-op DB)
+- `manage.py migrate_schemas --executor=multiprocessing`
+
+## Carto (explorer) — 3 correctifs + rafraîchissement auto du cache / Map explorer fixes + auto cache refresh
+
+**Date :** 2026-06-01
+**Migration :** Non · **Régénération du cache requise :** Oui (`refresh_seo_cache`)
+
+**Quoi / What :**
+- **Bug adresse décalée** : `pa_id` (clé des markers côté JS) valait `PostalAddress.pk`,
+  non unique entre tenants (PK par schema) → collision, mauvaise adresse au clic. Désormais
+  préfixé par le tenant (`{tenant_uuid}:{pk}`) en sortie de `build_aggregate_points`.
+- **Carte non rafraîchie au clic d'un event** : les cartes event n'avaient pas de
+  `data-pa-id` et `bindListDelegation` ne réagissait qu'aux cartes lieu. Ajout de
+  `data-pa-id` + nouvelle fonction `focusOnPA(paId, tenantId)`.
+- **Images absentes** : les events affichaient toujours une emoji ; le cache ne portait
+  pas l'`image_url` des events ni l'image des lieux. Ajout de `image_url` (events) et
+  `image_url`/`tenant_image_url` (lieux, via la social card) dans le cache, et affichage
+  côté JS (cartes lieu/event, accordéon) avec fallback logo → image → emoji.
+- **Rafraîchissement auto** : signal `post_save`/`post_delete` sur `Event` et
+  `PostalAddress` → `refresh_seo_cache` (Celery, **débouncé** : 1 refresh / 70 s, différé
+  60 s pour grouper les modifs).
+- **Audit (bonus)** : `highlightPin`/`highlightPinClass` ciblaient `data-lieu-id` au lieu de
+  `data-tenant-id` (surbrillance des pins inopérante) — corrigé (+ multi-adresses) ;
+  `scrollToCard` ne gérait que le mode « lieu » — fallback carte event ajouté ; popup
+  alignée sur le fallback logo→image.
+
+**Pourquoi / Why :** corriger l'UX de la carto (explorer ROOT + /federation/) et garder le
+cache à jour sans attendre le beat 4 h.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/services.py` | `pa_id` unique cross-tenant ; `image_url` events ; `tenant_image_url` lieux (points) |
+| `seo/tasks.py` | `image_url` des lieux dans `AGGREGATE_LIEUX` |
+| `seo/static/seo/explorer.js` | `focusOnPA` + clic event ; affichage images (cartes lieu/event, accordéon) |
+| `BaseBillet/signals.py` | Signal débouncé Event/PostalAddress → `refresh_seo_cache` |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+- **Action requise :** régénérer le cache : `manage.py shell -c "from seo.tasks import refresh_seo_cache; refresh_seo_cache()"`
+
+## Fédération — options d'affichage par tenant / Federation display options per tenant
+
+**Date :** 2026-06-01
+**Migration :** Oui (`BaseBillet 0215`, auto, tous schemas tenant)
+
+**Quoi / What :** nouveau singleton **`FederationConfiguration`** (par tenant) pilotant
+l'affichage de la page Réseau local (`/federation/`) : filtre « event à venir seulement »,
+toggle des lieux entrants (qui me fédèrent), texte d'introduction WYSIWYG, et tri des lieux
+(alphabétique / par prochain événement). Visible dans l'admin section **Fédération**,
+au-dessus de « Espaces » et « Assets ».
+/ New per-tenant `FederationConfiguration` singleton driving the Local network page display.
+
+**Pourquoi / Why :** rendre configurables des comportements jusque-là figés dans le code
+(bidirectionnalité forcée, lieux sans event toujours affichés), au niveau de chaque lieu.
+
+**Comment / How :** tout s'applique à la **consommation** (`FederationViewset.list`), via la
+fonction pure `seo.services.appliquer_options_federation`. **Aucune** modification du cache SEO
+(`refresh_seo_cache`), du `/explorer/` public ROOT, **ni du JS**. L'option « lieux sans adresse »
+est gérée côté serveur (injection d'un point sans coordonnées, listé mais sans marqueur — le JS
+ignore déjà les marqueurs sans coords). Tout est testable en pytch.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | Modèle `FederationConfiguration(SingletonModel)` (5 champs) |
+| `seo/services.py` | Fonction pure `appliquer_options_federation()` (filtre, tri, points sans coords) |
+| `Administration/admin_tenant.py` | `FederationConfigurationAdmin` (WYSIWYG + sanitize + permissions) |
+| `Administration/admin/dashboard.py` | Item sidebar « Options » en tête de la section Fédération |
+| `BaseBillet/views.py` | `FederationViewset.list` : lecture config + filtre/tri/entrants/sans-adresse/intro |
+| `BaseBillet/templates/reunion/views/federation/explorer.html` | Affichage du `texte_introduction` |
+| `Administration/management/commands/demo_data_v2.py` | Fixtures : 3 scénarios fédération additifs (reseed `--flush` requis) |
+| `tests/pytest/test_federation_config.py` | 7 tests DB-only (fonction pure) |
+| `tests/pytest/test_federation_view_integration.py` | 4 tests d'intégration de la vue |
+
+### Migration
+- **Migration nécessaire / Migration required :** Oui
+- `BaseBillet/migrations/0215_federationconfiguration.py`
+- `manage.py migrate_schemas --executor=multiprocessing`
+
 ## Sentry — tracing désactivé (budget spans saturé) / Sentry tracing disabled
 
 **Date :** 2026-05-25

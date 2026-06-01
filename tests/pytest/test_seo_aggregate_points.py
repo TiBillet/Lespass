@@ -144,8 +144,10 @@ def test_build_aggregate_points_is_main_address_flag():
             events_by_tenant={},
         )
     points_par_id = {p["pa_id"]: p for p in result["points"]}
-    assert points_par_id[10]["is_main_address"] is True
-    assert points_par_id[20]["is_main_address"] is False
+    # pa_id est prefixe par le tenant_uuid (unicite cross-tenant) : "uuid-X:10".
+    # / pa_id is prefixed with the tenant_uuid (cross-tenant uniqueness).
+    assert points_par_id["uuid-X:10"]["is_main_address"] is True
+    assert points_par_id["uuid-X:20"]["is_main_address"] is False
 
 
 def test_build_explorer_data_for_tenants_filtre_par_uuid():

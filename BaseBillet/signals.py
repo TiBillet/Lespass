@@ -6,7 +6,7 @@ from django.conf import settings
 from django.db import connection
 from django.utils.translation import gettext as _
 from django.db.models import Q
-from django.db.models.signals import pre_save, post_save
+from django.db.models.signals import pre_save, post_save, post_delete
 from django.dispatch import receiver
 from django.utils import timezone
 from jedi.inference.value import instance
@@ -14,7 +14,7 @@ from jedi.inference.value import instance
 from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product, Price, \
-    PaymentMethod, Membership, SaleOrigin, Configuration
+    PaymentMethod, Membership, SaleOrigin, Configuration, Event, PostalAddress
 from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation, \
     trigger_product_update_tasks, send_sale_to_laboutik, send_refund_to_laboutik, webhook_membership, \
     refill_from_lespass_to_user_wallet_from_ticket_scanned
@@ -457,4 +457,48 @@ def create_lignearticle_if_membership_created_on_admin(sender, instance: Members
     # On envoi un webhook. Si deadline, ça veut dire que l'adhésion est valide
     if membership.deadline:
         webhook_membership.delay(membership.pk)
+
+
+@receiver(post_save, sender=Event)
+@receiver(post_delete, sender=Event)
+@receiver(post_save, sender=PostalAddress)
+@receiver(post_delete, sender=PostalAddress)
+def declencher_refresh_seo_cache(sender, instance, **kwargs):
+    """
+    Modif d'un event/adresse -> recalcul cible du cache SEO (cf. SESSIONS/SEO/CHANTIER-07).
+    / Event/PostalAddress change -> targeted SEO cache recompute.
+
+    LOCALISATION : BaseBillet/signals.py
+
+    Deux taches Celery, deux debounces de granularite differente :
+    - refresh_tenant_seo_cache(tenant) : recalcule les fragments du SEUL tenant courant
+      (1 schema). Debounce PAR TENANT (60s).
+    - rebuild_seo_aggregates() : recompose les agregats par recombinaison des fragments
+      (zero cross-schema). Debounce GLOBAL (180s) -> borne la charge a 500 tenants,
+      independamment du volume de post_save.
+    Le countdown du fragment (30s) < celui du rebuild (180s) : le fragment est a jour
+    quand le rebuild recombine. Jamais de recalcul des schemas des autres tenants.
+    / Two Celery tasks, two debounce granularities: per-tenant fragment refresh (60s) +
+    global aggregate rebuild (180s). Never recomputes other tenants' schemas.
+    """
+    # Imports locaux : evite tout import circulaire avec seo.tasks.
+    # / Local imports: avoid circular import with seo.tasks.
+    from django.core.cache import cache
+    from django.db import connection
+    from seo.tasks import refresh_tenant_seo_cache, rebuild_seo_aggregates
+
+    tenant = getattr(connection, "tenant", None)
+    tenant_uuid = str(getattr(tenant, "uuid", "")) if tenant else ""
+    if not tenant_uuid:
+        return
+
+    # Debounce PAR TENANT : 1 refresh fragment / 60s / tenant.
+    # / Per-tenant debounce: 1 fragment refresh / 60s / tenant.
+    if cache.add(f"seo_refresh_tenant_{tenant_uuid}", "1", 60):
+        refresh_tenant_seo_cache.apply_async(args=[tenant_uuid], countdown=30)
+
+    # Debounce GLOBAL : 1 rebuild agregats / 180s, quel que soit le volume de modifs.
+    # / Global debounce: 1 aggregate rebuild / 180s, regardless of modification volume.
+    if cache.add("seo_rebuild_aggregates", "1", 180):
+        rebuild_seo_aggregates.apply_async(countdown=180)
 

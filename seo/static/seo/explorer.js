@@ -312,6 +312,7 @@
                     datetime_iso: ev.datetime_iso,
                     slug: ev.slug,
                     tags: ev.tags || [],
+                    image_url: ev.image_url || '',
                     pa_id: point.pa_id,
                     pa_name: point.pa_name,
                     address_display: point.address_display,
@@ -378,6 +379,7 @@
                 locality: t.locality,
                 country: t.country,
                 logo_url: t.logo_url,
+                image_url: t.image_url || '',
                 events: eventsUniques,
             });
         }
@@ -556,12 +558,21 @@
                 handleAccordionToggle(toggle);
                 return;
             }
-            // Click sur une card avec data-lieu-id : focus carte
-            // / Click on a card with data-lieu-id: focus map
+            // Click sur une card lieu (data-lieu-id) : focus carte sur le lieu.
+            // / Click on a lieu card: focus map on the venue.
             const card = ev.target.closest('[data-lieu-id]');
             if (card) {
                 const lieuId = card.getAttribute('data-lieu-id');
                 if (lieuId) focusOnLieu(lieuId);
+                return;
+            }
+            // Click sur une card event : focus carte sur l'adresse (PA) de l'event.
+            // / Click on an event card: focus map on the event's address (PA).
+            const eventCard = ev.target.closest('.explorer-card--event[data-pa-id]');
+            if (eventCard) {
+                const paId = eventCard.getAttribute('data-pa-id');
+                const tenantId = eventCard.getAttribute('data-tenant-id');
+                if (paId) focusOnPA(paId, tenantId);
             }
         });
 
@@ -632,8 +643,11 @@
         const href = domain ? 'https://' + domain + '/' : '#';
         const isCurrent = lieu.tenant_id === config.currentTenantUuid;
 
-        const logo = lieu.logo_url
-            ? '<img src="' + escapeHtml(lieu.logo_url) + '" alt="" class="explorer-card-icon lieu" style="object-fit:contain;padding:4px;">'
+        // Logo en priorite, sinon image principale du lieu, sinon emoji.
+        // / Logo first, then venue main image, then emoji fallback.
+        const lieuImgSrc = lieu.logo_url || lieu.image_url || '';
+        const logo = lieuImgSrc
+            ? '<img src="' + escapeHtml(lieuImgSrc) + '" alt="" class="explorer-card-icon lieu" style="object-fit:contain;padding:4px;">'
             : '<div class="explorer-card-icon lieu">\u{1F3DB}</div>';
 
         const meta = lieu.locality
@@ -683,9 +697,12 @@
             const ev = events[i];
             const evHref = domain && ev.slug ? 'https://' + domain + '/event/' + ev.slug + '/' : '#';
             const dateLabel = ev.datetime_iso ? formatShortDate(ev.datetime_iso) : '';
+            const accIcon = ev.image_url
+                ? '<img src="' + escapeHtml(ev.image_url) + '" alt="" class="explorer-accordion-icon" style="width:28px;height:28px;border-radius:4px;object-fit:cover;">'
+                : '<span class="explorer-accordion-icon">\u{1F3B6}</span>';
             items += ''
                 + '<a class="explorer-accordion-item" href="' + escapeHtml(evHref) + '" target="_blank" rel="noopener">'
-                    + '<span class="explorer-accordion-icon">\u{1F3B6}</span>'
+                    + accIcon
                     + '<span class="explorer-accordion-name">' + escapeHtml(ev.name) + '</span>'
                     + (dateLabel ? '<span class="explorer-accordion-date">' + escapeHtml(dateLabel) + '</span>' : '')
                 + '</a>';
@@ -729,13 +746,20 @@
             tagsHtml += '</div>';
         }
 
+        // Vignette de l'event si dispo, sinon emoji note de musique.
+        // / Event thumbnail if available, otherwise music-note emoji.
+        const eventIcon = event.image_url
+            ? '<img src="' + escapeHtml(event.image_url) + '" alt="" class="explorer-card-icon event" style="object-fit:cover;">'
+            : '<div class="explorer-card-icon event">\u{1F3B6}</div>';
+
         return ''
             + '<div class="explorer-card explorer-card--event"'
             + ' data-event-uuid="' + escapeHtml(event.uuid || '') + '"'
             + ' data-tenant-id="' + tenantId + '"'
+            + ' data-pa-id="' + escapeHtml(event.pa_id || '') + '"'
             + ' data-type="event"'
             + ' data-testid="explorer-card-event">'
-                + '<div class="explorer-card-icon event">\u{1F3B6}</div>'
+                + eventIcon
                 + '<div class="explorer-card-body">'
                     + '<div class="explorer-card-header">'
                         + '<h3 class="explorer-card-title">'
@@ -957,8 +981,11 @@
         // Lien tenant (avec logo si dispo)
         // / Tenant link (with logo if available)
         if (point.tenant_domain) {
-            const logoImg = point.tenant_logo_url
-                ? '<img src="' + escapeHtml(point.tenant_logo_url) + '" alt="" class="explorer-popup-logo">'
+            // Logo en priorite, sinon image principale du lieu (coherent avec les cartes).
+            // / Logo first, otherwise venue main image (consistent with the cards).
+            const popupImgSrc = point.tenant_logo_url || point.tenant_image_url || '';
+            const logoImg = popupImgSrc
+                ? '<img src="' + escapeHtml(popupImgSrc) + '" alt="" class="explorer-popup-logo">'
                 : '';
             html += '<p class="explorer-popup-tenant">' + logoImg
                 + '<a href="' + escapeHtml(tenantHref) + '" target="_blank" rel="noopener">'
@@ -1047,16 +1074,46 @@
         }
     }
 
+    function focusOnPA(paId, tenantId) {
+        // Centre la carte sur une adresse precise (PA), utilise au clic d'une card event.
+        // Le marker peut ne pas exister (lieu sans coordonnees) : on sort proprement.
+        // / Center the map on a specific address (PA), used on event card click.
+        // The marker may not exist (addressless venue): bail out gracefully.
+        if (window.innerWidth < 992 && state.currentView === 'list') toggleView();
+        if (!state.mapInitialized) initMap();
+        const marker = state.markers[paId];
+        if (!marker) return;
+
+        state.map.setView(marker.getLatLng(), 15, { animate: true });
+
+        if (state.markerCluster && typeof state.markerCluster.once === 'function') {
+            let fallback = setTimeout(function () { marker.openPopup(); }, 500);
+            state.markerCluster.once('animationend', function () {
+                clearTimeout(fallback);
+                marker.openPopup();
+            });
+        } else {
+            setTimeout(function () { marker.openPopup(); }, 200);
+        }
+
+        if (tenantId) highlightPin(tenantId);
+    }
+
     function highlightPin(tenantId) {
-        const pin = document.querySelector('.explorer-pin[data-lieu-id="' + cssEscape(tenantId) + '"]');
-        if (!pin) return;
-        pin.classList.add('selected');
-        setTimeout(function () { pin.classList.remove('selected'); }, 3000);
+        // Les pins portent data-tenant-id (cf. addMarkers), pas data-lieu-id.
+        // Un lieu peut avoir plusieurs adresses : on surligne tous ses pins.
+        // / Pins carry data-tenant-id (cf. addMarkers), not data-lieu-id.
+        // A venue may have several addresses: highlight all its pins.
+        const pins = document.querySelectorAll('.explorer-pin[data-tenant-id="' + cssEscape(tenantId) + '"]');
+        pins.forEach(function (pin) {
+            pin.classList.add('selected');
+            setTimeout(function () { pin.classList.remove('selected'); }, 3000);
+        });
     }
 
     function highlightPinClass(tenantId, isOn) {
-        const pin = document.querySelector('.explorer-pin[data-lieu-id="' + cssEscape(tenantId) + '"]');
-        if (pin) pin.classList.toggle('selected', isOn);
+        const pins = document.querySelectorAll('.explorer-pin[data-tenant-id="' + cssEscape(tenantId) + '"]');
+        pins.forEach(function (pin) { pin.classList.toggle('selected', isOn); });
     }
 
     function cssEscape(value) {
@@ -1113,7 +1170,15 @@
     }
 
     function scrollToCard(tenantId) {
-        const card = document.querySelector('.explorer-card[data-lieu-id="' + cssEscape(tenantId) + '"][data-type="lieu"]');
+        // Mode "lieu" : carte lieu du tenant. Mode "event" : il n'y a pas de carte
+        // lieu, on retombe sur la 1ere carte event du tenant.
+        // / "lieu" mode: venue card. "event" mode: no venue card, fall back to the
+        // tenant's first event card.
+        const tid = cssEscape(tenantId);
+        let card = document.querySelector('.explorer-card[data-lieu-id="' + tid + '"][data-type="lieu"]');
+        if (!card) {
+            card = document.querySelector('.explorer-card--event[data-tenant-id="' + tid + '"]');
+        }
         if (!card) return;
         card.scrollIntoView({ behavior: 'smooth', block: 'center' });
         card.setAttribute('data-highlighted', 'true');

@@ -219,6 +219,14 @@ def get_sidebar_navigation(request):
                 "collapsible": True,
                 "items": [
                     {
+                        "title": _("Options"),
+                        "icon": "tune",
+                        "link": reverse_lazy(
+                            "staff_admin:BaseBillet_federationconfiguration_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                    {
                         "title": _("Espaces"),
                         "icon": "linked_services",
                         "link": reverse_lazy(

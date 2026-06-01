@@ -1635,7 +1635,7 @@ class FederationViewset(viewsets.ViewSet):
         (SEOCache via build_explorer_data_for_tenants) by filtering
         on FederatedPlace UUIDs + the current tenant.
         """
-        from seo.services import build_explorer_data_for_tenants
+        from seo.services import build_explorer_data_for_tenants, appliquer_options_federation
         from seo.models import SEOCache
         from seo.views_common import (
             get_seo_cache,
@@ -1646,6 +1646,11 @@ class FederationViewset(viewsets.ViewSet):
 
         config = Configuration.get_solo()
         current_uuid = str(connection.tenant.uuid)
+
+        # Options d'affichage du tenant (singleton FederationConfiguration).
+        # / Tenant display options (FederationConfiguration singleton).
+        from BaseBillet.models import FederationConfiguration
+        config_federation = FederationConfiguration.get_solo()
 
         # Arretes SORTANTES : les FederatedPlace dans le schema du tenant courant.
         # = "les lieux avec lesquels JE federe (declaration de mon cote)".
@@ -1662,10 +1667,14 @@ class FederationViewset(viewsets.ViewSet):
         # / INCOMING edges: FederatedPlace from OTHER tenants pointing to me.
         # Pre-computed by refresh_seo_cache Celery task (cross-schema UNION ALL).
         # = "places that federate WITH me (their declaration)".
-        incoming_data = get_seo_cache(SEOCache.FEDERATION_INCOMING) or {}
-        incoming_uuids = set(
-            incoming_data.get("by_tenant", {}).get(current_uuid, [])
-        )
+        # Seulement si l'option du tenant est activee (afficher_lieux_entrants).
+        # / Only if the tenant option is enabled (afficher_lieux_entrants).
+        incoming_uuids = set()
+        if config_federation.afficher_lieux_entrants:
+            incoming_data = get_seo_cache(SEOCache.FEDERATION_INCOMING) or {}
+            incoming_uuids = set(
+                incoming_data.get("by_tenant", {}).get(current_uuid, [])
+            )
 
         # Union des deux directions = mes voisins directs dans le graphe de federation.
         # / Union of both directions = my direct neighbors in the federation graph.
@@ -1677,6 +1686,15 @@ class FederationViewset(viewsets.ViewSet):
         all_uuids = other_federated_uuids | {current_uuid}
         sorted_uuids = sorted(all_uuids)
         explorer_data = build_explorer_data_for_tenants(sorted_uuids)
+
+        # Filtre "event a venir" + tri des lieux selon la config du tenant.
+        # / "Upcoming event" filter + venue sort according to tenant config.
+        explorer_data = appliquer_options_federation(
+            explorer_data,
+            afficher_seulement_avec_event=config_federation.afficher_seulement_lieux_avec_event,
+            tri_des_lieux=config_federation.tri_des_lieux,
+            afficher_lieux_sans_adresse=config_federation.afficher_lieux_sans_adresse,
+        )
 
         # Etat vide : a-t-on AUTRE chose que le tenant courant sur la carte ?
         # / Empty state: do we have something OTHER than the current tenant on the map?
@@ -1758,6 +1776,7 @@ class FederationViewset(viewsets.ViewSet):
             'federation_json_ld': federation_json_ld,
             'breadcrumb_json_ld': breadcrumb_json_ld,
             'page_title': _('Réseau local'),
+            'texte_introduction': config_federation.texte_introduction,
         })
 
         template_path = get_skin_template(config, "views/federation/explorer.html")
