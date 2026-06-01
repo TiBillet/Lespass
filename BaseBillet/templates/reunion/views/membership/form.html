@@ -576,11 +576,12 @@
         </script>
 
         {% if newsletter_active %}
-            <!-- newsletter opt-out -->
+            <!-- newsletter opt-in -->
             <div class="form-check form-switch mb-3">
                 <input class="form-check-input" type="checkbox" role="switch" id="newsletter" name="newsletter" data-testid="membership-newsletter">
-                <label class="form-check-label"
-                       for="newsletter">{% translate "I do not want to receive the newsletter." %}</label>
+                <label class="form-check-label" for="newsletter">
+                    {% blocktranslate with structure=config.organisation %}Je veux recevoir les nouvelles de {{ structure }}{% endblocktranslate %}
+                </label>
             </div>
         {% endif %}
 

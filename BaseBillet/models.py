@@ -3100,7 +3100,7 @@ class Membership(models.Model):
     pseudo = models.CharField(max_length=50, null=True, blank=True)
 
     newsletter = models.BooleanField(
-        default=True, verbose_name=_("I want to receive the collective's newsletter."))
+        default=False, verbose_name=_("I want to receive the collective's newsletter."))
     postal_code = models.IntegerField(null=True, blank=True)
     birth_date = models.DateField(null=True, blank=True)
     phone = models.CharField(max_length=20, null=True, blank=True)

@@ -685,7 +685,10 @@ class MembershipValidator(serializers.Serializer):
     options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True,
                                                  allow_null=True, required=False)
 
-    newsletter = serializers.BooleanField()
+    # Opt-in newsletter : non obligatoire. Absent du POST (case masquee ou non cochee)
+    # = False. La case n'apparait que si Brevo/Ghost est configure (newsletter_active).
+    # / Newsletter opt-in: optional. Absent = False. Shown only if Brevo/Ghost configured.
+    newsletter = serializers.BooleanField(required=False, default=False)
 
     def to_internal_value(self, data):
         """
@@ -827,8 +830,9 @@ class MembershipValidator(serializers.Serializer):
             status=Membership.WAITING_PAYMENT,
             first_name=attrs['firstname'],
             last_name=attrs['lastname'],
-            # Note: newsletter is an opt-out in the form / opt-out dans le formulaire
-            newsletter=not attrs.get('newsletter'), 
+            # Newsletter en opt-in explicite : True uniquement si la personne coche la case.
+            # / Explicit opt-in: True only if the person ticks the box.
+            newsletter=attrs.get('newsletter', False),
         )
 
         # Gestion de la validation manuelle / Manual validation handling

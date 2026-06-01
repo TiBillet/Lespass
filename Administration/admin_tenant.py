@@ -1358,6 +1358,7 @@ class MembershipChangeForm(ModelForm):
             'first_name',
             'deadline',
             'commentaire',
+            'newsletter',
         )
 
 
