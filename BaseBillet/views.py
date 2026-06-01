@@ -1103,7 +1103,12 @@ class MyAccount(viewsets.ViewSet):
         # On peut alors conditionner simplement sur le if is_valid :)
         memberships_dict = {True: [], False: []}
 
-        for tenant in user.client_achat.all():
+        # On exclut le schema public : il ne contient pas les tables des TENANT_APPS
+        # (BaseBillet_membership n'y existe pas). Si le Client public se retrouve dans
+        # client_achat (cas du root/staff), l'iterer ferait planter toute la page
+        # avec "relation BaseBillet_membership does not exist".
+        # / Skip the public schema: it has no TENANT_APPS tables.
+        for tenant in user.client_achat.exclude(schema_name='public'):
             with tenant_context(tenant):
                 memberships = Membership.objects.filter(
                     last_contribution__isnull=False,
