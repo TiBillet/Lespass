@@ -144,7 +144,7 @@ function manageKey(event) {
 			console.log('params =', params.toString())
 			htmx.ajax('GET', '/laboutik/paiement/vider_carte/overlay/?' + params.toString(), {
 				target: '#messages',
-				swap: 'innerHTML'
+				swap: 'outerHTML'
 			})
 		}
 	}

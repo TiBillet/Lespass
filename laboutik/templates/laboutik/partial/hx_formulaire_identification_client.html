@@ -18,71 +18,66 @@ FLUX :
 3. VALIDER → JS injecte dans #addition-form → POST identifier_client
 4. identifier_client() recoit email + prenom + nom + repid-* + uuid_pv
 -->
-
-<div class="BF-col" data-testid="client-form" aria-live="polite">
-  <h1 class="adhesion-form-title adhesion-form-stagger" style="--ordre: 1">{% translate "Identifier le client" %}</h1>
-
-  {# --- Formulaire local (pas HTMX — la soumission passe par #addition-form) --- #}
-  <div class="adhesion-form-container adhesion-form-stagger" style="--ordre: 2"
-    data-testid="client-form-fields">
-
-    {# --- Email --- #}
-    <div class="adhesion-field">
-      <input type="email" id="client-email"
-        placeholder=" "
-        autofocus
-        class="adhesion-input"
-        inputmode="email"
-        autocomplete="email"
-        value="{{ email|default:'' }}"
-        aria-label="{% translate 'Email du client' %}"
-        data-testid="client-input-email" />
-      <label for="client-email" class="adhesion-label">{% translate "Email" %} *</label>
-    </div>
-
-    {# --- Prenom + Nom --- #}
-    <div class="adhesion-form-row">
-      <div class="adhesion-field adhesion-field-half">
-        <input type="text" id="client-prenom"
-          placeholder=" "
-          class="adhesion-input"
-          autocomplete="given-name"
-          value="{{ prenom|default:'' }}"
-          aria-label="{% translate 'Prenom' %}"
-          data-testid="client-input-prenom" />
-        <label for="client-prenom" class="adhesion-label">{% translate "Prenom" %} *</label>
+<div id="messages">
+  <div class="BF-col" data-testid="client-form" aria-live="polite">
+    <h1 class="adhesion-form-title adhesion-form-stagger" style="--ordre: 1">{% translate "Identifier le client" %}</h1>
+    {# --- Formulaire local (pas HTMX — la soumission passe par #addition-form) --- #}
+    <div class="adhesion-form-container adhesion-form-stagger"
+         style="--ordre: 2"
+         data-testid="client-form-fields">
+      {# --- Email --- #}
+      <div class="adhesion-field">
+        <input type="email"
+               id="client-email"
+               placeholder=" "
+               autofocus
+               class="adhesion-input"
+               inputmode="email"
+               autocomplete="email"
+               value="{{ email|default:'' }}"
+               aria-label="{% translate 'Email du client' %}"
+               data-testid="client-input-email" />
+        <label for="client-email" class="adhesion-label">{% translate "Email" %} *</label>
       </div>
-      <div class="adhesion-field adhesion-field-half">
-        <input type="text" id="client-nom"
-          placeholder=" "
-          class="adhesion-input"
-          autocomplete="family-name"
-          value="{{ nom|default:'' }}"
-          aria-label="{% translate 'Nom' %}"
-          data-testid="client-input-nom" />
-        <label for="client-nom" class="adhesion-label">{% translate "Nom" %} *</label>
+      {# --- Prenom + Nom --- #}
+      <div class="adhesion-form-row">
+        <div class="adhesion-field adhesion-field-half">
+          <input type="text"
+                 id="client-prenom"
+                 placeholder=" "
+                 class="adhesion-input"
+                 autocomplete="given-name"
+                 value="{{ prenom|default:'' }}"
+                 aria-label="{% translate 'Prenom' %}"
+                 data-testid="client-input-prenom" />
+          <label for="client-prenom" class="adhesion-label">{% translate "Prenom" %} *</label>
+        </div>
+        <div class="adhesion-field adhesion-field-half">
+          <input type="text"
+                 id="client-nom"
+                 placeholder=" "
+                 class="adhesion-input"
+                 autocomplete="family-name"
+                 value="{{ nom|default:'' }}"
+                 aria-label="{% translate 'Nom' %}"
+                 data-testid="client-input-nom" />
+          <label for="client-nom" class="adhesion-label">{% translate "Nom" %} *</label>
+        </div>
       </div>
+      {# --- Erreur serveur (si retour avec erreur) --- #}
+      {% if erreur %}<div class="adhesion-error" role="alert" data-testid="client-form-error">{{ erreur }}</div>{% endif %}
+      {# --- Bouton VALIDER --- #}
+      <button type="button"
+              class="adhesion-submit-btn"
+              data-testid="client-btn-valider"
+              onclick="soumettreIdentificationEmail()">
+        <i class="fas fa-check" aria-hidden="true"></i>
+        {% translate "VALIDER" %}
+      </button>
     </div>
-
-    {# --- Erreur serveur (si retour avec erreur) --- #}
-    {% if erreur %}
-    <div class="adhesion-error" role="alert" data-testid="client-form-error">
-      {{ erreur }}
-    </div>
-    {% endif %}
-
-    {# --- Bouton VALIDER --- #}
-    <button type="button" class="adhesion-submit-btn" data-testid="client-btn-valider"
-      onclick="soumettreIdentificationEmail()">
-      <i class="fas fa-check" aria-hidden="true"></i>
-      {% translate "VALIDER" %}
-    </button>
-  </div>
-
-  {# --- Bouton retour --- #}
-  <c-bt.return />
-
-  <script>
+    {# --- Bouton retour --- #}
+    <c-bt.return />
+    <script>
     /**
      * Valide les champs du formulaire, les injecte dans #addition-form,
      * puis soumet vers identifier_client.
@@ -156,6 +151,6 @@ FLUX :
         data: { actionType: 'submit' }
       });
     }
-  </script>
-
+    </script>
+  </div>
 </div>

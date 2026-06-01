@@ -37,7 +37,7 @@
               action="{% url 'laboutik-paiement-vider_carte' %}"
               hx-post="{% url 'laboutik-paiement-vider_carte' %}"
               hx-target="#messages"
-              hx-swap="innerHTML"
+              hx-swap="outerHTML"
               data-testid="vider-carte-confirm-form">
             {% csrf_token %}
             <input type="hidden" name="tag_id" value="{{ tag_id }}">

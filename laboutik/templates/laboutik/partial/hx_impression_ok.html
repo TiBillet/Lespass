@@ -6,8 +6,12 @@ Feedback apres impression du recu de remboursement.
 
 LOCALISATION : laboutik/templates/laboutik/partial/hx_impression_ok.html
 -->
-<div class="payment-msg-discret" style="color: #16A34A; margin-top: 0.5rem;"
-     data-testid="impression-ok-toast">
-  <i class="fas fa-check" aria-hidden="true"></i>
-  {% translate "Reçu imprimé" %}
+<div id="messages">
+  <div class="payment-msg-discret"
+       style="color: #16A34A;
+              margin-top: 0.5rem"
+       data-testid="impression-ok-toast">
+    <i class="fas fa-check" aria-hidden="true"></i>
+    {% translate "Reçu imprimé" %}
+  </div>
 </div>

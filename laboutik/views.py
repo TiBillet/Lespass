@@ -1007,7 +1007,6 @@ def _render_erreur_toast(request, msg):
     contexte = {
         "msg_type": "warning",
         "msg_content": str(msg),
-        "selector_bt_retour": "#messages",
     }
     return render(request, "laboutik/partial/hx_messages.html", contexte)
 
@@ -7499,13 +7498,24 @@ class PaiementViewSet(viewsets.ViewSet):
         uuid_pv = request.POST.get("uuid_pv", "")
 
         if not transaction_uuids or not uuid_pv:
-            return _render_erreur_toast(request, _("Parametres manquants."))
+            return render(
+                request,
+                "laboutik/partial/hx_print_feedback.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Parametres manquants."),
+                },
+            )
 
         pv = PointDeVente.objects.select_related("printer").filter(uuid=uuid_pv).first()
         if pv is None or pv.printer is None or not pv.printer.active:
-            return _render_erreur_toast(
+            return render(
                 request,
-                _("Pas d'imprimante configuree sur ce PV."),
+                "laboutik/partial/hx_print_feedback.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Pas d'imprimante configuree sur ce PV."),
+                },
             )
 
         transactions = Transaction.objects.filter(
@@ -7521,7 +7531,14 @@ class PaiementViewSet(viewsets.ViewSet):
             recu_data,
             connection.schema_name,
         )
-        return render(request, "laboutik/partial/hx_impression_ok.html")
+        return render(
+            request,
+                "laboutik/partial/hx_print_feedback.html",
+                {
+                    "msg_type": "success",
+                    "msg_content": _("Reçu imprimé"),
+                },
+            )
 
     # ------------------------------------------------------------------ #
     #  Impression ticket de vente (bouton sur l'ecran de succes)           #
@@ -7559,11 +7576,10 @@ class PaiementViewSet(viewsets.ViewSet):
         if not uuid_transaction_str or not uuid_pv:
             return render(
                 request,
-                "laboutik/partial/hx_messages.html",
+                "laboutik/partial/hx_print_feedback.html",
                 {
                     "msg_type": "warning",
                     "msg_content": _("Donnees manquantes pour l'impression"),
-                    "selector_bt_retour": "#print-feedback",
                 },
             )
 
@@ -7576,24 +7592,22 @@ class PaiementViewSet(viewsets.ViewSet):
         except (PointDeVente.DoesNotExist, ValueError):
             return render(
                 request,
-                "laboutik/partial/hx_messages.html",
+                "laboutik/partial/hx_print_feedback.html",
                 {
                     "msg_type": "warning",
                     "msg_content": _("Point de vente introuvable"),
-                    "selector_bt_retour": "#print-feedback",
                 },
             )
 
         if not point_de_vente.printer or not point_de_vente.printer.active:
             return render(
                 request,
-                "laboutik/partial/hx_messages.html",
+                "laboutik/partial/hx_print_feedback.html",
                 {
                     "msg_type": "warning",
                     "msg_content": _(
                         "Aucune imprimante configuree pour ce point de vente"
                     ),
-                    "selector_bt_retour": "#print-feedback",
                 },
             )
 
@@ -7606,11 +7620,10 @@ class PaiementViewSet(viewsets.ViewSet):
         if not lignes_du_paiement.exists():
             return render(
                 request,
-                "laboutik/partial/hx_messages.html",
+                "laboutik/partial/hx_print_feedback.html",
                 {
                     "msg_type": "warning",
                     "msg_content": _("Aucune ligne trouvee pour cette transaction"),
-                    "selector_bt_retour": "#print-feedback",
                 },
             )
 
@@ -7651,7 +7664,15 @@ class PaiementViewSet(viewsets.ViewSet):
             connection.schema_name,
         )
 
-        return render(request, "laboutik/partial/hx_print_confirmation.html")
+        # return render(request, "laboutik/partial/hx_print_confirmation.html")
+        return render(
+                request,
+                "laboutik/partial/hx_print_feedback.html",
+                {
+                    "msg_type": "success",
+                    "msg_content": _("Impression lancée"),
+                },
+            )
 
     # ----------------------------------------------------------------------- #
     #  Correction de moyen de paiement (conformite LNE exigence 4)             #

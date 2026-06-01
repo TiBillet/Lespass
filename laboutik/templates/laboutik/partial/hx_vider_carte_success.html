@@ -2,69 +2,54 @@
 {# Ecran plein ecran de succes apres remboursement carte. #}
 {# Fond vert success : soulagement, coherent avec paiement-succes. #}
 {# Full-screen success after card refund. Green success bg, consistent with paiement-succes. #}
-
-<div class="BF-col"
-     data-testid="vider-carte-success"
-     aria-live="polite">
-
-    <i class="fas fa-check-circle success-icon" aria-hidden="true"></i>
-
-    <div class="fi-title1">
-        {% translate "Remboursement effectué" %}
-    </div>
-
-    {# Montant rembourse en grand #}
-    {# / Refunded amount, large display #}
-    <div class="give-back-box" data-testid="vider-carte-success-amount">
-        <i class="fas fa-hand-holding-usd" aria-hidden="true"></i>
-        <strong>{{ total_centimes|cents_to_euros }}</strong>
-    </div>
-
-    {# Detail par asset #}
-    {# / Per-asset detail #}
-    {% if total_tlf_centimes > 0 %}
-    <div class="payment-msg-discret">
-        {% translate "Monnaie locale" %} : {{ total_tlf_centimes|cents_to_euros }}
-    </div>
-    {% endif %}
-    {% if total_fed_centimes > 0 %}
-    <div class="payment-msg-discret">
-        {% translate "Fiduciaire fédérée" %} : {{ total_fed_centimes|cents_to_euros }}
-    </div>
-    {% endif %}
-
-    {% if vider_carte %}
-    <div class="fi-msg1" role="status" aria-live="polite">
-        <i class="fas fa-info-circle" aria-hidden="true"></i>
-        {% translate "La carte a été réinitialisée." %}
-    </div>
-    {% endif %}
-
-    {# Actions : Imprimer (HTMX) + Retour (c-bt.return) cote a cote #}
-    {# / Actions: Print (HTMX) + Return (c-bt.return) side by side #}
-    <div class="vider-carte-actions-row">
-        <form style="margin: 0;"
-              hx-post="{% url 'laboutik-paiement-vider_carte_imprimer_recu' %}"
-              hx-target="#messages"
-              hx-swap="innerHTML">
-            {% csrf_token %}
-            {% for tx_uuid in transaction_uuids %}
-            <input type="hidden" name="transaction_uuids" value="{{ tx_uuid }}">
-            {% endfor %}
-            <input type="hidden" name="uuid_pv" value="{{ uuid_pv }}">
-            <button type="submit"
-                    class="bt-basic-container bt-vider-imprimer"
-                    data-testid="vider-carte-btn-imprimer"
-                    data-loading-disable>
-                <div class="bt-basic-icon">
-                    <i class="fas fa-print" aria-hidden="true"></i>
-                </div>
-                <div class="bt-basic-text">
-                    <div>{% translate "IMPRIMER" %}</div>
-                </div>
-            </button>
-        </form>
-
-        <c-bt.return />
+<div id="messages">
+    <div class="BF-col" data-testid="vider-carte-success" aria-live="polite">
+        <i class="fas fa-check-circle success-icon" aria-hidden="true"></i>
+        <div class="fi-title1">{% translate "Remboursement effectué" %}</div>
+        {# Montant rembourse en grand #}
+        {# / Refunded amount, large display #}
+        <div class="give-back-box" data-testid="vider-carte-success-amount">
+            <i class="fas fa-hand-holding-usd" aria-hidden="true"></i>
+            <strong>{{ total_centimes|cents_to_euros }}</strong>
+        </div>
+        {# Detail par asset #}
+        {# / Per-asset detail #}
+        {% if total_tlf_centimes > 0 %}
+            <div class="payment-msg-discret">{% translate "Monnaie locale" %} : {{ total_tlf_centimes|cents_to_euros }}</div>
+        {% endif %}
+        {% if total_fed_centimes > 0 %}
+            <div class="payment-msg-discret">{% translate "Fiduciaire fédérée" %} : {{ total_fed_centimes|cents_to_euros }}</div>
+        {% endif %}
+        {% if vider_carte %}
+            <div class="fi-msg1" role="status" aria-live="polite">
+                <i class="fas fa-info-circle" aria-hidden="true"></i>
+                {% translate "La carte a été réinitialisée." %}
+            </div>
+        {% endif %}
+        {# Actions : Imprimer (HTMX) + Retour (c-bt.return) cote a cote #}
+        {# / Actions: Print (HTMX) + Return (c-bt.return) side by side #}
+        <div class="vider-carte-actions-row">
+            <form style="margin: 0"
+                  hx-post="{% url 'laboutik-paiement-vider_carte_imprimer_recu' %}"
+                  hx-target="#print-feedback"
+                  hx-swap="innerHTML">
+                {% csrf_token %}
+                {% for tx_uuid in transaction_uuids %}<input type="hidden" name="transaction_uuids" value="{{ tx_uuid }}">{% endfor %}
+                <input type="hidden" name="uuid_pv" value="{{ uuid_pv }}">
+                <button type="submit"
+                        class="bt-basic-container bt-vider-imprimer"
+                        data-testid="vider-carte-btn-imprimer"
+                        data-loading-disable>
+                    <div class="bt-basic-icon">
+                        <i class="fas fa-print" aria-hidden="true"></i>
+                    </div>
+                    <div class="bt-basic-text">
+                        <div>{% translate "IMPRIMER" %}</div>
+                    </div>
+                </button>
+            </form>
+            <c-bt.return />
+        </div>
+        <div id="print-feedback" aria-live="polite"></div>
     </div>
 </div>
