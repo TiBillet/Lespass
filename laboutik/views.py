@@ -3224,6 +3224,8 @@ def _rendre_vue_ventes(request, template_partiel, context):
         # Navigation complete : page avec header + wrapper
         # / Full navigation: page with header + wrapper
         context["vue_partiel"] = template_partiel
+        type_app = request.GET.get("type_app", "unknown")
+        context["type_app"] = type_app
         return render(request, "laboutik/views/ventes.html", context)
 
 

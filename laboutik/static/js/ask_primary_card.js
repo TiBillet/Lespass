@@ -48,7 +48,7 @@ async function readConfFile() {
  * @param {string} typeApp - cordova/pi/desktop 
  */
 async function loadConfigFile(typeApp) {
-  // console.log('-> loadConfigFile - typeApp =', typeApp)
+  console.log('-> loadConfigFile - typeApp =', typeApp)
   let configFile = null
   if (typeApp !== 'cordova') {
     configFile = await readConfFile()
@@ -56,8 +56,8 @@ async function loadConfigFile(typeApp) {
     configFile = await cordovaReadConfFile()
   }
   state['configFile'] = configFile
-  // stockage configFile
-  localStorage.setItem("configFile", JSON.stringify(configFile));
+  // set type application
+  state['typeApp'] = state.configFile.type_app
 }
 
 /**

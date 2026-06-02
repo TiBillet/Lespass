@@ -73,7 +73,7 @@
 			<div class="menu-burger-item-content">{% translate "TABLES" %}</div>
 		</div>
 		<div class="menu-burger-item menu-burger-item-content"
-			hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?uuid_pv={{ pv.id }}&tag_id_cm={{ card.tag_id }}"
+			hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?uuid_pv={{ pv.id }}&tag_id_cm={{ card.tag_id }}&type_app={{type_app}}"
 			hx-target="body"
 			hx-swap="innerHTML"
 			hx-push-url="true"
