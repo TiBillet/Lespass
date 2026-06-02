@@ -120,31 +120,9 @@ function manageKey(event) {
 			const uuidPv = form.querySelector('input[name="uuid_pv"]').value
 			const tagIdCm = form.querySelector('input[name="tag_id_cm"]').value
 			const params = new URLSearchParams({ uuid_pv: uuidPv, tag_id_cm: tagIdCm })
-			console.clear()
-			console.log('uuidPv =', uuidPv)
-			console.log('tagIdCm =', tagIdCm)
-			console.log('params =', params.toString())
 			htmx.ajax('GET', '/laboutik/paiement/vider_carte/overlay/?' + params.toString(), {
 				target: '#messages',
 				swap: 'innerHTML'
-			})
-		}
-
-		// remboursement carte
-		if (methodeCaisse === 'VC') {
-			// Recupere uuid_pv et tag_id_cm depuis #addition-form.
-			// Retrieves uuid_pv and tag_id_cm from #addition-form.
-			const form = document.querySelector('#addition-form')
-			const uuidPv = form.querySelector('input[name="uuid_pv"]').value
-			const tagIdCm = form.querySelector('input[name="tag_id_cm"]').value
-			const params = new URLSearchParams({ uuid_pv: uuidPv, tag_id_cm: tagIdCm })
-			console.clear()
-			console.log('uuidPv =', uuidPv)
-			console.log('tagIdCm =', tagIdCm)
-			console.log('params =', params.toString())
-			htmx.ajax('GET', '/laboutik/paiement/vider_carte/overlay/?' + params.toString(), {
-				target: '#messages',
-				swap: 'outerHTML'
 			})
 		}
 	}
