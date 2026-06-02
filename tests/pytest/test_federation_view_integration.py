@@ -66,6 +66,9 @@ def _fake_config(**overrides):
         afficher_lieux_sans_adresse=True,
         tri_des_lieux="alpha",
         texte_introduction="",
+        # M2M tags_federation : la vue appelle .all() -> on simule un manager vide.
+        # / tags_federation M2M: the view calls .all() -> simulate an empty manager.
+        tags_federation=SimpleNamespace(all=lambda: []),
     )
     valeurs.update(overrides)
     return SimpleNamespace(**valeurs)

@@ -247,9 +247,14 @@ def get_events_for_tenants(tenant_schemas):
         # to build thumbnail URLs in tasks.py.
         # `postal_address_id` est la FK vers PostalAddress (sert a AGGREGATE_POINTS).
         # / `postal_address_id` is the FK to PostalAddress (used for AGGREGATE_POINTS).
+        # On recupere aussi `private` : un event prive ("ne pas montrer sur les
+        # agendas partages") ne doit pas fuiter via la carto reseau ni via la
+        # federation automatique par tags.
+        # / Also fetch `private`: a private event must not leak through the
+        # network map nor through tag-based auto federation.
         parts.append(
             f"SELECT %s AS tenant_id, uuid::text AS uuid, name, slug, short_description, "
-            f"datetime, end_datetime, img, postal_address_id "
+            f"datetime, end_datetime, img, postal_address_id, private "
             f'FROM "{schema_name}"."BaseBillet_event" '
             f"WHERE published = true AND datetime >= %s"
         )
@@ -272,6 +277,7 @@ def get_events_for_tenants(tenant_schemas):
                     "end_datetime": row[6].isoformat() if row[6] else None,
                     "img": row[7] or "",
                     "postal_address_id": row[8],
+                    "private": bool(row[9]),
                 }
             )
 
@@ -523,6 +529,13 @@ def build_aggregate_points(tenant_schemas, configs_by_tenant, events_by_tenant):
         # / Index events by pa_id (1 event lives on 1 PA)
         events_par_pa = {}
         for event in events_du_tenant:
+            # Veto private : un event "non federable" n'apparait jamais sur la
+            # carto reseau (qui est un agenda partage public). Filtre applique
+            # ICI -> vaut pour TOUS les lieux (corrige le trou historique).
+            # / private veto: a non-federable event never shows on the public
+            # network map. Filtered HERE -> applies to ALL venues.
+            if event.get("private"):
+                continue
             pa_id = event.get("postal_address_id")
             if pa_id is None:
                 continue
@@ -643,6 +656,56 @@ def build_explorer_data():
         | {l.get("tenant_id") for l in lieux_data.get("lieux", []) if l.get("tenant_id")}
     )
     return build_explorer_data_for_tenants(tenant_uuids)
+
+
+# ---------------------------------------------------------------------------
+# Federation automatique par tags / Tag-based auto federation
+# ---------------------------------------------------------------------------
+
+
+def get_tenant_uuids_with_event_tags(tag_slugs):
+    """
+    Retourne l'ensemble des tenant_uuid ayant au moins un evenement futur
+    PUBLIC (private=False) portant un des tags donnes. Lecture 100% cache
+    (AGGREGATE_EVENTS), zero requete cross-schema.
+    / Returns the set of tenant_uuid having at least one future PUBLIC
+    (private=False) event carrying one of the given tags. 100% cache read
+    (AGGREGATE_EVENTS), zero cross-schema query.
+
+    LOCALISATION : seo/services.py
+
+    Sert a la federation automatique par tags (FederationConfiguration.tags_federation) :
+    le tenant s'abonne a des slugs de tags et "recoit" les events de TOUT le reseau
+    qui les portent, en plus de sa federation habituelle (FederatedPlace).
+    Le matching se fait par SLUG (meme convention que tag_filter / tag_exclude).
+    / Used by tag-based auto federation: the tenant subscribes to tag slugs and
+    receives matching events from the WHOLE network. Matching is slug-based.
+
+    Parametres / Parameters:
+        tag_slugs: iterable de slugs (str). Vide -> set vide (federation auto inactive).
+    Retourne / Returns: set[str] de tenant_uuid.
+    """
+    if not tag_slugs:
+        return set()
+
+    from seo.models import SEOCache
+    from seo.views_common import get_seo_cache
+
+    slugs_voulus = set(tag_slugs)
+    events_data = get_seo_cache(SEOCache.AGGREGATE_EVENTS) or {}
+
+    tenant_uuids = set()
+    for event in events_data.get("events", []):
+        # Veto private : on ignore les events non federables.
+        # / private veto: skip non-federable events.
+        if event.get("private"):
+            continue
+        slugs_de_l_event = {tag.get("slug") for tag in event.get("tags", [])}
+        if slugs_de_l_event & slugs_voulus:
+            tenant_uuids.add(event.get("tenant_id"))
+
+    tenant_uuids.discard(None)
+    return tenant_uuids
 
 
 # ---------------------------------------------------------------------------

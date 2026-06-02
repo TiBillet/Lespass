@@ -123,6 +123,31 @@ Variables attendues :
       data-testid="wizard-place-form" class="vstack gap-3">
     {% csrf_token %}
 
+    {# Email du proposeur : affiche UNIQUEMENT pour un visiteur anonyme. #}
+    {# Place HORS des blocs de mode (sinon le JS du toggle le desactiverait #}
+    {# et il ne serait pas poste). Obligatoire cote serveur (serializer). #}
+    {# / Proposer email: shown ONLY for anonymous visitors. Kept OUTSIDE the #}
+    {# mode blocks (otherwise the toggle JS would disable it and it wouldn't #}
+    {# be POSTed). Required server-side (serializer). #}
+    {% if demander_email %}
+    <div class="mb-1" data-testid="wizard-place-email-block">
+        <label for="email_proposeur" class="form-label">
+            {% translate "Votre adresse e-mail" %} <span class="text-danger">*</span>
+        </label>
+        <input type="email" id="email_proposeur" name="email_proposeur"
+               class="form-control form-control-lg"
+               value="{{ initial.email_proposeur|default:'' }}"
+               required autocomplete="email"
+               placeholder="{% translate 'vous@exemple.org' %}"
+               aria-describedby="email_proposeur_help"
+               data-testid="wizard-place-email">
+        <div id="email_proposeur_help" class="form-text">
+            <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+            {% translate "Nécessaire pour suivre votre proposition. Vous pourrez confirmer votre compte plus tard." %}
+        </div>
+    </div>
+    {% endif %}
+
     <div class="wizard-mode-toggle">
         {# Toggle pleine largeur : `btn-group w-100` repartit les 2 boutons. #}
         {# / Full-width toggle: `btn-group w-100` splits the 2 buttons. #}

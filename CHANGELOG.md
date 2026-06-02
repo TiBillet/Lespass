@@ -1,5 +1,81 @@
 # Changelog / Journal des modifications
 
+## Redirection des anciens liens de la doc Docusaurus v2 → doc v3 / Redirect old Docusaurus v2 docs links to v3
+
+**Date :** 2026-06-02
+**Migration :** Non
+
+**Quoi / What :** l'ancienne documentation (Docusaurus v2) était servie sur `tibillet.org`
+avec des chemins `/docs/…`, `/fr/…`, `/en/…`, `/roadmap/`, `/search/`, `/cgucgv/`. Ces chemins
+n'existent plus dans Lespass : les vieux liens (indexés, partagés) tombaient en 404.
+`CanonicalDomainRedirectMiddleware` les redirige désormais (302) vers la nouvelle doc
+(`documentation_v3` sur `tibillet.github.io`).
+
+**Pourquoi / Why :** le middleware canonique ne faisait que `tibillet.org → tibillet.coop` en
+gardant le chemin → le 404 était simplement déplacé sur `.coop`, jamais corrigé. On rattrape
+maintenant les anciens chemins de doc avant la redirection canonique.
+
+**Comportement / Behavior :**
+- Page de démonstration (`/docs/presentation/demonstration/` et variante `/fr/…`) → page démo
+  précise de la doc v3.
+- CGU/CGV (`/cgucgv/`, `/fr/cgucgv/`) → page CGU/CGV de la doc v3.
+- Tout autre `/docs/…`, `/fr/…`, `/en/…`, `/roadmap/…`, `/search/…` → racine de la doc v3.
+- **ROOT uniquement** (`schema_name == "public"`) : zéro impact sur les sous-domaines tenants.
+- **302 temporaire** (cohérent avec le canonical, table pas encore figée). GET/HEAD seulement.
+- Pas d'`i18n_patterns` dans Lespass → `/fr` et `/en` sont des préfixes libres (aucune collision
+  vérifiée avec `seo.urls`, `onboard.urls`, `BaseBillet.urls`).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `Customers/middleware.py` | + fonction pure `url_doc_v3_pour_chemin_herite()` + méthode `_redirection_doc_heritee()` appelée avant la redirection canonique |
+| `tests/pytest/test_middleware_doc_redirect.py` | Nouveau : 26 cas (démo, CGU, préfixes hérités, routes Lespass non touchées) |
+
+## Agenda participatif → Fédération + récolte e-mail du proposeur anonyme
+
+**Date :** 2026-06-02
+**Migration :** Oui (`BaseBillet 0217` : déplace 3 champs `Configuration` → `FederationConfiguration`)
+
+**Quoi / What :** les réglages de l'agenda participatif quittent `Configuration` (et le
+dashboard des modules) pour vivre sur **`FederationConfiguration`** (admin « Options de
+fédération ») :
+- `module_agenda_participatif` (activation) + `proposition_anonyme_autorisee` + `tag_auto_proposition`
+  sont **déplacés** vers `FederationConfiguration`.
+- La **carte « Agenda participatif » du dashboard est supprimée** ; la carte fédération est
+  renommée **« Fédération et agenda participatif »** avec une description FALC.
+- La migration `0217` **recopie** la valeur existante par tenant (les tenants qui avaient
+  activé l'agenda le gardent activé).
+
+**Récolte e-mail (proposeur anonyme) / Anonymous proposer email :** à l'**étape 1** du wizard,
+un visiteur **non connecté** doit désormais saisir un **e-mail obligatoire**. À la finalisation,
+`get_or_create_user(email, send_mail=False)` crée (ou récupère) un compte **non validé**
+(`email_valid=False`, inactif) **sans déclencher l'OTP** ; l'évènement est lié à ce compte
+(`created_by`) et reste une **proposition modérée**. Si l'e-mail correspond à un compte déjà en
+erreur (`email_error`), la proposition est **refusée** avec un message.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | 3 champs déplacés `Configuration` → `FederationConfiguration` |
+| `BaseBillet/migrations/0217_*` | AddField ×3 → recopie par tenant (guard `public`) → RemoveField ×3 |
+| `Administration/admin_tenant.py` | fieldset « Agenda participatif » : `ConfigurationAdmin` → `FederationConfigurationAdmin` |
+| `Administration/admin/dashboard.py` | carte agenda supprimée ; carte fédération renommée + description FALC |
+| `BaseBillet/views.py` | `_garde_acces`, `_creer_event_depuis_brouillon`, `EventMVT.list` → `FederationConfiguration` ; étape 1 + finalisation : récolte e-mail + `get_or_create_user(send_mail=False)` |
+| `BaseBillet/validators.py` | `WizardPlaceSelectSerializer` : champ `email_proposeur` (obligatoire si anonyme) |
+| `.../event/wizard/_form_lieu.html` | champ e-mail conditionnel (visiteur anonyme) |
+| `.../event/list.html` | bouton « Proposer » lit `federation_config.*` |
+| `tests/pytest/test_event_wizard_unifie.py` | 2 tests adaptés + 2 nouveaux (récolte e-mail) |
+
+### Migration
+- **Migration nécessaire / Migration required :** Oui — `BaseBillet/migrations/0217_*`
+- Commande : `migrate_schemas --executor=multiprocessing`
+
+### i18n
+- Nouveaux textes `_()` (label/aide du champ e-mail, messages, libellé + description de la carte
+  dashboard fédération) — à extraire via `makemessages` (texte source FR).
+
+---
+
 ## Formulaire event unifié (front) + fix image + options config / Unified front event wizard
 
 **Date :** 2026-06-01

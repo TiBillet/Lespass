@@ -49,7 +49,8 @@ from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, Product, Event, Tag, Paiement_stripe, Membership, Reservation, \
     FormbricksConfig, FormbricksForms, FederatedPlace, Carrousel, LigneArticle, PriceSold, \
-    Price, ProductSold, PaymentMethod, PostalAddress, SaleOrigin, ProductFormField, GhostConfig, BrevoConfig
+    Price, ProductSold, PaymentMethod, PostalAddress, SaleOrigin, ProductFormField, GhostConfig, BrevoConfig, \
+    FederationConfiguration
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, \
     contact_mailer, send_to_ghost_email, send_sale_to_laboutik, \
     send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, \
@@ -1676,9 +1677,18 @@ class FederationViewset(viewsets.ViewSet):
                 incoming_data.get("by_tenant", {}).get(current_uuid, [])
             )
 
-        # Union des deux directions = mes voisins directs dans le graphe de federation.
-        # / Union of both directions = my direct neighbors in the federation graph.
-        other_federated_uuids = (outgoing_uuids | incoming_uuids)
+        # Federation automatique par tags : les lieux de TOUT le reseau ayant un
+        # event futur public portant un des tags choisis dans la config. Lecture
+        # 100% cache (AGGREGATE_EVENTS, veto private inclus). S'ajoute aux voisins.
+        # / Tag-based auto federation: venues from the WHOLE network with a public
+        # future event carrying one of the chosen tags. Cache-only read.
+        from seo.services import get_tenant_uuids_with_event_tags
+        tags_federation_slugs = [t.slug for t in config_federation.tags_federation.all()]
+        thematic_uuids = get_tenant_uuids_with_event_tags(tags_federation_slugs)
+
+        # Union : voisins directs (graphe) + abonnements thematiques (cache).
+        # / Union: direct neighbors (graph) + thematic subscriptions (cache).
+        other_federated_uuids = (outgoing_uuids | incoming_uuids | thematic_uuids)
         other_federated_uuids.discard(current_uuid)
 
         # Ensemble final pour l'explorer : voisins + tenant courant.
@@ -1911,6 +1921,36 @@ class EventMVT(viewsets.ViewSet):
                 "tag_exclude": [],
             }
         )
+
+        # Fédération automatique par tags : on ajoute les tenants de TOUT le
+        # réseau TiBillet qui ont un évènement futur public portant un des tags
+        # choisis dans FederationConfiguration.tags_federation. L'identification
+        # est 100% cache (AGGREGATE_EVENTS, veto private inclus) ; le rendu réutilise
+        # le moteur ci-dessous (objets Event, private=False appliqué d'office car
+        # tenant != this_tenant). Liste vide -> rien d'ajouté (comportement actuel).
+        # / Tag-based auto federation: add network tenants having a public future
+        # event carrying one of the chosen tags. Cache-only identification, then
+        # rendered by the same engine. Empty list -> nothing added.
+        from seo.services import get_tenant_uuids_with_event_tags
+        tags_federation_slugs = [
+            tag.slug for tag in FederationConfiguration.get_solo().tags_federation.all()
+        ]
+        if tags_federation_slugs:
+            uuids_deja_presents = {str(t["tenant"].uuid) for t in tenants}
+            uuids_thematiques = get_tenant_uuids_with_event_tags(tags_federation_slugs)
+            uuids_a_ajouter = uuids_thematiques - uuids_deja_presents
+            for client_thematique in Client.objects.filter(uuid__in=uuids_a_ajouter):
+                tenants.append({
+                    "tenant": client_thematique,
+                    "tag_filter": [],
+                    # tag_exclude = INCLURE uniquement ces tags (sémantique
+                    # historique inversée du moteur) : on ne récupère que les
+                    # events thématiques de ce tenant.
+                    # / tag_exclude = include-only these tags (engine's inverted
+                    # semantics): only this tenant's thematic events are fetched.
+                    "tag_exclude": tags_federation_slugs,
+                })
+
         # Récupération de tous les évènements de la fédération
         for tenant in tenants:
             with ((tenant_context(tenant['tenant']))):
@@ -2129,6 +2169,11 @@ class EventMVT(viewsets.ViewSet):
         # - tout passer en GET ( et non pas le partial_list POST plus haut )
         # - passer sur du partial render avec HTMX
         context = get_context(request)
+        # Reglages d'agenda participatif (sur FederationConfiguration) : pilotent
+        # l'affichage du bouton "Proposer un evenement" sur la page agenda.
+        # / Participatory-agenda settings (on FederationConfiguration): drive the
+        # "Propose an event" button on the agenda page.
+        context['federation_config'] = FederationConfiguration.get_solo()
         tags = request.GET.getlist('tag')
         search = request.GET.get('search')
         if search:
@@ -3612,6 +3657,9 @@ def _wizard_etape_choix_lieu(request, *, template, contexte_commun,
     contexte_page.update({
         "addresses": addresses,
         "default_address_pk": config.postal_address.pk if config.postal_address else None,
+        # Email du proposeur : affiche seulement pour un visiteur anonyme.
+        # / Proposer email: shown only for an anonymous visitor.
+        "demander_email": not request.user.is_authenticated,
     })
 
     if request.method == "GET":
@@ -3621,7 +3669,7 @@ def _wizard_etape_choix_lieu(request, *, template, contexte_commun,
         return render(request, template, context=context)
 
     # POST
-    serializer = WizardPlaceSelectSerializer(data=request.POST)
+    serializer = WizardPlaceSelectSerializer(data=request.POST, context={"request": request})
     if not serializer.is_valid():
         context = get_context(request)
         context.update(contexte_page)
@@ -3629,6 +3677,15 @@ def _wizard_etape_choix_lieu(request, *, template, contexte_commun,
         return render(request, template, context=context, status=422)
 
     data = serializer.validated_data
+
+    # Email du proposeur (anonyme) : on le garde en session pour la
+    # finalisation (creation/recuperation du compte SANS validation immediate).
+    # / Proposer email (anonymous): kept in session for finalization
+    # (account get_or_create WITHOUT immediate email validation).
+    email_proposeur = (data.get("email_proposeur") or "").strip()
+    if email_proposeur:
+        request.session[_wizard_lieu_session_key(session_prefix, "email_proposeur")] = email_proposeur
+
     if data["_mode"] == "existing":
         # Adresse existante : on garde le pk et on nettoie un eventuel nom.
         # / Existing address: keep the pk, clear any pending new-place name.
@@ -3901,7 +3958,7 @@ def _creer_event_depuis_brouillon(draft, postal_address, user, est_staff):
     Cree un Event depuis un brouillon du wizard UNIFIE (CHANTIER-03).
     - Staff -> event publie (published=True, is_proposal=False).
     - Public -> proposition (published=False, is_proposal=True) + tag automatique
-      (Configuration.tag_auto_proposition) si configure.
+      (FederationConfiguration.tag_auto_proposition) si configure.
     Tags du formulaire : staff = creation libre ; public = UNIQUEMENT les tags
     EXISTANTS (anti-spam, pas de creation par un visiteur).
     jauge_max + produit FREERES : staff uniquement.
@@ -3931,7 +3988,9 @@ def _creer_event_depuis_brouillon(draft, postal_address, user, est_staff):
         event.show_gauge = True
     event.save()
 
-    config = Configuration.get_solo()
+    # Reglages d'agenda participatif (deplaces sur FederationConfiguration).
+    # / Participatory-agenda settings (moved to FederationConfiguration).
+    federation_config = FederationConfiguration.get_solo()
 
     # Tags saisis dans le formulaire (sépares par virgule/point-virgule).
     # / Form tags (comma/semicolon separated).
@@ -3949,8 +4008,8 @@ def _creer_event_depuis_brouillon(draft, postal_address, user, est_staff):
             event.tag.add(tag_obj)
         # Tag automatique des propositions, si configure.
         # / Automatic proposal tag, if configured.
-        if config.tag_auto_proposition_id:
-            event.tag.add(config.tag_auto_proposition)
+        if federation_config.tag_auto_proposition_id:
+            event.tag.add(federation_config.tag_auto_proposition)
 
     if jauge:
         free_res = Product.objects.filter(
@@ -3996,10 +4055,10 @@ class EventWizard(viewsets.ViewSet):
         """
         if self._est_staff(request):
             return None
-        config = Configuration.get_solo()
-        if not config.module_agenda_participatif:
+        federation_config = FederationConfiguration.get_solo()
+        if not federation_config.module_agenda_participatif:
             raise Http404()
-        if not request.user.is_authenticated and not config.proposition_anonyme_autorisee:
+        if not request.user.is_authenticated and not federation_config.proposition_anonyme_autorisee:
             messages.add_message(request, messages.WARNING,
                                  _("Merci de vous connecter d'abord."))
             return redirect(f"{reverse('event-list')}?login=1")
@@ -4120,14 +4179,42 @@ class EventWizard(viewsets.ViewSet):
                 _("Ajoutez au moins un évènement avant de continuer."))
             return redirect("event-wizard-event")
 
+        # Qui sera l'auteur (created_by) des evenements ?
+        # - staff / connecte : l'utilisateur de la requete.
+        # - anonyme : on cree (ou recupere) un compte depuis l'email saisi a
+        #   l'etape 1, SANS envoyer le mail de validation (send_mail=False).
+        #   La personne validera son email elle-meme plus tard. L'evenement
+        #   reste une proposition moderee (est_staff=False).
+        # / Event author (created_by): request user for staff/logged-in. For an
+        # anonymous visitor we get_or_create a user from the step-1 email
+        # WITHOUT sending the validation mail; the event stays a moderated
+        # proposal.
+        user_pour_creation = request.user
+        if not est_staff and not request.user.is_authenticated:
+            email_proposeur = request.session.get(self._session_key("email_proposeur"))
+            if not email_proposeur:
+                # Email perdu (session expiree, acces direct) : retour etape 1.
+                # / Email lost (expired session, direct access): back to step 1.
+                messages.add_message(request, messages.WARNING,
+                    _("Merci d'indiquer votre adresse e-mail pour proposer un évènement."))
+                return redirect("event-wizard-place")
+            user_pour_creation = get_or_create_user(email_proposeur, send_mail=False)
+            if user_pour_creation is None:
+                # get_or_create_user renvoie None si l'email est marque en erreur.
+                # / get_or_create_user returns None if the email is flagged in error.
+                messages.add_message(request, messages.ERROR,
+                    _("Cette adresse e-mail pose un problème. Merci de nous contacter."))
+                return redirect("event-wizard-place")
+
         evenements_crees = []
         for draft in drafts:
             evenements_crees.append(
-                _creer_event_depuis_brouillon(draft, postal_address, request.user, est_staff)
+                _creer_event_depuis_brouillon(draft, postal_address, user_pour_creation, est_staff)
             )
 
         request.session.pop(_wizard_drafts_key(self.SESSION_PREFIX), None)
         request.session.pop(self._session_key("postal_address_pk"), None)
+        request.session.pop(self._session_key("email_proposeur"), None)
         request.session.modified = True
 
         nombre = len(evenements_crees)

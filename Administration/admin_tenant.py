@@ -394,12 +394,6 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 'additional_text_in_membership_mail',
             ),
         }),
-        (_('Agenda participatif'), {
-            'fields': (
-                'proposition_anonyme_autorisee',
-                'tag_auto_proposition',
-            ),
-        }),
         ('Stripe', {
             'fields': (
                 # 'vat_taxe',
@@ -3307,6 +3301,8 @@ class FederationConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
     compressed_fields = True
     warn_unsaved_form = True
 
+    autocomplete_fields = ["tags_federation"]
+
     fieldsets = (
         (_("Affichage des lieux"), {"fields": (
             "afficher_lieux_sans_adresse",
@@ -3314,7 +3310,21 @@ class FederationConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
             "afficher_lieux_entrants",
             "tri_des_lieux",
         )}),
+        # Federation automatique par tags : le tenant s'abonne a des tags et
+        # recoit les events de TOUT le reseau qui les portent (agenda + carto).
+        # / Tag-based auto federation: subscribe to tags, receive matching events
+        # from the WHOLE network (agenda + map).
+        (_("Fédération automatique par tags"), {"fields": ("tags_federation",)}),
         (_("Présentation"), {"fields": ("texte_introduction",)}),
+        # Agenda participatif : active le formulaire public de proposition
+        # d'evenement (deplace depuis le dashboard des modules vers ici).
+        # / Participatory agenda: enables the public event-proposal form
+        # (moved from the modules dashboard to here).
+        (_("Agenda participatif"), {"fields": (
+            "module_agenda_participatif",
+            "proposition_anonyme_autorisee",
+            "tag_auto_proposition",
+        )}),
     )
 
     formfield_overrides = {

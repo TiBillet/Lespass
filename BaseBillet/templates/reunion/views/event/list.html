@@ -66,8 +66,8 @@ wizard event unifié (cf. SESSIONS/EVENT_WIZARD/CHANTIER-03).
                                 <i class="bi bi-plus-circle" aria-hidden="true"></i>
                                 {% translate 'Ajouter un évènement' %}
                             </a>
-                        {% elif config.module_agenda_participatif %}
-                            {% if user.is_authenticated or config.proposition_anonyme_autorisee %}
+                        {% elif federation_config.module_agenda_participatif %}
+                            {% if user.is_authenticated or federation_config.proposition_anonyme_autorisee %}
                             <a class="btn btn-sm btn-outline-secondary"
                                href="{% url 'event-wizard-place' %}"
                                data-testid="btn-event-propose">

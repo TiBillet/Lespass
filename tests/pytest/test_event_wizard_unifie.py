@@ -120,16 +120,16 @@ def test_creer_event_public_est_proposition_avec_tag_auto():
     from django.contrib.auth.models import AnonymousUser
     from django_tenants.utils import tenant_context
     from BaseBillet.views import _creer_event_depuis_brouillon
-    from BaseBillet.models import Event, PostalAddress, Tag, Configuration
+    from BaseBillet.models import Event, PostalAddress, Tag, FederationConfiguration
 
     lespass = Client.objects.get(schema_name="lespass")
     with tenant_context(lespass):
         pa = PostalAddress.objects.first()
         tag_auto, _created = Tag.objects.get_or_create(name="Propose-auto-test")
-        config = Configuration.get_solo()
-        ancien_tag_id = config.tag_auto_proposition_id
-        config.tag_auto_proposition = tag_auto
-        config.save()
+        federation_config = FederationConfiguration.get_solo()
+        ancien_tag_id = federation_config.tag_auto_proposition_id
+        federation_config.tag_auto_proposition = tag_auto
+        federation_config.save()
         try:
             event = _creer_event_depuis_brouillon(
                 _draft_minimal("Public proposition test"), pa, AnonymousUser(), est_staff=False)
@@ -138,8 +138,8 @@ def test_creer_event_public_est_proposition_avec_tag_auto():
             assert tag_auto in event.tag.all()
             Event.objects.filter(pk=event.pk).delete()
         finally:
-            config.tag_auto_proposition_id = ancien_tag_id
-            config.save()
+            federation_config.tag_auto_proposition_id = ancien_tag_id
+            federation_config.save()
 
 
 @pytest.mark.django_db
@@ -177,30 +177,116 @@ def test_garde_acces_anonyme_selon_config():
     from django.test.client import Client as DjangoClient
     from django.urls import reverse
     from django_tenants.utils import tenant_context
-    from BaseBillet.models import Configuration
+    from BaseBillet.models import FederationConfiguration
 
     lespass = Client.objects.get(schema_name="lespass")
     domain = lespass.domains.first()
     http = DjangoClient(HTTP_HOST=domain.domain)  # client anonyme
 
     with tenant_context(lespass):
-        config = Configuration.get_solo()
-        module_avant = config.module_agenda_participatif
-        anonyme_avant = config.proposition_anonyme_autorisee
-        config.module_agenda_participatif = True
-        config.proposition_anonyme_autorisee = False
-        config.save()
+        federation_config = FederationConfiguration.get_solo()
+        module_avant = federation_config.module_agenda_participatif
+        anonyme_avant = federation_config.proposition_anonyme_autorisee
+        federation_config.module_agenda_participatif = True
+        federation_config.proposition_anonyme_autorisee = False
+        federation_config.save()
         try:
             # Anonyme non autorise -> redirige vers la connexion.
             resp = http.get(reverse("event-wizard-place"))
             assert resp.status_code == 302
 
             # Anonyme autorise -> acces OK (200).
-            config.proposition_anonyme_autorisee = True
-            config.save()
+            federation_config.proposition_anonyme_autorisee = True
+            federation_config.save()
             resp2 = http.get(reverse("event-wizard-place"))
             assert resp2.status_code == 200
         finally:
-            config.module_agenda_participatif = module_avant
-            config.proposition_anonyme_autorisee = anonyme_avant
-            config.save()
+            federation_config.module_agenda_participatif = module_avant
+            federation_config.proposition_anonyme_autorisee = anonyme_avant
+            federation_config.save()
+
+
+@pytest.mark.django_db
+def test_proposition_anonyme_cree_user_non_valide_et_le_lie():
+    """
+    Lot B : un proposeur anonyme -> get_or_create_user(email, send_mail=False)
+    cree un compte NON valide (email_valid=False, inactif), SANS OTP, et l'event
+    est lie a ce compte (created_by) en restant une proposition moderee.
+    / Anonymous proposer -> account created but not validated, no OTP, event
+    linked via created_by and kept as a moderated proposal.
+    """
+    from django_tenants.utils import tenant_context
+    from BaseBillet.views import _creer_event_depuis_brouillon
+    from BaseBillet.models import Event, PostalAddress
+    from AuthBillet.utils import get_or_create_user
+
+    lespass = Client.objects.get(schema_name="lespass")
+    email = f"anon-wizard-{uuidlib.uuid4().hex[:8]}@example.org"
+    with tenant_context(lespass):
+        pa = PostalAddress.objects.first()
+        user = get_or_create_user(email, send_mail=False)
+        try:
+            # Compte cree mais NON valide : la personne validera plus tard.
+            # / Account created but NOT validated: the person will validate later.
+            assert user is not None
+            assert user.email_valid is False
+            assert user.is_active is False
+
+            event = _creer_event_depuis_brouillon(
+                _draft_minimal("Anon proposition test"), pa, user, est_staff=False)
+            # L'event est lie au compte et reste une proposition moderee.
+            # / Event linked to the account and kept as a moderated proposal.
+            assert event.created_by == user
+            assert event.is_proposal is True
+            assert event.published is False
+        finally:
+            Event.objects.filter(created_by=user).delete()
+            user.delete()
+
+
+@pytest.mark.django_db
+def test_wizard_place_email_obligatoire_pour_anonyme():
+    """
+    Lot B : a l'etape 1 du wizard, un visiteur anonyme DOIT fournir un email.
+    Sans email -> 422 ; avec email -> 302 + email garde en session.
+    / Step 1: an anonymous visitor MUST provide an email. Without -> 422;
+    with -> 302 and the email is kept in session.
+    """
+    from django.test.client import Client as DjangoClient
+    from django.urls import reverse
+    from django_tenants.utils import tenant_context
+    from BaseBillet.models import FederationConfiguration, PostalAddress
+
+    lespass = Client.objects.get(schema_name="lespass")
+    domain = lespass.domains.first()
+    http = DjangoClient(HTTP_HOST=domain.domain)  # client anonyme
+
+    with tenant_context(lespass):
+        federation_config = FederationConfiguration.get_solo()
+        module_avant = federation_config.module_agenda_participatif
+        anonyme_avant = federation_config.proposition_anonyme_autorisee
+        federation_config.module_agenda_participatif = True
+        federation_config.proposition_anonyme_autorisee = True
+        federation_config.save()
+        pa = PostalAddress.objects.first()
+
+    try:
+        # Sans email -> erreur de validation (422).
+        resp = http.post(reverse("event-wizard-place"), {
+            "_form_mode": "existing", "postal_address": str(pa.pk),
+        })
+        assert resp.status_code == 422
+
+        # Avec email -> on passe (302) et l'email est garde en session.
+        email = f"anon-place-{uuidlib.uuid4().hex[:8]}@example.org"
+        resp2 = http.post(reverse("event-wizard-place"), {
+            "_form_mode": "existing", "postal_address": str(pa.pk),
+            "email_proposeur": email,
+        })
+        assert resp2.status_code == 302
+        assert http.session.get("event_wizard_email_proposeur") == email
+    finally:
+        with tenant_context(lespass):
+            federation_config.module_agenda_participatif = module_avant
+            federation_config.proposition_anonyme_autorisee = anonyme_avant
+            federation_config.save()

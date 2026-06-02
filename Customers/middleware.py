@@ -4,17 +4,25 @@ Middleware de domaine canonique pour le multi-tenant.
 
 LOCALISATION : Customers/middleware.py
 
-Chaque tenant peut avoir plusieurs domaines (ex : le ROOT TiBillet répond sur
-tibillet.coop, tibillet.re, tibillet.org, et bientôt tibillet.fr). Un seul est
-marqué comme principal (`is_primary=True`).
+Ce middleware fait DEUX choses, dans cet ordre :
 
-Cette middleware redirige (301) toute requête GET/HEAD arrivant sur un domaine
-secondaire vers le domaine principal du tenant, en conservant le chemin et la
-query string. Elle couvre donc automatiquement le cas « tibillet.org → tibillet.coop ».
+1. RATTRAPAGE DES ANCIENS LIENS DE DOC (Docusaurus v2).
+   L'ancienne documentation (Docusaurus) était servie sur tibillet.org avec des
+   chemins comme /docs/..., /fr/..., /en/..., /roadmap/, /search/, /cgucgv/.
+   Ces chemins n'existent plus dans Lespass : on les redirige vers la nouvelle
+   doc (documentation_v3 sur tibillet.github.io). Uniquement sur le tenant ROOT
+   (schema public), car c'est là qu'atterrissent les liens tibillet.org/.coop.
+   / Catch old Docusaurus v2 links (/docs, /fr, /en, /roadmap, /search, /cgucgv)
+   and redirect them to documentation_v3. ROOT tenant (public schema) only.
 
-/ Each tenant can own several domains; only one is primary. This middleware
-permanently redirects (301) GET/HEAD requests landing on a secondary domain to
-the tenant's primary domain, keeping the path and query string.
+2. DOMAINE CANONIQUE.
+   Chaque tenant peut avoir plusieurs domaines (ex : le ROOT TiBillet répond sur
+   tibillet.coop, tibillet.re, tibillet.org). Un seul est marqué principal
+   (`is_primary=True`). Toute requête GET/HEAD arrivant sur un domaine secondaire
+   est redirigée vers le domaine principal, en conservant chemin et query string
+   (cas « tibillet.org → tibillet.coop »).
+   / Redirect GET/HEAD requests landing on a secondary domain to the tenant's
+   primary domain, keeping path and query string.
 
 PLACEMENT : juste APRÈS `TenantMainMiddleware` dans settings.MIDDLEWARE, pour que
 `connection.tenant` soit déjà résolu.
@@ -29,6 +37,92 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db import connection
 from django.http import HttpResponsePermanentRedirect, HttpResponseRedirect
+
+
+# Racine de la nouvelle documentation (documentation_v3 sur GitHub Pages).
+# / Root of the new documentation (documentation_v3 on GitHub Pages).
+URL_DOC_V3 = "https://tibillet.github.io/documentation_v3/"
+
+# Page de démonstration des modules dans la doc v3.
+# URLs vérifiées (HTTP 200) le 2026-06-02 sur tibillet.github.io.
+# / Module demonstration page in the v3 docs. URLs checked (HTTP 200) on 2026-06-02.
+URL_DOC_V3_DEMO = (
+    "https://tibillet.github.io/documentation_v3/"
+    "les-bases-et-valeurs-tibillet/demonstration-des-differents-modules/"
+)
+
+# Page CGU / CGV dans la doc v3.
+# / Terms and conditions (CGU/CGV) page in the v3 docs.
+URL_DOC_V3_CGU = (
+    "https://tibillet.github.io/documentation_v3/"
+    "les-bases-et-valeurs-tibillet/aspects-legaux-et-reglementaires/cgu-cgv/"
+)
+
+# Anciens chemins Docusaurus v2 qui ont un équivalent PRÉCIS dans la doc v3.
+# Les clés sont normalisées : sans slash final, en minuscules.
+# / Old Docusaurus v2 paths with a PRECISE v3 equivalent. Keys are normalized:
+# no trailing slash, lowercase.
+REDIRECTIONS_DOC_EXACTES = {
+    "/docs/presentation/demonstration": URL_DOC_V3_DEMO,
+    "/fr/docs/presentation/demonstration": URL_DOC_V3_DEMO,
+    "/cgucgv": URL_DOC_V3_CGU,
+    "/fr/cgucgv": URL_DOC_V3_CGU,
+}
+
+# Préfixes hérités du Docusaurus v2 sans équivalent précis : tout ce qui commence
+# par l'un d'eux retombe sur la racine de la doc v3. Ces préfixes n'existent PAS
+# comme routes Lespass (pas d'i18n_patterns, donc /fr et /en sont libres).
+# / Legacy Docusaurus v2 prefixes with no precise mapping: anything starting with
+# one of these falls back to the v3 docs homepage. None of these are Lespass
+# routes (no i18n_patterns, so /fr and /en are free).
+PREFIXES_DOC_HERITES = ("/docs", "/fr", "/en", "/roadmap", "/search")
+
+
+def url_doc_v3_pour_chemin_herite(chemin_demande):
+    """
+    Retourne l'URL de la doc v3 correspondant à un ancien chemin Docusaurus v2,
+    ou None si le chemin n'est pas un ancien chemin de doc.
+    / Return the v3 docs URL matching an old Docusaurus v2 path, or None.
+
+    LOCALISATION : Customers/middleware.py
+
+    Logique :
+    1. On normalise le chemin (sans slash final, en minuscules).
+    2. Si c'est un chemin connu avec équivalent précis (démo, CGU) → URL précise.
+    3. Sinon, si le chemin commence par un préfixe hérité → racine de la doc v3.
+    4. Sinon → None (ce n'est pas un ancien lien de doc, on ne touche à rien).
+    / 1. Normalize. 2. Exact match (demo, CGU). 3. Legacy prefix → v3 homepage.
+    4. Otherwise None.
+
+    Fonction PURE (ne lit ni request ni connection) : facile à tester unitairement.
+    / PURE function (reads neither request nor connection): easy to unit-test.
+    """
+    # On enlève le slash final et on passe en minuscules pour comparer.
+    # / Strip trailing slash and lowercase for comparison.
+    chemin = chemin_demande.rstrip("/").lower()
+
+    # La racine "" est la home Lespass, jamais la doc.
+    # / The "" root is the Lespass home, never the docs.
+    if chemin == "":
+        return None
+
+    # Correspondance précise (page de démonstration, CGU/CGV).
+    # / Precise match (demonstration page, CGU/CGV).
+    if chemin in REDIRECTIONS_DOC_EXACTES:
+        return REDIRECTIONS_DOC_EXACTES[chemin]
+
+    # Préfixe hérité sans équivalent précis → racine de la doc v3.
+    # On teste l'égalité exacte (ex : /fr) ET le préfixe suivi d'un slash
+    # (ex : /fr/docs/...) pour ne pas attraper /french par erreur.
+    # / Legacy prefix without precise mapping → v3 homepage. Match exact (/fr)
+    # AND prefix followed by a slash (/fr/docs/...) to avoid catching /french.
+    for prefixe in PREFIXES_DOC_HERITES:
+        if chemin == prefixe or chemin.startswith(prefixe + "/"):
+            return URL_DOC_V3
+
+    # Ce n'est pas un ancien chemin de doc.
+    # / Not an old docs path.
+    return None
 
 
 class CanonicalDomainRedirectMiddleware:
@@ -56,12 +150,63 @@ class CanonicalDomainRedirectMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        # On calcule une éventuelle redirection avant de traiter la requête.
-        # / Compute a possible redirect before handling the request.
+        # 1. Anciens liens de la doc Docusaurus v2 → doc v3.
+        #    Prioritaire : on quitte carrément le domaine pour github.io, donc
+        #    inutile de passer par la redirection canonique org→coop ensuite.
+        # / 1. Old Docusaurus v2 links → v3 docs. Checked first: we leave the
+        #    domain for github.io, so no point running the canonical redirect.
+        redirection_doc = self._redirection_doc_heritee(request)
+        if redirection_doc is not None:
+            return redirection_doc
+
+        # 2. Domaine canonique (ex : tibillet.org → tibillet.coop).
+        # / 2. Canonical domain (e.g. tibillet.org → tibillet.coop).
         redirection = self._redirection_canonique(request)
         if redirection is not None:
             return redirection
         return self.get_response(request)
+
+    def _redirection_doc_heritee(self, request):
+        """
+        Redirige les anciens chemins de la doc Docusaurus v2 vers la doc v3.
+        Retourne une réponse de redirection (302) ou None.
+        / Redirect old Docusaurus v2 docs paths to the v3 docs. Returns a 302
+        response or None.
+
+        Uniquement sur le tenant ROOT (schema public) : c'est là qu'arrivent les
+        liens tibillet.org / tibillet.coop. Les sous-domaines des tenants ne sont
+        donc jamais affectés (zéro risque de collision avec leurs routes).
+        / ROOT tenant (public schema) only: that's where tibillet.org/.coop links
+        land. Tenant subdomains are never affected (no route collision risk).
+        """
+        # En test, on ne redirige jamais (même raison que la redirection
+        # canonique : l'hôte « testserver » fausserait tout).
+        # / In tests, never redirect (same reason as the canonical redirect).
+        if getattr(settings, "TEST", False):
+            return None
+
+        # Méthodes sûres seulement (GET/HEAD) — jamais de POST.
+        # / Safe methods only (GET/HEAD) — never POST.
+        if request.method not in ("GET", "HEAD"):
+            return None
+
+        # Uniquement sur le ROOT public.
+        # / ROOT public schema only.
+        tenant = getattr(connection, "tenant", None)
+        if tenant is None or getattr(tenant, "schema_name", None) != "public":
+            return None
+
+        # La logique de correspondance est dans la fonction pure (testable).
+        # / The matching logic lives in the pure function (testable).
+        url_cible = url_doc_v3_pour_chemin_herite(request.path)
+        if not url_cible:
+            return None
+
+        # 302 temporaire : la table de redirection n'est pas encore figée
+        # (cohérent avec REDIRECTION_PERMANENTE de la redirection canonique).
+        # / 302 temporary: the redirect table isn't frozen yet (consistent with
+        # the canonical redirect's REDIRECTION_PERMANENTE).
+        return HttpResponseRedirect(url_cible)
 
     def _redirection_canonique(self, request):
         # En contexte de test, on ne redirige jamais : APIClient utilise l'hôte

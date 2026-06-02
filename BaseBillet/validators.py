@@ -1351,7 +1351,29 @@ class WizardPlaceSelectSerializer(serializers.Serializer):
         required=False, allow_blank=True, max_length=200,
     )
 
+    # Email du proposeur. Obligatoire SEULEMENT pour un visiteur anonyme :
+    # un connecte a deja un compte. EmailField valide le FORMAT ; l'obligation
+    # (anonyme) est verifiee dans validate() via le contexte request.
+    # / Proposer email. Required ONLY for anonymous visitors (a logged-in user
+    # already has an account). EmailField validates the FORMAT; the requirement
+    # for anonymous visitors is checked in validate() using the request context.
+    email_proposeur = serializers.EmailField(required=False, allow_blank=True)
+
     def validate(self, attrs):
+        # Email du proposeur : obligatoire pour un visiteur anonyme. On le
+        # verifie en premier pour afficher l'erreur des le premier POST.
+        # / Proposer email: required for anonymous visitors. Checked first so
+        # the error shows on the very first POST.
+        request = self.context.get("request")
+        if request is not None and not request.user.is_authenticated:
+            email_value = (attrs.get("email_proposeur") or "").strip()
+            if not email_value:
+                raise serializers.ValidationError({
+                    "email_proposeur": _(
+                        "Merci d'indiquer votre adresse e-mail pour proposer un évènement."
+                    ),
+                })
+
         # On determine le mode selon ce qui est soumis : un pk d'adresse
         # existante OU un nom de nouveau lieu. Le JS du toggle desactive les
         # champs du bloc cache, donc un seul des deux arrive ici.
