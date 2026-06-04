@@ -1,5 +1,53 @@
 # Changelog / Journal des modifications
 
+## Fédération automatique des évènements par tags (agenda + carto, en cache)
+
+**Date :** 2026-06-03
+**Migration :** Oui (`BaseBillet 0218` : M2M `FederationConfiguration.tags_federation`)
+
+**Quoi / What :** un tenant peut s'abonner à des **tags** (`FederationConfiguration.tags_federation`,
+M2M) : les évènements de **tout le réseau TiBillet** portant un de ces tags apparaissent dans son
+**agenda** (`/event/`) ET sur sa **carte** (`/federation/`), **en plus** de sa fédération habituelle
+(voisins `FederatedPlace`). Liste vide = comportement inchangé.
+
+**Comment / How :**
+- Identification « qui dans le réseau porte ce tag » **100% cache** : nouveau helper
+  `seo.services.get_tenant_uuids_with_event_tags(slugs)` lit `AGGREGATE_EVENTS` (zéro requête
+  cross-schema), match par **slug**, **veto `private` respecté**.
+- **Agenda** : `federated_events_filter` ajoute les tenants thématiques à sa boucle existante
+  (rendu en objets `Event`, `private=False` appliqué d'office aux non-voisins).
+- **Carto** : `FederationViewset.list` ajoute ces tenants à `all_uuids`.
+- **Cache enrichi** : `get_events_for_tenants` expose désormais `private` ; `build_aggregate_points`
+  exclut les events `private` des popups → **carto nettoyée partout** (corrige un trou existant où
+  des events privés pouvaient apparaître sur la carte réseau).
+- Changer `tags_federation` régénère le token du cache agenda (`FederationConfiguration.save()`) → effet immédiat.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | `FederationConfiguration.tags_federation` (M2M) + `save()` invalide le cache agenda |
+| `BaseBillet/migrations/0218_*` | AddField M2M |
+| `seo/services.py` | `get_events_for_tenants` → `private` ; `build_aggregate_points` exclut `private` ; helper `get_tenant_uuids_with_event_tags` |
+| `BaseBillet/views.py` | agenda (`federated_events_filter`) + carto (`FederationViewset.list`) étendus au réseau via cache |
+| `Administration/admin_tenant.py` | fieldset « Fédération automatique par tags » + autocomplete |
+| `tests/pytest/test_federation_auto_tags.py` | 4 tests helper (slug + veto private) |
+| `tests/pytest/test_federation_view_integration.py` | mock `_fake_config` complété (`tags_federation`) |
+
+### Migration
+- **Migration nécessaire / Migration required :** Oui — `BaseBillet/migrations/0218_*`
+- Commande : `migrate_schemas --executor=multiprocessing`
+
+### Déploiement / Deployment
+- ⚠️ Après déploiement : **redémarrer le worker Celery** puis **relancer `refresh_seo_cache`**. Le
+  champ `private` n'entre dans le cache que si la task tourne avec le nouveau code. Tant que le cache
+  ne porte pas `private`, le filtrage formel du veto n'est pas actif (pas de fuite tant qu'aucun event
+  privé n'existe, mais à régénérer pour être correct).
+
+### i18n
+- Nouveaux `_()` (verbose_name/help_text de `tags_federation`, fieldset admin) → `makemessages` (texte source FR).
+
+---
+
 ## Redirection des anciens liens de la doc Docusaurus v2 → doc v3 / Redirect old Docusaurus v2 docs links to v3
 
 **Date :** 2026-06-02
