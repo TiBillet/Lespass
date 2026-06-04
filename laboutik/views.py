@@ -1316,8 +1316,8 @@ class CaisseViewSet(viewsets.ViewSet):
 
         # Par défaut : mode restaurant → afficher le choix des tables
         # Default: restaurant mode → show table selection
-        titre_page = _("Choisir une table")
-        template_name = "laboutik/views/tables.html"
+        titre_page = _("Resto")
+        template_name = "laboutik/views/restaurant_interface.html"
 
         # Service direct (pas de tables) → interface de vente directe
         # Direct service (no tables) → direct sales interface

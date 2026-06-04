@@ -1126,8 +1126,8 @@ class Command(BaseCommand):
             # Les tag_id par defaut correspondent au .env de test.
             # / 2 client cards (for testing NFC payments in Phase 3)
             client_tags = [
-                getattr(settings, "DEMO_TAGID_CLIENT1", "52BE6543"),
-                getattr(settings, "DEMO_TAGID_CLIENT2", "33BC1DAA"),
+                getattr(settings, "DEMO_TAGID_CLIENT1", "52BE6543").upper().strip(),
+                getattr(settings, "DEMO_TAGID_CLIENT2", "33BC1DAA").upper().strip(),
             ]
             for tag_id_client in client_tags:
                 carte_client, created_client = CarteCashless.objects.get_or_create(
@@ -1142,6 +1142,67 @@ class Command(BaseCommand):
                     self.stdout.write(f"  Carte client creee : {tag_id_client}")
                 else:
                     self.stdout.write(f"  Carte client existante : {tag_id_client}")
+
+            # --- Associer les cartes client 1 et 2 à des users identifiés ---
+            from AuthBillet.models import TibilletUser
+            clients_info = [
+                (
+                    getattr(settings, "DEMO_TAGID_CLIENT1", "52BE6543").upper().strip(),
+                    getattr(settings, "DEMO_EMAIL_CLIENT1", "client1@test.loc"),
+                    "Client",
+                    "Un",
+                ),
+                (
+                    getattr(settings, "DEMO_TAGID_CLIENT2", "33BC1DAA").upper().strip(),
+                    getattr(settings, "DEMO_EMAIL_CLIENT2", "client2@test.loc"),
+                    "Client",
+                    "Deux",
+                ),
+            ]
+
+            for tag_id_client, email_client, first_name_client, last_name_client in clients_info:
+                carte_client = CarteCashless.objects.filter(tag_id=tag_id_client).first()
+                if not carte_client:
+                    continue
+
+                if carte_client.user:
+                    self.stdout.write(f"  Carte {tag_id_client} deja liee a {carte_client.user.email}")
+                    continue
+
+                email_lower = email_client.lower()
+                user_client, created_user = TibilletUser.objects.get_or_create(
+                    email=email_lower,
+                    defaults={
+                        "username": email_lower,
+                        "espece": TibilletUser.TYPE_HUM,
+                        "first_name": first_name_client,
+                        "last_name": last_name_client,
+                        "client_source": tenant_client,
+                        "is_active": True,
+                    },
+                )
+                if created_user:
+                    self.stdout.write(f"  User cree : {email_lower}")
+                else:
+                    self.stdout.write(f"  User existant : {email_lower}")
+
+                # Creer le wallet si inexistant
+                if not hasattr(user_client, 'wallet') or not user_client.wallet:
+                    wallet_client = Wallet.objects.create(
+                        origin=tenant_client,
+                        name=f"Wallet {email_lower}",
+                    )
+                    user_client.wallet = wallet_client
+                    user_client.save(update_fields=["wallet"])
+                    self.stdout.write(f"  Wallet cree pour {email_lower}")
+                else:
+                    self.stdout.write(f"  Wallet existant pour {email_lower}")
+
+                # Lier la carte au user
+                carte_client.user = user_client
+                carte_client.wallet_ephemere = None
+                carte_client.save(update_fields=["user", "wallet_ephemere"])
+                self.stdout.write(f"  Carte {tag_id_client} liee a {email_lower}")
 
             # Carte client 3 "jetable" — remise a zero a chaque run en mode DEBUG.
             # Utilisee par les tests Playwright pour avoir une carte propre a chaque test.

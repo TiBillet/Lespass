@@ -1,0 +1,21 @@
+{% load static %}
+<link rel="stylesheet" href="{% static 'css/win_bottom_left.css' %}" />
+<nav id="win-bottom-left">
+  <div class="categories-container">
+    <!-- TODO: add bt prev -->
+    {% for category in categories %}
+    <div data-id="{{category.id}}" data-name="{{category.name}}" class="category-bt-container cat-{{ category.id}}"
+      style="background-color:{{ category.couleur_backgr }};">
+      <div class="category-name">{{ category.name }}</div>
+    </div>
+    {% endfor %}
+    <!-- TODO: add bt next -->
+  </div>
+
+  <div class="win-bottom-left-actions">
+    <div class="wbld-bt bc-place" hx-on:click="document.querySelector('#win-under').style.transform='translate(0 , 0 )';" hx-get="hx_managed_card" hx-target="#win-under" hx-swap="innerHTML">PLACE CARD</div>
+    <div class="wbld-bt bc-info" hx-on:click="document.querySelector('#win-under').style.transform='translate(0 , 0 )';" hx-get="hx_check_card" hx-target="#win-under" hx-swap="innerHTML">CHECK CARD</div>
+    <div class="wbld-bt bc-purple" hx-on:click="document.querySelector('#win-under').style.transform='translate(0 , 0 )';" hx-get="hx_currency_swap" hx-target="#win-under" hx-swap="innerHTML">SWAP CB/MONEY</div>
+     <div class="wbld-bt bc-table-ephemeral" hx-on:click="document.querySelector('#win-under').style.transform='translate(0 , 0 )';" hx-get="hx_get_all_tables" hx-target="#win-under" hx-swap="innerHTML">TABLE</div>
+  </div>
+</nav>

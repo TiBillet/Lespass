@@ -3450,6 +3450,7 @@ class Command(BaseCommand):
                 # la cle stable (lookup), l'UUID est force.
                 # / update_or_create: align UUID on hardcoded value if card
                 # existed with a random legacy UUID.
+                """
                 CarteCashless.objects.update_or_create(
                     tag_id=tag_id_carte,
                     defaults={
@@ -3461,6 +3462,23 @@ class Command(BaseCommand):
                         "user": None,
                         "wallet_ephemere": None,
                     },
+                )
+                """
+                defaults_carte = {
+                    "uuid": uuid_module.UUID(uuid_hardcode),
+                    "number": tag_id_carte,
+                    "detail": detail_e2e,
+                }
+
+                # En mode DEBUG : ne pas écraser le user/wallet (dev local)
+                # / DEBUG: preserve user/wallet. Prod: reset to blank state.
+                if not settings.DEBUG:
+                    defaults_carte["user"] = None
+                    defaults_carte["wallet_ephemere"] = None
+
+                CarteCashless.objects.update_or_create(
+                    tag_id=tag_id_carte,
+                    defaults=defaults_carte,
                 )
 
             self.stdout.write(

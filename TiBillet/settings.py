@@ -603,6 +603,9 @@ DEMO_TAGID_CM = os.environ.get('DEMO_TAGID_CM', 'A49E8E2A')
 DEMO_TAGID_CLIENT1 = os.environ.get('DEMO_TAGID_CLIENT1', 'B52F9F3B')
 DEMO_TAGID_CLIENT2 = os.environ.get('DEMO_TAGID_CLIENT2', 'C63A0A4C')
 DEMO_TAGID_CLIENT3 = os.environ.get('DEMO_TAGID_CLIENT3', 'D74B1B5D')
+DEMO_EMAIL_CLIENT1 = os.environ.get('DEMO_EMAIL_CLIENT1', 'client1@test.loc')
+DEMO_EMAIL_CLIENT2 = os.environ.get('DEMO_EMAIL_CLIENT2', 'client2@test.loc')
+DEMO_EMAIL_CLIENT3 = os.environ.get('DEMO_EMAIL_CLIENT3', 'client3@test.loc')
 # CLIENT4 : jamais créé en base — utilisé pour tester "Carte inconnue"
 # CLIENT4: never created in DB — used to test "Unknown card" scenario
 DEMO_TAGID_CLIENT4 = os.environ.get('DEMO_TAGID_CLIENT4', 'E85C2C6E')

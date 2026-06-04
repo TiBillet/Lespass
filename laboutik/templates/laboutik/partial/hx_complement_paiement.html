@@ -26,121 +26,115 @@ pour eviter le double submit HTMX.
 / TRAP 58: buttons are standalone type="button" (not in a <form>)
 to avoid HTMX double submit.
 -->
-
-<div class="BF-col" data-testid="complement-paiement" aria-live="polite">
-
-  <div class="fi-title1" data-testid="complement-titre">
-    {% translate "Complément de paiement" %}
-  </div>
-
-  {# Detail de la carte 1 et de ce qu'elle a couvert #}
-  {# / Card 1 detail and what it covered #}
-  <div class="fi-msg1" data-testid="complement-carte1-info">
-    {% translate "Carte" %} : <strong>{{ tag_id_carte1 }}</strong>
-  </div>
-
-  {# Somme totale qui etait disponible sur la carte au moment du scan #}
-  {# / Total amount available on the card at scan time #}
-  <div class="fi-msg1" data-testid="complement-carte1-disponible">
-    {% translate "Disponible sur la carte" %} : <strong>{{ total_nfc_carte1_euros }}€</strong>
-  </div>
-
-  {# Soldes utilises par la cascade de la 1ere carte #}
-  {# / Balances used by the 1st card's cascade #}
-  {% if detail_cascade %}
-  <div class="cascade-badges-list" data-testid="complement-detail-cascade">
-    {% for solde_utilise in detail_cascade %}
-    <span class="cascade-badge">
-      {{ solde_utilise.name }} : {{ solde_utilise.montant_euros }}€
-    </span>
-    {% endfor %}
-  </div>
-  {% endif %}
-
-  {# Total du panier et reste a payer #}
-  {# / Cart total and remaining amount #}
-  <div class="payment-detail fi-payment-detail" data-testid="complement-total-panier">
-    {% translate "Total panier" %} : {{ total_panier_euros }}€
-  </div>
-
-  <div class="give-back-box" style="margin: 0.75rem 0;" data-testid="complement-reste-a-payer"
-       role="alert">
-    <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
-    {% translate "Reste à payer" %} : <strong>{{ reste_euros }}€</strong>
-  </div>
-
-  {# Hidden inputs pour propager les donnees cascade de la 1ere carte #}
-  {# / Hidden inputs to propagate 1st card's cascade data #}
-  <input type="hidden" name="tag_id_carte1" value="{{ tag_id_carte1 }}" data-testid="hidden-tag-id-carte1" />
-  <input type="hidden" name="cascade_carte1" value="{{ cascade_carte1_json }}" data-testid="hidden-cascade-carte1" />
-  <input type="hidden" name="total_nfc_carte1" value="{{ total_nfc_carte1 }}" data-testid="hidden-total-nfc-carte1" />
-
-  {# Boutons complement — type="button" autonomes (piege 58) #}
-  {# / Complement buttons — standalone type="button" (trap 58) #}
-
-  {% comment %}
+<div id="messages">
+  <div class="BF-col" data-testid="complement-paiement" aria-live="polite">
+    <div class="fi-title1" data-testid="complement-titre">{% translate "Complément de paiement" %}</div>
+    {# Detail de la carte 1 et de ce qu'elle a couvert #}
+    {# / Card 1 detail and what it covered #}
+    <div class="fi-msg1" data-testid="complement-carte1-info">
+      {% translate "Carte" %} : <strong>{{ tag_id_carte1 }}</strong>
+    </div>
+    {# Somme totale qui etait disponible sur la carte au moment du scan #}
+    {# / Total amount available on the card at scan time #}
+    <div class="fi-msg1" data-testid="complement-carte1-disponible">
+      {% translate "Disponible sur la carte" %} : <strong>{{ total_nfc_carte1_euros }}€</strong>
+    </div>
+    {# Soldes utilises par la cascade de la 1ere carte #}
+    {# / Balances used by the 1st card's cascade #}
+    {% if detail_cascade %}
+      <div class="cascade-badges-list" data-testid="complement-detail-cascade">
+        {% for solde_utilise in detail_cascade %}
+          <span class="cascade-badge">{{ solde_utilise.name }} : {{ solde_utilise.montant_euros }}€</span>
+        {% endfor %}
+      </div>
+    {% endif %}
+    {# Total du panier et reste a payer #}
+    {# / Cart total and remaining amount #}
+    <div class="payment-detail fi-payment-detail"
+         data-testid="complement-total-panier">{% translate "Total panier" %} : {{ total_panier_euros }}€</div>
+    <div class="give-back-box"
+         style="margin: 0.75rem 0"
+         data-testid="complement-reste-a-payer"
+         role="alert">
+      <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+      {% translate "Reste à payer" %} : <strong>{{ reste_euros }}€</strong>
+    </div>
+    {# Hidden inputs pour propager les donnees cascade de la 1ere carte #}
+    {# / Hidden inputs to propagate 1st card's cascade data #}
+    <input type="hidden"
+           name="tag_id_carte1"
+           value="{{ tag_id_carte1 }}"
+           data-testid="hidden-tag-id-carte1" />
+    <input type="hidden"
+           name="cascade_carte1"
+           value="{{ cascade_carte1_json }}"
+           data-testid="hidden-cascade-carte1" />
+    <input type="hidden"
+           name="total_nfc_carte1"
+           value="{{ total_nfc_carte1 }}"
+           data-testid="hidden-total-nfc-carte1" />
+    {# Boutons complement — type="button" autonomes (piege 58) #}
+    {# / Complement buttons — standalone type="button" (trap 58) #}
+    {% comment %}
   ESPECES et CB ciblent #messages (innerHTML) car le retour est soit
   hx_return_payment_success soit un re-render de hx_complement_paiement —
   aucun des deux n'a de div id confirm en racine, donc un swap outerHTML
   ferait disparaitre l'overlay. Le complement_paiement lui-meme s'affiche
   dans #messages, on remplace son contenu par le resultat.
   / Cash and Card target #messages (innerHTML).
-  {% endcomment %}
-  {% if accepte_especes %}
-  <button type="button"
-          class="bt-basic-container bt-complement-base bt-complement-especes"
-          data-testid="btn-complement-especes"
-          hx-post="{% url 'laboutik-paiement-payer_complementaire' %}"
-          hx-vals='{"moyen_complement": "espece", "tag_id_carte1": "{{ tag_id_carte1 }}", "cascade_carte1": {{ cascade_carte1_json|escapejs }}, "total_nfc_carte1": "{{ total_nfc_carte1 }}"}'
-          hx-include="#addition-form"
-          hx-target="#messages"
-          hx-swap="innerHTML"
-          data-loading-disable>
-    <div class="bt-basic-icon">
-      <i class="fas fa-coins" aria-hidden="true"></i>
-    </div>
-    <div class="bt-basic-text">
-      <div>{% translate "ESPÈCES" %} — {{ reste_euros }}€</div>
-    </div>
-  </button>
-  {% endif %}
-
-  {% if accepte_carte_bancaire %}
-  <button type="button"
-          class="bt-basic-container bt-complement-base bt-complement-cb"
-          data-testid="btn-complement-cb"
-          hx-post="{% url 'laboutik-paiement-payer_complementaire' %}"
-          hx-vals='{"moyen_complement": "carte_bancaire", "tag_id_carte1": "{{ tag_id_carte1 }}", "cascade_carte1": {{ cascade_carte1_json|escapejs }}, "total_nfc_carte1": "{{ total_nfc_carte1 }}"}'
-          hx-include="#addition-form"
-          hx-target="#messages"
-          hx-swap="innerHTML"
-          data-loading-disable>
-    <div class="bt-basic-icon">
-      <i class="fas fa-credit-card" aria-hidden="true"></i>
-    </div>
-    <div class="bt-basic-text">
-      <div>{% translate "CB" %} — {{ reste_euros }}€</div>
-    </div>
-  </button>
-  {% endif %}
-
-  {% if autoriser_2eme_carte %}
-  <button type="button"
-          class="bt-basic-container bt-complement-base bt-complement-2eme-carte"
-          data-testid="btn-complement-2eme-carte"
-          hx-get="{% url 'laboutik-paiement-lire_nfc_complement' %}?tag_id_carte1={{ tag_id_carte1 }}&cascade_carte1={{ cascade_carte1_json|urlencode }}&total_nfc_carte1={{ total_nfc_carte1 }}"
-          hx-target="#confirm"
-          hx-swap="outerHTML"
-          data-loading-disable>
-    <div class="bt-basic-icon">
-      <i class="fas fa-address-card" aria-hidden="true"></i>
-    </div>
-    <div class="bt-basic-text">
-      <div>{% translate "2ème CARTE NFC" %} — {{ reste_euros }}€</div>
-    </div>
-  </button>
-  {% endif %}
-
-  <c-bt.return />
-
+    {% endcomment %}
+    {% if accepte_especes %}
+      <button type="button"
+              class="bt-basic-container bt-complement-base bt-complement-especes"
+              data-testid="btn-complement-especes"
+              hx-post="{% url 'laboutik-paiement-payer_complementaire' %}"
+              hx-vals='{"moyen_complement": "espece", "tag_id_carte1": "{{ tag_id_carte1 }}", "cascade_carte1": {{ cascade_carte1_json|escapejs }}, "total_nfc_carte1": "{{ total_nfc_carte1 }}"}'
+              hx-include="#addition-form"
+              hx-target="#messages"
+              hx-swap="outerHTML"
+              data-loading-disable>
+        <div class="bt-basic-icon">
+          <i class="fas fa-coins" aria-hidden="true"></i>
+        </div>
+        <div class="bt-basic-text">
+          <div>{% translate "ESPÈCES" %} — {{ reste_euros }}€</div>
+        </div>
+      </button>
+    {% endif %}
+    {% if accepte_carte_bancaire %}
+      <button type="button"
+              class="bt-basic-container bt-complement-base bt-complement-cb"
+              data-testid="btn-complement-cb"
+              hx-post="{% url 'laboutik-paiement-payer_complementaire' %}"
+              hx-vals='{"moyen_complement": "carte_bancaire", "tag_id_carte1": "{{ tag_id_carte1 }}", "cascade_carte1": {{ cascade_carte1_json|escapejs }}, "total_nfc_carte1": "{{ total_nfc_carte1 }}"}'
+              hx-include="#addition-form"
+              hx-target="#messages"
+              hx-swap="outerHTML"
+              data-loading-disable>
+        <div class="bt-basic-icon">
+          <i class="fas fa-credit-card" aria-hidden="true"></i>
+        </div>
+        <div class="bt-basic-text">
+          <div>{% translate "CB" %} — {{ reste_euros }}€</div>
+        </div>
+      </button>
+    {% endif %}
+    {% if autoriser_2eme_carte %}
+      <button type="button"
+              class="bt-basic-container bt-complement-base bt-complement-2eme-carte"
+              data-testid="btn-complement-2eme-carte"
+              hx-get="{% url 'laboutik-paiement-lire_nfc_complement' %}?tag_id_carte1={{ tag_id_carte1 }}&cascade_carte1={{ cascade_carte1_json|urlencode }}&total_nfc_carte1={{ total_nfc_carte1 }}"
+              hx-target="#confirm"
+              hx-swap="outerHTML"
+              data-loading-disable>
+        <div class="bt-basic-icon">
+          <i class="fas fa-address-card" aria-hidden="true"></i>
+        </div>
+        <div class="bt-basic-text">
+          <div>{% translate "2ème CARTE NFC" %} — {{ reste_euros }}€</div>
+        </div>
+      </button>
+    {% endif %}
+    <c-bt.return />
+  </div>
 </div>
