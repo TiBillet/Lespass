@@ -53,7 +53,7 @@ Variables attendues :
     {# widget pre-remplit la recherche et la lance automatiquement.            #}
     {# / Reusable map widget. `adresse_initiale` = place name -> the widget JS #}
     {# pre-fills and auto-runs the search.                                     #}
-    {% include "widgets/widget_carte_adresse.html" with identifiant_widget="place" hauteur_carte="350px" champs_adresse_separes=True adresse_initiale=new_address_name latitude_initiale=initial.place_latitude longitude_initiale=initial.place_longitude required=True %}
+    {% include "widgets/widget_carte_adresse.html" with identifiant_widget="place" hauteur_carte="350px" champs_adresse_separes=True adresse_initiale=adresse_recherche|default:new_address_name latitude_initiale=initial.place_latitude longitude_initiale=initial.place_longitude required=True %}
 
     <div class="d-flex justify-content-end pt-2">
         <button type="submit" class="btn btn-primary btn-lg" data-testid="wizard-map-submit">

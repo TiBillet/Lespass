@@ -1,5 +1,63 @@
 # Changelog / Journal des modifications
 
+## Intégration du recensement Tiers-Lieux dans le wizard d'évènement / Tiers-Lieux directory integration in the event wizard
+
+**Date :** 2026-06-05
+**Migration :** Non
+
+**Quoi / What :** à l'étape 1 du wizard de proposition d'évènement (visiteur anonyme), on
+enrichit la saisie du lieu avec l'**API publique du recensement national Tiers-Lieux**
+(https://api.tiers-lieux.fr/) et la détection d'instance :
+1. **Détection d'instance** : si l'email saisi correspond à un compte qui administre déjà une
+   instance TiBillet (`User.client_admin`), un encart **non-bloquant** invite le proposeur à
+   créer son évènement chez lui + à ajouter le(s) tag(s) que ce tenant fédère + à proposer son
+   espace à la fédération.
+2. **Recherche nationale unifiée** : à chaque recherche (≥ 3 car., débounce), le recensement
+   Tiers-Lieux est interrogé et **affiché sous les adresses locales**, avec un texte « Vous ne
+   trouvez pas votre lieu ci-dessus ? Élargissez au recensement national ». Un **spinner**
+   remplace la loupe de l'input pendant l'appel. Une fiche trouvée pré-remplit le nouveau lieu
+   et passe à l'étape carte (géocodage de l'adresse complète) pour **validation**. Le message
+   « aucun lieu trouvé + créer » ne s'affiche que si la liste locale est aussi vide (sinon
+   réponse vide, pas de bruit).
+3. **UX étape 1 fiabilisée** : plus de **pré-cochage automatique** de l'adresse principale
+   (corrige un bug : « Continuer » partait avec une sélection fantôme). Le bouton **Continuer
+   est grisé** tant qu'aucun choix réel n'est fait (adresse cochée *et visible*, ou nom de
+   nouveau lieu saisi), avec un indice explicite. Si rien n'est trouvé (local + national), un
+   **CTA « Créer « terme » comme nouveau lieu »** bascule en mode nouveau lieu avec le nom
+   pré-rempli. ⚠️ Le pré-cochage retiré concerne aussi le wizard staff (le formulaire est
+   unifié) : l'adresse doit désormais être choisie explicitement.
+
+**Comment / How :**
+- Service isolé `BaseBillet/services/tiers_lieux.py` : `rechercher_tiers_lieux(terme)` avec
+  **timeout 4 s + try/except → []** (le wizard ne casse jamais si l'API est lente/down) et cache
+  mémoire 1 h. L'API ne sait PAS chercher par email (testé) → la clé de recherche est le **nom/
+  ville/CP**, l'email ne sert qu'à la détection d'instance.
+- 3 `@action` sur `EventWizard` : `check-instance` (GET, HTMX au blur de l'email),
+  `search-tierslieux` (GET, HTMX débounce), `use-tierslieux` (POST → session → étape carte).
+- Le filtre JS local existant pilote le déclenchement de la recherche nationale (HTMX) uniquement
+  si 0 adresse locale et terme ≥ 3 caractères.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/services/tiers_lieux.py` (+`__init__.py`) | Client API : recherche + normalisation + timeout + cache |
+| `BaseBillet/views.py` | 3 `@action` (`check-instance`, `search-tierslieux`, `use-tierslieux`) + pré-remplissage `_wizard_etape_carte_lieu` |
+| `…/wizard/_form_lieu.html` | conteneurs `#wizard-instance-result` / `#wizard-tierslieux-result` + câblage HTMX + JS débounce |
+| `…/wizard/_form_carte.html` | `adresse_initiale=adresse_recherche` (géocodage de l'adresse complète) |
+| `…/wizard/_instance_trouvee.html`, `…/wizard/_tierslieux_resultats.html` | nouveaux partials |
+| `tests/pytest/test_tiers_lieux.py` | 11 tests (service mocké + endpoints) |
+
+### Sécurité
+- ⚠️ `check-instance` permet à un anonyme de tester un email et savoir s'il administre une
+  instance (+ son nom) → **énumération email→instance**. Risque limité (emails de contact souvent
+  publics), **accepté pour le MVP**. Rate-limit par IP possible en évolution.
+- API externe : timeout court + dégradation gracieuse (jamais d'exception vers le wizard).
+
+### i18n
+- Nouveaux `{% translate %}` / `{% blocktranslate %}` (encarts) → `makemessages` (texte source FR).
+
+---
+
 ## Jauge ouverte aux proposeurs dans le wizard d'évènement / Gauge available to proposers in the event wizard
 
 **Date :** 2026-06-05

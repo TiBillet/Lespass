@@ -134,17 +134,29 @@ Variables attendues :
         <label for="email_proposeur" class="form-label">
             {% translate "Votre adresse e-mail" %} <span class="text-danger">*</span>
         </label>
+        {# Au blur, on demande au serveur si cet email gère déjà une instance #}
+        {# TiBillet (HTMX, CHANTIER-04). La réponse remplit #wizard-instance-result. #}
+        {# / On blur, ask the server whether this email already manages a TiBillet #}
+        {# instance. The response fills #wizard-instance-result. #}
         <input type="email" id="email_proposeur" name="email_proposeur"
                class="form-control form-control-lg"
                value="{{ initial.email_proposeur|default:'' }}"
                required autocomplete="email"
                placeholder="{% translate 'vous@exemple.org' %}"
                aria-describedby="email_proposeur_help"
+               hx-get="{% url 'event-wizard-check-instance' %}"
+               hx-trigger="change"
+               hx-target="#wizard-instance-result"
+               hx-swap="innerHTML"
+               hx-indicator="#tibillet-spinner"
                data-testid="wizard-place-email">
         <div id="email_proposeur_help" class="form-text">
             <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
             {% translate "Nécessaire pour suivre votre proposition. Vous pourrez confirmer votre compte plus tard." %}
         </div>
+        {# Encart rempli par HTMX si l'email correspond à une instance gérée. #}
+        {# / Slot filled by HTMX if the email matches a managed instance. #}
+        <div id="wizard-instance-result" aria-live="polite"></div>
     </div>
     {% endif %}
 
@@ -174,7 +186,14 @@ Variables attendues :
             </label>
             <div class="input-group mb-2">
                 <span class="input-group-text" aria-hidden="true">
-                    <i class="bi bi-search"></i>
+                    {# Loupe par défaut ; remplacée par un spinner pendant l'appel #}
+                    {# à l'API nationale (basculé par le JS). #}
+                    {# / Search icon by default; swapped for a spinner during the #}
+                    {# national API call (toggled by JS). #}
+                    <i class="bi bi-search" data-testid="wizard-search-icon"></i>
+                    <span class="spinner-border spinner-border-sm text-secondary"
+                          role="status" style="display: none;"
+                          data-testid="wizard-search-spinner"></span>
                 </span>
                 <input type="text" id="wizard-place-search" class="form-control"
                        placeholder="{% translate 'Filtrer par nom, ville ou code postal…' %}"
@@ -188,11 +207,15 @@ Variables attendues :
                 {% for a in addresses %}
                 <label class="wizard-place-item"
                        data-search="{{ a.name|default:a.address_locality|lower }} {{ a.address_locality|lower }} {{ a.postal_code }}">
+                    {# Aucune adresse pré-cochée : l'utilisateur choisit explicitement #}
+                    {# (sinon « Continuer » partait avec une sélection fantôme). On ne #}
+                    {# re-coche que la valeur re-soumise après une erreur 422. #}
+                    {# / No address pre-checked: the user must pick explicitly (else #}
+                    {# « Continue » left with a phantom selection). Only re-check the #}
+                    {# value re-submitted after a 422. #}
                     <input type="radio" name="postal_address" value="{{ a.pk }}"
                            class="form-check-input"
-                           {% if initial.postal_address|stringformat:"s" == a.pk|stringformat:"s" %}checked
-                           {% elif default_address_pk and not initial.postal_address and default_address_pk|stringformat:"s" == a.pk|stringformat:"s" %}checked
-                           {% endif %}
+                           {% if initial.postal_address|stringformat:"s" == a.pk|stringformat:"s" %}checked{% endif %}
                            data-testid="wizard-place-radio">
                     <span class="wizard-place-item-body">
                         <span class="wizard-place-item-name">{{ a.name|default:a.address_locality }}</span>
@@ -221,6 +244,11 @@ Variables attendues :
                 <i class="bi bi-funnel me-1" aria-hidden="true"></i>
                 {% translate "Toutes les adresses ne sont pas affichées. Tapez ci-dessus pour filtrer." %}
             </p>
+            {# Encart rempli par HTMX avec le recensement national Tiers-Lieux, #}
+            {# uniquement si AUCUNE adresse locale ne correspond (cf. JS plus bas). #}
+            {# / Slot filled by HTMX with the national Tiers-Lieux directory, only #}
+            {# when NO local address matches (see JS below). #}
+            <div id="wizard-tierslieux-result" aria-live="polite"></div>
         </div>
 
         {# ---- Mode "nouveau lieu" : seulement le nom (carte = page 2) ---- #}
@@ -240,8 +268,18 @@ Variables attendues :
         </div>
     </div>
 
-    <div class="d-flex justify-content-end pt-2">
-        <button type="submit" class="btn btn-primary btn-lg" data-testid="wizard-place-submit">
+    <div class="d-flex flex-wrap justify-content-end align-items-center gap-2 pt-2">
+        {# Indice affiché tant que rien n'est sélectionné (géré par le JS). #}
+        {# / Hint shown while nothing is selected (toggled by JS). #}
+        <span id="wizard-place-hint" class="text-muted small me-auto"
+              role="status" aria-live="polite" data-testid="wizard-place-hint">
+            <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+            {% translate "Choisissez une adresse ou créez un nouveau lieu pour continuer." %}
+        </span>
+        {# Désactivé au départ : activé par le JS dès qu'un choix réel est fait. #}
+        {# / Disabled at first: enabled by JS as soon as a real choice is made. #}
+        <button type="submit" class="btn btn-primary btn-lg" disabled
+                data-testid="wizard-place-submit">
             {{ next_step_label|default:_("Continuer") }}
             <i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>
         </button>
@@ -286,6 +324,30 @@ Variables attendues :
         var liste = document.getElementById('wizard-place-list');
         var message_aucun = document.getElementById('wizard-place-no-result');
         var message_cap = document.getElementById('wizard-place-cap');
+
+        // Recherche nationale Tiers-Lieux (CHANTIER-04) : conteneur + URL + minuteur
+        // de debounce. On ne l'interroge que si aucune adresse locale ne correspond.
+        // / National Tiers-Lieux search: container + URL + debounce timer. Queried
+        // only when no local address matches.
+        var conteneur_tierslieux = document.getElementById('wizard-tierslieux-result');
+        var url_recherche_tierslieux = "{% url 'event-wizard-search-tierslieux' %}";
+        var minuteur_tierslieux = null;
+
+        // Spinner dans l'input de recherche pendant l'appel a l'API nationale :
+        // on remplace la loupe par un petit spinner tant qu'une requete est en
+        // vol. Un compteur gere les requetes qui se chevauchent (frappe rapide).
+        // / Spinner inside the search input during the national API call: swap
+        // the magnifier for a small spinner while a request is in flight. A
+        // counter handles overlapping requests (fast typing).
+        var icone_loupe = document.querySelector('[data-testid="wizard-search-icon"]');
+        var spinner_recherche = document.querySelector('[data-testid="wizard-search-spinner"]');
+        var requetes_tierslieux_en_cours = 0;
+
+        function maj_spinner_recherche() {
+            var actif = requetes_tierslieux_en_cours > 0;
+            if (icone_loupe) { icone_loupe.style.display = actif ? 'none' : 'inline-block'; }
+            if (spinner_recherche) { spinner_recherche.style.display = actif ? 'inline-block' : 'none'; }
+        }
 
         // Plafond d'affichage : avec beaucoup d'adresses (ex: 300), on garde
         // TOUTES les adresses dans le DOM pour que la recherche fonctionne,
@@ -333,6 +395,50 @@ Variables attendues :
             if (message_cap) {
                 message_cap.style.display = liste_plafonnee ? 'block' : 'none';
             }
+
+            // Recherche nationale Tiers-Lieux : seulement si AUCUNE adresse locale
+            // ne correspond ET terme >= 3 caracteres. Debounce 600ms pour ne pas
+            // solliciter l'API externe a chaque frappe. Sinon, on vide l'encart.
+            // / National Tiers-Lieux search: only if NO local address matches AND
+            // term >= 3 chars. 600ms debounce. Otherwise clear the slot.
+            if (conteneur_tierslieux) {
+                if (minuteur_tierslieux) { clearTimeout(minuteur_tierslieux); }
+                var terme_national = (champ_recherche.value || '').trim();
+                if (terme_national.length >= 3) {
+                    // Recherche nationale UNIFIEE : on l'interroge a chaque
+                    // recherche (>= 3 car.), meme s'il y a des resultats locaux,
+                    // et on l'affiche sous la liste locale. On indique au serveur
+                    // si la liste locale est vide : il n'affiche le message "rien
+                    // trouve" + creation que dans ce cas (sinon on n'encombre
+                    // pas, l'utilisateur a deja des adresses locales).
+                    // / UNIFIED national search: queried on every search (>= 3
+                    // chars), even with local results, shown under the local list.
+                    // We tell the server whether the local list is empty.
+                    var local_vide = (nombre_correspondants === 0) ? '1' : '0';
+                    minuteur_tierslieux = setTimeout(function () {
+                        // Spinner ON le temps de l'aller-retour vers l'API.
+                        // / Spinner ON during the API round-trip.
+                        requetes_tierslieux_en_cours += 1;
+                        maj_spinner_recherche();
+                        var fin_recherche = function () {
+                            requetes_tierslieux_en_cours -= 1;
+                            maj_spinner_recherche();
+                        };
+                        htmx.ajax('GET', url_recherche_tierslieux, {
+                            target: '#wizard-tierslieux-result',
+                            swap: 'innerHTML',
+                            values: { q: terme_national, local_vide: local_vide },
+                        }).then(fin_recherche, fin_recherche);
+                    }, 600);
+                } else {
+                    conteneur_tierslieux.innerHTML = '';
+                }
+            }
+
+            // Le filtrage peut masquer/afficher l'adresse cochee : on reevalue
+            // l'etat du bouton Continuer. / Filtering can hide/show the checked
+            // address: re-evaluate the Continue button state.
+            if (typeof maj_etat_continuer === 'function') { maj_etat_continuer(); }
         }
 
         // 3. Surlignage de l'item selectionne.
@@ -345,20 +451,81 @@ Variables attendues :
             });
         }
 
+        // 4. Etat du bouton "Continuer" : actif UNIQUEMENT si un vrai choix est
+        //    fait. Mode "adresse existante" -> une adresse doit etre cochee.
+        //    Mode "nouveau lieu" -> un nom doit etre saisi. Sinon le bouton est
+        //    grise. Cela evite de partir avec une selection fantome (le bug ou
+        //    le radio par defaut restait coche meme sans choix).
+        // / "Continue" button state: enabled ONLY on a real choice. Existing
+        //    mode -> an address must be checked; new mode -> a name must be
+        //    typed. Otherwise the button stays disabled. Prevents leaving with a
+        //    phantom selection.
+        var bouton_continuer = document.querySelector('[data-testid="wizard-place-submit"]');
+        var indice_continuer = document.getElementById('wizard-place-hint');
+        var champ_nouveau_nom = document.getElementById('new_address_name');
+
+        function maj_etat_continuer() {
+            var radio_mode = toggle.querySelector('input[name="_form_mode"]:checked');
+            var mode = radio_mode ? radio_mode.value : 'existing';
+            var actif = false;
+            if (mode === 'existing') {
+                // Une adresse locale doit etre cochee ET visible (pas masquee par
+                // le filtre de recherche). Sinon on ne part pas avec une selection
+                // invisible. / A local address must be checked AND visible (not
+                // hidden by the search filter).
+                var coche = liste && liste.querySelector('input[name="postal_address"]:checked');
+                var item_coche = coche ? coche.closest('.wizard-place-item') : null;
+                actif = !!(item_coche && item_coche.style.display !== 'none');
+            } else {
+                // Le nom du nouveau lieu doit etre renseigne.
+                // / The new place name must be filled.
+                actif = !!(champ_nouveau_nom && champ_nouveau_nom.value.trim());
+            }
+            if (bouton_continuer) { bouton_continuer.disabled = !actif; }
+            // L'indice n'a de sens que tant que le bouton est grise.
+            // / The hint only makes sense while the button is disabled.
+            if (indice_continuer) { indice_continuer.style.display = actif ? 'none' : 'inline'; }
+        }
+
         // Cablage des evenements.
         // / Wire up events.
         toggle.addEventListener('change', function (evenement) {
             if (evenement.target.matches('input[name="_form_mode"]')) { appliquer_mode(); }
             if (evenement.target.matches('input[name="postal_address"]')) { maj_selection(); }
+            maj_etat_continuer();
         });
         if (champ_recherche) { champ_recherche.addEventListener('input', filtrer_liste); }
+        if (champ_nouveau_nom) { champ_nouveau_nom.addEventListener('input', maj_etat_continuer); }
 
-        // Etat initial au chargement : applique le mode, le surlignage, et le
-        // plafond d'affichage (la liste s'ouvre deja limitee).
-        // / Initial state on load: apply mode, highlight, and the display cap
-        // (the list opens already capped).
+        // CTA "Creer un nouveau lieu" injecte dans les resultats Tiers-Lieux
+        // (delegation, car le bouton arrive via HTMX apres le chargement). Au
+        // clic : on bascule en mode nouveau lieu et on pre-remplit le nom avec
+        // le terme cherche -> parcours fluide quand rien n'est trouve.
+        // / Delegated "create new place" CTA from the Tiers-Lieux results: switch
+        // to new mode and pre-fill the name with the searched term.
+        document.addEventListener('click', function (evenement) {
+            var cible = evenement.target.closest('[data-testid="wizard-create-new"]');
+            if (!cible) { return; }
+            evenement.preventDefault();
+            var radio_new = document.getElementById('mode-new');
+            if (radio_new) { radio_new.checked = true; }
+            appliquer_mode();  // affiche le bloc nouveau lieu + active ses champs
+            if (champ_nouveau_nom) {
+                var terme = cible.getAttribute('data-terme')
+                    || (champ_recherche ? champ_recherche.value.trim() : '');
+                champ_nouveau_nom.value = terme;
+                champ_nouveau_nom.focus();
+            }
+            maj_etat_continuer();
+        });
+
+        // Etat initial au chargement : applique le mode, le surlignage, le
+        // plafond d'affichage, et l'etat du bouton Continuer (grise par defaut).
+        // / Initial state on load: mode, highlight, display cap, and Continue
+        // button state (disabled by default).
         appliquer_mode();
         maj_selection();
         filtrer_liste();
+        maj_etat_continuer();
     })();
 </script>

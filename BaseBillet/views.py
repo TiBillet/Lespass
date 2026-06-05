@@ -3724,6 +3724,16 @@ def _wizard_etape_carte_lieu(request, *, template, contexte_commun,
     contexte_page = dict(contexte_commun)
     contexte_page.update({"new_address_name": nom_nouveau_lieu})
 
+    # Texte de recherche pré-rempli pour le widget carte : si on vient d'une
+    # fiche Tiers-Lieux (CHANTIER-04), on passe l'adresse complète pour que le
+    # géocodage trouve le bon point ; sinon le nom du lieu suffit.
+    # / Pre-filled search text for the map widget: full address if coming from a
+    # Tiers-Lieux record, otherwise the place name.
+    adresse_recherche = request.session.get(
+        _wizard_lieu_session_key(session_prefix, "tierslieux_adresse_recherche")
+    )
+    contexte_page.update({"adresse_recherche": adresse_recherche or nom_nouveau_lieu})
+
     if request.method == "GET":
         context = get_context(request)
         context.update(contexte_page)
@@ -3760,6 +3770,7 @@ def _wizard_etape_carte_lieu(request, *, template, contexte_commun,
 
     request.session[_wizard_lieu_session_key(session_prefix, "postal_address_pk")] = str(addr.pk)
     request.session.pop(_wizard_lieu_session_key(session_prefix, "new_address_name"), None)
+    request.session.pop(_wizard_lieu_session_key(session_prefix, "tierslieux_adresse_recherche"), None)
     return redirect(event_url_name)
 
 
@@ -4259,6 +4270,134 @@ class EventWizard(viewsets.ViewSet):
             session_prefix=self.SESSION_PREFIX,
             inner_context=self._inner_context_events(request, postal_address),
         )
+
+    # -------------------------------------------------------------------------
+    # Intégration recensement Tiers-Lieux (CHANTIER-04). Trois aides HTMX à
+    # l'étape 1 : détecter l'instance du proposeur, chercher son lieu dans le
+    # recensement national, et l'utiliser pour pré-remplir le nouveau lieu.
+    # / Tiers-Lieux directory integration (CHANTIER-04). Three HTMX helpers on
+    # step 1: detect the proposer's instance, search the national directory,
+    # and use a record to pre-fill the new place.
+    # -------------------------------------------------------------------------
+
+    @action(detail=False, methods=["GET"], url_path="check-instance", url_name="check-instance")
+    def check_instance(self, request):
+        """
+        Détecte si l'email saisi correspond à un compte qui administre déjà une
+        ou plusieurs instances TiBillet. Renvoie un encart d'invitation
+        (non-bloquant) ou une réponse vide. Déclenché en HTMX au blur de l'email.
+        / Detect whether the typed email belongs to an account that already
+        manages TiBillet instance(s). Returns an invitation partial or empty.
+
+        LOCALISATION : BaseBillet/views.py
+        """
+        email = (request.GET.get("email_proposeur") or "").strip()
+        if not email:
+            return HttpResponse("")
+
+        # Le modèle User est SHARED : on peut chercher dans le schéma courant.
+        # / The User model is SHARED: we can search from the current schema.
+        user = TibilletUser.objects.filter(email__iexact=email).first()
+        if not user:
+            return HttpResponse("")
+
+        # Instances administrées par ce compte (M2M client_admin). On construit
+        # pour chacune le lien vers son propre wizard de proposition.
+        # / Instances managed by this account; build the link to each wizard.
+        instances = []
+        for tenant in user.client_admin.all():
+            domaine = tenant.get_primary_domain()
+            if not domaine:
+                continue
+            instances.append({
+                "name": tenant.name,
+                "wizard_url": f"https://{domaine.domain}/event/wizard/place/",
+            })
+
+        if not instances:
+            return HttpResponse("")
+
+        # Tags que CE tenant fédère automatiquement : à suggérer au proposeur
+        # pour que son évènement remonte ici (cf. CHANTIER FEDERATION).
+        # / Tags this tenant auto-federates: suggested so the event shows here.
+        federation_config = FederationConfiguration.get_solo()
+        tags_a_suggerer = [tag.name for tag in federation_config.tags_federation.all()]
+
+        return render(request, "reunion/views/event/wizard/_instance_trouvee.html", {
+            "instances": instances,
+            "tags_a_suggerer": tags_a_suggerer,
+        })
+
+    @action(detail=False, methods=["GET"], url_path="search-tierslieux", url_name="search-tierslieux")
+    def search_tierslieux(self, request):
+        """
+        Cherche le lieu du proposeur dans le recensement national Tiers-Lieux.
+        Déclenché en HTMX (débounce) quand aucune adresse locale ne correspond.
+        / Search the proposer's place in the national Tiers-Lieux directory.
+
+        LOCALISATION : BaseBillet/views.py
+        """
+        from BaseBillet.services.tiers_lieux import rechercher_tiers_lieux
+
+        terme = (request.GET.get("q") or "").strip()
+        # On évite les recherches trop courtes (bruit + charge API externe).
+        # / Avoid too-short searches (noise + external API load).
+        if len(terme) < 3:
+            return HttpResponse("")
+
+        fiches = rechercher_tiers_lieux(terme)
+        # Le client indique si la liste locale est vide : on n'affiche le message
+        # "aucun lieu trouvé" + création de lieu que dans ce cas (sinon réponse
+        # vide, car l'utilisateur a déjà des adresses locales).
+        # / The client tells whether the local list is empty: we only show the
+        # "nothing found" + create CTA then (otherwise empty response).
+        local_vide = request.GET.get("local_vide") == "1"
+        return render(request, "reunion/views/event/wizard/_tierslieux_resultats.html", {
+            "fiches": fiches,
+            "terme": terme,
+            "local_vide": local_vide,
+        })
+
+    @action(detail=False, methods=["POST"], url_path="use-tierslieux", url_name="use-tierslieux")
+    def use_tierslieux(self, request):
+        """
+        Mémorise la fiche Tiers-Lieux choisie et redirige vers l'étape carte
+        pré-remplie. Le proposeur valide ensuite comme une création de lieu
+        normale (la carte géocode l'adresse complète et remplit les champs).
+        / Store the chosen Tiers-Lieux record and redirect to the pre-filled map
+        step. The proposer then validates like a normal place creation.
+
+        LOCALISATION : BaseBillet/views.py
+        """
+        garde = self._garde_acces(request)
+        if garde:
+            return garde
+
+        nom = (request.POST.get("name") or "").strip()
+        if not nom:
+            return redirect("event-wizard-place")
+
+        # Adresse complète envoyée au widget carte comme texte de recherche :
+        # le widget géocode (Nominatim) et remplit les champs adresse.
+        # / Full address fed to the map widget as search text: it geocodes and
+        # fills the address fields.
+        morceaux = [
+            nom,
+            (request.POST.get("street_address") or "").strip(),
+            (request.POST.get("postal_code") or "").strip(),
+            (request.POST.get("locality") or "").strip(),
+        ]
+        adresse_recherche = " ".join(morceau for morceau in morceaux if morceau)
+
+        # L'étape carte exige un nom de lieu en session ; on garde aussi
+        # l'adresse de recherche pour pré-remplir le widget.
+        # / The map step requires a place name in session; we also keep the
+        # search address to pre-fill the widget.
+        request.session[self._session_key("new_address_name")] = nom
+        request.session[self._session_key("tierslieux_adresse_recherche")] = adresse_recherche
+        request.session.pop(self._session_key("postal_address_pk"), None)
+        request.session.modified = True
+        return redirect("event-wizard-map")
 
     @action(detail=False, methods=["GET"], url_path="done", url_name="done")
     def done(self, request):
