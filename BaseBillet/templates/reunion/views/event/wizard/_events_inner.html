@@ -18,7 +18,8 @@ Contexte attendu :
   - events (list[dict])     : brouillons (name, datetime ISO, long_description, image?, jauge_max?, tags?)
   - add_url (str)           : URL de l'action HTMX d'ajout
   - remove_url_name (str)   : nom d'URL de l'action HTMX de retrait (param idx)
-  - show_admin_fields (bool): affiche jauge_max + tags (wizard admin)
+  - show_admin_fields (bool): pilote le comportement des TAGS (staff = création libre ;
+                              public = sélection parmi l'existant). La jauge est affichée pour tous.
   - errors (dict), initial (dict) : apres une 422
 {% endcomment %}
 
@@ -51,7 +52,7 @@ Contexte attendu :
                     {% if event.long_description %}
                     <p class="mb-0 small text-muted">{{ event.long_description|truncatechars:90 }}</p>
                     {% endif %}
-                    {% if show_admin_fields and event.jauge_max %}
+                    {% if event.jauge_max %}
                     <span class="badge text-bg-light mt-1">
                         {% translate "Jauge" %} : {{ event.jauge_max }}
                     </span>
@@ -135,8 +136,8 @@ Contexte attendu :
                               data-testid="wizard-event-description">{{ initial.long_description|default:'' }}</textarea>
                 </div>
 
-                {# Jauge max : staff uniquement. / Gauge: staff only. #}
-                {% if show_admin_fields %}
+                {# Jauge max : affichée pour tous (staff comme proposeurs). #}
+                {# / Gauge: shown to everyone (staff and proposers). #}
                 <div class="col-md-6">
                     <label for="wizard-event-jauge" class="form-label small">
                         {% translate "Jauge max (optionnel)" %}
@@ -146,12 +147,11 @@ Contexte attendu :
                            class="form-control{% if errors.jauge_max %} is-invalid{% endif %}"
                            data-testid="wizard-event-jauge">
                 </div>
-                {% endif %}
 
                 {# Tags : commun à tous. Staff = création libre ; public = uniquement #}
                 {# les tags EXISTANTS (filtré côté serveur). Le datalist propose l'existant. #}
                 {# / Tags: shared. Staff free-creates; public limited to existing (server-side). #}
-                <div class="{% if show_admin_fields %}col-md-6{% else %}col-12{% endif %}">
+                <div class="col-md-6">
                     <label for="wizard-event-tags" class="form-label small">
                         {% translate "Tags (séparés par des virgules)" %}
                     </label>

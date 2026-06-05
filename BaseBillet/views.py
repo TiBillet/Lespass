@@ -3961,7 +3961,7 @@ def _creer_event_depuis_brouillon(draft, postal_address, user, est_staff):
       (FederationConfiguration.tag_auto_proposition) si configure.
     Tags du formulaire : staff = creation libre ; public = UNIQUEMENT les tags
     EXISTANTS (anti-spam, pas de creation par un visiteur).
-    jauge_max + produit FREERES : staff uniquement.
+    jauge_max + produit FREERES : pour tous (staff comme proposeurs).
     / Create an Event from a unified-wizard draft. Staff -> published; public ->
     proposal + auto tag; public form tags limited to existing tags (no creation).
 
@@ -3980,9 +3980,9 @@ def _creer_event_depuis_brouillon(draft, postal_address, user, est_staff):
     )
     _attacher_image_brouillon(event, draft)
 
-    # Jauge + produit FREERES : staff uniquement.
-    # / Gauge + FREERES product: staff only.
-    jauge = draft.get("jauge_max") if est_staff else None
+    # Jauge + produit FREERES : pour tous (staff comme proposeurs).
+    # / Gauge + FREERES product: for everyone (staff and proposers).
+    jauge = draft.get("jauge_max")
     if jauge:
         event.jauge_max = jauge
         event.show_gauge = True

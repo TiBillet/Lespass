@@ -143,6 +143,51 @@ def test_creer_event_public_est_proposition_avec_tag_auto():
 
 
 @pytest.mark.django_db
+def test_proposition_non_staff_applique_la_jauge():
+    """
+    Jauge pour tous : un proposeur non-staff qui renseigne une jauge la voit
+    appliquee (jauge_max + show_gauge=True + produit FREERES), tout en restant
+    une proposition moderee. Sans jauge -> defaut intact, pas de billetterie.
+    / Gauge for everyone: a non-staff proposer's gauge is applied (jauge_max +
+    show_gauge + FREERES product) while staying a moderated proposal.
+    """
+    from django.contrib.auth.models import AnonymousUser
+    from django_tenants.utils import tenant_context
+    from BaseBillet.views import _creer_event_depuis_brouillon
+    from BaseBillet.models import Event, PostalAddress, Product
+
+    lespass = Client.objects.get(schema_name="lespass")
+    with tenant_context(lespass):
+        pa = PostalAddress.objects.first()
+        free_res = Product.objects.filter(
+            categorie_article=Product.FREERES, publish=True, archive=False).first()
+
+        # Avec jauge -> appliquee + billetterie de reservation gratuite.
+        # / With a gauge -> applied + free-reservation product.
+        draft = _draft_minimal("Non-staff jauge test")
+        draft["jauge_max"] = 30
+        event = _creer_event_depuis_brouillon(draft, pa, AnonymousUser(), est_staff=False)
+        try:
+            assert event.jauge_max == 30
+            assert event.show_gauge is True
+            assert event.is_proposal is True  # reste une proposition moderee
+            if free_res:
+                assert free_res in event.products.all()
+        finally:
+            Event.objects.filter(pk=event.pk).delete()
+
+        # Sans jauge -> defaut du modele intact, aucune billetterie greffee.
+        # / No gauge -> model default untouched, no product attached.
+        event2 = _creer_event_depuis_brouillon(
+            _draft_minimal("Non-staff sans jauge test"), pa, AnonymousUser(), est_staff=False)
+        try:
+            assert event2.show_gauge is False
+            assert event2.products.count() == 0
+        finally:
+            Event.objects.filter(pk=event2.pk).delete()
+
+
+@pytest.mark.django_db
 def test_tags_public_uniquement_existants_pas_de_creation():
     """Public : un tag inexistant n'est PAS cree ; un tag existant est applique."""
     from django.contrib.auth.models import AnonymousUser

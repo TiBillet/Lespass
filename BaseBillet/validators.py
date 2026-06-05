@@ -1466,10 +1466,10 @@ class WizardPlaceMapSerializer(serializers.Serializer):
 class WizardEventSerializer(serializers.Serializer):
     """
     Serializer unifie du wizard event (front, CHANTIER-03). Champs communs + tags
-    (commun a tous). `jauge_max` reservee au staff : le ViewSet ne l'applique que si
-    staff. Pas de garde "module" ici (elle vit dans EventWizard._garde_acces).
-    / Unified event wizard serializer. Common fields + tags (shared). jauge_max
-    applied by the ViewSet only when staff. Module guard lives in the ViewSet.
+    + jauge_max (commun a tous : staff comme proposeurs). Pas de garde "module"
+    ici (elle vit dans EventWizard._garde_acces).
+    / Unified event wizard serializer. Common fields + tags + jauge_max (shared by
+    everyone, staff and proposers). Module guard lives in the ViewSet.
 
     LOCALISATION : BaseBillet/validators.py
     """
