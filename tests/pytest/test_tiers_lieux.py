@@ -18,7 +18,27 @@ from BaseBillet.services.tiers_lieux import (
     _construire_rue,
     _normaliser_fiche,
     rechercher_tiers_lieux,
+    valider_coordonnees,
 )
+
+
+def test_valider_coordonnees_tolere_la_virgule_et_rejette_le_garbage():
+    """Régression : un float localisé FR (« 44,05 ») doit être accepté et
+    converti, sinon le pré-remplissage GPS de la carte casse. Le texte arbitraire
+    (POST forgé), None et les coordonnées hors bornes sont rejetés -> (None, None)."""
+    # Virgule décimale (rendu localisé) tolérée -> floats normalisés au point.
+    assert valider_coordonnees("44,053909", "3,986721") == (44.053909, 3.986721)
+    # Point décimal (format machine) accepté.
+    assert valider_coordonnees("44.05", "3.98") == (44.05, 3.98)
+    # Floats déjà typés acceptés.
+    assert valider_coordonnees(-21.0096, 55.2705) == (-21.0096, 55.2705)
+    # Mauvais inputs -> (None, None), jamais d'exception.
+    assert valider_coordonnees("<script>alert(1)</script>", "x") == (None, None)
+    assert valider_coordonnees(None, None) == (None, None)
+    assert valider_coordonnees("", "") == (None, None)
+    # Hors bornes terrestres -> rejeté.
+    assert valider_coordonnees("200", "0") == (None, None)
+    assert valider_coordonnees("0", "-181") == (None, None)
 
 
 # ----------------------------------------------------------------------------

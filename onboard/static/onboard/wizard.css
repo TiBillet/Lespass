@@ -578,17 +578,26 @@
  * switch `form-switch` Bootstrap 5 — plus moderne pour un "j'accepte".
  * / CGU switch (step 1): TiBillet green slider toggle with linked label.
  * =========================================================== */
-.onboard-cgu-switch {
+/* IMPORTANT — prefixe `.onboard-wizard` OBLIGATOIRE ici : `wizard.css` est
+   charge AVANT `bootstrap.min.css`. A spécificité EGALE (0,2,0), c'est la
+   derniere feuille qui gagne -> Bootstrap ecrasait `.onboard-cgu-switch
+   .form-check-input` et le switch retombait a sa taille par defaut (2em = 32px,
+   "tout petit"). En prefixant par l'ancetre `.onboard-wizard` on passe a (0,3,0)
+   et on bat Bootstrap proprement (sans !important, sans toucher l'ordre de
+   chargement). / MANDATORY `.onboard-wizard` prefix: wizard.css loads BEFORE
+   bootstrap.css; at equal specificity Bootstrap wins and reset the switch to its
+   default size. The ancestor prefix raises specificity to beat Bootstrap. */
+.onboard-wizard .onboard-cgu-switch {
     /* Padding-left assez large pour un toggle confortable. Sans `padding`,
        le switch chevauche le label. / Wide left padding for the slider
        to breathe; without it, it overlaps the label. */
     padding-left: 3rem;
     margin-top: 0.5rem;
 }
-.onboard-cgu-switch .form-check-input {
-    /* Toggle un peu plus grand que le defaut Bootstrap : meilleure
-       affordance tactile (mobile). / Slightly larger than default for
-       better touch affordance on mobile. */
+.onboard-wizard .onboard-cgu-switch .form-check-input {
+    /* Toggle plus grand que le defaut Bootstrap (2em) : meilleure affordance
+       tactile et lisibilite. / Larger than the Bootstrap default (2em) for
+       better touch affordance and readability. */
     width: 2.75em;
     height: 1.5em;
     margin-left: -3rem;

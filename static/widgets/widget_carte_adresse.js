@@ -527,11 +527,24 @@
         // Si on a des coords initiales, on place le marqueur tout de suite.
         // / If initial coords exist, place the marker immediately.
         if (a_des_coords_initiales) {
+            // Parties d'adresse initiales (ex: depuis le recensement Tiers-Lieux) :
+            // on remplit les champs DIRECTEMENT, sans geocodage Nominatim — qui
+            // echoue sur des libelles complexes ("MIETE (Maison...) 150 Rue...").
+            // Absentes (autres usages avec coords seules) -> objet vide, comme avant.
+            // / Initial address parts (e.g. from the Tiers-Lieux directory): fill
+            // the fields DIRECTLY, no Nominatim geocode (which fails on complex
+            // labels). Absent for other uses -> empty object, as before.
+            var rue_init = container.dataset.rueInitiale || "";
+            var cp_init = container.dataset.cpInitiale || "";
+            var ville_init = container.dataset.villeInitiale || "";
+            var parties_initiales = (rue_init || cp_init || ville_init)
+                ? { road: rue_init, postcode: cp_init, city: ville_init }
+                : {};
             placer_marqueur_et_remplir_champs(
                 latitude_initiale,
                 longitude_initiale,
                 container.dataset.adresseInitiale || "",
-                {},  // pas d'address dict initial — on ne re-geocode pas au load.
+                parties_initiales,
             );
         } else if (container.dataset.adresseInitiale) {
             // Pas de coords mais on a une chaîne de recherche initiale (ex:

@@ -46,6 +46,40 @@ CACHE_TTL = 3600
 # / Polite header to identify the caller to the API.
 USER_AGENT = "TiBillet-Lespass (https://tibillet.coop)"
 
+# Longueur maximale d'un terme de recherche. Un nom de lieu / ville / code postal
+# ne dépasse jamais ça : on tronque pour ne pas envoyer une requête démesurée à
+# l'API (et garder une clé de cache raisonnable).
+# / Max search term length. A place/city/zip never exceeds this: we truncate to
+# avoid sending an oversized request to the API (and keep a sane cache key).
+LONGUEUR_MAX_TERME = 120
+
+
+def valider_coordonnees(latitude, longitude):
+    """
+    Valide une paire de coordonnées GPS reçue en entrée (POST forgé, fiche API).
+    / Validate a GPS pair from untrusted input (forged POST, API record).
+
+    LOCALISATION : BaseBillet/services/tiers_lieux.py
+
+    On ne fait JAMAIS confiance à une coordonnée brute : elle peut être absente,
+    vide, ou contenir du texte arbitraire. Renvoie un couple de floats (lat, lng)
+    si les deux sont numériques ET dans les bornes terrestres, sinon (None, None).
+    / Never trust a raw coordinate (may be absent, empty, or arbitrary text).
+    Returns (lat, lng) floats if both are numeric and within Earth bounds,
+    otherwise (None, None).
+    """
+    # On tolère la virgule décimale (format FR) : un rendu localisé ou une fiche
+    # API peut renvoyer « 44,05 » au lieu de « 44.05 ». / Tolerate the French
+    # decimal comma: a localized render or an API record may send "44,05".
+    try:
+        lat = float(str(latitude).replace(",", "."))
+        lng = float(str(longitude).replace(",", "."))
+    except (TypeError, ValueError):
+        return None, None
+    if -90 <= lat <= 90 and -180 <= lng <= 180:
+        return lat, lng
+    return None, None
+
 
 def _cle_de_cache(terme, limite):
     """
@@ -144,7 +178,10 @@ def rechercher_tiers_lieux(terme, limite=5):
     :param limite: nombre maximum de fiches (défaut 5)
     :return: liste de dicts normalisés (vide si rien trouvé ou si erreur)
     """
-    terme_propre = (terme or "").strip()
+    # On borne le terme : un input démesuré (POST forgé) ne doit ni gonfler la
+    # requête sortante ni la clé de cache. / Bound the term: an oversized input
+    # must not bloat the outgoing request nor the cache key.
+    terme_propre = (terme or "").strip()[:LONGUEUR_MAX_TERME]
     if not terme_propre:
         return []
 
@@ -168,10 +205,28 @@ def rechercher_tiers_lieux(terme, limite=5):
         logger.warning("Recherche Tiers-Lieux échouée pour '%s' : %s", terme_propre, erreur)
         return []
 
-    # L'API renvoie {"hits": [...]}. On normalise chaque fiche.
-    # / The API returns {"hits": [...]}. Normalize each record.
-    fiches_brutes = donnees.get("hits", []) if isinstance(donnees, dict) else []
-    fiches_normalisees = [_normaliser_fiche(fiche) for fiche in fiches_brutes]
+    # L'API renvoie {"hits": [...]}. On normalise chaque fiche en ignorant les
+    # entrées qui ne sont pas des dicts (réponse inattendue). Si la normalisation
+    # échoue malgré tout, on ne casse PAS le wizard (règle « ne lève jamais ») :
+    # on journalise en ERROR — c'est une anomalie de NOTRE traitement, donc une
+    # remontée Sentry justifiée (au contraire d'un simple échec réseau, gardé en
+    # warning) — et on renvoie une liste vide.
+    # / Normalize each record, skipping non-dict entries. If normalization still
+    # fails, never break the wizard: log ERROR (a Sentry-worthy anomaly in OUR
+    # code, unlike a transient network failure kept at warning) and return [].
+    try:
+        fiches_brutes = donnees.get("hits", []) if isinstance(donnees, dict) else []
+        fiches_normalisees = [
+            _normaliser_fiche(fiche)
+            for fiche in fiches_brutes
+            if isinstance(fiche, dict)
+        ]
+    except Exception as erreur:
+        logger.error(
+            "Normalisation Tiers-Lieux inattendue pour '%s' : %s",
+            terme_propre, erreur,
+        )
+        return []
 
     cache.set(cle, fiches_normalisees, CACHE_TTL)
     return fiches_normalisees

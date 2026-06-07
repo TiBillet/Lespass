@@ -3686,6 +3686,19 @@ def _wizard_etape_choix_lieu(request, *, template, contexte_commun,
     if email_proposeur:
         request.session[_wizard_lieu_session_key(session_prefix, "email_proposeur")] = email_proposeur
 
+    # Ce formulaire (adresse existante OU nouveau lieu saisi à la main) ne vient
+    # PAS d'une fiche Tiers-Lieux. On nettoie un éventuel pré-remplissage TL
+    # resté en session — cas : l'utilisateur avait cliqué « Utiliser ce lieu »
+    # puis est revenu en arrière pour saisir le lieu à la main. Sans ce nettoyage,
+    # la page carte poserait le marqueur sur l'ancienne fiche (GPS résiduel) au
+    # lieu de lancer la recherche Nominatim sur le nouveau nom.
+    # / This form (existing address OR hand-typed new place) does NOT come from a
+    # Tiers-Lieux record. Clear any leftover TL pre-fill in session (user clicked
+    # "Use this place" then went back to type manually). Otherwise the map step
+    # would place the marker on the stale record instead of running Nominatim.
+    request.session.pop(_wizard_lieu_session_key(session_prefix, "tierslieux_adresse_recherche"), None)
+    request.session.pop(_wizard_lieu_session_key(session_prefix, "tierslieux_prefill"), None)
+
     if data["_mode"] == "existing":
         # Adresse existante : on garde le pk et on nettoie un eventuel nom.
         # / Existing address: keep the pk, clear any pending new-place name.
@@ -3734,6 +3747,30 @@ def _wizard_etape_carte_lieu(request, *, template, contexte_commun,
     )
     contexte_page.update({"adresse_recherche": adresse_recherche or nom_nouveau_lieu})
 
+    # Pré-remplissage GPS + adresse structurée (si on vient d'une fiche
+    # Tiers-Lieux avec coordonnées) : le widget carte pose le marqueur sur la
+    # géoloc de l'API et remplit les champs DIRECTEMENT, sans géocodage.
+    # On garantit TOUTES les clés (même vides) : dans un template Django,
+    # `valeur|default:prefill.latitude` lève VariableDoesNotExist si la clé
+    # `latitude` manque (la résolution d'un ARGUMENT de filtre ne tolère pas une
+    # clé absente, contrairement à l'opérande principal). En saisie manuelle, le
+    # prefill est absent -> dict de clés vides -> le widget bascule sur Nominatim.
+    # / GPS + structured-address pre-fill (from a Tiers-Lieux record with coords):
+    # the widget places the marker and fills fields directly. We ensure ALL keys
+    # (even empty): a missing dict key in a filter argument (`default:prefill.x`)
+    # raises VariableDoesNotExist. Manual entry -> empty keys -> widget uses Nominatim.
+    prefill_session = request.session.get(
+        _wizard_lieu_session_key(session_prefix, "tierslieux_prefill")
+    ) or {}
+    prefill = {
+        "latitude": prefill_session.get("latitude", ""),
+        "longitude": prefill_session.get("longitude", ""),
+        "street_address": prefill_session.get("street_address", ""),
+        "postal_code": prefill_session.get("postal_code", ""),
+        "address_locality": prefill_session.get("address_locality", ""),
+    }
+    contexte_page.update({"prefill": prefill})
+
     if request.method == "GET":
         context = get_context(request)
         context.update(contexte_page)
@@ -3771,6 +3808,7 @@ def _wizard_etape_carte_lieu(request, *, template, contexte_commun,
     request.session[_wizard_lieu_session_key(session_prefix, "postal_address_pk")] = str(addr.pk)
     request.session.pop(_wizard_lieu_session_key(session_prefix, "new_address_name"), None)
     request.session.pop(_wizard_lieu_session_key(session_prefix, "tierslieux_adresse_recherche"), None)
+    request.session.pop(_wizard_lieu_session_key(session_prefix, "tierslieux_prefill"), None)
     return redirect(event_url_name)
 
 
@@ -4295,6 +4333,18 @@ class EventWizard(viewsets.ViewSet):
         if not email:
             return HttpResponse("")
 
+        # Rate-limit léger par IP : limite l'énumération email -> instance.
+        # Au-delà de 20 requêtes/min/IP, on répond vide (silencieux : aucun
+        # indice qu'une limite existe). Clé scopée au tenant courant.
+        # / Light per-IP rate-limit to curb email -> instance enumeration:
+        # beyond 20 req/min/IP, return empty silently. Tenant-scoped cache key.
+        ip = request.META.get("REMOTE_ADDR", "")
+        cle_rate = f"check_instance_rate:{connection.tenant.uuid}:{ip}"
+        nb_appels = cache.get(cle_rate, 0)
+        if nb_appels >= 20:
+            return HttpResponse("")
+        cache.set(cle_rate, nb_appels + 1, 60)
+
         # Le modèle User est SHARED : on peut chercher dans le schéma courant.
         # / The User model is SHARED: we can search from the current schema.
         user = TibilletUser.objects.filter(email__iexact=email).first()
@@ -4373,20 +4423,26 @@ class EventWizard(viewsets.ViewSet):
         if garde:
             return garde
 
-        nom = (request.POST.get("name") or "").strip()
+        from BaseBillet.services.tiers_lieux import valider_coordonnees
+
+        # Champs reçus du POST (fiche choisie OU POST forgé) : on les borne avant
+        # de les mettre en session. Le nom alimentera `PostalAddress.name`
+        # (max 400) à l'étape carte ; on tronque ici pour ne pas polluer la
+        # session avec un input démesuré. / Fields from POST (chosen record OR a
+        # forged POST): bound before storing in session. The name feeds
+        # `PostalAddress.name` (max 400) at the map step; truncate here.
+        nom = (request.POST.get("name") or "").strip()[:200]
         if not nom:
             return redirect("event-wizard-place")
+        rue = (request.POST.get("street_address") or "").strip()[:250]
+        code_postal = (request.POST.get("postal_code") or "").strip()[:20]
+        ville = (request.POST.get("locality") or "").strip()[:120]
 
         # Adresse complète envoyée au widget carte comme texte de recherche :
         # le widget géocode (Nominatim) et remplit les champs adresse.
         # / Full address fed to the map widget as search text: it geocodes and
         # fills the address fields.
-        morceaux = [
-            nom,
-            (request.POST.get("street_address") or "").strip(),
-            (request.POST.get("postal_code") or "").strip(),
-            (request.POST.get("locality") or "").strip(),
-        ]
+        morceaux = [nom, rue, code_postal, ville]
         adresse_recherche = " ".join(morceau for morceau in morceaux if morceau)
 
         # L'étape carte exige un nom de lieu en session ; on garde aussi
@@ -4395,6 +4451,29 @@ class EventWizard(viewsets.ViewSet):
         # search address to pre-fill the widget.
         request.session[self._session_key("new_address_name")] = nom
         request.session[self._session_key("tierslieux_adresse_recherche")] = adresse_recherche
+
+        # GPS + adresse structurée de la fiche (si dispo) : on les garde pour
+        # poser le marqueur et remplir les champs DIRECTEMENT à l'étape carte,
+        # sans géocodage Nominatim (qui échoue sur les libellés complexes type
+        # « MIETE (Maison...) 150 Rue... »). `adresse_recherche` reste le repli
+        # (recherche Nominatim) quand la fiche n'a pas de GPS. On valide les
+        # coordonnées (un POST forgé pourrait envoyer du texte). Sinon on nettoie.
+        # / GPS + structured address from the record (if any): kept to place the
+        # marker and fill the fields directly on the map step, no Nominatim
+        # geocode. We validate the coords (a forged POST could send text).
+        latitude, longitude = valider_coordonnees(
+            request.POST.get("latitude"), request.POST.get("longitude"))
+        if latitude is not None and longitude is not None:
+            request.session[self._session_key("tierslieux_prefill")] = {
+                "latitude": latitude,
+                "longitude": longitude,
+                "street_address": rue,
+                "postal_code": code_postal,
+                "address_locality": ville,
+            }
+        else:
+            request.session.pop(self._session_key("tierslieux_prefill"), None)
+
         request.session.pop(self._session_key("postal_address_pk"), None)
         request.session.modified = True
         return redirect("event-wizard-map")

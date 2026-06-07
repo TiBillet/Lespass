@@ -1,5 +1,98 @@
 # Changelog / Journal des modifications
 
+## Recensement Tiers-Lieux + restructuration des étapes dans l'onboarding / Tiers-Lieux directory + step restructuring in onboarding
+
+**Date :** 2026-06-05
+**Migration :** Oui (`MetaBillet 0017` : ajout du choix `venue` sur `WaitingConfiguration.current_step` — pas de SQL, juste l'état Django)
+
+**Quoi / What :** le wizard de création d'espace (`/onboard/`) passe de **6 à 7 étapes** et
+intègre le **recensement national Tiers-Lieux** :
+
+1. **Identité allégée** : on retire le **nom du lieu** et le **choix du domaine** de la 1ʳᵉ page
+   (qui ne demande plus que prénom, nom, email, CGU). Le brouillon est créé avec un nom vide.
+2. **Nouvelle étape « Votre lieu »** (après la vérification email) : recherche du lieu dans le
+   recensement Tiers-Lieux (débounce + spinner) → « Utiliser ce lieu » pré-remplit le **nom** et
+   garde l'**adresse** pour l'étape suivante. Sinon saisie manuelle du nom. Le **domaine** se
+   choisit ici : **slug éditable pré-rempli depuis le nom** (live) + suffixe **.coop / .re** +
+   aperçu.
+3. **Étape « Adresse » optionnelle** (ex-« Votre lieu ») : carte pré-remplie depuis la fiche
+   Tiers-Lieux, avec un bouton **« Je ne renseigne pas d'adresse »** qui passe l'étape.
+
+Le check d'unicité du nom (« déjà pris ») est déplacé de l'identité vers l'étape « Votre lieu ».
+
+**Pré-remplissage carte par GPS direct (au lieu du géocodage Nominatim) :** quand une fiche
+Tiers-Lieux a des coordonnées, on passe au widget carte la **géoloc** + l'**adresse structurée**
+(rue / CP / ville) de l'API. Le widget **pose le marqueur** et **remplit les champs directement**,
+sans repasser par Nominatim — qui échouait sur les libellés complexes (ex :
+« MIETE (Maison des Initiatives…) 150 Rue du 4 Août 1789 69100 Villeurbanne »). La recherche
+Nominatim reste le **repli** pour les fiches sans GPS et la saisie manuelle. La même logique est
+appliquée au **wizard de création d'évènement** (`/event/wizard/`) et au widget réutilisable
+`widgets/widget_carte_adresse` (nouvelles `data-rue/cp/ville-initiale`).
+
+**Robustesse du pré-remplissage (2 correctifs) :**
+- **Clés du `prefill` toujours présentes** : en saisie manuelle, le `prefill` est vide ; or
+  `valeur|default:prefill.latitude` dans un template Django lève `VariableDoesNotExist` si la clé
+  manque (la résolution d'un *argument* de filtre ne tolère pas une clé absente). Les vues passent
+  désormais un dict aux clés garanties (vides → le widget bascule sur Nominatim avec le nom du lieu).
+- **Pas de GPS résiduel** : si on choisit une fiche puis qu'on revient en arrière pour saisir le
+  lieu à la main, on oublie la fiche (purge des clés `tierslieux_*` côté serveur pour l'event wizard,
+  reset des hidden `tl_*` côté JS pour l'onboard), sinon le marqueur se posait sur l'ancien lieu.
+
+Deux **tests de non-régression** couvrent ce cas : `GET /event/wizard/map/` et `GET /onboard/place/`
+en saisie manuelle (sans fiche en session) doivent rendre 200 (avant : `VariableDoesNotExist`).
+
+**Source des données :** les résultats du recensement national affichent désormais leur source —
+*Grand recensement des tiers-lieux 2026*, en open data sur
+[comite-data.tiers-lieux.fr](https://comite-data.tiers-lieux.fr/) (event wizard + onboard).
+
+**Création d'instance sans adresse :** confirmée — l'étape « Adresse » de l'onboard est optionnelle
+(bouton « Je ne renseigne pas d'adresse ») et `TenantCreateValidator.create_tenant` n'utilise aucun
+champ adresse (tous nullable sur `WaitingConfiguration`). Une instance se crée sans adresse.
+
+### Revue de sécurité / robustesse (event wizard + onboard, mêmes correctifs)
+
+- **Bug coordonnées localisées (corrigé) :** avec `USE_L10N` + locale FR, Django rendait les floats
+  GPS avec une **virgule** (`44,05`), ce qui cassait `float()` côté serveur et `parseFloat` côté JS
+  → marqueur mal placé / pré-remplissage perdu. Fix : `|unlocalize` sur toutes les coordonnées des
+  templates (`_tierslieux_resultats.html`, `venue_tierslieux.html`, widget `widget_carte_adresse`) +
+  `valider_coordonnees()` tolère la virgule. Vérifié sur les deux flux.
+- **Validation des entrées :** nouvelle fonction `valider_coordonnees()` (float + bornes terrestres,
+  rejette texte/None) appelée par `use_tierslieux` (event) et `venue` (onboard) ; terme de recherche
+  borné (`LONGUEUR_MAX_TERME`) ; nom/adresse tronqués avant mise en session (anti-pollution).
+- **Remontée Sentry :** la normalisation des fiches API est protégée (skip des entrées non-dict) et
+  journalise en `logger.error` toute anomalie de traitement (→ issue Sentry) sans casser le wizard ;
+  un simple échec réseau de l'API reste en `logger.warning` (transitoire, pas de bruit Sentry).
+- **XSS :** aucune faille — Django auto-échappe texte et attributs, les écritures JS passent par
+  `.value` (jamais `innerHTML`), HTMX injecte du HTML rendu serveur (aucun `|safe`), clé de cache md5.
+- Tests ajoutés : `valider_coordonnees` (virgule/garbage/bornes), POST coordonnées invalides ignorées.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `MetaBillet/models.py` | `STEP_VENUE` + libellé `STEP_PLACE` → « Address » |
+| `onboard/serializers.py` | identity sans name/dns ; nouveau `OnboardVenueSerializer` (name + slug + dns + check unicité) |
+| `onboard/views.py` | vues `venue`/`venue_search`, routage OTP→venue, place optionnelle + pré-remplissage |
+| `onboard/urls.py` | routes `onboard-venue` / `onboard-venue-search` |
+| `onboard/templatetags/onboard_steps.py` | `STEP_ORDER` + `venue` |
+| `…/steps/01_identity.html` | retrait nom + domaine, compteur 1/7 |
+| `…/steps/03_venue.html` (nouveau) + `partials/venue_tierslieux.html` (nouveau) | étape recherche + slug DNS |
+| `…/steps/03_place.html` | « Adresse » 4/7, optionnelle, pré-remplie, bouton « passer » |
+| `…/partials/progress_panel.html` + compteurs steps | flux 7 étapes |
+| `templates/widgets/widget_carte_adresse.html` + `static/widgets/widget_carte_adresse.js` | `data-rue/cp/ville-initiale` : marqueur + champs remplis directement depuis le GPS de l'API (sans Nominatim) |
+| `BaseBillet/views.py` (`use_tierslieux`, `_wizard_etape_carte_lieu`) | wizard event : stocke GPS + adresse de la fiche en session, les passe au widget |
+| `…/wizard/_tierslieux_resultats.html` + `_form_carte.html` | hidden `latitude`/`longitude` + pré-remplissage GPS du widget |
+| `…/steps/03_venue.html` + `partials/venue_tierslieux.html` | hidden `tl_lat/tl_lng/tl_street/tl_cp/tl_ville`, masquage de la recherche après choix |
+| `onboard/tests/*` | tests adaptés (OTP→venue, check nom→serializer venue, prefill GPS en session) |
+
+### Migration
+- **Migration nécessaire :** Oui — `MetaBillet/migrations/0017_*` (à générer via `makemigrations`).
+  Pas d'opération SQL (changement de `choices`), la DB tourne déjà avec la nouvelle valeur.
+
+### i18n
+- Nombreux nouveaux `{% translate %}` (étape venue, libellés) → `makemessages` (texte source FR).
+
+---
+
 ## Intégration du recensement Tiers-Lieux dans le wizard d'évènement / Tiers-Lieux directory integration in the event wizard
 
 **Date :** 2026-06-05

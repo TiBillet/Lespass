@@ -148,12 +148,12 @@ def test_verify_correct_otp_passes_to_place(cleanup_waiting_configs):
         f"Expected 302/303, got {response.status_code}. "
         f"Body excerpt: {response.content[:300]!r}"
     )
-    assert response["Location"] == "/onboard/place/"
+    assert response["Location"] == "/onboard/venue/"
 
     with schema_context("meta"):
         wc.refresh_from_db()
     assert wc.email_confirmed is True
-    assert wc.current_step == WaitingConfiguration.STEP_PLACE
+    assert wc.current_step == WaitingConfiguration.STEP_VENUE
     assert wc.otp_hash == ""
 
     # User TibilletUser doit avoir ete cree avec email_valid=True + is_active=True.
@@ -258,11 +258,11 @@ def test_verify_debug_bypass_accepts_any_code(cleanup_waiting_configs):
     assert response.status_code in (302, 303), (
         f"Expected redirect with DEBUG bypass, got {response.status_code}."
     )
-    assert response["Location"] == "/onboard/place/"
+    assert response["Location"] == "/onboard/venue/"
     with schema_context("meta"):
         wc.refresh_from_db()
     assert wc.email_confirmed is True
-    assert wc.current_step == WaitingConfiguration.STEP_PLACE
+    assert wc.current_step == WaitingConfiguration.STEP_VENUE
 
 
 def test_resend_otp_regenerates(cleanup_waiting_configs):

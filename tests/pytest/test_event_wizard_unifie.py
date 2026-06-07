@@ -290,6 +290,55 @@ def test_proposition_anonyme_cree_user_non_valide_et_le_lie():
 
 
 @pytest.mark.django_db
+def test_wizard_map_get_sans_prefill_se_rend_sans_erreur():
+    """
+    Regression : GET /event/wizard/map/ pour un nouveau lieu saisi A LA MAIN
+    (nom en session, AUCUNE fiche Tiers-Lieux choisie) doit renvoyer 200.
+
+    Avant le fix, `_form_carte.html` levait `VariableDoesNotExist` : `prefill`
+    etait un dict vide et `valeur|default:prefill.latitude` ne tolere pas une
+    cle absente quand elle est resolue comme ARGUMENT de filtre. La vue garantit
+    desormais toutes les cles du prefill (vides -> le widget bascule sur Nominatim).
+    / Regression: GET map for a hand-typed new place must return 200 (no TL prefill
+    in session). The view now guarantees all prefill keys.
+    """
+    from django.test.client import Client as DjangoClient
+    from django.urls import reverse
+    from django_tenants.utils import tenant_context
+    from BaseBillet.models import FederationConfiguration
+
+    lespass = Client.objects.get(schema_name="lespass")
+    domain = lespass.domains.first()
+    http = DjangoClient(HTTP_HOST=domain.domain)  # client anonyme
+
+    with tenant_context(lespass):
+        federation_config = FederationConfiguration.get_solo()
+        module_avant = federation_config.module_agenda_participatif
+        anonyme_avant = federation_config.proposition_anonyme_autorisee
+        federation_config.module_agenda_participatif = True
+        federation_config.proposition_anonyme_autorisee = True
+        federation_config.save()
+    try:
+        # Nouveau lieu saisi a la main : nom en session, pas de prefill Tiers-Lieux.
+        # / Hand-typed new place: name in session, no TL prefill.
+        session = http.session
+        session["event_wizard_new_address_name"] = "Lieu Sans Prefill Test"
+        session.pop("event_wizard_tierslieux_prefill", None)
+        session.pop("event_wizard_tierslieux_adresse_recherche", None)
+        session.save()
+
+        resp = http.get(reverse("event-wizard-map"))
+        assert resp.status_code == 200, (
+            "GET map sans prefill doit se rendre (regression VariableDoesNotExist)."
+        )
+    finally:
+        with tenant_context(lespass):
+            federation_config.module_agenda_participatif = module_avant
+            federation_config.proposition_anonyme_autorisee = anonyme_avant
+            federation_config.save()
+
+
+@pytest.mark.django_db
 def test_wizard_place_email_obligatoire_pour_anonyme():
     """
     Lot B : a l'etape 1 du wizard, un visiteur anonyme DOIT fournir un email.

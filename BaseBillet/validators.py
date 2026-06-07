@@ -952,7 +952,12 @@ class TenantCreateValidator:
             if not tenant:
                 raise Exception("No waiting tenant. ")
 
-            slug = slugify(name)
+            # Slug du sous-domaine : on respecte le slug saisi à l'étape
+            # « Votre lieu » (éditable, cf. onboard STEP_VENUE), avec repli sur
+            # le slug du nom si absent (compat anciens brouillons / autres flux).
+            # / Sub-domain slug: honour the slug entered at the "Your venue" step
+            # (editable), falling back to the name slug if missing.
+            slug = waiting_config.slug or slugify(name)
             dns = waiting_config.dns_choice if waiting_config.dns_choice else 'tibillet.coop'
             if settings.DEBUG:
                 dns = "tibillet.localhost"

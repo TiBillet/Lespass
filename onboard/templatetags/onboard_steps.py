@@ -30,6 +30,7 @@ register = template.Library()
 STEP_ORDER = [
     "identity",
     "verify",
+    "venue",
     "place",
     "descriptions",
     "events",
