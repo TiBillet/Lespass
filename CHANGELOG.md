@@ -1,5 +1,36 @@
 # Changelog / Journal des modifications
 
+## Fix race « mail de connexion » dispatché avant COMMIT / Fix "login email" task dispatched before COMMIT
+
+**Date :** 2026-06-07
+**Migration :** Non / No
+
+**Quoi / What :** la tâche Celery `connexion_celery_mailer` plantait par intermittence avec
+`TibilletUser.DoesNotExist` (vu dans le conteneur `lespass_celery`). En cause : `sender_mail_connect()`
+appelait `connexion_celery_mailer.delay(...)` **pendant** une transaction encore ouverte. Le worker
+Celery, sur sa propre connexion DB, lisait l'utilisateur **avant le COMMIT** → introuvable.
+
+**Pourquoi / Why :** la création d'utilisateur déclenche le mail dès `get_or_create_user()`. Hors
+admin, on est en autocommit : l'user est committé immédiatement, pas de souci. **Mais l'admin Django
+enveloppe ses vues `changeform` dans `transaction.atomic()`** : quand une adhésion (`MembershipForm.save`)
+ou une réservation (form admin) est créée pour un **nouvel** email, l'user est créé dans la transaction
+admin et le `.delay()` part avant le COMMIT. L'utilisateur **n'est pas supprimé** : il était simplement
+pas encore committé au moment où la tâche tournait (il existe après le COMMIT).
+
+**Correctif / Fix :** dispatch différé via `transaction.on_commit(...)`. Hors transaction, le callback
+s'exécute immédiatement (comportement public inchangé) ; dans une transaction, il s'exécute après le
+COMMIT (l'user est alors visible par le worker). Bonus : si la transaction admin rollback, aucun mail
+orphelin n'est envoyé. Comportement prouvé en dev (autre connexion : `DoesNotExist` pendant la tx →
+`TROUVE` après COMMIT).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `AuthBillet/utils.py` | Import `transaction` ; `connexion_celery_mailer.delay(...)` enveloppé dans `transaction.on_commit(...)` dans `sender_mail_connect()` |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No
+
 ## Recensement Tiers-Lieux + restructuration des étapes dans l'onboarding / Tiers-Lieux directory + step restructuring in onboarding
 
 **Date :** 2026-06-05
@@ -66,6 +97,24 @@ champ adresse (tous nullable sur `WaitingConfiguration`). Une instance se crée 
   `.value` (jamais `innerHTML`), HTMX injecte du HTML rendu serveur (aucun `|safe`), clé de cache md5.
 - Tests ajoutés : `valider_coordonnees` (virgule/garbage/bornes), POST coordonnées invalides ignorées.
 
+### Revue de design / accessibilité (event wizard + onboard)
+
+- **Cohérence couleur d'accent :** le toggle « Utiliser une adresse existante / Créer un nouveau
+  lieu » passait de bleu (`btn-outline-primary`) à vert (`btn-outline-success`), cohérent avec les
+  boutons d'action « Utiliser ce lieu ». Override **local** uniquement (pas de modif du thème global).
+- **Responsive des fiches de résultats :** sur mobile (`<576px`) le nom du lieu et le bouton
+  « Utiliser ce lieu » s'empilent (`flex-column flex-sm-row`) au lieu de se serrer
+  (`_tierslieux_resultats.html` + `venue_tierslieux.html`).
+- **Switch CGU trop petit (bug CSS corrigé) :** le style qui agrandissait le switch
+  (`.onboard-cgu-switch .form-check-input`, 2.75em) était **mort** — `wizard.css` est chargé AVANT
+  `bootstrap.css`, et à spécificité égale (0,2,0) Bootstrap gagnait, ramenant le switch à 2em (32px).
+  Préfixe `.onboard-wizard` ajouté → spécificité 0,3,0 → le switch retrouve sa taille (44×24px),
+  sans `!important` ni changement d'ordre de chargement.
+- **Accessibilité vérifiée :** police *luciole*, contraste texte 15:1 / bouton vert 5:1 / bleu 4.5:1
+  (≥ WCAG AA), touch targets ≥ 44px, viewport zoomable, body 16px.
+- **Note (non corrigé) :** le bloc CSS `.onboard-dns-radio*` de `wizard.css` est **mort** (le template
+  utilise `btn-outline-success`) — à supprimer ou rebrancher selon le look voulu pour les pills DNS.
+
 ### Fichiers modifiés / Modified files
 | Fichier / File | Changement / Change |
 |---|---|
@@ -83,6 +132,9 @@ champ adresse (tous nullable sur `WaitingConfiguration`). Une instance se crée 
 | `…/wizard/_tierslieux_resultats.html` + `_form_carte.html` | hidden `latitude`/`longitude` + pré-remplissage GPS du widget |
 | `…/steps/03_venue.html` + `partials/venue_tierslieux.html` | hidden `tl_lat/tl_lng/tl_street/tl_cp/tl_ville`, masquage de la recherche après choix |
 | `onboard/tests/*` | tests adaptés (OTP→venue, check nom→serializer venue, prefill GPS en session) |
+| `…/wizard/_form_lieu.html` | toggle existant/nouveau : bleu → vert (`btn-outline-success`) |
+| `…/wizard/_tierslieux_resultats.html` + `partials/venue_tierslieux.html` | fiches `flex-column flex-sm-row` (responsive mobile) |
+| `static/onboard/wizard.css` | fix spécificité switch CGU (préfixe `.onboard-wizard`) → taille restaurée 44×24px |
 
 ### Migration
 - **Migration nécessaire :** Oui — `MetaBillet/migrations/0017_*` (à générer via `makemigrations`).

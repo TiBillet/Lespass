@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-04 20:11+0000\n"
+"POT-Creation-Date: 2026-06-07 17:20+0000\n"
 "PO-Revision-Date: 2025-03-12 09:37+0100\n"
 "Last-Translator: Diane Alma Kay <pro@kayathommy.fr>\n"
 "Language-Team: French\n"
@@ -26,8 +26,8 @@ msgid "Dashboard"
 msgstr "Tableau de bord"
 
 #: Administration/admin/dashboard.py:60 BaseBillet/models.py:906
-#: BaseBillet/models.py:907 BaseBillet/models.py:912 MetaBillet/models.py:386
-#: MetaBillet/models.py:387 TiBillet/settings.py:524
+#: BaseBillet/models.py:907 BaseBillet/models.py:912 MetaBillet/models.py:392
+#: MetaBillet/models.py:393 TiBillet/settings.py:524
 msgid "Settings"
 msgstr "Paramètres"
 
@@ -75,7 +75,7 @@ msgid "Addresses"
 msgstr "Adresses"
 
 #: Administration/admin/dashboard.py:172 BaseBillet/models.py:1915
-#: BaseBillet/models.py:3372 MetaBillet/models.py:345
+#: BaseBillet/models.py:3372 MetaBillet/models.py:351
 msgid "Events"
 msgstr "Évènements"
 
@@ -1041,7 +1041,7 @@ msgstr "Réservation de billets"
 #: Administration/admin/products.py:818 Administration/admin/products.py:1280
 #: Administration/management/commands/batch_new_tenant.py:225
 #: BaseBillet/models.py:1023 BaseBillet/models.py:2945
-#: BaseBillet/validators.py:1032
+#: BaseBillet/validators.py:1037
 msgid "Free booking"
 msgstr "Réservation gratuite"
 
@@ -1678,8 +1678,8 @@ msgid "Fédération automatique par tags"
 msgstr "Fédération automatique par tags"
 
 #: Administration/admin_tenant.py:3318
-#: onboard/templates/onboard/partials/progress_panel.html:104
-#: onboard/templates/onboard/partials/progress_panel.html:108
+#: onboard/templates/onboard/partials/progress_panel.html:120
+#: onboard/templates/onboard/partials/progress_panel.html:124
 msgid "Présentation"
 msgstr "Présentation"
 
@@ -1944,7 +1944,7 @@ msgstr "Ventilation par lieu"
 
 #: Administration/templates/admin/asset/asset_change_form_before.html:49
 #: Administration/templates/admin/asset/asset_change_form_before.html:60
-#: BaseBillet/views.py:4113
+#: BaseBillet/views.py:4162
 #: fedow_public/templates/fedow_public/retrieve_bank_deposits.html:45
 #: seo/templates/seo/partials/explorer_widget.html:26
 msgid "Lieu"
@@ -2092,7 +2092,7 @@ msgid "Besoin d'aide ? Cliquer ici !"
 msgstr ""
 
 #: Administration/templates/admin/human_user/right_and_wallet_info.html:9
-#: BaseBillet/views.py:4162
+#: BaseBillet/views.py:4211
 msgid "Évènements"
 msgstr "Évènements"
 
@@ -3405,7 +3405,7 @@ msgstr "Description courte"
 msgid "Long description"
 msgstr "Description longue"
 
-#: BaseBillet/models.py:355 MetaBillet/models.py:67
+#: BaseBillet/models.py:355 MetaBillet/models.py:67 MetaBillet/models.py:349
 msgid "Address"
 msgstr "Adresse"
 
@@ -5140,7 +5140,7 @@ msgstr ""
 msgid "Payer maintenant"
 msgstr "Payer maintenant"
 
-#: BaseBillet/tasks.py:844 BaseBillet/views.py:4267
+#: BaseBillet/tasks.py:844 BaseBillet/views.py:4485
 msgid "Merci !"
 msgstr "Merci !"
 
@@ -5515,8 +5515,8 @@ msgstr "Retirer les filtres"
 
 #: BaseBillet/templates/faire_festival/views/event/list.html:88
 #: BaseBillet/templates/reunion/views/event/list.html:67
-#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:86
-#: BaseBillet/views.py:4112 BaseBillet/views.py:4133
+#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:88
+#: BaseBillet/views.py:4161 BaseBillet/views.py:4182
 msgid "Ajouter un évènement"
 msgstr "Ajouter un événement"
 
@@ -6794,7 +6794,7 @@ msgid "Filtres"
 msgstr "Filtres"
 
 #: BaseBillet/templates/reunion/views/event/list.html:75
-#: BaseBillet/views.py:4112 BaseBillet/views.py:4133
+#: BaseBillet/views.py:4161 BaseBillet/views.py:4182
 msgid "Proposer un évènement"
 msgstr "Proposer un évènement"
 
@@ -7076,96 +7076,97 @@ msgstr ""
 #: BaseBillet/templates/reunion/views/event/wizard/_base.html:58
 #: BaseBillet/templates/reunion/views/event/wizard/step2_event.html:55
 #: onboard/templates/onboard/steps/02_verify.html:140
-#: onboard/templates/onboard/steps/03_place.html:62
+#: onboard/templates/onboard/steps/03_place.html:68
 #: onboard/templates/onboard/steps/04_descriptions.html:165
 #: onboard/templates/onboard/steps/05_events.html:116
 #: seo/templates/seo/evenements.html:45
 msgid "Précédent"
 msgstr "Précédent"
 
-#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:27
+#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:28
 msgid "Évènements ajoutés"
 msgstr "Évènements ajoutés"
 
-#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:47
+#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:48
 #: onboard/templates/onboard/partials/events_list.html:60
 msgid "à"
 msgstr "à"
 
-#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:56
+#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:57
 msgid "Jauge"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:69
+#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:71
 #, python-format
 msgid "Retirer l'évènement %(name)s"
 msgstr "Retirer l'évènement %(name)s"
 
-#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:71
+#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:73
 msgid "Retirer"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:77
+#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:79
 msgid "Aucun évènement pour l'instant. Ajoutez-en au moins un ci-dessous."
 msgstr "Aucun évènement pour l’instant. Ajoutez-en au moins un ci-dessous."
 
-#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:111
+#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:114
 #: onboard/templates/onboard/partials/event_row_form.html:64
 #: onboard/templates/onboard/steps/01_identity.html:105
 msgid "Nom"
 msgstr "Nom"
 
-#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:116
+#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:119
 msgid "Nom de l’évènement"
 msgstr "Nom de l'évènement"
 
-#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:121
+#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:124
 #: onboard/templates/onboard/partials/event_row_form.html:84
 msgid "Date et heure"
 msgstr "Date et heure"
 
-#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:130
+#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:133
 #: onboard/templates/onboard/partials/event_row_form.html:102
 msgid "Description (optionnel)"
 msgstr "Description (optionnelle)"
 
-#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:134
+#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:137
 msgid "Quelques mots pour présenter l’évènement."
 msgstr "Quelques mots pour présenter l'évènement."
 
-#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:142
+#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:145
 msgid "Jauge max (optionnel)"
 msgstr "Jauge max (optionnel)"
 
-#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:156
+#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:158
 msgid "Tags (séparés par des virgules)"
 msgstr "Tags (séparés par des virgules)"
 
-#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:162
+#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:164
 msgid "concert, gratuit"
 msgstr "concert, gratuit"
 
-#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:166
+#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:168
 msgid "Choisissez parmi les tags proposés."
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:176
+#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:178
 #: onboard/templates/onboard/partials/event_row_form.html:120
 msgid "Image (optionnelle)"
 msgstr "Image (optionnelle)"
 
-#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:182
+#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:184
 msgid "JPEG, PNG ou WebP."
 msgstr "JPEG, PNG ou WebP."
 
-#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:188
+#: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:190
 msgid "Ajouter à la liste"
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/event/wizard/_form_carte.html:27
 #: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:111
 #: onboard/templates/onboard/steps/01_identity.html:62
-#: onboard/templates/onboard/steps/03_place.html:31
+#: onboard/templates/onboard/steps/03_place.html:32
+#: onboard/templates/onboard/steps/03_venue.html:35
 #: onboard/templates/onboard/steps/04_descriptions.html:56
 msgid "Merci de corriger les erreurs ci-dessous."
 msgstr "Merci de corriger les erreurs ci-dessous."
@@ -7180,11 +7181,12 @@ msgid ""
 "déplacez le marqueur si besoin, ou cliquez directement sur la carte."
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/wizard/_form_carte.html:60
-#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:245
-#: BaseBillet/views.py:4115 BaseBillet/views.py:4136
-#: onboard/templates/onboard/steps/01_identity.html:279
-#: onboard/templates/onboard/steps/03_place.html:66
+#: BaseBillet/templates/reunion/views/event/wizard/_form_carte.html:66
+#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:283
+#: BaseBillet/views.py:4164 BaseBillet/views.py:4185
+#: onboard/templates/onboard/steps/01_identity.html:212
+#: onboard/templates/onboard/steps/03_place.html:81
+#: onboard/templates/onboard/steps/03_venue.html:143
 #: onboard/templates/onboard/steps/04_descriptions.html:170
 msgid "Continuer"
 msgstr "Continuer"
@@ -7193,64 +7195,128 @@ msgstr "Continuer"
 msgid "Votre adresse e-mail"
 msgstr "Votre adresse e-mail"
 
-#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:141
+#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:145
 msgid "vous@exemple.org"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:146
+#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:155
 msgid ""
 "Nécessaire pour suivre votre proposition. Vous pourrez confirmer votre "
 "compte plus tard."
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:154
+#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:166
 msgid "Mode de saisie du lieu"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:159
+#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:171
 msgid "Utiliser une adresse existante"
 msgstr "Utiliser une adresse existante"
 
-#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:166
+#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:178
 msgid "Créer un nouveau lieu"
 msgstr "Créer un nouveau lieu"
 
-#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:173
+#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:185
 msgid "Rechercher une adresse"
 msgstr "Rechercher une adresse"
 
-#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:180
+#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:199
 msgid "Filtrer par nom, ville ou code postal…"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:186
+#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:205
 msgid "Adresses disponibles"
 msgstr "Adresses disponibles"
 
-#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:208
+#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:231
 msgid "Aucune adresse enregistrée pour le moment. Créez un nouveau lieu."
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:214
+#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:237
 msgid "Aucune adresse ne correspond à votre recherche."
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:222
+#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:245
 msgid ""
 "Toutes les adresses ne sont pas affichées. Tapez ci-dessus pour filtrer."
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:229
+#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:257
 msgid "Nom du nouveau lieu"
 msgstr "Nom du nouveau lieu"
 
-#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:234
+#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:262
 msgid "Ex : Salle des fêtes, Café du commerce…"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:238
+#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:266
 msgid "À l'étape suivante, vous placerez ce lieu sur la carte."
 msgstr ""
+
+#: BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html:277
+msgid "Choisissez une adresse ou créez un nouveau lieu pour continuer."
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/event/wizard/_instance_trouvee.html:27
+#, python-format
+msgid "Vous gérez déjà « %(nom)s » sur TiBillet."
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/event/wizard/_instance_trouvee.html:29
+msgid "Vous gérez déjà des espaces sur TiBillet."
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/event/wizard/_instance_trouvee.html:41
+#, python-format
+msgid "Créer mon évènement sur « %(nom)s »"
+msgstr "Créer mon évènement sur « %(nom)s »"
+
+#: BaseBillet/templates/reunion/views/event/wizard/_instance_trouvee.html:50
+msgid "Pour qu'il apparaisse aussi dans notre agenda :"
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/event/wizard/_instance_trouvee.html:55
+msgid "ajoutez à votre évènement le tag :"
+msgstr "ajoutez à votre évènement le tag :"
+
+#: BaseBillet/templates/reunion/views/event/wizard/_instance_trouvee.html:59
+msgid "et/ou proposez votre espace à notre fédération (s'il n'y est pas déjà)."
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/event/wizard/_instance_trouvee.html:63
+msgid "Vous pouvez aussi proposer votre évènement ici, ci-dessous."
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/event/wizard/_tierslieux_resultats.html:25
+msgid ""
+"Vous ne trouvez pas votre lieu ci-dessus ? Élargissez au recensement "
+"national Tiers-Lieux :"
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/event/wizard/_tierslieux_resultats.html:66
+#: onboard/templates/onboard/partials/venue_tierslieux.html:53
+msgid "Utiliser ce lieu"
+msgstr "Utiliser ce lieu"
+
+#: BaseBillet/templates/reunion/views/event/wizard/_tierslieux_resultats.html:80
+#, python-format
+msgid "Aucun ne correspond ? Créer « %(terme)s » comme nouveau lieu"
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/event/wizard/_tierslieux_resultats.html:88
+#: onboard/templates/onboard/partials/venue_tierslieux.html:65
+msgid "Source : Grand recensement des tiers-lieux 2026"
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/event/wizard/_tierslieux_resultats.html:98
+msgid "Aucun lieu trouvé dans le recensement national."
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/event/wizard/_tierslieux_resultats.html:103
+#, python-format
+msgid "Créer « %(terme)s » comme nouveau lieu"
+msgstr "Créer « %(terme)s » comme nouveau lieu"
 
 #: BaseBillet/templates/reunion/views/event/wizard/public_done.html:7
 msgid "Merci pour votre proposition !"
@@ -8251,15 +8317,15 @@ msgstr "Le montant doit être un nombre positif."
 msgid "This product is limited in quantity per person."
 msgstr "Ce produit est disponible en quantité limitée par personne."
 
-#: BaseBillet/validators.py:1071
+#: BaseBillet/validators.py:1076
 msgid "le format du tag NFC n'est pas bon"
 msgstr "Le format du tag NFC n'est pas bon"
 
-#: BaseBillet/validators.py:1083
+#: BaseBillet/validators.py:1088
 msgid "La carte n'existe pas"
 msgstr "La carte n'existe pas"
 
-#: BaseBillet/validators.py:1087
+#: BaseBillet/validators.py:1092
 msgid ""
 "La carte n'est pas liée à un.e utilisateur.ice. Merci de demander à la "
 "personne propriétaire de la lier en flashant le qrcode au dos de la carte."
@@ -8268,7 +8334,7 @@ msgstr ""
 "demander à la personne propriétaire de la lier en flashant le code QR au dos "
 "de la carte."
 
-#: BaseBillet/validators.py:1092
+#: BaseBillet/validators.py:1097
 msgid ""
 "Le portefeuille n'est pas liée à un.e utilisateur.ice. Merci de demander à "
 "la personne propriétaire de la lier en flashant le qrcode au dos de la carte."
@@ -8277,41 +8343,41 @@ msgstr ""
 "demander à la personne propriétaire de le lier en flashant le code QR au dos "
 "de la carte."
 
-#: BaseBillet/validators.py:1103
+#: BaseBillet/validators.py:1108
 msgid "Paiement introuvable."
 msgstr "Paiement introuvable."
 
-#: BaseBillet/validators.py:1110
+#: BaseBillet/validators.py:1115
 msgid ""
 "Solde insuffisant. Il reste {dround(self.user_balance)} sur le portefeuille."
 msgstr ""
 "Solde insuffisant. Il reste {dround(self.user_balance)} sur le portefeuille."
 
-#: BaseBillet/validators.py:1237
+#: BaseBillet/validators.py:1242
 msgid "Un évènement avec ce nom et cette date existe déjà."
 msgstr "Un événement avec ce nom et cette date existe déjà."
 
-#: BaseBillet/validators.py:1312
+#: BaseBillet/validators.py:1317
 msgid "Le montant doit être positif."
 msgstr "Le montant doit être positif."
 
-#: BaseBillet/validators.py:1322
+#: BaseBillet/validators.py:1327
 msgid "Impossible d'utiliser 'Offert' avec un montant positif."
 msgstr "Impossible d'utiliser « Offert » avec un montant positif."
 
-#: BaseBillet/validators.py:1373 BaseBillet/views.py:4199
+#: BaseBillet/validators.py:1378 BaseBillet/views.py:4248
 msgid "Merci d'indiquer votre adresse e-mail pour proposer un évènement."
 msgstr ""
 
-#: BaseBillet/validators.py:1388
+#: BaseBillet/validators.py:1393
 msgid "Adresse sélectionnée introuvable."
 msgstr ""
 
-#: BaseBillet/validators.py:1403
+#: BaseBillet/validators.py:1408
 msgid "Choisissez une adresse existante ou saisissez le nom d'un nouveau lieu."
 msgstr ""
 
-#: BaseBillet/validators.py:1460
+#: BaseBillet/validators.py:1465
 msgid "Ce champ est obligatoire."
 msgstr "Ce champ est obligatoire."
 
@@ -8641,39 +8707,39 @@ msgstr "Adhésion annulée. %(count)d avoir(s) créé(s)."
 msgid "Adhésion annulée."
 msgstr "Adhésion annulée."
 
-#: BaseBillet/views.py:4063
+#: BaseBillet/views.py:4112
 msgid "Merci de vous connecter d'abord."
 msgstr "Merci de vous connecter d'abord."
 
-#: BaseBillet/views.py:4134
+#: BaseBillet/views.py:4183
 msgid "Localiser le nouveau lieu"
 msgstr "Localiser le nouveau lieu"
 
-#: BaseBillet/views.py:4161
+#: BaseBillet/views.py:4210
 msgid "Ajouter des évènements"
 msgstr "Ajouter des évènements"
 
-#: BaseBillet/views.py:4161
+#: BaseBillet/views.py:4210
 msgid "Proposer des évènements"
 msgstr "Proposer des évènements"
 
-#: BaseBillet/views.py:4164
+#: BaseBillet/views.py:4213
 msgid "Créer les évènements"
 msgstr "Créer les évènements"
 
-#: BaseBillet/views.py:4164
+#: BaseBillet/views.py:4213
 msgid "Envoyer ma proposition"
 msgstr "Envoyer ma proposition"
 
-#: BaseBillet/views.py:4179
+#: BaseBillet/views.py:4228
 msgid "Ajoutez au moins un évènement avant de continuer."
 msgstr "Ajoutez au moins un évènement avant de continuer."
 
-#: BaseBillet/views.py:4206
+#: BaseBillet/views.py:4255
 msgid "Cette adresse e-mail pose un problème. Merci de nous contacter."
 msgstr ""
 
-#: BaseBillet/views.py:4223
+#: BaseBillet/views.py:4272
 #, python-format
 msgid "%(n)s évènement(s) créé(s)."
 msgstr "%(n)s évènement(s) créé(s)."
@@ -8799,43 +8865,43 @@ msgstr ""
 "Avertissements non bloquants du traitement du brouillon d'événement lors de "
 "la création du lieu."
 
-#: MetaBillet/models.py:341
+#: MetaBillet/models.py:346
 msgid "Identity"
 msgstr "Identité"
 
-#: MetaBillet/models.py:342
+#: MetaBillet/models.py:347
 msgid "Verify email"
 msgstr "Vérifier l'adresse e-mail"
 
-#: MetaBillet/models.py:343
-msgid "Place location"
-msgstr "Localisation du lieu"
+#: MetaBillet/models.py:348
+msgid "Your venue"
+msgstr "Votre lieu"
 
-#: MetaBillet/models.py:344
+#: MetaBillet/models.py:350
 msgid "Descriptions"
 msgstr "Descriptions"
 
-#: MetaBillet/models.py:346
+#: MetaBillet/models.py:352
 msgid "Launch"
 msgstr "Lancer"
 
-#: MetaBillet/models.py:350
+#: MetaBillet/models.py:356
 msgid "Current wizard step"
 msgstr "Étape actuelle de l'assistant"
 
-#: MetaBillet/models.py:351
+#: MetaBillet/models.py:357
 msgid "Current step the user is on in the wizard."
 msgstr "Étape actuelle où vous êtes dans l'assistant."
 
-#: MetaBillet/models.py:359
+#: MetaBillet/models.py:365
 msgid "Invitation used"
 msgstr "Invitation utilisée"
 
-#: MetaBillet/models.py:364
+#: MetaBillet/models.py:370
 msgid "Async task error"
 msgstr "Erreur de tâche asynchrone"
 
-#: MetaBillet/models.py:365
+#: MetaBillet/models.py:371
 msgid "Error message captured by the async tenant-creation task, if any."
 msgstr ""
 "Message d'erreur capturé par la tâche asynchrone de création du lieu, le cas "
@@ -9184,16 +9250,20 @@ msgid "Organisation"
 msgstr "Dernière transaction"
 
 #: comptabilite/templates/comptabilite/admin/_sections_rapport.html:156
+#: onboard/templates/onboard/partials/progress_panel.html:107
+#: onboard/templates/onboard/partials/progress_panel.html:111
+#: onboard/templates/onboard/steps/03_place.html:19
+#: onboard/templates/onboard/steps/03_place.html:24
 msgid "Adresse"
 msgstr "Adresse"
 
 #: comptabilite/templates/comptabilite/admin/_sections_rapport.html:157
-#: templates/widgets/widget_carte_adresse.html:85
+#: templates/widgets/widget_carte_adresse.html:88
 msgid "Code postal"
 msgstr "Code postal"
 
 #: comptabilite/templates/comptabilite/admin/_sections_rapport.html:158
-#: templates/widgets/widget_carte_adresse.html:95
+#: templates/widgets/widget_carte_adresse.html:98
 msgid "Ville"
 msgstr "Ville"
 
@@ -10617,35 +10687,39 @@ msgstr "Invitation d'accès"
 msgid "Onboard invitations"
 msgstr "Invitations d'accès"
 
-#: onboard/serializers.py:81
+#: onboard/serializers.py:69
 msgid "You must accept the terms."
 msgstr "Vous devez accepter les conditions."
 
-#: onboard/serializers.py:103
-msgid "Name must be at least 3 characters."
-msgstr "Le nom doit comporter au moins 3 caractères."
-
-#: onboard/serializers.py:124
-msgid "This venue name is already taken. Please choose another."
-msgstr "Ce nom de lieu est déjà utilisé. Veuillez en choisir un autre."
-
-#: onboard/serializers.py:136
+#: onboard/serializers.py:79
 msgid "Emails do not match."
 msgstr "Les e-mails ne correspondent pas."
 
-#: onboard/serializers.py:245
+#: onboard/serializers.py:122
+msgid "Name must be at least 3 characters."
+msgstr "Le nom doit comporter au moins 3 caractères."
+
+#: onboard/serializers.py:137
+msgid "This venue name is already taken. Please choose another."
+msgstr "Ce nom de lieu est déjà utilisé. Veuillez en choisir un autre."
+
+#: onboard/serializers.py:168
+msgid "This web address is already taken. Please choose another."
+msgstr "Cette adresse web est déjà utilisée. Veuillez en choisir une autre."
+
+#: onboard/serializers.py:268
 msgid "Logo too large: maximum 5 MB."
 msgstr "Logo trop volumineux : maximum 5 Mo."
 
-#: onboard/serializers.py:254
+#: onboard/serializers.py:277
 msgid "Logo must be JPEG, PNG or WebP."
 msgstr "Le logo doit être au format JPEG, PNG ou WebP."
 
-#: onboard/serializers.py:304
+#: onboard/serializers.py:327
 msgid "Image too large: maximum 5 MB."
 msgstr "Image trop volumineuse : maximum 5 Mo."
 
-#: onboard/serializers.py:313
+#: onboard/serializers.py:336
 msgid "Image must be JPEG, PNG or WebP."
 msgstr "L'image doit être au format JPEG, PNG ou WebP."
 
@@ -10781,44 +10855,51 @@ msgstr "Supprimer"
 msgid "Aucun événement pour l'instant. C'est optionnel !"
 msgstr "Aucun événement pour l'instant. C'est optionnel !"
 
-#: onboard/templates/onboard/partials/progress_panel.html:53
+#: onboard/templates/onboard/partials/progress_panel.html:55
 msgid "CRÉER MON ESPACE"
 msgstr "CRÉER MON ESPACE"
 
-#: onboard/templates/onboard/partials/progress_panel.html:78
-#: onboard/templates/onboard/partials/progress_panel.html:82
+#: onboard/templates/onboard/partials/progress_panel.html:80
+#: onboard/templates/onboard/partials/progress_panel.html:84
 msgid "Identité"
 msgstr "Identité"
 
-#: onboard/templates/onboard/partials/progress_panel.html:79
-#: onboard/templates/onboard/partials/progress_panel.html:83
+#: onboard/templates/onboard/partials/progress_panel.html:81
+#: onboard/templates/onboard/partials/progress_panel.html:85
 msgid "Qui êtes-vous et comment s'appelle votre lieu ?"
 msgstr "Qui êtes-vous et comment s'appelle votre lieu ?"
 
-#: onboard/templates/onboard/partials/progress_panel.html:91
-#: onboard/templates/onboard/partials/progress_panel.html:95
+#: onboard/templates/onboard/partials/progress_panel.html:94
+#: onboard/templates/onboard/partials/progress_panel.html:98
+#: onboard/templates/onboard/steps/03_venue.html:22
+#: onboard/templates/onboard/steps/03_venue.html:27
 msgid "Votre lieu"
 msgstr "Votre lieu"
 
-#: onboard/templates/onboard/partials/progress_panel.html:92
-#: onboard/templates/onboard/partials/progress_panel.html:96
-msgid "Nous localisons votre lieu sur la carte."
-msgstr "Nous localisons votre lieu sur la carte."
+#: onboard/templates/onboard/partials/progress_panel.html:95
+#: onboard/templates/onboard/partials/progress_panel.html:99
+msgid "Cherchez votre lieu et choisissez votre adresse web."
+msgstr ""
 
-#: onboard/templates/onboard/partials/progress_panel.html:105
-#: onboard/templates/onboard/partials/progress_panel.html:109
+#: onboard/templates/onboard/partials/progress_panel.html:108
+#: onboard/templates/onboard/partials/progress_panel.html:112
+msgid "Localisez votre lieu sur la carte (optionnel)."
+msgstr "Localisez votre lieu sur la carte (optionnel)."
+
+#: onboard/templates/onboard/partials/progress_panel.html:121
+#: onboard/templates/onboard/partials/progress_panel.html:125
 msgid "Accroche, texte long et logo."
 msgstr "Accroche, texte long et logo."
 
-#: onboard/templates/onboard/partials/progress_panel.html:120
+#: onboard/templates/onboard/partials/progress_panel.html:136
 msgid "C'est parti !"
 msgstr "C'est parti !"
 
-#: onboard/templates/onboard/partials/progress_panel.html:121
+#: onboard/templates/onboard/partials/progress_panel.html:137
 msgid "Découverte de TiBillet pendant la création."
 msgstr "Découverte de TiBillet pendant la création."
 
-#: onboard/templates/onboard/partials/progress_panel.html:129
+#: onboard/templates/onboard/partials/progress_panel.html:145
 #, python-format
 msgid "Invité·e par %(name)s"
 msgstr "Invité·e par %(name)s"
@@ -10946,21 +11027,27 @@ msgstr ""
 "pouvez relancer la création maintenant. Si le problème persiste, contactez-"
 "nous à contact@tibillet.re."
 
+#: onboard/templates/onboard/partials/venue_tierslieux.html:20
+msgid "Lieux trouvés dans le recensement national :"
+msgstr ""
+
+#: onboard/templates/onboard/partials/venue_tierslieux.html:72
+msgid "Aucun lieu trouvé. Saisissez le nom de votre lieu ci-dessous."
+msgstr ""
+
 #: onboard/templates/onboard/steps/01_identity.html:26
 msgid "Créer votre espace TiBillet"
 msgstr "Créer votre espace TiBillet"
 
 #: onboard/templates/onboard/steps/01_identity.html:35
-msgid "Étape 1 / 6"
-msgstr "Étape 1 / 6"
+msgid "Étape 1 / 7"
+msgstr "Étape 1 / 7"
 
 #: onboard/templates/onboard/steps/01_identity.html:37
 msgid ""
-"Renseignez votre identité et celle de votre collectif. Un code de "
-"vérification vous sera envoyé par email."
-msgstr ""
-"Renseignez votre identité et celle de votre collectif. Un code de "
-"vérification vous sera envoyé par email."
+"Renseignez votre identité. Un code de vérification vous sera envoyé par "
+"email."
+msgstr "Renseignez votre identité. Un code de vérification vous sera envoyé par email."
 
 #: onboard/templates/onboard/steps/01_identity.html:49
 msgid "Vous avez été invité·e à rejoindre TiBillet."
@@ -10982,23 +11069,11 @@ msgstr "Un code de vérification y sera envoyé."
 msgid "Confirmation de l'email"
 msgstr "Confirmation de l'email"
 
-#: onboard/templates/onboard/steps/01_identity.html:169
-msgid "Nom du collectif / lieu"
-msgstr "Nom du collectif / lieu"
-
-#: onboard/templates/onboard/steps/01_identity.html:202
-msgid "Nom de domaine"
-msgstr "Nom de domaine"
-
-#: onboard/templates/onboard/steps/01_identity.html:233
-msgid "Votre adresse finale :"
-msgstr "Votre adresse finale :"
-
-#: onboard/templates/onboard/steps/01_identity.html:257
+#: onboard/templates/onboard/steps/01_identity.html:190
 msgid "J'accepte les"
 msgstr "J'accepte les"
 
-#: onboard/templates/onboard/steps/01_identity.html:264
+#: onboard/templates/onboard/steps/01_identity.html:197
 msgid "conditions générales d'utilisation"
 msgstr "conditions générales d'utilisation"
 
@@ -11007,8 +11082,8 @@ msgid "Vérification — Créer votre espace TiBillet"
 msgstr "Vérification — Créer votre espace TiBillet"
 
 #: onboard/templates/onboard/steps/02_verify.html:46
-msgid "Étape 2 / 6"
-msgstr "Étape 2 / 6"
+msgid "Étape 2 / 7"
+msgstr "Étape 2 / 7"
 
 #: onboard/templates/onboard/steps/02_verify.html:47
 msgid "Vérifiez votre adresse email"
@@ -11060,29 +11135,69 @@ msgstr "Vous n'avez pas reçu le code ?"
 msgid "Renvoyer le code"
 msgstr "Renvoyer le code"
 
-#: onboard/templates/onboard/steps/03_place.html:19
-msgid "Créer votre espace TiBillet — Lieu"
-msgstr "Créer votre espace TiBillet — Lieu"
-
 #: onboard/templates/onboard/steps/03_place.html:23
-msgid "Étape 3 / 6"
-msgstr "Étape 3 / 6"
+msgid "Étape 4 / 7"
+msgstr "Étape 4 / 7"
 
-#: onboard/templates/onboard/steps/03_place.html:25
+#: onboard/templates/onboard/steps/03_place.html:26
 msgid ""
-"Cherchez votre adresse dans la barre de recherche, ou cliquez directement "
-"sur la carte. Le marqueur peut être déplacé pour ajuster la position."
+"Cherchez votre adresse, ou cliquez sur la carte. Cette étape est "
+"optionnelle : vous pouvez la passer et renseigner l'adresse plus tard."
 msgstr ""
-"Cherchez votre adresse dans la barre de recherche, ou cliquez directement "
-"sur la carte. Le marqueur peut être déplacé pour ajuster la position."
+
+#: onboard/templates/onboard/steps/03_place.html:77
+msgid "Je ne renseigne pas d'adresse"
+msgstr ""
+
+#: onboard/templates/onboard/steps/03_venue.html:26
+msgid "Étape 3 / 7"
+msgstr "Étape 3 / 7"
+
+#: onboard/templates/onboard/steps/03_venue.html:29
+msgid ""
+"Cherchez votre lieu dans le recensement national des tiers-lieux, ou "
+"saisissez son nom. Choisissez ensuite votre adresse web."
+msgstr ""
+
+#: onboard/templates/onboard/steps/03_venue.html:53
+msgid "Rechercher votre lieu (recensement national)"
+msgstr ""
+
+#: onboard/templates/onboard/steps/03_venue.html:63
+msgid "Nom du lieu, ville ou code postal…"
+msgstr ""
+
+#: onboard/templates/onboard/steps/03_venue.html:77
+msgid "Chercher un autre lieu dans le recensement"
+msgstr "Chercher un autre lieu dans le recensement"
+
+#: onboard/templates/onboard/steps/03_venue.html:83
+msgid "Nom du collectif / lieu"
+msgstr "Nom du collectif / lieu"
+
+#: onboard/templates/onboard/steps/03_venue.html:97
+msgid "Votre adresse web"
+msgstr "Votre adresse web"
+
+#: onboard/templates/onboard/steps/03_venue.html:104
+msgid "mon-lieu"
+msgstr "mon-lieu"
+
+#: onboard/templates/onboard/steps/03_venue.html:108
+msgid "Suffixe de domaine"
+msgstr "Suffixe de domaine"
+
+#: onboard/templates/onboard/steps/03_venue.html:124
+msgid "Votre adresse finale :"
+msgstr "Votre adresse finale :"
 
 #: onboard/templates/onboard/steps/04_descriptions.html:40
 msgid "Créer votre espace TiBillet — Présentation"
 msgstr "Créer votre espace TiBillet — Présentation"
 
 #: onboard/templates/onboard/steps/04_descriptions.html:44
-msgid "Étape 4 / 6"
-msgstr "Étape 4 / 6"
+msgid "Étape 5 / 7"
+msgstr "Étape 5 / 7"
 
 #: onboard/templates/onboard/steps/04_descriptions.html:45
 msgid "Présentation et logo"
@@ -11137,8 +11252,8 @@ msgid "Créer votre espace TiBillet — Événements"
 msgstr "Créer votre espace TiBillet — Événements"
 
 #: onboard/templates/onboard/steps/05_events.html:63
-msgid "Étape 5 / 6"
-msgstr "Étape 5 / 6"
+msgid "Étape 6 / 7"
+msgstr "Étape 6 / 7"
 
 #: onboard/templates/onboard/steps/05_events.html:64
 msgid "Premiers événements"
@@ -11169,8 +11284,8 @@ msgid "Création de votre espace TiBillet"
 msgstr "Création de votre espace TiBillet"
 
 #: onboard/templates/onboard/steps/06_launch.html:60
-msgid "Étape 6 / 6"
-msgstr "Étape 6 / 6"
+msgid "Étape 7 / 7"
+msgstr "Étape 7 / 7"
 
 #: onboard/templates/onboard/steps/06_launch.html:63
 #, python-format
@@ -11269,24 +11384,24 @@ msgstr ""
 "Votre lieu peut rejoindre le réseau coopératif TiBillet et partager son "
 "agenda avec d'autres structures."
 
-#: onboard/views.py:1240 onboard/views.py:1327
+#: onboard/views.py:1245 onboard/views.py:1332
 msgid "Email error on user account."
 msgstr "Erreur email sur le compte utilisateur."
 
-#: onboard/views.py:1263
+#: onboard/views.py:1268
 msgid "Account locked: too many wrong attempts."
 msgstr "Compte verrouillé : trop de tentatives échouées."
 
-#: onboard/views.py:1278
+#: onboard/views.py:1283
 msgid "No code requested yet. Click \"Receive the code\" first."
 msgstr ""
 "Aucun code demandé pour l'instant. Cliquez d'abord sur « Recevoir le code »."
 
-#: onboard/views.py:1289
+#: onboard/views.py:1294
 msgid "OTP expired. Please request a new code."
 msgstr "OTP expiré. Veuillez demander un nouveau code."
 
-#: onboard/views.py:1306
+#: onboard/views.py:1311
 msgid "Wrong code."
 msgstr "Code incorrect."
 
@@ -11914,13 +12029,26 @@ msgid ""
 "réseau coopératif TiBillet."
 msgstr ""
 
-#: templates/widgets/widget_carte_adresse.html:75
+#: templates/widgets/widget_carte_adresse.html:78
 msgid "Rue et numéro"
 msgstr "Rue et numéro"
 
-#: templates/widgets/widget_carte_adresse.html:105
+#: templates/widgets/widget_carte_adresse.html:108
 msgid "Pays"
 msgstr "Pays"
+
+#~ msgid "Place location"
+#~ msgstr "Localisation du lieu"
+
+#~ msgid "Créer votre espace TiBillet — Lieu"
+#~ msgstr "Créer votre espace TiBillet — Lieu"
+
+#~ msgid ""
+#~ "Cherchez votre adresse dans la barre de recherche, ou cliquez directement "
+#~ "sur la carte. Le marqueur peut être déplacé pour ajuster la position."
+#~ msgstr ""
+#~ "Cherchez votre adresse dans la barre de recherche, ou cliquez directement "
+#~ "sur la carte. Le marqueur peut être déplacé pour ajuster la position."
 
 #~ msgid "Federation"
 #~ msgstr "Fédérations"
