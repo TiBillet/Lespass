@@ -1479,6 +1479,7 @@ class MembershipStatusSerializer(serializers.Serializer):
     """
     product_name = serializers.SerializerMethodField()
     price_name = serializers.SerializerMethodField()
+    member_name = serializers.SerializerMethodField()
     is_valid = serializers.SerializerMethodField()
     deadline = serializers.DateTimeField()
 
@@ -1487,6 +1488,9 @@ class MembershipStatusSerializer(serializers.Serializer):
 
     def get_price_name(self, obj):
         return obj.price.name if obj.price else None
+
+    def get_member_name(self, obj: Membership):
+        return obj.member_name()
 
     def get_is_valid(self, obj):
         return obj.is_valid()
