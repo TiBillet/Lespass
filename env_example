@@ -1,25 +1,6 @@
 ##########################
-### CHANGE ME :
-##########################
-
-ADMIN_EMAIL=''
-
-# go Discord to get it or use yours :)
-# For transactionnal email :
-EMAIL_HOST="SSL0.OVH.NET"
-EMAIL_PORT="465"
-EMAIL_HOST_USER=""
-EMAIL_HOST_PASSWORD=""
-
-STRIPE_KEY_TEST=''
-STRIPE_ENDPOINT_SECRET_TEST=''
-TEST_STRIPE_CONNECT_ACCOUNT=''
-
-
-
-##########################
 # TiBillet / Lespass
-# All the env are needed, this is example only, you can use it but change for production !!!
+# All the env are needed
 ##########################
 
 # Secret
@@ -35,12 +16,14 @@ POSTGRES_USER='lespass_postgres_user'
 POSTGRES_PASSWORD='kKoyueJsLPUN2KhKyjFpsU' # strong ! generate a new fernet for exemple.
 POSTGRES_DB='tibillet'
 
+# STRIPE
 STRIPE_KEY='' # from your stripe account
 
 TIME_ZONE='UTC' # or where you are
 PUBLIC='TiBillet Coop.' # The name of the root instance
 
 DOMAIN='tibillet.localhost' # for the wildcard : without subdomain ! ex : tibillet.coop, not lespass.tibillet.coop
+DOMAIN_REGEX=^.+\.tibillet\.localhost$$ # regex for wildcard matching — escape . and - with \, end with $$ (docker compose escaping)
 
 FEDOW_DOMAIN='fedow.tibillet.localhost' # the same as Fedow
 
@@ -48,6 +31,13 @@ ADDITIONAL_DOMAINS='domainbis.localhost' # optional - add addiotional domain for
 SUB='lespass' # the sub domain of your first place ex : if 'lespass', it will be accessible on https://lespass.tibillet.coop
 META='agenda' # the federated agenda for all events on all tenants. If 'agenda', it will be accessible, for exemple, on https://agenda.tibillet.coop
 
+ADMIN_EMAIL='admin@admin.com'
+
+# For transactionnal email :
+EMAIL_HOST="SSL0.OVH.NET"
+EMAIL_PORT="465"
+EMAIL_HOST_USER=""
+EMAIL_HOST_PASSWORD=""
 
 # Usefull for dev/test
 # Auto login for admin, no https cert' verification, demonstration data, auto database flush, etc ...
@@ -58,11 +48,39 @@ DEMO=1
 STRIPE_TEST=1 # set to 1 for use stripe test env
 
 
-
 DEMO_TAGID_CM='A49E8E2A'
 DEMO_TAGID_CLIENT1='52BE6543'
 DEMO_TAGID_CLIENT2='33BC1DAA'
 
-TEST_FORMBRICKS_API="1064a420e6449d074d59fee39cbb5f14"
+TEST_FORMBRICKS_API=""
 TEST_FORMBRICKS_EVENT_FORM=""
 TEST_FORMBRICKS_ADH_FORM=""
+
+# Token secret utilise uniquement par les tests E2E Playwright pour l'endpoint
+# de force_login (/api/user/__test_only__/force_login/). Gate par DEBUG=1.
+# Ne jamais mettre en production. Regenerer cette valeur si elle fuit.
+# / Secret token used only by Playwright E2E tests for the force_login endpoint.
+# Gated by DEBUG=1. Never ship to production. Rotate if leaked.
+E2E_TEST_TOKEN='e2e-dev-only-pGk3xVqLz8R4nFw2'
+
+
+##########################
+# TiBillet / LaBoutik V1 Legacy
+# Pour lancer des tests
+##########################
+
+FEDOW_URL='https://fedow.tibillet.localhost/' # ex : https://fedow.tibillet.localhost/
+LESPASS_TENANT_URL='https://lespass.tibillet.localhost/' # ex : https://lespass.tibillet.localhost/
+MAIN_ASSET_NAME="TestCoin"
+DEMO_TAGID_CM='EE144CE8'
+DEMO_TAGID_CLIENT1='41726643'
+DEMO_TAGID_CLIENT2='93BD3684'
+
+# SUNMI
+APP_ID=
+APP_KEY=
+PRINTER_SN=
+
+# Stripe
+STRIPE_TEST_API_KEY=""
+STRIPE_TEST_CONNECT_ACCOUNT_ID=""
