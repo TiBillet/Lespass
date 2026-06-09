@@ -532,7 +532,10 @@ UNFOLD = {
         "show_search": True, #  Search in applications and models names
         "show_all_applications": False, # Dropdown with all applications and models
         "navigation": "Administration.admin_tenant.get_sidebar_navigation",
-    }
+    },
+    "SCRIPTS": [
+        lambda request: static("js/autofocus_select2.js"),
+    ],
 }
 
 if DEBUG:

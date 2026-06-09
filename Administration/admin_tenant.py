@@ -96,6 +96,7 @@ from unfold.widgets import (
     UnfoldAdminSelectWidget,
     UnfoldAdminTextInputWidget,
     UnfoldBooleanSwitchWidget,
+    UnfoldAdminSelect2Widget
 )
 
 from Administration.importers.ticket_exporter import TicketExportResource
@@ -2621,10 +2622,12 @@ class ReservationValidFilter(admin.SimpleListFilter):
 
 class ReservationAddAdmin(ModelForm):
     # Uniquement les tarif Adhésion
-    email = forms.EmailField(
+    email = forms.ModelChoiceField(
         required=True,
-        widget=UnfoldAdminEmailInputWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
+        queryset=TibilletUser.objects.all(),
+        empty_label=_("Select a user"),  # Texte affiché par défaut
         label="Email",
+        widget=UnfoldAdminSelect2Widget,
     )
 
     pricesold = forms.ModelChoiceField(
@@ -2634,7 +2637,7 @@ class ReservationAddAdmin(ModelForm):
         # Remplis le champ select avec les objets Price
         empty_label=_("Select a product"),  # Texte affiché par défaut
         required=True,
-        widget=UnfoldAdminSelectWidget(),
+        widget=UnfoldAdminSelect2Widget,
         label=_("Rate")
     )
 
@@ -2817,6 +2820,7 @@ class ReservationAdmin(ModelAdmin):
 
     # Formulaire de création. A besoin de get_form pour fonctionner
     add_form = ReservationAddAdmin
+    autocomplete_fields = ["event",]
 
     def get_form(self, request, obj=None, **kwargs):
         """ Si c'est un add, on modifie le formulaire"""
