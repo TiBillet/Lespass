@@ -20,14 +20,12 @@ FLUX :
 3. JS on load injects card1 cascade data into #addition-form
 4. NFC scan → JS puts tag_id in #addition-form → POST payer_complementaire
 -->
-
 <div id="confirm" data-testid="lire-nfc-complement">
-	<c-read-nfc selector="#confirm" event-manage-form="additionManageForm" submit-url="{% url 'laboutik-paiement-payer_complementaire' %}">
-		<h1>{% translate "Attente lecture 2ème carte" %}</h1>
-		<p style="opacity: 0.7; font-size: 1rem;">{% translate "Posez la 2ème carte du client sur le lecteur" %}</p>
-	</c-read-nfc>
-
-	<script>
+  <c-read-nfc selector="#confirm" input-selector="#nfc-tag-id" form-selector="#addition-form" submit-url="{% url 'laboutik-paiement-payer_complementaire' %}">
+  <h1>{% translate "Attente lecture 2ème carte" %}</h1>
+  <p style="opacity: 0.7; font-size: 1rem;">{% translate "Posez la 2ème carte du client sur le lecteur" %}</p>
+  </c-read-nfc>
+  <script>
 		/**
 		 * Injecte les donnees cascade de la carte1 dans #addition-form au chargement.
 		 * Le NFC reader soumet #addition-form (pas les champs dans ce partial).
@@ -36,22 +34,46 @@ FLUX :
 		 *
 		 * LOCALISATION : hx_lire_nfc_complement.html (inline)
 		 */
-		(function() {
-			var form = document.querySelector('#addition-form');
-			function setHiddenInput(name, value) {
-				var input = form.querySelector('[name="' + name + '"]');
-				if (!input) {
-					input = document.createElement('input');
-					input.type = 'hidden';
-					input.name = name;
-					form.appendChild(input);
-				}
-				input.value = value;
+
+		sendEventOrganizer({
+			src: { file: 'hx_lire_nfc_complement.html', method: 'sendEventOrganizer' },
+			msg: 'additionManageForm',
+			data: {
+				actionType: 'createAndPopInput',
+				name: 'tag_id_carte1',
+				value: '{{ tag_id_carte1|escapejs }}'
 			}
-			setHiddenInput('tag_id_carte1', '{{ tag_id_carte1|escapejs }}');
-			setHiddenInput('cascade_carte1', '{{ cascade_carte1_json|escapejs }}');
-			setHiddenInput('total_nfc_carte1', '{{ total_nfc_carte1|escapejs }}');
-			setHiddenInput('moyen_complement', 'nfc');
-		})();
-	</script>
+		})
+
+		sendEventOrganizer({
+			src: { file: 'hx_lire_nfc_complement.html', method: 'sendEventOrganizer' },
+			msg: 'additionManageForm',
+			data: {
+				actionType: 'createAndPopInput',
+				name: 'cascade_carte1',
+				value: '{{ cascade_carte1_json|escapejs }}'
+			}
+		})
+
+		sendEventOrganizer({
+			src: { file: 'hx_lire_nfc_complement.html', method: 'sendEventOrganizer' },
+			msg: 'additionManageForm',
+			data: {
+				actionType: 'createAndPopInput',
+				name: 'total_nfc_carte1',
+				value: '{{ total_nfc_carte1|escapejs }}'
+			}
+		})
+
+		sendEventOrganizer({
+			src: { file: 'hx_lire_nfc_complement.html', method: 'sendEventOrganizer' },
+			msg: 'additionManageForm',
+			data: {
+				actionType: 'createAndPopInput',
+				name: 'moyen_complement',
+				value: 'nfc'
+			}
+		})
+
+  </script>
 </div>

@@ -59,20 +59,26 @@ to avoid HTMX double submit.
       <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
       {% translate "Reste à payer" %} : <strong>{{ reste_euros }}€</strong>
     </div>
-    {# Hidden inputs pour propager les donnees cascade de la 1ere carte #}
-    {# / Hidden inputs to propagate 1st card's cascade data #}
-    <input type="hidden"
-           name="tag_id_carte1"
-           value="{{ tag_id_carte1 }}"
-           data-testid="hidden-tag-id-carte1" />
-    <input type="hidden"
-           name="cascade_carte1"
-           value="{{ cascade_carte1_json }}"
-           data-testid="hidden-cascade-carte1" />
-    <input type="hidden"
-           name="total_nfc_carte1"
-           value="{{ total_nfc_carte1 }}"
-           data-testid="hidden-total-nfc-carte1" />
+    <form id="complement-form"
+          hx-post="{% url 'laboutik-paiement-payer_complementaire' %}"
+          hx-include="#addition-form"
+          hx-target="#messages"
+          hx-swap="outerHTML">
+      {# Hidden inputs pour propager les donnees cascade de la 1ere carte #}
+      {# / Hidden inputs to propagate 1st card's cascade data #}
+      <input type="hidden"
+             name="tag_id_carte1"
+             value="{{ tag_id_carte1 }}"
+             data-testid="hidden-tag-id-carte1" />
+      <input type="hidden"
+             name="cascade_carte1"
+             value="{{ cascade_carte1_json }}"
+             data-testid="hidden-cascade-carte1" />
+      <input type="hidden"
+             name="total_nfc_carte1"
+             value="{{ total_nfc_carte1 }}"
+             data-testid="hidden-total-nfc-carte1" />
+    </form>
     {# Boutons complement — type="button" autonomes (piege 58) #}
     {# / Complement buttons — standalone type="button" (trap 58) #}
     {% comment %}
@@ -84,14 +90,10 @@ to avoid HTMX double submit.
   / Cash and Card target #messages (innerHTML).
     {% endcomment %}
     {% if accepte_especes %}
-      <button type="button"
+      <button type="text"
               class="bt-basic-container bt-complement-base bt-complement-especes"
               data-testid="btn-complement-especes"
-              hx-post="{% url 'laboutik-paiement-payer_complementaire' %}"
-              hx-vals='{"moyen_complement": "espece", "tag_id_carte1": "{{ tag_id_carte1 }}", "cascade_carte1": {{ cascade_carte1_json|escapejs }}, "total_nfc_carte1": "{{ total_nfc_carte1 }}"}'
-              hx-include="#addition-form"
-              hx-target="#messages"
-              hx-swap="outerHTML"
+              onclick="askAdditionManageForm('updateInput','#addition-moyen-complement','espece'); htmx.trigger('#complement-form', 'submit')" 
               data-loading-disable>
         <div class="bt-basic-icon">
           <i class="fas fa-coins" aria-hidden="true"></i>
@@ -102,14 +104,11 @@ to avoid HTMX double submit.
       </button>
     {% endif %}
     {% if accepte_carte_bancaire %}
-      <button type="button"
+      <button type="text"
               class="bt-basic-container bt-complement-base bt-complement-cb"
               data-testid="btn-complement-cb"
-              hx-post="{% url 'laboutik-paiement-payer_complementaire' %}"
-              hx-vals='{"moyen_complement": "carte_bancaire", "tag_id_carte1": "{{ tag_id_carte1 }}", "cascade_carte1": {{ cascade_carte1_json|escapejs }}, "total_nfc_carte1": "{{ total_nfc_carte1 }}"}'
-              hx-include="#addition-form"
-              hx-target="#messages"
-              hx-swap="outerHTML"
+              hx-trigger="click"
+              onclick="askAdditionManageForm('updateInput','#addition-moyen-complement','carte_bancaire'); htmx.trigger('#complement-form', 'submit')" 
               data-loading-disable>
         <div class="bt-basic-icon">
           <i class="fas fa-credit-card" aria-hidden="true"></i>

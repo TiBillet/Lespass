@@ -6457,6 +6457,7 @@ class PaiementViewSet(viewsets.ViewSet):
         7. Si NFC → cascade sur la 2ème carte, si insuffisant → re-render
         8. Succès → render hx_return_payment_success.html
         """
+
         import json as json_module
         from collections import OrderedDict
 
@@ -6794,7 +6795,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 "currency_data": CURRENCY_DATA,
                 "payment": donnees_paiement,
                 "monnaie_name": nom_monnaie_principal,
-                "moyen_paiement": _("NFC"),
+                "moyen_paiement": moyen_complement,
                 "original_payment": True,
                 "original_moyen_paiement": _("NFC"),
                 "deposit_is_present": False,
