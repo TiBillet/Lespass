@@ -18,6 +18,10 @@ POSTGRES_DB='tibillet'
 
 # STRIPE
 STRIPE_KEY='' # from your stripe account
+STRIPE_KEY_TEST=''
+STRIPE_ENDPOINT_SECRET_TEST=''
+TEST_STRIPE_CONNECT_ACCOUNT=''
+
 
 TIME_ZONE='UTC' # or where you are
 PUBLIC='TiBillet Coop.' # The name of the root instance
@@ -61,7 +65,7 @@ TEST_FORMBRICKS_ADH_FORM=""
 # Ne jamais mettre en production. Regenerer cette valeur si elle fuit.
 # / Secret token used only by Playwright E2E tests for the force_login endpoint.
 # Gated by DEBUG=1. Never ship to production. Rotate if leaked.
-E2E_TEST_TOKEN='e2e-dev-only-pGk3xVqLz8R4nFw2'
+E2E_TEST_TOKEN=''
 
 
 ##########################
