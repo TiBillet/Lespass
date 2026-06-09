@@ -1,5 +1,5 @@
 import { addAllMenuItems } from './modules/menuPlugins/addAllMenuPlugins.js'
-import { initListenDevicesStatus, managedPinCode, readConfFile, setGeneralStatus, deleteServer } from "./modules/utils.js"
+import { getDevicesStatus, managedPinCode, readConfFile, setGeneralStatus, deleteServer } from "./modules/utils.js"
 
 // Ouvrir/fermer le menu burger / Toggle burger menu
 function toggleClassMenuBurger(event) {
@@ -53,6 +53,8 @@ document.addEventListener('deviceready', async () => {
 
   window.state = {}
   const confFile = await readConfFile()
+  // console.log('deviceready - confFile =', confFile);
+  
   if (confFile === null) {
     setGeneralStatus('error')
     return
@@ -64,7 +66,6 @@ document.addEventListener('deviceready', async () => {
   }
   state['step'] = 'init'
 
-  // listen devices status
   // étape 2 - listen devices status 
-  initListenDevicesStatus()
+  await getDevicesStatus()
 })

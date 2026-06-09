@@ -69,35 +69,27 @@ export function startBrowser(url) {
   })
 }
 
-export async function testNetworkStatus(timeout = 3000) {
-  const urls = [
-    "https://httpbin.org/get",
-    "https://www.google.com/generate_204",
-    "https://postman-echo.com/get"
-  ]
-  const promises = urls.map(async (url) => {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeout)
-    try {
-      const response = await fetch(url, {
-        method: "HEAD",
-        mode: "no-cors",
-        signal: controller.signal,
-        cache: "no-store"
-      })
-      clearTimeout(timer)
-      return response
-    } catch (error) {
-      clearTimeout(timer)
-      return null
-    }
-  })
-  const responses = await Promise.all(promises);
-
-  if (responses.filter(item => item !== null).length >= 1) {
-    return 'available'
+export async function testNetworkStatus(timeoutMs = 5000) {
+  // 1. Premier filtre rapide
+  if (navigator.onLine === false) {
+    return false
   }
-  return 'disable'
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    await fetch('https://detectportal.firefox.com/canonical.html', {
+      mode: 'no-cors',
+      cache: 'no-store',
+      signal: controller.signal
+    });
+    return 'available'
+  } catch (error) {
+    return 'disable'
+  } finally {
+    clearTimeout(timeoutId)
+  }
 }
 
 /**

@@ -1,7 +1,5 @@
 import { renderHtml } from './renderHtml.js'
 import { env } from '../../../env.js'
-// dev
-import './dev.js'
 
 export function putLog(typeMsg, msg, options) {
   let msgFinal = ''
@@ -149,43 +147,36 @@ export function setGeneralStatus(status) {
   document.querySelector('.header-status').style.backgroundColor = `var(--${status})`
 }
 
-export async function testNetworkStatus(timeout = 5000) {
-  const urls = [
-    "https://httpbin.org/get",
-    "https://www.google.com/generate_204",
-    "https://postman-echo.com/get"
-  ]
-  const promises = urls.map(async (url) => {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeout)
-    try {
-      const response = await fetch(url, {
-        method: "HEAD",
-        mode: "no-cors",
-        signal: controller.signal,
-        cache: "no-store"
-      })
-      clearTimeout(timer)
-      return response
-    } catch (error) {
-      clearTimeout(timer)
-      return null
-    }
-  })
-  const responses = await Promise.all(promises);
-
-  if (responses.filter(item => item !== null).length >= 1) {
-    return 'available'
+export async function testNetworkStatus(timeoutMs = 5000) {
+  // 1. Premier filtre rapide
+  if (navigator.onLine === false) {
+    return false
   }
-  return 'disable'
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    await fetch('https://detectportal.firefox.com/canonical.html', {
+      mode: 'no-cors',
+      cache: 'no-store',
+      signal: controller.signal
+    });
+    return 'available'
+  } catch (error) {
+    return 'disable'
+  } finally {
+    clearTimeout(timeoutId)
+  }
 }
 
 /**
  * Listen required devices status
  */
-export async function initListenDevicesStatus() {
+export async function getDevicesStatus() {
   // console.log('-> initListenDevicesStatus')
   try {
+    showSpinner()
     // NFC : available / disabled
     const nfcStatus = await nfcPlugin.available()
     if (nfcStatus !== 'available') {
@@ -209,10 +200,8 @@ export async function initListenDevicesStatus() {
     putLog('error', "-> initListenDevicesStatus,", error)
     setGeneralStatus('error')
   }
-
+  hideSpinner()
   renderHtml(state)
-  // relance les écoutes dans 5 secondes
-  const timeoutId = setTimeout(initListenDevicesStatus, 5000)
 }
 
 
@@ -258,9 +247,6 @@ export async function goServer(event) {
 
   const url = event.target.getAttribute('data-server')
   const data = state.servers.find(item => item.server_url === url)
-  // console.log('data =', data)
-
-  // TODO: peut être ajouter le current server dans config file.
 
   // Soumission POST via formulaire natif pour éviter les restrictions CORS/fetch
   // et garantir la transmission du cookie session sur la redirection Django
@@ -362,8 +348,13 @@ export async function managedPinCode(event) {
         }
       }
 
+      // les devices sont ok ?
+      await getDevicesStatus()
+
       // pinCode entré -> get server
       const result = await getServerInfos(parseInt(pinCode))
+      // console.log('-> managedPinCode - result =', result)
+
       let typeMsg = "success"
 
       if (result.error === false) {
@@ -388,7 +379,7 @@ export async function managedPinCode(event) {
 
         putLog('typeMsg', 'update config file, add server =', updateConfFile)
         // render
-        showMainContent(state)
+        renderHtml(state)
 
       } else {
         result.msgs.forEach(msg => {
@@ -397,7 +388,7 @@ export async function managedPinCode(event) {
       }
 
     } catch (error) {
-      // putLog('error','error =', error)
+      putLog('error', 'error =', error)
       label.textContent = error
     }
   } else {
