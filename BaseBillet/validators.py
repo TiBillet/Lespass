@@ -185,7 +185,8 @@ class LoginEmailValidator(serializers.Serializer):
 class TicketCreator():
 
     def __init__(self, reservation: Reservation, products_dict: dict, promo_code: PromotionalCode = None, custom_amounts: dict = None,
-                 sale_origin: str = SaleOrigin.LESPASS):
+                 sale_origin: str = SaleOrigin.LESPASS,
+                 create_checkout: bool = True):
         self.products_dict = products_dict
         self.reservation = reservation
         self.user = reservation.user_commande
@@ -193,6 +194,13 @@ class TicketCreator():
         self.custom_amounts = custom_amounts or {}
         # Source de vente (ex: LESPASS, API) / Sale source (e.g., LESPASS, API)
         self.sale_origin = sale_origin
+        # Si False, on ne déclenche pas get_checkout_stripe() à la fin de method_B.
+        # Utilisé par CommandeService.materialiser() qui consolide toutes les
+        # LigneArticle puis crée UN SEUL checkout Stripe pour la commande entière.
+        # / If False, skip get_checkout_stripe() at the end of method_B.
+        # Used by CommandeService.materialiser() which consolidates all
+        # LigneArticle then creates ONE Stripe checkout for the entire order.
+        self.create_checkout = create_checkout
         # La liste des objets a vendre pour la création du paiement stripe
         self.list_line_article_sold = []
 

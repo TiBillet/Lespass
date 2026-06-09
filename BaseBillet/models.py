@@ -1230,6 +1230,122 @@ class PromotionalCode(models.Model):
         verbose_name_plural = _('Promotional codes')
         ordering = ('-date_created',)
 
+class Commande(models.Model):
+    """
+    Commande unifiée : regroupe plusieurs reservations et adhésions dans un achat
+    unique (panier multi-events). Sert de pivot sémantique, découplé du moyen de
+    paiement (Stripe aujourd'hui, autres moyens plus tard).
+
+    / Unified order: groups several reservations and memberships into a single
+    purchase (multi-event cart). Semantic pivot, decoupled from the payment mean
+    (Stripe today, other means later).
+
+    Liens (FK inverses) :
+      - commande.reservations           → Reservation.commande (FK nullable)
+      - commande.memberships_commande   → Membership.commande (FK nullable)
+      - commande.paiement_stripe        → Paiement_stripe (OneToOne nullable, reverse=commande_obj)
+    """
+
+    uuid = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        unique=True,
+        db_index=True,
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="commandes",
+        verbose_name=_("Buyer"),
+        help_text=_(
+            "Utilisateur acheteur (résolu par email au checkout). "
+            "/ Buyer user (resolved by email at checkout)."
+        ),
+    )
+
+    # Informations acheteur, capturées au moment du checkout
+    # / Buyer information, captured at checkout time
+    email_acheteur = models.EmailField(
+        verbose_name=_("Buyer email"),
+    )
+    first_name = models.CharField(
+        max_length=200,
+        verbose_name=_("First name"),
+    )
+    last_name = models.CharField(
+        max_length=200,
+        verbose_name=_("Last name"),
+    )
+
+    # Statuts du cycle de vie d'une commande
+    # / Order lifecycle statuses
+    DRAFT = "DRAFT"
+    PENDING = "PENDING"
+    PAID = "PAID"
+    CANCELED = "CANCELED"
+    EXPIRED = "EXPIRED"
+    STATUS_CHOICES = [
+        (DRAFT, _("Draft")),
+        (PENDING, _("Pending payment")),
+        (PAID, _("Paid")),
+        (CANCELED, _("Canceled")),
+        (EXPIRED, _("Expired")),
+    ]
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default=DRAFT,
+        verbose_name=_("Order status"),
+    )
+
+    # Lien optionnel vers le paiement Stripe.
+    # Nullable car :
+    #   - une commande gratuite (total 0€) n'a pas de paiement
+    #   - une commande DRAFT pré-checkout n'a pas encore de paiement
+    # / Optional link to the Stripe payment. Nullable because:
+    #   - a free order (total 0€) has no payment
+    #   - a DRAFT pre-checkout order has no payment yet
+    paiement_stripe = models.OneToOneField(
+        "Paiement_stripe",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="commande_obj",
+        verbose_name=_("Stripe payment"),
+    )
+
+    # Code promo appliqué au panier (au plus un par commande en v1).
+    # / Promotional code applied to the cart (at most one per order in v1).
+    promo_code = models.ForeignKey(
+        PromotionalCode,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="commandes",
+        verbose_name=_("Promotional code"),
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Created at"))
+    paid_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Paid at"),
+    )
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = _("Order")
+        verbose_name_plural = _("Orders")
+
+    def __str__(self):
+        return f"Commande {str(self.uuid)[:8]} ({self.status})"
+
+    def uuid_8(self):
+        """Raccourci d'affichage. / Display shortcut."""
+        return f"{self.uuid}".partition("-")[0]
+
 
 @receiver(post_save, sender=Product)
 def post_save_Product(sender, instance: Product, created, **kwargs):
@@ -2163,9 +2279,28 @@ class Reservation(models.Model):
                                                                       on_delete=models.PROTECT,
                                                                       related_name='reservations')
 
-    event = models.ForeignKey(Event,
-                              on_delete=models.PROTECT,
-                              related_name="reservation")
+    event = models.ForeignKey(
+        Event, on_delete=models.PROTECT, related_name="reservation"
+    )
+
+    # FK optionnelle vers la commande qui regroupe cette reservation avec d'autres
+    # (billets d'autres events + adhésions). Nullable pour que les flows directs
+    # existants (mono-event sans panier) continuent de fonctionner sans régression.
+    # / Optional FK to the order that groups this reservation with others
+    # (tickets from other events + memberships). Nullable so that existing
+    # direct flows (mono-event without cart) continue to work without regression.
+    commande = models.ForeignKey(
+        "Commande",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reservations",
+        verbose_name=_("Order"),
+        help_text=_(
+            "Renseignée uniquement si la reservation a été créée via un panier multi-items. "
+            "/ Only set if the reservation was created via a multi-item cart."
+        ),
+    )
 
     CANCELED, CREATED, UNPAID, FREERES, FREERES_USERACTIV, PAID, PAID_ERROR, PAID_NOMAIL, VALID, = 'C', 'R', 'U', 'F', 'FA', 'P', 'PE', 'PN', 'V'
     TYPE_CHOICES = [
@@ -2680,6 +2815,18 @@ class Paiement_stripe(models.Model):
     datetime = models.DateTimeField(auto_now=True)
 
     checkout_session_id_stripe = models.CharField(max_length=80, blank=True, null=True)
+    checkout_session_url = models.URLField(
+        max_length=1024,
+        blank=True,
+        null=True,
+        verbose_name=_("Stripe checkout URL"),
+        help_text=_(
+            "URL Stripe Checkout persistée après création — permet de rediriger "
+            "l'utilisateur vers le paiement sans rappeler Stripe. "
+            "/ Stripe Checkout URL persisted after creation — allows redirecting "
+            "the user to payment without recalling Stripe."
+        ),
+    )
     payment_intent_id = models.CharField(max_length=80, blank=True, null=True)
     metadata_stripe = JSONField(blank=True, null=True)
     customer_stripe = models.CharField(max_length=20, blank=True, null=True)  # pas utile
@@ -3035,6 +3182,29 @@ class Membership(models.Model):
     price = models.ForeignKey(Price, on_delete=models.PROTECT, related_name='membership',
                               verbose_name=_('Product / price'),
                               null=True, blank=True)
+
+    # FK optionnelle vers la commande qui regroupe cette adhésion avec d'autres
+    # items (billets, autres adhésions). Nullable pour que les flows directs
+    # existants (adhésion isolée via MembershipValidator) continuent de fonctionner.
+    # / Optional FK to the order that groups this membership with other items
+    # (tickets, other memberships). Nullable so that existing direct flows
+    # (standalone membership via MembershipValidator) continue to work.
+    commande = models.ForeignKey(
+        "Commande",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        # Asymétrique avec Reservation.commande (related_name="reservations") :
+        # "memberships" est déjà pris par le FK user → Membership.
+        # / Asymmetric with Reservation.commande: "memberships" already taken by user FK.
+        related_name="memberships_commande",
+        verbose_name=_("Order"),
+        help_text=_(
+            "Renseignée uniquement si l'adhésion a été créée via un panier multi-items. "
+            "/ Only set if the membership was created via a multi-item cart."
+        ),
+    )
+
 
     asset_fedow = models.UUIDField(null=True, blank=True)
     card_number = models.CharField(max_length=16, null=True, blank=True)
