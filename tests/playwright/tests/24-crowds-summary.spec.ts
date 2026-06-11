@@ -71,7 +71,8 @@ test.describe('Crowds summary toggle / Toggle résumé crowds', () => {
       if (await projectButtons.count()) {
         await expect(projectButtons.first()).toBeVisible();
       } else {
-        await expect(popup).toContainText('Aucun projet disponible');
+        // FR/EN bilingual / Bilingue FR/EN
+        await expect(popup).toContainText(/Aucun projet disponible|No project available/);
       }
 
       const closeButton = popup.locator('.swal2-close');
@@ -89,19 +90,22 @@ test.describe('Crowds summary toggle / Toggle résumé crowds', () => {
       await expect(popup).toBeVisible();
       await expect(popup.locator('#contrib-name')).toBeVisible();
       await expect(popup.locator('#contrib-amt')).toBeVisible();
-      await popup.locator('button:has-text("Annuler")').click();
+      // FR: "Annuler" / EN: "Cancel"
+      await popup.locator('button:has-text("Annuler"), button:has-text("Cancel")').first().click();
     }
 
     // Step 4: Check toggle button / Étape 4 : Vérifier le bouton toggle
     const toggle = page.locator('[data-testid="crowds-summary-toggle-details"]');
     await expect(toggle).toBeVisible();
-    await expect(toggle).toHaveText(/Voir plus de détail/);
+    // FR: "Voir plus de détail..." / EN: "See more details..."
+    await expect(toggle).toHaveText(/Voir plus de détail|See more details/);
 
     // Step 5: Expand details / Étape 5 : Ouvrir les détails
     await toggle.click();
     const details = page.locator('[data-testid="crowds-summary-details"]');
     await expect(details).toHaveClass(/show/);
-    await expect(toggle).toHaveText(/Voir moins/);
+    // FR: "Voir moins" / EN: "View less"
+    await expect(toggle).toHaveText(/Voir moins|View less/);
 
     // Step 6: Check currency block / Étape 6 : Vérifier un bloc monnaie
     const currencyCards = details.locator('[data-testid="crowds-summary-currency-card"]');
@@ -113,7 +117,8 @@ test.describe('Crowds summary toggle / Toggle résumé crowds', () => {
     const actionsCard = details.locator('[data-testid="crowds-summary-actions-card"]');
     await expect(actionsCard).toBeVisible();
     const actionsGrid = details.locator('[data-testid="crowds-summary-actions-grid"]');
-    const actionsEmpty = details.locator('text=Aucune action en cours');
+    // FR: "Aucune action en cours" / EN: "No action in progress"
+    const actionsEmpty = details.locator('text=/Aucune action en cours|No action in progress/');
     if (await actionsGrid.count()) {
       await expect(actionsGrid).toBeVisible();
     } else {

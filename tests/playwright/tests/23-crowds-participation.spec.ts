@@ -113,7 +113,8 @@ test.describe('Crowds participation popup / Popup participation crowds', () => {
 
     // Step 10: Mark completed / Étape 10 : Marquer terminé
     await test.step('Mark as completed / Marquer comme terminé', async () => {
-      const markButton = page.locator('button:has-text("Marquer terminé"), button:has-text("Mark completed")').first();
+      // FR: "Marquer terminé" / EN: "Mark as completed"
+      const markButton = page.locator('button:has-text("Marquer terminé"), button:has-text("Mark as completed")').first();
       await expect(markButton).toBeVisible();
       await markButton.click();
 

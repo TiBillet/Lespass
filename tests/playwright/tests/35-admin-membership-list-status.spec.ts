@@ -118,9 +118,9 @@ test.describe('Admin Membership List Status / Statut vue liste admin adhésion',
       await expect(row).toBeVisible({ timeout: 10000 });
 
       // Le statut doit être "Payé en ligne" (status ONCE = 'A')
-      // Status must be "Payé en ligne" (status ONCE = 'A')
+      // Status must be "Payé en ligne" / "Paid online" (status ONCE = 'A')
       const statusCell = row.locator('td.field-status');
-      await expect(statusCell).toContainText('Payé en ligne');
+      await expect(statusCell).toContainText(/Payé en ligne|Paid online/);
 
       // La deadline doit être une date au format JJ/MM/AAAA (pas "-")
       // Deadline must be a date in DD/MM/YYYY format (not "-")
@@ -197,7 +197,7 @@ test.describe('Admin Membership List Status / Statut vue liste admin adhésion',
       // Status must be "Créé via l'administration" (status ADMIN = 'D').
       // The post_save signal creates a LigneArticle but does not change the status.
       const statusCell = row.locator('td.field-status');
-      await expect(statusCell).toContainText("l'administration");
+      await expect(statusCell).toContainText(/Créé via l'administration|Created via administration/);
 
       // La deadline doit être une date (trigger_A appelle set_deadline())
       // Deadline must be a date (trigger_A calls set_deadline())
@@ -252,9 +252,9 @@ test.describe('Admin Membership List Status / Statut vue liste admin adhésion',
       await expect(row).toBeVisible({ timeout: 10000 });
 
       // Le statut doit être "Payé en ligne" (status ONCE = 'A')
-      // Status must be "Payé en ligne" (ONCE = 'A')
+      // Status must be "Payé en ligne" / "Paid online" (ONCE = 'A')
       const statusCell = row.locator('td.field-status');
-      await expect(statusCell).toContainText('Payé en ligne');
+      await expect(statusCell).toContainText(/Payé en ligne|Paid online/);
 
       // La deadline doit être une date (pas "-")
       // Deadline must be a date (not "-")

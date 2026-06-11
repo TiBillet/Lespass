@@ -42,21 +42,21 @@ test.describe('Login Flow / Flux de connexion', () => {
       console.log('✓ Successfully on /my_account / Succès sur /my_account');
     });
 
-    // Step 7: Confirm admin rights (presence of the admin panel button)
-    // Étape 7 : Confirmer les droits admin (présence du bouton vers le panel admin)
+    // Step 7: Confirm admin rights (presence of the admin tenant card)
+    // Étape 7 : Confirmer les droits admin (présence de la carte admin du tenant)
     await test.step('Verify Admin access / Vérifier l\'accès Admin', async () => {
-      // Admin users see a red button pointing to /admin/
-      // Les admins voient un bouton rouge pointant vers /admin/
-      const adminPanelButton = page.locator('a[href*="/admin/"]').filter({ hasText: /Admin panel|Panneau d'administration/i });
-      
+      // Admin users see an "Administration" section with one red card per tenant pointing to /admin/
+      // Les admins voient une section "Administration" avec une carte rouge par tenant pointant vers /admin/
+      const adminPanelButton = page.locator('a.btn-admin-tenant[href*="/admin/"]').first();
+
       // We expect this button to be visible
       // On s'attend à ce que ce bouton soit visible
       await expect(adminPanelButton).toBeVisible({ timeout: 10000 });
       console.log('✓ Admin button is visible / Le bouton Admin est visible');
-      
+
       // We check that it has the correct CSS class
       // On vérifie qu'il a la bonne classe CSS
-      await expect(adminPanelButton).toHaveClass(/btn-outline-danger/);
+      await expect(adminPanelButton).toHaveClass(/btn-admin-tenant/);
     });
   });
 

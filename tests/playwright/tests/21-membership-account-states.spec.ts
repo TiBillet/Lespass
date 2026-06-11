@@ -63,7 +63,9 @@ test.describe('Membership account states / Etats adhesion', () => {
       await openButton.click();
       const alreadyContent = page.locator('#membership-already-has-content').first();
       await expect(alreadyContent).toBeVisible();
-      await expect(alreadyContent).toContainText('Adhésion déjà active');
+      // Le navigateur Playwright est en anglais par defaut, on accepte FR ou EN
+      // Playwright browser defaults to English, accept FR or EN
+      await expect(alreadyContent).toContainText(/Adhésion déjà active|Membership already active/);
     });
 
     await test.step('Create expired membership / Creer adhesion expiree', async () => {

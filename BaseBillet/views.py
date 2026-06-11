@@ -19,7 +19,7 @@ from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.core.serializers.json import DjangoJSONEncoder
 from django.core.signing import TimestampSigner
-from django.db import connection, IntegrityError
+from django.db import connection, IntegrityError, transaction as db_transaction
 from django.db.models import Count, Q, Sum
 from django.http import HttpResponse, HttpRequest, Http404, HttpResponseRedirect
 from django.urls import reverse
@@ -4255,11 +4255,25 @@ class EventWizard(viewsets.ViewSet):
                     _("Cette adresse e-mail pose un problème. Merci de nous contacter."))
                 return redirect("event-wizard-place")
 
+        # Creation en bloc : tout ou rien. Un doublon (name + datetime,
+        # unique_together sur Event) levait un 500 brut ; on le transforme en
+        # message de formulaire et on garde les brouillons en session pour
+        # que la personne corrige.
+        # / All-or-nothing creation. A duplicate (name + datetime,
+        # unique_together on Event) used to raise a bare 500; turn it into a
+        # form message and keep the drafts in session so the user can fix.
         evenements_crees = []
-        for draft in drafts:
-            evenements_crees.append(
-                _creer_event_depuis_brouillon(draft, postal_address, user_pour_creation, est_staff)
-            )
+        try:
+            with db_transaction.atomic():
+                for draft in drafts:
+                    evenements_crees.append(
+                        _creer_event_depuis_brouillon(draft, postal_address, user_pour_creation, est_staff)
+                    )
+        except IntegrityError:
+            messages.add_message(request, messages.WARNING,
+                _("Un évènement avec le même nom existe déjà à cette date. "
+                  "Modifiez le nom ou la date avant de valider."))
+            return redirect("event-wizard-event")
 
         request.session.pop(_wizard_drafts_key(self.SESSION_PREFIX), None)
         request.session.pop(self._session_key("postal_address_pk"), None)

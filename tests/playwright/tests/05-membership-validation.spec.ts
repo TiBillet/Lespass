@@ -29,21 +29,26 @@ test.describe('Create Selective Validation Membership / Créer Adhésion à Vali
     await test.step('Login', async () => { await loginAsAdmin(page); });
 
     await test.step('Open form', async () => {
-      await page.goto('/admin/BaseBillet/product/');
+      // L'admin produit a ete refondu en proxys : les adhesions se creent via
+      // /admin/BaseBillet/membershipproduct/ (la categorie est fixee par le proxy).
+      // / Product admin was split into proxies: memberships are created via
+      // the membershipproduct proxy (category is set by the proxy itself).
+      await page.goto('/admin/BaseBillet/membershipproduct/');
       await page.waitForLoadState('networkidle');
       const productLink = page.locator('#result_list a, .result-list a').filter({ hasText: 'Adhésion à validation sélective (Le Tiers-Lustre)' }).first();
       if (await productLink.count() > 0) {
         await productLink.click();
       } else {
-        await page.goto('/admin/BaseBillet/product/add/');
+        await page.goto('/admin/BaseBillet/membershipproduct/add/');
       }
       await page.waitForLoadState('networkidle');
     });
 
     await test.step('Fill basic info', async () => {
       await page.locator('input[name="name"]').fill('Adhésion à validation sélective (Le Tiers-Lustre)');
-      await page.locator('select[name="categorie_article"]').selectOption('A');
-      await page.locator('input[name="short_description"]').fill('Tarif solidaire soumis à validation manuelle');
+      // Pas de selection de categorie : le proxy MembershipProduct la fixe (champ cache).
+      // / No category selection: the MembershipProduct proxy sets it (hidden field).
+      await page.locator('input[name="short_description"]').first().fill('Tarif solidaire soumis à validation manuelle');
     });
 
     await test.step('Add prices', async () => {

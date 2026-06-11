@@ -204,26 +204,39 @@ def test_calculer_totaux_par_moyen_basique(tenant_lespass, periode_test):
     debut, fin = periode_test
     with tenant_context(tenant_lespass):
         from BaseBillet.models import PaymentMethod
+        from comptabilite.services import RapportComptableService
+
+        # Snapshot AVANT creation : la fenetre de 5 min peut contenir des lignes
+        # creees par d'autres tests (API v2, serveur de dev). On teste en DELTA.
+        # / Snapshot BEFORE creation: the 5-min window may contain lines from
+        # other tests (API v2, dev server). We assert on DELTAS.
+        avant = RapportComptableService(debut, fin).calculer_totaux_par_moyen()
+        avant_ca = avant.get("CA", {"total": 0, "nb": 0})
+        avant_cc = avant.get("CC", {"total": 0, "nb": 0})
+        avant_sf = avant.get("SF", {"total": 0, "nb": 0})
+
         l_cash = _creer_ligne(tenant_lespass, amount=1000, payment_method=PaymentMethod.CASH)
         l_cc = _creer_ligne(tenant_lespass, amount=2000, payment_method=PaymentMethod.CC)
         l_stripe = _creer_ligne(tenant_lespass, amount=500, payment_method=PaymentMethod.STRIPE_FED)
 
-        from comptabilite.services import RapportComptableService
-        rapport = RapportComptableService(debut, fin).calculer_totaux_par_moyen()
+        try:
+            rapport = RapportComptableService(debut, fin).calculer_totaux_par_moyen()
 
-        assert "CA" in rapport  # CASH code
-        assert "CC" in rapport
-        assert "SF" in rapport  # STRIPE_FED code
-        assert rapport["CA"]["total"] == 1000
-        assert rapport["CA"]["nb"] == 1
-        assert rapport["CC"]["total"] == 2000
-        assert rapport["SF"]["total"] == 500
-        assert rapport["total"] == 3500
-        assert rapport["currency_code"] == "EUR"
-
-        l_cash.delete()
-        l_cc.delete()
-        l_stripe.delete()
+            assert "CA" in rapport  # CASH code
+            assert "CC" in rapport
+            assert "SF" in rapport  # STRIPE_FED code
+            assert rapport["CA"]["total"] - avant_ca["total"] == 1000
+            assert rapport["CA"]["nb"] - avant_ca["nb"] == 1
+            assert rapport["CC"]["total"] - avant_cc["total"] == 2000
+            assert rapport["SF"]["total"] - avant_sf["total"] == 500
+            assert rapport["total"] - avant["total"] == 3500
+            assert rapport["currency_code"] == "EUR"
+        finally:
+            # Nettoyage TOUJOURS execute, meme si une assertion echoue.
+            # / Cleanup ALWAYS runs, even when an assertion fails.
+            l_cash.delete()
+            l_cc.delete()
+            l_stripe.delete()
 
 
 def test_calculer_totaux_par_moyen_avec_qty_decimal(tenant_lespass, periode_test):
@@ -234,6 +247,13 @@ def test_calculer_totaux_par_moyen_avec_qty_decimal(tenant_lespass, periode_test
     debut, fin = periode_test
     with tenant_context(tenant_lespass):
         from BaseBillet.models import PaymentMethod
+        from comptabilite.services import RapportComptableService
+
+        # Snapshot AVANT creation — assertions en delta (fenetre partagee).
+        # / Snapshot BEFORE creation — delta assertions (shared window).
+        avant = RapportComptableService(debut, fin).calculer_totaux_par_moyen()
+        avant_ca_total = avant.get("CA", {"total": 0})["total"]
+
         ligne = _creer_ligne(
             tenant_lespass,
             amount=1000,
@@ -241,14 +261,14 @@ def test_calculer_totaux_par_moyen_avec_qty_decimal(tenant_lespass, periode_test
             payment_method=PaymentMethod.CASH,
         )
 
-        from comptabilite.services import RapportComptableService
-        rapport = RapportComptableService(debut, fin).calculer_totaux_par_moyen()
+        try:
+            rapport = RapportComptableService(debut, fin).calculer_totaux_par_moyen()
 
-        # CASH code = 'CA'
-        assert rapport["CA"]["total"] == 2000
-        assert rapport["total"] == 2000
-
-        ligne.delete()
+            # CASH code = 'CA'
+            assert rapport["CA"]["total"] - avant_ca_total == 2000
+            assert rapport["total"] - avant["total"] == 2000
+        finally:
+            ligne.delete()
 
 
 # ---------------------------------------------------------------------------
@@ -359,6 +379,17 @@ def test_calculer_adhesions_avec_membership(tenant_lespass, periode_test):
             contribution_value=Decimal("15.00"),
         )
 
+        from comptabilite.services import RapportComptableService
+
+        # Snapshot AVANT creation : d'autres adhesions peuvent exister dans la
+        # fenetre (tests API v2, serveur de dev). On teste le total en DELTA ;
+        # les assertions sur NOTRE produit restent absolues (nom unique).
+        # / Snapshot BEFORE creation: other memberships may exist in the window
+        # (API v2 tests, dev server). Total asserted as DELTA; our product's
+        # assertions stay absolute (unique name).
+        avant = RapportComptableService(debut, fin).calculer_detail_ventes()
+        avant_adh_total = avant.get("A", {"total_ttc": 0})["total_ttc"]
+
         ligne = LigneArticle.objects.create(
             amount=1500, qty=Decimal("1"),
             status=LigneArticle.VALID,
@@ -367,24 +398,24 @@ def test_calculer_adhesions_avec_membership(tenant_lespass, periode_test):
             membership=membership,
         )
 
-        from comptabilite.services import RapportComptableService
-        rapport = RapportComptableService(debut, fin).calculer_detail_ventes()
+        try:
+            rapport = RapportComptableService(debut, fin).calculer_detail_ventes()
 
-        # Structure detail_ventes : cat_code -> {nom_categorie, articles: [{...}], total_ttc}
-        # / detail_ventes structure: cat_code -> {nom_categorie, articles, total_ttc}
-        assert "A" in rapport, "La categorie ADHESION (A) doit etre presente"
-        cat_adh = rapport["A"]
-        assert cat_adh["total_ttc"] == 1500
-        # On retrouve notre produit dans la liste d'articles de la categorie
-        # / Locate our product in the category's articles list
-        articles_du_produit = [a for a in cat_adh["articles"] if a["nom_produit"] == product.name]
-        assert len(articles_du_produit) == 1
-        article = articles_du_produit[0]
-        assert article["total_ttc"] == 1500
-        assert article["qty_total"] == 1.0
-
-        ligne.delete()
-        membership.delete()
+            # Structure detail_ventes : cat_code -> {nom_categorie, articles: [{...}], total_ttc}
+            # / detail_ventes structure: cat_code -> {nom_categorie, articles, total_ttc}
+            assert "A" in rapport, "La categorie ADHESION (A) doit etre presente"
+            cat_adh = rapport["A"]
+            assert cat_adh["total_ttc"] - avant_adh_total == 1500
+            # On retrouve notre produit dans la liste d'articles de la categorie
+            # / Locate our product in the category's articles list
+            articles_du_produit = [a for a in cat_adh["articles"] if a["nom_produit"] == product.name]
+            assert len(articles_du_produit) == 1
+            article = articles_du_produit[0]
+            assert article["total_ttc"] == 1500
+            assert article["qty_total"] == 1.0
+        finally:
+            ligne.delete()
+            membership.delete()
 
 
 def test_calculer_billets_avec_reservation(tenant_lespass, periode_test):

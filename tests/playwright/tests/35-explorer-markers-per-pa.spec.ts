@@ -19,10 +19,16 @@ import { env } from './utils/env';
 
 test.describe('Explorer ROOT — markers par PostalAddress (CHANTIER-05)', () => {
 
+  // ROOT tenant (schema public) : /explorer/ vit sur le domaine racine
+  // (ex: https://tibillet.localhost), PAS sur le sous-domaine tenant du baseURL.
+  // / ROOT tenant (public schema): /explorer/ lives on the bare domain,
+  // NOT on the tenant subdomain used as Playwright baseURL.
+  const EXPLORER_URL = `https://${env.DOMAIN}/explorer/`;
+
   test('la page /explorer/ se charge et injecte des points', async ({ page }) => {
 
     // ROOT tenant : page Explorer publique, pas besoin de login
-    await page.goto('/explorer/');
+    await page.goto(EXPLORER_URL);
     await page.waitForLoadState('networkidle');
 
     // Vérifie que l'élément JSON-data est présent
@@ -55,7 +61,7 @@ test.describe('Explorer ROOT — markers par PostalAddress (CHANTIER-05)', () =>
 
   test('au moins 1 marker (ou cluster) visible si la carte a des données', async ({ page }) => {
 
-    await page.goto('/explorer/');
+    await page.goto(EXPLORER_URL);
     await page.waitForLoadState('networkidle');
 
     // Vérifie si la carte a au moins 1 point

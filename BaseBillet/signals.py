@@ -14,7 +14,7 @@ from jedi.inference.value import instance
 from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product, Price, \
-    PaymentMethod, Membership, SaleOrigin, Configuration, Event, PostalAddress
+    PaymentMethod, Membership, SaleOrigin, Configuration, Event, PostalAddress, PROXYS_PRODUCT
 from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation, \
     trigger_product_update_tasks, send_sale_to_laboutik, send_refund_to_laboutik, webhook_membership, \
     refill_from_lespass_to_user_wallet_from_ticket_scanned
@@ -430,6 +430,21 @@ def trigger_product_update(sender, instance: Product, created, **kwargs):
     # On le lance en async pour bien que le produit soit en DB avant que LaBoutik ne réclame les info par une requete
     product_pk = instance.pk
     trigger_product_update_tasks.delay(product_pk)
+
+
+# Les signaux ne sont pas emis pour sender=Product quand le save passe par un
+# proxy admin (TicketProduct, MembershipProduct...) : on connecte donc chaque
+# proxy aux trois receivers Product ci-dessus. La liste PROXYS_PRODUCT vit
+# dans BaseBillet/models.py (source unique) et le test de garde
+# tests/pytest/test_signaux_proxys_product.py verifie ces connexions.
+# / Signals are not emitted for sender=Product when the save goes through an
+# admin proxy: each proxy is therefore connected to the three Product
+# receivers above. PROXYS_PRODUCT lives in BaseBillet/models.py (single
+# source) and the guard test checks these connections.
+for _proxy_product in PROXYS_PRODUCT:
+    pre_save.connect(unpublish_if_archived, sender=_proxy_product)
+    post_save.connect(send_membership_and_badge_product_to_fedow, sender=_proxy_product)
+    post_save.connect(trigger_product_update, sender=_proxy_product)
 
 
 @receiver(post_save, sender=Membership)

@@ -275,10 +275,10 @@ test.describe('Manual Validation + Stripe Payment / Validation manuelle + Paieme
       const row = await rechercherDansListeAdmin(page, userEmail);
       await expect(row).toBeVisible({ timeout: 10000 });
 
-      // Statut : "Payé en ligne" (status ONCE = 'A')
-      // / Status: "Payé en ligne" (status ONCE = 'A')
+      // Statut : "Payé en ligne" / "Paid online" (status ONCE = 'A')
+      // / Status: "Payé en ligne" / "Paid online" (status ONCE = 'A')
       const statusCell = row.locator('td.field-status');
-      await expect(statusCell).toContainText('Payé en ligne');
+      await expect(statusCell).toContainText(/Payé en ligne|Paid online/);
       console.log('✓ Statut "Payé en ligne" dans la liste');
 
       // Deadline : doit être une date au format JJ/MM/AAAA (pas "-")

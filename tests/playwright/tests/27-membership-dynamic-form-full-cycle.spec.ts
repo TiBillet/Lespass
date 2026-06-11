@@ -42,38 +42,51 @@ async function addFormField(page: Page, fieldData: {
   order: number;
   options?: string;
 }) {
-  const section = page.locator('.inline-group').filter({
-    has: page.locator('h2:has-text("Dynamic form field")'),
-  });
-  const addButton = section.locator('a:has-text("Add another")').first();
-  await addButton.click();
+  // Inline Unfold : conteneur #form_fields-group (prefix = related_name 'form_fields'),
+  // bouton d'ajout = a.add-row. Le champ 'order' est cache (hide_ordering_field,
+  // gere par drag & drop), on ne le remplit pas.
+  // / Unfold inline: container #form_fields-group (prefix = related_name 'form_fields'),
+  // add button = a.add-row. The 'order' field is hidden (hide_ordering_field,
+  // managed by drag & drop), we do not fill it.
+  const section = page.locator('#form_fields-group');
+  const countBefore = await section.locator('input[name^="form_fields-"][name$="-label"]:not([name*="__prefix__"])').count();
 
-  const lastRow = section.locator('tr.form-row:not(.empty-form)').last();
-  await lastRow.waitFor({ state: 'visible', timeout: 5000 });
+  await section.locator('a.add-row').first().click();
+
+  const formIndex = countBefore;
+  const labelInput = section.locator(`input[name="form_fields-${formIndex}-label"]`);
+  await labelInput.waitFor({ state: 'visible', timeout: 5000 });
 
   console.log(`✓ Adding field / Ajout du champ : ${fieldData.label}`);
 
-  await lastRow.locator('input[name*="-label"]').fill(fieldData.label);
-  await lastRow.locator('select[name*="-field_type"]').selectOption(fieldData.type);
+  await labelInput.fill(fieldData.label);
+  await section.locator(`select[name="form_fields-${formIndex}-field_type"]`).selectOption(fieldData.type);
 
   if (fieldData.required) {
-    await lastRow.locator('input[name*="-required"]').check();
+    await section.locator(`input[name="form_fields-${formIndex}-required"]`).check();
   }
 
-  await lastRow.locator('input[name*="-help_text"], textarea[name*="-help_text"]').fill(fieldData.help_text);
-  await lastRow.locator('input[name*="-order"]').fill(fieldData.order.toString(), { force: true });
+  await section.locator(`input[name="form_fields-${formIndex}-help_text"], textarea[name="form_fields-${formIndex}-help_text"]`).fill(fieldData.help_text);
 
   if (fieldData.options) {
-    // Le champ s'appelle "options_csv" (input text, pas textarea)
-    // The field is named "options_csv" (text input, not textarea)
-    const optionsInput = lastRow.locator('input[name*="-options_csv"]');
-    await optionsInput.waitFor({ state: 'visible', timeout: 5000 });
-    await optionsInput.fill(fieldData.options);
+    // Les options se saisissent via le champ CSV 'options_csv' (proxy du JSONField).
+    // / Options are entered via the 'options_csv' CSV field (JSONField proxy).
+    const optionsInput = section.locator(`input[name="form_fields-${formIndex}-options_csv"], textarea[name="form_fields-${formIndex}-options_csv"]`);
+    await optionsInput.first().waitFor({ state: 'visible', timeout: 5000 });
+    await optionsInput.first().fill(fieldData.options);
   }
 }
 
 
 test.describe('Full Membership Dynamic Form Cycle / Cycle complet formulaire dynamique adhésion', () => {
+
+  // Les 7 étapes dépendent les unes des autres (même produit, même email).
+  // Mode serial : un échec saute les suivantes, et un retry rejoue tout depuis
+  // l'étape 1 (le randomId change à chaque redémarrage de worker).
+  // / The 7 steps depend on each other (same product, same email).
+  // Serial mode: a failure skips the next ones, and a retry replays everything
+  // from step 1 (randomId changes on each worker restart).
+  test.describe.configure({ mode: 'serial' });
 
   // ===================================================================
   // ÉTAPE 1 — Admin : créer le produit adhésion avec champs dynamiques
@@ -87,12 +100,15 @@ test.describe('Full Membership Dynamic Form Cycle / Cycle complet formulaire dyn
     });
 
     await test.step('Fill product info / Remplir les infos produit', async () => {
-      await page.goto('/admin/BaseBillet/product/add/');
+      // L'admin produit a ete refondu en proxys : les adhesions se creent via
+      // /admin/BaseBillet/membershipproduct/ (la categorie est fixee par le proxy, champ cache).
+      // / Product admin was split into proxies: memberships are created via
+      // the membershipproduct proxy (category is set by the proxy itself, hidden field).
+      await page.goto('/admin/BaseBillet/membershipproduct/add/');
       await page.waitForLoadState('networkidle');
 
       await page.locator('input[name="name"]').fill(PRODUCT_NAME);
       await page.locator('input[name="short_description"]').fill('Test E2E formulaire dynamique complet');
-      await page.locator('select[name="categorie_article"]').selectOption('A');
       await page.check('input[name="publish"]');
 
       console.log(`✓ Product info filled: ${PRODUCT_NAME}`);
@@ -101,9 +117,10 @@ test.describe('Full Membership Dynamic Form Cycle / Cycle complet formulaire dyn
     await test.step('Add price inline / Ajouter un tarif', async () => {
       // Un tarif est obligatoire pour sauvegarder un produit adhésion
       // A price is required to save a membership product
-      // Scroller vers le bas pour trouver le bouton "Add another" des prix
-      // Scroll down to find the "Add another" button for prices
-      const addPriceButton = page.locator('a:has-text("Add another"), button:has-text("Add another")').first();
+      // Inline Unfold : conteneur #prices-group, bouton d'ajout a.add-row
+      // / Unfold inline: container #prices-group, add button a.add-row
+      const pricesSection = page.locator('#prices-group');
+      const addPriceButton = pricesSection.locator('a.add-row').first();
       await addPriceButton.scrollIntoViewIfNeeded();
       await addPriceButton.click();
       await page.waitForTimeout(500);
@@ -142,9 +159,9 @@ test.describe('Full Membership Dynamic Form Cycle / Cycle complet formulaire dyn
     });
 
     await test.step('Add 6 dynamic form fields / Ajouter 6 champs dynamiques', async () => {
-      // Ouvrir l'onglet "Dynamic form field"
-      // Open the "Dynamic form field" tab
-      const tab = page.locator('button:has-text("Dynamic form field"), a:has-text("Dynamic form field")').first();
+      // Onglet Unfold de l'inline : ancre #form_fields (activeTab Alpine.js).
+      // / Unfold inline tab: #form_fields anchor (Alpine.js activeTab).
+      const tab = page.locator('a[href="#form_fields"]').first();
       if (await tab.count() > 0) {
         await tab.click();
         await page.waitForTimeout(1000);
@@ -313,7 +330,10 @@ test.describe('Full Membership Dynamic Form Cycle / Cycle complet formulaire dyn
       // The server returns free_confirmed.html in the offcanvas.
       console.log('Waiting for confirmation... / Attente confirmation...');
 
-      const successMessage = page.locator('text=/confirmée|confirmed|succès|success/i');
+      // .first() : le template free_confirmed.html contient 2 textes qui matchent
+      // (titre "Membership confirmed!" + paragraphe "successfully registered")
+      // / .first(): free_confirmed.html contains 2 matching texts
+      const successMessage = page.locator('text=/confirmée|confirmed|succès|success/i').first();
       await expect(successMessage).toBeVisible({ timeout: 15000 });
       console.log('✓ Membership confirmed (free) / Adhésion confirmée (gratuite)');
     });

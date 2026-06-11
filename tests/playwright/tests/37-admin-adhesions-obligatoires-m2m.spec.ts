@@ -5,13 +5,20 @@ import { loginAsAdmin } from './utils/auth';
  * TEST: Adhesions obligatoires M2M on Price
  * TEST : Adhesions obligatoires M2M sur un tarif
  *
+ * L'admin produit a ete refondu en proxys :
+ * - adhesions via /admin/BaseBillet/membershipproduct/ (categorie cachee, subscription_type dans l'inline)
+ * - billetterie via /admin/BaseBillet/ticketproduct/ (adhesions_obligatoires directement dans l'inline tarif)
+ * / Product admin was split into proxies:
+ * - memberships via the membershipproduct proxy (hidden category, subscription_type in the inline)
+ * - ticketing via the ticketproduct proxy (adhesions_obligatoires directly in the price inline)
+ *
  * Flow :
  * 1. Create 2 membership products / Creer 2 produits adhesion
  * 2. Create a free reservation product (auto-generates a free price)
  *    / Creer un produit reservation gratuite (genere auto un tarif gratuit)
- * 3. Save, then open the free price in standalone admin
- *    / Enregistrer, puis ouvrir le tarif gratuit en standalone
- * 4. Add 2 adhesions via select2 autocomplete / Ajouter 2 adhesions via select2
+ * 3. Save and continue: the inline shows the auto-created free price
+ *    / Enregistrer et continuer : l'inline affiche le tarif gratuit auto-cree
+ * 4. Add 2 adhesions via select2 autocomplete in the inline / Ajouter 2 adhesions via select2 dans l'inline
  * 5. Save and verify both are persisted / Enregistrer et verifier
  * 6. Remove one, verify only the other remains / Retirer une, verifier
  * 7. Verify no "add +" button on the M2M widget / Verifier pas de bouton "+"
@@ -34,82 +41,60 @@ test.describe('Adhesions obligatoires M2M / Adhesions obligatoires M2M', () => {
 
     // --- Create membership product A ---
     await test.step('Create membership product A / Creer produit adhesion A', async () => {
-      await page.goto('/admin/BaseBillet/product/add/');
-      await page.waitForLoadState('networkidle');
-      await page.locator('input[name="name"]').fill(membershipName1);
-      await page.locator('select[name="categorie_article"]').selectOption('A');
-
-      const addBtn = page.locator('a:has-text("Add another"), button:has-text("Add another")').first();
-      await addBtn.click();
-      await page.waitForTimeout(500);
-      await page.locator('input[name="prices-0-name"]').fill('Tarif annuel');
-      await page.locator('input[name="prices-0-prix"]').fill('10');
-      await page.locator('select[name="prices-0-subscription_type"]').selectOption('Y');
-
-      await page.locator('button[type="submit"]:has-text("Save"), input[type="submit"]').first().click();
-      await page.waitForLoadState('networkidle');
+      await createMembershipProduct(page, membershipName1, '10');
       console.log(`Created membership A: ${membershipName1}`);
     });
 
     // --- Create membership product B ---
     await test.step('Create membership product B / Creer produit adhesion B', async () => {
-      await page.goto('/admin/BaseBillet/product/add/');
-      await page.waitForLoadState('networkidle');
-      await page.locator('input[name="name"]').fill(membershipName2);
-      await page.locator('select[name="categorie_article"]').selectOption('A');
-
-      const addBtn = page.locator('a:has-text("Add another"), button:has-text("Add another")').first();
-      await addBtn.click();
-      await page.waitForTimeout(500);
-      await page.locator('input[name="prices-0-name"]').fill('Tarif annuel');
-      await page.locator('input[name="prices-0-prix"]').fill('15');
-      await page.locator('select[name="prices-0-subscription_type"]').selectOption('Y');
-
-      await page.locator('button[type="submit"]:has-text("Save"), input[type="submit"]').first().click();
-      await page.waitForLoadState('networkidle');
+      await createMembershipProduct(page, membershipName2, '15');
       console.log(`Created membership B: ${membershipName2}`);
     });
 
-    // --- Create free reservation product (auto-generates a free price) ---
+    // --- Create free reservation product: the free price is AUTO-created ---
+    // Le tarif gratuit FREERES est auto-cree par post_save_Product, y compris
+    // via le proxy TicketProduct (bug corrige le 2026-06-11 : les proxys sont
+    // connectes aux signaux Product — cf. PROXYS_PRODUCT dans models.py et le
+    // test de garde tests/pytest/test_signaux_proxys_product.py).
+    // / The FREERES free price is auto-created by post_save_Product, including
+    // through the TicketProduct proxy (bug fixed on 2026-06-11: proxies are
+    // connected to the Product signals — see PROXYS_PRODUCT in models.py and
+    // the guard test tests/pytest/test_signaux_proxys_product.py).
     await test.step('Create free reservation product / Creer produit reservation gratuite', async () => {
-      await page.goto('/admin/BaseBillet/product/add/');
+      await page.goto('/admin/BaseBillet/ticketproduct/add/');
       await page.waitForLoadState('networkidle');
       await page.locator('input[name="name"]').fill(freeResProductName);
       await page.locator('select[name="categorie_article"]').selectOption('F'); // FREERES
 
-      // Save and continue — Django post_save will auto-create a "Free rate" price
+      // Save and continue editing / Enregistrer et continuer
       await page.locator('button[name="_continue"], input[name="_continue"]').first().click();
       await page.waitForLoadState('networkidle');
 
-      // Verify the product was saved (success message)
-      const successMsg = page.locator('.messagelist .success, .alert-success, div.bg-green-100');
-      await expect(successMsg).toBeVisible({ timeout: 5000 });
+      // We must be on the change page of the saved product
+      // On doit etre sur la page de modification du produit sauvegarde
+      await expect(page).toHaveURL(/\/admin\/BaseBillet\/ticketproduct\/[0-9a-f-]+\/change\//);
       console.log(`Created free reservation product: ${freeResProductName}`);
     });
 
-    // --- Open the auto-generated free price in standalone admin ---
-    let priceChangeUrl: string;
-
-    await test.step('Open free price in standalone admin / Ouvrir le tarif gratuit en standalone', async () => {
-      // The inline should show the auto-created "Free rate" price with a change link
-      const changeLink = page.locator('a[href*="/admin/BaseBillet/price/"]').first();
-      const href = await changeLink.getAttribute('href');
-      expect(href).toBeTruthy();
-      priceChangeUrl = href!;
-      console.log(`Price change URL: ${priceChangeUrl}`);
-
-      await page.goto(priceChangeUrl);
-      await page.waitForLoadState('networkidle');
-
-      // Verify we are on the Price change page
-      const nameInput = page.locator('input[name="name"]');
-      await expect(nameInput).toBeVisible();
-      console.log('Opened Price standalone form');
+    // --- The inline shows the AUTO-created free price with the M2M field ---
+    await test.step('Verify auto-created free price inline / Verifier le tarif gratuit auto-cree', async () => {
+      // Le tarif gratuit auto-cree est la premiere ligne de l'inline (prices-0)
+      // et son prix vaut 0 — c'est la preuve E2E du fix des signaux proxys.
+      // / The auto-created free price is the first inline row (prices-0) and
+      // its price is 0 — the E2E proof of the proxy-signals fix.
+      const prixInput = page.locator('input[name="prices-0-prix"]');
+      await expect(prixInput).toBeAttached({ timeout: 10000 });
+      await expect(prixInput).toHaveValue(/^0([.,]0+)?$/);
+      const adhesionsSelect = page.locator('select[name="prices-0-adhesions_obligatoires"]');
+      await expect(adhesionsSelect).toBeAttached({ timeout: 10000 });
+      console.log('Auto-created free price inline with adhesions_obligatoires field - OK');
     });
 
     // --- Verify no "add +" button on the M2M widget ---
     await test.step('Verify no add button / Verifier pas de bouton +', async () => {
-      const addRelatedBtn = page.locator('#add_id_adhesions_obligatoires, a.add-related[href*="adhesions"]');
+      const addRelatedBtn = page.locator(
+        '#add_id_prices-0-adhesions_obligatoires, .field-adhesions_obligatoires a.add-related'
+      );
       await expect(addRelatedBtn).toHaveCount(0);
       console.log('No add button on M2M widget - OK');
     });
@@ -124,27 +109,16 @@ test.describe('Adhesions obligatoires M2M / Adhesions obligatoires M2M', () => {
       await addAdhesionSelect2(page, membershipName2);
     });
 
-    // --- Save — PriceAdmin.response_change redirige vers la page Product parent ---
-    // --- Save — PriceAdmin.response_change redirects to the parent Product page ---
+    // --- Save and continue editing to stay on the page ---
     await test.step('Save price / Enregistrer le tarif', async () => {
-      await page.locator('button[type="submit"]:has-text("Save"), input[type="submit"]').first().click();
+      await page.locator('button[name="_continue"], input[name="_continue"]').first().click();
       await page.waitForLoadState('networkidle');
-      // Apres save, on est redirige vers la page Product parent avec un message de succes
-      // After save, we are redirected to the parent Product page with a success message
-      const successMsg = page.locator('.messagelist .success, .alert-success, div.bg-green-100');
-      await expect(successMsg).toBeVisible({ timeout: 5000 });
-      console.log('Price saved with 2 adhesions');
+      await expect(page).toHaveURL(/\/admin\/BaseBillet\/ticketproduct\/[0-9a-f-]+\/change\//);
+      console.log('Product saved with 2 adhesions on the free price');
     });
 
-    // --- Re-ouvrir la page Price pour verifier les adhesions ---
-    // --- Re-open the Price page to verify adhesions ---
+    // --- Verify both adhesions persisted after reload ---
     await test.step('Verify both adhesions saved / Verifier les 2 adhesions', async () => {
-      // Naviguer vers le tarif via le lien Change dans l'inline
-      // Navigate to the price via the Change link in the inline
-      const changeLink = page.locator('a[href*="/admin/BaseBillet/price/"]').first();
-      await changeLink.click();
-      await page.waitForLoadState('networkidle');
-
       const selected = await getSelectedAdhesions(page);
       expect(selected).toContain(membershipName1);
       expect(selected).toContain(membershipName2);
@@ -155,22 +129,15 @@ test.describe('Adhesions obligatoires M2M / Adhesions obligatoires M2M', () => {
     await test.step('Remove adhesion A / Retirer adhesion A', async () => {
       await removeAdhesionSelect2(page, membershipName1);
 
-      // Save — redirige vers Product parent
-      // Save — redirects to parent Product
-      await page.locator('button[type="submit"]:has-text("Save"), input[type="submit"]').first().click();
+      // Save and continue / Enregistrer et continuer
+      await page.locator('button[name="_continue"], input[name="_continue"]').first().click();
       await page.waitForLoadState('networkidle');
-      const successMsg = page.locator('.messagelist .success, .alert-success, div.bg-green-100');
-      await expect(successMsg).toBeVisible({ timeout: 5000 });
+      await expect(page).toHaveURL(/\/admin\/BaseBillet\/ticketproduct\/[0-9a-f-]+\/change\//);
       console.log(`Removed adhesion A: ${membershipName1}`);
     });
 
-    // --- Re-ouvrir la page Price et verifier ---
-    // --- Re-open Price page and verify ---
+    // --- Verify only adhesion B remains after reload ---
     await test.step('Verify only adhesion B remains / Verifier seule B reste', async () => {
-      const changeLink = page.locator('a[href*="/admin/BaseBillet/price/"]').first();
-      await changeLink.click();
-      await page.waitForLoadState('networkidle');
-
       const selected = await getSelectedAdhesions(page);
       expect(selected).not.toContain(membershipName1);
       expect(selected).toContain(membershipName2);
@@ -183,11 +150,35 @@ test.describe('Adhesions obligatoires M2M / Adhesions obligatoires M2M', () => {
 
 
 /**
- * Add an adhesion via select2 autocomplete widget
- * / Ajouter une adhesion via le widget select2 autocomplete
+ * Create a membership product via the MembershipProduct proxy admin.
+ * The category is fixed by the proxy (hidden field), no selectOption needed.
+ * / Create a membership product via the MembershipProduct proxy admin.
+ * The category is set by the proxy (hidden field), no selectOption needed.
+ */
+async function createMembershipProduct(page: Page, name: string, prix: string) {
+  await page.goto('/admin/BaseBillet/membershipproduct/add/');
+  await page.waitForLoadState('networkidle');
+  await page.locator('input[name="name"]').fill(name);
+
+  // Add an inline price row / Ajouter une ligne de tarif inline
+  const addBtn = page.locator('a:has-text("Add another"), button:has-text("Add another"), a:has-text("Ajouter")').first();
+  await addBtn.click();
+  await page.waitForTimeout(500);
+  await page.locator('input[name="prices-0-name"]').fill('Tarif annuel');
+  await page.locator('input[name="prices-0-prix"]').fill(prix);
+  await page.locator('select[name="prices-0-subscription_type"]').selectOption('Y');
+
+  await page.locator('button[name="_save"], input[name="_save"]').first().click();
+  await page.waitForLoadState('networkidle');
+}
+
+
+/**
+ * Add an adhesion via select2 autocomplete widget (inline price row)
+ * / Ajouter une adhesion via le widget select2 autocomplete (ligne tarif inline)
  *
  * Select2 renders:
- * - A hidden <select multiple> with id="id_adhesions_obligatoires"
+ * - A hidden <select multiple> with name="prices-0-adhesions_obligatoires"
  * - A visible <span class="select2 ..."> with a search input inside
  */
 async function addAdhesionSelect2(page: Page, adhesionName: string) {
@@ -216,6 +207,11 @@ async function addAdhesionSelect2(page: Page, adhesionName: string) {
   await option.click();
   await page.waitForTimeout(300);
 
+  // Close the dropdown so it does not block other interactions
+  // Fermer le dropdown pour ne pas bloquer les autres interactions
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+
   console.log(`Added adhesion: ${adhesionName}`);
 }
 
@@ -233,7 +229,7 @@ async function getSelectedAdhesions(page: Page): Promise<string[]> {
   for (let i = 0; i < count; i++) {
     const text = await items.nth(i).textContent();
     // select2 prepends a "x" remove button, strip it
-    const cleaned = text?.replace(/^[\u00d7\u2715×x]\s*/, '').trim();
+    const cleaned = text?.replace(/^[×✕×x]\s*/, '').trim();
     if (cleaned) names.push(cleaned);
   }
   return names;

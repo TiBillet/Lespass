@@ -28,30 +28,33 @@ async function addFormField(page: Page, fieldData: {
     required: boolean;
     options?: string;
 }) {
-    // Trouver la section inline "Dynamic form field"
-    // Find the "Dynamic form field" inline section
-    const section = page.locator('.inline-group').filter({
-        has: page.locator('h2:has-text("Dynamic form field")'),
-    });
-    const addButton = section.locator('a:has-text("Add another")').first();
-    await addButton.click();
+    // Inline Unfold : conteneur #form_fields-group (prefix = related_name 'form_fields'),
+    // bouton d'ajout = a.add-row. Le champ 'order' est cache (drag & drop), on ne le remplit pas.
+    // / Unfold inline: container #form_fields-group (prefix = related_name 'form_fields'),
+    // add button = a.add-row. The 'order' field is hidden (drag & drop), we do not fill it.
+    const section = page.locator('#form_fields-group');
+    const countBefore = await section.locator('input[name^="form_fields-"][name$="-label"]:not([name*="__prefix__"])').count();
 
-    // Attendre la dernière ligne ajoutée
-    // Wait for the last added row
-    const lastRow = section.locator('tr.form-row:not(.empty-form)').last();
-    await lastRow.waitFor({ state: 'visible', timeout: 5000 });
+    await section.locator('a.add-row').first().click();
+
+    const formIndex = countBefore;
+    const labelInput = section.locator(`input[name="form_fields-${formIndex}-label"]`);
+    await labelInput.waitFor({ state: 'visible', timeout: 5000 });
 
     console.log(`  ✓ Adding field / Ajout du champ : ${fieldData.label}`);
 
-    await lastRow.locator('input[name*="-label"]').fill(fieldData.label);
-    await lastRow.locator('select[name*="-field_type"]').selectOption(fieldData.type);
+    await labelInput.fill(fieldData.label);
+    await section.locator(`select[name="form_fields-${formIndex}-field_type"]`).selectOption(fieldData.type);
 
     if (fieldData.required) {
-        await lastRow.locator('input[name*="-required"]').check();
+        await section.locator(`input[name="form_fields-${formIndex}-required"]`).check();
     }
 
     if (fieldData.options) {
-        await lastRow.locator('input[name*="-options"]').fill(fieldData.options);
+        // Les options se saisissent via le champ CSV 'options_csv' (proxy du JSONField).
+        // / Options are entered via the 'options_csv' CSV field (JSONField proxy).
+        const optionsInput = section.locator(`input[name="form_fields-${formIndex}-options_csv"], textarea[name="form_fields-${formIndex}-options_csv"]`);
+        await optionsInput.first().fill(fieldData.options);
     }
 }
 
@@ -74,14 +77,13 @@ test.describe('Admin Membership Custom Form Edit / Édition custom_form adhésio
         // Étape 1 : Créer un produit d'adhésion avec un tarif et des champs dynamiques
         // Step 1: Create a membership product with a price and dynamic fields
         await test.step('Create membership product / Créer produit adhésion', async () => {
-            await page.goto('/admin/BaseBillet/product/add/');
+            // Les adhesions se creent via le proxy membershipproduct (categorie fixee, champ cache).
+            // / Memberships are created via the membershipproduct proxy (category is set, hidden field).
+            await page.goto('/admin/BaseBillet/membershipproduct/add/');
             await page.waitForLoadState('networkidle');
 
             // Nom du produit / Product name
             await page.fill('input[name="name"]', PRODUCT_NAME);
-
-            // Catégorie : Adhésion / Category: Membership
-            await page.selectOption('select[name="categorie_article"]', 'A');
 
             // Description courte / Short description
             await page.fill('input[name="short_description"]', 'Test édition custom_form admin');
@@ -118,9 +120,9 @@ test.describe('Admin Membership Custom Form Edit / Édition custom_form adhésio
         // Étape 2 : Ajouter des champs dynamiques au produit
         // Step 2: Add dynamic fields to the product
         await test.step('Add custom fields / Ajouter champs personnalisés', async () => {
-            // Ouvrir l'onglet "Dynamic form field" (Unfold tabs)
-            // Open the "Dynamic form field" tab (Unfold tabs)
-            const tab = page.locator('button:has-text("Dynamic form field"), a:has-text("Dynamic form field")').first();
+            // Ouvrir l'onglet de l'inline : ancre #form_fields (activeTab Alpine.js).
+            // / Open the inline tab: #form_fields anchor (Alpine.js activeTab).
+            const tab = page.locator('a[href="#form_fields"]').first();
             if (await tab.count() > 0) {
                 await tab.click();
                 await page.waitForTimeout(1000);
@@ -266,8 +268,9 @@ print('OK')
             await villeSelect.selectOption('Lyon');
             console.log('✓ Modified field values / Valeurs modifiées');
 
-            // Sauvegarder les modifications / Save changes
-            const saveButton = page.locator('button[type="submit"]:has-text("Enregistrer")').first();
+            // Sauvegarder les modifications (data-testid : le libellé est traduit, FR ou EN)
+            // / Save changes (data-testid: the label is translated, FR or EN)
+            const saveButton = page.locator('[data-testid="custom-form-save-btn"]');
             await saveButton.click();
             await page.waitForTimeout(1000);
 

@@ -14,33 +14,38 @@ async function addFormField(page: Page, fieldData: {
   order: number;
   options?: string;
 }) {
-  const section = page.locator('.inline-group').filter({ has: page.locator('h2:has-text("Dynamic form field")') });
-  const addButton = section.locator('a:has-text("Add another")').first();
-  
-  await addButton.click();
-  
-  // Wait for the new row to appear and be stable
-  const lastRow = section.locator('tr.form-row:not(.empty-form)').last();
-  await lastRow.waitFor({ state: 'visible', timeout: 5000 });
-  
+  // Inline Unfold : conteneur #form_fields-group (prefix = related_name 'form_fields'),
+  // bouton d'ajout = a.add-row. Le champ 'order' est cache (hide_ordering_field,
+  // gere par drag & drop), on ne le remplit pas.
+  // / Unfold inline: container #form_fields-group (prefix = related_name 'form_fields'),
+  // add button = a.add-row. The 'order' field is hidden (hide_ordering_field,
+  // managed by drag & drop), we do not fill it.
+  const section = page.locator('#form_fields-group');
+  const countBefore = await section.locator('input[name^="form_fields-"][name$="-label"]:not([name*="__prefix__"])').count();
+
+  await section.locator('a.add-row').first().click();
+
+  const formIndex = countBefore;
+  const labelInput = section.locator(`input[name="form_fields-${formIndex}-label"]`);
+  await labelInput.waitFor({ state: 'visible', timeout: 5000 });
+
   console.log(`✓ Adding form field / Ajout du champ : ${fieldData.label}`);
-  
-  await lastRow.locator('input[name*="-label"]').fill(fieldData.label);
-  await lastRow.locator('select[name*="-field_type"]').selectOption(fieldData.type);
-  
-  if (fieldData.required) { 
-    await lastRow.locator('input[name*="-required"]').check(); 
+
+  await labelInput.fill(fieldData.label);
+  await section.locator(`select[name="form_fields-${formIndex}-field_type"]`).selectOption(fieldData.type);
+
+  if (fieldData.required) {
+    await section.locator(`input[name="form_fields-${formIndex}-required"]`).check();
   }
-  
-  await lastRow.locator('input[name*="-help_text"], textarea[name*="-help_text"]').fill(fieldData.help_text);
-  
-  // Use force:true to avoid visibility/scroll issues if needed
-  await lastRow.locator('input[name*="-order"]').fill(fieldData.order.toString(), { force: true });
-  
+
+  await section.locator(`input[name="form_fields-${formIndex}-help_text"], textarea[name="form_fields-${formIndex}-help_text"]`).fill(fieldData.help_text);
+
   if (fieldData.options) {
-    const optionsTextarea = lastRow.locator('textarea[name*="-options"]');
-    if (await optionsTextarea.count() > 0) { 
-      await optionsTextarea.fill(fieldData.options); 
+    // Les options se saisissent via le champ CSV 'options_csv' (proxy du JSONField).
+    // / Options are entered via the 'options_csv' CSV field (JSONField proxy).
+    const optionsInput = section.locator(`input[name="form_fields-${formIndex}-options_csv"], textarea[name="form_fields-${formIndex}-options_csv"]`);
+    if (await optionsInput.count() > 0) {
+      await optionsInput.fill(fieldData.options);
     }
   }
 }
@@ -52,7 +57,11 @@ test.describe('SSA Membership Creation / Création Adhésion SSA', () => {
     await test.step('Login / Connexion', async () => { await loginAsAdmin(page); });
 
     await test.step('Open or Check / Ouvrir ou Vérifier', async () => {
-      await page.goto('/admin/BaseBillet/product/');
+      // L'admin produit a ete refondu en proxys : les adhesions se creent via
+      // /admin/BaseBillet/membershipproduct/ (la categorie est fixee par le proxy).
+      // / Product admin was split into proxies: memberships are created via
+      // the membershipproduct proxy (category is set by the proxy itself).
+      await page.goto('/admin/BaseBillet/membershipproduct/');
       await page.waitForLoadState('networkidle');
       const productLink = page.locator('#result_list a, .result-list a').filter({ hasText: 'Caisse de sécurité sociale alimentaire' }).first();
       if (await productLink.count() > 0) {
@@ -60,7 +69,7 @@ test.describe('SSA Membership Creation / Création Adhésion SSA', () => {
         productExists = true;
         await productLink.click();
       } else {
-        await page.goto('/admin/BaseBillet/product/add/');
+        await page.goto('/admin/BaseBillet/membershipproduct/add/');
       }
       await page.waitForLoadState('networkidle');
     });
@@ -69,7 +78,8 @@ test.describe('SSA Membership Creation / Création Adhésion SSA', () => {
       if (productExists) return;
       await page.locator('input[name="name"]').fill('Caisse de sécurité sociale alimentaire');
       await page.locator('input[name="short_description"]').fill('Payez selon vos moyens, recevez selon vos besoins !');
-      await page.locator('select[name="categorie_article"]').selectOption('A');
+      // Pas de selection de categorie : le proxy MembershipProduct la fixe (champ cache).
+      // / No category selection: the MembershipProduct proxy sets it (hidden field).
     });
 
     await test.step('Initial save / Enregistrement initial', async () => {
@@ -94,16 +104,18 @@ test.describe('SSA Membership Creation / Création Adhésion SSA', () => {
         await page.waitForLoadState('networkidle');
       }
 
-      const tab = page.locator('button:has-text("Dynamic form field"), a:has-text("Dynamic form field")').first();
+      // Onglet Unfold de l'inline : ancre #form_fields (activeTab Alpine.js).
+      // / Unfold inline tab: #form_fields anchor (Alpine.js activeTab).
+      const tab = page.locator('a[href="#form_fields"]').first();
       if (await tab.count() > 0) {
         await tab.click();
         await page.waitForTimeout(1000); // Wait for tab animation
       }
-      
+
       // Atomic check on first label to avoid duplicates
       // Vérification atomique sur le premier libellé pour éviter les doublons
-      const section = page.locator('.inline-group').filter({ has: page.locator('h2:has-text("Dynamic form field")') });
-      const firstLabel = section.locator('input[name*="-label"]').first();
+      const section = page.locator('#form_fields-group');
+      const firstLabel = section.locator('input[name^="form_fields-"][name$="-label"]:not([name*="__prefix__"])').first();
       const count = await firstLabel.count();
       const value = count > 0 ? await firstLabel.inputValue() : "";
 

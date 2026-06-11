@@ -105,8 +105,11 @@ test.describe('SSA Membership and Tokens / Adhesion SSA et Jetons', () => {
       await page.waitForLoadState('domcontentloaded');
 
       // The token table loads via HTMX with hx-trigger="revealed" (lazy load on scroll)
-      // Scroll to the "Currency list" section to trigger the HTMX request
-      await page.locator('#detail-monnaies').scrollIntoViewIfNeeded();
+      // Scroll the HTMX div itself into view (scrolling only the heading leaves the div
+      // below the fold and the "revealed" trigger never fires)
+      // Scroller la div HTMX elle-meme (scroller seulement le titre laisse la div
+      // sous la ligne de flottaison et le trigger "revealed" ne part jamais)
+      await page.locator('div[hx-get="/my_account/tokens_table/"]').scrollIntoViewIfNeeded();
 
       // Wait for the token table to replace the "Loading list" spinner
       await page.locator('table tbody tr td').first().waitFor({ state: 'visible', timeout: 15000 });

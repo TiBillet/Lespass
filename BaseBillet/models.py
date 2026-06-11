@@ -1242,10 +1242,30 @@ def post_save_Product(sender, instance: Product, created, **kwargs):
             Price.objects.create(product=instance, name=_("Free rate"), prix=0, publish=True)
 
 
+# Les signaux Django sont emis avec la classe EXACTE utilisee au save() :
+# un Product sauve via un proxy admin (TicketProduct, MembershipProduct...)
+# n'emet PAS le signal connecte a sender=Product. Sans les connexions
+# ci-dessous, le tarif gratuit FREERES n'est pas auto-cree via le proxy
+# billetterie, et les receivers de signals.py restent muets aussi.
+# Garde-fou : tests/pytest/test_signaux_proxys_product.py echoue si un
+# nouveau proxy de Product est cree sans etre ajoute a PROXYS_PRODUCT.
+# / Django signals are sent with the EXACT class used at save(): a Product
+# saved through an admin proxy does NOT emit the signal connected to
+# sender=Product. Without the connections below, the FREERES free price is
+# not auto-created through the ticket proxy, and the signals.py receivers
+# stay silent too.
+# Guard: tests/pytest/test_signaux_proxys_product.py fails if a new Product
+# proxy is created without being added to PROXYS_PRODUCT.
+PROXYS_PRODUCT = (TicketProduct, MembershipProduct, POSProduct, FutProduct)
+for _proxy_product in PROXYS_PRODUCT:
+    post_save.connect(post_save_Product, sender=_proxy_product)
+
+
 """
 Un autre post save existe dans .signals.py : send_membership_and_badge_product_to_fedow
 Dans fichier signals pour éviter les doubles imports
 Il vérifie l'existante du produit Adhésion et Badge dans Fedow et le créé si besoin
+Les proxys de Product y sont connectes aussi (voir PROXYS_PRODUCT ci-dessus).
 """
 
 

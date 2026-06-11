@@ -41,23 +41,50 @@ test.describe('Numeric overflow validation / Validation dépassement numérique'
       await page.waitForLoadState('domcontentloaded');
     });
 
-    // Étape 2 : Ouvrir le premier panneau d'adhésion disponible
-    // Step 2: Open the first available membership panel
-    await test.step('Open membership panel / Ouvrir le panneau adhésion', async () => {
-      // Cliquer sur le premier bouton "Adhérer" / Click the first "Subscribe" button
-      const openButton = page.locator('[data-testid^="membership-open-"]').first();
-      await openButton.click();
-      // Attendre que le formulaire soit visible / Wait for form to be visible
-      const membershipForm = page.locator('[data-testid="membership-form"], #membership-form').first();
-      await expect(membershipForm).toBeVisible({ timeout: 5000 });
+    // Étape 2 : Ouvrir un panneau d'adhésion QUI PROPOSE un prix libre.
+    // La page partage la base de dev : d'autres tests E2E créent des produits
+    // sans prix libre qui peuvent passer en premier — on ne prend donc pas
+    // « le premier » panneau, on cherche celui qui a un input prix libre.
+    // Step 2: Open a membership panel THAT OFFERS a free price.
+    // The page shares the dev database: other E2E specs create products
+    // without free price that may come first — so we don't take "the first"
+    // panel, we look for the one with a free price input.
+    await test.step('Open membership panel with free price / Ouvrir un panneau avec prix libre', async () => {
+      const openButtons = page.locator('[data-testid^="membership-open-"]');
+      const totalPanels = await openButtons.count();
+      let freePriceFound = false;
 
-      // Si plusieurs prix : sélectionner le radio prix libre pour afficher le container
-      // If multiple prices: select the free price radio to show the container
-      const freePriceRadio = page.locator('input.free-price-radio').first();
-      if (await freePriceRadio.isVisible()) {
-        await freePriceRadio.click();
-        await page.waitForTimeout(300);
+      for (let i = 0; i < totalPanels && !freePriceFound; i++) {
+        await openButtons.nth(i).click();
+        // Attendre que le formulaire soit visible / Wait for form to be visible
+        const membershipForm = page.locator('[data-testid="membership-form"], #membership-form').first();
+        await expect(membershipForm).toBeVisible({ timeout: 5000 });
+
+        // Si plusieurs prix : sélectionner le radio prix libre pour afficher le container
+        // If multiple prices: select the free price radio to show the container
+        const freePriceRadio = page.locator('input.free-price-radio').first();
+        if (await freePriceRadio.isVisible()) {
+          await freePriceRadio.click();
+          await page.waitForTimeout(300);
+        }
+
+        // Ce panneau a-t-il un input prix libre visible ? / Does this panel show a free price input?
+        freePriceFound = (await page.locator('input[name^="custom_amount_"]:visible').count()) > 0;
+
+        if (!freePriceFound) {
+          // Fermer l'offcanvas avant d'essayer le panneau suivant : son backdrop
+          // intercepte les clics tant qu'il est ouvert. Escape ne le ferme pas
+          // (pas de listener clavier) : on clique le bouton Close du panneau.
+          // / Close the offcanvas before trying the next panel: its backdrop
+          // intercepts clicks while open. Escape doesn't close it (no keyboard
+          // listener): click the panel's Close button.
+          await page.locator('#subscribePanel [data-bs-dismiss="offcanvas"], #subscribePanel .btn-close').first().click();
+          await page.locator('.offcanvas-backdrop').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+          await page.waitForTimeout(300);
+        }
       }
+
+      expect(freePriceFound, 'Aucune adhésion à prix libre sur /memberships/ — fixture manquante ? / No free-price membership found').toBeTruthy();
     });
 
     // Étape 3 : Vérifier que l'input prix libre a un attribut max

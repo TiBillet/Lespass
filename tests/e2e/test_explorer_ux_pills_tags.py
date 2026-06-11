@@ -24,7 +24,13 @@ from playwright.sync_api import expect
 # URL de base de l'explorer (ROOT, pas un tenant).
 # / Base URL of the explorer (ROOT, not a tenant).
 DOMAIN = os.environ.get("DOMAIN", "tibillet.localhost")
-EXPLORER_URL = f"https://www.{DOMAIN}/explorer/"
+# Domaine APEX (nu) : le Traefik de dev ne route pas www.<domaine>
+# (404 text/plain emis par Traefik, la requete n'atteint jamais Django).
+# Le spec TS explorer utilise aussi l'apex.
+# / Bare (apex) domain: dev Traefik does not route www.<domain>
+# (plain-text 404 emitted by Traefik, request never reaches Django).
+# The TS explorer spec uses the apex too.
+EXPLORER_URL = f"https://{DOMAIN}/explorer/"
 
 pytestmark = pytest.mark.e2e
 

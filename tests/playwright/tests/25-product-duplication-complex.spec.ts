@@ -20,7 +20,7 @@ async function addInlinePrice(page: Page, priceData: {
   name: string;
   prix: number;
   subscription_type: string;
-  prix_libre?: boolean;
+  free_price?: boolean;
 }) {
   const countBefore = await page.locator('input[name*="prices-"][name$="-name"]:not([name*="__prefix__"])').count();
   const addButtons = await page.locator('a:has-text("Add another"), button:has-text("Add another")').all();
@@ -33,8 +33,8 @@ async function addInlinePrice(page: Page, priceData: {
   await page.locator(`input[name="prices-${formIndex}-prix"]`).fill(priceData.prix.toString());
   await page.locator(`select[name="prices-${formIndex}-subscription_type"]`).selectOption(priceData.subscription_type);
 
-  if (priceData.prix_libre) {
-    const checkbox = page.locator(`input[name="prices-${formIndex}-prix_libre"]`);
+  if (priceData.free_price) {
+    const checkbox = page.locator(`input[name="prices-${formIndex}-free_price"]`);
     if (await checkbox.count() > 0) await checkbox.check();
   }
 
@@ -46,30 +46,36 @@ async function addFormField(page: Page, fieldData: {
   type: string;
   required: boolean;
   help_text: string;
-  order: number;
   options?: string;
 }) {
-  const section = page.locator('.inline-group').filter({ has: page.locator('h2:has-text("Dynamic form field")') });
-  const addButton = section.locator('a:has-text("Add another")').first();
+  // Inline Unfold : conteneur #form_fields-group, bouton d'ajout a.add-row.
+  // Le champ 'order' est cache (drag & drop), on ne le remplit pas.
+  // / Unfold inline: container #form_fields-group, add button a.add-row.
+  // The 'order' field is hidden (drag & drop), we do not fill it.
+  const section = page.locator('#form_fields-group');
+  const countBefore = await section.locator('input[name^="form_fields-"][name$="-label"]:not([name*="__prefix__"])').count();
 
-  await addButton.click();
-  const lastRow = section.locator('tr.form-row:not(.empty-form)').last();
-  await lastRow.waitFor({ state: 'visible', timeout: 5000 });
+  await section.locator('a.add-row').first().click();
 
-  await lastRow.locator('input[name*="-label"]').fill(fieldData.label);
-  await lastRow.locator('select[name*="-field_type"]').selectOption(fieldData.type);
+  const formIndex = countBefore;
+  const labelInput = section.locator(`input[name="form_fields-${formIndex}-label"]`);
+  await labelInput.waitFor({ state: 'visible', timeout: 5000 });
+
+  await labelInput.fill(fieldData.label);
+  await section.locator(`select[name="form_fields-${formIndex}-field_type"]`).selectOption(fieldData.type);
 
   if (fieldData.required) {
-    await lastRow.locator('input[name*="-required"]').check();
+    await section.locator(`input[name="form_fields-${formIndex}-required"]`).check();
   }
 
-  await lastRow.locator('input[name*="-help_text"], textarea[name*="-help_text"]').fill(fieldData.help_text);
-  await lastRow.locator('input[name*="-order"]').fill(fieldData.order.toString(), { force: true });
+  await section.locator(`input[name="form_fields-${formIndex}-help_text"], textarea[name="form_fields-${formIndex}-help_text"]`).fill(fieldData.help_text);
 
   if (fieldData.options) {
-    const optionsTextarea = lastRow.locator('textarea[name*="-options"]');
-    if (await optionsTextarea.count() > 0) {
-      await optionsTextarea.fill(fieldData.options);
+    // Les options se saisissent via le champ CSV 'options_csv' (proxy du JSONField).
+    // / Options are entered via the 'options_csv' CSV field (JSONField proxy).
+    const optionsInput = section.locator(`input[name="form_fields-${formIndex}-options_csv"], textarea[name="form_fields-${formIndex}-options_csv"]`);
+    if (await optionsInput.count() > 0) {
+      await optionsInput.fill(fieldData.options);
     }
   }
 
@@ -88,14 +94,16 @@ async function getPriceNames(page: Page): Promise<string[]> {
 }
 
 async function getFormFieldLabels(page: Page): Promise<string[]> {
-  const tab = page.locator('button:has-text("Dynamic form field"), a:has-text("Dynamic form field")').first();
+  // Onglet Unfold de l'inline : ancre #form_fields (activeTab Alpine.js).
+  // / Unfold inline tab: #form_fields anchor (Alpine.js activeTab).
+  const tab = page.locator('a[href="#form_fields"]').first();
   if (await tab.count() > 0) {
     await tab.click();
     await page.waitForTimeout(500);
   }
 
-  const section = page.locator('.inline-group').filter({ has: page.locator('h2:has-text("Dynamic form field")') });
-  const labelInputs = section.locator('input[name*="-label"]:not([name*="__prefix__"])');
+  const section = page.locator('#form_fields-group');
+  const labelInputs = section.locator('input[name^="form_fields-"][name$="-label"]:not([name*="__prefix__"])');
   const count = await labelInputs.count();
   const labels: string[] = [];
   for (let i = 0; i < count; i++) {
@@ -117,14 +125,15 @@ test.describe('Product Duplication / Duplication de produit', () => {
     });
 
     await test.step('Create product / Créer le produit', async () => {
-      await page.goto('/admin/BaseBillet/product/add/');
+      // Les adhesions se creent via le proxy membershipproduct (categorie fixee, champ cache).
+      // / Memberships are created via the membershipproduct proxy (category is set, hidden field).
+      await page.goto('/admin/BaseBillet/membershipproduct/add/');
       await page.waitForLoadState('networkidle');
 
       await page.locator('input[name="name"]').fill(originalProductName);
-      await page.locator('select[name="categorie_article"]').selectOption('A');
-      await page.locator('input[name="short_description"]').fill('Produit de test pour duplication');
+      await page.locator('input[name="short_description"]').first().fill('Produit de test pour duplication');
 
-      await addInlinePrice(page, { name: 'Tarif Original 1', prix: 10, subscription_type: 'Y', prix_libre: true });
+      await addInlinePrice(page, { name: 'Tarif Original 1', prix: 10, subscription_type: 'Y', free_price: true });
       await addInlinePrice(page, { name: 'Tarif Original 2', prix: 5, subscription_type: 'Y' });
       await addInlinePrice(page, { name: 'Tarif Original 3', prix: 20, subscription_type: 'M' });
 
@@ -135,36 +144,30 @@ test.describe('Product Duplication / Duplication de produit', () => {
     });
 
     await test.step('Add form field / Ajouter champ formulaire', async () => {
-      const tab = page.locator('button:has-text("Dynamic form field"), a:has-text("Dynamic form field")').first();
+      // Onglet Unfold de l'inline : ancre #form_fields (activeTab Alpine.js).
+      // / Unfold inline tab: #form_fields anchor (Alpine.js activeTab).
+      const tab = page.locator('a[href="#form_fields"]').first();
       if (await tab.count() > 0) {
         await tab.click();
         await page.waitForTimeout(800);
-
-        const section = page.locator('.inline-group').filter({ has: page.locator('h2:has-text("Dynamic form field")') });
-        if (await section.count() > 0) {
-          // Add only one form field to keep test fast
-          await addFormField(page, {
-            label: 'Champ Original',
-            type: 'ST',
-            required: true,
-            help_text: 'Texte court',
-            order: 1
-          });
-
-          const saveButton = page.locator('button[type="submit"]:has-text("Save"), input[type="submit"]').first();
-          await saveButton.click();
-          await page.waitForLoadState('networkidle');
-          console.log('✓ Form field added / Champ ajouté');
-        } else {
-          console.log('⚠ Form fields section not available / Section non disponible');
-        }
-      } else {
-        console.log('⚠ Form fields tab not found / Onglet non trouvé');
       }
+
+      // Add only one form field to keep test fast
+      await addFormField(page, {
+        label: 'Champ Original',
+        type: 'ST',
+        required: true,
+        help_text: 'Texte court'
+      });
+
+      const saveButton = page.locator('button[type="submit"]:has-text("Save"), input[type="submit"]').first();
+      await saveButton.click();
+      await page.waitForLoadState('networkidle');
+      console.log('✓ Form field added / Champ ajouté');
     });
 
     await test.step('Capture original data / Capturer données originales', async () => {
-      await page.goto('/admin/BaseBillet/product/');
+      await page.goto(`/admin/BaseBillet/membershipproduct/?q=${encodeURIComponent(originalProductName)}`);
       await page.waitForLoadState('networkidle');
 
       const productLink = page.locator('#result_list a, .result-list a').filter({ hasText: originalProductName }).first();
@@ -186,7 +189,7 @@ test.describe('Product Duplication / Duplication de produit', () => {
 
     await test.step('Duplicate product / Dupliquer le produit', async () => {
       // Go to product list - this will be the HTTP_REFERER
-      const listUrl = '/admin/BaseBillet/product/';
+      const listUrl = `/admin/BaseBillet/membershipproduct/?q=${encodeURIComponent(originalProductName)}`;
       await page.goto(listUrl);
       await page.waitForLoadState('networkidle');
       console.log('✓ On product list / Sur la liste des produits');
@@ -209,17 +212,24 @@ test.describe('Product Duplication / Duplication de produit', () => {
       console.log(`✓ Extracted product ID: ${productId}`);
 
       // Navigate to duplicate URL from the list page to ensure HTTP_REFERER is set
-      const duplicateUrl = `/admin/BaseBillet/product/${productId}/duplicate_product/`;
+      const duplicateUrl = `/admin/BaseBillet/membershipproduct/${productId}/duplicate_product/`;
       console.log(`✓ Navigating to duplicate URL: ${duplicateUrl}`);
 
-      // Use evaluate to navigate with proper referer by creating and clicking a link
-      await page.evaluate((url) => {
-        const link = document.createElement('a');
-        link.href = url;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-      }, duplicateUrl);
+      // Use evaluate to navigate with proper referer by creating and clicking a link.
+      // The duplicate view redirects back to the referer (the changelist) : on attend
+      // explicitement ce retour pour eviter une course avec le goto suivant.
+      // / The duplicate view redirects back to the referer (changelist): wait for it
+      // explicitly to avoid racing with the next goto.
+      await Promise.all([
+        page.waitForURL((url) => url.pathname.endsWith('/admin/BaseBillet/membershipproduct/'), { timeout: 15000 }),
+        page.evaluate((url) => {
+          const link = document.createElement('a');
+          link.href = url;
+          link.style.display = 'none';
+          document.body.appendChild(link);
+          link.click();
+        }, duplicateUrl),
+      ]);
 
       await page.waitForLoadState('networkidle');
       console.log('✓ Duplication completed / Duplication terminée');
@@ -229,10 +239,10 @@ test.describe('Product Duplication / Duplication de produit', () => {
 
     await test.step('Modify duplicate / Modifier la copie', async () => {
       // Find and open the duplicated product
-      // The duplicated product should now exist in the list with " [DUPLICATA]" appended
-      // but is unpublished by default, so we need to show unpublished products
-      // Use URL parameter to show unpublished products
-      await page.goto('/admin/BaseBillet/product/?publish=false');
+      // The duplicated product should now exist in the list with " [DUPLICATA]" appended.
+      // The changelist shows unpublished products too; we narrow with the search box.
+      // / The changelist also shows unpublished products; narrow via search.
+      await page.goto(`/admin/BaseBillet/membershipproduct/?q=${encodeURIComponent(originalProductName)}`);
       await page.waitForLoadState('networkidle');
 
       // Look for the duplicated product with "[DUPLICATA]" in the name
@@ -268,13 +278,15 @@ test.describe('Product Duplication / Duplication de produit', () => {
       }
 
       // Modify form field labels too
-      const tab = page.locator('button:has-text("Dynamic form field"), a:has-text("Dynamic form field")').first();
+      const tab = page.locator('a[href="#form_fields"]').first();
       if (await tab.count() > 0) {
         await tab.click();
         await page.waitForTimeout(500);
+      }
 
-        const section = page.locator('.inline-group').filter({ has: page.locator('h2:has-text("Dynamic form field")') });
-        const labelInputs = section.locator('input[name*="-label"]:not([name*="__prefix__"])');
+      {
+        const section = page.locator('#form_fields-group');
+        const labelInputs = section.locator('input[name^="form_fields-"][name$="-label"]:not([name*="__prefix__"])');
         const labelCount = await labelInputs.count();
 
         for (let i = 0; i < labelCount; i++) {
@@ -294,7 +306,7 @@ test.describe('Product Duplication / Duplication de produit', () => {
     });
 
     await test.step('Verify original unchanged / Vérifier original inchangé', async () => {
-      await page.goto('/admin/BaseBillet/product/');
+      await page.goto(`/admin/BaseBillet/membershipproduct/?q=${encodeURIComponent(originalProductName)}`);
       await page.waitForLoadState('networkidle');
 
       // Find the original product (without [DUPLICATA] suffix)
@@ -322,7 +334,7 @@ test.describe('Product Duplication / Duplication de produit', () => {
     });
 
     await test.step('Verify duplicate has changes / Vérifier copie modifiée', async () => {
-      await page.goto('/admin/BaseBillet/product/');
+      await page.goto(`/admin/BaseBillet/membershipproduct/?q=${encodeURIComponent(originalProductName)}`);
       await page.waitForLoadState('networkidle');
 
       const duplicateLink = page.locator('#result_list a, .result-list a')
