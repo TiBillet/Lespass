@@ -2610,5 +2610,54 @@ section 10 pour le contexte complet.
 
 ---
 
+### Session baseline tests verts + fixes proxys (2026-06-11)
+
+**Signaux muets sur les proxy models — `sender=Product` ne couvre PAS les proxys.**
+Django emet les signaux de modele avec la classe EXACTE utilisee au `save()` :
+sauver via `TicketProduct` (proxy) n'emet PAS les signaux connectes a
+`sender=Product`. Symptome observe : tarif gratuit FREERES non auto-cree via
+l'admin proxy billetterie, notification LaBoutik (`trigger_product_update`)
+muette, asset Fedow jamais archive. Fix : liste `PROXYS_PRODUCT`
+(BaseBillet/models.py) + boucles `connect()` (models.py et signals.py).
+Garde-fou : `tests/pytest/test_signaux_proxys_product.py` scanne
+`Product.__subclasses__()` et echoue si un nouveau proxy n'est pas connecte.
+
+**Tenants `waiting_config` (categorie W) sans Domain : `.exclude(public).first()` finit par les ramasser.**
+Les tests E2E d'onboarding creent des tenants W (schema_name hexadecimal,
+AUCUN domaine) qui s'accumulent dans la DB de dev. Des qu'un schema commence
+par un chiffre, il passe premier dans l'ordre alphabetique → tout fixture en
+`Client.objects.exclude(schema_name="public").first()` recupere un tenant
+sans `get_primary_domain()` → `AttributeError: 'NoneType' ... 'domain'` au
+setup, voire dans `Event.save()` (full_url). TOUJOURS cibler explicitement :
+`Client.objects.get(schema_name="lespass")`. Corrige dans
+test_comptabilite_exports.py et test_event_is_proposal_field.py.
+
+**Chromium `--host-resolver-rules` : `MAP *.domaine` ne couvre PAS le domaine nu.**
+La regle wildcard ne matche que les SOUS-domaines. Les pages ROOT
+(`/explorer/` sur `tibillet.localhost`) restent resolues en 127.0.0.1 par la
+convention `.localhost` → `ERR_CONNECTION_REFUSED` dans le conteneur. Ajouter
+la regle apex : `MAP *.{DOMAIN} {GW}, MAP {DOMAIN} {GW}` (tests/e2e/conftest.py).
+Et le Traefik de dev ne route pas `www.{DOMAIN}` (404 text/plain avant Django).
+
+**Le cache pytest (`.pytest_cache`) survit a `docker compose down -v`.**
+Un test qui met en cache un uuid d'objet (ex. initiative crowd) le reutilise
+apres recreation de la DB → 404. Toujours verifier l'existence de l'objet
+cache avant de le reutiliser (cf. test_crowd_budget_item_flow.py).
+
+**pymemcache sous concurrence : `AttributeError: 'NoneType' object has no attribute 'recv'`.**
+Lancer pytest PENDANT la suite Playwright (meme serveur, meme memcached)
+provoque des courses sur le socket pymemcache via `get_solo()` (django-solo)
+→ 500 intermittents (vu sur `/api/v2/memberships/`, chemin
+`RootConfiguration.get_stripe_api`). Deja note dans fedow_api.py:524. Regle :
+ne PAS lancer les deux suites en parallele pour un run de validation.
+
+**Assertions E2E : l'admin et le front sont rendus en ANGLAIS par Playwright.**
+Toute assertion sur un texte FR doit etre bilingue :
+`toContainText(/Payé en ligne|Paid online/)`. Verifier la traduction EXACTE
+dans `locale/en/LC_MESSAGES/django.po` (ex. « Mark as completed », pas
+« Mark completed »).
+
+---
+
 *Ce document est un commun numerique. Prenez-en soin !*
 *This document is a digital common. Take care of it!*

@@ -15,6 +15,7 @@ Observed bug: the FREERES free price was no longer auto-created through the
 ticket proxy. Connections live in BaseBillet/models.py (PROXYS_PRODUCT) and
 BaseBillet/signals.py.
 """
+
 import uuid
 
 import pytest

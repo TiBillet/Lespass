@@ -3979,11 +3979,20 @@ def _wizard_events_remove_generic(request, idx, *, session_prefix, inner_context
 def _attacher_image_brouillon(event, draft):
     """
     Migre l'image temporaire du brouillon (event_wizard_drafts/...) vers le champ
-    img de l'event (dossier images/), puis supprime le fichier temp.
+    img de l'event (dossier images/).
     save=False : l'event sera sauve UNE seule fois par l'appelant, donc les signaux
     post_save ne se declenchent qu'une fois.
-    / Migrate the draft temp image into event.img (images/) and delete the temp file.
+    ATTENTION : le fichier temporaire n'est PAS supprime ici. La creation des
+    events est enveloppee dans transaction.atomic() (doublon possible) : un
+    rollback DB n'annule pas une suppression de fichier, et les brouillons
+    conserves en session referencent encore ce chemin. La suppression se fait
+    par l'appelant APRES le commit (step2_event).
+    / Migrate the draft temp image into event.img (images/).
     save=False: the caller saves the event once (signals fire once).
+    WARNING: the temp file is NOT deleted here. Event creation runs inside
+    transaction.atomic() (duplicates possible): a DB rollback does not undo a
+    file deletion, and the session drafts still reference this path. The
+    caller deletes temp files AFTER the commit (step2_event).
 
     LOCALISATION : BaseBillet/views.py
     """
@@ -3999,7 +4008,6 @@ def _attacher_image_brouillon(event, draft):
     # Recopie reelle dans images/ (variations StdImage generees a la sauvegarde).
     # / Real copy into images/ (StdImage variations generated on save).
     event.img.save(f"event_{uuid.uuid4().hex[:8]}{extension}", ContentFile(contenu), save=False)
-    default_storage.delete(chemin_temp)
 
 
 def _creer_event_depuis_brouillon(draft, postal_address, user, est_staff):
@@ -4269,11 +4277,29 @@ class EventWizard(viewsets.ViewSet):
                     evenements_crees.append(
                         _creer_event_depuis_brouillon(draft, postal_address, user_pour_creation, est_staff)
                     )
-        except IntegrityError:
+        except IntegrityError as erreur_integrite:
+            # Trace pour le diagnostic en prod : le message utilisateur suppose
+            # un doublon name+datetime, mais toute violation d'integrite passe ici.
+            # / Prod diagnostics trace: the user message assumes a name+datetime
+            # duplicate, but any integrity violation lands here.
+            logger.warning(f"EventWizard finalize IntegrityError : {erreur_integrite}")
             messages.add_message(request, messages.WARNING,
                 _("Un évènement avec le même nom existe déjà à cette date. "
                   "Modifiez le nom ou la date avant de valider."))
             return redirect("event-wizard-event")
+
+        # COMMIT reussi : on peut maintenant supprimer les images temporaires
+        # des brouillons. Pas avant — un rollback DB n'annule pas une
+        # suppression de fichier, et les brouillons conserves en session en
+        # auraient encore besoin pour un nouvel essai (cf. _attacher_image_brouillon).
+        # / COMMIT succeeded: temp draft images can now be deleted. Not before —
+        # a DB rollback does not undo a file deletion, and the session drafts
+        # would still need them for a retry.
+        from django.core.files.storage import default_storage
+        for draft in drafts:
+            chemin_temp = draft.get("image")
+            if chemin_temp and default_storage.exists(chemin_temp):
+                default_storage.delete(chemin_temp)
 
         request.session.pop(_wizard_drafts_key(self.SESSION_PREFIX), None)
         request.session.pop(self._session_key("postal_address_pk"), None)

@@ -12,6 +12,7 @@ La fusion complète (S4, strangler fig) reste documentée comme option future.
 
 | Doc | Contenu | Statut |
 |---|---|---|
+| [HANDOFF.md](./HANDOFF.md) | **Point d'entrée pour reprendre le chantier** : état, baseline tests verte, prochain lot (C-A), prompt de démarrage | 2026-06-11 |
 | [ROADMAP.md](./ROADMAP.md) | **Feuille de route S6** : lots C-A (socle) → C-B (durcissement) → C-C (interop legacy) → C-D (pilote), checkpoints et critères de recette | 2026-06-10 — **ACTÉE, pilote le chantier** |
 | [TESTS-STRATEGIE.md](./TESTS-STRATEGIE.md) | Stratégie de tests : non-régression (735 tests), invariant de conservation de la monnaie, concurrence/stress, mocks à payloads réels, intégration Fedow docker, fixture « pont » | 2026-06-10 |
 | [SPEC.md](./SPEC.md) | Spec S5 d'origine (D1-D6) — D3-D6 toujours valables, découpage remplacé par ROADMAP | 2026-06-10 — révisée |

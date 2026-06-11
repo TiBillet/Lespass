@@ -40,16 +40,34 @@ Causes racines corrigées :
 La suite pytest doit rester verte sur un second run immédiat (c'était le bug
 de pollution : les tests comptabilité échouaient après tout run API v2).
 
-## Décisions / arbitrages en attente
+## Décisions / arbitrages
 
-1. **Bug wizard event** (doublon → 500, `BaseBillet/views.py:4005`) : à
-   corriger côté app (gérer IntegrityError + message formulaire). Le test du
-   cas est prêt en `test.fixme` dans `21-event-quick-create-duplicate.spec.ts`.
-2. **Bug signaux proxys** (`sender=Product` muet pour TicketProduct/
-   MembershipProduct) : décider entre connecter les receivers aux proxys ou
-   dispatcher sur `instance._meta.concrete_model`. Impacte le tarif gratuit
-   FREERES auto-créé et possiblement l'envoi des produits adhésion vers Fedow.
+1. ~~Bug wizard event~~ → **CORRIGÉ le 2026-06-11** (atomic + message +
+   images temp différées post-commit, suite review externe). Test réactivé et
+   vert : `21-event-quick-create-duplicate.spec.ts`.
+2. ~~Bug signaux proxys~~ → **CORRIGÉ le 2026-06-11** (option B : connexions
+   explicites `PROXYS_PRODUCT` + test de garde
+   `tests/pytest/test_signaux_proxys_product.py`). Spec 37 sans contournement.
 3. **Playwright Python** installé dans le conteneur via pip (hors
    `pyproject.toml`) — pérenniser dans les deps si on garde `tests/e2e/`.
 4. **Traefik dev** : `www.tibillet.localhost` non routé (404 avant Django) —
    ajouter aux labels compose si nécessaire.
+
+### Test manuel des deux fixes (mainteneur)
+
+**Fix wizard doublon :**
+1. `/event/wizard/place` → choisir un lieu → ajouter un brouillon
+   « Test Doublon » à une date D → finaliser (créé).
+2. Refaire le wizard avec le MÊME nom et la MÊME date → finaliser.
+3. Attendu : toast warning « Un évènement avec le même nom existe déjà à
+   cette date », retour à l'étape brouillons (brouillon conservé), pas de 500.
+4. Bonus image : mettre une image sur le brouillon doublon → corriger le nom
+   → finaliser → l'event créé doit AVOIR son image.
+
+**Fix signaux proxys :**
+1. `/admin/BaseBillet/ticketproduct/add/` → créer un produit catégorie
+   « Réservation gratuite » (FREERES) → enregistrer.
+2. Attendu : un tarif « Free rate » à 0 € apparaît automatiquement dans
+   l'inline (sans l'avoir saisi).
+3. Archiver un produit adhésion depuis `/admin/BaseBillet/membershipproduct/`
+   → il doit passer en non publié automatiquement.

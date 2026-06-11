@@ -27,7 +27,7 @@ def _enable_db_access(django_db_blocker):
 @pytest.mark.django_db
 def test_is_proposal_default_false():
     from BaseBillet.models import Event
-    tenant = Client.objects.exclude(schema_name="public").first()
+    tenant = Client.objects.get(schema_name="lespass")  # tenant EXPLICITE — .first() peut tomber sur un tenant W sans domaine / explicit tenant, .first() may hit a domainless W tenant
     with tenant_context(tenant):
         suffix = uuid.uuid4().hex[:8]
         event = Event.objects.create(
@@ -44,7 +44,7 @@ def test_is_proposal_default_false():
 @pytest.mark.django_db
 def test_is_proposal_can_be_set_true():
     from BaseBillet.models import Event
-    tenant = Client.objects.exclude(schema_name="public").first()
+    tenant = Client.objects.get(schema_name="lespass")  # tenant EXPLICITE — .first() peut tomber sur un tenant W sans domaine / explicit tenant, .first() may hit a domainless W tenant
     with tenant_context(tenant):
         suffix = uuid.uuid4().hex[:8]
         event = Event.objects.create(
