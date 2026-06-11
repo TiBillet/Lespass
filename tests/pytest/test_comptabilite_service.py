@@ -491,8 +491,6 @@ def test_calculer_billets_avec_reservation(tenant_lespass, periode_test):
         # If image is not set, callback crashes on os.path.splitext(None).
         # Temporarily disable ALL post_delete receivers for Event.
         from django.db.models.signals import post_delete
-        from django.utils.module_loading import import_string
-        import django.dispatch
         event_uid = id(Event)
         # Sauvegarde et suppression temporaire des receivers lies a Event
         # / Save and temporarily remove receivers linked to Event
@@ -521,7 +519,7 @@ def test_calculer_detail_ventes_groupe_par_categorie(tenant_lespass, periode_tes
     """
     debut, fin = periode_test
     with tenant_context(tenant_lespass):
-        from BaseBillet.models import Product, PaymentMethod, LigneArticle
+        from BaseBillet.models import Product, PaymentMethod
 
         # 1 BILLET payant
         l_billet = _creer_ligne(
@@ -580,7 +578,7 @@ def test_calculer_detail_ventes_prix_libre_amount_zero_compte_comme_offert(
     """
     debut, fin = periode_test
     with tenant_context(tenant_lespass):
-        from BaseBillet.models import Product, PaymentMethod, LigneArticle
+        from BaseBillet.models import Product, PaymentMethod
 
         # 3 lignes sur le MEME pricesold (meme tarif prix libre)
         # / 3 lines on the SAME pricesold (same open-price tariff)

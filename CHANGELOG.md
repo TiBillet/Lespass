@@ -26,16 +26,28 @@ l'apex, `www.` non routé par le Traefik de dev).
 | `tests/e2e/test_explorer_ux_pills_tags.py` | Explorer testé sur l'apex (le Traefik de dev ne route pas `www.`) |
 | `tests/playwright/tests/*.spec.ts` (19 fichiers) | Adaptation à la nouvelle UX admin : proxys produits, inlines Unfold (`#form_fields-group`, `a.add-row`, `options_csv`, `order` caché), assertions bilingues FR/EN, wizard event unifié, divers sélecteurs |
 
-### Bugs applicatifs découverts (non corrigés, à arbitrer) / App bugs found (not fixed, to triage)
-1. **Wizard event : doublon → HTTP 500.** `_creer_event_depuis_brouillon()` (`BaseBillet/views.py:4005`)
-   ne gère pas l'`IntegrityError` de `unique_together('name','datetime')`. L'ancien flow affichait une
-   erreur de formulaire. Cas conservé en `test.fixme` dans `21-event-quick-create-duplicate.spec.ts`.
-2. **Signaux `post_save` muets sur les proxys.** Les receivers `sender=Product`
-   (`BaseBillet/models.py:1229`, `signals.py`) ne se déclenchent pas quand on sauve via les proxys
-   `TicketProduct`/`MembershipProduct` (Django émet avec la classe proxy comme sender) → tarif gratuit
-   FREERES non auto-créé, signal Fedow adhésion potentiellement concerné. Contournement dans le spec 37.
-3. **Infra dev :** `www.tibillet.localhost` n'est pas routé par Traefik (404 text/plain avant Django) —
-   à ajouter aux labels compose si le comportement canonique www→apex doit être testable en dev.
+### Bugs applicatifs découverts puis CORRIGÉS le 2026-06-11 / App bugs found then FIXED on 2026-06-11
+1. **Wizard event : doublon → HTTP 500 — CORRIGÉ.** La finalisation (`EventWizard.step2_event`,
+   `BaseBillet/views.py`) enveloppe la création des brouillons dans `transaction.atomic()` et attrape
+   l'`IntegrityError` de `unique_together('name','datetime')` → message warning + retour à l'étape des
+   brouillons (conservés en session), création tout-ou-rien. Suite à la review externe : la suppression
+   des images temporaires des brouillons est différée APRÈS le commit (un rollback DB n'annule pas une
+   suppression de fichier — sinon retry sans images) + log de l'exception. Test E2E réactivé
+   (`21-event-quick-create-duplicate.spec.ts`, plus de `fixme`).
+2. **Signaux `post_save`/`pre_save` muets sur les proxys — CORRIGÉ.** Liste `PROXYS_PRODUCT`
+   (`BaseBillet/models.py`) + connexions explicites des 4 receivers aux 4 proxys
+   (`models.py` : post_save_Product ; `signals.py` : unpublish_if_archived,
+   send_membership_and_badge_product_to_fedow, trigger_product_update). Test de garde
+   `tests/pytest/test_signaux_proxys_product.py` (échoue si un nouveau proxy n'est pas connecté +
+   rejoue le bug FREERES). Contournement du spec 37 retiré (le test prouve désormais l'auto-création).
+   Bonus : retrait d'un import accidentel d'IDE `from jedi.inference.value import instance`
+   (`signals.py:12`, inutilisé, dépendance dev-only en code de prod).
+3. **Fixtures non déterministes (tenants `W` sans domaine)** : `test_comptabilite_exports.py` et
+   `test_event_is_proposal_field.py` utilisaient `.exclude(public).first()` → tenant `waiting_config`
+   sans Domain (créé par les E2E onboarding) → `AttributeError`. Tenant `lespass` explicite désormais.
+4. **Infra dev (non corrigé, à arbitrer) :** `www.tibillet.localhost` n'est pas routé par Traefik
+   (404 text/plain avant Django). Et noté : courses pymemcache (`'NoneType'... 'recv'`) quand les
+   deux suites de tests tournent en parallèle (cf. tests/PIEGES.md, session 2026-06-11).
 
 ## Fix race « mail de connexion » dispatché avant COMMIT / Fix "login email" task dispatched before COMMIT
 
