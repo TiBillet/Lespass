@@ -232,6 +232,22 @@ def context_for_membership_email(membership: "Membership"):
             additionnal_text_3 = _("Your membership entitles you to ") + f"{dround(membership.price.fedow_reward_amount)} {membership.price.fedow_reward_asset.name.upper()} " + _("credited to your TiBillet wallet. You can check your balance in the ‘My Account’ section.")
 
     membership.refresh_from_db()
+
+    # Les dates peuvent etre absentes : adhesion en attente de validation
+    # manuelle, ou creee sans paiement (user/email optionnels par design).
+    # On ne formate que si la date existe, sinon le mail crashe sur
+    # date_format(None) — incident Celery du 2026-06-11.
+    # / Dates may be missing: membership pending manual validation, or
+    # created without payment. Only format when present, otherwise the
+    # email task crashes on date_format(None) — 2026-06-11 Celery incident.
+    date_derniere_contribution = None
+    if membership.last_contribution:
+        date_derniere_contribution = date_format(membership.last_contribution, format='DATE_FORMAT', use_l10n=True)
+    deadline_adhesion = membership.get_deadline()
+    date_fin_validite = None
+    if deadline_adhesion:
+        date_fin_validite = date_format(deadline_adhesion, format='DATE_FORMAT', use_l10n=True)
+
     context = {
         'username': membership.member_name(),
         'now': timezone.now(),
@@ -246,8 +262,6 @@ def context_for_membership_email(membership: "Membership"):
             _('Receipt for:'): f'{membership.member_name()}',
             _('Product'): f'{membership.price.product.name} - {membership.price.name}',
             _('Contribution'): f'{membership.contribution_value} {config.currency_code}',
-            _('Date'): date_format(membership.last_contribution, format='DATE_FORMAT', use_l10n=True),
-            _('Valid until'): date_format(membership.get_deadline(), format='DATE_FORMAT', use_l10n=True),
         },
         'button_color': "#009058",
         'button': {
@@ -260,9 +274,17 @@ def context_for_membership_email(membership: "Membership"):
         'signature': _("Marvin, the TiBillet robot"),
     }
 
+    # Lignes de dates ajoutees seulement si la date existe (cf. commentaire plus haut)
+    # / Date rows added only when the date exists (see comment above)
+    if date_derniere_contribution:
+        context['table_info'][_('Date')] = date_derniere_contribution
+    if date_fin_validite:
+        context['table_info'][_('Valid until')] = date_fin_validite
+
     if membership.price.recurring_payment:
         context['table_info'][_('Recurring payment')] = _("Yes")
-        context['table_info'][_('Next payment withdrawal')] = date_format(membership.get_deadline(), format='DATE_FORMAT', use_l10n=True)
+        if date_fin_validite:
+            context['table_info'][_('Next payment withdrawal')] = date_fin_validite
 
     # Ajout des options str si il y en a :
     if membership.option_generale.count() > 0:

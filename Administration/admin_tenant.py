@@ -46,7 +46,7 @@ from django.contrib import admin
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.signing import TimestampSigner
-from django.db import models, connection, IntegrityError
+from django.db import models, connection, IntegrityError, transaction as db_transaction
 from django.db.models import Model, Count, Q, Prefetch, F
 from django.forms import ModelForm, Form, HiddenInput
 from django.http import HttpResponse, HttpRequest, HttpResponseRedirect
@@ -1342,8 +1342,26 @@ class MembershipAddForm(ModelForm):
         # self.instance.set_deadline()
 
         if self.card_number:
-            linked_serialized_card = self.fedowAPI.NFCcard.linkwallet_card_number(user=user,
-                                                                                  card_number=self.card_number)
+            # Ne lier la carte chez Fedow QU'APRES le commit de la transaction.
+            # L'admin Django appelle form.save() AVANT de valider les inlines :
+            # si un formset est invalide, la transaction DB est annulee mais un
+            # appel HTTP deja parti vers Fedow ne peut pas l'etre — la carte
+            # serait liee chez Fedow sans adhesion cote Lespass.
+            # (Bug trouve par tests/pytest/test_membership_card_wallet_fedow.py)
+            # / Only link the card on Fedow AFTER the DB transaction commits.
+            # Django admin calls form.save() BEFORE validating inlines: on an
+            # invalid formset the DB transaction rolls back, but an HTTP call
+            # already sent to Fedow cannot — the card would be linked on Fedow
+            # with no membership on the Lespass side.
+            utilisateur_a_lier = user
+            numero_carte_a_lier = self.card_number
+            fedow_api = self.fedowAPI
+            db_transaction.on_commit(
+                lambda: fedow_api.NFCcard.linkwallet_card_number(
+                    user=utilisateur_a_lier,
+                    card_number=numero_carte_a_lier,
+                )
+            )
 
         # Le post save BaseBillet.signals.create_lignearticle_if_membership_created_on_admin s'executera
         # # Création de la ligne Article vendu qui envera à la caisse si besoin

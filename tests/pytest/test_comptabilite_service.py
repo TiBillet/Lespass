@@ -460,6 +460,16 @@ def test_calculer_billets_avec_reservation(tenant_lespass, periode_test):
             user_commande=user,
             event=event,
         )
+        # Total de la categorie AVANT notre ligne : la DB dev est partagee,
+        # d'autres tests laissent des ventes — on verifie le delta, pas
+        # l'absolu (piege 9.60 de tests/PIEGES.md).
+        # / Category total BEFORE our line: dev DB is shared, other tests
+        # leave sales behind — assert the delta, not the absolute value
+        # (trap 9.60 in tests/PIEGES.md).
+        from comptabilite.services import RapportComptableService
+        rapport_avant = RapportComptableService(debut, fin).calculer_detail_ventes()
+        avant_billet_total = rapport_avant.get("B", {}).get("total_ttc", 0)
+
         ligne = LigneArticle.objects.create(
             amount=2000, qty=Decimal("1"),
             status=LigneArticle.VALID,
@@ -468,14 +478,13 @@ def test_calculer_billets_avec_reservation(tenant_lespass, periode_test):
             reservation=reservation,
         )
 
-        from comptabilite.services import RapportComptableService
         rapport = RapportComptableService(debut, fin).calculer_detail_ventes()
 
         # Structure detail_ventes : cat_code -> {nom_categorie, articles, total_ttc}
         # / detail_ventes structure: cat_code -> {nom_categorie, articles, total_ttc}
         assert "B" in rapport, "La categorie BILLET (B) doit etre presente"
         cat_billet = rapport["B"]
-        assert cat_billet["total_ttc"] == 2000
+        assert cat_billet["total_ttc"] - avant_billet_total == 2000
         articles_du_produit = [a for a in cat_billet["articles"] if a["nom_produit"] == product.name]
         assert len(articles_du_produit) == 1
         article = articles_du_produit[0]
@@ -540,9 +549,15 @@ def test_calculer_detail_ventes_groupe_par_categorie(tenant_lespass, periode_tes
         assert Product.BILLET in rapport
         cat = rapport[Product.BILLET]
         assert isinstance(cat["articles"], list)
-        # 1 seul article (les 2 lignes utilisent le meme produit via pricesold partage)
-        assert len(cat["articles"]) == 1
-        article = cat["articles"][0]
+        # On filtre par le nom unique du produit : la DB dev est partagee,
+        # d'autres tests laissent des articles dans la meme categorie
+        # (piege 9.60 de tests/PIEGES.md).
+        # / Filter by the unique product name: dev DB is shared, other tests
+        # leave articles in the same category (trap 9.60 in tests/PIEGES.md).
+        nom_produit = l_billet.pricesold.productsold.product.name
+        articles_du_produit = [a for a in cat["articles"] if a["nom_produit"] == nom_produit]
+        assert len(articles_du_produit) == 1
+        article = articles_du_produit[0]
         assert article["qty_payants"] == 1.0
         assert article["qty_offerts"] == 1.0
         assert article["qty_total"] == 2.0
@@ -606,11 +621,17 @@ def test_calculer_detail_ventes_prix_libre_amount_zero_compte_comme_offert(
         with django_assert_num_queries(1):
             rapport = service.calculer_detail_ventes()
 
-        # 1 seul article (meme produit), 1 seule entree dans la categorie
+        # On filtre par le nom unique du produit : la DB dev est partagee,
+        # d'autres tests laissent des articles dans la meme categorie
+        # (piege 9.60 de tests/PIEGES.md).
+        # / Filter by the unique product name: dev DB is shared, other tests
+        # leave articles in the same category (trap 9.60 in tests/PIEGES.md).
         assert Product.BILLET in rapport
         cat = rapport[Product.BILLET]
-        assert len(cat["articles"]) == 1
-        article = cat["articles"][0]
+        nom_produit = l_10.pricesold.productsold.product.name
+        articles_du_produit = [a for a in cat["articles"] if a["nom_produit"] == nom_produit]
+        assert len(articles_du_produit) == 1
+        article = articles_du_produit[0]
 
         # 2 payants (10€ + 20€), 1 offert (0€)
         # / 2 paid (10€ + 20€), 1 offered (0€)

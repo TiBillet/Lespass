@@ -1,5 +1,163 @@
 # Changelog / Journal des modifications
 
+## Test carte NFC → wallet (vérif Fedow réelle) + bugfix lien carte hors transaction / NFC card → wallet test (real Fedow check) + card-link transaction bugfix
+
+**Date :** 2026-06-11
+**Migration :** Non / No
+
+**Quoi / What :** nouveau test d'intégration `tests/pytest/test_membership_card_wallet_fedow.py` :
+création d'adhésion via le formulaire admin avec un numéro de carte NFC, puis vérification
+RÉELLE chez Fedow (wallet `has_user_card=True`, carte plus éphémère), nettoyage rejouable
+(`lost_my_card`). Skip explicite si `FEDOW_TEST_CARD_NUMBER` absent de l'environnement.
+
+**Bugfix découvert par le test :** `MembershipAddForm.save()` liait la carte chez Fedow
+pendant `form.save()` — que l'admin Django appelle AVANT de valider les inlines. Si un
+formset était invalide, la transaction DB était annulée mais l'appel HTTP déjà parti :
+**carte liée chez Fedow sans adhésion côté Lespass**. Corrigé avec `transaction.on_commit`.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/admin_tenant.py` | **Bugfix** : `linkwallet_card_number` déplacé dans `transaction.on_commit` (cohérence Lespass ↔ Fedow) |
+| `tests/pytest/test_membership_card_wallet_fedow.py` | **Nouveau** — test d'intégration carte → wallet avec vrais appels Fedow |
+
+### Note dev
+- Pour rendre le test actif en permanence : ajouter `FEDOW_TEST_CARD_NUMBER=<numero>` au `.env`
+  (une carte Fedow sans utilisateur ; voir le docstring du test pour la trouver).
+- 3 cartes de démo Fedow ont été consommées par la mise au point (7EEF8BE2, 2182D39F, 58515F52,
+  liées à des users `jturbeaux+carte*`). Pour les libérer (même opération que la vue
+  `lost_my_card_by_signature` de Fedow) :
+  `docker exec fedow_django bash -c "cd /home/fedow/Fedow && poetry run python manage.py shell"`
+  puis `Card.objects.get(number_printed='XXXX')` → `c.user=None; c.wallet_ephemere=None; c.save()`.
+
+## Vague 5 (finale) : la suite TypeScript n'existe plus / Wave 5 (final): TypeScript suite is gone
+
+**Date :** 2026-06-11
+**Migration :** Non / No
+
+**Quoi / What :** les 3 derniers specs TS (duplication produit complexe, event quick create,
+explorer markers) convertis en Playwright Python — 5 tests verts. **`tests/playwright/tests/`
+est vide : 42 specs TS → 0 en une journée.** La suite E2E est désormais 100 % Python
+(~65 tests, ~6 min) ; suite backend pytest : 246 tests (~50 s).
+
+**Pourquoi / Why :** une seule techno de test (pytest), login E2E instantané (force_login),
+Stripe mocké pour la logique + smoke réels pour les parcours d'argent. Reste une décision
+mainteneur : supprimer le dossier `tests/playwright/` (outillage Node/yarn mort) et les
+`tests/scripts/verify_*.py` devenus inutiles — voir
+`TECH_DOC/SESSIONS/TESTS/CHANTIER-05-vague-5-cloture.md`.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `tests/e2e/test_product_duplication_complex.py`, `test_event_quick_create_duplicate.py`, `test_explorer_markers_per_pa.py` | **Nouveaux** — conversions des 3 derniers specs TS |
+| `tests/playwright/` | **Dossier supprimé entièrement** (specs, utils, configs, node_modules — plus aucune dépendance Node/yarn) |
+| `tests/scripts/verify_*.py` (4 fichiers) | **Supprimés** — n'étaient appelés que par les specs TS ; `setup_test_data.py` conservé (fixture e2e) |
+| `tests/README.md`, `GUIDELINES.md`, `TECH_DOC/SESSIONS/TESTS/CHANTIER-05-*.md` | Documentation de clôture |
+
+## Vague 4 migration tests TS→Python — specs adhésions / Wave 4 TS→Python test migration — membership specs
+
+**Date :** 2026-06-11
+**Migration :** Non / No
+
+**Quoi / What :** 11 specs adhésions Playwright TS convertis en Playwright Python (workflow
+d'agents Sonnet séquentiels) : création admin (simple, récurrente, validation, AMAP, solidaire,
+manuelle), prix libre multi (Stripe réel ×4), annulation récurrente, cycle complet formulaire
+dynamique (7 tests), protection doublon SEPA, validation manuelle + paiement Stripe réel —
+22 tests Python, tous verts. **Suite TS : 14 → 3 specs.**
+
+**Pourquoi / Why :** avant-dernière vague de la migration vers pytest unique. Après la vague 5
+(3 specs restants : 25, 29, 40), le dossier `tests/playwright/` et l'outillage Node pourront
+être supprimés.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `tests/e2e/test_membership*.py`, `test_memberships_admin_create.py`, `test_sepa_duplicate_protection.py` (11 fichiers) | **Nouveaux** — conversions des specs TS 03-07, 14, 17, 22, 27, 36, 43 |
+| `tests/playwright/tests/` | **Supprimés** : les 11 specs migrés |
+| `BaseBillet/tasks.py` | **Bugfix** : `context_for_membership_email` crashait (`AttributeError`) quand `get_deadline()` ou `last_contribution` est `None` (adhésion en attente de validation) — les lignes de dates du mail ne sont ajoutées que si la date existe |
+| `tests/e2e/test_membership_account_states.py` | Résilience : 1 reload si le runserver dev rend une page d'erreur transitoire (`OSError Bad file descriptor` sous charge) |
+| `tests/README.md`, `TECH_DOC/SESSIONS/TESTS/CHANTIER-04-*.md` | Documentation à jour (dont constat interop V1 `/api/salefromlespass`) |
+
+## Vague 3 migration tests TS→Python — specs admin / Wave 3 TS→Python test migration — admin specs
+
+**Date :** 2026-06-11
+**Migration :** Non / No
+
+**Quoi / What :** 8 specs admin Playwright TS convertis en Playwright Python par un workflow
+d'agents Sonnet séquentiels (1 agent par spec, conversion + vérification + corrections) :
+custom form edit, credit note, ajouter paiement, cancel membership, list status, adhésions
+obligatoires M2M (x2), reservation cancel — 13 tests Python, tous verts. Suite TS : 22 → 14 specs.
+
+**Pourquoi / Why :** poursuite de la migration vers une seule techno de test (pytest), avec un
+coût réduit de ~40 % vs la vague 2 (1 agent au lieu de 2 par spec, modèle Sonnet, cheat-sheet
+dans le prompt au lieu de relire conftest + PIEGES).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `tests/e2e/test_admin_*.py` (6 fichiers), `test_event_adhesion_obligatoire_check.py` | **Nouveaux** — conversions des specs TS 26, 32, 33, 34, 35, 37, 38, 39 |
+| `tests/playwright/tests/` | **Supprimés** : les 8 specs migrés |
+| `tests/README.md`, `TECH_DOC/SESSIONS/TESTS/CHANTIER-03-*.md` | Documentation à jour, dont un ⚠️ « formulaires imbriqués HTMX dans la fiche admin Membership » à vérifier manuellement |
+
+## Vague 2 migration tests TS→Python + fix timeout fedow_api / Wave 2 TS→Python test migration + fedow_api timeout fix
+
+**Date :** 2026-06-11
+**Migration :** Non / No
+
+**Quoi / What :** 8 specs Playwright TS supplémentaires convertis en Playwright Python via un
+workflow multi-agents (login, admin-config, account-summary, reservation-limits,
+account-states, crowds x2, theme/language — 11 tests Python, tous verts). Suite TS : 30 → 22 specs.
+**Bugfix critique** : `timeout=30` sur les appels HTTP de `fedow_connect/fedow_api.py`.
+
+**Pourquoi / Why :** sans timeout, un serveur Fedow muet gelait le runserver mono-thread pour
+toujours (incident du 2026-06-11 : serveur bloqué 1h dans `send_membership_product_to_fedow`,
+toutes les requêtes en 504, cascade de faux échecs E2E sur les specs 33-39).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `fedow_connect/fedow_api.py` | **Bugfix** : `timeout=30` sur `_post` et `_get` |
+| `tests/e2e/test_login.py`, `test_admin_configuration.py`, `test_user_account_summary.py`, `test_reservation_limits.py`, `test_membership_account_states.py`, `test_crowds_participation.py`, `test_crowds_summary.py`, `test_theme_language.py` | **Nouveaux** — conversions des specs TS 01, 02, 16, 19, 21, 23, 24, 99 |
+| `tests/playwright/tests/` | **Supprimés** : 01, 02, 16, 19, 21, 23, 24, 99 (migrés en Python) |
+| `tests/playwright/tests/36-sepa-duplicate-protection.spec.ts` | **Bugfix** : import `Paiement_stripe` depuis `BaseBillet.models` (l'ancien import `PaiementStripe.models` échouait silencieusement → test flaky qui ne testait pas la protection doublon) |
+| `tests/playwright/tests/26-admin-membership-custom-form-edit.spec.ts` | Timeout `execSync` 15 s → 60 s (boot `tenant_command shell` sous charge) |
+| `tests/README.md`, `TECH_DOC/SESSIONS/TESTS/` | Tableau de migration et CHANTIER-02 à jour |
+
+## Simplification des suites de tests + socle E2E Python (force_login) / Test suites simplification + Python E2E foundation
+
+**Date :** 2026-06-11
+**Migration :** Non / No
+
+**Quoi / What :** portage du socle E2E Python de la V2 (endpoint `force_login` triple-gated +
+fixtures), migration de 3 specs TS vers Playwright Python, portage de 17 tests pytest Stripe
+mockés + 2 smoke Stripe E2E réels depuis la V2, suppression de 12 specs TS redondants
+(42 → 30 specs, suite TS ~11 min → ~7 min), renumérotation des doublons 21/35.
+
+**Pourquoi / Why :** une seule techno de test (pytest), des tests Stripe 50× plus rapides
+(mock au lieu de vrai checkout), et un login E2E en 100 ms au lieu de 5 s. Politique identique
+à la V2 (`lespass-main`) pour faciliter la fusion future.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `AuthBillet/views_test_only.py` | **Nouveau** — endpoint `force_login_for_e2e` (DEBUG + E2E_TEST_TOKEN + header X-Test-Token, copie V2) |
+| `AuthBillet/urls.py` | Branchement de l'endpoint sous `if settings.DEBUG:` |
+| `tests/pytest/conftest.py` | Fixtures partagées portées de la V2 : `api_client`, `auth_headers`, `admin_user`, `admin_client`, `tenant`, `mock_stripe`, `django_db_setup`, `_enable_db_access_for_all` |
+| `tests/pytest/test_stripe_membership_simple.py` | **Nouveau** (V2) — 5 tests Stripe mockés adhésion |
+| `tests/pytest/test_stripe_membership_complex.py` | **Nouveau** (V2) — 6 tests : multi prix libre, montant zéro, champs dynamiques |
+| `tests/pytest/test_stripe_reservation.py` | **Nouveau** (V2) — 4 tests réservation (gratuit, payant, options, form dynamique) |
+| `tests/pytest/test_stripe_crowds.py` | **Nouveau** (V2) — 2 tests contribution crowds |
+| `tests/pytest/test_comptabilite_service.py` | 3 tests passés en assertions delta / filtre par produit (piège 9.60, DB partagée) |
+| `tests/e2e/test_membership_validations.py` | **Nouveau** (V2, remplace spec TS 20) — assertion e-mail tolérante FR/EN |
+| `tests/e2e/test_reservation_validations.py` | **Nouveau** (V2, remplace spec TS 18) |
+| `tests/e2e/test_numeric_overflow_validation.py` | **Nouveau** (conversion du spec TS 28) |
+| `tests/e2e/test_stripe_smoke.py` | **Nouveau** (V2) — 2 checkouts Stripe réels (adhésion + réservation) |
+| `BaseBillet/templates/reunion/views/event/partial/booking_form.html` | **Bugfix** : `min="{{ price.prix\|unlocalize }}"` — en locale FR, `min="5,00"` est invalide et neutralisait la validation HTML5 |
+| `BaseBillet/templates/reunion/views/membership/form.html` | Même bugfix `unlocalize` (2 occurrences) |
+| `tests/playwright/tests/` | **Supprimés** (couverts par mock/smoke/Python) : 08, 09, 10, 11, 12, 13, 15, 18, 20, 28, 42, 44. **Renommés** : 21-event-quick-create→29, 35-admin-reservation-cancel→39, 35-explorer-markers→40 |
+| `tests/README.md` | Réécriture complète (comptes à jour, 3 suites, politique Stripe, migration TS→Python) |
+| `TECH_DOC/SESSIONS/TESTS/` | **Nouveau** hub : état des lieux, plan de simplification, tests restants |
+
 ## Remise au vert des suites de tests (baseline chantier FEDOW_IMPORT) / Test suites back to green (FEDOW_IMPORT baseline)
 
 **Date :** 2026-06-11
