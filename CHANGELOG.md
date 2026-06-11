@@ -45,7 +45,13 @@ l'apex, `www.` non routé par le Traefik de dev).
 3. **Fixtures non déterministes (tenants `W` sans domaine)** : `test_comptabilite_exports.py` et
    `test_event_is_proposal_field.py` utilisaient `.exclude(public).first()` → tenant `waiting_config`
    sans Domain (créé par les E2E onboarding) → `AttributeError`. Tenant `lespass` explicite désormais.
-4. **Infra dev (non corrigé, à arbitrer) :** `www.tibillet.localhost` n'est pas routé par Traefik
+4. **Celery `trigger_product_update_tasks` : flood d'ERROR `Product.DoesNotExist` — CORRIGÉ.**
+   La tâche (1 s après le post_save) faisait un `get` sec : tout produit supprimé entre-temps
+   (cleanup des tests, suppression admin rapide) levait une ERROR. Produit disparu = rien à
+   notifier à LaBoutik → `try/except DoesNotExist` + log info (`BaseBillet/tasks.py:1756`).
+   Worker celery redémarré pour charger le fix. Note : le volume de ces tâches augmente
+   légitimement avec le fix n°2 (les saves via proxys notifient désormais LaBoutik, comme prévu).
+5. **Infra dev (non corrigé, à arbitrer) :** `www.tibillet.localhost` n'est pas routé par Traefik
    (404 text/plain avant Django). Et noté : courses pymemcache (`'NoneType'... 'recv'`) quand les
    deux suites de tests tournent en parallèle (cf. tests/PIEGES.md, session 2026-06-11).
 

@@ -1755,9 +1755,20 @@ def membership_renewal_reminder():
 @app.task
 def trigger_product_update_tasks(product_pk):
     time.sleep(1)
-    product = Product.objects.get(pk=product_pk)
+    # Le produit peut avoir ete supprime entre le post_save et l'execution de
+    # la tache (cleanup des tests, suppression rapide dans l'admin) : il n'y a
+    # alors simplement rien a notifier a LaBoutik — log info, pas une ERROR.
+    # / The product may have been deleted between post_save and the task run
+    # (test cleanup, quick admin deletion): nothing to notify LaBoutik about
+    # then — info log, not an ERROR.
+    try:
+        product = Product.objects.get(pk=product_pk)
+    except Product.DoesNotExist:
+        logger.info(
+            f"trigger_product_update_tasks : produit {product_pk} deja supprime, rien a notifier")
+        return
     # On prévient LaBoutik qu'un produit adhésion et/ou badge a changé
-    if product.categorie_article in [Product.ADHESION, Product.BADGE]:
+    if product.categorie_article in [Product.ADHESION]:
         config = Configuration.get_solo()
         if config.check_serveur_cashless():
             send_to_laboutik = requests.post(

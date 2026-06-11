@@ -35,10 +35,18 @@ def _vraie_image_jpeg():
 
 
 @pytest.mark.django_db
-def test_attacher_image_brouillon_migre_vers_images_et_nettoie_le_temp():
+def test_attacher_image_brouillon_migre_vers_images_et_conserve_le_temp():
     """
-    Fix bug #1 : l'image temp du brouillon doit être MIGRÉE vers images/ (et plus
-    rester dans event_wizard_drafts/), puis le temp supprimé.
+    L'image temp du brouillon doit être MIGRÉE vers images/ (et plus rester
+    dans event_wizard_drafts/). Le fichier temporaire est CONSERVÉ par le
+    helper : la création des events est dans transaction.atomic() (doublon
+    possible) et un rollback DB n'annule pas une suppression de fichier — la
+    suppression se fait par l'appelant APRÈS le commit (step2_event), cf.
+    review du 2026-06-11.
+    / The draft temp image must be MIGRATED to images/. The temp file is KEPT
+    by the helper: event creation runs inside transaction.atomic() and a DB
+    rollback does not undo a file deletion — the caller deletes temp files
+    AFTER the commit (step2_event).
     """
     from django.core.files.base import ContentFile
     from django.core.files.storage import default_storage
@@ -61,12 +69,15 @@ def test_attacher_image_brouillon_migre_vers_images_et_nettoie_le_temp():
         # / Image points to images/ (real file), not the temp draft folder.
         assert event.img.name.startswith("images/"), event.img.name
         assert default_storage.exists(event.img.name)
-        # Le fichier temporaire a été supprimé.
-        # / The temp file was deleted.
-        assert not default_storage.exists(chemin_temp)
+        # Le fichier temporaire est CONSERVÉ (suppression post-commit par
+        # l'appelant — un rollback du wizard doit pouvoir réessayer avec l'image).
+        # / The temp file is KEPT (post-commit deletion by the caller — a
+        # wizard rollback must be able to retry with the image).
+        assert default_storage.exists(chemin_temp)
 
-        # Cleanup du fichier créé par le test.
+        # Cleanup des fichiers créés par le test.
         default_storage.delete(event.img.name)
+        default_storage.delete(chemin_temp)
 
 
 @pytest.mark.django_db
