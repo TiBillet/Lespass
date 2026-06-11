@@ -185,7 +185,8 @@ class LoginEmailValidator(serializers.Serializer):
 class TicketCreator():
 
     def __init__(self, reservation: Reservation, products_dict: dict, promo_code: PromotionalCode = None, custom_amounts: dict = None,
-                 sale_origin: str = SaleOrigin.LESPASS):
+                 sale_origin: str = SaleOrigin.LESPASS,
+                 paid_externally: bool = False, external_payment_method: str = None):
         self.products_dict = products_dict
         self.reservation = reservation
         self.user = reservation.user_commande
@@ -193,6 +194,13 @@ class TicketCreator():
         self.custom_amounts = custom_amounts or {}
         # Source de vente (ex: LESPASS, API) / Sale source (e.g., LESPASS, API)
         self.sale_origin = sale_origin
+        # Billet déjà payé ailleurs (ex : en caisse LaBoutik).
+        # Le paiement a eu lieu hors ligne : espèce ou carte bancaire au comptoir.
+        # Dans ce cas, on ne crée pas de checkout Stripe.
+        # La vente est enregistrée directement comme valide.
+        # / Ticket already paid elsewhere (e.g., LaBoutik cash register).
+        self.paid_externally = paid_externally
+        self.external_payment_method = external_payment_method
         # La liste des objets a vendre pour la création du paiement stripe
         self.list_line_article_sold = []
 
@@ -286,6 +294,38 @@ class TicketCreator():
                 promo_code=self.promo_code,
                 custom_amount=self.custom_amounts.get(price_generique.uuid))
 
+            # Cas du billet déjà payé ailleurs (ex : en caisse LaBoutik).
+            # Le client a payé au comptoir : espèce ou carte bancaire.
+            # On enregistre la vente directement comme valide.
+            # La création directe en VALID ne déclenche pas la machine à état
+            # (signals.pre_save_signal_status ignore _state.adding=True).
+            # Donc pas de renvoi de la vente vers LaBoutik : pas de boucle.
+            # / Ticket already paid elsewhere (e.g., LaBoutik POS):
+            # / create the sale line as VALID, no Stripe checkout, no state machine loop.
+            if self.paid_externally:
+                line_article = LigneArticle.objects.create(
+                    pricesold=pricesold,
+                    amount=dec_to_int(pricesold.prix),
+                    payment_method=self.external_payment_method or PaymentMethod.UNKNOWN,
+                    qty=qty,
+                    promotional_code=self.promo_code,
+                    sale_origin=self.sale_origin,
+                    reservation=reservation,
+                    status=LigneArticle.VALID,
+                )
+                self.list_line_article_sold.append(line_article)
+
+                # Le billet est payé : il est directement valide, prêt à être scanné.
+                # / Ticket is paid: directly valid, ready to be scanned.
+                for _i in range(int(qty)):
+                    ticket = Ticket.objects.create(
+                        status=Ticket.NOT_SCANNED,
+                        reservation=reservation,
+                        pricesold=pricesold,
+                    )
+                    tickets.append(ticket)
+                continue
+
             # Ligne comptable de la vente, liee a la reservation
             # / Accounting line for the sale, linked to reservation
             line_article = LigneArticle.objects.create(
@@ -310,6 +350,14 @@ class TicketCreator():
                 )
                 tickets.append(ticket)
 
+        # Billet payé en caisse : pas de checkout Stripe.
+        # On valide la réservation. Le save() déclenche la machine à état
+        # qui enverra le billet par mail (au client ou à l'email de la caisse).
+        # / Paid at the POS: no Stripe checkout, validate the reservation.
+        if self.paid_externally:
+            reservation.status = Reservation.VALID
+            reservation.save()
+            return tickets
 
         self.checkout_link = self.get_checkout_stripe()
         return tickets
@@ -654,12 +702,19 @@ class ReservationValidator(serializers.Serializer):
         # Fabrication de la reservation et des tickets en fonction du type de produit
         # Source de vente selon le contexte / Sale origin from context
         sale_origin = self.context.get('sale_origin', SaleOrigin.LESPASS)
+        # Billet déjà payé ailleurs (ex : caisse LaBoutik) ?
+        # Le contexte transporte le flag et le moyen de paiement réel.
+        # / Ticket already paid elsewhere (e.g., LaBoutik POS)? Context carries the flag.
+        paid_externally = self.context.get('paid_externally', False)
+        external_payment_method = self.context.get('external_payment_method', None)
         self.tickets = TicketCreator(
             reservation=reservation,
             products_dict=products_dict,
             promo_code=self.promo_code if hasattr(self, 'promo_code') else None,
             custom_amounts=self.custom_amounts if hasattr(self, 'custom_amounts') else {},
             sale_origin=sale_origin,
+            paid_externally=paid_externally,
+            external_payment_method=external_payment_method,
         )
         self.reservation = reservation
         # On récupère le lien de paiement fabriqué dans le TicketCreator si besoin :

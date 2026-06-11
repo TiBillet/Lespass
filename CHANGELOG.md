@@ -1,5 +1,42 @@
 # Changelog / Journal des modifications
 
+## Vente de billet en caisse LaBoutik → réservation Lespass (API v2) / LaBoutik POS ticket sale → Lespass reservation (API v2)
+
+**Date :** 2026-06-11
+**Migration :** Non / No
+
+**Quoi / What :** l'API v2 `POST /api/v2/reservations/` accepte maintenant une vente de
+billet déjà payée en caisse (`additionalProperty paymentMethod = "cash" | "card"`) :
+réservation créée directement `VALID`, tickets `NOT_SCANNED`, `LigneArticle` `VALID`
+avec le vrai moyen de paiement (`CASH`/`CC`) et `sale_origin=LABOUTIK`, **sans checkout
+Stripe**. `reservationFor` devient optionnel : Lespass déduit l'évènement depuis le tarif
+(prochain évènement publié qui propose le produit ; erreur claire si zéro ou plusieurs
+candidats). Côté LaBoutik (dépôt séparé) : implémentation de `Commande.methode_BI` qui
+appelait jusqu'ici un attribut inexistant (crash 500 en prod, cafeasso 2026-06-11).
+
+**Pourquoi / Why :** un article `BILLET` synchronisé depuis Lespass était vendable en
+caisse mais sans handler (`AttributeError: 'Commande' object has no attribute 'methode_BI'`)
+et aucune remontée du billet vers Lespass n'existait.
+
+**Pas de boucle / No loop :** la `LigneArticle` est créée directement en `VALID` :
+la machine à état (`pre_save_signal_status`) ignore les créations (`_state.adding`),
+donc pas de renvoi `send_sale_to_laboutik` vers la caisse.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/validators.py` | `TicketCreator` : mode `paid_externally` + `external_payment_method` (ligne de vente `VALID`, tickets `NOT_SCANNED`, pas de Stripe) ; `ReservationValidator` lit ces flags depuis le `context` |
+| `api_v2/serializers.py` | `ReservationCreateSerializer` : `reservationFor` optionnel + `_resolve_event_from_prices()` ; `additionalProperty paymentMethod` (cash/card) → mode payé en caisse, `sale_origin=LABOUTIK` |
+| `tests/pytest/test_api_v2_reservation_laboutik.py` | **Nouveau** — 5 tests : cash sans event, card avec event, paymentMethod inconnu, event ambigu, aucun event futur |
+| `../LaBoutik/webview/billet_lespass.py` | **Nouveau** (dépôt LaBoutik) — `envoyer_reservation_billet()` : POST API v2, timeout (3, 5), erreurs lisibles |
+| `../LaBoutik/webview/views.py` | **Nouveau** (dépôt LaBoutik) — `Commande.methode_BI` : espèce/CB only, email carte NFC sinon config, appel synchrone, rollback atomique si échec |
+
+### Note dev
+- La clé API LaBoutik (`Configuration.lespass_api_key`) doit avoir la permission
+  **Bookings (`reservation`)** sur `ExternalApiKey` côté Lespass.
+- Effet de bord assumé : la réservation passant à `VALID` envoie le billet PDF par mail —
+  au client si carte NFC avec email, sinon à l'email de la Configuration LaBoutik.
+
 ## Test carte NFC → wallet (vérif Fedow réelle) + bugfix lien carte hors transaction / NFC card → wallet test (real Fedow check) + card-link transaction bugfix
 
 **Date :** 2026-06-11
@@ -22,13 +59,14 @@ formset était invalide, la transaction DB était annulée mais l'appel HTTP dé
 | `tests/pytest/test_membership_card_wallet_fedow.py` | **Nouveau** — test d'intégration carte → wallet avec vrais appels Fedow |
 
 ### Note dev
-- Pour rendre le test actif en permanence : ajouter `FEDOW_TEST_CARD_NUMBER=<numero>` au `.env`
-  (une carte Fedow sans utilisateur ; voir le docstring du test pour la trouver).
-- 3 cartes de démo Fedow ont été consommées par la mise au point (7EEF8BE2, 2182D39F, 58515F52,
-  liées à des users `jturbeaux+carte*`). Pour les libérer (même opération que la vue
-  `lost_my_card_by_signature` de Fedow) :
-  `docker exec fedow_django bash -c "cd /home/fedow/Fedow && poetry run python manage.py shell"`
-  puis `Card.objects.get(number_printed='XXXX')` → `c.user=None; c.wallet_ephemere=None; c.save()`.
+- Pour rendre le test actif en permanence : ajouter `FEDOW_TEST_CARD_NUMBER=58515F52` au `.env`
+  (une carte Fedow sans utilisateur ; voir le docstring du test pour en trouver une autre).
+  Sans la variable, le test skip proprement.
+- Piège documenté : un user créé dans un test pytest (transaction rollbackée) mais enregistré
+  chez Fedow pendant la validation du formulaire laisse un FedowUser orphelin dont les clés de
+  signature sont perdues — ses endpoints signés (dont `lost_my_card`) deviennent inaccessibles.
+  Les cartes de démo consommées pendant la mise au point ont été libérées (opération identique
+  à la vue `lost_my_card_by_signature` de Fedow, validée par le mainteneur).
 
 ## Vague 5 (finale) : la suite TypeScript n'existe plus / Wave 5 (final): TypeScript suite is gone
 
