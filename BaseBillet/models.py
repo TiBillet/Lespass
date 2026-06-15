@@ -1128,10 +1128,21 @@ class Product(models.Model):
         unique_together = ('categorie_article', 'name')
 
 
+class TicketProductManager(models.Manager):
+    """
+    Manager for TicketProduct.
+    With it, when using 'TicketProduct.objects.all()' only product with categorie_article__in=[Product.BILLET, Product.FREERES] will be returned
+    """
+    def get_queryset(self):
+        return super().get_queryset().filter(categorie_article__in=[Product.BILLET, Product.FREERES])
+
+
 class TicketProduct(Product):
     """Proxy pour afficher uniquement les produits billetterie dans l'admin.
     Proxy to display only ticket products in admin.
     Meme table, zero migration."""
+
+    objects = TicketProductManager()
 
     class Meta:
         proxy = True
@@ -1139,10 +1150,21 @@ class TicketProduct(Product):
         verbose_name_plural = _("Ticket products")
 
 
+class MembershipProductManager(models.Manager):
+    """
+    Manager for MembershipProduct.
+    With it, when using 'MembershipProduct.objects.all()' only product with categorie_article=Product.ADHESION will be returned
+    """
+    def get_queryset(self):
+        return super().get_queryset().filter(categorie_article=Product.ADHESION)
+
+
 class MembershipProduct(Product):
     """Proxy pour afficher uniquement les produits adhesion dans l'admin.
     Proxy to display only membership products in admin.
     Meme table, zero migration."""
+
+    objects = MembershipProductManager()
 
     class Meta:
         proxy = True
