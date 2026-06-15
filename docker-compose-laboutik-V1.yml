@@ -50,7 +50,11 @@ services:
       # Resolu par compose via le .env (DOMAIN=tibillet.localhost) -> laboutik.tibillet.localhost.
       DOMAIN: fedow.$DOMAIN
     volumes:
+      # Bind-mount du code source Fedow pour le dev (comme ../LaBoutik cote Laboutik).
+      - ../Fedow:/home/fedow/Fedow
+      # Le volume nomme reste en sous-montage : la base SQLite est preservee.
       - fedow_database:/home/fedow/Fedow/database
+#      - ../Fedow/database:/home/fedow/Fedow/database
     networks:
       - backend
     command: "bash start.sh"
@@ -68,6 +72,11 @@ services:
     hostname: fedow_nginx
     volumes:
       - ./nginx/fedow_nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # Statics partages avec django : collectstatic ecrit dans ../Fedow/www/static,
+      # nginx les sert via "root /www" (cf. fedow_nginx.conf). Meme motif que Lespass/Laboutik.
+      # / Statics shared with django: collectstatic writes to ../Fedow/www/static,
+      #   nginx serves them via "root /www" (see fedow_nginx.conf). Same pattern as Lespass/Laboutik.
+      - ../Fedow/www:/www
       - ./logs:/logs
     depends_on:
       - fedow_django
@@ -79,6 +88,7 @@ services:
       - traefik.http.routers.fedow_nginx.tls=true
       - traefik.http.routers.fedow_nginx.rule=Host(`fedow.$DOMAIN`)
       - traefik.http.services.fedow_nginx.loadbalancer.server.port=80
+      - traefik.http.routers.fedow_nginx.priority=100 # plus c'est grand, plus c'est prioritaire
 
     networks:
       - frontend
@@ -117,8 +127,7 @@ services:
       - backend
 
   lespass_django:
-    build: .
-#    image: tibillet/lespass:latest
+    image: tibillet/lespass:latest
     restart: unless-stopped
     container_name: lespass_django
     hostname: lespass_django
@@ -144,8 +153,7 @@ services:
 
 
   lespass_celery:
-    build: .
-#    image: tibillet/lespass:latest
+    image: tibillet/lespass:latest
     container_name: lespass_celery
     restart: unless-stopped
     hostname: lespass_celery
@@ -185,8 +193,10 @@ services:
       - traefik.enable=true
       - traefik.docker.network=frontend
       - traefik.http.routers.lespass_nginx.tls=true
-      - traefik.http.routers.lespass_nginx.rule=Host(`$DOMAIN`) || Host(`www.$DOMAIN`) || Host(`agenda.$DOMAIN`) || Host(`lespass.$DOMAIN`) || Host(`linterupteur.$DOMAIN`) || Host(`demo.$DOMAIN`) || Host(`bis.domainbis.localhost`) || Host(`domainbis.localhost`) || Host(`chantefrein.$DOMAIN`)  || Host(`la-lowcow-motiv.$DOMAIN`)
+      - traefik.http.routers.lespass_nginx.rule=Host(`$DOMAIN`) || Host(`lespass.$DOMAIN`)
       - traefik.http.services.lespass_nginx.loadbalancer.server.port=80
+      - traefik.http.routers.lespass_nginx.priority=1 # plus c'est grand, plus c'est prioritaire
+
     networks:
       - backend
       - frontend
@@ -298,7 +308,8 @@ services:
       - traefik.enable=true
       - traefik.docker.network=frontend
       - traefik.http.routers.laboutik_nginx.tls.certresolver=myresolver
-      - traefik.http.routers.laboutik_nginx.rule=Host(`laboutik.$DOMAIN`) || Host(`cashless.$DOMAIN`)
+      - traefik.http.routers.laboutik_nginx.rule=Host(`laboutik.$DOMAIN`)
+      - traefik.http.routers.laboutik_nginx.priority=100 # plus c'est grand, plus c'est prioritaire
     networks:
       - frontend
       - backend

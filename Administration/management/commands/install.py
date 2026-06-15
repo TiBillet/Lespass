@@ -108,10 +108,19 @@ class Command(BaseCommand):
 
         ### Tenant générique : créer son espace !
 
+        # Domaine alias `www.` : NON primary (l'apex `{DOMAIN}` est le seul
+        # primary). Sans cette difference, `tenant_public.get_primary_domain()`
+        # peut retourner l'un ou l'autre selon l'ordre d'insertion DB, et tout
+        # le code qui s'appuie sur cette methode (onboard, admin, mails) part
+        # alors sur `www.` au lieu de l'apex. Cf. discussion 2026-05-16.
+        # / `www.` alias: NOT primary (apex is the sole primary). Without this,
+        # `get_primary_domain()` may return either depending on DB insert
+        # order, and downstream code (onboard, admin, mails) ends up on `www.`
+        # instead of the apex.
         domain_public, created = Domain.objects.get_or_create(
             domain=f'www.{os.getenv("DOMAIN")}',
             tenant=tenant_public,
-            is_primary=True
+            is_primary=False
         )
         domain_public.save()
 

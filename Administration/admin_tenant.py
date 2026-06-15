@@ -7,6 +7,8 @@ from Administration.admin import (
     products,
     prices
 )
+from Administration.admin.help_messages_dictionnary import HELP_MESSAGES_DICT
+from Administration.admin.mixins import HelpDisplayMixin
 
 from Administration.admin.site import staff_admin_site, sanitize_textfields
 
@@ -22,7 +24,7 @@ from uuid import UUID, uuid4
 from unfold.utils import parse_datetime_str
 from django.core.validators import EMPTY_VALUES
 from collections.abc import Iterator
-from django.urls import path, reverse
+from django.urls import path, reverse, NoReverseMatch
 
 from django.contrib import admin
 from django.contrib.admin.options import ModelAdmin
@@ -44,8 +46,8 @@ from django.contrib import admin
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.signing import TimestampSigner
-from django.db import models, connection, IntegrityError
-from django.db.models import Model, Count, Q, Prefetch
+from django.db import models, connection, IntegrityError, transaction as db_transaction
+from django.db.models import Model, Count, Q, Prefetch, F
 from django.forms import ModelForm, Form, HiddenInput
 from django.http import HttpResponse, HttpRequest, HttpResponseRedirect
 from django.template.response import TemplateResponse
@@ -94,6 +96,7 @@ from unfold.widgets import (
     UnfoldAdminSelectWidget,
     UnfoldAdminTextInputWidget,
     UnfoldBooleanSwitchWidget,
+    UnfoldAdminSelect2Widget
 )
 
 from Administration.importers.ticket_exporter import TicketExportResource
@@ -106,7 +109,7 @@ from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
     FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp, ProductFormField, \
-    PromotionalCode, Tva
+    PromotionalCode, Tva, MembershipProduct, FederationConfiguration
 from BaseBillet.tasks import webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
     send_reservation_cancellation_user, send_sale_to_laboutik, forge_connexion_url
@@ -122,7 +125,6 @@ from fedow_public.models import AssetFedowPublic as Asset, AssetFedowPublic
 from stripe._error import InvalidRequestError
 
 logger = logging.getLogger(__name__)
-
 
 
 @admin.register(ExternalApiKey, site=staff_admin_site)
@@ -150,6 +152,12 @@ class ExternalApiKeyAdmin(ModelAdmin):
         ('event', 'product',),
         ('reservation', 'ticket'),
         ('wallet', 'sale'),
+        # membership : requis pour que LaBoutik lise les adhesions (route by-wallet).
+        # / membership: required so LaBoutik can read memberships (by-wallet route).
+        ('membership', 'crowd'),
+        # Recharge cadeau : asset TNF que cette cle peut crediter via l'API v2
+        # / Gift refill: TNF asset this key may top-up via API v2
+        'gift_asset',
         'user',
         'key',
     ]
@@ -737,63 +745,6 @@ class OptionGeneraleAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 """
 
-class PriceInlineChangeForm(ModelForm):
-    # Le formulaire pour changer une adhésion
-    class Meta:
-        model = Price
-        fields = (
-            'name',
-            'product',
-            'prix',
-            'free_price',
-            'subscription_type',
-            'publish',
-        )
-
-    def clean_prix(self):
-        cleaned_data = self.cleaned_data
-        prix = cleaned_data.get('prix')
-        if 0 < prix < 1:
-            raise forms.ValidationError(_("A rate cannot be between 0€ and 1€"), code="invalid")
-        return prix
-
-    def clean_subscription_type(self):
-        cleaned_data = self.cleaned_data
-        product: Product = cleaned_data.get('product')
-        subscription_type = cleaned_data.get('subscription_type')
-        if product.categorie_article == Product.ADHESION:
-            if subscription_type == Price.NA:
-                raise forms.ValidationError(_("A subscription must have a duration"), code="invalid")
-        return subscription_type
-
-
-class PriceInline(TabularInline):
-    model = Price
-    fk_name = 'product'
-    form = PriceInlineChangeForm
-    # hide_title = True
-    # collapsible = True # usefull for StackedInline
-
-    # ordering_field = "weight"
-    # max_num = 1
-    extra = 0
-    show_change_link = True
-
-    # tab = True # don't set to false : comment or the tab title will be visible
-
-    # Surcharger la méthode pour désactiver la suppression
-    def has_delete_permission(self, request, obj=None):
-        return False
-
-    def has_add_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_change_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_view_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
 
 @admin.register(Paiement_stripe, site=staff_admin_site)
 class PaiementStripeAdmin(ModelAdmin):
@@ -925,6 +876,87 @@ class UserWithMembershipValid(admin.SimpleListFilter):
             ).distinct()
 
 
+# ---------------------------------------------------------------------------
+# Badges de statut pour la fiche utilisateur (évènements + adhésions).
+# Styles inline (hex) : le bundle Unfold n'inclut pas toutes les classes Tailwind ;
+# un fond saturé + texte blanc reste lisible en thème clair comme sombre.
+# Helpers AU NIVEAU MODULE (hors classe) — Unfold wrappe les méthodes des ModelAdmin.
+# / Status badges for the user profile. Inline hex styles, readable in light/dark.
+# Module-level helpers (NOT inside the admin class) — Unfold wraps ModelAdmin methods.
+# ---------------------------------------------------------------------------
+BADGE_VERT = ("#16a34a", "#ffffff")    # validé / payé
+BADGE_BLEU = ("#2563eb", "#ffffff")    # gratuit / en ligne
+BADGE_AMBRE = ("#d97706", "#ffffff")   # en attente / non payé
+BADGE_ROUGE = ("#dc2626", "#ffffff")   # annulé
+BADGE_GRIS = ("#6b7280", "#ffffff")    # autre
+
+
+def _badge_couleur_reservation(status_code):
+    """Couleur (fond, texte) du badge selon le statut de réservation.
+    / Badge color (bg, fg) for a booking status."""
+    if status_code in (Reservation.VALID, Reservation.PAID,
+                       Reservation.PAID_NOMAIL, Reservation.PAID_ERROR):
+        return BADGE_VERT
+    if status_code in (Reservation.FREERES, Reservation.FREERES_USERACTIV):
+        return BADGE_BLEU
+    if status_code in (Reservation.CREATED, Reservation.UNPAID):
+        return BADGE_AMBRE
+    if status_code == Reservation.CANCELED:
+        return BADGE_ROUGE
+    return BADGE_GRIS
+
+
+def _badge_couleur_adhesion(est_valide, status_code):
+    """Couleur (fond, texte) du badge selon l'état d'adhésion.
+    / Badge color (bg, fg) for a membership state."""
+    if est_valide:
+        return BADGE_VERT
+    if status_code in (Membership.CANCELED, Membership.ADMIN_CANCELED):
+        return BADGE_ROUGE
+    return BADGE_GRIS
+
+
+def _admin_url_basebillet(model_name, pk):
+    """URL admin de modification d'un objet BaseBillet, ou None si introuvable.
+    / Admin change URL for a BaseBillet object, or None if not found."""
+    try:
+        return reverse(f"staff_admin:BaseBillet_{model_name}_change", args=[pk])
+    except NoReverseMatch:
+        return None
+
+
+# Statuts de ligne considérés comme "payés" (cf Reservation.articles_paid).
+# / Line statuses considered "paid".
+LIGNE_PAYEE_STATUTS = (LigneArticle.PAID, LigneArticle.VALID, LigneArticle.REFUNDED)
+
+
+def _lignes_payees_prefetch(reservation):
+    """Lignes payées/confirmées/remboursées d'une réservation, en exploitant les
+    relations préchargées (prefetch_related) : zéro requête par réservation.
+    Réplique la logique de Reservation.articles_paid() mais en mémoire — la méthode
+    du modèle, elle, fait un .filter() (donc une requête) à chaque appel.
+    / Prefetch-aware version of Reservation.articles_paid() — no per-row query.
+    """
+    # Lignes liées directement à la réservation (données récentes)
+    # / Lines linked directly to the reservation (recent data)
+    lignes_directes = [
+        ligne for ligne in reservation.lignearticles.all()
+        if ligne.status in LIGNE_PAYEE_STATUTS
+    ]
+    if lignes_directes:
+        return lignes_directes
+
+    # Fallback : anciennes lignes liées via le paiement Stripe
+    # / Fallback: legacy lines linked via the Stripe payment
+    lignes_legacy = []
+    for paiement in reservation.paiements.all():
+        lignes_legacy += [
+            ligne for ligne in paiement.lignearticles.all()
+            if ligne.status in LIGNE_PAYEE_STATUTS
+        ]
+    return lignes_legacy
+
+
 # Tout les utilisateurs de type HUMAIN
 @admin.register(HumanUser, site=staff_admin_site)
 class HumanUserAdmin(ModelAdmin):
@@ -937,13 +969,6 @@ class HumanUserAdmin(ModelAdmin):
 
     change_form_after_template = "admin/human_user/right_and_wallet_info.html"
 
-    # changeform_view sert à donner le pk de l'user pour le bouton htmx
-    def changeform_view(self, request: HttpRequest, object_id: Optional[str] = None, form_url: str = "",
-                        extra_context: Optional[Dict[str, bool]] = None) -> Any:
-        extra_context = extra_context or {}
-        extra_context['object_id'] = object_id
-        return super().changeform_view(request, object_id, form_url, extra_context)
-
     list_display = [
         'email',
         'first_name',
@@ -952,9 +977,17 @@ class HumanUserAdmin(ModelAdmin):
     ]
 
     search_fields = [
+        # Nom / prénom / email portés par l'user lui-même
+        # / Name / first name / email carried by the user itself
         'email',
         'first_name',
         'last_name',
+        # Nom / prénom saisis sur les adhésions de l'user (souvent l'adhérent·e
+        # réel·le, parfois différent de l'user). Django ajoute distinct() au besoin.
+        # / Name / first name entered on the user's memberships (the actual member,
+        # sometimes different from the account user). Django adds distinct() if needed.
+        'memberships__first_name',
+        'memberships__last_name',
     ]
 
     fieldsets = (
@@ -985,12 +1018,13 @@ class HumanUserAdmin(ModelAdmin):
                         extra_context: Optional[Dict[str, bool]] = None) -> Any:
         extra_context = extra_context or {}
         extra_context['object_id'] = object_id
-        # Provide initial states for rights toggles
         if object_id:
+            # Bloc 1 — états initiaux des toggles de droits.
+            # Conserve le comportement existant : re-lève une erreur inattendue.
+            # / Rights toggles initial states. Keeps existing behaviour (re-raises).
             try:
                 user = TibilletUser.objects.get(pk=object_id)
                 tenant = connection.tenant
-                # Admin (client_admin) initial state
                 extra_context['is_client_admin'] = user.client_admin.filter(pk=tenant.pk).exists()
                 extra_context['can_initiate_payment'] = user.initiate_payment.filter(pk=tenant.pk).exists()
                 extra_context['can_create_event'] = user.create_event.filter(pk=tenant.pk).exists()
@@ -1000,11 +1034,99 @@ class HumanUserAdmin(ModelAdmin):
                 extra_context['can_initiate_payment'] = False
                 extra_context['can_create_event'] = False
                 extra_context['can_manage_crowd'] = False
-            except ValidationError as e:
-                # c'est une requete post pour les actions
+            except ValidationError:
+                # Requete POST pour les actions (object_id pas un uuid) : on ignore.
+                # / POST for actions (object_id not a uuid): ignore.
                 pass
             except Exception as e:
                 raise e
+
+            # Bloc 2 — évènements + adhésions (tenant courant), préparés en listes de
+            # dictionnaires. ISOLÉ dans son propre try/except : un cas de données
+            # limite ne doit JAMAIS faire planter (500) la fiche utilisateur — on
+            # logge et on affiche la page sans (ou avec moins d') encarts.
+            # / Bookings + memberships. Isolated try/except: an edge case must never
+            # 500 the user change page; we log and render the page anyway.
+            try:
+                user = TibilletUser.objects.get(pk=object_id)
+                extra_context['devise'] = Configuration.get_solo().currency_code
+                maintenant = timezone.now()
+
+                # Prefetch des relations : nombre de requêtes constant (pas de N+1).
+                # Tri NULLS LAST : les réservations sans évènement ne remontent pas en tête.
+                # / Prefetch relations (no N+1); NULLS LAST so event-less bookings stay last.
+                reservations = (
+                    Reservation.objects
+                    .filter(user_commande=user)
+                    .select_related('event')
+                    .prefetch_related('tickets', 'lignearticles', 'paiements__lignearticles')
+                    .order_by(F('event__datetime').desc(nulls_last=True))
+                )
+                evenements_a_venir = []
+                evenements_passes = []
+                for reservation in reservations:
+                    badge_fond, badge_texte = _badge_couleur_reservation(reservation.status)
+                    # Lignes payées calculées UNE seule fois sur les relations préchargées.
+                    # / Paid lines computed once from prefetched relations.
+                    lignes_payees = _lignes_payees_prefetch(reservation)
+                    montant_paye = dround(sum(int(ligne.amount * ligne.qty) for ligne in lignes_payees))
+                    moyens_de_paiement = sorted({
+                        ligne.get_payment_method_display()
+                        for ligne in lignes_payees
+                        if ligne.payment_method
+                    })
+                    date_evenement = reservation.event.datetime if reservation.event else None
+                    if date_evenement and date_evenement >= maintenant:
+                        liste_cible = evenements_a_venir
+                    else:
+                        liste_cible = evenements_passes
+                    liste_cible.append({
+                        'nom': reservation.event.name if reservation.event else _("(évènement supprimé)"),
+                        'date': date_evenement,
+                        'nb_billets': len(reservation.tickets.all()),
+                        'montant': montant_paye,
+                        'moyens': ", ".join(moyens_de_paiement),
+                        'statut': reservation.get_status_display(),
+                        'badge_fond': badge_fond,
+                        'badge_texte': badge_texte,
+                        'url': _admin_url_basebillet('reservation', reservation.pk),
+                    })
+                extra_context['evenements_a_venir'] = evenements_a_venir
+                extra_context['evenements_passes'] = evenements_passes
+
+                adhesions = (
+                    Membership.objects
+                    .filter(user=user)
+                    .select_related('price', 'price__product')
+                    .order_by('-deadline')
+                )
+                adhesions_en_cours = []
+                adhesions_passees = []
+                for adhesion in adhesions:
+                    est_valide = adhesion.is_valid()
+                    badge_fond, badge_texte = _badge_couleur_adhesion(est_valide, adhesion.status)
+                    if est_valide:
+                        liste_cible = adhesions_en_cours
+                    else:
+                        liste_cible = adhesions_passees
+                    liste_cible.append({
+                        'produit': adhesion.product_name() or "—",
+                        'tarif': adhesion.price_name() or "",
+                        'montant': adhesion.contribution_value,
+                        'moyen': adhesion.get_payment_method_display() if adhesion.payment_method else "",
+                        'deadline': adhesion.deadline,
+                        'statut': _("En cours") if est_valide else adhesion.get_status_display(),
+                        'badge_fond': badge_fond,
+                        'badge_texte': badge_texte,
+                        'url': _admin_url_basebillet('membership', adhesion.pk),
+                    })
+                extra_context['adhesions_en_cours'] = adhesions_en_cours
+                extra_context['adhesions_passees'] = adhesions_passees
+            except Exception as erreur_encarts:
+                logger.error(
+                    f"HumanUserAdmin : encarts évènements/adhésions indisponibles "
+                    f"pour {object_id} : {erreur_encarts}"
+                )
 
         return super().changeform_view(request, object_id, form_url, extra_context)
 
@@ -1056,7 +1178,7 @@ class HumanUserAdmin(ModelAdmin):
             domain = tenant.get_primary_domain().domain
             base_url = f"https://{domain}"
         except Exception:
-            base_url = "https://tibillet.org"
+            base_url = "https://tibillet.coop"
 
         connexion_url = forge_connexion_url(user, base_url)
         return redirect(connexion_url)
@@ -1088,7 +1210,7 @@ class MembershipAddForm(ModelForm):
     price = forms.ModelChoiceField(
         queryset=Price.objects.filter(
             product__categorie_article=Product.ADHESION, product__archive=False
-        ).select_related('product', 'fedow_reward_asset'),
+        ).select_related('product', 'fedow_reward_asset').order_by("-free_price","name"),
         # Remplis le champ select avec les objets Price
         # / Fills the select with Price objects
         empty_label=_("Select an subscription"),  # Texte affiché par défaut
@@ -1220,8 +1342,26 @@ class MembershipAddForm(ModelForm):
         # self.instance.set_deadline()
 
         if self.card_number:
-            linked_serialized_card = self.fedowAPI.NFCcard.linkwallet_card_number(user=user,
-                                                                                  card_number=self.card_number)
+            # Ne lier la carte chez Fedow QU'APRES le commit de la transaction.
+            # L'admin Django appelle form.save() AVANT de valider les inlines :
+            # si un formset est invalide, la transaction DB est annulee mais un
+            # appel HTTP deja parti vers Fedow ne peut pas l'etre — la carte
+            # serait liee chez Fedow sans adhesion cote Lespass.
+            # (Bug trouve par tests/pytest/test_membership_card_wallet_fedow.py)
+            # / Only link the card on Fedow AFTER the DB transaction commits.
+            # Django admin calls form.save() BEFORE validating inlines: on an
+            # invalid formset the DB transaction rolls back, but an HTTP call
+            # already sent to Fedow cannot — the card would be linked on Fedow
+            # with no membership on the Lespass side.
+            utilisateur_a_lier = user
+            numero_carte_a_lier = self.card_number
+            fedow_api = self.fedowAPI
+            db_transaction.on_commit(
+                lambda: fedow_api.NFCcard.linkwallet_card_number(
+                    user=utilisateur_a_lier,
+                    card_number=numero_carte_a_lier,
+                )
+            )
 
         # Le post save BaseBillet.signals.create_lignearticle_if_membership_created_on_admin s'executera
         # # Création de la ligne Article vendu qui envera à la caisse si besoin
@@ -1237,6 +1377,7 @@ class MembershipChangeForm(ModelForm):
             'first_name',
             'deadline',
             'commentaire',
+            'newsletter',
         )
 
 
@@ -1367,8 +1508,31 @@ class LigneArticleInline(TabularInline):
         return False
 
 
+class MembershipPublishedFilter(admin.SimpleListFilter):
+    """
+    Filter for filtering Membership by MembershipProduct that are not archived
+    """
+    title = _('Product')
+    parameter_name = 'price' # Get the product from the price
+
+    def lookups(self, request, model_admin):
+        # Return only product that are not archived to display in the filter
+        return [
+            (product.pk, product.name)
+            for product in MembershipProduct.objects.filter(categorie_article=Product.ADHESION,archive=False)
+        ]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            # Return only membership where the product correspond to the selected product
+            return queryset.filter(price__product=self.value())
+        return queryset
+
+
+
 @admin.register(Membership, site=staff_admin_site)
-class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
+class MembershipAdmin(HelpDisplayMixin, ModelAdmin, ImportExportModelAdmin):
+
     inlines = [LigneArticleInline]
     # Expandable section to display custom form answers in changelist
     list_sections = [MembershipCustomFormSection]
@@ -1382,6 +1546,13 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     import_form_class = ImportForm
 
     list_before_template = "admin/membership/membership_list_before.html"  # appelle le MembershipComponent plus haut pour le contexte
+
+    # Help info for HelpModelAdmin
+    list_help_text = HELP_MESSAGES_DICT["ADHESION"]["list_help_text"]
+    list_help_url = HELP_MESSAGES_DICT["ADHESION"]["list_help_url"]
+
+    changeform_help_text = HELP_MESSAGES_DICT["ADHESION"]["changeform_help_text"]
+    changeform_help_url = HELP_MESSAGES_DICT["ADHESION"]["changeform_help_url"]
 
     # Formulaire de modification
     form = MembershipChangeForm
@@ -1410,7 +1581,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     ordering = ('-date_added',)
     search_fields = ('user__email', 'user__first_name', 'user__last_name', 'card_number', 'last_contribution',
                      'custom_form')
-    list_filter = [MembershipStatusFilter, 'price__product', 'last_contribution', 'deadline', ]
+    list_filter = [MembershipStatusFilter, MembershipPublishedFilter, 'last_contribution', 'deadline', ]
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -1593,13 +1764,13 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
 
 class LigneArticlePublishedFilter(admin.SimpleListFilter):
     """
-    Filter for filtering LigneArticle by Produc
+    Filter for filtering LigneArticle by Product that are not archived
     """
     title = _('Product')
     parameter_name = 'product'
 
     def lookups(self, request, model_admin):
-        # Return only product that are not archived
+        # Return only product that are not archived to display in the filter
         return [
             (product.pk, product.name)
             for product in Product.objects.filter(archive=False)
@@ -2028,6 +2199,33 @@ class EventResource(resources.ModelResource):
         report_skipped = True
 
 
+class IsProposalFilter(admin.SimpleListFilter):
+    """
+    Filtre sidebar Unfold pour distinguer propositions publiques en
+    attente, propositions approuvees et events normaux.
+    / Unfold sidebar filter for pending proposals, approved proposals
+    and regular events.
+    """
+    title = _("Proposal status")
+    parameter_name = "proposal_status"
+
+    def lookups(self, request, model_admin):
+        return [
+            ("pending", _("Proposals pending")),
+            ("approved", _("Proposals approved")),
+            ("regular", _("Regular events")),
+        ]
+
+    def queryset(self, request, queryset):
+        if self.value() == "pending":
+            return queryset.filter(is_proposal=True, published=False)
+        if self.value() == "approved":
+            return queryset.filter(is_proposal=True, published=True)
+        if self.value() == "regular":
+            return queryset.filter(is_proposal=False)
+        return queryset
+
+
 @admin.register(Event, site=staff_admin_site)
 class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     form = EventForm
@@ -2113,11 +2311,14 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
 
     search_fields = ['name']
     list_filter = [
+        IsProposalFilter,
         EventArchiveFilter,
         ('datetime', RangeDateTimeFilterWithTimeZone),
         'published',
     ]
     list_filter_submit = True
+
+    actions = ["approuver_propositions"]
 
     autocomplete_fields = [
         "tag",
@@ -2380,6 +2581,23 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
 
         return duplicate
 
+    @admin.action(description=_("Approve and publish selected proposals"))
+    def approuver_propositions(self, request, queryset):
+        """
+        Action bulk : pour chaque event selectionne qui est une proposition
+        en attente, set is_proposal=False + published=True.
+        / Bulk action: approve and publish selected pending proposals.
+        """
+        nb_approuvees = queryset.filter(is_proposal=True, published=False).update(
+            is_proposal=False,
+            published=True,
+        )
+        self.message_user(
+            request,
+            _("%(n)s proposal(s) approved.") % {"n": nb_approuvees},
+            messages.SUCCESS,
+        )
+
 
 class ReservationValidFilter(admin.SimpleListFilter):
     # Pour filtrer sur les réservation valide : payée, payée et confirmée, et mail en erreur même si payés
@@ -2422,10 +2640,12 @@ class ReservationValidFilter(admin.SimpleListFilter):
 
 class ReservationAddAdmin(ModelForm):
     # Uniquement les tarif Adhésion
-    email = forms.EmailField(
+    email = forms.ModelChoiceField(
         required=True,
-        widget=UnfoldAdminEmailInputWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
+        queryset=TibilletUser.objects.all(),
+        empty_label=_("Select a user"),  # Texte affiché par défaut
         label="Email",
+        widget=UnfoldAdminSelect2Widget,
     )
 
     pricesold = forms.ModelChoiceField(
@@ -2435,7 +2655,7 @@ class ReservationAddAdmin(ModelForm):
         # Remplis le champ select avec les objets Price
         empty_label=_("Select a product"),  # Texte affiché par défaut
         required=True,
-        widget=UnfoldAdminSelectWidget(),
+        widget=UnfoldAdminSelect2Widget,
         label=_("Rate")
     )
 
@@ -2618,6 +2838,7 @@ class ReservationAdmin(ModelAdmin):
 
     # Formulaire de création. A besoin de get_form pour fonctionner
     add_form = ReservationAddAdmin
+    autocomplete_fields = ["event",]
 
     def get_form(self, request, obj=None, **kwargs):
         """ Si c'est un add, on modifie le formulaire"""
@@ -3097,6 +3318,62 @@ class TenantAdmin(ModelAdmin):
 
 ### Connect
 
+@admin.register(FederationConfiguration, site=staff_admin_site)
+class FederationConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
+    compressed_fields = True
+    warn_unsaved_form = True
+
+    autocomplete_fields = ["tags_federation"]
+
+    fieldsets = (
+        (_("Affichage des lieux"), {"fields": (
+            "afficher_lieux_sans_adresse",
+            "afficher_seulement_lieux_avec_event",
+            "afficher_lieux_entrants",
+            "tri_des_lieux",
+        )}),
+        # Federation automatique par tags : le tenant s'abonne a des tags et
+        # recoit les events de TOUT le reseau qui les portent (agenda + carto).
+        # / Tag-based auto federation: subscribe to tags, receive matching events
+        # from the WHOLE network (agenda + map).
+        (_("Fédération automatique par tags"), {"fields": ("tags_federation",)}),
+        (_("Présentation"), {"fields": ("texte_introduction",)}),
+        # Agenda participatif : active le formulaire public de proposition
+        # d'evenement (deplace depuis le dashboard des modules vers ici).
+        # / Participatory agenda: enables the public event-proposal form
+        # (moved from the modules dashboard to here).
+        (_("Agenda participatif"), {"fields": (
+            "module_agenda_participatif",
+            "proposition_anonyme_autorisee",
+            "tag_auto_proposition",
+        )}),
+    )
+
+    formfield_overrides = {
+        models.TextField: {
+            "widget": WysiwygWidget,
+        }
+    }
+
+    def save_model(self, request, obj, form, change):
+        # Sanitize les TextField pour eviter le XSS via WYSIWYG
+        # / Sanitize TextFields to avoid XSS via WYSIWYG
+        sanitize_textfields(obj)
+        super().save_model(request, obj, form, change)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(FederatedPlace, site=staff_admin_site)
 class FederatedPlaceAdmin(ModelAdmin):
     list_display = ["tenant", "str_tag_filter", "str_tag_exclude", "membership_visible", ]
@@ -3239,9 +3516,20 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
             permissions=["custom_actions_detail"])
     def test_api_ghost_admin_button(self, request, object_id):
 
-        ghost_config = GhostConfig.get_solo()
-        ghost_url = ghost_config.ghost_url
-        ghost_key = ghost_config.get_api_key()
+        from sib_api_v3_sdk.rest import ApiException
+        try:
+            ghost_config = GhostConfig.get_solo()
+            ghost_url = ghost_config.ghost_url
+            ghost_key = ghost_config.get_api_key()
+        except ApiException as e:
+            ghost_config.last_log = f"{e}"
+            logger.warning("ApiException when calling AccountApi->get_account: %s\n" % e)
+            messages.error(request, _(f"Api not OK : {e}"))
+            return redirect(request.META["HTTP_REFERER"])
+        except Exception:
+            messages.error(request, _("La connexion à l'API Ghost a échoué. L'API a potentiellement mal été configuré "))
+            return redirect(request.META["HTTP_REFERER"])
+
 
         if not ghost_url or not ghost_key:
             messages.error(request, _("Ghost URL or API key is missing"))
@@ -3272,7 +3560,8 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
     def has_add_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
+        return False
+        #return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -3399,74 +3688,10 @@ class FormbricksFormsAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
 
-@admin.register(WaitingConfiguration, site=staff_admin_site)
-class WaitingConfigAdmin(ModelAdmin):
-    compressed_fields = True  # Default: False
-    warn_unsaved_form = True  # Default: False
-
-    list_display = (
-        "organisation",
-        "email",
-        "datetime",
-        "site_web",
-        "short_description",
-        "laboutik_wanted",
-        "payment_wanted",
-        "email_confirmed",
-        "created",
-    )
-
-    fields = list_display
-    readonly_fields = (
-        "datetime",
-    )
-
-    ordering = ('-datetime',)
-
-    list_filter = ["datetime", "created"]
-    search_fields = ["email", "organisation", "datetime"]
-
-    actions_detail = ["create_tenant", ]
-
-    @action(description=_("Create instance"),
-            url_path="create_tenant",
-            permissions=["custom_actions_detail"])
-    def create_tenant(self, request, object_id):
-        wc = WaitingConfiguration.objects.get(pk=object_id)
-        if wc.email_confirmed:
-            try:
-                tenant = wc.create_tenant()
-                messages.add_message(
-                    request, messages.SUCCESS,
-                    _(f"creation OK")
-                )
-            except Exception as e:
-                messages.add_message(
-                    request, messages.ERROR,
-                    _(f"{wc.organisation} tenant create error : {e} not confirmed")
-                )
-
-        else:
-            messages.add_message(
-                request, messages.WARNING,
-                _(f"Email not confirmed")
-            )
-        return redirect(request.META["HTTP_REFERER"])
-
-    def has_custom_actions_detail_permission(self, request, object_id):
-        return RootPermissionWithRequest(request)
-
-    def has_view_permission(self, request, obj=None):
-        return RootPermissionWithRequest(request)
-
-    def has_add_permission(self, request, obj=None):
-        return RootPermissionWithRequest(request)
-
-    def has_change_permission(self, request, obj=None):
-        return RootPermissionWithRequest(request)
-
-    def has_delete_permission(self, request, obj=None):
-        return RootPermissionWithRequest(request)
+# NOTE : `WaitingConfigAdmin` a ete migre vers `onboard/admin.py` lors
+# de la session de cleanup legacy 2026-05-16. Cf.
+# `TECH_DOC/SESSIONS/ONBOARD/03-session-recap.md`.
+# / WaitingConfigAdmin moved to `onboard/admin.py` on 2026-05-16.
 
 
 # Deux formulaires, un qui s'affiche si l'api est vide (ou supprimé)

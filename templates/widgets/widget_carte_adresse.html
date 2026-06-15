@@ -1,0 +1,135 @@
+{% load i18n static l10n %}
+{% comment %}
+LOCALISATION: templates/widgets/widget_carte_adresse.html
+
+Widget Django réutilisable : carte Leaflet + barre de recherche
+leaflet-geosearch + marqueur draggable. Géocodage inverse via
+endpoint serveur /widgets/geocode-reverse/.
+
+Variables de contexte (cf. spec section 3.1) :
+  - identifiant_widget (str, OBLIGATOIRE) : préfixe IDs DOM + name HTTP.
+  - latitude_initiale (float?) : pré-remplit + centre la carte.
+  - longitude_initiale (float?) : idem.
+  - adresse_initiale (str?) : pré-remplit la search bar.
+  - hauteur_carte (str, défaut "400px") : hauteur CSS du container.
+  - champs_adresse_separes (bool, défaut True) : affiche les 4 champs adresse.
+  - noms_champs_separes (dict?) : override des `name=` des 4 champs adresse.
+  - required (bool, défaut False) : ajoute required sur les hidden lat/lng.
+
+/ Reusable Django widget: Leaflet map + leaflet-geosearch search bar +
+draggable marker. Reverse geocoding via /widgets/geocode-reverse/.
+{% endcomment %}
+
+{# Defaults FALC pour les variables optionnelles. On les pose dans des #}
+{# variables locales pour ne pas dupliquer les `default:` partout. #}
+{# / FALC defaults for optional variables. #}
+{% with hauteur_effective=hauteur_carte|default:"400px" %}
+{% with afficher_champs=champs_adresse_separes|default_if_none:True %}
+{% with name_rue=noms_champs_separes.rue|default:"street_address" %}
+{% with name_cp=noms_champs_separes.code_postal|default:"postal_code" %}
+{% with name_ville=noms_champs_separes.ville|default:"address_locality" %}
+{% with name_pays=noms_champs_separes.pays|default:"address_country" %}
+
+<div class="widget-carte-adresse" data-testid="widget-carte-adresse-{{ identifiant_widget }}">
+
+    {# Container Leaflet (data-* lus par widget_carte_adresse.js au scan DOMContentLoaded). #}
+    {# / Leaflet container (data-* read by JS at DOMContentLoaded scan). #}
+    <div id="{{ identifiant_widget }}-container"
+         class="widget-carte-adresse-map"
+         data-widget-initialized="false"
+         data-identifiant="{{ identifiant_widget }}"
+         data-lat-initiale="{{ latitude_initiale|default_if_none:''|unlocalize }}"
+         data-lng-initiale="{{ longitude_initiale|default_if_none:''|unlocalize }}"
+         data-adresse-initiale="{{ adresse_initiale|default_if_none:''|escape }}"
+         data-rue-initiale="{{ rue_initiale|default_if_none:''|escape }}"
+         data-cp-initiale="{{ cp_initiale|default_if_none:''|escape }}"
+         data-ville-initiale="{{ ville_initiale|default_if_none:''|escape }}"
+         style="height: {{ hauteur_effective }};"
+         data-testid="widget-carte-adresse-map-{{ identifiant_widget }}"></div>
+
+    {# Hidden inputs : valeurs réelles soumises au formulaire parent. #}
+    {# / Hidden inputs: actual values submitted by the parent form. #}
+    <input type="hidden"
+           id="{{ identifiant_widget }}-latitude"
+           name="{{ identifiant_widget }}_latitude"
+           value="{{ latitude_initiale|default_if_none:''|unlocalize }}"
+           {% if required %}required{% endif %}
+           data-testid="widget-carte-adresse-latitude-{{ identifiant_widget }}">
+    <input type="hidden"
+           id="{{ identifiant_widget }}-longitude"
+           name="{{ identifiant_widget }}_longitude"
+           value="{{ longitude_initiale|default_if_none:''|unlocalize }}"
+           {% if required %}required{% endif %}
+           data-testid="widget-carte-adresse-longitude-{{ identifiant_widget }}">
+    <input type="hidden"
+           id="{{ identifiant_widget }}-adresse"
+           name="{{ identifiant_widget }}_adresse"
+           value="{{ adresse_initiale|default_if_none:'' }}"
+           data-testid="widget-carte-adresse-adresse-{{ identifiant_widget }}">
+
+    {# Champs adresse séparés (auto-remplis par le JS depuis Nominatim). #}
+    {# Affichés par défaut, masqués si champs_adresse_separes=False. #}
+    {# / Separate address fields (auto-filled by JS from Nominatim). #}
+    {% if afficher_champs %}
+    <div class="widget-carte-adresse-fields mt-3">
+        <div class="row g-3">
+            <div class="col-12">
+                <label for="{{ identifiant_widget }}-street" class="form-label">
+                    {% translate "Rue et numéro" %}
+                </label>
+                <input type="text"
+                       id="{{ identifiant_widget }}-street"
+                       name="{{ name_rue }}"
+                       class="form-control"
+                       data-testid="widget-carte-adresse-street-{{ identifiant_widget }}">
+            </div>
+            <div class="col-md-4">
+                <label for="{{ identifiant_widget }}-postal" class="form-label">
+                    {% translate "Code postal" %}
+                </label>
+                <input type="text"
+                       id="{{ identifiant_widget }}-postal"
+                       name="{{ name_cp }}"
+                       class="form-control"
+                       data-testid="widget-carte-adresse-postal-{{ identifiant_widget }}">
+            </div>
+            <div class="col-md-8">
+                <label for="{{ identifiant_widget }}-locality" class="form-label">
+                    {% translate "Ville" %}
+                </label>
+                <input type="text"
+                       id="{{ identifiant_widget }}-locality"
+                       name="{{ name_ville }}"
+                       class="form-control"
+                       data-testid="widget-carte-adresse-locality-{{ identifiant_widget }}">
+            </div>
+            <div class="col-12">
+                <label for="{{ identifiant_widget }}-country" class="form-label">
+                    {% translate "Pays" %}
+                </label>
+                <input type="text"
+                       id="{{ identifiant_widget }}-country"
+                       name="{{ name_pays }}"
+                       class="form-control"
+                       value="France"
+                       data-testid="widget-carte-adresse-country-{{ identifiant_widget }}">
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{# Assets Leaflet + leaflet-geosearch via CDN unpkg. Le navigateur dédoublonne #}
+{# les <script src="..."> identiques (cas N widgets sur la même page). #}
+{# / Leaflet + leaflet-geosearch via unpkg CDN. Browser dedupes identical scripts. #}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<link rel="stylesheet" href="https://unpkg.com/leaflet-geosearch@4.4.0/dist/geosearch.css">
+<link rel="stylesheet" href="{% static 'widgets/widget_carte_adresse.css' %}">
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet-geosearch@4.4.0/dist/bundle.min.js"></script>
+<script src="{% static 'widgets/widget_carte_adresse.js' %}" defer></script>
+
+{% endwith %}{% endwith %}{% endwith %}{% endwith %}{% endwith %}{% endwith %}

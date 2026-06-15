@@ -10,7 +10,21 @@ import requests
 def _ensure_initiative(base_url, api_key, request):
     cached_uuid = request.config.cache.get("api_v2_crowd_initiative_uuid", None)
     if cached_uuid:
-        return cached_uuid
+        # Le cache pytest survit sur disque, mais pas la base de donnees
+        # (ex : docker compose down -v). On verifie que l'initiative existe
+        # encore avant de reutiliser l'uuid, sinon on en recree une.
+        # / The pytest cache persists on disk, but the database may have been
+        # reset (e.g. docker compose down -v). Check the initiative still
+        # exists before reusing the uuid; otherwise create a fresh one.
+        check_url = f"{base_url}/api/v2/initiatives/{cached_uuid}/"
+        check_resp = requests.get(
+            check_url,
+            headers={"Authorization": f"Api-Key {api_key}"},
+            timeout=10,
+            verify=False,
+        )
+        if check_resp.status_code == 200:
+            return cached_uuid
     payload = {
         "@context": "https://schema.org",
         "@type": "Project",

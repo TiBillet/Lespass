@@ -19,6 +19,21 @@ def adhesion_badge_callback(request):
     return f"+ {Membership.objects.filter(last_contribution__gte=timezone.localtime() - timedelta(days=7)).count()}"
 
 
+# Badge "+ N" sur le menu Events si des propositions publiques attendent moderation
+# / "+ N" badge on Events menu if public proposals are pending moderation
+def event_proposals_badge_callback(request):
+    """
+    Compte des propositions d'event en attente de validation.
+    / Count of pending event proposals.
+
+    Affiche un badge "+ N" sur le menu "Events" si des propositions
+    publiques attendent moderation (is_proposal=True, published=False).
+    """
+    from BaseBillet.models import Event
+    count = Event.objects.filter(is_proposal=True, published=False).count()
+    return f"+ {count}" if count else None
+
+
 def get_sidebar_navigation(request):
     """Sidebar dynamique : masque les sections liees aux modules inactifs.
     Appelee par Unfold via SIDEBAR.navigation (string importable)."""
@@ -54,7 +69,16 @@ def get_sidebar_navigation(request):
                     "icon": "person_add",
                     "link": reverse_lazy("staff_admin:AuthBillet_humanuser_changelist"),
                     "permission": admin_permission,
-                }
+                },
+                # This menu option is here only for debug purpose
+                # {
+                #     "title": _("Produit"),
+                #     "icon": "sports_bar",
+                #     "link": reverse_lazy(
+                #         "staff_admin:BaseBillet_product_changelist"
+                #     ),
+                #     "permission": admin_permission,
+                # }
             ],
         },
     ]
@@ -69,7 +93,6 @@ def get_sidebar_navigation(request):
                 "separator": True,
                 "collapsible": True,
                 "items": [
-                    # FROM V2 : PAGE TO IMPLEMENT
                     {
                         "title": _("Membership products"),
                         "icon": "loyalty",
@@ -79,7 +102,7 @@ def get_sidebar_navigation(request):
                         "permission": admin_permission,
                     },
                     {
-                        "title": _("Subscriptions"),
+                        "title": _("Adhésion / Pass"),
                         "icon": "card_membership",
                         "link": reverse_lazy(
                             "staff_admin:BaseBillet_membership_changelist"
@@ -149,6 +172,13 @@ def get_sidebar_navigation(request):
                         "title": _("Events"),
                         "icon": "event",
                         "link": reverse_lazy("staff_admin:BaseBillet_event_changelist"),
+                        # Badge "+ N" uniquement s'il y a des propositions en attente.
+                        # On appelle le callback ici et on passe "" quand il n'y a rien.
+                        # Le template Unfold teste {% if item.badge %} : une chaine vide
+                        # masque completement le badge (sinon il affichait "None").
+                        # / "+ N" badge only when proposals are pending. Empty string
+                        # hides the badge entirely (Unfold tests {% if item.badge %}).
+                        "badge": event_proposals_badge_callback(request) or "",
                         "permission": admin_permission,
                     },
                     {
@@ -188,6 +218,14 @@ def get_sidebar_navigation(request):
                 "separator": True,
                 "collapsible": True,
                 "items": [
+                    {
+                        "title": _("Options"),
+                        "icon": "tune",
+                        "link": reverse_lazy(
+                            "staff_admin:BaseBillet_federationconfiguration_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
                     {
                         "title": _("Espaces"),
                         "icon": "linked_services",
@@ -549,6 +587,14 @@ def get_sidebar_navigation(request):
             "collapsible": True,
             "items": [
                 {
+                    "title": _("Rapports"),
+                    "icon": "lock",
+                    "link": reverse_lazy(
+                        "staff_admin:comptabilite_cloturecaisse_changelist"
+                    ),
+                    "permission": admin_permission,
+                },
+                {
                     "title": _("Entries"),
                     "icon": "receipt_long",
                     "link": reverse_lazy(
@@ -556,7 +602,7 @@ def get_sidebar_navigation(request):
                     ),
                     "permission": admin_permission,
                 },
-                # FROM V2 : TO ADD LATER
+                # FROM V2 : TO ADD LATER (laboutik viendra plus tard)
                 # {
                 #     "title": _("Operation logs"),
                 #     "icon": "history",
@@ -564,10 +610,10 @@ def get_sidebar_navigation(request):
                 #     "permission": admin_permission,
                 # },
                 # {
-                #     "title": _("Accounting codes"),
+                #     "title": _("Accounting accounts"),
                 #     "icon": "account_balance",
                 #     "link": reverse_lazy(
-                #         "staff_admin:laboutik_comptecomptable_changelist"
+                #         "staff_admin:comptabilite_comptecomptable_changelist"
                 #     ),
                 #     "permission": admin_permission,
                 # },
@@ -575,7 +621,7 @@ def get_sidebar_navigation(request):
                 #     "title": _("Payment method mapping"),
                 #     "icon": "swap_horiz",
                 #     "link": reverse_lazy(
-                #         "staff_admin:laboutik_mappingmoyendepaiement_changelist"
+                #         "staff_admin:comptabilite_mappingmoyendepaiement_changelist"
                 #     ),
                 #     "permission": admin_permission,
                 # },
@@ -720,8 +766,12 @@ MODULE_FIELDS = {
         "testid": "dashboard-card-crowdfunding",
     },
     "module_federation": {
-        "name": _("Federation"),
-        "description": _("Explore federation with other TiBillet instance"),
+        "name": _("Fédération et agenda participatif"),
+        "description": _(
+            "Reliez votre lieu au réseau TiBillet pour partager vos évènements. "
+            "Vous pouvez aussi laisser le public proposer des évènements : "
+            "c'est l'agenda participatif. Tout se règle dans « Options de fédération »."
+        ),
         "testid": "dashboard-card-federation",
     },
     # FROM V2 : TO IMPLEMENT LATER ON

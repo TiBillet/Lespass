@@ -1,0 +1,60 @@
+{% load i18n %}
+{% comment %}
+LOCALISATION: onboard/templates/onboard/partials/status_progress.html
+
+Partial HTMX rendu par `OnboardViewSet.launch_status` (et par
+`launch_retry` apres reset d'erreur) quand la creation du tenant est en
+cours (ni erreur, ni tenant attache).
+
+CRUCIAL : doit contenir `hx-trigger="every 2s"` — c'est cet attribut qui
+fait perdurer le polling. Quand le partial est swap dans `#status`
+(innerHTML), HTMX detecte le nouvel attribut hx-trigger sur ce noeud
+enfant et re-arme le polling. Quand on swap `status_done.html` (sans
+hx-trigger), le polling s'arrete naturellement.
+
+Contexte attendu : aucun.
+
+`data-testid="onboard-status-progress"` pour les tests Playwright.
+`aria-live="polite"` sur le container parent (`#status`) annonce les
+transitions de phase aux lecteurs d'ecran sans interrompre.
+
+/ HTMX partial rendered by `OnboardViewSet.launch_status` (and by
+`launch_retry` after an error reset) while tenant creation is in
+progress (no error, no tenant attached).
+
+CRUCIAL: must contain `hx-trigger="every 2s"` — this attribute keeps
+polling alive. When the partial is swapped into `#status` (innerHTML),
+HTMX detects the new hx-trigger on this child node and re-arms
+polling. When `status_done.html` is swapped (no hx-trigger), polling
+stops naturally.
+
+Expected context: none.
+{% endcomment %}
+<div class="alert alert-info d-flex align-items-center mb-0"
+     data-testid="onboard-status-progress"
+     hx-get="{% url 'onboard-launch-status' %}"
+     hx-trigger="every 2s"
+     hx-swap="innerHTML"
+     hx-target="#status">
+    <div class="spinner-border spinner-border-sm me-2"
+         role="status"
+         aria-hidden="true">
+        <span class="visually-hidden">{% translate "Chargement..." %}</span>
+    </div>
+    <div class="flex-grow-1">
+        <strong>{% translate "Finalisation en cours..." %}</strong>
+        <div class="small text-muted">
+            {% blocktranslate trimmed %}
+                Cette opération prend généralement quelques secondes.
+                Vous pouvez laisser cet onglet ouvert ; un email vous
+                sera envoyé dès que votre espace sera prêt.
+            {% endblocktranslate %}
+        </div>
+    </div>
+    <button type="button"
+            class="btn btn-primary ms-2 disabled"
+            disabled
+            data-testid="onboard-launch-go">
+        {% translate "Préparation..." %}
+    </button>
+</div>

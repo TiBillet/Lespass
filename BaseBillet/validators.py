@@ -185,7 +185,10 @@ class LoginEmailValidator(serializers.Serializer):
 class TicketCreator():
 
     def __init__(self, reservation: Reservation, products_dict: dict, promo_code: PromotionalCode = None, custom_amounts: dict = None,
-                 sale_origin: str = SaleOrigin.LESPASS):
+                 sale_origin: str = SaleOrigin.LESPASS,
+                 create_checkout: bool = True,
+                 paid_externally: bool = False, external_payment_method: str = None):
+
         self.products_dict = products_dict
         self.reservation = reservation
         self.user = reservation.user_commande
@@ -193,6 +196,23 @@ class TicketCreator():
         self.custom_amounts = custom_amounts or {}
         # Source de vente (ex: LESPASS, API) / Sale source (e.g., LESPASS, API)
         self.sale_origin = sale_origin
+
+        # Si False, on ne déclenche pas get_checkout_stripe() à la fin de method_B.
+        # Utilisé par CommandeService.materialiser() qui consolide toutes les
+        # LigneArticle puis crée UN SEUL checkout Stripe pour la commande entière.
+        # / If False, skip get_checkout_stripe() at the end of method_B.
+        # Used by CommandeService.materialiser() which consolidates all
+        # LigneArticle then creates ONE Stripe checkout for the entire order.
+        self.create_checkout = create_checkout
+
+        # Billet déjà payé ailleurs (ex : en caisse LaBoutik).
+        # Le paiement a eu lieu hors ligne : espèce ou carte bancaire au comptoir.
+        # Dans ce cas, on ne crée pas de checkout Stripe.
+        # La vente est enregistrée directement comme valide.
+        # / Ticket already paid elsewhere (e.g., LaBoutik cash register).
+        self.paid_externally = paid_externally
+        self.external_payment_method = external_payment_method
+
         # La liste des objets a vendre pour la création du paiement stripe
         self.list_line_article_sold = []
 
@@ -286,6 +306,38 @@ class TicketCreator():
                 promo_code=self.promo_code,
                 custom_amount=self.custom_amounts.get(price_generique.uuid))
 
+            # Cas du billet déjà payé ailleurs (ex : en caisse LaBoutik).
+            # Le client a payé au comptoir : espèce ou carte bancaire.
+            # On enregistre la vente directement comme valide.
+            # La création directe en VALID ne déclenche pas la machine à état
+            # (signals.pre_save_signal_status ignore _state.adding=True).
+            # Donc pas de renvoi de la vente vers LaBoutik : pas de boucle.
+            # / Ticket already paid elsewhere (e.g., LaBoutik POS):
+            # / create the sale line as VALID, no Stripe checkout, no state machine loop.
+            if self.paid_externally:
+                line_article = LigneArticle.objects.create(
+                    pricesold=pricesold,
+                    amount=dec_to_int(pricesold.prix),
+                    payment_method=self.external_payment_method or PaymentMethod.UNKNOWN,
+                    qty=qty,
+                    promotional_code=self.promo_code,
+                    sale_origin=self.sale_origin,
+                    reservation=reservation,
+                    status=LigneArticle.VALID,
+                )
+                self.list_line_article_sold.append(line_article)
+
+                # Le billet est payé : il est directement valide, prêt à être scanné.
+                # / Ticket is paid: directly valid, ready to be scanned.
+                for _i in range(int(qty)):
+                    ticket = Ticket.objects.create(
+                        status=Ticket.NOT_SCANNED,
+                        reservation=reservation,
+                        pricesold=pricesold,
+                    )
+                    tickets.append(ticket)
+                continue
+
             # Ligne comptable de la vente, liee a la reservation
             # / Accounting line for the sale, linked to reservation
             line_article = LigneArticle.objects.create(
@@ -310,6 +362,14 @@ class TicketCreator():
                 )
                 tickets.append(ticket)
 
+        # Billet payé en caisse : pas de checkout Stripe.
+        # On valide la réservation. Le save() déclenche la machine à état
+        # qui enverra le billet par mail (au client ou à l'email de la caisse).
+        # / Paid at the POS: no Stripe checkout, validate the reservation.
+        if self.paid_externally:
+            reservation.status = Reservation.VALID
+            reservation.save()
+            return tickets
 
         self.checkout_link = self.get_checkout_stripe()
         return tickets
@@ -654,12 +714,19 @@ class ReservationValidator(serializers.Serializer):
         # Fabrication de la reservation et des tickets en fonction du type de produit
         # Source de vente selon le contexte / Sale origin from context
         sale_origin = self.context.get('sale_origin', SaleOrigin.LESPASS)
+        # Billet déjà payé ailleurs (ex : caisse LaBoutik) ?
+        # Le contexte transporte le flag et le moyen de paiement réel.
+        # / Ticket already paid elsewhere (e.g., LaBoutik POS)? Context carries the flag.
+        paid_externally = self.context.get('paid_externally', False)
+        external_payment_method = self.context.get('external_payment_method', None)
         self.tickets = TicketCreator(
             reservation=reservation,
             products_dict=products_dict,
             promo_code=self.promo_code if hasattr(self, 'promo_code') else None,
             custom_amounts=self.custom_amounts if hasattr(self, 'custom_amounts') else {},
             sale_origin=sale_origin,
+            paid_externally=paid_externally,
+            external_payment_method=external_payment_method,
         )
         self.reservation = reservation
         # On récupère le lien de paiement fabriqué dans le TicketCreator si besoin :
@@ -685,7 +752,10 @@ class MembershipValidator(serializers.Serializer):
     options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True,
                                                  allow_null=True, required=False)
 
-    newsletter = serializers.BooleanField()
+    # Opt-in newsletter : non obligatoire. Absent du POST (case masquee ou non cochee)
+    # = False. La case n'apparait que si Brevo/Ghost est configure (newsletter_active).
+    # / Newsletter opt-in: optional. Absent = False. Shown only if Brevo/Ghost configured.
+    newsletter = serializers.BooleanField(required=False, default=False)
 
     def to_internal_value(self, data):
         """
@@ -827,8 +897,9 @@ class MembershipValidator(serializers.Serializer):
             status=Membership.WAITING_PAYMENT,
             first_name=attrs['firstname'],
             last_name=attrs['lastname'],
-            # Note: newsletter is an opt-out in the form / opt-out dans le formulaire
-            newsletter=not attrs.get('newsletter'), 
+            # Newsletter en opt-in explicite : True uniquement si la personne coche la case.
+            # / Explicit opt-in: True only if the person ticks the box.
+            newsletter=attrs.get('newsletter', False),
         )
 
         # Gestion de la validation manuelle / Manual validation handling
@@ -890,55 +961,47 @@ class MembershipValidator(serializers.Serializer):
                 amount=dec_to_int(membership.contribution_value),
                 qty=1,
                 sale_origin=sale_origin,
-                status=LigneArticle.VALID,
+                status=LigneArticle.PAID,
                 metadata={"source": "api"},
             )
+            # Important pour lancer le triggers pre save qui envoie les mails
             line.save(update_fields=["status"])
 
         return attrs
 
 
-class TenantCreateValidator(serializers.Serializer):
-    email = serializers.EmailField()
-    emailConfirmation = serializers.EmailField()
-    name = serializers.CharField(max_length=200)
-    cgu = serializers.BooleanField(required=True)
-    dns_choice = serializers.ChoiceField(choices=["tibillet.coop", "tibillet.re"])
-    short_description = serializers.CharField(max_length=250)
-    # Anti-spam très léger (même mécanisme que le formulaire de contact): x + y == answer
-    x = serializers.IntegerField(required=True, min_value=0)
-    y = serializers.IntegerField(required=True, min_value=0)
-    answer = serializers.IntegerField(required=True)
+class TenantCreateValidator:
+    """
+    Conteneur de la chaine de creation de tenant. La staticmethod
+    `create_tenant(wc)` est l'API publique : elle prend une
+    `WaitingConfiguration` et provisionne un tenant (Client, Domain,
+    admin User, Configuration, Fedow API, Product FREERES).
 
-    def validate_cgu(self, value):
-        if not value:
-            raise serializers.ValidationError(_('Please accept terms and conditions.'))
-        return value
+    HISTORIQUE 2026-05-16 : cette classe etait initialement un
+    `serializers.Serializer` qui validait le formulaire legacy
+    `/tenant/new/` (email + emailConfirmation + name + cgu + dns_choice +
+    captcha x+y=answer). La partie validation a ete SUPPRIMEE avec le
+    cleanup du flow legacy — la validation se fait maintenant cote
+    `onboard.serializers` (chaque step du wizard a son propre serializer).
+    On garde le nom de classe `TenantCreateValidator` pour ne pas casser
+    `WaitingConfiguration.create_tenant()` (cf. MetaBillet/models.py:314)
+    qui delegue ici.
 
-    def validate_name(self, value):
-        if WaitingConfiguration.objects.filter(slug=slugify(value)).exists():
-            raise serializers.ValidationError(f"{value}. " + _('This name is not available'))
-        if Client.objects.filter(name=value).exists():
-            raise serializers.ValidationError(f"{value}. " + _('This name is not available'))
-        if Domain.objects.filter(domain__icontains=f'{slugify(value)}').exists():
-            raise serializers.ValidationError(f"{value}. " + _('This name is not available'))
+    APPELE PAR :
+      - `WaitingConfiguration.create_tenant()` (MetaBillet/models.py)
+        → utilisee par `onboard.tasks.create_tenant_from_draft`
+        → utilisee par `onboard.admin.WaitingConfigAdmin.create_tenant`
+          (action manuelle ROOT).
 
-        return value
-
-    def validate(self, attrs):
-        # Validation anti-spam: vérifier que answer == x + y (identique à ContactValidator)
-        try:
-            x = int(attrs.get('x', 0))
-            y = int(attrs.get('y', 0))
-            answer = int(attrs.get('answer', -1))
-        except (TypeError, ValueError):
-            raise serializers.ValidationError({'answer': [_('Please answer the anti-spam question.')]})
-
-        if x + y != answer:
-            raise serializers.ValidationError({'answer': [_('Wrong answer to the anti-spam question.')]})
-
-        return attrs
-
+    / Container for the tenant creation chain. The staticmethod
+    `create_tenant(wc)` is the public API: takes a WaitingConfiguration
+    and provisions a tenant (Client, Domain, admin user, Configuration,
+    Fedow API, FREERES product). The Serializer validation part was
+    removed on 2026-05-16 alongside the legacy `/tenant/new/` cleanup —
+    validation now lives in `onboard.serializers`. Class name kept to
+    avoid breaking `WaitingConfiguration.create_tenant()` which delegates
+    here. Cf. `TECH_DOC/SESSIONS/ONBOARD/`.
+    """
 
     @staticmethod
     def create_tenant(waiting_config: WaitingConfiguration):
@@ -956,7 +1019,12 @@ class TenantCreateValidator(serializers.Serializer):
             if not tenant:
                 raise Exception("No waiting tenant. ")
 
-            slug = slugify(name)
+            # Slug du sous-domaine : on respecte le slug saisi à l'étape
+            # « Votre lieu » (éditable, cf. onboard STEP_VENUE), avec repli sur
+            # le slug du nom si absent (compat anciens brouillons / autres flux).
+            # / Sub-domain slug: honour the slug entered at the "Your venue" step
+            # (editable), falling back to the name slug if missing.
+            slug = waiting_config.slug or slugify(name)
             dns = waiting_config.dns_choice if waiting_config.dns_choice else 'tibillet.coop'
             if settings.DEBUG:
                 dns = "tibillet.localhost"
@@ -1326,3 +1394,164 @@ class PaiementHorsLigneSerializer(serializers.Serializer):
                 _("Impossible d'utiliser 'Offert' avec un montant positif.")
             )
         return donnees_validees
+
+
+# ---------------------------------------------------------------------------
+# Wizard event admin (S3 EVENT_WIZARD)
+# / Admin event wizard serializers (S3 EVENT_WIZARD)
+# ---------------------------------------------------------------------------
+
+class WizardPlaceSelectSerializer(serializers.Serializer):
+    """
+    Page 1 du choix de lieu (wizards event admin + public).
+    L'utilisateur choisit SOIT une adresse existante (via une liste
+    filtrable), SOIT la creation d'un nouveau lieu en saisissant juste
+    son nom. La carte (coordonnees GPS + adresse postale) arrive en page 2.
+    / Step 1 of the place selection (admin + public event wizards).
+    The user picks EITHER an existing address (filterable list) OR creates
+    a new place by entering just its name. The map (GPS + postal address)
+    comes on page 2.
+    """
+
+    # Cas "adresse existante" : pk d'une PostalAddress.
+    # / "Existing address" case: pk of a PostalAddress.
+    postal_address = serializers.CharField(required=False, allow_blank=True)
+
+    # Cas "nouveau lieu" : seulement le nom (la carte vient en page 2).
+    # / "New place" case: only the name (the map comes on page 2).
+    new_address_name = serializers.CharField(
+        required=False, allow_blank=True, max_length=200,
+    )
+
+    # Email du proposeur. Obligatoire SEULEMENT pour un visiteur anonyme :
+    # un connecte a deja un compte. EmailField valide le FORMAT ; l'obligation
+    # (anonyme) est verifiee dans validate() via le contexte request.
+    # / Proposer email. Required ONLY for anonymous visitors (a logged-in user
+    # already has an account). EmailField validates the FORMAT; the requirement
+    # for anonymous visitors is checked in validate() using the request context.
+    email_proposeur = serializers.EmailField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        # Email du proposeur : obligatoire pour un visiteur anonyme. On le
+        # verifie en premier pour afficher l'erreur des le premier POST.
+        # / Proposer email: required for anonymous visitors. Checked first so
+        # the error shows on the very first POST.
+        request = self.context.get("request")
+        if request is not None and not request.user.is_authenticated:
+            email_value = (attrs.get("email_proposeur") or "").strip()
+            if not email_value:
+                raise serializers.ValidationError({
+                    "email_proposeur": _(
+                        "Merci d'indiquer votre adresse e-mail pour proposer un évènement."
+                    ),
+                })
+
+        # On determine le mode selon ce qui est soumis : un pk d'adresse
+        # existante OU un nom de nouveau lieu. Le JS du toggle desactive les
+        # champs du bloc cache, donc un seul des deux arrive ici.
+        # / Mode is decided by what is submitted: an existing pk OR a new name.
+        # The toggle JS disables hidden-block inputs, so only one arrives.
+        pk_value = (attrs.get("postal_address") or "").strip()
+        nom_value = (attrs.get("new_address_name") or "").strip()
+
+        if pk_value:
+            if not PostalAddress.objects.filter(pk=pk_value).exists():
+                raise serializers.ValidationError({
+                    "postal_address": _("Adresse sélectionnée introuvable."),
+                })
+            attrs["_mode"] = "existing"
+            attrs["postal_address"] = pk_value
+            return attrs
+
+        if nom_value:
+            attrs["_mode"] = "new"
+            attrs["new_address_name"] = nom_value
+            return attrs
+
+        # Ni adresse existante ni nom de nouveau lieu : on bloque.
+        # / Neither an existing address nor a new place name: block.
+        raise serializers.ValidationError({
+            "postal_address": _(
+                "Choisissez une adresse existante ou saisissez le nom "
+                "d'un nouveau lieu."
+            ),
+        })
+
+
+class WizardPlaceMapSerializer(serializers.Serializer):
+    """
+    Page 2 du choix de lieu (creation d'un nouveau lieu).
+    Le nom du lieu est deja en session (saisi en page 1) ; ici on valide la
+    position issue de la carte (lat/lng obligatoires) et les champs adresse
+    auto-remplis par le geocodage inverse.
+    / Step 2 of the place selection (new place creation). The place name is
+    already in session (entered on page 1); here we validate the map position
+    (lat/lng required) and the address fields auto-filled by reverse geocoding.
+    """
+
+    street_address = serializers.CharField(
+        required=False, allow_blank=True, max_length=255,
+    )
+    postal_code = serializers.CharField(
+        required=False, allow_blank=True, max_length=20,
+    )
+    address_locality = serializers.CharField(
+        required=False, allow_blank=True, max_length=120,
+    )
+    address_country = serializers.CharField(
+        required=False, allow_blank=True, max_length=80, default="France",
+    )
+    # Champs prefixes par le widget carte / Fields prefixed by the map widget
+    place_latitude = serializers.FloatField(
+        required=False, min_value=-90, max_value=90, allow_null=True,
+    )
+    place_longitude = serializers.FloatField(
+        required=False, min_value=-180, max_value=180, allow_null=True,
+    )
+    place_adresse = serializers.CharField(
+        required=False, allow_blank=True, max_length=500,
+    )
+
+    def validate(self, attrs):
+        # La carte fait foi pour la position : lat/lng obligatoires.
+        # L'adresse postale (rue, CP, ville) est auto-remplie mais requise
+        # pour creer une PostalAddress exploitable.
+        # / The map is the source of truth for the position: lat/lng required.
+        # The postal address is auto-filled but required to create a usable
+        # PostalAddress.
+        manquants = []
+        for champ in ("street_address", "postal_code", "address_locality"):
+            if not (attrs.get(champ) or "").strip():
+                manquants.append(champ)
+        if attrs.get("place_latitude") is None:
+            manquants.append("place_latitude")
+        if attrs.get("place_longitude") is None:
+            manquants.append("place_longitude")
+
+        if manquants:
+            erreurs = {champ: [_("Ce champ est obligatoire.")] for champ in manquants}
+            raise serializers.ValidationError(erreurs)
+
+        return attrs
+
+
+class WizardEventSerializer(serializers.Serializer):
+    """
+    Serializer unifie du wizard event (front, CHANTIER-03). Champs communs + tags
+    + jauge_max (commun a tous : staff comme proposeurs). Pas de garde "module"
+    ici (elle vit dans EventWizard._garde_acces).
+    / Unified event wizard serializer. Common fields + tags + jauge_max (shared by
+    everyone, staff and proposers). Module guard lives in the ViewSet.
+
+    LOCALISATION : BaseBillet/validators.py
+    """
+    name = serializers.CharField(max_length=200)
+    datetime = serializers.DateTimeField()
+    long_description = serializers.CharField(
+        required=False, allow_blank=True, max_length=5000,
+    )
+    image = serializers.ImageField(required=False, allow_null=True)
+    tags = serializers.CharField(required=False, allow_blank=True)
+    jauge_max = serializers.IntegerField(
+        required=False, allow_null=True, min_value=1,
+    )

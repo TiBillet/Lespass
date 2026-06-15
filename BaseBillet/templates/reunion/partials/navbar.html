@@ -2,94 +2,124 @@
 
 <nav class="navbar navbar-expand-xl bg-body" data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
     <div class="container-lg justify-content-between">
-      <a class="navbar-brand flex-grow-1" href="/" hx-get="/" hx-target="body" hx-push-url="true">
-        {% if config.logo %}
-        {% include 'reunion/partials/picture.html' with img=config.logo alt=config.organisation style='max-width: 6rem' %}
-        {% else %}
-        {{ config.organisation }}
-        {% endif %}
-      </a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainMenu"
-        aria-controls="mainMenu" aria-expanded="false" aria-label="{% trans 'Toggle menu' %}">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="mainMenu">
-
-        <ul class="navbar-nav me-auto">
-          {% for item in main_nav %}
-          <li class="nav-item">
-            <a class="nav-link{% if url_name == item.name %} active" aria-current="page{% endif %}"
-                href="{{ item.url }}" hx-get="{{ item.url }}" hx-target="body" hx-push-url="true">
-              <i class="bi bi-{{ item.icon }}"></i>
-              {% translate item.label %}
-            </a>
-          </li>
-          {% endfor %}
-
-          <li class="nav-item">
-            <a class="nav-link"
-                href=""
-                data-bs-toggle="offcanvas"
-                data-bs-target="#contactPanel"
-                aria-controls="contactPanel">
-              <i class="bi bi-question-lg"></i>
-              {% translate 'Contact and support' %}
-            </a>
-          </li>
-        </ul>
-
-        <div class="navbar-nav d-flex mb-0">
-          <div class="nav-item dropdown">
-            <button class="nav-link border-0 bg-transparent dropdown-toggle" id="languageDropdown" data-bs-toggle="dropdown" aria-expanded="false" title="{% trans 'Switch language' %}">
-              <i class="bi bi-translate"></i>
-              <span class="d-xl-none">{% trans "Language" %}</span>
-            </button>
-            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="languageDropdown">
-              <li><button class="dropdown-item language-select-btn" data-lang="fr">{% trans "French" %}</button></li>
-              <li><button class="dropdown-item language-select-btn" data-lang="en">{% trans "English" %}</button></li>
-            </ul>
-          </div>
-          <div class="nav-item">
-            <button id="themeToggle" class="nav-link border-0 bg-transparent" title="{% trans 'Toggle theme' %}">
-              <i class="bi bi-circle-half"></i>
-              <span class="d-xl-none">{% trans "Theme" %}</span>
-            </button>
-          </div>
-          <div class="nav-item">
-            {% if user.is_authenticated == False %}
-            <button
-                class="nav-link"
-                data-bs-toggle="offcanvas"
-                data-bs-target="#loginPanel"
-                aria-controls="loginPanel">
-                {% translate 'Log in' %}
-            </button>
+        <a class="navbar-brand flex-grow-1" href="/" hx-get="/" hx-target="body" hx-push-url="true">
+            {% if config.logo %}
+                {% include 'reunion/partials/picture.html' with img=config.logo alt=config.organisation style='max-width: 6rem' %}
             {% else %}
-              <a class="nav-link" href="/my_account/" hx-get="/my_account/" hx-target="body" hx-push-url="true">
-                <i class="bi bi-person-circle"></i>
-                {% translate 'My account' %}
-              </a>
+                {{ config.organisation }}
             {% endif %}
-          </div>
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainMenu"
+                aria-controls="mainMenu" aria-expanded="false" aria-label="{% trans 'Toggle menu' %}">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="mainMenu">
+
+            <ul class="navbar-nav me-auto">
+                {% for item in main_nav %}
+                    <li class="nav-item">
+                        <a class="nav-link{% if url_name == item.name %} active" aria-current="page{% endif %}"
+                           href="{{ item.url }}" hx-get="{{ item.url }}" hx-target="body" hx-push-url="true">
+                            <i class="bi bi-{{ item.icon }}"></i>
+                            {% translate item.label %}
+                        </a>
+                    </li>
+                {% endfor %}
+
+                <li class="nav-item">
+                    <a class="nav-link"
+                       href=""
+                       data-bs-toggle="offcanvas"
+                       data-bs-target="#contactPanel"
+                       aria-controls="contactPanel">
+                        <i class="bi bi-question-lg"></i>
+                        {% translate 'Contact and support' %}
+                    </a>
+                </li>
+            </ul>
+
+            <div class="navbar-nav d-flex mb-0">
+                <div class="nav-item dropdown">
+                    <button class="nav-link border-0 bg-transparent dropdown-toggle" id="languageDropdown" data-bs-toggle="dropdown" aria-expanded="false" title="{% trans 'Switch language' %}">
+                        <i class="bi bi-translate"></i>
+                        <span class="d-xl-none">{% trans "Language" %}</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="languageDropdown">
+                        <li><button class="dropdown-item language-select-btn" data-lang="fr">{% trans "French" %}</button></li>
+                        <li><button class="dropdown-item language-select-btn" data-lang="en">{% trans "English" %}</button></li>
+                    </ul>
+                </div>
+                <div class="nav-item">
+                    <button id="themeToggle" class="nav-link border-0 bg-transparent" title="{% trans 'Toggle theme' %}">
+                        <i class="bi bi-circle-half"></i>
+                        <span class="d-xl-none">{% trans "Theme" %}</span>
+                    </button>
+                </div>
+                <div class="nav-item">
+                    <a class="nav-link position-relative" href="/panier/"
+                       hx-get="/panier/" hx-target="body" hx-push-url="true"
+                       title="{% trans 'Your cart' %}"
+                       aria-label="{% blocktrans count n=panier.count %}Cart ({{ n }} item){% plural %}Cart ({{ n }} items){% endblocktrans %}">
+                        <i class="bi bi-bag" aria-hidden="true"></i>
+                        <span class="d-xl-none">{% trans "Cart" %}</span>
+                        {# Badge compteur — rendu direct en Django (pas de OOB ici). #}
+                        {# Les MAJ via HTMX utilisent le meme id, rendu par panier_badge.html avec hx-swap-oob. #}
+                        {# / Counter badge — direct Django render (no OOB here). #}
+                        {# HTMX updates target the same id, rendered by panier_badge.html with hx-swap-oob. #}
+                        <span id="panier-badge-nav">
+                {% if panier.count > 0 %}
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary">
+                    {{ panier.count }}
+                    <span class="visually-hidden">{% trans "items" %}</span>
+                  </span>
+                {% endif %}
+              </span>
+                    </a>
+                </div>
+                <div class="nav-item">
+                    {% if user.is_authenticated == False %}
+                        <button
+                                class="nav-link"
+                                data-bs-toggle="offcanvas"
+                                data-bs-target="#loginPanel"
+                                aria-controls="loginPanel">
+                            {% translate 'Log in' %}
+                        </button>
+                    {% else %}
+                        <a class="nav-link" href="/my_account/" hx-get="/my_account/" hx-target="body" hx-push-url="true">
+                            <i class="bi bi-person-circle"></i>
+                            {% translate 'My account' %}
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
         </div>
-      </div>
     </div>
-  </nav>
+</nav>
 
-  <!-- contact panel -->
-  <div class="offcanvas-start offcanvas" tabindex="-1" id="contactPanel" aria-labelledby="contactPanelLabel">
-      <div class="offcanvas-header">
-          <h5 class="offcanvas-title" id="contactPanelLabel">{% translate 'Contact and support' %}</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% translate 'Close' %}"></button>
-      </div>
-      <div class="offcanvas-body">
-          {# TODO: load all forms through htmx? #}
-          {% include 'reunion/forms/contact.html' %}
-      </div>
-  </div>
 
-  <!-- login panel -->
-  <div class="offcanvas-start offcanvas" tabindex="-1" id="loginPanel" aria-labelledby="loginPanelLabel">
+<!-- contact panel -->
+<div class="offcanvas-start offcanvas" tabindex="-1" id="contactPanel" aria-labelledby="contactPanelLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="contactPanelLabel">{% translate 'Contact and support' %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% translate 'Close' %}"></button>
+    </div>
+    <div class="offcanvas-body">
+        {# Lien direct vers la documentation, proposé avant le formulaire de contact. #}
+        {# / Direct documentation link, offered before the contact form. #}
+        <div class="alert alert-light border d-flex align-items-start gap-2 mb-4" role="note">
+            <i class="bi bi-info-circle fs-5 mt-1" aria-hidden="true"></i>
+            <span>
+                {% blocktranslate with orga=config.organisation %}Ce formulaire écrit directement à l'équipe de « {{ orga }} ».<br>Pour une question sur TiBillet (le logiciel lui-même), la <a href="https://tibillet.github.io/documentation_v3/" target="_blank" rel="noopener">documentation</a> a peut-être déjà la réponse.{% endblocktranslate %}
+            </span>
+        </div>
+        {# TODO: load all forms through htmx? #}
+        {% include 'reunion/forms/contact.html' %}
+    </div>
+</div>
+
+<!-- login panel -->
+<div class="offcanvas-start offcanvas" tabindex="-1" id="loginPanel" aria-labelledby="loginPanelLabel">
     <div class="offcanvas-header">
         <h5 class="offcanvas-title" id="loginPanelLabel">{% translate 'Login' %}</h5>
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% translate 'Close' %}"></button>
@@ -98,4 +128,48 @@
         {# TODO: load all forms through htmx? #}
         {% include 'reunion/forms/login.html' %}
     </div>
-  </div>
+</div>
+
+{% comment %}
+  OUVERTURE AUTO DE L'OFFCANVAS DE CONNEXION
+  / Auto-open the login offcanvas
+
+  LOCALISATION : BaseBillet/templates/reunion/partials/navbar.html
+
+  Quand une vue serveur redirige un visiteur anonyme avec le parametre
+  `?login=1` (ex : tentative de proposer un evenement sans etre connecte,
+  cf. EventWizardPublic._require_login_or_redirect), on ouvre automatiquement
+  l'offcanvas de connexion #loginPanel via l'API Bootstrap deja chargee.
+  On nettoie ensuite l'URL pour qu'un rafraichissement ne le rouvre pas.
+
+  / When a server view redirects an anonymous visitor with `?login=1`, open the
+  login offcanvas automatically using the already-loaded Bootstrap API, then
+  clean the URL so a refresh won't reopen it.
+  {% endcomment %}
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        // On ne fait rien si le parametre ?login=1 est absent.
+        // / Do nothing if the ?login=1 param is absent.
+        const parametresUrl = new URLSearchParams(window.location.search);
+        if (!parametresUrl.has("login")) {
+            return;
+        }
+
+        // Ouvre l'offcanvas de connexion (meme mecanisme que les autres panneaux).
+        // / Open the login offcanvas (same mechanism as the other panels).
+        const panneauConnexion = document.getElementById("loginPanel");
+        if (panneauConnexion) {
+            bootstrap.Offcanvas.getOrCreateInstance(panneauConnexion).show();
+        }
+
+        // Retire ?login=1 de l'URL sans recharger la page.
+        // / Remove ?login=1 from the URL without reloading.
+        parametresUrl.delete("login");
+        const requete = parametresUrl.toString();
+        const nouvelleUrl =
+            window.location.pathname +
+            (requete ? "?" + requete : "") +
+            window.location.hash;
+        window.history.replaceState({}, "", nouvelleUrl);
+    });
+</script>

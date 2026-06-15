@@ -1,0 +1,108 @@
+{% extends "reunion/views/event/wizard/_base.html" %}
+{% load i18n %}
+
+{% comment %}
+LOCALISATION: BaseBillet/templates/reunion/views/event/wizard/step2_event.html
+Etape evenements du wizard UNIFIE (CHANTIER-03). Staff -> events publies ;
+public -> propositions moderees. Liste + sous-form HTMX (`_events_inner.html`) +
+form de finalisation.
+/ Unified event wizard step. Staff -> published events; public -> moderated proposals.
+{% endcomment %}
+
+{% block step_content %}
+<p class="text-muted mb-3">
+    {% if est_staff %}
+        {% translate "Ajoutez un ou plusieurs évènements à ce lieu, puis créez-les." %}
+    {% else %}
+        {% translate "Proposez un ou plusieurs évènements à ce lieu, puis envoyez votre proposition." %}
+    {% endif %}
+</p>
+
+{% if postal_address %}
+<div class="alert alert-light border d-flex align-items-center justify-content-between gap-2 mb-3"
+     role="status" data-testid="wizard-events-place">
+    <span>
+        <i class="bi bi-geo-alt-fill text-success me-1" aria-hidden="true"></i>
+        {% translate "Lieu :" %} <strong>{{ postal_address.name|default:postal_address.address_locality }}</strong>
+    </span>
+    <a href="{{ back_url }}" class="small text-decoration-none"
+       data-testid="wizard-events-change-place">
+        <i class="bi bi-pencil" aria-hidden="true"></i> {% translate "Modifier" %}
+    </a>
+</div>
+{% endif %}
+
+{# Zone HTMX : liste des brouillons + sous-form d'ajout. #}
+{# / HTMX zone: drafts list + add sub-form.              #}
+<div id="events-step-inner">
+    {% include "reunion/views/event/wizard/_events_inner.html" %}
+</div>
+
+{% if not est_staff %}
+<div class="alert alert-warning small mt-3" role="status">
+    <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+    {% translate "Vos propositions seront relues par un administrateur avant publication." %}
+</div>
+{% endif %}
+
+{# Finalisation : POST plein page -> cree tous les events/propositions. #}
+{# / Finalize: full-page POST -> creates all events/proposals.          #}
+<form method="post" action="{{ finalize_url }}" class="mt-2"
+      id="wizard-finalize-form" data-testid="wizard-events-finalize-form">
+    {% csrf_token %}
+    <div class="d-flex justify-content-between pt-2">
+        <a href="{{ back_url }}" class="btn btn-link" data-testid="wizard-events-prev">
+            <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> {% translate "Précédent" %}
+        </a>
+        <button type="submit" class="btn btn-primary btn-lg"
+                data-testid="wizard-events-finalize">
+            {{ finalize_label }}
+            <i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>
+        </button>
+    </div>
+</form>
+
+{# Flux #4 : si un évènement est en cours de saisie (sous-form rempli mais pas #}
+{# encore ajouté), on avertit avant d'envoyer pour ne rien perdre. #}
+{# / Flow #4: warn before finalizing if an event is being typed (not yet added). #}
+<script>
+(function () {
+    var finalizeForm = document.getElementById('wizard-finalize-form');
+    if (!finalizeForm || typeof Swal === 'undefined') return;
+
+    finalizeForm.addEventListener('submit', function (ev) {
+        var nameInput = document.getElementById('wizard-event-name');
+        var dateInput = document.getElementById('wizard-event-datetime');
+        var saisieEnCours =
+            (nameInput && nameInput.value.trim() !== '') ||
+            (dateInput && dateInput.value.trim() !== '');
+        if (!saisieEnCours) return;  // rien en cours -> envoi normal / nothing pending -> submit
+
+        ev.preventDefault();
+        var rowForm = document.querySelector('[data-testid="wizard-event-row-form"]');
+        Swal.fire({
+            title: "{% translate 'Évènement non ajouté' %}",
+            text: "{% translate 'Vous avez commencé à saisir un évènement sans l’ajouter à la liste. Que souhaitez-vous faire ?' %}",
+            icon: 'warning',
+            showDenyButton: true,
+            showCancelButton: true,
+            confirmButtonText: "{% translate 'Ajouter d’abord' %}",
+            denyButtonText: "{% translate 'Envoyer sans' %}",
+            cancelButtonText: "{% translate 'Annuler' %}",
+        }).then(function (result) {
+            if (result.isConfirmed && rowForm) {
+                // Ajoute le brouillon en cours (HTMX) ; l'utilisateur recliquera "Envoyer".
+                // / Add the pending draft (HTMX); user clicks "Send" again afterwards.
+                rowForm.requestSubmit();
+            } else if (result.isDenied) {
+                // Envoie sans l'évènement en cours (il sera perdu, choix explicite).
+                // / Send without the pending event (explicit choice).
+                finalizeForm.submit();
+            }
+            // Annuler : on ne fait rien, la saisie est conservée.
+            // / Cancel: do nothing, the input is kept.
+        });
+    });
+})();
+</script>
+{% endblock %}

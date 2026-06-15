@@ -10,6 +10,7 @@ from cryptography.fernet import Fernet
 from django.contrib.auth import get_user_model
 
 from django.db import connection
+from django.db.models import Q
 from django.http import Http404, HttpResponse
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -42,6 +43,37 @@ from fedow_connect.utils import rsa_decrypt_string, rsa_encrypt_string, get_publ
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Depreciation de l'API v1 (ApiBillet) -> orienter les clients vers /api/v2/.
+# / API v1 (ApiBillet) deprecation -> point consumers to /api/v2/.
+# En-tetes HTTP non bloquants : le client continue de fonctionner.
+# / Non-breaking HTTP headers: the client keeps working.
+# ---------------------------------------------------------------------------
+API_V1_DEPRECATION_HEADERS = {
+    "Deprecation": "true",                                    # draft IETF Deprecation header
+    "Link": '</api/v2/>; rel="successor-version"',            # RFC 8288 : version qui remplace
+    "Warning": '299 - "TiBillet API v1 is deprecated, migrate to /api/v2/"',
+}
+
+
+class DeprecatedV1Mixin:
+    """
+    A placer EN PREMIER dans les bases d'une vue v1 (ViewSet ou APIView).
+    Ajoute les en-tetes de depreciation sur chaque reponse, sans rien casser.
+    / Put FIRST in a v1 view's bases. Adds deprecation headers to every response.
+
+    Marche pour ViewSet ET APIView : les deux exposent `finalize_response`
+    (ViewSet l'herite d'APIView).
+    / Works for both ViewSet and APIView (ViewSet inherits it from APIView).
+    """
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        for header_name, header_value in API_V1_DEPRECATION_HEADERS.items():
+            response[header_name] = header_value
+        return response
 
 
 # class DecimalEncoder(json.JSONEncoder):
@@ -102,7 +134,7 @@ def get_permission_Api_ALL_Admin(self: ViewSet):
 
 ### END GET PERMISSION ###
 
-class TarifBilletViewSet(viewsets.ViewSet):
+class TarifBilletViewSet(DeprecatedV1Mixin, viewsets.ViewSet):
 
     def list(self, request):
         queryset = Price.objects.all().order_by('prix')
@@ -120,7 +152,7 @@ class TarifBilletViewSet(viewsets.ViewSet):
         return get_permission_Api_LR_Any_CU_Admin(self)
 
 
-class ProductViewSet(viewsets.ViewSet):
+class ProductViewSet(DeprecatedV1Mixin, viewsets.ViewSet):
 
     def retrieve(self, request, pk):
         product = get_object_or_404(Product, pk=pk)
@@ -194,7 +226,7 @@ class TenantViewSet(viewsets.ViewSet):
         # permission_classes = [permissions.AllowAny]
 
 
-class HereViewSet(viewsets.ViewSet):
+class HereViewSet(DeprecatedV1Mixin, viewsets.ViewSet):
 
     def list(self, request):
         config = Configuration.get_solo()
@@ -219,7 +251,7 @@ class HereViewSet(viewsets.ViewSet):
         return get_permission_Api_LR_Any_CU_Admin(self)
 
 
-class EventsSlugViewSet(viewsets.ViewSet):
+class EventsSlugViewSet(DeprecatedV1Mixin, viewsets.ViewSet):
     def retrieve(self, request, pk=None):
         queryset = Event.objects.filter(published=True).order_by('-datetime')
         # import ipdb; ipdb.set_trace()
@@ -237,14 +269,41 @@ class EventsSlugViewSet(viewsets.ViewSet):
         return get_permission_Api_LR_Any_CU_Admin(self)
 
 
-class EventsViewSet(viewsets.ViewSet):
+class EventsViewSet(DeprecatedV1Mixin, viewsets.ViewSet):
     permission_classes = [permissions.AllowAny]
 
     def list(self, request):
+        only_futur = request.GET.get("only_futur", None)
+        filter = request.GET.get("filter", None)
+
         events = Event.objects.filter(
             published=True,
             parent__isnull=True,
-        ).order_by('-datetime')
+        ).order_by('datetime')
+
+        if only_futur:
+            timezone = Configuration.get_solo().get_tzinfo()
+
+            # Get the timezone
+            now = datetime.now()
+            # Convert it to the tenant configured timezone
+            now = now.astimezone(timezone)
+            # Remove one day to it to also show recent events
+            now = now.replace(day=now.day-1)
+
+            events = events.filter(
+                Q(datetime__gte=now) |
+                Q(end_datetime__gte=now)
+            )
+
+        if filter:
+            # Filter by name and descriptions
+            events = events.filter(
+                Q(name__icontains=filter) |
+                Q(short_description__icontains=filter) |
+                Q(long_description__icontains=filter)
+            )
+
         serializer = EventSerializer(events, many=True)
         return Response(serializer.data)
 
@@ -424,7 +483,7 @@ class ChargeCashless(viewsets.ViewSet):
 """
 
 
-class ApiReservationViewset(viewsets.ViewSet):
+class ApiReservationViewset(DeprecatedV1Mixin, viewsets.ViewSet):
     def list(self, request):
         queryset = Reservation.objects.all().order_by('-datetime')
         serializer = ApiReservationSerializer(queryset, many=True, context={'request': request})
@@ -442,7 +501,11 @@ class ApiReservationViewset(viewsets.ViewSet):
         if validator.is_valid():
             return Response(validator.data, status=status.HTTP_201_CREATED)
 
-        logger.error(f"ReservationViewset CREATE ERROR : {validator.errors}")
+        # Validation 400 cote client (payload incomplet) : ce n'est PAS une erreur
+        # applicative. En warning -> pas d'event Sentry (event_level=ERROR par defaut),
+        # seulement un breadcrumb. Le 400 + le corps d'erreur informent deja l'appelant.
+        # / Client-side 400 validation, not an app error. warning -> no Sentry event.
+        logger.warning(f"ReservationViewset CREATE : validation refusee (400) : {validator.errors}")
         return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
@@ -450,7 +513,7 @@ class ApiReservationViewset(viewsets.ViewSet):
         return get_permission_Api_LR_Admin_CU_Any(self)
 
 
-class OptionTicket(viewsets.ViewSet):
+class OptionTicket(DeprecatedV1Mixin, viewsets.ViewSet):
     def list(self, request):
         queryset = OptionGenerale.objects.all()
         serializer = OptionsSerializer(queryset, many=True, context={'request': request})
@@ -492,7 +555,7 @@ class CancelSubscriptionInput(serializers.Serializer):
     uuid_membership = serializers.UUIDField(required=True)
 
 
-class CancelSubscription(APIView):
+class CancelSubscription(DeprecatedV1Mixin, APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
@@ -595,7 +658,7 @@ class CancelSubscription(APIView):
 
 
 @permission_classes([TenantAdminApiPermission])
-class Gauge(APIView):
+class Gauge(DeprecatedV1Mixin, APIView):
 
     # API pour avoir l'état de la jauge (GAUGE in inglishe) et des billets scannés.
     def get(self, request):
@@ -616,7 +679,7 @@ class Gauge(APIView):
         return Response(data, status=status.HTTP_200_OK)
 
 
-class TicketViewset(viewsets.ViewSet):
+class TicketViewset(DeprecatedV1Mixin, viewsets.ViewSet):
     # Vérifie la clé API et que l'user de la clé est admin du tenant
     permission_classes = [TenantAdminApiPermission]
 
@@ -639,7 +702,7 @@ class TicketViewset(viewsets.ViewSet):
         return Response(serializer.data)
 
 
-class TicketPdf(APIView):
+class TicketPdf(DeprecatedV1Mixin, APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, pk_uuid):
@@ -985,7 +1048,7 @@ class Onboard_laboutik(APIView):
 
 
 # api check wallet
-class Wallet(viewsets.ViewSet):
+class Wallet(DeprecatedV1Mixin, viewsets.ViewSet):
 
     @action(detail=False, methods=['POST'], permission_classes=[TenantAdminApiPermission])
     def get_stripe_checkout_with_email(self, request):

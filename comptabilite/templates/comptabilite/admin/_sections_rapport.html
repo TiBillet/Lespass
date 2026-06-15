@@ -1,0 +1,167 @@
+{% load i18n unfold %}
+
+{# Partial affichant les 8 sections du rapport de cloture comptable. #}
+{# / Partial rendering the 8 sections of the accounting closure report. #}
+{# LOCALISATION : comptabilite/templates/comptabilite/admin/_sections_rapport.html #}
+{# Inclus depuis change_form_before.html et views/rapport_temps_reel.html. #}
+
+<div class="flex flex-col gap-4">
+
+    {# --- 1. Totaux par moyen de paiement / Totals by payment method --- #}
+    <section data-testid="comptabilite-section-totaux-par-moyen">
+        {% component "unfold/components/card.html" with title=_("Totaux par moyen de paiement") %}
+            <table class="w-full">
+                <thead>
+                    <tr class="text-left text-font-important-light dark:text-font-important-dark border-b border-base-200 dark:border-base-800">
+                        <th class="py-2 px-3 font-semibold">{% translate "Moyen" %}</th>
+                        <th class="py-2 px-3 font-semibold text-right">{% translate "Total" %}</th>
+                        <th class="py-2 px-3 font-semibold text-right">{% translate "Nombre" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {# Affichage agrege par 4 categories (especes, CB, en ligne, cashless) + Autres si non-vide. #}
+                    {# Les 12 PaymentMethod bruts restent disponibles dans rapport_json pour les exports. #}
+                    {# / Aggregated display by 4 categories + Other if non-empty. The 12 raw PaymentMethod #}
+                    {# codes stay accessible in rapport_json for the exports. #}
+                    {% for categorie in rapport.totaux_par_moyen.categories %}
+                        <tr class="border-b border-base-100 dark:border-base-800">
+                            <td class="py-2 px-3">{{ categorie.label }}</td>
+                            <td class="py-2 px-3 text-right font-mono">{{ categorie.total_euros }} €</td>
+                            <td class="py-2 px-3 text-right">{{ categorie.nb }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td class="py-2 px-3 text-base-500 italic" colspan="3">
+                                {% translate "Aucun paiement sur cette période." %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    <tr class="font-semibold bg-base-50 dark:bg-base-900">
+                        <td class="py-2 px-3">{% translate "Total" %}</td>
+                        <td class="py-2 px-3 text-right font-mono">{{ rapport.totaux_par_moyen.total_euros|default:"0.00" }} €</td>
+                        <td class="py-2 px-3 text-right">—</td>
+                    </tr>
+                </tbody>
+            </table>
+        {% endcomponent %}
+    </section>
+
+    {# --- 2. TVA par taux / VAT breakdown --- #}
+    <section data-testid="comptabilite-section-tva">
+        {% component "unfold/components/card.html" with title=_("TVA par taux") %}
+            {% if rapport.tva %}
+                <table class="w-full">
+                    <thead>
+                        <tr class="text-left text-font-important-light dark:text-font-important-dark border-b border-base-200 dark:border-base-800">
+                            <th class="py-2 px-3 font-semibold">{% translate "Taux" %}</th>
+                            <th class="py-2 px-3 font-semibold text-right">{% translate "HT" %}</th>
+                            <th class="py-2 px-3 font-semibold text-right">{% translate "TVA" %}</th>
+                            <th class="py-2 px-3 font-semibold text-right">{% translate "TTC" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for taux, item in rapport.tva.items %}
+                            <tr class="border-b border-base-100 dark:border-base-800">
+                                <td class="py-2 px-3">{{ item.taux }}%</td>
+                                <td class="py-2 px-3 text-right font-mono">{{ item.total_ht_euros }} €</td>
+                                <td class="py-2 px-3 text-right font-mono">{{ item.total_tva_euros }} €</td>
+                                <td class="py-2 px-3 text-right font-mono">{{ item.total_ttc_euros }} €</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p class="text-base-500 italic">{% translate "Aucune TVA collectée sur cette période." %}</p>
+            {% endif %}
+        {% endcomponent %}
+    </section>
+
+    {# --- 3. Detail des ventes par categorie / Sales detail by category --- #}
+    <section data-testid="comptabilite-section-detail-ventes">
+        {% component "unfold/components/card.html" with title=_("Détail des ventes par catégorie") %}
+            {% if rapport.detail_ventes %}
+                {% for cat_code, cat in rapport.detail_ventes.items %}
+                    <div class="mb-4">
+                        <h4 class="font-semibold py-2 text-font-important-light dark:text-font-important-dark">
+                            {{ cat.nom_categorie }} <span class="text-base-500">({{ cat.articles|length }})</span>
+                        </h4>
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="text-left text-base-500 border-b border-base-200 dark:border-base-800">
+                                    <th class="py-1 px-2 font-medium">{% translate "Produit" %}</th>
+                                    <th class="py-1 px-2 font-medium text-right">{% translate "Payants" %}</th>
+                                    <th class="py-1 px-2 font-medium text-right">{% translate "Offerts" %}</th>
+                                    <th class="py-1 px-2 font-medium text-right">{% translate "Qté totale" %}</th>
+                                    <th class="py-1 px-2 font-medium text-right">{% translate "Taux TVA" %}</th>
+                                    <th class="py-1 px-2 font-medium text-right">{% translate "HT" %}</th>
+                                    <th class="py-1 px-2 font-medium text-right">{% translate "TVA" %}</th>
+                                    <th class="py-1 px-2 font-medium text-right">{% translate "TTC" %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for article in cat.articles %}
+                                    <tr class="border-b border-base-100 dark:border-base-800">
+                                        <td class="py-1 px-2">{{ article.nom_produit }}</td>
+                                        <td class="py-1 px-2 text-right">{{ article.qty_payants }}</td>
+                                        <td class="py-1 px-2 text-right">{{ article.qty_offerts }}</td>
+                                        <td class="py-1 px-2 text-right">{{ article.qty_total }}</td>
+                                        <td class="py-1 px-2 text-right">{{ article.taux_tva|default:0 }}%</td>
+                                        <td class="py-1 px-2 text-right font-mono">{{ article.total_ht_euros|default:"0.00" }} €</td>
+                                        <td class="py-1 px-2 text-right font-mono">{{ article.total_tva_euros|default:"0.00" }} €</td>
+                                        <td class="py-1 px-2 text-right font-mono">{{ article.total_ttc_euros|default:"0.00" }} €</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p class="text-base-500 italic">{% translate "Aucune vente sur cette période." %}</p>
+            {% endif %}
+        {% endcomponent %}
+    </section>
+
+    {# --- 4. Remboursements / Refunds --- #}
+    <section data-testid="comptabilite-section-remboursements">
+        {% component "unfold/components/card.html" with title=_("Remboursements et avoirs") %}
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-left border-b border-base-200 dark:border-base-800">
+                        <th class="py-2 px-3 font-semibold">{% translate "Type" %}</th>
+                        <th class="py-2 px-3 font-semibold text-right">{% translate "Total" %}</th>
+                        <th class="py-2 px-3 font-semibold text-right">{% translate "Nombre" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="border-b border-base-100 dark:border-base-800">
+                        <td class="py-2 px-3">{% translate "Avoirs" %}</td>
+                        <td class="py-2 px-3 text-right font-mono">{{ rapport.remboursements.credit_notes.total_euros|default:"0.00" }} €</td>
+                        <td class="py-2 px-3 text-right">{{ rapport.remboursements.credit_notes.nb|default:0 }}</td>
+                    </tr>
+                    <tr>
+                        <td class="py-2 px-3">{% translate "Remboursements" %}</td>
+                        <td class="py-2 px-3 text-right font-mono">{{ rapport.remboursements.refunded.total_euros|default:"0.00" }} €</td>
+                        <td class="py-2 px-3 text-right">{{ rapport.remboursements.refunded.nb|default:0 }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        {% endcomponent %}
+    </section>
+
+    {# --- 5. Infos legales / Legal info --- #}
+    <section data-testid="comptabilite-section-infos-legales">
+        {% component "unfold/components/card.html" with title=_("Informations légales") %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                <div><strong>{% translate "Organisation" %} :</strong> {{ rapport.infos_legales.organisation|default:"—" }}</div>
+                <div><strong>{% translate "Adresse" %} :</strong> {{ rapport.infos_legales.adresse|default:"—" }}</div>
+                <div><strong>{% translate "Code postal" %} :</strong> {{ rapport.infos_legales.code_postal|default:"—" }}</div>
+                <div><strong>{% translate "Ville" %} :</strong> {{ rapport.infos_legales.ville|default:"—" }}</div>
+                <div><strong>SIREN :</strong> {{ rapport.infos_legales.siren|default:"—" }}</div>
+                <div><strong>{% translate "Numéro de TVA" %} :</strong> {{ rapport.infos_legales.tva_number|default:"—" }}</div>
+                <div><strong>Email :</strong> {{ rapport.infos_legales.email|default:"—" }}</div>
+                <div><strong>{% translate "Téléphone" %} :</strong> {{ rapport.infos_legales.phone|default:"—" }}</div>
+            </div>
+        {% endcomponent %}
+    </section>
+
+</div>

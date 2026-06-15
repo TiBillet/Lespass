@@ -1,0 +1,216 @@
+{% extends "onboard/base_wizard.html" %}
+{% load i18n %}
+
+{% comment %}
+  LOCALISATION: onboard/templates/onboard/steps/01_identity.html
+
+  Step 1 du wizard d'onboarding : identite (nom, prenom, email, organisation,
+  DNS, CGU). Soumet a `onboard-identity` (POST). En cas d'erreur (422), la
+  vue rerend ce meme template avec :
+    - errors : dict {field: [msg, ...]} renvoye par le serializer ;
+    - initial : dict des valeurs saisies (pour les re-injecter dans les inputs) ;
+    - invitation : `OnboardInvitation` ou None (bandeau d'invitation si non-null).
+
+  / Step 1 of the onboarding wizard: identity (first/last name, email,
+  organisation, DNS, T&C). Submits to `onboard-identity` (POST). On error
+  (422), the view re-renders this same template with errors, initial values
+  (to refill inputs), and the optional invitation banner.
+
+  Garde-fou test : le data-testid="onboard-identity-form" sur le <form>
+  est presence-checke par `test_identity_get_renders_form` (le test
+  recherche `b"onboard-identity-form"` dans le body).
+  / Test guard: the form's `data-testid="onboard-identity-form"` is
+  asserted by `test_identity_get_renders_form`.
+{% endcomment %}
+
+{% block page_title %}{% translate "Créer votre espace TiBillet" %}{% endblock %}
+
+{% block step_content %}
+{# Le titre principal "Creer votre espace TiBillet" a ete retire du content #}
+{# (feedback mainteneur 2026-05-15) : il etait deja porte par l'eyebrow du #}
+{# panneau gauche ("CRÉER MON ESPACE") — duplication visuelle inutile.    #}
+{# / Main title removed from content (maintainer feedback): already shown  #}
+{# by the left panel eyebrow ("CRÉER MON ESPACE").                        #}
+<header class="mb-4">
+    <p class="onboard-step-counter mb-1">{% translate "Étape 1 / 7" %}</p>
+    <p class="text-muted mb-0">
+        {% translate "Renseignez votre identité. Un code de vérification vous sera envoyé par email." %}
+    </p>
+</header>
+
+{% if invitation %}
+    {# Bandeau d'invitation : informe le user qu'il est invite par un autre tenant. #}
+    {# / Invitation banner: tells the user they're sponsored by another tenant. #}
+    <div class="alert alert-info d-flex align-items-start gap-2"
+         role="status"
+         data-testid="onboard-invitation-banner">
+        <i class="bi bi-envelope-heart" aria-hidden="true"></i>
+        <div>
+            {% blocktranslate trimmed %}
+                Vous avez été invité·e à rejoindre TiBillet.
+            {% endblocktranslate %}
+        </div>
+    </div>
+{% endif %}
+
+{% if errors %}
+    {# Recapitulatif global d'erreurs (a11y : role="alert", focus naturel). #}
+    {# / Global error recap (a11y: role="alert"). #}
+    <div class="alert alert-danger"
+         role="alert"
+         data-testid="onboard-identity-errors">
+        <strong>{% translate "Merci de corriger les erreurs ci-dessous." %}</strong>
+        <ul class="mb-0 mt-1">
+            {% for field, msgs in errors.items %}
+                <li>
+                    <strong>{{ field }}</strong> :
+                    {% for msg in msgs %}{{ msg }}{% if not forloop.last %} / {% endif %}{% endfor %}
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+{% endif %}
+
+<form method="post"
+      action="{% url 'onboard-identity' %}{% if invitation %}?invite={{ invitation.code }}{% endif %}"
+      novalidate
+      data-testid="onboard-identity-form"
+      class="vstack gap-3">
+    {% csrf_token %}
+
+    {# Prenom + nom sur la meme ligne en desktop, empiles en mobile. #}
+    {# / First + last name on one row on desktop, stacked on mobile. #}
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label for="onboard-id-first-name" class="form-label">
+                {% translate "Prénom" %}
+            </label>
+            <input id="onboard-id-first-name"
+                   type="text"
+                   name="first_name"
+                   required
+                   maxlength="60"
+                   autocomplete="given-name"
+                   class="form-control{% if errors.first_name %} is-invalid{% endif %}"
+                   value="{{ initial.first_name|default:'' }}"
+                   data-testid="onboard-identity-first-name">
+            {% if errors.first_name %}
+                <div class="invalid-feedback">
+                    {% for msg in errors.first_name %}{{ msg }}{% endfor %}
+                </div>
+            {% endif %}
+        </div>
+        <div class="col-md-6">
+            <label for="onboard-id-last-name" class="form-label">
+                {% translate "Nom" %}
+            </label>
+            <input id="onboard-id-last-name"
+                   type="text"
+                   name="last_name"
+                   required
+                   maxlength="60"
+                   autocomplete="family-name"
+                   class="form-control{% if errors.last_name %} is-invalid{% endif %}"
+                   value="{{ initial.last_name|default:'' }}"
+                   data-testid="onboard-identity-last-name">
+            {% if errors.last_name %}
+                <div class="invalid-feedback">
+                    {% for msg in errors.last_name %}{{ msg }}{% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# Email + confirmation : deux champs distincts pour eviter une faute. #}
+    {# / Email + confirm: two distinct fields to prevent typos. #}
+    <div>
+        <label for="onboard-id-email" class="form-label">
+            {% translate "Adresse email" %}
+        </label>
+        <input id="onboard-id-email"
+               type="email"
+               name="email"
+               required
+               autocomplete="email"
+               class="form-control{% if errors.email %} is-invalid{% endif %}"
+               value="{{ initial.email|default:'' }}"
+               data-testid="onboard-identity-email">
+        {% if errors.email %}
+            <div class="invalid-feedback">
+                {% for msg in errors.email %}{{ msg }}{% endfor %}
+            </div>
+        {% endif %}
+        <div class="form-text">
+            {% translate "Un code de vérification y sera envoyé." %}
+        </div>
+    </div>
+
+    <div>
+        <label for="onboard-id-email-confirm" class="form-label">
+            {% translate "Confirmation de l'email" %}
+        </label>
+        <input id="onboard-id-email-confirm"
+               type="email"
+               name="email_confirm"
+               required
+               autocomplete="email"
+               class="form-control{% if errors.email_confirm %} is-invalid{% endif %}"
+               value="{{ initial.email|default:'' }}"
+               data-testid="onboard-identity-email-confirm">
+        {% if errors.email_confirm %}
+            <div class="invalid-feedback">
+                {% for msg in errors.email_confirm %}{{ msg }}{% endfor %}
+            </div>
+        {% endif %}
+    </div>
+
+    {# Le nom du lieu et le choix du domaine ont été déplacés à l'étape       #}
+    {# « Votre lieu » (STEP_VENUE), après la vérification email : ils y sont  #}
+    {# pré-remplis depuis le recensement Tiers-Lieux.                         #}
+    {# / Venue name and domain moved to the "Your venue" step (after email    #}
+    {# verification), where they are pre-filled from the Tiers-Lieux directory. #}
+
+    {# CGU en switch Bootstrap 5 (feedback mainteneur 2026-05-15) :        #}
+    {# `form-switch` rend la checkbox sous forme de toggle slider, plus    #}
+    {# moderne et plus parlant pour un "j'accepte". Lien target=_blank +  #}
+    {# rel="noopener" vers la doc CGU/CGV (numerique.gouv pattern).        #}
+    {# / CGU as a Bootstrap 5 form-switch slider — more modern than a     #}
+    {# bare checkbox for an "I accept" intent. Link opens the T&C page in #}
+    {# a new tab (target=_blank + rel=noopener).                          #}
+    <div class="form-check form-switch onboard-cgu-switch">
+        <input id="onboard-id-cgu"
+               type="checkbox"
+               name="cgu"
+               value="on"
+               required
+               role="switch"
+               class="form-check-input{% if errors.cgu %} is-invalid{% endif %}"
+               data-testid="onboard-identity-cgu">
+        <label for="onboard-id-cgu" class="form-check-label">
+            {% blocktranslate trimmed %}
+                J'accepte les
+            {% endblocktranslate %}
+            <a href="https://tibillet.github.io/documentation_v3/les-bases-et-valeurs-tibillet/aspects-legaux-et-reglementaires/cgu-cgv/"
+               target="_blank"
+               rel="noopener"
+               data-testid="onboard-identity-cgu-link">
+                {% translate "conditions générales d'utilisation" %}
+                <i class="bi bi-box-arrow-up-right ms-1" aria-hidden="true"></i>
+            </a>.
+        </label>
+        {% if errors.cgu %}
+            <div class="invalid-feedback d-block">
+                {% for msg in errors.cgu %}{{ msg }}{% endfor %}
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="d-flex justify-content-end pt-2">
+        <button type="submit"
+                class="btn btn-primary btn-lg"
+                data-testid="onboard-identity-next">
+            {% translate "Continuer" %} <i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>
+        </button>
+    </div>
+</form>
+{% endblock step_content %}

@@ -1,0 +1,49 @@
+{% load i18n %}
+{% comment %}
+LOCALISATION: onboard/templates/onboard/partials/status_timeout.html
+
+Partial rendu par `launch_status` quand le polling depasse 5 minutes
+(Mod 5 — feedback mainteneur 2026-05-15). Affiche un message clair
+"la creation prend plus longtemps que prevu" + un bouton "Réessayer"
+qui POSTe sur `onboard-launch-retry` (reset error_message + reset
+session timer + re-enqueue la task).
+
+IMPORTANT : ce partial N'INCLUT PAS `hx-trigger="every 2s"`. C'est
+volontaire : on stoppe le polling et on attend une action utilisateur.
+
+/ Partial rendered by `launch_status` when polling exceeds 5 minutes.
+Clear message + "Retry" button (POST onboard-launch-retry resets
+error/session timer + re-enqueues). No `hx-trigger`: polling stops.
+{% endcomment %}
+<div id="status" class="alert alert-warning" role="alert"
+     data-testid="onboard-launch-status-timeout">
+    <div class="d-flex align-items-start gap-3">
+        <i class="bi bi-hourglass-split fs-3" aria-hidden="true"></i>
+        <div class="flex-grow-1">
+            <h2 class="h5 mb-1">
+                {% translate "La création prend plus de temps que prévu" %}
+            </h2>
+            <p class="mb-2 small">
+                {% blocktranslate trimmed %}
+                    Pas de panique : on a peut-être rencontré un imprévu côté
+                    serveur. Tu peux relancer la création maintenant. Si le
+                    problème persiste, contacte-nous à
+                    contact@tibillet.re.
+                {% endblocktranslate %}
+            </p>
+            <form method="post" action="{% url 'onboard-launch-retry' %}">
+                {% csrf_token %}
+                <button type="submit"
+                        class="btn btn-warning"
+                        hx-post="{% url 'onboard-launch-retry' %}"
+                        hx-target="#status"
+                        hx-swap="outerHTML"
+                        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                        data-testid="onboard-launch-retry">
+                    <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>
+                    {% translate "Réessayer" %}
+                </button>
+            </form>
+        </div>
+    </div>
+</div>

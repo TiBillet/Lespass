@@ -258,17 +258,24 @@ class PostalAddress(models.Model):
         help_text=_("Full name or ISO code.")
     )
 
+    # max_digits=9, decimal_places=6 = precision ~11cm, range +/-999.999999
+    # / max_digits=9, decimal_places=6 = ~11cm precision, +/-999.999999 range
+    # Aligne sur MetaBillet.WaitingConfiguration.latitude/longitude.
+    # Anciennement 18/16 (bug : 2 chiffres avant la virgule -> overflow pour
+    # toute longitude hors [-99, +99], i.e. Asie/Pacifique/Ameriques).
+    # / Was previously 18/16 (only 2 digits before decimal -> overflow for any
+    # longitude outside [-99, +99], i.e. most of Asia/Pacific/Americas).
     latitude = models.DecimalField(
-        max_digits=18,
-        decimal_places=16,
+        max_digits=9,
+        decimal_places=6,
         blank=True,
         null=True,
         verbose_name=_("Latitude"),
         help_text=_("GPS coordinate: latitude.")
     )
     longitude = models.DecimalField(
-        max_digits=18,
-        decimal_places=16,
+        max_digits=9,
+        decimal_places=6,
         blank=True,
         null=True,
         verbose_name=_("Longitude"),
@@ -554,6 +561,45 @@ class Configuration(SingletonModel):
         verbose_name=_("Federation module"),
     )
 
+    # NOTE : tout l'agenda participatif (activation + propositions anonymes +
+    # tag automatique) vit desormais sur FederationConfiguration. Il s'active
+    # dans l'admin "Options de federation", plus dans le dashboard des modules.
+    # / NOTE: the whole participatory agenda (activation + anonymous proposals +
+    # auto tag) now lives on FederationConfiguration. Enabled in the "Federation
+    # options" admin, no longer in the modules dashboard.
+
+    ######### COMPTABILITE — RAPPORTS PERIODIQUES #########
+    # / Periodic reports — accounting app
+
+    PERIODICITE_NONE = "NONE"
+    PERIODICITE_JOURNALIER = "J"
+    PERIODICITE_HEBDOMADAIRE = "H"
+    PERIODICITE_MENSUEL = "M"
+    PERIODICITE_ANNUEL = "A"
+    PERIODICITE_CHOICES = [
+        (PERIODICITE_NONE, _("No email")),
+        (PERIODICITE_JOURNALIER, _("Daily")),
+        (PERIODICITE_HEBDOMADAIRE, _("Weekly")),
+        (PERIODICITE_MENSUEL, _("Monthly")),
+        (PERIODICITE_ANNUEL, _("Yearly")),
+    ]
+
+    rapport_emails = models.TextField(
+        blank=True,
+        default="",
+        verbose_name=_("Recipient emails for closure reports"),
+        help_text=_(
+            "Comma-separated emails. Leave empty to disable automatic sending."
+        ),
+    )
+
+    rapport_periodicite = models.CharField(
+        max_length=4,
+        choices=PERIODICITE_CHOICES,
+        default=PERIODICITE_NONE,
+        verbose_name=_("Closure report sending frequency"),
+    )
+
     # FROM V2 : UNUSED
     module_monnaie_locale = models.BooleanField(
         default=False,
@@ -753,7 +799,9 @@ class Configuration(SingletonModel):
                 tenant = connection.tenant
                 tenant_url = tenant.get_primary_domain().domain
                 msg = _('Link your stripe account to accept payment')
-                return format_html(f"<a href='https://{tenant_url}/tenant/onboard_stripe_from_config'>{msg}</a>")
+                return format_html(f"<a href='https://{tenant_url}/stripe/onboard/from_config/' class='font-medium inline-flex group items-center gap-1 relative rounded-default justify-center whitespace-nowrap cursor-pointer px-3 py-2 border border-base-200 bg-primary-600 border-transparent text-white hover:bg-primary-600/80 w-full lg:w-auto'>"
+                                   f"{msg}<span class='material-symbols-outlined text-icon text-sm align-center text-white'>link</span>"
+                                   f"</a>")
             return _("Stripe connected")
         except Exception as e:
             logger.error(_("Stripe error, check admin"))
@@ -955,7 +1003,7 @@ class Product(models.Model):
 
     NONE, BILLET, PACK, RECHARGE_CASHLESS = 'N', 'B', 'P', 'R'
     RECHARGE_FEDERATED, VETEMENT, MERCH, ADHESION, BADGE = 'S', 'T', 'M', 'A', 'G'
-    DON, FREERES, NEED_VALIDATION = 'D', 'F', 'V'
+    DON, FREERES, NEED_VALIDATION = 'D', 'F', 'V' # DON / Reservation gratuite / Besoin de validation
     QRCODE_MA = 'Q'
 
     # FROM V2 : TODO
@@ -1176,6 +1224,122 @@ class PromotionalCode(models.Model):
         verbose_name_plural = _('Promotional codes')
         ordering = ('-date_created',)
 
+class Commande(models.Model):
+    """
+    Commande unifiée : regroupe plusieurs reservations et adhésions dans un achat
+    unique (panier multi-events). Sert de pivot sémantique, découplé du moyen de
+    paiement (Stripe aujourd'hui, autres moyens plus tard).
+
+    / Unified order: groups several reservations and memberships into a single
+    purchase (multi-event cart). Semantic pivot, decoupled from the payment mean
+    (Stripe today, other means later).
+
+    Liens (FK inverses) :
+      - commande.reservations           → Reservation.commande (FK nullable)
+      - commande.memberships_commande   → Membership.commande (FK nullable)
+      - commande.paiement_stripe        → Paiement_stripe (OneToOne nullable, reverse=commande_obj)
+    """
+
+    uuid = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        unique=True,
+        db_index=True,
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="commandes",
+        verbose_name=_("Buyer"),
+        help_text=_(
+            "Utilisateur acheteur (résolu par email au checkout). "
+            "/ Buyer user (resolved by email at checkout)."
+        ),
+    )
+
+    # Informations acheteur, capturées au moment du checkout
+    # / Buyer information, captured at checkout time
+    email_acheteur = models.EmailField(
+        verbose_name=_("Buyer email"),
+    )
+    first_name = models.CharField(
+        max_length=200,
+        verbose_name=_("First name"),
+    )
+    last_name = models.CharField(
+        max_length=200,
+        verbose_name=_("Last name"),
+    )
+
+    # Statuts du cycle de vie d'une commande
+    # / Order lifecycle statuses
+    DRAFT = "DRAFT"
+    PENDING = "PENDING"
+    PAID = "PAID"
+    CANCELED = "CANCELED"
+    EXPIRED = "EXPIRED"
+    STATUS_CHOICES = [
+        (DRAFT, _("Draft")),
+        (PENDING, _("Pending payment")),
+        (PAID, _("Paid")),
+        (CANCELED, _("Canceled")),
+        (EXPIRED, _("Expired")),
+    ]
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default=DRAFT,
+        verbose_name=_("Order status"),
+    )
+
+    # Lien optionnel vers le paiement Stripe.
+    # Nullable car :
+    #   - une commande gratuite (total 0€) n'a pas de paiement
+    #   - une commande DRAFT pré-checkout n'a pas encore de paiement
+    # / Optional link to the Stripe payment. Nullable because:
+    #   - a free order (total 0€) has no payment
+    #   - a DRAFT pre-checkout order has no payment yet
+    paiement_stripe = models.OneToOneField(
+        "Paiement_stripe",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="commande_obj",
+        verbose_name=_("Stripe payment"),
+    )
+
+    # Code promo appliqué au panier (au plus un par commande en v1).
+    # / Promotional code applied to the cart (at most one per order in v1).
+    promo_code = models.ForeignKey(
+        PromotionalCode,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="commandes",
+        verbose_name=_("Promotional code"),
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Created at"))
+    paid_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Paid at"),
+    )
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = _("Order")
+        verbose_name_plural = _("Orders")
+
+    def __str__(self):
+        return f"Commande {str(self.uuid)[:8]} ({self.status})"
+
+    def uuid_8(self):
+        """Raccourci d'affichage. / Display shortcut."""
+        return f"{self.uuid}".partition("-")[0]
+
 
 @receiver(post_save, sender=Product)
 def post_save_Product(sender, instance: Product, created, **kwargs):
@@ -1193,10 +1357,30 @@ def post_save_Product(sender, instance: Product, created, **kwargs):
             Price.objects.create(product=instance, name=_("Free rate"), prix=0, publish=True)
 
 
+# Les signaux Django sont emis avec la classe EXACTE utilisee au save() :
+# un Product sauve via un proxy admin (TicketProduct, MembershipProduct...)
+# n'emet PAS le signal connecte a sender=Product. Sans les connexions
+# ci-dessous, le tarif gratuit FREERES n'est pas auto-cree via le proxy
+# billetterie, et les receivers de signals.py restent muets aussi.
+# Garde-fou : tests/pytest/test_signaux_proxys_product.py echoue si un
+# nouveau proxy de Product est cree sans etre ajoute a PROXYS_PRODUCT.
+# / Django signals are sent with the EXACT class used at save(): a Product
+# saved through an admin proxy does NOT emit the signal connected to
+# sender=Product. Without the connections below, the FREERES free price is
+# not auto-created through the ticket proxy, and the signals.py receivers
+# stay silent too.
+# Guard: tests/pytest/test_signaux_proxys_product.py fails if a new Product
+# proxy is created without being added to PROXYS_PRODUCT.
+PROXYS_PRODUCT = (TicketProduct, MembershipProduct, POSProduct, FutProduct)
+for _proxy_product in PROXYS_PRODUCT:
+    post_save.connect(post_save_Product, sender=_proxy_product)
+
+
 """
 Un autre post save existe dans .signals.py : send_membership_and_badge_product_to_fedow
 Dans fichier signals pour éviter les doubles imports
 Il vérifie l'existante du produit Adhésion et Badge dans Fedow et le créé si besoin
+Les proxys de Product y sont connectes aussi (voir PROXYS_PRODUCT ci-dessus).
 """
 
 
@@ -1428,6 +1612,14 @@ class Event(models.Model):
     full_url = models.URLField(blank=True, null=True)
 
     published = models.BooleanField(default=True, verbose_name=_("Publish"))
+    is_proposal = models.BooleanField(
+        default=False,
+        verbose_name=_("Public proposal"),
+        help_text=_(
+            "Event submitted via the public proposal wizard, "
+            "awaiting admin validation."
+        ),
+    )
     archived = models.BooleanField(default=False, verbose_name=_("Archive"))
     private = models.BooleanField(default=False, verbose_name=_("Non-federable event"),
                                   help_text=_("Will not be displayed on shared calendars."))
@@ -1836,10 +2028,14 @@ class Event(models.Model):
         cache.delete(f'event_get_sticker_img_{self.pk}')
         cache.delete(f'event_get_social_card_{self.pk}')
 
-        # Supprime le cache de la page principale des events de ce tenant
-        # La clé est construite avec l'uuid du tenant (voir EventMVT.federated_events_filter)
-        # / Delete the main event list cache for this tenant
-        cache.delete(f'event_list_{connection.tenant.uuid}')
+        # Invalide TOUTES les variantes du cache de la liste des évènements de ce tenant :
+        # la page principale ET chaque page filtrée par date.
+        # On réécrit un jeton de version aléatoire : les clés construites avec l'ancien jeton
+        # ne sont plus lues et expirent seules (TTL). Pas de cache.incr (piège memcached).
+        # Voir EventMVT.federated_events_filter pour la construction des clés.
+        # / Invalidate ALL event-list cache variants (main page + every per-date page) by
+        # / rewriting a random version token. Old keys are abandoned and expire via TTL.
+        cache.set(f'event_list_version_{connection.tenant.uuid}', uuid4().hex, None)
 
     # def get_absolute_url(self):
     #     return reverse("event-detail", args=[self.slug])
@@ -2097,9 +2293,28 @@ class Reservation(models.Model):
                                                                       on_delete=models.PROTECT,
                                                                       related_name='reservations')
 
-    event = models.ForeignKey(Event,
-                              on_delete=models.PROTECT,
-                              related_name="reservation")
+    event = models.ForeignKey(
+        Event, on_delete=models.PROTECT, related_name="reservation"
+    )
+
+    # FK optionnelle vers la commande qui regroupe cette reservation avec d'autres
+    # (billets d'autres events + adhésions). Nullable pour que les flows directs
+    # existants (mono-event sans panier) continuent de fonctionner sans régression.
+    # / Optional FK to the order that groups this reservation with others
+    # (tickets from other events + memberships). Nullable so that existing
+    # direct flows (mono-event without cart) continue to work without regression.
+    commande = models.ForeignKey(
+        "Commande",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reservations",
+        verbose_name=_("Order"),
+        help_text=_(
+            "Renseignée uniquement si la reservation a été créée via un panier multi-items. "
+            "/ Only set if the reservation was created via a multi-item cart."
+        ),
+    )
 
     CANCELED, CREATED, UNPAID, FREERES, FREERES_USERACTIV, PAID, PAID_ERROR, PAID_NOMAIL, VALID, = 'C', 'R', 'U', 'F', 'FA', 'P', 'PE', 'PN', 'V'
     TYPE_CHOICES = [
@@ -2614,6 +2829,18 @@ class Paiement_stripe(models.Model):
     datetime = models.DateTimeField(auto_now=True)
 
     checkout_session_id_stripe = models.CharField(max_length=80, blank=True, null=True)
+    checkout_session_url = models.URLField(
+        max_length=1024,
+        blank=True,
+        null=True,
+        verbose_name=_("Stripe checkout URL"),
+        help_text=_(
+            "URL Stripe Checkout persistée après création — permet de rediriger "
+            "l'utilisateur vers le paiement sans rappeler Stripe. "
+            "/ Stripe Checkout URL persisted after creation — allows redirecting "
+            "the user to payment without recalling Stripe."
+        ),
+    )
     payment_intent_id = models.CharField(max_length=80, blank=True, null=True)
     metadata_stripe = JSONField(blank=True, null=True)
     customer_stripe = models.CharField(max_length=20, blank=True, null=True)  # pas utile
@@ -2743,7 +2970,13 @@ class Paiement_stripe(models.Model):
                         logger.info(f"lignearticles set to PaymentMethod.STRIPE_SEPA_NOFED : {self.lignearticles}")
 
                 # Pour subscription :
-                elif checkout_session.mode == 'subscription':
+                # On ne lit l'abonnement que s'il existe deja cote Stripe.
+                # Sur un retour navigateur trop precoce (F5, success_url avant
+                # finalisation de la session par Stripe), checkout_session.subscription
+                # vaut None : on saute cette passe, le webhook fera le traitement.
+                # / Only read the subscription if Stripe already created it.
+                # / On an early browser return it is None: skip, the webhook handles it.
+                elif checkout_session.mode == 'subscription' and checkout_session.subscription:
                     subscription_stripe = stripe.Subscription.retrieve(
                         checkout_session.subscription,
                         stripe_account=self.config.get_stripe_connect_account()
@@ -2765,15 +2998,40 @@ class Paiement_stripe(models.Model):
                 self.status = Paiement_stripe.EXPIRE
 
         elif checkout_session.payment_status == "paid":
-            self.status = Paiement_stripe.PAID
-            self.last_action = timezone.now()
-            self.traitement_en_cours = True
+            # Cas particulier abonnement : Stripe peut renvoyer payment_status="paid"
+            # alors que l'objet subscription n'est pas encore rattache a la session
+            # (retour navigateur trop precoce / micro-decalage de propagation Stripe).
+            # Il ne faut PAS figer le paiement dans ce cas : la garde
+            # "if self.traitement_en_cours: return" en tete de methode empecherait
+            # ensuite le webhook de finaliser, et self.subscription resterait vide a vie.
+            # / Stripe may report "paid" before the subscription object is attached.
+            # / Do not lock the payment then: the webhook must still be able to finalize it.
+            subscription_attendue_mais_absente = (
+                checkout_session.mode == 'subscription'
+                and not checkout_session.subscription
+            )
 
-            # Dans le cas d'un nouvel abonnement
-            # On va chercher le numéro de l'abonnement stripe
-            # Et sa facture
-            if checkout_session.mode == 'subscription':
-                if bool(checkout_session.subscription):
+            if subscription_attendue_mais_absente:
+                # On reste en attente : etat recuperable. Le webhook (ou un rechargement
+                # ulterieur de la page de retour) finalisera quand l'abonnement sera rattache.
+                # On loggue pour souligner l'anomalie sans bloquer l'utilisateur.
+                # / Stay pending: recoverable. The webhook will finalize once the sub exists.
+                logger.warning(
+                    f"Checkout {self.uuid} : payment_status=paid mais subscription "
+                    f"absente cote Stripe. Reste PENDING, le webhook finalisera."
+                )
+                self.status = Paiement_stripe.PENDING
+
+            else:
+                self.status = Paiement_stripe.PAID
+                self.last_action = timezone.now()
+                self.traitement_en_cours = True
+
+                # Dans le cas d'un nouvel abonnement, on enregistre le numero
+                # d'abonnement stripe et sa facture. On est ici certain que la
+                # subscription existe (sinon on serait dans la branche ci-dessus).
+                # / New subscription: store stripe subscription id and invoice.
+                if checkout_session.mode == 'subscription':
                     self.subscription = checkout_session.subscription
                     # La récurrence max est géré dans le webhook de renouvellement : BaseBillet.triggers.update_membership_state_after_stripe_paiement
                     # Ajout des metadata du checkout pour les futurs webhook de renouvellement
@@ -2783,8 +3041,6 @@ class Paiement_stripe(models.Model):
                         metadata=metadata,
                     )
                     self.invoice_stripe = subscription.latest_invoice
-
-                    # check si sepa ?
 
 
         else:
@@ -2970,6 +3226,29 @@ class Membership(models.Model):
                               verbose_name=_('Product / price'),
                               null=True, blank=True)
 
+    # FK optionnelle vers la commande qui regroupe cette adhésion avec d'autres
+    # items (billets, autres adhésions). Nullable pour que les flows directs
+    # existants (adhésion isolée via MembershipValidator) continuent de fonctionner.
+    # / Optional FK to the order that groups this membership with other items
+    # (tickets, other memberships). Nullable so that existing direct flows
+    # (standalone membership via MembershipValidator) continue to work.
+    commande = models.ForeignKey(
+        "Commande",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        # Asymétrique avec Reservation.commande (related_name="reservations") :
+        # "memberships" est déjà pris par le FK user → Membership.
+        # / Asymmetric with Reservation.commande: "memberships" already taken by user FK.
+        related_name="memberships_commande",
+        verbose_name=_("Order"),
+        help_text=_(
+            "Renseignée uniquement si l'adhésion a été créée via un panier multi-items. "
+            "/ Only set if the membership was created via a multi-item cart."
+        ),
+    )
+
+
     asset_fedow = models.UUIDField(null=True, blank=True)
     card_number = models.CharField(max_length=16, null=True, blank=True)
 
@@ -3005,7 +3284,7 @@ class Membership(models.Model):
     pseudo = models.CharField(max_length=50, null=True, blank=True)
 
     newsletter = models.BooleanField(
-        default=True, verbose_name=_("I want to receive the collective's newsletter."))
+        default=False, verbose_name=_("I want to receive the collective's newsletter."))
     postal_code = models.IntegerField(null=True, blank=True)
     birth_date = models.DateField(null=True, blank=True)
     phone = models.CharField(max_length=20, null=True, blank=True)
@@ -3077,8 +3356,8 @@ class Membership(models.Model):
 
     class Meta:
         # unique_together = ('user', 'price')
-        verbose_name = _('Subscription')
-        verbose_name_plural = _('Subscriptions')
+        verbose_name = _('Adhésion / Abonnement / Pass')
+        verbose_name_plural = _('Adhésion / Abonnement / Pass')
 
     def email(self):
         self.user: "HumanUser"
@@ -3291,6 +3570,27 @@ class ExternalApiKey(models.Model):
     sale = models.BooleanField(default=False, verbose_name=_("Sales"))
     crowd = models.BooleanField(default=False, verbose_name=_("Crowds"))
 
+    # Asset cadeau (TNF) que cette cle peut recharger via /api/v2/wallet-refills/.
+    # La presence de cet asset sert a la fois d'interrupteur du droit "walletrefill"
+    # et de restriction : la cle ne peut recharger QUE cet asset.
+    # / Gift asset (TNF) this key can top-up via the wallet-refill route.
+    # Its presence both enables the "walletrefill" permission and restricts it to this asset.
+    gift_asset = models.ForeignKey(
+        "fedow_public.AssetFedowPublic",
+        on_delete=models.SET_NULL, blank=True, null=True,
+        # Confort admin : filtre le widget sur les categories rechargeables.
+        # La source de verite est AssetFedowPublic.REFILLABLE_CATEGORIES, et la
+        # securite reelle est la validation dans la vue (cf api_v2/views.py).
+        # Monnaies NON adossees a l'euro : cadeau (TNF), temps (TIM),
+        # fidelite (FID), badgeuse (BDG).
+        # / Admin convenience filter; canonical set is
+        # AssetFedowPublic.REFILLABLE_CATEGORIES, enforced in the view.
+        limit_choices_to={"category__in": ["TNF", "TIM", "FID", "BDG"]},
+        related_name="api_keys_gift_refill",
+        verbose_name=_("Wallet refill (asset)"),
+        help_text=_("If set, this key can top-up this asset (gift, time, loyalty or badge — non-fiat) via /api/v2/wallet-refills/."),
+    )
+
     def api_permissions(self):
         return {
             # Basename ( regarder dans utils.py -> user_apikey_valid pour comprendre le mecanisme )
@@ -3306,6 +3606,9 @@ class ExternalApiKey(models.Model):
             # Basename de la route des ventes
             "sale": self.sale,
             "crowd": self.crowd,
+            # Recharge cadeau : autorisee seulement si un asset cadeau est defini
+            # / Gift refill: allowed only if a gift asset is set
+            "walletrefill": bool(self.gift_asset_id),
         }
 
     class Meta:
@@ -3335,6 +3638,143 @@ class Webhook(models.Model):
     last_response = models.TextField(null=True, blank=True)
 
 ### Fédérations
+
+class FederationConfiguration(SingletonModel):
+    """
+    Options d'affichage de la page Réseau local (/federation/) pour ce tenant.
+    Singleton tenant : 1 instance par schema. Lu par FederationViewset.list.
+    / Display options for this tenant's Local network page (/federation/).
+    Tenant singleton: 1 row per schema. Read by FederationViewset.list.
+
+    LOCALISATION : BaseBillet/models.py
+
+    Toutes les options s'appliquent à la CONSOMMATION (la vue), pas au cache
+    SEO pré-calculé (refresh_seo_cache). Additif, zéro migration de cache.
+    / All options apply at CONSUMPTION time (the view), not to the pre-computed
+    SEO cache. Additive, no cache migration.
+    """
+
+    # Tri de la liste des lieux / Sort order of the venues list
+    TRI_ALPHABETIQUE = "alpha"
+    TRI_EVENTS_A_VENIR = "events"
+    TRI_CHOICES = [
+        (TRI_ALPHABETIQUE, _("Alphabétique")),
+        (TRI_EVENTS_A_VENIR, _("Par prochain événement")),
+    ]
+
+    afficher_lieux_sans_adresse = models.BooleanField(
+        default=True,
+        verbose_name=_("Afficher les lieux sans adresse"),
+        help_text=_(
+            "Si activé, la liste inclut aussi les lieux du réseau sans adresse "
+            "géolocalisée (ils apparaissent dans la liste mais pas sur la carte)."
+        ),
+    )
+    afficher_seulement_lieux_avec_event = models.BooleanField(
+        default=False,
+        verbose_name=_("Afficher seulement les lieux avec un événement à venir"),
+        help_text=_(
+            "Si activé, seuls les lieux ayant au moins un événement publié à venir "
+            "sont affichés."
+        ),
+    )
+    afficher_lieux_entrants = models.BooleanField(
+        default=True,
+        verbose_name=_("Afficher les lieux qui me fédèrent"),
+        help_text=_(
+            "Si activé, affiche aussi les lieux qui m'ont ajouté à leur réseau, "
+            "même si je ne les ai pas ajoutés au mien."
+        ),
+    )
+    texte_introduction = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name=_("Texte d'introduction"),
+        help_text=_("Texte affiché en haut de la page Réseau local."),
+    )
+    tri_des_lieux = models.CharField(
+        max_length=10,
+        choices=TRI_CHOICES,
+        default=TRI_ALPHABETIQUE,
+        verbose_name=_("Tri des lieux"),
+        help_text=_("Ordre d'affichage de la liste des lieux."),
+    )
+
+    # --- Federation automatique des evenements par tags ---
+    # Le tenant s'abonne a des tags : les evenements de TOUT le reseau TiBillet
+    # portant un de ces tags apparaissent dans son agenda ET sa carte, en plus
+    # de sa federation habituelle (FederatedPlace). Le veto private est respecte
+    # (un event private d'un autre tenant n'est jamais affiche). Vide = inactif.
+    # / Tag-based auto federation: the tenant subscribes to tags; events from the
+    # WHOLE TiBillet network carrying one of these tags show up in its agenda and
+    # map, on top of its usual federation. The private veto is enforced. Empty = off.
+    tags_federation = models.ManyToManyField(
+        "BaseBillet.Tag",
+        blank=True,
+        related_name="federation_configs_auto",
+        verbose_name=_("Fédérer automatiquement tous les évènements avec ces tags"),
+        help_text=_("Affiche dans votre agenda et votre carte les évènements de tout le "
+                    "réseau TiBillet portant un de ces tags, en plus de votre fédération "
+                    "habituelle. Laisser vide pour ne rien ajouter."),
+    )
+
+    # --- Agenda participatif ---
+    # Le formulaire public de proposition d'evenement sur la page agenda.
+    # S'active ici (plus dans le dashboard des modules). Les propositions sont
+    # creees non publiees et doivent etre validees par un admin.
+    # / Participatory agenda: public event-proposal form on the agenda page.
+    # Enabled here (no longer in the modules dashboard). Proposals are created
+    # unpublished and must be validated by an admin.
+    module_agenda_participatif = models.BooleanField(
+        default=False,
+        verbose_name=_("Activer l'agenda participatif"),
+        help_text=_("Affiche un formulaire sur la page agenda pour que le public "
+                    "propose des évènements. Les propositions sont à valider dans l'admin."),
+    )
+    # Autorise les visiteurs NON connectes a proposer un evenement.
+    # Necessite module_agenda_participatif. Si False : connexion requise.
+    # / Allow anonymous (logged-out) visitors to propose an event.
+    # Requires module_agenda_participatif. If False: login required.
+    proposition_anonyme_autorisee = models.BooleanField(
+        default=False,
+        verbose_name=_("Autoriser les propositions anonymes"),
+        help_text=_("Si activé, les visiteurs non connectés peuvent proposer des évènements "
+                    "(nécessite l'agenda participatif)."),
+    )
+    # Tag ajoute automatiquement aux evenements PROPOSES (is_proposal=True).
+    # / Tag automatically added to PROPOSED events.
+    tag_auto_proposition = models.ForeignKey(
+        "BaseBillet.Tag",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="config_tag_auto_proposition",
+        verbose_name=_("Tag automatique des évènements proposés"),
+        help_text=_("Tag ajouté automatiquement aux évènements proposés via l'agenda participatif."),
+    )
+
+    class Meta:
+        verbose_name = _("Options de fédération")
+        verbose_name_plural = _("Options de fédération")
+
+    def __str__(self):
+        return str(_("Options de fédération"))
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Changer les options de federation (surtout tags_federation) doit
+        # rafraichir l'agenda du tenant tout de suite. On regenere le jeton de
+        # version du cache liste d'evenements, comme Event.save().
+        # / Changing federation options (esp. tags_federation) must refresh the
+        # tenant agenda right away. Regenerate the event-list cache version token,
+        # like Event.save().
+        try:
+            cache.set(f'event_list_version_{connection.tenant.uuid}', uuid4().hex, None)
+        except Exception:
+            # Hors contexte tenant (ex: schema public) : rien a invalider.
+            # / Outside a tenant context (e.g. public schema): nothing to do.
+            pass
+
 
 class FederatedPlace(models.Model):
     tenant = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="Collective")

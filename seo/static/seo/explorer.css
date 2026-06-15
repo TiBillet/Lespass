@@ -1,0 +1,874 @@
+/*
+ * Styles pour la page Explorer (carte Leaflet + liste + barre de recherche).
+ * / Styles for the Explorer page (Leaflet map + list + search toolbar).
+ *
+ * LOCALISATION: seo/static/seo/explorer.css
+ */
+
+/* ============================================================
+ * 1. Forcer le theme clair / Force light theme
+ * ============================================================ */
+.explorer-toolbar,
+.explorer-container,
+.explorer-fab {
+    color-scheme: light;
+    --bs-body-bg: #fff;
+    --bs-body-color: #222;
+}
+
+/* ============================================================
+ * 2. Barre d'outils (recherche + pills + compteur)
+ *    / Toolbar (search + pills + counter)
+ * ============================================================ */
+.explorer-toolbar {
+    background: #fff;
+    border-bottom: 1px solid #eee;
+    padding: 12px 24px;
+}
+
+.explorer-search-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.explorer-search {
+    flex: 1;
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 999px;
+    padding: 10px 16px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 150ms, box-shadow 150ms;
+}
+
+.explorer-search:focus {
+    border-color: #222;
+    box-shadow: 0 0 0 3px rgba(34, 34, 34, 0.1);
+}
+
+.explorer-pills {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    /* Scroll horizontal sur petit ecran, masque la scrollbar. */
+    /* Le fade-out a droite indique visuellement qu'on peut scroller. */
+    /* / Horizontal scroll on small screens, hides scrollbar. */
+    /* Right fade-out hints that content can be scrolled. */
+    overflow-x: auto;
+    max-width: 100%;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    -webkit-mask-image: linear-gradient(to right, black 0%, black 92%, transparent 100%);
+    mask-image: linear-gradient(to right, black 0%, black 92%, transparent 100%);
+}
+
+.explorer-pills::-webkit-scrollbar {
+    display: none;
+}
+
+.explorer-pill {
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 150ms, color 150ms, border-color 150ms;
+    /* flex-shrink: 0 pour que les pills ne se compressent pas */
+    /* / flex-shrink: 0 so pills don't compress */
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.explorer-pill:hover {
+    background: #f5f5f5;
+}
+
+.explorer-pill.active {
+    background: #222;
+    color: #fff;
+    border-color: #222;
+    font-weight: 600;
+    /* Petit halo pour bien differencier le filtre actif. */
+    /* / Small halo to clearly distinguish the active filter. */
+    box-shadow: 0 0 0 2px rgba(34, 34, 34, 0.15);
+}
+
+.explorer-counter {
+    font-size: 13px;
+    color: #666;
+    margin-top: 8px;
+}
+
+/* ============================================================
+ * 3. Vue split desktop (>= 992px)
+ *    / Desktop split view (>= 992px)
+ * ============================================================ */
+.explorer-container {
+    display: flex;
+    height: calc(100vh - 160px);
+}
+
+.explorer-list {
+    width: 55%;
+    overflow-y: auto;
+    padding: 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.explorer-map {
+    width: 45%;
+    position: sticky;
+    top: 0;
+    height: calc(100vh - 160px);
+    border-left: 1px solid #eee;
+}
+
+/* ============================================================
+ * 4. Cartes / Cards
+ * ============================================================ */
+.explorer-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    gap: 16px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: box-shadow 150ms, border-color 150ms;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+    text-decoration: none;
+    color: inherit;
+}
+
+.explorer-card:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.08);
+    border-color: rgba(37, 157, 73, 0.25);
+    color: inherit;
+    text-decoration: none;
+    transform: translateY(-1px);
+}
+
+/* Card "plate" (event) : hint visuel "voir sur la carte" */
+/* qui apparait au hover pour indiquer l'action.          */
+/* / Flat card (event): "see on map" visual hint          */
+/* that appears on hover to indicate the action.          */
+.explorer-card[data-type="event"]:hover::after {
+    content: "\1F4CD Voir sur la carte";
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 11px;
+    background: #222;
+    color: #fff;
+    padding: 3px 8px;
+    border-radius: 999px;
+    pointer-events: none;
+}
+
+.explorer-card[data-type="event"] {
+    position: relative;
+}
+
+.explorer-card[data-highlighted="true"] {
+    border-color: #222;
+}
+
+/* Icone de carte / Card icon */
+.explorer-card-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.explorer-card-icon.lieu {
+    background: #e9ecef;
+    color: #666;
+}
+
+.explorer-card-icon.event {
+    background: #fff3e0;
+    color: #e65100;
+}
+
+/* Corps de carte / Card body */
+.explorer-card-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.explorer-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.explorer-card-title {
+    font-weight: 600;
+    font-size: 15px;
+    margin: 0;
+}
+
+/* Badges */
+.explorer-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+
+.explorer-badge.lieu {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.explorer-badge.event {
+    background: #fff3e0;
+    color: #e65100;
+}
+
+/* Badge "Vous etes ici" affiche sur la card du tenant courant. */
+/* / "You are here" badge shown on the current tenant's card. */
+.explorer-badge--current {
+    background: var(--bs-primary, #0d6efd);
+    color: #fff;
+    margin-left: 4px;
+}
+
+.explorer-card--current {
+    border-color: var(--bs-primary, #0d6efd) !important;
+}
+
+.explorer-card-meta {
+    font-size: 13px;
+    color: #666;
+    margin-top: 2px;
+}
+
+.explorer-card-desc {
+    font-size: 13px;
+    color: #888;
+    margin-top: 4px;
+    /* Max 2 lignes avec ellipsis pour uniformiser les tailles de card. */
+    /* / Max 2 lines with ellipsis to keep card heights consistent. */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.4;
+}
+
+.explorer-card-stats {
+    font-size: 12px;
+    color: #999;
+    margin-top: 6px;
+}
+
+/* Carte lieu : layout vertical avec zone focus + accordeon */
+/* / Lieu card: vertical layout with focus zone + accordion */
+.explorer-card--lieu {
+    flex-direction: column;
+    padding: 0;
+    gap: 0;
+}
+
+/* Zone cliquable (focus carte) / Clickable zone (map focus) */
+.explorer-card-focus {
+    display: flex;
+    gap: 16px;
+    padding: 16px;
+    cursor: pointer;
+    border-radius: 12px 12px 0 0;
+    transition: background 150ms;
+}
+
+.explorer-card-focus:hover {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+/* Footer avec lien vers le site du lieu / Footer with link to lieu's site */
+.explorer-card-footer {
+    padding: 8px 16px 14px;
+    border-top: 1px solid #f5f5f5;
+    margin-top: 2px;
+}
+
+.explorer-card-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #259d49;
+    text-decoration: none;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(37, 157, 73, 0.25);
+    background: rgba(37, 157, 73, 0.05);
+    transition: background 150ms, border-color 150ms, transform 150ms;
+}
+
+.explorer-card-link:hover {
+    background: rgba(37, 157, 73, 0.12);
+    border-color: #259d49;
+    color: #1e8a3f;
+    text-decoration: none;
+    transform: translateX(2px);
+}
+
+/* ============================================================
+ * Accordeon events/adhesions dans les cartes lieu
+ * / Events/memberships accordion inside lieu cards
+ * ============================================================ */
+
+.explorer-accordion {
+    border-top: 1px solid #eee;
+}
+
+/* Bouton toggle / Toggle button */
+/* Zone de clic ~48px de haut (recommandation Apple HIG 44px / Material 48dp). */
+/* / Click target ~48px tall (Apple HIG 44px / Material 48dp recommendation). */
+.explorer-accordion-toggle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 16px;
+    border: none;
+    background: transparent;
+    font-size: 13px;
+    font-weight: 500;
+    color: #555;
+    cursor: pointer;
+    transition: background 150ms;
+}
+
+.explorer-accordion-toggle:hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.explorer-accordion-toggle:active {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.explorer-accordion-chevron {
+    font-size: 14px;
+    transition: transform 200ms ease;
+}
+
+/* Panneau depliable — technique grid-template-rows pour animer du contenu.   */
+/* Quand .open est ajoute, la row passe de 0fr a 1fr et anime smooth,        */
+/* peu importe la hauteur reelle du contenu (pas besoin de calculer px).     */
+/* / Collapsible panel — grid-template-rows technique to animate content.    */
+/* When .open is added, row goes from 0fr to 1fr and animates smoothly,      */
+/* regardless of actual content height (no px calculation needed).           */
+.explorer-accordion-panel {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 280ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.explorer-accordion-panel > .explorer-accordion-panel-inner {
+    overflow: hidden;
+    min-height: 0;
+    opacity: 0;
+    transition: opacity 200ms ease 80ms;
+}
+
+.explorer-accordion-panel.open {
+    grid-template-rows: 1fr;
+}
+
+.explorer-accordion-panel.open > .explorer-accordion-panel-inner {
+    opacity: 1;
+}
+
+/* Item event/adhesion dans l'accordeon / Event/membership item in accordion */
+.explorer-accordion-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    font-size: 13px;
+    color: inherit;
+    text-decoration: none;
+    transition: background 150ms;
+    border-top: 1px solid #f5f5f5;
+    /* Reset de tous les styles par defaut des <button> pour avoir un rendu */
+    /* identique a un <a> (full-width, pas de border/bg, meme curseur). */
+    /* / Reset all default <button> styles for a rendering identical to <a> */
+    /* (full-width, no border/bg, same cursor). */
+    background: transparent;
+    border: none;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.explorer-accordion-item:hover {
+    background: rgba(37, 157, 73, 0.05);
+    text-decoration: none;
+    color: inherit;
+}
+
+.explorer-accordion-item:active {
+    background: rgba(37, 157, 73, 0.1);
+}
+
+.explorer-accordion-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.explorer-accordion-name {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.explorer-accordion-date {
+    font-size: 11px;
+    color: #999;
+    flex-shrink: 0;
+}
+
+/* ============================================================
+ * 5. Marqueurs carte Leaflet (DivIcon)
+ *    / Leaflet map pins (DivIcon)
+ * ============================================================ */
+.explorer-pin {
+    background: #fff;
+    color: #222;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    white-space: nowrap;
+    transition: background 150ms, color 150ms, transform 150ms;
+}
+
+.explorer-pin.selected {
+    background: #222;
+    color: #fff;
+    transform: scale(1.08);
+}
+
+/* Pin du tenant courant : couleur primaire + halo discret. */
+/* Permet de reperer "vous etes ici" sur la carte d'un explorer in-tenant. */
+/* / Current tenant pin: primary color + discrete halo. */
+/* Highlights "you are here" on the map of an in-tenant explorer. */
+.explorer-pin--current {
+    background: var(--bs-primary, #0d6efd);
+    color: #fff;
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25), 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.explorer-pin--current.selected {
+    background: var(--bs-primary, #0d6efd);
+    color: #fff;
+    transform: scale(1.1);
+}
+
+/* ============================================================
+ * 6. Surcharge popup Leaflet
+ *    / Leaflet popup overrides
+ * ============================================================ */
+.leaflet-popup-content-wrapper {
+    border-radius: 12px !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
+}
+
+.explorer-popup-title {
+    font-weight: 600;
+    font-size: 14px;
+    margin: 0;
+}
+
+.explorer-popup-desc {
+    font-size: 12px;
+    color: #666;
+    margin-top: 4px;
+}
+
+.explorer-popup-stats {
+    font-size: 11px;
+    color: #999;
+    margin-top: 6px;
+}
+
+.explorer-popup-events {
+    font-size: 12px;
+    margin-top: 8px;
+}
+
+.explorer-popup-events li {
+    margin-bottom: 2px;
+}
+
+.explorer-popup-link {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #0d6efd;
+    text-decoration: none;
+}
+
+.explorer-popup-link:hover {
+    text-decoration: underline;
+}
+
+/* ============================================================
+ * 7. FAB toggle mobile (bouton carte/liste)
+ *    !important sur position/bottom pour blinder contre les overrides
+ *    Bootstrap ou thème qui pourraient casser le fixed.
+ *    / !important defensive: blocks Bootstrap/theme overrides
+ *    that could break the fixed positioning.
+ * ============================================================ */
+.explorer-fab {
+    display: none;
+    position: fixed !important;
+    bottom: 20px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    /* Fond semi-transparent + blur pour detacher le FAB du contenu derriere. */
+    /* / Semi-transparent bg + blur to detach FAB from content behind it. */
+    background: rgba(34, 34, 34, 0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    padding: 12px 24px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    z-index: 1000;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), 0 0 0 4px rgba(255, 255, 255, 0.8);
+    align-items: center;
+    gap: 8px;
+    transition: transform 150ms;
+}
+
+.explorer-fab:hover {
+    transform: translateX(-50%) translateY(-2px) !important;
+}
+
+.explorer-fab:active {
+    transform: translateX(-50%) translateY(0) !important;
+}
+
+/* ============================================================
+ * Loading state carte : spinner visible pendant l'init Leaflet
+ * / Map loading state: spinner visible during Leaflet init
+ * ============================================================ */
+.explorer-map-loading {
+    position: absolute;
+    inset: 0;
+    z-index: 400;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    transition: opacity 200ms ease;
+}
+
+.explorer-map-loading[hidden] {
+    display: none;
+}
+
+.explorer-map-loading--fading {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.explorer-map-loading-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid rgba(37, 157, 73, 0.2);
+    border-top-color: #259d49;
+    border-radius: 50%;
+    animation: explorer-spin 800ms linear infinite;
+}
+
+@keyframes explorer-spin {
+    to { transform: rotate(360deg); }
+}
+
+
+/* ============================================================
+ * 8. Mobile (< 992px)
+ * ============================================================ */
+@media (max-width: 991.98px) {
+    /* Barre de recherche en colonne / Search bar stacked */
+    .explorer-search-row {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    /* Pills : retour a la ligne plutot que scroll horizontal sur mobile.   */
+    /* Plus lisible qu'une liste tronquee qu'il faut scroller manuellement. */
+    /* / Pills: wrap instead of horizontal scroll on mobile.                */
+    /* More readable than a truncated list that needs manual scrolling.     */
+    .explorer-pills {
+        flex-wrap: wrap;
+        overflow-x: visible;
+        row-gap: 6px;
+        /* Retire le mask-image fade (inutile sans scroll). */
+        /* / Remove mask-image fade (useless without scroll). */
+        -webkit-mask-image: none;
+        mask-image: none;
+    }
+
+    /* Conteneur en bloc / Container becomes block */
+    .explorer-container {
+        display: block;
+        height: auto;
+    }
+
+    /* Liste pleine largeur avec marge basse pour le FAB */
+    /* / Full-width list with bottom padding for FAB */
+    .explorer-list {
+        width: 100%;
+        height: auto;
+        padding: 12px 16px 80px;
+    }
+
+    /* Carte pleine largeur, masquee par defaut. En mode carte, seules la */
+    /* navbar et la recherche sont visibles au-dessus.                     */
+    /* / Full-width map, hidden by default. In map mode, only navbar       */
+    /* and search are visible above.                                       */
+    .explorer-map {
+        width: 100%;
+        height: calc(100vh - 140px);
+        position: relative;
+        border-left: none;
+        display: none;
+    }
+
+    /* Icone plus petite sur mobile / Smaller icon on mobile */
+    .explorer-card-icon {
+        width: 64px;
+        height: 64px;
+        font-size: 20px;
+    }
+
+    .explorer-card {
+        padding: 12px;
+        gap: 12px;
+    }
+
+    /* Les cards lieu gardent leur layout vertical sans padding global */
+    /* / Lieu cards keep their vertical layout without global padding */
+    .explorer-card--lieu {
+        padding: 0;
+        gap: 0;
+    }
+
+    .explorer-card--lieu .explorer-card-focus {
+        padding: 12px;
+        gap: 12px;
+    }
+
+    .explorer-card-title {
+        font-size: 14px;
+    }
+
+    /* FAB visible sur mobile (enfant direct de body via block body_extras). */
+    /* / FAB visible on mobile (direct body child via block body_extras). */
+    .explorer-fab {
+        display: flex;
+    }
+
+    /* Mode carte : masquer liste + pills + compteur + footer, afficher carte. */
+    /* Les pills et le compteur sont dans .explorer-toolbar (hors du container), */
+    /* donc on les cible via body.explorer-map-active et non via .explorer-view-map. */
+    /* La recherche reste visible pour filtrer les marqueurs.                     */
+    /* / Map mode: hide list + pills + counter + footer, show map.               */
+    /* Pills and counter live in .explorer-toolbar (outside the container),       */
+    /* so we target them via body.explorer-map-active, not .explorer-view-map.   */
+    /* Search stays visible to filter markers.                                   */
+    .explorer-view-map .explorer-list {
+        display: none;
+    }
+
+    .explorer-view-map .explorer-map {
+        display: block;
+    }
+
+    body.explorer-map-active .explorer-pills,
+    body.explorer-map-active .explorer-counter {
+        display: none;
+    }
+
+    body.explorer-map-active footer {
+        display: none;
+    }
+
+}
+
+
+/* ============================================================
+   Popup riche par PostalAddress (CHANTIER-05)
+   Styles pour les classes ajoutees par buildPopupContent() dans explorer.js
+   ============================================================ */
+
+.explorer-popup-address {
+    color: #666;
+    font-size: 0.85rem;
+    margin: 0 0 8px;
+    line-height: 1.4;
+}
+
+.explorer-popup-tenant {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    margin: 8px 0;
+    padding-top: 8px;
+    border-top: 1px solid #eee;
+}
+
+.explorer-popup-logo {
+    width: 22px;
+    height: 22px;
+    border-radius: 3px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.explorer-popup-tenant a {
+    color: #2a5d9f;
+    text-decoration: none;
+}
+
+.explorer-popup-tenant a:hover {
+    text-decoration: underline;
+}
+
+.explorer-popup-events-list {
+    list-style: none;
+    padding: 0;
+    margin: 4px 0;
+    font-size: 0.82rem;
+}
+
+.explorer-popup-events-list li {
+    padding: 3px 0;
+    border-bottom: 1px dashed #eee;
+}
+
+.explorer-popup-events-list li:last-child {
+    border-bottom: none;
+}
+
+.explorer-popup-events-list a {
+    color: #2a5d9f;
+    text-decoration: none;
+}
+
+.explorer-popup-events-list a:hover {
+    text-decoration: underline;
+}
+
+.explorer-popup-events-more {
+    display: block;
+    color: #888;
+    font-size: 0.78rem;
+    font-style: italic;
+    margin: 4px 0 0;
+}
+
+/* --- Tag chips (CHANTIER-06) --- */
+.explorer-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 12px 0;
+    align-items: center;
+}
+.explorer-tag-chip {
+    --chip-color: #0dcaf0;
+    background: var(--chip-color);
+    color: #fff;
+    border: 2px solid transparent;
+    border-radius: 12px;
+    padding: 3px 10px;
+    font-size: 0.82rem;
+    cursor: pointer;
+    font-weight: 500;
+    line-height: 1.3;
+    white-space: nowrap;
+    transition: filter 0.15s, border-color 0.15s, transform 0.05s;
+}
+.explorer-tag-chip:hover {
+    filter: brightness(1.1);
+}
+.explorer-tag-chip:active {
+    transform: scale(0.97);
+}
+.explorer-tag-chip--active {
+    border-color: #222;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6) inset;
+}
+.explorer-tag-chip-more {
+    background: transparent;
+    color: #555;
+    border: 1px dashed #aaa;
+    border-radius: 12px;
+    padding: 3px 10px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+.explorer-tag-chip-more:hover {
+    background: #eee;
+}
+.explorer-tag-chip-rest {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+    width: 100%;
+    padding-top: 6px;
+    border-top: 1px solid #eee;
+}
+
+/* --- Empty state action --- */
+.explorer-empty-state {
+    padding: 16px 12px;
+}
+.explorer-empty-state .btn-link {
+    text-decoration: underline;
+    color: #2a5d9f;
+}
+
+/* --- Card event : tags inline --- */
+.explorer-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+.explorer-card-tag {
+    color: #fff;
+    font-size: 0.72rem;
+    padding: 1px 7px;
+    border-radius: 8px;
+    line-height: 1.3;
+}

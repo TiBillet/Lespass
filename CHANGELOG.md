@@ -1,5 +1,1946 @@
 # Changelog / Journal des modifications
 
+## Vente de billet en caisse LaBoutik → réservation Lespass (API v2) / LaBoutik POS ticket sale → Lespass reservation (API v2)
+
+**Date :** 2026-06-11
+**Migration :** Non / No
+
+**Quoi / What :** l'API v2 `POST /api/v2/reservations/` accepte maintenant une vente de
+billet déjà payée en caisse (`additionalProperty paymentMethod = "cash" | "card"`) :
+réservation créée directement `VALID`, tickets `NOT_SCANNED`, `LigneArticle` `VALID`
+avec le vrai moyen de paiement (`CASH`/`CC`) et `sale_origin=LABOUTIK`, **sans checkout
+Stripe**. `reservationFor` devient optionnel : Lespass déduit l'évènement depuis le tarif
+(prochain évènement publié qui propose le produit ; erreur claire si zéro ou plusieurs
+candidats). Côté LaBoutik (dépôt séparé) : implémentation de `Commande.methode_BI` qui
+appelait jusqu'ici un attribut inexistant (crash 500 en prod, cafeasso 2026-06-11).
+
+**Pourquoi / Why :** un article `BILLET` synchronisé depuis Lespass était vendable en
+caisse mais sans handler (`AttributeError: 'Commande' object has no attribute 'methode_BI'`)
+et aucune remontée du billet vers Lespass n'existait.
+
+**Pas de boucle / No loop :** la `LigneArticle` est créée directement en `VALID` :
+la machine à état (`pre_save_signal_status`) ignore les créations (`_state.adding`),
+donc pas de renvoi `send_sale_to_laboutik` vers la caisse.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/validators.py` | `TicketCreator` : mode `paid_externally` + `external_payment_method` (ligne de vente `VALID`, tickets `NOT_SCANNED`, pas de Stripe) ; `ReservationValidator` lit ces flags depuis le `context` |
+| `api_v2/serializers.py` | `ReservationCreateSerializer` : `reservationFor` optionnel + `_resolve_event_from_prices()` ; `additionalProperty paymentMethod` (cash/card) → mode payé en caisse, `sale_origin=LABOUTIK` |
+| `tests/pytest/test_api_v2_reservation_laboutik.py` | **Nouveau** — 5 tests : cash sans event, card avec event, paymentMethod inconnu, event ambigu, aucun event futur |
+| `../LaBoutik/webview/billet_lespass.py` | **Nouveau** (dépôt LaBoutik) — `envoyer_reservation_billet()` : POST API v2, timeout (3, 5), erreurs lisibles |
+| `../LaBoutik/webview/views.py` | **Nouveau** (dépôt LaBoutik) — `Commande.methode_BI` : espèce/CB only, email carte NFC sinon config, appel synchrone, rollback atomique si échec |
+
+### Note dev
+- La clé API LaBoutik (`Configuration.lespass_api_key`) doit avoir la permission
+  **Bookings (`reservation`)** sur `ExternalApiKey` côté Lespass.
+- Effet de bord assumé : la réservation passant à `VALID` envoie le billet PDF par mail —
+  au client si carte NFC avec email, sinon à l'email de la Configuration LaBoutik.
+
+## Test carte NFC → wallet (vérif Fedow réelle) + bugfix lien carte hors transaction / NFC card → wallet test (real Fedow check) + card-link transaction bugfix
+
+**Date :** 2026-06-11
+**Migration :** Non / No
+
+**Quoi / What :** nouveau test d'intégration `tests/pytest/test_membership_card_wallet_fedow.py` :
+création d'adhésion via le formulaire admin avec un numéro de carte NFC, puis vérification
+RÉELLE chez Fedow (wallet `has_user_card=True`, carte plus éphémère), nettoyage rejouable
+(`lost_my_card`). Skip explicite si `FEDOW_TEST_CARD_NUMBER` absent de l'environnement.
+
+**Bugfix découvert par le test :** `MembershipAddForm.save()` liait la carte chez Fedow
+pendant `form.save()` — que l'admin Django appelle AVANT de valider les inlines. Si un
+formset était invalide, la transaction DB était annulée mais l'appel HTTP déjà parti :
+**carte liée chez Fedow sans adhésion côté Lespass**. Corrigé avec `transaction.on_commit`.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/admin_tenant.py` | **Bugfix** : `linkwallet_card_number` déplacé dans `transaction.on_commit` (cohérence Lespass ↔ Fedow) |
+| `tests/pytest/test_membership_card_wallet_fedow.py` | **Nouveau** — test d'intégration carte → wallet avec vrais appels Fedow |
+
+### Note dev
+- Pour rendre le test actif en permanence : ajouter `FEDOW_TEST_CARD_NUMBER=58515F52` au `.env`
+  (une carte Fedow sans utilisateur ; voir le docstring du test pour en trouver une autre).
+  Sans la variable, le test skip proprement.
+- Piège documenté : un user créé dans un test pytest (transaction rollbackée) mais enregistré
+  chez Fedow pendant la validation du formulaire laisse un FedowUser orphelin dont les clés de
+  signature sont perdues — ses endpoints signés (dont `lost_my_card`) deviennent inaccessibles.
+  Les cartes de démo consommées pendant la mise au point ont été libérées (opération identique
+  à la vue `lost_my_card_by_signature` de Fedow, validée par le mainteneur).
+
+## Vague 5 (finale) : la suite TypeScript n'existe plus / Wave 5 (final): TypeScript suite is gone
+
+**Date :** 2026-06-11
+**Migration :** Non / No
+
+**Quoi / What :** les 3 derniers specs TS (duplication produit complexe, event quick create,
+explorer markers) convertis en Playwright Python — 5 tests verts. **`tests/playwright/tests/`
+est vide : 42 specs TS → 0 en une journée.** La suite E2E est désormais 100 % Python
+(~65 tests, ~6 min) ; suite backend pytest : 246 tests (~50 s).
+
+**Pourquoi / Why :** une seule techno de test (pytest), login E2E instantané (force_login),
+Stripe mocké pour la logique + smoke réels pour les parcours d'argent. Reste une décision
+mainteneur : supprimer le dossier `tests/playwright/` (outillage Node/yarn mort) et les
+`tests/scripts/verify_*.py` devenus inutiles — voir
+`TECH_DOC/SESSIONS/TESTS/CHANTIER-05-vague-5-cloture.md`.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `tests/e2e/test_product_duplication_complex.py`, `test_event_quick_create_duplicate.py`, `test_explorer_markers_per_pa.py` | **Nouveaux** — conversions des 3 derniers specs TS |
+| `tests/playwright/` | **Dossier supprimé entièrement** (specs, utils, configs, node_modules — plus aucune dépendance Node/yarn) |
+| `tests/scripts/verify_*.py` (4 fichiers) | **Supprimés** — n'étaient appelés que par les specs TS ; `setup_test_data.py` conservé (fixture e2e) |
+| `tests/README.md`, `GUIDELINES.md`, `TECH_DOC/SESSIONS/TESTS/CHANTIER-05-*.md` | Documentation de clôture |
+
+## Vague 4 migration tests TS→Python — specs adhésions / Wave 4 TS→Python test migration — membership specs
+
+**Date :** 2026-06-11
+**Migration :** Non / No
+
+**Quoi / What :** 11 specs adhésions Playwright TS convertis en Playwright Python (workflow
+d'agents Sonnet séquentiels) : création admin (simple, récurrente, validation, AMAP, solidaire,
+manuelle), prix libre multi (Stripe réel ×4), annulation récurrente, cycle complet formulaire
+dynamique (7 tests), protection doublon SEPA, validation manuelle + paiement Stripe réel —
+22 tests Python, tous verts. **Suite TS : 14 → 3 specs.**
+
+**Pourquoi / Why :** avant-dernière vague de la migration vers pytest unique. Après la vague 5
+(3 specs restants : 25, 29, 40), le dossier `tests/playwright/` et l'outillage Node pourront
+être supprimés.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `tests/e2e/test_membership*.py`, `test_memberships_admin_create.py`, `test_sepa_duplicate_protection.py` (11 fichiers) | **Nouveaux** — conversions des specs TS 03-07, 14, 17, 22, 27, 36, 43 |
+| `tests/playwright/tests/` | **Supprimés** : les 11 specs migrés |
+| `BaseBillet/tasks.py` | **Bugfix** : `context_for_membership_email` crashait (`AttributeError`) quand `get_deadline()` ou `last_contribution` est `None` (adhésion en attente de validation) — les lignes de dates du mail ne sont ajoutées que si la date existe |
+| `tests/e2e/test_membership_account_states.py` | Résilience : 1 reload si le runserver dev rend une page d'erreur transitoire (`OSError Bad file descriptor` sous charge) |
+| `tests/README.md`, `TECH_DOC/SESSIONS/TESTS/CHANTIER-04-*.md` | Documentation à jour (dont constat interop V1 `/api/salefromlespass`) |
+
+## Vague 3 migration tests TS→Python — specs admin / Wave 3 TS→Python test migration — admin specs
+
+**Date :** 2026-06-11
+**Migration :** Non / No
+
+**Quoi / What :** 8 specs admin Playwright TS convertis en Playwright Python par un workflow
+d'agents Sonnet séquentiels (1 agent par spec, conversion + vérification + corrections) :
+custom form edit, credit note, ajouter paiement, cancel membership, list status, adhésions
+obligatoires M2M (x2), reservation cancel — 13 tests Python, tous verts. Suite TS : 22 → 14 specs.
+
+**Pourquoi / Why :** poursuite de la migration vers une seule techno de test (pytest), avec un
+coût réduit de ~40 % vs la vague 2 (1 agent au lieu de 2 par spec, modèle Sonnet, cheat-sheet
+dans le prompt au lieu de relire conftest + PIEGES).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `tests/e2e/test_admin_*.py` (6 fichiers), `test_event_adhesion_obligatoire_check.py` | **Nouveaux** — conversions des specs TS 26, 32, 33, 34, 35, 37, 38, 39 |
+| `tests/playwright/tests/` | **Supprimés** : les 8 specs migrés |
+| `tests/README.md`, `TECH_DOC/SESSIONS/TESTS/CHANTIER-03-*.md` | Documentation à jour, dont un ⚠️ « formulaires imbriqués HTMX dans la fiche admin Membership » à vérifier manuellement |
+
+## Vague 2 migration tests TS→Python + fix timeout fedow_api / Wave 2 TS→Python test migration + fedow_api timeout fix
+
+**Date :** 2026-06-11
+**Migration :** Non / No
+
+**Quoi / What :** 8 specs Playwright TS supplémentaires convertis en Playwright Python via un
+workflow multi-agents (login, admin-config, account-summary, reservation-limits,
+account-states, crowds x2, theme/language — 11 tests Python, tous verts). Suite TS : 30 → 22 specs.
+**Bugfix critique** : `timeout=30` sur les appels HTTP de `fedow_connect/fedow_api.py`.
+
+**Pourquoi / Why :** sans timeout, un serveur Fedow muet gelait le runserver mono-thread pour
+toujours (incident du 2026-06-11 : serveur bloqué 1h dans `send_membership_product_to_fedow`,
+toutes les requêtes en 504, cascade de faux échecs E2E sur les specs 33-39).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `fedow_connect/fedow_api.py` | **Bugfix** : `timeout=30` sur `_post` et `_get` |
+| `tests/e2e/test_login.py`, `test_admin_configuration.py`, `test_user_account_summary.py`, `test_reservation_limits.py`, `test_membership_account_states.py`, `test_crowds_participation.py`, `test_crowds_summary.py`, `test_theme_language.py` | **Nouveaux** — conversions des specs TS 01, 02, 16, 19, 21, 23, 24, 99 |
+| `tests/playwright/tests/` | **Supprimés** : 01, 02, 16, 19, 21, 23, 24, 99 (migrés en Python) |
+| `tests/playwright/tests/36-sepa-duplicate-protection.spec.ts` | **Bugfix** : import `Paiement_stripe` depuis `BaseBillet.models` (l'ancien import `PaiementStripe.models` échouait silencieusement → test flaky qui ne testait pas la protection doublon) |
+| `tests/playwright/tests/26-admin-membership-custom-form-edit.spec.ts` | Timeout `execSync` 15 s → 60 s (boot `tenant_command shell` sous charge) |
+| `tests/README.md`, `TECH_DOC/SESSIONS/TESTS/` | Tableau de migration et CHANTIER-02 à jour |
+
+## Simplification des suites de tests + socle E2E Python (force_login) / Test suites simplification + Python E2E foundation
+
+**Date :** 2026-06-11
+**Migration :** Non / No
+
+**Quoi / What :** portage du socle E2E Python de la V2 (endpoint `force_login` triple-gated +
+fixtures), migration de 3 specs TS vers Playwright Python, portage de 17 tests pytest Stripe
+mockés + 2 smoke Stripe E2E réels depuis la V2, suppression de 12 specs TS redondants
+(42 → 30 specs, suite TS ~11 min → ~7 min), renumérotation des doublons 21/35.
+
+**Pourquoi / Why :** une seule techno de test (pytest), des tests Stripe 50× plus rapides
+(mock au lieu de vrai checkout), et un login E2E en 100 ms au lieu de 5 s. Politique identique
+à la V2 (`lespass-main`) pour faciliter la fusion future.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `AuthBillet/views_test_only.py` | **Nouveau** — endpoint `force_login_for_e2e` (DEBUG + E2E_TEST_TOKEN + header X-Test-Token, copie V2) |
+| `AuthBillet/urls.py` | Branchement de l'endpoint sous `if settings.DEBUG:` |
+| `tests/pytest/conftest.py` | Fixtures partagées portées de la V2 : `api_client`, `auth_headers`, `admin_user`, `admin_client`, `tenant`, `mock_stripe`, `django_db_setup`, `_enable_db_access_for_all` |
+| `tests/pytest/test_stripe_membership_simple.py` | **Nouveau** (V2) — 5 tests Stripe mockés adhésion |
+| `tests/pytest/test_stripe_membership_complex.py` | **Nouveau** (V2) — 6 tests : multi prix libre, montant zéro, champs dynamiques |
+| `tests/pytest/test_stripe_reservation.py` | **Nouveau** (V2) — 4 tests réservation (gratuit, payant, options, form dynamique) |
+| `tests/pytest/test_stripe_crowds.py` | **Nouveau** (V2) — 2 tests contribution crowds |
+| `tests/pytest/test_comptabilite_service.py` | 3 tests passés en assertions delta / filtre par produit (piège 9.60, DB partagée) |
+| `tests/e2e/test_membership_validations.py` | **Nouveau** (V2, remplace spec TS 20) — assertion e-mail tolérante FR/EN |
+| `tests/e2e/test_reservation_validations.py` | **Nouveau** (V2, remplace spec TS 18) |
+| `tests/e2e/test_numeric_overflow_validation.py` | **Nouveau** (conversion du spec TS 28) |
+| `tests/e2e/test_stripe_smoke.py` | **Nouveau** (V2) — 2 checkouts Stripe réels (adhésion + réservation) |
+| `BaseBillet/templates/reunion/views/event/partial/booking_form.html` | **Bugfix** : `min="{{ price.prix\|unlocalize }}"` — en locale FR, `min="5,00"` est invalide et neutralisait la validation HTML5 |
+| `BaseBillet/templates/reunion/views/membership/form.html` | Même bugfix `unlocalize` (2 occurrences) |
+| `tests/playwright/tests/` | **Supprimés** (couverts par mock/smoke/Python) : 08, 09, 10, 11, 12, 13, 15, 18, 20, 28, 42, 44. **Renommés** : 21-event-quick-create→29, 35-admin-reservation-cancel→39, 35-explorer-markers→40 |
+| `tests/README.md` | Réécriture complète (comptes à jour, 3 suites, politique Stripe, migration TS→Python) |
+| `TECH_DOC/SESSIONS/TESTS/` | **Nouveau** hub : état des lieux, plan de simplification, tests restants |
+
+## Remise au vert des suites de tests (baseline chantier FEDOW_IMPORT) / Test suites back to green (FEDOW_IMPORT baseline)
+
+**Date :** 2026-06-11
+**Migration :** Non / No
+
+**Quoi / What :** remise au vert complète des 3 suites (pytest 226, E2E Playwright TS ~66, E2E
+Playwright Python 8) avant d'ouvrir le chantier S6 (caisse V2 + fedow_core). Aucun code applicatif
+modifié — uniquement les tests et leur outillage.
+
+**Pourquoi / Why :** baseline de non-régression exigée avant le lot C-A (copier-coller du socle).
+Les échecs venaient de : (1) tests E2E non mis à jour après la refonte de l'admin produits en
+proxys (`membershipproduct`/`ticketproduct`, inlines Unfold) ; (2) pollution de données entre tests
+(fenêtre comptable de 5 min partagée, cache pytest persistant après `docker compose down -v`) ;
+(3) outillage (clé API absente du conteneur, Playwright non installé, règle DNS Chromium sans
+l'apex, `www.` non routé par le Traefik de dev).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `tests/pytest/conftest.py` | Fallback en conteneur pour `test_api_key` (porté de lespass-main) — la commande documentée du README refonctionne |
+| `tests/pytest/test_comptabilite_service.py` | 3 tests rendus hermétiques : assertions en DELTA (snapshot avant création) + cleanup en `try/finally` |
+| `tests/pytest/test_crowd_budget_item_flow.py` | Vérifie que l'initiative en cache pytest existe encore (DB recréée) avant réutilisation |
+| `tests/e2e/conftest.py` | Règle Chromium `MAP` : ajout du domaine apex (le wildcard `*.domaine` ne couvre pas le domaine nu) |
+| `tests/e2e/test_explorer_ux_pills_tags.py` | Explorer testé sur l'apex (le Traefik de dev ne route pas `www.`) |
+| `tests/playwright/tests/*.spec.ts` (19 fichiers) | Adaptation à la nouvelle UX admin : proxys produits, inlines Unfold (`#form_fields-group`, `a.add-row`, `options_csv`, `order` caché), assertions bilingues FR/EN, wizard event unifié, divers sélecteurs |
+
+### Bugs applicatifs découverts puis CORRIGÉS le 2026-06-11 / App bugs found then FIXED on 2026-06-11
+1. **Wizard event : doublon → HTTP 500 — CORRIGÉ.** La finalisation (`EventWizard.step2_event`,
+   `BaseBillet/views.py`) enveloppe la création des brouillons dans `transaction.atomic()` et attrape
+   l'`IntegrityError` de `unique_together('name','datetime')` → message warning + retour à l'étape des
+   brouillons (conservés en session), création tout-ou-rien. Suite à la review externe : la suppression
+   des images temporaires des brouillons est différée APRÈS le commit (un rollback DB n'annule pas une
+   suppression de fichier — sinon retry sans images) + log de l'exception. Test E2E réactivé
+   (`21-event-quick-create-duplicate.spec.ts`, plus de `fixme`).
+2. **Signaux `post_save`/`pre_save` muets sur les proxys — CORRIGÉ.** Liste `PROXYS_PRODUCT`
+   (`BaseBillet/models.py`) + connexions explicites des 4 receivers aux 4 proxys
+   (`models.py` : post_save_Product ; `signals.py` : unpublish_if_archived,
+   send_membership_and_badge_product_to_fedow, trigger_product_update). Test de garde
+   `tests/pytest/test_signaux_proxys_product.py` (échoue si un nouveau proxy n'est pas connecté +
+   rejoue le bug FREERES). Contournement du spec 37 retiré (le test prouve désormais l'auto-création).
+   Bonus : retrait d'un import accidentel d'IDE `from jedi.inference.value import instance`
+   (`signals.py:12`, inutilisé, dépendance dev-only en code de prod).
+3. **Fixtures non déterministes (tenants `W` sans domaine)** : `test_comptabilite_exports.py` et
+   `test_event_is_proposal_field.py` utilisaient `.exclude(public).first()` → tenant `waiting_config`
+   sans Domain (créé par les E2E onboarding) → `AttributeError`. Tenant `lespass` explicite désormais.
+4. **Celery `trigger_product_update_tasks` : flood d'ERROR `Product.DoesNotExist` — CORRIGÉ.**
+   La tâche (1 s après le post_save) faisait un `get` sec : tout produit supprimé entre-temps
+   (cleanup des tests, suppression admin rapide) levait une ERROR. Produit disparu = rien à
+   notifier à LaBoutik → `try/except DoesNotExist` + log info (`BaseBillet/tasks.py:1756`).
+   Worker celery redémarré pour charger le fix. Note : le volume de ces tâches augmente
+   légitimement avec le fix n°2 (les saves via proxys notifient désormais LaBoutik, comme prévu).
+5. **Infra dev (non corrigé, à arbitrer) :** `www.tibillet.localhost` n'est pas routé par Traefik
+   (404 text/plain avant Django). Et noté : courses pymemcache (`'NoneType'... 'recv'`) quand les
+   deux suites de tests tournent en parallèle (cf. tests/PIEGES.md, session 2026-06-11).
+
+## Fix race « mail de connexion » dispatché avant COMMIT / Fix "login email" task dispatched before COMMIT
+
+**Date :** 2026-06-07
+**Migration :** Non / No
+
+**Quoi / What :** la tâche Celery `connexion_celery_mailer` plantait par intermittence avec
+`TibilletUser.DoesNotExist` (vu dans le conteneur `lespass_celery`). En cause : `sender_mail_connect()`
+appelait `connexion_celery_mailer.delay(...)` **pendant** une transaction encore ouverte. Le worker
+Celery, sur sa propre connexion DB, lisait l'utilisateur **avant le COMMIT** → introuvable.
+
+**Pourquoi / Why :** la création d'utilisateur déclenche le mail dès `get_or_create_user()`. Hors
+admin, on est en autocommit : l'user est committé immédiatement, pas de souci. **Mais l'admin Django
+enveloppe ses vues `changeform` dans `transaction.atomic()`** : quand une adhésion (`MembershipForm.save`)
+ou une réservation (form admin) est créée pour un **nouvel** email, l'user est créé dans la transaction
+admin et le `.delay()` part avant le COMMIT. L'utilisateur **n'est pas supprimé** : il était simplement
+pas encore committé au moment où la tâche tournait (il existe après le COMMIT).
+
+**Correctif / Fix :** dispatch différé via `transaction.on_commit(...)`. Hors transaction, le callback
+s'exécute immédiatement (comportement public inchangé) ; dans une transaction, il s'exécute après le
+COMMIT (l'user est alors visible par le worker). Bonus : si la transaction admin rollback, aucun mail
+orphelin n'est envoyé. Comportement prouvé en dev (autre connexion : `DoesNotExist` pendant la tx →
+`TROUVE` après COMMIT).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `AuthBillet/utils.py` | Import `transaction` ; `connexion_celery_mailer.delay(...)` enveloppé dans `transaction.on_commit(...)` dans `sender_mail_connect()` |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No
+
+## Recensement Tiers-Lieux + restructuration des étapes dans l'onboarding / Tiers-Lieux directory + step restructuring in onboarding
+
+**Date :** 2026-06-05
+**Migration :** Oui (`MetaBillet 0017` : ajout du choix `venue` sur `WaitingConfiguration.current_step` — pas de SQL, juste l'état Django)
+
+**Quoi / What :** le wizard de création d'espace (`/onboard/`) passe de **6 à 7 étapes** et
+intègre le **recensement national Tiers-Lieux** :
+
+1. **Identité allégée** : on retire le **nom du lieu** et le **choix du domaine** de la 1ʳᵉ page
+   (qui ne demande plus que prénom, nom, email, CGU). Le brouillon est créé avec un nom vide.
+2. **Nouvelle étape « Votre lieu »** (après la vérification email) : recherche du lieu dans le
+   recensement Tiers-Lieux (débounce + spinner) → « Utiliser ce lieu » pré-remplit le **nom** et
+   garde l'**adresse** pour l'étape suivante. Sinon saisie manuelle du nom. Le **domaine** se
+   choisit ici : **slug éditable pré-rempli depuis le nom** (live) + suffixe **.coop / .re** +
+   aperçu.
+3. **Étape « Adresse » optionnelle** (ex-« Votre lieu ») : carte pré-remplie depuis la fiche
+   Tiers-Lieux, avec un bouton **« Je ne renseigne pas d'adresse »** qui passe l'étape.
+
+Le check d'unicité du nom (« déjà pris ») est déplacé de l'identité vers l'étape « Votre lieu ».
+
+**Pré-remplissage carte par GPS direct (au lieu du géocodage Nominatim) :** quand une fiche
+Tiers-Lieux a des coordonnées, on passe au widget carte la **géoloc** + l'**adresse structurée**
+(rue / CP / ville) de l'API. Le widget **pose le marqueur** et **remplit les champs directement**,
+sans repasser par Nominatim — qui échouait sur les libellés complexes (ex :
+« MIETE (Maison des Initiatives…) 150 Rue du 4 Août 1789 69100 Villeurbanne »). La recherche
+Nominatim reste le **repli** pour les fiches sans GPS et la saisie manuelle. La même logique est
+appliquée au **wizard de création d'évènement** (`/event/wizard/`) et au widget réutilisable
+`widgets/widget_carte_adresse` (nouvelles `data-rue/cp/ville-initiale`).
+
+**Robustesse du pré-remplissage (2 correctifs) :**
+- **Clés du `prefill` toujours présentes** : en saisie manuelle, le `prefill` est vide ; or
+  `valeur|default:prefill.latitude` dans un template Django lève `VariableDoesNotExist` si la clé
+  manque (la résolution d'un *argument* de filtre ne tolère pas une clé absente). Les vues passent
+  désormais un dict aux clés garanties (vides → le widget bascule sur Nominatim avec le nom du lieu).
+- **Pas de GPS résiduel** : si on choisit une fiche puis qu'on revient en arrière pour saisir le
+  lieu à la main, on oublie la fiche (purge des clés `tierslieux_*` côté serveur pour l'event wizard,
+  reset des hidden `tl_*` côté JS pour l'onboard), sinon le marqueur se posait sur l'ancien lieu.
+
+Deux **tests de non-régression** couvrent ce cas : `GET /event/wizard/map/` et `GET /onboard/place/`
+en saisie manuelle (sans fiche en session) doivent rendre 200 (avant : `VariableDoesNotExist`).
+
+**Source des données :** les résultats du recensement national affichent désormais leur source —
+*Grand recensement des tiers-lieux 2026*, en open data sur
+[comite-data.tiers-lieux.fr](https://comite-data.tiers-lieux.fr/) (event wizard + onboard).
+
+**Création d'instance sans adresse :** confirmée — l'étape « Adresse » de l'onboard est optionnelle
+(bouton « Je ne renseigne pas d'adresse ») et `TenantCreateValidator.create_tenant` n'utilise aucun
+champ adresse (tous nullable sur `WaitingConfiguration`). Une instance se crée sans adresse.
+
+### Revue de sécurité / robustesse (event wizard + onboard, mêmes correctifs)
+
+- **Bug coordonnées localisées (corrigé) :** avec `USE_L10N` + locale FR, Django rendait les floats
+  GPS avec une **virgule** (`44,05`), ce qui cassait `float()` côté serveur et `parseFloat` côté JS
+  → marqueur mal placé / pré-remplissage perdu. Fix : `|unlocalize` sur toutes les coordonnées des
+  templates (`_tierslieux_resultats.html`, `venue_tierslieux.html`, widget `widget_carte_adresse`) +
+  `valider_coordonnees()` tolère la virgule. Vérifié sur les deux flux.
+- **Validation des entrées :** nouvelle fonction `valider_coordonnees()` (float + bornes terrestres,
+  rejette texte/None) appelée par `use_tierslieux` (event) et `venue` (onboard) ; terme de recherche
+  borné (`LONGUEUR_MAX_TERME`) ; nom/adresse tronqués avant mise en session (anti-pollution).
+- **Remontée Sentry :** la normalisation des fiches API est protégée (skip des entrées non-dict) et
+  journalise en `logger.error` toute anomalie de traitement (→ issue Sentry) sans casser le wizard ;
+  un simple échec réseau de l'API reste en `logger.warning` (transitoire, pas de bruit Sentry).
+- **XSS :** aucune faille — Django auto-échappe texte et attributs, les écritures JS passent par
+  `.value` (jamais `innerHTML`), HTMX injecte du HTML rendu serveur (aucun `|safe`), clé de cache md5.
+- Tests ajoutés : `valider_coordonnees` (virgule/garbage/bornes), POST coordonnées invalides ignorées.
+
+### Revue de design / accessibilité (event wizard + onboard)
+
+- **Cohérence couleur d'accent :** le toggle « Utiliser une adresse existante / Créer un nouveau
+  lieu » passait de bleu (`btn-outline-primary`) à vert (`btn-outline-success`), cohérent avec les
+  boutons d'action « Utiliser ce lieu ». Override **local** uniquement (pas de modif du thème global).
+- **Responsive des fiches de résultats :** sur mobile (`<576px`) le nom du lieu et le bouton
+  « Utiliser ce lieu » s'empilent (`flex-column flex-sm-row`) au lieu de se serrer
+  (`_tierslieux_resultats.html` + `venue_tierslieux.html`).
+- **Switch CGU trop petit (bug CSS corrigé) :** le style qui agrandissait le switch
+  (`.onboard-cgu-switch .form-check-input`, 2.75em) était **mort** — `wizard.css` est chargé AVANT
+  `bootstrap.css`, et à spécificité égale (0,2,0) Bootstrap gagnait, ramenant le switch à 2em (32px).
+  Préfixe `.onboard-wizard` ajouté → spécificité 0,3,0 → le switch retrouve sa taille (44×24px),
+  sans `!important` ni changement d'ordre de chargement.
+- **Accessibilité vérifiée :** police *luciole*, contraste texte 15:1 / bouton vert 5:1 / bleu 4.5:1
+  (≥ WCAG AA), touch targets ≥ 44px, viewport zoomable, body 16px.
+- **Note (non corrigé) :** le bloc CSS `.onboard-dns-radio*` de `wizard.css` est **mort** (le template
+  utilise `btn-outline-success`) — à supprimer ou rebrancher selon le look voulu pour les pills DNS.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `MetaBillet/models.py` | `STEP_VENUE` + libellé `STEP_PLACE` → « Address » |
+| `onboard/serializers.py` | identity sans name/dns ; nouveau `OnboardVenueSerializer` (name + slug + dns + check unicité) |
+| `onboard/views.py` | vues `venue`/`venue_search`, routage OTP→venue, place optionnelle + pré-remplissage |
+| `onboard/urls.py` | routes `onboard-venue` / `onboard-venue-search` |
+| `onboard/templatetags/onboard_steps.py` | `STEP_ORDER` + `venue` |
+| `…/steps/01_identity.html` | retrait nom + domaine, compteur 1/7 |
+| `…/steps/03_venue.html` (nouveau) + `partials/venue_tierslieux.html` (nouveau) | étape recherche + slug DNS |
+| `…/steps/03_place.html` | « Adresse » 4/7, optionnelle, pré-remplie, bouton « passer » |
+| `…/partials/progress_panel.html` + compteurs steps | flux 7 étapes |
+| `templates/widgets/widget_carte_adresse.html` + `static/widgets/widget_carte_adresse.js` | `data-rue/cp/ville-initiale` : marqueur + champs remplis directement depuis le GPS de l'API (sans Nominatim) |
+| `BaseBillet/views.py` (`use_tierslieux`, `_wizard_etape_carte_lieu`) | wizard event : stocke GPS + adresse de la fiche en session, les passe au widget |
+| `…/wizard/_tierslieux_resultats.html` + `_form_carte.html` | hidden `latitude`/`longitude` + pré-remplissage GPS du widget |
+| `…/steps/03_venue.html` + `partials/venue_tierslieux.html` | hidden `tl_lat/tl_lng/tl_street/tl_cp/tl_ville`, masquage de la recherche après choix |
+| `onboard/tests/*` | tests adaptés (OTP→venue, check nom→serializer venue, prefill GPS en session) |
+| `…/wizard/_form_lieu.html` | toggle existant/nouveau : bleu → vert (`btn-outline-success`) |
+| `…/wizard/_tierslieux_resultats.html` + `partials/venue_tierslieux.html` | fiches `flex-column flex-sm-row` (responsive mobile) |
+| `static/onboard/wizard.css` | fix spécificité switch CGU (préfixe `.onboard-wizard`) → taille restaurée 44×24px |
+
+### Migration
+- **Migration nécessaire :** Oui — `MetaBillet/migrations/0017_*` (à générer via `makemigrations`).
+  Pas d'opération SQL (changement de `choices`), la DB tourne déjà avec la nouvelle valeur.
+
+### i18n
+- Nombreux nouveaux `{% translate %}` (étape venue, libellés) → `makemessages` (texte source FR).
+
+---
+
+## Intégration du recensement Tiers-Lieux dans le wizard d'évènement / Tiers-Lieux directory integration in the event wizard
+
+**Date :** 2026-06-05
+**Migration :** Non
+
+**Quoi / What :** à l'étape 1 du wizard de proposition d'évènement (visiteur anonyme), on
+enrichit la saisie du lieu avec l'**API publique du recensement national Tiers-Lieux**
+(https://api.tiers-lieux.fr/) et la détection d'instance :
+1. **Détection d'instance** : si l'email saisi correspond à un compte qui administre déjà une
+   instance TiBillet (`User.client_admin`), un encart **non-bloquant** invite le proposeur à
+   créer son évènement chez lui + à ajouter le(s) tag(s) que ce tenant fédère + à proposer son
+   espace à la fédération.
+2. **Recherche nationale unifiée** : à chaque recherche (≥ 3 car., débounce), le recensement
+   Tiers-Lieux est interrogé et **affiché sous les adresses locales**, avec un texte « Vous ne
+   trouvez pas votre lieu ci-dessus ? Élargissez au recensement national ». Un **spinner**
+   remplace la loupe de l'input pendant l'appel. Une fiche trouvée pré-remplit le nouveau lieu
+   et passe à l'étape carte (géocodage de l'adresse complète) pour **validation**. Le message
+   « aucun lieu trouvé + créer » ne s'affiche que si la liste locale est aussi vide (sinon
+   réponse vide, pas de bruit).
+3. **UX étape 1 fiabilisée** : plus de **pré-cochage automatique** de l'adresse principale
+   (corrige un bug : « Continuer » partait avec une sélection fantôme). Le bouton **Continuer
+   est grisé** tant qu'aucun choix réel n'est fait (adresse cochée *et visible*, ou nom de
+   nouveau lieu saisi), avec un indice explicite. Si rien n'est trouvé (local + national), un
+   **CTA « Créer « terme » comme nouveau lieu »** bascule en mode nouveau lieu avec le nom
+   pré-rempli. ⚠️ Le pré-cochage retiré concerne aussi le wizard staff (le formulaire est
+   unifié) : l'adresse doit désormais être choisie explicitement.
+
+**Comment / How :**
+- Service isolé `BaseBillet/services/tiers_lieux.py` : `rechercher_tiers_lieux(terme)` avec
+  **timeout 4 s + try/except → []** (le wizard ne casse jamais si l'API est lente/down) et cache
+  mémoire 1 h. L'API ne sait PAS chercher par email (testé) → la clé de recherche est le **nom/
+  ville/CP**, l'email ne sert qu'à la détection d'instance.
+- 3 `@action` sur `EventWizard` : `check-instance` (GET, HTMX au blur de l'email),
+  `search-tierslieux` (GET, HTMX débounce), `use-tierslieux` (POST → session → étape carte).
+- Le filtre JS local existant pilote le déclenchement de la recherche nationale (HTMX) uniquement
+  si 0 adresse locale et terme ≥ 3 caractères.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/services/tiers_lieux.py` (+`__init__.py`) | Client API : recherche + normalisation + timeout + cache |
+| `BaseBillet/views.py` | 3 `@action` (`check-instance`, `search-tierslieux`, `use-tierslieux`) + pré-remplissage `_wizard_etape_carte_lieu` |
+| `…/wizard/_form_lieu.html` | conteneurs `#wizard-instance-result` / `#wizard-tierslieux-result` + câblage HTMX + JS débounce |
+| `…/wizard/_form_carte.html` | `adresse_initiale=adresse_recherche` (géocodage de l'adresse complète) |
+| `…/wizard/_instance_trouvee.html`, `…/wizard/_tierslieux_resultats.html` | nouveaux partials |
+| `tests/pytest/test_tiers_lieux.py` | 11 tests (service mocké + endpoints) |
+
+### Sécurité
+- ⚠️ `check-instance` permet à un anonyme de tester un email et savoir s'il administre une
+  instance (+ son nom) → **énumération email→instance**. Risque limité (emails de contact souvent
+  publics), **accepté pour le MVP**. Rate-limit par IP possible en évolution.
+- API externe : timeout court + dégradation gracieuse (jamais d'exception vers le wizard).
+
+### i18n
+- Nouveaux `{% translate %}` / `{% blocktranslate %}` (encarts) → `makemessages` (texte source FR).
+
+---
+
+## Jauge ouverte aux proposeurs dans le wizard d'évènement / Gauge available to proposers in the event wizard
+
+**Date :** 2026-06-05
+**Migration :** Non
+
+**Quoi / What :** dans le wizard de proposition d'évènement (agenda participatif), le champ
+**« Jauge max »** était réservé au staff. Il est désormais proposé à **tout le monde** (anonyme,
+membre connecté, staff). Une proposition non-staff qui renseigne une jauge la voit **appliquée à
+l'identique du staff** : `jauge_max` + `show_gauge=True` + produit **FREERES** (billetterie de
+réservation gratuite). L'évènement **reste une proposition modérée** (`is_proposal=True`) jusqu'à
+validation admin. Sans jauge saisie : défaut du modèle (`50`) intact, `show_gauge=False`, aucune
+billetterie greffée. La logique des **tags** (staff = création libre ; public = sélection parmi
+l'existant) est **inchangée**.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/templates/reunion/views/event/wizard/_events_inner.html` | Champ jauge + badge jauge affichés pour tous ; layout tags en `col-md-6` ; logique tags inchangée (`show_admin_fields`) |
+| `BaseBillet/views.py` | `_creer_event_depuis_brouillon` : jauge appliquée pour tous (plus de `if est_staff else None`) |
+| `BaseBillet/validators.py` | Docstring `WizardEventSerializer` mis à jour (jauge commune à tous) |
+| `tests/pytest/test_event_wizard_unifie.py` | +1 test de non-régression (jauge non-staff appliquée + cas sans jauge) |
+
+### i18n
+- Aucune nouvelle chaîne (`« Jauge max (optionnel) »` / `« Jauge »` existaient déjà). Pas de `makemessages`.
+
+---
+
+## Fédération automatique des évènements par tags (agenda + carto, en cache)
+
+**Date :** 2026-06-03
+**Migration :** Oui (`BaseBillet 0218` : M2M `FederationConfiguration.tags_federation`)
+
+**Quoi / What :** un tenant peut s'abonner à des **tags** (`FederationConfiguration.tags_federation`,
+M2M) : les évènements de **tout le réseau TiBillet** portant un de ces tags apparaissent dans son
+**agenda** (`/event/`) ET sur sa **carte** (`/federation/`), **en plus** de sa fédération habituelle
+(voisins `FederatedPlace`). Liste vide = comportement inchangé.
+
+**Comment / How :**
+- Identification « qui dans le réseau porte ce tag » **100% cache** : nouveau helper
+  `seo.services.get_tenant_uuids_with_event_tags(slugs)` lit `AGGREGATE_EVENTS` (zéro requête
+  cross-schema), match par **slug**, **veto `private` respecté**.
+- **Agenda** : `federated_events_filter` ajoute les tenants thématiques à sa boucle existante
+  (rendu en objets `Event`, `private=False` appliqué d'office aux non-voisins).
+- **Carto** : `FederationViewset.list` ajoute ces tenants à `all_uuids`.
+- **Cache enrichi** : `get_events_for_tenants` expose désormais `private` ; `build_aggregate_points`
+  exclut les events `private` des popups → **carto nettoyée partout** (corrige un trou existant où
+  des events privés pouvaient apparaître sur la carte réseau).
+- Changer `tags_federation` régénère le token du cache agenda (`FederationConfiguration.save()`) → effet immédiat.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | `FederationConfiguration.tags_federation` (M2M) + `save()` invalide le cache agenda |
+| `BaseBillet/migrations/0218_*` | AddField M2M |
+| `seo/services.py` | `get_events_for_tenants` → `private` ; `build_aggregate_points` exclut `private` ; helper `get_tenant_uuids_with_event_tags` |
+| `BaseBillet/views.py` | agenda (`federated_events_filter`) + carto (`FederationViewset.list`) étendus au réseau via cache |
+| `Administration/admin_tenant.py` | fieldset « Fédération automatique par tags » + autocomplete |
+| `tests/pytest/test_federation_auto_tags.py` | 4 tests helper (slug + veto private) |
+| `tests/pytest/test_federation_view_integration.py` | mock `_fake_config` complété (`tags_federation`) |
+
+### Migration
+- **Migration nécessaire / Migration required :** Oui — `BaseBillet/migrations/0218_*`
+- Commande : `migrate_schemas --executor=multiprocessing`
+
+### Déploiement / Deployment
+- ⚠️ Après déploiement : **redémarrer le worker Celery** puis **relancer `refresh_seo_cache`**. Le
+  champ `private` n'entre dans le cache que si la task tourne avec le nouveau code. Tant que le cache
+  ne porte pas `private`, le filtrage formel du veto n'est pas actif (pas de fuite tant qu'aucun event
+  privé n'existe, mais à régénérer pour être correct).
+
+### i18n
+- Nouveaux `_()` (verbose_name/help_text de `tags_federation`, fieldset admin) → `makemessages` (texte source FR).
+
+---
+
+## Redirection des anciens liens de la doc Docusaurus v2 → doc v3 / Redirect old Docusaurus v2 docs links to v3
+
+**Date :** 2026-06-02
+**Migration :** Non
+
+**Quoi / What :** l'ancienne documentation (Docusaurus v2) était servie sur `tibillet.org`
+avec des chemins `/docs/…`, `/fr/…`, `/en/…`, `/roadmap/`, `/search/`, `/cgucgv/`. Ces chemins
+n'existent plus dans Lespass : les vieux liens (indexés, partagés) tombaient en 404.
+`CanonicalDomainRedirectMiddleware` les redirige désormais (302) vers la nouvelle doc
+(`documentation_v3` sur `tibillet.github.io`).
+
+**Pourquoi / Why :** le middleware canonique ne faisait que `tibillet.org → tibillet.coop` en
+gardant le chemin → le 404 était simplement déplacé sur `.coop`, jamais corrigé. On rattrape
+maintenant les anciens chemins de doc avant la redirection canonique.
+
+**Comportement / Behavior :**
+- Page de démonstration (`/docs/presentation/demonstration/` et variante `/fr/…`) → page démo
+  précise de la doc v3.
+- CGU/CGV (`/cgucgv/`, `/fr/cgucgv/`) → page CGU/CGV de la doc v3.
+- Tout autre `/docs/…`, `/fr/…`, `/en/…`, `/roadmap/…`, `/search/…` → racine de la doc v3.
+- **ROOT uniquement** (`schema_name == "public"`) : zéro impact sur les sous-domaines tenants.
+- **302 temporaire** (cohérent avec le canonical, table pas encore figée). GET/HEAD seulement.
+- Pas d'`i18n_patterns` dans Lespass → `/fr` et `/en` sont des préfixes libres (aucune collision
+  vérifiée avec `seo.urls`, `onboard.urls`, `BaseBillet.urls`).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `Customers/middleware.py` | + fonction pure `url_doc_v3_pour_chemin_herite()` + méthode `_redirection_doc_heritee()` appelée avant la redirection canonique |
+| `tests/pytest/test_middleware_doc_redirect.py` | Nouveau : 26 cas (démo, CGU, préfixes hérités, routes Lespass non touchées) |
+
+## Agenda participatif → Fédération + récolte e-mail du proposeur anonyme
+
+**Date :** 2026-06-02
+**Migration :** Oui (`BaseBillet 0217` : déplace 3 champs `Configuration` → `FederationConfiguration`)
+
+**Quoi / What :** les réglages de l'agenda participatif quittent `Configuration` (et le
+dashboard des modules) pour vivre sur **`FederationConfiguration`** (admin « Options de
+fédération ») :
+- `module_agenda_participatif` (activation) + `proposition_anonyme_autorisee` + `tag_auto_proposition`
+  sont **déplacés** vers `FederationConfiguration`.
+- La **carte « Agenda participatif » du dashboard est supprimée** ; la carte fédération est
+  renommée **« Fédération et agenda participatif »** avec une description FALC.
+- La migration `0217` **recopie** la valeur existante par tenant (les tenants qui avaient
+  activé l'agenda le gardent activé).
+
+**Récolte e-mail (proposeur anonyme) / Anonymous proposer email :** à l'**étape 1** du wizard,
+un visiteur **non connecté** doit désormais saisir un **e-mail obligatoire**. À la finalisation,
+`get_or_create_user(email, send_mail=False)` crée (ou récupère) un compte **non validé**
+(`email_valid=False`, inactif) **sans déclencher l'OTP** ; l'évènement est lié à ce compte
+(`created_by`) et reste une **proposition modérée**. Si l'e-mail correspond à un compte déjà en
+erreur (`email_error`), la proposition est **refusée** avec un message.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | 3 champs déplacés `Configuration` → `FederationConfiguration` |
+| `BaseBillet/migrations/0217_*` | AddField ×3 → recopie par tenant (guard `public`) → RemoveField ×3 |
+| `Administration/admin_tenant.py` | fieldset « Agenda participatif » : `ConfigurationAdmin` → `FederationConfigurationAdmin` |
+| `Administration/admin/dashboard.py` | carte agenda supprimée ; carte fédération renommée + description FALC |
+| `BaseBillet/views.py` | `_garde_acces`, `_creer_event_depuis_brouillon`, `EventMVT.list` → `FederationConfiguration` ; étape 1 + finalisation : récolte e-mail + `get_or_create_user(send_mail=False)` |
+| `BaseBillet/validators.py` | `WizardPlaceSelectSerializer` : champ `email_proposeur` (obligatoire si anonyme) |
+| `.../event/wizard/_form_lieu.html` | champ e-mail conditionnel (visiteur anonyme) |
+| `.../event/list.html` | bouton « Proposer » lit `federation_config.*` |
+| `tests/pytest/test_event_wizard_unifie.py` | 2 tests adaptés + 2 nouveaux (récolte e-mail) |
+
+### Migration
+- **Migration nécessaire / Migration required :** Oui — `BaseBillet/migrations/0217_*`
+- Commande : `migrate_schemas --executor=multiprocessing`
+
+### i18n
+- Nouveaux textes `_()` (label/aide du champ e-mail, messages, libellé + description de la carte
+  dashboard fédération) — à extraire via `makemessages` (texte source FR).
+
+---
+
+## Formulaire event unifié (front) + fix image + options config / Unified front event wizard
+
+**Date :** 2026-06-01
+**Migration :** Oui (`BaseBillet 0216` : 2 champs `Configuration`)
+
+**Quoi / What :** un **seul** formulaire/wizard event sur le front (`EventWizard`) remplace les
+deux boutons « Ajouter » (staff) et « Proposer » (public) de `/event`. Le formulaire s'adapte
+au contexte :
+- **Staff** (droits de création) → event **publié**, champs `jauge_max` + `tags`.
+- **Public** (connecté ou anonyme autorisé) → **proposition modérée** (`is_proposal=True`) +
+  **tag automatique** ; tags limités aux **tags existants** (anti-spam).
+- Champs communs : nom, date, description, image, **tags**. `jauge_max` reste staff-only.
+
+Corrige aussi le **bug image** (#1) : l'image uploadée n'apparaissait pas dans `/event` car le
+fichier temp n'était jamais migré (`event.img.name = draft["image"]`) → désormais recopié dans
+`images/` via `event.img.save(...)` puis temp supprimé.
+
+Ajoute le **flux « Envoyer »** (#4) : si un évènement est en cours de saisie (sous-form non
+ajouté), une popup SweetAlert propose « Ajouter d'abord / Envoyer sans / Annuler » — rien n'est
+perdu sans confirmation.
+
+**Config (« déplacer dans la config ») :** `proposition_anonyme_autorisee` (Bool, défaut False)
++ `tag_auto_proposition` (FK Tag), dans le fieldset « Agenda participatif ». L'admin Django
+**n'est pas touché**.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | `Configuration` : `proposition_anonyme_autorisee` + `tag_auto_proposition` |
+| `Administration/admin_tenant.py` | fieldset « Agenda participatif » |
+| `BaseBillet/views.py` | `EventWizard` (unifié) + helpers `_attacher_image_brouillon`, `_creer_event_depuis_brouillon` |
+| `BaseBillet/validators.py` | `WizardEventSerializer` (unifié) |
+| `BaseBillet/urls.py` | route `event-wizard-*` (remplace `event-propose`/`event-admin-wizard`) |
+| `.../event/list.html` | bouton unique vers le wizard |
+| `.../event/wizard/step2_event.html` (+ `_events_inner.html`) | template unifié + tags datalist + JS flux #4 |
+| `tests/pytest/test_event_wizard_unifie.py` | 6 tests (image, rôle, tag auto, tags public, garde accès) |
+
+### Migration
+- **Migration nécessaire / Migration required :** Oui (`BaseBillet/migrations/0216_*`)
+
+### Nettoyage effectué / Cleanup done
+Code mort de l'ancien flux **supprimé** : classes `EventWizardAdmin` + `EventWizardPublic`
+(`views.py`, 599 lignes), helpers `_creer_event_admin_depuis_brouillon` /
+`_creer_event_public_depuis_brouillon`, serializers `WizardEventAdminSerializer` /
+`WizardEventPublicSerializer` / `EventProposalEmailSerializer`, et templates
+`admin_step*.html`, `public_step0_*.html`, `public_step2_event.html`. Tests obsolètes
+(`test_event_wizard_admin.py`, `test_event_wizard_public.py`) supprimés (flux remplacé,
+couvert par `test_event_wizard_unifie.py`). Audit conformité djc : OK.
+
+## Cache SEO — fragments par tenant + agrégats par recombinaison / Per-tenant SEO cache fragments
+
+**Date :** 2026-06-01
+**Migration :** Oui (`seo 0004`, `alter cache_type`, no-op DB) · **Régénération cache :** au prochain beat ou `refresh_seo_cache()`
+
+**Quoi / What :** refonte de `seo/tasks.py` pour la scalabilité (≈ 500 tenants). Le cache SEO
+est désormais produit par **fragments par tenant** puis **recombiné** en agrégats :
+- `refresh_tenant_seo_cache(tenant_id)` — recalcule les fragments d'**un** tenant
+  (`TENANT_SUMMARY`, `TENANT_EVENTS`, nouveau `TENANT_POINTS`). 1 schema.
+- `rebuild_seo_aggregates()` — recompose `AGGREGATE_EVENTS/LIEUX/POINTS` + `SITEMAP_INDEX`
+  par lecture des fragments + concat (**zéro cross-schema**).
+- `refresh_seo_cache()` — orchestrateur du beat 4 h (tous fragments + rebuild +
+  `FEDERATION_INCOMING` cross-schema + nettoyage stale).
+
+**Pourquoi / Why :** l'ancien recalcul intégral faisait un `UNION ALL` sur tous les schemas à
+chaque exécution — ingérable à 500 tenants, et impossible à déclencher sur chaque modif.
+
+**Comment / How :** le signal `post_save`/`post_delete` Event/PostalAddress déclenche
+**uniquement** `refresh_tenant_seo_cache` du tenant courant (1 schema, débounce **par tenant**
+60 s) + `rebuild_seo_aggregates` (débounce **global** 180 s qui **borne la charge**
+indépendamment du volume de modifs). Jamais de recalcul des schemas des autres tenants. Les
+vues consommatrices sont **inchangées** (mêmes `AGGREGATE_*`). Équivalence vérifiée : agrégats
+identiques à l'ancienne version (20 events / 5 lieux / 4 points, 0 collision `pa_id`).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/models.py` | + `cache_type` `TENANT_POINTS` (migration `0004`) |
+| `seo/services.py` | + `get_counts_for_tenant(schema_name)` (counts 1-tenant) |
+| `seo/tasks.py` | refonte : `refresh_tenant_seo_cache`, `rebuild_seo_aggregates`, `refresh_seo_cache` orchestrateur |
+| `BaseBillet/signals.py` | signal → refresh **ciblé tenant** + rebuild débouncés (remplace le refresh complet) |
+| `tests/pytest/test_seo_cache_fragments.py` | 4 tests (fragments, recombinaison, unicité pa_id, incoming au beat) |
+| `tests/pytest/test_seo_aggregate_points.py` | maj test `is_main_address` (pa_id préfixé) |
+
+### Migration
+- **Migration nécessaire / Migration required :** Oui (`seo/migrations/0004_alter_seocache_cache_type.py`, no-op DB)
+- `manage.py migrate_schemas --executor=multiprocessing`
+
+## Carto (explorer) — 3 correctifs + rafraîchissement auto du cache / Map explorer fixes + auto cache refresh
+
+**Date :** 2026-06-01
+**Migration :** Non · **Régénération du cache requise :** Oui (`refresh_seo_cache`)
+
+**Quoi / What :**
+- **Bug adresse décalée** : `pa_id` (clé des markers côté JS) valait `PostalAddress.pk`,
+  non unique entre tenants (PK par schema) → collision, mauvaise adresse au clic. Désormais
+  préfixé par le tenant (`{tenant_uuid}:{pk}`) en sortie de `build_aggregate_points`.
+- **Carte non rafraîchie au clic d'un event** : les cartes event n'avaient pas de
+  `data-pa-id` et `bindListDelegation` ne réagissait qu'aux cartes lieu. Ajout de
+  `data-pa-id` + nouvelle fonction `focusOnPA(paId, tenantId)`.
+- **Images absentes** : les events affichaient toujours une emoji ; le cache ne portait
+  pas l'`image_url` des events ni l'image des lieux. Ajout de `image_url` (events) et
+  `image_url`/`tenant_image_url` (lieux, via la social card) dans le cache, et affichage
+  côté JS (cartes lieu/event, accordéon) avec fallback logo → image → emoji.
+- **Rafraîchissement auto** : signal `post_save`/`post_delete` sur `Event` et
+  `PostalAddress` → `refresh_seo_cache` (Celery, **débouncé** : 1 refresh / 70 s, différé
+  60 s pour grouper les modifs).
+- **Audit (bonus)** : `highlightPin`/`highlightPinClass` ciblaient `data-lieu-id` au lieu de
+  `data-tenant-id` (surbrillance des pins inopérante) — corrigé (+ multi-adresses) ;
+  `scrollToCard` ne gérait que le mode « lieu » — fallback carte event ajouté ; popup
+  alignée sur le fallback logo→image.
+
+**Pourquoi / Why :** corriger l'UX de la carto (explorer ROOT + /federation/) et garder le
+cache à jour sans attendre le beat 4 h.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/services.py` | `pa_id` unique cross-tenant ; `image_url` events ; `tenant_image_url` lieux (points) |
+| `seo/tasks.py` | `image_url` des lieux dans `AGGREGATE_LIEUX` |
+| `seo/static/seo/explorer.js` | `focusOnPA` + clic event ; affichage images (cartes lieu/event, accordéon) |
+| `BaseBillet/signals.py` | Signal débouncé Event/PostalAddress → `refresh_seo_cache` |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+- **Action requise :** régénérer le cache : `manage.py shell -c "from seo.tasks import refresh_seo_cache; refresh_seo_cache()"`
+
+## Fédération — options d'affichage par tenant / Federation display options per tenant
+
+**Date :** 2026-06-01
+**Migration :** Oui (`BaseBillet 0215`, auto, tous schemas tenant)
+
+**Quoi / What :** nouveau singleton **`FederationConfiguration`** (par tenant) pilotant
+l'affichage de la page Réseau local (`/federation/`) : filtre « event à venir seulement »,
+toggle des lieux entrants (qui me fédèrent), texte d'introduction WYSIWYG, et tri des lieux
+(alphabétique / par prochain événement). Visible dans l'admin section **Fédération**,
+au-dessus de « Espaces » et « Assets ».
+/ New per-tenant `FederationConfiguration` singleton driving the Local network page display.
+
+**Pourquoi / Why :** rendre configurables des comportements jusque-là figés dans le code
+(bidirectionnalité forcée, lieux sans event toujours affichés), au niveau de chaque lieu.
+
+**Comment / How :** tout s'applique à la **consommation** (`FederationViewset.list`), via la
+fonction pure `seo.services.appliquer_options_federation`. **Aucune** modification du cache SEO
+(`refresh_seo_cache`), du `/explorer/` public ROOT, **ni du JS**. L'option « lieux sans adresse »
+est gérée côté serveur (injection d'un point sans coordonnées, listé mais sans marqueur — le JS
+ignore déjà les marqueurs sans coords). Tout est testable en pytch.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | Modèle `FederationConfiguration(SingletonModel)` (5 champs) |
+| `seo/services.py` | Fonction pure `appliquer_options_federation()` (filtre, tri, points sans coords) |
+| `Administration/admin_tenant.py` | `FederationConfigurationAdmin` (WYSIWYG + sanitize + permissions) |
+| `Administration/admin/dashboard.py` | Item sidebar « Options » en tête de la section Fédération |
+| `BaseBillet/views.py` | `FederationViewset.list` : lecture config + filtre/tri/entrants/sans-adresse/intro |
+| `BaseBillet/templates/reunion/views/federation/explorer.html` | Affichage du `texte_introduction` |
+| `Administration/management/commands/demo_data_v2.py` | Fixtures : 3 scénarios fédération additifs (reseed `--flush` requis) |
+| `tests/pytest/test_federation_config.py` | 7 tests DB-only (fonction pure) |
+| `tests/pytest/test_federation_view_integration.py` | 4 tests d'intégration de la vue |
+
+### Migration
+- **Migration nécessaire / Migration required :** Oui
+- `BaseBillet/migrations/0215_federationconfiguration.py`
+- `manage.py migrate_schemas --executor=multiprocessing`
+
+## Sentry — tracing désactivé (budget spans saturé) / Sentry tracing disabled
+
+**Date :** 2026-05-25
+**Migration :** Non · **Déploiement requis :** Oui (redémarrage prod)
+
+**Quoi / What :** `sentry_sdk.init` (settings) : `traces_sample_rate` et
+`profiles_sample_rate` passés de **0.3 → 0.0**. Le tracing/performance monitoring
+(spans) est coupé ; les **events d'erreur (issues) restent captés normalement**.
+/ Tracing/profiling sampling 0.3 → 0.0. Spans off, error events unaffected.
+
+**Pourquoi / Why :** le volume festival (4000 users + tâches Celery) avec 30 % de
+transactions tracées a **saturé le budget de spans** Sentry (100 % consommé → spans
+droppés). On coupe le tracing pour ne plus exploser le budget. Remonter prudemment
+(0.01–0.05) plus tard si besoin de perf.
+
+**Note :** ne restaure pas l'ingestion de la **période en cours** (déjà consommée) —
+ça nécessite un ajustement budget côté Sentry ou le reset de période. Prend effet
+**au déploiement** (l'init ne tourne qu'en prod : `not DEBUG and SENTRY_DNS`).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `TiBillet/settings.py` | `sentry_sdk.init` : `traces_sample_rate=0.0`, `profiles_sample_rate=0.0` |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+
+## API v1 — validation réservation loggée en `warning` (anti-bruit Sentry) / Reservation validation logged at warning
+
+**Date :** 2026-05-25
+**Migration :** Non
+
+**Quoi / What :** `ApiReservationViewset.create` (v1) loggeait les **échecs de validation
+(400 client)** en `logger.error` → events Sentry. Passé en **`logger.warning`** : la
+`LoggingIntegration` Sentry (défaut `event_level=ERROR`, aucune surcharge dans
+`settings.py`) ne crée **plus d'event** pour ces 400 (juste un breadcrumb). Le 400 + le
+corps d'erreur informent déjà l'appelant.
+/ v1 reservation `create` logged client 400 validation failures at `error` (Sentry events).
+Now `warning` → no Sentry event (default `event_level=ERROR`).
+
+**Pourquoi / Why :** une validation 400 côté client (payload incomplet) n'est pas une
+erreur applicative ; elle ne doit pas solliciter Sentry.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `ApiBillet/views.py` | `ApiReservationViewset.create` : `logger.error` → `logger.warning` sur `validator.errors` |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+
+## API v1 (ApiBillet) — en-têtes de dépréciation vers /api/v2/ / API v1 deprecation headers
+
+**Date :** 2026-05-25
+**Migration :** Non
+
+**Quoi / What :**
+- Les réponses des endpoints **consommateur** de l'API v1 (`ApiBillet`) portent
+  désormais des en-têtes HTTP **non bloquants** orientant vers v2 :
+  `Deprecation: true`, `Link: </api/v2/>; rel="successor-version"`,
+  `Warning: 299 - "TiBillet API v1 is deprecated, migrate to /api/v2/"`.
+- Mécanisme : mixin **`DeprecatedV1Mixin`** (override `finalize_response`) placé en
+  **première base** des viewsets/APIViews consommateur. Marche pour `ViewSet` **et**
+  `APIView` (les deux héritent `finalize_response` de DRF — vérifié).
+- 12 classes concernées : `ApiReservationViewset`, `EventsViewSet`, `EventsSlugViewSet`,
+  `ProductViewSet`, `TarifBilletViewSet`, `TicketViewset`, `Wallet`, `OptionTicket`,
+  `HereViewSet`, `Gauge`, `TicketPdf`, `CancelSubscription`.
+- **Exclus** (plomberie, pas de successeur v2) : `Webhook_stripe`, `Onboard_laboutik`,
+  `Onboard_stripe_return`, `Get_user_pub_pem`.
+- **Pas de `Sunset`** (aucune date de retrait décidée — à ajouter dans
+  `API_V1_DEPRECATION_HEADERS` le jour venu).
+
+**Pourquoi / Why :** orienter les intégrateurs (ex. client « codex-api » repéré sur le
+tenant `raffinerie`) vers l'API v2 sémantique, sans casser les clients v1 existants.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `ApiBillet/views.py` | + `API_V1_DEPRECATION_HEADERS` + `DeprecatedV1Mixin` ; mixin ajouté en 1ʳᵉ base de 12 classes consommateur |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+
+## API v2 — Fix `retrieve` Product (lookup_field manquant) / Fix Product retrieve (missing lookup_field)
+
+**Date :** 2026-05-25
+**Migration :** Non
+
+**Quoi / What :**
+- `GET /api/v2/products/{uuid}/` levait `TypeError: retrieve() got an unexpected
+  keyword argument 'pk'` (**HTTP 500**), même avec un uuid valide. `ProductViewSet`
+  n'avait pas `lookup_field = "uuid"` : le routeur DRF passait `pk`, alors que
+  `retrieve(self, request, uuid=None)` attend `uuid`. L'endpoint détail Product
+  n'avait donc jamais fonctionné.
+- Ajout de `lookup_field = "uuid"` sur `ProductViewSet` (cohérent avec
+  Event/Reservation/Membership/Initiative ; aligne le code sur l'OpenAPI qui
+  documente déjà `/products/{uuid}/`).
+
+**Pourquoi / Why :** Issue Sentry 7368726717 (crawler appelant l'endpoint détail
+Product avec un uuid valide).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `api_v2/views.py` | `ProductViewSet` : + `lookup_field = "uuid"` |
+| `tests/pytest/test_product_retrieve.py` | Nouveau test DB-only : retrieve par uuid → 200, uuid inconnu → 404 |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+
+## API v2 — `GET /events/{id}/` accepte uuid OU slug front (+ 404 propre) / Event retrieve by uuid OR front slug
+
+**Date :** 2026-05-25
+**Migration :** Non
+
+**Quoi / What :**
+- **Résolution par slug.** `GET /api/v2/events/{id}/` accepte désormais, en plus
+  de l'uuid, le **slug** utilisé par le contrôleur front (ex :
+  `mon-evenement-260620-0900-7d51dee7`). Logique miroir d'`EventMVT.retrieve` :
+  les 8 derniers caractères hex du slug = début de l'uuid → `uuid__startswith`,
+  puis fallback `slug__startswith`. Nouvelle fonction
+  `get_event_par_identifiant_ou_404(identifiant)`.
+- **Plus de filtre `published`** sur la résolution `retrieve` (uuid **et** slug),
+  pour coller au comportement du front (`EventMVT.retrieve` ne filtre pas
+  `published`). ⚠️ Conséquence : un évènement non publié devient récupérable par
+  l'API v2 via son uuid/slug.
+- **404 propre sur identifiant inconnu/malformé.** Avant, un slug envoyé sur
+  `retrieve`/`destroy`/`link-address` faisait lever `ValidationError` à Django
+  (conversion `UUIDField`) → **HTTP 500**. `destroy` et `link-address` utilisent
+  un helper `get_objet_par_uuid_ou_404` (uuid-only → 404 si malformé) ; `retrieve`
+  résout uuid+slug et renvoie 404 si rien ne correspond.
+
+**Pourquoi / Why :** Issue Sentry 7504311969 — un client/crawler (clé API valide)
+appelait l'API avec le **slug** du front au lieu de l'uuid → 500. On rend l'API
+robuste (404, jamais 500) **et** on accepte le slug front pour que la même URL
+fonctionne des deux côtés. Même classe de bug que le piège 9.76 (`detail_vente`).
+
+**Périmètre / Scope :** Event uniquement. Les autres endpoints détail par uuid
+(Product, Reservation, Membership, Initiative) gardent le même défaut latent
+(500 sur slug) ; le helper `get_objet_par_uuid_ou_404` est prêt à y être appliqué.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `api_v2/views.py` | + `import re` ; + helpers `get_objet_par_uuid_ou_404` et `get_event_par_identifiant_ou_404` ; `retrieve` résout uuid+slug ; `destroy`/`link_address` migrés sur le helper uuid-only |
+| `tests/pytest/test_event_retrieve_invalid_uuid.py` | Test DB-only : retrieve par uuid → 200, par slug → 200, slug inconnu → 404, uuid inconnu → 404 |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+
+### Note appelant / Caller note
+Le « spider » Sentry possède une clé API valide et appelle avec un slug : il
+existe probablement une intégration qui construit des URLs `/api/v2/events/<slug>/`.
+Ce correctif rend l'API robuste et compatible, mais l'appelant peut être revu.
+
+## Admin — Recherche par adhésion + renommage « Adhésion / Abonnement / Pass »
+
+**Date :** 2026-05-21
+**Migration :** Oui (`BaseBillet/0213_alter_membership_options` — options only, no-op DB)
+
+**Quoi / What :**
+- **Recherche users élargie** : la barre de recherche du changelist
+  `HumanUserAdmin` cherche désormais aussi dans les **nom/prénom saisis sur les
+  adhésions** (`memberships__first_name`, `memberships__last_name`), en plus du
+  nom/prénom/email de l'user. Permet de retrouver un compte par le nom de
+  l'adhérent·e (parfois différent du compte). Django ajoute `distinct()` au besoin.
+- **Renommage** du modèle `Membership` : `verbose_name` / `verbose_name_plural`
+  → **« Adhésion / Abonnement / Pass »** (titre de la page d'administration).
+- **Sidebar** : l'item de menu vers les adhésions → **« Adhésion / Pass »**.
+
+**Pourquoi / Why :** Accueil festival/forum/salon : retrouver vite un compte par
+le nom de l'adhésion ; libellés reflétant les trois usages (adhésion ponctuelle,
+abonnement récurrent, pass).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/admin_tenant.py` | `HumanUserAdmin.search_fields` : + `memberships__first_name`, `memberships__last_name` |
+| `BaseBillet/models.py` | `Membership.Meta` : `verbose_name`/`verbose_name_plural` = « Adhésion / Abonnement / Pass » |
+| `BaseBillet/migrations/0213_alter_membership_options.py` | Migration d'options (no-op DB) |
+| `Administration/admin/dashboard.py` | Item sidebar adhésions → « Adhésion / Pass » |
+
+### Migration
+- **Migration nécessaire / Migration required :** Oui (options only)
+- `BaseBillet/0213_alter_membership_options` · `manage.py migrate_schemas --executor=multiprocessing`
+
+### i18n
+Nouvelles chaînes (source FR) : `Adhésion / Abonnement / Pass`, `Adhésion / Pass`
+(remplacent les anciens `Subscription`/`Subscriptions`). makemessages/compilemessages
+par le mainteneur.
+
+## Admin — Évènements et adhésions sur la fiche user / Admin — bookings & memberships on user profile
+
+**Date :** 2026-05-21
+**Migration :** Non
+
+**Quoi / What :** La fiche utilisateur·ice de l'admin affiche deux encarts
+riches, alimentés **en local** (ORM, tenant courant — aucun appel Fedow),
+pensés pour l'accueil d'un festival / forum / salon :
+- **Évènements** : toutes les réservations de l'user, séparées « À venir » /
+  « Passés ». Colonnes : évènement (lien cliquable vers la réservation), date,
+  nombre de billets, montant payé, moyen(s) de paiement, statut (badge couleur).
+- **Adhésions** : séparées « En cours » / « Passées ». Colonnes : adhésion
+  (lien cliquable), montant (contribution), moyen de paiement, échéance, statut.
+- Montants alignés en chiffres tabulaires ; badges de statut en styles inline
+  (couleur **+** texte, lisibles en thème clair comme sombre).
+- **Performance** : `prefetch_related('tickets', 'lignearticles', 'paiements__lignearticles')`
+  + helper `_lignes_payees_prefetch` (montant + moyens calculés en mémoire) →
+  **nombre de requêtes SQL constant** quel que soit le nombre de réservations,
+  pas de N+1. Mesuré : 6 réservations + 13 adhésions = **5 requêtes**.
+- **Robustesse** : la collecte évènements/adhésions est isolée dans son propre
+  `try/except` (logge + dégrade) — un cas de données limite ne peut **jamais
+  faire planter (500)** la fiche utilisateur. Tri réservations en `NULLS LAST`
+  (les réservations sans évènement ne remontent plus en tête).
+- **Vérifié visuellement** (Chrome) : encarts remplis, liens cliquables, badges
+  de statut colorés (vert/bleu/ambre/rouge), montants alignés, toggles de droits
+  fonctionnels, bouton Tirelire OK, aucune erreur console.
+
+**Correctif au passage / Fix :** `HumanUserAdmin` contenait **deux**
+`changeform_view` (doublon préexistant) ; la 2ᵉ écrasait la 1ʳᵉ. Les deux sont
+fusionnées en une seule méthode (états des droits + évènements + adhésions),
+ce qui rend les encarts réellement alimentés.
+
+**Pourquoi / Why :** Donner à l'accueil une vue complète et scannable de
+l'activité de la personne, sans dépendre de Fedow.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/admin_tenant.py` | Helpers badges + `_admin_url_basebillet` (niveau module) ; fusion des deux `changeform_view` de `HumanUserAdmin` (droits + évènements + adhésions enrichis) ; import `NoReverseMatch` |
+| `Administration/templates/admin/human_user/right_and_wallet_info.html` | Encarts « Évènements » et « Adhésions » : tableaux enrichis (badges, montants tabulaires, liens cliquables) |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+
+### i18n
+Nouvelles chaînes, **texte source en français** : `Évènements`, `À venir`,
+`Passés`, `Évènement`, `Date`, `Billets`, `Payé`, `Paiement`, `Statut`,
+`Aucun évènement à venir`, `Aucun évènement passé`, `Adhésions`, `Adhésion`,
+`En cours`, `Passées`, `Montant`, `Échéance`, `Aucune adhésion en cours`,
+`Aucune adhésion passée`. Le mainteneur lance makemessages/compilemessages.
+
+## Admin — Dernières transactions Fedow (72 h) dans la fiche user / Admin — last 72h Fedow transactions in user profile
+
+**Date :** 2026-05-21
+**Migration :** Non
+
+**Quoi / What :** Le bloc « Tirelire » de la fiche utilisateur·ice de l'admin
+affiche désormais, en plus des cartes et du solde, les **transactions des
+72 dernières heures** récupérées depuis Fedow.
+- Vue `admin_my_cards` enrichie : appel `FedowAPI.transaction.paginated_list_by_wallet_signature(user)`
+  filtré sur 72 h. Encadré `try/except` : si Fedow est indisponible, le bloc
+  cartes/tokens reste affiché (les transactions sont simplement omises).
+- Nouveau bloc « Last transactions (72h) » dans `wallet_info.html` (style Unfold,
+  réutilise les filtres `dround` / `get_choice_string` / `naturaltime`).
+- L'historique inclut les transactions d'un éventuel **wallet éphémère fusionné**
+  (actions `FUS`), car la signature de l'user retrouve tout l'historique du wallet.
+- Les transactions d'**adhésion** (asset de catégorie `SUB` / SUBSCRIPTION) sont
+  **exclues** du bloc, par cohérence avec l'exclusion des adhésions du solde de tokens.
+
+**Pourquoi / Why :** Donner à l'admin une vue rapide de l'activité récente de la
+tirelire d'un membre (support, surveillance des abus).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/views.py` | `admin_my_cards` : transactions 72 h ajoutées au contexte (try/except Fedow) |
+| `Administration/templates/admin/membership/wallet_info.html` | Bloc « Last transactions (72h) » |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+
+### i18n
+Nouvelles chaînes, **texte source en français** : `Dernières transactions (72h)`,
+`Aucune transaction sur les 72 dernières heures`, `Valeur`, `Sens`.
+(`Action`, `Date` identiques FR/EN.) Le mainteneur lance makemessages/compilemessages
+(traduction EN générée depuis le FR).
+
+## API v2 — Recharge de tokens non fiduciaires / API v2 — non-fiat wallet refill
+
+**Date :** 2026-05-21
+**Migration :** Oui (`BaseBillet/0211_externalapikey_gift_asset`,
+`BaseBillet/0212_alter_externalapikey_gift_asset`)
+
+**Quoi / What :** Nouvelle route `POST /api/v2/wallet-refills/` qui crédite des
+tokens **non adossés à l'euro** sur la tirelire d'un user à partir de son email,
+sans paiement — réplique en API du trigger `Price.fedow_reward_*`.
+- Catégories rechargeables (`AssetFedowPublic.REFILLABLE_CATEGORIES`) : `TNF`
+  (cadeau), `TIM` (monnaie temps), `FID` (fidélité), `BDG` (badgeuse). Exclues :
+  fiduciaires (`TLF`, `FED`) et adhésion (`SUB`).
+- Authentification par clé API (`SemanticApiKeyPermission`).
+- Nouveau champ `ExternalApiKey.gift_asset` (FK → `fedow_public.AssetFedowPublic`,
+  `limit_choices_to={'category__in':['TNF','TIM','FID','BDG']}`). Sa présence
+  active le droit `walletrefill` **et** restreint la clé à ce seul asset.
+- Payload : `email` + `asset` (uuid TNF) + `amount` (entier, unité brute).
+- Plafond hardcodé par recharge : `GIFT_REFILL_MAX_AMOUNT = 10000`.
+- Header optionnel `Idempotency-Key` : anti double-crédit (cache best-effort,
+  TTL ~48 h ; renvoie la transaction stockée avec un `208 Already Reported`).
+- Réponse schema.org `MoneyTransfer`.
+
+**Pourquoi / Why :** Permettre à un service externe d'offrir des tokens cadeau
+de façon contrôlée (un asset par clé, catégorie cadeau uniquement, plafond).
+La route v1 `/api/wallet/get_stripe_checkout_with_email/` (recharge **payante**
+Stripe) reste inchangée.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `fedow_public/models.py` | Constante `AssetFedowPublic.REFILLABLE_CATEGORIES` (TNF/TIM/FID/BDG) |
+| `BaseBillet/models.py` | Champ `gift_asset` sur `ExternalApiKey` + entrée `api_permissions()` |
+| `BaseBillet/migrations/0211_externalapikey_gift_asset.py` | Ajout du champ |
+| `BaseBillet/migrations/0212_alter_externalapikey_gift_asset.py` | Élargissement `limit_choices_to` + libellés |
+| `api_v2/serializers.py` | `WalletRefillCreateSerializer` |
+| `api_v2/views.py` | `WalletRefillViewSet` + `GIFT_REFILL_MAX_AMOUNT` + import `gettext` |
+| `api_v2/urls.py` | Route `wallet-refills` (basename `walletrefill`) |
+| `Administration/admin_tenant.py` | `gift_asset` dans `ExternalApiKeyAdmin.fields` |
+| `api_v2/openapi-schema.yaml` | Path + schéma `MoneyTransfer` |
+| `api_v2/README.md`, `api_v2/GUIDELINES.md` | Documentation de la route |
+| `tests/pytest/test_api_v2_wallet_refill.py` | 11 tests (FedowAPI mockée) |
+
+### Migration
+- **Migration nécessaire / Migration required :** Oui
+- `BaseBillet/0211_externalapikey_gift_asset` + `BaseBillet/0212_alter_externalapikey_gift_asset`
+- `manage.py migrate_schemas --executor=multiprocessing`
+
+### i18n
+Nouvelles chaînes `_()` côté serveur (messages d'erreur de la vue + `verbose_name`/
+`help_text` du champ `gift_asset`). Le mainteneur lance makemessages/compilemessages.
+
+## Module « Agenda participatif » / "Participatory agenda" module
+
+**Date :** 2026-05-21
+**Migration :** Oui (`BaseBillet/0210_configuration_module_agenda_participatif`)
+**Contributeurs / Contributors :** JonasFW13 (Jonas)
+
+**Quoi / What :** Le wizard public de proposition d'évènement est désormais
+piloté par un module Groupware dédié, désactivé par défaut.
+- Nouveau champ `Configuration.module_agenda_participatif` (`BooleanField`,
+  `default=False`).
+- Nouvelle carte « Agenda participatif » sur le dashboard admin (toggle HTMX),
+  avec le texte d'aide : « un formulaire pour que vos users puissent proposer
+  des évènements sur la page agenda ; évènements à valider dans l'admin ».
+- Sur la page agenda, le bouton « Proposer un évènement » ne s'affiche que si
+  le module est actif (`{% if config.module_agenda_participatif %}`).
+- `WizardEventPublicSerializer.validate()` refuse la création de proposition si
+  le module est désactivé (garde côté serveur, même en atteignant l'URL
+  directement).
+
+**Pourquoi / Why :** Permettre à chaque tenant d'activer ou non l'agenda
+participatif. Le parcours admin de création d'évènement reste inchangé.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | Champ `module_agenda_participatif` sur `Configuration` |
+| `BaseBillet/migrations/0210_configuration_module_agenda_participatif.py` | Migration du champ |
+| `Administration/admin/dashboard.py` | Entrée `MODULE_FIELDS` (carte + texte d'aide) |
+| `BaseBillet/templates/reunion/views/event/list.html` | Bouton public conditionné au module |
+| `BaseBillet/validators.py` | Garde module dans `WizardEventPublicSerializer.validate()` |
+
+### Migration
+- **Migration nécessaire / Migration required :** Oui
+- `BaseBillet/0210_configuration_module_agenda_participatif`
+- `manage.py migrate_schemas --executor=multiprocessing`
+
+### i18n
+Carte dashboard : texte source **en français** (« Agenda participatif » + texte
+d'aide), affichée directement sans attendre de traduction. Le mainteneur lance
+makemessages/compilemessages pour générer la traduction EN. Autres chaînes `_()` :
+`Participatory agenda module` (verbose_name modèle, EN),
+`La proposition d'évènement n'est pas activée.` (erreur serializer, FR).
+
+## Triggers Fedow dans les inlines de tarif (adhésion + billet) / Fedow triggers in price inlines (membership + ticket)
+
+**Date :** 2026-05-21
+**Migration :** Non
+**Contributeurs / Contributors :** JonasFW13 (Jonas) + Claude Opus 4.7
+
+**Quoi / What :** Depuis que les tarifs (`Price`) sont des inlines dans les proxys
+produit, l'onglet « Triggers » de l'ancienne vue `PriceAdmin` n'était plus
+atteignable (lien désactivé, absent de la sidebar). Les deux déclencheurs Fedow
+sont désormais exposés **directement dans l'inline du bon proxy** :
+- **Adhésion** (`MembershipPriceInline`) : `fedow_reward_enabled` → recharge le
+  wallet du membre à l'achat de l'adhésion.
+- **Billet** (`TicketPriceInline`) : `reward_on_ticket_scanned` → récompense le
+  wallet de l'acheteur au scan du billet.
+
+Dans les deux cas, `fedow_reward_asset` + `fedow_reward_amount` ne s'affichent que
+si le toggle est coché, via le mécanisme JS `inline_conditional_fields` existant.
+
+**Pourquoi / Why :** Redonner l'accès à un réglage rare (très peu de tenants) sans
+polluer l'inline du cas courant. Comme chaque proxy n'a qu'un seul toggle, la
+limite « une source par règle » du JS conditionnel n'est jamais atteinte (pas de
+`OU` à gérer). Le câblage conditionnel est remonté dans la base `ProductAdmin`
+pour que `TicketProductAdmin` en bénéficie aussi (avant : uniquement adhésion).
+
+### Fichiers modifiés / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/admin/products.py` | `BasePriceInline.formfield_for_foreignkey` (filtre `fedow_reward_asset` sur `AssetFedowPublic` local du tenant) ; `BasePriceInlineForm.__init__` désactive les boutons +/✎/🗑/👁 du dropdown asset (aucune création/édition/consultation d'asset depuis l'inline) ; champs trigger + règles conditionnelles ajoutés à `MembershipPriceInline` et `TicketPriceInline` (+ `Media.js`) ; `change_form_after_template` + `changeform_view` remontés dans `ProductAdmin` (base), retirés de `MembershipProductAdmin` (devenus redondants) ; **nettoyage** : correction i18n (`_(f"…")` → placeholders `%`) dans `duplicate_product`/`archive`/`desarchive`, suppression d'un `logger.error(self.actions_row)` de debug |
+| `Administration/admin_tenant.py` | **nettoyage** : suppression du code mort `PriceInlineChangeForm` + `PriceInline` (ancien inline orphelin, remplacé par le package `Administration/admin/`) |
+| `A TESTER et DOCUMENTER/triggers-fedow-inline-tarif.md` | NOUVEAU — scénarios de test manuel |
+
+> **i18n :** les correctifs `_(f"…")` → `_("…%(x)s…") % {…}` **changent les msgid** de
+> `duplicate_product`/`archive`/`desarchive`. Lancer le workflow traductions
+> (`makemessages` + `.po` + `compilemessages`) — non lancé ici (le mainteneur s'en charge).
+
+### Décisions clés / Key decisions
+
+- **Un toggle par proxy** : adhésion = `fedow_reward_enabled` (recharge à l'achat),
+  billet = `reward_on_ticket_scanned` (récompense au scan). Sémantique confirmée
+  dans le code consommateur (`tasks.py:refill_..._from_price_solded` vs
+  `signals.py:check_reward` → `tasks.py:refill_..._from_ticket_scanned`).
+- **JS inchangé** : la séparation par proxy évite le besoin d'un `OU` dans
+  `inline_conditional_fields.js`.
+- **`PriceAdmin` standalone conservé** (onglet Triggers intact) — sert toujours
+  d'autocomplete et de cible de redirection, mais n'est plus le chemin nominal.
+
+### Migration
+
+- **Migration nécessaire / Migration required:** Non (aucun changement de modèle ;
+  les 4 champs `Price` existent déjà depuis les migrations 0163 / 0180).
+
+## Wizard évènement V2 : connexion classique, lieu en 2 pages, multi-évènements / Event wizard V2: classic login, 2-page place, multi-events
+
+**Date :** 2026-05-21
+**Migration :** Non
+**Contributeurs / Contributors :** JonasFW13 (Jonas) + Claude Opus 4.7
+
+**Quoi / What :** Évolution du wizard évènement (cf. entrée du 2026-05-19). Le
+wizard public n'utilise plus l'OTP mais la **connexion classique** (l'OTP est
+conservé en code, parqué pour un futur offcanvas de connexion). Le choix de lieu
+passe en **2 pages** comme l'onboarding (page 1 : adresse existante filtrable OU
+nom d'un nouveau lieu ; page 2 : carte pré-remplie avec recherche auto). On peut
+désormais **proposer / créer plusieurs évènements** d'un coup (liste HTMX
+add/remove, lieu partagé). Le routage des 2 wizards passe sur un **router DRF**
+(plus de `path()` manuels). La liste d'adresses **plafonne l'affichage à 50** (la
+recherche couvre la totalité) pour rester navigable avec 300+ adresses, et le
+toggle de mode passe en **vertical sur mobile**.
+
+**Pourquoi / Why :** `authentication_classes = []` faisait afficher « Connexion »
+à un visiteur déjà connecté et imposait un OTP redondant. Le multi-évènements
+reproduit le formulaire onboarding (annoncer plusieurs dates d'un lieu). Le
+plafond d'adresses et le toggle mobile préparent les tenants « agenda régional ».
+
+### Fichiers modifiés / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/views.py` | Auth session + garde `_require_login_or_redirect`, split lieu (2 helpers), multi-events (3 helpers + 2 fabriques `_creer_event_*`), `@action` + `url_name` |
+| `BaseBillet/validators.py` | `WizardPlaceSelectSerializer` + `WizardPlaceMapSerializer` (remplacent `WizardPlaceSerializer`) |
+| `BaseBillet/urls.py` | `SimpleRouter` `wizard_router` (avant le routeur principal), suppression des `as_view`/`path` manuels du wizard |
+| `BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html` | Toggle full-width + liste filtrable + plafond 50 + media query mobile |
+| `BaseBillet/templates/reunion/views/event/wizard/_form_carte.html` + `{admin,public}_step_map.html` | NOUVEAU — page carte (étape 2 du lieu) |
+| `BaseBillet/templates/reunion/views/event/wizard/_events_inner.html` | NOUVEAU — liste brouillons + sous-form HTMX add |
+| `BaseBillet/templates/reunion/views/event/wizard/{admin,public}_step2_event.html` | Réécrits en étape multi-évènements |
+| `Administration/admin/dashboard.py` | Fix badge sidebar « None » (`event_proposals_badge_callback(request) or ""`) |
+| `BaseBillet/templates/reunion/partials/navbar.html` | Ouverture auto de l'offcanvas connexion via `?login=1` |
+| `static/widgets/widget_carte_adresse.js` | Repli reverse-geocode quand la recherche par nom renvoie une adresse incomplète |
+| `TECH_DOC/SESSIONS/EVENT_WIZARD/CHANTIER-02-*.md` | NOUVEAU — recap du chantier |
+| `TECH_DOC/SESSIONS/WIDGET_GEO/03-fix-reverse-geocode-fallback.md` | NOUVEAU — note de correctif |
+| `A TESTER et DOCUMENTER/event-wizards.md` | Mis à jour (nouveau flux login + multi-events) |
+
+### Décisions clés / Key decisions
+
+- **OTP parqué** (code conservé) → réintégration future dans l'offcanvas de connexion.
+- **Lieu partagé** : tous les évènements d'une proposition au même lieu choisi à l'étape 1.
+- **Image de brouillon** : `event.img.name = chemin` au finalize (une seule sauvegarde → signaux 1×).
+- **HTMX add** : renvoi **200** sur erreur de validation (pas de config swap-on-422 dans le skin reunion).
+- **Routage** : `SimpleRouter` inclus avant `EventMVT` pour que `event/propose/...` résolve avant `event/{pk}/`.
+
+### Migration
+
+- **Migration nécessaire / Migration required:** Non (aucun changement de modèle ; `Event.is_proposal` existe déjà depuis la migration 0209).
+
+### À surveiller / Watch out
+
+- Tests `tests/pytest/test_event_wizard_public.py` à adapter (testaient le flow OTP/anonyme) — différé.
+- i18n : `makemessages` / `compilemessages` à lancer (nouvelles chaînes).
+- Images de brouillons abandonnés (wizard quitté sans finaliser) : restent dans `event_wizard_drafts/` (pas de purge auto).
+
+
+## Carte explorer ROOT : pills exclusives, tag chips, URL partageable / Exclusive pills, tag chips, shareable URL
+
+**Date :** 2026-05-21
+**Migration :** Non
+**Contributeurs / Contributors :** JonasFW13 (Jonas) + Claude Opus 4.7
+
+**Quoi / What :** Refonte UX de la carte explorer ROOT (`/explorer/`). La pill
+"Tous" est supprimée — il reste "Lieux" et "Événements" exclusives. En mode
+Événements, la liste affiche 1 card par event futur (au lieu de cards lieu).
+Une nouvelle barre de tag chips (top 10 par fréquence parmi les events visibles)
+permet de filtrer par tag, avec bouton "+ N tags" pour le reste. Les filtres
+(`v`, `q`, `tag`) sont synchronisés dans l'URL via `history.replaceState`,
+ce qui rend la carte partageable. L'accordéon "Prochains événements" sur les
+cards lieu est réparé (régression CHANTIER-05 résolue). Un bug 1-ligne sur
+le JSON-LD federation des explorers tenant est corrigé en parallèle.
+
+**Pourquoi / Why :** Suite à CHANTIER-05, le filtre "Événements" ne changeait
+plus visuellement la vue, et la liste d'événements avait disparu. En parallèle,
+l'arrivée de tenants type "réseau régional" ou "agenda culturel régional"
+(200+ PostalAddress) demandait une UX de filtrage par thématique pour rester
+navigable. Les tags `Event.tag` existaient en DB depuis longtemps mais
+n'étaient pas exposés côté SEO.
+
+### Fichiers modifiés / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/services.py` | +`get_event_tags_for_tenants` (helper SQL cross-schema), propagation `tags` dans `events_pour_popup`, `get_events_for_tenants` retourne aussi `uuid` |
+| `seo/tasks.py` | Enrichissement events avec tags dans `refresh_seo_cache` (1 requête SQL supplémentaire) |
+| `BaseBillet/views.py` | Fix bug 1-ligne : `lieux` → `tenants` dans le JSON-LD federation des explorers tenant |
+| `seo/templates/seo/partials/explorer_widget.html` | Suppression pill "Tous", ajout `#explorer-tags`, data-i18n |
+| `seo/static/seo/explorer.js` | Refonte `applyFilters`, chips top 10, URL sync, accordéon réparé |
+| `seo/static/seo/explorer.css` | +Styles `.explorer-tag-chip*`, `.explorer-empty-state`, `.explorer-card-tags` |
+| `tests/pytest/test_seo_event_tags.py` | NOUVEAU — tests unitaires (3) du nouveau helper |
+| `tests/pytest/test_seo_aggregate_points.py` | +2 tests propagation tags |
+| `tests/e2e/test_explorer_ux_pills_tags.py` | NOUVEAU — 8 tests Playwright (pills, chips, URL, empty state) |
+| `tests/e2e/conftest.py` | NOUVEAU sur la branche — fixtures Playwright (page, browser) |
+| `pytest.ini` | +marker `e2e` |
+| `CHANGELOG.md` | Cette entrée |
+| `A TESTER et DOCUMENTER/explorer-ux-pills-tags.md` | NOUVEAU — scénarios test manuel |
+
+### Activation
+
+Aucune migration DB. Le nouveau format de cache (events avec `tags`) est rétro-
+compatible : le JS lit avec `.tags || []`. Activation au prochain cycle Celery
+Beat de `refresh_seo_cache` (4h max), ou refresh manuel :
+
+```bash
+docker exec lespass_django poetry run python manage.py shell -c "from seo.tasks import refresh_seo_cache; refresh_seo_cache()"
+```
+
+## Wizards de création et proposition d'évènement / Event creation & proposal wizards
+
+**Date :** 2026-05-19
+**Migration :** Oui (`BaseBillet/migrations/0209_event_is_proposal.py`, additive, default=False)
+**Contributeurs / Contributors :** JonasFW13 (Jonas) + Claude Opus 4.7
+
+**Quoi / What :** Refonte de la création d'évènement en wizard 2 étapes (admin)
+avec carte interactive Leaflet pour les nouvelles adresses. Ajout d'un wizard
+public anonyme protégé par OTP email permettant à tout visiteur de proposer un
+évènement soumis à modération admin (badge sidebar Unfold + filtre + action bulk).
+
+**Pourquoi / Why :** Améliorer l'UX admin (offcanvas → wizard plus FALC) et
+ouvrir la plateforme aux contributions publiques avec modération. Mettre en
+place un service OTP DRY (`AuthBillet/otp_service.py`) réutilisable pour de
+futurs flows (login OTP, SSO).
+
+### Fichiers modifiés / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `AuthBillet/otp_service.py` | NOUVEAU — service OTP stateless DRY |
+| `AuthBillet/otp_session.py` | NOUVEAU — helper session HTTP |
+| `AuthBillet/templates/auth/emails/otp_code.{html,txt}` | NOUVEAU — templates email génériques |
+| `BaseBillet/models.py` | +`Event.is_proposal` (BooleanField default=False) |
+| `BaseBillet/migrations/0209_event_is_proposal.py` | NOUVEAU — migration additive |
+| `BaseBillet/views.py` | +`EventWizardAdmin`, +`EventWizardPublic` ViewSets. Suppression `EventMVT.simple_*` |
+| `BaseBillet/validators.py` | +4 serializers wizard |
+| `BaseBillet/urls.py` | +8 routes (admin + public) |
+| `BaseBillet/templates/reunion/views/event/wizard/` | NOUVEAU (9 templates) |
+| `BaseBillet/templates/reunion/views/event/list.html` | Suppression offcanvas, ajout 2 boutons (admin + public) |
+| `BaseBillet/templates/faire_festival/views/event/list.html` | Adaptation skin Faire Festival |
+| `BaseBillet/templates/reunion/views/event/partial/simple_add_event.html` | supprimé |
+| `BaseBillet/templates/reunion/views/event/partial/address_simple_add.html` | supprimé |
+| `Administration/admin/dashboard.py` | +`event_proposals_badge_callback` + badge sur item Events |
+| `Administration/admin_tenant.py` | +`IsProposalFilter` + action `approuver_propositions` sur `EventAdmin` |
+| `tests/pytest/test_otp_service.py` | NOUVEAU — 16 tests |
+| `tests/pytest/test_otp_session.py` | NOUVEAU — 12 tests |
+| `tests/pytest/test_event_is_proposal_field.py` | NOUVEAU — 2 tests |
+| `tests/pytest/test_event_wizard_admin.py` | NOUVEAU — 9 tests |
+| `tests/pytest/test_event_wizard_public.py` | NOUVEAU — 12 tests |
+| `tests/pytest/test_event_proposal_admin.py` | NOUVEAU — 5 tests |
+| `TECH_DOC/SESSIONS/EVENT_WIZARD/` | NOUVEAU hub : INDEX + SPEC + PLAN |
+| `TECH_DOC/SESSIONS/OTP/` | NOUVEAU hub : INDEX + SPEC |
+| `A TESTER et DOCUMENTER/event-wizards.md` | NOUVEAU — scénarios de test manuel |
+
+### Décisions clés / Key decisions
+
+- **Service OTP DRY** : `OtpService` stateless + `OtpSession` HTTP helper, réutilisable (login OTP, SSO, migration onboard future).
+- **Anti-spam** : Throttle DRF (3 demandes/heure/IP) + honeypot champ `website` + garde de session entre les étapes.
+- **Modération** : `Event.is_proposal=True, published=False` → badge sidebar Unfold + filtre `Proposals pending` + action bulk `Approve and publish`.
+- **Compatibilité** : onboard inchangé (logique OTP custom conservée), events existants restent `is_proposal=False` (défaut migration).
+
+### Migration
+
+- **Migration nécessaire / Migration required:** Oui
+- `BaseBillet/migrations/0209_event_is_proposal.py` (additive, default=False, aucune data migration)
+
+
+## SEO Chantier 05 : carte explorer ROOT — 1 marker par PostalAddress / SEO Chantier 05: 1 marker per PostalAddress on ROOT explorer map
+
+**Date :** 2026-05-17
+**Migration :** Non (juste une nouvelle valeur dans CharField choices)
+**Contributeurs / Contributors :** JonasFW13 (Jonas) + Claude Opus 4.7
+
+**Quoi / What :** Refonte de la carte `/explorer/` du tenant ROOT. Avant :
+1 marker par tenant (positionne sur Configuration.postal_address). Apres :
+1 marker par PostalAddress active, avec popup riche listant le nom du lieu,
+l'adresse, le tenant + un lien, et les 5 prochains events futurs.
+
+**Pourquoi / Why :** Suite a l'import de 327 PostalAddress geolocalisees
+(via outil nominatim-review), les tenants comme l'Universite Populaire de
+Villeurbanne (24 lieux d'evenements differents) etaient invisibles. La carte
+ROOT devient une vraie cartographie des lieux du reseau, pas juste des sieges.
+
+### Fichiers modifies / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/models.py` | +constante `SEOCache.AGGREGATE_POINTS` |
+| `seo/services.py` | +`get_postal_addresses_for_tenants`, +`build_aggregate_points`, refacto `build_explorer_data_for_tenants` (retourne `{points, tenants}`) |
+| `seo/tasks.py` | +Etape 6 dans `refresh_seo_cache` (ecriture `AGGREGATE_POINTS`) |
+| `seo/views.py` | `explorer()` itere sur `explorer_data["tenants"]` pour federation JSON-LD |
+| `seo/templates/seo/partials/explorer_widget.html` | Commentaires mis a jour |
+| `seo/static/seo/explorer.js` | Boucle sur `state.data.points` (1 marker par PA), popup riche avec `events_futurs`, `state.markers` indexes par `pa_id` |
+| `seo/static/seo/explorer.css` | +styles popup riche (.explorer-popup-address, -tenant, -logo, -events-list, -events-more) |
+| `tests/pytest/test_seo_aggregate_points.py` | +6 tests unitaires (mocks, sans DB) |
+| `tests/playwright/tests/35-explorer-markers-per-pa.spec.ts` | +2 tests E2E (structure JSON + markers visibles) |
+| `TECH_DOC/SESSIONS/SEO/CHANTIER-05-explorer-markers-per-pa.md` | Spec |
+| `TECH_DOC/SESSIONS/SEO/PLAN-05-explorer-markers-per-pa.md` | Plan d'implementation |
+
+### Decisions cles / Key decisions
+- **1 marker par PA** : popup riche listant tout (vs. markers superposes)
+- **Filtre "tenant vivant"** : PA incluse si tenant a >=1 event futur OU >=1 produit publie
+- **Cache dedie** `AGGREGATE_POINTS` : zero impact sur `AGGREGATE_LIEUX` (utilise par les autres vues `/lieu/<slug>/`, `/lieux/`, recherche)
+- **Top 5 events** par popup + `events_futurs_count_total` pour afficher "+ N autres"
+
+### Compatibilite / Compatibility
+- `AGGREGATE_LIEUX` reste maintenu en parallele -> vues `/lieu/<slug>/`, `/lieux/`, recherche ROOT, JSON-LD federation continuent de fonctionner comme avant.
+- **Activation** : prochain cycle Celery Beat de `refresh_seo_cache` (4h max), ou manuel :
+  ```bash
+  docker exec lespass_django poetry run python manage.py shell -c \
+    "from seo.tasks import refresh_seo_cache; refresh_seo_cache()"
+  ```
+
+
+## Liste des évènements : filtre par date en SQL + filtres conservés à la pagination / Event list: date filter in SQL + filters kept on pagination
+
+**Quoi / What :** Correction d'un bug de la page liste des évènements (`EventMVT`)
+visible sur les gros agendas (festival > 300 évènements). Le filtre par date
+était appliqué en Python **après** la pagination (100 évènements/page) : filtrer
+un jour situé au-delà de la page 1 (ex : samedi d'un festival jeu/ven/sam) ne
+renvoyait rien. Désormais le filtre par date est appliqué en base (SQL) et,
+quand un jour est sélectionné, **tous** les évènements de ce jour s'affichent
+sans pagination. De plus, le bouton « CHARGER PLUS » conserve maintenant tous
+les filtres actifs (recherche, thématique, tags multiples), au lieu du seul
+premier tag — la recherche ne « perdait » plus son filtre après un chargement
+supplémentaire.
+
+Les pages filtrées par **date seule** sont désormais mises en cache (1 h), comme
+la page principale — c'est l'action la plus fréquente sur un festival. Le cache
+de la liste utilise un **jeton de version par tenant** réécrit dans `Event.save()` :
+modifier un évènement invalide d'un coup la page principale ET toutes les pages
+par date (pas de `cache.incr`, qui est piégeux avec memcached).
+
+**Pourquoi / Why :** Sur un festival, la pagination s'arrêtait au milieu et le
+filtre par jour affichait « aucun résultat » pour les jours non encore chargés.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/views.py` | `federated_events_filter` : param `date_filter`, filtre SQL `datetime__date`, pagination désactivée si date filtrée. Cache versionné (page principale + page par date seule). Helpers `_parse_date_filter` + `_querystring_filtres`. `list()` : filtre date en SQL (suppression du filtrage Python post-pagination). `partial_list()` : lecture/propagation du filtre date. Querystring des filtres actifs exposée au contexte. |
+| `BaseBillet/models.py` | `Event.save()` : invalidation du cache liste par réécriture d'un jeton de version (`event_list_version_{tenant.uuid}`) au lieu de la suppression d'une clé unique. |
+| `BaseBillet/templates/faire_festival/views/event/list.html` | Bouton CHARGER PLUS : `{{ querystring_filtres }}` au lieu de `&tag={{ tags.0 }}`. |
+| `BaseBillet/templates/faire_festival/views/event/partial/list_append.html` | Idem bouton CHARGER PLUS. |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+
+## Home publique : section « Ils contribuent » + mention France 2030 dans le footer / Public home: "They contribute" section + France 2030 footer mention
+
+**Quoi / What :** Ajout d'une section « Ils contribuent » sur la landing
+page du tenant public (app `seo`), à la suite des bandeaux lieux et
+événements de la fédération : panneau gris doux, grille de tuiles
+blanches (logo + nom dessous), logos cliquables, pilotée par une liste
+explicite dans la vue. Un logo blanc sur transparent (CoopCircuit) a été
+inversé pour rester visible sur tuile blanche. Ajout aussi de la mention
+obligatoire de financement France 2030 dans le footer de la home publique
+(séparateur + texte à gauche / logo aligné à droite), qui en était
+dépourvue alors que les footers des tenants l'affichent déjà.
+
+**Pourquoi / Why :** Valoriser les contributeurs du commun sur la page
+d'accueil du réseau, et homogénéiser la mention légale France 2030
+(« Solutions de billetteries innovantes », Caisse des Dépôts) présente
+sur les footers tenants mais absente du footer ROOT.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/views.py` | Constante `CONTRIBUTEURS` (nom + logo + url) + ajout au contexte de `landing` |
+| `seo/templates/seo/landing.html` | Section `contributeurs-section` (grille de logos cliquables, masquée si liste vide) |
+| `seo/static/seo/seo.css` | Styles `.contributeurs-*` (grille auto-fit centrée, logos couleur, relief au survol) |
+| `seo/templates/seo/base.html` | Mention France 2030 + logo `reunion/img/france_2030.png` dans le footer |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+- **i18n :** Nouvelles chaînes (`Ils contribuent`, sous-titre, mention France 2030…) — lancer `makemessages` + `compilemessages` (à la charge du mainteneur).
+
+## SEO Chantier 01 : desindexer les instances DEV / DEMO / TEST / SEO Chantier 01: deindex DEV / DEMO / TEST instances
+
+**Date :** 2026-05-17
+**Migration :** Non
+**Contributeurs / Contributors :** JonasFW13 (Jonas) + Claude Opus 4.7
+
+**Quoi / What :** Les instances de dev / demo / test (filaos.re, devtib.fr)
+etaient publiquement indexees sur Google et Bing alors qu'elles ne
+devraient pas l'etre. Mise en place d'une regle metier simple :
+`noindex, nofollow` (via `robots.txt` ET `<meta name="robots">`) quand
+au moins un flag d'environnement est a `1` :
+- `DEBUG=1` ou `TEST=1` ou `DEMO=1` ou `STRIPE_TEST=1`.
+
+**Pourquoi / Why :** Aligne le projet sur le **Google AI Optimization
+Guide** publie le 15 mai 2026 (cf. `TECH_DOC/SESSIONS/SEO/SPEC.md` et
+Atomic atom `491b2fe3-049c-4b2d-86bf-ae2fc41b6b31`). Les instances dev
+qui apparaissent dans la SERP volent la place du tenant principal sur
+les requetes "TiBillet" et brouillent la marque. Une regle
+supplementaire sur le host (DOMAIN / ADDITIONAL_DOMAINS) a ete
+envisagee puis ecartee : redondante en pratique avec les 4 flags +
+Django bloque deja les hosts inconnus via `ALLOWED_HOSTS`.
+
+### Fichiers modifies / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `TiBillet/seo_indexing.py` | NOUVEAU. Helper `should_noindex(request) -> bool` (regle metier complete, FALC bilingue) + context processor `noindex_context` |
+| `TiBillet/settings.py` | +1 ligne dans `TEMPLATES.OPTIONS.context_processors` (`'TiBillet.seo_indexing.noindex_context'`) |
+| `seo/views_common.py::robots_txt` | Branche sur `should_noindex(request)` : si True, sert `Disallow: /`. Sinon : `Allow: /` + sitemap |
+| `BaseBillet/views_robots.py::robots_txt` | Meme logique cote tenant. Supprime imports inutiles (`connection`, `get_current_site`) |
+| `seo/templates/seo/base.html` | Block `meta_robots` etend la logique : `noindex_seo` -> `noindex, nofollow`, sinon `index, follow` |
+| `BaseBillet/templates/reunion/base.html` | Idem |
+| `BaseBillet/templates/faire_festival/base.html` | Idem |
+| `BaseBillet/templates/htmx/base.html` | NOUVEAU bloc `meta_robots` (n'en avait pas) + commentaire FALC bilingue |
+| `tests/pytest/test_seo_indexing.py` | NOUVEAU. 5 tests unitaires : 4 flags d'env + 1 cas indexable |
+| `TECH_DOC/SESSIONS/SEO/INDEX.md` | NOUVEAU. Hub du chantier SEO sur plusieurs sessions |
+| `TECH_DOC/SESSIONS/SEO/SPEC.md` | NOUVEAU. Vision globale, principes Google 2026, etat actuel, anti-patterns |
+| `TECH_DOC/SESSIONS/SEO/CHANTIER-01-noindex-dev.md` | NOUVEAU. Spec actionable de ce chantier |
+| `A TESTER et DOCUMENTER/seo-noindex-dev.md` | NOUVEAU. Scenarios de test manuel |
+
+### Migrations
+
+- **Migration necessaire / Migration required :** Non
+
+### Tests
+
+```bash
+docker exec lespass_django poetry run pytest tests/pytest/test_seo_indexing.py --api-key dummy -v
+# 5 passed in 0.27s
+```
+
+### Note importante
+
+Pour faire desindexer effectivement filaos.re et devtib.fr (deja
+presents dans la SERP), il faut **en plus** soumettre une demande
+de suppression via Google Search Console + Bing Webmaster apres le
+deploiement. Sinon Google peut mettre plusieurs semaines a les
+oublier tout seul.
+
+---
+
+## Session marathon onboard + landing : hotfix prod + UX + i18n / Onboard marathon: prod hotfix + UX + i18n
+
+**Date :** 2026-05-17
+**Migration :** Oui (2 migrations)
+**Contributeurs / Contributors :** JonasFW13 (Jonas) + Claude Opus 4.7
+
+**Quoi / What :** Session multi-axes regroupant un hotfix prod critique
+(PostalAddress lat/lng overflow sur les longitudes hors [-99, +99]),
+plusieurs bugs UX du wizard onboarding (perte de session après login,
+mailer en anglais non traduit, prénom/nom non répercutés sur l'user, long
+description / logo non transférés au tenant, polling infini après erreur),
+le polish de la landing root (4 nouvelles fonctionnalités + section
+roadmap accordéon, JSON-LD WebSite + searchbox SERP, og:locale) et la
+réécriture des deux templates email (OTP + ready) avec le wording riche
+du flow legacy `/tenant/new/` adapté au contexte wizard.
+
+**Pourquoi / Why :** Avant push prod. Sentry a remonté l'overflow lat/long
+(création tenant cassée pour Asie / Pacifique / Amériques). Les autres
+bugs étaient bloquants ou dégradants UX. La landing root manquait des
+fonctionnalités différenciantes (open-data, AGPLv3, fédération) et n'avait
+pas de roadmap visible pour engager la communauté.
+
+### Fichiers modifiés / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | `PostalAddress.latitude/longitude` 18/16 → 9/6 (overflow longitude hors [-99, +99]) |
+| `BaseBillet/migrations/0207_fix_postaladdress_latlng_precision.py` | NOUVEAU |
+| `MetaBillet/models.py` | + champ `language` sur `WaitingConfiguration` (CharField max 10) |
+| `MetaBillet/migrations/0016_add_wc_language.py` | NOUVEAU |
+| `onboard/views.py::_finalize_otp_success` | + `_set_session_wc()` après login (perte session avec SESSION_SAVE_EVERY_REQUEST=True) ; + report `wc.first_name/last_name` sur user (si user n'a pas déjà ces champs) |
+| `onboard/views.py` POST identity | + capture `get_language()` dans `wc.language` |
+| `onboard/tasks.py::onboard_otp_mailer` | + `translation.override(wc.language)` autour du sujet + render templates |
+| `onboard/tasks.py::onboard_ready_mailer` | idem + nouveau context var `instance_url` |
+| `onboard/tasks.py::create_tenant_from_draft` | NOUVEAU bloc "3ter" transfert `wc.long_description` + `wc.logo` vers `Configuration.long_description` + `Configuration.img` (try/except sans re-raise pour préserver l'idempotence Celery, cf. piège #23) |
+| `onboard/templates/onboard/steps/06_launch.html` | Fix polling infini : retrait `hx-trigger="load, every 2s"` du parent `#status` (le swap innerHTML ne touche pas les attributs du parent, donc le polling continuait après status_error) |
+| `onboard/templates/onboard/emails/ready.html` | Réécrit avec wording riche du legacy `welcome_email.html` adapté au contexte post-création (bouton "ACCÉDER À MON ESPACE", liste "Informations importantes", section "Voici ce que vous pouvez faire", signature équipe coopérative) |
+| `onboard/templates/onboard/emails/ready.txt` | Version texte cohérente |
+| `onboard/templates/onboard/emails/otp_code.html` | Réécrit dans le style général (table imbriquée, palette `#009058`, Arial) ; capsule vert clair encadrée avec code PIN en `Courier New 36px` letter-spacing 12px |
+| `onboard/templates/onboard/emails/otp_code.txt` | Réécrit |
+| `seo/templates/seo/landing.html` | Philo réécrite (Code Commun + Ostrom) ; + 4 nouvelles cartes Fonctionnalités (Données ouvertes, Logiciel libre AGPLv3, Agenda participatif, Référencement et SEO) ; + nouvelle section roadmap `<details>` natif "Futur de TiBillet" (Newsletter, Réseaux sociaux, Fédiverse, Cascade) ; + `<h2 visually-hidden>` pour hiérarchie SEO |
+| `seo/templates/seo/base.html` | + `<meta property="og:locale">` mappé `fr_FR` / `en_US` |
+| `seo/views.py::landing` | Split JSON-LD en 2 blocs : Organization (`json_ld_org`) + WebSite/SearchAction (`json_ld`) pour éligibilité sitelinks searchbox SERP Google |
+| `seo/static/seo/seo.css` | + section "ROADMAP / FUTURE" (~85 lignes) — accordéon stylé, chevron rotate, palette orange pour "futur" vs vert pour "actuel", `prefers-reduced-motion` respecté |
+
+### Migrations
+
+- **Migration nécessaire / Migration required :** Oui
+- `BaseBillet/migrations/0207_fix_postaladdress_latlng_precision.py` — 2 AlterField sur PostalAddress (latitude, longitude) de DecimalField(18,16) à DecimalField(9,6). Compatible avec les données existantes (précision tronquée si > 6 décimales, aucune perte de range).
+- `MetaBillet/migrations/0016_add_wc_language.py` — AddField `language` CharField(max_length=10, blank=True, default="") sur WaitingConfiguration.
+- Commande : `docker exec lespass_django poetry run python /DjangoFiles/manage.py migrate_schemas --executor=multiprocessing`
+
+### Pièges documentés / Pitfalls documented
+
+Voir `tests/PIEGES.md` section "Onboarding wizard (session 2026-05-17)" :
+- DecimalField lat/lng : max_digits - decimal_places ≥ 3 obligatoire
+- Polling HTMX : ne JAMAIS doubler `hx-trigger="every Xs"` sur parent + child
+- `login()` peut perdre les clés de session avec `SESSION_SAVE_EVERY_REQUEST=True`
+- `cron_morning` create_waiting_tenant fragile : `raise` global peut laisser le pool dans un état hybride
+- gettext dans tasks Celery sans LocaleMiddleware → fallback `LANGUAGE_CODE`
+- `wc.create_tenant()` ne transfère PAS automatiquement long_description, logo, ni first_name/last_name
+
+---
+
+## Widget de saisie d'adresse géolocalisée / Geolocated address input widget
+
+**Date :** 2026-05-15
+**Migration :** Non
+**Contributeurs / Contributors :** JonasFW13 (Jonas)
+
+**Quoi / What:** nouveau widget Django+Leaflet+leaflet-geosearch réutilisable
+pour saisir une adresse (search live, marqueur draggable, géocodage inverse).
+Refonte de la step 03_place du wizard onboard pour l'utiliser.
+**Architecture full client** : recherche live ET reverse geocode appellent
+Nominatim direct depuis le navigateur (pas de proxy serveur).
+
+**Pourquoi / Why:** UX précédente (saisie en 4 champs séparés + géocodage HTMX
+au change) trop friction. Pattern GPS standard (suggestions live + drag) plus
+intuitif et réutilisable dans d'autres formulaires (Event admin, etc.).
+
+**Décision architecturale 2026-05-15** : la spec initiale proposait une approche
+"Hybride" (search client + reverse via endpoint serveur `/widgets/geocode-reverse/`
+avec cache Redis). Bascule en **full client** après découverte d'un problème
+multi-tenant routing : la route `BaseBillet/urls.py` n'est inclus que dans
+`urls_tenants.py`, pas dans `urls_public.py` → 404 sur ROOT (où tourne le
+wizard onboard). Plutôt que dupliquer l'URL dans 2 fichiers, on a supprimé
+l'endpoint serveur et on appelle Nominatim direct (CORS open, déjà fait par
+leaflet-geosearch pour le forward). Trade-off : pas de cache mutualisé, mais
+acceptable pour notre volume.
+
+### Fichiers modifiés / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `templates/widgets/widget_carte_adresse.html` | NOUVEAU — widget réutilisable |
+| `static/widgets/widget_carte_adresse.js` | NOUVEAU — init IIFE multi-widget, fetch Nominatim direct |
+| `static/widgets/widget_carte_adresse.css` | NOUVEAU — surcharges palette TiBillet |
+| `BaseBillet/form_fields.py` | NOUVEAU — `AdresseGeolocaliseeField` helper (validation serveur) |
+| `TiBillet/settings.py` | + `BASE_DIR / "templates"` dans TEMPLATES dirs, + `BASE_DIR / "static"` dans STATICFILES_DIRS |
+| `onboard/templates/onboard/steps/03_place.html` | utilise le widget |
+| `onboard/serializers.py` | `OnboardPlaceSerializer` : nouveaux champs `place_*` |
+| `onboard/views.py` | mapping persistance + suppression action `geocode` |
+| `onboard/urls.py` | suppression route geocode |
+| `onboard/templates/onboard/partials/map_widget.html` | SUPPRIMÉ |
+| `onboard/templates/onboard/partials/geocode_result.html` | SUPPRIMÉ |
+| `tests/pytest/test_widget_form_field_geo.py` | NOUVEAU (6 tests `AdresseGeolocaliseeField`) |
+| `onboard/tests/test_step_place.py` | adapté + suppression test endpoint geocode |
+
+### Migration
+- **Migration nécessaire / Migration required:** Non
+- Pas de modification de schéma DB.
+
+### Breaking changes
+- Endpoint `POST /onboard/geocode/` supprimé. Aucun consommateur externe (uniquement utilisé en interne par l'ex-step 03_place).
+
+## Chantier landing #04 — Filtre "lieu vivant" + UX "Voir tous" → explorer
+
+**Date :** 2026-05-14
+**Migration :** Non
+**Contributeurs / Contributors :** JonasFW13 (Jonas)
+
+**FR :** Le cache SEO listait tous les tenants ayant un domaine, sans
+verifier s'il y avait quelque chose a voir/acheter chez eux. En prod
+avec 375 tenants, le marquee, `/lieux/`, la carte explorer et le
+sitemap pointaient vers des dizaines de pages quasi-vides — bruit UX
+et crawl budget gaspille pour Google + bots LLM.
+
+1. **Filtre "lieu vivant"** sur `AGGREGATE_LIEUX` et `SITEMAP_INDEX` :
+   un tenant n'apparait que s'il a un domaine ET (au moins 1 event
+   futur publie OU au moins 1 produit BILLET/FREERES/ADHESION publie).
+   Implementation : `seo/services.py::get_active_tenants_with_counts()`
+   ramene `event_count` + `product_count` par tenant en 1 seule requete
+   SQL (UNION ALL avec sous-selects scalaires). `seo/tasks.py` applique
+   le filtre `lieu_est_vivant` avant de remplir `lieux` et
+   `sitemap_tenants`. `TENANT_SUMMARY` / `TENANT_EVENTS` (caches
+   per-tenant) restent inchanges.
+2. **Chiffres cles supprimes** : "X lieux", "Y events" sur la landing
+   — vanity metrics SaaS qui jurent avec le ton commun cooperatif. Bloc
+   `stats-row` retire du template. `GLOBAL_COUNTS` n'est plus genere
+   (suppression de `get_global_event_count()` dans `seo/services.py` et
+   du bloc de generation dans `tasks.py`). Constante
+   `SEOCache.GLOBAL_COUNTS` laissee dans `choices` pour eviter une
+   migration de schema sur du code mort.
+3. **UX "Voir tous"** : les 2 boutons sous les marquees pointent
+   maintenant vers `/explorer/` (carte + filtres, vue interactive)
+   plutot que `/lieux/` et `/evenements/`. Ces deux pages restent
+   indexables pour le SEO/ranking mais ne sont plus mises en avant
+   dans la navigation humaine.
+
+**EN :** SEO cache listed every tenant with a domain, no check if there
+was anything to see/buy there. In prod with 375 tenants, the marquee,
+`/lieux/`, the explorer map and the sitemap pointed to dozens of
+near-empty pages — UX noise and wasted crawl budget for Google + LLM
+bots. Added an "alive venue" filter, removed vanity counters on the
+landing, redirected "See all" buttons to `/explorer/` for humans.
+
+### Fichiers modifies / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/services.py` | `get_active_tenants_with_event_count()` → `get_active_tenants_with_counts()` (+ `product_count`). `get_global_event_count()` supprime. Constante `CATEGORIES_PRODUIT_LIEU_VIVANT = ("B","F","A")`. |
+| `seo/tasks.py` | Filtre `lieu_est_vivant` sur `aggregate_lieux` + `sitemap_tenants`. Suppression du bloc `GLOBAL_COUNTS`. Log final reflete `lieux_vivants` au lieu de `lieux totaux`. |
+| `seo/views.py` | `landing()` : suppression de `lieux_count`, `events_count`, lecture `GLOBAL_COUNTS`. |
+| `seo/templates/seo/landing.html` | Bloc `stats-row` retire. 2 boutons "Voir tous" → `/explorer/`. |
+
+### Migration / Migration
+- **Migration necessaire / Migration required :** Non.
+- Anciennes entrees `SEOCache(cache_type='global_counts')` deviennent du
+  data mort, ignorees a la lecture. Nettoyage automatique au prochain
+  refresh ? Non — la step 6 ne supprime que les entrees rattachees a un
+  tenant disparu, pas les entrees globales obsoletes. Pas grave : 1 ligne.
+
+## Chantier landing #03 — Marquee scalable + textes V2 + icone cashless + flush cache
+
+**Date :** 2026-05-14
+**Migration :** Non
+**Contributeurs / Contributors :** JonasFW13 (Jonas)
+
+**Quoi / What :** Quatre fixes sur la landing root `/` qui se voyaient
+en prod avec 375 tenants ou apres un `flush`.
+
+1. **Marquee "Nos lieux vivants" scalable** : la duree d'animation etait
+   figee a 30s dans le CSS. Avec 6 lieux, vitesse ~41 px/sec (lisible).
+   Avec 375 lieux, vitesse ~2580 px/sec (illisible, eclair). Fix :
+   - `seo/views.py::landing()` calcule `marquee_lieux_duration_sec` pour
+     viser ~40 px/sec constants.
+   - Liste melangee aleatoirement (`random.shuffle`) a chaque chargement
+     pour valoriser tous les lieux du reseau equitablement.
+   - Plafonnee a 30 lieux pour ne pas alourdir le DOM (doublee par le
+     `{% for copy in "ab" %}`).
+   - `seo/static/seo/seo.css` consomme la duree via la CSS variable
+     `--marquee-duration` (fallback 30s pour les autres pages).
+
+2. **Textes V2 portes sur la landing** : hero title "Adhesion,
+   billetterie, caisse enregistreuse et outils libres et federes"
+   (etait "Lieux culturels, billetterie, outils libres et federes").
+   Philosophie etoffee (encaisser au bar, boite a outils complete avec
+   cashless/caisse/monnaie locale/budget contributif, "une seule carte
+   pour plusieurs lieux"). Subheading features "Une solution complete"
+   (au lieu de "Une boite a outils"). Source : prototype V2
+   `../lespass-main/seo/templates/seo/landing.html`.
+
+3. **Icone cashless invisible** : `bi-contactless` n'existe pas dans
+   Bootstrap Icons 1.11.3. La feature card etait sans icone visible
+   (width 0, `content: none`). Remplace par `bi-credit-card-2-front`
+   (carte bancaire avec puce).
+
+4. **Cache SEO ne se recharge pas apres `flush.sh` / `flush_dev.sh`** :
+   la landing root affichait "0 lieux 0 events" tant que Celery beat
+   n'avait pas tourne (toutes les 4h). Ajout de
+   `python manage.py refresh_seo_cache` en fin de chaque script de flush.
+
+### Fichiers modifies / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/views.py` | `landing()` : `random.shuffle`, cap 30 lieux, calcul `marquee_lieux_duration_sec` |
+| `seo/templates/seo/landing.html` | Hero V2, philosophie V2, subheading V2, `bi-contactless` → `bi-credit-card-2-front`, `style="--marquee-duration: ...s"` sur la track |
+| `seo/static/seo/seo.css` | `.marquee-content` lit `var(--marquee-duration, 30s)` |
+| `flush.sh` | Ajout `manage.py refresh_seo_cache` apres collectstatic |
+| `flush_dev.sh` | Ajout etape 6/6 `manage.py refresh_seo_cache` |
+
+### Migration / Migration
+- **Migration necessaire / Migration required :** Non
+- Pas de nouvelle chaine `_()` ajoutee — les `{% translate %}` du hero
+  V2 ("Adhesion", "billetterie,", "caisse enregistreuse") n'avaient pas
+  d'entree dans les `.po`. **makemessages + compilemessages reportes**
+  (le francais s'affiche correctement comme fallback).
+
+## Chantier SEO #02 — Review critique + 10 fixes prod / Critical review + 10 prod fixes
+
+**Date :** 2026-05-13
+**Migration :** Non
+**Contributeurs / Contributors :** JonasFW13 (Jonas)
+
+**FR :** Review critique de la session SEO/FEDERATION par un agent + navigation
+Chrome MCP. Score initial 79/100, 10 fixes appliques pour atteindre la qualite
+prod :
+
+1. **Critical XSS JSON-LD** : helper `json_for_html()` qui translate `<>&` en
+   sequences unicode `< > &`. Empeche qu'un admin tenant qui met
+   `</script>` dans son nom de configuration casse le HTML des pages de ses
+   voisins (qui consomment le SEOCache).
+2. **`<h1>` ajoutes** sur `/federation/` tenant et `/explorer/` public (etaient
+   absents, 21+ H3 seulement). Visually-hidden, n'affecte pas l'UI.
+3. **Open Graph + Twitter tags** : override `og_title`, `twitter_title`,
+   `og_description`, `twitter_description` sur le wrapper `/federation/`
+   (etaient au fallback "Accueil | <tenant>").
+4. **`SECURE_PROXY_SSL_HEADER`** dans settings.py : canonical URLs et JSON-LD
+   contiennent maintenant `https://` (etaient en `http://` car Traefik forwarde
+   en HTTP au container Django).
+5. **N+1 cache landing** : `event_count` lu directement de `AGGREGATE_LIEUX`
+   au lieu de 20 appels `get_seo_cache(TENANT_SUMMARY, ...)`.
+6. **`_('Local network')`** : navbar label maintenant traduisible (etait
+   hardcode).
+7. **XML escape sitemap_index** : `xml.sax.saxutils.escape` sur les URLs et
+   timestamps (defense en profondeur).
+8. **BreadcrumbList shape** : `"item": {"@id": ..., "name": ...}` (forme
+   recommandee Google Rich Results, au lieu du string brut qui passe les tests
+   mais genere des warnings).
+9. **`config.organisation or tenant.name`** : fallback si organisation vide.
+10. **`CSS.escape()`** : remplace l'echappement regex maison dans explorer.js,
+    avec fallback pour vieux navigateurs.
+
+**EN :** Critical review of the SEO/FEDERATION session by an agent + Chrome MCP
+navigation. Initial score 79/100, 10 fixes applied to reach prod quality:
+
+1. **Critical XSS JSON-LD**: `json_for_html()` helper translating `<>&` to
+   `< > &` unicode sequences. Prevents a tenant admin who puts
+   `</script>` in their configuration name from breaking the HTML of neighbor
+   pages (which consume SEOCache).
+2. **`<h1>` added** on tenant `/federation/` and public `/explorer/` (were
+   missing, 21+ H3 only). Visually-hidden, doesn't affect UI.
+3. **Open Graph + Twitter tags**: override `og_title`, `twitter_title`,
+   `og_description`, `twitter_description` on the `/federation/` wrapper
+   (defaulted to "Accueil | <tenant>").
+4. **`SECURE_PROXY_SSL_HEADER`** in settings.py: canonical URLs and JSON-LD
+   now contain `https://` (were `http://` because Traefik forwards HTTP to
+   the Django container).
+5. **N+1 cache landing**: `event_count` read directly from `AGGREGATE_LIEUX`
+   instead of 20 `get_seo_cache(TENANT_SUMMARY, ...)` calls.
+6. **`_('Local network')`**: navbar label now translatable (was hardcoded).
+7. **XML escape sitemap_index**: `xml.sax.saxutils.escape` on URLs and
+   timestamps (defense in depth).
+8. **BreadcrumbList shape**: `"item": {"@id": ..., "name": ...}` (Google Rich
+   Results recommended shape, instead of raw string that passes tests but
+   generates warnings).
+9. **`config.organisation or tenant.name`**: fallback when organisation empty.
+10. **`CSS.escape()`**: replaces homemade regex escaping in explorer.js, with
+    fallback for legacy browsers.
+
+**Validation** : tous les fixes verifies via curl + Chrome MCP. Helper
+`json_for_html()` teste avec input malicieux (`Foo</script><script>alert(1)`)
+→ tous les caracteres dangereux echappes.
+
+---
+
+## Chantier SEO #01 — Decouverte LLM/Google du reseau federe / LLM and Google discovery of the federated network
+
+**Date :** 2026-05-13
+**Migration :** Oui (`seo/0002_alter_seocache_cache_type.py`)
+**Contributeurs / Contributors :** JonasFW13 (Jonas)
+
+**FR :** Trois axes pour rendre le reseau TiBillet visible aux LLMs (GPTBot,
+ClaudeBot, PerplexityBot, CommonCrawl) et a Google.
+
+1. **Voisins bidirectionnels** : la carte d'un tenant affiche les voisins
+   declarations dans les 2 sens. Si X federate avec moi mais que je n'ai pas
+   declare X dans mes `FederatedPlace`, X apparait quand meme. Pre-calcul
+   cross-schema dans le Celery task `refresh_seo_cache`, stockage en
+   `SEOCache.FEDERATION_INCOMING`. La navbar "Reseau local" est desormais
+   pilotee uniquement par `config.module_federation`.
+
+2. **JSON-LD federation** : nouvelle helper
+   `seo.views_common.build_json_ld_federation()` qui produit un schema.org/
+   Organization + `subOrganization` + `memberOf`. Injecte sur `/federation/`
+   tenant (racine = tenant, subOrg = voisins federes, memberOf = reseau
+   TiBillet) et sur `/explorer/` public (racine = TiBillet, subOrg = tous les
+   tenants). Les crawlers no-JS recoivent immediatement la structure du
+   reseau sans avoir besoin d'executer Leaflet. Fix collateral : `meta_robots`
+   devient un `{% block %}` dans `seo/base.html`.
+
+3. **Quick wins SEO** :
+   - `/humans.txt` sur le ROOT public (manquait avant)
+   - `/federation/` ajoute au `StaticViewSitemap` tenant
+   - Helper `build_json_ld_breadcrumb()` + BreadcrumbList sur `/federation/`
+
+**EN :** Three axes to make the TiBillet network visible to LLMs (GPTBot,
+ClaudeBot, PerplexityBot, CommonCrawl) and Google.
+
+1. **Bidirectional neighbors**: a tenant's map shows neighbors declared in
+   both directions. If X federates with me but I haven't declared X in my
+   `FederatedPlace`, X still appears. Cross-schema pre-computation in the
+   `refresh_seo_cache` Celery task, stored in `SEOCache.FEDERATION_INCOMING`.
+   The "Local network" navbar is now driven solely by `config.module_federation`.
+
+2. **Federation JSON-LD**: new helper
+   `seo.views_common.build_json_ld_federation()` produces a schema.org/
+   Organization + `subOrganization` + `memberOf`. Injected on `/federation/`
+   tenant (root = tenant, subOrg = federated neighbors, memberOf = TiBillet
+   network) and on `/explorer/` public (root = TiBillet, subOrg = all
+   tenants). No-JS crawlers immediately receive the network structure without
+   executing Leaflet. Collateral fix: `meta_robots` becomes a `{% block %}`
+   in `seo/base.html`.
+
+3. **SEO quick wins**:
+   - `/humans.txt` on public ROOT (was missing)
+   - `/federation/` added to tenant `StaticViewSitemap`
+   - `build_json_ld_breadcrumb()` helper + BreadcrumbList on `/federation/`
+
+**Fichiers :** voir `TECH DOC/SESSIONS/FEDERATION/03-explorer-federation-CHANGELOG.md`
+
+---
+
+## Chantier FEDERATION #01 — Explorer in-tenant + refactor JS prod / In-tenant explorer + production-grade JS refactor
+
+**Date :** 2026-05-13
+**Migration :** Non
+**Contributeurs / Contributors :** JonasFW13 (Jonas)
+
+**FR :** `/federation/` (Réseau local) sur chaque tenant rend maintenant l'explorer
+(carte Leaflet + filtres) avec uniquement le tenant courant + ses FederatedPlace.
+Le code de la carte est consolidé en source unique dans `seo/` (JS + CSS + widget
+HTML + data builder), partagé avec le public `/explorer/`. Le JS a été refactoré
+pour la prod : IIFE encapsulé (zéro pollution `window`), event delegation (zéro
+`onclick=` inline), i18n via `data-i18n-*`, garde-fous défensifs (try/catch JSON,
+DOM presence), Leaflet vendoré (plus de CDN externe unpkg.com), event Leaflet
+`animationend` au lieu de `setTimeout(...,400)`. Marker visuel "Vous êtes ici"
+pour le tenant courant.
+
+**EN :** `/federation/` (Local network) on each tenant now renders the explorer
+(Leaflet map + filters) limited to the current tenant + its FederatedPlace.
+Map code is consolidated as a single source under `seo/` (JS + CSS + widget HTML +
+data builder), shared with the public `/explorer/`. The JS has been refactored
+for production: encapsulated IIFE (zero `window` pollution), event delegation
+(zero inline `onclick=`), i18n via `data-i18n-*`, defensive guards (try/catch
+JSON, DOM presence), vendored Leaflet (no external unpkg.com CDN), Leaflet
+`animationend` event instead of `setTimeout(...,400)`. Visual "You are here"
+marker for the current tenant.
+
+**Fichiers :** voir `TECH DOC/SESSIONS/FEDERATION/03-explorer-federation-CHANGELOG.md`
+
+---
+
+## Chantier M-To-V2 #02 — Port app `seo/` allegee (landing ROOT lieux + events) / Port lightweight `seo/` app
+
+**Date :** 2026-05-13
+**Migration :** Oui (`seo/0001_initial.py` sur le schema public)
+**Contributeurs / Contributors :** JonasFW13 (Jonas)
+
+**FR :** Portage de l'app `seo` de V2 (lespass-main) vers V1 en version allegee.
+On agrege uniquement les **lieux + evenements** du reseau (pas d'adhesions, pas
+d'initiatives crowdfunding, pas de monnaies fedow_core). La landing ROOT remplace
+l'ancienne redirection MetaBillet vers tibillet.org. Cache 2 niveaux (Memcached
+L1 + DB L2) rafraichi toutes les 4h par Celery Beat. 7 routes : `/`, `/lieux/`,
+`/evenements/`, `/recherche/`, `/explorer/`, `/robots.txt`, `/sitemap.xml`.
+
+**EN :** Port of the V2 `seo` app to V1 in a lightweight version. Aggregates only
+**venues + events** (no memberships, no crowdfunding initiatives, no fedow_core
+currencies). The ROOT landing replaces the previous MetaBillet redirect to
+tibillet.org. 2-tier cache (Memcached L1 + DB L2) refreshed every 4h by Celery
+Beat. 7 routes: `/`, `/lieux/`, `/evenements/`, `/recherche/`, `/explorer/`,
+`/robots.txt`, `/sitemap.xml`.
+
+**Fichiers crees :** voir `TECH DOC/SESSIONS/M-To-V2/02-app-seo.md`
+**Fichiers modifies :** `TiBillet/settings.py`, `TiBillet/urls_public.py`, `TiBillet/celery.py`
+
+---
+
 ## v1.8 — Modules Groupware + refacto admin + proxies Product / Groupware modules + admin refactor + Product proxies
 
 **Date :** 2026-05-13

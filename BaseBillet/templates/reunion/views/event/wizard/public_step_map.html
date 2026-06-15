@@ -1,0 +1,12 @@
+{% extends "reunion/views/event/wizard/_base.html" %}
+{% load i18n %}
+
+{% comment %}
+LOCALISATION: BaseBillet/templates/reunion/views/event/wizard/public_step_map.html
+Page 2 (carte) du wizard public — creation d'un nouveau lieu.
+/ Step 2 (map) of the public wizard — new place creation.
+{% endcomment %}
+
+{% block step_content %}
+{% include "reunion/views/event/wizard/_form_carte.html" %}
+{% endblock %}

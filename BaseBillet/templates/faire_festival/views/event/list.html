@@ -17,21 +17,6 @@
              ============================================================= -->
         <div class="d-flex justify-content-center flex-wrap gap-3 conteneur-filtres mb-2">
 
-            <!-- Bouton Admin -->
-            {% if user|can_create_event_tag %}
-                <button class="bouton-filtre fond-jaune texte-bleu"
-                        type="button"
-                        hx-get="/event/simple_add_event/"
-                        hx-target="#offcanvas-event-admin"
-                        hx-swap="innerHTML"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#adminAddEventPanel"
-                        aria-controls="adminAddEventPanel">
-                    <i class="bi bi-plus-circle me-1"></i>
-                    {% translate 'Ajouter un évènement' %}
-                </button>
-            {% endif %}
-
              <!-- Filtre Date -->
              <div class="dropdown">
                 <button class="bouton-filtre dropdown-toggle" type="button" data-bs-toggle="dropdown">
@@ -89,6 +74,22 @@
                     ✕ {% translate 'Retirer les filtres' %}
                 </a>
             {% endif %}
+
+            {# Bouton vers le wizard event unifie (staff : ajout publie). #}
+            {# La route event-admin-wizard-place a ete supprimee au refactor #}
+            {# wizard -> on cible la route unifiee event-wizard-place. #}
+            {# / Button to the unified event wizard (staff: published add). #}
+            {# event-admin-wizard-place was removed -> target event-wizard-place. #}
+            {% if user|can_create_event_tag %}
+                <a class="btn btn-sm btn-success"
+                   href="{% url 'event-wizard-place' %}"
+                   data-testid="btn-event-admin-add">
+                    <i class="bi bi-plus-circle" aria-hidden="true"></i>
+                    {% translate 'Ajouter un évènement' %}
+                </a>
+            {% endif %}
+
+
 
         </div>
 
@@ -239,7 +240,7 @@
                 <div class="col-12" id="paginator">
                     <div class="text-center py-5">
                         <button class="bouton-charger-plus"
-                                hx-get="/event/partial_list/?page={{ paginated_info.page|add:1 }}{% if tags %}&tag={{ tags.0 }}{% endif %}"
+                                hx-get="/event/partial_list/?page={{ paginated_info.page|add:1 }}{% if querystring_filtres %}&{{ querystring_filtres }}{% endif %}"
                                 hx-target="#paginator"
                                 hx-swap="outerHTML">
                             {% translate 'CHARGER PLUS' %}
@@ -272,25 +273,6 @@
 {#         </div> #}
 {#     </div> #}
 {# </div> #}
-
-<!-- OFFCANVAS ADMIN -->
-<style>
-    #adminAddEventPanel { --bs-offcanvas-width: 100vw; }
-    @media (min-width: 992px) { #adminAddEventPanel { --bs-offcanvas-width: 800px; } }
-</style>
-<div class="offcanvas offcanvas-start" tabindex="-1" id="adminAddEventPanel">
-    <div class="offcanvas-header">
-        <h5 class="offcanvas-title">{% translate 'Ajouter un évènement' %}</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
-    </div>
-    <div class="offcanvas-body" id="offcanvas-event-admin">
-        <div class="text-center py-5">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
-        </div>
-    </div>
-</div>
 
 {% endblock %}
 

@@ -34,7 +34,7 @@
                 {% if token.asset.logo %}
                 <img class="align-baseline" src="{{ token.asset.logo.thumbnail.url }}" alt="{{ token.name }}" style="height: 1.5rem" />
                 {% endif %}
-                {# TODO: url du lespass d'origine pour accès facile à plus d'infos ? #}
+                {# TODO: url du tenant d'origine pour accès facile à plus d'infos ? #}
                 <span>{{ token.asset.names_of_place_federated|join:", " }}</span>
                 {% endif %}
             </td>

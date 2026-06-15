@@ -94,17 +94,19 @@ class StaticViewSitemap(TenantSitemap):
 
     def items(self):
         # List of static pages to include
-        return ['index', 'event-list', 'membership_mvt-list']
+        # / Liste des pages statiques a inclure
+        return ['index', 'event-list', 'membership_mvt-list', 'federation-list']
 
     def location(self, item):
         # Generate URLs for each static page - returns absolute path without protocol or domain
-        # This follows Django's sitemap documentation requirements
+        # / Genere les URL pour chaque page statique — retourne le chemin absolu sans protocole/domaine
         if item == 'index':
-            # Home page
             return reverse(item)
         elif item == 'event-list':
-            # Events list page
             return reverse('event-list')
         elif item == 'membership_mvt-list':
-            # Memberships list page
             return reverse('membership_mvt-list')
+        elif item == 'federation-list':
+            # Page "Reseau local" — explorer carte/liste des lieux federes
+            # / "Local network" page — federated lieux explorer (map/list)
+            return reverse('federation-list')

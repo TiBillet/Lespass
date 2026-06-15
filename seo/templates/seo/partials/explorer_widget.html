@@ -1,0 +1,108 @@
+{% load static i18n %}
+
+{# Widget Explorer — utilise dans 2 contextes : /explorer/ (public ROOT) et /federation/ (tenant). #}
+{# Source unique du HTML : si tu changes ce fichier, les 2 vues evoluent ensemble. #}
+{# / Explorer widget — used in 2 contexts: /explorer/ (public ROOT) and /federation/ (tenant). #}
+{# Single HTML source: changing this file affects both views simultaneously. #}
+{#                                                                                                #}
+{# Variables de contexte attendues :                                                              #}
+{#   - explorer_data : dict {points: [...], tenants: [...]} retourne par                          #}
+{#     seo.services.build_explorer_data_for_tenants()                                             #}
+{#     points = 1 entree par PostalAddress active (markers carte)                                 #}
+{#     tenants = 1 entree par tenant vivant (infos tenant-level)                                  #}
+{#   - current_tenant_uuid : str — UUID du tenant courant, ou "" sur le public                    #}
+{# / Expected context variables:                                                                  #}
+{#   - explorer_data: dict {points: [...], tenants: [...]} from                                   #}
+{#     seo.services.build_explorer_data_for_tenants()                                             #}
+{#     points = 1 entry per active PostalAddress (map markers)                                    #}
+{#     tenants = 1 entry per alive tenant (tenant-level info)                                     #}
+{#   - current_tenant_uuid: str — current tenant UUID, or "" on public                            #}
+
+<div id="explorer-root"
+     class="explorer-root"
+     data-current-tenant-uuid="{{ current_tenant_uuid|default:'' }}"
+      data-i18n-empty="{% translate 'Aucun résultat trouvé.' %}"
+      data-i18n-visit="{% translate 'Visiter le lieu' %}"
+      data-i18n-lieu="{% translate 'Lieu' %}"
+      data-i18n-event="{% translate 'Événement' %}"
+      data-i18n-current="{% translate 'Vous êtes ici' %}"
+      data-i18n-lieu-singular="{% translate 'lieu' %}"
+      data-i18n-lieu-plural="{% translate 'lieux' %}"
+      data-i18n-event-singular="{% translate 'événement' %}"
+      data-i18n-event-plural="{% translate 'événements' %}"
+      data-i18n-next-events="{% translate 'Prochains événements :' %}"
+      data-i18n-more="{% translate 'autre(s)' %}"
+      data-i18n-list="{% translate 'Liste' %}"
+      data-i18n-map="{% translate 'Carte' %}"
+      data-i18n-clear-tag="{% translate 'Effacer le filtre' %}"
+      data-i18n-tag-empty="{% translate 'Aucun événement « {tag} » dans la zone visible.' %}"
+      data-i18n-more-tags="{% translate '+ {count} tags' %}">
+
+    {# Barre de recherche + pills / Search bar + category pills #}
+    <div class="explorer-toolbar">
+        <div class="explorer-search-row">
+            {# name="q" + value pre-rempli : la navbar globale peut soumettre vers /explorer/?q=... #}
+            {# / name="q" + pre-filled value: the global navbar can submit to /explorer/?q=... #}
+            <input type="search"
+                   class="explorer-search"
+                   id="explorer-search"
+                   name="q"
+                   value="{{ request.GET.q|default:'' }}"
+                   placeholder="{% translate 'Rechercher un lieu ou un événement...' %}"
+                   aria-label="{% translate 'Rechercher' %}">
+            <div class="explorer-pills" id="explorer-pills" role="tablist">
+                <button class="explorer-pill active" type="button" data-category="lieu" role="tab"
+                        data-testid="explorer-pill-lieu">{% translate "Lieux" %}</button>
+                <button class="explorer-pill" type="button" data-category="event" role="tab"
+                        data-testid="explorer-pill-event">{% translate "Événements" %}</button>
+            </div>
+        </div>
+        <div class="explorer-counter" id="explorer-counter" aria-live="polite"></div>
+    </div>
+
+    {# Barre tag chips : top 10 par fréquence parmi events visibles. #}
+    {# Rendu par JS, masquée tant qu'il n'y a pas de tags à afficher. #}
+    {# / Tag chip bar: top 10 by frequency among visible events. #}
+    {# Rendered by JS, hidden while no tags to display. #}
+    <div class="explorer-tags"
+         id="explorer-tags"
+         role="group"
+         aria-label="{% translate 'Filtrer par tag' %}"
+         data-testid="explorer-tags"
+         hidden></div>
+
+    {# Split view : liste + carte / Split view: list + map #}
+    <div class="explorer-container">
+        <div class="explorer-list"
+             id="explorer-list"
+             aria-live="polite"
+             data-testid="explorer-list"></div>
+
+        <div class="explorer-map" id="explorer-map" data-testid="explorer-map">
+            <div class="explorer-map-loading"
+                 id="explorer-map-loading"
+                 role="status"
+                 aria-live="polite">
+                <div class="explorer-map-loading-spinner" aria-hidden="true"></div>
+                <span class="visually-hidden">{% translate "Chargement de la carte…" %}</span>
+            </div>
+        </div>
+    </div>
+
+    {# Donnees JSON pour le JS / JSON data for JS #}
+    {{ explorer_data|json_script:"explorer-data" }}
+
+    {# FAB toggle mobile (carte/liste) — enfant direct de #explorer-root #}
+    {# position:fixed reste viewport-relative car aucun ancetre n'a `transform` #}
+    {# / FAB mobile toggle (map/list) — direct child of #explorer-root #}
+    {# position:fixed stays viewport-relative since no ancestor uses `transform` #}
+    <button class="explorer-fab"
+            id="explorer-fab"
+            type="button"
+            aria-label="{% translate 'Basculer carte/liste' %}"
+            data-testid="explorer-fab">
+        &#128506; <span class="explorer-fab-label">{% translate "Carte" %}</span>
+    </button>
+
+</div>
+

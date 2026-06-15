@@ -54,13 +54,15 @@ if not DEBUG and os.environ.get('SENTRY_DNS'):
 
     sentry_sdk.init(
         dsn=os.environ.get('SENTRY_DNS'),
-        # Set traces_sample_rate to 1.0 to capture 100%
-        # of transactions for performance monitoring.
-        traces_sample_rate=0.3,
-        # Set profiles_sample_rate to 1.0 to profile 100%
-        # of sampled transactions.
-        # We recommend adjusting this value in production.
-        profiles_sample_rate=0.3,
+        # Tracing DESACTIVE (0.0) : le volume festival (4000 users + taches Celery)
+        # saturait le budget de spans Sentry. Les events d'erreur (issues) restent
+        # captures normalement ; seul le performance monitoring (spans/transactions)
+        # est coupe. Remonter PRUDEMMENT (ex. 0.01-0.05) si besoin de perf, en
+        # surveillant le budget spans.
+        # / Tracing DISABLED (0.0): festival volume exhausted the Sentry spans budget.
+        # Error events are still captured; only performance monitoring is off.
+        traces_sample_rate=0.0,
+        profiles_sample_rate=0.0,
     )
 
 DATETIME_INPUT_FORMATS = ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M', '%d/%m/%Y %H:%M:%S', '%d/%m/%Y %H:%M:%S.%f', '%d/%m/%Y %H:%M', '%d/%m/%y %H:%M:%S', '%d/%m/%y %H:%M:%S.%f', '%d/%m/%y %H:%M']
@@ -152,6 +154,8 @@ SHARED_APPS = (
     'wsocket',
     'fedow_public',
     'discovery',
+    'seo',
+    'onboard',
 
     'django_extensions',
     'solo',
@@ -183,6 +187,7 @@ TENANT_APPS = (
     'fedow_connect',
     'crowds',
     'booking',
+    'comptabilite',
 )
 
 INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]
@@ -206,6 +211,12 @@ TENANT_LIMIT_SET_CALLS = True
 
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware',
+    # Redirige (301) vers le domaine principal du tenant si on arrive sur un
+    # domaine secondaire (ex : tibillet.org -> tibillet.coop). Doit rester juste
+    # apres TenantMainMiddleware (besoin de connection.tenant).
+    # / Redirect (301) to the tenant's primary domain. Must stay right after
+    # TenantMainMiddleware (needs connection.tenant).
+    'Customers.middleware.CanonicalDomainRedirectMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -222,11 +233,28 @@ MIDDLEWARE = [
 if DEBUG and not TEST :
     MIDDLEWARE += ['django_browser_reload.middleware.BrowserReloadMiddleware', ]
 
+# Detection HTTPS derriere proxy (Traefik termine TLS et forwarde HTTP au container).
+# Sans ce reglage, request.scheme = 'http' → canonical URLs et JSON-LD contiennent
+# http://... au lieu de https://... ce qui penalise le SEO.
+# Le header X-Forwarded-Proto doit etre setting cote Traefik (par defaut dans
+# le mode HTTPS auto, mais a verifier). En dev local, le browser accepte http
+# meme si on tape https:// donc le canonical http:// reste cosmetique.
+# / HTTPS detection behind proxy (Traefik terminates TLS, forwards HTTP to container).
+# Without this, request.scheme = 'http' → canonical URLs and JSON-LD contain
+# http://... instead of https://... which hurts SEO.
+# The X-Forwarded-Proto header must be set on Traefik side (default in
+# HTTPS auto mode, but worth checking). In local dev, browsers accept http
+# even if typed as https://, so http:// canonical stays cosmetic.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         # 'DIRS': [],
-        'DIRS': [BASE_DIR / "Administration/templates"],  # Pour le dashboard d'admin unfold
+        'DIRS': [
+            BASE_DIR / "Administration/templates",  # Pour le dashboard d'admin unfold
+            BASE_DIR / "templates",  # Templates réutilisables projet (widgets, etc.)
+        ],
         'APP_DIRS': True,
 
         'OPTIONS': {
@@ -235,6 +263,12 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                # Expose `noindex_seo: bool` aux bases templates pour
+                # le rendu de <meta name="robots">. Voir
+                # TiBillet/seo_indexing.py et SESSIONS/SEO/CHANTIER-01.
+                # / Expose `noindex_seo: bool` to base templates.
+                'TiBillet.seo_indexing.noindex_context',
+                'BaseBillet.context_processors.panier_context',
             ],
         },
     }
@@ -337,7 +371,7 @@ REST_FRAMEWORK = {
 # Internationalization
 # https://docs.djangoproject.com/en/3.1/topics/i18n/
 
-LANGUAGE_CODE = os.environ.get('LANGUAGE_CODE', 'en')
+LANGUAGE_CODE = os.environ.get('LANGUAGE_CODE', 'fr')
 
 TIME_ZONE = os.environ.get('TIME_ZONE', 'UTC')
 
@@ -354,8 +388,12 @@ LOCALE_PATHS = (
 STATIC_ROOT = os.path.join(BASE_DIR, "www", "static")
 STATIC_URL = '/static/'
 
-STATICFILES_DIRS = ['BaseBillet/static', 'MetaBillet/static', 'QrcodeCashless/static', ]
-# STATICFILES_DIRS = [BASE_DIR / "static"]
+STATICFILES_DIRS = [
+    'BaseBillet/static',
+    'MetaBillet/static',
+    'QrcodeCashless/static',
+    BASE_DIR / "static",  # Fichiers statiques projet (widgets, etc.)
+]
 
 MEDIA_ROOT = os.path.join(BASE_DIR, "www", "media")
 MEDIA_URL = '/media/'
@@ -376,6 +414,16 @@ CELERY_TASK_TIME_LIMIT = 30 * 60
 BROKER_URL = os.environ.get('CELERY_BROKER', 'redis://redis:6379/0')
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER', 'redis://redis:6379/0')
 CELERY_RESULT_BACKEND = os.environ.get('CELERY_BACKEND', 'redis://redis:6379/0')
+
+# Fenetre pendant laquelle Redis attend l'ack d'une tache avant de la redelivrer.
+# Avec un broker Redis, une tache dont le countdown (retry, eta) depasse cette
+# valeur est consideree comme perdue et redelivree en boucle (meme task_id),
+# ce qui provoque une duplication exponentielle des taches et sature la RAM.
+# REGLE : MAX_RETRY_TIME des taches *_to_laboutik (BaseBillet/tasks.py) doit
+# rester strictement sous cette valeur.
+# / Redis re-delivers any task whose countdown exceeds this timeout. Keep task
+# retry countdowns strictly below it to avoid exponential task duplication.
+CELERY_BROKER_TRANSPORT_OPTIONS = {'visibility_timeout': 3600}  # 1 h
 # DJANGO_CELERY_BEAT_TZ_AWARE=False
 
 # CHANNELS
@@ -390,25 +438,8 @@ CHANNEL_LAYERS = {
 }
 
 # -------------------------------------/
-# COMMUNECTER SSO oauth2
+# COMMUNECTER SSO oauth2 — RETIRÉ (plus utilisé) / REMOVED (no longer used)
 # -------------------------------------/
-OAUTH_URL_WHITELISTS = []
-OAUTH_CLIENT_NAME = os.environ.get('OAUTH_NAME')
-OAUTH_CLIENT = {
-    'name': os.environ.get('OAUTH_NAME'),
-    'client_id': os.environ.get('OAUTH_CLIENT_ID'),
-    'client_secret': os.environ.get('OAUTH_CLIENT_SECRET'),
-    'access_token_url': os.environ.get('OAUTH_ACCESS_TOKEN_URL'),
-    'authorize_url': os.environ.get('OAUTH_AUTHORIZE_URL'),
-    'api_base_url': os.environ.get('OAUTH_BASE_URL'),
-    'redirect_uri': 'https://www.tibillet.org/api/user/oauth',
-    'client_kwargs': {
-        'scope': 'openid profile email',
-        'token_placement': 'header'
-    },
-    'userinfo_endpoint': 'user',
-}
-OAUTH_COOKIE_SESSION_ID = 'sso_session_id'
 
 # -------------------------------------/
 # LOGGING
@@ -469,7 +500,6 @@ LOGGING = {
 }
 
 UNFOLD = {
-    # "ENVIRONMENT_TITLE_PREFIX": "sample_app.environment_title_prefix_callback",  # environment name prefix in title tag
     "ENVIRONMENT": "Administration.admin_tenant.environment_callback",  # environment name in header
     "DASHBOARD_CALLBACK": "Administration.admin_tenant.dashboard_callback",
     "SHOW_HISTORY": False,  # show/hide "History" button, default: True
@@ -478,8 +508,8 @@ UNFOLD = {
     "SITE_DROPDOWN": [
         {
             "icon": "diamond",
-            "title": _("TiBillet / Lèspass"),
-            "link": "https://tibillet.org",
+            "title": _("TiBillet"),
+            "link": "https://tibillet.coop",
         },
     ],
     "TABS": [
@@ -501,203 +531,13 @@ UNFOLD = {
         },
     ],
     "SIDEBAR": {
-        "show_search": True,
-        "show_all_applications": False,
+        "show_search": True, #  Search in applications and models names
+        "show_all_applications": False, # Dropdown with all applications and models
         "navigation": "Administration.admin_tenant.get_sidebar_navigation",
     },
-    "SIDEBAR-TEMP-OLD": {
-        "show_search": True,  # Search in applications and models names
-        "show_all_applications": False,  # Dropdown with all applications and models
-        "navigation": [
-            {
-                "title": _("Products"),
-                "separator": True,  # Top border
-                "collapsible": True,  # Collapsible group of links
-                "items": [
-                    {
-                        "title": _("Products"),
-                        "icon": "storefront",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_product_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-
-                    },
-                    {
-                        "title": _("Promotional codes"),
-                        "icon": "local_offer",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_promotionalcode_changelist"),
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-
-                    },
-                    {
-                        "title": _("Tags"),
-                        "icon": "style",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_tag_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-
-                    },
-                    # {
-                    #     "title": _("Options"),
-                    #     "icon": "page_info",  # Supported icon set: https://fonts.google.com/icons
-                    #     "link": reverse_lazy("staff_admin:BaseBillet_optiongenerale_changelist"),
-                    #     # "badge": "Administration.admin_tenant.badge_callback",
-                    #     "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    # },
-                ],
-            },
-            # {
-            #     "title": _("Caisse LaBoutik"),
-            #     "separator": True,
-            #     "collapsible": True,
-            #     "items": [
-            #         {
-            #             "title": _("Device pairing (PIN)"),
-            #             "icon": "phonelink_setup",
-            #             "link": reverse_lazy("staff_admin:discovery_pairingdevice_changelist"),
-            #             "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
-            #         },
-            #     ],
-            # },
-            {
-                "title": _("Sales"),
-                "separator": True,  # Top border
-                "collapsible": True,  # Collapsible group of links
-                "items": [
-                    {
-                        "title": _("Entries"),
-                        "icon": "receipt_long",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_lignearticle_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    },
-                    # {
-                    #     "title": _("Stripe payments"),
-                    #     "icon": "price_change",  # Supported icon set: https://fonts.google.com/icons
-                    #     "link": lambda
-                    #         request: f'{reverse_lazy("staff_admin:BaseBillet_paiement_stripe_changelist")}?status__exact=V',
-                    #     # "badge": "Administration.admin_tenant.badge_callback",
-                    #     "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    #
-                    # }
-                ],
-            },
-            {
-                "title": _("Fédération"),
-                "separator": True,  # Top border
-                "collapsible": True,  # Collapsible group of links
-                "items": [
-                    {
-                        "title": _("Espaces"),
-                        "icon": "linked_services",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_federatedplace_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    },
-                    {
-                        "title": _("Assets"),
-                        "icon": "currency_exchange",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:fedow_public_assetfedowpublic_changelist"),
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    },
-                ],
-            },
-            {
-                "title": _("Contributions"),
-                "separator": True,  # Top border
-                "collapsible": True,  # Collapsible group of links
-                "items": [
-                    {
-                        "title": _("Configuration"),
-                        "icon": "manufacturing",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:crowds_crowdconfig_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    },
-                    {
-                        "title": _("Initiative"),
-                        "icon": "crowdsource",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:crowds_initiative_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    },
-                ],
-            },
-            {
-                "title": _("External tools"),
-                "separator": True,  # Top border
-                "collapsible": True,  # Collapsible group of links
-                "items": [
-
-                    {
-                        "title": _("API Key"),
-                        "icon": "api",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_externalapikey_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    },
-                    {
-                        "title": _("Webhook"),
-                        "icon": "webhook",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_webhook_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    },
-                    {
-                        "title": _("Ghost"),
-                        "icon": "circle",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_ghostconfig_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    },
-                    {
-                        "title": _("Formbricks"),
-                        "icon": "list_alt",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_formbricksforms_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    },
-                    {
-                        "title": _("Brevo"),
-                        "icon": "alternate_email",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_brevoconfig_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    },
-                    # {
-                    #     "title": _("Dokos"),
-                    #     "icon": "circle",  # Supported icon set: https://fonts.google.com/icons
-                    #     "link": reverse_lazy("staff_admin:BaseBillet_paiement_stripe_changelist"),
-                    #     # "badge": "Administration.admin_tenant.badge_callback",
-                    #     "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    #
-                    # },
-                ],
-            },
-
-            {
-                "title": _("Root Configuration"),
-                "separator": True,  # Top border
-                "collapsible": True,  # Collapsible group of links
-                "items": [
-                    {
-                        "title": _("Waiting Configuration"),
-                        "icon": "linked_services",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:MetaBillet_waitingconfiguration_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.RootPermissionWithRequest"
-                    },
-                    {
-                        "title": _("Tenants"),
-                        "icon": "domain",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:Customers_client_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.RootPermissionWithRequest"
-                    },
-                ],
-            },
-        ],
-    },
+    "SCRIPTS": [
+        lambda request: static("js/autofocus_select2.js"),
+    ],
 }
 
 if DEBUG:

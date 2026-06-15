@@ -19,17 +19,16 @@ from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.core.serializers.json import DjangoJSONEncoder
 from django.core.signing import TimestampSigner
-from django.db import connection, IntegrityError
+from django.db import connection, IntegrityError, transaction as db_transaction
 from django.db.models import Count, Q, Sum
 from django.http import HttpResponse, HttpRequest, Http404, HttpResponseRedirect
 from django.urls import reverse
 from django.shortcuts import render, redirect, get_object_or_404
-from django.template.response import TemplateResponse
 from django.utils import timezone
 from django.utils.encoding import force_str, force_bytes
 from django.utils.html import format_html
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as _, ngettext
 from django.views.decorators.csrf import requires_csrf_token
 from django.views.decorators.http import require_GET
 from django_htmx.http import HttpResponseClientRedirect
@@ -39,6 +38,7 @@ from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
 from ApiBillet.permissions import TenantAdminPermission, CanInitiatePaymentPermission, CanCreateEventPermission
@@ -49,15 +49,18 @@ from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, Product, Event, Tag, Paiement_stripe, Membership, Reservation, \
     FormbricksConfig, FormbricksForms, FederatedPlace, Carrousel, LigneArticle, PriceSold, \
-    Price, ProductSold, PaymentMethod, PostalAddress, SaleOrigin, ProductFormField
-from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
-    contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email, send_sale_to_laboutik, \
+    Price, ProductSold, PaymentMethod, PostalAddress, SaleOrigin, ProductFormField, GhostConfig, BrevoConfig, \
+    FederationConfiguration
+from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, \
+    contact_mailer, send_to_ghost_email, send_sale_to_laboutik, \
     send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, \
     send_ticket_cancellation_user, send_email_generique, \
     send_membership_pending_admin, send_membership_pending_user, send_membership_payment_link_user
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
     ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator, EventQuickCreateSerializer, \
-    PaiementHorsLigneSerializer
+    PaiementHorsLigneSerializer, WizardPlaceSelectSerializer, WizardPlaceMapSerializer, \
+    WizardEventSerializer
+from Administration.utils import clean_html as admin_clean_html
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from TiBillet import settings
@@ -215,13 +218,24 @@ def get_context(request):
             'icon': 'calendar-date'
         })
 
-    agenda_federation_active = FederatedPlace.objects.exists()
-    asset_federation_active = AssetFedowPublic.objects.filter(federated_with__isnull=False).exists()
-    if (agenda_federation_active or asset_federation_active) and config.module_federation:
+    # Activation du menu "Réseau local" : pilotee UNIQUEMENT par le flag
+    # config.module_federation. Le test d'existence de FederatedPlace est
+    # devenu superflu depuis le support des entrantes : un tenant sans
+    # FederatedPlace sortante peut quand meme avoir des voisins entrants
+    # (autres tenants qui le federent), donc afficher /federation/ a du sens.
+    # Si jamais le tenant n'a vraiment aucun voisin, la vue affiche le
+    # message "Aucune autre place federee pour le moment.".
+    # / "Local network" menu activation: driven ONLY by the
+    # config.module_federation flag. The existence test on FederatedPlace
+    # became superfluous when we added incoming-edge support: a tenant with
+    # no outgoing FederatedPlace can still have incoming neighbors, so
+    # showing /federation/ makes sense. If the tenant has no neighbor at
+    # all, the view shows the "No other federated place" message.
+    if config.module_federation:
         navbar.append({
             'name': 'federation',
             'url': '/federation/',
-            'label': 'Local network',
+            'label': _('Local network'),
             'icon': 'diagram-2-fill'
         })
 
@@ -351,17 +365,6 @@ class Ticket_html_view(APIView):
 
         return render(request, "ticket/ticket.html", context=context)
         # return render(request, 'ticket/qrtest.html', context=context)
-
-
-def test_jinja(request):
-    context = {
-        "list": [1, 2, 3, 4, 5, 6],
-        "var1": "",
-        "var2": "",
-        "var3": "",
-        "var4": "hello",
-    }
-    return TemplateResponse(request, "htmx/views/test_jinja.html", context=context)
 
 
 def deconnexion(request):
@@ -787,6 +790,26 @@ class MyAccount(viewsets.ViewSet):
 
         return render(request, "reunion/views/account/balance.html", context=template_context)
 
+    @action(detail=False, methods=['GET'], url_path='tirelire_section')
+    def tirelire_section(self, request: HttpRequest):
+        """
+        Renvoie le partial de la section "Ma tirelire" a l'etat initial.
+        / Returns the initial "My balance" section partial.
+
+        Appelee par le bouton "Annuler" du formulaire V2 de recharge (HTMX swap
+        outerHTML sur #tirelire-section). Permet de revenir a l'etat initial
+        sans recharger la page complete.
+        / Called by the V2 refill form "Cancel" button. Restores the initial
+        state without full page reload.
+        """
+        template_context = get_context(request)
+        return render(
+            request,
+            "htmx/views/my_account/tirelire_section.html",
+            context=template_context,
+        )
+
+
     @action(detail=False, methods=['GET'])
     def my_cards(self, request):
         fedowAPI = FedowAPI()
@@ -804,9 +827,37 @@ class MyAccount(viewsets.ViewSet):
         wallet = fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
         tokens = [token for token in wallet.get('tokens') if token.get('asset_category') not in ['SUB', 'BDG']]
 
+        # Transactions des 72 dernieres heures, via la signature de l'user de la fiche.
+        # La signature retrouve tout l'historique du wallet (y compris les transactions
+        # d'un ancien wallet ephemere fusionne : elles apparaissent via les actions FUS).
+        # On encadre l'appel Fedow : s'il echoue, on n'affiche rien plutot que de casser la page.
+        # / Last 72h transactions via the profile user's signature. The signature returns the
+        # full wallet history (including a merged ephemeral wallet, shown as FUS actions).
+        # The Fedow call is wrapped: on failure we show nothing instead of breaking the page.
+        transactions_recentes = []
+        try:
+            transactions_paginees = fedowAPI.transaction.paginated_list_by_wallet_signature(user).validated_data
+            limite_72h = timezone.now() - timedelta(hours=72)
+            for transaction in transactions_paginees.get('results', []):
+                date_transaction = transaction.get('datetime')
+                if not (date_transaction and date_transaction >= limite_72h):
+                    continue
+                # On exclut les transactions d'adhesion (asset de categorie SUBSCRIPTION),
+                # comme on exclut deja les adhesions du solde de tokens plus haut.
+                # / Skip membership transactions (SUBSCRIPTION asset category), as we
+                # already exclude memberships from the token balance above.
+                asset_transaction = transaction.get('serialized_asset') or {}
+                if asset_transaction.get('category') == 'SUB':
+                    continue
+                transactions_recentes.append(transaction)
+        except Exception as erreur_fedow:
+            logger.error(f"admin_my_cards : transactions Fedow indisponibles pour {user} : {erreur_fedow}")
+
         context = {
             'cards': cards,
             'tokens': tokens,
+            'transactions': transactions_recentes,
+            'actions_choices': TransactionSimpleValidator.TYPE_ACTION,
             'user_pk': pk,
         }
         return render(request, "admin/membership/wallet_info.html", context=context)
@@ -1069,7 +1120,12 @@ class MyAccount(viewsets.ViewSet):
         # On peut alors conditionner simplement sur le if is_valid :)
         memberships_dict = {True: [], False: []}
 
-        for tenant in user.client_achat.all():
+        # On exclut le schema public : il ne contient pas les tables des TENANT_APPS
+        # (BaseBillet_membership n'y existe pas). Si le Client public se retrouve dans
+        # client_achat (cas du root/staff), l'iterer ferait planter toute la page
+        # avec "relation BaseBillet_membership does not exist".
+        # / Skip the public schema: it has no TENANT_APPS tables.
+        for tenant in user.client_achat.exclude(schema_name='public'):
             with tenant_context(tenant):
                 memberships = Membership.objects.filter(
                     last_contribution__isnull=False,
@@ -1546,7 +1602,7 @@ def index(request):
     # On redirige vers la page d'adhésion en attendant que les events soient disponibles
     tenant: Client = connection.tenant
     if tenant.categorie in [Client.WAITING_CONFIG, Client.ROOT]:
-        return HttpResponseRedirect('https://tibillet.org/')
+        return HttpResponseRedirect('https://tibillet.coop/')
     template_context = get_context(request)
 
     # Résolution du template avec fallback vers reunion si le skin n'a pas de home.html
@@ -1591,94 +1647,177 @@ class FederationViewset(viewsets.ViewSet):
     permission_classes = [permissions.AllowAny]
 
     def list(self, request):
+        """
+        Affiche l'explorer (carte + liste) restreint au tenant courant
+        et a ses lieux federes via FederatedPlace.
+        / Renders the explorer (map + list) restricted to the current tenant
+        and its federated places via FederatedPlace.
+
+        LOCALISATION : BaseBillet/views.py — FederationViewset.list
+
+        Reprend la meme source de donnees que le public /explorer/
+        (SEOCache via build_explorer_data_for_tenants) en filtrant
+        sur les UUIDs des FederatedPlace + le tenant courant.
+
+        Reuses the same data source as the public /explorer/
+        (SEOCache via build_explorer_data_for_tenants) by filtering
+        on FederatedPlace UUIDs + the current tenant.
+        """
+        from seo.services import build_explorer_data_for_tenants, appliquer_options_federation
+        from seo.models import SEOCache
+        from seo.views_common import (
+            get_seo_cache,
+            build_json_ld_federation,
+            build_json_ld_breadcrumb,
+            json_for_html,
+        )
+
+        config = Configuration.get_solo()
+        current_uuid = str(connection.tenant.uuid)
+
+        # Options d'affichage du tenant (singleton FederationConfiguration).
+        # / Tenant display options (FederationConfiguration singleton).
+        from BaseBillet.models import FederationConfiguration
+        config_federation = FederationConfiguration.get_solo()
+
+        # Arretes SORTANTES : les FederatedPlace dans le schema du tenant courant.
+        # = "les lieux avec lesquels JE federe (declaration de mon cote)".
+        # / OUTGOING edges: FederatedPlace in current tenant's schema.
+        # = "places I federate with (my declaration)".
+        outgoing_uuids = {
+            str(fp.tenant.uuid)
+            for fp in FederatedPlace.objects.select_related('tenant').all()
+        }
+
+        # Arretes ENTRANTES : les FederatedPlace d'AUTRES tenants pointant vers moi.
+        # Pre-calcule par le Celery task refresh_seo_cache (UNION ALL cross-schema).
+        # = "les lieux qui federent AVEC moi (declaration de leur cote)".
+        # / INCOMING edges: FederatedPlace from OTHER tenants pointing to me.
+        # Pre-computed by refresh_seo_cache Celery task (cross-schema UNION ALL).
+        # = "places that federate WITH me (their declaration)".
+        # Seulement si l'option du tenant est activee (afficher_lieux_entrants).
+        # / Only if the tenant option is enabled (afficher_lieux_entrants).
+        incoming_uuids = set()
+        if config_federation.afficher_lieux_entrants:
+            incoming_data = get_seo_cache(SEOCache.FEDERATION_INCOMING) or {}
+            incoming_uuids = set(
+                incoming_data.get("by_tenant", {}).get(current_uuid, [])
+            )
+
+        # Federation automatique par tags : les lieux de TOUT le reseau ayant un
+        # event futur public portant un des tags choisis dans la config. Lecture
+        # 100% cache (AGGREGATE_EVENTS, veto private inclus). S'ajoute aux voisins.
+        # / Tag-based auto federation: venues from the WHOLE network with a public
+        # future event carrying one of the chosen tags. Cache-only read.
+        from seo.services import get_tenant_uuids_with_event_tags
+        tags_federation_slugs = [t.slug for t in config_federation.tags_federation.all()]
+        thematic_uuids = get_tenant_uuids_with_event_tags(tags_federation_slugs)
+
+        # Union : voisins directs (graphe) + abonnements thematiques (cache).
+        # / Union: direct neighbors (graph) + thematic subscriptions (cache).
+        other_federated_uuids = (outgoing_uuids | incoming_uuids | thematic_uuids)
+        other_federated_uuids.discard(current_uuid)
+
+        # Ensemble final pour l'explorer : voisins + tenant courant.
+        # / Final set for the explorer: neighbors + current tenant.
+        all_uuids = other_federated_uuids | {current_uuid}
+        sorted_uuids = sorted(all_uuids)
+        explorer_data = build_explorer_data_for_tenants(sorted_uuids)
+
+        # Filtre "event a venir" + tri des lieux selon la config du tenant.
+        # / "Upcoming event" filter + venue sort according to tenant config.
+        explorer_data = appliquer_options_federation(
+            explorer_data,
+            afficher_seulement_avec_event=config_federation.afficher_seulement_lieux_avec_event,
+            tri_des_lieux=config_federation.tri_des_lieux,
+            afficher_lieux_sans_adresse=config_federation.afficher_lieux_sans_adresse,
+        )
+
+        # Etat vide : a-t-on AUTRE chose que le tenant courant sur la carte ?
+        # / Empty state: do we have something OTHER than the current tenant on the map?
+        has_other_federated_places = bool(other_federated_uuids)
+
+        # JSON-LD federation : declare la structure du reseau pour les LLMs et
+        # les moteurs de recherche. Le tenant courant = racine, les autres lieux
+        # de la liste = subOrganization. memberOf pointe vers le reseau TiBillet.
+        # / Federation JSON-LD: declares the network structure to LLMs and
+        # search engines. Current tenant = root, other lieux = subOrganization.
+        # memberOf points to the global TiBillet network.
+        federation_members = []
+        self_lieu_data = None
+        for lieu in explorer_data.get("tenants", []):
+            domain = lieu.get("domain", "")
+            member_url = f"https://{domain}/" if domain else ""
+            member_dict = {
+                "name": lieu.get("name", ""),
+                "url": member_url,
+                "short_description": lieu.get("short_description", ""),
+                "locality": lieu.get("locality", ""),
+                "country": lieu.get("country", ""),
+                "logo_url": lieu.get("logo_url") or "",
+            }
+            if lieu.get("tenant_id") == current_uuid:
+                self_lieu_data = member_dict
+            else:
+                federation_members.append(member_dict)
+
+        # Racine du JSON-LD = tenant courant. Si le SEOCache n'a pas encore
+        # de donnees pour le tenant courant (refresh non encore lance), on
+        # utilise les valeurs courantes de config en fallback.
+        # / JSON-LD root = current tenant. If SEOCache has no data yet for
+        # current tenant, fall back to current config values.
+        root_url = request.build_absolute_uri("/")
+        if self_lieu_data:
+            root_name = self_lieu_data["name"] or config.organisation
+            root_description = self_lieu_data.get("short_description") or ""
+            root_address = {}
+            if self_lieu_data.get("locality"):
+                root_address["addressLocality"] = self_lieu_data["locality"]
+            if self_lieu_data.get("country"):
+                root_address["addressCountry"] = self_lieu_data["country"]
+        else:
+            # Fallback : config.organisation peut etre une chaine vide.
+            # / Fallback: config.organisation can be an empty string.
+            root_name = config.organisation or connection.tenant.name
+            root_description = (config.short_description or "")
+            root_address = {}
+
+        federation_json_ld_dict = build_json_ld_federation(
+            root_name=root_name,
+            root_url=root_url,
+            federation_members=federation_members,
+            root_description=root_description,
+            root_address=root_address or None,
+            member_of={
+                "name": "TiBillet — Réseau coopératif de lieux culturels",
+                "url": "https://tibillet.coop/",
+            },
+        )
+        federation_json_ld = json_for_html(federation_json_ld_dict)
+
+        # BreadcrumbList : Accueil > Reseau local. Pour les rich snippets SERP.
+        # / BreadcrumbList: Home > Local network. For SERP rich snippets.
+        breadcrumb_json_ld_dict = build_json_ld_breadcrumb([
+            {"name": str(config.organisation), "url": root_url},
+            {"name": str(_("Réseau local")), "url": request.build_absolute_uri()},
+        ])
+        breadcrumb_json_ld = json_for_html(breadcrumb_json_ld_dict)
+
+        # Contexte standard du skin + variables specifiques a l'explorer
+        # / Standard skin context + explorer-specific variables
         template_context = get_context(request)
+        template_context.update({
+            'explorer_data': explorer_data,
+            'current_tenant_uuid': current_uuid,
+            'has_other_federated_places': has_other_federated_places,
+            'federation_json_ld': federation_json_ld,
+            'breadcrumb_json_ld': breadcrumb_json_ld,
+            'page_title': _('Réseau local'),
+            'texte_introduction': config_federation.texte_introduction,
+        })
 
-        def build_federated_places():
-            results = list()
-            tenants = list()
-            assets = list()
-
-            actual_tenant: Client = connection.tenant
-            tenants.append(actual_tenant)
-            # Les lieux fédéré en agenda
-            for fed in FederatedPlace.objects.all().select_related('tenant'):
-                if fed.tenant not in tenants:
-                    tenants.append(fed.tenant)
-
-            for asset in AssetFedowPublic.objects.filter(
-                    origin=actual_tenant, archive=False
-            ).exclude(category=AssetFedowPublic.STRIPE_FED_FIAT).select_related('origin').prefetch_related(
-                'federated_with'):
-                assets.append(asset)
-
-            for asset in AssetFedowPublic.objects.filter(
-                    federated_with=actual_tenant, archive=False
-            ).exclude(category=AssetFedowPublic.STRIPE_FED_FIAT).select_related('origin').prefetch_related(
-                'federated_with'):
-                assets.append(asset)
-
-            # Les lieux fédéré en Asset
-            for asset in assets:
-                tenant_origin = asset.origin
-                if tenant_origin not in tenants:
-                    tenants.append(tenant_origin)
-                for tenant in asset.federated_with.all():
-                    if tenant not in tenants:
-                        tenants.append(tenant)
-
-            for tenant in tenants:
-                if tenant.categorie == Client.ROOT:
-                    tenants.remove(tenant)
-            # logger.info(f"Tenants: {tenants}")
-
-            for client in list(set(tenants)):
-                with tenant_context(client):
-                    # logger.info(f"with tenant_context(client): {client}")
-                    # logger.info(f"with tenant: {client}")
-                    # logger.info(f"with categorie: {client.categorie}")
-
-                    config = Configuration.get_solo()
-
-                    assets = list()
-
-                    # les assets fédérés
-                    for asset in client.federated_assets_fedow_public.exclude(
-                            category__in=[
-                                AssetFedowPublic.BADGE,
-                                AssetFedowPublic.SUBSCRIPTION,
-                            ], archive=False):
-                        assets.append(asset)
-
-                    # Les assets créés
-                    for asset in client.assets_fedow_public.exclude(
-                            category__in=[
-                                AssetFedowPublic.BADGE,
-                                AssetFedowPublic.SUBSCRIPTION,
-                            ], archive=False):
-                        if asset not in assets:
-                            assets.append(asset)
-
-                    results.append({
-                        "organisation": config.organisation,
-                        "slug": config.slug,
-                        "short_description": config.short_description,
-                        "long_description": config.long_description,
-                        "img": config.get_med_img,
-                        "assets": [{"name": f"{asset.name}", "category": f"{asset.category}"} for asset in assets],
-                        "url": config.full_url(),
-                    })
-
-            logger.info(f"Mse en cache : federated places: {results}")
-            return results
-
-        # federated_places = None
-        federated_places = cache.get(f'federated_places_{connection.tenant.uuid}')
-        if not federated_places:
-            federated_places = build_federated_places()
-            cache.set(f'federated_places_{connection.tenant.uuid}', federated_places, 60)
-
-        template_context['federated_places'] = federated_places
-        return render(request, "reunion/views/federation/list.html", context=template_context)
+        template_path = get_skin_template(config, "views/federation/explorer.html")
+        return render(request, template_path, context=template_context)
 
 
 class HomeViewset(viewsets.ViewSet):
@@ -1714,12 +1853,10 @@ class EventMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
     def get_permissions(self):
-        # Permissions spécifiques pour les actions d'administration (création d'évènement simple)
-        if self.action in ['simple_add_event', 'simple_create_event', 'address_add_form', 'address_create']:
-            permission_classes = [CanCreateEventPermission]
-        else:
-            permission_classes = [permissions.AllowAny]
-        return [permission() for permission in permission_classes]
+        # EventMVT n'expose plus que des vues publiques (list/retrieve).
+        # Les actions admin de creation d'evenement vivent dans EventWizardAdmin (S3).
+        # / EventMVT now only exposes public views. Admin create actions live in EventWizardAdmin.
+        return [permissions.AllowAny()]
 
     def federated_events_get(self, slug):
         for place in FederatedPlace.objects.all().select_related('tenant'):
@@ -1757,18 +1894,28 @@ class EventMVT(viewsets.ViewSet):
 
         return None
 
-    def federated_events_filter(self, tags=None, search=None, page=1, thematique=None):
-        # Cache simple : on cache uniquement la page principale (sans filtres, page 1)
-        # Les requêtes avec filtres (tags, recherche, thématique) ne sont pas cachées
-        # car elles sont rares et rapides à exécuter
-        # Clé = uuid du tenant. Invalidé dans Event.save()
-        # / Simple cache: only cache the main page (no filters, page 1)
-        # / Filtered requests are not cached (rare and fast)
-        # / Key = tenant uuid. Invalidated in Event.save()
-        page_sans_filtres = (page == 1 and not tags and not search and not thematique)
+    def federated_events_filter(self, tags=None, search=None, page=1, thematique=None, date_filter=None):
+        # Cache : on cache les deux cas les plus fréquents sur un gros agenda (festival) :
+        #   1) la page principale (page 1, aucun filtre)
+        #   2) une page filtrée par date seule (un jour précis, sans autre filtre)
+        # Les filtres combinés (tags, recherche, thématique) restent NON cachés : ils sont rares.
+        # La clé inclut un jeton de version par tenant, réécrit à chaque Event.save().
+        # Quand le jeton change, la page principale ET toutes les pages par date sont
+        # invalidées d'un coup (les anciennes clés ne sont plus lues et expirent via le TTL).
+        # / Cache the two frequent cases (main page + single-date page). Combined filters stay
+        # / uncached. Keys embed a per-tenant version token, rewritten in Event.save().
+        page_principale = (page == 1 and not tags and not search and not thematique and not date_filter)
+        date_seule = bool(date_filter) and not tags and not search and not thematique
+
         cache_key = None
-        if page_sans_filtres:
-            cache_key = f'event_list_{connection.tenant.uuid}'
+        if page_principale or date_seule:
+            # Jeton de version du cache liste pour ce tenant (défaut 'v0' si jamais écrit)
+            # / List-cache version token for this tenant (default 'v0' if never written)
+            version = cache.get(f'event_list_version_{connection.tenant.uuid}', 'v0')
+            if date_seule:
+                cache_key = f'event_list_{connection.tenant.uuid}_{version}_date_{date_filter.isoformat()}'
+            else:
+                cache_key = f'event_list_{connection.tenant.uuid}_{version}'
             cached = cache.get(cache_key)
             if cached:
                 return cached
@@ -1801,6 +1948,36 @@ class EventMVT(viewsets.ViewSet):
                 "tag_exclude": [],
             }
         )
+
+        # Fédération automatique par tags : on ajoute les tenants de TOUT le
+        # réseau TiBillet qui ont un évènement futur public portant un des tags
+        # choisis dans FederationConfiguration.tags_federation. L'identification
+        # est 100% cache (AGGREGATE_EVENTS, veto private inclus) ; le rendu réutilise
+        # le moteur ci-dessous (objets Event, private=False appliqué d'office car
+        # tenant != this_tenant). Liste vide -> rien d'ajouté (comportement actuel).
+        # / Tag-based auto federation: add network tenants having a public future
+        # event carrying one of the chosen tags. Cache-only identification, then
+        # rendered by the same engine. Empty list -> nothing added.
+        from seo.services import get_tenant_uuids_with_event_tags
+        tags_federation_slugs = [
+            tag.slug for tag in FederationConfiguration.get_solo().tags_federation.all()
+        ]
+        if tags_federation_slugs:
+            uuids_deja_presents = {str(t["tenant"].uuid) for t in tenants}
+            uuids_thematiques = get_tenant_uuids_with_event_tags(tags_federation_slugs)
+            uuids_a_ajouter = uuids_thematiques - uuids_deja_presents
+            for client_thematique in Client.objects.filter(uuid__in=uuids_a_ajouter):
+                tenants.append({
+                    "tenant": client_thematique,
+                    "tag_filter": [],
+                    # tag_exclude = INCLURE uniquement ces tags (sémantique
+                    # historique inversée du moteur) : on ne récupère que les
+                    # events thématiques de ce tenant.
+                    # / tag_exclude = include-only these tags (engine's inverted
+                    # semantics): only this tenant's thematic events are fetched.
+                    "tag_exclude": tags_federation_slugs,
+                })
+
         # Récupération de tous les évènements de la fédération
         for tenant in tenants:
             with ((tenant_context(tenant['tenant']))):
@@ -1862,12 +2039,33 @@ class EventMVT(viewsets.ViewSet):
                     if th.slug not in all_thematiques_by_slug:
                         all_thematiques_by_slug[th.slug] = th
 
-                # Pagination : 100 évènements par page par tenant
-                paginator = Paginator(events.order_by('datetime').distinct(), 100)
-                paginated_events = paginator.get_page(page)
-                paginated_info['page'] = page
-                paginated_info['has_next'] = paginated_events.has_next()
-                paginated_info['has_previous'] = paginated_events.has_previous()
+                # Filtre par date : on restreint les évènements affichés au jour choisi.
+                # Important : on filtre APRÈS la collecte des dates/tags ci-dessus,
+                # pour que les menus déroulants restent complets (changer de jour reste possible).
+                # / Date filter: restrict displayed events to the chosen day.
+                # / Applied AFTER collecting dates/tags so dropdowns stay complete.
+                events_a_afficher = events
+                if date_filter:
+                    events_a_afficher = events_a_afficher.filter(datetime__date=date_filter)
+
+                events_tries = events_a_afficher.order_by('datetime').distinct()
+
+                if date_filter:
+                    # Un jour précis est sélectionné : on affiche TOUS les évènements de ce jour,
+                    # sans pagination (un festival a rarement plus de 100 évènements sur une journée).
+                    # / A specific day is selected: show ALL its events, no pagination.
+                    paginated_events = events_tries
+                    paginated_info['page'] = page
+                    paginated_info['has_next'] = False
+                    paginated_info['has_previous'] = False
+                else:
+                    # Pagination : 200 évènements par page par tenant
+                    # / Pagination: 200 events per page per tenant
+                    paginator = Paginator(events_tries, 200)
+                    paginated_events = paginator.get_page(page)
+                    paginated_info['page'] = page
+                    paginated_info['has_next'] = paginated_events.has_next()
+                    paginated_info['has_previous'] = paginated_events.has_previous()
 
                 for event in paginated_events:
                     # On va chercher les urls d'images :
@@ -1897,13 +2095,58 @@ class EventMVT(viewsets.ViewSet):
 
         result = (sorted_dict_by_date, paginated_info, sorted_all_dates, sorted_all_tags, sorted_all_thematiques)
 
-        # On met en cache seulement la page principale (sans filtres)
-        # Durée : 1 heure. Invalidé dans Event.save()
-        # / Only cache the main page (no filters). Duration: 1 hour.
+        # On met en cache la page principale OU la page filtrée par date seule
+        # (cache_key n'est défini que dans ces deux cas, voir le haut de la méthode).
+        # Durée : 1 heure. Invalidé dans Event.save() via le jeton de version.
+        # / Cache the main page OR the single-date page (cache_key set only in those cases).
+        # / Duration: 1 hour. Invalidated in Event.save() via the version token.
         if cache_key:
             cache.set(cache_key, result, 3600)
 
         return result
+
+    def _parse_date_filter(self, raw_date):
+        """
+        Convertit un paramètre date ISO ("2025-03-15") en objet date.
+        Retourne None si le paramètre est absent ou invalide.
+        / Parse an ISO date param into a date object. None if missing/invalid.
+
+        LOCALISATION : BaseBillet/views.py — EventMVT
+        Utilisé par list() et partial_list() pour le filtre par jour.
+        """
+        if not raw_date:
+            return None
+        try:
+            return date_type.fromisoformat(raw_date)
+        except (ValueError, TypeError):
+            # Paramètre invalide : on ignore et on affiche tout
+            # / Invalid param: ignore and show everything
+            return None
+
+    def _querystring_filtres(self, search=None, tags=None, thematique=None):
+        """
+        Construit la querystring des filtres actifs (recherche, tags, thématique)
+        pour les conserver dans le bouton "charger plus".
+        / Build active-filters querystring to keep them in the "load more" button.
+
+        LOCALISATION : BaseBillet/views.py — EventMVT
+
+        Le filtre par date est volontairement exclu : quand une date est choisie,
+        on affiche tous les évènements du jour sans pagination, donc pas de bouton.
+        / Date filter is excluded on purpose: a chosen day shows everything, no button.
+        """
+        from urllib.parse import urlencode
+
+        filtres_actifs = {}
+        if search:
+            filtres_actifs['search'] = search
+        if thematique:
+            filtres_actifs['thematique'] = thematique
+        if tags:
+            filtres_actifs['tag'] = tags
+        # doseq=True : gère la liste de tags (tag=a&tag=b)
+        # / doseq=True: handles the list of tags (tag=a&tag=b)
+        return urlencode(filtres_actifs, doseq=True)
 
     @action(detail=False, methods=['POST', 'GET'])
     def partial_list(self, request):
@@ -1922,9 +2165,19 @@ class EventMVT(viewsets.ViewSet):
         logger.info(f"request.GET : {request.GET}")
 
         thematique_slug = request.GET.get('thematique')
+        # Filtre par date (format ISO "2025-03-15") — None si absent/invalide
+        # / Date filter (ISO format) — None if missing/invalid
+        date_filter = self._parse_date_filter(request.GET.get('date'))
+
         ctx = {}  # le dict de context pour template
         ctx['dated_events'], ctx['paginated_info'], _dates, _tags, _thematiques = self.federated_events_filter(
-            tags=tags, search=search, page=page, thematique=thematique_slug
+            tags=tags, search=search, page=page, thematique=thematique_slug, date_filter=date_filter
+        )
+
+        # On conserve les filtres actifs (recherche, tags, thématique) dans le bouton "charger plus"
+        # / Keep active filters in the "load more" button
+        ctx['querystring_filtres'] = self._querystring_filtres(
+            search=search, tags=tags, thematique=thematique_slug
         )
 
         # Résolution du template avec fallback vers reunion
@@ -1943,28 +2196,39 @@ class EventMVT(viewsets.ViewSet):
         # - tout passer en GET ( et non pas le partial_list POST plus haut )
         # - passer sur du partial render avec HTMX
         context = get_context(request)
+        # Reglages d'agenda participatif (sur FederationConfiguration) : pilotent
+        # l'affichage du bouton "Proposer un evenement" sur la page agenda.
+        # / Participatory-agenda settings (on FederationConfiguration): drive the
+        # "Propose an event" button on the agenda page.
+        context['federation_config'] = FederationConfiguration.get_solo()
         tags = request.GET.getlist('tag')
         search = request.GET.get('search')
         if search:
             search = str(search)
         page = request.GET.get('page', 1)
         thematique_slug = request.GET.get('thematique')
-        # Paramètre de filtre par date (format ISO : "2025-03-15")
-        # / Date filter param (ISO format: "2025-03-15")
-        date_filter = request.GET.get('date')
+        # Paramètre de filtre par date (format ISO : "2025-03-15"), validé en objet date.
+        # Le filtrage se fait en base (SQL), pas après la pagination.
+        # / Date filter param (ISO), validated to a date object. Filtered in SQL, not after pagination.
+        date_filter = self._parse_date_filter(request.GET.get('date'))
 
-        # Données pour les filtres (tags, thématiques, recherche)
-        # / Data for filter UI (tags, thematiques, search)
+        # Données pour les filtres (tags, thématiques, recherche, date)
+        # / Data for filter UI (tags, thematiques, search, date)
         context['active_tag'] = Tag.objects.filter(slug=tags[0]).first() if tags else None
         context['tags'] = tags
         context['search'] = search
         context['active_thematique'] = thematique_slug
-        context['active_date'] = date_filter
+        # active_date : string ISO (URL/affichage) ; active_date_obj : objet date (libellé du dropdown)
+        # / active_date: ISO string (URL/display) ; active_date_obj: date object (dropdown label)
+        context['active_date'] = date_filter.isoformat() if date_filter else None
+        context['active_date_obj'] = date_filter
 
-        # federated_events_filter retourne aussi TOUTES les dates et tags (avant pagination)
-        # / federated_events_filter also returns ALL dates and tags (before pagination)
+        # federated_events_filter applique le filtre date en SQL et désactive la pagination ce jour-là.
+        # Il retourne aussi TOUTES les dates et tags (menus déroulants complets).
+        # / federated_events_filter applies the date filter in SQL and disables pagination for that day.
+        # / It also returns ALL dates and tags (complete dropdowns).
         context['dated_events'], context['paginated_info'], all_dates_list, all_tags_list, all_thematiques_list = self.federated_events_filter(
-            tags=tags, search=search, page=page, thematique=thematique_slug
+            tags=tags, search=search, page=page, thematique=thematique_slug, date_filter=date_filter
         )
 
         # Toutes les dates disponibles pour le dropdown filtre (pas limité à la pagination)
@@ -1979,21 +2243,11 @@ class EventMVT(viewsets.ViewSet):
         # / All thematiques from visible events
         context['all_thematiques'] = all_thematiques_list
 
-        # Filtre par date : on ne garde que la date sélectionnée pour l'affichage des cartes
-        # / Date filter: keep only the selected date for card display
-        if date_filter:
-            try:
-                selected_date = date_type.fromisoformat(date_filter)
-                dated_events_filtered = {}
-                for event_date, event_list in context['dated_events'].items():
-                    if event_date == selected_date:
-                        dated_events_filtered[event_date] = event_list
-                context['dated_events'] = dated_events_filtered
-                context['active_date_obj'] = selected_date
-            except (ValueError, TypeError):
-                # Paramètre invalide → on ignore, on affiche tout
-                # / Invalid param → ignore, show all
-                context['active_date'] = None
+        # On conserve les filtres actifs (recherche, tags, thématique) dans le bouton "charger plus"
+        # / Keep active filters in the "load more" button
+        context['querystring_filtres'] = self._querystring_filtres(
+            search=search, tags=tags, thematique=thematique_slug
+        )
 
         # Résolution du template avec fallback vers reunion
         config = Configuration.get_solo()
@@ -2248,212 +2502,6 @@ class EventMVT(viewsets.ViewSet):
             return redirect('/my_account/my_reservations/')
         return redirect('/event/')
 
-    ### Simple add event
-
-    @action(detail=False, methods=['GET'])
-    def simple_add_event(self, request: HttpRequest):
-        """
-        Offcanvas de création rapide d'un évènement SANS billetterie (gratuit ou sans réservation payante).
-        - Accessible uniquement aux admins du tenant
-        - Préremplit l'adresse avec la valeur par défaut de la Configuration
-        - Propose l'autocomplétion des tags (datalist), avec création automatique côté serveur
-        """
-        context = get_context(request)
-        config = Configuration.get_solo()
-        context.update({
-            'default_address': config.postal_address,
-            'addresses': PostalAddress.objects.all().order_by('name', 'address_locality', 'postal_code'),
-        })
-        return render(request, "reunion/views/event/partial/simple_add_event.html", context=context)
-
-    @action(detail=False, methods=['POST'])
-    def simple_create_event(self, request: HttpRequest):
-        """
-        Crée un évènement simple à partir du formulaire Offcanvas (HTMX).
-        Champs supportés:
-        - name, datetime_start, datetime_end, short_description, long_description
-        - postal_address (pk) optionnel
-        - img (image) optionnelle
-        - tags (liste séparée par des virgules)
-        """
-
-        # Aide à l'affichage des erreurs du formulaire avec pré-remplissage des champs
-        def render_form_error(errors_list):
-            context = get_context(request)
-            context.update({
-                'form_errors': errors_list,
-                'default_address': Configuration.get_solo().postal_address,
-                'addresses': PostalAddress.objects.all().order_by('name', 'address_locality', 'postal_code'),
-                'all_tags': Tag.objects.all().order_by('name'),
-                'prefill': {
-                    'name': request.POST.get('name', ''),
-                    'datetime_start': request.POST.get('datetime_start', ''),
-                    'datetime_end': request.POST.get('datetime_end', ''),
-                    'short_description': request.POST.get('short_description', ''),
-                    'long_description': request.POST.get('long_description', ''),
-                    'postal_address': request.POST.get('postal_address', ''),
-                    'tags': request.POST.get('tags', ''),
-                    'jauge_max': request.POST.get('jauge_max', ''),
-                }
-            })
-            return render(request, "reunion/views/event/partial/simple_add_event.html", context=context)
-
-        # Utilise un Serializer DRF pour valider, nettoyer et créer l'évènement
-        serializer = EventQuickCreateSerializer(data=request.POST, context={'request': request})
-        if not serializer.is_valid():
-            # On transforme les erreurs DRF en une liste simple de messages pour le template
-            form_errors = []
-            for field, msgs in serializer.errors.items():
-                if isinstance(msgs, (list, tuple)):
-                    for msg in msgs:
-                        form_errors.append(str(msg))
-                else:
-                    form_errors.append(str(msgs))
-            return render_form_error(form_errors)
-
-        # Sauvegarde de l'évènement avec gestion des erreurs d'intégrité (doublons)
-        try:
-            event = serializer.save()
-        except IntegrityError:
-            # Si un doublon a été créé entre-temps, on renvoie une erreur explicite
-            return render_form_error([_("Un évènement avec ce nom et cette date existe déjà.")])
-
-        # Message succès utilisateur
-        try:
-            messages.add_message(request, messages.SUCCESS, _("Évènement créé !"))
-        except MessageFailure:
-            pass
-
-        context = get_context(request)
-        context.update({'event': event})
-        # Réponse HTMX: après création, on reste dans le flux offcanvas et on recharge
-        # Réponse HTMX: remplace le contenu de l'offcanvas par un message de succès
-        # return render(request, "reunion/views/event/partial/admin_add_success.html", context=context)
-        return HttpResponseClientRedirect("/event/")
-
-    @action(detail=False, methods=['GET'])
-    def address_add_form(self, request: HttpRequest):
-        """
-        Formulaire HTMX pour créer une nouvelle adresse (lieu) depuis l'ajout rapide d'évènement.
-        - Champs simples et noms FALC.
-        - Affiche les textes d'aide du modèle.
-        """
-        context = get_context(request)
-        # Passer un dict d'erreurs vide par défaut pour simplifier le template
-        context.update({'errors': {}, 'prefill': {}})
-        return render(request, "reunion/views/event/partial/address_simple_add.html", context=context)
-
-    @action(detail=False, methods=['POST'])
-    def address_create(self, request: HttpRequest):
-        """
-        Création d'une `PostalAddress` via HTMX avec champs FALC.
-        - Utilise le serializer schema.org existant en mappant nos noms de champs.
-        - En cas d'erreur: renvoie le même formulaire avec les erreurs (400).
-        - En cas de succès: redirige vers le formulaire d'ajout d'évènement.
-        """
-
-        # Mapping FALC -> schema.org pour réutiliser PostalAddressCreateSerializer de api_v2
-        data = {
-            'name': request.POST.get('name') or None,
-            'streetAddress': request.POST.get('street_address', ''),
-            'addressLocality': request.POST.get('address_locality', ''),
-            'postalCode': request.POST.get('postal_code', ''),
-            # Pays: si absent, on emprunte celui de l'adresse par défaut ou "FR"
-            'addressCountry': (getattr(Configuration.get_solo().postal_address, 'address_country', None) or 'FR'),
-        }
-
-        # Import tardif pour éviter les imports circulaires au chargement du module
-        from api_v2.serializers import PostalAddressCreateSerializer
-
-        pa_serializer = PostalAddressCreateSerializer(data=data, context={'request': request})
-        if not pa_serializer.is_valid():
-            # On renvoie le formulaire avec les erreurs structurées par champ
-            context = get_context(request)
-            context.update({
-                'errors': pa_serializer.errors,
-                'prefill': {
-                    'name': request.POST.get('name', ''),
-                    'street_address': request.POST.get('street_address', ''),
-                    'address_locality': request.POST.get('address_locality', ''),
-                    'postal_code': request.POST.get('postal_code', ''),
-                    'is_main': request.POST.get('is_main', ''),
-                }
-            })
-            return render(request, "reunion/views/event/partial/address_simple_add.html", context=context)
-
-        addr = pa_serializer.save()
-
-        # Gestion des fichiers images optionnels (img), et du flag is_main
-        updated_fields = []
-        if hasattr(request, 'FILES'):
-            f = request.FILES.get('img')
-            if f:
-                addr.img = f
-                updated_fields.append('img')
-        # Champ simple booléen
-        is_main_val = request.POST.get('is_main')
-        if is_main_val in ['on', 'true', 'True', '1']:
-            addr.is_main = True
-            updated_fields.append('is_main')
-        if updated_fields:
-            addr.save(update_fields=updated_fields)
-
-        try:
-            messages.add_message(request, messages.SUCCESS, _("Adresse créée !"))
-        except MessageFailure:
-            pass
-
-        # Redirige l'offcanvas vers le formulaire d'évènement
-        return self.simple_add_event(request)
-
-
-'''
-@require_GET
-def agenda(request):
-    template_context = get_context(request)
-    template_context['events'] = Event.objects.all()
-    return render(request, "htmx/views/home.html", context=template_context)
-
-
-@require_GET
-def event(request: HttpRequest, slug) -> HttpResponse:
-    event = get_object_or_404(Event, slug=slug)
-    template_context = get_context(request)
-    template_context['event'] = event
-    return render(request, "htmx/views/event.html", context=template_context)
-
-
-def validate_event(request):
-    if request.method == 'POST':
-        print("-> validate_event, méthode POST !")
-        # range-start-index - range-end-index, date-index 
-        data = dict(request.POST.lists())
-        print(f"data = {data}")
-
-        # validé / pas validé retourner un message
-        dev_validation = True
-
-        if dev_validation == False:
-            messages.add_message(request, messages.WARNING, "Le message d'erreur !")
-
-        if dev_validation == True:
-            messages.add_message(request, messages.SUCCESS, "Réservation validée !")
-
-    return redirect('home')
-
-'''
-
-
-def modal(request, level="info", title='Information', content: str = None):
-    context = {
-        "modal_message": {
-            "type": level,
-            "title": title,
-            "content": content,
-        }
-    }
-    return render(request, "htmx/components/modal_message.html", context=context)
-
 
 class Badge(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
@@ -2497,7 +2545,11 @@ class MembershipMVT(viewsets.ViewSet):
         logger.info(f"new membership : {request.data}")
         membership_validator = MembershipValidator(data=request.data, context={'request': request})
         if not membership_validator.is_valid():
-            logger.warning(f"MembershipViewset CREATE ERROR : {membership_validator.errors}")
+            # Validation d'entree echouee (souvent un bot qui POST le formulaire vide ou partiel).
+            # Ce n'est pas une erreur serveur : on logge en info, pas en warning, pour ne pas
+            # generer de bruit dans Sentry sur une soumission invalide attendue.
+            # / Failed input validation (often a bot posting an empty/partial form). Not a server error.
+            logger.info(f"Membership create — validation refusee : {membership_validator.errors}")
             error_messages = [str(item) for sublist in membership_validator.errors.values() for item in sublist]
             messages.add_message(request, messages.ERROR, error_messages)
             return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
@@ -2660,6 +2712,12 @@ class MembershipMVT(viewsets.ViewSet):
                             prefill[field.name] = stored_data[label_key]
 
             context['prefill'] = prefill
+
+            # On teste la presence reelle d'une cle (truthiness) et pas "is not None" :
+            # un CharField vide via le form admin vaut '' (pas None), ce qui passerait
+            # "is not None" a tort et afficherait le switch newsletter sans config.
+            # / Truthiness check: an empty CharField is '' (not None) when blanked via admin.
+            context["newsletter_active"] = bool(GhostConfig.get_solo().ghost_key) or bool(BrevoConfig.get_solo().api_key)
 
             return render(request, "reunion/views/membership/form.html", context=context)
 
@@ -3561,293 +3619,1412 @@ class MembershipMVT(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
-class Tenant(viewsets.ViewSet):
-    authentication_classes = [SessionAuthentication, ]
-    # Tout le monde peut créer un tenant, sous reserve d'avoir validé son compte stripe
-    permission_classes = [permissions.AllowAny, ]
+# =============================================================================
+# Classe `Tenant` (ViewSet) — SUPPRIMEE lors de la session 2026-05-16.
+# / Class `Tenant` (ViewSet) — REMOVED during the 2026-05-16 session.
+# =============================================================================
+#
+# Cette classe melangeait deux responsabilites disjointes :
+#
+# 1. Creation de tenant via le flow legacy `/tenant/new/`. Remplace par
+#    l'app `onboard/` (wizard multi-step avec OTP, magic-link et SSO).
+#    Methodes supprimees : `new`, `create_waiting_configuration`,
+#    `emailconfirmation_tenant`, `onboard_stripe`, `onboard_stripe_return`.
+#
+# 2. Onboarding Stripe Connect d'un tenant EXISTANT (depuis l'admin
+#    Unfold). Migre vers `PaiementStripe/views.py::StripeConnectOnboardingViewSet`.
+#    Methodes deplacees : `onboard_stripe_from_config`,
+#    `onboard_stripe_return_from_config`.
+#
+# / This class mixed two disjoint responsibilities: (1) legacy tenant
+# creation flow, now in `onboard/`; (2) Stripe Connect onboarding for
+# an existing tenant, moved to `PaiementStripe/views.py::StripeConnectOnboardingViewSet`.
+#
+# References :
+#   - `TECH_DOC/SESSIONS/ONBOARD/03-session-recap.md`
+#   - `TECH_DOC/SESSIONS/MOYENS_PAIEMENT/01-stripe-migration-spec.md`
 
-    @action(detail=False, methods=['GET', 'POST'])
-    def new(self, request, *args, **kwargs):
-        """
-        Le formulaire de création de nouveau tenant
-        """
+
+# =============================================================================
+# Helpers communs du choix de lieu (wizards admin + public).
+# Le choix de lieu se fait en 2 pages, comme l'onboarding :
+#   Page 1 (choix)  : adresse existante (liste filtrable) OU nom d'un nouveau lieu.
+#   Page 2 (carte)  : carte pre-remplie avec le nom -> recherche auto + adresse.
+# Les deux wizards partagent la logique ; seuls changent les URLs, le prefixe
+# de session et les templates. On factorise ici au niveau module.
+# / Shared place-selection helpers (admin + public wizards). Two pages like the
+# onboarding flow: page 1 picks an existing address (filterable list) or a new
+# place name; page 2 shows the map pre-filled with that name (auto-search). Both
+# wizards share this logic; only URLs, session prefix and templates differ.
+# =============================================================================
+
+def _wizard_lieu_session_key(session_prefix, suffix):
+    """Construit la cle de session prefixee pour le choix de lieu.
+    / Build the prefixed session key for the place selection."""
+    return f"{session_prefix}_{suffix}"
+
+
+def _wizard_etape_choix_lieu(request, *, template, contexte_commun,
+                             session_prefix, map_url_name, event_url_name):
+    """
+    Page 1 commune (admin + public) : choix du lieu.
+
+    GET  : affiche le toggle (adresse existante filtrable / nouveau lieu).
+    POST :
+      - adresse existante -> on memorise le pk et on file a l'etape event.
+      - nouveau lieu       -> on memorise le nom et on file a la page carte.
+
+    / Shared step 1 (admin + public): place selection. GET shows the toggle;
+    POST routes to the event step (existing) or to the map page (new).
+    """
+    addresses = PostalAddress.objects.all().order_by("name", "address_locality")
+    config = Configuration.get_solo()
+
+    contexte_page = dict(contexte_commun)
+    contexte_page.update({
+        "addresses": addresses,
+        "default_address_pk": config.postal_address.pk if config.postal_address else None,
+        # Email du proposeur : affiche seulement pour un visiteur anonyme.
+        # / Proposer email: shown only for an anonymous visitor.
+        "demander_email": not request.user.is_authenticated,
+    })
+
+    if request.method == "GET":
         context = get_context(request)
-        context['email_query_params'] = request.query_params.get('email') if request.query_params.get('email') else ""
-        context['name_query_params'] = request.query_params.get('name') if request.query_params.get('name') else ""
+        context.update(contexte_page)
+        context.update({"initial": {}, "errors": {}})
+        return render(request, template, context=context)
 
-        return render(request, "reunion/views/tenant/new_tenant.html", context=context)
+    # POST
+    serializer = WizardPlaceSelectSerializer(data=request.POST, context={"request": request})
+    if not serializer.is_valid():
+        context = get_context(request)
+        context.update(contexte_page)
+        context.update({"initial": request.POST.dict(), "errors": serializer.errors})
+        return render(request, template, context=context, status=422)
 
-    @action(detail=False, methods=['POST'])
-    def create_waiting_configuration(self, request, *args, **kwargs):
-        """
-        Reception du formulaire de création de nouveau tenant
-        Création d'un objet waiting configuration
-        Envoi du mail qui invite à la création d'un compte Stripe
-        """
-        new_tenant = TenantCreateValidator(data=request.data, context={'request': request})
-        logger.info(new_tenant.initial_data)
-        if not new_tenant.is_valid():
-            # Construire une liste d'erreurs FALC par champ pour le partial `field_errors.html`
-            errors = []
+    data = serializer.validated_data
+
+    # Email du proposeur (anonyme) : on le garde en session pour la
+    # finalisation (creation/recuperation du compte SANS validation immediate).
+    # / Proposer email (anonymous): kept in session for finalization
+    # (account get_or_create WITHOUT immediate email validation).
+    email_proposeur = (data.get("email_proposeur") or "").strip()
+    if email_proposeur:
+        request.session[_wizard_lieu_session_key(session_prefix, "email_proposeur")] = email_proposeur
+
+    # Ce formulaire (adresse existante OU nouveau lieu saisi à la main) ne vient
+    # PAS d'une fiche Tiers-Lieux. On nettoie un éventuel pré-remplissage TL
+    # resté en session — cas : l'utilisateur avait cliqué « Utiliser ce lieu »
+    # puis est revenu en arrière pour saisir le lieu à la main. Sans ce nettoyage,
+    # la page carte poserait le marqueur sur l'ancienne fiche (GPS résiduel) au
+    # lieu de lancer la recherche Nominatim sur le nouveau nom.
+    # / This form (existing address OR hand-typed new place) does NOT come from a
+    # Tiers-Lieux record. Clear any leftover TL pre-fill in session (user clicked
+    # "Use this place" then went back to type manually). Otherwise the map step
+    # would place the marker on the stale record instead of running Nominatim.
+    request.session.pop(_wizard_lieu_session_key(session_prefix, "tierslieux_adresse_recherche"), None)
+    request.session.pop(_wizard_lieu_session_key(session_prefix, "tierslieux_prefill"), None)
+
+    if data["_mode"] == "existing":
+        # Adresse existante : on garde le pk et on nettoie un eventuel nom.
+        # / Existing address: keep the pk, clear any pending new-place name.
+        request.session[_wizard_lieu_session_key(session_prefix, "postal_address_pk")] = data["postal_address"]
+        request.session.pop(_wizard_lieu_session_key(session_prefix, "new_address_name"), None)
+        return redirect(event_url_name)
+
+    # Nouveau lieu : on garde le nom et on va sur la page carte.
+    # / New place: keep the name and go to the map page.
+    request.session[_wizard_lieu_session_key(session_prefix, "new_address_name")] = data["new_address_name"]
+    request.session.pop(_wizard_lieu_session_key(session_prefix, "postal_address_pk"), None)
+    return redirect(map_url_name)
+
+
+def _wizard_etape_carte_lieu(request, *, template, contexte_commun,
+                             session_prefix, choix_url_name, event_url_name):
+    """
+    Page 2 commune (admin + public) : carte du nouveau lieu.
+
+    Le nom du lieu a ete saisi en page 1 et vit en session ; on s'en sert pour
+    pre-remplir la recherche de la carte (le widget lance la recherche tout
+    seul). POST -> cree la PostalAddress et file a l'etape event.
+
+    / Shared step 2 (admin + public): new-place map. The place name lives in
+    session (entered on page 1) and pre-fills the map search (the widget
+    auto-runs it). POST creates the PostalAddress and goes to the event step.
+    """
+    nom_nouveau_lieu = request.session.get(
+        _wizard_lieu_session_key(session_prefix, "new_address_name")
+    )
+    if not nom_nouveau_lieu:
+        # Pas de nom en session (acces direct) -> retour au choix du lieu.
+        # / No name in session (direct access) -> back to place selection.
+        return redirect(choix_url_name)
+
+    contexte_page = dict(contexte_commun)
+    contexte_page.update({"new_address_name": nom_nouveau_lieu})
+
+    # Texte de recherche pré-rempli pour le widget carte : si on vient d'une
+    # fiche Tiers-Lieux (CHANTIER-04), on passe l'adresse complète pour que le
+    # géocodage trouve le bon point ; sinon le nom du lieu suffit.
+    # / Pre-filled search text for the map widget: full address if coming from a
+    # Tiers-Lieux record, otherwise the place name.
+    adresse_recherche = request.session.get(
+        _wizard_lieu_session_key(session_prefix, "tierslieux_adresse_recherche")
+    )
+    contexte_page.update({"adresse_recherche": adresse_recherche or nom_nouveau_lieu})
+
+    # Pré-remplissage GPS + adresse structurée (si on vient d'une fiche
+    # Tiers-Lieux avec coordonnées) : le widget carte pose le marqueur sur la
+    # géoloc de l'API et remplit les champs DIRECTEMENT, sans géocodage.
+    # On garantit TOUTES les clés (même vides) : dans un template Django,
+    # `valeur|default:prefill.latitude` lève VariableDoesNotExist si la clé
+    # `latitude` manque (la résolution d'un ARGUMENT de filtre ne tolère pas une
+    # clé absente, contrairement à l'opérande principal). En saisie manuelle, le
+    # prefill est absent -> dict de clés vides -> le widget bascule sur Nominatim.
+    # / GPS + structured-address pre-fill (from a Tiers-Lieux record with coords):
+    # the widget places the marker and fills fields directly. We ensure ALL keys
+    # (even empty): a missing dict key in a filter argument (`default:prefill.x`)
+    # raises VariableDoesNotExist. Manual entry -> empty keys -> widget uses Nominatim.
+    prefill_session = request.session.get(
+        _wizard_lieu_session_key(session_prefix, "tierslieux_prefill")
+    ) or {}
+    prefill = {
+        "latitude": prefill_session.get("latitude", ""),
+        "longitude": prefill_session.get("longitude", ""),
+        "street_address": prefill_session.get("street_address", ""),
+        "postal_code": prefill_session.get("postal_code", ""),
+        "address_locality": prefill_session.get("address_locality", ""),
+    }
+    contexte_page.update({"prefill": prefill})
+
+    if request.method == "GET":
+        context = get_context(request)
+        context.update(contexte_page)
+        context.update({"initial": {}, "errors": {}})
+        return render(request, template, context=context)
+
+    # POST
+    serializer = WizardPlaceMapSerializer(data=request.POST)
+    if not serializer.is_valid():
+        context = get_context(request)
+        context.update(contexte_page)
+        context.update({"initial": request.POST.dict(), "errors": serializer.errors})
+        return render(request, template, context=context, status=422)
+
+    data = serializer.validated_data
+    # Creation de la PostalAddress via le serializer schema.org existant.
+    # / Create the PostalAddress via the existing schema.org serializer.
+    from api_v2.serializers import PostalAddressCreateSerializer
+    payload = {
+        "name": nom_nouveau_lieu,
+        "streetAddress": data["street_address"],
+        "addressLocality": data["address_locality"],
+        "postalCode": data["postal_code"],
+        "addressCountry": data.get("address_country") or "France",
+    }
+    pa_ser = PostalAddressCreateSerializer(data=payload, context={"request": request})
+    pa_ser.is_valid(raise_exception=True)
+    addr = pa_ser.save()
+    # Ajout lat/lng (non gere par le serializer schema.org).
+    # / Add lat/lng (not handled by the schema.org serializer).
+    addr.latitude = data["place_latitude"]
+    addr.longitude = data["place_longitude"]
+    addr.save(update_fields=["latitude", "longitude"])
+
+    request.session[_wizard_lieu_session_key(session_prefix, "postal_address_pk")] = str(addr.pk)
+    request.session.pop(_wizard_lieu_session_key(session_prefix, "new_address_name"), None)
+    request.session.pop(_wizard_lieu_session_key(session_prefix, "tierslieux_adresse_recherche"), None)
+    request.session.pop(_wizard_lieu_session_key(session_prefix, "tierslieux_prefill"), None)
+    return redirect(event_url_name)
+
+
+# =============================================================================
+# Helpers communs des brouillons d'evenements (etape "events" des 2 wizards).
+# On peut ajouter PLUSIEURS evenements avant de finaliser (repris du formulaire
+# multi-events de l'onboarding). Les brouillons vivent en session HTTP (liste
+# de dicts) ; les images uploadees sont stockees en `default_storage` et seul
+# leur chemin relatif est garde dans la session. La finalisation (propre a
+# chaque wizard) cree N `Event` partageant le lieu choisi a l'etape 1.
+# / Shared event-draft helpers (the "events" step of both wizards). The user
+# can add SEVERAL events before finalizing (mirrors the onboarding multi-event
+# form). Drafts live in the HTTP session (list of dicts); uploaded images go to
+# default_storage and only their relative path is kept in the session. Finalize
+# (per-wizard) creates N Events sharing the place chosen at step 1.
+# =============================================================================
+
+def _wizard_drafts_key(session_prefix):
+    """Cle de session de la liste des brouillons d'events.
+    / Session key of the event drafts list."""
+    return f"{session_prefix}_event_drafts"
+
+
+def _wizard_get_drafts(request, session_prefix):
+    """Liste des brouillons (jamais None).
+    / Drafts list (never None)."""
+    return request.session.get(_wizard_drafts_key(session_prefix), [])
+
+
+def _wizard_set_drafts(request, session_prefix, drafts):
+    """Ecrit la liste des brouillons en session.
+    / Persist the drafts list in session."""
+    request.session[_wizard_drafts_key(session_prefix)] = drafts
+    request.session.modified = True
+
+
+def _wizard_store_draft_image(image_file, session_prefix):
+    """
+    Stocke une image de brouillon dans `default_storage` et renvoie son
+    chemin relatif (gardable en session JSON, compatible S3). Meme approche
+    que l'onboarding (cf. onboard/views.py events_add).
+    / Store a draft image in default_storage and return its relative path
+    (JSON-session friendly, S3-compatible). Same approach as onboarding.
+    """
+    import os
+    import uuid as uuid_module
+
+    from django.core.files.storage import default_storage
+
+    _, extension = os.path.splitext(image_file.name or "")
+    extension = (extension or ".bin").lower()
+    chemin_cible = (
+        f"event_wizard_drafts/{session_prefix}/"
+        f"{uuid_module.uuid4().hex}{extension}"
+    )
+    return default_storage.save(chemin_cible, image_file)
+
+
+def _wizard_render_events_inner(request, *, session_prefix, inner_context, status=200):
+    """
+    Rend le partial HTMX `_events_inner.html` (liste des brouillons + sous-form
+    d'ajout). Cible des swaps add/remove. `inner_context` porte les variables
+    propres au wizard (add_url, remove_url_name, show_admin_fields, all_tags).
+    / Render the HTMX partial `_events_inner.html` (drafts list + add sub-form).
+    Target of the add/remove swaps. `inner_context` carries wizard-specific
+    variables (add_url, remove_url_name, show_admin_fields, all_tags).
+    """
+    contexte = dict(inner_context)
+    contexte.setdefault("errors", {})
+    contexte.setdefault("initial", {})
+    contexte["events"] = _wizard_get_drafts(request, session_prefix)
+    return render(
+        request,
+        "reunion/views/event/wizard/_events_inner.html",
+        context=contexte,
+        status=status,
+    )
+
+
+def _wizard_events_add_generic(request, *, serializer_class, session_prefix,
+                               build_draft, inner_context):
+    """
+    Ajoute un brouillon d'event (commun admin + public).
+    Valide le sous-form, stocke l'image eventuelle, append le brouillon en
+    session, puis re-rend le partial liste+form. En cas d'erreur : re-rend
+    avec les erreurs et les valeurs saisies (status 422), liste inchangee.
+    / Add an event draft (shared admin + public). Validate, store optional
+    image, append to session, re-render the list+form partial. On error:
+    re-render with errors + submitted values (422), list unchanged.
+    """
+    # Pour les ImageField : fusionner POST + FILES.
+    # / For ImageField support: merge POST + FILES.
+    data_combined = request.POST.copy()
+    for f_key in request.FILES:
+        data_combined[f_key] = request.FILES[f_key]
+
+    serializer = serializer_class(data=data_combined)
+    if not serializer.is_valid():
+        # On renvoie 200 (et NON 422) volontairement : HTMX ne swappe pas les
+        # reponses 4xx par defaut, et le skin reunion n'a pas de config
+        # `htmx:beforeOnLoad` pour forcer le swap sur erreur. Renvoyer 200 avec
+        # le partial re-rendu (erreurs + valeurs saisies) garantit l'affichage.
+        # Meme choix que le multi-events de l'onboarding.
+        # / Return 200 (NOT 422) on purpose: HTMX won't swap 4xx by default and
+        # the reunion skin has no swap-on-error config. 200 + the re-rendered
+        # partial (errors + submitted values) guarantees display. Same choice
+        # as the onboarding multi-event form.
+        return _wizard_render_events_inner(
+            request,
+            session_prefix=session_prefix,
+            inner_context={
+                **inner_context,
+                "errors": serializer.errors,
+                "initial": request.POST.dict(),
+            },
+        )
+
+    validated = serializer.validated_data
+    image_path = None
+    if validated.get("image"):
+        image_path = _wizard_store_draft_image(validated["image"], session_prefix)
+
+    # Le wizard decide quels champs garder dans le brouillon (public vs admin).
+    # / The wizard decides which fields to keep in the draft (public vs admin).
+    draft = build_draft(validated, image_path)
+
+    drafts = _wizard_get_drafts(request, session_prefix)
+    drafts.append(draft)
+    _wizard_set_drafts(request, session_prefix, drafts)
+
+    return _wizard_render_events_inner(
+        request, session_prefix=session_prefix, inner_context=inner_context,
+    )
+
+
+def _wizard_events_remove_generic(request, idx, *, session_prefix, inner_context):
+    """
+    Retire le brouillon a l'index `idx` (commun admin + public) et supprime
+    son image temporaire eventuelle. Re-rend le partial liste+form.
+    / Remove the draft at index `idx` (shared) and delete its temp image if
+    any. Re-render the list+form partial.
+    """
+    drafts = _wizard_get_drafts(request, session_prefix)
+    try:
+        index = int(idx)
+    except (TypeError, ValueError):
+        index = -1
+
+    if 0 <= index < len(drafts):
+        brouillon_retire = drafts.pop(index)
+        # Nettoyage de l'image temporaire (si presente).
+        # / Clean up the temp image (if any).
+        if brouillon_retire.get("image"):
+            from django.core.files.storage import default_storage
             try:
-                for field, msgs in new_tenant.errors.items():
-                    if isinstance(msgs, (list, tuple)):
-                        for msg in msgs:
-                            errors.append({'id': field, 'msg': str(msg)})
-                    else:
-                        errors.append({'id': field, 'msg': str(msgs)})
-            except Exception:
-                # En cas d'erreur inattendue, on met un message générique
-                errors.append({'id': 'form', 'msg': _('An error occurred. Please try again.')})
+                default_storage.delete(brouillon_retire["image"])
+            except Exception as erreur_suppression:
+                logger.warning(
+                    "Suppression image brouillon échouée: %s", erreur_suppression
+                )
+        _wizard_set_drafts(request, session_prefix, drafts)
 
-            # Pré-remplissage des champs avec les valeurs envoyées
-            form_values = {
-                'email': request.POST.get('email', ''),
-                'emailConfirmation': request.POST.get('emailConfirmation', ''),
-                'name': request.POST.get('name', ''),
-                'short_description': request.POST.get('short_description', ''),
-                'dns_choice': request.POST.get('dns_choice', 'tibillet.coop'),
-                'cgu': request.POST.get('cgu') in ['true', 'True', 'on', '1'],
-                # On ne pré-remplit pas answer volontairement (captcha), il sera régénéré côté JS
-            }
+    return _wizard_render_events_inner(
+        request, session_prefix=session_prefix, inner_context=inner_context,
+    )
 
+
+def _attacher_image_brouillon(event, draft):
+    """
+    Migre l'image temporaire du brouillon (event_wizard_drafts/...) vers le champ
+    img de l'event (dossier images/).
+    save=False : l'event sera sauve UNE seule fois par l'appelant, donc les signaux
+    post_save ne se declenchent qu'une fois.
+    ATTENTION : le fichier temporaire n'est PAS supprime ici. La creation des
+    events est enveloppee dans transaction.atomic() (doublon possible) : un
+    rollback DB n'annule pas une suppression de fichier, et les brouillons
+    conserves en session referencent encore ce chemin. La suppression se fait
+    par l'appelant APRES le commit (step2_event).
+    / Migrate the draft temp image into event.img (images/).
+    save=False: the caller saves the event once (signals fire once).
+    WARNING: the temp file is NOT deleted here. Event creation runs inside
+    transaction.atomic() (duplicates possible): a DB rollback does not undo a
+    file deletion, and the session drafts still reference this path. The
+    caller deletes temp files AFTER the commit (step2_event).
+
+    LOCALISATION : BaseBillet/views.py
+    """
+    from django.core.files.base import ContentFile
+    from django.core.files.storage import default_storage
+
+    chemin_temp = draft.get("image")
+    if not chemin_temp or not default_storage.exists(chemin_temp):
+        return
+    with default_storage.open(chemin_temp, "rb") as fichier_temp:
+        contenu = fichier_temp.read()
+    extension = os.path.splitext(chemin_temp)[1] or ".jpg"
+    # Recopie reelle dans images/ (variations StdImage generees a la sauvegarde).
+    # / Real copy into images/ (StdImage variations generated on save).
+    event.img.save(f"event_{uuid.uuid4().hex[:8]}{extension}", ContentFile(contenu), save=False)
+
+
+def _creer_event_depuis_brouillon(draft, postal_address, user, est_staff):
+    """
+    Cree un Event depuis un brouillon du wizard UNIFIE (CHANTIER-03).
+    - Staff -> event publie (published=True, is_proposal=False).
+    - Public -> proposition (published=False, is_proposal=True) + tag automatique
+      (FederationConfiguration.tag_auto_proposition) si configure.
+    Tags du formulaire : staff = creation libre ; public = UNIQUEMENT les tags
+    EXISTANTS (anti-spam, pas de creation par un visiteur).
+    jauge_max + produit FREERES : pour tous (staff comme proposeurs).
+    / Create an Event from a unified-wizard draft. Staff -> published; public ->
+    proposal + auto tag; public form tags limited to existing tags (no creation).
+
+    LOCALISATION : BaseBillet/views.py
+    """
+    from django.utils.dateparse import parse_datetime
+
+    event = Event(
+        name=(draft.get("name") or "").strip(),
+        datetime=parse_datetime(draft["datetime"]),
+        long_description=admin_clean_html(draft.get("long_description") or ""),
+        postal_address=postal_address,
+        created_by=user if user.is_authenticated else None,
+        published=est_staff,
+        is_proposal=not est_staff,
+    )
+    _attacher_image_brouillon(event, draft)
+
+    # Jauge + produit FREERES : pour tous (staff comme proposeurs).
+    # / Gauge + FREERES product: for everyone (staff and proposers).
+    jauge = draft.get("jauge_max")
+    if jauge:
+        event.jauge_max = jauge
+        event.show_gauge = True
+    event.save()
+
+    # Reglages d'agenda participatif (deplaces sur FederationConfiguration).
+    # / Participatory-agenda settings (moved to FederationConfiguration).
+    federation_config = FederationConfiguration.get_solo()
+
+    # Tags saisis dans le formulaire (sépares par virgule/point-virgule).
+    # / Form tags (comma/semicolon separated).
+    noms_tags = [t.strip() for t in re.split(r"[,;]", draft.get("tags") or "") if t.strip()]
+    if est_staff:
+        # Staff : creation libre des tags.
+        # / Staff: free tag creation.
+        for tname in noms_tags:
+            tag_obj, _tag_created = Tag.objects.get_or_create(name=tname)
+            event.tag.add(tag_obj)
+    else:
+        # Public : on ne garde que les tags EXISTANTS (pas de creation).
+        # / Public: keep only EXISTING tags (no creation).
+        for tag_obj in Tag.objects.filter(name__in=noms_tags):
+            event.tag.add(tag_obj)
+        # Tag automatique des propositions, si configure.
+        # / Automatic proposal tag, if configured.
+        if federation_config.tag_auto_proposition_id:
+            event.tag.add(federation_config.tag_auto_proposition)
+
+    if jauge:
+        free_res = Product.objects.filter(
+            categorie_article=Product.FREERES, publish=True, archive=False
+        ).first()
+        if free_res:
+            event.products.add(free_res)
+
+    return event
+
+
+class EventWizard(viewsets.ViewSet):
+    """
+    Wizard event UNIFIE (front, CHANTIER-03). Remplace EventWizardAdmin +
+    EventWizardPublic. Un seul parcours, comportement selon le contexte :
+    - Staff (droits de creation d'event) : champs jauge/tags, event PUBLIE.
+    - Public (connecte ou anonyme autorise) : proposition moderee + tag auto.
+    Acces public conditionne par module_agenda_participatif + proposition_anonyme_autorisee.
+    / Unified front event wizard. Staff -> published; public -> moderated proposal.
+
+    LOCALISATION : BaseBillet/views.py
+    """
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [permissions.AllowAny]
+
+    SESSION_PREFIX = "event_wizard"
+
+    def _session_key(self, suffix):
+        return f"{self.SESSION_PREFIX}_{suffix}"
+
+    def _est_staff(self, request):
+        # Staff = a les droits de creation d'event (meme permission que l'ancien wizard admin).
+        # / Staff = has event-creation rights (same permission as the old admin wizard).
+        return bool(CanCreateEventPermission().has_permission(request, self))
+
+    def _garde_acces(self, request):
+        """
+        Garde d'acces du wizard. Staff : toujours autorise. Public : seulement si
+        l'agenda participatif est actif ; anonyme : seulement si autorise par la config.
+        / Access guard. Staff always; public if participatory agenda on; anonymous
+        only if allowed by config.
+        Retourne un redirect/raise si refuse, None sinon.
+        """
+        if self._est_staff(request):
+            return None
+        federation_config = FederationConfiguration.get_solo()
+        if not federation_config.module_agenda_participatif:
+            raise Http404()
+        if not request.user.is_authenticated and not federation_config.proposition_anonyme_autorisee:
+            messages.add_message(request, messages.WARNING,
+                                 _("Merci de vous connecter d'abord."))
+            return redirect(f"{reverse('event-list')}?login=1")
+        return None
+
+    def _postal_address_ou_redirect(self, request):
+        pk = request.session.get(self._session_key("postal_address_pk"))
+        if not pk:
+            return None, redirect("event-wizard-place")
+        try:
+            return PostalAddress.objects.get(pk=pk), None
+        except PostalAddress.DoesNotExist:
+            request.session.pop(self._session_key("postal_address_pk"), None)
+            return None, redirect("event-wizard-place")
+
+    def _inner_context_events(self, request, postal_address):
+        est_staff = self._est_staff(request)
+        return {
+            "add_url": reverse("event-wizard-events-add"),
+            "remove_url_name": "event-wizard-events-remove",
+            "show_admin_fields": est_staff,
+            # Tags existants : pour le staff (autocomplete libre) ET le public
+            # (selection parmi l'existant, pas de creation).
+            # / Existing tags: free for staff, selection-only for public.
+            "all_tags": Tag.objects.all().order_by("name"),
+            "postal_address": postal_address,
+        }
+
+    def _build_draft(self, validated, image_path):
+        # tags + jauge_max stockes dans le brouillon ; le filtrage par role
+        # se fait a la creation (_creer_event_depuis_brouillon).
+        # / tags + jauge_max kept in the draft; role filtering happens at creation.
+        draft = {
+            "name": validated["name"].strip(),
+            "datetime": validated["datetime"].isoformat(),
+            "long_description": validated.get("long_description") or "",
+            "tags": validated.get("tags", ""),
+            "jauge_max": validated.get("jauge_max"),
+        }
+        if image_path:
+            draft["image"] = image_path
+        return draft
+
+    @action(detail=False, methods=["GET", "POST"], url_path="place", url_name="place")
+    def step1_place(self, request):
+        garde = self._garde_acces(request)
+        if garde:
+            return garde
+        est_staff = self._est_staff(request)
+        contexte_commun = {
+            "wizard_title": _("Ajouter un évènement") if est_staff else _("Proposer un évènement"),
+            "wizard_step_label": _("Lieu"),
+            "form_action_url": reverse("event-wizard-place"),
+            "next_step_label": _("Continuer"),
+        }
+        return _wizard_etape_choix_lieu(
+            request,
+            template="reunion/views/event/wizard/public_step1_place.html",
+            contexte_commun=contexte_commun,
+            session_prefix=self.SESSION_PREFIX,
+            map_url_name="event-wizard-map",
+            event_url_name="event-wizard-event",
+        )
+
+    @action(detail=False, methods=["GET", "POST"], url_path="map", url_name="map")
+    def step_map(self, request):
+        garde = self._garde_acces(request)
+        if garde:
+            return garde
+        est_staff = self._est_staff(request)
+        contexte_commun = {
+            "wizard_title": _("Ajouter un évènement") if est_staff else _("Proposer un évènement"),
+            "wizard_step_label": _("Localiser le nouveau lieu"),
+            "form_action_url": reverse("event-wizard-map"),
+            "next_step_label": _("Continuer"),
+            "wizard_back_url": reverse("event-wizard-place"),
+        }
+        return _wizard_etape_carte_lieu(
+            request,
+            template="reunion/views/event/wizard/public_step_map.html",
+            contexte_commun=contexte_commun,
+            session_prefix=self.SESSION_PREFIX,
+            choix_url_name="event-wizard-place",
+            event_url_name="event-wizard-event",
+        )
+
+    @action(detail=False, methods=["GET", "POST"], url_path="event", url_name="event")
+    def step2_event(self, request):
+        garde = self._garde_acces(request)
+        if garde:
+            return garde
+        postal_address, redirection = self._postal_address_ou_redirect(request)
+        if redirection:
+            return redirection
+        est_staff = self._est_staff(request)
+
+        if request.method == "GET":
             context = get_context(request)
             context.update({
-                'errors': errors,
-                'form_values': form_values,
-                # Conserver les query params existants si présents pour compat
-                'email_query_params': request.query_params.get('email') if request.query_params.get('email') else "",
-                'name_query_params': request.query_params.get('name') if request.query_params.get('name') else "",
+                "wizard_title": _("Ajouter des évènements") if est_staff else _("Proposer des évènements"),
+                "wizard_step_label": _("Évènements"),
+                "finalize_url": reverse("event-wizard-event"),
+                "finalize_label": _("Créer les évènements") if est_staff else _("Envoyer ma proposition"),
+                "back_url": reverse("event-wizard-place"),
+                "est_staff": est_staff,
+                "events": _wizard_get_drafts(request, self.SESSION_PREFIX),
+                "errors": {}, "initial": {},
+            })
+            context.update(self._inner_context_events(request, postal_address))
+            return render(request, "reunion/views/event/wizard/step2_event.html",
+                          context=context)
+
+        # POST = finalisation.
+        # / POST = finalize.
+        drafts = _wizard_get_drafts(request, self.SESSION_PREFIX)
+        if not drafts:
+            messages.add_message(request, messages.WARNING,
+                _("Ajoutez au moins un évènement avant de continuer."))
+            return redirect("event-wizard-event")
+
+        # Qui sera l'auteur (created_by) des evenements ?
+        # - staff / connecte : l'utilisateur de la requete.
+        # - anonyme : on cree (ou recupere) un compte depuis l'email saisi a
+        #   l'etape 1, SANS envoyer le mail de validation (send_mail=False).
+        #   La personne validera son email elle-meme plus tard. L'evenement
+        #   reste une proposition moderee (est_staff=False).
+        # / Event author (created_by): request user for staff/logged-in. For an
+        # anonymous visitor we get_or_create a user from the step-1 email
+        # WITHOUT sending the validation mail; the event stays a moderated
+        # proposal.
+        user_pour_creation = request.user
+        if not est_staff and not request.user.is_authenticated:
+            email_proposeur = request.session.get(self._session_key("email_proposeur"))
+            if not email_proposeur:
+                # Email perdu (session expiree, acces direct) : retour etape 1.
+                # / Email lost (expired session, direct access): back to step 1.
+                messages.add_message(request, messages.WARNING,
+                    _("Merci d'indiquer votre adresse e-mail pour proposer un évènement."))
+                return redirect("event-wizard-place")
+            user_pour_creation = get_or_create_user(email_proposeur, send_mail=False)
+            if user_pour_creation is None:
+                # get_or_create_user renvoie None si l'email est marque en erreur.
+                # / get_or_create_user returns None if the email is flagged in error.
+                messages.add_message(request, messages.ERROR,
+                    _("Cette adresse e-mail pose un problème. Merci de nous contacter."))
+                return redirect("event-wizard-place")
+
+        # Creation en bloc : tout ou rien. Un doublon (name + datetime,
+        # unique_together sur Event) levait un 500 brut ; on le transforme en
+        # message de formulaire et on garde les brouillons en session pour
+        # que la personne corrige.
+        # / All-or-nothing creation. A duplicate (name + datetime,
+        # unique_together on Event) used to raise a bare 500; turn it into a
+        # form message and keep the drafts in session so the user can fix.
+        evenements_crees = []
+        try:
+            with db_transaction.atomic():
+                for draft in drafts:
+                    evenements_crees.append(
+                        _creer_event_depuis_brouillon(draft, postal_address, user_pour_creation, est_staff)
+                    )
+        except IntegrityError as erreur_integrite:
+            # Trace pour le diagnostic en prod : le message utilisateur suppose
+            # un doublon name+datetime, mais toute violation d'integrite passe ici.
+            # / Prod diagnostics trace: the user message assumes a name+datetime
+            # duplicate, but any integrity violation lands here.
+            logger.warning(f"EventWizard finalize IntegrityError : {erreur_integrite}")
+            messages.add_message(request, messages.WARNING,
+                _("Un évènement avec le même nom existe déjà à cette date. "
+                  "Modifiez le nom ou la date avant de valider."))
+            return redirect("event-wizard-event")
+
+        # COMMIT reussi : on peut maintenant supprimer les images temporaires
+        # des brouillons. Pas avant — un rollback DB n'annule pas une
+        # suppression de fichier, et les brouillons conserves en session en
+        # auraient encore besoin pour un nouvel essai (cf. _attacher_image_brouillon).
+        # / COMMIT succeeded: temp draft images can now be deleted. Not before —
+        # a DB rollback does not undo a file deletion, and the session drafts
+        # would still need them for a retry.
+        from django.core.files.storage import default_storage
+        for draft in drafts:
+            chemin_temp = draft.get("image")
+            if chemin_temp and default_storage.exists(chemin_temp):
+                default_storage.delete(chemin_temp)
+
+        request.session.pop(_wizard_drafts_key(self.SESSION_PREFIX), None)
+        request.session.pop(self._session_key("postal_address_pk"), None)
+        request.session.pop(self._session_key("email_proposeur"), None)
+        request.session.modified = True
+
+        nombre = len(evenements_crees)
+        if est_staff:
+            messages.add_message(request, messages.SUCCESS,
+                _("%(n)s évènement(s) créé(s).") % {"n": nombre})
+            if nombre == 1:
+                ev = evenements_crees[0]
+                return redirect(reverse("event-detail", kwargs={"pk": ev.slug or ev.uuid}))
+            return redirect("event-list")
+        # Public : page de remerciement.
+        # / Public: thank-you page.
+        return redirect("event-wizard-done")
+
+    @action(detail=False, methods=["POST"], url_path="events/add", url_name="events-add")
+    def events_add(self, request):
+        garde = self._garde_acces(request)
+        if garde:
+            return garde
+        postal_address, redirection = self._postal_address_ou_redirect(request)
+        if redirection:
+            return redirection
+        return _wizard_events_add_generic(
+            request,
+            serializer_class=WizardEventSerializer,
+            session_prefix=self.SESSION_PREFIX,
+            build_draft=self._build_draft,
+            inner_context=self._inner_context_events(request, postal_address),
+        )
+
+    @action(detail=False, methods=["POST"],
+            url_path=r"events/remove/(?P<idx>[0-9]+)", url_name="events-remove")
+    def events_remove(self, request, idx=None):
+        garde = self._garde_acces(request)
+        if garde:
+            return garde
+        postal_address, redirection = self._postal_address_ou_redirect(request)
+        if redirection:
+            return redirection
+        return _wizard_events_remove_generic(
+            request, idx,
+            session_prefix=self.SESSION_PREFIX,
+            inner_context=self._inner_context_events(request, postal_address),
+        )
+
+    # -------------------------------------------------------------------------
+    # Intégration recensement Tiers-Lieux (CHANTIER-04). Trois aides HTMX à
+    # l'étape 1 : détecter l'instance du proposeur, chercher son lieu dans le
+    # recensement national, et l'utiliser pour pré-remplir le nouveau lieu.
+    # / Tiers-Lieux directory integration (CHANTIER-04). Three HTMX helpers on
+    # step 1: detect the proposer's instance, search the national directory,
+    # and use a record to pre-fill the new place.
+    # -------------------------------------------------------------------------
+
+    @action(detail=False, methods=["GET"], url_path="check-instance", url_name="check-instance")
+    def check_instance(self, request):
+        """
+        Détecte si l'email saisi correspond à un compte qui administre déjà une
+        ou plusieurs instances TiBillet. Renvoie un encart d'invitation
+        (non-bloquant) ou une réponse vide. Déclenché en HTMX au blur de l'email.
+        / Detect whether the typed email belongs to an account that already
+        manages TiBillet instance(s). Returns an invitation partial or empty.
+
+        LOCALISATION : BaseBillet/views.py
+        """
+        email = (request.GET.get("email_proposeur") or "").strip()
+        if not email:
+            return HttpResponse("")
+
+        # Rate-limit léger par IP : limite l'énumération email -> instance.
+        # Au-delà de 20 requêtes/min/IP, on répond vide (silencieux : aucun
+        # indice qu'une limite existe). Clé scopée au tenant courant.
+        # / Light per-IP rate-limit to curb email -> instance enumeration:
+        # beyond 20 req/min/IP, return empty silently. Tenant-scoped cache key.
+        ip = request.META.get("REMOTE_ADDR", "")
+        cle_rate = f"check_instance_rate:{connection.tenant.uuid}:{ip}"
+        nb_appels = cache.get(cle_rate, 0)
+        if nb_appels >= 20:
+            return HttpResponse("")
+        cache.set(cle_rate, nb_appels + 1, 60)
+
+        # Le modèle User est SHARED : on peut chercher dans le schéma courant.
+        # / The User model is SHARED: we can search from the current schema.
+        user = TibilletUser.objects.filter(email__iexact=email).first()
+        if not user:
+            return HttpResponse("")
+
+        # Instances administrées par ce compte (M2M client_admin). On construit
+        # pour chacune le lien vers son propre wizard de proposition.
+        # / Instances managed by this account; build the link to each wizard.
+        instances = []
+        for tenant in user.client_admin.all():
+            domaine = tenant.get_primary_domain()
+            if not domaine:
+                continue
+            instances.append({
+                "name": tenant.name,
+                "wizard_url": f"https://{domaine.domain}/event/wizard/place/",
             })
 
-            # Réponse partielle HTMX: on renvoie le même template avec les erreurs et valeurs pré-remplies
-            return render(request, "reunion/views/tenant/new_tenant.html", context=context)
+        if not instances:
+            return HttpResponse("")
 
-        # Création d'un objet waiting_configuration
-        validated_data = new_tenant.validated_data
-        waiting_configuration = WaitingConfiguration.objects.create(
-            organisation=validated_data['name'],
-            email=validated_data['email'],
-            dns_choice=validated_data['dns_choice'],
-            short_description=validated_data['short_description'],
+        # Tags que CE tenant fédère automatiquement : à suggérer au proposeur
+        # pour que son évènement remonte ici (cf. CHANTIER FEDERATION).
+        # / Tags this tenant auto-federates: suggested so the event shows here.
+        federation_config = FederationConfiguration.get_solo()
+        tags_a_suggerer = [tag.name for tag in federation_config.tags_federation.all()]
+
+        return render(request, "reunion/views/event/wizard/_instance_trouvee.html", {
+            "instances": instances,
+            "tags_a_suggerer": tags_a_suggerer,
+        })
+
+    @action(detail=False, methods=["GET"], url_path="search-tierslieux", url_name="search-tierslieux")
+    def search_tierslieux(self, request):
+        """
+        Cherche le lieu du proposeur dans le recensement national Tiers-Lieux.
+        Déclenché en HTMX (débounce) quand aucune adresse locale ne correspond.
+        / Search the proposer's place in the national Tiers-Lieux directory.
+
+        LOCALISATION : BaseBillet/views.py
+        """
+        from BaseBillet.services.tiers_lieux import rechercher_tiers_lieux
+
+        terme = (request.GET.get("q") or "").strip()
+        # On évite les recherches trop courtes (bruit + charge API externe).
+        # / Avoid too-short searches (noise + external API load).
+        if len(terme) < 3:
+            return HttpResponse("")
+
+        fiches = rechercher_tiers_lieux(terme)
+        # Le client indique si la liste locale est vide : on n'affiche le message
+        # "aucun lieu trouvé" + création de lieu que dans ce cas (sinon réponse
+        # vide, car l'utilisateur a déjà des adresses locales).
+        # / The client tells whether the local list is empty: we only show the
+        # "nothing found" + create CTA then (otherwise empty response).
+        local_vide = request.GET.get("local_vide") == "1"
+        return render(request, "reunion/views/event/wizard/_tierslieux_resultats.html", {
+            "fiches": fiches,
+            "terme": terme,
+            "local_vide": local_vide,
+        })
+
+    @action(detail=False, methods=["POST"], url_path="use-tierslieux", url_name="use-tierslieux")
+    def use_tierslieux(self, request):
+        """
+        Mémorise la fiche Tiers-Lieux choisie et redirige vers l'étape carte
+        pré-remplie. Le proposeur valide ensuite comme une création de lieu
+        normale (la carte géocode l'adresse complète et remplit les champs).
+        / Store the chosen Tiers-Lieux record and redirect to the pre-filled map
+        step. The proposer then validates like a normal place creation.
+
+        LOCALISATION : BaseBillet/views.py
+        """
+        garde = self._garde_acces(request)
+        if garde:
+            return garde
+
+        from BaseBillet.services.tiers_lieux import valider_coordonnees
+
+        # Champs reçus du POST (fiche choisie OU POST forgé) : on les borne avant
+        # de les mettre en session. Le nom alimentera `PostalAddress.name`
+        # (max 400) à l'étape carte ; on tronque ici pour ne pas polluer la
+        # session avec un input démesuré. / Fields from POST (chosen record OR a
+        # forged POST): bound before storing in session. The name feeds
+        # `PostalAddress.name` (max 400) at the map step; truncate here.
+        nom = (request.POST.get("name") or "").strip()[:200]
+        if not nom:
+            return redirect("event-wizard-place")
+        rue = (request.POST.get("street_address") or "").strip()[:250]
+        code_postal = (request.POST.get("postal_code") or "").strip()[:20]
+        ville = (request.POST.get("locality") or "").strip()[:120]
+
+        # Adresse complète envoyée au widget carte comme texte de recherche :
+        # le widget géocode (Nominatim) et remplit les champs adresse.
+        # / Full address fed to the map widget as search text: it geocodes and
+        # fills the address fields.
+        morceaux = [nom, rue, code_postal, ville]
+        adresse_recherche = " ".join(morceau for morceau in morceaux if morceau)
+
+        # L'étape carte exige un nom de lieu en session ; on garde aussi
+        # l'adresse de recherche pour pré-remplir le widget.
+        # / The map step requires a place name in session; we also keep the
+        # search address to pre-fill the widget.
+        request.session[self._session_key("new_address_name")] = nom
+        request.session[self._session_key("tierslieux_adresse_recherche")] = adresse_recherche
+
+        # GPS + adresse structurée de la fiche (si dispo) : on les garde pour
+        # poser le marqueur et remplir les champs DIRECTEMENT à l'étape carte,
+        # sans géocodage Nominatim (qui échoue sur les libellés complexes type
+        # « MIETE (Maison...) 150 Rue... »). `adresse_recherche` reste le repli
+        # (recherche Nominatim) quand la fiche n'a pas de GPS. On valide les
+        # coordonnées (un POST forgé pourrait envoyer du texte). Sinon on nettoie.
+        # / GPS + structured address from the record (if any): kept to place the
+        # marker and fill the fields directly on the map step, no Nominatim
+        # geocode. We validate the coords (a forged POST could send text).
+        latitude, longitude = valider_coordonnees(
+            request.POST.get("latitude"), request.POST.get("longitude"))
+        if latitude is not None and longitude is not None:
+            request.session[self._session_key("tierslieux_prefill")] = {
+                "latitude": latitude,
+                "longitude": longitude,
+                "street_address": rue,
+                "postal_code": code_postal,
+                "address_locality": ville,
+            }
+        else:
+            request.session.pop(self._session_key("tierslieux_prefill"), None)
+
+        request.session.pop(self._session_key("postal_address_pk"), None)
+        request.session.modified = True
+        return redirect("event-wizard-map")
+
+    @action(detail=False, methods=["GET"], url_path="done", url_name="done")
+    def done(self, request):
+        context = get_context(request)
+        context.update({
+            "wizard_title": _("Merci !"),
+            "wizard_step_label": "",
+        })
+        return render(request, "reunion/views/event/wizard/public_done.html",
+                      context=context)
+
+
+class PanierMVT(viewsets.ViewSet):
+    """
+    ViewSet du panier d'achat. Toutes les actions manipulent PanierSession
+    ou delegue a CommandeService pour le checkout. Toute validation metier
+    est dans les services — cette vue est un thin wrapper.
+
+    / Cart ViewSet. All actions manipulate PanierSession or delegate to
+    CommandeService for checkout. All business validation is in the services
+    — this view is a thin wrapper.
+    """
+    authentication_classes = [SessionAuthentication, ]
+
+    def get_permissions(self):
+        # Lectures du panier (list + badge) : AllowAny — session-scoped, aucun data leak.
+        # Le template panier gère l'état auth (anonyme → message "log in to checkout").
+        # Écritures (add, remove, checkout, promo, clear) : IsAuthenticated — force le login.
+        # / Reads: AllowAny (session-scoped, no data leak). Template handles auth state.
+        # Writes: IsAuthenticated (force login via HTMX 403 catch + offcanvas).
+        if self.action in ['list', 'badge']:
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
+
+    # --- Helpers internes ---
+    # --- Internal helpers ---
+
+    def _render_badge_and_toast(self, request, message=None, level='success', swap_cart_content=False):
+        """
+        Rend les partials HTMX pour refresh du badge + envoie un toast via HX-Trigger.
+        / Render HTMX partials for badge refresh + send a toast via HX-Trigger.
+
+        LOCALISATION : BaseBillet/views.py (dans PanierMVT).
+
+        FLUX :
+        1. Le badge panier est rendu comme reponse HTMX (hx-swap-oob dans partial).
+        2. Le toast est signale au client via le header HX-Trigger avec un event
+           "panierToast". Un listener global dans base.html (reunion et
+           faire_festival) capte l'event et affiche un toast SweetAlert2.
+        3. Si swap_cart_content=True, le body de la reponse contient le partial
+           panier_content.html (le contenu de la page panier). Le bouton/form
+           doit cibler #panier-content via hx-target/hx-swap="outerHTML".
+           Sinon, le body est juste le partial badge (rien a swapper).
+
+        / FLOW:
+        1. Cart badge rendered as HTMX response (hx-swap-oob in partial).
+        2. Toast signaled via HX-Trigger header with event "panierToast".
+        3. If swap_cart_content=True, body contains the cart content partial.
+
+        :param request: Objet Request DRF.
+        :param message: Texte du toast (traduit cote serveur). Si None, pas de toast.
+        :param level: 'success' | 'error' | 'warning' | 'info'. Mappe sur icon Swal.
+        :param swap_cart_content: Si True, rend panier_content.html comme
+            corps de reponse (pour un swap HTMX direct du contenu panier).
+        :return: HttpResponse avec le partial + headers HX-Trigger.
+        """
+        if swap_cart_content:
+            # Rend 2 partials concatenes : le contenu panier (swap sur
+            # #panier-content via hx-swap="outerHTML") + le badge navbar
+            # (OOB swap sur #panier-badge-nav). Ils sont separes pour
+            # eviter la duplication d'id #panier-badge-nav dans le DOM
+            # initial (navbar rend deja un span avec ce id).
+            # / Render 2 concatenated partials: cart content (swap into
+            # #panier-content) + navbar badge (OOB). Separate to avoid
+            # duplicate #panier-badge-nav id in initial DOM.
+            from django.template.loader import render_to_string
+            from django.http import HttpResponse
+            template_context = get_context(request)
+            content_html = render_to_string(
+                'htmx/components/panier_content.html',
+                context=template_context, request=request,
+            )
+            badge_html = render_to_string(
+                'htmx/components/panier_badge.html',
+                context=template_context, request=request,
+            )
+            response = HttpResponse(content_html + badge_html)
+        else:
+            response = render(request, 'htmx/components/panier_toast.html')
+
+        if message:
+            # str() force l'evaluation d'un lazy _() en texte final,
+            # sinon json.dumps leve un TypeError.
+            # / str() forces evaluation of a lazy _() to final text.
+            response['HX-Trigger'] = json.dumps({
+                'panierToast': {
+                    'level': level,
+                    'text': str(message),
+                }
+            })
+        return response
+
+    # --- GET /panier/ ---
+    def list(self, request):
+        """Page panier : récap complet, modif, total, bouton checkout."""
+        template_context = get_context(request)
+        return render(request, 'htmx/views/panier.html', context=template_context)
+
+    # --- POST /panier/add/membership/ ---
+    @action(detail=False, methods=['POST'], url_path='add/membership')
+    def add_membership(self, request):
+        """
+        Ajoute une adhesion au panier.
+
+        Le formulaire d'adhesion (`membership/form.html`) poste :
+        - `price` (nom du radio/hidden) avec l'uuid du tarif choisi
+        - `custom_amount_{uuid}` pour les prix libres (un champ par prix)
+        - `options` (multi-valeur)
+        - `form__*` pour les champs custom
+
+        On accepte aussi `price_uuid` et `custom_amount` pour un appel direct
+        (tests, API). On recupere automatiquement le bon custom_amount en
+        cherchant la cle `custom_amount_{price_uuid}`.
+
+        / Adds a membership to the cart.
+        Accepts the membership form fields (`price`, `custom_amount_{uuid}`)
+        and also direct `price_uuid`/`custom_amount` (for tests/API).
+        """
+        from BaseBillet.services_panier import PanierSession, InvalidItemError
+
+        # Support des deux conventions de nommage (form HTML + appel direct).
+        # / Support both naming conventions (HTML form + direct call).
+        price_uuid = request.POST.get('price_uuid') or request.POST.get('price')
+
+        # Cherche d'abord custom_amount direct, puis custom_amount_{uuid}.
+        # / Look for direct custom_amount first, then custom_amount_{uuid}.
+        custom_amount = request.POST.get('custom_amount')
+        if not custom_amount and price_uuid:
+            custom_amount = request.POST.get(f'custom_amount_{price_uuid}')
+        custom_amount = custom_amount or None
+
+        options = request.POST.getlist('options') if hasattr(request.POST, 'getlist') else []
+        custom_form = {k[len('form__'):]: v for k, v in request.POST.items() if k.startswith('form__')}
+
+        # Le formulaire d'adhesion collecte les noms (cf. membership/form.html).
+        # On les passe a PanierSession pour qu'ils soient stockes sur l'item et
+        # prioritaires sur user.first_name/last_name a la materialisation.
+        # / The membership form collects names. We pass them to PanierSession
+        # so they're stored on the item and prioritized at materialization.
+        firstname = request.POST.get('firstname') or None
+        lastname = request.POST.get('lastname') or None
+
+        # Code promo : lie a un Product specifique (FK). On ne passe que si
+        # ce code existe pour le product de l'adhesion cible — sinon None.
+        # Validation complete (actif, is_usable, match) dans add_membership.
+        # / Promo code linked to a specific Product (FK). Passed only if it
+        # matches target product; else None. Full validation in add_membership.
+        promotional_code_name = (request.POST.get('promotional_code') or '').strip() or None
+        item_promo = None
+        if promotional_code_name and price_uuid:
+            from BaseBillet.models import PromotionalCode, Price as PriceModel
+            try:
+                _target_price = PriceModel.objects.get(uuid=price_uuid)
+                if PromotionalCode.objects.filter(
+                        name=promotional_code_name,
+                        product=_target_price.product,
+                ).exists():
+                    item_promo = promotional_code_name
+            except PriceModel.DoesNotExist:
+                pass  # add_membership levera l'erreur Price not found
+
+        panier = PanierSession(request)
+        try:
+            panier.add_membership(
+                price_uuid=price_uuid,
+                custom_amount=custom_amount,
+                options=options,
+                custom_form=custom_form,
+                firstname=firstname,
+                lastname=lastname,
+                promotional_code_name=item_promo,
+            )
+        except InvalidItemError as exc:
+            return self._render_badge_and_toast(request, message=str(exc), level='error')
+        except Exception as exc:
+            logger.error(f"add_membership unexpected error: {exc}")
+            return self._render_badge_and_toast(
+                request, message=_("Unable to add membership."), level='error'
+            )
+        # Si le bouton "Ajouter au panier et payer" a envoye `then=checkout`,
+        # on enchaine directement sur le checkout (redirect Stripe ou gratuit).
+        # / If the "Add to cart and pay" button sent `then=checkout`, chain
+        # directly to checkout (Stripe redirect or free order).
+        if request.POST.get('then') == 'checkout':
+            return self.checkout(request)
+        return self._render_badge_and_toast(request, message=_("Membership added to cart."))
+
+    # --- POST /panier/remove/<int:pk>/ ---
+    @action(detail=True, methods=['POST'], url_path='remove')
+    def remove(self, request, pk=None):
+        """Retire un item a l'index donne (pk = index en string)."""
+        from BaseBillet.services_panier import PanierSession
+
+        try:
+            index = int(pk)
+        except (TypeError, ValueError):
+            return self._render_badge_and_toast(
+                request, message=_("Invalid index."), level='error'
+            )
+        panier = PanierSession(request)
+        panier.remove_item(index)
+        return self._render_badge_and_toast(
+            request, message=_("Item removed."), swap_cart_content=True,
         )
-        # Envoi d'un mail pour vérifier le compte. Un lien vers stripe sera créé
-        # new_tenant_mailer.delay(waiting_config_uuid=str(waiting_configuration.uuid))
-        new_tenant_mailer.delay(waiting_config_uuid=str(waiting_configuration.uuid))
 
-        try:
-            meta = Client.objects.filter(categorie=Client.META).first()
-            with tenant_context(meta):
-                send_to_ghost_email.delay(validated_data['email'], name=validated_data['name'])
-        except Exception as e:
-            logger.error(f"new_tenant send_to_ghost_email ERROR : {e}")
+    # Note : l'endpoint update_quantity a ete supprime volontairement (refactor
+    # 2026-04). Pour changer la quantite, l'user retire l'item et le re-ajoute
+    # via booking_form, garantissant que toutes les validations sont appliquees.
+    # / update_quantity endpoint removed: user must remove + re-add to change qty.
 
-        return render(request, "reunion/views/tenant/create_waiting_configuration_THANKS.html", context={})
+    # --- POST /panier/promo_code/ ---
+    @action(detail=False, methods=['POST'], url_path='promo_code')
+    def set_promo_code(self, request):
+        """Applique un code promo au panier."""
+        from BaseBillet.services_panier import PanierSession, InvalidItemError
 
-    @action(detail=True, methods=['GET'])
-    def emailconfirmation_tenant(self, request, pk):
-        """
-        Lien de vérification de demande de création de nouveau tenant
-        Mail envoyé par tasks.new_tenant_mailer
-        """
-        signer = TimestampSigner()
-        try:
-            wc_pk = signer.unsign(urlsafe_base64_decode(pk).decode('utf8'), max_age=(3600 * 24 * 30))  # 30 jours
-            wc = WaitingConfiguration.objects.get(uuid=wc_pk)
-            wc.email_confirmed = True
-            wc.save()
-
-            # Idempotent behavior: if the tenant was already created, redirect directly
-            if wc.tenant:
-                primary_domain = f"https://{wc.tenant.get_primary_domain().domain}"
-                # Le tenant existe déja, on envoi un mail de connection
-                get_or_create_user(wc.email, send_mail=True)
-                return redirect(primary_domain)
-
-            # Si assez de tenant en attentent de création existent :
-            if Client.objects.filter(categorie=Client.WAITING_CONFIG).exists():
-                try:
-                    tenant = wc.create_tenant()
-                except Exception as e:
-                    logger.error(f"Error creating tenant for {wc.organisation}: {e}")
-                    # Try to redirect to existing tenant if it's a name conflict
-                    existing_client = Client.objects.filter(name=wc.organisation).first()
-                    if existing_client:
-                        try:
-                            # Repare la liaison manquante pour les prochains clics
-                            # Fix the missing link for future clicks
-                            if not wc.tenant:
-                                wc.tenant = existing_client
-                                wc.save()
-                            primary_domain = f"https://{existing_client.get_primary_domain().domain}"
-                            messages.info(request, _("This space already exists. Redirecting you to it."))
-                            return redirect(primary_domain)
-                        except Exception:
-                            pass
-
-                    messages.error(request,
-                                   _("An error occurred while creating your space. It might be because the name is already taken or no free slot is available. Please contact us."))
-                    return redirect('/')
-
-                primary_domain = f"https://{tenant.get_primary_domain().domain}"
-                user = get_or_create_user(wc.email, send_mail=False)
-                token = user.get_connect_token()
-                connexion_url = f"{primary_domain}/emailconfirmation/{token}"
-                return redirect(connexion_url)
-
-            else:
-                context = get_context(request)
-                return render(request, "reunion/views/tenant/create_waiting_configuration_MAIL_CONFIRMED.html",
-                              context=context)
-        except UnicodeDecodeError as e:
-            messages.error(request, _("Invalid token. Please request a new confirmation email."))
-            return redirect('/')
-
-    @action(detail=True, methods=['GET'])
-    def onboard_stripe(self, request, pk):
-        """
-        Requete provenant du mail envoyé après la création d'une configuration en attente
-        Fabrication du lien stripe onboard
-        """
-        waiting_config = get_object_or_404(WaitingConfiguration, pk=pk)
-        tenant = connection.tenant
-        tenant_url = tenant.get_primary_domain().domain
-
-        rootConf = RootConfiguration.get_solo()
-        stripe.api_key = rootConf.get_stripe_api()
-
-        if not waiting_config.id_acc_connect:
-            acc_connect = stripe.Account.create(
-                type="standard",
-                country="FR",
+        code_name = request.POST.get('code_name', '').strip()
+        if not code_name:
+            return self._render_badge_and_toast(
+                request, message=_("Missing code."), level='error'
             )
-            id_acc_connect = acc_connect.get('id')
-            waiting_config.id_acc_connect = id_acc_connect
-            waiting_config.save()
-
-        account_link = stripe.AccountLink.create(
-            account=waiting_config.id_acc_connect,
-            refresh_url=f"https://{tenant_url}/tenant/{waiting_config.id_acc_connect}/onboard_stripe_return/",
-            return_url=f"https://{tenant_url}/tenant/{waiting_config.id_acc_connect}/onboard_stripe_return/",
-            type="account_onboarding",
+        panier = PanierSession(request)
+        try:
+            panier.set_promo_code(code_name)
+        except InvalidItemError as exc:
+            return self._render_badge_and_toast(
+                request, message=str(exc), level='error', swap_cart_content=True,
+            )
+        return self._render_badge_and_toast(
+            request, message=_("Promo code applied."), swap_cart_content=True,
         )
 
-        url_onboard = account_link.get('url')
-        return redirect(url_onboard)
+    # --- POST /panier/promo_code/clear/ ---
+    @action(detail=False, methods=['POST'], url_path='promo_code/clear')
+    def clear_promo_code(self, request):
+        """Retire le code promo du panier."""
+        from BaseBillet.services_panier import PanierSession
+        panier = PanierSession(request)
+        panier.clear_promo_code()
+        return self._render_badge_and_toast(
+            request, message=_("Promo code removed."), swap_cart_content=True,
+        )
 
-    @action(detail=True, methods=['GET'])
-    def onboard_stripe_return(self, request, pk):
+    # --- POST /panier/clear/ ---
+    @action(detail=False, methods=['POST'], url_path='clear')
+    def clear(self, request):
+        """Vide completement le panier."""
+        from BaseBillet.services_panier import PanierSession
+        panier = PanierSession(request)
+        panier.clear()
+        return self._render_badge_and_toast(
+            request, message=_("Cart cleared."), swap_cart_content=True,
+        )
+
+    # --- POST /panier/checkout/ ---
+    @action(detail=False, methods=['POST'], url_path='checkout')
+    def checkout(self, request):
         """
-        Return url après avoir terminé le onboard sur stripe
-        Vérification que le mail soit bien le même (cela nous confirme qu'il existe bien, Stripe impose une double auth)
-        Vérification que le formulaire a bien été complété (detail submitted)
-        Envoi un mail à l'administrateur ROOT de l'insatnce TiBillet pour prévenir, vérifier, et lancer la création du tenant à la main.
+        Matérialise le panier en Commande → redirect Stripe (payant) ou
+        my_account (gratuit). Utilise request.user comme buyer (auth required).
+        / Materialize cart → Stripe redirect (paid) or my_account (free).
+        Uses request.user as buyer (auth required).
         """
-        details_submitted, waiting_config = False, False
-        id_acc_connect = pk
-        # La clé du compte principal stripe connect
-        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-        # Récupération des info lié au lieu via sont id account connec
+        from BaseBillet.services_commande import CommandeService, CommandeServiceError
+        from BaseBillet.services_panier import PanierSession, InvalidItemError
+
+        user = request.user
+        # Les prenom/nom de l'acheteur sont collectes :
+        # - soit via les formulaires adhesion/reservation (custom_form data)
+        # - soit par Stripe Checkout (billing_address_collection)
+        # On passe user.first_name / user.last_name s'ils existent (fallback),
+        # sinon une chaine vide — Stripe completera.
+        # / Buyer first/last name collected via booking/membership forms or Stripe.
+        # We pass user.first_name/last_name as fallback, or empty string — Stripe fills in.
+        panier = PanierSession(request)
+        # InvalidItemError est leve par revalidate_all() en Phase 0 de
+        # materialiser() — ex : user a retire une adhesion obligatoire du
+        # panier entre temps. On remonte le message precis a l'utilisateur
+        # ("This rate requires a membership: X") plutot qu'un generique
+        # "Checkout failed" via le fallback Exception.
+        # / InvalidItemError raised by revalidate_all() in Phase 0 — e.g.
+        # user removed a required membership from cart. Surface the precise
+        # message instead of the generic "Checkout failed".
+
+
+
+        if not user.first_name or not user.last_name:
+            backup_first_name = ""
+            backup_last_name = ""
+
+            # Get the user first name and last name from a membership
+            membership_temp = panier.memberships()[0]
+
+            if membership_temp:
+                backup_first_name = membership_temp.get("firstname")
+                backup_last_name = membership_temp.get("lastname")
+
         try:
-            info_stripe = stripe.Account.retrieve(id_acc_connect)
-            details_submitted = info_stripe.details_submitted
-        except Exception as e:
-            logger.error(f"onboard_stripe_return. id_acc_connect : {id_acc_connect}, erreur stripe : {e}")
-            raise Http404
-
-        if details_submitted:
-            waiting_config = WaitingConfiguration.objects.get(id_acc_connect=id_acc_connect)
-            waiting_config.onboard_stripe_finished = True
-            waiting_config.save()
-            # Envoie du mail aux superadmins
-            new_tenant_after_stripe_mailer.delay(waiting_config.pk)
-
-        context = get_context(request)
-        context["details_submitted"] = details_submitted
-        return render(request, "reunion/views/tenant/after_onboard_stripe.html", context=context)
-
-        #     _("Your Stripe account does not seem to be valid. "
-        #       "\nPlease complete your Stripe.com registration before creating a new TiBillet space."))
-        # return redirect('/tenant/new/')
-
-    '''
-    @action(detail=False, methods=['GET'])
-    def emailconfirmation(self, request, pk):
-        """
-        Requete provenant du mail envoyé après la création d'un tenant
-        """
-        wc = WaitingConfiguration.objects.get(pk=pk)
-        wc.email_confirmed = True
-        wc.save()
-        context = get_context(request)
-        return render(request, "reunion/views/tenant/create_waiting_configuration_MAIL_CONFIRMED.html", context=context)
-    '''
-
-    @action(detail=False, methods=['GET'])
-    def onboard_stripe_from_config(self, request):
-        """
-        Requete provenant du mail envoyé après la création d'une configuration en attente
-        Fabrication du lien stripe onboard
-        """
-        config = Configuration.get_solo()
-        id_acc_connect = config.get_stripe_connect_account()
-        tenant = connection.tenant
-        tenant_url = tenant.get_primary_domain().domain
-
-        rootConf = RootConfiguration.get_solo()
-        stripe.api_key = rootConf.get_stripe_api()
-
-        try:
-            account_link = stripe.AccountLink.create(
-                account=id_acc_connect,
-                refresh_url=f"https://{tenant_url}/tenant/{id_acc_connect}/onboard_stripe_return_from_config/",
-                return_url=f"https://{tenant_url}/tenant/{id_acc_connect}/onboard_stripe_return_from_config/",
-                type="account_onboarding",
+            commande = CommandeService.materialiser(
+                panier, user,
+                first_name=user.first_name or backup_first_name,
+                last_name=user.last_name or backup_last_name,
+                email=user.email,
+            )
+        except InvalidItemError as exc:
+            return self._render_badge_and_toast(request, message=str(exc), level='error')
+        except CommandeServiceError as exc:
+            return self._render_badge_and_toast(request, message=str(exc), level='error')
+        except Exception as exc:
+            logger.error(f"CommandeService.materialiser failed: {exc}")
+            return self._render_badge_and_toast(
+                request, message=_("Checkout failed. Please try again."), level='error'
             )
 
-        except stripe._error.InvalidRequestError:
-            # Stripe account not valid, on le vide et on relance
-            config.stripe_connect_account = None
-            config.save()
-            id_acc_connect = config.get_stripe_connect_account()
-            account_link = stripe.AccountLink.create(
-                account=id_acc_connect,
-                refresh_url=f"https://{tenant_url}/tenant/{id_acc_connect}/onboard_stripe_return_from_config/",
-                return_url=f"https://{tenant_url}/tenant/{id_acc_connect}/onboard_stripe_return_from_config/",
-                type="account_onboarding",
+        # Le panier est vide apres materialisation reussie.
+        # / Cart is empty after successful materialization.
+        panier.clear()
+
+        # Redirection selon le cas (payant/gratuit).
+        # / Redirect based on case (paid/free).
+        if commande.paiement_stripe and commande.paiement_stripe.checkout_session_url:
+            # C3 : URL persistee en DB — plus besoin d'appeler Stripe.
+            # / C3: URL persisted in DB — no Stripe API call needed.
+            return HttpResponseClientRedirect(commande.paiement_stripe.checkout_session_url)
+        elif commande.paiement_stripe:
+            logger.error(
+                f"Commande {commande.uuid_8()} has Paiement_stripe but no checkout_session_url"
+            )
+            messages.error(
+                request,
+                _("Payment link unavailable. Please contact support."),
+            )
+            return HttpResponseClientRedirect('/my_account/my_reservations/')
+        else:
+            # Commande gratuite : messages success + redirect vers my_account
+            # / Free order: success message + redirect to my_account
+            messages.success(
+                request,
+                _("Order confirmed. You will receive an email shortly."),
+            )
+            return HttpResponseClientRedirect('/my_account/my_reservations/')
+
+    # --- GET /panier/badge/ ---
+    @action(detail=False, methods=['GET'], url_path='badge')
+    def badge(self, request):
+        """Partial HTMX : le badge compteur seul."""
+        return render(request, 'htmx/components/panier_badge.html')
+
+    # --- POST /panier/add/tickets_batch/ ---
+    @action(detail=False, methods=['POST'], url_path='add/tickets_batch')
+    def add_tickets_batch(self, request):
+        """
+        Ajoute plusieurs billets au panier à partir du formulaire page event
+        (format legacy : price_uuid=qty + options + custom_amount_<uuid> + form__<field>).
+        Rollback si erreur (on retire tous les items ajoutés dans cette requête).
+
+        / Add multiple tickets to the cart from the event page form (legacy
+        format: price_uuid=qty + options + custom_amount_<uuid> + form__<field>).
+        Rollback on error (remove all items added in this request).
+        """
+        from BaseBillet.models import Event
+        from BaseBillet.services_panier import PanierSession, InvalidItemError
+        from decimal import Decimal
+
+        # Accepter soit `slug` (legacy htmx/views/event.html), soit `event` (uuid, booking_form.html prod).
+        # / Accept either `slug` (legacy template) or `event` (uuid, prod booking_form.html).
+        slug = request.POST.get('slug')
+        event_uuid_param = request.POST.get('event')
+        event = None
+        if event_uuid_param:
+            try:
+                event = Event.objects.get(uuid=event_uuid_param)
+            except (Event.DoesNotExist, ValueError):
+                event = None
+        if event is None and slug:
+            try:
+                event = Event.objects.get(slug=slug)
+            except Event.DoesNotExist:
+                event = None
+        if event is None:
+            return self._render_badge_and_toast(
+                request, message=_("Event not found."), level='error',
             )
 
-        url_onboard = account_link.get('url')
-        return redirect(url_onboard)
+        panier = PanierSession(request)
+        added_count_before = len(panier.items())
 
-    @action(detail=True, methods=['GET'])
-    def onboard_stripe_return_from_config(self, request, pk):
-        """
-        Return url après avoir terminé le onboard sur stripe
-        Vérification que le mail soit bien le même (cela nous confirme qu'il existe bien, Stripe impose une double auth)
-        Vérification que le formulaire a bien été complété (detail submitted)
-        Envoi un mail à l'administrateur ROOT de l'insatnce TiBillet pour prévenir, vérifier, et lancer la création du tenant à la main.
-        """
-        details_submitted, waiting_config = False, False
-        id_acc_connect = pk
-        # La clé du compte principal stripe connect
-        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-        # Récupération des infos liées au lieu via son id account connec
+        # Extraire options de l'event / Extract event options
+        options_ids = request.POST.getlist('options') if hasattr(request.POST, 'getlist') else []
+        # Custom form fields (prefix form__) / Custom form fields
+        custom_form = {k[len('form__'):]: v for k, v in request.POST.items() if k.startswith('form__')}
+        # Code promo saisi dans booking_form (champ `promotional_code`).
+        # Valide cote serveur dans PanierSession.add_ticket (existence, actif,
+        # is_usable, lie au produit). Le front n'envoie que le nom.
+        # / Promo code from booking_form. Server-validated in add_ticket.
+        promotional_code_name = (request.POST.get('promotional_code') or '').strip() or None
+
+        items_added = 0
         try:
-            info_stripe = stripe.Account.retrieve(id_acc_connect)
-            details_submitted = info_stripe.details_submitted
-        except Exception as e:
-            logger.error(f"onboard_stripe_return. id_acc_connect : {id_acc_connect}, erreur stripe : {e}")
-            raise Http404
+            for product in event.products.all():
+                for price in product.prices.all():
+                    price_key = str(price.uuid)
+                    raw_qty = request.POST.get(price_key)
+                    if not raw_qty:
+                        continue
+                    try:
+                        qty = int(Decimal(str(raw_qty).replace(',', '.')))
+                    except (TypeError, ValueError):
+                        continue
+                    if qty <= 0:
+                        continue
 
-        config = Configuration.get_solo()
-        if info_stripe and info_stripe.get('payouts_enabled'):
-            config.stripe_payouts_enabled = info_stripe.get('payouts_enabled')
-            config.save()
+                    # Custom amount si free_price / Custom amount if free_price
+                    custom_amount = None
+                    if price.free_price:
+                        custom_amount_raw = request.POST.get(f"custom_amount_{price.uuid}")
+                        if custom_amount_raw not in [None, '', 'null']:
+                            custom_amount = custom_amount_raw
 
-        context = get_context(request)
-        context["details_submitted"] = details_submitted
-        return render(request, "reunion/views/tenant/after_onboard_stripe.html", context=context)
+                    # Le code promo est lie a UN product specifique (FK). Le
+                    # booking_form a un champ global `promotional_code` pour
+                    # tout l'event, mais l'event peut avoir plusieurs products.
+                    # On ne passe le code que pour les prices dont le product
+                    # correspond — pour les autres, on passe None (silent skip,
+                    # pas d'erreur). Validation complete (actif, is_usable,
+                    # product match) faite dans add_ticket.
+                    # / Promo code is linked to ONE product (FK). The form
+                    # has a global field but events may have multiple products.
+                    # We pass the code only for matching-product prices;
+                    # others get None (silent skip, no error).
+                    item_promo = None
+                    if promotional_code_name:
+                        from BaseBillet.models import PromotionalCode
+                        if PromotionalCode.objects.filter(
+                                name=promotional_code_name,
+                                product=price.product,
+                        ).exists():
+                            item_promo = promotional_code_name
+                    panier.add_ticket(
+                        event_uuid=event.uuid,
+                        price_uuid=price.uuid,
+                        qty=qty,
+                        custom_amount=custom_amount,
+                        options=options_ids,
+                        custom_form=custom_form,
+                        promotional_code_name=item_promo,
+                    )
+                    items_added += 1
+        except InvalidItemError as exc:
+            # Rollback : retirer les items ajoutés pendant cette requête
+            # / Rollback: remove items added during this request
+            added_after = len(panier.items())
+            for _idx in range(added_after - added_count_before):
+                panier.remove_item(added_count_before)
+            return self._render_badge_and_toast(
+                request, message=str(exc), level='error',
+            )
 
-        #     _("Your Stripe account does not seem to be valid. "
-        #       "\nPlease complete your Stripe.com registration before creating a new TiBillet space.")
+        if items_added == 0:
+            return self._render_badge_and_toast(
+                request, message=_("No tickets selected."), level='error',
+            )
+
+        message = ngettext(
+            "%(count)d ticket added to cart.",
+            "%(count)d tickets added to cart.",
+            items_added,
+        ) % {'count': items_added}
+        # Si le bouton "Ajouter au panier et payer" a envoye `then=checkout`,
+        # on enchaine directement sur le checkout.
+        # / If "Add to cart and pay" button sent `then=checkout`, chain to checkout.
+        if request.POST.get('then') == 'checkout':
+            return self.checkout(request)
+        return self._render_badge_and_toast(request, message=message)

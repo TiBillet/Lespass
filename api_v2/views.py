@@ -1,5 +1,12 @@
+import datetime
+import re
+import uuid as uuid_module
+
 from django.db import connection
+from django.db.models import Q
+from django.http import Http404
 from django.shortcuts import get_object_or_404
+from django.utils.translation import gettext_lazy as _
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
@@ -8,7 +15,9 @@ from django.core.cache import cache
 
 from ApiBillet.permissions import TenantAdminApiPermission
 from ApiBillet.views import get_permission_Api_ALL_Admin
-from BaseBillet.models import Event, PostalAddress, LigneArticle, Product, Reservation, Membership
+from AuthBillet.models import TibilletUser
+from BaseBillet.models import Event, PostalAddress, LigneArticle, Product, Reservation, Membership, logger, \
+    Configuration
 from crowds.models import Initiative, BudgetItem, Participation, Vote
 from .permissions import SemanticApiKeyPermission
 from .serializers import (
@@ -22,6 +31,8 @@ from .serializers import (
     ReservationSchemaSerializer,
     MembershipCreateSerializer,
     MembershipSchemaSerializer,
+    MembershipStatusSerializer,
+    WalletRefillCreateSerializer,
     InitiativeSchemaSerializer,
     InitiativeCreateSerializer,
     BudgetItemSchemaSerializer,
@@ -29,6 +40,89 @@ from .serializers import (
     ParticipationSchemaSerializer,
     ParticipationCreateSerializer,
 )
+
+
+def get_objet_par_uuid_ou_404(model, uuid_recu, **filtres_supplementaires):
+    """
+    Recupere un objet via son uuid, ou leve Http404 si l'uuid est mal forme.
+    / Get an object by its uuid, or raise Http404 if the uuid is malformed.
+
+    LOCALISATION : api_v2/views.py
+
+    Pourquoi : le routeur DRF capture n'importe quelle chaine dans l'URL
+    (regex `[^/.]+`). Un robot peut appeler /api/v2/events/<slug>/ avec un
+    slug au lieu d'un uuid. Sans cette verification, Django essaie de
+    convertir le slug en UUID pour le filtre ORM, leve ValidationError,
+    et renvoie une 500. On veut une 404 propre : la ressource n'existe pas.
+    / The DRF router captures any string in the URL. A crawler may pass a
+    slug instead of a uuid. Without this guard Django raises ValidationError
+    on the UUIDField (-> HTTP 500). We want a clean 404 instead.
+
+    Voir piege 9.76 (tests/PIEGES.md) : meme correctif sur detail_vente().
+    / See pitfall 9.76: same fix applied to detail_vente().
+    """
+    # On verifie d'abord que la chaine recue est un uuid valide.
+    # / First check the received string is a valid uuid.
+    try:
+        uuid_module.UUID(str(uuid_recu))
+    except (ValueError, TypeError, AttributeError):
+        # uuid mal forme -> la ressource ne peut pas exister -> 404
+        # / malformed uuid -> resource cannot exist -> 404
+        raise Http404("Invalid identifier")
+
+    return get_object_or_404(model, uuid=uuid_recu, **filtres_supplementaires)
+
+
+def get_event_par_identifiant_ou_404(identifiant):
+    """
+    Resout un evenement a partir d'un identifiant qui peut etre un uuid OU le slug
+    utilise par le controleur front (EventMVT). Leve Http404 si rien ne correspond.
+    / Resolve an event from an identifier that can be a uuid OR the front slug.
+
+    LOCALISATION : api_v2/views.py
+
+    Deux formes acceptees, comme cote front (cf EventMVT.retrieve dans BaseBillet) :
+    - uuid complet (ex: 7d51dee7-1234-...) -> lookup direct par uuid ;
+    - slug (ex: mon-evenement-260620-0900-7d51dee7) -> les 8 derniers caracteres
+      hex sont le debut de l'uuid (Event.slug se termine par uuid.hex[:8]). On
+      cherche via uuid__startswith (un LIKE texte : pas de ValidationError), puis
+      en dernier recours via slug__startswith.
+    / Two accepted forms, like the front: a full uuid, or the slug whose last 8 hex
+      are the start of the uuid (uuid__startswith), with a slug__startswith fallback.
+
+    Pas de filtre `published` : on resout n'importe quel evenement, comme
+    EventMVT.retrieve. / No `published` filter: resolve any event, like the front.
+    """
+    identifiant = str(identifiant)
+
+    # 1. Identifiant deja sous forme d'uuid valide -> lookup direct.
+    # / Identifier is already a valid uuid -> direct lookup.
+    try:
+        uuid_module.UUID(identifiant)
+        event = Event.objects.filter(uuid=identifiant).first()
+        if event is None:
+            raise Http404("Event not found")
+        return event
+    except (ValueError, TypeError, AttributeError):
+        # Pas un uuid : on tente la resolution par slug.
+        # / Not a uuid: fall through to slug resolution.
+        pass
+
+    # 2. Slug front : les 8 derniers caracteres hex sont le debut de l'uuid.
+    # / Front slug: the last 8 hex characters are the start of the uuid.
+    correspondance_hex8 = re.search(r'([0-9a-fA-F]{8})$', identifiant)
+    if correspondance_hex8:
+        debut_uuid = correspondance_hex8.group(1)
+        event = Event.objects.filter(uuid__startswith=debut_uuid).first()
+        if event is not None:
+            return event
+
+    # 3. Dernier recours : recherche par slug complet.
+    # / Last resort: lookup by full slug.
+    event = Event.objects.filter(slug__startswith=identifiant).first()
+    if event is None:
+        raise Http404("Event not found")
+    return event
 
 
 class CrowdInitiativeViewSet(viewsets.ViewSet):
@@ -133,14 +227,41 @@ class EventViewSet(viewsets.ViewSet):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def list(self, request):
+        only_futur = request.GET.get("only_futur", None)
+        filter = request.GET.get("filter", None)
+
         queryset = Event.objects.filter(published=True)
+        if only_futur:
+            timezone = Configuration.get_solo().get_tzinfo()
+
+            # Get the timezone
+            now = datetime.now()
+            # Convert it to the tenant configured timezone
+            now = now.astimezone(timezone)
+            # Remove one day to it to also show recent events
+            now = now.replace(day=now.day-1)
+
+            queryset = queryset.filter(
+                Q(datetime__gte=now) |
+                Q(end_datetime__gte=now)
+            )
+
+        if filter:
+            # Filter by name and descriptions
+            queryset = queryset.filter(
+                Q(name__icontains=filter) |
+                Q(short_description__icontains=filter) |
+                Q(long_description__icontains=filter)
+            )
+
         serializer = EventSchemaSerializer(queryset, many=True)
         # Non-paginated wrapper for consistency with tests
         return Response({"results": serializer.data})
 
     def retrieve(self, request, uuid=None):
-        # Router passes {pk}; our lookup is by uuid
-        event = get_object_or_404(Event, uuid=uuid, published=True)
+        # Accepte un uuid OU le slug du front (cf EventMVT.retrieve cote front).
+        # / Accepts a uuid OR the front slug (see EventMVT.retrieve on the front).
+        event = get_event_par_identifiant_ou_404(uuid)
         serializer = EventSchemaSerializer(event)
         return Response(serializer.data)
 
@@ -166,7 +287,7 @@ class EventViewSet(viewsets.ViewSet):
         return Response(output_serializer.data, status=status.HTTP_201_CREATED)
 
     def destroy(self, request, uuid=None):
-        event = get_object_or_404(Event, uuid=uuid)
+        event = get_objet_par_uuid_ou_404(Event, uuid)
         event.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -179,7 +300,7 @@ class EventViewSet(viewsets.ViewSet):
         - a schema.org PostalAddress payload to create & link on the fly.
         Returns the updated Event representation.
         """
-        event = get_object_or_404(Event, uuid=uuid)
+        event = get_objet_par_uuid_ou_404(Event, uuid)
         addr_id = request.data.get("postalAddressId")
         address = None
         if addr_id:
@@ -257,6 +378,10 @@ class ProductViewSet(viewsets.ViewSet):
     """
 
     permission_classes = [SemanticApiKeyPermission]
+    # Le lookup detail se fait par uuid (le routeur passe `uuid`, pas `pk`).
+    # Sans ca, DRF utilise `pk` et `retrieve(uuid=...)` leve un TypeError.
+    # / Detail lookup is by uuid (the router passes `uuid`, not `pk`).
+    lookup_field = "uuid"
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def list(self, request):
@@ -322,6 +447,145 @@ class MembershipViewSet(viewsets.ViewSet):
         membership = get_object_or_404(Membership, uuid=uuid)
         serializer = MembershipSchemaSerializer(membership)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+    @action(detail=False, methods=["get"], url_path="by-wallet")
+    def by_wallet(self, request):
+        """
+        Liste les adhesions d'un porteur a partir de son wallet Fedow.
+        / Lists a holder's memberships from their Fedow wallet uuid.
+        Auth + IP + permission `membership` geres par SemanticApiKeyPermission.
+        """
+        wallet_uuid = request.query_params.get("wallet_uuid")
+        if not wallet_uuid:
+            return Response({"detail": "wallet_uuid is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = TibilletUser.objects.filter(wallet__uuid=wallet_uuid).first()
+        memberships = user.memberships.all() if user else Membership.objects.none()
+        serializer = MembershipStatusSerializer(memberships, many=True)
+        return Response(
+            {"wallet_uuid": wallet_uuid, "memberships": serializer.data},
+            status=status.HTTP_200_OK,
+        )
+
+
+# Plafond par recharge cadeau, en unite brute (cf SPEC API_GIFT_REFILL).
+# / Per-call gift refill cap, in raw unit.
+GIFT_REFILL_MAX_AMOUNT = 10000
+
+
+class WalletRefillViewSet(viewsets.ViewSet):
+    """
+    Recharge de tokens cadeau (TNF) sur la tirelire d'un user.
+    / Gift token (TNF) wallet refill.
+
+    LOCALISATION : api_v2/views.py
+
+    Header : Authorization: Api-Key <key> (cle restreinte a un asset cadeau via
+    ExternalApiKey.gift_asset).
+    Header optionnel : Idempotency-Key (anti double-credit, cache best-effort).
+
+    FLUX :
+    1. Recupere l'objet cle API pour connaitre l'asset cadeau autorise.
+    2. Valide le payload (email, asset uuid, amount entier positif).
+    3. Resout l'asset et verifie qu'il est de categorie cadeau (TNF).
+    4. Verifie que l'asset demande est bien celui autorise sur la cle.
+    5. Verifie le plafond.
+    6. Idempotence (cache par tenant).
+    7. Cree/recupere l'user, verifie Fedow, credite la tirelire.
+    """
+    permission_classes = [SemanticApiKeyPermission]
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+    def create(self, request):
+        from ApiBillet.permissions import get_apikey_valid
+        from fedow_public.models import AssetFedowPublic
+        from fedow_connect.models import FedowConfig
+        from fedow_connect.fedow_api import FedowAPI
+        from AuthBillet.utils import get_or_create_user
+
+        # 1. Recupere l'objet cle API pour connaitre l'asset autorise
+        # / Get the API key object to know the allowed asset
+        api_key = get_apikey_valid(self)
+        if not api_key or not api_key.gift_asset_id:
+            return Response({"detail": _("API key not allowed for gift refill.")},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        # 2. Validation du payload / Validate payload
+        input_serializer = WalletRefillCreateSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        email = input_serializer.validated_data["email"]
+        asset_uuid = input_serializer.validated_data["asset"]
+        amount = input_serializer.validated_data["amount"]
+
+        # 3. Resolution de l'asset / Resolve asset
+        asset = get_object_or_404(AssetFedowPublic, uuid=asset_uuid)
+
+        # 4. Categorie rechargeable obligatoire (non adossee a l'euro)
+        # / Refillable category required (not euro-backed)
+        if asset.category not in AssetFedowPublic.REFILLABLE_CATEGORIES:
+            return Response({"detail": _("This asset category cannot be topped up.")},
+                            status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        # 5. L'asset doit etre celui autorise sur la cle / Must match key asset
+        if asset.uuid != api_key.gift_asset_id:
+            return Response({"detail": _("Asset not allowed for this API key.")},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        # 6. Plafond / Cap
+        if amount > GIFT_REFILL_MAX_AMOUNT:
+            return Response({"detail": _("Amount above the maximum allowed.")},
+                            status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        # 7. Idempotence (cache best-effort, cle par tenant)
+        # / Idempotency (best-effort cache, per-tenant key)
+        idempotency_key = request.META.get("HTTP_IDEMPOTENCY_KEY")
+        cache_key = None
+        if idempotency_key:
+            cache_key = f"api:gift_refill:idem:{connection.tenant.pk}:{idempotency_key}"
+            cached = cache.get(cache_key)
+            if cached is not None:
+                # Rejeu idempotent : la transaction a deja ete creee, on renvoie
+                # la reponse stockee sans recrediter. 208 = deja traite.
+                # / Idempotent replay: transaction already created, return the
+                # stored response without re-crediting. 208 = already reported.
+                return Response(cached, status=status.HTTP_208_ALREADY_REPORTED)
+
+        # 8. User / User
+        user = get_or_create_user(email)
+        if not user:
+            return Response({"detail": _("Invalid email.")},
+                            status=status.HTTP_406_NOT_ACCEPTABLE)
+
+        # 9. Fedow dispo ? / Fedow available?
+        if not FedowConfig.get_solo().can_fedow():
+            return Response({"detail": _("Fedow service unavailable.")},
+                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        # 10. Credit / Refill
+        fedowAPI = FedowAPI()
+        metadata = {
+            "reason": f"API gift refill: {amount} {asset.name}",
+            "api_key": api_key.name,
+        }
+        if idempotency_key:
+            metadata["idempotency_key"] = idempotency_key
+        reward_tx = fedowAPI.transaction.refill_from_lespass_to_user_wallet(
+            user=user, amount=amount, asset=asset, metadata=metadata,
+        )
+
+        # 11. Reponse schema.org MoneyTransfer
+        payload = {
+            "@context": "https://schema.org",
+            "@type": "MoneyTransfer",
+            "identifier": str(reward_tx.get("uuid")),
+            "amount": amount,
+            "asset": str(asset.uuid),
+            "recipient": {"@type": "Person", "email": email},
+        }
+        if cache_key:
+            cache.set(cache_key, payload, timeout=60 * 60 * 48)  # 48h
+        return Response(payload, status=status.HTTP_201_CREATED)
 
 
 class SaleViewSet(viewsets.ViewSet):

@@ -17,7 +17,7 @@
     <meta name="description" content="{% block meta_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
 
     <!-- Instructions pour les robots d'indexation -->
-    <meta name="robots" content="{% block meta_robots %}index, follow{% endblock %}">
+    <meta name="robots" content="{% block meta_robots %}{% if noindex_seo %}noindex, nofollow{% else %}index, follow{% endif %}{% endblock %}">
 
     <!-- Titre de la page affiché dans l'onglet du navigateur -->
     <title>{% block title %}{% translate 'Home' %}{% endblock %} | {{ config.organisation }}</title>
@@ -204,6 +204,14 @@
                     <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% translate 'Close' %}"></button>
                 </div>
                 <div class="offcanvas-body">
+                    {# Lien direct vers la documentation, proposé avant le formulaire de contact. #}
+                    {# / Direct documentation link, offered before the contact form. #}
+                    <div class="alert alert-light border d-flex align-items-start gap-2 mb-4" role="note">
+                        <i class="bi bi-info-circle fs-5 mt-1" aria-hidden="true"></i>
+                        <span>
+                            {% blocktranslate with orga=config.organisation %}Ce formulaire écrit directement à l'équipe de « {{ orga }} ».<br>Pour une question sur TiBillet (le logiciel lui-même), la <a href="https://tibillet.github.io/documentation_v3/" target="_blank" rel="noopener">documentation</a> a peut-être déjà la réponse.{% endblocktranslate %}
+                        </span>
+                    </div>
                     {% include 'reunion/forms/contact.html' %}
                 </div>
             </div>
@@ -239,6 +247,10 @@
          ================================================================ -->
     {% block scripts %}{% endblock %}
     {% block extra_scripts %}{% endblock %}
+
+    {# Scripts globaux panier : toast + catch 403. Partage avec faire_festival. #}
+    {# / Global cart scripts: toast + 403 catch. Shared with faire_festival. #}
+    {% include "htmx/components/panier_scripts.html" %}
 
 </body>
 </html>

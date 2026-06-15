@@ -9,8 +9,18 @@ Authentication
 - API keys are managed in admin (ExternalApiKey). Ensure the `event` permission is enabled on the key.
 
 Endpoints
-- GET /api/v2/events/{uuid}/  → Retrieve a single Event
+- GET /api/v2/events/{id}/  → Retrieve a single Event
+  - `{id}` accepts **either** the Event UUID **or** the front-end slug
+    (e.g. `my-event-260620-0900-7d51dee7`), whose last 8 hex characters are the
+    start of the UUID. Mirrors the front controller (`EventMVT.retrieve`):
+    valid UUID → direct lookup; otherwise `uuid__startswith=<last 8 hex>`, then a
+    `slug__startswith` fallback.
+  - No `published` filter on retrieve (same behaviour as the front): an
+    unpublished Event is retrievable by its UUID/slug.
+  - Returns 404 (not 500) when the identifier matches no Event.
   - Response JSON-LD (schema.org/Event)
+  - Note: `DELETE /api/v2/events/{uuid}/` and `POST /api/v2/events/{uuid}/link-address/`
+    remain UUID-only (a non-UUID returns 404).
 - GET /api/v2/events/ → List all published Events (semantic list)
 
 OpenAPI / Auto‑generated docs (drf-spectacular)
@@ -22,6 +32,13 @@ OpenAPI / Auto‑generated docs (drf-spectacular)
 Export the schema file (with Poetry)
 - `poetry run python manage.py spectacular --color --file api_v2/openapi-schema.yaml`
 - Add `--validate` to also validate against the OpenAPI spec
+
+Lint the schema (yamllint)
+- `api_v2/openapi-schema.yaml` is maintained **by hand**, so lint it to catch
+  syntax / indentation / duplicate-key bugs (e.g. an over-indented child key).
+- `docker exec lespass_django poetry run yamllint api_v2/openapi-schema.yaml`
+- Config: `.yamllint` at the repo root — extends `relaxed`, **structural checks
+  only** (`line-length` and `document-start` disabled). Exit code `0` = clean.
 
 Example response
 ```
@@ -55,3 +72,24 @@ Testing with pytest
 Notes
 - Output is intentionally minimal; new properties can be added as needed following schema.org/Event.
 - Membership endpoints and finer per-action permissions will follow the same pattern.
+
+Gift token wallet refill
+- POST /api/v2/wallet-refills/  → credit non-fiat tokens to a user wallet, from the place wallet, without payment.
+- Refillable asset categories (NOT euro-backed): `TNF` (gift / "Cadeau"), `TIM` (time currency), `FID` (loyalty points), `BDG` (clocking/badge). Excluded: fiat (`TLF`, `FED`) and subscription (`SUB`). Canonical list: `AssetFedowPublic.REFILLABLE_CATEGORIES`.
+- Permission: the API key must have a `gift_asset` set in the admin. This single field BOTH enables the `walletrefill` permission AND restricts the key to that one asset (no separate checkbox). The admin widget is filtered to the refillable categories.
+- Body: `{ "email": "<user email>", "asset": "<asset uuid>", "amount": <int raw unit> }`
+- Optional header `Idempotency-Key: <string>` — a repeat with the same key (same tenant) returns the stored transaction (208 Already Reported) instead of crediting again (best-effort cache, ~48h TTL).
+- Constraints: the asset must be in a refillable category AND must match the key's `gift_asset`; `amount` is a positive integer capped at `10000` (raw unit).
+- Response 201 (or 208 Already Reported on idempotent replay): schema.org/MoneyTransfer
+```json
+{
+  "@context": "https://schema.org",
+  "@type": "MoneyTransfer",
+  "identifier": "<fedow tx uuid>",
+  "amount": 500,
+  "asset": "<gift asset uuid>",
+  "recipient": { "@type": "Person", "email": "alice@example.org" }
+}
+```
+- Errors: 403 (key not allowed / asset not authorized for this key), 422 (asset not TNF, or amount above cap), 503 (Fedow unavailable).
+- This is distinct from the v1 route `POST /api/wallet/get_stripe_checkout_with_email/`, which creates a **paid** Stripe top-up link.

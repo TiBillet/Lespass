@@ -1,0 +1,87 @@
+{% extends "onboard/base_wizard.html" %}
+{% load i18n %}
+
+{% comment %}
+LOCALISATION: onboard/templates/onboard/steps/03_place.html
+
+Step 3 du wizard onboarding : adresse + carte. Refondue 2026-05-15
+pour utiliser le widget réutilisable `templates/widgets/widget_carte_adresse.html`
+(pattern GPS avec leaflet-geosearch).
+
+Soumet à `onboard-place` (POST). En cas d'erreur (422), la vue re-rend
+ce template avec `errors` et `initial` (qui re-pré-remplit le widget
+via `latitude_initiale` / `longitude_initiale` / `adresse_initiale`).
+
+/ Step 3 of the onboarding wizard: address + map. Refactored 2026-05-15
+to use the reusable widget (GPS pattern with leaflet-geosearch).
+{% endcomment %}
+
+{% block page_title %}{% translate "Adresse" %}{% endblock %}
+
+{% block step_content %}
+<header class="mb-4">
+    <p class="onboard-step-counter mb-1">{% translate "Étape 4 / 7" %}</p>
+    <h1 class="h4 mb-1">{% translate "Adresse" %}</h1>
+    <p class="text-muted mb-0">
+        {% translate "Cherchez votre adresse, ou cliquez sur la carte. Cette étape est optionnelle : vous pouvez la passer et renseigner l'adresse plus tard." %}
+    </p>
+</header>
+
+{% if errors %}
+<div class="alert alert-danger" role="alert" data-testid="onboard-place-errors">
+    <strong>{% translate "Merci de corriger les erreurs ci-dessous." %}</strong>
+    <ul class="mb-0 mt-1">
+        {% for field, msgs in errors.items %}
+        <li>
+            <strong>{{ field }}</strong> :
+            {% for msg in msgs %}{{ msg }}{% if not forloop.last %} / {% endif %}{% endfor %}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<form method="post" action="{% url 'onboard-place' %}" novalidate
+      data-testid="onboard-place-form" class="vstack gap-3">
+    {% csrf_token %}
+
+    {# Widget réutilisable carte adresse. Préfixe "place" pour les name=.   #}
+    {# Pré-remplissage, par ordre de priorité :                            #}
+    {#  1) l'user a déjà soumis (422) → on remet ses valeurs (`initial`).  #}
+    {#  2) une fiche Tiers-Lieux a été choisie à l'étape précédente        #}
+    {#     (`prefill`) → on passe la géoloc + l'adresse structurée de       #}
+    {#     l'API : le widget pose le marqueur et remplit les champs        #}
+    {#     directement, SANS géocodage Nominatim (qui échoue sur les       #}
+    {#     libellés complexes type « MIETE (Maison...) 150 Rue... »).      #}
+    {#  3) le WC a déjà une adresse (resume / retour).                     #}
+    {#  4) fallback FALC : le nom du collectif (`wc.organisation`) pour    #}
+    {#     amorcer le geosearch Nominatim.                                 #}
+    {# / Reusable address map widget. Pre-fill priority: 422 values →      #}
+    {# Tiers-Lieux record GPS+address (no Nominatim) → WC address →        #}
+    {# wc.organisation as FALC fallback for the geosearch.                 #}
+    {% include "widgets/widget_carte_adresse.html" with identifiant_widget="place" latitude_initiale=initial.place_latitude|default:prefill.latitude|default:wc.latitude longitude_initiale=initial.place_longitude|default:prefill.longitude|default:wc.longitude adresse_initiale=initial.place_adresse|default:prefill.adresse_recherche|default:wc.street_address|default:wc.organisation rue_initiale=initial.street_address|default:prefill.street_address|default:wc.street_address cp_initiale=initial.postal_code|default:prefill.postal_code|default:wc.postal_code ville_initiale=initial.address_locality|default:prefill.address_locality|default:wc.address_locality hauteur_carte="350px" champs_adresse_separes=True required=False %}
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 pt-2">
+        <a href="{% url 'onboard-venue' %}" class="btn btn-link"
+           data-testid="onboard-place-prev">
+            <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>
+            {% translate "Précédent" %}
+        </a>
+        <div class="d-flex flex-wrap gap-2">
+            {# Étape optionnelle : on peut passer sans renseigner d'adresse. #}
+            {# `formnovalidate` : ne bloque pas sur d'éventuels champs requis. #}
+            {# / Optional step: skip without an address. #}
+            <button type="submit" name="skip_address" value="1" formnovalidate
+                    class="btn btn-outline-secondary"
+                    data-testid="onboard-place-skip">
+                {% translate "Je ne renseigne pas d'adresse" %}
+            </button>
+            <button type="submit" class="btn btn-primary btn-lg"
+                    data-testid="onboard-place-submit">
+                {% translate "Continuer" %}
+                <i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>
+            </button>
+        </div>
+    </div>
+</form>
+{% endblock step_content %}

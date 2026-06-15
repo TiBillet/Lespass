@@ -41,10 +41,20 @@ class CreationPaiementStripe():
                  success_url: (str, None) = None,
                  cancel_url: (str, None) = None,
                  invoice=None,
+                 accept_sepa: (bool, None) = None,
                  ) -> None:
+        """
+        accept_sepa : None = comportement legacy (SEPA si reservation=None + config ON)
+                      True = forcer SEPA autorisé (cas adhésion-only)
+                      False = forcer SEPA refusé (cas panier avec billets)
+        / accept_sepa: None = legacy (SEPA if reservation=None + config ON)
+                       True = force allow SEPA (standalone membership case)
+                       False = force deny SEPA (cart-with-tickets case)
+        """
 
         # On va chercher les informations de configuration
         # et test si tout est ok pour créer un paiement
+        self.accept_sepa = accept_sepa
         self.user = user
         self.email_paiement = user.email
         self.invoice = invoice
@@ -156,7 +166,17 @@ class CreationPaiementStripe():
         cancel_url = f"{self.absolute_domain}{self.paiement_stripe_db.uuid}/{self.cancel_url}"
 
         payment_method_types = ["card",]
-        if not self.reservation and self.config.stripe_accept_sepa:
+        # SEPA autorisé si :
+        # - Flag explicite True (cas adhésion-only via panier), OU
+        # - Flag None (legacy) + pas de reservation FK (cas adhésion directe).
+        # SEPA refusé si flag explicite False (cas panier avec billets).
+        # / SEPA authorized if explicit True, or legacy (None) with no reservation FK.
+        # SEPA refused if explicit False (cart-with-tickets).
+        if self.accept_sepa is not None:
+            sepa_authorized = self.accept_sepa
+        else:
+            sepa_authorized = not self.reservation
+        if sepa_authorized and self.config.stripe_accept_sepa:
             payment_method_types.append("sepa_debit")
 
         data_checkout = {
@@ -226,6 +246,9 @@ class CreationPaiementStripe():
 
         self.paiement_stripe_db.payment_intent_id = checkout_session.payment_intent
         self.paiement_stripe_db.checkout_session_id_stripe = checkout_session.id
+        # C3 : persistance URL Stripe Checkout pour redirect fiable (pas d'appel Stripe a chaque redirect)
+        # / C3: persist Stripe Checkout URL for reliable redirect (no Stripe API call per redirect)
+        self.paiement_stripe_db.checkout_session_url = checkout_session.url
         self.paiement_stripe_db.status = Paiement_stripe.PENDING
         self.paiement_stripe_db.save()
 
@@ -305,4 +328,201 @@ def new_entry_from_stripe_subscription_invoice(user, id_invoice, membership):
 
         return paiement_stripe
 
+
+# ---------------------------------------------------------------------------
+# Stripe Connect — onboarding pour tenant EXISTANT
+# / Stripe Connect — onboarding for an EXISTING tenant
+# ---------------------------------------------------------------------------
+#
+# Ces 2 vues geraient la connexion d'un compte Stripe Connect a un tenant
+# DEJA cree, declenchee depuis l'admin Unfold (Configuration → Products →
+# bouton "Creer et lier son compte Stripe" dans le CheckStripeComponent).
+#
+# Historique : ces methodes vivaient initialement dans
+# `BaseBillet/views.py::Tenant.onboard_stripe_from_config` +
+# `.onboard_stripe_return_from_config`. Le ViewSet `Tenant` melangeait
+# 2 responsabilites disjointes : (1) creation de tenant via le legacy
+# `/tenant/new/` (supprime lors de la session 2026-05-16 — remplace par
+# l'app `onboard/`) et (2) onboarding Stripe Connect d'un tenant existant.
+# Les 2 methodes (2) ont ete migrees ici, dans l'app dediee `PaiementStripe`,
+# pour respecter la separation des responsabilites.
+#
+# Spec du chantier complet : `TECH_DOC/SESSIONS/MOYENS_PAIEMENT/01-stripe-migration-spec.md`.
+#
+# / These 2 views handled connecting a Stripe Connect account to an EXISTING
+# tenant, triggered from the Unfold admin (Configuration → Products →
+# "Create and link your Stripe account" button in CheckStripeComponent).
+# Migrated here from `BaseBillet/views.py::Tenant` during the 2026-05-16
+# session to separate concerns from the (now deleted) tenant creation flow.
+
+from django.http import Http404
+from django.shortcuts import redirect, render
+from django_tenants.utils import schema_context  # noqa: F401  reserved for future use
+from rest_framework import permissions, viewsets
+from rest_framework.decorators import action
+
+
+class StripeConnectOnboardingViewSet(viewsets.ViewSet):
+    """
+    Onboarding Stripe Connect pour un tenant existant (depuis l'admin Unfold).
+
+    Pas d'onboarding initial (= creation de tenant) ici — celui-ci est dans
+    l'app `onboard/`. Stripe Connect est demande PLUS TARD, au moment ou
+    l'admin du tenant essaie de creer son premier produit payant. Choix
+    UX volontaire : Stripe Connect demande des infos sensibles
+    (IBAN, identite, justificatifs) qu'on ne veut pas demander dans le
+    wizard d'onboarding initial.
+
+    Routes :
+      - `GET /stripe/onboard/from_config/` -> redirige vers une AccountLink
+        Stripe ou l'utilisateur saisit ses infos.
+      - `GET /stripe/onboard/return_from_config/<id_acc_connect>/` -> retour
+        de Stripe, met a jour `Configuration.stripe_payouts_enabled`.
+
+    / Stripe Connect onboarding for an EXISTING tenant (from the Unfold
+    admin). Not the initial tenant creation — that's in `onboard/`. Stripe
+    is intentionally deferred until the admin tries to create a paid product.
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    @action(detail=False, methods=["GET"], url_path="onboard/from_config")
+    def onboard_from_config(self, request):
+        """
+        GET `/stripe/onboard/from_config/` — initie l'onboarding Stripe.
+
+        Cree ou recupere le compte Stripe Connect du tenant courant, forge
+        une `stripe.AccountLink` (URL hosted Stripe) et redirige.
+
+        En cas d'`InvalidRequestError` (compte Stripe expire / supprime cote
+        Stripe), on vide `Configuration.stripe_connect_account` et on relance
+        — `get_stripe_connect_account()` recreera un nouveau compte.
+
+        / GET `/stripe/onboard/from_config/` — initiate Stripe onboarding.
+        Creates/fetches the Stripe Connect account, builds an AccountLink,
+        redirects. On InvalidRequestError (account expired/removed at
+        Stripe), reset and retry.
+        """
+        config = Configuration.get_solo()
+        id_acc_connect = config.get_stripe_connect_account()
+        tenant = connection.tenant
+        tenant_url = tenant.get_primary_domain().domain
+
+        rootConf = RootConfiguration.get_solo()
+        stripe.api_key = rootConf.get_stripe_api()
+
+        # `return_url` et `refresh_url` pointent sur la NOUVELLE route
+        # `/stripe/onboard/return_from_config/<id>/` (pas l'ancienne
+        # `/tenant/<id>/onboard_stripe_return_from_config/`).
+        # / return_url + refresh_url point to the NEW route.
+        url_retour = (
+            f"https://{tenant_url}/stripe/onboard/return_from_config/"
+            f"{id_acc_connect}/"
+        )
+
+        try:
+            account_link = stripe.AccountLink.create(
+                account=id_acc_connect,
+                refresh_url=url_retour,
+                return_url=url_retour,
+                type="account_onboarding",
+            )
+        except InvalidRequestError as exc_premiere_tentative:
+            # WARNING niveau Sentry (breadcrumb) : c'est attendu si l'ID
+            # stocke devient invalide, mais utile pour debug. Le `exc_info`
+            # permet de voir le message Stripe complet en cas d'enquete.
+            # / WARNING level for Sentry breadcrumb: expected when stored
+            # ID becomes invalid, but useful for diagnosis.
+            logger.warning(
+                "Stripe onboard: AccountLink.create failed (first attempt), "
+                "clearing stored ID and retrying. tenant=%s mode_test=%s "
+                "id_acc_connect=%s error=%s",
+                connection.schema_name, config.stripe_mode_test,
+                id_acc_connect, exc_premiere_tentative,
+            )
+            # Compte Stripe invalide : l'ID stocke ne correspond pas a la
+            # plateforme actuelle (compte supprime cote Stripe, ou compte
+            # cree avec une autre cle API). On vide LE BON champ selon le
+            # mode (test / prod), puis on relance — `get_stripe_connect_account`
+            # creera un nouveau compte avec la cle API actuelle.
+            #
+            # PIEGE corrige 2026-05-16 : l'ancien code (legacy
+            # `Tenant.onboard_stripe_from_config`) vidait TOUJOURS
+            # `stripe_connect_account` (champ PROD) meme en mode test, du
+            # coup `get_stripe_connect_account` continuait a renvoyer
+            # l'ancien `stripe_connect_account_test` invalide → Stripe
+            # re-rejetait. `Configuration` a 2 champs separes
+            # (`stripe_connect_account` pour prod, `stripe_connect_account_test`
+            # pour test) — il faut vider le bon selon `stripe_mode_test`.
+            #
+            # / Stripe account invalid: clear the RIGHT field based on mode
+            # (test vs prod), then retry. The legacy code always cleared
+            # the PROD field even in test mode, causing infinite "account
+            # not connected" errors in test mode.
+            if config.stripe_mode_test:
+                config.stripe_connect_account_test = None
+            else:
+                config.stripe_connect_account = None
+            config.save()
+            id_acc_connect = config.get_stripe_connect_account()
+            url_retour = (
+                f"https://{tenant_url}/stripe/onboard/return_from_config/"
+                f"{id_acc_connect}/"
+            )
+            account_link = stripe.AccountLink.create(
+                account=id_acc_connect,
+                refresh_url=url_retour,
+                return_url=url_retour,
+                type="account_onboarding",
+            )
+
+        return redirect(account_link.get("url"))
+
+    @action(
+        detail=False,
+        methods=["GET"],
+        url_path=r"onboard/return_from_config/(?P<id_acc_connect>[^/.]+)",
+    )
+    def onboard_return_from_config(self, request, id_acc_connect=None):
+        """
+        GET `/stripe/onboard/return_from_config/<id_acc_connect>/` —
+        retour de Stripe apres l'onboarding hosted page.
+
+        Verifie `details_submitted` ET `payouts_enabled` via l'API Stripe,
+        puis met a jour `Configuration.stripe_payouts_enabled` pour debloquer
+        la creation de produits payants cote admin.
+
+        / GET return URL from Stripe onboarding. Checks `details_submitted`
+        and `payouts_enabled` via Stripe API, then updates
+        `Configuration.stripe_payouts_enabled`.
+        """
+        details_submitted = False
+
+        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+        try:
+            info_stripe = stripe.Account.retrieve(id_acc_connect)
+            details_submitted = info_stripe.details_submitted
+        except Exception as e:
+            logger.error(
+                "stripe_onboard_return: id_acc_connect=%s erreur stripe: %s",
+                id_acc_connect, e,
+            )
+            raise Http404
+
+        config = Configuration.get_solo()
+        if info_stripe and info_stripe.get("payouts_enabled"):
+            config.stripe_payouts_enabled = info_stripe.get("payouts_enabled")
+            config.save()
+
+        # Choix du base template selon HTMX (cf. pattern projet).
+        # / Choose base template depending on HTMX request type.
+        from BaseBillet.views import get_context
+
+        context = get_context(request)
+        context["details_submitted"] = details_submitted
+        return render(
+            request,
+            "paiementstripe/after_onboard_stripe.html",
+            context=context,
+        )
 

@@ -40,6 +40,18 @@ class AssetFedowPublic(models.Model):
         (SUBSCRIPTION, _('Adhésion ou abonnement')),
     ]
 
+    # Categories rechargeables via l'API v2 (/api/v2/wallet-refills/) : toutes
+    # les monnaies NON adossees a l'euro. On exclut les fiduciaires (TLF, FED)
+    # et l'adhesion (SUB).
+    # / Categories that can be topped up via the API v2 refill route: all
+    # currencies NOT backed by euro. Excludes fiat (TLF, FED) and subscription (SUB).
+    REFILLABLE_CATEGORIES = [
+        TOKEN_LOCAL_NOT_FIAT,  # Cadeau / gift
+        TIME,                  # Monnaie temps / time currency
+        FIDELITY,              # Points de fidelite / loyalty points
+        BADGE,                 # Badgeuse / clocking
+    ]
+
     category = models.CharField(
         max_length=3,
         choices=CATEGORIES

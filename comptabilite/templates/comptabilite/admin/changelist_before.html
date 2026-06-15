@@ -1,0 +1,20 @@
+{% load i18n unfold %}
+
+{# Bandeau au-dessus de la liste des clotures : lien vers le rapport temps reel. #}
+{# / Banner above the cloture list: link to the real-time report. #}
+{# LOCALISATION : comptabilite/templates/comptabilite/admin/changelist_before.html #}
+
+<div class="mb-4">
+    {% component "unfold/components/card.html" with title=_("Suivi temps réel") %}
+        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+            <p class="text-base-500 text-sm m-0">
+                {% translate "Visualiser les ventes du service en cours, agrégées depuis la dernière clôture journalière." %}
+            </p>
+            <a href="{% url 'staff_admin:comptabilite_cloturecaisse_temps_reel' %}"
+               data-testid="comptabilite-bouton-temps-reel"
+               class="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-md font-medium text-sm no-underline transition-colors">
+                {% translate "Ouvrir le rapport temps réel" %}
+            </a>
+        </div>
+    {% endcomponent %}
+</div>

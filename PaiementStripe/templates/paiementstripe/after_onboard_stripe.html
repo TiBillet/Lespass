@@ -1,0 +1,37 @@
+{% extends base_template %}
+{% load tibitags i18n %}
+
+{% comment %}
+LOCALISATION: PaiementStripe/templates/paiementstripe/after_onboard_stripe.html
+
+Page de confirmation apres retour de l'onboarding Stripe Connect (depuis
+l'admin Unfold d'un tenant existant — pas depuis le wizard onboard).
+Affichee par `PaiementStripe.views.StripeConnectOnboardingViewSet.onboard_return_from_config`.
+
+Variable de contexte :
+  - `details_submitted` (bool) : vrai si Stripe confirme que l'utilisateur
+    a complete le formulaire de KYC. Sinon, affichage d'un message
+    d'invitation a finaliser (l'utilisateur peut etre revenu trop tot).
+
+/ Confirmation page after Stripe Connect onboarding return. Rendered by
+`PaiementStripe.views.StripeConnectOnboardingViewSet.onboard_return_from_config`.
+Context: `details_submitted` (bool) — True if Stripe confirmed KYC
+completion.
+
+NOTE : ce template etait initialement dans
+`BaseBillet/templates/reunion/views/tenant/after_onboard_stripe.html`
+(flow legacy `/tenant/new/`). Deplace ici lors de la session
+2026-05-16 (cf. TECH_DOC/SESSIONS/MOYENS_PAIEMENT/).
+/ Was originally under `reunion/views/tenant/`. Moved here during the
+2026-05-16 session.
+{% endcomment %}
+
+{% block main %}
+<div class="container-lg my-5">
+    {% if not details_submitted %}
+        {% translate "You do not seem to have completed your Stripe registration. Please contact us if you need help." %}
+    {% else %}
+        {% translate "Your stripe account has been registered. Thank you very much!" %}
+    {% endif %}
+</div>
+{% endblock %}
