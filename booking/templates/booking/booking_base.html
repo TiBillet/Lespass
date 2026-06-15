@@ -1,0 +1,22 @@
+{% extends base_template %}
+{% load i18n %}
+
+<!--
+LOCALISATION : booking/templates/booking/booking_base.html
+
+Template de base du module booking.
+Étend le template de skin courant (base_template, plein ou headless).
+/ Base template for the booking module.
+Extends the current skin template (base_template, full or headless).
+
+Hiérarchie / Hierarchy:
+  skin/base.html (ou headless.html)
+    └── booking/booking_base.html
+            └── booking/views/*.html
+-->
+
+{% block main %}
+<main class="container-lg py-4">
+    {% block booking_content %}{% endblock %}
+</main>
+{% endblock main %}
