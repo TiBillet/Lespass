@@ -1,5 +1,54 @@
 # Changelog / Journal des modifications
 
+## Onboarding : fin de la cascade de mails OTP + durcissement de l'endpoint public / Onboarding: stop the OTP mail burst + harden the public endpoint
+
+**Date :** 2026-06-15
+**Migration :** Non / No
+
+**Contexte / Context :** les mails « your TiBillet verification code » proviennent du wizard
+de **création d'espace** (`onboard`, step `identity`), **pas** de la proposition d'évènement
+(agenda participatif `proposition_anonyme_autorisee`). `onboard_otp_mailer` n'a qu'un seul
+appelant : `onboard/views.py`. L'endpoint `/onboard/identity/` est **public** (`AllowAny`,
+sur ROOT) et était la cible d'un **email-bombing** (un attaquant inonde la boîte d'une
+victime via le formulaire d'inscription public) — observé : ~12 mails en ~3 s pour le même
+email, chacun avec un `WaitingConfiguration` différent.
+
+**Quoi / What :** trois protections, de la cause racine au durcissement.
+1. **Dédup par email (cause racine)** — la step `identity` ne crée plus un nouveau brouillon
+   + un nouvel OTP à chaque soumission : elle réutilise un brouillon **non confirmé** existant
+   pour le même email (`email__iexact`, `email_confirmed=False`, le plus récent).
+2. **Cooldown 60 s** — l'OTP n'est ré-envoyé que si aucun n'a été expédié à ce brouillon
+   depuis 60 s (même seuil que `resend_otp`). Neutralise l'email-bombing mono-cible (1 mail
+   / 60 s / email).
+3. **Durcissement endpoint** — captcha arithmétique (`x + y == answer`, même mécanisme que le
+   formulaire de contact) sur la step `identity` ; throttle IP abaissé de **20 → 10/min** et
+   calé sur la **vraie IP** (`get_client_ip`/X-Forwarded-For) ; anti-double-submit du bouton
+   « Continuer ».
+
+**Pourquoi / Why :** les garde-fous existants ne couvraient pas ce cas : cooldown 60 s +
+rate-limit 3/h ne s'appliquaient qu'à `resend_otp` (renvoi sur un brouillon retrouvé en
+session), et le throttle 20/min/IP laissait passer les 12 envois (< 20).
+
+**Limite connue / Known limit :** la dédup n'est pas atomique sous concurrence stricte
+(POST réellement parallèles avant le 1er commit pourraient créer 2-3 brouillons). Le captcha
++ le throttle 10/min + l'anti-double-submit restent les filets de sécurité. Un abus
+multi-IP/multi-email reste limité par le throttle et le captcha mais non éliminé.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `onboard/views.py` | `identity` (POST) : dédup brouillon non confirmé + envoi OTP conditionné au cooldown 60 s. `IdentityPostRateThrottle` : 20→10/min + `get_ident` sur la vraie IP |
+| `onboard/serializers.py` | `OnboardIdentitySerializer` : champs captcha `x`/`y`/`answer` + validation `x+y==answer` |
+| `onboard/templates/onboard/steps/01_identity.html` | Bloc captcha (label + hidden x/y + génération JS) + anti-double-submit du bouton « Continuer » |
+| `onboard/tests/test_step_identity.py` | Captcha ajouté aux payloads ; `quota` 20→10 ; **2 nouveaux tests** : dédup (2 POST même email → 1 brouillon, 1 OTP) et captcha invalide → 422 |
+
+### Note dev
+- **i18n à régénérer** : nouveaux msgid FR sur la step identity (« Anti-spam », « Combien
+  font », « Merci de répondre à cette question simple… », « Mauvaise réponse à la question
+  anti-spam. »). Lancer `makemessages` + `compilemessages` (côté mainteneur).
+- Warning ruff **préexistant** non corrigé (hors scope) : `F601` clé `"has_pending_otp"`
+  dupliquée dans `onboard/views.py` (vue `verify`, ~ligne 1243).
+
 ## Vente de billet en caisse LaBoutik → réservation Lespass (API v2) / LaBoutik POS ticket sale → Lespass reservation (API v2)
 
 **Date :** 2026-06-11

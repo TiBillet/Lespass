@@ -65,13 +65,27 @@ SESSION_KEY = "onboard_wc_uuid"
 # single-IP bot iterating fast. `allow_request` filter: throttle only
 # POST (a refresh of GET shouldn't burn the user's quota).
 class IdentityPostRateThrottle(AnonRateThrottle):
-    """20 POST/minute/IP — anti-spam creation WC + envoi OTP."""
+    """10 POST/minute/IP — anti-spam creation WC + envoi OTP."""
 
-    rate = "20/minute"
+    # Abaisse de 20 a 10/min (2026-06-15). Combine au captcha de la step
+    # identity, 10/min/IP coupe un bot tout en laissant large pour un vrai
+    # createur (qui POST 1 fois, ~2-3 avec erreurs de saisie).
+    # / Lowered 20 -> 10/min: combined with the identity captcha, blocks a
+    # bot while leaving plenty of room for a real creator.
+    rate = "10/minute"
     # `scope` doit etre unique pour ne pas partager le compteur DRF avec
     # d'autres throttles (ex: WidgetReverseGeocodeRateThrottle si re-introduit).
     # / Unique `scope` to avoid sharing the DRF counter with other throttles.
     scope = "onboard_identity_post"
+
+    def get_ident(self, request):
+        # Identifie le client par sa VRAIE IP (X-Forwarded-For via
+        # get_client_ip), pas par l'IP du proxy Traefik. Coherent avec le
+        # rate-limit de resend_otp : meme semantique d'IP partout dans l'app.
+        # / Identify the client by its REAL IP (X-Forwarded-For), like
+        # resend_otp. Consistent IP semantics across the app.
+        from AuthBillet.utils import get_client_ip
+        return get_client_ip(request) or "unknown"
 
     def allow_request(self, request, view):
         if request.method != "POST":
@@ -1089,55 +1103,102 @@ class OnboardViewSet(viewsets.ViewSet):
         from django.utils.translation import get_language
         ui_language = get_language() or "fr"
 
+        # `timezone` sert au cooldown OTP plus bas. Import local : coherent
+        # avec le reste du module (cf. _generate_and_send_otp_for_wc).
+        # / `timezone` is used by the OTP cooldown below. Local import.
+        from django.utils import timezone
+
         # Persistance du brouillon dans le schema `meta`.
         # / Persist the draft in the `meta` schema.
+        #
+        # DEDUP PAR EMAIL : avant de creer un nouveau brouillon, on cherche
+        # un brouillon NON confirme deja ouvert pour ce meme email. Sans
+        # cette etape, chaque re-soumission du formulaire (double-clic,
+        # refresh-and-resubmit, page lente, bot) creait un nouveau
+        # WaitingConfiguration ET declenchait un nouvel OTP : on a observe
+        # des cascades de ~12 mails en quelques secondes pour le meme email.
+        # On ne reutilise QUE les brouillons non confirmes ; la branche
+        # `skip_otp` (user authentifie + email valide) repart toujours sur
+        # un brouillon neuf (pas d'OTP, redirection directe vers Venue).
+        # / EMAIL DEDUP: before creating a draft, reuse an existing
+        # UNCONFIRMED draft for the same email. Without this, every re-submit
+        # created a new WaitingConfiguration + a new OTP -> bursts of ~12
+        # mails in seconds. Only unconfirmed drafts are reused.
         with schema_context("meta"):
-            wc = WaitingConfiguration.objects.create(
-                # Le nom et le domaine sont saisis à l'étape « Votre lieu »
-                # (STEP_VENUE), après la vérification email. On crée donc le
-                # brouillon avec un nom vide, complété à cette étape.
-                # / Name and domain are entered at the "Your venue" step
-                # (STEP_VENUE), after email verification. The draft starts with
-                # an empty name, completed there.
-                organisation="",
-                email=data["email"],
-                dns_choice=None,
-                first_name=data["first_name"],
-                last_name=data["last_name"],
-                # `phone` est obligatoire dans le modele historique. On le
-                # laisse vide ici (sera saisi plus tard) — le champ accepte
-                # max_length=20 mais pas blank=True. En l'absence de
-                # contrainte DB stricte (CharField), une chaine vide passe.
-                # / `phone` is required by the legacy model; we leave it
-                # empty (filled later). CharField without NOT NULL
-                # constraint accepts an empty string.
-                phone="",
-                language=ui_language,
-                email_confirmed=skip_otp,
-                current_step=(
-                    WaitingConfiguration.STEP_VENUE if skip_otp
-                    else WaitingConfiguration.STEP_VERIFY
-                ),
-                invitation=invitation,
-            )
+            brouillon_existant = None
+            if not skip_otp:
+                brouillon_existant = (
+                    WaitingConfiguration.objects
+                    .filter(email__iexact=data["email"], email_confirmed=False)
+                    .order_by("-datetime")
+                    .first()
+                )
 
-        # Envoi automatique de l'OTP (refacto 2026-05-15) : auparavant,
-        # l'OTP n'etait envoye que sur clic explicite "Recevoir le code"
-        # cote step Verify. Friction UX inutile : l'utilisateur arrivait
-        # sur Verify, regardait sa boite mail vide, devait revenir cliquer
-        # un bouton, attendre. Slack / Linear / Stripe envoient l'OTP des
-        # la validation de l'email — on s'aligne. Le bouton "Renvoyer"
-        # reste, avec cooldown 60s + rate-limit IP 3/h (cf. resend_otp).
-        # On skip si l'utilisateur est deja authentifie + email valide
-        # (branche `skip_otp` ci-dessus) — il sera redirige direct vers
-        # Place sans passer par Verify.
-        # / Auto-send OTP (refactor 2026-05-15): used to require an
-        # explicit "Receive code" click on Verify — pointless friction.
-        # Now sent here, right after draft creation. The "Resend" button
-        # stays, with 60s cooldown + 3/h IP rate-limit (cf. resend_otp).
-        # Skipped on the `skip_otp` branch (auth user, redirected to Place).
+            if brouillon_existant is not None:
+                # Reutilisation : on rafraichit prenom/nom/langue/invitation
+                # sans creer de doublon. L'etape repasse a Verify.
+                # / Reuse: refresh first/last name, language, invitation; no
+                # duplicate row. Step goes back to Verify.
+                wc = brouillon_existant
+                WaitingConfiguration.objects.filter(uuid=wc.uuid).update(
+                    first_name=data["first_name"],
+                    last_name=data["last_name"],
+                    language=ui_language,
+                    invitation=invitation,
+                    current_step=WaitingConfiguration.STEP_VERIFY,
+                )
+            else:
+                wc = WaitingConfiguration.objects.create(
+                    # Le nom et le domaine sont saisis à l'étape « Votre lieu »
+                    # (STEP_VENUE), après la vérification email. On crée donc le
+                    # brouillon avec un nom vide, complété à cette étape.
+                    # / Name and domain are entered at the "Your venue" step
+                    # (STEP_VENUE), after email verification. The draft starts
+                    # with an empty name, completed there.
+                    organisation="",
+                    email=data["email"],
+                    dns_choice=None,
+                    first_name=data["first_name"],
+                    last_name=data["last_name"],
+                    # `phone` est obligatoire dans le modele historique. On le
+                    # laisse vide ici (sera saisi plus tard) — le champ accepte
+                    # max_length=20 mais pas blank=True. En l'absence de
+                    # contrainte DB stricte (CharField), une chaine vide passe.
+                    # / `phone` is required by the legacy model; we leave it
+                    # empty (filled later). CharField without NOT NULL
+                    # constraint accepts an empty string.
+                    phone="",
+                    language=ui_language,
+                    email_confirmed=skip_otp,
+                    current_step=(
+                        WaitingConfiguration.STEP_VENUE if skip_otp
+                        else WaitingConfiguration.STEP_VERIFY
+                    ),
+                    invitation=invitation,
+                )
+
+        # Envoi de l'OTP avec COOLDOWN 60s (refacto 2026-05-15 + dedup
+        # 2026-06-15). On n'envoie un mail QUE si aucun OTP n'a ete expedie
+        # a ce brouillon dans les 60 dernieres secondes : l'OTP en cours
+        # reste valide, inutile d'en empiler un nouveau a chaque clic. Sur
+        # un brouillon neuf, `otp_sent_at` vaut None -> on envoie. Sur un
+        # brouillon reutilise recent -> on saute l'envoi. Le bouton
+        # "Renvoyer" (resend_otp) reste disponible une fois le cooldown
+        # ecoule. Branche `skip_otp` : pas d'OTP du tout.
+        # / OTP send with 60s COOLDOWN. Only send if no OTP was sent to this
+        # draft in the last 60s — the current OTP stays valid. New draft:
+        # `otp_sent_at` is None -> send. Recently-reused draft -> skip.
         if not skip_otp:
-            _generate_and_send_otp_for_wc(wc, is_resend=False)
+            otp_envoye_recemment = False
+            if wc.otp_sent_at is not None:
+                secondes_depuis_dernier_envoi = (
+                    timezone.now() - wc.otp_sent_at
+                ).total_seconds()
+                otp_envoye_recemment = (
+                    secondes_depuis_dernier_envoi < OTP_RESEND_COOLDOWN_SECONDS
+                )
+            if not otp_envoye_recemment:
+                _generate_and_send_otp_for_wc(wc, is_resend=False)
 
         _set_session_wc(request, wc)
         return redirect(
@@ -1188,7 +1249,6 @@ class OnboardViewSet(viewsets.ViewSet):
             return render(request, "onboard/steps/02_verify.html", {
                 "step": "verify",
                 "email": wc.email,
-                "has_pending_otp": bool(wc.otp_hash),
                 # `has_pending_otp` permet au template d'adapter le label :
                 # "Recevoir le code" si pas encore envoye, "Renvoyer" sinon.
                 # / Lets the template adapt the label: "Receive the code"
