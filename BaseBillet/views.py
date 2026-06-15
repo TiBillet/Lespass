@@ -4800,12 +4800,14 @@ class PanierMVT(viewsets.ViewSet):
         # message instead of the generic "Checkout failed".
 
 
-        # Get the user first name and last name from a membership
-        membership_temp = panier.memberships()[0]
 
         if not user.first_name or not user.last_name:
             backup_first_name = ""
             backup_last_name = ""
+
+            # Get the user first name and last name from a membership
+            membership_temp = panier.memberships()[0]
+
             if membership_temp:
                 backup_first_name = membership_temp.get("firstname")
                 backup_last_name = membership_temp.get("lastname")
