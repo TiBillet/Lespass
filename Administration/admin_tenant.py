@@ -3,6 +3,9 @@ from Administration.admin.dashboard import (  # noqa: F401
     MODULE_FIELDS, _build_modules_context, adhesion_badge_callback,
 )
 
+from Administration.admin.ressources import (  # noqa: F401
+    CalendarAdmin, WeeklyOpeningAdmin, BookingAdmin, ResourceGroupAdmin, ResourceAdmin
+)
 from Administration.admin import (
     products,
     prices
