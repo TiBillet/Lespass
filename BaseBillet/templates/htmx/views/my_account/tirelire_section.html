@@ -1,30 +1,3 @@
-{% load i18n %}
-{% comment %}
-Section "Ma tirelire" : titre + description + panel refund + bloc des 3 boutons.
-
-LOCALISATION : BaseBillet/templates/htmx/views/my_account/tirelire_section.html
-
-Ce partial est :
-- inclus dans balance.html au chargement initial
-- renvoye par la vue MyAccount.tirelire_section() au clic sur "Annuler" dans
-  le formulaire V2 de recharge (HTMX swap outerHTML)
-
-Le conteneur racine porte id="tirelire-section" pour que le swap cible le meme
-element qu'il remplace.
-
-/ This partial is included in balance.html on initial load, and returned by
-MyAccount.tirelire_section() when user clicks Cancel in the V2 refill form.
-Root container id="tirelire-section" so HTMX swap targets the right element.
-{% endcomment %}
-
-<section class="card mb-3 pt-3" id="tirelire-section">
-    <div class="card-body">
-        <h1 class="card-title">{% trans 'My balance' %}</h1>
-        <p class="lead">
-            {% trans 'Here I can review my currencies, access my transaction history and see which currencies are accepted by this collective.' %}
-        </p>
-    </div>
-
     {% if config.show_refill_button %}
         <!-- Si pas possible de recharger, alors pas possible de se faire rembourser -->
         <!-- refund panel -->
@@ -40,7 +13,7 @@ Root container id="tirelire-section" so HTMX swap targets the right element.
                         <div class="alert  alert-primary" role="alert">
                             <h4>{% trans "Don't panic! You've got time left…" %}</h4>
                             <p>
-                                {% translate 'TiBillet works on a <a href="https://tibillet.org/docs/presentation/philosophy/">melting funds</a> principle.' %}
+                                {% translate 'TiBillet works on a <a href="https://tibillet.github.io/documentation_v3/">melting funds</a> principle.' %}
                                 {% translate "You can get your leftover balance back for 14 months after your last Pass card use." %}
                                 {% translate "We send a reminder a month before expiration." %}
                             </p>
@@ -67,6 +40,13 @@ Root container id="tirelire-section" so HTMX swap targets the right element.
                                 hx-get="/my_account/refund_online/" hx-indicator="#tibillet-spinner">
                             {% trans "Send request" %}</button>
 
+                        {#                            <button disabled type="button" class="btn btn-secondary d-block w-100 mb-3"#}
+                        {#                                {% trans "Gift my leftover balance to" %} {{ config.organisation }}#}
+                        {#                            </button>#}
+                        {#                            <p class="alert alert-warning">#}
+                        {#                                {% trans "The collective donation feature is being developed, coming soon!" %}#}
+                        {#                            </p>#}
+
                         <button type="button" class="btn btn-danger d-block w-100" data-bs-dismiss="offcanvas"
                                 aria-label="{% trans 'Close' %}">
                             {% trans "Cancel" %}
@@ -78,26 +58,15 @@ Root container id="tirelire-section" so HTMX swap targets the right element.
 
     {% endif %}
 
-    {# Bloc des 3 boutons d'action. Quand on clique sur "Refill TiBillets", #}
-    {# le formulaire V2 remplace la section entiere (hx-target=#tirelire-section, #}
-    {# hx-swap=outerHTML) — titre + description + boutons disparaissent le temps de la recharge. #}
-    {# Le bouton "Annuler" du formulaire fait hx-get sur /my_account/tirelire_section/ #}
-    {# et re-swap cette meme section a l'identique (pas de reload full page). #}
-    {# / Refill form replaces the whole section (outerHTML on #tirelire-section). #}
-    {# Cancel button does hx-get /my_account/tirelire_section/ to restore. #}
-    <div class="row g-0">
+    <div class="row g-0" id="button_tirelire">
         <div class="col-12 bg-body-tertiary p-3">
             <div class="row g-2">
-                {% if config.show_refill_button %}
+                {% if config.show_refill_button %} <!-- Si pas possible de recharger -->
+
                     <div class="col-6 col-md-auto me-md-2">
-                        <a href="#"
-                           hx-get="/my_account/refill_wallet"
-                           hx-target="#tirelire-section"
-                           hx-swap="outerHTML"
-                           hx-indicator="#tibillet-spinner"
-                           class="btn btn-primary square-btn w-100"
-                           data-testid="refill-btn-open">
-                            <i class="bi bi-plus-circle" aria-hidden="true"></i>
+                        <a href="#" hx-get="/my_account/refill_wallet" hx-indicator="#tibillet-spinner"
+                           class="btn btn-primary square-btn w-100">
+                            <i class="bi bi-plus-circle"></i>
                             {% trans "Refill TiBillets" %}
                         </a>
                     </div>
@@ -119,6 +88,7 @@ Root container id="tirelire-section" so HTMX swap targets the right element.
                     </div>
                 {% endif %}
 
+                {# Initiate payment button moved above the Currencies heading for admins #}
                 <div class="col-6 col-md-auto me-md-2">
                     <a href="#detail-monnaies"
                        class="btn btn-secondary square-btn w-100 d-md-none">
@@ -127,7 +97,7 @@ Root container id="tirelire-section" so HTMX swap targets the right element.
                     </a>
                 </div>
 
-                {% if config.show_refill_button %}
+                {% if config.show_refill_button %} <!-- Si pas possible de recharger -->
                     <div class="col-6 col-md-auto">
                         <button class="btn btn-secondary square-btn w-100"
                                 type="button"
@@ -139,14 +109,32 @@ Root container id="tirelire-section" so HTMX swap targets the right element.
                             {% trans "Request a refund" %}
                         </button>
                     </div>
+
                 {% endif %}
             </div>
 
-            {% if config.show_refill_button %}
+            {% if config.show_refill_button %} <!-- Si pas possible de recharger -->
                 <p class="opacity-50 m-0 mt-2">
                     {% trans 'The TiBillet, recharged online, are the only currency we can refund online. For local currencies (recharged in cash or at a bank terminal on site), please contact the collective that issued them.' %}
                 </p>
             {% endif %}
         </div>
+
+        {% comment %} HIDE: monnaie-temps
+            <div class="col-md bg-body-tertiary p-3">
+                <h3>Temps</h3>
+                <p class="lead">
+                    <strong>03:30</strong> heures échangeables avec
+                    <em>Le Tiers Lustre</em> <br />
+                    <span class="opacity-50"><strong>07:00</strong> heures en tout</span>
+                </p>
+                <a href="#" class="btn btn-primary d-block mb-3">
+                    Déclarer des heures
+                </a>
+                <a href="#detail-heures" class="btn btn-secondary d-block d-md-none">
+                    Détail du temps
+                </a>
+            </div>
+            {% endcomment %}
     </div>
-</section>
+    </section>
