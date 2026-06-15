@@ -210,6 +210,12 @@ TENANT_LIMIT_SET_CALLS = True
 
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware',
+    # Redirige (301) vers le domaine principal du tenant si on arrive sur un
+    # domaine secondaire (ex : tibillet.org -> tibillet.coop). Doit rester juste
+    # apres TenantMainMiddleware (besoin de connection.tenant).
+    # / Redirect (301) to the tenant's primary domain. Must stay right after
+    # TenantMainMiddleware (needs connection.tenant).
+    'Customers.middleware.CanonicalDomainRedirectMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -364,7 +370,7 @@ REST_FRAMEWORK = {
 # Internationalization
 # https://docs.djangoproject.com/en/3.1/topics/i18n/
 
-LANGUAGE_CODE = os.environ.get('LANGUAGE_CODE', 'en')
+LANGUAGE_CODE = os.environ.get('LANGUAGE_CODE', 'fr')
 
 TIME_ZONE = os.environ.get('TIME_ZONE', 'UTC')
 
@@ -407,6 +413,16 @@ CELERY_TASK_TIME_LIMIT = 30 * 60
 BROKER_URL = os.environ.get('CELERY_BROKER', 'redis://redis:6379/0')
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER', 'redis://redis:6379/0')
 CELERY_RESULT_BACKEND = os.environ.get('CELERY_BACKEND', 'redis://redis:6379/0')
+
+# Fenetre pendant laquelle Redis attend l'ack d'une tache avant de la redelivrer.
+# Avec un broker Redis, une tache dont le countdown (retry, eta) depasse cette
+# valeur est consideree comme perdue et redelivree en boucle (meme task_id),
+# ce qui provoque une duplication exponentielle des taches et sature la RAM.
+# REGLE : MAX_RETRY_TIME des taches *_to_laboutik (BaseBillet/tasks.py) doit
+# rester strictement sous cette valeur.
+# / Redis re-delivers any task whose countdown exceeds this timeout. Keep task
+# retry countdowns strictly below it to avoid exponential task duplication.
+CELERY_BROKER_TRANSPORT_OPTIONS = {'visibility_timeout': 3600}  # 1 h
 # DJANGO_CELERY_BEAT_TZ_AWARE=False
 
 # CHANNELS
@@ -421,25 +437,8 @@ CHANNEL_LAYERS = {
 }
 
 # -------------------------------------/
-# COMMUNECTER SSO oauth2
+# COMMUNECTER SSO oauth2 — RETIRÉ (plus utilisé) / REMOVED (no longer used)
 # -------------------------------------/
-OAUTH_URL_WHITELISTS = []
-OAUTH_CLIENT_NAME = os.environ.get('OAUTH_NAME')
-OAUTH_CLIENT = {
-    'name': os.environ.get('OAUTH_NAME'),
-    'client_id': os.environ.get('OAUTH_CLIENT_ID'),
-    'client_secret': os.environ.get('OAUTH_CLIENT_SECRET'),
-    'access_token_url': os.environ.get('OAUTH_ACCESS_TOKEN_URL'),
-    'authorize_url': os.environ.get('OAUTH_AUTHORIZE_URL'),
-    'api_base_url': os.environ.get('OAUTH_BASE_URL'),
-    'redirect_uri': 'https://www.tibillet.org/api/user/oauth',
-    'client_kwargs': {
-        'scope': 'openid profile email',
-        'token_placement': 'header'
-    },
-    'userinfo_endpoint': 'user',
-}
-OAUTH_COOKIE_SESSION_ID = 'sso_session_id'
 
 # -------------------------------------/
 # LOGGING
@@ -508,8 +507,8 @@ UNFOLD = {
     "SITE_DROPDOWN": [
         {
             "icon": "diamond",
-            "title": _("TiBillet / Lèspass"),
-            "link": "https://tibillet.org",
+            "title": _("TiBillet"),
+            "link": "https://tibillet.coop",
         },
     ],
     "TABS": [

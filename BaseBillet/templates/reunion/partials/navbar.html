@@ -97,6 +97,7 @@
     </div>
 </nav>
 
+
 <!-- contact panel -->
 <div class="offcanvas-start offcanvas" tabindex="-1" id="contactPanel" aria-labelledby="contactPanelLabel">
     <div class="offcanvas-header">
@@ -104,6 +105,14 @@
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% translate 'Close' %}"></button>
     </div>
     <div class="offcanvas-body">
+        {# Lien direct vers la documentation, proposé avant le formulaire de contact. #}
+        {# / Direct documentation link, offered before the contact form. #}
+        <div class="alert alert-light border d-flex align-items-start gap-2 mb-4" role="note">
+            <i class="bi bi-info-circle fs-5 mt-1" aria-hidden="true"></i>
+            <span>
+                {% blocktranslate with orga=config.organisation %}Ce formulaire écrit directement à l'équipe de « {{ orga }} ».<br>Pour une question sur TiBillet (le logiciel lui-même), la <a href="https://tibillet.github.io/documentation_v3/" target="_blank" rel="noopener">documentation</a> a peut-être déjà la réponse.{% endblocktranslate %}
+            </span>
+        </div>
         {# TODO: load all forms through htmx? #}
         {% include 'reunion/forms/contact.html' %}
     </div>

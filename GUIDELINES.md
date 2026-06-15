@@ -264,38 +264,41 @@ poetry run celery -A TiBillet worker -l INFO -B --concurrency=6
 
 ## Tests
 
-### Backend (pytest)
+**Source de verite : `tests/README.md`** (suites, commandes, politique Stripe,
+migration TS→Python). Pieges : `tests/PIEGES.md` — a lire avant d'ecrire un test.
+
+### Backend (pytest, ~246 tests, ~50 s)
 
 ```bash
-# Tous les tests API
-poetry run pytest tests/pytest/ -v
+# Suite essentielle (smoke ~10 s) : wallet, adhesion, billetterie
+# Voir tests/README.md pour la liste des fichiers
+docker exec lespass_django poetry run pytest tests/pytest/test_api_v2_wallet_refill.py \
+  tests/pytest/test_membership_create.py tests/pytest/test_membership_by_wallet.py \
+  tests/pytest/test_reservation_create.py tests/pytest/test_event_create.py \
+  tests/pytest/test_events_list.py -q
+
+# Tous les tests backend (Stripe mocke inclus)
+docker exec lespass_django poetry run pytest tests/pytest/ -q
 
 # Tests integration API v2 uniquement
-poetry run pytest -m integration tests/pytest/
+docker exec lespass_django poetry run pytest -m integration tests/pytest/
 
 # Un seul fichier
-poetry run pytest tests/pytest/test_events_list.py -qs
-
-# Avec cle API
-poetry run pytest tests/pytest --api-key <KEY> --api-base-url https://lespass.tibillet.localhost
+docker exec lespass_django poetry run pytest tests/pytest/test_events_list.py -qs
 ```
 
-### E2E (Playwright)
+### E2E Playwright Python (~15 tests, ~1 min) — format cible
 
 ```bash
-cd tests/playwright
-yarn install && yarn playwright install
-
-# Un test a la fois (toujours --workers=1). Ne jamais lancer tous les tests d'un coup.
-yarn playwright test --project=chromium --headed --workers=1 tests/01-login.spec.ts
+# Serveur Django actif requis (Traefik). Login instantane via force_login
+# (E2E_TEST_TOKEN dans .env, voir tests/README.md).
+docker exec lespass_django poetry run pytest tests/e2e/ -q
 ```
 
-Les tests sont numerotes pour l'ordre d'execution (01 a 24+). Carte Stripe test : `4242 4242 4242 4242`, nom : Douglas Adams, exp : 12/42, CVC : 424.
+L'ancienne suite Playwright TypeScript a été entièrement migrée en Python
+puis supprimée (2026-06-11). Plus aucune dépendance Node/yarn pour les tests.
 
-Verification DB apres un test E2E :
-```bash
-docker exec lespass_django poetry run python manage.py verify_test_data --type reservation --email <EMAIL>
-```
+Carte Stripe test : `4242 4242 4242 4242`, nom : Douglas Adams, exp : 12/42, CVC : 424.
 
 ### Regles d'ecriture des tests
 

@@ -62,6 +62,14 @@
     {# disturb the UI (the explorer toolbar stays the dominant visual element). #}
     <h1 class="visually-hidden">{% translate "Réseau local" %} — {{ config.organisation }}</h1>
 
+    {# Chapô éditorial optionnel (FederationConfiguration.texte_introduction). #}
+    {# Rendu |safe car contenu admin sanitizé côté save_model. #}
+    {# / Optional editorial intro, |safe because admin content sanitized on save. #}
+    {% if texte_introduction %}
+    <div class="federation-intro mx-auto my-3" style="max-width: 800px;"
+         data-testid="federation-intro">{{ texte_introduction|safe }}</div>
+    {% endif %}
+
     {# Message d'etat vide : si le tenant n'a aucune autre place federee. #}
     {# / Empty-state message: if the tenant has no other federated place. #}
     {% if not has_other_federated_places %}

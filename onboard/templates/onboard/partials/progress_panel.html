@@ -42,6 +42,8 @@
 {% is_step_current step 'identity' as identity_current %}
 {% is_step_current step 'verify' as verify_current %}
 {% is_step_done step 'verify' as verify_done %}
+{% is_step_current step 'venue' as venue_current %}
+{% is_step_done step 'venue' as venue_done %}
 {% is_step_current step 'place' as place_current %}
 {% is_step_done step 'place' as place_done %}
 {% is_step_current step 'descriptions' as descriptions_current %}
@@ -82,29 +84,43 @@
                 <small class="onboard-step-hint">{% translate "Qui êtes-vous et comment s'appelle votre lieu ?" %}</small>
             {% endif %}
         </li>
-        {# Etape 2 : Lieu / Step 2: Place #}
-        <li class="onboard-step {% if place_current %}is-current{% elif place_done %}is-done{% endif %}"
-            {% if place_current %}aria-current="step"{% endif %}>
-            {% if place_done %}
-                <a href="{% url 'onboard-place' %}" class="onboard-step-link" data-testid="onboard-progress-2">
+        {# Etape 2 : Votre lieu (recherche Tiers-Lieux + nom + domaine) #}
+        {# / Step 2: Your venue (Tiers-Lieux search + name + domain) #}
+        <li class="onboard-step {% if venue_current %}is-current{% elif venue_done %}is-done{% endif %}"
+            {% if venue_current %}aria-current="step"{% endif %}>
+            {% if venue_done %}
+                <a href="{% url 'onboard-venue' %}" class="onboard-step-link" data-testid="onboard-progress-2">
                     <span class="onboard-step-num">2</span> {% translate "Votre lieu" %}
-                    <small class="onboard-step-hint">{% translate "Nous localisons votre lieu sur la carte." %}</small>
+                    <small class="onboard-step-hint">{% translate "Cherchez votre lieu et choisissez votre adresse web." %}</small>
                 </a>
             {% else %}
                 <span class="onboard-step-num">2</span> {% translate "Votre lieu" %}
-                <small class="onboard-step-hint">{% translate "Nous localisons votre lieu sur la carte." %}</small>
+                <small class="onboard-step-hint">{% translate "Cherchez votre lieu et choisissez votre adresse web." %}</small>
             {% endif %}
         </li>
-        {# Etape 3 : Presentation / Step 3: Presentation #}
+        {# Etape 3 : Adresse (optionnelle) / Step 3: Address (optional) #}
+        <li class="onboard-step {% if place_current %}is-current{% elif place_done %}is-done{% endif %}"
+            {% if place_current %}aria-current="step"{% endif %}>
+            {% if place_done %}
+                <a href="{% url 'onboard-place' %}" class="onboard-step-link" data-testid="onboard-progress-3">
+                    <span class="onboard-step-num">3</span> {% translate "Adresse" %}
+                    <small class="onboard-step-hint">{% translate "Localisez votre lieu sur la carte (optionnel)." %}</small>
+                </a>
+            {% else %}
+                <span class="onboard-step-num">3</span> {% translate "Adresse" %}
+                <small class="onboard-step-hint">{% translate "Localisez votre lieu sur la carte (optionnel)." %}</small>
+            {% endif %}
+        </li>
+        {# Etape 4 : Presentation / Step 4: Presentation #}
         <li class="onboard-step {% if descriptions_current %}is-current{% elif descriptions_done %}is-done{% endif %}"
             {% if descriptions_current %}aria-current="step"{% endif %}>
             {% if descriptions_done %}
-                <a href="{% url 'onboard-descriptions' %}" class="onboard-step-link" data-testid="onboard-progress-3">
-                    <span class="onboard-step-num">3</span> {% translate "Présentation" %}
+                <a href="{% url 'onboard-descriptions' %}" class="onboard-step-link" data-testid="onboard-progress-4">
+                    <span class="onboard-step-num">4</span> {% translate "Présentation" %}
                     <small class="onboard-step-hint">{% translate "Accroche, texte long et logo." %}</small>
                 </a>
             {% else %}
-                <span class="onboard-step-num">3</span> {% translate "Présentation" %}
+                <span class="onboard-step-num">4</span> {% translate "Présentation" %}
                 <small class="onboard-step-hint">{% translate "Accroche, texte long et logo." %}</small>
             {% endif %}
         </li>
@@ -116,7 +132,7 @@
         {# default flow (kept in code for future reuse).                    #}
         <li class="onboard-step {% if launch_current %}is-current{% endif %}"
             {% if launch_current %}aria-current="step"{% endif %}>
-            <span class="onboard-step-num">4</span> {% translate "C'est parti !" %}
+            <span class="onboard-step-num">5</span> {% translate "C'est parti !" %}
             <small class="onboard-step-hint">{% translate "Découverte de TiBillet pendant la création." %}</small>
         </li>
     </ol>

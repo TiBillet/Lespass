@@ -75,11 +75,14 @@
                 </a>
             {% endif %}
 
-            {# Bouton admin (admin uniquement) — wizard 2 etapes #}
-            {# / Admin button (admin only) — 2-step wizard #}
+            {# Bouton vers le wizard event unifie (staff : ajout publie). #}
+            {# La route event-admin-wizard-place a ete supprimee au refactor #}
+            {# wizard -> on cible la route unifiee event-wizard-place. #}
+            {# / Button to the unified event wizard (staff: published add). #}
+            {# event-admin-wizard-place was removed -> target event-wizard-place. #}
             {% if user|can_create_event_tag %}
                 <a class="btn btn-sm btn-success"
-                   href="{% url 'event-admin-wizard-place' %}"
+                   href="{% url 'event-wizard-place' %}"
                    data-testid="btn-event-admin-add">
                     <i class="bi bi-plus-circle" aria-hidden="true"></i>
                     {% translate 'Ajouter un évènement' %}

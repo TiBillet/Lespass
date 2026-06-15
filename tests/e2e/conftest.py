@@ -28,7 +28,11 @@ BASE_URL = f"https://{SUB}.{DOMAIN}"
 # / Chromium resolves *.localhost → 127.0.0.1 (RFC 6761), ignoring /etc/hosts.
 # We force resolution to the Docker gateway (Traefik).
 DOCKER_GATEWAY = os.environ.get("DOCKER_GATEWAY", "172.17.0.1")
-CHROMIUM_HOST_RULES = f"MAP *.{DOMAIN} {DOCKER_GATEWAY}"
+# La regle `MAP *.domaine` ne couvre que les SOUS-domaines : il faut aussi
+# mapper le domaine nu (apex), utilise par les pages ROOT comme /explorer/.
+# / The `MAP *.domain` rule only covers SUBdomains: the bare (apex) domain
+# must be mapped too — ROOT pages like /explorer/ live there.
+CHROMIUM_HOST_RULES = f"MAP *.{DOMAIN} {DOCKER_GATEWAY}, MAP {DOMAIN} {DOCKER_GATEWAY}"
 
 # Détection : on est dans le container si 'docker' n'est pas disponible.
 # / Detection: we're inside the container if 'docker' is not available.

@@ -1,0 +1,279 @@
+{% extends "onboard/base_wizard.html" %}
+{% load i18n static %}
+
+{% comment %}
+  LOCALISATION: onboard/templates/onboard/steps/03_venue.html
+
+  Step 3 du wizard d'onboarding : « Votre lieu ». L'utilisateur cherche son
+  lieu dans le recensement national Tiers-Lieux (pré-remplit le nom + garde
+  l'adresse pour l'étape suivante), ou saisit le nom manuellement. Puis il
+  choisit son domaine : un slug éditable (pré-rempli depuis le nom) + le
+  suffixe .coop / .re, avec un aperçu live.
+
+  Soumet à `onboard-venue` (POST). En cas d'erreur (422), re-rend avec
+  `errors` + `initial`.
+
+  / Step 3: "Your venue". Search the national Tiers-Lieux directory to pre-fill
+  the name (and keep the address for the next step), or type the name. Then
+  choose the domain: an editable slug (pre-filled from the name) + .coop/.re
+  suffix, with a live preview.
+{% endcomment %}
+
+{% block page_title %}{% translate "Votre lieu" %}{% endblock %}
+
+{% block step_content %}
+<header class="mb-4">
+    <p class="onboard-step-counter mb-1">{% translate "Étape 3 / 7" %}</p>
+    <h1 class="h4 mb-1">{% translate "Votre lieu" %}</h1>
+    <p class="text-muted mb-0">
+        {% translate "Cherchez votre lieu dans le recensement national des tiers-lieux, ou saisissez son nom. Choisissez ensuite votre adresse web." %}
+    </p>
+</header>
+
+{% if errors %}
+<div class="alert alert-danger" role="alert" data-testid="onboard-venue-errors">
+    <strong>{% translate "Merci de corriger les erreurs ci-dessous." %}</strong>
+    <ul class="mb-0 mt-1">
+        {% for field, msgs in errors.items %}
+            <li><strong>{{ field }}</strong> : {% for msg in msgs %}{{ msg }}{% if not forloop.last %} / {% endif %}{% endfor %}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<form method="post" action="{% url 'onboard-venue' %}" novalidate
+      data-testid="onboard-venue-form" class="vstack gap-3">
+    {% csrf_token %}
+
+    {# ---------- Recherche dans le recensement Tiers-Lieux ---------- #}
+    {# Masquée une fois un lieu choisi (cf. JS) : on ne garde que les champs. #}
+    {# / Hidden once a place is chosen (see JS): only the fields remain. #}
+    <div id="onboard-venue-search-block">
+        <label for="onboard-venue-search" class="form-label">
+            {% translate "Rechercher votre lieu (recensement national)" %}
+        </label>
+        <div class="input-group">
+            <span class="input-group-text" aria-hidden="true">
+                <i class="bi bi-search" data-testid="onboard-venue-search-icon"></i>
+                <span class="spinner-border spinner-border-sm text-secondary"
+                      role="status" style="display: none;"
+                      data-testid="onboard-venue-search-spinner"></span>
+            </span>
+            <input type="text" id="onboard-venue-search" class="form-control"
+                   placeholder="{% translate 'Nom du lieu, ville ou code postal…' %}"
+                   autocomplete="off" aria-controls="onboard-venue-tl-result"
+                   data-testid="onboard-venue-search-input">
+        </div>
+        {# Rempli par HTMX avec les fiches du recensement national. #}
+        {# / Filled by HTMX with the national directory records. #}
+        <div id="onboard-venue-tl-result" aria-live="polite" class="mt-2"></div>
+    </div>
+
+    {# Lien pour rechercher à nouveau (affiché une fois un lieu choisi). #}
+    {# / Link to search again (shown once a place is chosen). #}
+    <a href="#" id="onboard-venue-search-again" class="small text-decoration-none"
+       style="display: none;" data-testid="onboard-venue-search-again">
+        <i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>
+        {% translate "Chercher un autre lieu dans le recensement" %}
+    </a>
+
+    {# ---------- Nom du lieu ---------- #}
+    <div>
+        <label for="onboard-venue-name" class="form-label">
+            {% translate "Nom du collectif / lieu" %} <span class="text-danger">*</span>
+        </label>
+        <input id="onboard-venue-name" type="text" name="name" required maxlength="50"
+               class="form-control form-control-lg{% if errors.name %} is-invalid{% endif %}"
+               value="{{ initial.name|default:'' }}"
+               data-testid="onboard-venue-name">
+        {% if errors.name %}
+        <div class="invalid-feedback">{% for msg in errors.name %}{{ msg }}{% endfor %}</div>
+        {% endif %}
+    </div>
+
+    {# ---------- Domaine : slug éditable (pré-rempli du nom) + suffixe ---------- #}
+    <div>
+        <label for="onboard-venue-slug" class="form-label">
+            {% translate "Votre adresse web" %} <span class="text-danger">*</span>
+        </label>
+        <div class="row g-2 align-items-center">
+            <div class="col-12 col-sm">
+                <input id="onboard-venue-slug" type="text" name="slug" required maxlength="50"
+                       class="form-control{% if errors.slug %} is-invalid{% endif %}"
+                       value="{{ initial.slug|default:'' }}"
+                       placeholder="{% translate 'mon-lieu' %}"
+                       data-testid="onboard-venue-slug">
+            </div>
+            <div class="col-12 col-sm-auto">
+                <div class="onboard-dns-radios" role="radiogroup" aria-label="{% translate 'Suffixe de domaine' %}">
+                    <input type="radio" class="btn-check" name="dns_choice" id="onboard-venue-dns-coop"
+                           value="tibillet.coop" data-testid="onboard-venue-dns-coop"
+                           {% if initial.dns_choice == 'tibillet.re' %}{% else %}checked{% endif %}>
+                    <label class="btn btn-outline-success" for="onboard-venue-dns-coop">.coop</label>
+                    <input type="radio" class="btn-check" name="dns_choice" id="onboard-venue-dns-re"
+                           value="tibillet.re" data-testid="onboard-venue-dns-re"
+                           {% if initial.dns_choice == 'tibillet.re' %}checked{% endif %}>
+                    <label class="btn btn-outline-success" for="onboard-venue-dns-re">.re</label>
+                </div>
+            </div>
+        </div>
+        {% if errors.slug %}
+        <div class="invalid-feedback d-block">{% for msg in errors.slug %}{{ msg }}{% endfor %}</div>
+        {% endif %}
+        <div class="form-text">
+            {% translate "Votre adresse finale :" %}
+            <code data-testid="onboard-venue-domain-preview"><span id="onboard-venue-domain-slug">…</span><span id="onboard-venue-domain-suffix">.tibillet.coop</span></code>
+        </div>
+    </div>
+
+    {# Données de la fiche Tiers-Lieux choisie : GPS + adresse structurée. #}
+    {# Elles pré-remplissent l'étape Adresse (marqueur + champs, sans géocodage). #}
+    {# `tl_adresse` = repli (recherche Nominatim) si la fiche n'a pas de GPS. #}
+    {# / Chosen Tiers-Lieux record: GPS + structured address. Pre-fill the Address #}
+    {# step (marker + fields, no geocoding). `tl_adresse` = Nominatim fallback. #}
+    <input type="hidden" name="tl_adresse" id="onboard-venue-tl-adresse" value="">
+    <input type="hidden" name="tl_lat" id="onboard-venue-tl-lat" value="">
+    <input type="hidden" name="tl_lng" id="onboard-venue-tl-lng" value="">
+    <input type="hidden" name="tl_street" id="onboard-venue-tl-street" value="">
+    <input type="hidden" name="tl_cp" id="onboard-venue-tl-cp" value="">
+    <input type="hidden" name="tl_ville" id="onboard-venue-tl-ville" value="">
+
+    <div class="d-flex justify-content-end pt-2">
+        <button type="submit" class="btn btn-primary btn-lg" data-testid="onboard-venue-next">
+            {% translate "Continuer" %} <i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>
+        </button>
+    </div>
+</form>
+
+<script src="{% static 'js/tierslieux_search.js' %}"></script>
+<script>
+// Étape « Votre lieu » : recherche Tiers-Lieux (HTMX débounce + spinner),
+// slug auto-généré depuis le nom (modifiable), aperçu du domaine, et
+// remplissage depuis une fiche choisie.
+// / "Your venue" step: Tiers-Lieux search (HTMX debounce + spinner), slug
+// auto-generated from the name (editable), domain preview, fill from a record.
+document.addEventListener("DOMContentLoaded", function () {
+    var champ_recherche = document.getElementById("onboard-venue-search");
+    var conteneur_tl = document.getElementById("onboard-venue-tl-result");
+    var champ_nom = document.getElementById("onboard-venue-name");
+    var champ_slug = document.getElementById("onboard-venue-slug");
+    var champ_tl_adresse = document.getElementById("onboard-venue-tl-adresse");
+    var champ_tl_lat = document.getElementById("onboard-venue-tl-lat");
+    var champ_tl_lng = document.getElementById("onboard-venue-tl-lng");
+    var champ_tl_street = document.getElementById("onboard-venue-tl-street");
+    var champ_tl_cp = document.getElementById("onboard-venue-tl-cp");
+    var champ_tl_ville = document.getElementById("onboard-venue-tl-ville");
+    var apercu_slug = document.getElementById("onboard-venue-domain-slug");
+    var apercu_suffixe = document.getElementById("onboard-venue-domain-suffix");
+    var icone_loupe = document.querySelector('[data-testid="onboard-venue-search-icon"]');
+    var spinner = document.querySelector('[data-testid="onboard-venue-search-spinner"]');
+    var url_recherche = "{% url 'onboard-venue-search' %}";
+    var bloc_recherche = document.getElementById("onboard-venue-search-block");
+    var lien_rechercher = document.getElementById("onboard-venue-search-again");
+
+    // Slugify partagé, exposé par wizard.js (chargé par base_wizard) — évite la
+    // duplication. Garde de sécurité minimale au cas où il serait absent.
+    // / Shared slugify exposed by wizard.js (avoids duplication). Minimal fallback.
+    var slugify = window.tibilletSlugify || function (valeur) {
+        return (valeur || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    };
+
+    // Tant que l'utilisateur n'a pas édité le slug à la main, on le synchronise
+    // depuis le nom. / Until the user edits the slug, keep it synced to the name.
+    var slug_edite_main = !!(champ_slug && champ_slug.value);
+
+    function maj_apercu() {
+        var radio = document.querySelector('input[name="dns_choice"]:checked');
+        var suffixe = radio ? radio.value : "tibillet.coop";
+        if (apercu_slug) { apercu_slug.textContent = (champ_slug.value || slugify(champ_nom.value)) || "…"; }
+        if (apercu_suffixe) { apercu_suffixe.textContent = "." + suffixe; }
+    }
+
+    if (champ_nom) {
+        champ_nom.addEventListener("input", function () {
+            if (!slug_edite_main && champ_slug) { champ_slug.value = slugify(champ_nom.value); }
+            maj_apercu();
+        });
+    }
+    if (champ_slug) {
+        champ_slug.addEventListener("input", function () {
+            slug_edite_main = true;
+            // On nettoie au format slug en direct (le serveur le revalidera).
+            // / Clean to slug format live (server revalidates).
+            champ_slug.value = slugify(champ_slug.value);
+            maj_apercu();
+        });
+    }
+    document.querySelectorAll('input[name="dns_choice"]').forEach(function (r) {
+        r.addEventListener("change", maj_apercu);
+    });
+
+    // ---- Recherche Tiers-Lieux : util partagé (débounce + spinner) ----
+    // / Tiers-Lieux search: shared util (debounce + spinner).
+    var recherche_tl = creerRechercheTiersLieux({
+        conteneur: "#onboard-venue-tl-result", url: url_recherche,
+        iconeLoupe: icone_loupe, spinner: spinner,
+    });
+    if (champ_recherche) {
+        champ_recherche.addEventListener("input", function () {
+            var terme = (champ_recherche.value || "").trim();
+            if (terme.length < 3) { recherche_tl.annuler(); conteneur_tl.innerHTML = ""; return; }
+            recherche_tl.lancer({ q: terme });
+        });
+    }
+
+    // ---- Clic sur une fiche : remplit nom + slug + adresse cachée, puis
+    // masque la recherche (on ne garde que les champs nom + domaine) ----
+    // (délégation car les fiches arrivent via HTMX).
+    // / Click a record: fill name + slug + hidden address, then hide the search
+    // block (keep only the name + domain fields). Delegated (records via HTMX).
+    document.addEventListener("click", function (evt) {
+        var cible = evt.target.closest('[data-testid="onboard-venue-use"]');
+        if (!cible) { return; }
+        evt.preventDefault();
+        if (champ_nom) { champ_nom.value = (cible.getAttribute("data-name") || "").slice(0, 50); }
+        if (champ_slug) { slug_edite_main = false; champ_slug.value = slugify(champ_nom.value); }
+        // On garde les données GPS + adresse structurée de la fiche pour
+        // pré-remplir l'étape Adresse (marqueur + champs, sans géocodage).
+        // / Keep the record's GPS + structured address to pre-fill the Address step.
+        if (champ_tl_adresse) { champ_tl_adresse.value = cible.getAttribute("data-adresse") || ""; }
+        if (champ_tl_lat) { champ_tl_lat.value = cible.getAttribute("data-lat") || ""; }
+        if (champ_tl_lng) { champ_tl_lng.value = cible.getAttribute("data-lng") || ""; }
+        if (champ_tl_street) { champ_tl_street.value = cible.getAttribute("data-street") || ""; }
+        if (champ_tl_cp) { champ_tl_cp.value = cible.getAttribute("data-cp") || ""; }
+        if (champ_tl_ville) { champ_tl_ville.value = cible.getAttribute("data-ville") || ""; }
+        maj_apercu();
+        // Le lieu est choisi : on masque la zone de recherche et on propose un
+        // lien pour en chercher un autre. / Place chosen: hide search, offer link.
+        if (bloc_recherche) { bloc_recherche.style.display = "none"; }
+        if (lien_rechercher) { lien_rechercher.style.display = "inline-block"; }
+        if (champ_nom) { champ_nom.focus(); }
+    });
+
+    // ---- Lien « Chercher un autre lieu » : ré-affiche la recherche ----
+    // / "Search again" link: re-show the search area.
+    if (lien_rechercher) {
+        lien_rechercher.addEventListener("click", function (evt) {
+            evt.preventDefault();
+            if (bloc_recherche) { bloc_recherche.style.display = ""; }
+            lien_rechercher.style.display = "none";
+            if (champ_recherche) { champ_recherche.value = ""; champ_recherche.focus(); }
+            if (conteneur_tl) { conteneur_tl.innerHTML = ""; }
+            // On oublie la fiche précédemment choisie : sinon son GPS resterait
+            // attaché à une nouvelle saisie manuelle (marqueur au mauvais endroit
+            // à l'étape Adresse). / Forget the previously chosen record, otherwise
+            // its GPS would stick to a new manual entry (wrong marker next step).
+            if (champ_tl_adresse) { champ_tl_adresse.value = ""; }
+            if (champ_tl_lat) { champ_tl_lat.value = ""; }
+            if (champ_tl_lng) { champ_tl_lng.value = ""; }
+            if (champ_tl_street) { champ_tl_street.value = ""; }
+            if (champ_tl_cp) { champ_tl_cp.value = ""; }
+            if (champ_tl_ville) { champ_tl_ville.value = ""; }
+        });
+    }
+
+    // État initial.
+    maj_apercu();
+});
+</script>
+{% endblock step_content %}

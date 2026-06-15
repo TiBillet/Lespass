@@ -116,6 +116,13 @@
                         <i class="bi bi-book" aria-hidden="true"></i> {% translate "Documentation" %}
                     </a>
                 </li>
+                {# Contact : simple lien mailto vers l'adresse officielle TiBillet. #}
+                {# / Contact: plain mailto link to the official TiBillet address. #}
+                <li class="nav-item">
+                    <a class="nav-link" href="mailto:contact@tibillet.re">
+                        <i class="bi bi-envelope" aria-hidden="true"></i> {% translate "Contact" %}
+                    </a>
+                </li>
             </ul>
             <div class="navbar-nav d-flex mb-0">
                 {# Recherche globale : soumet vers Explorer qui gere le filtre texte. #}
@@ -128,6 +135,24 @@
                         <i class="bi bi-search" aria-hidden="true"></i>
                     </button>
                 </form>
+                {# Sélecteur de langue : formulaire Django set_language (POST + CSRF intégré). #}
+                {# Pas de JS custom ni de cookie CSRF requis ; chaque bouton soumet la langue. #}
+                {# / Language selector: Django set_language form (POST + built-in CSRF). #}
+                <div class="nav-item dropdown ms-2">
+                    <button class="nav-link border-0 bg-transparent dropdown-toggle" id="languageDropdown"
+                            type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                            title="{% translate 'Changer de langue' %}">
+                        <i class="bi bi-translate" aria-hidden="true"></i>
+                    </button>
+                    <form action="/i18n/setlang/" method="post" class="mb-0">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="languageDropdown">
+                            <li><button class="dropdown-item" type="submit" name="language" value="fr">Français</button></li>
+                            <li><button class="dropdown-item" type="submit" name="language" value="en">English</button></li>
+                        </ul>
+                    </form>
+                </div>
                 <div class="nav-item ms-2">
                     <button id="themeToggle" class="nav-link border-0 bg-transparent" title="{% translate 'Toggle theme' %}">
                         <i class="bi bi-circle-half" aria-hidden="true"></i>
@@ -151,8 +176,8 @@
 <footer class="bg-secondary-subtle pb-5">
     <div class="container-lg py-5">
         <div class="row">
-            <div class="col-sm-4 col-md-3 pb-5 pb-md-0">
-                <h4>TiBillet</h4>
+            <div class="col-12 col-md-3 pb-5 pb-md-0">
+                <h4>{% translate "Découvrir TiBillet" %}</h4>
                 <ul class="nav flex-column">
                     <li class="nav-item">
                         <a class="nav-link" href="/lieux/">{% translate "Lieux" %}</a>
@@ -168,27 +193,24 @@
                     </li>
                 </ul>
             </div>
-            <div class="col-sm">
+            {# tibillet info — colonne du milieu / middle column #}
+            <div class="col-12 col-md-6">
                 <h4>
                     <span>TiBillet</span>
                 </h4>
                 <p class="lead">{% translate "Billetterie et lieux culturels coopératifs." %}</p>
                 <hr/>
-                <div class="row">
-                    <div class="col-md">
-                        <p>
+                <p>
                             {% translate "TiBillet, c'est une boîte à outils d'organisation collective : billetterie en ligne, adhésion et abonnements, fédération de collectifs, le tout libre et open-source." %}
                         </p>
-                    </div>
-                    <div class="col-md-4 col-lg-3">
-                        <ul class="nav flex-column">
-                            <li class="nav-item"><a class="nav-link" href="https://tibillet.org" target="_blank">TiBillet.org</a></li>
-                            <li class="nav-item"><a class="nav-link" href="https://tibillet.github.io/documentation_v3/" target="_blank" rel="noopener">{% translate "Documentation" %}</a></li>
-                            <li class="nav-item"><a class="nav-link" href="https://pouet.chapril.org/@tibillet" target="_blank">Mastodon</a></li>
-                            <li class="nav-item"><a class="nav-link" href="https://github.com/TiBillet/" target="_blank">Github</a></li>
-                        </ul>
-                    </div>
-                </div>
+            </div>
+            {# Colonne 3 : liens communauté TiBillet / Column 3: TiBillet community links #}
+            <div class="col-12 col-md-3">
+                {# Liens communauté TiBillet — bloc commun partagé avec les pieds de page tenant. #}
+                {# / TiBillet community links — shared block reused by tenant footers. #}
+                <ul class="nav flex-column">
+                    {% include "seo/partials/tibillet_community_links.html" %}
+                </ul>
             </div>
         </div>
 

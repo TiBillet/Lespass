@@ -28,12 +28,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-from authlib.integrations.django_client import OAuth
-
-oauth = OAuth()
-sso_client = oauth.register(
-    **settings.OAUTH_CLIENT,
-)
+# SSO Communecter (OAuth2) retiré — plus utilisé.
+# / Communecter SSO (OAuth2) removed — no longer used.
 
 
 def encode_uid(pk):
@@ -282,57 +278,5 @@ class SetPasswordIfEmpty(APIView):
                         status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
-class OAauthApi(APIView):
-    permission_classes = [AllowAny]
-
-    def get(self, request):
-        communecter = oauth.create_client('communecter')
-        redirect_uri = request.build_absolute_uri('/api/user/oauth').replace('http://', 'https://')
-        logger.info(f"redirect_uri : {redirect_uri}")
-
-        auth = communecter.authorize_redirect(request, redirect_uri)
-        if type(auth) == HttpResponseRedirect:
-            if auth.status_code == 302:
-                return auth
-        else:
-            return Response(_('SSO "Communecter" not available. Try the email login.'),
-                            status=status.HTTP_404_NOT_FOUND)
-
-
-class OAauthCallback(APIView):
-    permission_classes = [AllowAny]
-
-    def get(self, request):
-        token = oauth.communecter.authorize_access_token(request)
-
-        if token.get('access_token'):
-            user_info = oauth.communecter.get('/oauth/userinfo', token=token).json()
-            if user_info.get('email_verified'):
-
-                user = get_or_create_user(
-                    user_info.get('email'),
-                    set_active=True,
-                    send_mail=False,
-                )
-
-                signer = TimestampSigner()
-                signer.sign(f"{user.pk}")
-                token = encode_uid(signer.sign(f"{user.pk}"))
-
-                ### VERIFICATION SIGNATURE AVANT D'ENVOYER
-                user_pk = signer.unsign(urlsafe_base64_decode(token).decode('utf8'), max_age=(3600 * 72))  # 3 jours
-                designed_user = User.objects.get(pk=user_pk)
-                assert user == designed_user
-
-                redirect_uri = request.build_absolute_uri(f'/emailconfirmation/{token}') \
-                    .replace('http://', 'https://')
-                return HttpResponseRedirect(redirect_uri)
-
-
-            else:
-                get_or_create_user(user_info.get('email'))
-                redirect_uri = request.build_absolute_uri().replace('http://', 'https://')
-                return HttpResponseRedirect(redirect_uri)
-
-        else:
-            return Response(_('Access forbidden'), status=status.HTTP_401_UNAUTHORIZED)
+# Vues SSO Communecter (OAauthApi / OAauthCallback) retirées — OAuth plus utilisé.
+# / Communecter SSO views (OAauthApi / OAauthCallback) removed — OAuth no longer used.

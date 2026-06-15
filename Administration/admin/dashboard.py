@@ -219,6 +219,14 @@ def get_sidebar_navigation(request):
                 "collapsible": True,
                 "items": [
                     {
+                        "title": _("Options"),
+                        "icon": "tune",
+                        "link": reverse_lazy(
+                            "staff_admin:BaseBillet_federationconfiguration_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                    {
                         "title": _("Espaces"),
                         "icon": "linked_services",
                         "link": reverse_lazy(
@@ -758,17 +766,13 @@ MODULE_FIELDS = {
         "testid": "dashboard-card-crowdfunding",
     },
     "module_federation": {
-        "name": _("Federation"),
-        "description": _("Explore federation with other TiBillet instance"),
-        "testid": "dashboard-card-federation",
-    },
-    "module_agenda_participatif": {
-        "name": _("Agenda participatif"),
+        "name": _("Fédération et agenda participatif"),
         "description": _(
-            "un formulaire pour que vos users puissent proposer des évènements "
-            "sur la page agenda ; évènements à valider dans l'admin"
+            "Reliez votre lieu au réseau TiBillet pour partager vos évènements. "
+            "Vous pouvez aussi laisser le public proposer des évènements : "
+            "c'est l'agenda participatif. Tout se règle dans « Options de fédération »."
         ),
-        "testid": "dashboard-card-agenda-participatif",
+        "testid": "dashboard-card-federation",
     },
     # FROM V2 : TO IMPLEMENT LATER ON
     # "module_monnaie_locale": {

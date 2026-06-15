@@ -1,4 +1,4 @@
-{% load i18n tibitags static %}
+{% load i18n l10n tibitags static %}
 
 <style>
     form summary::marker {
@@ -178,7 +178,9 @@
                                    class="form-control form-control-lg custom-amount-input js-order-custom-price"
                                    type="number"
                                    name="custom_amount_{{ price.uuid }}"
-                                   min="{{ price.prix }}"
+                                   {# unlocalize : en locale FR, min="5,00" (virgule) est invalide en HTML #}
+                                   {# / unlocalize: in FR locale, min="5,00" (comma) is invalid HTML #}
+                                   min="{{ price.prix|unlocalize }}"
                                    max="999999.99"
                                    step="0.10"
                                    placeholder="{% trans "Enter the amount (minimum" %} {{ price.prix }}€)"

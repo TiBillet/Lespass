@@ -2,7 +2,7 @@ import logging
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.db import connection
+from django.db import connection, transaction
 
 from AuthBillet.models import TibilletUser
 from BaseBillet.tasks import connexion_celery_mailer
@@ -35,8 +35,21 @@ def sender_mail_connect(email, subject_mail=None, next_url=None):
 
     try:
         logger.info(f"sender_mail_connect : {email} - {base_url}")
-        connexion_celery_mailer.delay(email, f"https://{base_url}", subject_mail, next_url=next_url)
-        # connexion_celery_mailer(email, f"https://{base_url}", subject_mail)
+        # On attend le COMMIT avant d'envoyer la tache Celery.
+        # Sinon, quand l'user est cree dans une transaction (ex: creation
+        # via l'admin Django, dont les vues changeform sont atomic), le
+        # worker Celery peut lire l'user AVANT le COMMIT depuis sa propre
+        # connexion et planter sur "TibilletUser DoesNotExist".
+        # Hors transaction (vues publiques en autocommit), on_commit execute
+        # le callback immediatement : aucun changement de comportement.
+        # / Defer the Celery dispatch until after COMMIT, so the worker never
+        #   reads the user before it is committed (admin changeform = atomic).
+        #   Outside a transaction (public views), the callback runs immediately.
+        transaction.on_commit(
+            lambda: connexion_celery_mailer.delay(
+                email, f"https://{base_url}", subject_mail, next_url=next_url
+            )
+        )
     except Exception as e:
         logger.error(f"validate_email_and_return_user erreur pour récuperer config : {email} - {base_url} : {e}")
 

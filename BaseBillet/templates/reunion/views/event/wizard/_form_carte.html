@@ -49,11 +49,17 @@ Variables attendues :
       data-testid="wizard-map-form" class="vstack gap-3">
     {% csrf_token %}
 
-    {# Widget carte reutilisable. `adresse_initiale` = nom du lieu -> le JS du #}
-    {# widget pre-remplit la recherche et la lance automatiquement.            #}
-    {# / Reusable map widget. `adresse_initiale` = place name -> the widget JS #}
-    {# pre-fills and auto-runs the search.                                     #}
-    {% include "widgets/widget_carte_adresse.html" with identifiant_widget="place" hauteur_carte="350px" champs_adresse_separes=True adresse_initiale=new_address_name latitude_initiale=initial.place_latitude longitude_initiale=initial.place_longitude required=True %}
+    {# Widget carte reutilisable. Pré-remplissage, par ordre de priorité :     #}
+    {#  1) re-soumission après 422 (`initial`) ;                               #}
+    {#  2) fiche Tiers-Lieux choisie en page 1 avec GPS (`prefill`) : on passe #}
+    {#     lat/lng + rue/cp/ville -> le widget pose le marqueur et remplit les #}
+    {#     champs DIRECTEMENT, sans géocodage Nominatim (qui échoue sur les    #}
+    {#     libellés complexes type « MIETE (Maison...) 150 Rue... ») ;         #}
+    {#  3) sinon `adresse_initiale` = nom/adresse du lieu -> le widget JS      #}
+    {#     pré-remplit la recherche et la lance automatiquement (Nominatim).   #}
+    {# / Reusable map widget. Pre-fill priority: 422 values -> Tiers-Lieux     #}
+    {# record GPS+address (no Nominatim) -> place name as Nominatim seed.      #}
+    {% include "widgets/widget_carte_adresse.html" with identifiant_widget="place" hauteur_carte="350px" champs_adresse_separes=True adresse_initiale=adresse_recherche|default:new_address_name latitude_initiale=initial.place_latitude|default:prefill.latitude longitude_initiale=initial.place_longitude|default:prefill.longitude rue_initiale=initial.street_address|default:prefill.street_address cp_initiale=initial.postal_code|default:prefill.postal_code ville_initiale=initial.address_locality|default:prefill.address_locality required=True %}
 
     <div class="d-flex justify-content-end pt-2">
         <button type="submit" class="btn btn-primary btn-lg" data-testid="wizard-map-submit">

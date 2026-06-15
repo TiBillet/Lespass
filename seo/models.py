@@ -21,6 +21,7 @@ class SEOCache(models.Model):
 
     TENANT_SUMMARY = "tenant_summary"
     TENANT_EVENTS = "tenant_events"
+    TENANT_POINTS = "tenant_points"
     AGGREGATE_EVENTS = "aggregate_events"
     AGGREGATE_LIEUX = "aggregate_lieux"
     AGGREGATE_POINTS = "aggregate_points"
@@ -31,6 +32,7 @@ class SEOCache(models.Model):
     CACHE_TYPE_CHOICES = [
         (TENANT_SUMMARY, _("Tenant summary (config, stats, domain)")),
         (TENANT_EVENTS, _("Published events for tenant")),
+        (TENANT_POINTS, _("Points (PA) for tenant")),
         (AGGREGATE_EVENTS, _("Aggregated events for network (ROOT)")),
         (AGGREGATE_LIEUX, _("Aggregated active venues (ROOT)")),
         (AGGREGATE_POINTS, _("Aggregated PostalAddress points for explorer map (ROOT)")),

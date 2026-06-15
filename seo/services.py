@@ -194,6 +194,34 @@ def get_active_tenants_with_counts():
     return results
 
 
+def get_counts_for_tenant(schema_name):
+    """
+    Compte, pour UN schema tenant, les events futurs publies et les produits
+    "lieu vivant" (BILLET/FREERES/ADHESION) publies. Une seule requete sur 1 schema.
+    / Per-tenant counts (1 schema): published future events + alive-venue products.
+
+    SECURITE / SECURITY : schema_name vient de Client.schema_name (DB, admin-only),
+    jamais d'input utilisateur (cf. note en tete de fichier).
+
+    Retourne / Returns: dict {"event_count": int, "product_count": int}
+    """
+    now = timezone.now()
+    placeholders_categories = ", ".join(["%s"] * len(CATEGORIES_PRODUIT_LIEU_VIVANT))
+    sql = (
+        f"SELECT "
+        f'(SELECT COUNT(*) FROM "{schema_name}"."BaseBillet_event" '
+        f" WHERE published = true AND datetime >= %s) AS event_count, "
+        f'(SELECT COUNT(*) FROM "{schema_name}"."BaseBillet_product" '
+        f"   WHERE publish = true AND categorie_article IN ({placeholders_categories})"
+        f") AS product_count"
+    )
+    params = [now, *CATEGORIES_PRODUIT_LIEU_VIVANT]
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params)
+        row = cursor.fetchone()
+    return {"event_count": row[0], "product_count": row[1]}
+
+
 def get_events_for_tenants(tenant_schemas):
     """
     Recupere tous les evenements publies et futurs pour les schemas donnes.
@@ -219,9 +247,14 @@ def get_events_for_tenants(tenant_schemas):
         # to build thumbnail URLs in tasks.py.
         # `postal_address_id` est la FK vers PostalAddress (sert a AGGREGATE_POINTS).
         # / `postal_address_id` is the FK to PostalAddress (used for AGGREGATE_POINTS).
+        # On recupere aussi `private` : un event prive ("ne pas montrer sur les
+        # agendas partages") ne doit pas fuiter via la carto reseau ni via la
+        # federation automatique par tags.
+        # / Also fetch `private`: a private event must not leak through the
+        # network map nor through tag-based auto federation.
         parts.append(
             f"SELECT %s AS tenant_id, uuid::text AS uuid, name, slug, short_description, "
-            f"datetime, end_datetime, img, postal_address_id "
+            f"datetime, end_datetime, img, postal_address_id, private "
             f'FROM "{schema_name}"."BaseBillet_event" '
             f"WHERE published = true AND datetime >= %s"
         )
@@ -244,6 +277,7 @@ def get_events_for_tenants(tenant_schemas):
                     "end_datetime": row[6].isoformat() if row[6] else None,
                     "img": row[7] or "",
                     "postal_address_id": row[8],
+                    "private": bool(row[9]),
                 }
             )
 
@@ -495,6 +529,13 @@ def build_aggregate_points(tenant_schemas, configs_by_tenant, events_by_tenant):
         # / Index events by pa_id (1 event lives on 1 PA)
         events_par_pa = {}
         for event in events_du_tenant:
+            # Veto private : un event "non federable" n'apparait jamais sur la
+            # carto reseau (qui est un agenda partage public). Filtre applique
+            # ICI -> vaut pour TOUS les lieux (corrige le trou historique).
+            # / private veto: a non-federable event never shows on the public
+            # network map. Filtered HERE -> applies to ALL venues.
+            if event.get("private"):
+                continue
             pa_id = event.get("postal_address_id")
             if pa_id is None:
                 continue
@@ -515,6 +556,9 @@ def build_aggregate_points(tenant_schemas, configs_by_tenant, events_by_tenant):
                     "datetime_iso": ev.get("datetime", ""),
                     "slug": ev.get("slug", ""),
                     "tags": ev.get("tags", []),
+                    # Vignette de l'event (variation crop), ajoutee dans tasks.py.
+                    # / Event thumbnail (crop variation), added in tasks.py.
+                    "image_url": ev.get("image_url"),
                 })
 
             address_morceaux = [pa["street_address"], pa["postal_code"], pa["address_locality"]]
@@ -522,7 +566,13 @@ def build_aggregate_points(tenant_schemas, configs_by_tenant, events_by_tenant):
             address_display = ", ".join(address_morceaux_nettoyes)
 
             points.append({
-                "pa_id": pa["pa_id"],
+                # pa_id unique GLOBALEMENT : PostalAddress.pk repart a 1 dans chaque
+                # schema tenant, donc on prefixe par tenant_uuid pour eviter les
+                # collisions cote JS (cle des markers). Le matching interne (events,
+                # is_main_address) reste sur le pk brut.
+                # / Globally unique pa_id: PostalAddress.pk restarts at 1 per tenant
+                # schema, so prefix with tenant_uuid to avoid JS marker key collisions.
+                "pa_id": f"{tenant_uuid}:{pa['pa_id']}",
                 "latitude": pa["latitude"],
                 "longitude": pa["longitude"],
                 "pa_name": pa["name"] or pa["street_address"] or pa["address_locality"] or config.get("organisation", ""),
@@ -532,6 +582,9 @@ def build_aggregate_points(tenant_schemas, configs_by_tenant, events_by_tenant):
                 "tenant_organisation": config.get("organisation", ""),
                 "tenant_domain": config.get("domain", ""),
                 "tenant_logo_url": config.get("logo_url"),
+                # Image principale du lieu (social card) — fallback derriere le logo.
+                # / Venue main image (social card) — fallback behind the logo.
+                "tenant_image_url": config.get("social_card_url"),
                 "events_futurs": events_pour_popup,
                 "events_futurs_count_total": len(events_tries),
             })
@@ -603,3 +656,136 @@ def build_explorer_data():
         | {l.get("tenant_id") for l in lieux_data.get("lieux", []) if l.get("tenant_id")}
     )
     return build_explorer_data_for_tenants(tenant_uuids)
+
+
+# ---------------------------------------------------------------------------
+# Federation automatique par tags / Tag-based auto federation
+# ---------------------------------------------------------------------------
+
+
+def get_tenant_uuids_with_event_tags(tag_slugs):
+    """
+    Retourne l'ensemble des tenant_uuid ayant au moins un evenement futur
+    PUBLIC (private=False) portant un des tags donnes. Lecture 100% cache
+    (AGGREGATE_EVENTS), zero requete cross-schema.
+    / Returns the set of tenant_uuid having at least one future PUBLIC
+    (private=False) event carrying one of the given tags. 100% cache read
+    (AGGREGATE_EVENTS), zero cross-schema query.
+
+    LOCALISATION : seo/services.py
+
+    Sert a la federation automatique par tags (FederationConfiguration.tags_federation) :
+    le tenant s'abonne a des slugs de tags et "recoit" les events de TOUT le reseau
+    qui les portent, en plus de sa federation habituelle (FederatedPlace).
+    Le matching se fait par SLUG (meme convention que tag_filter / tag_exclude).
+    / Used by tag-based auto federation: the tenant subscribes to tag slugs and
+    receives matching events from the WHOLE network. Matching is slug-based.
+
+    Parametres / Parameters:
+        tag_slugs: iterable de slugs (str). Vide -> set vide (federation auto inactive).
+    Retourne / Returns: set[str] de tenant_uuid.
+    """
+    if not tag_slugs:
+        return set()
+
+    from seo.models import SEOCache
+    from seo.views_common import get_seo_cache
+
+    slugs_voulus = set(tag_slugs)
+    events_data = get_seo_cache(SEOCache.AGGREGATE_EVENTS) or {}
+
+    tenant_uuids = set()
+    for event in events_data.get("events", []):
+        # Veto private : on ignore les events non federables.
+        # / private veto: skip non-federable events.
+        if event.get("private"):
+            continue
+        slugs_de_l_event = {tag.get("slug") for tag in event.get("tags", [])}
+        if slugs_de_l_event & slugs_voulus:
+            tenant_uuids.add(event.get("tenant_id"))
+
+    tenant_uuids.discard(None)
+    return tenant_uuids
+
+
+# ---------------------------------------------------------------------------
+# Options d'affichage par tenant / Per-tenant display options
+# ---------------------------------------------------------------------------
+
+
+def appliquer_options_federation(
+    explorer_data,
+    afficher_seulement_avec_event,
+    tri_des_lieux,
+    afficher_lieux_sans_adresse=False,
+):
+    """
+    Filtre et trie explorer_data selon les options du tenant (FederationConfiguration).
+    N'agit QUE sur la carte/liste : filtre les points (PA) et les tenants.
+    / Filter and sort explorer_data according to tenant FederationConfiguration options.
+
+    LOCALISATION : seo/services.py
+
+    Parametres / Parameters:
+        explorer_data: dict {"points": [...], "tenants": [...]}
+        afficher_seulement_avec_event: bool — si True, ne garde que les lieux
+            avec au moins 1 event futur.
+        tri_des_lieux: str — "alpha" (nom d'organisation) ou "events" (prochain event).
+        afficher_lieux_sans_adresse: bool — si True, injecte un "point sans
+            coordonnees" pour chaque tenant sans adresse geocodee (sans point reel),
+            pour qu'il apparaisse dans la liste.
+
+    Retourne / Returns: nouveau dict {"points", "tenants"}, filtre et trie.
+    """
+    points = list(explorer_data.get("points", []))
+    tenants = list(explorer_data.get("tenants", []))
+
+    # Lieux sans adresse : on injecte un "point sans coordonnees" par tenant qui
+    # n'a aucun point reel. Cote JS, ce point apparait dans la liste mais son
+    # marqueur carte est ignore (addMarkers fait `continue` si lat/lng manquent).
+    # / Addressless venues: inject one coords-less point per tenant without any
+    # real point. The JS lists it but skips its map marker (no lat/lng).
+    if afficher_lieux_sans_adresse:
+        tenant_ids_avec_point = {p.get("tenant_id") for p in points}
+        for tenant in tenants:
+            tenant_id = tenant.get("tenant_id")
+            if tenant_id in tenant_ids_avec_point:
+                continue
+            points.append({
+                "pa_id": f"addressless-{tenant_id}",
+                "latitude": None,
+                "longitude": None,
+                "pa_name": tenant.get("name", ""),
+                "address_display": "",
+                "is_main_address": False,
+                "tenant_id": tenant_id,
+                "tenant_organisation": tenant.get("name", ""),
+                "tenant_domain": tenant.get("domain", ""),
+                "tenant_logo_url": tenant.get("logo_url"),
+                "events_futurs": [],
+                "events_futurs_count_total": tenant.get("event_count", 0),
+                "is_addressless": True,
+            })
+
+    # Filtre "event a venir seulement" / "upcoming event only" filter
+    if afficher_seulement_avec_event:
+        points = [p for p in points if (p.get("events_futurs_count_total") or 0) > 0]
+        tenants = [t for t in tenants if (t.get("event_count") or 0) > 0]
+
+    # Tri des points : l'ordre des cartes lieu (cote JS) suit l'ordre des points.
+    # / Sort points: the JS venue-card order follows the points order.
+    if tri_des_lieux == "events":
+        # Par date du prochain event ; les lieux sans event finissent a la fin.
+        # / By next-event date; venues without events go last.
+        def cle_prochain_event(point):
+            events = point.get("events_futurs") or []
+            if not events:
+                return "9999"
+            return events[0].get("datetime_iso") or "9999"
+        points.sort(key=cle_prochain_event)
+    else:
+        # Alphabetique par nom d'organisation du tenant.
+        # / Alphabetical by tenant organisation name.
+        points.sort(key=lambda p: (p.get("tenant_organisation") or "").lower())
+
+    return {"points": points, "tenants": tenants}

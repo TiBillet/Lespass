@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 SESSION_KEY = "onboard_wc_uuid"
 
 
-# Rate-limit anti-spam sur identity POST : 5 creations de WC par minute
+# Rate-limit anti-spam sur identity POST : 20 creations de WC par minute
 # par IP. Friction ZERO pour un user normal (qui POST 1 fois identity).
 # Bloque silencieusement (HTTP 429) un bot single-IP qui itere vite.
 # `rate` declare directement sur la classe car le projet n'a pas active
@@ -60,14 +60,14 @@ SESSION_KEY = "onboard_wc_uuid"
 # `allow_request` filtre : on n'applique le throttle qu'au POST. Sans
 # ca un user qui refresh la page (GET) consommerait son quota et
 # resterait bloque apres 5 GET innocents.
-# / Anti-spam rate-limit on identity POST: 5 WC/min/IP. ZERO friction
+# / Anti-spam rate-limit on identity POST: 20 WC/min/IP. ZERO friction
 # for normal users (who POST identity once). Silently blocks (429) a
 # single-IP bot iterating fast. `allow_request` filter: throttle only
 # POST (a refresh of GET shouldn't burn the user's quota).
 class IdentityPostRateThrottle(AnonRateThrottle):
-    """5 POST/minute/IP — anti-spam creation WC + envoi OTP."""
+    """20 POST/minute/IP — anti-spam creation WC + envoi OTP."""
 
-    rate = "5/minute"
+    rate = "20/minute"
     # `scope` doit etre unique pour ne pas partager le compteur DRF avec
     # d'autres throttles (ex: WidgetReverseGeocodeRateThrottle si re-introduit).
     # / Unique `scope` to avoid sharing the DRF counter with other throttles.
@@ -88,6 +88,7 @@ class IdentityPostRateThrottle(AnonRateThrottle):
 STEP_TO_URL_NAME = {
     WaitingConfiguration.STEP_IDENTITY: "onboard-identity",
     WaitingConfiguration.STEP_VERIFY: "onboard-verify",
+    WaitingConfiguration.STEP_VENUE: "onboard-venue",
     WaitingConfiguration.STEP_PLACE: "onboard-place",
     WaitingConfiguration.STEP_DESCRIPTIONS: "onboard-descriptions",
     WaitingConfiguration.STEP_EVENTS: "onboard-events",
@@ -331,7 +332,7 @@ def _finalize_otp_success(request, wc):
     with schema_context("meta"):
         WaitingConfiguration.objects.filter(uuid=wc.uuid).update(
             email_confirmed=True,
-            current_step=WaitingConfiguration.STEP_PLACE,
+            current_step=WaitingConfiguration.STEP_VENUE,
             otp_hash="",
             otp_expires_at=None,
         )
@@ -1016,8 +1017,6 @@ class OnboardViewSet(viewsets.ViewSet):
                     "email": wc.email,
                     "first_name": wc.first_name,
                     "last_name": wc.last_name,
-                    "name": wc.organisation,
-                    "dns_choice": wc.dns_choice,
                 }
             # Priorite 2 : si l'utilisateur est deja authentifie (cas user
             # qui reviennt sur le wizard apres avoir deja un compte TiBillet),
@@ -1059,7 +1058,7 @@ class OnboardViewSet(viewsets.ViewSet):
             initial_from_post = {
                 key: request.data.get(key, "")
                 for key in (
-                    "email", "first_name", "last_name", "name", "dns_choice",
+                    "email", "first_name", "last_name",
                 )
             }
             return render(request, "onboard/steps/01_identity.html", {
@@ -1094,9 +1093,15 @@ class OnboardViewSet(viewsets.ViewSet):
         # / Persist the draft in the `meta` schema.
         with schema_context("meta"):
             wc = WaitingConfiguration.objects.create(
-                organisation=data["name"],
+                # Le nom et le domaine sont saisis à l'étape « Votre lieu »
+                # (STEP_VENUE), après la vérification email. On crée donc le
+                # brouillon avec un nom vide, complété à cette étape.
+                # / Name and domain are entered at the "Your venue" step
+                # (STEP_VENUE), after email verification. The draft starts with
+                # an empty name, completed there.
+                organisation="",
                 email=data["email"],
-                dns_choice=data["dns_choice"],
+                dns_choice=None,
                 first_name=data["first_name"],
                 last_name=data["last_name"],
                 # `phone` est obligatoire dans le modele historique. On le
@@ -1110,7 +1115,7 @@ class OnboardViewSet(viewsets.ViewSet):
                 language=ui_language,
                 email_confirmed=skip_otp,
                 current_step=(
-                    WaitingConfiguration.STEP_PLACE if skip_otp
+                    WaitingConfiguration.STEP_VENUE if skip_otp
                     else WaitingConfiguration.STEP_VERIFY
                 ),
                 invitation=invitation,
@@ -1136,7 +1141,7 @@ class OnboardViewSet(viewsets.ViewSet):
 
         _set_session_wc(request, wc)
         return redirect(
-            "onboard-place" if skip_otp else "onboard-verify",
+            "onboard-venue" if skip_otp else "onboard-verify",
         )
 
     # ------------------------------------------------------------------
@@ -1239,7 +1244,7 @@ class OnboardViewSet(viewsets.ViewSet):
                     "has_pending_otp": bool(wc.otp_hash),
                     "errors": {"otp": [_("Email error on user account.")]},
                 }, status=422)
-            return redirect("onboard-place")
+            return redirect("onboard-venue")
 
         serializer = OnboardVerifySerializer(data=request.data)
         if not serializer.is_valid():
@@ -1327,7 +1332,7 @@ class OnboardViewSet(viewsets.ViewSet):
                 "errors": {"otp": [_("Email error on user account.")]},
             }, status=422)
 
-        return redirect("onboard-place")
+        return redirect("onboard-venue")
 
     # ------------------------------------------------------------------
     # Step 2bis — Resend OTP (Task 11).
@@ -1418,6 +1423,117 @@ class OnboardViewSet(viewsets.ViewSet):
     # Step 3 — Place (Task 12).
     # ------------------------------------------------------------------
 
+    @action(detail=False, methods=["GET", "POST"], url_path="venue")
+    def venue(self, request):
+        """
+        GET  `/onboard/venue/` -> rend l'étape « Votre lieu » : recherche
+        Tiers-Lieux + nom du lieu + domaine (slug éditable + suffixe .coop/.re).
+        POST `/onboard/venue/` -> valide nom + slug + domaine, met à jour le
+        brouillon, et redirige vers `onboard-place` (adresse).
+
+        Pré-requis : brouillon en session ET `email_confirmed=True` (comme
+        place). Si une fiche Tiers-Lieux a été choisie, son adresse est gardée
+        en session pour pré-remplir l'étape Adresse.
+
+        / GET renders the "Your venue" step (Tiers-Lieux search + name + domain).
+        POST validates and advances to the address step. The chosen Tiers-Lieux
+        address (if any) is kept in session to pre-fill the Address step.
+
+        LOCALISATION : onboard/views.py
+        """
+        wc, redirect_response = _get_confirmed_wc_or_redirect(request)
+        if redirect_response is not None:
+            return redirect_response
+
+        if request.method == "GET":
+            return render(request, "onboard/steps/03_venue.html", {
+                "step": "venue", "wc": wc,
+                "initial": {
+                    "name": wc.organisation,
+                    "slug": wc.slug,
+                    "dns_choice": wc.dns_choice or "tibillet.coop",
+                },
+            })
+
+        # === POST ===
+        from onboard.serializers import OnboardVenueSerializer
+
+        serializer = OnboardVenueSerializer(data=request.data)
+        initial = {
+            key: request.data.get(key, "")
+            for key in ("name", "slug", "dns_choice")
+        }
+        if not serializer.is_valid():
+            return render(request, "onboard/steps/03_venue.html", {
+                "step": "venue", "wc": wc,
+                "errors": serializer.errors, "initial": initial,
+            }, status=422)
+
+        data = serializer.validated_data
+        with schema_context("meta"):
+            WaitingConfiguration.objects.filter(uuid=wc.uuid).update(
+                organisation=data["name"],
+                slug=data["slug"],
+                dns_choice=data["dns_choice"],
+                current_step=WaitingConfiguration.STEP_PLACE,
+            )
+
+        # Données de la fiche Tiers-Lieux choisie (champs cachés) : GPS + adresse
+        # structurée. On les garde en session pour pré-remplir le widget carte de
+        # l'étape Adresse : marqueur posé sur la géoloc de l'API + champs remplis
+        # directement (sans géocodage Nominatim, qui échoue sur les libellés
+        # complexes). `adresse_recherche` reste un repli (recherche Nominatim) si
+        # la fiche n'a pas de GPS, ou en saisie manuelle. Sinon on nettoie.
+        # / Chosen Tiers-Lieux record (hidden fields): GPS + structured address,
+        # kept in session to pre-fill the Address step (marker on the API geoloc +
+        # fields filled directly, no Nominatim). `adresse_recherche` is the
+        # fallback (Nominatim search) when there's no GPS. Otherwise clear.
+        from BaseBillet.services.tiers_lieux import valider_coordonnees
+
+        # Champs cachés bornés (fiche choisie OU POST forgé) et coordonnées
+        # validées (un POST forgé pourrait envoyer du texte au lieu d'un float).
+        # / Hidden fields bounded (chosen record OR forged POST) and coordinates
+        # validated (a forged POST could send text instead of a float).
+        adresse_tl = (request.data.get("tl_adresse") or "").strip()[:250]
+        lat_tl, lng_tl = valider_coordonnees(
+            request.data.get("tl_lat"), request.data.get("tl_lng"))
+        coords_ok = lat_tl is not None and lng_tl is not None
+        if adresse_tl or coords_ok:
+            request.session["onboard_venue_prefill"] = {
+                "adresse_recherche": adresse_tl,
+                "latitude": lat_tl if coords_ok else "",
+                "longitude": lng_tl if coords_ok else "",
+                "street_address": (request.data.get("tl_street") or "").strip()[:250],
+                "postal_code": (request.data.get("tl_cp") or "").strip()[:20],
+                "address_locality": (request.data.get("tl_ville") or "").strip()[:120],
+            }
+        else:
+            request.session.pop("onboard_venue_prefill", None)
+        request.session.modified = True
+
+        return redirect("onboard-place")
+
+    @action(detail=False, methods=["GET"], url_path="venue-search")
+    def venue_search(self, request):
+        """
+        Recherche dans le recensement national Tiers-Lieux (partial HTMX),
+        déclenchée par le champ de recherche de l'étape « Votre lieu ».
+        / National Tiers-Lieux directory search (HTMX partial) for the Venue step.
+
+        LOCALISATION : onboard/views.py
+        """
+        from BaseBillet.services.tiers_lieux import rechercher_tiers_lieux
+
+        terme = (request.GET.get("q") or "").strip()
+        # On évite les recherches trop courtes (bruit + charge API externe).
+        # / Avoid too-short searches (noise + external API load).
+        if len(terme) < 3:
+            return HttpResponse("")
+        fiches = rechercher_tiers_lieux(terme)
+        return render(request, "onboard/partials/venue_tierslieux.html", {
+            "fiches": fiches, "terme": terme,
+        })
+
     @action(detail=False, methods=["GET", "POST"], url_path="place")
     def place(self, request):
         """
@@ -1451,12 +1567,49 @@ class OnboardViewSet(viewsets.ViewSet):
         if redirect_response is not None:
             return redirect_response
 
+        # Pré-remplissage depuis la fiche Tiers-Lieux choisie à l'étape « Votre
+        # lieu » : géoloc + adresse structurée passées au widget carte (marqueur
+        # posé + champs remplis directement, sans géocodage). On garantit TOUTES
+        # les clés (même vides) : dans un template Django, `valeur|default:prefill.x`
+        # lève VariableDoesNotExist si la clé `x` manque (la résolution d'un
+        # ARGUMENT de filtre ne tolère pas une clé absente). En saisie manuelle, le
+        # prefill est absent -> clés vides -> le widget bascule sur Nominatim.
+        # `adresse_recherche` = repli (recherche Nominatim).
+        # / Pre-fill from the chosen Tiers-Lieux record. We ensure ALL keys (even
+        # empty): a missing dict key in a filter argument raises VariableDoesNotExist.
+        prefill_session = request.session.get("onboard_venue_prefill") or {}
+        prefill = {
+            "latitude": prefill_session.get("latitude", ""),
+            "longitude": prefill_session.get("longitude", ""),
+            "street_address": prefill_session.get("street_address", ""),
+            "postal_code": prefill_session.get("postal_code", ""),
+            "address_locality": prefill_session.get("address_locality", ""),
+            "adresse_recherche": prefill_session.get("adresse_recherche", ""),
+        }
+
         if request.method == "GET":
             return render(request, "onboard/steps/03_place.html", {
                 "step": "place", "wc": wc,
+                "prefill": prefill,
             })
 
         # === POST ===
+        # Adresse OPTIONNELLE : si l'utilisateur passe l'étape (bouton « passer »)
+        # ou n'a placé aucun point sur la carte, on avance sans adresse.
+        # / OPTIONAL address: if the user skips or didn't place a marker, advance
+        # without an address.
+        passer = bool(request.data.get("skip_address"))
+        lat_brut = (request.data.get("place_latitude") or "").strip()
+        lng_brut = (request.data.get("place_longitude") or "").strip()
+        if passer or not lat_brut or not lng_brut:
+            with schema_context("meta"):
+                WaitingConfiguration.objects.filter(uuid=wc.uuid).update(
+                    current_step=WaitingConfiguration.STEP_DESCRIPTIONS,
+                )
+            request.session.pop("onboard_venue_prefill", None)
+            request.session.modified = True
+            return redirect("onboard-descriptions")
+
         # Import local pour eviter une dependance circulaire au chargement
         # de l'app onboard. / Local import to avoid circular import.
         from onboard.serializers import OnboardPlaceSerializer
@@ -1477,11 +1630,14 @@ class OnboardViewSet(viewsets.ViewSet):
             )
         }
         if not serializer.is_valid():
-            # 422 + re-rendu du formulaire avec les erreurs et les valeurs saisies.
-            # / 422 + re-render the form with errors and submitted values.
+            # 422 + re-rendu : les valeurs re-soumises (`initial`) priment sur le
+            # pré-remplissage Tiers-Lieux (`prefill`) côté template.
+            # / 422 + re-render: submitted values (`initial`) take precedence over
+            # the Tiers-Lieux pre-fill (`prefill`) in the template.
             return render(request, "onboard/steps/03_place.html", {
                 "step": "place", "wc": wc,
                 "errors": serializer.errors, "initial": initial,
+                "prefill": prefill,
             }, status=422)
 
         data = serializer.validated_data
@@ -1498,6 +1654,10 @@ class OnboardViewSet(viewsets.ViewSet):
                 longitude=data["place_longitude"], # idem
                 current_step=WaitingConfiguration.STEP_DESCRIPTIONS,
             )
+        # Adresse enregistrée : on nettoie le pré-remplissage Tiers-Lieux.
+        # / Address saved: clear the Tiers-Lieux pre-fill.
+        request.session.pop("onboard_venue_prefill", None)
+        request.session.modified = True
         return redirect("onboard-descriptions")
 
     # ------------------------------------------------------------------

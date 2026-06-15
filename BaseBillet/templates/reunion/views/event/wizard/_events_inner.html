@@ -18,7 +18,8 @@ Contexte attendu :
   - events (list[dict])     : brouillons (name, datetime ISO, long_description, image?, jauge_max?, tags?)
   - add_url (str)           : URL de l'action HTMX d'ajout
   - remove_url_name (str)   : nom d'URL de l'action HTMX de retrait (param idx)
-  - show_admin_fields (bool): affiche jauge_max + tags (wizard admin)
+  - show_admin_fields (bool): pilote le comportement des TAGS (staff = création libre ;
+                              public = sélection parmi l'existant). La jauge est affichée pour tous.
   - errors (dict), initial (dict) : apres une 422
 {% endcomment %}
 
@@ -51,7 +52,7 @@ Contexte attendu :
                     {% if event.long_description %}
                     <p class="mb-0 small text-muted">{{ event.long_description|truncatechars:90 }}</p>
                     {% endif %}
-                    {% if show_admin_fields and event.jauge_max %}
+                    {% if event.jauge_max %}
                     <span class="badge text-bg-light mt-1">
                         {% translate "Jauge" %} : {{ event.jauge_max }}
                     </span>
@@ -64,6 +65,7 @@ Contexte attendu :
                         hx-post="{% url remove_url_name idx=forloop.counter0 %}"
                         hx-target="#events-step-inner"
                         hx-swap="innerHTML"
+                        hx-indicator="#tibillet-spinner"
                         hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
                         data-testid="wizard-event-{{ forloop.counter0 }}-remove"
                         aria-label="{% blocktranslate with name=event.name %}Retirer l'évènement {{ name }}{% endblocktranslate %}">
@@ -99,6 +101,7 @@ Contexte attendu :
         <form hx-post="{{ add_url }}"
               hx-target="#events-step-inner"
               hx-swap="innerHTML"
+              hx-indicator="#tibillet-spinner"
               hx-encoding="multipart/form-data"
               hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
               enctype="multipart/form-data"
@@ -135,7 +138,8 @@ Contexte attendu :
                               data-testid="wizard-event-description">{{ initial.long_description|default:'' }}</textarea>
                 </div>
 
-                {% if show_admin_fields %}
+                {# Jauge max : affichée pour tous (staff comme proposeurs). #}
+                {# / Gauge: shown to everyone (staff and proposers). #}
                 <div class="col-md-6">
                     <label for="wizard-event-jauge" class="form-label small">
                         {% translate "Jauge max (optionnel)" %}
@@ -145,17 +149,29 @@ Contexte attendu :
                            class="form-control{% if errors.jauge_max %} is-invalid{% endif %}"
                            data-testid="wizard-event-jauge">
                 </div>
+
+                {# Tags : commun à tous. Staff = création libre ; public = uniquement #}
+                {# les tags EXISTANTS (filtré côté serveur). Le datalist propose l'existant. #}
+                {# / Tags: shared. Staff free-creates; public limited to existing (server-side). #}
                 <div class="col-md-6">
                     <label for="wizard-event-tags" class="form-label small">
                         {% translate "Tags (séparés par des virgules)" %}
                     </label>
                     <input id="wizard-event-tags" type="text" name="tags"
+                           list="wizard-tags-datalist"
                            value="{{ initial.tags|default:'' }}"
                            class="form-control"
                            placeholder="{% translate 'concert, gratuit' %}"
                            data-testid="wizard-event-tags">
+                    {% if not show_admin_fields %}
+                    <div class="form-text small">
+                        {% translate "Choisissez parmi les tags proposés." %}
+                    </div>
+                    {% endif %}
+                    <datalist id="wizard-tags-datalist">
+                        {% for tag in all_tags %}<option value="{{ tag.name }}"></option>{% endfor %}
+                    </datalist>
                 </div>
-                {% endif %}
 
                 <div class="col-12">
                     <label for="wizard-event-image" class="form-label small">

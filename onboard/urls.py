@@ -62,6 +62,16 @@ onboard_verify = OnboardViewSet.as_view({
 onboard_resend_otp = OnboardViewSet.as_view({
     "post": "resend_otp",
 })
+# Step « Votre lieu » (recherche Tiers-Lieux + nom + domaine), insérée après
+# la vérification email. / "Your venue" step, after email verification.
+onboard_venue = OnboardViewSet.as_view({
+    "get": "venue", "post": "venue",
+})
+# Recherche Tiers-Lieux de la step Venue — GET only (partial HTMX).
+# / Tiers-Lieux search for the Venue step — GET only (HTMX partial).
+onboard_venue_search = OnboardViewSet.as_view({
+    "get": "venue_search",
+})
 onboard_place = OnboardViewSet.as_view({
     "get": "place", "post": "place",
 })
@@ -111,6 +121,8 @@ urlpatterns = [
     # impose ce chemin. / Resend OTP: POST only, HTMX partial. Flat URL
     # (not under /verify/) per plan spec + ViewSet binding.
     path("onboard/resend-otp/", onboard_resend_otp, name="onboard-resend-otp"),
+    path("onboard/venue/", onboard_venue, name="onboard-venue"),
+    path("onboard/venue/search/", onboard_venue_search, name="onboard-venue-search"),
     path("onboard/place/", onboard_place, name="onboard-place"),
     path("onboard/descriptions/", onboard_descriptions, name="onboard-descriptions"),
     path("onboard/events/", onboard_events, name="onboard-events"),

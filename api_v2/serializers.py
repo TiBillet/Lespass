@@ -1016,7 +1016,12 @@ class ReservationCreateSerializer(serializers.Serializer):
     Serializer d'entree pour creer une reservation via API v2.
     """
 
-    reservationFor = serializers.DictField(required=True)
+    # reservationFor est optionnel : si absent, l'événement est déduit
+    # à partir des tarifs demandés (cas de la caisse LaBoutik qui ne
+    # connaît que le tarif, pas l'événement).
+    # / reservationFor is optional: if missing, the event is resolved
+    # / from the requested prices (LaBoutik POS only knows the price).
+    reservationFor = serializers.DictField(required=False)
     underName = serializers.DictField(required=True)
     reservedTicket = serializers.ListField(child=serializers.DictField(), required=True)
     additionalProperty = serializers.ListField(child=serializers.DictField(), required=False)
@@ -1027,6 +1032,57 @@ class ReservationCreateSerializer(serializers.Serializer):
             if name == key.lower():
                 return prop.get("value")
         return None
+
+    def _resolve_event_from_prices(self, reserved_tickets: List[Dict[str, Any]]) -> "Event":
+        """
+        Déduit l'événement à partir des tarifs demandés.
+        / Resolves the event from the requested prices.
+
+        LOCALISATION : api_v2/serializers.py
+
+        Cas d'usage : la caisse LaBoutik vend un billet.
+        Elle ne connaît que l'uuid du tarif (Price), pas l'événement.
+        On cherche le prochain événement publié qui propose ce produit.
+
+        Règles simples :
+        - Aucun événement à venir trouvé : erreur claire.
+        - Plusieurs événements possibles : erreur claire.
+          L'appelant doit alors préciser reservationFor.
+        - Un seul événement : on le retourne.
+        """
+        from datetime import timedelta
+        from django.utils import timezone
+
+        # On récupère les produits des tarifs demandés.
+        # / Get the products of the requested prices.
+        price_uuids = []
+        for item in reserved_tickets:
+            price_uuid = item.get("identifier") or item.get("id") or item.get("uuid")
+            if price_uuid:
+                price_uuids.append(str(price_uuid))
+
+        products_of_requested_prices = Product.objects.filter(prices__uuid__in=price_uuids).distinct()
+        if not products_of_requested_prices.exists():
+            raise serializers.ValidationError({"reservedTicket": "No product found for the given prices."})
+
+        # Événements publiés à venir qui proposent ces produits.
+        # Même fenêtre que ReservationValidator : on garde la veille (J-1).
+        # / Published upcoming events offering these products (same J-1 window as ReservationValidator).
+        now_minus_one_day = timezone.now() - timedelta(days=1)
+        candidate_events = Event.objects.filter(
+            published=True,
+            datetime__gte=now_minus_one_day,
+            products__in=products_of_requested_prices,
+        ).distinct().order_by("datetime")
+
+        if candidate_events.count() == 0:
+            raise serializers.ValidationError(
+                {"reservationFor": "No upcoming event found for this product. Please provide reservationFor."})
+        if candidate_events.count() > 1:
+            raise serializers.ValidationError(
+                {"reservationFor": "Several upcoming events match this product. Please provide reservationFor."})
+
+        return candidate_events.first()
 
     def create(self, validated_data: Dict[str, Any]) -> Reservation:
         from django.contrib.auth.models import AnonymousUser
@@ -1046,15 +1102,39 @@ class ReservationCreateSerializer(serializers.Serializer):
         event_uuid = reservation_for.get("identifier") or reservation_for.get("id") or reservation_for.get("uuid")
         email = under_name.get("email")
 
-        if not event_uuid:
-            raise serializers.ValidationError({"reservationFor": "identifier is required."})
         if not email:
             raise serializers.ValidationError({"underName": "email is required."})
 
-        try:
-            event = Event.objects.get(uuid=str(event_uuid))
-        except Event.DoesNotExist:
-            raise serializers.ValidationError({"reservationFor": "Event not found."})
+        if event_uuid:
+            try:
+                event = Event.objects.get(uuid=str(event_uuid))
+            except Event.DoesNotExist:
+                raise serializers.ValidationError({"reservationFor": "Event not found."})
+        else:
+            # Pas d'événement fourni : on le déduit des tarifs demandés.
+            # Cas de la caisse LaBoutik qui ne connaît que le tarif.
+            # / No event given: resolve it from the requested prices (LaBoutik POS case).
+            event = self._resolve_event_from_prices(reserved_tickets)
+
+        # Billet déjà payé ailleurs (ex : en caisse LaBoutik) ?
+        # additionalProperty paymentMethod = "cash" ou "card".
+        # Dans ce cas : pas de checkout Stripe, la vente est valide tout de suite.
+        # / Ticket already paid elsewhere (e.g., LaBoutik POS)?
+        # / additionalProperty paymentMethod = "cash" or "card": no Stripe checkout.
+        EXTERNAL_PAYMENT_METHODS = {
+            "cash": PaymentMethod.CASH,
+            "card": PaymentMethod.CC,
+        }
+        payment_method_property = self._extract_property(add_props, "paymentMethod")
+        paid_externally = False
+        external_payment_method = None
+        if payment_method_property is not None:
+            payment_method_key = str(payment_method_property).strip().lower()
+            if payment_method_key not in EXTERNAL_PAYMENT_METHODS:
+                raise serializers.ValidationError(
+                    {"additionalProperty": "paymentMethod must be one of: cash, card."})
+            paid_externally = True
+            external_payment_method = EXTERNAL_PAYMENT_METHODS[payment_method_key]
 
         data = QueryDict(mutable=True)
         data.update({
@@ -1094,11 +1174,27 @@ class ReservationCreateSerializer(serializers.Serializer):
 
         # Build a fake request for the validator
         fake_request = SimpleNamespace(user=AnonymousUser(), data=data)
-        validator = ReservationValidator(data=data, context={"request": fake_request, "sale_origin": SaleOrigin.API})
+        validator_context = {"request": fake_request, "sale_origin": SaleOrigin.API}
+        if paid_externally:
+            # Vente déjà payée en caisse : origine LaBoutik,
+            # le TicketCreator créera la ligne de vente en VALID sans Stripe.
+            # / Already paid at the POS: LaBoutik origin, sale line created VALID, no Stripe.
+            validator_context["sale_origin"] = SaleOrigin.LABOUTIK
+            validator_context["paid_externally"] = True
+            validator_context["external_payment_method"] = external_payment_method
+        validator = ReservationValidator(data=data, context=validator_context)
         validator.is_valid(raise_exception=True)
 
         reservation = validator.reservation
         checkout_link = validator.checkout_link
+
+        # Vente payée en caisse : tout est déjà créé et valide.
+        # On ne passe pas par les blocs "gratuit" ci-dessous,
+        # sinon une deuxième ligne de vente serait créée en double.
+        # / Paid at the POS: everything is already created and valid.
+        # / Skip the free-booking blocks below to avoid a duplicate sale line.
+        if paid_externally:
+            return reservation
 
         # Confirm free reservations (optional)
         confirmed = bool(self._extract_property(add_props, "confirmed"))
@@ -1479,6 +1575,7 @@ class MembershipStatusSerializer(serializers.Serializer):
     """
     product_name = serializers.SerializerMethodField()
     price_name = serializers.SerializerMethodField()
+    member_name = serializers.SerializerMethodField()
     is_valid = serializers.SerializerMethodField()
     deadline = serializers.DateTimeField()
 
@@ -1487,6 +1584,9 @@ class MembershipStatusSerializer(serializers.Serializer):
 
     def get_price_name(self, obj):
         return obj.price.name if obj.price else None
+
+    def get_member_name(self, obj: Membership):
+        return obj.member_name()
 
     def get_is_valid(self, obj):
         return obj.is_valid()
