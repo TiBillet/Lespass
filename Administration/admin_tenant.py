@@ -1590,6 +1590,42 @@ class MembershipAdmin(HelpDisplayMixin, ModelAdmin, ImportExportModelAdmin):
             .prefetch_related('price__product__form_fields')
         )
 
+    def get_export_formats(self):
+        """
+        Met le format Excel (XLSX) en premier dans le menu d'export.
+        / Put the Excel (XLSX) format first in the export dropdown.
+
+        LOCALISATION : Administration/admin_tenant.py (MembershipAdmin)
+
+        Pourquoi : un fichier CSV s'ouvre mal dans Excel en langue francaise.
+        Excel attend le point-virgule comme separateur de colonnes, mais le
+        CSV utilise la virgule. Du coup toutes les colonnes (email, nom...)
+        se retrouvent dans une seule cellule et on ne peut pas recuperer
+        facilement la liste des mails.
+        Le format Excel (XLSX) n'a pas ce probleme : il s'ouvre toujours en
+        colonnes propres. On le remonte donc en tete de la liste pour que les
+        utilisateur-ices le voient et le choisissent en premier.
+        / A CSV opens badly in French Excel (comma vs semicolon separator),
+        / so XLSX is moved to the top of the export format list.
+        """
+        # On recupere la liste des formats fournie par django-import-export
+        # / Get the export formats provided by django-import-export
+        formats_disponibles = super().get_export_formats()
+
+        # On separe le format Excel (XLSX) des autres formats
+        # / Split the Excel (XLSX) format from the others
+        formats_excel = []
+        autres_formats = []
+        for format_export in formats_disponibles:
+            if format_export().get_extension() == "xlsx":
+                formats_excel.append(format_export)
+            else:
+                autres_formats.append(format_export)
+
+        # XLSX en premier, puis les autres formats dans leur ordre d'origine
+        # / XLSX first, then the other formats in their original order
+        return formats_excel + autres_formats
+
     @display(description=_("User"))
     def user_email_link(self, obj):
         if obj.user:
