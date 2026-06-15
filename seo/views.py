@@ -63,12 +63,7 @@ CONTRIBUTEURS = [
     {"nom": "France Tiers-Lieux", "logo": "contributeurs/ftl.png", "url": ""},  # à vérifier : nom + URL / to verify: name + URL
     {"nom": "La Compagnie des Tiers-Lieux", "logo": "contributeurs/Compagnie des tiers lieux.svg", "url": ""},  # à vérifier : URL / to verify: URL
     {"nom": "Circa", "logo": "contributeurs/circa.png", "url": ""},  # à vérifier : URL / to verify: URL
-    # Logo CoopCircuit fourni en blanc sur transparent (invisible sur tuile claire) :
-    # on pointe vers une version inversee (RGB negatif, transparence conservee).
-    # / CoopCircuit logo shipped as white-on-transparent (invisible on a light tile):
-    # we point to an inverted version (negative RGB, alpha preserved).
-    {"nom": "CoopCircuit", "logo": "contributeurs/coopcircuit-noir.png", "url": "https://coopcircuit.org/"},
-    # Soutiens institutionnels / Institutional support
+    {"nom": "CoopCircuits", "logo": "contributeurs/coopcircuit-noir.png", "url": "https://coopcircuits.fr/"},
     {"nom": "JetBrains", "logo": "contributeurs/jet_brain_beam.png", "url": "https://jb.gg/OpenSourceSupport"},
     {"nom": "France 2030", "logo": "contributeurs/france_2030.png", "url": "https://www.economie.gouv.fr/france-2030"},
 ]
