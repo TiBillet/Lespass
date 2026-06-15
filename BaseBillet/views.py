@@ -49,7 +49,7 @@ from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, Product, Event, Tag, Paiement_stripe, Membership, Reservation, \
     FormbricksConfig, FormbricksForms, FederatedPlace, Carrousel, LigneArticle, PriceSold, \
     Price, ProductSold, PaymentMethod, PostalAddress, SaleOrigin, ProductFormField, GhostConfig, BrevoConfig, \
-    FederationConfiguration
+    FederationConfiguration, MembershipProduct
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, \
     contact_mailer, send_to_ghost_email, send_sale_to_laboutik, \
     send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, \
@@ -3662,8 +3662,7 @@ class MembershipMVT(viewsets.ViewSet):
                 })
 
         template_context['federated_tenants'] = federated_tenant_dict
-        products = Product.objects.filter(categorie_article=Product.ADHESION,
-                                                              publish=True).prefetch_related('tag')
+        template_context['products'] = MembershipProduct.objects.filter(publish=True).prefetch_related('tag')
 
         for product in products:
             # Les tarifs en points ou en temps se vendent a la caisse seulement :
@@ -3694,8 +3693,7 @@ class MembershipMVT(viewsets.ViewSet):
     @action(detail=False, methods=['GET'])
     def embed(self, request):
         template_context = get_context(request)
-        template_context['products'] = Product.objects.filter(categorie_article=Product.ADHESION,
-                                                              publish=True).prefetch_related('tag')
+        template_context['products'] = MembershipProduct.objects.filter(publish=True).prefetch_related('tag')
         template_context['embed'] = True
         # CHANTIER-04 : l'embed suivait TOUJOURS le look reunion (chemin en dur).
         # Il suit désormais le skin du tenant, comme la page adhésions normale.
@@ -3717,7 +3715,7 @@ class MembershipMVT(viewsets.ViewSet):
         for tenant in set(tenants):
             with tenant_context(tenant):
                 try:
-                    product = Product.objects.get(uuid=uuid, categorie_article=Product.ADHESION, publish=True)
+                    product = MembershipProduct.objects.get(uuid=uuid, publish=True)
                     url = f"https://{tenant.get_primary_domain().domain}/memberships/{product.uuid}"
                     return url
                 except Product.DoesNotExist:
@@ -3734,7 +3732,7 @@ class MembershipMVT(viewsets.ViewSet):
         '''
         try:
             # On essaye sur ce tenant :
-            product = Product.objects.get(uuid=pk, categorie_article=Product.ADHESION, publish=True)
+            product = MembershipProduct.objects.get(uuid=pk, publish=True)
             context = get_context(request)
             context['product'] = product
 

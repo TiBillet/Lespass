@@ -1527,10 +1527,6 @@ class TicketProductAdmin(ProductAdmin):
 
     list_filter = ["publish", ProductArchiveFilter]  # categorie_article inutile, deja filtre
 
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        return qs.filter(categorie_article__in=[Product.BILLET, Product.FREERES])
-
 
 @admin.register(MembershipProduct, site=staff_admin_site)
 class MembershipProductAdmin(HelpDisplayMixin, ProductAdmin):
@@ -1550,9 +1546,6 @@ class MembershipProductAdmin(HelpDisplayMixin, ProductAdmin):
 
     list_filter = ["publish", ProductArchiveFilter]  # categorie_article inutile, deja filtre
 
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        return qs.filter(categorie_article=Product.ADHESION)
 
 class ResourceProductForm(ProductAdminCustomForm):
     """Formulaire produit force en mode Ressource.
