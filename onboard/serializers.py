@@ -60,6 +60,28 @@ class OnboardIdentitySerializer(serializers.Serializer):
     # "Your venue" step (STEP_VENUE), after email verification.
     cgu = serializers.BooleanField(required=True)
 
+    # Captcha anti-spam arithmetique (x + y == answer). Meme mecanisme que
+    # le formulaire de contact (cf. BaseBillet.validators.ContactValidator) :
+    # x/y sont generes cote client (JS) et envoyes en hidden, la somme est
+    # saisie par l'utilisateur. Bloque les bots simples qui POSTent
+    # directement /onboard/identity/ (endpoint public AllowAny, cible
+    # d'email-bombing : un attaquant inonde la boite d'une victime via le
+    # formulaire d'inscription public).
+    # / Arithmetic anti-spam captcha (x + y == answer), same as the contact
+    # form. x/y generated client-side (JS) and sent hidden; user types the
+    # sum. Blocks simple bots POSTing directly to the public endpoint.
+    #
+    # `min_value=1` (et non 0) : les hidden x/y valent 0 par defaut dans le
+    # HTML ; le JS les remplace par des nombres 1-9 au chargement. Exiger >= 1
+    # ferme le contournement trivial `x=0, y=0, answer=0` (0+0==0) d'un bot qui
+    # POSTe les valeurs par defaut sans executer le JS.
+    # / `min_value=1`: hidden x/y default to 0 in the HTML; the JS replaces
+    # them with 1-9. Requiring >= 1 closes the trivial `x=0,y=0,answer=0`
+    # bypass of a bot POSTing the defaults without running the JS.
+    x = serializers.IntegerField(required=True, min_value=1)
+    y = serializers.IntegerField(required=True, min_value=1)
+    answer = serializers.IntegerField(required=True)
+
     def validate_cgu(self, value):
         """
         Validation explicite : l'utilisateur DOIT accepter les CGU.
@@ -71,9 +93,17 @@ class OnboardIdentitySerializer(serializers.Serializer):
 
     def validate(self, attrs):
         """
-        Verifie que les deux emails saisis correspondent (case-insensitive).
-        / Verify both emails match (case-insensitive).
+        Verifie le captcha anti-spam (x + y == answer) puis que les deux
+        emails saisis correspondent (case-insensitive).
+        / Check the anti-spam captcha (x + y == answer), then verify both
+        emails match (case-insensitive).
         """
+        # Captcha d'abord : inutile de valider le reste si c'est un bot.
+        # / Captcha first: no need to validate the rest if it's a bot.
+        if attrs["x"] + attrs["y"] != attrs["answer"]:
+            raise serializers.ValidationError(
+                {"answer": _("Mauvaise réponse à la question anti-spam.")},
+            )
         if attrs["email"].lower() != attrs["email_confirm"].lower():
             raise serializers.ValidationError(
                 {"email_confirm": _("Emails do not match.")},
