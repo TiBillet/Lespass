@@ -118,6 +118,8 @@ def test_identity_post_creates_wc_and_redirects_to_verify(cleanup_waiting_config
             "name": "Mon Lieu Test",
             "dns_choice": "tibillet.coop",
             "cgu": "on",
+            # Captcha valide (x + y == answer). / Valid captcha.
+            "x": 4, "y": 5, "answer": 9,
         })
 
     assert response.status_code in (302, 303), (
@@ -157,6 +159,118 @@ def test_identity_post_creates_wc_and_redirects_to_verify(cleanup_waiting_config
     call_kwargs = mock_mailer.call_args.kwargs
     assert call_kwargs["wc_uuid"] == str(wc.uuid)
     assert call_kwargs["otp_clair"]  # 6 chiffres non vide / 6-digit non-empty
+
+
+def test_identity_post_same_email_twice_reuses_draft_and_skips_second_otp(
+    cleanup_waiting_configs,
+):
+    """
+    Deux POST identity rapproches avec le MEME email ne creent qu'UN seul
+    brouillon et n'envoient qu'UN seul OTP (cooldown 60s).
+
+    REGRESSION (fix dedup 2026-06-15) : avant, chaque POST identity creait
+    un nouveau WaitingConfiguration ET declenchait un nouvel OTP. Un
+    double-clic / refresh-and-resubmit produisait une cascade de mails OTP
+    pour le meme email (incident prod : ~12 mails en ~3s).
+
+    / Two close identity POSTs with the SAME email create only ONE draft
+    and send only ONE OTP (60s cooldown). Regression test for the dedup
+    fix: before it, each POST created a new WC + a new OTP -> mail bursts.
+    """
+    client = Client(HTTP_HOST=DEV_HOST)
+
+    import time
+    unique_email = f"dedup-{int(time.time() * 1000)}@example.com"
+
+    payload = {
+        "email": unique_email,
+        "email_confirm": unique_email,
+        "first_name": "Jonas",
+        "last_name": "Test",
+        "name": "Mon Lieu Test",
+        "dns_choice": "tibillet.coop",
+        "cgu": "on",
+        # Captcha valide (x + y == answer). / Valid captcha.
+        "x": 4, "y": 5, "answer": 9,
+    }
+
+    # On patche le mailer sur les DEUX POST : on veut compter combien de
+    # fois l'OTP est reellement enqueue. / Patch the mailer across BOTH
+    # POSTs to count how many times the OTP is actually enqueued.
+    with patch("onboard.tasks.onboard_otp_mailer.delay") as mock_mailer:
+        first_response = client.post("/onboard/identity/", data=payload)
+        second_response = client.post("/onboard/identity/", data=payload)
+
+    assert first_response.status_code in (302, 303)
+    assert second_response.status_code in (302, 303)
+    assert second_response["Location"] == "/onboard/verify/"
+
+    # Un SEUL brouillon doit exister pour cet email (dedup).
+    # / Only ONE draft must exist for this email (dedup).
+    with schema_context("meta"):
+        drafts = list(
+            WaitingConfiguration.objects.filter(email__iexact=unique_email)
+        )
+        assert len(drafts) == 1, (
+            f"Expected exactly 1 draft after 2 POSTs, got {len(drafts)}."
+        )
+        cleanup_waiting_configs(drafts[0])
+
+    # Un SEUL OTP enqueue : le 2e POST tombe dans le cooldown 60s -> pas de
+    # 2e mail. / Only ONE OTP enqueued: the 2nd POST is within the 60s
+    # cooldown -> no second mail.
+    assert mock_mailer.call_count == 1, (
+        f"Expected exactly 1 OTP send across 2 POSTs, got "
+        f"{mock_mailer.call_count}."
+    )
+
+
+def test_identity_post_wrong_captcha_returns_422(cleanup_waiting_configs):
+    """
+    POST identity avec une mauvaise reponse au captcha (x + y != answer)
+    renvoie 422, ne cree AUCUN brouillon et n'envoie AUCUN OTP.
+
+    Le captcha arithmetique bloque les bots simples qui POSTent directement
+    l'endpoint public (AllowAny) — vecteur d'email-bombing.
+
+    / Identity POST with a wrong captcha answer returns 422, creates NO
+    draft and sends NO OTP. The arithmetic captcha blocks simple bots on
+    the public endpoint (email-bombing vector).
+    """
+    from django.core.cache import cache
+    # Repart d'un quota throttle propre (le test ne doit pas etre 429).
+    # / Fresh throttle quota (this test must be 422, not 429).
+    cache.clear()
+
+    client = Client(HTTP_HOST=DEV_HOST)
+
+    import time
+    unique_email = f"captcha-{int(time.time() * 1000)}@example.com"
+
+    with patch("onboard.tasks.onboard_otp_mailer.delay") as mock_mailer:
+        response = client.post("/onboard/identity/", data={
+            "email": unique_email,
+            "email_confirm": unique_email,
+            "first_name": "Bot",
+            "last_name": "Spam",
+            "cgu": "on",
+            # Captcha FAUX : 2 + 2 != 5. / Wrong captcha.
+            "x": 2, "y": 2, "answer": 5,
+        })
+
+    # 422 : le serializer rejette, l'erreur est sous la cle "answer".
+    # / 422: serializer rejects; error is under the "answer" key.
+    assert response.status_code == 422, (
+        f"Expected 422 on wrong captcha, got {response.status_code}."
+    )
+
+    # Aucun brouillon cree, aucun OTP envoye.
+    # / No draft created, no OTP sent.
+    with schema_context("meta"):
+        assert not WaitingConfiguration.objects.filter(
+            email__iexact=unique_email,
+        ).exists(), "No draft must be created when the captcha is wrong."
+    mock_mailer.assert_not_called()
 
 
 def test_identity_post_with_invitation_attaches_it(
@@ -213,6 +327,8 @@ def test_identity_post_with_invitation_attaches_it(
                 "name": "Lieu invite",
                 "dns_choice": "tibillet.coop",
                 "cgu": "on",
+                # Captcha valide (x + y == answer). / Valid captcha.
+                "x": 4, "y": 5, "answer": 9,
             },
         )
 
@@ -228,83 +344,39 @@ def test_identity_post_with_invitation_attaches_it(
         assert wc.invitation.code == inv.code
 
 
-def test_identity_post_existing_tenant_name_returns_422(cleanup_waiting_configs):
+def test_venue_serializer_rejects_existing_tenant_name():
     """
-    POST `/onboard/identity/` avec un nom (`name`) qui matche deja un
-    tenant existant (case-insensitive) -> 422 + erreur sur `name`.
+    Le check d'unicité du nom de lieu a été DÉPLACÉ de l'identité vers l'étape
+    « Votre lieu » (STEP_VENUE) : le nom n'est plus saisi à l'identité. Ici on
+    vérifie que `OnboardVenueSerializer` rejette un nom déjà pris par un tenant
+    existant (check case-insensitive : "LESPASS" vs le tenant `lespass`).
 
-    On verifie l'UX : l'utilisateur apprend des la step 1 que le nom est
-    pris, sans avoir a parcourir les 6 etapes pour decouvrir l'echec en
-    Launch (ou TenantCreateValidator.create_tenant raise).
-
-    On utilise un tenant existant en DB dev (`lespass`) qui est toujours
-    la. Le check serializer fait `iexact` -> on tape "LESPASS" (casse
-    differente) pour valider que le check est case-insensitive. Le mailer
-    OTP est patche par defense (ne devrait pas etre appele si validation
-    echoue, mais on assure).
-
-    / POST identity with a `name` matching an existing tenant (case-
-    insensitive) -> 422 + error on `name`. UX: user learns at step 1, no
-    need to walk through 6 steps before discovering at Launch. We hit the
-    always-present `lespass` tenant with mixed case "LESPASS" to verify
-    the iexact lookup. Mailer is patched defensively.
+    / The venue-name uniqueness check MOVED from identity to the "Your venue"
+    step (name is no longer asked at identity). We check that
+    `OnboardVenueSerializer` rejects a name already taken (case-insensitive).
     """
-    client = Client(HTTP_HOST=DEV_HOST)
+    from onboard.serializers import OnboardVenueSerializer
 
-    import time
-    unique_email = f"taken-{int(time.time() * 1000)}@example.com"
-
-    with patch("onboard.tasks.onboard_otp_mailer.delay") as mock_mailer:
-        response = client.post("/onboard/identity/", data={
-            "email": unique_email,
-            "email_confirm": unique_email,
-            "first_name": "Jonas",
-            "last_name": "Test",
-            "name": "LESPASS",  # Case differente du tenant existant `lespass`.
-            "dns_choice": "tibillet.coop",
-            "cgu": "on",
-        })
-
-    assert response.status_code == 422, (
-        f"Expected 422 (name taken), got {response.status_code}. "
-        f"Body excerpt: {response.content[:300]!r}"
-    )
-
-    # L'erreur doit pointer specifiquement le champ `name`.
-    # / Error must specifically target the `name` field.
-    assert b"name" in response.content, (
-        "Response should mention the `name` field error."
-    )
-
-    # Aucun WC ne doit avoir ete cree (validation a echoue avant create()).
-    # / No WC should have been created (validation failed before create()).
-    with schema_context("meta"):
-        wc_cree = WaitingConfiguration.objects.filter(email=unique_email).first()
-        if wc_cree:
-            cleanup_waiting_configs(wc_cree)
-        assert wc_cree is None, (
-            "WC should NOT be created when name validation fails."
-        )
-
-    # Defense : le mailer OTP n'a pas ete enqueue puisque validation a echoue.
-    # / Defensive: mailer OTP not enqueued since validation failed.
-    assert not mock_mailer.called, (
-        "OTP mailer should NOT be enqueued when serializer validation fails."
-    )
+    serializer = OnboardVenueSerializer(data={
+        "name": "LESPASS",  # Casse différente du tenant existant `lespass`.
+        "slug": "lespass-onboard-test",
+        "dns_choice": "tibillet.coop",
+    })
+    assert not serializer.is_valid()
+    assert "name" in serializer.errors
 
 
-def test_identity_post_rate_limit_429_after_5_calls_per_minute(cleanup_waiting_configs):
+def test_identity_post_rate_limit_429_over_quota_per_minute(cleanup_waiting_configs):
     """
-    Regression : `IdentityPostRateThrottle` (5/min/IP) bloque silencieusement
-    le 6e POST identity dans la meme minute depuis la meme IP. Friction zero
-    pour user normal (qui POST 1 fois). Bloque un bot single-IP qui itere.
+    Regression : `IdentityPostRateThrottle` (10/min/IP) bloque silencieusement
+    le POST identity AU-DELA du quota dans la meme minute depuis la meme IP.
+    Friction zero pour user normal (qui POST 1 fois). Bloque un bot single-IP.
 
     Le throttle ne s applique qu au POST (cf. `allow_request` du throttle) :
     un user qui refresh le GET ne consomme pas le quota.
 
-    / Regression: `IdentityPostRateThrottle` (5/min/IP) silently blocks
-    the 6th identity POST in the same minute from the same IP. Zero
-    friction for normal user, blocks single-IP bot.
+    / Regression: `IdentityPostRateThrottle` (10/min/IP) silently blocks the
+    identity POST over quota in the same minute from the same IP.
     """
     from django.core.cache import cache
     # Reset compteur DRF (cle cache interne basee sur scope + IP).
@@ -315,25 +387,26 @@ def test_identity_post_rate_limit_429_after_5_calls_per_minute(cleanup_waiting_c
 
     import time
     base_email = f"throttle-{int(time.time() * 1000)}"
+    # Aligne sur IdentityPostRateThrottle.rate ("10/minute").
+    # / Aligned with IdentityPostRateThrottle.rate ("10/minute").
+    quota = 10
 
-    # 5 POST consecutifs depuis la meme IP : doivent passer (avec validation
-    # qui peut faire 422 ou 302 mais PAS 429). On utilise un email/nom valide
-    # pour un succes complet (302 vers verify) sur les 5 premiers.
-    # / 5 consecutive POSTs from same IP: must NOT hit 429.
+    # `quota` POST consecutifs depuis la meme IP : doivent passer (302/422 mais
+    # PAS 429). / `quota` consecutive POSTs from the same IP: must NOT hit 429.
     with patch("onboard.tasks.onboard_otp_mailer.delay"):
-        first_5_statuses = []
-        for i in range(5):
+        statuses_sous_quota = []
+        for i in range(quota):
             unique_email = f"{base_email}-{i}@example.com"
             response = client.post("/onboard/identity/", data={
                 "email": unique_email,
                 "email_confirm": unique_email,
                 "first_name": "Bot",
                 "last_name": f"Number{i}",
-                "name": f"BotLieu-{base_email}-{i}",
-                "dns_choice": "tibillet.coop",
                 "cgu": "on",
+                # Captcha valide (x + y == answer). / Valid captcha.
+                "x": 4, "y": 5, "answer": 9,
             })
-            first_5_statuses.append(response.status_code)
+            statuses_sous_quota.append(response.status_code)
 
             # Cleanup au fur et a mesure pour eviter pollution dev DB.
             with schema_context("meta"):
@@ -341,26 +414,27 @@ def test_identity_post_rate_limit_429_after_5_calls_per_minute(cleanup_waiting_c
                 if wc:
                     cleanup_waiting_configs(wc)
 
-        # Aucun des 5 ne doit etre 429 (sous le quota).
-        # / None of the first 5 should be 429 (under quota).
-        assert all(s != 429 for s in first_5_statuses), (
-            f"Aucun des 5 premiers POST ne doit etre throttle. Statuses: {first_5_statuses}"
+        # Aucun des `quota` premiers ne doit etre 429 (sous le quota).
+        # / None of the first `quota` should be 429 (under quota).
+        assert all(s != 429 for s in statuses_sous_quota), (
+            f"Aucun des {quota} premiers POST ne doit etre throttle. "
+            f"Statuses: {statuses_sous_quota}"
         )
 
-        # 6e POST : doit etre 429 (over quota).
-        # / 6th POST: must be 429 (over quota).
-        response_6 = client.post("/onboard/identity/", data={
-            "email": f"{base_email}-6@example.com",
-            "email_confirm": f"{base_email}-6@example.com",
+        # POST au-dela du quota : doit etre 429 (over quota).
+        # / POST over quota: must be 429.
+        response_over = client.post("/onboard/identity/", data={
+            "email": f"{base_email}-over@example.com",
+            "email_confirm": f"{base_email}-over@example.com",
             "first_name": "Bot",
-            "last_name": "Number6",
-            "name": f"BotLieu-{base_email}-6",
-            "dns_choice": "tibillet.coop",
+            "last_name": "Over",
             "cgu": "on",
+            # Captcha valide (x + y == answer). / Valid captcha.
+            "x": 4, "y": 5, "answer": 9,
         })
 
-    assert response_6.status_code == 429, (
-        f"6e POST identity dans la meme minute doit etre throttled (429), "
-        f"recu {response_6.status_code}."
+    assert response_over.status_code == 429, (
+        f"Le POST identity au-dela du quota ({quota}/min) doit etre throttled "
+        f"(429), recu {response_over.status_code}."
     )
 

@@ -56,9 +56,9 @@ docker exec lespass_django poetry run python manage.py get_login_link user@examp
                 base_url = f"https://{domain}"
             except Exception:
                 # Fallback si pas de domaine défini ou erreur
-                base_url = "https://tibillet.org"
+                base_url = "https://tibillet.coop"
                 self.stdout.write(self.style.WARNING(
-                    "Pas de domaine primaire trouvé, utilisation de https://tibillet.org par défaut."))
+                    "Pas de domaine primaire trouvé, utilisation de https://tibillet.coop par défaut."))
 
             connexion_url = forge_connexion_url(user, base_url)
             self.stdout.write(connexion_url)

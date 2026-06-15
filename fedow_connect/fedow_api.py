@@ -68,11 +68,17 @@ def _post(fedow_config: FedowConfig = None,
         })
 
     session = requests.Session()
+    # timeout obligatoire : sans lui, si Fedow ne repond pas, le thread
+    # du serveur reste bloque pour toujours (incident du 2026-06-11 :
+    # runserver gele 1h, toutes les requetes en 504).
+    # / Mandatory timeout: without it, if Fedow does not answer, the server
+    # thread hangs forever (2026-06-11 incident: runserver frozen, all 504).
     request_fedow = session.post(
         f"https://{fedow_domain}/{path}/",
         headers=headers,
         data=json.dumps(data),
         verify=bool(not settings.DEBUG),
+        timeout=30,
     )
 
     # TODO: Vérifier la signature de FEDOW avec root_config.fedow_primary_pub_pem
@@ -118,10 +124,13 @@ def _get(fedow_config: FedowConfig = None,
         })
 
     session = requests.Session()
+    # timeout obligatoire : meme raison que _post (incident 2026-06-11).
+    # / Mandatory timeout: same reason as _post (2026-06-11 incident).
     request_fedow = session.get(
         f"https://{fedow_domain}/{path}/",
         headers=headers,
         verify=bool(not settings.DEBUG),
+        timeout=30,
     )
     session.close()
 

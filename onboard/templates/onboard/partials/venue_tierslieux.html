@@ -1,0 +1,74 @@
+{% load i18n l10n %}
+{% comment %}
+LOCALISATION: onboard/templates/onboard/partials/venue_tierslieux.html
+
+Résultats de la recherche Tiers-Lieux pour l'étape « Votre lieu » de l'onboard.
+Chaque fiche est un bouton qui REMPLIT le formulaire (nom + slug + adresse cachée)
+via le JS de 03_venue.html — pas de POST direct (on est en cours de saisie).
+
+/ Tiers-Lieux search results for the onboarding "Your venue" step. Each record
+is a button that FILLS the form (name + slug + hidden address) via the JS in
+03_venue.html — no direct POST.
+
+Variables : fiches (list[dict]), terme (str).
+{% endcomment %}
+
+{% if fiches %}
+<div data-testid="onboard-venue-tl-results">
+    <p class="small text-muted mb-2">
+        <i class="bi bi-globe2 me-1" aria-hidden="true"></i>
+        {% translate "Lieux trouvés dans le recensement national :" %}
+    </p>
+    <div class="vstack gap-2">
+        {% for fiche in fiches %}
+        <div class="card border-0" style="background-color: var(--bs-tertiary-bg, #f8f9fa);"
+             data-testid="onboard-venue-tl-card">
+            {# Mobile (<576px) : texte empilé puis bouton (flex-column) ; ligne à sm+. #}
+            {# / Mobile: stack text then button; row at sm+. #}
+            <div class="card-body d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2 gap-sm-3 py-2">
+                <div style="min-width: 0;">
+                    <div class="fw-semibold">{{ fiche.name }}</div>
+                    {% if fiche.street_address or fiche.postal_code or fiche.locality %}
+                    <div class="small text-muted">
+                        {% if fiche.street_address %}{{ fiche.street_address }}, {% endif %}{{ fiche.postal_code }} {{ fiche.locality }}
+                    </div>
+                    {% endif %}
+                </div>
+                {# data-lat/lng + adresse structurée : on place le marqueur et on #}
+                {# remplit les champs DIRECTEMENT (sans géocodage). data-adresse = #}
+                {# repli (recherche Nominatim) si la fiche n'a pas de GPS. #}
+                {# / data-lat/lng + structured address: place the marker and fill #}
+                {# the fields directly. data-adresse = fallback (Nominatim search) #}
+                {# if the record has no GPS. #}
+                <button type="button" class="btn btn-outline-success btn-sm flex-shrink-0"
+                        data-testid="onboard-venue-use"
+                        data-name="{{ fiche.name }}"
+                        {# |unlocalize : point décimal machine, jamais la virgule FR. #}
+                        data-lat="{{ fiche.latitude|default_if_none:''|unlocalize }}"
+                        data-lng="{{ fiche.longitude|default_if_none:''|unlocalize }}"
+                        data-street="{{ fiche.street_address }}"
+                        data-cp="{{ fiche.postal_code }}"
+                        data-ville="{{ fiche.locality }}"
+                        data-adresse="{{ fiche.name }} {{ fiche.street_address }} {{ fiche.postal_code }} {{ fiche.locality }}">
+                    {% translate "Utiliser ce lieu" %}
+                    <i class="bi bi-arrow-down ms-1" aria-hidden="true"></i>
+                </button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {# Crédit de la source open data des fiches affichées. #}
+    {# / Open-data source credit for the displayed records. #}
+    <p class="small text-muted mt-2 mb-0" data-testid="onboard-venue-tl-source">
+        <i class="bi bi-database me-1" aria-hidden="true"></i>
+        {% translate "Source : Grand recensement des tiers-lieux 2026" %}
+        (<a href="https://comite-data.tiers-lieux.fr/" target="_blank" rel="noopener">comite-data.tiers-lieux.fr</a>)
+    </p>
+</div>
+{% else %}
+<div class="text-muted small" data-testid="onboard-venue-tl-empty" role="status" aria-live="polite">
+    <i class="bi bi-globe2 me-1" aria-hidden="true"></i>
+    {% translate "Aucun lieu trouvé. Saisissez le nom de votre lieu ci-dessous." %}
+</div>
+{% endif %}

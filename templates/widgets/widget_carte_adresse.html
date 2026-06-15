@@ -1,4 +1,4 @@
-{% load i18n static %}
+{% load i18n static l10n %}
 {% comment %}
 LOCALISATION: templates/widgets/widget_carte_adresse.html
 
@@ -38,9 +38,12 @@ draggable marker. Reverse geocoding via /widgets/geocode-reverse/.
          class="widget-carte-adresse-map"
          data-widget-initialized="false"
          data-identifiant="{{ identifiant_widget }}"
-         data-lat-initiale="{{ latitude_initiale|default_if_none:'' }}"
-         data-lng-initiale="{{ longitude_initiale|default_if_none:'' }}"
+         data-lat-initiale="{{ latitude_initiale|default_if_none:''|unlocalize }}"
+         data-lng-initiale="{{ longitude_initiale|default_if_none:''|unlocalize }}"
          data-adresse-initiale="{{ adresse_initiale|default_if_none:''|escape }}"
+         data-rue-initiale="{{ rue_initiale|default_if_none:''|escape }}"
+         data-cp-initiale="{{ cp_initiale|default_if_none:''|escape }}"
+         data-ville-initiale="{{ ville_initiale|default_if_none:''|escape }}"
          style="height: {{ hauteur_effective }};"
          data-testid="widget-carte-adresse-map-{{ identifiant_widget }}"></div>
 
@@ -49,13 +52,13 @@ draggable marker. Reverse geocoding via /widgets/geocode-reverse/.
     <input type="hidden"
            id="{{ identifiant_widget }}-latitude"
            name="{{ identifiant_widget }}_latitude"
-           value="{{ latitude_initiale|default_if_none:'' }}"
+           value="{{ latitude_initiale|default_if_none:''|unlocalize }}"
            {% if required %}required{% endif %}
            data-testid="widget-carte-adresse-latitude-{{ identifiant_widget }}">
     <input type="hidden"
            id="{{ identifiant_widget }}-longitude"
            name="{{ identifiant_widget }}_longitude"
-           value="{{ longitude_initiale|default_if_none:'' }}"
+           value="{{ longitude_initiale|default_if_none:''|unlocalize }}"
            {% if required %}required{% endif %}
            data-testid="widget-carte-adresse-longitude-{{ identifiant_widget }}">
     <input type="hidden"

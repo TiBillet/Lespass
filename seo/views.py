@@ -23,6 +23,7 @@ from django.core.paginator import Paginator
 from django.http import HttpResponse
 from django.template.response import TemplateResponse
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
 from seo.models import SEOCache
 from seo.views_common import (
@@ -188,8 +189,8 @@ def landing(request):
         # <script type="application/ld+json"> tags (valid schema.org pattern).
         "json_ld": json_for_html(json_ld_website),
         "json_ld_org": json_for_html(json_ld_org),
-        "page_title": "TiBillet — Billetterie coopérative et lieux culturels",
-        "page_description": (
+        "page_title": _("TiBillet — Billetterie coopérative et lieux culturels"),
+        "page_description": _(
             "TiBillet : billetterie en ligne libre et coopérative pour les lieux "
             "culturels et associatifs. Découvrez les lieux et les événements à venir."
         ),
@@ -225,8 +226,8 @@ def lieux(request):
     context = {
         "lieux": all_lieux,
         "json_ld": json_for_html(json_ld_list),
-        "page_title": "Lieux - TiBillet",
-        "page_description": (
+        "page_title": _("Lieux - TiBillet"),
+        "page_description": _(
             "Découvrez les lieux culturels et associatifs du réseau coopératif "
             "TiBillet : salles, cafés, festivals, tiers-lieux."
         ),
@@ -265,8 +266,8 @@ def evenements(request):
     context = {
         "page_obj": page_obj,
         "json_ld": json_for_html(json_ld_list),
-        "page_title": "Evenements - TiBillet",
-        "page_description": (
+        "page_title": _("Evenements - TiBillet"),
+        "page_description": _(
             "Tous les événements à venir dans le réseau TiBillet : concerts, "
             "ateliers, spectacles, rencontres."
         ),
@@ -323,14 +324,18 @@ def recherche(request):
         "results_lieux": results_lieux,
         "results_events": results_events,
         "total_results": total_results,
-        "page_title": f"Recherche : {query} - TiBillet"
-        if query
-        else "Recherche - TiBillet",
-        "page_description": (
-            f"Résultats de recherche pour « {query} » dans le réseau coopératif "
-            f"TiBillet : lieux et événements."
+        "page_title": (
+            _("Recherche : %(query)s - TiBillet") % {"query": query}
             if query
-            else (
+            else _("Recherche - TiBillet")
+        ),
+        "page_description": (
+            _(
+                "Résultats de recherche pour « %(query)s » dans le réseau "
+                "coopératif TiBillet : lieux et événements."
+            ) % {"query": query}
+            if query
+            else _(
                 "Recherchez un lieu ou un événement dans le "
                 "réseau coopératif TiBillet."
             )
@@ -392,8 +397,8 @@ def explorer(request):
         # / Public ROOT: no current tenant to highlight on the map.
         "current_tenant_uuid": "",
         "federation_json_ld": json_for_html(federation_json_ld_dict),
-        "page_title": "Explorer - TiBillet",
-        "page_description": (
+        "page_title": _("Explorer - TiBillet"),
+        "page_description": _(
             "Explorez sur une carte interactive les lieux culturels et "
             "événements du réseau coopératif TiBillet."
         ),

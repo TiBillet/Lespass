@@ -681,6 +681,17 @@ class Command(BaseCommand):
                         "include_tags": ["Prix libre"],
                         "exclude_tags": ["Réunion"],
                         "membership_visible": True
+                    },
+                    {
+                        # Scénario fédération : lieu SANS adresse géocodée ET SANS event.
+                        # Le Réseau régional a une adresse sans lat/lng et events=[] :
+                        # il teste l'option "afficher_lieux_sans_adresse" (apparait en liste,
+                        # pas sur la carte) et l'option "afficher_seulement_lieux_avec_event".
+                        # / Federation scenario: addressless AND eventless venue.
+                        "tenant": "Le Réseau des lieux en réseau",
+                        "include_tags": [],
+                        "exclude_tags": [],
+                        "membership_visible": True
                     }
                 ],
             },
@@ -793,6 +804,17 @@ class Command(BaseCommand):
                         "include_tags": ["Jazz"],
                         "exclude_tags": ["Réunion"],
                         "membership_visible": False
+                    },
+                    {
+                        # Scénario fédération : voisin ENTRANT non-réciproque.
+                        # Le Cœur en or fédère Lespass, mais Lespass ne fédère PAS Le Cœur
+                        # en or. Sur /federation/ de Lespass, ce lieu n'apparait que si
+                        # l'option "afficher_lieux_entrants" est activée.
+                        # / Federation scenario: non-reciprocal incoming neighbor.
+                        "tenant": "Lespass",
+                        "include_tags": [],
+                        "exclude_tags": [],
+                        "membership_visible": True
                     }
                 ],
             },
@@ -874,8 +896,11 @@ class Command(BaseCommand):
                     "address_locality": "Villeurbanne",
                     "postal_code": "69100",
                     "address_country": "FR",
-                    "latitude": "45.7695",
-                    "longitude": "4.8770",
+                    # Pas de lat/lng : réseau régional sans lieu physique unique.
+                    # -> PostalAddress.latitude=None -> exclu d'AGGREGATE_POINTS (pas de
+                    # marqueur carte), mais le tenant reste "vivant" via ses adhésions.
+                    # Sert de scénario "lieu sans adresse" pour /federation/.
+                    # / No lat/lng: regional network, addressless scenario.
                 },
                 # Réseau régional: uniquement des adhésions
                 "adhesions": [

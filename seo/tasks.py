@@ -1,15 +1,19 @@
 """
-Celery task pour rafraichir le cache SEO cross-tenant.
-/ Celery task to refresh the cross-tenant SEO cache.
+Celery tasks pour le cache SEO cross-tenant.
+/ Celery tasks for the cross-tenant SEO cache.
 
 LOCALISATION: seo/tasks.py
 
-Version V1 allegee : on rafraichit uniquement lieux + events.
-Les adhesions, initiatives crowds et monnaies fedow_core sont
-volontairement exclues pour cette etape de migration.
-/ V1 lightweight version: only refreshes venues + events.
-Memberships, crowds initiatives and fedow_core currencies are
-deliberately excluded for this migration step.
+Architecture (cf. SESSIONS/SEO/CHANTIER-07) : producteur / agregateur.
+- refresh_tenant_seo_cache(tenant_id) : recalcule les fragments d'UN tenant
+  (TENANT_SUMMARY, TENANT_EVENTS, TENANT_POINTS). Declenche par post_save (cible).
+- rebuild_seo_aggregates() : recompose les agregats globaux par recombinaison des
+  fragments (lecture SEOCache, zero cross-schema).
+- refresh_seo_cache() : orchestrateur du beat 4h (tous les fragments + rebuild +
+  FEDERATION_INCOMING + nettoyage stale). Filet anti-derive.
+
+Version allegee : on porte uniquement lieux + events (pas adhesions/crowds/fedow_core).
+/ Lightweight version: venues + events only.
 """
 
 import logging
@@ -22,341 +26,242 @@ from seo.models import SEOCache
 logger = logging.getLogger(__name__)
 
 
-@shared_task(name="seo.tasks.refresh_seo_cache")
-def refresh_seo_cache():
+@shared_task(name="seo.tasks.refresh_tenant_seo_cache")
+def refresh_tenant_seo_cache(tenant_id):
     """
-    Rafraichit le cache SEO pour tous les tenants actifs.
-    Appele par Celery Beat toutes les 4 heures.
-    / Refresh SEO cache for all active tenants.
-    Called by Celery Beat every 4 hours.
+    Recalcule les fragments SEO d'UN tenant : TENANT_SUMMARY, TENANT_EVENTS, TENANT_POINTS.
+    N'ecrit AUCUN agregat (cf. rebuild_seo_aggregates). Cout : 1 schema.
+    / Recompute one tenant's SEO fragments. No aggregate writes here.
 
-    Pipeline allege (V1) :
-    1. get_active_tenants_with_counts() — 1 requete SQL UNION ALL
-       (event_count futur publie + product_count BILLET/FREERES/ADHESION)
-    2. get_events_for_tenants() — 1 requete SQL UNION ALL
-    3. build_tenant_config_data() — N requetes ORM (1 par tenant)
-    4. Ecriture SEOCache per-tenant (TENANT_SUMMARY, TENANT_EVENTS)
-       — tous les tenants actifs, sans filtre "lieu vivant"
-    5. Ecriture SEOCache global (AGGREGATE_EVENTS, AGGREGATE_LIEUX,
-       SITEMAP_INDEX) — filtre "lieu vivant" applique : un lieu n'apparait
-       que s'il a au moins 1 event futur publie OU au moins 1 produit
-       (BILLET, FREERES, ADHESION) publie.
-    6. Nettoyage des entrees obsoletes (tenants supprimes)
-    7. Ecriture Memcached L1 a chaque update
+    Parametres / Parameters: tenant_id (str uuid du Client)
     """
     from seo.services import (
+        build_aggregate_points,
         build_stdimage_variation_url,
         build_tenant_config_data,
-        get_active_tenants_with_counts,
+        get_counts_for_tenant,
+        get_event_tags_for_tenants,
         get_events_for_tenants,
         set_memcached_l1,
     )
 
-    logger.info("Debut refresh_seo_cache / Starting refresh_seo_cache")
+    try:
+        client = Client.objects.get(uuid=tenant_id)
+    except Client.DoesNotExist:
+        logger.warning("refresh_tenant_seo_cache : tenant %s introuvable", tenant_id)
+        return None
+    if client.categorie in (Client.ROOT, Client.WAITING_CONFIG):
+        return None
 
-    # ------------------------------------------------------------------
-    # Etape 1 : Comptes par tenant (1 requete SQL).
-    # On recupere a la fois event_count et product_count par tenant ;
-    # le product_count sert plus loin a filtrer les "lieux vivants".
-    # / Step 1: Per-tenant counts (1 SQL query). We fetch event_count AND
-    # product_count per tenant; product_count is used later to filter
-    # "alive venues".
-    # ------------------------------------------------------------------
-    tenant_counts = get_active_tenants_with_counts()
-    logger.info(
-        "Tenants actifs trouves : %d / Active tenants found: %d",
-        len(tenant_counts),
-        len(tenant_counts),
-    )
+    tenant_uuid = str(client.uuid)
+    schema = client.schema_name
+    tenant_schemas = [(tenant_uuid, schema)]
 
-    # Extraire la liste (uuid, schema_name) pour les requetes suivantes
-    # / Extract (uuid, schema_name) list for next queries
-    tenant_schemas = [(row["tenant_id"], row["schema_name"]) for row in tenant_counts]
+    # 1. Comptes (1 schema) / Counts (1 schema)
+    counts = get_counts_for_tenant(schema)
 
-    # Index des counts par tenant_id pour acces rapide
-    # / Index counts by tenant_id for fast access
-    counts_by_tenant = {}
-    for row in tenant_counts:
-        counts_by_tenant[row["tenant_id"]] = {
-            "event_count": row["event_count"],
-            "product_count": row["product_count"],
-        }
-
-    # ------------------------------------------------------------------
-    # Etape 2 : Evenements de tous les tenants (1 requete SQL)
-    # / Step 2: Events from all tenants (1 SQL query)
-    # ------------------------------------------------------------------
-    all_events = get_events_for_tenants(tenant_schemas)
-
-    # Enrichir chaque event avec ses tags (1 requete SQL cross-schema).
-    # Un event sans tag recoit tags=[] (defaut). On modifie all_events in-place
-    # pour que events_by_tenant herite des tags automatiquement.
-    # / Enrich each event with its tags (1 cross-schema SQL query).
-    # Events without tags get tags=[]. Mutate all_events in-place so that
-    # events_by_tenant inherits tags automatically.
-    from seo.services import get_event_tags_for_tenants
+    # 2. Events + tags / Events + tags
+    events = get_events_for_tenants(tenant_schemas)
     tags_par_event = get_event_tags_for_tenants(tenant_schemas)
-    for event in all_events:
+    for event in events:
         event["tags"] = tags_par_event.get(event.get("uuid", ""), [])
 
-    # Grouper par tenant_id / Group by tenant_id
-    events_by_tenant = {}
-    for event in all_events:
-        tid = event["tenant_id"]
-        if tid not in events_by_tenant:
-            events_by_tenant[tid] = []
-        events_by_tenant[tid].append(event)
+    # 3. Config du tenant / Tenant config
+    config_data = build_tenant_config_data(client)
 
-    # ------------------------------------------------------------------
-    # Etape 3 : Config par tenant (N requetes ORM)
-    # / Step 3: Per-tenant config (N ORM queries)
-    # ------------------------------------------------------------------
-    active_tenant_ids = set()
-    configs_by_tenant = {}
-
-    # Charger les objets Client pour build_tenant_config_data
-    # / Load Client objects for build_tenant_config_data
-    tenant_id_list = [row["tenant_id"] for row in tenant_counts]
-    clients = Client.objects.filter(uuid__in=tenant_id_list)
-    clients_by_id = {str(c.uuid): c for c in clients}
-
-    for tenant_id, client in clients_by_id.items():
-        active_tenant_ids.add(tenant_id)
-        config_data = build_tenant_config_data(client)
-        configs_by_tenant[tenant_id] = config_data
-
-    # ------------------------------------------------------------------
-    # Etape 4 : Ecriture des entrees par tenant
-    # / Step 4: Write per-tenant entries
-    # ------------------------------------------------------------------
-    for tenant_id in active_tenant_ids:
-        client = clients_by_id[tenant_id]
-        config_data = configs_by_tenant.get(tenant_id, {})
-        counts = counts_by_tenant.get(
-            tenant_id, {"event_count": 0, "product_count": 0}
+    # 4. Enrichir les events (image crop, url canonique, nom du lieu)
+    # / Enrich events (crop image, canonical url, venue name)
+    tenant_domain = config_data.get("domain", "")
+    tenant_name = config_data.get("organisation") or config_data.get("name", "")
+    for event in events:
+        event["image_url"] = build_stdimage_variation_url(
+            event.get("img", ""), variation="crop"
         )
-        tenant_events = events_by_tenant.get(tenant_id, [])
+        slug = event.get("slug", "")
+        if tenant_domain and slug:
+            event["canonical_url"] = f"https://{tenant_domain}/event/{slug}"
+        else:
+            event["canonical_url"] = None
+        event["tenant_name"] = tenant_name
 
-        # Enrichir chaque event avec image_url et canonical_url.
-        # On utilise le domaine du tenant pour construire les URLs completes.
-        # / Enrich each event with image_url and canonical_url.
-        # We use the tenant domain to build full URLs.
-        tenant_domain = config_data.get("domain", "")
-        tenant_name = config_data.get("organisation") or config_data.get("name", "")
-        for event in tenant_events:
-            # URL de la vignette crop (480x270) / Crop thumbnail URL (480x270)
-            event["image_url"] = build_stdimage_variation_url(
-                event.get("img", ""), variation="crop"
-            )
-            # URL canonique vers la page de l'event sur le site du tenant
-            # / Canonical URL to the event page on the tenant site
-            slug = event.get("slug", "")
-            if tenant_domain and slug:
-                event["canonical_url"] = f"https://{tenant_domain}/event/{slug}"
-            else:
-                event["canonical_url"] = None
-            # Nom du lieu (tenant) pour affichage / Venue name for display
-            event["tenant_name"] = tenant_name
+    # 5. Ecriture des fragments / Write fragments
+    summary_data = {**config_data, **counts}
+    SEOCache.objects.update_or_create(
+        cache_type=SEOCache.TENANT_SUMMARY,
+        tenant=client,
+        defaults={"data": summary_data},
+    )
+    set_memcached_l1(SEOCache.TENANT_SUMMARY, tenant_uuid, summary_data)
 
-        # tenant_summary : config + stats
-        summary_data = {
-            **config_data,
-            **counts,
-        }
-        SEOCache.objects.update_or_create(
-            cache_type=SEOCache.TENANT_SUMMARY,
-            tenant=client,
-            defaults={"data": summary_data},
+    events_data = {"events": events}
+    SEOCache.objects.update_or_create(
+        cache_type=SEOCache.TENANT_EVENTS,
+        tenant=client,
+        defaults={"data": events_data},
+    )
+    set_memcached_l1(SEOCache.TENANT_EVENTS, tenant_uuid, events_data)
+
+    # TENANT_POINTS : points (PA geocodees) SI le lieu est "vivant" (domaine + au
+    # moins 1 event futur OU 1 produit), sinon liste vide. Meme regle que l'agregat
+    # historique pour preserver l'equivalence.
+    # / TENANT_POINTS: points only if the venue is "alive", else empty list.
+    a_des_events = counts.get("event_count", 0) > 0
+    a_des_produits = counts.get("product_count", 0) > 0
+    lieu_est_vivant = bool(tenant_domain) and (a_des_events or a_des_produits)
+    if lieu_est_vivant:
+        points_data = build_aggregate_points(
+            tenant_schemas, {tenant_uuid: config_data}, {tenant_uuid: events}
         )
-        set_memcached_l1(SEOCache.TENANT_SUMMARY, tenant_id, summary_data)
+    else:
+        points_data = {"points": []}
+    SEOCache.objects.update_or_create(
+        cache_type=SEOCache.TENANT_POINTS,
+        tenant=client,
+        defaults={"data": points_data},
+    )
+    set_memcached_l1(SEOCache.TENANT_POINTS, tenant_uuid, points_data)
 
-        # tenant_events : liste des evenements du tenant
-        # / tenant_events: list of events for this tenant
-        SEOCache.objects.update_or_create(
-            cache_type=SEOCache.TENANT_EVENTS,
-            tenant=client,
-            defaults={"data": {"events": tenant_events}},
-        )
-        set_memcached_l1(SEOCache.TENANT_EVENTS, tenant_id, {"events": tenant_events})
+    return {
+        "tenant": tenant_uuid,
+        "events": len(events),
+        "points": len(points_data.get("points", [])),
+        "vivant": lieu_est_vivant,
+    }
 
-    # ------------------------------------------------------------------
-    # Etape 5 : Agregats globaux (tenant=None)
-    # / Step 5: Global aggregates (tenant=None)
-    # ------------------------------------------------------------------
 
-    # Re-enrichir all_events avec image_url, canonical_url, tenant_name pour l'agregat
-    # / Re-enrich all_events with image_url, canonical_url, tenant_name for the aggregate
+@shared_task(name="seo.tasks.rebuild_seo_aggregates")
+def rebuild_seo_aggregates():
+    """
+    Recompose AGGREGATE_EVENTS / AGGREGATE_POINTS / AGGREGATE_LIEUX / SITEMAP_INDEX
+    a partir des fragments TENANT_* (lecture SEOCache, ZERO cross-schema).
+    Ne touche PAS FEDERATION_INCOMING (depend des FederatedPlace -> beat seulement).
+    / Recompose aggregates from TENANT_* fragments (no cross-schema). Excludes incoming edges.
+    """
+    from seo.services import set_memcached_l1
+
+    # AGGREGATE_EVENTS : concat de tous les TENANT_EVENTS, tri date asc.
+    # / Concatenation of all TENANT_EVENTS, sorted by ascending date.
     aggregate_events = []
-    for tenant_id in active_tenant_ids:
-        aggregate_events.extend(events_by_tenant.get(tenant_id, []))
-
-    # Tri par date croissante pour l'affichage agenda
-    # / Sort by ascending date for agenda display
+    for entry in SEOCache.objects.filter(cache_type=SEOCache.TENANT_EVENTS):
+        aggregate_events.extend(entry.data.get("events", []))
     aggregate_events.sort(key=lambda e: e.get("datetime") or "")
-
-    # aggregate_events : tous les evenements de tous les tenants
-    # / aggregate_events: all events from all tenants
     aggregate_events_data = {"events": aggregate_events}
     SEOCache.objects.update_or_create(
-        cache_type=SEOCache.AGGREGATE_EVENTS,
-        tenant=None,
+        cache_type=SEOCache.AGGREGATE_EVENTS, tenant=None,
         defaults={"data": aggregate_events_data},
     )
     set_memcached_l1(SEOCache.AGGREGATE_EVENTS, None, aggregate_events_data)
 
-    # aggregate_lieux : liste des lieux VIVANTS (tenants avec domaine ET
-    # au moins 1 event futur publie OU au moins 1 produit BILLET/FREERES/
-    # ADHESION publie). Un tenant sans contenu visible ne pollue donc plus
-    # le marquee, la page /lieux/ ni la carte explorer.
-    # / aggregate_lieux: list of ALIVE venues (with domain AND at least
-    # one published future event OR one published BILLET/FREERES/ADHESION
-    # product). Empty tenants no longer pollute the marquee, /lieux/ or
-    # the explorer map.
+    # AGGREGATE_POINTS : concat des TENANT_POINTS (deja filtres "vivant" a la source).
+    # / Concatenation of all TENANT_POINTS (already alive-filtered at the source).
+    aggregate_points = []
+    for entry in SEOCache.objects.filter(cache_type=SEOCache.TENANT_POINTS):
+        aggregate_points.extend(entry.data.get("points", []))
+    aggregate_points_data = {"points": aggregate_points}
+    SEOCache.objects.update_or_create(
+        cache_type=SEOCache.AGGREGATE_POINTS, tenant=None,
+        defaults={"data": aggregate_points_data},
+    )
+    set_memcached_l1(SEOCache.AGGREGATE_POINTS, None, aggregate_points_data)
+
+    # AGGREGATE_LIEUX + SITEMAP_INDEX : filtre "lieu vivant" sur les TENANT_SUMMARY.
+    # / Alive-venue filter on TENANT_SUMMARY fragments.
     lieux = []
-    for tenant_id in active_tenant_ids:
-        config = configs_by_tenant.get(tenant_id, {})
-        counts = counts_by_tenant.get(
-            tenant_id, {"event_count": 0, "product_count": 0}
-        )
+    sitemap_tenants = []
+    for entry in SEOCache.objects.filter(cache_type=SEOCache.TENANT_SUMMARY):
+        config = entry.data
         domaine_du_tenant = config.get("domain")
-        a_des_events = counts.get("event_count", 0) > 0
-        a_des_produits = counts.get("product_count", 0) > 0
+        a_des_events = config.get("event_count", 0) > 0
+        a_des_produits = config.get("product_count", 0) > 0
         lieu_est_vivant = bool(domaine_du_tenant) and (a_des_events or a_des_produits)
         if not lieu_est_vivant:
             continue
-        lieux.append(
-            {
-                "tenant_id": tenant_id,
-                "name": config.get("organisation") or config.get("name", ""),
-                "domain": domaine_du_tenant,
-                "slug": config.get("slug", ""),
-                "short_description": config.get("short_description", ""),
-                "locality": config.get("locality", ""),
-                "country": config.get("country", ""),
-                "logo_url": config.get("logo_url"),
-                "categorie": config.get("categorie", ""),
-                "latitude": config.get("latitude"),
-                "longitude": config.get("longitude"),
-                "event_count": counts.get("event_count", 0),
-                "product_count": counts.get("product_count", 0),
-            }
-        )
+        tenant_uuid = config.get("tenant_id")
+        nom = config.get("organisation") or config.get("name", "")
+        lieux.append({
+            "tenant_id": tenant_uuid,
+            "name": nom,
+            "domain": domaine_du_tenant,
+            "slug": config.get("slug", ""),
+            "short_description": config.get("short_description", ""),
+            "locality": config.get("locality", ""),
+            "country": config.get("country", ""),
+            "logo_url": config.get("logo_url"),
+            # Image principale du lieu (social card) — fallback derriere le logo cote carto.
+            # / Venue main image — fallback behind the logo in the map.
+            "image_url": config.get("social_card_url"),
+            "categorie": config.get("categorie", ""),
+            "latitude": config.get("latitude"),
+            "longitude": config.get("longitude"),
+            "event_count": config.get("event_count", 0),
+            "product_count": config.get("product_count", 0),
+        })
+        sitemap_tenants.append({
+            "tenant_id": tenant_uuid,
+            "domain": domaine_du_tenant,
+            "name": nom,
+        })
+
     aggregate_lieux_data = {"lieux": lieux}
     SEOCache.objects.update_or_create(
-        cache_type=SEOCache.AGGREGATE_LIEUX,
-        tenant=None,
+        cache_type=SEOCache.AGGREGATE_LIEUX, tenant=None,
         defaults={"data": aggregate_lieux_data},
     )
     set_memcached_l1(SEOCache.AGGREGATE_LIEUX, None, aggregate_lieux_data)
 
-    # ------------------------------------------------------------------
-    # Etape 6 : AGGREGATE_POINTS (1 entree par PA active)
-    # Construit la liste des points geo (1 par PostalAddress avec coords,
-    # pour chaque tenant vivant) avec les events futurs lies en popup.
-    # / Step 6: AGGREGATE_POINTS (1 entry per active PA).
-    # Builds the geo points list (1 per PA with coords, for alive tenants)
-    # with future events linked for the popup.
-    # ------------------------------------------------------------------
-    from seo.services import build_aggregate_points
-
-    # Filtre "tenant vivant" : meme regle que pour AGGREGATE_LIEUX
-    # (au moins 1 event futur OU 1 produit publie).
-    # / Alive filter: same rule as AGGREGATE_LIEUX.
-    tenants_vivants_schemas = [
-        (tenant_id, schema)
-        for tenant_id, schema in tenant_schemas
-        if (
-            counts_by_tenant.get(tenant_id, {}).get("event_count", 0) > 0
-            or counts_by_tenant.get(tenant_id, {}).get("product_count", 0) > 0
-        )
-    ]
-    configs_vivants = {
-        tid: configs_by_tenant[tid]
-        for tid, _s in tenants_vivants_schemas
-        if tid in configs_by_tenant
-    }
-    events_vivants = {
-        tid: events_by_tenant.get(tid, [])
-        for tid, _s in tenants_vivants_schemas
-    }
-    points_data = build_aggregate_points(
-        tenants_vivants_schemas, configs_vivants, events_vivants
-    )
-    SEOCache.objects.update_or_create(
-        cache_type=SEOCache.AGGREGATE_POINTS,
-        tenant=None,
-        defaults={"data": points_data},
-    )
-    set_memcached_l1(SEOCache.AGGREGATE_POINTS, None, points_data)
-    logger.info(
-        "AGGREGATE_POINTS ecrit : %d points / written: %d points",
-        len(points_data["points"]),
-        len(points_data["points"]),
-    )
-
-    # sitemap_index : MEME filtre que aggregate_lieux. Inutile de pointer
-    # un crawler Google ou un LLM (GPTBot, ClaudeBot) vers un sitemap
-    # tenant qui ne contient rien d'autre que la page d'accueil — ca
-    # gaspille le crawl budget et dilue le signal qualite du domaine ROOT.
-    # / sitemap_index: SAME filter as aggregate_lieux. No point pointing
-    # Google or LLM crawlers (GPTBot, ClaudeBot) to a tenant sitemap that
-    # holds nothing but the home page — wastes crawl budget and dilutes
-    # the ROOT domain's quality signal.
-    sitemap_tenants = []
-    for tenant_id in active_tenant_ids:
-        config = configs_by_tenant.get(tenant_id, {})
-        counts = counts_by_tenant.get(
-            tenant_id, {"event_count": 0, "product_count": 0}
-        )
-        domaine_du_tenant = config.get("domain")
-        a_des_events = counts.get("event_count", 0) > 0
-        a_des_produits = counts.get("product_count", 0) > 0
-        lieu_est_vivant = bool(domaine_du_tenant) and (a_des_events or a_des_produits)
-        if not lieu_est_vivant:
-            continue
-        sitemap_tenants.append(
-            {
-                "tenant_id": tenant_id,
-                "domain": domaine_du_tenant,
-                "name": config.get("organisation") or config.get("name", ""),
-            }
-        )
     sitemap_data = {"tenants": sitemap_tenants}
     SEOCache.objects.update_or_create(
-        cache_type=SEOCache.SITEMAP_INDEX,
-        tenant=None,
+        cache_type=SEOCache.SITEMAP_INDEX, tenant=None,
         defaults={"data": sitemap_data},
     )
     set_memcached_l1(SEOCache.SITEMAP_INDEX, None, sitemap_data)
 
-    # ------------------------------------------------------------------
-    # Etape 5.bis : Calcul des arretes entrantes de fédération.
-    # Pour chaque tenant X, on liste les tenants qui ont une FederatedPlace
-    # pointant vers X (= les tenants qui federent AVEC X).
-    # Permet a /federation/ d'un tenant d'afficher les voisins qui le federent
-    # meme s'il n'a pas declare de relation reciproque.
-    # / Step 5.bis: Compute incoming federation edges.
-    # For each tenant X, list the tenants that have a FederatedPlace pointing
-    # to X (= tenants that federate WITH X).
-    # Allows /federation/ of a tenant to display neighbors that federate with
-    # them even without a reciprocal declaration.
-    # ------------------------------------------------------------------
-    # Schema -> uuid lookup pour passer du schema_name (source de l'edge)
-    # a l'UUID du tenant source.
-    # / schema -> uuid lookup to map source schema_name to source tenant UUID.
-    schema_to_uuid = {row["schema_name"]: row["tenant_id"] for row in tenant_counts}
+    logger.info(
+        "rebuild_seo_aggregates : %d events, %d points, %d lieux vivants",
+        len(aggregate_events), len(aggregate_points), len(lieux),
+    )
+    return {
+        "events": len(aggregate_events),
+        "points": len(aggregate_points),
+        "lieux": len(lieux),
+    }
 
-    # Construction par UNION ALL : 1 sous-requete par schema tenant.
-    # Chaque ligne donne (source_schema, target_uuid) ou target_uuid est
-    # l'UUID du tenant fédéré (FederatedPlace.tenant_id).
-    # / UNION ALL build: one sub-query per tenant schema.
-    # Each row yields (source_schema, target_uuid).
+
+@shared_task(name="seo.tasks.refresh_seo_cache")
+def refresh_seo_cache():
+    """
+    Beat 4h : recalcul INTEGRAL. Boucle refresh_tenant_seo_cache sur tous les tenants
+    actifs + rebuild_seo_aggregates() + FEDERATION_INCOMING (cross-schema, ici seulement)
+    + nettoyage des entrees obsoletes. Filet anti-derive.
+    / Full 4h rebuild: per-tenant fragments + aggregates + incoming edges + stale cleanup.
+    """
+    from django.db import connection as _conn
+    from seo.services import set_memcached_l1
+
+    logger.info("Debut refresh_seo_cache / Starting refresh_seo_cache")
+
+    excluded_categories = [Client.ROOT, Client.WAITING_CONFIG]
+    tenants = list(Client.objects.exclude(categorie__in=excluded_categories))
+    tenant_id_list = [str(t.uuid) for t in tenants]
+    tenant_schemas = [(str(t.uuid), t.schema_name) for t in tenants]
+    logger.info("Tenants actifs trouves : %d", len(tenants))
+
+    # 1. Fragments par tenant / Per-tenant fragments
+    for tenant in tenants:
+        refresh_tenant_seo_cache(str(tenant.uuid))
+
+    # 2. Agregats par recombinaison / Aggregates by recombination
+    aggregats = rebuild_seo_aggregates()
+
+    # 3. FEDERATION_INCOMING : arretes entrantes (depend des FederatedPlace, cross-schema).
+    # Recalcule UNIQUEMENT ici (beat), pas dans rebuild_seo_aggregates.
+    # / Incoming federation edges (depend on FederatedPlace, cross-schema). Beat only.
+    schema_to_uuid = {schema: uuid for uuid, schema in tenant_schemas}
     incoming_by_tenant = {}
     if tenant_schemas:
-        from django.db import connection as _conn
         edge_parts = []
         edge_params = []
-        for _tid, schema_name in tenant_schemas:
+        for _uuid, schema_name in tenant_schemas:
             edge_parts.append(
                 f"SELECT %s AS source_schema, tenant_id::text AS target_uuid "
                 f'FROM "{schema_name}"."BaseBillet_federatedplace"'
@@ -384,51 +289,24 @@ def refresh_seo_cache():
 
     federation_incoming_data = {"by_tenant": incoming_by_tenant}
     SEOCache.objects.update_or_create(
-        cache_type=SEOCache.FEDERATION_INCOMING,
-        tenant=None,
+        cache_type=SEOCache.FEDERATION_INCOMING, tenant=None,
         defaults={"data": federation_incoming_data},
     )
     set_memcached_l1(SEOCache.FEDERATION_INCOMING, None, federation_incoming_data)
 
-    # ------------------------------------------------------------------
-    # Etape 6 : Nettoyage des entrees obsoletes (tenants supprimes/inactifs)
-    # / Step 6: Clean up stale entries (deleted/inactive tenants)
-    # ------------------------------------------------------------------
+    # 4. Nettoyage des entrees obsoletes (tenants supprimes/inactifs)
+    # / Clean up stale entries (deleted/inactive tenants)
     stale_count = (
         SEOCache.objects.exclude(tenant__isnull=True)
         .exclude(tenant__uuid__in=tenant_id_list)
         .delete()[0]
     )
-
     if stale_count > 0:
-        logger.info(
-            "Entrees obsoletes supprimees : %d / Stale entries deleted: %d",
-            stale_count,
-            stale_count,
-        )
+        logger.info("Entrees obsoletes supprimees : %d", stale_count)
 
-    # Comptages remontes apres filtre "lieu vivant" — `lieux` est ce que
-    # le public verra (marquee root, /lieux/, sitemap). `aggregate_events`
-    # est ce qu'on aggrege apres filtre publish + futur sur les events.
-    # / Counts after the "alive venue" filter — `lieux` is what the
-    # public sees (root marquee, /lieux/, sitemap). `aggregate_events`
-    # is what we aggregate after the publish + future event filter.
-    nombre_de_lieux_vivants = len(lieux)
-    nombre_de_events_publies = len(aggregate_events)
-    logger.info(
-        "Fin refresh_seo_cache : %d tenants actifs, %d events publies, "
-        "%d lieux vivants / Done: %d active tenants, %d published events, "
-        "%d alive venues",
-        len(active_tenant_ids),
-        nombre_de_events_publies,
-        nombre_de_lieux_vivants,
-        len(active_tenant_ids),
-        nombre_de_events_publies,
-        nombre_de_lieux_vivants,
-    )
-
+    logger.info("Fin refresh_seo_cache : %d tenants actifs", len(tenants))
     return {
-        "tenants": len(active_tenant_ids),
-        "events": nombre_de_events_publies,
-        "lieux": nombre_de_lieux_vivants,
+        "tenants": len(tenants),
+        "events": aggregats.get("events", 0),
+        "lieux": aggregats.get("lieux", 0),
     }

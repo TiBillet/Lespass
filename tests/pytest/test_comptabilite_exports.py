@@ -44,7 +44,13 @@ def admin_client_avec_cloture():
     from comptabilite.models import ClotureCaisse
     from comptabilite.tasks import generer_cloture_pour_tenant
 
-    tenant = TenantClient.objects.exclude(schema_name="public").first()
+    # Tenant EXPLICITE : .exclude(public).first() est non deterministe et peut
+    # renvoyer un tenant 'waiting_config' (categorie W, cree par les tests E2E
+    # d'onboarding) qui n'a AUCUN domaine → AttributeError au setup.
+    # / EXPLICIT tenant: .exclude(public).first() is non-deterministic and may
+    # return a 'waiting_config' tenant (W category, created by onboarding E2E
+    # tests) which has NO domain → AttributeError at setup.
+    tenant = TenantClient.objects.get(schema_name="lespass")
     domain = tenant.domains.first()
 
     with tenant_context(tenant):

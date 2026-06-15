@@ -1,4 +1,4 @@
-{% load i18n static tibitags %}
+{% load i18n l10n static tibitags %}
 <form id="membership-form" hx-post="/memberships/" hx-target="#target_formbricks"
       class="d-flex flex-column justify-content-between h-100"
       data-loading-target="#tibillet-spinner"
@@ -58,7 +58,7 @@
                                    class="form-control form-control-lg custom-amount-input"
                                    type="number"
                                    name="custom_amount_{{ price.uuid }}"
-                                   min="{{ price.prix }}"
+                                   min="{{ price.prix|unlocalize }}"
                                    max="999999.99"
                                    step="0.10"
                                    placeholder="{% trans "Enter the amount (minimum" %} {{ price.prix }}€)"
@@ -162,7 +162,7 @@
                                    class="form-control form-control-lg custom-amount-input"
                                    type="number"
                                    name="custom_amount_{{ price.uuid }}"
-                                   min="{{ price.prix }}"
+                                   min="{{ price.prix|unlocalize }}"
                                    max="999999.99"
                                    step="0.10"
                                    placeholder="{% trans "Enter the amount (minimum" %} {{ price.prix }}€)"
@@ -575,12 +575,15 @@
             })();
         </script>
 
-        <!-- newsletter opt-out -->
-        <div class="form-check form-switch mb-3">
-            <input class="form-check-input" type="checkbox" role="switch" id="newsletter" name="newsletter" data-testid="membership-newsletter">
-            <label class="form-check-label"
-                   for="newsletter">{% translate "I do not want to receive the newsletter." %}</label>
-        </div>
+        {% if newsletter_active %}
+            <!-- newsletter opt-in -->
+            <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" role="switch" id="newsletter" name="newsletter" data-testid="membership-newsletter">
+                <label class="form-check-label" for="newsletter">
+                    {% blocktranslate with structure=config.organisation %}Je veux recevoir les nouvelles de {{ structure }}{% endblocktranslate %}
+                </label>
+            </div>
+        {% endif %}
 
         {% if product.legal_link %}
             <div class="form-check form-switch mb-3">

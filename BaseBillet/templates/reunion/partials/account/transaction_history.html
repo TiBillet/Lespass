@@ -33,7 +33,7 @@
                         {% if tr.serialized_sender.uuid == user.wallet.uuid %}
                             {% translate "Wallet" %}
                         {% elif tr.serialized_sender.get_name == 'Primary Wallet' %}
-                            {% trans 'Lèspass platform' %}
+                            {% trans 'TiBillet platform' %}
                         {% else %}
                             {% trans 'LaBoutik register' %}
                             {#{ tr.serialized_sender.get_name }#}

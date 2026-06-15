@@ -1,0 +1,63 @@
+{% load i18n %}
+{% comment %}
+LIENS COMMUNAUTÉ TIBILLET — bloc commun à tous les pieds de page
+/ TiBillet community links — shared block for every footer
+
+LOCALISATION : seo/templates/seo/partials/tibillet_community_links.html
+
+Ce partial liste les liens officiels de TiBillet : documentation, réseaux,
+salons de discussion et email de contact. On le met à un seul endroit pour
+que les pieds de page (public et tenants) ne divergent plus entre eux.
+/ Single source for TiBillet links so footers stop drifting apart.
+
+Inclus dans :
+- seo/templates/seo/base.html (pied de page public)
+- BaseBillet/templates/reunion/partials/footer.html (pied de page tenant)
+- BaseBillet/templates/faire_festival/partials/footer.html (skin festival)
+
+Le partial rend uniquement des <li> : chaque pied de page garde son propre
+<ul class="nav flex-column"> et peut y ajouter ses liens spécifiques.
+/ Renders only <li> items: each footer keeps its own <ul> wrapper.
+
+Variable optionnelle / Optional variable :
+- link_class : classe CSS ajoutée à chaque lien.
+  Utile pour les fonds sombres (ex: "text-white" sur le skin festival).
+  / Extra CSS class per link, e.g. "text-white" on dark backgrounds.
+{% endcomment %}
+{# Ordre : site, doc, puis salons (Matrix avant Discord), réseaux, contact. #}
+{# / Order: site, docs, then chat rooms (Matrix before Discord), socials, contact. #}
+<li class="nav-item">
+    <a class="nav-link {{ link_class }}" href="https://tibillet.coop" target="_blank" rel="noopener">
+        <i class="bi bi-globe2 me-2" aria-hidden="true"></i>tibillet.coop
+    </a>
+</li>
+<li class="nav-item">
+    <a class="nav-link {{ link_class }}" href="https://tibillet.github.io/documentation_v3/" target="_blank" rel="noopener">
+        <i class="bi bi-book me-2" aria-hidden="true"></i>{% translate "Documentation" %}
+    </a>
+</li>
+<li class="nav-item">
+    <a class="nav-link {{ link_class }}" href="https://matrix.to/#/#tibillet:tiers-lieux.org" target="_blank" rel="noopener">
+        <i class="bi bi-chat-dots me-2" aria-hidden="true"></i>Matrix
+    </a>
+</li>
+<li class="nav-item">
+    <a class="nav-link {{ link_class }}" href="https://discord.gg/ecb5jtP7vY" target="_blank" rel="noopener">
+        <i class="bi bi-discord me-2" aria-hidden="true"></i>Discord
+    </a>
+</li>
+<li class="nav-item">
+    <a class="nav-link {{ link_class }}" href="https://pouet.chapril.org/@tibillet" target="_blank" rel="noopener">
+        <i class="bi bi-mastodon me-2" aria-hidden="true"></i>Mastodon
+    </a>
+</li>
+<li class="nav-item">
+    <a class="nav-link {{ link_class }}" href="https://github.com/TiBillet/" target="_blank" rel="noopener">
+        <i class="bi bi-github me-2" aria-hidden="true"></i>Github
+    </a>
+</li>
+<li class="nav-item">
+    <a class="nav-link {{ link_class }}" href="mailto:contact@tibillet.re">
+        <i class="bi bi-envelope me-2" aria-hidden="true"></i>{% translate "Nous contacter" %}
+    </a>
+</li>

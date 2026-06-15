@@ -53,24 +53,34 @@ class OnboardIdentitySerializer(serializers.Serializer):
     last_name = serializers.CharField(
         max_length=60, required=True, allow_blank=False,
     )
-    # `max_length=50` : aligne sur la contrainte DB du modele
-    # `MetaBillet.WaitingConfiguration.organisation` (CharField max_length=50).
-    # Sans cet alignement, un nom > 50 chars passait la validation serializer
-    # puis crashait en INSERT PostgreSQL ("value too long for type character
-    # varying(50)"). On limite aussi cote HTML via `maxlength="50"` sur
-    # l'input #onboard-id-name pour empecher la saisie en amont.
-    # / `max_length=50`: aligned on the DB constraint of
-    # `WaitingConfiguration.organisation` (CharField max_length=50). Without
-    # this alignment, a >50 char name passed serializer validation then crashed
-    # on the PostgreSQL INSERT. The HTML input also has `maxlength="50"` to
-    # prevent over-typing client-side.
-    name = serializers.CharField(
-        max_length=50, required=True, allow_blank=False,
-    )
-    dns_choice = serializers.ChoiceField(
-        choices=DNS_CHOICES, default="tibillet.coop",
-    )
+    # Le nom du lieu et le choix du domaine ne sont PLUS saisis ici : ils sont
+    # demandés à l'étape « Votre lieu » (STEP_VENUE), après la vérification
+    # email (cf. OnboardVenueSerializer).
+    # / Venue name and domain choice are NO LONGER asked here: they move to the
+    # "Your venue" step (STEP_VENUE), after email verification.
     cgu = serializers.BooleanField(required=True)
+
+    # Captcha anti-spam arithmetique (x + y == answer). Meme mecanisme que
+    # le formulaire de contact (cf. BaseBillet.validators.ContactValidator) :
+    # x/y sont generes cote client (JS) et envoyes en hidden, la somme est
+    # saisie par l'utilisateur. Bloque les bots simples qui POSTent
+    # directement /onboard/identity/ (endpoint public AllowAny, cible
+    # d'email-bombing : un attaquant inonde la boite d'une victime via le
+    # formulaire d'inscription public).
+    # / Arithmetic anti-spam captcha (x + y == answer), same as the contact
+    # form. x/y generated client-side (JS) and sent hidden; user types the
+    # sum. Blocks simple bots POSTing directly to the public endpoint.
+    #
+    # `min_value=1` (et non 0) : les hidden x/y valent 0 par defaut dans le
+    # HTML ; le JS les remplace par des nombres 1-9 au chargement. Exiger >= 1
+    # ferme le contournement trivial `x=0, y=0, answer=0` (0+0==0) d'un bot qui
+    # POSTe les valeurs par defaut sans executer le JS.
+    # / `min_value=1`: hidden x/y default to 0 in the HTML; the JS replaces
+    # them with 1-9. Requiring >= 1 closes the trivial `x=0,y=0,answer=0`
+    # bypass of a bot POSTing the defaults without running the JS.
+    x = serializers.IntegerField(required=True, min_value=1)
+    y = serializers.IntegerField(required=True, min_value=1)
+    answer = serializers.IntegerField(required=True)
 
     def validate_cgu(self, value):
         """
@@ -81,56 +91,19 @@ class OnboardIdentitySerializer(serializers.Serializer):
             raise serializers.ValidationError(_("You must accept the terms."))
         return value
 
-    def validate_name(self, value):
-        """
-        Le nom du lieu doit avoir au moins 3 caracteres significatifs
-        (strip pour ignorer espaces de bord). On verifie aussi qu'il n'est
-        pas deja pris par un tenant existant (check case-insensitive pour
-        eviter les ambiguites visuelles "MonLieu" vs "monlieu", meme si la
-        contrainte DB sur Client.name est case-sensitive). Sans ce check,
-        l'utilisateur ne decouvrirait le conflit qu'a la step Launch quand
-        TenantCreateValidator.create_tenant raise — friction UX.
-
-        / The venue name must have at least 3 meaningful chars. Also checks
-        the name is not already taken by an existing tenant (case-insensitive
-        for visual UX clarity, even though the DB constraint on Client.name
-        is case-sensitive). Without this check, the user would only discover
-        the conflict at the Launch step.
-        """
-        valeur_nettoyee = value.strip()
-        if len(valeur_nettoyee) < 3:
-            raise serializers.ValidationError(
-                _("Name must be at least 3 characters."),
-            )
-
-        # Imports locaux : evitent la dependance au chargement du module
-        # onboard.serializers vers Customers (SHARED_APPS).
-        # / Local imports: avoid load-time dependency on Customers.
-        from django_tenants.utils import schema_context
-
-        from Customers.models import Client
-
-        # `Client` (= tenant) vit dans le schema `public` (TENANT_MODEL).
-        # On force le contexte pour ne pas planter si le serializer est
-        # appele depuis un schema tenant.
-        # / `Client` lives in `public` schema; force context to avoid crash
-        # when the serializer is called from a tenant schema.
-        with schema_context("public"):
-            nom_deja_pris = Client.objects.filter(
-                name__iexact=valeur_nettoyee,
-            ).exists()
-        if nom_deja_pris:
-            raise serializers.ValidationError(
-                _("This venue name is already taken. Please choose another."),
-            )
-
-        return valeur_nettoyee
-
     def validate(self, attrs):
         """
-        Verifie que les deux emails saisis correspondent (case-insensitive).
-        / Verify both emails match (case-insensitive).
+        Verifie le captcha anti-spam (x + y == answer) puis que les deux
+        emails saisis correspondent (case-insensitive).
+        / Check the anti-spam captcha (x + y == answer), then verify both
+        emails match (case-insensitive).
         """
+        # Captcha d'abord : inutile de valider le reste si c'est un bot.
+        # / Captcha first: no need to validate the rest if it's a bot.
+        if attrs["x"] + attrs["y"] != attrs["answer"]:
+            raise serializers.ValidationError(
+                {"answer": _("Mauvaise réponse à la question anti-spam.")},
+            )
         if attrs["email"].lower() != attrs["email_confirm"].lower():
             raise serializers.ValidationError(
                 {"email_confirm": _("Emails do not match.")},
@@ -145,6 +118,86 @@ class OnboardVerifySerializer(serializers.Serializer):
     """
 
     otp = serializers.RegexField(regex=r"^\d{6}$", required=True)
+
+
+class OnboardVenueSerializer(serializers.Serializer):
+    """
+    Step 3 — Votre lieu : nom du lieu + domaine (slug éditable + suffixe
+    .coop/.re). Le nom et le domaine étaient avant sur l'identité ; ils sont
+    déplacés ici pour pouvoir être pré-remplis depuis le recensement Tiers-Lieux.
+    / Step 3 — Your venue: venue name + domain (editable slug + .coop/.re
+    suffix). Moved from identity so they can be pre-filled from the Tiers-Lieux
+    directory.
+    """
+
+    # `max_length=50` aligné sur WaitingConfiguration.organisation (CharField 50).
+    # / `max_length=50` aligned on WaitingConfiguration.organisation.
+    name = serializers.CharField(max_length=50, required=True, allow_blank=False)
+    # Le slug du sous-domaine (pré-rempli depuis le nom, modifiable).
+    # SlugField valide le format (minuscules, chiffres, tirets).
+    # / The sub-domain slug (pre-filled from the name, editable).
+    slug = serializers.SlugField(max_length=50, required=True, allow_blank=False)
+    dns_choice = serializers.ChoiceField(choices=DNS_CHOICES, default="tibillet.coop")
+
+    def validate_name(self, value):
+        """
+        Le nom du lieu doit avoir au moins 3 caracteres significatifs et ne pas
+        etre deja pris par un tenant existant (check case-insensitive). Sans ce
+        check, l'utilisateur ne decouvrirait le conflit qu'a la step Launch.
+        / Venue name: >= 3 meaningful chars and not already taken (case-insensitive).
+        """
+        valeur_nettoyee = value.strip()
+        if len(valeur_nettoyee) < 3:
+            raise serializers.ValidationError(
+                _("Name must be at least 3 characters."),
+            )
+
+        # `Client` (= tenant) vit dans le schema `public`. On force le contexte.
+        # / `Client` lives in the `public` schema; force context.
+        from django_tenants.utils import schema_context
+
+        from Customers.models import Client
+
+        with schema_context("public"):
+            nom_deja_pris = Client.objects.filter(
+                name__iexact=valeur_nettoyee,
+            ).exists()
+        if nom_deja_pris:
+            raise serializers.ValidationError(
+                _("This venue name is already taken. Please choose another."),
+            )
+
+        return valeur_nettoyee
+
+    def validate(self, attrs):
+        """
+        Vérifie que l'adresse web choisie (slug + suffixe) n'est pas déjà prise
+        par un tenant existant. On reproduit la construction du domaine faite au
+        Lancement (`TenantCreateValidator.create_tenant`) : suffixe = dns_choice,
+        forcé à 'tibillet.localhost' en DEBUG (dev). Sans ce check, le conflit
+        de domaine ne serait découvert qu'au Lancement.
+        / Check the chosen web address (slug + suffix) isn't already taken. We
+        mirror the domain build done at Launch (dns_choice, forced to
+        'tibillet.localhost' in DEBUG). Without this, the conflict would only
+        surface at Launch.
+        """
+        from django.conf import settings
+        from django_tenants.utils import schema_context
+
+        from Customers.models import Domain
+
+        slug = attrs.get("slug", "")
+        dns = attrs.get("dns_choice") or "tibillet.coop"
+        if settings.DEBUG:
+            dns = "tibillet.localhost"
+        domaine = f"{slug}.{dns}"
+        with schema_context("public"):
+            domaine_deja_pris = Domain.objects.filter(domain=domaine).exists()
+        if domaine_deja_pris:
+            raise serializers.ValidationError({
+                "slug": _("This web address is already taken. Please choose another."),
+            })
+        return attrs
 
 
 class OnboardPlaceSerializer(serializers.Serializer):

@@ -131,39 +131,14 @@
             .replace(/^-+|-+$/g, "");
     }
 
-    function setupDomainPreview() {
-        // Le DNS est maintenant un radiogroup (feedback mainteneur 2026-05-15).
-        // On lit le radio coche via `input[name="dns_choice"]:checked`. On
-        // ecoute `change` sur chacun des radios — pas d'event delegation
-        // pour rester FALC (lecture explicite top-down).
-        // / DNS is now a radio group (maintainer feedback). We read the
-        // checked radio and listen for `change` on each one.
-        const nameInput = document.getElementById("onboard-id-name");
-        const slugEl = document.getElementById("onboard-id-domain-slug");
-        const suffixEl = document.getElementById("onboard-id-domain-suffix");
-        const dnsRadios = document.querySelectorAll('input[name="dns_choice"]');
-        if (!nameInput || !slugEl || !suffixEl || dnsRadios.length === 0) {
-            return;
-        }
-        function getSelectedDnsSuffix() {
-            const checked = document.querySelector('input[name="dns_choice"]:checked');
-            // Defense : si rien n'est coche (cas extreme), on garde le default
-            // attendu cote serveur. / Defensive: fall back to default suffix.
-            return checked ? checked.value : "tibillet.coop";
-        }
-        function update() {
-            const s = slugify(nameInput.value);
-            slugEl.textContent = s || "…";
-            suffixEl.textContent = "." + getSelectedDnsSuffix();
-        }
-        nameInput.addEventListener("input", update);
-        dnsRadios.forEach(function (radio) {
-            radio.addEventListener("change", update);
-        });
-        // Initialisation (cas : champs deja remplis au reload, ex. erreurs 422).
-        // / Init (case: fields prefilled on reload, e.g. 422 errors).
-        update();
-    }
+    // Exposition globale du slugify pour reutilisation par le JS inline de
+    // 03_venue.html (etape « Votre lieu ») — evite de dupliquer la fonction.
+    // L'ancien apercu de domaine de l'etape 1 (`setupDomainPreview`) a ete
+    // retire : le nom et le domaine ne sont plus saisis sur l'identite.
+    // / Global slugify export for reuse by 03_venue.html (avoids duplication).
+    // The old step-1 domain preview (`setupDomainPreview`) was removed: the
+    // name and domain are no longer on the identity step.
+    window.tibilletSlugify = slugify;
 
     // 3. Rotation du carrousel d'info (etape 6)
     //    On garde une reference au `setInterval` et on le clear sur
@@ -323,7 +298,6 @@
 
     document.addEventListener("DOMContentLoaded", () => {
         setupOtpAutoTab();
-        setupDomainPreview();
         setupCarousel();
         setupResendCooldown();
     });

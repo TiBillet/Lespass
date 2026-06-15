@@ -1,10 +1,11 @@
+from django.conf import settings
 from django.urls import include, path
 from rest_framework import routers
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenVerifyView
 
 from AuthBillet import views as auth_view
 from AuthBillet.views import test_api_key
-# TokenRefreshViewCustom, OAauthApi, OAauthCallback, SetPasswordIfEmpty
+# TokenRefreshViewCustom, SetPasswordIfEmpty
 
 router = routers.DefaultRouter()
 router.register(r'me', auth_view.MeViewset, basename='me')
@@ -24,10 +25,25 @@ urlpatterns = [
 
     # path('token/verify/', TokenVerifyView.as_view(), name='token_verify'),
     # path('create/', create_user.as_view(), name='create_user'),
-    # path('requestoauth/', OAauthApi.as_view(), name='requestoauth'),
-    # path('oauth/', OAauthCallback.as_view(), name='oauth'),
     # uniquement pour tenant public :
     # path('terminal/', create_terminal_user.as_view(), name='create_terminal_user'),
 
     path('activate/<str:uid>/<str:token>', auth_view.activate, name='activate'),
 ]
+
+
+# Endpoint reserve aux tests E2E Playwright.
+# Charge UNIQUEMENT si DEBUG=True ET si un token est configure.
+# Triple garde-fou applique cote vue (voir AuthBillet/views_test_only.py).
+# / Endpoint reserved for Playwright E2E tests.
+# Loaded ONLY if DEBUG=True AND a token is configured.
+# Triple gate applied view-side (see AuthBillet/views_test_only.py).
+if settings.DEBUG:
+    from AuthBillet.views_test_only import force_login_for_e2e
+    urlpatterns += [
+        path(
+            '__test_only__/force_login/',
+            force_login_for_e2e,
+            name='e2e_force_login',
+        ),
+    ]

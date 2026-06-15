@@ -46,7 +46,7 @@ from django.contrib import admin
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.signing import TimestampSigner
-from django.db import models, connection, IntegrityError
+from django.db import models, connection, IntegrityError, transaction as db_transaction
 from django.db.models import Model, Count, Q, Prefetch, F
 from django.forms import ModelForm, Form, HiddenInput
 from django.http import HttpResponse, HttpRequest, HttpResponseRedirect
@@ -109,7 +109,7 @@ from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
     FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp, ProductFormField, \
-    PromotionalCode, Tva, MembershipProduct
+    PromotionalCode, Tva, MembershipProduct, FederationConfiguration
 from BaseBillet.tasks import webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
     send_reservation_cancellation_user, send_sale_to_laboutik, forge_connexion_url
@@ -1178,7 +1178,7 @@ class HumanUserAdmin(ModelAdmin):
             domain = tenant.get_primary_domain().domain
             base_url = f"https://{domain}"
         except Exception:
-            base_url = "https://tibillet.org"
+            base_url = "https://tibillet.coop"
 
         connexion_url = forge_connexion_url(user, base_url)
         return redirect(connexion_url)
@@ -1342,8 +1342,26 @@ class MembershipAddForm(ModelForm):
         # self.instance.set_deadline()
 
         if self.card_number:
-            linked_serialized_card = self.fedowAPI.NFCcard.linkwallet_card_number(user=user,
-                                                                                  card_number=self.card_number)
+            # Ne lier la carte chez Fedow QU'APRES le commit de la transaction.
+            # L'admin Django appelle form.save() AVANT de valider les inlines :
+            # si un formset est invalide, la transaction DB est annulee mais un
+            # appel HTTP deja parti vers Fedow ne peut pas l'etre — la carte
+            # serait liee chez Fedow sans adhesion cote Lespass.
+            # (Bug trouve par tests/pytest/test_membership_card_wallet_fedow.py)
+            # / Only link the card on Fedow AFTER the DB transaction commits.
+            # Django admin calls form.save() BEFORE validating inlines: on an
+            # invalid formset the DB transaction rolls back, but an HTTP call
+            # already sent to Fedow cannot — the card would be linked on Fedow
+            # with no membership on the Lespass side.
+            utilisateur_a_lier = user
+            numero_carte_a_lier = self.card_number
+            fedow_api = self.fedowAPI
+            db_transaction.on_commit(
+                lambda: fedow_api.NFCcard.linkwallet_card_number(
+                    user=utilisateur_a_lier,
+                    card_number=numero_carte_a_lier,
+                )
+            )
 
         # Le post save BaseBillet.signals.create_lignearticle_if_membership_created_on_admin s'executera
         # # Création de la ligne Article vendu qui envera à la caisse si besoin
@@ -1359,6 +1377,7 @@ class MembershipChangeForm(ModelForm):
             'first_name',
             'deadline',
             'commentaire',
+            'newsletter',
         )
 
 
@@ -3299,6 +3318,62 @@ class TenantAdmin(ModelAdmin):
 
 ### Connect
 
+@admin.register(FederationConfiguration, site=staff_admin_site)
+class FederationConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
+    compressed_fields = True
+    warn_unsaved_form = True
+
+    autocomplete_fields = ["tags_federation"]
+
+    fieldsets = (
+        (_("Affichage des lieux"), {"fields": (
+            "afficher_lieux_sans_adresse",
+            "afficher_seulement_lieux_avec_event",
+            "afficher_lieux_entrants",
+            "tri_des_lieux",
+        )}),
+        # Federation automatique par tags : le tenant s'abonne a des tags et
+        # recoit les events de TOUT le reseau qui les portent (agenda + carto).
+        # / Tag-based auto federation: subscribe to tags, receive matching events
+        # from the WHOLE network (agenda + map).
+        (_("Fédération automatique par tags"), {"fields": ("tags_federation",)}),
+        (_("Présentation"), {"fields": ("texte_introduction",)}),
+        # Agenda participatif : active le formulaire public de proposition
+        # d'evenement (deplace depuis le dashboard des modules vers ici).
+        # / Participatory agenda: enables the public event-proposal form
+        # (moved from the modules dashboard to here).
+        (_("Agenda participatif"), {"fields": (
+            "module_agenda_participatif",
+            "proposition_anonyme_autorisee",
+            "tag_auto_proposition",
+        )}),
+    )
+
+    formfield_overrides = {
+        models.TextField: {
+            "widget": WysiwygWidget,
+        }
+    }
+
+    def save_model(self, request, obj, form, change):
+        # Sanitize les TextField pour eviter le XSS via WYSIWYG
+        # / Sanitize TextFields to avoid XSS via WYSIWYG
+        sanitize_textfields(obj)
+        super().save_model(request, obj, form, change)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(FederatedPlace, site=staff_admin_site)
 class FederatedPlaceAdmin(ModelAdmin):
     list_display = ["tenant", "str_tag_filter", "str_tag_exclude", "membership_visible", ]
@@ -3441,9 +3516,20 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
             permissions=["custom_actions_detail"])
     def test_api_ghost_admin_button(self, request, object_id):
 
-        ghost_config = GhostConfig.get_solo()
-        ghost_url = ghost_config.ghost_url
-        ghost_key = ghost_config.get_api_key()
+        from sib_api_v3_sdk.rest import ApiException
+        try:
+            ghost_config = GhostConfig.get_solo()
+            ghost_url = ghost_config.ghost_url
+            ghost_key = ghost_config.get_api_key()
+        except ApiException as e:
+            ghost_config.last_log = f"{e}"
+            logger.warning("ApiException when calling AccountApi->get_account: %s\n" % e)
+            messages.error(request, _(f"Api not OK : {e}"))
+            return redirect(request.META["HTTP_REFERER"])
+        except Exception:
+            messages.error(request, _("La connexion à l'API Ghost a échoué. L'API a potentiellement mal été configuré "))
+            return redirect(request.META["HTTP_REFERER"])
+
 
         if not ghost_url or not ghost_key:
             messages.error(request, _("Ghost URL or API key is missing"))
@@ -3474,7 +3560,8 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
     def has_add_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
+        return False
+        #return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)

@@ -32,9 +32,9 @@
 {# / Main title removed from content (maintainer feedback): already shown  #}
 {# by the left panel eyebrow ("CRÉER MON ESPACE").                        #}
 <header class="mb-4">
-    <p class="onboard-step-counter mb-1">{% translate "Étape 1 / 6" %}</p>
+    <p class="onboard-step-counter mb-1">{% translate "Étape 1 / 7" %}</p>
     <p class="text-muted mb-0">
-        {% translate "Renseignez votre identité et celle de votre collectif. Un code de vérification vous sera envoyé par email." %}
+        {% translate "Renseignez votre identité. Un code de vérification vous sera envoyé par email." %}
     </p>
 </header>
 
@@ -164,78 +164,11 @@
         {% endif %}
     </div>
 
-    <div>
-        <label for="onboard-id-name" class="form-label">
-            {% translate "Nom du collectif / lieu" %}
-        </label>
-        {# `maxlength="50"` aligne sur la contrainte DB de    #}
-        {# `WaitingConfiguration.organisation` (CharField max_length=50).    #}
-        {# / `maxlength="50"` matches the DB constraint of `organisation`. #}
-        <input id="onboard-id-name"
-               type="text"
-               name="name"
-               required
-               maxlength="50"
-               class="form-control{% if errors.name %} is-invalid{% endif %}"
-               value="{{ initial.name|default:'' }}"
-               data-testid="onboard-identity-name">
-        {% if errors.name %}
-            <div class="invalid-feedback">
-                {% for msg in errors.name %}{{ msg }}{% endfor %}
-            </div>
-        {% endif %}
-    </div>
-
-    <div>
-        {# Choix du domaine en boutons radios visibles (feedback mainteneur 2026-05-15) #}
-        {# Le pattern Bootstrap btn-check / btn-outline-* fait des "pills" que       #}
-        {# l'utilisateur peut comparer d'un coup d'oeil — plus parlant qu'un select. #}
-        {# Le `name` est partage par les deux <input> -> selection mutuellement       #}
-        {# exclusive. Le slug preview ci-dessous reagit aux changements via          #}
-        {# `wizard.js::setupDomainPreview()` (event delegation sur input[name=dns_choice]). #}
-        {# / Domain choice as visible radio buttons. The Bootstrap btn-check pattern  #}
-        {# renders pills the user can compare at a glance — more telling than a select. #}
-        {# Same `name` -> mutually exclusive selection. Slug preview reacts via       #}
-        {# `wizard.js::setupDomainPreview()` (event delegation).                      #}
-        <fieldset class="onboard-dns-fieldset"
-                  aria-describedby="onboard-id-dns-help">
-            <legend class="form-label mb-2">{% translate "Nom de domaine" %}</legend>
-            <div class="onboard-dns-radios" role="radiogroup">
-                <input type="radio"
-                       class="btn-check"
-                       name="dns_choice"
-                       id="onboard-id-dns-coop"
-                       value="tibillet.coop"
-                       data-testid="onboard-identity-dns-coop"
-                       {% if initial.dns_choice == 'tibillet.re' %}{% else %}checked{% endif %}>
-                <label class="btn btn-outline-success onboard-dns-radio" for="onboard-id-dns-coop">
-                    <i class="bi bi-globe2 me-2" aria-hidden="true"></i>tibillet.coop
-                </label>
-
-                <input type="radio"
-                       class="btn-check"
-                       name="dns_choice"
-                       id="onboard-id-dns-re"
-                       value="tibillet.re"
-                       data-testid="onboard-identity-dns-re"
-                       {% if initial.dns_choice == 'tibillet.re' %}checked{% endif %}>
-                <label class="btn btn-outline-success onboard-dns-radio" for="onboard-id-dns-re">
-                    <i class="bi bi-globe2 me-2" aria-hidden="true"></i>tibillet.re
-                </label>
-            </div>
-        </fieldset>
-        {% if errors.dns_choice %}
-            <div class="invalid-feedback d-block">
-                {% for msg in errors.dns_choice %}{{ msg }}{% endfor %}
-            </div>
-        {% endif %}
-        <div class="form-text" id="onboard-id-dns-help">
-            {% translate "Votre adresse finale :" %}
-            <code data-testid="onboard-identity-domain-preview">
-                <span id="onboard-id-domain-slug">…</span><span id="onboard-id-domain-suffix">.tibillet.coop</span>
-            </code>
-        </div>
-    </div>
+    {# Le nom du lieu et le choix du domaine ont été déplacés à l'étape       #}
+    {# « Votre lieu » (STEP_VENUE), après la vérification email : ils y sont  #}
+    {# pré-remplis depuis le recensement Tiers-Lieux.                         #}
+    {# / Venue name and domain moved to the "Your venue" step (after email    #}
+    {# verification), where they are pre-filled from the Tiers-Lieux directory. #}
 
     {# CGU en switch Bootstrap 5 (feedback mainteneur 2026-05-15) :        #}
     {# `form-switch` rend la checkbox sous forme de toggle slider, plus    #}
@@ -272,6 +205,41 @@
         {% endif %}
     </div>
 
+    {# CAPTCHA ANTI-SPAM (arithmetique) #}
+    {# Endpoint public (AllowAny) : ce captcha bloque les bots simples qui #}
+    {# POSTent directement /onboard/identity/ (email-bombing). Les nombres #}
+    {# x/y sont generes par le JS en bas de page et envoyes en hidden ; #}
+    {# l'utilisateur saisit la somme. Meme principe que le formulaire de #}
+    {# contact. / Public endpoint: this captcha blocks simple bots. x/y are #}
+    {# generated by the JS below and sent hidden; user types the sum. #}
+    <div>
+        <label for="onboard-id-captcha" class="form-label">
+            {% translate "Anti-spam" %} —
+            {% translate "Combien font" %}
+            <span data-testid="onboard-identity-captcha-x">0</span> +
+            <span data-testid="onboard-identity-captcha-y">0</span> ?
+        </label>
+        <input id="onboard-id-captcha"
+               type="number"
+               name="answer"
+               required
+               inputmode="numeric"
+               class="form-control{% if errors.answer %} is-invalid{% endif %}"
+               data-testid="onboard-identity-captcha-answer">
+        <input type="hidden" name="x" value="0"
+               data-testid="onboard-identity-captcha-hidden-x">
+        <input type="hidden" name="y" value="0"
+               data-testid="onboard-identity-captcha-hidden-y">
+        {% if errors.answer %}
+            <div class="invalid-feedback">
+                {% for msg in errors.answer %}{{ msg }}{% endfor %}
+            </div>
+        {% endif %}
+        <div class="form-text">
+            {% translate "Merci de répondre à cette question simple pour prouver que vous n'êtes pas un robot." %}
+        </div>
+    </div>
+
     <div class="d-flex justify-content-end pt-2">
         <button type="submit"
                 class="btn btn-primary btn-lg"
@@ -280,4 +248,53 @@
         </button>
     </div>
 </form>
+
+{# ANTI-DOUBLE-SUBMIT (defense-in-depth) #}
+{# Ce formulaire est un POST classique (pas HTMX). Sans garde-fou, un #}
+{# double-clic ou un clic sur une page lente renvoie le POST plusieurs #}
+{# fois -> plusieurs brouillons + plusieurs mails OTP pour le meme email. #}
+{# On desactive le bouton "Continuer" des la soumission. La soumission #}
+{# native est deja partie a ce moment-la, donc le premier envoi aboutit ; #}
+{# seuls les clics suivants sont bloques. En cas d'erreur 422, la vue #}
+{# rerend cette page et le bouton repart actif (correction + renvoi OK). #}
+{# / Anti-double-submit: classic POST form (not HTMX). On submit we disable #}
+{# the "Continue" button so a double-click can't resend the POST and #}
+{# create duplicate drafts + duplicate OTP mails. #}
+<script>
+    (function () {
+        // Recupere le formulaire d'identite et son bouton de soumission.
+        // / Get the identity form and its submit button.
+        var formulaireIdentite = document.querySelector('[data-testid="onboard-identity-form"]');
+        if (!formulaireIdentite) {
+            return;
+        }
+        var boutonContinuer = formulaireIdentite.querySelector('[data-testid="onboard-identity-next"]');
+
+        // Captcha : genere deux petits nombres (1-9) au chargement et remplit
+        // les champs caches x/y. La somme attendue change a chaque rendu (y
+        // compris apres une erreur 422), donc un bot ne peut pas rejouer une
+        // reponse. / Captcha: generate two small numbers (1-9) on load and
+        // fill the hidden x/y inputs. The expected sum changes on every render.
+        var captchaAfficheX = formulaireIdentite.querySelector('[data-testid="onboard-identity-captcha-x"]');
+        var captchaAfficheY = formulaireIdentite.querySelector('[data-testid="onboard-identity-captcha-y"]');
+        var captchaHiddenX = formulaireIdentite.querySelector('[data-testid="onboard-identity-captcha-hidden-x"]');
+        var captchaHiddenY = formulaireIdentite.querySelector('[data-testid="onboard-identity-captcha-hidden-y"]');
+        if (captchaAfficheX && captchaAfficheY && captchaHiddenX && captchaHiddenY) {
+            var captchaNombreX = Math.floor(Math.random() * 9) + 1;
+            var captchaNombreY = Math.floor(Math.random() * 9) + 1;
+            captchaAfficheX.textContent = captchaNombreX;
+            captchaAfficheY.textContent = captchaNombreY;
+            captchaHiddenX.value = captchaNombreX;
+            captchaHiddenY.value = captchaNombreY;
+        }
+
+        // A la soumission, on desactive le bouton pour bloquer un 2e envoi.
+        // / On submit, disable the button to block a second send.
+        formulaireIdentite.addEventListener("submit", function () {
+            if (boutonContinuer) {
+                boutonContinuer.disabled = true;
+            }
+        });
+    })();
+</script>
 {% endblock step_content %}

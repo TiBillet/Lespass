@@ -1,6 +1,13 @@
 {% extends base_template %}
 {% load static i18n tibitags %}
 
+{% comment %}
+LOCALISATION : BaseBillet/templates/reunion/views/event/list.html
+Liste des évènements du tenant (agenda) + filtres par tags + bouton unique vers le
+wizard event unifié (cf. SESSIONS/EVENT_WIZARD/CHANTIER-03).
+/ Tenant event list (agenda) + tag filters + single button to the unified event wizard.
+{% endcomment %}
+
 {% block title %}{% translate 'Agenda' %}{% endblock %}
 {% block meta_description %}{{ config.organisation }} : {% translate 'Découvrez tous nos événements et activités à venir' %} - {{ config.short_description }}{% endblock %}
 {% block og_title %}{% translate 'Agenda' %} | {{ config.organisation }}{% endblock %}
@@ -47,28 +54,27 @@
                             <i class="bi bi-sliders"></i> {% translate 'Filtres' %}
                         </button>
 
-                        {# Bouton admin (admin uniquement) — wizard 2 etapes #}
-                        {# / Admin button (admin only) — 2-step wizard #}
+                        {# Bouton UNIQUE vers le wizard event unifié (CHANTIER-03). #}
+                        {# Staff : "Ajouter" (event publié). Public : "Proposer" (modéré), #}
+                        {# affiché si l'agenda participatif est actif ET (connecté OU anonyme autorisé). #}
+                        {# / Single button to the unified event wizard. Staff: add (published); #}
+                        {# public: propose (moderated), shown if agenda module on AND (logged-in OR anon allowed). #}
                         {% if user|can_create_event_tag %}
                             <a class="btn btn-sm btn-success"
-                               href="{% url 'event-admin-wizard-place' %}"
-                               data-testid="btn-event-admin-add">
+                               href="{% url 'event-wizard-place' %}"
+                               data-testid="btn-event-add">
                                 <i class="bi bi-plus-circle" aria-hidden="true"></i>
                                 {% translate 'Ajouter un évènement' %}
                             </a>
-                        {% endif %}
-
-                        {# Bouton public (tout le monde) — wizard avec OTP #}
-                        {# Affiche seulement si le module agenda participatif est actif #}
-                        {# / Public button (everyone) — wizard with OTP #}
-                        {# / Shown only when the participatory agenda module is enabled #}
-                        {% if config.module_agenda_participatif %}
+                        {% elif federation_config.module_agenda_participatif %}
+                            {% if user.is_authenticated or federation_config.proposition_anonyme_autorisee %}
                             <a class="btn btn-sm btn-outline-secondary"
-                               href="{% url 'event-propose-email' %}"
-                               data-testid="btn-event-public-propose">
+                               href="{% url 'event-wizard-place' %}"
+                               data-testid="btn-event-propose">
                                 <i class="bi bi-megaphone" aria-hidden="true"></i>
                                 {% translate 'Proposer un évènement' %}
                             </a>
+                            {% endif %}
                         {% endif %}
                     </div>
                 </div>

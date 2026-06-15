@@ -333,6 +333,11 @@ class WaitingConfiguration(models.Model):
     # Etapes du wizard. / Wizard steps.
     STEP_IDENTITY = "identity"
     STEP_VERIFY = "verify"
+    # STEP_VENUE : nouvelle étape « Votre lieu » (recherche Tiers-Lieux + nom +
+    # domaine), insérée après la vérification email.
+    # / STEP_VENUE: new "Your venue" step (Tiers-Lieux search + name + domain),
+    # inserted right after email verification.
+    STEP_VENUE = "venue"
     STEP_PLACE = "place"
     STEP_DESCRIPTIONS = "descriptions"
     STEP_EVENTS = "events"
@@ -340,7 +345,8 @@ class WaitingConfiguration(models.Model):
     STEP_CHOICES = (
         (STEP_IDENTITY, _("Identity")),
         (STEP_VERIFY, _("Verify email")),
-        (STEP_PLACE, _("Place location")),
+        (STEP_VENUE, _("Your venue")),
+        (STEP_PLACE, _("Address")),
         (STEP_DESCRIPTIONS, _("Descriptions")),
         (STEP_EVENTS, _("Events")),
         (STEP_LAUNCH, _("Launch")),

@@ -118,7 +118,7 @@ def email_contribution_paid_user(schema_name: str, contribution_uuid: str) -> bo
 
             # FR: Logo du lieu (header de l'email)
             # EN: Place logo (email header)
-            image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+            image_url = "https://tibillet.coop/static/assets/logo-couleur.svg"
             try:
                 if hasattr(config, "img") and hasattr(config.img, "med") and config.img.med:
                     image_url = f"https://{domain}{config.img.med.url}"
