@@ -2734,7 +2734,57 @@ class MembershipMVT(viewsets.ViewSet):
         3. Si trouve : verifie le statut de la session Stripe
         4. Redirige vers Stripe ou affiche une page d'info
         """
-        membership = get_object_or_404(Membership, uuid=uuid.UUID(pk), status=Membership.ADMIN_VALID)
+        # On récupère l'adhésion SANS filtrer sur le statut. Cela permet
+        # d'afficher un message clair selon l'état de l'adhésion, au lieu du
+        # 404 JSON brut renvoyé auparavant par get_object_or_404.
+        # / Fetch the membership WITHOUT a status filter, so we can show a clear
+        # message depending on its state, instead of the previous raw JSON 404.
+        try:
+            membership = Membership.objects.get(uuid=uuid.UUID(pk))
+        except (Membership.DoesNotExist, ValueError):
+            context = get_context(request)
+            return render(
+                request,
+                "reunion/views/membership/payment_link_invalid.html",
+                context=context,
+                status=404,
+            )
+
+        context = get_context(request)
+        context['membership'] = membership
+
+        # Adhésion déjà payée (CB) ou active (abonnement) : plus rien à payer.
+        # / Membership already paid (card) or active (subscription): nothing to pay.
+        if membership.status in [Membership.ONCE, Membership.AUTO]:
+            return render(
+                request,
+                "reunion/views/membership/payment_already_done.html",
+                context=context,
+            )
+
+        # Paiement déjà soumis, débit en cours (SEPA jusqu'à 14 jours).
+        # On ne recrée surtout PAS de checkout : ce serait un 2e prélèvement.
+        # / Payment already submitted, debit pending (SEPA up to 14 days).
+        # We must NOT recreate a checkout: it would be a 2nd debit.
+        if membership.status == Membership.PAYMENT_PENDING:
+            return render(
+                request,
+                "reunion/views/membership/payment_already_pending.html",
+                context=context,
+            )
+
+        # Adhésion annulée, ou lien reçu avant validation admin : lien inactif.
+        # / Cancelled membership, or link used before admin validation: dead link.
+        if membership.status != Membership.ADMIN_VALID:
+            return render(
+                request,
+                "reunion/views/membership/payment_link_invalid.html",
+                context=context,
+                status=409,
+            )
+
+        # À partir d'ici : statut ADMIN_VALID, on peut créer/réutiliser un checkout.
+        # / From here: ADMIN_VALID status, we can create/reuse a checkout.
 
         # Chercher un paiement Stripe deja en cours pour cette adhesion
         # On filtre sur PENDING et OPEN : ce sont les statuts avant encaissement
@@ -2788,12 +2838,20 @@ class MembershipMVT(viewsets.ViewSet):
                 paiement_stripe_existant.save(update_fields=['status'])
 
             except Exception as e:
-                # Erreur API Stripe : on marque comme expire et on continue
-                # / Stripe API error: mark as expired and continue
+                # Erreur API Stripe : en cas de doute, on NE recrée PAS de
+                # checkout (cela pourrait générer un 2e prélèvement). On affiche
+                # la page "paiement en cours". L'adhérent réessaiera plus tard si
+                # le paiement n'avait pas abouti ; aucun risque de doublon.
+                # / Stripe API error: when in doubt, do NOT recreate a checkout
+                # (risk of a 2nd debit). Show the "payment pending" page instead.
                 logger.warning(
-                    f"get_checkout_for_membership : erreur recuperation session Stripe : {e}")
-                paiement_stripe_existant.status = Paiement_stripe.EXPIRE
-                paiement_stripe_existant.save(update_fields=['status'])
+                    f"get_checkout_for_membership : erreur recuperation session Stripe, "
+                    f"affichage page paiement en cours (pas de nouveau checkout) : {e}")
+                return render(
+                    request,
+                    "reunion/views/membership/payment_already_pending.html",
+                    context=context,
+                )
 
         # Aucun paiement existant ou session expiree : on cree un nouveau checkout
         # / No existing payment or expired session: create a new checkout

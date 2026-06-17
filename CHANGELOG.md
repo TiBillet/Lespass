@@ -1,5 +1,58 @@
 # Changelog / Journal des modifications
 
+## Adhésions SEPA : lien de paiement à usage unique (anti double prélèvement) / SEPA memberships: single-use payment link (duplicate debit fix)
+
+**Date :** 2026-06-17
+**Migration :** Oui / Yes — `BaseBillet/migrations/0219_alter_membership_status.py` (`migrate_schemas`)
+
+**Contexte / Context :** pour une adhésion à validation manuelle (caisse sociale
+alimentaire), l'admin valide l'adhésion (`ADMIN_VALID`) et un mail envoie un lien de
+paiement. En carte bancaire, le paiement est immédiat → l'adhésion passe `ONCE` → le lien
+devient inactif. En **prélèvement SEPA**, le débit prend 3 à 14 jours pendant lesquels
+l'adhésion restait `ADMIN_VALID` : le lien restait actif. Recliquer dessus pouvait, via le
+`except` réseau de la vue, **recréer un checkout** et donc un **2e prélèvement** (cas signalé
+« Damien GARNIER »). De plus, une adhésion déjà payée renvoyait un **404 JSON brut** illisible.
+
+**Quoi / What :**
+1. **Nouveau statut `Membership.PAYMENT_PENDING` ('PP')** — « Paiement soumis, en attente de
+   validation bancaire ». Posé dans `Paiement_stripe.update_checkout_status()` dès que le
+   paiement ressort `PENDING` (checkout soumis mais non débité) ; déclenché par le webhook
+   `checkout.session.completed` **et** par le retour navigateur. Le succès final repasse en
+   `ONCE`/`AUTO` (inchangé), l'échec SEPA (`async_payment_failed`) réarme en `ADMIN_VALID`.
+2. **`get_checkout_for_membership` route selon le statut** au lieu d'un `get_object_or_404` :
+   `ADMIN_VALID` → checkout ; `PAYMENT_PENDING` → page « paiement en cours » ; `ONCE`/`AUTO`
+   → page « adhésion déjà active » ; annulée/introuvable → page « lien invalide ». Plus aucun
+   404 JSON brut.
+3. **`except` Stripe bloquant** — en cas d'erreur API au moment de vérifier la session, on
+   n'ouvre plus jamais de nouveau checkout : on affiche « paiement en cours ».
+4. **Bug latent corrigé** — les templates membership utilisaient `{% block content %}` (le
+   skin attend `{% block main %}`) et avaient `{% load %}` avant `{% extends %}` : ils
+   rendaient une page vide. Corrigé sur `payment_already_pending.html` + 2 nouveaux templates.
+
+**Pourquoi / Why :** matérialiser l'état « paiement soumis » sur l'adhésion elle-même rend la
+protection fiable et locale (aucun appel Stripe nécessaire pour bloquer), et symétrique avec
+le comportement déjà sûr de la carte bancaire.
+
+**Hors périmètre / Out of scope :** le cas « deux adhésions distinctes pour la même personne »
+(relève de `max_per_user`), non traité ici.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | Statut `PAYMENT_PENDING` + bascule `ADMIN_VALID → PAYMENT_PENDING` dans `update_checkout_status` |
+| `BaseBillet/migrations/0219_alter_membership_status.py` | Nouveau choix de statut (généré) |
+| `BaseBillet/views.py` | `get_checkout_for_membership` : routage HTML par statut + `except` bloquant |
+| `ApiBillet/views.py` | `async_payment_failed` : réarmement `PAYMENT_PENDING → ADMIN_VALID` |
+| `Administration/admin_tenant.py` | Filtre « Attente de paiement » inclut `PAYMENT_PENDING` |
+| `BaseBillet/templates/reunion/views/membership/payment_already_pending.html` | Bloc `main` + `{% extends %}` en tête |
+| `BaseBillet/templates/.../payment_already_done.html` | Nouveau — page « adhésion déjà active » |
+| `BaseBillet/templates/.../payment_link_invalid.html` | Nouveau — page « lien invalide » |
+| `tests/pytest/test_membership_sepa_payment_link.py` | Nouveau — 4 tests (routage + bascule de statut) |
+| `tests/e2e/test_sepa_duplicate_protection.py` | Test 3 adapté au nouveau comportement (200 + page, plus de 404) |
+
+### i18n
+Nouvelles chaînes FR à extraire/compiler (`makemessages` + `compilemessages`) — à faire par le mainteneur.
+
 ## Onboarding : fin de la cascade de mails OTP + durcissement de l'endpoint public / Onboarding: stop the OTP mail burst + harden the public endpoint
 
 **Date :** 2026-06-15

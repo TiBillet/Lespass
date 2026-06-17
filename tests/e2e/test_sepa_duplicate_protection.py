@@ -412,31 +412,36 @@ class TestSepaDuplicateProtection:
         )
         membership_uuid = uuid_match.group(1)
 
-        # --- Étape 3 : Tenter d'accéder au lien de paiement → doit retourner 4xx ---
-        # La vue exige status=ADMIN_VALID (AV) ; une adhésion ONCE (A) → 404.
-        # On utilise page.request pour faire un GET sans suivre les redirections.
-        # / Step 3: Try to access the payment link → should return 4xx
-        # The view requires status=ADMIN_VALID (AV); a ONCE (A) membership → 404.
-        # Use page.request for a GET without following redirects through Stripe.
+        # --- Étape 3 : Accéder au lien → page "adhésion déjà active", PAS Stripe ---
+        # Une adhésion ONCE (payée) n'est plus ADMIN_VALID : la vue n'ouvre aucun
+        # checkout. Elle affiche désormais une page d'information claire (HTTP 200)
+        # au lieu de l'ancien 404 JSON. L'important : ne jamais rediriger vers Stripe.
+        # / Step 3: Access the link → "membership already active" page, NOT Stripe.
+        # A ONCE (paid) membership is no longer ADMIN_VALID: the view opens no
+        # checkout. It now renders a clear info page (HTTP 200) instead of the old
+        # JSON 404. The key point: never redirect to Stripe.
         checkout_url = f"/memberships/{membership_uuid}/get_checkout_for_membership/"
         response = page.request.get(
             checkout_url,
             max_redirects=0,
         )
-        # L'adhésion étant en statut ONCE (payée), pas ADMIN_VALID, la vue retourne 404.
-        # La réponse peut être 404 direct ou une redirection (3xx) vers une page d'erreur.
-        # On accepte tout code ≥ 400 OU une redirection vers une page non-Stripe.
-        # / The membership is in ONCE (paid) status, not ADMIN_VALID, so view returns 404.
-        # Response can be direct 404 or a redirect (3xx) to an error page.
-        # We accept any code ≥ 400 OR a redirect to a non-Stripe page.
         status_code = response.status
-        assert status_code >= 400 or status_code in (301, 302, 303, 307, 308), (
-            f"Attendu 4xx ou redirection pour adhésion payée, obtenu : {status_code}"
-        )
-        # Si c'est une redirection, vérifier qu'on ne part pas vers Stripe.
-        # / If it's a redirect, verify we don't go to Stripe.
+
+        # On ne doit jamais partir vers Stripe pour une adhésion déjà payée.
+        # / We must never go to Stripe for an already-paid membership.
         if status_code in (301, 302, 303, 307, 308):
             location = response.headers.get("location", "")
             assert "checkout.stripe.com" not in location, (
                 f"La redirection ne doit pas aller vers Stripe pour une adhésion déjà payée : {location}"
             )
+        else:
+            # Réponse rendue (200) : on vérifie la page "adhésion déjà active".
+            # / Rendered response (200): check the "membership already active" page.
+            assert status_code == 200, (
+                f"Attendu 200 (page d'info) ou redirection non-Stripe, obtenu : {status_code}"
+            )
+            body = response.text()
+            assert "membership-payment-already-done" in body, (
+                "La page 'adhésion déjà active' attendue n'a pas été rendue."
+            )
+            assert "checkout.stripe.com" not in body

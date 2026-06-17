@@ -1412,7 +1412,13 @@ class MembershipStatusFilter(admin.SimpleListFilter):
             return queryset.filter(status=Membership.ADMIN_WAITING)
 
         if value == "wp":
-            return queryset.filter(status__in=[Membership.WAITING_PAYMENT, Membership.ADMIN_VALID])
+            # PAYMENT_PENDING : paiement soumis mais débit pas encore confirmé (SEPA).
+            # / PAYMENT_PENDING: payment submitted but debit not confirmed yet (SEPA).
+            return queryset.filter(status__in=[
+                Membership.WAITING_PAYMENT,
+                Membership.ADMIN_VALID,
+                Membership.PAYMENT_PENDING,
+            ])
 
         if value == "canceled":
             return queryset.filter(status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED])
@@ -2398,6 +2404,21 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
                 )
             )
         )
+
+    def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
+        # On enveloppe la vue d'ajout/édition pour transformer une IntegrityError
+        # (contrainte unique name+datetime) en message propre plutôt qu'une 500.
+        # Cas typique : double-clic sur "Enregistrer" / double soumission. La
+        # validation du formulaire (unique_together) était passée, mais un INSERT
+        # concurrent a déjà créé l'évènement entre temps (course / TOCTOU).
+        # / Wrap the add/change view to turn an IntegrityError (unique name+datetime
+        # constraint) into a clean message instead of a 500. Typical case: a
+        # double "Save" submit slipping past the form's unique validation.
+        try:
+            return super().changeform_view(request, object_id, form_url, extra_context)
+        except IntegrityError:
+            messages.error(request, _("Un évènement avec le même nom et la même date existe déjà."))
+            return redirect(reverse(f"{self.admin_site.name}:BaseBillet_event_changelist"))
 
     def save_model(self, request, obj: Event, form, change):
         # Sanitize all TextField inputs to avoid XSS via WysiwYG/TextField

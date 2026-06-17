@@ -1218,6 +1218,17 @@ class Webhook_stripe(APIView):
                 paiement_stripe.lignearticles.all().update(status=LigneArticle.FAILED)
                 paiement_stripe.save()
 
+                # Échec du prélèvement SEPA : on réarme les adhésions liées qui
+                # étaient "paiement soumis, en attente". On les repasse en
+                # "validé par admin" pour que l'adhérent puisse relancer un
+                # paiement via son lien (sinon il reste bloqué sur un lien inactif).
+                # / SEPA debit failed: rearm linked memberships that were
+                # "payment pending" back to "admin validated" so the member can
+                # pay again via the link (otherwise stuck on a dead link).
+                for membership in paiement_stripe.membership.filter(status=Membership.PAYMENT_PENDING):
+                    membership.status = Membership.ADMIN_VALID
+                    membership.save(update_fields=['status'])
+
                 # envoyer ici le mail d'echec de paiement
                 send_payment_refused_user.delay(str(paiement_stripe.uuid))
                 return Response(f"Traité par /api/Webhook_stripe : {paiement_stripe.get_status_display()}", status=status.HTTP_200_OK)

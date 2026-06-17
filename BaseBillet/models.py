@@ -2900,6 +2900,19 @@ class Paiement_stripe(models.Model):
         else:
             self.status = Paiement_stripe.CANCELED
 
+        # Adhésion : le checkout a été soumis mais le débit n'est pas encore
+        # confirmé (cas SEPA, jusqu'à 14 jours). On bascule les adhésions liées
+        # de "validé par admin" vers "paiement soumis, en attente" pour que le
+        # lien de paiement ne génère plus de nouveau checkout. Cela ferme la
+        # fenêtre où un re-clic recréait une session et donc un 2e prélèvement.
+        # / Membership: checkout submitted but debit not confirmed yet (SEPA).
+        # Move linked memberships from "admin validated" to "payment pending" so
+        # the payment link stops creating new checkouts (duplicate debit fix).
+        if self.status == Paiement_stripe.PENDING:
+            for membership in self.membership.filter(status=Membership.ADMIN_VALID):
+                membership.status = Membership.PAYMENT_PENDING
+                membership.save(update_fields=['status'])
+
         # le .save() lance le process BaseBillet.triggers.TRIGGER_LigneArticlePaid_ActionByCategorie
         # qui modifie le status de chaque ligne
 
@@ -3142,6 +3155,14 @@ class Membership(models.Model):
     WAITING_PAYMENT = 'WP'
     ADMIN, IMPORT, LABOUTIK = 'D', 'I', 'L'
     ADMIN_WAITING, ADMIN_VALID = 'AW', 'AV'
+    # Le membre a soumis son paiement (checkout validé) mais le débit n'est pas
+    # encore confirmé. Cas typique : prélèvement SEPA, qui prend jusqu'à 14 jours.
+    # Tant que l'adhésion est dans cet état, le lien de paiement ne doit plus
+    # générer de nouveau checkout (protection contre les doubles prélèvements).
+    # / Member submitted payment (checkout completed) but debit not confirmed yet.
+    # Typical case: SEPA direct debit (up to 14 days). While in this state, the
+    # payment link must not generate a new checkout (duplicate debit protection).
+    PAYMENT_PENDING = 'PP'
     ONCE, AUTO =  'A', 'O'
     CANCELED, ADMIN_CANCELED = 'C', 'AC'
     STATUS_CHOICES = [
@@ -3154,6 +3175,7 @@ class Membership(models.Model):
         # Pour les validations manuelles
         (ADMIN_WAITING, _('En attente de validation par un admin')),
         (ADMIN_VALID, _('Confirmé par un admin, en attente de paiement')),
+        (PAYMENT_PENDING, _('Paiement soumis, en attente de validation bancaire')),
 
         (ONCE, _('Payé en ligne')),
         (AUTO, _('Payé en ligne (récurrent)')),
