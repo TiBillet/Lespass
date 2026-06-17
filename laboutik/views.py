@@ -245,6 +245,7 @@ def _construire_state(point_de_vente=None, carte_primaire_obj=None):
     # Ces champs ne sont pertinents que sur l'interface POS, pas sur la page d'attente.
     # Enrich with point of sale properties (if provided).
     if point_de_vente is not None:
+        state["uuid_pv"] = str(point_de_vente.uuid)
         state["comportement"] = point_de_vente.comportement
         state["afficher_les_prix"] = point_de_vente.afficher_les_prix
         state["accepte_especes"] = point_de_vente.accepte_especes
@@ -1144,9 +1145,9 @@ class CaisseViewSet(viewsets.ViewSet):
         Displays the primary card waiting page (cash register manager's card).
         """
 
-        # pour le chargement de cordova
+        # pour le chargement des assets de cordova (plugins)
         type_app = request.GET.get("type_app", "unknown")
-        
+
         state = _construire_state()
         context = {
             "state": state,
@@ -1233,6 +1234,7 @@ class CaisseViewSet(viewsets.ViewSet):
         # Always redirect to the first POS in the list (sorted by poid_liste).
         pv = pvs[0]
         url_point_de_vente = reverse("laboutik-caisse-point_de_vente")
+        request.session["client_id"] = 123
         url_avec_params = (
             f"{url_point_de_vente}?uuid_pv={pv.uuid}&tag_id_cm={tag_id_carte_manager}&type_app={type_app}"
         )
@@ -1435,6 +1437,55 @@ class CaisseViewSet(viewsets.ViewSet):
             "type_app": type_app,
         }
         return render(request, template_name, context)
+
+
+    # ----------------------------------------------------------------------- #
+    # Interface direct pour gèrer le contenu d'une carte cashless             #
+    # ----------------------------------------------------------------------- #
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="managed_card",
+        url_name="managed_card",
+    )
+    def managed_card(self, request):
+        uuid_pv = request.GET.get("uuid_pv") or None
+
+        # --- Charger le point de vente depuis la DB ---
+        # --- Load the point of sale from DB ---
+        try:
+            pv = PointDeVente.objects.get(uuid=uuid_pv)
+            state = _construire_state(pv)
+        except (PointDeVente.DoesNotExist, ValueError):
+            raise Http404(_("Point de vente introuvable"))
+
+        # logger.info("-----------------------------------------------------")
+        # logger.info(f"pv = {vars(pv)}")
+        
+        template_name = 'laboutik/partial/hx_managed_card.html'
+        list_payment = []
+        if state["accepte_especes"]:
+            list_payment.append({
+                "name": "espece",
+                "trad": _("espèce")
+            })
+        if state["accepte_carte_bancaire"]:
+            list_payment.append({
+                "name": "carte_bancaire",
+                "trad": _("carte bancaire")
+            })
+        if state["accepte_cheque"]:
+            list_payment.append({
+                "name": "CH",
+                "trad": _("chèque")
+            })
+
+        context = {
+            "list_payment": list_payment,
+            "state": state
+        }
+        return render(request, template_name, context)
+
 
     # ----------------------------------------------------------------------- #
     #  Cloture de caisse (Phase 5)                                             #
@@ -8940,3 +8991,4 @@ class LaBoutikAuthBridgeView(APIView):
         )
         # ajout du paramètres de requête type_app afin d'être récupérer par le front et le back après redirection
         return HttpResponseRedirect("/laboutik/caisse?type_app=" + type_app)
+

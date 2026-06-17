@@ -1,0 +1,27 @@
+{% load static i18n %}
+<link rel="stylesheet" href="{% static 'css/keypad.css' %}" />
+<div {{ attrs }} class="keyboard-content">
+  <div class="key-touch key-size1">7</div>
+  <div class="key-touch key-size1">8</div>
+  <div class="key-touch key-size1">9</div>
+  <div class="key-touch key-size1">4</div>
+  <div class="key-touch key-size1">5</div>
+  <div class="key-touch key-size1">6</div>
+  <div class="key-touch key-size1">1</div>
+  <div class="key-touch key-size1">2</div>
+  <div class="key-touch key-size1">3</div>
+  <div class="key-touch key-size1">0</div>
+  <div class="key-touch key-size1">.</div>
+  <div class="key-touch key-size1">C</div>
+  <script>
+  function manageKeyboard(event) {
+    const element = event.target
+    if(element.className.includes('key-touch')) {
+      const key = element.textContent
+      sendEvent('keypadSendValue','{{ ck_target }}', {key})
+    }
+  }
+  document.querySelector('#{{ id }}').addEventListener('click', manageKeyboard)
+
+  </script>
+</div>

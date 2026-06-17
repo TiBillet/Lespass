@@ -9,6 +9,7 @@
 #   /laboutik/caisse/                     → CaisseViewSet.list (page d'attente carte primaire)
 #   /laboutik/caisse/carte_primaire/      → CaisseViewSet.carte_primaire (validation carte NFC)
 #   /laboutik/caisse/point_de_vente/      → CaisseViewSet.point_de_vente (interface POS)
+#   /laboutik/caisse/managed_card/        → CaisseViewSet.managed_card (interface cashless)
 #   /laboutik/paiement/moyens_paiement/   → PaiementViewSet.moyens_paiement (boutons paiement)
 #   /laboutik/paiement/confirmer/         → PaiementViewSet.confirmer (confirmation)
 #   /laboutik/paiement/payer/             → PaiementViewSet.payer (exécution paiement)

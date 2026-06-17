@@ -12,7 +12,6 @@
     <link rel="stylesheet" href="{% static 'css/overlay.css' %}" />
     <link rel="stylesheet" href="{% static 'css/components.css' %}" />
     <link rel="stylesheet" href="{% static 'css/header.css' %}" />
-    <link rel="stylesheet" href="{% static 'css/categories.css' %}" />
     <link rel="stylesheet" href="{% static 'css/articles.css' %}" />
     <link rel="stylesheet" href="{% static 'css/billet_tuile.css' %}" />
     <link rel="stylesheet" href="{% static 'css/addition.css' %}" />
@@ -34,16 +33,16 @@
 		state['typeApp'] = '{{ type_app }}'
     </script>
     {% if type_app == "cordova" %}
-		<!-- Attention, url specifique à cordova-->
-		<script src="http://localhost/cordova.js"></script>
-		<script src="{% static 'js/manageSunmiPrint.js' %}"></script>
-		{% endif %}
+      <!-- Attention, url specifique à cordova-->
+      <script src="http://localhost/cordova.js"></script>
+      <script src="{% static 'js/manageSunmiPrint.js' %}"></script>
+    {% endif %}
     <!-- https://github.com/MikeMcl/big.js/tree/main -->
     <script src="{% static 'js/big.js' %}"></script>
-		<script src="{% static 'js/socket.io.min.js' %}"></script>
+    <script src="{% static 'js/socket.io.min.js' %}"></script>
     <!-- passing django values to javascript - ex : state.demo.active -->
     <script src="{% static 'js/nfc.js' %}"></script>
-		<!-- common functions -->
+    <!-- common functions -->
     <script src="{% static 'js/tibilletUtils.js' %}"></script>
   </head>
   <!-- <body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-on::before-request="spinnerRequestOn()" hx-on::after-request="spinnerRequestOff()" style="background-color:#000000;"> -->

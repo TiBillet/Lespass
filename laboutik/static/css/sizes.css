@@ -41,6 +41,10 @@
 	--bt-basic-height: 120px;
 	--bt-basic-icon-width: 28%;
 	--bt-basic-text-width: 72%;
+	
+	/* keys */
+  --key-width: 80px;
+  --key-height: 80px;
 }
 
 /* Mobile : sidebar et footer plus compacts

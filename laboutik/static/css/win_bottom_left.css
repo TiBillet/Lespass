@@ -53,3 +53,19 @@
   overflow: hidden;
   color: var(--blanc01);
 }
+
+.bc-place {
+  background-color: var(--info);
+}
+
+.bc-info {
+  background-color: var(--bleu02);
+}
+
+.bc-purple {
+  background-color: var(--bleu10);
+}
+
+.bc-table-ephemeral {
+  background-color: var(--vert05);
+}

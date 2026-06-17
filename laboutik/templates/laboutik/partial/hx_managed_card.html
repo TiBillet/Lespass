@@ -1,0 +1,68 @@
+{% load static i18n %}
+<div id="messages">
+  <div id="mc-container">
+    <link rel="stylesheet" href="{% static 'css/hx_managed_card.css' %}" />
+    <div class="mc-title">{{ state.place.monnaie_name }}</div>
+    <div class="mc-content">
+      <div class="mc-content-main">
+        <c-keypad id="keypad-1" ck-target="#mc-actions" />
+        <input id="input-mc" class="hide" />
+        <div id="mc-actions">
+          {% for payement in list_payment %}
+            <div id="action-payment-{{ payement.name }}" class="mc-output">0</div>
+            <div class="mc-payment-select" data-payment-type="{{ payement.name }}">{{ payement.trad }}</div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="mc-error-container">
+        <div class="mc-error">{% translate "Aucun type de paiement choisi !" %}</div>
+      </div>
+    </div>
+    <div class="mc-footer-actions">
+      <div class="mc-actions-bt bc-error">{% translate "REMBOURSEMENT" %}</div>
+      <div class="mc-actions-bt bc-info"
+           onclick="hideAndEmptyElement('#messages');">{% translate "RETOUR" %}</div>
+      <div class="mc-actions-bt bc-success">{% translate "VALIDER" %}</div>
+    </div>
+  </div>
+  <script>
+    window['cashlessPaymentType'] =  null
+    function managePaymentSelection(event) {
+      const element = event.target
+      if(element.className.includes('mc-payment-select')) {
+        cashlessPaymentType = element.dataset.paymentType
+        const target = document.querySelector('#action-payment-' + cashlessPaymentType)
+        document.querySelectorAll('.mc-output').forEach(ele => {
+          ele.classList.remove('active')
+        })
+        target.classList.add('active')
+        // console.log('cashlessPaymentType =', cashlessPaymentType)
+      }
+    }
+
+    function insertValue(event) {
+      const key = event.detail.key
+      
+      const msgError = document.querySelector('.mc-error')
+      if(window.cashlessPaymentType === null) {
+        msgError.style.display = 'flex'
+      } else {
+        const target = document.querySelector('#action-payment-' + cashlessPaymentType)
+        if (key !== 'C') {
+          msgError.style.display = 'none'
+          let value = target.innerText
+          if(value === '0') {
+            value = ''
+          }
+          value +=  key
+          target.innerText = value
+        } else {
+          target.innerText = '0'
+        }
+      }
+    }
+
+    document.querySelector('#mc-actions').addEventListener('click', managePaymentSelection)
+    document.querySelector('#mc-actions').addEventListener('keypadSendValue', insertValue)
+  </script>
+</div>
