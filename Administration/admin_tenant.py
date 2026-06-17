@@ -1647,10 +1647,26 @@ class MembershipAdmin(HelpDisplayMixin, ModelAdmin, ImportExportModelAdmin):
     def price_product_display(self, obj: Membership):
         return f"{obj.price.product.name} / {obj.price.name}"
 
+    @display(description=_("Statut de l'adhésion"))
+    def display_status_membership(self, obj: Membership):
+        # Badge couleur selon l'état : vert = valide, rouge = annulé, gris = autre
+        # (dont "Paiement soumis, en attente"). En lecture seule : le statut est
+        # piloté par la machine à états du paiement, il ne se modifie jamais a la main.
+        # / Colored badge by state: green = valid, red = cancelled, grey = other.
+        # Read-only: the status is driven by the payment state machine, never edited by hand.
+        badge_fond, badge_texte = _badge_couleur_adhesion(obj.is_valid(), obj.status)
+        return format_html(
+            '<span style="background-color:{}; color:{}; padding:2px 10px; '
+            'border-radius:9999px; font-size:.85em;">{}</span>',
+            badge_fond, badge_texte, obj.get_status_display(),
+        )
+
     def get_readonly_fields(self, request, obj=None):
         readonly_fields = super().get_readonly_fields(request, obj)
         if obj:  # On est en train de modifier
-            return list(readonly_fields) + ['user_email_link', 'price_product_display']
+            return list(readonly_fields) + [
+                'display_status_membership', 'user_email_link', 'price_product_display',
+            ]
         return readonly_fields
 
     # def get_fields(self, request, obj=None):

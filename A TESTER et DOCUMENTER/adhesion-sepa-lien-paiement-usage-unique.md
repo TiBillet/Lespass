@@ -78,6 +78,31 @@ with tenant_context(t):
 - Filtre liste adhésions « Attente de paiement » : les adhésions en `PAYMENT_PENDING`
   y apparaissent bien.
 
+## Backfill production (adhésions déjà en cours au déploiement)
+
+Le correctif ne bascule en `PAYMENT_PENDING` que les **nouvelles** soumissions
+(via webhook/retour). Les adhésions dont le mandat SEPA était **déjà soumis**
+au moment du déploiement restent `ADMIN_VALID` → leur lien pourrait encore
+recréer un checkout. Le management command les régularise :
+
+```bash
+# 1. Dry-run sur le tenant concerné (n'écrit rien, liste les adhésions) :
+docker exec lespass_django poetry run python manage.py backfill_membership_payment_pending --schema <schema>
+
+# 2. Appliquer :
+docker exec lespass_django poetry run python manage.py backfill_membership_payment_pending --schema <schema> --apply
+
+# 3. (option) Confirmer en plus via l'API Stripe les cas sans moyen SEPA local :
+docker exec lespass_django poetry run python manage.py backfill_membership_payment_pending --schema <schema> --verify-stripe --apply
+```
+
+Détection : adhésion `ADMIN_VALID` + paiement `PENDING` dont une ligne est en
+`STRIPE_SEPA_NOFED` (preuve que le mandat a été soumis). `--verify-stripe`
+ajoute une confirmation via `Session.retrieve` (`status == 'complete'`) pour les
+cas où le webhook n'aurait pas posé le moyen de paiement. Sans `--schema`, tous
+les tenants (hors ROOT) sont traités. **Dry-run par défaut**, `--apply` requis
+pour écrire. Testé en dev (cycle AV → détection → apply → PP).
+
 ## i18n
 Nouvelles chaînes FR (statut + pages) → `makemessages -l fr/en` puis `compilemessages`
 (à faire par le mainteneur).

@@ -389,12 +389,18 @@ class TestSepaDuplicateProtection:
             f"Création adhésion payée échouée : HTTP {result['status']} — {result['text']}"
         )
 
-        # --- Étape 2 : Récupérer l'UUID de l'adhésion via django_shell ---
-        # / Step 2: Get the membership UUID via django_shell
+        # --- Étape 2 : Forcer le statut ONCE (adhésion payée) + récupérer l'UUID ---
+        # On force explicitement le statut ONCE pour simuler une adhésion déjà
+        # payée (paymentMode=FREE ne garantit pas ONCE sur un produit à
+        # validation manuelle). C'est ce cas précis que le test veut couvrir.
+        # / Step 2: Force ONCE status (paid membership) + get the UUID.
+        # We explicitly force ONCE to simulate an already-paid membership.
         uuid_result = django_shell(
             "from BaseBillet.models import Membership\n"
             f"m = Membership.objects.filter(user__email='{paid_email}').first()\n"
             "if m:\n"
+            "    Membership.objects.filter(pk=m.pk).update(status=Membership.ONCE)\n"
+            "    m.refresh_from_db()\n"
             "    print(f'status={m.status}')\n"
             "    print(f'uuid={m.uuid}')\n"
             "else:\n"

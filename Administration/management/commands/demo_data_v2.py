@@ -460,6 +460,11 @@ class Command(BaseCommand):
                "stripe_mode_test": True,
                "stripe_connect_account_test": os.environ.get('TEST_STRIPE_CONNECT_ACCOUNT'),
                "stripe_payouts_enabled": True,
+               # Accepte le prélèvement SEPA (adhésions à validation manuelle).
+               # Nécessite que la capability SEPA soit active sur le compte connecté.
+               # / Accept SEPA direct debit (manual-validation memberships).
+               # Requires the SEPA capability to be active on the connected account.
+               "stripe_accept_sepa": True,
                "site_web": "https://tibillet.org",
                "legal_documents": "https://tibillet.org/cgucgv",
                "adresse": {
@@ -1487,6 +1492,27 @@ class Command(BaseCommand):
                     if addr_obj:
                         config.postal_address = addr_obj
                     config.save()
+
+                    # Active le prélèvement SEPA si la fixture le demande.
+                    # On le fait APRÈS le save principal et dans un bloc isolé :
+                    # Configuration.save() vérifie la capability SEPA via l'API
+                    # Stripe et lève une erreur si elle n'est pas active sur le
+                    # compte connecté. Sans cet isolement, un compte sans SEPA
+                    # ferait perdre toute la configuration du tenant.
+                    # / Enable SEPA only if requested, after the main save and in an
+                    # isolated block: Configuration.save() checks the Stripe SEPA
+                    # capability and raises if inactive. Without isolation, a compte
+                    # without SEPA would discard the whole tenant configuration.
+                    if fx.get('stripe_accept_sepa'):
+                        try:
+                            config.stripe_accept_sepa = True
+                            config.save()
+                            logger.info(f"SEPA activé pour {tenant.name}")
+                        except Exception as e:
+                            logger.warning(
+                                f"SEPA non activé pour {tenant.name} "
+                                f"(capability Stripe absente ou inactive ?) : {e}"
+                            )
 
                 except Exception as e:
                     logger.warning(f"Impossible de configurer Configuration pour {tenant.name}: {e}")

@@ -43,10 +43,11 @@ le comportement déjà sûr de la carte bancaire.
 | `BaseBillet/migrations/0219_alter_membership_status.py` | Nouveau choix de statut (généré) |
 | `BaseBillet/views.py` | `get_checkout_for_membership` : routage HTML par statut + `except` bloquant |
 | `ApiBillet/views.py` | `async_payment_failed` : réarmement `PAYMENT_PENDING → ADMIN_VALID` |
-| `Administration/admin_tenant.py` | Filtre « Attente de paiement » inclut `PAYMENT_PENDING` |
+| `Administration/admin_tenant.py` | Filtre « Attente de paiement » inclut `PAYMENT_PENDING` ; statut de l'adhésion affiché en lecture seule (badge couleur) sur la fiche détail |
 | `BaseBillet/templates/reunion/views/membership/payment_already_pending.html` | Bloc `main` + `{% extends %}` en tête |
 | `BaseBillet/templates/.../payment_already_done.html` | Nouveau — page « adhésion déjà active » |
 | `BaseBillet/templates/.../payment_link_invalid.html` | Nouveau — page « lien invalide » |
+| `Administration/management/commands/backfill_membership_payment_pending.py` | Nouveau — régularise en prod les adhésions SEPA déjà soumises restées `ADMIN_VALID` (dry-run par défaut, `--apply`, `--verify-stripe`) |
 | `tests/pytest/test_membership_sepa_payment_link.py` | Nouveau — 4 tests (routage + bascule de statut) |
 | `tests/e2e/test_sepa_duplicate_protection.py` | Test 3 adapté au nouveau comportement (200 + page, plus de 404) |
 
