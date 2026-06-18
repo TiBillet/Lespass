@@ -110,6 +110,9 @@ git clone https://github.com/TiBillet/Lespass.git
 cd Lespass
 cp env_example .env        # Configure environment variables
 
+# network
+docker network create frontend
+
 # Lespass only:
 docker compose up -d
 # Lespass + Laboutik
