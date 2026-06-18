@@ -515,10 +515,21 @@ def test_calculer_billets_avec_reservation(tenant_lespass, periode_test):
             else:
                 remaining_receivers.append(receiver)
         post_delete.receivers = remaining_receivers
+        # Django met en cache les receivers par sender (sender_receivers_cache).
+        # Modifier .receivers ne l'invalide PAS : sans ce clear, dès qu'un test
+        # precedent a fait un Event.delete() (cache peuple), event.delete() ici
+        # reutilise les receivers caches (non filtres) et le callback stdimage
+        # crashe quand meme. On vide le cache avant ET apres.
+        # / Django caches receivers per sender; clearing .receivers does not
+        # invalidate it. Without this clear, once a previous test ran an
+        # Event.delete(), event.delete() reuses cached (unfiltered) receivers and
+        # the stdimage callback still crashes. Clear the cache before AND after.
+        post_delete.sender_receivers_cache.clear()
         try:
             event.delete()
         finally:
             post_delete.receivers = remaining_receivers + saved_receivers
+            post_delete.sender_receivers_cache.clear()
 
 
 def test_calculer_detail_ventes_groupe_par_categorie(tenant_lespass, periode_test):

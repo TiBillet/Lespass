@@ -540,7 +540,7 @@ msgstr "Mint"
 
 #: Administration/admin/products.py:83
 msgid "Peche"
-msgstr ""
+msgstr "Peach"
 
 #: Administration/admin/products.py:84
 msgid "Rose"
@@ -556,11 +556,11 @@ msgstr "Sand"
 
 #: Administration/admin/products.py:105
 msgid "Biere"
-msgstr ""
+msgstr "Beer"
 
 #: Administration/admin/products.py:106
 msgid "Vin rouge / rose"
-msgstr ""
+msgstr "Red wine / rosé"
 
 #: Administration/admin/products.py:107
 msgid "Vin blanc"
@@ -568,7 +568,7 @@ msgstr "White wine"
 
 #: Administration/admin/products.py:108
 msgid "Bouteille vin"
-msgstr ""
+msgstr "Wine bottle"
 
 #: Administration/admin/products.py:109
 msgid "Cocktail / bar"
@@ -576,11 +576,11 @@ msgstr "Cocktail / bar"
 
 #: Administration/admin/products.py:110
 msgid "Spiritueux / soda"
-msgstr ""
+msgstr "Spirits / soda"
 
 #: Administration/admin/products.py:111
 msgid "Champagne / fete"
-msgstr ""
+msgstr "Champagne / party"
 
 #: Administration/admin/products.py:112
 msgid "Martini / apero"
@@ -608,7 +608,7 @@ msgstr ""
 
 #: Administration/admin/products.py:118
 msgid "Biere artisanale"
-msgstr ""
+msgstr "Craft beer"
 
 #: Administration/admin/products.py:119
 msgid "Shot / fiole"
@@ -616,7 +616,7 @@ msgstr "Shot / vial"
 
 #: Administration/admin/products.py:120
 msgid "Eau minerale / source"
-msgstr ""
+msgstr "Mineral water / spring water"
 
 #: Administration/admin/products.py:122
 msgid "Restaurant / plat"
@@ -644,7 +644,7 @@ msgstr "Cheese / platter"
 
 #: Administration/admin/products.py:128
 msgid "Brunch / petit-dej"
-msgstr ""
+msgstr "Brunch / breakfast"
 
 #: Administration/admin/products.py:129
 msgid "Fruit / bio"
@@ -652,7 +652,7 @@ msgstr "Fruit / organic"
 
 #: Administration/admin/products.py:130
 msgid "Salade / vegetal"
-msgstr ""
+msgstr "Salad / plant-based"
 
 #: Administration/admin/products.py:131
 msgid "Bio / vegan"
@@ -660,7 +660,7 @@ msgstr "Organic / vegan"
 
 #: Administration/admin/products.py:132
 msgid "Dessert / gouter"
-msgstr ""
+msgstr "Dessert / snack"
 
 #: Administration/admin/products.py:133
 msgid "Snack"
@@ -680,11 +680,11 @@ msgstr "Fish / seafood"
 
 #: Administration/admin/products.py:137
 msgid "Legume / veggie"
-msgstr ""
+msgstr "Vegetable / veggie"
 
 #: Administration/admin/products.py:138
 msgid "Epice / piment"
-msgstr ""
+msgstr "Spice / chili"
 
 #: Administration/admin/products.py:139
 msgid "Confiserie / sucre"
@@ -712,7 +712,7 @@ msgstr "Wallet / balance"
 
 #: Administration/admin/products.py:146
 msgid "Especes"
-msgstr ""
+msgstr "Cash"
 
 #: Administration/admin/products.py:147
 msgid "Carte bancaire"
@@ -776,15 +776,15 @@ msgstr "Adhesion / membre"
 
 #: Administration/admin/products.py:163
 msgid "Nouvel adherent"
-msgstr ""
+msgstr "New member"
 
 #: Administration/admin/products.py:164
 msgid "Communaute / asso"
-msgstr ""
+msgstr "Community / association"
 
 #: Administration/admin/products.py:165
 msgid "Partenariat / cooperative"
-msgstr ""
+msgstr "Partnership / cooperative"
 
 #: Administration/admin/products.py:166
 msgid "Don / soutien"
@@ -792,7 +792,7 @@ msgstr "Donation / support"
 
 #: Administration/admin/products.py:167
 msgid "Premium / fidelite"
-msgstr ""
+msgstr "Premium / loyalty"
 
 #: Administration/admin/products.py:169
 #: BaseBillet/templates/faire_festival/views/home.html:232
@@ -876,7 +876,7 @@ msgstr "Shop / stand"
 
 #: Administration/admin/products.py:189
 msgid "Echoppe / marche"
-msgstr ""
+msgstr "Shop / market stall"
 
 #: Administration/admin/products.py:190
 msgid "Entree / accueil"
@@ -908,7 +908,7 @@ msgstr "Caravan / trailer"
 
 #: Administration/admin/products.py:197
 msgid "Jardin / exterieur"
-msgstr ""
+msgstr "Garden / outdoor"
 
 #: Administration/admin/products.py:198
 msgid "Feu / barbecue"
@@ -916,7 +916,7 @@ msgstr "Fire / barbecue"
 
 #: Administration/admin/products.py:199
 msgid "Plein air / ete"
-msgstr ""
+msgstr "Outdoor / summer"
 
 #: Administration/admin/products.py:201
 msgid "Danger / attention"
@@ -932,7 +932,7 @@ msgstr "Cancel / refund"
 
 #: Administration/admin/products.py:204
 msgid "Consigne / echange"
-msgstr ""
+msgstr "Deposit / exchange"
 
 #: Administration/admin/products.py:205
 msgid "Consigne retour"
@@ -940,15 +940,15 @@ msgstr "Return instructions"
 
 #: Administration/admin/products.py:206
 msgid "Bloquer / desactiver"
-msgstr ""
+msgstr "Block / disable"
 
 #: Administration/admin/products.py:207
 msgid "Verrouille"
-msgstr ""
+msgstr "Locked"
 
 #: Administration/admin/products.py:208
 msgid "Valide / succes"
-msgstr ""
+msgstr "Valid / success"
 
 #: Administration/admin/products.py:341
 msgid "A price cannot be both free price and weight/volume-based."
@@ -1328,7 +1328,7 @@ msgstr ""
 
 #: Administration/admin_tenant.py:1513 Administration/admin_tenant.py:1514
 msgid "Ventes / Ligne comptables"
-msgstr ""
+msgstr "Sales / Accounting lines"
 
 #: Administration/admin_tenant.py:1528 Administration/admin_tenant.py:1972
 #: Administration/templates/admin/membership/wallet_info.html:95
@@ -1865,7 +1865,7 @@ msgstr "Label"
 
 #: Administration/importers/lignearticle_exporter.py:22
 msgid "Prix Unitaire"
-msgstr ""
+msgstr "Unit Price"
 
 #: Administration/importers/lignearticle_exporter.py:23
 #: BaseBillet/models.py:2943 BaseBillet/templates/invoice/invoice.html:176
@@ -1926,11 +1926,11 @@ msgstr "Place of origin"
 
 #: Administration/templates/admin/asset/asset_change_form_before.html:35
 msgid "-> Voir le detail des transactions et remises en banques <-"
-msgstr ""
+msgstr "-> View transaction details and bank deposits <-"
 
 #: Administration/templates/admin/asset/asset_change_form_before.html:41
 msgid "Ventillation par lieu"
-msgstr ""
+msgstr "Breakdown by venue"
 
 #: Administration/templates/admin/asset/asset_change_form_before.html:49
 #: Administration/templates/admin/asset/asset_change_form_before.html:60
@@ -1960,11 +1960,11 @@ msgstr "No data available."
 
 #: Administration/templates/admin/asset/asset_changelist_invitations.html:13
 msgid "Invitations de partage d'assets"
-msgstr ""
+msgstr "Asset sharing invitations"
 
 #: Administration/templates/admin/asset/asset_changelist_invitations.html:42
 msgid "Cree par"
-msgstr ""
+msgstr "Created by"
 
 #: Administration/templates/admin/asset/asset_changelist_invitations.html:57
 msgid "Accepter le partage"
@@ -2051,11 +2051,11 @@ msgstr ""
 
 #: Administration/templates/admin/federation/federation_list_before.html:13
 msgid "Invitations a rejoindre une federation"
-msgstr ""
+msgstr "Invitations to join a federation"
 
 #: Administration/templates/admin/federation/federation_list_before.html:36
 msgid "Invite par"
-msgstr ""
+msgstr "Invited by"
 
 #: Administration/templates/admin/federation/federation_list_before.html:44
 msgid "membre(s)"
@@ -2067,11 +2067,11 @@ msgstr "Accept the invitation"
 
 #: Administration/templates/admin/federation/federation_members.html:13
 msgid "Membres de la federation"
-msgstr ""
+msgstr "Federation members"
 
 #: Administration/templates/admin/federation/federation_members.html:30
 msgid "Createur"
-msgstr ""
+msgstr "Creator"
 
 #: Administration/templates/admin/federation/federation_members.html:48
 msgid "Exclure"
@@ -2159,7 +2159,7 @@ msgstr "No past memberships"
 
 #: Administration/templates/admin/human_user/right_and_wallet_info.html:154
 msgid "Tirelire"
-msgstr ""
+msgstr "Piggy bank"
 
 #: Administration/templates/admin/human_user/right_and_wallet_info.html:163
 msgid "Get cards and wallet information"
@@ -2210,7 +2210,7 @@ msgstr "PDF Receipt"
 
 #: Administration/templates/admin/membership/actions_panel.html:87
 msgid "Renouveller"
-msgstr ""
+msgstr "Renew"
 
 #: Administration/templates/admin/membership/actions_panel.html:112
 #: Administration/templates/admin/membership/partials/ajouter_paiement_button.html:17
@@ -2552,7 +2552,7 @@ msgstr "Current contribution"
 
 #: Administration/templates/admin/membership/partials/renouveller_confirm.html:43
 msgid "Ce que va faire cette action :"
-msgstr ""
+msgstr "What this action will do:"
 
 #: Administration/templates/admin/membership/partials/renouveller_confirm.html:46
 msgid ""
@@ -4575,7 +4575,7 @@ msgid ""
 "Astuce Dev' : pour tester un webhook, lancez un petit serveur HTTP qui "
 "affiche le contenu de la requete : https://gist.github.com/"
 "mdonkers/63e115cc0c79b4f6b8b3a6b797e485c7"
-msgstr ""
+msgstr "Dev tip: to test a webhook, start a small HTTP server that displays the request content: https://gist.github.com/mdonkers/63e115cc0c79b4f6b8b3a6b797e485c7"
 
 #: BaseBillet/models.py:3485
 msgid "Confirmed subscription"
@@ -4878,7 +4878,7 @@ msgstr "{config.organisation}: New membership request pending"
 
 #: BaseBillet/tasks.py:371
 msgid "Administrateur"
-msgstr ""
+msgstr "Administrator"
 
 #: BaseBillet/tasks.py:376
 msgid "Une nouvelle demande d'adhésion est en attente de validation manuelle."
@@ -4895,7 +4895,7 @@ msgstr "Request date"
 
 #: BaseBillet/tasks.py:387
 msgid "Ouvrir l’administration"
-msgstr ""
+msgstr "Open the administration"
 
 #: BaseBillet/tasks.py:390 BaseBillet/tasks.py:621 BaseBillet/tasks.py:737
 #: crowds/templates/success.html:9
@@ -4904,7 +4904,7 @@ msgstr "Thank you"
 
 #: BaseBillet/tasks.py:391
 msgid "Marvin, le TiBillet robot"
-msgstr ""
+msgstr "Marvin, the TiBillet robot"
 
 #: BaseBillet/tasks.py:440
 #, python-brace-format
@@ -4919,7 +4919,7 @@ msgstr "Your membership application has been successfully registered."
 msgid ""
 "Elle est maintenant en attente de validation manuelle par un.e "
 "administrateur.ice."
-msgstr ""
+msgstr "It is now pending manual validation by an administrator."
 
 #: BaseBillet/tasks.py:450
 #: BaseBillet/templates/reunion/views/membership/pending_manual_validation.html:40
@@ -5527,7 +5527,7 @@ msgstr ""
 
 #: BaseBillet/templates/faire_festival/views/event/retrieve.html:327
 msgid "Lieu:"
-msgstr ""
+msgstr "Venue:"
 
 #: BaseBillet/templates/faire_festival/views/event/retrieve.html:336
 msgid "More information:"
@@ -5590,7 +5590,7 @@ msgstr "DAY 01"
 #: BaseBillet/templates/faire_festival/views/home.html:136
 #: BaseBillet/templates/faire_festival/views/home.html:150
 msgid "Entre Espaces,"
-msgstr ""
+msgstr "Between Spaces,"
 
 #: BaseBillet/templates/faire_festival/views/home.html:137
 #: BaseBillet/templates/faire_festival/views/home.html:151
@@ -5742,7 +5742,7 @@ msgstr "5 min walk from Montaudran TER stop"
 
 #: BaseBillet/templates/faire_festival/views/infos_pratiques.html:128
 msgid "28-30 Mai 2026"
-msgstr ""
+msgstr "28-30 May 2026"
 
 #: BaseBillet/templates/faire_festival/views/infos_pratiques.html:139
 msgid "Carte interactive - La Cité, Toulouse"
@@ -6650,7 +6650,7 @@ msgstr ""
 #: BaseBillet/templates/reunion/views/event/list.html:45
 #: crowds/templates/crowds/views/list.html:73
 msgid "Filtrer par tags"
-msgstr ""
+msgstr "Filter by tags"
 
 #: BaseBillet/templates/reunion/views/event/list.html:54
 msgid "Filtres"
@@ -6665,12 +6665,12 @@ msgstr "Propose an event"
 #: crowds/templates/crowds/views/list.html:83
 #, python-format
 msgid "Filtrer par le tag %(tag.name)s"
-msgstr ""
+msgstr "Filter by tag %(tag.name)s"
 
 #: BaseBillet/templates/reunion/views/event/list.html:96
 #: crowds/templates/crowds/views/list.html:88
 msgid "Aucun tag disponible."
-msgstr ""
+msgstr "No tags available."
 
 #: BaseBillet/templates/reunion/views/event/partial/accordion.html:14
 msgid "Schedule"
@@ -6701,7 +6701,7 @@ msgstr ""
 #: BaseBillet/templates/reunion/views/event/partial/booking_form.html:42
 #: BaseBillet/templates/reunion/views/event/partial/booking_form.html:43
 msgid "Les emails ne correspondent pas."
-msgstr ""
+msgstr "Emails do not match."
 
 #: BaseBillet/templates/reunion/views/event/partial/booking_form.html:82
 msgid "Your email is not confirmed. Please check your spam folder :)"
@@ -6976,7 +6976,7 @@ msgstr "Date and time"
 #: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:133
 #: onboard/templates/onboard/partials/event_row_form.html:102
 msgid "Description (optionnel)"
-msgstr ""
+msgstr "Description (optional)"
 
 #: BaseBillet/templates/reunion/views/event/wizard/_events_inner.html:137
 msgid "Quelques mots pour présenter l’évènement."
@@ -8190,7 +8190,7 @@ msgstr ""
 
 #: BaseBillet/validators.py:1131
 msgid "le format du tag NFC n'est pas bon"
-msgstr ""
+msgstr "the NFC tag format is not valid"
 
 #: BaseBillet/validators.py:1143
 msgid "La carte n'existe pas"
@@ -8232,7 +8232,7 @@ msgstr "The amount must be positive."
 
 #: BaseBillet/validators.py:1382
 msgid "Impossible d'utiliser 'Offert' avec un montant positif."
-msgstr ""
+msgstr "Cannot use 'Free' with a positive amount."
 
 #: BaseBillet/validators.py:1433 BaseBillet/views.py:4314
 msgid "Merci d'indiquer votre adresse e-mail pour proposer un évènement."
@@ -8520,7 +8520,7 @@ msgstr "Product not found"
 #: BaseBillet/views.py:3204
 #, python-brace-format
 msgid "Le champ '{field.label}' est obligatoire."
-msgstr ""
+msgstr "The field '{field.label}' is required."
 
 #: BaseBillet/views.py:3250
 msgid "Erreur lors de l'enregistrement : {str(e)}"
@@ -8974,7 +8974,7 @@ msgstr "Account type"
 #: comptabilite/models.py:185
 #: fedow_public/templates/fedow_public/retrieve_bank_deposits.html:32
 msgid "Actif"
-msgstr ""
+msgstr "Active"
 
 #: comptabilite/models.py:189 comptabilite/models.py:212
 msgid "Compte comptable"
@@ -9290,15 +9290,15 @@ msgstr "Vote button name"
 msgid ""
 "C'est le nom par defaut que vous pouvez changer ici. Vous pouvez aussi le "
 "changer dans chaque initiative."
-msgstr ""
+msgstr "This is the default name that you can change here. You can also change it in each initiative."
 
 #: crowds/models.py:31 crowds/models.py:97
 msgid "Mot pour 'Objectif'"
-msgstr ""
+msgstr "Word for 'Goal'"
 
 #: crowds/models.py:34 crowds/models.py:101
 msgid "Mot pour 'Financement'"
-msgstr ""
+msgstr "Word for 'Funding'"
 
 #: crowds/models.py:35 crowds/models.py:102
 #: crowds/templates/crowds/views/detail.html:191
@@ -9307,7 +9307,7 @@ msgstr "Funding"
 
 #: crowds/models.py:38 crowds/models.py:105
 msgid "Mot pour 'Participations'"
-msgstr ""
+msgstr "Word for 'Participations'"
 
 #: crowds/models.py:39 crowds/models.py:106 crowds/models.py:465
 msgid "Participations"
@@ -9324,7 +9324,7 @@ msgstr ""
 
 #: crowds/models.py:46
 msgid "Mot pour 'Pro-bono'"
-msgstr ""
+msgstr "Word for 'Pro-bono'"
 
 #: crowds/models.py:48
 msgid ""
@@ -9340,11 +9340,11 @@ msgstr "Global funding button on the Crowds home page"
 
 #: crowds/models.py:51
 msgid "Texte du bouton 'Je finance'"
-msgstr ""
+msgstr "'I fund' button text"
 
 #: crowds/models.py:58
 msgid "Utilisateur"
-msgstr ""
+msgstr "User"
 
 #: crowds/models.py:60 crowds/models.py:350
 msgid "Nom affiché de l'origine de la contribution"
@@ -9429,7 +9429,7 @@ msgid ""
 "C'est le nom par defaut que vous pouvez changer ici uniquement pour cet "
 "initiative. Vous pouvez aussi le changer celui par default pour tous dans la "
 "configuration."
-msgstr ""
+msgstr "This is the default name that you can change here for this initiative only. You can also change the default one for everyone in the configuration."
 
 #: crowds/models.py:113
 msgid ""
@@ -9593,7 +9593,7 @@ msgstr "Project"
 
 #: crowds/tasks.py:190 crowds/templates/crowds/partial/contributions.html:6
 msgid "Contributeur"
-msgstr ""
+msgstr "Contributor"
 
 #: crowds/tasks.py:194
 msgid "Voir le projet"
@@ -9676,7 +9676,7 @@ msgid ""
 "sur un objectif de %(goal)s %(currency)s\n"
 "                        .\n"
 "                    "
-msgstr ""
+msgstr "\n                        Funding progress: %(percent)s percent of a %(goal)s %(currency)s goal\n                        .\n                    "
 
 #: crowds/templates/crowds/partial/card.html:126
 msgid "Budget contributif et demandes validées"
@@ -9827,11 +9827,11 @@ msgstr "Summary of all projects"
 
 #: crowds/templates/crowds/partial/summary.html:79
 msgid "contributeur·ices"
-msgstr ""
+msgstr "contributors"
 
 #: crowds/templates/crowds/partial/summary.html:92
 msgid "lieux & orgas"
-msgstr ""
+msgstr "venues & organisations"
 
 #: crowds/templates/crowds/partial/summary.html:120
 msgid "à répartir"
@@ -9887,7 +9887,7 @@ msgstr "An error occurred."
 
 #: crowds/templates/crowds/partial/summary.html:281
 msgid "Choisissez un projet"
-msgstr ""
+msgstr "Choose a project"
 
 #: crowds/templates/crowds/partial/summary.html:283
 #: crowds/templates/crowds/views/detail.html:321
@@ -9950,12 +9950,12 @@ msgstr "Please enter an amount with at most two decimal places."
 #: crowds/templates/crowds/partial/summary.html:334
 #: crowds/templates/crowds/views/detail.html:573
 msgid "Veuillez indiquer un montant valide (> 0)."
-msgstr ""
+msgstr "Please enter a valid amount (> 0)."
 
 #: crowds/templates/crowds/partial/summary.html:369
 #: crowds/templates/crowds/views/detail.html:621
 msgid "Redirection vers le paiement..."
-msgstr ""
+msgstr "Redirecting to payment..."
 
 #: crowds/templates/crowds/partial/votes_badge.html:2
 msgid "Votes de pertinence"
@@ -10792,7 +10792,7 @@ msgstr "Invited by %(name)s"
 
 #: onboard/templates/onboard/partials/resend_blocked.html:14
 msgid "Trop de demandes. Veuillez patienter avant d'en redemander un."
-msgstr ""
+msgstr "Too many requests. Please wait before requesting another one."
 
 #: onboard/templates/onboard/partials/resend_cooldown.html:20
 #, python-format
@@ -10962,7 +10962,7 @@ msgstr "terms and conditions of use"
 
 #: onboard/templates/onboard/steps/01_identity.html:218
 msgid "Combien font"
-msgstr ""
+msgstr "How much is"
 
 #: onboard/templates/onboard/steps/01_identity.html:239
 msgid ""
@@ -11223,11 +11223,11 @@ msgstr ""
 msgid ""
 "Lance des campagnes de financement participatif avec contribution adaptive "
 "et cascade multi-asset."
-msgstr ""
+msgstr "Launch crowdfunding campaigns with adaptive contribution and multi-asset cascade."
 
 #: onboard/templates/onboard/steps/06_launch.html:134
 msgid "Booking de salle ou ressource"
-msgstr ""
+msgstr "Room or resource booking"
 
 #: onboard/templates/onboard/steps/06_launch.html:135
 msgid ""
