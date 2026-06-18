@@ -2393,6 +2393,9 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
                 'published',
                 'private',
                 'archived',
+                # Auteur de l'event (ex : proposeur via le wizard public), en lecture seule.
+                # / Event author (e.g. public-wizard proposer), read-only.
+                'display_created_by',
             ),
         }),
     )
@@ -2404,17 +2407,14 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         'datetime',
         'show_time',
         'published',
-        'display_created_by',
     ]
-
-    # select_related sur created_by : evite une requete par ligne dans la
-    # changelist (la colonne display_created_by lit instance.created_by).
-    # / select_related on created_by: avoids one query per row in the changelist.
-    list_select_related = ('created_by',)
 
     list_editable = ['published', ]
     readonly_fields = (
         'display_valid_tickets_count',
+        # Affiche en lecture seule sur la fiche event (bas du bloc Publier).
+        # / Read-only on the event change form (bottom of the Publish block).
+        'display_created_by',
     )
 
     search_fields = ['name']
