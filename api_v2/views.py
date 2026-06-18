@@ -562,19 +562,65 @@ class WalletRefillViewSet(viewsets.ViewSet):
             return Response({"detail": _("Fedow service unavailable.")},
                             status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-        # 10. Credit / Refill
+        # 10. Tracabilite comptable : on cree une LigneArticle "recharge cadeau"
+        # AVANT d'appeler Fedow. Deux raisons : (a) Fedow exige
+        # metadata.ligne_article_uuid ; (b) on doit garder une trace de tout ce
+        # qui a ete credite (comme une recharge offerte sur LaBoutik V1).
+        # / Accounting trace: create a "gift refill" LigneArticle BEFORE calling
+        # Fedow. (a) Fedow requires metadata.ligne_article_uuid; (b) we must keep
+        # a trace of everything credited (like an offered refill on LaBoutik V1).
+        from BaseBillet.models import LigneArticle
+
+        ligne_article = self._creer_ligne_article_recharge(asset, amount, user, api_key)
+
+        # 11. Credit / Refill
+        # IMPORTANT : l'endpoint Fedow refill_from_lespass_to_user_wallet est, par
+        # defaut, concu pour la RECOMPENSE D'ADHESION : son serializer exige
+        # membership_uuid / product_uuid / price_uuid (cf Fedow
+        # TransactionRefilFromLespassSerializer.validate_metadata). Une recharge
+        # cadeau directe n'a aucun de ces objets. Fedow prevoit pour ce cas un
+        # bypass : le flag `rewarded_from_ticket_scanned` (un credit direct sans
+        # contexte de vente, deja utilise pour les recompenses de scan de ticket).
+        # On le reutilise ici pour un credit direct, et on garde `ligne_article_uuid`
+        # pour notre tracabilite comptable.
+        # / The Fedow refill endpoint is meant for MEMBERSHIP REWARD and requires
+        # membership/product/price uuids. A direct gift refill has none. Fedow
+        # offers a bypass flag `rewarded_from_ticket_scanned` (direct credit with
+        # no sale context). We reuse it, keeping ligne_article_uuid for our audit.
         fedowAPI = FedowAPI()
         metadata = {
             "reason": f"API gift refill: {amount} {asset.name}",
             "api_key": api_key.name,
+            "ligne_article_uuid": str(ligne_article.uuid),
+            "rewarded_from_ticket_scanned": True,  # bypass validation vente Fedow
         }
         if idempotency_key:
             metadata["idempotency_key"] = idempotency_key
-        reward_tx = fedowAPI.transaction.refill_from_lespass_to_user_wallet(
-            user=user, amount=amount, asset=asset, metadata=metadata,
+        try:
+            reward_tx = fedowAPI.transaction.refill_from_lespass_to_user_wallet(
+                user=user, amount=amount, asset=asset, metadata=metadata,
+            )
+        except Exception as e:
+            # Echec Fedow : la ligne passe FAILED (via .update() -> aucun signal)
+            # et on renvoie une erreur propre au lieu de la 500 brute precedente.
+            # / Fedow failure: mark the line FAILED (via .update() -> no signal)
+            # and return a clean error instead of the previous raw 500.
+            LigneArticle.objects.filter(pk=ligne_article.pk).update(
+                status=LigneArticle.FAILED,
+            )
+            logger.error(
+                f"WalletRefill : echec Fedow, ligne {ligne_article.uuid} -> FAILED : {e}"
+            )
+            return Response({"detail": _("Wallet provider error.")},
+                            status=status.HTTP_502_BAD_GATEWAY)
+
+        # Succes : la ligne passe VALID (via .update() -> aucun trigger).
+        # / Success: the line becomes VALID (via .update() -> no trigger).
+        LigneArticle.objects.filter(pk=ligne_article.pk).update(
+            status=LigneArticle.VALID,
         )
 
-        # 11. Reponse schema.org MoneyTransfer
+        # 12. Reponse schema.org MoneyTransfer
         payload = {
             "@context": "https://schema.org",
             "@type": "MoneyTransfer",
@@ -586,6 +632,74 @@ class WalletRefillViewSet(viewsets.ViewSet):
         if cache_key:
             cache.set(cache_key, payload, timeout=60 * 60 * 48)  # 48h
         return Response(payload, status=status.HTTP_201_CREATED)
+
+    def _creer_ligne_article_recharge(self, asset, amount, user, api_key):
+        """
+        Cree une LigneArticle qui trace une recharge cadeau (audit comptable).
+        / Create a LigneArticle tracing a gift refill (accounting audit).
+
+        LOCALISATION : api_v2/views.py — WalletRefillViewSet
+
+        Un produit RECHARGE_CASHLESS dedie par asset (decision : un produit par
+        asset). Tarif a 0 € : la recharge est OFFERTE (payment_method=FREE).
+        Le ProductSold / PriceSold sont crees a la main pour NE PAS declencher
+        d'appel Stripe (get_or_create_price_sold appelle get_id_price_stripe).
+        / One RECHARGE_CASHLESS product per asset. 0 € price: the refill is
+        OFFERED (payment_method=FREE). ProductSold/PriceSold created by hand to
+        avoid the Stripe call done by get_or_create_price_sold.
+
+        La ligne est creee en CREATED. Aucun trigger ne se declenche :
+        _state.adding=True a la creation (cf signals.py), et trigger_R
+        (RECHARGE_CASHLESS) n'existe pas. Le credit reel est fait par l'appel
+        Fedow direct, pas par cette ligne -> pas de double credit.
+        / Created as CREATED. No trigger fires (adding=True + no trigger_R).
+        """
+        from decimal import Decimal
+
+        from BaseBillet.models import (
+            Product, Price, ProductSold, PriceSold, LigneArticle,
+            PaymentMethod, SaleOrigin,
+        )
+        from AuthBillet.models import Wallet
+
+        # Produit + tarif de recharge dedies a cet asset (idempotent).
+        # / Refill product + price dedicated to this asset (idempotent).
+        produit, _created = Product.objects.get_or_create(
+            categorie_article=Product.RECHARGE_CASHLESS,
+            name=f"Recharge {asset.name}",
+        )
+        prix, _created = Price.objects.get_or_create(
+            product=produit,
+            name="Recharge API",
+            defaults={"prix": Decimal("0")},
+        )
+        productsold, _created = ProductSold.objects.get_or_create(
+            product=produit, event=None,
+        )
+        pricesold, _created = PriceSold.objects.get_or_create(
+            productsold=productsold, price=prix, prix=Decimal("0"),
+        )
+
+        # wallet : seulement si c'est un vrai Wallet (None sinon). On ne fait pas
+        # confiance aveuglement a user.wallet (peut etre absent).
+        # / wallet: only a real Wallet (None otherwise).
+        wallet = user.wallet if isinstance(getattr(user, "wallet", None), Wallet) else None
+
+        return LigneArticle.objects.create(
+            pricesold=pricesold,
+            amount=amount,  # unites brutes de l'asset creditees / raw asset units credited
+            qty=Decimal("1"),
+            asset=asset.uuid,
+            wallet=wallet,
+            payment_method=PaymentMethod.FREE,  # recharge offerte / offered refill
+            sale_origin=SaleOrigin.LESPASS,
+            status=LigneArticle.CREATED,
+            metadata={
+                "source": "api_v2_wallet_refill",
+                "api_key": api_key.name,
+                "email": getattr(user, "email", ""),
+            },
+        )
 
 
 class SaleViewSet(viewsets.ViewSet):

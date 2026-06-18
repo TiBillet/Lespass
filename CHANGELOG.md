@@ -1,5 +1,109 @@
 # Changelog / Journal des modifications
 
+## Admin clé API & asset : fix icônes asset cadeau, nettoyage assets démo BDG, UUID asset lisible / Admin API key & asset: gift-asset icon fix, BDG demo-asset cleanup, readable asset UUID
+
+**Date :** 2026-06-18
+**Migration :** Non / No
+
+**Contexte / Context :** Remontée utilisateur sur **Admin → Outils externes → Clé API**. En changeant
+l'asset cadeau (`gift_asset`) d'une clé puis en enregistrant, l'utilisateur croyait que le
+changement n'était pas pris en compte et voyait une **erreur sur le nouvel asset**.
+
+**Quoi / What :**
+1. **Bug clé API expliqué et corrigé.** La sauvegarde de `gift_asset` **fonctionnait** (vérifié :
+   la valeur change bien en base). L'erreur venait des **icônes crayon / œil / +** affichées à côté
+   du menu déroulant : elles ouvrent l'admin des assets, qui **masque volontairement les assets
+   badgeuse (BDG)** → clic = erreur « cet asset n'existe pas ». On retire ces icônes de gestion
+   d'asset sur le champ `gift_asset` (`formfield_for_dbfield`) : on ne gère pas les assets depuis
+   la page clé API, la sélection dans la liste suffit.
+2. **Assets démo « [DEMO] Biere / Soft / Sandwich » (catégorie BDG) supprimés.** Origine : la
+   fixture `_demo_data_v2_ventes.py` créait ces produits en `Product.BADGE` (mauvaise catégorie :
+   ce sont des **ventes de comptoir**, pas des badgeuses). Le signal post_save
+   `send_membership_and_badge_product_to_fedow` transformait alors chaque produit BADGE en asset
+   BDG, qui polluait les listes d'assets (et le menu `gift_asset`). Fixture corrigée en
+   `Product.NONE` + 3 assets BDG supprimés de la base dev + 3 produits démo repassés en `NONE`.
+3. **UUID de l'asset en lecture seule** sur la page change d'un asset (`AssetAdmin`).
+4. **Étanchéité multi-tenant sur `gift_asset` (faille corrigée).** `AssetFedowPublic` vit dans le
+   schéma public partagé : le menu déroulant listait les assets de **tous les lieux**, un lieu
+   pouvait donc choisir l'asset cadeau d'un autre. Le queryset est désormais restreint aux assets
+   **dont le tenant courant est l'origine** (`origin = connection.tenant`), via
+   `ExternalApiKeyAdmin.formfield_for_foreignkey`. Vérifié : un asset d'un autre tenant n'apparaît
+   plus et est rejeté en validation. (Surfaces déjà sûres : `Price.fedow_reward_asset` filtre déjà
+   `origin=client` ; `Initiative.asset` n'est pas un champ éditable.)
+5. **Démo badgeuse retirée de `demo_data.py`.** Le bloc « Badgeuse co-working » (produit `BADGE` +
+   tarif « Passage ») et la phrase qui l'annonçait dans la description de l'instance démo sont
+   supprimés (« on n'utilise plus les badges »). Aucune donnée en base : ce bloc n'avait jamais été
+   exécuté sur la base dev.
+
+**Pourquoi / Why :** lever l'ambiguïté côté utilisateur (« on n'utilise plus les badges »), retirer
+des données démo trompeuses, exposer l'identifiant technique de l'asset quand on en a besoin, et
+**garantir l'isolation multi-tenant** sur le choix de l'asset cadeau.
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/admin_tenant.py` | `ExternalApiKeyAdmin.formfield_for_foreignkey` : queryset `gift_asset` limité à `origin = tenant` + catégories rechargeables. `ExternalApiKeyAdmin.formfield_for_dbfield` : retire add/change/delete/view related sur `gift_asset`. `AssetAdmin` : `uuid` ajouté en `readonly_fields` + `fields` |
+| `Administration/management/commands/_demo_data_v2_ventes.py` | Produits démo Biere/Soft/Sandwich : `Product.BADGE` → `Product.NONE` (évite la création d'assets BDG parasites) |
+| `Administration/management/commands/demo_data.py` | Bloc « Badgeuse co-working » (produit BADGE + tarif) supprimé + phrase descriptive associée retirée |
+| Base dev (one-shot, pas de code) | Suppression des 3 assets BDG `[DEMO] *` + produits démo repassés en `NONE` |
+
+## API v2 recharge cadeau : traçabilité LigneArticle + fix 500 Fedow / API v2 gift refill: LigneArticle traceability + Fedow 500 fix
+
+**Date :** 2026-06-18
+**Migration :** Non / No
+
+**Contexte / Context :** `POST /api/v2/wallet-refills/` ne fonctionnait **pas du tout** en réel
+(500), mais les tests **mockaient Fedow** et le cachaient. L'endpoint Fedow réutilisé
+(`refill_from_lespass_to_user_wallet`) est en fait celui de la **récompense d'adhésion** : son
+serializer exige `ligne_article_uuid` + `membership_uuid` + `product_uuid` + `price_uuid`. Une
+recharge cadeau directe n'a aucun de ces objets. De plus, aucune **trace comptable** n'était créée.
+
+**Quoi / What :**
+1. **Le fix Fedow (option C, sans toucher Fedow)** : le serializer Fedow prévoit un bypass via le
+   flag `rewarded_from_ticket_scanned` (crédit direct sans contexte de vente, déjà utilisé pour les
+   récompenses de scan de ticket). La vue le passe désormais dans le metadata → la recharge
+   **crédite réellement** le wallet. Validé en intégration réelle (solde vérifié sur Fedow).
+2. La vue crée une **LigneArticle de traçabilité** AVANT l'appel Fedow (un produit
+   `RECHARGE_CASHLESS` par asset, tarif 0 €, `payment_method=FREE`) et passe son `uuid` dans le
+   metadata. Comme une recharge offerte sur LaBoutik V1 : on trace tout ce qui est crédité.
+3. Succès Fedow → ligne `VALID` ; échec → ligne `FAILED` + **502** propre (au lieu de la 500 brute).
+   Pas de double-crédit (ligne `CREATED`, `_state.adding` → aucun trigger ; `trigger_R` commenté).
+4. **Restriction d'assets alignée sur Fedow** : `REFILLABLE = {cadeau TNF, temps TIM, fidélité FID}`.
+   **BADGE (BDG) retiré** (Fedow le refuse via `validate_asset`, et il n'est plus utilisé) ; euro
+   (TLF) et fédéré (FED) rejetés en 422.
+5. **Tests convertis en intégration RÉELLE** (plus de mock du crédit Fedow) : recharge de chaque
+   type (cadeau/temps/fidélité) via l'API + **vérification du solde réel** sur Fedow, et idempotence
+   réelle. La fixture crée les assets sur Fedow (comme l'admin : `wallet_origin = place.wallet` +
+   `get_or_create_token_asset`). Mocks conservés uniquement pour simuler l'indisponibilité (503) et
+   la panne Fedow (502), non reproductibles en réel.
+
+**Pourquoi / Why :** auditer toute recharge (trou comptable) et rendre l'erreur Fedow propre et
+traçable, **sans toucher au serveur Fedow** (option choisie par le mainteneur).
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `api_v2/views.py` | `WalletRefillViewSet` : flag `rewarded_from_ticket_scanned` (bypass Fedow) + `_creer_ligne_article_recharge` + `ligne_article_uuid` dans metadata + succès/échec (VALID/FAILED, 502) |
+| `fedow_public/models.py` | `REFILLABLE_CATEGORIES` : retrait de `BADGE` (aligné sur `validate_asset` côté Fedow) |
+| `tests/pytest/test_api_v2_wallet_refill.py` | Rejet FED testé (422) ; **tests d'intégration réels** (recharge cadeau/temps/fidélité + vérif solde Fedow + idempotence) via fixture `fedow_real_setup` (assets créés sur Fedow) ; test échec Fedow → 502 + ligne FAILED |
+
+## Tests : couverture du remboursement Stripe + helper Stripe Checkout multi-moyens / Tests: Stripe refund coverage + multi-method Checkout helper
+
+**Date :** 2026-06-18
+**Migration :** Non / No
+
+**Quoi / What :**
+1. **Nouveau `tests/pytest/test_stripe_refund.py`** (3 tests) — couvre le remboursement Stripe, jusqu'ici non testé : (a) `cancel_and_refund_resa()` — `stripe.Refund.create` (montant + `payment_intent`), paiement `REFUNDED`, avoir négatif, réservation + billets annulés ; (b) réservation gratuite → aucun refund ; (c) **remboursement partiel** `cancel_and_refund_ticket()` — 1 billet sur 4 (montant d'**un** billet, pas du panier ; avoir `qty=-1` ; paiement reste `VALID`). Le test (a) documente que `cancel_and_refund_resa` rembourse `amount_total` (le **paiement entier**) — à revoir pour les paniers.
+2. **`tests/e2e/conftest.py` — `fill_stripe_card`** : déplie l'accordéon « Carte » de Stripe Checkout (`data-testid="card-accordion-item-button"`, `dispatch_event`) quand plusieurs moyens sont actifs (Carte + SEPA). Attend que le formulaire soit monté (accordéon **ou** champ carte). Reste compatible « carte seule » (no-op). Débloque `test_membership_manual_validation_stripe` après activation de SEPA sur le compte de test.
+
+**Pourquoi / Why :** le chemin de remboursement Stripe n'avait aucune couverture (les tests d'avoir/annulation utilisent des objets gratuits) ; et l'activation de SEPA a changé la page Checkout (sélecteur de moyen de paiement), cassant le helper partagé.
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `tests/pytest/test_stripe_refund.py` | Nouveau — 2 tests (refund payé + gratuit sans refund) |
+| `tests/e2e/conftest.py` | `fill_stripe_card` : sélection « Carte » sur Checkout multi-moyens |
+
 ## Adhésions SEPA : lien de paiement à usage unique (anti double prélèvement) / SEPA memberships: single-use payment link (duplicate debit fix)
 
 **Date :** 2026-06-17
@@ -49,7 +153,8 @@ le comportement déjà sûr de la carte bancaire.
 | `BaseBillet/templates/.../payment_link_invalid.html` | Nouveau — page « lien invalide » |
 | `Administration/management/commands/backfill_membership_payment_pending.py` | Nouveau — régularise en prod les adhésions SEPA déjà soumises restées `ADMIN_VALID` (dry-run par défaut, `--apply`, `--verify-stripe`) |
 | `tests/pytest/test_membership_sepa_payment_link.py` | Nouveau — 4 tests (routage + bascule de statut) |
-| `tests/e2e/test_sepa_duplicate_protection.py` | Test 3 adapté au nouveau comportement (200 + page, plus de 404) |
+| `tests/e2e/test_sepa_duplicate_protection.py` | Test 3 adapté au nouveau comportement (200 + page, plus de 404) ; force `ONCE` explicitement |
+| `tests/e2e/conftest.py` | `fill_stripe_card` : déplie l'accordéon « Carte » (`data-testid="card-accordion-item-button"`, `dispatch_event`) quand plusieurs moyens sont actifs (Carte + SEPA) ; reste compatible carte seule (no-op) |
 
 ### i18n
 Nouvelles chaînes FR à extraire/compiler (`makemessages` + `compilemessages`) — à faire par le mainteneur.

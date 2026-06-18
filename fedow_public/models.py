@@ -45,11 +45,15 @@ class AssetFedowPublic(models.Model):
     # et l'adhesion (SUB).
     # / Categories that can be topped up via the API v2 refill route: all
     # currencies NOT backed by euro. Excludes fiat (TLF, FED) and subscription (SUB).
+    # Note : on s'aligne sur ce que Fedow accepte vraiment côté
+    # TransactionRefilFromLespassSerializer.validate_asset (TLF/TNF/TIM/FID).
+    # BADGE est exclu : Fedow le refuserait, et il n'est pas utilisé dans l'UX.
+    # / Aligned with what Fedow actually accepts (TLF/TNF/TIM/FID). BADGE excluded:
+    # Fedow would reject it and it's unused in the UX.
     REFILLABLE_CATEGORIES = [
         TOKEN_LOCAL_NOT_FIAT,  # Cadeau / gift
         TIME,                  # Monnaie temps / time currency
         FIDELITY,              # Points de fidelite / loyalty points
-        BADGE,                 # Badgeuse / clocking
     ]
 
     category = models.CharField(

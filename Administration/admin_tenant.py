@@ -194,6 +194,50 @@ class ExternalApiKeyAdmin(ModelAdmin):
             obj.user = request.user
         super().save_model(request, obj, form, change)
 
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        # Etancheite multi-tenant : pour le champ "gift_asset", on ne propose
+        # QUE les assets rechargeables dont le tenant courant est l'origine
+        # (c'est-a-dire ses propres assets). Sans cela, le menu deroulant
+        # listait les assets de TOUS les lieux (AssetFedowPublic vit dans le
+        # schema public, partage), et un lieu pouvait choisir l'asset cadeau
+        # d'un autre lieu. On filtre aussi sur les categories rechargeables,
+        # comme le fait limit_choices_to sur le modele.
+        # / Multi-tenant isolation: on "gift_asset", only offer refillable
+        # assets owned by the CURRENT tenant (its own assets). Otherwise the
+        # dropdown listed every place's assets (AssetFedowPublic lives in the
+        # shared public schema) and a place could pick another place's gift
+        # asset. We also keep the refillable-category filter (like the model's
+        # limit_choices_to).
+        if db_field.name == "gift_asset":
+            kwargs["queryset"] = AssetFedowPublic.objects.filter(
+                origin=connection.tenant,
+                category__in=AssetFedowPublic.REFILLABLE_CATEGORIES,
+            )
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        # Pour le champ "gift_asset" (asset cadeau a recharger), on retire les
+        # petites icones "ajouter / modifier / voir l'asset" affichees a cote
+        # du menu deroulant. Ces raccourcis ouvrent l'admin des assets, qui
+        # masque volontairement les assets de type badgeuse (BDG) : cliquer
+        # dessus renvoyait une erreur "cet asset n'existe pas". Le simple choix
+        # dans la liste suffit ici : on ne gere pas les assets depuis la cle API.
+        # On surcharge formfield_for_dbfield (et non formfield_for_foreignkey)
+        # car Django enveloppe le widget dans le RelatedFieldWidgetWrapper APRES
+        # formfield_for_foreignkey : il faut donc agir une fois l'enveloppe posee.
+        # / Remove the add/change/view related-object icons on "gift_asset".
+        # They open the Asset admin, which hides BDG assets and raised a
+        # "does not exist" error. We override formfield_for_dbfield (not
+        # formfield_for_foreignkey) because Django wraps the widget in the
+        # RelatedFieldWidgetWrapper AFTER formfield_for_foreignkey runs.
+        formfield = super().formfield_for_dbfield(db_field, request, **kwargs)
+        if db_field.name == "gift_asset" and formfield is not None:
+            formfield.widget.can_add_related = False
+            formfield.widget.can_change_related = False
+            formfield.widget.can_delete_related = False
+            formfield.widget.can_view_related = False
+        return formfield
+
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
@@ -3872,12 +3916,16 @@ class AssetAdmin(ModelAdmin):
     ]
 
     readonly_fields = [
+        # Identifiant unique de l'asset, affiche en lecture seule sur la fiche.
+        # / Asset unique identifier, shown read-only on the change form.
+        'uuid',
         'created_at',
         'wallet_origin',
         'federated_with',
     ]
 
     fields = [
+        "uuid",
         "name",
         "currency_code",
         "category",

@@ -1367,9 +1367,28 @@ class Webhook_stripe(APIView):
 
                     except Membership.DoesNotExist:
                         logger.info((f'    Nouvelle adhésion, facture pas encore comptabilisée : {invoice}'))
-                    except Exception:
-                        logger.error((f'    erreur dans Webhook_stripe customer.subscription.updated : {Exception}'))
-                        raise Exception
+                    except Client.DoesNotExist:
+                        # Le tenant du metadata n'existe pas sur cette instance : ce
+                        # webhook n'est pas pour nous (abonnement d'un autre
+                        # environnement, ou tenant supprimé). On acquitte avec un 204
+                        # pour que Stripe arrête de réessayer, au lieu d'une 500.
+                        # / The metadata tenant does not exist on this instance: this
+                        # webhook is not for us. Acknowledge with 204 so Stripe stops
+                        # retrying, instead of a 500.
+                        logger.warning(
+                            f"    Webhook_stripe : tenant {tenant_uuid} inconnu sur cette "
+                            f"instance, webhook ignoré (pas pour nous)."
+                        )
+                        return Response("Tenant inconnu, ignoré.", status=status.HTTP_204_NO_CONTENT)
+                    except Exception as e:
+                        # On loggue l'erreur RÉELLE (et non la classe Exception) puis on
+                        # la relaie telle quelle pour que Stripe retente (erreur transitoire).
+                        # / Log the REAL error (not the Exception class) then re-raise it
+                        # as-is so Stripe retries (transient error).
+                        logger.error(
+                            f"    erreur dans Webhook_stripe customer.subscription.updated : {e}"
+                        )
+                        raise
 
         # Réponse pour l'api stripe qui envoie des webhook pour tout autre que la validation de paiement.
         # Si on renvoie une erreur, ils suppriment le webhook de leur côté.

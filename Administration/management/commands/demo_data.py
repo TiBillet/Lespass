@@ -77,8 +77,7 @@ class Command(BaseCommand):
                     "Bienvenue sur Lespass, la plateforme en ligne de TiBillet."
                     "\nVous trouverez ici des exemples d'évènements à réserver et d'adhésions à prendre."
                     " Vous pouvez choisir entre tarifs gratuits, payants, en prix libre ou soumis à adhésion."
-                    " Les adhésions peuvent être mensuelles ou annuelles, ponctuelles ou réccurentes."
-                    "\nEnfin, vous avez en démonstration une badgeuse pour la gestion d'accès d'un espace de co-working.")
+                    " Les adhésions peuvent être mensuelles ou annuelles, ponctuelles ou réccurentes.")
                 config.tva_number = fake.bban()[:20]
                 config.siren = fake.siret()[:20]
                 config.phone = fake.phone_number()[:20]
@@ -418,42 +417,6 @@ class Command(BaseCommand):
                     except Exception as e:
                         logger.warning(f"Unable to create ProductFormField demo data: {e}")
 
-
-                ### BADGEUSE ###
-
-                badgeuse_cowork, created = Product.objects.get_or_create(
-                    name=f"Badgeuse co-working ({tenant.name})",
-                    short_description="Accès à l'espace de co-working.",
-                    long_description="Merci de pointer à chaque entrée ET sortie même pour un passage rapide. Les adhérent·es bénéficient de 3h gratuites par semaine.",
-                    categorie_article=Product.BADGE,
-                )
-
-                badge_zero, created = Price.objects.get_or_create(
-                    product=badgeuse_cowork,
-                    name="Passage",
-                    short_description="Pointage d'un passage",
-                    prix=0,
-                    recurring_payment=False,
-                )
-                """
-
-                # badge_jour, created = Price.objects.get_or_create(
-                #     product=badgeuse_cowork,
-                #     name="Jour",
-                #     short_description="Pointage payant pour la journée",
-                #     prix=5,
-                #     recurring_payment=False,
-                # )
-                #
-                # badge_hour, created = Price.objects.get_or_create(
-                #     product=badgeuse_cowork,
-                #     name="Heure",
-                #     short_description="Pointage à l'heure",
-                #     prix=1,
-                #     recurring_payment=False,
-                # )
-                
-                """
 
                 ### EVENTS ###
                 rock, created = Tag.objects.get_or_create(name='Rock', color='#3B71CA')

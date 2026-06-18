@@ -556,16 +556,23 @@ def seed_ventes_demo(*, reset=False):
 
         # --- 3. VENTES VIA QR / NFC (monnaie locale ou cashless) ---
         # / QR/NFC sales (local currency or cashless)
+        # Ventes de consommation (biere, soft, sandwich). Categorie NONE et non
+        # BADGE : ce sont de simples ventes au comptoir, pas des produits de
+        # badgeuse. Avec BADGE, le signal post_save creait un asset "badgeuse"
+        # (categorie BDG) parasite, visible a tort dans les listes d'assets.
+        # / Counter sales (beer, soft, sandwich). Category NONE, not BADGE:
+        # these are plain sales, not punchclock products. BADGE made the
+        # post_save signal create a stray BDG asset polluting the asset lists.
         prix_biere = _prix_demo(
-            _produit_demo("Biere", Product.BADGE),
+            _produit_demo("Biere", Product.NONE),
             "Biere 5e", Decimal("5.00"), vat=Decimal("20.00"),
         )
         prix_soft = _prix_demo(
-            _produit_demo("Soft", Product.BADGE),
+            _produit_demo("Soft", Product.NONE),
             "Soft 4e", Decimal("4.00"), vat=Decimal("5.50"),
         )
         prix_sandwich = _prix_demo(
-            _produit_demo("Sandwich", Product.BADGE),
+            _produit_demo("Sandwich", Product.NONE),
             "Sandwich 6e", Decimal("6.00"), vat=Decimal("5.50"),
         )
 
