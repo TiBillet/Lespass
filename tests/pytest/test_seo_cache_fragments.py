@@ -81,3 +81,50 @@ def test_rebuild_ne_touche_pas_federation_incoming():
     apres = SEOCache.objects.get(cache_type=SEOCache.FEDERATION_INCOMING, tenant=None).updated_at
 
     assert avant == apres
+
+
+@pytest.mark.django_db
+def test_get_events_for_tenants_exclut_les_events_archives():
+    """
+    Regression : un event archive (archived=True) ne doit PLUS remonter dans
+    get_events_for_tenants, meme s'il reste publie et futur. Sinon il continue
+    d'apparaitre sur la carte SEO apres archivage.
+    / Regression: an archived event must not show up in get_events_for_tenants,
+    even if still published and in the future.
+    """
+    from django.utils import timezone
+    from datetime import timedelta
+    from django_tenants.utils import tenant_context
+    from BaseBillet.models import Event
+    from seo.services import get_events_for_tenants
+
+    lespass = Client.objects.get(schema_name="lespass")
+    futur = timezone.now() + timedelta(days=30)
+
+    with tenant_context(lespass):
+        # Un event publie futur NON archive (doit apparaitre) et un archive (doit disparaitre).
+        # / A published future event NOT archived (should appear) and an archived one (should not).
+        event_visible = Event.objects.create(
+            name="SEO archive test - visible", datetime=futur, published=True, archived=False,
+        )
+        event_archive = Event.objects.create(
+            name="SEO archive test - archive", datetime=futur, published=True, archived=True,
+        )
+    try:
+        resultats = get_events_for_tenants([(str(lespass.uuid), lespass.schema_name)])
+        uuids = {e["uuid"] for e in resultats}
+        assert str(event_visible.uuid) in uuids, "L'event publie non archive doit remonter."
+        assert str(event_archive.uuid) not in uuids, "L'event archive ne doit PAS remonter."
+    finally:
+        # Nettoyage : la base de dev n'est pas rollback (django_db_setup reutilise la base).
+        # Suppression en SQL brut pour eviter le signal post_delete de stdimage, qui
+        # plante sur un event sans image (name=None). Nos events n'ont aucune relation.
+        # / Cleanup: dev DB is not rolled back. Raw SQL delete to bypass stdimage's
+        # post_delete signal (crashes on a null image name). Our events have no relations.
+        from django.db import connection as conn
+        with tenant_context(lespass):
+            with conn.cursor() as cur:
+                cur.execute(
+                    'DELETE FROM "BaseBillet_event" WHERE uuid IN (%s, %s)',
+                    [str(event_visible.uuid), str(event_archive.uuid)],
+                )

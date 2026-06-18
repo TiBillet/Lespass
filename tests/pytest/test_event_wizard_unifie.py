@@ -395,3 +395,65 @@ def test_wizard_place_email_obligatoire_pour_anonyme():
             federation_config.module_agenda_participatif = module_avant
             federation_config.proposition_anonyme_autorisee = anonyme_avant
             federation_config.save()
+
+
+@pytest.mark.django_db
+def test_use_tierslieux_anonyme_garde_email_en_session():
+    """
+    Regression : choisir un lieu via le recensement national Tiers-Lieux ne
+    perdait plus l'email du proposeur anonyme. Le bouton « Utiliser ce lieu »
+    est un formulaire DISTINCT du form principal de l'etape 1 ; il poste son
+    propre email (injecte par le JS). use-tierslieux doit le garder en session,
+    sinon la finalisation renvoie au debut.
+
+    - Sans email -> 302 retour etape 1, rien en session.
+    - Avec email -> 302 vers la carte + email garde en session.
+    / Regression: picking a place via the national Tiers-Lieux directory used to
+    lose the anonymous proposer's email. The "Use this place" button is a SEPARATE
+    form; use-tierslieux must keep the email in session.
+    """
+    from django.test.client import Client as DjangoClient
+    from django.urls import reverse
+    from django_tenants.utils import tenant_context
+    from BaseBillet.models import FederationConfiguration
+
+    lespass = Client.objects.get(schema_name="lespass")
+    domain = lespass.domains.first()
+    http = DjangoClient(HTTP_HOST=domain.domain)  # client anonyme
+
+    with tenant_context(lespass):
+        federation_config = FederationConfiguration.get_solo()
+        module_avant = federation_config.module_agenda_participatif
+        anonyme_avant = federation_config.proposition_anonyme_autorisee
+        federation_config.module_agenda_participatif = True
+        federation_config.proposition_anonyme_autorisee = True
+        federation_config.save()
+
+    try:
+        # Sans email -> retour etape 1, et rien n'est mis en session.
+        # / Without email -> back to step 1, nothing stored.
+        resp = http.post(reverse("event-wizard-use-tierslieux"), {
+            "name": "Le Tiers-Lieu Test",
+        })
+        assert resp.status_code == 302
+        assert reverse("event-wizard-place") in resp.url
+        assert http.session.get("event_wizard_email_proposeur") is None
+
+        # Avec email + nom de lieu -> 302 vers la carte, email garde en session.
+        # / With email + place name -> 302 to map, email kept in session.
+        email = f"anon-tl-{uuidlib.uuid4().hex[:8]}@example.org"
+        resp2 = http.post(reverse("event-wizard-use-tierslieux"), {
+            "name": "Le Tiers-Lieu Test",
+            "email_proposeur": email,
+        })
+        assert resp2.status_code == 302
+        assert reverse("event-wizard-map") in resp2.url
+        assert http.session.get("event_wizard_email_proposeur") == email
+        # Le nom du lieu est aussi en session pour l'etape carte.
+        # / The place name is also in session for the map step.
+        assert http.session.get("event_wizard_new_address_name") == "Le Tiers-Lieu Test"
+    finally:
+        with tenant_context(lespass):
+            federation_config.module_agenda_participatif = module_avant
+            federation_config.proposition_anonyme_autorisee = anonyme_avant
+            federation_config.save()

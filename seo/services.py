@@ -163,7 +163,7 @@ def get_active_tenants_with_counts():
             f"SELECT %s AS tenant_id, %s AS schema_name, "
             f"(SELECT COUNT(*) "
             f' FROM "{schema}"."BaseBillet_event" '
-            f" WHERE published = true AND datetime >= %s"
+            f" WHERE published = true AND archived = false AND datetime >= %s"
             f") AS event_count, "
             f"(SELECT COUNT(*) "
             f' FROM "{schema}"."BaseBillet_product" '
@@ -210,7 +210,7 @@ def get_counts_for_tenant(schema_name):
     sql = (
         f"SELECT "
         f'(SELECT COUNT(*) FROM "{schema_name}"."BaseBillet_event" '
-        f" WHERE published = true AND datetime >= %s) AS event_count, "
+        f" WHERE published = true AND archived = false AND datetime >= %s) AS event_count, "
         f'(SELECT COUNT(*) FROM "{schema_name}"."BaseBillet_product" '
         f"   WHERE publish = true AND categorie_article IN ({placeholders_categories})"
         f") AS product_count"
@@ -252,11 +252,15 @@ def get_events_for_tenants(tenant_schemas):
         # federation automatique par tags.
         # / Also fetch `private`: a private event must not leak through the
         # network map nor through tag-based auto federation.
+        # Filtre archived = false : un event archive (retire de l'agenda) ne doit
+        # plus apparaitre sur la carte ni dans les popups, meme s'il reste publie.
+        # / archived = false filter: an archived event must not show on the map or
+        # popups anymore, even if still published.
         parts.append(
             f"SELECT %s AS tenant_id, uuid::text AS uuid, name, slug, short_description, "
             f"datetime, end_datetime, img, postal_address_id, private "
             f'FROM "{schema_name}"."BaseBillet_event" '
-            f"WHERE published = true AND datetime >= %s"
+            f"WHERE published = true AND archived = false AND datetime >= %s"
         )
         params.extend([str(tenant_uuid), now])
 
@@ -319,7 +323,7 @@ def get_event_tags_for_tenants(tenant_schemas):
             f'FROM "{schema_name}"."BaseBillet_event" e '
             f'JOIN "{schema_name}"."BaseBillet_event_tag" et ON et.event_id = e.uuid '
             f'JOIN "{schema_name}"."BaseBillet_tag" t ON t.uuid = et.tag_id '
-            f"WHERE e.published = true AND e.datetime >= %s"
+            f"WHERE e.published = true AND e.archived = false AND e.datetime >= %s"
         )
         params.append(now)
 

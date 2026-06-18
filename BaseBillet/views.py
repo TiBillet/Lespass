@@ -4521,6 +4521,24 @@ class EventWizard(viewsets.ViewSet):
         if garde:
             return garde
 
+        # Email du proposeur (visiteur anonyme) : le bouton « Utiliser ce lieu »
+        # est un formulaire DISTINCT du form principal de l'etape 1, donc l'email
+        # saisi plus haut n'y est pas poste nativement (le JS l'y injecte). On le
+        # memorise en session ICI, exactement comme le fait _wizard_etape_choix_lieu
+        # pour le chemin classique. Sans ca, la finalisation ne retrouve pas
+        # l'email et renvoie l'utilisateur au debut. Obligatoire pour un anonyme.
+        # / Proposer email (anonymous visitor): the "Use this place" button is a
+        # SEPARATE form from step 1's main form, so the email above is not POSTed
+        # natively (the JS injects it). Store it in session HERE, just like
+        # _wizard_etape_choix_lieu does for the classic path. Required for anonymous.
+        if not request.user.is_authenticated:
+            email_proposeur = (request.POST.get("email_proposeur") or "").strip()
+            if not email_proposeur:
+                messages.add_message(request, messages.WARNING,
+                    _("Merci d'indiquer votre adresse e-mail pour proposer un évènement."))
+                return redirect("event-wizard-place")
+            request.session[self._session_key("email_proposeur")] = email_proposeur
+
         from BaseBillet.services.tiers_lieux import valider_coordonnees
 
         # Champs reçus du POST (fiche choisie OU POST forgé) : on les borne avant

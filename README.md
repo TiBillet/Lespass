@@ -111,8 +111,8 @@ Quelques exemples de ce que TiBillet rend possible aujourd'hui :
 TiBillet tourne dans Docker. Une seule commande pour lancer l'environnement de développement :
 
 ```bash
-git clone https://github.com/TiBillet/TiBillet.git
-cd TiBillet
+git clone https://github.com/TiBillet/Lespass.git
+cd Lespass
 cp env_example .env        # Configurer les variables d'environnement
 
 # Lespass uniquement :

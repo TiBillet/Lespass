@@ -2404,7 +2404,13 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         'datetime',
         'show_time',
         'published',
+        'display_created_by',
     ]
+
+    # select_related sur created_by : evite une requete par ligne dans la
+    # changelist (la colonne display_created_by lit instance.created_by).
+    # / select_related on created_by: avoids one query per row in the changelist.
+    list_select_related = ('created_by',)
 
     list_editable = ['published', ]
     readonly_fields = (
@@ -2518,6 +2524,16 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         if count is None:
             count = instance.valid_tickets_count()
         return f"{count} / {instance.jauge_max}"
+
+    @display(description=_("Créé par"))
+    def display_created_by(self, instance: Event):
+        # Affiche l'utilisateur qui a cree l'event (ex : proposeur via le wizard
+        # public). Tiret si inconnu (events anciens ou crees par script/import).
+        # / Show the user who created the event (e.g. public-wizard proposer).
+        # Dash if unknown (legacy events or created by a script/import).
+        if instance.created_by:
+            return instance.created_by.email
+        return "—"
 
     @action(
         description=_("Archive"),

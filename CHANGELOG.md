@@ -1,5 +1,39 @@
 # Changelog / Journal des modifications
 
+## Wizard event public : fix email perdu via le chemin Tiers-Lieux / Public event wizard: fix email lost via the Tiers-Lieux path
+
+**Date :** 2026-06-18
+**Migration :** Non / No
+
+**Quoi / What :** Un visiteur **anonyme** qui choisissait son lieu via le recensement national
+**Tiers-Lieux** (bouton « Utiliser ce lieu ») voyait, à la soumission finale, son évènement
+**rejeté** avec retour au début et le message « Merci d'indiquer votre adresse e-mail… », alors
+que l'email était bien renseigné.
+
+**Pourquoi / Why :** le bouton « Utiliser ce lieu » est un **formulaire distinct** du form principal
+de l'étape 1 (imbriqué via HTMX). Le navigateur ne postait donc que les champs du lieu — **pas
+l'email**, qui vit dans le form principal. L'action `use_tierslieux` ne stockait jamais
+`email_proposeur` en session (contrairement au chemin classique `_wizard_etape_choix_lieu`), donc
+la finalisation ne le retrouvait pas. Le chemin « adresse existante » / « nouveau lieu manuel »
+n'était pas affecté (d'où le bug visible uniquement via l'API Tiers-Lieux).
+
+**Fix :**
+- JS (`_form_lieu.html`) : au **clic** sur « Utiliser ce lieu », l'email du proposeur est injecté
+  dans un champ caché du form Tiers-Lieux avant l'envoi natif (et le clic est bloqué avec
+  `preventDefault()` + `reportValidity()` si l'email est vide). On écoute le `click` et **pas** le
+  `submit` : le `submit` d'un **formulaire imbriqué** ne remonte pas jusqu'à `document` (vérifié en
+  navigateur), donc une délégation `submit` ne se déclencherait jamais.
+- Serveur (`use_tierslieux`) : lecture de `email_proposeur` dans le POST et stockage en session pour
+  les anonymes, exactement comme `_wizard_etape_choix_lieu`. Garde défensive : email vide → retour
+  étape 1 avec le même message (POST forgé / session perdue).
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/views.py` | `EventWizard.use_tierslieux` : capture + stockage session de `email_proposeur` (anonyme) |
+| `BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html` | JS : injection de l'email dans le form Tiers-Lieux au submit |
+| `tests/pytest/test_event_wizard_unifie.py` | `test_use_tierslieux_anonyme_garde_email_en_session` (régression) |
+
 ## i18n EN : sync + complétion des traductions manquantes + fix extraction f-string / i18n EN: sync + fill missing translations + f-string extraction fix
 
 **Date :** 2026-06-18
