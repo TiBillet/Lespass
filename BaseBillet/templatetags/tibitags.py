@@ -222,8 +222,24 @@ def minutes_to_human(value):
         total_minutes = int(value)
     except (TypeError, ValueError):
         return ""
+
+    # Unités de durée traduisibles. IMPORTANT : on sort les _() des f-strings.
+    # makemessages (xgettext) n'extrait PAS un _() écrit à l'intérieur d'une
+    # f-string : l'expression entre accolades (ex: f"{n} {_('j')}") est ignorée
+    # par l'extracteur, donc "j"/"h"/"min" n'apparaissaient jamais dans les .po
+    # et restaient en français sur le site anglais. On affecte chaque unité à
+    # une variable AVANT de construire la chaîne pour qu'elles soient extraites.
+    # / Translatable duration units. We keep _() OUT of f-strings: makemessages
+    # does not extract a _() placed inside an f-string interpolation.
+    # Translators: abréviation de l'unité "jours" / abbreviation for "days"
+    unite_jour = _('j')
+    # Translators: abréviation de l'unité "heures" / abbreviation for "hours"
+    unite_heure = _('h')
+    # Translators: abréviation de l'unité "minutes" / abbreviation for "minutes"
+    unite_minute = _('min')
+
     if total_minutes <= 0:
-        return f"0 {_('min')}"
+        return f"0 {unite_minute}"
     minutes_per_day = 8 * 60
     days = total_minutes // minutes_per_day
     rem = total_minutes % minutes_per_day
@@ -231,11 +247,11 @@ def minutes_to_human(value):
     mins = rem % 60
     parts = []
     if days:
-        parts.append(f"{days} {_('j')}")
+        parts.append(f"{days} {unite_jour}")
     if hours:
-        parts.append(f"{hours} {_('h')}")
+        parts.append(f"{hours} {unite_heure}")
     if mins or not parts:
-        parts.append(f"{mins} {_('min')}")
+        parts.append(f"{mins} {unite_minute}")
     return " ".join(parts)
 
 

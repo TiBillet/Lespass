@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-18 06:55+0000\n"
+"POT-Creation-Date: 2026-06-18 07:59+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -4575,7 +4575,10 @@ msgid ""
 "Astuce Dev' : pour tester un webhook, lancez un petit serveur HTTP qui "
 "affiche le contenu de la requete : https://gist.github.com/"
 "mdonkers/63e115cc0c79b4f6b8b3a6b797e485c7"
-msgstr "Dev tip: to test a webhook, start a small HTTP server that displays the request content: https://gist.github.com/mdonkers/63e115cc0c79b4f6b8b3a6b797e485c7"
+msgstr ""
+"Dev tip: to test a webhook, start a small HTTP server that displays the "
+"request content: https://gist.github.com/"
+"mdonkers/63e115cc0c79b4f6b8b3a6b797e485c7"
 
 #: BaseBillet/models.py:3485
 msgid "Confirmed subscription"
@@ -7546,7 +7549,8 @@ msgstr "Your membership is already active"
 #: BaseBillet/templates/reunion/views/membership/payment_already_done.html:31
 msgid ""
 "Ce paiement a déjà été effectué. Il n'y a rien de plus à régler. Merci !"
-msgstr "This payment has already been made. There is nothing left to pay. Thank you!"
+msgstr ""
+"This payment has already been made. There is nothing left to pay. Thank you!"
 
 #: BaseBillet/templates/reunion/views/membership/payment_already_done.html:49
 #: BaseBillet/templates/reunion/views/membership/payment_already_pending.html:62
@@ -7604,7 +7608,9 @@ msgstr "This payment link is no longer valid"
 msgid ""
 "Ce lien de paiement n'est pas (ou plus) actif. Si vous pensez qu'il s'agit "
 "d'une erreur, contactez l'organisateur."
-msgstr "This payment link is not (or no longer) active. If you think this is an error, please contact the organiser."
+msgstr ""
+"This payment link is not (or no longer) active. If you think this is an "
+"error, please contact the organiser."
 
 #: BaseBillet/templates/reunion/views/membership/pending_manual_validation.html:7
 msgid "Demande d'adhésion enregistrée"
@@ -8056,13 +8062,28 @@ msgstr ""
 "The team at Coopérative Code Commun: Axel, Adrienne, Nicolas, Kaya, Mike and "
 "Jonas."
 
-#: BaseBillet/templatetags/tibitags.py:260
-#: BaseBillet/templatetags/tibitags.py:348
+#. Translators: abréviation de l'unité "jours" / abbreviation for "days"
+#: BaseBillet/templatetags/tibitags.py:235
+msgid "j"
+msgstr "d"
+
+#. Translators: abréviation de l'unité "heures" / abbreviation for "hours"
+#: BaseBillet/templatetags/tibitags.py:237
+msgid "h"
+msgstr ""
+
+#. Translators: abréviation de l'unité "minutes" / abbreviation for "minutes"
+#: BaseBillet/templatetags/tibitags.py:239
+msgid "min"
+msgstr ""
+
+#: BaseBillet/templatetags/tibitags.py:276
+#: BaseBillet/templatetags/tibitags.py:364
 msgid "Field"
 msgstr ""
 
-#: BaseBillet/templatetags/tibitags.py:260
-#: BaseBillet/templatetags/tibitags.py:348
+#: BaseBillet/templatetags/tibitags.py:276
+#: BaseBillet/templatetags/tibitags.py:364
 msgid "Answer"
 msgstr ""
 
@@ -9290,7 +9311,9 @@ msgstr "Vote button name"
 msgid ""
 "C'est le nom par defaut que vous pouvez changer ici. Vous pouvez aussi le "
 "changer dans chaque initiative."
-msgstr "This is the default name that you can change here. You can also change it in each initiative."
+msgstr ""
+"This is the default name that you can change here. You can also change it in "
+"each initiative."
 
 #: crowds/models.py:31 crowds/models.py:97
 msgid "Mot pour 'Objectif'"
@@ -9429,7 +9452,9 @@ msgid ""
 "C'est le nom par defaut que vous pouvez changer ici uniquement pour cet "
 "initiative. Vous pouvez aussi le changer celui par default pour tous dans la "
 "configuration."
-msgstr "This is the default name that you can change here for this initiative only. You can also change the default one for everyone in the configuration."
+msgstr ""
+"This is the default name that you can change here for this initiative only. "
+"You can also change the default one for everyone in the configuration."
 
 #: crowds/models.py:113
 msgid ""
@@ -9676,7 +9701,12 @@ msgid ""
 "sur un objectif de %(goal)s %(currency)s\n"
 "                        .\n"
 "                    "
-msgstr "\n                        Funding progress: %(percent)s percent of a %(goal)s %(currency)s goal\n                        .\n                    "
+msgstr ""
+"\n"
+"                        Funding progress: %(percent)s percent of a %(goal)s "
+"%(currency)s goal\n"
+"                        .\n"
+"                    "
 
 #: crowds/templates/crowds/partial/card.html:126
 msgid "Budget contributif et demandes validées"
@@ -11223,7 +11253,9 @@ msgstr ""
 msgid ""
 "Lance des campagnes de financement participatif avec contribution adaptive "
 "et cascade multi-asset."
-msgstr "Launch crowdfunding campaigns with adaptive contribution and multi-asset cascade."
+msgstr ""
+"Launch crowdfunding campaigns with adaptive contribution and multi-asset "
+"cascade."
 
 #: onboard/templates/onboard/steps/06_launch.html:134
 msgid "Booking de salle ou ressource"

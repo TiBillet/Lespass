@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-18 06:55+0000\n"
+"POT-Creation-Date: 2026-06-18 07:59+0000\n"
 "PO-Revision-Date: 2025-03-12 09:37+0100\n"
 "Last-Translator: Diane Alma Kay <pro@kayathommy.fr>\n"
 "Language-Team: French\n"
@@ -8233,13 +8233,28 @@ msgid ""
 "et Jonas."
 msgstr ""
 
-#: BaseBillet/templatetags/tibitags.py:260
-#: BaseBillet/templatetags/tibitags.py:348
+#. Translators: abréviation de l'unité "jours" / abbreviation for "days"
+#: BaseBillet/templatetags/tibitags.py:235
+msgid "j"
+msgstr ""
+
+#. Translators: abréviation de l'unité "heures" / abbreviation for "hours"
+#: BaseBillet/templatetags/tibitags.py:237
+msgid "h"
+msgstr ""
+
+#. Translators: abréviation de l'unité "minutes" / abbreviation for "minutes"
+#: BaseBillet/templatetags/tibitags.py:239
+msgid "min"
+msgstr ""
+
+#: BaseBillet/templatetags/tibitags.py:276
+#: BaseBillet/templatetags/tibitags.py:364
 msgid "Field"
 msgstr "Champ"
 
-#: BaseBillet/templatetags/tibitags.py:260
-#: BaseBillet/templatetags/tibitags.py:348
+#: BaseBillet/templatetags/tibitags.py:276
+#: BaseBillet/templatetags/tibitags.py:364
 msgid "Answer"
 msgstr "Réponse"
 
