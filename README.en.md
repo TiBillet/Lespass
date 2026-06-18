@@ -1,8 +1,3 @@
-> [!CAUTION]
-> The V2 branch is an alpha prototype : NOT FOR PROD
-> 
-> Use main branch only for production
-
 <h1 align="center">
   <!-- CAPTURE: TiBillet logo (the current one or a new one if you have it) -->
   <br>

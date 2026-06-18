@@ -1,8 +1,3 @@
-> [!CAUTION]
-> La branche V2 est un propotype en ALPHA : Ne pas utiliser en production
-> 
-> Utilisez la branche main.
-
 <h1 align="center">
   <!-- CAPTURE : Logo TiBillet (le logo actuel ou un nouveau si vous en avez un) -->
   <br>
