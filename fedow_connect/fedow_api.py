@@ -863,7 +863,12 @@ class NFCcardFedow():
         )
 
         if response_link.status_code != 200:
-            logger.error(f"linkwallet_cardqrcode : {response_link.status_code} {response_link.json()}")
+            # Cas géré par l'appelant (BaseBillet.views.ScanQrCode.link affiche un message
+            # utilisateur) : QR inconnu de Fedow, carte non activée, etc. → warning plutôt
+            # qu'error, pour ne pas remonter dans Sentry une situation utilisateur normale.
+            # / Handled by the caller (a user message is shown): unknown QR, card not
+            # activated… → warning, not error, to avoid Sentry noise on a normal user case.
+            logger.warning(f"linkwallet_cardqrcode : {response_link.status_code} {response_link.json()}")
             return False
 
         validated_card = CardValidator(data=response_link.json())

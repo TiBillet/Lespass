@@ -549,7 +549,16 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
         qrcode_uuid = validator.validated_data['qrcode_uuid']
         linked_serialized_card = fedowAPI.NFCcard.linkwallet_cardqrcode(user=user, qrcode_uuid=qrcode_uuid)
         if not linked_serialized_card:
-            messages.add_message(request, messages.ERROR, _("Not valid"))
+            # QR code inconnu de Fedow (carte non enregistrée / pas encore activée) ou
+            # échec de la liaison. On affiche un message explicite et on s'arrête : sans
+            # ce return, le code plus bas faisait linked_serialized_card['qrcode_uuid']
+            # sur False → TypeError "'bool' object is not subscriptable" (500).
+            # / Unknown QR code on Fedow side (card not registered / not activated yet) or
+            # link failure. Show an explicit message and stop: without this return, the code
+            # below did linked_serialized_card['qrcode_uuid'] on False → TypeError 500.
+            messages.add_message(request, messages.ERROR,
+                                 _("Cette carte n'est pas reconnue. Elle n'est peut-être pas encore activée."))
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         # On retourne sur la page GET /qr/
         # Qui redirigera si besoin et affichera l'erreur
