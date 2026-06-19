@@ -4,6 +4,7 @@ from django.db import connection
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from rest_framework import permissions
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.viewsets import ViewSet
 from rest_framework_api_key.models import AbstractAPIKey, APIKey
 
@@ -17,10 +18,24 @@ logger = logging.getLogger(__name__)
 ###
 
 def get_apikey_valid(view: ViewSet) -> AbstractAPIKey or None:
-    try:
-        # Récupération de la clé API et vérification qu'elle existe pour le tenant
-        key = view.request.META["HTTP_AUTHORIZATION"].split()[1]
+    # Header attendu : "Authorization: Api-Key <clé>". Si le header est absent ou mal
+    # formé (pas de clé après le préfixe), on refuse avec un message explicite pour
+    # que le client comprenne le problème, plutôt qu'un 403 générique ou une erreur
+    # serveur silencieuse. Levé HORS du try/except ci-dessous, sinon le `except
+    # Exception` l'avalerait et on retomberait sur un retour None opaque.
+    # / Expected header: "Authorization: Api-Key <key>". Missing/malformed → explicit
+    # 403 so the client understands the issue. Raised OUTSIDE the try below, otherwise
+    # the broad `except Exception` would swallow it into an opaque None.
+    parties_authorization = view.request.META.get("HTTP_AUTHORIZATION", "").split()
+    if len(parties_authorization) < 2:
+        raise PermissionDenied(detail=_(
+            "Header « Authorization » manquant ou mal formé. "
+            "Format attendu : « Authorization: Api-Key <clé> »."
+        ))
+    key = parties_authorization[1]
 
+    try:
+        # Vérification que la clé existe pour le tenant
         api_key = APIKey.objects.get_from_key(key)
         tenant_apikey = get_object_or_404(ExternalApiKey, key=api_key)
 
