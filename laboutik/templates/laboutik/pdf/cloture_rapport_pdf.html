@@ -1,0 +1,211 @@
+{% load i18n %}
+<!--
+TEMPLATE PDF — Rapport de cloture de caisse
+/ PDF TEMPLATE — Cash register closure report
+
+LOCALISATION : laboutik/templates/laboutik/pdf/cloture_rapport_pdf.html
+
+Rendu par WeasyPrint (generer_pdf_cloture dans laboutik/pdf.py).
+Styles inline (WeasyPrint ne charge pas de CSS externe de facon fiable).
+Rendered by WeasyPrint (generer_pdf_cloture in laboutik/pdf.py).
+Inline styles (WeasyPrint does not reliably load external CSS).
+-->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>{% translate "Rapport de clôture" %}</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      font-size: 12px;
+      color: #333;
+      margin: 2cm 1.5cm;
+    }
+    h1 {
+      font-size: 20px;
+      text-align: center;
+      margin-bottom: 0.3cm;
+      color: #17a2b8;
+    }
+    h2 {
+      font-size: 14px;
+      margin-top: 0.5cm;
+      margin-bottom: 0.2cm;
+      border-bottom: 1px solid #ccc;
+      padding-bottom: 2px;
+    }
+    .header-info {
+      text-align: center;
+      margin-bottom: 0.5cm;
+      font-size: 11px;
+      color: #666;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 0.3cm;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 4px 8px;
+      text-align: left;
+      font-size: 11px;
+    }
+    th {
+      background-color: #f5f5f5;
+      font-weight: bold;
+    }
+    .text-right {
+      text-align: right;
+    }
+    .total-row {
+      font-weight: bold;
+      background-color: #e8f4f8;
+    }
+    .footer {
+      margin-top: 1cm;
+      text-align: center;
+      font-size: 10px;
+      color: #999;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>{% translate "Rapport de clôture de caisse" %}</h1>
+
+  <div class="header-info">
+    {% if config.organisation %}{{ config.organisation }}<br>{% endif %}
+    <strong>{% translate "Point de vente" %} :</strong> {{ point_de_vente.name }}<br>
+    <strong>{% translate "Ouverture" %} :</strong> {{ datetime_ouverture|date:"d/m/Y H:i" }}
+    &nbsp;—&nbsp;
+    <strong>{% translate "Clôture" %} :</strong> {{ datetime_cloture|date:"d/m/Y H:i" }}<br>
+    {% if responsable %}
+    <strong>{% translate "Responsable" %} :</strong> {{ responsable }}<br>
+    {% endif %}
+  </div>
+
+  <!-- Totaux par moyen de paiement / Totals by payment method -->
+  <h2>{% translate "Totaux par moyen de paiement" %}</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>{% translate "Moyen de paiement" %}</th>
+        <th class="text-right">{% translate "Total (EUR)" %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>{% translate "Espèces" %}</td>
+        <td class="text-right">{{ total_especes_euros|floatformat:2 }} €</td>
+      </tr>
+      <tr>
+        <td>{% translate "Carte bancaire" %}</td>
+        <td class="text-right">{{ total_cb_euros|floatformat:2 }} €</td>
+      </tr>
+      <tr>
+        <td>{% translate "Cashless" %}</td>
+        <td class="text-right">{{ total_nfc_euros|floatformat:2 }} €</td>
+      </tr>
+      <tr class="total-row">
+        <td>{% translate "Total général" %}</td>
+        <td class="text-right">{{ total_general_euros|floatformat:2 }} €</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>{{ nombre_transactions }} {% translate "transaction(s)" %}</p>
+
+  <!-- Par produit / By product -->
+  {% if par_produit %}
+  <h2>{% translate "Détail par produit" %}</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>{% translate "Produit" %}</th>
+        <th class="text-right">{% translate "Quantité" %}</th>
+        <th class="text-right">{% translate "Total (EUR)" %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for nom, donnees in par_produit.items %}
+      <tr>
+        <td>{{ nom }}</td>
+        <td class="text-right">{{ donnees.qty }}</td>
+        <td class="text-right">{{ donnees.total_euros|floatformat:2 }} €</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <!-- Par categorie / By category -->
+  {% if par_categorie %}
+  <h2>{% translate "Détail par catégorie" %}</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>{% translate "Catégorie" %}</th>
+        <th class="text-right">{% translate "Total (EUR)" %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for nom, total_euros in par_categorie.items %}
+      <tr>
+        <td>{{ nom }}</td>
+        <td class="text-right">{{ total_euros|floatformat:2 }} €</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <!-- Ventilation TVA / VAT breakdown -->
+  {% if par_tva %}
+  <h2>{% translate "Ventilation TVA" %}</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>{% translate "Taux" %}</th>
+        <th class="text-right">{% translate "HT (EUR)" %}</th>
+        <th class="text-right">{% translate "TVA (EUR)" %}</th>
+        <th class="text-right">{% translate "TTC (EUR)" %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for taux_label, tva_data in par_tva.items %}
+      <tr>
+        <td>{{ taux_label }}</td>
+        <td class="text-right">{{ tva_data.total_ht_euros|floatformat:2 }} €</td>
+        <td class="text-right">{{ tva_data.total_tva_euros|floatformat:2 }} €</td>
+        <td class="text-right">{{ tva_data.total_ttc_euros|floatformat:2 }} €</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <!-- Commandes / Orders -->
+  {% if commandes %}
+  <h2>{% translate "Commandes" %}</h2>
+  <table>
+    <tbody>
+      <tr>
+        <td>{% translate "Total commandes" %}</td>
+        <td class="text-right">{{ commandes.total }}</td>
+      </tr>
+      <tr>
+        <td>{% translate "Commandes annulées" %}</td>
+        <td class="text-right">{{ commandes.annulees }}</td>
+      </tr>
+    </tbody>
+  </table>
+  {% endif %}
+
+  <div class="footer">
+    {% translate "Généré par TiBillet" %}
+  </div>
+
+</body>
+</html>

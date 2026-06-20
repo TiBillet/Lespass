@@ -1,0 +1,303 @@
+{% load i18n %}
+<!--
+SORTIE DE CAISSE — formulaire de ventilation par coupure
+/ CASH WITHDRAWAL — denomination breakdown form
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_sortie_de_caisse.html
+
+Affiche dans #ventes-zone (même conteneur que le Ticket X).
+12 coupures en grille 2 colonnes × 6 lignes. Total recalculé JS.
+
+Validation JS avant envoi :
+  - total > fond + especes : erreur bloquante
+  - total > especes seules : avertissement + propose nouveau fond de caisse
+-->
+
+<!-- CSS extrait vers laboutik/static/css/sortie_de_caisse.css (chargé dans base.html <head>)
+     / CSS extracted to laboutik/static/css/sortie_de_caisse.css (loaded in base.html <head>) -->
+
+<div class="ventes-container" data-testid="sortie-de-caisse">
+
+    <!-- Bouton retour vers Ticket X -->
+    <!-- / Back button to Ticket X -->
+    <div style="margin-bottom: 1rem;">
+        <button class="btn-retour-recap"
+            hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?{{ params_ventes }}"
+            hx-target="#ventes-zone"
+            hx-swap="innerHTML"
+            data-loading-disable
+            data-testid="btn-retour-recap">
+            <i class="fas fa-arrow-left" aria-hidden="true"></i>
+            {% translate "Retour" %}
+        </button>
+    </div>
+
+    <h3 class="ventes-section-title" style="text-wrap: balance;">
+        <i class="fas fa-money-bill-wave" aria-hidden="true"></i>
+        {% translate "Sortie de caisse" %}
+    </h3>
+
+    <form id="form-sortie-caisse"
+          hx-post="{% url 'laboutik-caisse-creer_sortie_de_caisse' %}"
+          hx-target="#ventes-zone"
+          hx-swap="innerHTML"
+          aria-label="{% translate 'Sortie de caisse' %}"
+          data-fond="{{ fond_de_caisse_centimes }}"
+          data-especes="{{ entrees_especes_centimes }}">
+        {% csrf_token %}
+        <input type="hidden" name="uuid_pv" value="{{ uuid_pv }}">
+
+        <!-- Grille des coupures — 2 colonnes, 6 lignes, stagger animation -->
+        <!-- / Denomination grid — 2 columns, 6 rows, stagger animation -->
+        <div class="sortie-grille" data-testid="sortie-coupures-table">
+            {% for paire in coupures_paires %}
+
+            <!-- Coupure gauche (A) — fond neutre -->
+            <!-- / Left denomination (A) — neutral background -->
+            <div class="sortie-cellule sortie-cellule-gauche" style="--ordre: {{ forloop.counter0 }}">
+                <span class="sortie-label">{{ paire.0.label }}</span>
+                {% include "laboutik/partial/_sortie_coupure_input.html" with coupure=paire.0 %}
+            </div>
+
+            <!-- Coupure droite (B) — fond indigo teinté -->
+            <!-- / Right denomination (B) — indigo-tinted background -->
+            <div class="sortie-cellule sortie-cellule-droite" style="--ordre: {{ forloop.counter0 }}">
+                <span class="sortie-label">{{ paire.1.label }}</span>
+                {% include "laboutik/partial/_sortie_coupure_input.html" with coupure=paire.1 %}
+            </div>
+
+            {% endfor %}
+
+            <!-- Ligne total pleine largeur -->
+            <!-- / Full-width total row -->
+            <div class="sortie-total-row">
+                <span class="sortie-total-label">
+                    <i class="fas fa-sigma" aria-hidden="true" style="margin-right: 0.4rem; opacity: 0.6;"></i>
+                    {% translate "Total sortie" %}
+                </span>
+                <span id="sortie-total-affichage"
+                      data-testid="sortie-total"
+                      aria-live="polite"
+                      class="sortie-total-valeur">
+                    0,00 €
+                </span>
+            </div>
+        </div>
+
+        <!-- État actuel de la caisse : fond | espèces | solde -->
+        <!-- / Current cash drawer state: float | cash | balance -->
+        <div class="sortie-etat-caisse" data-testid="sortie-etat-caisse">
+            <div class="sortie-etat-bloc">
+                <span class="sortie-etat-libelle">
+                    <i class="fas fa-coins" aria-hidden="true"></i>
+                    {% translate "Fond" %}
+                </span>
+                <span class="sortie-etat-montant">{{ fond_de_caisse_euros }} €</span>
+            </div>
+            <div class="sortie-etat-bloc">
+                <span class="sortie-etat-libelle">
+                    <i class="fas fa-money-bill-wave" aria-hidden="true"></i>
+                    {% translate "Espèces" %}
+                </span>
+                <span class="sortie-etat-montant">{{ entrees_especes_euros }} €</span>
+            </div>
+            <div class="sortie-etat-bloc sortie-etat-bloc-solde">
+                <span class="sortie-etat-libelle">
+                    <i class="fas fa-cash-register" aria-hidden="true"></i>
+                    {% translate "Solde" %}
+                </span>
+                <span class="sortie-etat-montant sortie-etat-montant-solde">{{ solde_total_euros }} €</span>
+            </div>
+        </div>
+
+        <!-- Note optionnelle -->
+        <!-- / Optional note -->
+        <div style="margin: 0 0 1rem 0;">
+            <label for="note" class="sortie-note-label">
+                {% translate "Note (optionnelle)" %}
+            </label>
+            <textarea name="note" id="note" rows="2"
+                      class="sortie-note-textarea"
+                      data-testid="sortie-textarea-note"></textarea>
+        </div>
+
+        <!-- Zone d'alerte inline — classes CSS prédéfinies (pas de calcul couleur JS)
+             / Inline alert zone — predefined CSS classes (no JS color calculation) -->
+        <div id="sortie-alerte"
+             class="sortie-alerte"
+             role="alert"
+             aria-live="assertive"
+             data-testid="sortie-alerte">
+            <p id="sortie-alerte-texte"></p>
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                <button type="button"
+                        id="sortie-btn-confirmer-quand-meme"
+                        class="sortie-alerte-btn-confirm"
+                        data-testid="sortie-btn-confirmer-quand-meme"
+                        onclick="confirmerSortieQuandMeme()">
+                    <i class="fas fa-check" aria-hidden="true" style="margin-right: 0.3rem;"></i>
+                    {% translate "Confirmer quand même" %}
+                </button>
+                <button type="button"
+                        class="sortie-alerte-btn-cancel"
+                        data-testid="sortie-btn-annuler-alerte"
+                        onclick="masquerAlerteSortie()">
+                    {% translate "Annuler" %}
+                </button>
+            </div>
+        </div>
+
+        <button type="submit"
+                class="sortie-btn-submit"
+                data-loading-disable
+                data-testid="sortie-btn-enregistrer">
+            <i class="fas fa-sign-out-alt" aria-hidden="true" style="margin-right: 0.4rem;"></i>
+            {% translate "Enregistrer la sortie" %}
+        </button>
+    </form>
+</div>
+
+<script>
+/*
+ * Recalcule le total a partir des quantites saisies.
+ * Chaque input porte data-centimes = valeur de la coupure.
+ * / Recalculates total from entered quantities.
+ * Each input carries data-centimes = denomination value.
+ */
+function recalculerTotalSortie() {
+    var inputs = document.querySelectorAll('[data-centimes]');
+    var total_en_centimes = 0;
+    for (var i = 0; i < inputs.length; i++) {
+        var valeur_coupure = parseInt(inputs[i].getAttribute('data-centimes')) || 0;
+        var quantite_saisie = parseInt(inputs[i].value) || 0;
+        total_en_centimes += valeur_coupure * quantite_saisie;
+    }
+    document.getElementById('sortie-total-affichage').textContent = formaterEuros(total_en_centimes);
+}
+
+/*
+ * Formate des centimes en "X,XX €".
+ * / Formats cents as "X,XX €".
+ */
+function formaterEuros(centimes) {
+    var e = Math.floor(centimes / 100);
+    var c = centimes % 100;
+    return e + ',' + (c < 10 ? '0' + c : '' + c) + ' €';
+}
+
+/* Flag : l'utilisateur a confirme malgre l'avertissement.
+   / Flag: user confirmed despite warning. */
+var _sortie_confirmee_par_utilisateur = false;
+
+/* "Confirmer quand meme" : active le flag et re-soumet via htmx.
+   / "Confirm anyway": sets the flag and re-submits via htmx. */
+function confirmerSortieQuandMeme() {
+    _sortie_confirmee_par_utilisateur = true;
+    masquerAlerteSortie();
+    htmx.trigger(document.getElementById('form-sortie-caisse'), 'submit');
+}
+
+/* Cache l'alerte et retire les classes de style.
+   / Hides the alert and removes style classes. */
+function masquerAlerteSortie() {
+    var zone = document.getElementById('sortie-alerte');
+    zone.style.display = 'none';
+    zone.classList.remove('sortie-alerte-erreur', 'sortie-alerte-avertissement');
+}
+
+/*
+ * Affiche l'alerte avec la classe CSS appropriee.
+ * type_alerte : 'erreur' ou 'avertissement'
+ * avec_confirmation : true pour montrer le bouton "Confirmer quand meme"
+ * / Shows the alert with the appropriate CSS class.
+ * type_alerte: 'erreur' or 'avertissement'
+ * avec_confirmation: true to show the "Confirm anyway" button
+ */
+function afficherAlerteSortie(html_message, type_alerte, avec_confirmation) {
+    var zone = document.getElementById('sortie-alerte');
+    var texte = document.getElementById('sortie-alerte-texte');
+    var btn_confirmer = document.getElementById('sortie-btn-confirmer-quand-meme');
+
+    /* Appliquer la bonne classe de style (pas de calcul JS sur les couleurs)
+       / Apply the right style class (no JS color calculation) */
+    zone.classList.remove('sortie-alerte-erreur', 'sortie-alerte-avertissement');
+    zone.classList.add('sortie-alerte-' + type_alerte);
+
+    texte.innerHTML = html_message;
+    btn_confirmer.style.display = avec_confirmation ? '' : 'none';
+    zone.style.display = 'block';
+}
+
+/*
+ * Validation avant envoi HTMX.
+ * Logique :
+ *   total > fond + especes → erreur bloquante
+ *   total > especes seules → avertissement avec nouveau fond propose
+ *   total <= especes → OK direct
+ * / Validation before HTMX submission.
+ */
+document.getElementById('form-sortie-caisse').addEventListener('htmx:configRequest', function(event) {
+    /* Deja confirme par l'utilisateur : laisser passer et remettre a zero.
+       / Already confirmed by user: let through and reset. */
+    if (_sortie_confirmee_par_utilisateur) {
+        _sortie_confirmee_par_utilisateur = false;
+        return;
+    }
+
+    var form = document.getElementById('form-sortie-caisse');
+    var fond_centimes = parseInt(form.getAttribute('data-fond')) || 0;
+    var especes_centimes = parseInt(form.getAttribute('data-especes')) || 0;
+    var solde_total_centimes = fond_centimes + especes_centimes;
+
+    /* Recalculer le total depuis les inputs */
+    /* / Recalculate total from inputs */
+    var inputs = document.querySelectorAll('[data-centimes]');
+    var total_centimes = 0;
+    for (var i = 0; i < inputs.length; i++) {
+        var val_coupure = parseInt(inputs[i].getAttribute('data-centimes')) || 0;
+        var qte = parseInt(inputs[i].value) || 0;
+        total_centimes += val_coupure * qte;
+    }
+
+    /* Cas 1 : total > solde total — erreur bloquante */
+    /* / Case 1: total > total balance — blocking error */
+    if (total_centimes > solde_total_centimes) {
+        afficherAlerteSortie(
+            '<i class="fas fa-exclamation-circle" aria-hidden="true" style="margin-right:0.4rem;"></i>'
+            + '{% translate "Montant impossible" %} : '
+            + formaterEuros(total_centimes)
+            + ' &gt; {% translate "solde caisse" %} ('
+            + formaterEuros(solde_total_centimes)
+            + ').',
+            'erreur',
+            false
+        );
+        event.preventDefault();
+        return;
+    }
+
+    /* Cas 2 : total > especes mais <= solde — avertissement avec fond propose */
+    /* / Case 2: total > cash but <= balance — warning with proposed float */
+    if (total_centimes > especes_centimes) {
+        var nouveau_fond_centimes = solde_total_centimes - total_centimes;
+        afficherAlerteSortie(
+            '<i class="fas fa-exclamation-triangle" aria-hidden="true" style="margin-right:0.4rem;"></i>'
+            + '{% translate "Le montant" %} ('
+            + formaterEuros(total_centimes)
+            + ') {% translate "dépasse les ventes en espèces" %} ('
+            + formaterEuros(especes_centimes)
+            + ').<br>'
+            + '{% translate "Le nouveau fond de caisse serait de" %} '
+            + '<strong style="color:#4ade80">' + formaterEuros(nouveau_fond_centimes) + '</strong>.',
+            'avertissement',
+            true
+        );
+        event.preventDefault();
+        return;
+    }
+
+    /* Cas 3 : total OK */
+    /* / Case 3: total OK */
+    masquerAlerteSortie();
+});
+</script>

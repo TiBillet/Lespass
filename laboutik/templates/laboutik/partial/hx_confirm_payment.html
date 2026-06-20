@@ -1,0 +1,106 @@
+{% load static i18n %}
+{% load laboutik_process %}
+<!--
+ECRAN CONFIRMATION DE PAIEMENT
+Demande une validation avant de finaliser le paiement.
+Pour les especes : affiche le total a encaisser et un champ pour la somme donnee.
+/ Payment confirmation screen — validates before finalizing. Cash: shows total and given amount field.
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_confirm_payment.html
+
+FLUX :
+1. Clic sur un bouton paiement dans hx_display_type_payment.html
+2. Ce partial s'affiche avec le moyen de paiement et le total
+3. Clic VALIDER → soumet le formulaire d'addition vers laboutik-paiement-payer
+-->
+
+<div id="confirm" class="BF-col" data-testid="paiement-confirmation" aria-live="polite">
+  <h1>{% translate "Confirmez le paiement par" %} {{ payment_translation }}</h1>
+  {% if method == 'espece' %}
+  <!-- total a encaisser, bien visible pour le caissier / total to collect, clearly visible -->
+  <div class="confirm-total">
+    {% translate "A encaisser" %} : {{ total|floatformat:2 }} {{ currency_data.symbol }}
+  </div>
+  <div class="info-sum-given">
+    <i class="fas fa-coins" aria-hidden="true"></i> {% translate "Somme donnée" %}
+  </div>
+  <!-- champ de saisie de la somme donnee par le client / input for amount given by customer -->
+  <div class="confirm-input-wrapper">
+    <input type="number" id="given-sum" class="addition-fractionnee-input"
+      inputmode="decimal" autofocus
+      aria-label="{% translate "Somme donnée" %}"
+      data-testid="paiement-input-somme-donnee">
+    <span class="confirm-currency" aria-hidden="true">{{ currency_data.symbol }}</span>
+  </div>
+  <small id="given-sum-msg-erreur" role="alert"></small>
+  {% endif %}
+
+  <div id="confirm-action-container">
+    <!-- bouton retour / back button -->
+    <c-bt.return selector="#confirm" layer="2" />
+
+    <div id="bt-valider-layer2" class="bt-basic-container bt-basic-bg-success"
+      onclick="askManageAddition('{{ method }}' {% if method == 'espece' %}, {{ total|force_dot }} {% endif %})"
+      data-testid="paiement-btn-valider">
+      <div class="bt-basic-icon">
+        <i class="fas fa-check-circle" aria-hidden="true"></i>
+      </div>
+      <div class="bt-basic-text">
+        <div>{% translate "VALIDER" %}</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * Valide et soumet le paiement
+     * Verifie que la somme donnee est suffisante (si especes),
+     * puis soumet le formulaire d'addition.
+     * / Validates and submits payment — checks given amount for cash, then submits.
+     *
+     * LOCALISATION : laboutik/templates/laboutik/partial/hx_confirm_payment.html
+     *
+     * COMMUNICATION :
+     * Emet : 'additionManageForm' → #event-organizer (updateInput, postUrl, submit)
+     *
+     * @param {string} method - moyen de paiement (espece, carte_bancaire, CH, gift, nfc)
+     * @param {number} total - total en euros (uniquement pour especes)
+     */
+    function askManageAddition(method, total) {
+      if (method === 'espece') {
+        // Verifie que la somme donnee couvre le total
+        // / Checks given amount covers the total
+        const inputGivenSum = document.querySelector('#given-sum').value
+        const givenSum = Number(inputGivenSum)
+        if (inputGivenSum !== '' && givenSum < total) {
+          document.querySelector('#given-sum-msg-erreur').innerText = `{% translate "Total" %} : ${total} {{ currency_data.symbol }} - {% translate "Somme incorrecte !" %}`
+          return
+        } else {
+          // Insere la somme donnee en centimes dans le formulaire de l'addition
+          // / Inserts given amount in cents into the addition form
+          sendEvent('organizerMsg', '#event-organizer', {
+            src: { file: 'hx_confirm_payment.html', method: 'submitAddition' },
+            msg: 'additionManageForm',
+            data: { actionType: 'updateInput', selector: '#addition-given-sum', value: givenSum * 100 }
+          })
+        }
+      }
+
+      // Definit l'URL de soumission du formulaire
+      // / Sets the form submission URL
+      sendEvent('organizerMsg', '#event-organizer', {
+        src: { file: 'hx_confirm_payment.html', method: 'submitAddition' },
+        msg: 'additionManageForm',
+        data: { actionType: 'postUrl', selector: null, value: '{% url "laboutik-paiement-payer" %}' }
+      })
+
+      // Soumet le formulaire d'addition
+      // / Submits the addition form
+      sendEvent('organizerMsg', '#event-organizer', {
+        src: { file: 'hx_confirm_payment.html', method: 'submitAddition' },
+        msg: 'additionManageForm',
+        data: { actionType: 'submit' }
+      })
+    }
+  </script>
+</div>

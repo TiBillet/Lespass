@@ -1,0 +1,116 @@
+{% load static i18n %}
+<!--
+ECRAN RETOUR CARTE — informations de la carte NFC scannee.
+Type de carte (anonyme / prenom / carte liee), soldes par asset, adhesions.
+/ Card feedback screen — NFC card info: type, balances per asset, memberships.
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_card_feedback.html
+
+Injecte dans #messages via innerHTML (pas outerHTML).
+Pas de id="messages" ici : l'element #messages existe dans base.html.
+Note : le listener 'tarifSelection' est sur #articles-zone (tarif.js), pas #messages.
+/ Injected into #messages via innerHTML (not outerHTML).
+No id="messages" here: the element is in base.html.
+Note: 'tarifSelection' listener is on #articles-zone (tarif.js), not #messages.
+-->
+<div class="cf-wrapper" aria-live="polite">
+
+  <!-- EN-TETE CARTE / CARD HEADER -->
+  <div class="cf-card-header" style="background-color: var({{ background }});">
+    {% if erreur %}
+    <div class="cf-card-type" data-testid="retour-carte-erreur">
+      <i class="fas fa-exclamation-triangle cf-card-type-icon" aria-hidden="true"></i>
+      <span>{{ erreur }}</span>
+    </div>
+
+    {% elif not card.email %}
+    <div class="cf-card-type" data-testid="retour-carte-anonyme">
+      <i class="fas fa-user-secret cf-card-type-icon" aria-hidden="true"></i>
+      <span>{% trans "Carte anonyme" %}</span>
+    </div>
+
+    {% else %}
+    <div class="cf-card-type" data-testid="retour-carte-nom">
+      <i class="fas fa-user-check cf-card-type-icon" aria-hidden="true"></i>
+      {% if card.first_name %}
+      <span>{{ card.first_name|title }}</span>
+      {% else %}
+      <span>{% trans "Carte liée" %}</span>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% if not erreur and state.place.name %}
+    <div class="cf-card-place">
+      <i class="fas fa-map-marker-alt" aria-hidden="true"></i> {{ state.place.name }}
+    </div>
+    {% endif %}
+  </div>
+
+  {% if not erreur %}
+  <!-- CONTENU SCROLLABLE / SCROLLABLE CONTENT -->
+  <div class="cf-content">
+
+    <!-- SOLDE TOTAL / TOTAL BALANCE -->
+    <div class="cf-total" data-testid="retour-carte-soldes">
+      <div class="cf-total-label">{% trans "Solde total" %}</div>
+      <div class="cf-total-value test-return-total-card">{{ total_monnaie|floatformat:2 }} &euro;</div>
+    </div>
+
+    <!-- DETAIL PAR TOKEN / BALANCE PER TOKEN -->
+    {% for token in tokens %}
+    <div class="cf-token-row" data-testid="retour-carte-solde-{{ forloop.counter }}">
+      <div class="cf-token-icon">
+        {% if token.asset_category == "TLF" %}
+        <i class="fas fa-euro-sign" aria-hidden="true"></i>
+        {% elif token.asset_category == "TNF" %}
+        <i class="fas fa-gift" aria-hidden="true"></i>
+        {% elif token.asset_category == "TIM" %}
+        <i class="fas fa-clock" aria-hidden="true"></i>
+        {% else %}
+        <i class="fas fa-coins" aria-hidden="true"></i>
+        {% endif %}
+      </div>
+      <div class="cf-token-info">
+        <div class="cf-token-name test-return-monnaie-item-name{{ forloop.counter }}">{{ token.asset_name }}</div>
+        {% if token.provenance %}
+        <div class="cf-token-place test-return-monnaie-item-place{{ forloop.counter }}">{{ token.provenance }}</div>
+        {% endif %}
+      </div>
+      <div class="cf-token-value test-return-monnaie-item-value{{ forloop.counter }}">{{ token.value_euros|floatformat:2 }}</div>
+    </div>
+    {% empty %}
+    <div class="cf-token-row cf-token-empty">
+      <div class="cf-token-icon"><i class="fas fa-wallet" aria-hidden="true"></i></div>
+      <div class="cf-token-info"><div class="cf-token-name">{% trans "Aucun solde" %}</div></div>
+      <div class="cf-token-value">0.00</div>
+    </div>
+    {% endfor %}
+
+    <!-- ADHESIONS ACTIVES / ACTIVE MEMBERSHIPS -->
+    {% if adhesions %}
+    <div class="cf-section-title">
+      <i class="fas fa-id-badge" aria-hidden="true"></i> {% trans "Adhesions actives" %}
+    </div>
+    {% for adhesion in adhesions %}
+    <div class="cf-adhesion-row" data-testid="retour-carte-adhesion-{{ forloop.counter }}">
+      <div class="cf-adhesion-icon">
+        <i class="fas fa-check-circle" aria-hidden="true"></i>
+      </div>
+      <div class="cf-adhesion-info">
+        <div class="cf-adhesion-name">{{ adhesion.price.product.name }}</div>
+        {% if adhesion.deadline %}
+        <div class="cf-adhesion-deadline">{% trans "Expire" %} {{ adhesion.deadline|date:"d/m/Y" }}</div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+  </div>
+  {% endif %}
+
+  <!-- BOUTON RETOUR / BACK BUTTON -->
+  <c-bt.return selector="#messages" />
+
+</div>

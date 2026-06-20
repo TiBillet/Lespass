@@ -1,0 +1,31 @@
+{% load i18n %}
+<!--
+CONFIRMATION DE CORRECTION — remplace la zone de correction apres succes
+/ CORRECTION CONFIRMATION — replaces the correction zone after success
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_correction_succes.html
+
+Affiche un message anime avec l'ancien et le nouveau moyen.
+L'animation correction-slide-in est definie en commun dans overlay.css.
+/ Animated message with old and new method. Animation defined in overlay.css.
+-->
+<div class="correction-succes-box"
+     role="status"
+     aria-live="polite"
+     data-testid="correction-succes">
+
+    <div class="correction-succes-header">
+        <span class="correction-succes-check">
+            <i class="fas fa-check" aria-hidden="true"></i>
+        </span>
+        <span class="correction-succes-title">
+            {% translate "Correction enregistree" %}
+        </span>
+    </div>
+
+    <p class="correction-succes-detail">
+        {{ ancien_moyen_label }}
+        <span class="correction-succes-arrow">&rarr;</span>
+        <strong class="correction-succes-new-method">{{ nouveau_moyen_label }}</strong>
+    </p>
+</div>

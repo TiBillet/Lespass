@@ -1,0 +1,71 @@
+{% load i18n %}
+<!--
+FOND DE CAISSE — formulaire de lecture/modification
+/ CASH FLOAT — read/update form
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_fond_de_caisse.html
+
+Affiche dans #ventes-zone (meme conteneur que le Ticket X).
+Bouton retour vers le recap "toutes caisses".
+-->
+<div class="ventes-container" data-testid="fond-de-caisse">
+
+    <!-- Bouton retour vers Ticket X -->
+    <!-- / Back button to Ticket X -->
+    <div style="margin-bottom: 1rem;">
+        <button class="btn-retour-recap"
+            hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?{{ params_ventes }}"
+            hx-target="#ventes-zone"
+            hx-swap="innerHTML"
+            data-loading-disable
+            data-testid="btn-retour-recap">
+            <i class="fas fa-arrow-left" aria-hidden="true"></i>
+            {% translate "Retour" %}
+        </button>
+    </div>
+
+    <h3 class="ventes-section-title">
+        <i class="fas fa-cash-register" aria-hidden="true"></i>
+        {% translate "Fond de caisse" %}
+    </h3>
+
+    {% if message_succes %}
+    <div class="feedback-message-success"
+        role="status" aria-live="polite" data-testid="fond-message-succes">
+        <i class="fas fa-check" aria-hidden="true"></i>
+        {% translate "Fond de caisse mis a jour" %}
+    </div>
+    {% endif %}
+
+    <p class="fond-info-text">
+        {% translate "Montant actuel" %} :
+        <strong>{{ montant_actuel_euros }} €</strong>
+    </p>
+
+    <form method="post"
+          action="{% url 'laboutik-caisse-fond_de_caisse' %}{% if params_ventes %}?{{ params_ventes }}{% endif %}"
+          hx-post="{% url 'laboutik-caisse-fond_de_caisse' %}{% if params_ventes %}?{{ params_ventes }}{% endif %}"
+          hx-target="#ventes-zone"
+          hx-swap="innerHTML"
+          aria-label="{% translate 'Fond de caisse' %}">
+        {% csrf_token %}
+
+        <div style="margin-bottom: 1rem;">
+            <label for="montant_euros" class="fond-input-label">
+                {% translate "Nouveau montant (euros)" %}
+            </label>
+            <input type="text" name="montant_euros" id="montant_euros"
+                   class="fond-input"
+                   inputmode="decimal"
+                   value="{{ montant_actuel_euros }}"
+                   data-testid="fond-input-montant">
+        </div>
+
+        <button type="submit"
+                class="fond-btn-submit"
+                data-loading-disable
+                data-testid="fond-btn-enregistrer">
+            {% translate "Enregistrer" %}
+        </button>
+    </form>
+</div>

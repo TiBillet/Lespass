@@ -1,0 +1,86 @@
+:root {
+  /* header */
+  --header-height: 49px;
+  --header-img-width: 120px;
+  --header-status-width: 26px;
+  --header-menu-width: 56px;
+  --header-add-img-status: calc(var(--header-img-width) + var(--header-status-width));
+  --header-add-img-status-menu: calc(var(--header-add-img-status) + var(--header-menu-width));
+
+  /* nav category */
+  --cat-width: 100px;
+  --cat-height: 60px;
+  --cat-icon-size: 2.5rem;
+  --cat-name-size: 1rem;
+
+  /* footer */
+  --footer-container-height: 90px;
+
+  /* main */
+  --no-main-container-height: calc(var(--header-height) + var(--footer-container-height));
+  --main-container-height: calc(100% - var(--no-main-container-height));
+
+  /* main demeter */
+  --main-grid-col1-width: 56%;
+  --main-grid-col2-width: calc(100% - var(--main-grid-col1-width));
+  --main-row3-height: 22%;
+  --main-add-row1-row3-height: calc(var(--header-height) + var(--main-row3-height));
+  --main-row2-height: calc(100% - var(--main-add-row1-row3-height));
+
+
+  /* bouton article */
+  --bt-article-width: 120px;
+  --bt-article-height: 120px;
+
+  /* tables */
+  --bt-table-width: 90px;
+  --bt-table-height: 90px;
+
+  /* addition */
+  --addition-legend-heigh: 20px;
+  --addition-line-heigh: 29px;
+  /* dev addition */
+  --addition-list-height: 50%;
+
+  /* button basic */
+  --bt-basic-width: 280px;
+  --bt-basic-height: 120px;
+  --bt-basic-icon-width: 28%;
+  --bt-basic-text-width: 72%;
+
+  /* keys */
+  --key-width: 80px;
+  --key-height: 80px;
+
+  /* led */
+  --led-size: 14px;
+}
+
+#contenu {
+  width: 100vw;
+  height: 100vh;
+  background-color: var(--gris10);
+  display: grid;
+  grid-template-areas:
+    "header header"
+    "products addition"
+    "win-bottom-left win-bottom-right";
+  grid-template-rows: var(--header-height) var(--main-row2-height) var(--main-row3-height);
+  grid-template-columns: var(--main-grid-col1-width) var(--main-grid-col2-width);
+}
+
+.header-background {
+  grid-area: header;
+}
+
+#products {
+  grid-area: products;
+  width: 100%;
+  height: 100%;
+}
+
+#addition {
+  grid-area: addition;
+   width: 100%;
+   height: 100%;
+}

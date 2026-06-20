@@ -1,0 +1,18 @@
+{% load static i18n %}
+<div class="BF-ligne-deb"
+     style="background-color: var(--{{ msg_type }})"
+     role="alert"
+     aria-live="assertive"
+     data-testid="alerte-messages">
+  {% if msg_type == "success" %}
+    <i class="fas fa-check-circle alerte-messages-icone" aria-hidden="true"></i>
+  {% elif msg_type == "info" %}
+    <i class="fas fa-info-circle alerte-messages-icone" aria-hidden="true"></i>
+  {% elif msg_type == "error" %}
+    <i class="fas fa-times-circle alerte-messages-icone" aria-hidden="true"></i>
+  {% else %}
+    <i class="fas fa-exclamation-triangle alerte-messages-icone"
+       aria-hidden="true"></i>
+  {% endif %}
+  <p class="alerte-messages-texte" data-testid="alerte-messages-texte">{{ msg_content }}</p>
+</div>

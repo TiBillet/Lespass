@@ -1,0 +1,22 @@
+.keyboard-content {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  column-gap: 6px;
+  row-gap: 6px;
+}
+
+.key-touch {
+    display: flex;
+    flex-direction: column;
+    text-align: center;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    cursor: pointer;
+  }
+
+.key-size1 {
+  width: var(--key-width);
+  height: var(--key-height);
+}

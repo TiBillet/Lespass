@@ -105,6 +105,19 @@ class Wallet(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, db_index=True)
     origin = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="wallets", blank=True, null=True)
 
+    # Ajouts Phase 0 fedow_core (decision 16.6)
+    # Phase 0 fedow_core additions (decision 16.6)
+    public_pem = models.TextField(
+        null=True,
+        blank=True,
+        help_text=_("Cle publique PEM pour audit cryptographique"),
+    )
+    name = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text=_("Nom du wallet (ex: nom du lieu, nom du user)"),
+    )
 
 
 class TibilletUser(AbstractUser):
@@ -141,6 +154,25 @@ class TibilletUser(AbstractUser):
     espece = models.CharField(max_length=2,
                               choices=ESPECE_CHOICES,
                               default=TYPE_HUM)
+
+    # Rôles des terminaux hardware (uniquement renseigné si espece=TE)
+    # Hardware terminal roles (only set when espece=TE)
+    ROLE_LABOUTIK = 'LB'
+    ROLE_TIREUSE = 'TI'
+    ROLE_KIOSQUE = 'KI'
+    TERMINAL_ROLE_CHOICES = (
+        (ROLE_LABOUTIK, _('LaBoutik POS')),
+        (ROLE_TIREUSE, _('Connected tap')),
+        (ROLE_KIOSQUE, _('Kiosk / self-service')),
+    )
+
+    terminal_role = models.CharField(
+        max_length=2,
+        choices=TERMINAL_ROLE_CHOICES,
+        null=True, blank=True,
+        verbose_name=_("Terminal role"),
+        help_text=_("Only set for espece=TE. Drives permission checks."),
+    )
 
     PUBLIC, FREE, PREMIUM, ENTREPRISE, CUSTOM = 'PU', 'FR', 'PR', 'EN', 'CU'
     OFFRE_CHOICES = (

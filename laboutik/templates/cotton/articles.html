@@ -1,0 +1,175 @@
+{% load static %}
+{% load i18n %}
+{% load laboutik_process %}
+
+<!-- les data articles sont prises dans le container #products -->
+<div id="products">
+	{% for article in pv.articles %}
+	<!-- TODO: supprimer dès le back l'article paiement fractionné -->
+	{% if article.id != uuidArticlePaiementFractionne %}
+
+	{% if article.methode_caisse == 'BI' and article.event %}
+	{# Tuile billet paysage — 2 colonnes, affiche event + jauge #}
+	{# / Landscape ticket tile — 2 columns, shows event + gauge #}
+	{% include "cotton/billet_tuile.html" %}
+	{% else %}
+	{# Tuile standard carrée — articles VT, RE, AD, etc. #}
+	{# / Standard square tile — VT, RE, AD articles, etc. #}
+	<div data-uuid="{{article.id}}" data-name="{{article.name}}" data-price="{{article.prix}}" data-currency="{{ currency_data.symbol }}" data-group="{{article.bt_groupement.groupe}}"
+		data-methode-caisse="{{ article.methode_caisse }}"
+		data-multi-tarif="{{ article.multi_tarif|yesno:'true,false' }}"
+		data-est-adhesion="{{ article.est_adhesion|yesno:'true,false' }}"
+		data-tarifs='{{ article.tarifs_json }}'
+		data-poids-mesure="{{ article.a_poids_mesure|yesno:'true,false' }}"
+		{% if article.unite_saisie_label %}data-unite-saisie="{{ article.unite_saisie_label }}"{% endif %}
+		{% if article.prix_reference_label %}data-prix-reference="{{ article.prix_reference_label }}"{% endif %}
+		{% if article.stock_bloquant %}data-stock-bloquant="true"{% endif %}
+		class="article-container cat-{{ article.categorie.id}}{% if article.est_adhesion %} article-adhesion{% endif %}{% if article.stock_bloquant %} article-bloquant{% endif %}"
+		style="background-color:{{ article.couleur_backgr }};"
+		data-testid="article-{{ article.id }}">
+		<!-- Icône catégorie — petit badge haut-gauche
+		     Deux systèmes : MS (<span>) ou FA (<i>)
+		     / Category icon — small badge top-left
+		     Two systems: MS (<span>) or FA (<i>) -->
+		{% if article.categorie.icone_type == "ms" %}
+		<span class="material-symbols-outlined article-cat-icon"
+		      aria-hidden="true"
+		      style="color:{{ article.couleur_texte }};">{{ article.categorie.icon }}</span>
+		{% elif article.categorie.icone_type == "fa" %}
+		<i class="fas {{ article.categorie.icon }} article-cat-icon"
+		   aria-hidden="true"
+		   style="color:{{ article.couleur_texte }};"></i>
+		{% endif %}
+
+		{% comment %}
+		PASTILLE STOCK — badge en haut à droite de la tuile
+		3 états : alerte (orange), rupture (rouge), pas de badge si stock normal ou pas géré
+		Mise à jour en temps réel via WebSocket OOB swap (hx_stock_badge.html)
+		/ STOCK BADGE — top-right badge on the tile
+		3 states: alert (orange), out of stock (red), no badge if normal or unmanaged
+		Real-time update via WebSocket OOB swap (hx_stock_badge.html)
+		{% endcomment %}
+		<div id="stock-badge-{{ article.id }}"
+		     aria-live="polite"
+		     data-testid="stock-badge-{{ article.id }}">
+			{% if article.stock_en_alerte %}
+			<span class="article-stock-badge article-stock-badge-alerte"
+			      data-testid="stock-badge-alerte">{{ article.stock_quantite_lisible }}</span>
+			{% elif article.stock_en_rupture %}
+			<span class="article-stock-badge article-stock-badge-rupture"
+			      data-testid="stock-badge-rupture">{% translate "Épuisé" %}</span>
+			{% endif %}
+		</div>
+
+		<!-- Zone visuelle produit : icône OU image, centrée dans la tuile
+		     Priorité : url_image > icone produit (MS ou FA) > fond uni
+		     / Product visual zone: icon OR image, centered in tile
+		     Priority: url_image > product icon (MS or FA) > plain background -->
+		<div class="article-visual-layer">
+			{% if article.url_image %}
+			<img class="article-visual-img"
+			     src="{{ article.url_image }}"
+			     loading="lazy"
+			     alt=""
+			     onerror="this.style.display='none'">
+			{% elif article.icone_type == "ms" %}
+			<span class="material-symbols-outlined article-visual-icon"
+			      aria-hidden="true"
+			      style="color:{{ article.couleur_texte }};">{{ article.icone }}</span>
+			{% elif article.icone_type == "fa" %}
+			<i class="fas {{ article.icone }} article-visual-icon"
+			   aria-hidden="true"
+			   style="color:{{ article.couleur_texte }};"></i>
+			{% endif %}
+		</div>
+		<!-- Nom de l'article — zone entre le visuel et le footer
+		     / Article name — zone between visual zone and footer -->
+		<div class="article-name-layer">
+			<span class="article-name-text"
+			      style="color:{{article.couleur_texte}};text-shadow:1px 1px 4px {{article.couleur_backgr}}80;">
+				{{article.name}}
+			</span>
+		</div>
+		<!-- footer : pills + badge — PAS de width:100% ici (conflit avec left/right absolus)
+		     / footer: pills + badge — NO width:100% here (conflicts with absolute left/right) -->
+		<div class="article-footer-layer">
+			{% if article.methode_caisse == 'VC' %}
+			<!-- Methode VC (Vider Carte / remboursement) : le montant depend de la carte scannee.
+			     On affiche "Solde" + icone NFC au lieu d'un prix bidon (0,00 €).
+			     / VC method (empty card / refund): amount depends on the scanned card.
+			     Shows "Solde" + NFC icon instead of a dummy price (0.00 €). -->
+			<div class="article-tarifs-pills">
+				<span class="article-tarif-pill"
+				      aria-label="{% translate 'solde de la carte scannée' %}"
+				      data-testid="article-solde-pill-{{ article.id }}">
+					<span class="material-symbols-outlined"
+					      aria-hidden="true"
+					      style="font-size:14px;vertical-align:middle;">nfc</span>
+					{% translate "Solde" %}
+				</span>
+			</div>
+
+			{% elif article.multi_tarif %}
+			<!-- pills tarifs : un badge par tarif disponible / one badge per available rate -->
+			<div class="article-tarifs-pills">
+				{% for tarif in article.tarifs %}
+					{% if tarif.poids_mesure %}
+					<span class="article-tarif-pill article-tarif-pill-poids"
+					      aria-label="{% translate 'au poids' %}">
+						<i class="fas fa-balance-scale" aria-hidden="true"></i>
+						{{ tarif.prix_centimes|divide_by:100|floatformat:"-2" }}{{ tarif.prix_reference_label }}
+					</span>
+					{% elif tarif.free_price %}
+					<span class="article-tarif-pill article-tarif-pill-libre"
+					      aria-label="{% translate 'prix libre' %}">? {{ currency_data.symbol }}</span>
+					{% else %}
+					<span class="article-tarif-pill">
+						{# Pas de symbole € pour les recharges gratuites (RC/TM) : ce ne sont pas des euros #}
+						{# / No € symbol for free top-ups (RC/TM): they are not euros #}
+						{{ tarif.prix_centimes|divide_by:100|floatformat:"-2" }}{% if not article.est_recharge_gratuite %}{{ currency_data.symbol }}{% endif %}
+					</span>
+					{% endif %}
+				{% endfor %}
+			</div>
+
+			{% elif article.a_poids_mesure and pv.afficher_les_prix %}
+			<!-- prix au poids unique — affiche l'icône balance et le prix de référence
+			     / single weight price — shows scale icon and reference price -->
+			<div class="article-tarifs-pills">
+				<span class="article-tarif-pill article-tarif-pill-poids"
+				      aria-label="{% translate 'au poids' %}">
+					<i class="fas fa-balance-scale" aria-hidden="true"></i>
+					{{ article.prix|divide_by:100|floatformat:"-2" }}{{ article.prix_reference_label }}
+				</span>
+			</div>
+
+			{% elif pv.afficher_les_prix %}
+			<!-- prix unique en pill : même design que les multi-tarifs
+			     / single price as pill: same design as multi-rate pills -->
+			<div class="article-tarifs-pills">
+				<span class="article-tarif-pill">
+					{# Pas de symbole € pour les recharges gratuites (RC/TM) #}
+					{# / No € symbol for free top-ups (RC/TM) #}
+					{{ article.prix|divide_by:100|floatformat:"-2" }}{% if not article.est_recharge_gratuite %}{{ currency_data.symbol }}{% endif %}
+				</span>
+			</div>
+			{% endif %}
+
+			<!-- quantity -->
+			<div class="article-quantity BF-ligne">
+				<span id="article-quantity-number-{{ article.id }}" class="badge">0</span>
+			</div>
+		</div>
+		<!-- pour remonter au parent plus facilement -->
+		<div class="article-touch"></div>
+	</div>
+	{% endif %}{# fin if methode_caisse BI / else standard #}
+	{% endif %}{# fin if uuidArticlePaiementFractionne #}
+	{% endfor %}
+</div>
+<script src="{% static 'js/tarif.js' %}"></script>
+<script src="{% static 'js/articles.js' %}"></script>
+<!-- Variable Django — doit rester inline / Must stay inline (Django template variable) -->
+<style>
+	:root { --article-font-size: {{ laboutik_config.taille_police_articles }}px; }
+</style>

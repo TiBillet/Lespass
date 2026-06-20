@@ -1,0 +1,25 @@
+{% load static %}
+<link rel="stylesheet" href="{% static 'css/win_bottom_left.css' %}" />
+<nav id="win-bottom-left">
+  <div class="categories-container">
+    <c-categories direction="row" />
+  </div>
+  <div class="win-bottom-left-actions">
+    <div class="wbld-bt bc-place"
+         hx-get="/laboutik/caisse/managed_card/?uuid_pv={{ state.uuid_pv }}"
+         hx-target="#messages"
+         hx-swap="outerHTML">PLACE CARD</div>
+    <div class="wbld-bt bc-info"
+         hx-get="/laboutik/paiement/verifier_carte/"
+         hx-target="#messages"
+         hx-swap="innerHTML">CHECK CARD</div>
+    <div class="wbld-bt bc-purple"
+         hx-get="hx_currency_swap"
+         hx-target="#messages"
+         hx-swap="innerHTML">SWAP CB/MONEY</div>
+    <div class="wbld-bt bc-table-ephemeral"
+         hx-get="hx_get_all_tables"
+         hx-target="#messages"
+         hx-swap="innerHTML">TABLE</div>
+  </div>
+</nav>

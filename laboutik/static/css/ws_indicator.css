@@ -1,0 +1,51 @@
+/* Indicateur réseau dans le header — petit bouton cliquable
+   / Network indicator in header — small clickable button
+   LOCALISATION : laboutik/static/css/ws_indicator.css
+   Extrait de : laboutik/templates/laboutik/partial/hx_ws_indicator.html */
+
+.ws-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 10px;
+  height: 100%;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: color 0.3s ease;
+  user-select: none;
+}
+
+.ws-indicator i {
+  font-size: 0.9rem;
+}
+
+/* Vert = connecté / Green = connected */
+.ws-connected {
+  color: #198754;
+}
+
+/* Rouge = déconnecté / Red = disconnected */
+.ws-disconnected {
+  color: #dc3545;
+}
+
+/* Animation flash au ping (retour du pong)
+   / Flash animation on ping (pong response) */
+@keyframes ws-ping-flash {
+  0%   { color: #fff; }
+  100% { color: #198754; }
+}
+.ws-ping-flash {
+  animation: ws-ping-flash 0.4s ease-out;
+}
+
+/* Label de latence à droite de l'icône
+   / Latency label to the right of the icon */
+.ws-indicator-label {
+  font-family: monospace;
+  font-size: 0.7rem;
+  min-width: 0;
+  white-space: nowrap;
+}

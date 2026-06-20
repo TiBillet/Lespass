@@ -1,0 +1,198 @@
+/* ============================================================
+   CATEGORIES.CSS — Barre laterale des categories de produits
+   / Product categories sidebar
+
+   LOCALISATION : laboutik/static/css/categories.css
+   SOURCE : cotton/categories.html
+   ============================================================ */
+
+#categories {
+	width: var(--cat-width);
+	height: 100%;
+	background-color: var(--noir04);
+	overflow-y: auto;
+	overflow-x: hidden;
+
+	/* Scrollbar fine et discrete — coherente avec le theme sombre POS
+	   / Thin discreet scrollbar — consistent with dark POS theme */
+	scrollbar-width: thin;
+	scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+
+	.category-item {
+		width: 100%;
+		height: 66px;
+		border-bottom: 1px solid var(--noir02);
+		padding: 4px 0;
+		cursor: pointer;
+		color: var(--gris07);
+		overflow: hidden;
+		position: relative;
+	}
+}
+
+#categories:has(.direction-row) {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	flex-direction: row;
+	justify-content: start;
+	align-items: center;
+	overflow-y: hidden;
+	overflow-x: auto;
+
+	.category-item {
+		max-width: 120px;
+		height: 66px;
+		border-bottom: none;
+	}
+}
+
+
+/* Webkit scrollbar (Chrome, Edge, Safari) */
+#categories::-webkit-scrollbar {
+	width: 4px;
+}
+
+#categories::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+#categories::-webkit-scrollbar-thumb {
+	background-color: rgba(255, 255, 255, 0.15);
+	border-radius: 2px;
+}
+
+#categories::-webkit-scrollbar-thumb:hover {
+	background-color: rgba(255, 255, 255, 0.3);
+}
+
+.category-icon {
+	font-size: var(--cat-icon-size);
+	text-shadow: 2px 2px var(--gris02)
+}
+
+/* Séparateur entre "Tous" et les catégories spécifiques
+   / Separator between "All" and specific categories */
+#category-all {
+	margin-bottom: 6px;
+	border-bottom: 2px solid var(--gris01);
+}
+
+/* FIX : le sélecteur était .categorie-nom (FR) mais le HTML utilise .category-nom (EN).
+   La règle ne s'appliquait jamais.
+   / FIX: selector was .categorie-nom (FR) but HTML uses .category-nom (EN).
+   The rule was never applied. */
+.category-nom {
+	font-size: var(--cat-name-size);
+	text-wrap: balance;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-height: 2.4em;
+	line-height: 1.2;
+	text-align: center;
+}
+
+.category-touch {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+}
+
+.category-item-active {
+	color: var(--blanc01);
+	background-color: rgba(255, 255, 255, 0.06);
+	border-left: 3px solid var(--vert01);
+}
+
+#bt-hide-addition {
+	display: none;
+}
+
+/* pour une largeur supérieure 1022 pixels */
+@media only screen and (width > 1022px) {
+
+	/* effacer le bouton addition */
+	#bt-show-addition {
+		display: none;
+	}
+}
+
+/* pour une largeur supérieure 1199 pixels */
+@media only screen and (width > 1199px) {
+	.category-item {
+		height: 90px;
+		margin: 10px 0;
+	}
+}
+
+/* Mobile : sidebar plus étroite pour maximiser l'espace articles
+   / Mobile: narrower sidebar to maximize articles space */
+@media only screen and (max-width: 599px) {
+	.category-item {
+		height: 52px;
+	}
+}
+
+/* --- PSEUDO-CATÉGORIES EVENT (PV BILLETTERIE) ---
+   Les events apparaissent dans la sidebar avec date + mini-jauge.
+   Le data-sel="cat-{event_uuid}" permet le filtre JS existant.
+   / Event pseudo-categories (BILLETTERIE POS)
+   Events appear in the sidebar with date + mini-gauge.
+   data-sel="cat-{event_uuid}" enables the existing JS filter. */
+
+.category-event {
+	height: auto;
+	min-height: 66px;
+	padding: 6px 4px;
+}
+
+.category-event-date {
+	font-size: 0.7rem;
+	opacity: 0.6;
+	line-height: 1.2;
+	margin-top: 1px;
+}
+
+/* Mini-jauge dans la sidebar — barre fine sous le nom de l'event
+   / Mini-gauge in sidebar — thin bar under event name */
+.category-event-jauge {
+	width: 80%;
+	height: 3px;
+	border-radius: 2px;
+	background-color: rgba(255, 255, 255, 0.15);
+	margin: 3px auto 1px;
+	overflow: hidden;
+}
+
+.category-event-jauge-fill {
+	height: 100%;
+	border-radius: 2px;
+	background-color: var(--vert01, #00e676);
+	transition: width 300ms ease;
+}
+
+.category-event-jauge-complet {
+	background-color: var(--rouge01, #e53935);
+}
+
+.category-event-places {
+	font-size: 0.65rem;
+	font-variant-numeric: tabular-nums;
+	opacity: 0.7;
+	line-height: 1;
+}
+
+.category-event-complet {
+	color: var(--rouge01, #e53935);
+	font-weight: bold;
+	opacity: 1;
+}
+
+/* sunmi d3mini -- pour une largeur supérieure ou égale à 1278 pixels */
+@media only screen and (width > 1278px) {
+	:root {
+		--cat-width: 8%;
+	}
+}

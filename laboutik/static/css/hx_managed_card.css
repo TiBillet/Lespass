@@ -1,0 +1,126 @@
+#mc-container {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--bleu11);
+  --mc-row1: 20%;
+  --mc-row3: 120px;
+  --mc-row2: calc(100% - var(--mc-row1) - var(--mc-row3));
+}
+
+.mc-title {
+  width: 100%;
+  height: var(--mc-row1);
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  /* margin: 20px 0 0 20px; */
+  font-size: 3rem;
+  font-weight: bold;
+  color: var(--blanc01);
+}
+
+.mc-content {
+  width: 100%;
+  height: var(--mc-row2);
+  margin-bottom: 18px;
+  color: var(--blanc01);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+
+  .key-touch {
+    background-color: var(--blanc01);
+    border: 1px solid var(--noir01);
+    color: var(--noir01);
+  }
+}
+
+.mc-content-main {
+  display: flex;
+  flex-direction: row;
+}
+
+#mc-actions {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  /* grid-template-rows: repeat(4, 1fr); */
+  column-gap: 6px;
+  row-gap: 6px;
+  justify-self: flex-end;
+  margin-left: 32px;
+
+  .active {
+    border: 1px solid var(--vert01);
+  }
+}
+
+.mc-output {
+  width: var(--key-width);
+  height: var(--key-height);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.mc-error-container {
+  width: 100%;
+  height: 1rem;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.mc-error {
+  font-size: 1rem;
+  color: var(--error);
+  display: none;
+}
+
+.mc-footer-actions {
+  width: 100%;
+  height: var(--mc-row3);
+  display: flex;
+  flex-direction: row;
+  background-color: aquamarine;
+}
+
+.mc-actions-bt {
+  width: calc(100% / 3);
+  height: 100%;
+  padding: 0 10px;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  color: var(--blanc01);
+}
+
+.mc-payment-select {
+  height: var(--key-height);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: var(--blanc01);
+  color: var(--noir01);
+  padding: 0 6px;
+  cursor: pointer;
+}
+
+.bc-error {
+  background-color: var(--rouge03);
+}
+
+.bc-info {
+  background-color: var(--bleu02);
+}
+
+.bc-success {
+  background-color: var(--vert03);
+}

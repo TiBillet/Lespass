@@ -49,6 +49,7 @@ djangorestframework-stubs = "^3.16.6"
 ruff = "^0.15.8"
 yamllint = "^1.38.0"
 playwright = "^1.60.0"
+django-cotton = "^2.7.2"
 
 [tool.poetry.group.dev.dependencies]
 django-debug-toolbar = "^4.2.0"

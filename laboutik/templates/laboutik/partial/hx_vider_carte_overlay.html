@@ -1,0 +1,24 @@
+{% load static i18n %}
+
+<!--
+Infos c-read-nfc : 
+- input-selector = selector css(id unique) d'un input où nfc enverra le tagId lu
+- form-selector = selector css(id unique) du formulaire qui écoute un évènement provenant du routeur d'évènement 
+- submit-url = url à poussée dans hx-post
+- not touch hx-triger="" and hx-post="", they are handled by the script below and nfc.js
+-->
+<c-read-nfc selector="#messages" input-selector="#nfc-tag-id" form-selector="#vider-carte-form" submit-url="{% url 'laboutik-paiement-vider_carte_preview' %}">
+<form id="vider-carte-form"
+      class="hide"
+      hx-post=""
+      hx-trigger=""
+      hx-target="#messages"
+      hx-swap="outerHTML">
+    {% csrf_token %}
+    <input id="nfc-tag-id" name="tag_id" value="" />
+    <input name="tag_id_cm" value="{{ card.tag_id }}" />
+    <input name="uuid_pv" value="{{ pv.uuid }}" />
+</form>
+<h2>{% translate "Vider la carte" %}</h2>
+<p>{% translate "Scannez la carte du client." %}</p>
+</c-read-nfc>

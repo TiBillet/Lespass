@@ -1,0 +1,93 @@
+{% load static i18n %}
+
+<!--
+RAPPORT DE CLOTURE DE CAISSE
+/ Cash register closure report
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_cloture_rapport.html
+
+Affiche le resume de la cloture avec les totaux par moyen de paiement.
+Displays the closure summary with totals by payment method.
+-->
+<div class="BF-col" data-testid="cloture-rapport" aria-live="polite">
+
+  <div class="payment-title1">{% translate "Clôture de caisse" %}</div>
+
+  <div class="cloture-section" data-testid="cloture-totaux">
+    <div class="payment-msg1" data-testid="cloture-total-especes">
+      {% translate "Espèces" %} : {{ total_especes_euros }} {{ currency_data.symbol }}
+    </div>
+    <div class="payment-msg1" data-testid="cloture-total-cb">
+      {% translate "Carte bancaire" %} : {{ total_cb_euros }} {{ currency_data.symbol }}
+    </div>
+    <div class="payment-msg1" data-testid="cloture-total-nfc">
+      {% translate "Cashless" %} : {{ total_nfc_euros }} {{ currency_data.symbol }}
+    </div>
+    <hr style="border-color: rgba(255,255,255,0.3); margin: 0.5rem 2rem;">
+    <div class="payment-title1" data-testid="cloture-total-general">
+      {% translate "Total" %} : {{ total_general_euros }} {{ currency_data.symbol }}
+    </div>
+    <div class="payment-msg1">
+      {{ nombre_transactions }} {% translate "transaction(s)" %}
+    </div>
+  </div>
+
+  {% if rapport_tva_euros %}
+  <div class="cloture-section" data-testid="cloture-tva">
+    <div class="payment-msg1" style="margin-top: 0.5rem;">{% translate "Ventilation TVA" %}</div>
+    {% for taux_label, tva_data in rapport_tva_euros.items %}
+    <div class="payment-msg2" data-testid="cloture-tva-{{ forloop.counter }}">
+      {% translate "TVA" %} {{ taux_label }} :
+      {% translate "HT" %} {{ tva_data.total_ht_euros }} € —
+      {% translate "TVA" %} {{ tva_data.total_tva_euros }} € —
+      {% translate "TTC" %} {{ tva_data.total_ttc_euros }} €
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Boutons export PDF / CSV / Email -->
+  <!-- Export buttons PDF / CSV / Email -->
+  <div class="cloture-section" style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+    <a href="{% url 'laboutik-caisse-rapport_pdf' pk=cloture.uuid %}"
+       class="btn-export"
+       data-testid="cloture-btn-pdf"
+       download>
+      📄 {% translate "Télécharger PDF" %}
+    </a>
+    <a href="{% url 'laboutik-caisse-rapport_csv' pk=cloture.uuid %}"
+       class="btn-export"
+       data-testid="cloture-btn-csv"
+       download>
+      📊 {% translate "Télécharger CSV" %}
+    </a>
+    <button hx-post="{% url 'laboutik-caisse-envoyer_rapport' pk=cloture.uuid %}"
+            hx-target="#messages"
+            hx-swap="innerHTML"
+            class="btn-export"
+            data-loading-disable
+            data-testid="cloture-btn-email">
+      ✉️ {% translate "Envoyer par email" %}
+    </button>
+  </div>
+
+  <!-- Retour a l'ecran de selection du point de vente (ferme la caisse) -->
+  <!-- / Back to the POS selection screen (closes the register) -->
+  <div class="cloture-section" style="display: flex; justify-content: center; margin-top: 1rem;">
+    <a href="{% url 'laboutik-caisse-list' %}"
+       style="
+           display: inline-flex; align-items: center; gap: 0.5rem;
+           padding: 0.7rem 1.5rem;
+           background: rgba(99, 102, 241, 0.15);
+           border: 1px solid rgba(99, 102, 241, 0.4);
+           border-radius: 8px; color: #a5b4fc;
+           font-family: 'Luciole-regular'; font-size: 1rem;
+           font-weight: 600; cursor: pointer; text-decoration: none;
+       "
+       data-testid="btn-fermer-caisse">
+      <i class="fas fa-sign-out-alt" aria-hidden="true"></i>
+      {% translate "Fermer la caisse" %}
+    </a>
+  </div>
+
+</div>

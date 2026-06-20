@@ -1,0 +1,44 @@
+{% load static i18n %}
+
+<div id="addition">
+	<div class="addition-legend-grid">
+		<div></div>
+		<div>{% translate "PRODUIT" %}</div>
+		<div>{% translate "PRIX" %}</div>
+	</div>
+	<div id="addition-list" data-empty-text="{% translate 'Panier vide' %}" aria-live="polite">
+		<div id="addition-empty" class="BF-col addition-placeholder" data-testid="addition-empty-placeholder">
+			<i class="fas fa-shopping-basket" aria-hidden="true"></i>
+			<span>{% translate "Panier vide" %}</span>
+		</div>
+	</div>
+	<!-- NOTE : le listener 'tarifSelection' est sur #articles-zone (tarif.js),
+	pas sur #messages. Les partials HTMX continuent d'utiliser innerHTML
+	sur #messages pour d'autres raisons (preservation des listeners HTMX).
+	/ NOTE: 'tarifSelection' listener is on #articles-zone (tarif.js),
+	not #messages. HTMX partials still use innerHTML on #messages
+	for other reasons (preserving HTMX listeners). -->
+	<form id="addition-form" class="hide"
+		hx-post="{% url 'laboutik-paiement-moyens_paiement' %}"
+		hx-trigger="validerPaiement"
+		hx-target="#messages"
+		hx-swap="outerHTML"
+		hx-on::after-request="hideAndEmptyElement('#confirm')"
+		data-url-reset="{% url 'laboutik-paiement-moyens_paiement' %}">
+		<input type="text" name="id_table" value="{{ id_table }}" />
+		<input type="text" name="uuid_pv" value="{{ pv.id }}" />
+		<input type="text" name="responsable" value="{{ card.name }}" />
+		<input type="text" name="tag_id_cm" value="{{ card.tag_id }}" />
+		<input type="text" id="nfc-tag-id" name="tag_id" />
+		<input type="text" id="addition-comportement" name="comportement" value="{{ pv.comportement }}" />
+		<input type="number" id="addition-total" name="total" value="" />
+		<input type="text" id="addition-moyen-paiement" name="moyen_paiement" value="" />
+		<input type="text" id="addition-hostname-client" name="hostname_client" value="{{ hostname_client }}" />
+		<input type="text" id="addition-uuid-transaction" name="uuid_transaction" value="" />
+		<input type="number" id="addition-given-sum" name="given_sum" value="" />
+		<input type="text" id="addition-moyen-complement" name="moyen_complement" value="" />
+	</form>
+</div>
+
+<script src="{% static 'js/addition.js' %}"></script>
+

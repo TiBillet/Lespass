@@ -1,0 +1,91 @@
+{% load i18n laboutik_filters %}
+<!--
+DETAIL D'UNE VENTE — collapse dans un <td colspan="5"> sous la ligne cliquee
+/ SALE DETAIL — collapsed inside a <td colspan="5"> below the clicked row
+LOCALISATION : laboutik/templates/laboutik/partial/hx_detail_vente.html
+-->
+<div class="ventes-detail-collapse" data-testid="ventes-detail">
+
+    <div class="ventes-detail-info" data-testid="detail-info">
+        <div class="ventes-detail-info-item">
+            <i class="fas fa-clock" aria-hidden="true"></i>
+            {{ datetime|date:"d/m/Y H:i" }}
+        </div>
+        {% if nom_pv %}
+        <div class="ventes-detail-info-item">
+            <i class="fas fa-store" aria-hidden="true"></i>
+            {{ nom_pv }}
+        </div>
+        {% endif %}
+        <div class="ventes-detail-info-item">
+            <i class="fas fa-credit-card" aria-hidden="true"></i>
+            <span class="ventes-badge-moyen ventes-badge-{{ moyen_paiement }}">{{ moyen_paiement_label|default:moyen_paiement }}</span>
+        </div>
+    </div>
+
+    <table class="ventes-table" data-testid="detail-articles">
+        <thead>
+            <tr>
+                <th>{% translate "Article" %}</th>
+                <th>{% translate "Tarif" %}</th>
+                <th class="text-end">{% translate "Qty" %}</th>
+                <th class="text-end">{% translate "Prix unit." %}</th>
+                <th class="text-end">{% translate "Total" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for article in articles %}
+            <tr>
+                <td>{{ article.nom }}</td>
+                <td>{{ article.tarif }}</td>
+                {# Pour les lignes vrac : afficher le poids/volume (350g, 1,5kg, 50cl, 2L) #}
+                {# au lieu de la qty entiere (toujours 1 pour vrac, sans valeur metier).   #}
+                {# / For vrac lines: show weight/volume instead of integer qty (always 1).#}
+                <td class="text-end" data-testid="detail-qty">
+                    {% if article.est_vrac %}{{ article|afficher_poids }}{% else %}{{ article.qty|floatformat:0 }}{% endif %}
+                </td>
+                {# Pour les lignes vrac : prix au kg / L (12,00 €/kg) au lieu du prix de la ligne. #}
+                {# / For vrac lines: price per kg / L (12,00 €/kg) instead of line amount.        #}
+                <td class="text-end" data-testid="detail-prix-unit">
+                    {% if article.est_vrac and article.prix_par_unite %}{{ article.prix_par_unite }}{% else %}{{ article.prix_unitaire|euros }}{% endif %}
+                </td>
+                <td class="text-end" data-testid="detail-total-ligne">{{ article.total_ligne|euros }}</td>
+            </tr>
+            {% endfor %}
+            <tr class="ventes-total-row">
+                <td colspan="4"><strong>{% translate "Total" %}</strong></td>
+                <td class="text-end"><strong data-testid="detail-total-transaction">{{ total|euros }}</strong></td>
+            </tr>
+        </tbody>
+    </table>
+
+    {% if uuid_transaction %}
+    <div class="ventes-detail-actions" data-testid="detail-actions">
+        <button class="ventes-btn-action"
+                hx-post="{% url 'laboutik-paiement-imprimer_ticket' %}"
+                hx-target="closest .ventes-detail-actions"
+                hx-swap="innerHTML"
+                hx-vals='{"uuid_transaction": "{{ uuid_transaction }}"}'
+                data-loading-disable
+                data-testid="btn-reimprimer">
+            <i class="fas fa-print" aria-hidden="true"></i>
+            {% translate "Ré-imprimer" %}
+        </button>
+        {% if correction_possible %}
+        <button class="ventes-btn-action"
+                hx-get="{% url 'laboutik-paiement-formulaire_correction' %}?ligne_uuid={{ premiere_ligne_uuid }}"
+                hx-target="#correction-zone-{{ premiere_ligne_uuid }}"
+                hx-swap="innerHTML"
+                data-loading-disable
+                data-testid="btn-corriger">
+            <i class="fas fa-edit" aria-hidden="true"></i>
+            {% translate "Corriger moyen" %}
+        </button>
+        {% endif %}
+    </div>
+    <!-- Zone pour le formulaire de correction (chargee en HTMX) -->
+    <!-- / Zone for the correction form (loaded via HTMX) -->
+    <div id="correction-zone-{{ premiere_ligne_uuid }}" data-testid="correction-zone" aria-live="polite"></div>
+    {% endif %}
+
+</div>

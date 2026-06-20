@@ -1,0 +1,34 @@
+{% load static i18n %}
+<!--
+ECRAN ATTENTE LECTURE CARTE NFC (check carte)
+/ NFC card read waiting screen (card check)
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_check_card.html
+
+Ce partial est injecte dans #messages via innerHTML (pas outerHTML).
+On ne met PAS id="messages" sur le composant read-nfc car l'element
+#messages existe deja dans base.html.
+Note : le listener 'tarifSelection' est sur #articles-zone (tarif.js), pas #messages.
+/ This partial is injected into #messages via innerHTML (not outerHTML).
+We do NOT set id="messages" on the read-nfc component because the #messages
+element already exists in base.html.
+Note: 'tarifSelection' listener is on #articles-zone (tarif.js), not #messages.
+
+Infos c-read-nfc : 
+- input-selector = selector css(id unique) d'un input où nfc enverra le tagId lu
+- form-selector = selector css(id unique) du formulaire qui écoute un évènement provenant du routeur d'évènement 
+- submit-url = url à poussée dans hx-post
+- not touch hx-triger="" and hx-post="", they are handled by the script below and nfc.js
+-->
+<c-read-nfc selector="#messages" input-selector="#nfc-tag-id" form-selector="#form-check-nfc" submit-url="{% url 'laboutik-paiement-retour_carte' %}">
+<form id="form-check-nfc"
+      class="hide"
+      hx-post=""
+      hx-trigger=""
+      hx-target="#messages"
+      hx-swap="innerHTML">
+  {% csrf_token %}
+  <input id="nfc-tag-id" name="tag_id" />
+</form>
+<h1>{% translate "Attente lecture carte" %}</h1>
+</c-read-nfc>

@@ -1,0 +1,156 @@
+{% extends "laboutik/base.html" %}
+{% load static %}
+{% load static i18n %}
+{# ARCHITECTURE DE LABOUTIK - INTERFACE CAISSE / CASHLESS #}
+{# ========================================================== #}
+{# 
+# LaBoutik est une application de caisse/cashless pour points de vente.
+# Cette page est l'interface principale utilisée par les vendeurs pour :
+# - Sélectionner des articles/produits
+# - Gérer une addition (panier)
+# - Valider une vente avec différents moyens de paiement
+#
+# STRUCTURE DE L'APPLICATION :
+# -----------------------------
+# 1. COMPONENTS DJANGO COTTON (templates/cotton/) :
+#    - c-header : En-tête avec titre, menu burger, navigation
+#    - c-categories : Liste des catégories de produits
+#    - c-articles : Grille des articles disponibles (produits)
+#    - c-addition : Panier/Addition avec formulaire de paiement
+#
+# 2. FICHIERS JAVASCRIPT (static/js/) :
+#    - tibilletUtils.js : Système d'événements central (eventsOrganizer)
+#    - articles.js : Gestion des articles (clic, quantité, groupes)
+#    - addition.js : Gestion de l'addition (calcul total, paiement)
+#
+# 3. SYSTÈME D'ÉVÉNEMENTS (EVENT BUS) :
+# --------------------------------------
+# L'application utilise un système d'événements personnalisés via l'élément
+# #event-organizer (défini dans base.html) pour communiquer entre composants.
+# 
+# Fonctionnement :
+# - Envoi : sendEvent('organizerMsg', '#event-organizer', { msg: 'nomEvent', data: {} })
+# - Réception : eventsOrganizer() dans tibilletUtils.js reçoit et route l'événement
+# - Table de routage : objet 'switches' dans tibilletUtils.js mappe les événements
+#
+# Flux d'un clic sur un article (exemple complet) :
+# 1. articles.js:manageKey() → détecte le clic sur un article
+# 2. articles.js:addArticle() → envoie événement 'articlesAdd' à #event-organizer
+# 3. tibilletUtils.js:eventsOrganizer() reçoit l'événement via l'écouteur 'organizerMsg'
+# 4. tibilletUtils.js:switches['articlesAdd'] → [{ name: 'additionInsertArticle', selector: '#addition' }]
+# 5. addition.js:additionInsertArticle() → ajoute l'article à l'addition
+# 6. addition.js envoie 'additionTotalChange' → eventsOrganizer
+# 7. switches['additionTotalChange'] → [{ name: 'updateBtValider', selector: '#bt-valider' }]
+# 8. common_user_interface.html:updateBtValider() → met à jour l'affichage du total
+#
+# Avantages de cette architecture :
+# - Découplage : les composants ne se connaissent pas directement
+# - Testabilité : facile de simuler des événements
+# - Maintenabilité : un seul endroit pour modifier le routage (switches)
+#}
+{% block content %}
+  <!-- 
+HEADER - BARRE DE NAVIGATION
+Composant Cotton : templates/cotton/header.html
+Contient : Logo TiBillet, titre du point de vente, menu burger (navigation)
+-->
+  <c-header :title="title" />
+  <!--
+CONNEXION WEBSOCKET — push serveur vers navigateur
+/ WebSocket connection — server push to browser
+
+Active l'extension HTMX ws sur ce conteneur uniquement (pas sur tout le <body>).
+Le consumer LaboutikConsumer envoie le badge "Connecte" a l'ouverture,
+puis pousse les mises a jour de jauge et les notifications.
+La div #ws-status recoit le badge via OOB swap.
+-->
+  <div hx-ext="ws"
+       ws-connect="/ws/laboutik/{{ pv.id }}/"
+       style="display: contents">
+    <!--
+ZONE PRINCIPALE - CONTENU DE L'APPLICATION
+Structure en 3 colonnes sur desktop :
+- Colonne 1 (gauche) : Catégories de produits
+- Colonne 2 (centre) : Articles/produits disponibles  
+- Colonne 3 (droite) : Addition/panier (visible uniquement sur grand écran)
+-->
+    <main data-testid="caisse-pv-interface">
+      <!--
+	CATÉGORIES DE PRODUITS
+	Composant Cotton : templates/cotton/categories.html
+	Liste cliquable des catégories pour filtrer les articles affichés.
+	Chaque catégorie a une couleur et une icône associées.
+	-->
+      <c-categories direction="column" />
+      <div id="products-container">
+        <!--
+		ARTICLES/PRODUITS
+		Composant Cotton : templates/cotton/articles.html
+		Grille des articles disponibles a la vente.
+		Chaque article affiche : image, nom, prix (si configure), quantite selectionnee
+		Les paniers mixtes (VT + RE + AD) sont autorises.
+		-->
+        <c-articles />
+        <!--
+		ADDITION / PANIER
+		Composant Cotton : templates/cotton/addition.html
+		Affiche la liste des articles ajoutés avec leur quantité et prix.
+		Contient un formulaire caché (#addition-form) qui sera soumis lors du paiement.
+		
+		CHAMPS DU FORMULAIRE (input cachés) :
+		- id_table : Identifiant de la table (si mode restaurant)
+		- uuid_pv : UUID du point de vente actuel
+		- responsable : Nom du vendeur (carte primaire)
+		- tag_id_cm : ID de la carte vendeur
+		- tag_id (nfc-tag-id) : ID de la carte client (pour paiement NFC)
+		- comportement : Mode d'interface du point de vente (D=direct, V=avance)
+		- total (addition-total) : Montant total de la commande en centimes
+		- moyen_paiement (addition-moyen-paiement) : Type de paiement choisi
+		- hostname_client : Nom de l'appareil client
+		- uuid_transaction : UUID de la transaction (pour traçabilité)
+		- given_sum : Somme donnée (pour calcul de monnaie en espèces)
+		-->
+        <c-addition />
+      </div>
+    </main>
+    <div id="article-panel"></div>
+    <div id="article-panel-backdrop"></div>
+    <c-footer />
+    <script src="{% static 'js/longpress.js' %}"></script>
+    <script>
+			// ajoute dans state les data du fichier de conf stoké dans localStorage
+			const configFile = localStorage.getItem("configFile")
+			state['configFile'] = JSON.parse(configFile)
+	
+			document.addEventListener('DOMContentLoaded', () => {
+				// Long press sur les tuiles article → ouvre le panel contextuel
+				// / Long press on article tiles → opens contextual panel
+				initLongPress({
+					container: document.querySelector('#products'),
+					selector: '.article-container',
+					delay: 600,
+					moveThreshold: 10
+				})
+
+				// Fermeture du panel via le backdrop
+				// / Close panel via backdrop click
+				document.getElementById('article-panel-backdrop').addEventListener('click', function() {
+					document.getElementById('article-panel').innerHTML = ''
+				})
+			})
+    </script>
+    <!-- 
+MESSAGE "AUCUN ARTICLE SÉLECTIONNÉ"
+Partial : templates/laboutik/partial/no_articles.html
+Affiché lorsque l'utilisateur clique sur VALIDER sans avoir ajouté d'articles.
+Contient un message d'erreur et un bouton de retour pour fermer l'overlay.
+-->
+    {% include "laboutik/partial/no_articles.html" %}
+    <!-- Indicateur WebSocket (CSS + JS) — charge en fin de page pour que le DOM soit pret
+     / WebSocket indicator (CSS + JS) — loaded at end of page so DOM is ready -->
+    {% include "laboutik/partial/hx_ws_indicator.html" %}
+  </div>
+  {# Fin du conteneur WebSocket hx-ext="ws" / End of WebSocket container #}
+{% endblock content %}
+{% block css %}
+{% endblock css %}

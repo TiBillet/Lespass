@@ -1,0 +1,169 @@
+{% load static i18n %}
+<header class="header-background">
+{% if mode_ecole %}
+{# Bandeau orange visible en mode ecole (LNE exigence 5) — indique que les ventes sont des simulations #}
+{# / Orange banner visible in training mode (LNE req. 5) — indicates sales are simulations #}
+<div style="background: #ff6600; color: white; text-align: center; padding: 8px; font-weight: bold; font-size: 1.2em; position: relative; z-index: 1000;"
+     role="alert"
+     aria-label="{% translate 'Mode ecole actif' %}"
+     data-testid="banner-mode-ecole">
+    {% translate "MODE ECOLE — SIMULATION" %}
+</div>
+{% endif %}
+	<!-- link = first sales point of the primary card -->
+	<div class="header-img" data-nav-spinner
+		onclick="window.location = '{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{card.pvs_list.0.uuid}}&tag_id_cm={{card.tag_id}}&type_app={{type_app}}'">
+		<img class="pointer" alt="TiBillet" src="{% static 'images/icon-complet-blanc.svg' %}" />
+	</div>
+	<!--
+	INDICATEUR CONNEXION WEBSOCKET — toujours visible dans le header
+	/ WebSocket connection indicator — always visible in header
+
+	LOCALISATION : cotton/header.html
+
+	Vert = connecte, rouge = deconnecte.
+	Clic = envoie un ping WebSocket et affiche la latence aller-retour.
+	Le JS est dans laboutik/templates/laboutik/partial/hx_ws_indicator.html
+	(charge dans common_user_interface.html via include).
+
+	FLUX :
+	1. htmx:wsOpen → icone passe en vert
+	2. htmx:wsClose/htmx:wsError → icone passe en rouge
+	3. Clic → envoie JSON {"type":"ping","client_ts":...} via WebSocket
+	4. Consumer repond {"type":"pong","client_ts":...}
+	5. JS calcule (now - client_ts) et affiche le delai
+	-->
+	<div id="ws-indicator"
+		 class="ws-indicator ws-disconnected"
+		 data-testid="ws-indicator"
+		 role="status"
+		 aria-label="{% translate 'Etat de la connexion' %}"
+		 onclick="wsPing()"
+		 title="{% translate 'Cliquer pour tester la latence' %}">
+		<i class="fas fa-signal" aria-hidden="true"></i>
+		<span id="ws-indicator-label" class="ws-indicator-label"></span>
+	</div>
+	<div class="header-status">
+		<div id="header-status-info1"></div>
+		<div id="header-status-info2"></div>
+	</div>
+	<div id="header-title">
+		<div>
+			<span>{{ title }}</span>{% if pv.name and hide_pv_name != True %} - <i class="fas {{ pv.icon }}" aria-hidden="true"></i> {{ pv.name }}{% endif %}
+		</div>
+	</div>
+	<div class="header-menu pointer">
+		<i class="menu-burger-icon fas fa-bars curseur-action" onclick="toggleMenuBurger(event)"
+			role="button" aria-label="{% translate 'Menu' %}" data-testid="burger-icon"></i>
+	</div>
+</header>
+<div id="menu-burger-overlay" data-testid="menu-burger-overlay" aria-hidden="true"></div>
+<nav id="menu-burger-container" aria-label="{% translate 'Menu principal' %}" data-testid="menu-burger">
+	<div class="main-menu">
+		<div class="menu-burger-item menu-burger-item-content" onclick="showSubMenu(event, '.sub-menu-pvs')">
+			<i class="menu-burger-item-content fas fa-store"></i>
+			<div class="menu-burger-item-content">{% translate "POINTS DE VENTES" %}</div>
+		</div>
+		<div class="menu-burger-item menu-burger-item-content">
+			<i class="menu-burger-item-content fas fa-concierge-bell"></i>
+			<div class="menu-burger-item-content">{% translate "PREPARATIONS" %}</div>
+		</div>
+		<div class="menu-burger-item menu-burger-item-content">
+			<i class="menu-burger-item-content fas fa-utensils"></i>
+			<div class="menu-burger-item-content">{% translate "TABLES" %}</div>
+		</div>
+		<div class="menu-burger-item menu-burger-item-content"
+			hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?uuid_pv={{ pv.id }}&tag_id_cm={{ card.tag_id }}&type_app={{type_app}}"
+			hx-target="body"
+			hx-swap="innerHTML"
+			hx-push-url="true"
+			onclick="hideMenuBurger()"
+			data-loading-disable
+			data-testid="menu-ventes">
+			<i class="menu-burger-item-content fas fa-cash-register" aria-hidden="true"></i>
+			<div class="menu-burger-item-content">{% translate "VENTES" %}</div>
+		</div>
+		<div class="menu-burger-item menu-burger-item-content" onclick="showSubMenu(event, '.sub-menu-params')">
+			<i class="menu-burger-item-content fas fa-cog"></i>
+			<div class="menu-burger-item-content">{% translate "PARAMÈTRES" %}</div>
+		</div>
+	</div>
+	<!-- sub menu points de vente -->
+	<div class="sub-menu-pvs sub-menu hide">
+		{% for pv in card.pvs_list %}
+		{# Full reload (pas de hx-get) pour que les event listeners JS (articles.js, #}
+		{# addition.js, tarif.js) soient re-attaches au chargement de la page POS.    #}
+		{# Un swap HTMX body detruit ces listeners et le POS ne fonctionne plus.       #}
+		{# / Full reload (no hx-get) so JS event listeners are re-attached on POS load.#}
+		<a class="menu-burger-item menu-burger-item-content"
+			href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{pv.uuid}}&tag_id_cm={{card.tag_id}}&type_app={{type_app}}"
+			data-nav-spinner
+			style="text-decoration: none;">
+			<i class="menu-burger-item-content fas {{ pv.icon }}" aria-hidden="true"></i>
+			<div class="menu-burger-item-content">{{ pv.name }}</div>
+		</a>
+		{% endfor %}
+	</div>
+	<!-- dev sub menu paramètres -->
+	<div class="sub-menu-params sub-menu hide">
+		<div class="menu-burger-item menu-burger-item-content">
+			<i class="menu-burger-item-content fas fa-utensils"></i>
+			<div class="menu-burger-item-content">params 1</div>
+		</div>
+		<div class="menu-burger-item menu-burger-item-content">
+			<i class="menu-burger-item-content fas fa-utensils"></i>
+			<div class="menu-burger-item-content">params 2</div>
+		</div>
+	</div>
+</nav>
+<script>
+	window.showSubMenu = function (event, subMenuClass) {
+		// effacer main-menu
+		document.querySelector('#menu-burger-container .main-menu').classList.add('hide')
+		// effacer touts les sub-menu
+		document.querySelectorAll('#menu-burger-container .sub-menu').forEach(ele => {
+			ele.classList.add('hide')
+		})
+		// afficher subMenuClass
+		document.querySelector(`#menu-burger-container ${subMenuClass}`).classList.remove('hide')
+	}
+
+	// Fermer le menu burger (avec garde null — l'element peut ne pas exister
+	// apres un swap HTMX vers ventes.html qui n'inclut pas le header complet)
+	// / Close burger menu (null guard — element may not exist after HTMX swap to ventes.html)
+	window.hideMenuBurger = function () {
+		var icon = document.querySelector('.menu-burger-icon')
+		var container = document.querySelector('#menu-burger-container')
+		var overlay = document.querySelector('#menu-burger-overlay')
+		if (icon) icon.classList.remove('menu-burger-active')
+		if (container) container.classList.remove('menu-open')
+		if (overlay) overlay.classList.remove('menu-open')
+	}
+
+	// Ouvrir/fermer le menu burger / Toggle burger menu
+	window.toggleMenuBurger = function (event) {
+		const ele = event.target
+		const classRep = ele.classList
+		if (!classRep.contains('menu-burger-active')) {
+			// Réinitialiser les sous-menus / Reset sub-menus
+			document.querySelectorAll('#menu-burger-container .sub-menu').forEach(ele => {
+				ele.classList.add('hide')
+			})
+			document.querySelector('#menu-burger-container .main-menu').classList.remove('hide')
+			ele.classList.add('menu-burger-active')
+			document.querySelector('#menu-burger-container').classList.add('menu-open')
+			document.querySelector('#menu-burger-overlay').classList.add('menu-open')
+		} else {
+			hideMenuBurger()
+		}
+	}
+
+	document.addEventListener('click', (event) => {
+		const classRep = event.target.classList
+		if (!classRep.contains('menu-burger-icon') && !classRep.contains('menu-burger-item-content')) {
+			hideMenuBurger()
+		}
+	})
+
+</script>
+

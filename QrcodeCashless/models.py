@@ -68,5 +68,16 @@ class CarteCashless(models.Model):
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True)
 
+    # Wallet temporaire pour carte anonyme (avant identification user) — Phase 0 fedow_core
+    # Temporary wallet for anonymous card (before user identification)
+    wallet_ephemere = models.OneToOneField(
+        'AuthBillet.Wallet',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='carte_ephemere',
+        help_text="Wallet temporaire pour carte anonyme (avant identification user)",
+    )
+
     def __str__(self):
         return self.number

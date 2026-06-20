@@ -1,0 +1,192 @@
+{% load i18n %}
+
+<div class="panel-header" data-loading-states>
+    <button class="panel-back-btn"
+            hx-get="/laboutik/article-panel/{{ product.uuid }}/panel/"
+            hx-target="#article-panel"
+            hx-swap="innerHTML"
+            data-loading-disable
+            data-testid="panel-back">
+        ← {% translate "Retour" %}
+    </button>
+    <span class="panel-title" style="text-align: right;">{% translate "Stock" %}</span>
+    <button class="panel-close-btn"
+            onclick="closeArticlePanel()"
+            aria-label="{% translate 'Fermer' %}"
+            data-testid="panel-close">
+        ✕
+    </button>
+</div>
+
+<div class="panel-body" data-loading-states>
+    {% if message_feedback %}
+    <div class="stock-feedback stock-feedback-success" data-testid="stock-feedback-success">
+        {{ message_feedback }}
+    </div>
+    {% endif %}
+    {% if erreur_feedback %}
+    <div class="stock-feedback stock-feedback-error" data-testid="stock-feedback-error">
+        {{ erreur_feedback }}
+    </div>
+    {% endif %}
+
+    <div class="stock-info-card" data-testid="stock-info">
+        <div style="font-weight: bold; font-size: 1.1rem; margin-bottom: 8px;">
+            {{ product.name }}
+        </div>
+        <div class="stock-info-row">
+            <span class="stock-info-label">{% translate "Stock actuel" %}</span>
+            <span class="stock-info-value stock-badge-{{ etat }}"
+                  data-testid="stock-quantite">
+                {{ quantite_lisible }}
+            </span>
+        </div>
+        {% if seuil_lisible %}
+        <div class="stock-info-row">
+            <span class="stock-info-label">{% translate "Seuil d'alerte" %}</span>
+            <span class="stock-info-value">{{ seuil_lisible }}</span>
+        </div>
+        {% endif %}
+        <div class="stock-info-row" style="margin-top: 4px;">
+            <span class="stock-info-label">{% translate "Vente hors stock" %}</span>
+            <button class="panel-menu-btn"
+                    style="width: auto; padding: 4px 12px; font-size: 0.85rem; gap: 6px;
+                           {% if stock.autoriser_vente_hors_stock %}background: var(--vert04);{% else %}background: var(--rouge07);{% endif %}"
+                    hx-post="/laboutik/article-panel/{{ product.uuid }}/stock/toggle-bloquant/"
+                    hx-target="#article-panel"
+                    hx-swap="innerHTML"
+                    data-loading-disable
+                    aria-label="{% if stock.autoriser_vente_hors_stock %}{% translate 'Cliquer pour bloquer la vente hors stock' %}{% else %}{% translate 'Cliquer pour autoriser la vente hors stock' %}{% endif %}"
+                    data-testid="stock-toggle-bloquant">
+                {% if stock.autoriser_vente_hors_stock %}
+                    <span style="color: var(--vert02);">{% translate "Autorisée" %}</span>
+                {% else %}
+                    <span style="color: var(--rouge05);">{% translate "Bloquée" %}</span>
+                {% endif %}
+            </button>
+        </div>
+    </div>
+
+    <div class="stock-separator"></div>
+
+    <form id="stock-action-form">
+        {% csrf_token %}
+
+        <div class="stock-form-group">
+            <label class="stock-form-label" for="stock-quantite-input">
+                {% translate "Quantité" %}
+            </label>
+            <div class="stock-form-input-row">
+                <input type="number"
+                       id="stock-quantite-input"
+                       name="quantite"
+                       class="stock-form-input"
+                       min="0"
+                       value="1"
+                       required
+                       data-testid="stock-input-quantite">
+                <span class="stock-form-unit">{{ unite_saisie }}</span>
+            </div>
+        </div>
+
+        <div class="stock-form-group" style="margin-top: 4px;">
+            <label class="stock-form-label" for="stock-motif-input">
+                {% translate "Motif" %} <small style="opacity: 0.5;">({% translate "optionnel" %})</small>
+            </label>
+            <input type="text"
+                   id="stock-motif-input"
+                   name="motif"
+                   class="stock-form-motif"
+                   maxlength="200"
+                   placeholder="{% translate 'Raison du mouvement...' %}"
+                   data-testid="stock-input-motif">
+        </div>
+
+        <div class="stock-separator"></div>
+
+        <div class="stock-actions-grid">
+            <button type="submit"
+                    class="stock-action-btn stock-action-btn-reception"
+                    hx-post="/laboutik/article-panel/{{ product.uuid }}/stock/reception/"
+                    hx-target="#article-panel"
+                    hx-swap="innerHTML"
+                    hx-include="#stock-action-form"
+                    data-loading-disable
+                    data-testid="stock-btn-reception">
+                + {% translate "Réception" %}
+            </button>
+            <button type="submit"
+                    class="stock-action-btn stock-action-btn-perte"
+                    hx-post="/laboutik/article-panel/{{ product.uuid }}/stock/perte/"
+                    hx-target="#article-panel"
+                    hx-swap="innerHTML"
+                    hx-include="#stock-action-form"
+                    data-loading-disable
+                    data-testid="stock-btn-perte">
+                ⚠ {% translate "Perte/casse" %}
+            </button>
+            <button type="submit"
+                    class="stock-action-btn"
+                    style="background: var(--warning);"
+                    hx-post="/laboutik/article-panel/{{ product.uuid }}/stock/ajustement/"
+                    hx-target="#article-panel"
+                    hx-swap="innerHTML"
+                    hx-include="#stock-action-form"
+                    data-loading-disable
+                    data-testid="stock-btn-ajustement">
+                🔢 {% translate "Ajustement inventaire" %}
+            </button>
+        </div>
+    </form>
+
+    {% if derniers_mouvements %}
+    <div class="stock-separator"></div>
+    <div style="font-size: 0.8rem; color: var(--gris07);" data-testid="stock-derniers-mouvements">
+        <div style="font-weight: 600; margin-bottom: 6px;">{% translate "Derniers mouvements" %}</div>
+        {% for mvt in derniers_mouvements %}
+        <div style="padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
+            <span style="opacity: 0.6;">{{ mvt.cree_le|date:"d/m H:i" }}</span>
+            — <strong>{{ mvt.get_type_mouvement_display }}</strong>
+            {% if mvt.quantite >= 0 %}+{% endif %}{{ mvt.quantite }}
+            {% if mvt.motif %} — <em>{{ mvt.motif }}</em>{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="stock-separator"></div>
+
+    <details open style="font-size: 0.85rem; color: var(--gris07);">
+        <summary style="cursor: pointer; user-select: none;">
+            {% translate "Aide : comprendre les actions" %}
+        </summary>
+        <div style="margin-top: 8px; padding: 10px; background: var(--noir03); border-radius: 10px; line-height: 1.6; font-size: 0.8rem;">
+            <p style="margin: 0 0 6px 0;">
+                <strong style="color: var(--vert03);">{% translate "Réception" %}</strong> :
+                {% translate "Ajoute du stock après une livraison." %}
+            </p>
+            <p style="margin: 0 0 6px 0;">
+                <strong style="color: var(--rouge03);">{% translate "Perte/casse" %}</strong> :
+                {% translate "Retire du stock pour un produit cassé, périmé ou perdu." %}
+            </p>
+            <p style="margin: 0 0 6px 0;">
+                <strong style="color: var(--warning);">{% translate "Ajustement" %}</strong> :
+                {% translate "Remplace la quantité actuelle par le stock réel compté. Le système calcule le delta." %}
+            </p>
+            <p style="margin: 0 0 6px 0;">
+                <strong style="color: var(--blanc01);">{% translate "Vente hors stock" %}</strong> :
+                {% translate "Si bloquée, l'article est grisé et invendable en rupture. Si autorisée, la vente continue même à stock négatif." %}
+            </p>
+            <p style="margin: 6px 0 0 0; font-style: italic; opacity: 0.7;">
+                {% translate "Chaque action est tracée dans le journal des mouvements." %}
+            </p>
+        </div>
+    </details>
+
+    <a href="/adminstaff/inventaire/stock/{{ stock.pk }}/change/"
+       class="stock-admin-link"
+       target="_blank"
+       data-testid="stock-admin-link">
+        {% translate "Voir dans l'admin" %} ↗
+    </a>
+</div>

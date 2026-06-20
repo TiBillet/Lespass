@@ -994,6 +994,21 @@ asgiref = ">=3.6"
 django = ">=4.2"
 
 [[package]]
+name = "django-cotton"
+version = "2.7.2"
+description = "Enabling Modern UI Composition in Django."
+optional = false
+python-versions = "<4,>=3.8"
+groups = ["main"]
+files = [
+    {file = "django_cotton-2.7.2-py3-none-any.whl", hash = "sha256:1b293037ead54ab228362654da00ededc5ca52b2ff407b6087a81cfd9390850e"},
+    {file = "django_cotton-2.7.2.tar.gz", hash = "sha256:7e050042873f724beaa5824e86d5034ced2f7de1c5478c3a9d8c053e05caa8ac"},
+]
+
+[package.dependencies]
+django = ">=4.2,<7.0"
+
+[[package]]
 name = "django-debug-toolbar"
 version = "4.4.6"
 description = "A configurable set of panels that display various debug information about the current request/response."
@@ -3422,4 +3437,4 @@ test = ["pytest"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "2c3884157f3038a35921d77d654c1b9b172f3fa211100f5348005c94520a4795"
+content-hash = "1600f02bdf0081332fae054a7e8f186851c54d7329184418be605c1ec79fe0d1"

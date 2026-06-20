@@ -1,0 +1,1904 @@
+/* ============================================================
+   OVERLAY.CSS — Styles pour les couches superposees #messages et #confirm
+   / Styles for overlay layers #messages and #confirm
+
+   LOCALISATION : laboutik/static/css/overlay.css
+
+   #messages (layer 1) : check carte, types de paiement, adhesion, cloture.
+   #confirm  (layer 2) : confirmation NFC, lecture carte paiement.
+   ============================================================ */
+
+/* --- Positionnement noyau des overlays --- */
+/* / Core overlay positioning */
+#messages, #confirm {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	z-index: 800;
+	color: var(--blanc01);
+	font-size: 1.5rem;
+	text-align: center;
+}
+
+/* Overlay vide = invisible. Quand HTMX injecte du contenu,
+   :empty ne matche plus → l'overlay apparait.
+   IMPORTANT : <div id="messages"></div> doit rester sur une seule ligne
+   (pas d'espace/saut de ligne entre les balises) sinon :empty ne matche plus.
+   / Empty overlay = invisible. When HTMX injects content,
+   :empty no longer matches → overlay appears.
+   IMPORTANT: keep the div on a single line with no whitespace. */
+#messages:empty, #confirm:empty {
+	display: none;
+}
+
+/* L'enfant direct de #messages doit remplir tout l'espace du parent
+   pour que le flex layout fonctionne correctement.
+   Les partials injectes via innerHTML ne sont plus l'element #messages
+   lui-meme mais des enfants — ils ont besoin de width/height 100%.
+   / The direct child of #messages must fill the parent's space
+   so the flex layout works correctly. Partials injected via innerHTML
+   are children, not the element itself — they need width/height 100%. */
+#messages > :first-child {
+	width: 100%;
+	height: 100%;
+}
+
+
+/* ============================================================
+   ANIMATIONS COMMUNES
+   / Common animations
+   ============================================================ */
+
+/* Animation fade-up commune aux overlays adhesion
+   (remplace choose-id-fade-up, adhesion-fade-up, adhesion-form-fade-up)
+   / Common fade-up animation for membership overlays
+   (replaces choose-id-fade-up, adhesion-fade-up, adhesion-form-fade-up) */
+@keyframes overlay-fade-up {
+	from {
+		transform: translateY(8px);
+		opacity: 0;
+	}
+}
+
+/* Icone succes — scale-in (hx_return_payment_success)
+   / Success icon — scale-in */
+@keyframes scale-in {
+	from { transform: scale(0); opacity: 0; }
+	to { transform: scale(1); opacity: 1; }
+}
+
+/* Check adhesion — scale-in avec overshoot (hx_adhesion_confirm)
+   / Membership check — scale-in with overshoot */
+@keyframes adhesion-scale-in {
+	0% { transform: scale(0); opacity: 0; }
+	70% { transform: scale(1.15); }
+	100% { transform: scale(1); opacity: 1; }
+}
+
+
+/* ============================================================
+   #message-no-article (partial/no_articles.html)
+   ============================================================ */
+#message-no-article {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	z-index: 999;
+	background-color: var(--bleu09);
+	color: var(--blanc01);
+	font-size: 1.5rem;
+	text-align: center;
+}
+
+
+/* ============================================================
+   #message-nfc (hx_read_nfc + hx_read_nfc_adhesion)
+   ============================================================ */
+#message-nfc {
+	flex-direction: row;
+	justify-content: center;
+	align-items: center;
+	font-weight: bold;
+	white-space: pre-line;
+	text-align: center;
+}
+
+
+/* ============================================================
+   hx_display_type_payment.html — choix du moyen de paiement
+   / Payment method selection
+   ============================================================ */
+.message-title {
+	font-size: 1.5rem;
+	font-weight: bold;
+}
+
+.paiement-bt-total {
+	font-size: 1.5rem;
+}
+
+
+/* ============================================================
+   hx_funds_insufficient.html — fonds insuffisants
+   / Insufficient funds
+   ============================================================ */
+.fi-title1 {
+	font-size: clamp(1.5rem, 4vw, 2.5rem);
+	font-weight: bold;
+	text-align: center;
+}
+
+.fi-msg1 {
+	font-size: clamp(1rem, 3vw, 1.5rem);
+	font-weight: bold;
+	text-align: center;
+}
+
+
+/* ============================================================
+   hx_check_card.html — attente lecture carte
+   / Card check waiting screen
+   ============================================================ */
+.check-carte-container {
+	width: 100%;
+	height: 100%;
+	color: var(--white);
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+}
+
+
+/* ============================================================
+   hx_confirm_payment.html — confirmation de paiement
+   / Payment confirmation
+   ============================================================ */
+#confirm-action-container {
+	display: flex;
+	flex-direction: row;
+	justify-content: space-around;
+	align-items: center;
+	margin-top: 2rem;
+}
+
+.confirm-total {
+	font-size: 2.5rem;
+	font-weight: bold;
+	font-variant-numeric: tabular-nums;
+	margin-bottom: 1rem;
+}
+
+.info-sum-given {
+	font-size: 1.5rem;
+	font-weight: bold;
+}
+
+.confirm-input-wrapper {
+	display: flex;
+	flex-direction: row;
+	justify-content: center;
+	align-items: center;
+	gap: 0.5rem;
+	margin-top: 1rem;
+}
+
+.addition-fractionnee-input {
+	height: 80px;
+	width: 200px;
+	max-width: 60%;
+	font-size: 2rem;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+}
+
+.confirm-currency {
+	font-size: 2rem;
+	font-weight: bold;
+}
+
+#bt-valider-layer2 {
+	margin-left: 8px;
+}
+
+#given-sum-msg-erreur {
+	margin-top: 4px;
+	width: 100%;
+	height: 24px;
+	color: var(--warning);
+}
+
+/* Sur mobile : boutons empiles verticalement / Mobile: stack buttons vertically */
+@media (max-width: 600px) {
+	#confirm-action-container {
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+	#bt-valider-layer2 {
+		margin-left: 0;
+	}
+}
+
+
+/* ============================================================
+   Styles partages paiement (hx_return_payment_success + hx_cloture_rapport)
+   / Shared payment styles
+   ============================================================ */
+.payment-title1 {
+	font-size: 2.5rem;
+	font-weight: bold;
+	text-align: center;
+}
+
+.payment-detail {
+	font-size: 1.5rem;
+	font-weight: bold;
+	text-align: center;
+	margin-top: 0.5rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.payment-msg1 {
+	font-size: 1.5rem;
+	font-weight: bold;
+	text-align: center;
+}
+
+.payment-msg2 {
+	font-size: 1.2rem;
+	text-align: center;
+}
+
+.payment-msg-discret {
+	font-size: 1.2rem;
+	text-align: center;
+	opacity: 0.85;
+	margin-top: 0.5rem;
+	font-variant-numeric: tabular-nums;
+}
+
+
+/* ============================================================
+   hx_return_payment_success.html — succes de paiement
+   / Payment success
+   ============================================================ */
+.success-icon {
+	font-size: 4rem;
+	animation: scale-in 300ms ease both;
+}
+
+/* Zone monnaie a rendre — fond rouge + bordure doree pour attirer l'attention
+   / Change to give back — red background + gold border to draw attention */
+.give-back-box {
+	font-size: 2.5rem;
+	font-weight: bold;
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+	padding: 1rem 2rem;
+	margin-top: 0.5rem;
+	background-color: var(--rouge07);
+	border: 3px solid var(--warning00);
+	border-radius: 12px;
+}
+
+.give-back-box i {
+	margin-right: 0.5rem;
+}
+
+/* Bouton "Imprimer le ticket" sur l'ecran de succes
+   / "Print receipt" button on the success screen */
+.bt-imprimer-ticket {
+	background-color: var(--bleu05);
+	margin-top: 1rem;
+}
+
+/* Feedback d'impression — visible seulement quand le serveur a injecte du contenu.
+   Box contrastee (fond sombre + bordure doree) pour ressortir sur le fond vert
+   de l'ecran de succes, comme la box "Monnaie a rendre" ressort en rouge.
+   / Print feedback — visible only when server has injected content.
+   Contrasted box (dark bg + gold border) to stand out on the green success
+   background, like the "Change to give back" red box stands out. */
+#print-feedback:not(:empty) {
+	display: inline-block;
+	margin-top: 0.75rem;
+	padding: 0.5rem 1rem;
+	background-color: var(--noir03);
+	color: var(--blanc01);
+	border: 2px solid var(--warning00);
+	border-radius: 8px;
+	font-weight: bold;
+}
+
+/* Liste des badges du detail cascade NFC (complement de paiement)
+   / NFC cascade detail badge list (payment complement)
+   Wrap auto pour eviter le debordement quand plusieurs assets sont utilises.
+   / Auto wrap to avoid overflow when multiple assets are used. */
+.cascade-badges-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	justify-content: center;
+	max-width: 100%;
+	margin: 0.5rem 0;
+	font-size: 0.95rem;
+}
+
+.cascade-badge {
+	max-width: 100%;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	background-color: var(--gris02);
+	color: #fff;
+	padding: 4px 8px;
+	border-radius: 4px;
+}
+
+/* Boutons complement de paiement (.bt-basic-container reutilise pour la largeur)
+   / Payment complement buttons (reuses .bt-basic-container for width) */
+.bt-complement-base {
+	border: none;
+}
+
+.bt-complement-especes {
+	background-color: var(--vert01);
+}
+
+.bt-complement-cb {
+	background-color: var(--bleu03);
+}
+
+.bt-complement-2eme-carte {
+	background-color: var(--warning00);
+}
+
+/* Detail de paiement (Total panier, montants) — chiffres alignes
+   / Payment detail (cart total, amounts) — aligned digits */
+.fi-payment-detail {
+	font-variant-numeric: tabular-nums;
+	margin-top: 0.5rem;
+}
+
+
+/* ============================================================
+   hx_cloture_rapport.html — rapport de cloture
+   / Closure report
+   ============================================================ */
+.cloture-section {
+	margin: 1rem 0;
+}
+
+.btn-export {
+	display: inline-block;
+	padding: 0.5rem 1.2rem;
+	background-color: rgba(255,255,255,0.2);
+	color: var(--blanc01, #fff);
+	border: 1px solid rgba(255,255,255,0.5);
+	border-radius: 6px;
+	font-size: 1.1rem;
+	text-decoration: none;
+	cursor: pointer;
+	font-family: inherit;
+}
+
+.btn-export:hover {
+	background-color: rgba(255,255,255,0.35);
+}
+
+
+/* ============================================================
+   hx_adhesion_choose_id.html — choix du mode d'identification
+   / Identification method selection
+   ============================================================ */
+.choose-id-stagger {
+	animation: overlay-fade-up 0.4s ease both;
+	animation-delay: calc(80ms * var(--ordre, 0));
+}
+
+.choose-id-title {
+	font-size: 1.5rem;
+	font-weight: bold;
+	margin-bottom: 1.5rem;
+	text-wrap: balance;
+}
+
+/* Boutons avec box-shadow au lieu de border (regle UI)
+   / Buttons with box-shadow instead of border (UI rule) */
+.choose-id-btn {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	width: 90%;
+	max-width: 400px;
+	margin: 0 auto;
+	padding: 16px 24px;
+	min-height: 56px;
+	background-color: rgba(255, 255, 255, 0.1);
+	border: none;
+	border-radius: 16px;
+	box-shadow:
+		0 0 0 1px rgba(255, 255, 255, 0.15),
+		0 1px 2px -1px rgba(0, 0, 0, 0.1),
+		0 2px 4px 0 rgba(0, 0, 0, 0.06);
+	color: var(--blanc01);
+	font-size: 1.2rem;
+	font-family: "Luciole-regular", sans-serif;
+	cursor: pointer;
+	transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+
+.choose-id-btn:hover,
+.choose-id-btn:focus-visible {
+	background-color: rgba(255, 255, 255, 0.18);
+	box-shadow:
+		0 0 0 1px rgba(255, 255, 255, 0.3),
+		0 1px 2px -1px rgba(0, 0, 0, 0.12),
+		0 2px 6px 0 rgba(0, 0, 0, 0.08);
+}
+
+.choose-id-btn:active {
+	transform: scale(0.98);
+}
+
+.choose-id-icon {
+	font-size: 1.5rem;
+	opacity: 0.85;
+}
+
+.choose-id-separator {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 60%;
+	max-width: 300px;
+	margin: 1rem auto;
+	opacity: 0.5;
+}
+
+.choose-id-separator-line {
+	flex: 1;
+	height: 1px;
+	background-color: var(--blanc01);
+}
+
+.choose-id-separator-text {
+	font-size: 1rem;
+}
+
+/* Texte explicatif sous le titre d'identification client
+   / Help text under client identification title */
+.choose-id-help {
+	opacity: 0.8;
+	font-size: 1rem;
+	margin: 0 0 0.5rem;
+}
+
+/* Avertissement quand aucun moyen de paiement n'est configure
+   / Warning when no payment method is configured */
+.no-payment-warning {
+	color: var(--warning);
+}
+
+
+/* ============================================================
+   hx_adhesion_confirm.html — confirmation adhesion
+   / Membership confirmation
+   ============================================================ */
+.adhesion-stagger {
+	animation: overlay-fade-up 0.4s ease both;
+	animation-delay: calc(100ms * var(--ordre, 0));
+}
+
+.adhesion-confirm-header {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.5rem;
+	margin-bottom: 1.5rem;
+}
+
+.adhesion-confirm-check {
+	font-size: 3rem;
+	color: var(--vert01, #00e676);
+	animation: adhesion-scale-in 0.3s ease-out 0.15s both;
+}
+
+.adhesion-confirm-title {
+	font-size: 1.5rem;
+	font-weight: bold;
+	text-wrap: balance;
+}
+
+/* Carte resume (ombres, pas de bordure) / Summary card (shadows, no border) */
+.adhesion-confirm-card {
+	width: 90%;
+	max-width: 380px;
+	margin: 0 auto 1.5rem;
+	padding: 20px 24px;
+	background-color: rgba(255, 255, 255, 0.06);
+	border-radius: 16px;
+	box-shadow:
+		0 0 0 1px rgba(255, 255, 255, 0.06),
+		0 1px 3px rgba(0, 0, 0, 0.12),
+		0 4px 12px rgba(0, 0, 0, 0.08),
+		0 8px 24px rgba(0, 0, 0, 0.06);
+	text-align: left;
+}
+
+.adhesion-confirm-email {
+	font-size: 1.1rem;
+	margin-bottom: 4px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.adhesion-confirm-name {
+	font-size: 1.3rem;
+	font-weight: bold;
+	margin-bottom: 8px;
+	margin-left: 28px;
+}
+
+.adhesion-confirm-solde {
+	font-size: 1rem;
+	opacity: 0.8;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Actions de l'ecran recapitulatif client : empilement vertical des boutons
+   de paiement. La largeur fixe de .bt-basic-container interdit un alignement
+   horizontal avec 4 boutons, qui debordait sur tous les viewports < 1280px.
+   / Client recap actions: vertical stacking of payment buttons.
+   .bt-basic-container fixed width breaks horizontal alignment with 4 buttons,
+   which overflowed on every viewport < 1280px. */
+.adhesion-confirm-actions {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.75rem;
+	margin-top: 1rem;
+}
+
+/* Boutons compacts pour la pile verticale du recapitulatif client.
+   La hauteur globale (~5 boutons + header + carte + articles) depassait
+   100vh sur grand viewport et provoquait un debordement coupe.
+   On reduit la hauteur native (var --bt-basic-height: 120px) a 80px,
+   et on neutralise le margin-top natif (le gap du parent gere l'espacement).
+   / Compact buttons for the client recap vertical stack.
+   Total height (~5 buttons + header + card + articles) overflowed 100vh
+   on large viewports and got cropped. We reduce native height (var
+   --bt-basic-height: 120px) to 80px and neutralize native margin-top. */
+.adhesion-confirm-actions > .bt-basic-container {
+	margin-top: 0;
+	height: 80px;
+	font-size: 1.4rem;
+}
+
+.adhesion-confirm-actions > .bt-basic-container .bt-basic-icon {
+	font-size: 1.8rem;
+}
+
+.adhesion-confirm-actions > .bt-basic-container .bt-basic-text {
+	font-size: 1.4rem;
+}
+
+/* Sur grand viewport, .bt-basic-container est multiplie par ~1.42 (modele00.css)
+   ce qui repousserait la hauteur a 113px. On bloque a 80px sur cet ecran.
+   / On large viewport, .bt-basic-container is multiplied (~1.42) which would
+   push height to 113px. We cap at 80px on this screen. */
+@media only screen and (min-width: 600px) {
+	.adhesion-confirm-actions > .bt-basic-container {
+		height: 80px;
+	}
+}
+
+#bt-confirmer-adhesion {
+	min-height: 70px;
+	min-width: 200px;
+	font-size: 1.2rem;
+}
+
+
+/* ============================================================
+   hx_recapitulatif_client.html — recapitulatif articles
+   / Client recap — articles list
+   ============================================================ */
+.recapitulatif-articles {
+	width: 100%;
+	max-width: 420px;
+	margin: 0.5rem auto;
+	padding: 0 0.5rem;
+}
+
+.recapitulatif-article-ligne {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	padding: 0.3rem 0;
+	font-size: 0.95rem;
+	opacity: 0.9;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.recapitulatif-article-desc {
+	flex: 1;
+	margin-right: 1rem;
+}
+
+.recapitulatif-article-prix {
+	white-space: nowrap;
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+}
+
+.recapitulatif-total-prix {
+	font-variant-numeric: tabular-nums;
+}
+
+/* Boutons de paiement de l'ecran recapitulatif client (.bt-basic-container)
+   / Client recap payment buttons (.bt-basic-container) */
+.bt-client-cashless {
+	background-color: var(--bleu03);
+}
+
+.bt-client-especes {
+	background-color: var(--warning00);
+}
+
+.bt-client-cb {
+	background-color: var(--bleu05);
+}
+
+.bt-client-cheque {
+	background-color: var(--gris02);
+}
+
+.recapitulatif-total-ligne {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	padding: 0.5rem 0 0.3rem;
+	margin-top: 0.3rem;
+	border-top: 2px solid rgba(255, 255, 255, 0.2);
+	font-size: 1.1rem;
+	font-weight: 700;
+}
+
+/* ============================================================
+   hx_adhesion_form.html — formulaire d'identification membre
+   / Member identification form
+   ============================================================ */
+.adhesion-form-stagger {
+	animation: overlay-fade-up 0.4s ease both;
+	animation-delay: calc(100ms * var(--ordre, 0));
+}
+
+.adhesion-form-title {
+	font-size: 1.5rem;
+	font-weight: bold;
+	margin-bottom: 1.5rem;
+	text-wrap: balance;
+}
+
+.adhesion-form-container {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 0 16px;
+	max-width: 420px;
+	margin: 0 auto 1rem;
+	width: 100%;
+}
+
+.adhesion-form-row {
+	display: flex;
+	gap: 8px;
+}
+
+/* Champ avec label flottant / Floating label field */
+.adhesion-field {
+	position: relative;
+	width: 100%;
+}
+
+.adhesion-field-half {
+	width: 50%;
+}
+
+.adhesion-input {
+	width: 100%;
+	height: 56px;
+	padding: 20px 14px 6px;
+	font-size: 1.1rem;
+	font-family: "Luciole-regular", sans-serif;
+	border: 2px solid rgba(255, 255, 255, 0.25);
+	border-radius: 12px;
+	background-color: rgba(255, 255, 255, 0.08);
+	color: #fff;
+	transition: border-color 0.2s ease;
+	box-sizing: border-box;
+}
+
+.adhesion-input::placeholder {
+	color: transparent;
+}
+
+.adhesion-label {
+	position: absolute;
+	left: 14px;
+	top: 50%;
+	transform: translateY(-50%);
+	font-size: 1rem;
+	color: rgba(255, 255, 255, 0.5);
+	pointer-events: none;
+	transition: all 0.2s ease;
+	font-family: "Luciole-regular", sans-serif;
+}
+
+/* Label flottant : monte quand l'input a du contenu ou est focus
+   / Floating label: moves up when input has content or is focused */
+.adhesion-input:focus + .adhesion-label,
+.adhesion-input:not(:placeholder-shown) + .adhesion-label {
+	top: 10px;
+	transform: translateY(0);
+	font-size: 0.75rem;
+	color: rgba(255, 255, 255, 0.7);
+}
+
+.adhesion-input:focus {
+	outline: none;
+	border-color: var(--vert01, #00e676);
+}
+
+/* Validation visuelle / Visual validation */
+.adhesion-input:invalid:not(:placeholder-shown):not(:focus) {
+	border-color: var(--rouge01, #ff5252);
+}
+
+.adhesion-input:valid:not(:placeholder-shown) {
+	border-color: var(--vert01, #00e676);
+}
+
+/* Bouton VALIDER adhesion / Membership VALIDATE button */
+.adhesion-submit-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	width: 100%;
+	max-width: 420px;
+	margin: 0.5rem auto 0;
+	padding: 0 24px;
+	height: 56px;
+	font-size: 1.3rem;
+	font-weight: bold;
+	font-family: "Luciole-regular", sans-serif;
+	color: var(--blanc01);
+	background-color: var(--vert03, #2e7d32);
+	border: none;
+	border-radius: 14px;
+	cursor: pointer;
+	transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.adhesion-submit-btn:hover,
+.adhesion-submit-btn:focus-visible {
+	background-color: var(--vert01, #00e676);
+	color: var(--noir01, #111);
+}
+
+.adhesion-submit-btn:active {
+	transform: scale(0.98);
+}
+
+.adhesion-error {
+	color: var(--warning, #ff9800);
+	font-size: 1rem;
+	margin-bottom: 0.5rem;
+}
+
+
+/* ============================================================
+   hx_card_feedback.html — retour carte NFC
+   / NFC card feedback
+   ============================================================ */
+
+/* Wrapper enfant direct de #messages.
+   Reproduit le layout que l'ancien <div id="messages"> avait
+   directement (avant le passage a innerHTML).
+   / Direct child wrapper of #messages. Reproduces the layout
+   that the old <div id="messages"> had (before the innerHTML switch). */
+.cf-wrapper {
+	display: flex;
+	flex-direction: column;
+}
+
+/* En-tete avec couleur de statut / Status-colored header */
+.cf-card-header {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	padding: 20px 16px 16px;
+	flex-shrink: 0;
+}
+
+.cf-card-type {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-size: 1.4rem;
+	font-weight: 700;
+}
+
+.cf-card-type-icon {
+	font-size: 1.6rem;
+}
+
+.cf-card-place {
+	font-size: 0.85rem;
+	opacity: 0.75;
+	margin-top: 2px;
+}
+
+/* Zone scrollable / Scrollable area */
+.cf-content {
+	flex: 1;
+	overflow-y: auto;
+	scrollbar-width: none;
+	padding: 0 16px 16px;
+}
+
+/* Solde total / Total balance */
+.cf-total {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	padding: 16px 12px;
+	margin: 12px 0;
+	border-radius: 12px;
+	background-color: rgba(255, 255, 255, 0.08);
+}
+
+.cf-total-label {
+	font-size: 1.1rem;
+	font-weight: 600;
+}
+
+.cf-total-value {
+	font-size: 1.8rem;
+	font-weight: 800;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Ligne token / Token row */
+.cf-token-row {
+	display: grid;
+	grid-template-columns: 40px 1fr auto;
+	align-items: center;
+	min-height: 48px;
+	padding: 8px 12px;
+	margin: 4px 0;
+	border-radius: 10px;
+	background-color: rgba(255, 255, 255, 0.04);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.cf-token-empty {
+	opacity: 0.5;
+}
+
+.cf-token-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	background-color: rgba(255, 255, 255, 0.1);
+	font-size: 0.9rem;
+}
+
+.cf-token-name {
+	font-size: 0.95rem;
+	font-weight: 500;
+}
+
+.cf-token-place {
+	font-size: 0.75rem;
+	color: var(--gris07);
+}
+
+.cf-token-value {
+	font-size: 1.2rem;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+/* Titre de section / Section title */
+.cf-section-title {
+	font-size: 0.85rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--gris07);
+	padding: 16px 12px 6px;
+	border-top: 1px solid rgba(255, 255, 255, 0.08);
+	margin-top: 8px;
+}
+
+/* Ligne adhesion / Membership row */
+.cf-adhesion-row {
+	display: grid;
+	grid-template-columns: 40px 1fr;
+	align-items: center;
+	min-height: 48px;
+	padding: 8px 12px;
+	margin: 4px 0;
+	border-radius: 10px;
+	background-color: rgba(255, 255, 255, 0.04);
+}
+
+.cf-adhesion-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--vert02);
+	font-size: 1.1rem;
+}
+
+.cf-adhesion-name {
+	font-size: 0.95rem;
+	font-weight: 600;
+}
+
+.cf-adhesion-deadline {
+	font-size: 0.8rem;
+	color: var(--gris07);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Bouton retour centre / Centered back button */
+.cf-wrapper > .bt-basic-container {
+	align-self: center;
+}
+
+
+/* ============================================================
+   COULEURS DE FOND DES OVERLAYS (regles :has())
+   Chaque partial injecte dans #messages (innerHTML) ou #confirm (outerHTML)
+   a un data-testid ou une classe unique. On cible le conteneur parent
+   via :has() pour appliquer la couleur de fond sans <style> inline.
+   Un seul partial visible a la fois → pas de conflit.
+   / Overlay background colors (:has() rules)
+   Each partial injected into #messages (innerHTML) or #confirm (outerHTML)
+   has a unique data-testid or class. We target the parent container
+   via :has() to apply background without inline <style>.
+   Only one partial visible at a time → no conflict.
+   ============================================================ */
+
+/* hx_display_type_payment.html — choix du moyen de paiement */
+#messages:has([data-testid="paiement-moyens"]) {
+	background-color: var(--bleu09);
+}
+
+/* hx_formulaire_identification_client.html — formulaire d'identification client */
+#messages:has([data-testid="client-form"]) {
+	background-color: var(--noir03, #1a1a2e);
+}
+
+/* hx_recapitulatif_client.html — recapitulatif client + boutons paiement */
+#messages:has([data-testid="client-recapitulatif"]) {
+	background-color: var(--noir03, #1a1a2e);
+}
+
+/* hx_card_feedback.html — retour carte NFC */
+#messages:has(.cf-wrapper) {
+	display: flex;
+	flex-direction: column;
+	background-color: var(--noir03);
+}
+
+/* hx_check_card.html — attente lecture carte (Cotton nfc-container dans #messages) */
+#messages:has(.nfc-container) {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	background-color: var(--noir01);
+}
+
+/* hx_return_payment_success.html — succes de paiement */
+#messages:has([data-testid="paiement-succes"]) {
+	background-color: var(--success);
+}
+
+/* hx_funds_insufficient.html — fonds insuffisants */
+#messages:has([data-testid="paiement-nfc-insuffisant"]) {
+	background-color: var(--rouge07);
+}
+
+/* hx_complement_paiement.html — complément de paiement NFC fractionné
+   / NFC split payment complement screen */
+#messages:has([data-testid="complement-paiement"]) {
+	display: flex;
+	flex-direction: column;
+	background-color: var(--rouge07);
+}
+
+/* hx_vider_carte_confirm.html — confirmation avant remboursement carte
+   / Empty card confirmation before refund (warning, action irréversible) */
+#messages:has([data-testid="vider-carte-confirm"]) {
+	display: flex;
+	flex-direction: column;
+	background-color: var(--warning00);
+	color: var(--noir01);
+}
+
+/* Override .give-back-box pour cet ecran : texte blanc lisible sur le fond
+   rouge07 (marron sombre) interne, et bordure sombre visible sur le fond
+   warning00 orange du parent.
+   / Override .give-back-box on this screen: white text on dark inner bg,
+   dark border visible on warning00 orange parent bg. */
+#messages:has([data-testid="vider-carte-confirm"]) .give-back-box {
+	color: var(--blanc01);
+	border-color: var(--noir01);
+}
+
+/* Le tableau et autre texte secondaire restent en noir (lisible sur orange) */
+/* / Table and secondary text stay in black (readable on orange) */
+
+/* hx_vider_carte_success.html — remboursement effectué (cohérent paiement-succes)
+   / Refund executed — consistent with paiement-succes */
+#messages:has([data-testid="vider-carte-success"]) {
+	display: flex;
+	flex-direction: column;
+	background-color: var(--success);
+}
+
+/* hx_cloture_rapport.html — rapport de cloture */
+#messages:has([data-testid="cloture-rapport"]) {
+	background-color: var(--info, #17a2b8);
+}
+
+/* hx_confirm_payment.html — confirmation de paiement (outerHTML → data-testid sur #confirm) */
+#confirm[data-testid="paiement-confirmation"] {
+	background-color: var(--bleu09);
+}
+
+/* hx_read_nfc.html + hx_lire_nfc_client.html — attente NFC paiement/identification */
+#confirm:has(.nfc-container) {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	background-color: var(--noir01);
+}
+
+
+/* ============================================================
+   ECRANS VIDER LA CARTE — plein ecran cohérent avec les autres
+   écrans de paiement (cascade insuffisante, succès, etc.).
+   / EMPTY CARD SCREENS — full-screen consistent with other
+   payment screens (insufficient cascade, success, etc.).
+   ============================================================ */
+
+/* Détail des soldes utilisés (table légère sur fond sombre transparent)
+   / Token balance details (light table on transparent dark background) */
+.cascade-tokens-table {
+	width: 100%;
+	max-width: 420px;
+	margin: 0.5rem auto;
+	border-collapse: collapse;
+	font-size: 0.95rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.cascade-tokens-table th,
+.cascade-tokens-table td {
+	padding: 0.4rem 0.6rem;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.cascade-tokens-table th {
+	text-align: left;
+	font-weight: 600;
+	opacity: 0.85;
+}
+
+.cascade-tokens-table th:last-child,
+.cascade-tokens-table td:last-child {
+	text-align: right;
+}
+
+.cascade-tokens-table tbody tr:last-child td {
+	border-bottom: none;
+}
+
+/* Checkbox compact réinitialisation carte (vider_carte_confirm)
+   / Compact card-reset checkbox (vider_carte_confirm) */
+.vider-carte-checkbox {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin: 1rem auto;
+	font-size: 1rem;
+	cursor: pointer;
+}
+
+.vider-carte-checkbox input {
+	width: 1.1rem;
+	height: 1.1rem;
+	cursor: pointer;
+}
+
+/* Bouton de remboursement principal (vert succès) — réutilise .bt-basic-container
+   / Main refund button (green success) — reuses .bt-basic-container */
+.bt-vider-confirm {
+	background-color: var(--success);
+	border: none;
+}
+
+/* Bouton "Rembourser et garder l'user" (bleu calme — choix moins destructif)
+   / "Refund and keep user" button (calm blue — less destructive choice) */
+.bt-vider-keep-user {
+	background-color: var(--bleu07);
+	border: none;
+}
+
+/* Email du user dans le bouton "Garder" — plus petit, italique pour distinguer
+   du label d'action principal.
+   / User email in the "Keep" button — smaller, italic to distinguish from the
+   main action label. */
+.vider-carte-user-email {
+	font-size: 0.85em;
+	font-style: italic;
+	opacity: 0.9;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Bouton imprimer reçu sur l'écran de succès
+   / Print receipt button on success screen */
+.bt-vider-imprimer {
+	background-color: var(--bleu05);
+	border: none;
+}
+
+/* Ligne d'actions horizontales (Imprimer + Retour) sur écran succès
+   / Horizontal action row (Print + Return) on success screen */
+.vider-carte-actions-row {
+	display: flex;
+	gap: 0.75rem;
+	flex-wrap: wrap;
+	justify-content: center;
+	margin-top: 1rem;
+}
+
+
+/* ============================================================
+   ECRANS CAISSE (recap, fond, sortie) — boutons d'action
+   / CASH MANAGEMENT SCREENS — action buttons
+
+   Boutons utilises dans hx_recap_en_cours.html, hx_fond_de_caisse.html,
+   hx_sortie_de_caisse.html. Pattern unifie : flex inline, padding cohérent,
+   :hover/:focus-visible CSS (remplace les onmouseover/onmouseout inline qui
+   cassaient l'a11y clavier).
+   / Buttons used in cash management partials. Unified pattern: inline flex,
+   consistent padding, :hover/:focus-visible CSS (replaces inline mouseover
+   that broke keyboard a11y).
+   ============================================================ */
+
+.recap-action-btn {
+	flex: 1;
+	min-width: 180px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	padding: 0.7rem 1.25rem;
+	border-radius: 8px;
+	font-family: 'Luciole-regular', sans-serif;
+	font-size: 0.95rem;
+	background: transparent;
+	cursor: pointer;
+	transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.recap-action-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+/* --- Variante indigo : fond de caisse --- */
+.recap-action-btn--indigo {
+	background: rgba(99, 102, 241, 0.12);
+	border: 1px solid rgba(99, 102, 241, 0.3);
+	color: #a5b4fc;
+}
+.recap-action-btn--indigo:hover,
+.recap-action-btn--indigo:focus-visible {
+	background: rgba(99, 102, 241, 0.25);
+	border-color: #818cf8;
+}
+
+/* --- Variante rouge : sortie de caisse, confirmer cloture --- */
+.recap-action-btn--rouge {
+	background: rgba(239, 68, 68, 0.12);
+	border: 1px solid rgba(239, 68, 68, 0.3);
+	color: #fca5a5;
+}
+.recap-action-btn--rouge:hover,
+.recap-action-btn--rouge:focus-visible {
+	background: rgba(239, 68, 68, 0.25);
+	border-color: #f87171;
+}
+
+/* --- Variante rouge "fort" : confirmer cloture (border 2px + bold) --- */
+.recap-action-btn--rouge-strong {
+	background: rgba(239, 68, 68, 0.2);
+	border: 2px solid rgba(239, 68, 68, 0.5);
+	color: #fca5a5;
+	font-weight: 600;
+}
+.recap-action-btn--rouge-strong:hover,
+.recap-action-btn--rouge-strong:focus-visible {
+	background: rgba(239, 68, 68, 0.3);
+	border-color: #f87171;
+}
+
+/* --- Variante vert : imprimer Ticket X --- */
+.recap-action-btn--vert {
+	background: rgba(74, 222, 128, 0.12);
+	border: 1px solid rgba(74, 222, 128, 0.3);
+	color: #86efac;
+}
+.recap-action-btn--vert:hover,
+.recap-action-btn--vert:focus-visible {
+	background: rgba(74, 222, 128, 0.25);
+	border-color: #4ade80;
+}
+
+/* --- Variante orange : cloturer toutes les caisses --- */
+.recap-action-btn--orange {
+	background: rgba(251, 146, 60, 0.12);
+	border: 1px solid rgba(251, 146, 60, 0.3);
+	color: #fdba74;
+}
+.recap-action-btn--orange:hover,
+.recap-action-btn--orange:focus-visible {
+	background: rgba(251, 146, 60, 0.25);
+	border-color: #fb923c;
+}
+
+/* --- Variante ghost : annuler, transparent --- */
+.recap-action-btn--ghost {
+	background: transparent;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	color: #9ca3af;
+	flex: 0 0 auto;
+	min-width: auto;
+}
+.recap-action-btn--ghost:hover,
+.recap-action-btn--ghost:focus-visible {
+	border-color: rgba(255, 255, 255, 0.3);
+	color: #d1d5db;
+}
+
+/* Ligne d'actions horizontale (boutons recap)
+   / Horizontal action row (recap buttons) */
+.recap-actions-row {
+	display: flex;
+	gap: 0.75rem;
+	flex-wrap: wrap;
+}
+.recap-actions-row + .recap-actions-row {
+	margin-top: 0.75rem;
+}
+
+/* Bouton retour vers le recap (utilise dans fond_de_caisse, sortie_de_caisse)
+   / Back-to-recap button (used in fond_de_caisse, sortie_de_caisse) */
+.btn-retour-recap {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	background: transparent;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	color: #a0a0a0;
+	padding: 0.4rem 1rem;
+	border-radius: 6px;
+	font-family: 'Luciole-regular', sans-serif;
+	font-size: 0.85rem;
+	cursor: pointer;
+	transition: color 150ms ease, border-color 150ms ease;
+}
+.btn-retour-recap:hover,
+.btn-retour-recap:focus-visible {
+	border-color: rgba(255, 255, 255, 0.3);
+	color: #d1d5db;
+}
+
+/* Cellule de tableau en rouge (sorties d'especes)
+   / Red table cell (cash outflows) */
+.recap-cell-rouge {
+	color: #f87171;
+}
+
+/* Zone de confirmation cloture — affichee apres clic sur bouton "Cloturer"
+   / Closure confirmation box — shown after click on "Close" button */
+.cloture-confirmation-box {
+	margin-top: 1rem;
+	padding: 1rem;
+	border-radius: 10px;
+	border: 2px solid rgba(251, 146, 60, 0.5);
+	background: rgba(251, 146, 60, 0.08);
+	font-family: 'Luciole-regular', sans-serif;
+}
+
+.cloture-text-warning {
+	color: #fdba74;
+	font-size: 0.95rem;
+	margin: 0 0 0.75rem 0;
+	line-height: 1.5;
+}
+.cloture-text-warning i {
+	margin-right: 0.4rem;
+}
+
+.cloture-text-discret {
+	color: #a0a0a0;
+	font-size: 0.85rem;
+	margin: 0 0 1rem 0;
+}
+
+/* Message de feedback succès (fond_de_caisse) — animation slide-in
+   / Success feedback message (fond_de_caisse) — slide-in animation */
+.feedback-message-success {
+	padding: 0.7rem 1rem;
+	border-radius: 8px;
+	margin-bottom: 1rem;
+	background: rgba(16, 185, 129, 0.15);
+	border: 1px solid rgba(16, 185, 129, 0.3);
+	color: #6ee7b7;
+	font-family: 'Luciole-regular', sans-serif;
+	font-size: 0.9rem;
+	animation: correction-slide-in 400ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+.feedback-message-success i {
+	margin-right: 0.4rem;
+}
+
+/* @keyframes correction-slide-in : déjà défini en haut du fichier (overlay-fade-up
+   est utilisé pour les autres animations). On l'ajoute s'il n'existe pas encore. */
+@keyframes correction-slide-in {
+	from { transform: translateY(-6px); opacity: 0; }
+}
+
+/* Champs du formulaire fond de caisse
+   / Cash float form fields */
+.fond-info-text {
+	color: #a0a0a0;
+	margin-bottom: 1rem;
+	font-family: 'Luciole-regular', sans-serif;
+}
+.fond-info-text strong {
+	color: #e0e0e0;
+	font-size: 1.2rem;
+}
+
+.fond-input-label {
+	color: #c0c0c0;
+	font-family: 'Luciole-regular', sans-serif;
+	display: block;
+	margin-bottom: 0.4rem;
+	font-size: 0.85rem;
+}
+
+.fond-input {
+	padding: 0.6rem 0.75rem;
+	font-size: 1.1rem;
+	font-family: 'Luciole-regular', sans-serif;
+	border-radius: 8px;
+	border: 1px solid rgba(99, 102, 241, 0.3);
+	background: rgba(0, 0, 0, 0.2);
+	color: #e0e0e0;
+	width: 180px;
+	transition: border-color 150ms ease;
+}
+.fond-input:focus {
+	outline: none;
+	border-color: rgba(99, 102, 241, 0.6);
+}
+
+.fond-btn-submit {
+	background: linear-gradient(135deg, #6366f1, #4f46e5);
+	color: white;
+	padding: 0.6rem 1.5rem;
+	border: none;
+	border-radius: 8px;
+	font-size: 0.95rem;
+	font-weight: 600;
+	font-family: 'Luciole-regular', sans-serif;
+	cursor: pointer;
+	box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+	transition: box-shadow 150ms ease, transform 150ms ease;
+}
+.fond-btn-submit:hover,
+.fond-btn-submit:focus-visible {
+	box-shadow: 0 4px 12px rgba(99, 102, 241, 0.45);
+	transform: translateY(-1px);
+}
+
+/* Boutons inline dans la zone d'alerte sortie de caisse
+   / Inline buttons in cash withdrawal alert zone */
+.sortie-alerte-btn-confirm {
+	background: rgba(251, 191, 36, 0.15);
+	color: #fde68a;
+	border: 2px solid rgba(251, 191, 36, 0.4);
+	padding: 0.5rem 1.2rem;
+	border-radius: 8px;
+	font-family: 'Luciole-regular', sans-serif;
+	font-size: 0.9rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 150ms ease;
+}
+.sortie-alerte-btn-confirm:hover,
+.sortie-alerte-btn-confirm:focus-visible {
+	background: rgba(251, 191, 36, 0.25);
+}
+
+.sortie-alerte-btn-cancel {
+	background: transparent;
+	color: #9ca3af;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	padding: 0.5rem 1.2rem;
+	border-radius: 8px;
+	font-family: 'Luciole-regular', sans-serif;
+	font-size: 0.9rem;
+	cursor: pointer;
+	transition: color 150ms ease, border-color 150ms ease;
+}
+.sortie-alerte-btn-cancel:hover,
+.sortie-alerte-btn-cancel:focus-visible {
+	color: #d1d5db;
+	border-color: rgba(255, 255, 255, 0.3);
+}
+
+
+/* ============================================================
+   FORMULAIRE CORRECTION DE MOYEN DE PAIEMENT
+   / Payment method correction form
+
+   Utilise dans hx_corriger_moyen_paiement.html (formulaire) et
+   hx_correction_succes.html (confirmation).
+   Les onmouseover/onmouseout et onchange JS de toggle radio sont
+   remplaces par CSS :hover et :has(input:checked) pour l'a11y clavier.
+   / In hx_corriger_moyen_paiement.html (form) and hx_correction_succes.html
+   (confirmation). Inline JS toggles replaced by CSS for keyboard a11y.
+   ============================================================ */
+
+.correction-form-box {
+	margin-top: 0.75rem;
+	padding: 1.25rem;
+	border-radius: 10px;
+	background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(79, 70, 229, 0.04) 100%);
+	border: 1px solid rgba(99, 102, 241, 0.2);
+	animation: correction-form-in 350ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+	font-family: 'Luciole-regular', sans-serif;
+}
+
+@keyframes correction-form-in {
+	from { transform: translateY(-6px); opacity: 0; filter: blur(2px); }
+}
+
+/* Entête : icône + titre + sous-titre (article + moyen actuel)
+   / Header: icon + title + subtitle (article + current method) */
+.correction-header {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	margin-bottom: 1rem;
+}
+
+.correction-header-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: 8px;
+	background: rgba(99, 102, 241, 0.2);
+	color: #a5b4fc;
+	font-size: 0.95rem;
+}
+
+.correction-header-title {
+	color: #e0e7ff;
+	font-size: 1rem;
+	font-weight: 600;
+	text-wrap: balance;
+}
+
+.correction-header-subtitle {
+	color: rgba(165, 180, 252, 0.6);
+	font-size: 0.8rem;
+	margin-top: 2px;
+}
+
+.correction-header-current-method {
+	display: inline-block;
+	padding: 1px 6px;
+	border-radius: 4px;
+	background: rgba(255, 255, 255, 0.08);
+	margin-left: 4px;
+	font-size: 0.75rem;
+	color: rgba(255, 255, 255, 0.5);
+}
+
+/* Groupe de radio buttons (4 moyens de paiement)
+   / Radio button group (4 payment methods) */
+.correction-radio-group {
+	display: flex;
+	gap: 0.5rem;
+	margin-bottom: 1rem;
+	flex-wrap: wrap;
+}
+
+.correction-radio-label {
+	flex: 1;
+	min-width: 100px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0.6rem 1rem;
+	border-radius: 8px;
+	cursor: pointer;
+	border: 1.5px solid rgba(99, 102, 241, 0.25);
+	background: rgba(99, 102, 241, 0.06);
+	color: #c7d2fe;
+	font-size: 0.95rem;
+	transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.correction-radio-label:hover,
+.correction-radio-label:focus-within {
+	border-color: rgba(99, 102, 241, 0.5);
+	background: rgba(99, 102, 241, 0.15);
+}
+
+/* Etat selectionne : detecte automatiquement via :has(input:checked)
+   / Selected state: auto-detected via :has(input:checked) */
+.correction-radio-label:has(input:checked) {
+	border-color: #818cf8;
+	background: rgba(99, 102, 241, 0.25);
+	color: #e0e7ff;
+}
+
+/* L'input radio est masque visuellement, le label le represente
+   / Radio input visually hidden, label represents it */
+.correction-radio-label input[type="radio"] {
+	display: none;
+}
+
+.correction-textarea {
+	width: 100%;
+	padding: 0.6rem 0.75rem;
+	font-size: 0.9rem;
+	font-family: 'Luciole-regular', sans-serif;
+	border-radius: 8px;
+	border: 1px solid rgba(99, 102, 241, 0.2);
+	background: rgba(0, 0, 0, 0.2);
+	color: #e0e7ff;
+	resize: vertical;
+	transition: border-color 150ms ease;
+	margin-bottom: 1rem;
+	display: block;
+}
+
+.correction-textarea:focus {
+	outline: none;
+	border-color: rgba(99, 102, 241, 0.5);
+}
+
+/* Ligne d'actions Annuler / Valider (alignee a droite)
+   / Action row Cancel / Submit (right-aligned) */
+.correction-actions-row {
+	display: flex;
+	gap: 0.5rem;
+	justify-content: flex-end;
+}
+
+.correction-btn-annuler {
+	background: transparent;
+	color: rgba(165, 180, 252, 0.6);
+	padding: 0.5rem 1.25rem;
+	border: 1px solid rgba(99, 102, 241, 0.15);
+	border-radius: 8px;
+	font-size: 0.9rem;
+	font-family: 'Luciole-regular', sans-serif;
+	cursor: pointer;
+	transition: border-color 150ms ease, color 150ms ease;
+}
+
+.correction-btn-annuler:hover,
+.correction-btn-annuler:focus-visible {
+	border-color: rgba(99, 102, 241, 0.3);
+	color: #c7d2fe;
+}
+
+.correction-btn-valider {
+	background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+	color: white;
+	padding: 0.5rem 1.5rem;
+	border: none;
+	border-radius: 8px;
+	font-size: 0.9rem;
+	font-weight: 600;
+	font-family: 'Luciole-regular', sans-serif;
+	cursor: pointer;
+	box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+	transition: box-shadow 150ms ease, transform 150ms ease;
+}
+
+.correction-btn-valider:hover,
+.correction-btn-valider:focus-visible {
+	box-shadow: 0 4px 12px rgba(99, 102, 241, 0.45);
+	transform: translateY(-1px);
+}
+
+.correction-btn-valider i {
+	margin-right: 0.35rem;
+	font-size: 0.8rem;
+}
+
+/* Box de succes apres correction (vert) — animation slide-in commune
+   / Success box after correction (green) — shared slide-in animation */
+.correction-succes-box {
+	padding: 1rem 1.25rem;
+	border-radius: 10px;
+	background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.08) 100%);
+	border: 1px solid rgba(16, 185, 129, 0.3);
+	margin-top: 0.75rem;
+	animation: correction-slide-in 400ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+	font-family: 'Luciole-regular', sans-serif;
+}
+
+.correction-succes-header {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	margin-bottom: 0.5rem;
+}
+
+.correction-succes-check {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border-radius: 50%;
+	background: rgba(16, 185, 129, 0.25);
+	color: #10b981;
+	font-size: 1rem;
+}
+
+.correction-succes-title {
+	color: #d1fae5;
+	font-size: 1.05rem;
+	font-weight: 600;
+}
+
+.correction-succes-detail {
+	color: rgba(209, 250, 229, 0.7);
+	font-size: 0.9rem;
+	margin: 0 0 0 2.5rem;
+	line-height: 1.5;
+}
+
+.correction-succes-arrow {
+	color: #6ee7b7;
+	margin: 0 0.25rem;
+}
+
+.correction-succes-new-method {
+	color: #d1fae5;
+}
+
+
+/* ============================================================
+   Responsive — ecrans de paiement compacts
+   / Responsive — compact payment screens
+
+   Cibles materiel :
+   - Sunmi D3 mini (10.1" portrait) et tablettes generiques  : <= 768px
+   - Sunmi V2s (5.45" portrait, ~720px largeur)              : <= 540px
+   / Hardware targets:
+   - Sunmi D3 mini (portrait) and generic tablets : <= 768px
+   - Sunmi V2s (portrait, ~720px)                 : <= 540px
+   ============================================================ */
+
+/* Tablettes / Sunmi D3 mini portrait
+   / Tablets / Sunmi D3 mini portrait */
+@media (max-width: 768px) {
+	.give-back-box {
+		font-size: 2rem;
+		padding: 0.75rem 1rem;
+	}
+	.cascade-badge {
+		font-size: 0.85rem;
+	}
+}
+
+/* Sunmi V2s portrait — ecran le plus contraint
+   / Sunmi V2s portrait — most constrained screen */
+@media (max-width: 540px) {
+	.give-back-box {
+		font-size: 1.6rem;
+		padding: 0.5rem 0.75rem;
+		margin-top: 0.25rem;
+	}
+	.cascade-badge {
+		font-size: 0.8rem;
+		padding: 2px 6px;
+	}
+	.fi-payment-detail {
+		font-size: 1rem;
+	}
+}
+
+
+/* ==========================================================================
+   Alerte hx_messages.html — generique pour warning / info / success / error
+   Affiche le message renvoye par le serveur (validation, erreur metier, etc.)
+   / Generic alert for warning / info / success / error server messages.
+   ========================================================================== */
+
+.alerte-messages {
+	gap: 1.25rem;
+	padding: 2.5rem 1.5rem;
+	text-align: center;
+	color: var(--noir01);
+}
+
+.alerte-messages-icone {
+	font-size: 3.5rem;
+	line-height: 1;
+	color: var(--noir01);
+}
+
+.alerte-messages-texte {
+	font-size: 1.4rem;
+	font-weight: 700;
+	line-height: 1.35;
+	max-width: 32rem;
+	margin: 0;
+	color: var(--noir01);
+	text-wrap: balance;
+	font-variant-numeric: tabular-nums;
+}
+
+
+/* ==========================================================================
+   Zone alerte stock negatif (hx_return_payment_success.html)
+   Affichee uniquement si autoriser_vente_hors_stock=True ET stock devenu < 0.
+   / Negative stock alert zone on the payment success screen.
+   Shown only when autoriser_vente_hors_stock=True AND stock went < 0.
+   ========================================================================== */
+
+.stock-negatif-box {
+	margin-top: 0.85rem;
+	padding: 0.9rem 1.05rem;
+	border-radius: 10px;
+	background-color: var(--warning00);
+	color: var(--noir01);
+	display: flex;
+	flex-direction: column;
+	gap: 0.45rem;
+	max-width: 32rem;
+	border: 2px solid var(--noir01);
+}
+
+.stock-negatif-titre {
+	display: flex;
+	align-items: center;
+	gap: 0.55rem;
+	font-weight: 800;
+	font-size: 1.05rem;
+	line-height: 1.2;
+	color: var(--noir01);
+}
+
+.stock-negatif-icone {
+	font-size: 1.15rem;
+	line-height: 1;
+	color: var(--noir01);
+}
+
+.stock-negatif-liste {
+	margin: 0;
+	padding-left: 1.6rem;
+	font-variant-numeric: tabular-nums;
+	font-size: 1rem;
+	line-height: 1.5;
+	color: var(--noir01);
+	font-weight: 600;
+}
+
+.stock-negatif-liste li {
+	margin: 0.05rem 0;
+}
+
+.stock-negatif-hint {
+	margin: 0;
+	font-size: 0.9rem;
+	line-height: 1.4;
+	color: var(--noir01);
+	font-weight: 500;
+	text-wrap: balance;
+}
+
+/* ==========================================================================
+   Alerte cote front : pave numerique vrac, quantite > stock disponible.
+   Affiche par tarif.js avant submit pour eviter un round-trip serveur.
+   / Front-side alert: vrac numpad, quantity > available stock.
+   Shown by tarif.js before submit to avoid a server round-trip.
+   ========================================================================== */
+
+.tarif-numpad-alerte-stock {
+	margin-top: 0.6rem;
+	padding: 0.55rem 0.75rem;
+	border-radius: 8px;
+	background-color: var(--warning00);
+	color: var(--noir01);
+	border: 2px solid var(--noir01);
+	font-size: 0.95rem;
+	font-weight: 700;
+	line-height: 1.35;
+	text-wrap: balance;
+	font-variant-numeric: tabular-nums;
+}
+
+.tarif-numpad-alerte-stock i {
+	margin-right: 0.4rem;
+}
+
+/* Sunmi V2s portrait : tasser un peu / Squeeze on V2s portrait */
+@media (max-width: 540px) {
+	.alerte-messages {
+		padding: 2rem 1rem;
+		gap: 1rem;
+	}
+	.alerte-messages-icone {
+		font-size: 2.75rem;
+	}
+	.alerte-messages-texte {
+		font-size: 1.2rem;
+	}
+	.stock-negatif-box {
+		padding: 0.7rem 0.85rem;
+	}
+	.stock-negatif-titre {
+		font-size: 1rem;
+	}
+	.stock-negatif-liste {
+		font-size: 0.95rem;
+	}
+	.stock-negatif-hint {
+		font-size: 0.85rem;
+	}
+}

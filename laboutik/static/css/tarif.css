@@ -1,0 +1,251 @@
+/* tarif.css — Overlay de selection de tarif (multi-clic + pave numerique)
+   / Rate selection overlay (multi-click + numpad)
+   LOCALISATION : laboutik/static/css/tarif.css */
+
+/* #products doit avoir position: relative pour que l'overlay
+   se positionne correctement en absolute par-dessus la grille.
+   / #products needs position: relative for the overlay
+   to position correctly as absolute on top of the grid. */
+#products {
+    position: relative;
+}
+
+/* L'overlay couvre #products avec position absolute
+   Le parent (#products) a position: relative ci-dessus
+   / Overlay covers #products with position absolute */
+.tarif-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.tarif-overlay-content {
+    background: #1a1a2e;
+    border-radius: 12px;
+    padding: 1.5rem;
+    max-width: 500px;
+    width: 100%;
+    max-height: 90%;
+    overflow-y: auto;
+}
+
+.tarif-overlay-title {
+    color: #fff;
+    font-size: 1.4rem;
+    text-align: center;
+    margin: 0 0 0.25rem 0;
+}
+
+.tarif-overlay-subtitle {
+    color: #aaa;
+    text-align: center;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.tarif-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* Bouton tarif commun / Common rate button */
+.tarif-btn {
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    cursor: pointer;
+    transition: background 150ms ease;
+}
+
+.tarif-btn:hover, .tarif-btn:active {
+    background: rgba(255,255,255,0.15);
+}
+
+.tarif-btn-label {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.tarif-btn-price, .tarif-btn-sublabel {
+    font-size: 0.85rem;
+    color: #ccc;
+    margin-top: 0.15rem;
+}
+
+/* Tarif fixe / Fixed rate */
+.tarif-btn-fixed {
+    text-align: left;
+    width: 100%;
+}
+
+/* Prix libre / Free price */
+.tarif-free-input-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.tarif-free-input {
+    flex: 1;
+    padding: 0.5rem;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.3);
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    font-size: 1.1rem;
+    text-align: right;
+    min-width: 0;
+}
+
+.tarif-free-currency {
+    color: #ccc;
+    font-size: 1rem;
+}
+
+.tarif-free-validate {
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    border: none;
+    background: #10b981;
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 1rem;
+}
+
+.tarif-free-error {
+    color: #ef4444;
+    font-size: 0.8rem;
+    margin-top: 0.25rem;
+    min-height: 1.2em;
+}
+
+.tarif-input-error {
+    border-color: #ef4444 !important;
+}
+
+/* Pave numerique / Numpad */
+.tarif-btn-poids {
+    cursor: default;
+}
+
+.tarif-numpad-zone {
+    margin-top: 0.75rem;
+}
+
+.tarif-numpad-display {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 0.5rem;
+    background: rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.tarif-numpad-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+}
+
+.tarif-numpad-unit {
+    font-size: 1rem;
+    color: #aaa;
+}
+
+.tarif-numpad-total {
+    text-align: center;
+    color: #10b981;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.tarif-numpad-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+
+.tarif-numpad-btn {
+    padding: 0.75rem;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    font-size: 1.3rem;
+    font-weight: 600;
+    cursor: pointer;
+    min-height: 48px;
+    transition: background 100ms ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.tarif-numpad-btn:active {
+    background: rgba(255,255,255,0.25);
+}
+
+.tarif-numpad-btn-clear {
+    background: rgba(239, 68, 68, 0.3);
+}
+
+.tarif-numpad-btn-ok {
+    background: rgba(16, 185, 129, 0.4);
+}
+
+.tarif-numpad-btn-ok:active {
+    background: rgba(16, 185, 129, 0.6);
+}
+
+/* Bouton retour / Back button */
+.tarif-btn-retour {
+    display: block;
+    width: 100%;
+    margin-top: 1rem;
+    padding: 0.75rem;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.05);
+    color: #ccc;
+    font-size: 1rem;
+    cursor: pointer;
+    text-align: center;
+}
+
+.tarif-btn-retour:hover {
+    background: rgba(255,255,255,0.1);
+}
+
+/* RESPONSIVE MOBILE V2s */
+@media (max-width: 599px) {
+    .tarif-overlay {
+        padding: 0.5rem;
+    }
+    .tarif-overlay-content {
+        padding: 1rem;
+        max-height: 85vh;
+    }
+    .tarif-numpad-btn {
+        padding: 0.6rem;
+        font-size: 1.1rem;
+    }
+    .tarif-numpad-value {
+        font-size: 1.6rem;
+    }
+}

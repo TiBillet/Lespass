@@ -1,0 +1,89 @@
+{% load i18n %}
+<!--
+EXPORT FISCAL — formulaire dates optionnelles + telechargement ZIP
+/ FISCAL EXPORT — optional date form + ZIP download
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_export_fiscal.html
+
+Page autonome servie par CaisseViewSet.export_fiscal (GET).
+Le formulaire soumet en POST vers la meme URL.
+Le serveur renvoie directement le ZIP (Content-Disposition: attachment).
+
+DESIGN : meme style que hx_fond_de_caisse.html (theme POS sombre, Luciole).
+-->
+<div class="ventes-container" data-testid="export-fiscal-form"
+     style="max-width: 560px; margin: 2rem auto; padding: 1.5rem;">
+
+    <h3 style="color: #e0e0e0; margin-bottom: 0.5rem; font-family: 'Luciole-regular'; font-size: 1.2rem;">
+        <i class="fas fa-file-archive" aria-hidden="true" style="margin-right: 0.5rem; color: #6366f1;"></i>
+        {% translate "Fiscal export" %}
+    </h3>
+
+    <p style="color: #a0a0a0; margin-bottom: 0.5rem; font-family: 'Luciole-regular'; font-size: 0.85rem; line-height: 1.5;">
+        {% translate "Generate a signed archive (ZIP) of all POS data for the tax administration." %}
+    </p>
+    <p style="color: #a0a0a0; margin-bottom: 1.5rem; font-family: 'Luciole-regular'; font-size: 0.85rem;">
+        {% translate "Dates are optional. Without dates, all data will be exported." %}
+    </p>
+
+    <form method="post"
+          action="{% url 'laboutik-caisse-export_fiscal' %}"
+          aria-label="{% translate 'Fiscal export' %}">
+        {% csrf_token %}
+
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
+            <div style="flex: 1; min-width: 160px;">
+                <label for="debut"
+                       style="display: block; color: #c0c0c0; font-family: 'Luciole-regular';
+                              font-size: 0.85rem; margin-bottom: 0.3rem;">
+                    {% translate "Start date" %}
+                </label>
+                <input type="date" id="debut" name="debut"
+                       style="width: 100%; padding: 0.6rem 0.75rem; font-size: 1rem;
+                              font-family: 'Luciole-regular';
+                              border-radius: 8px; border: 1px solid rgba(99, 102, 241, 0.3);
+                              background: rgba(0,0,0,0.2); color: #e0e0e0;"
+                       data-testid="export-fiscal-debut">
+            </div>
+            <div style="flex: 1; min-width: 160px;">
+                <label for="fin"
+                       style="display: block; color: #c0c0c0; font-family: 'Luciole-regular';
+                              font-size: 0.85rem; margin-bottom: 0.3rem;">
+                    {% translate "End date" %}
+                </label>
+                <input type="date" id="fin" name="fin"
+                       style="width: 100%; padding: 0.6rem 0.75rem; font-size: 1rem;
+                              font-family: 'Luciole-regular';
+                              border-radius: 8px; border: 1px solid rgba(99, 102, 241, 0.3);
+                              background: rgba(0,0,0,0.2); color: #e0e0e0;"
+                       data-testid="export-fiscal-fin">
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <button type="submit"
+                    style="display: inline-flex; align-items: center; gap: 0.5rem;
+                           background: linear-gradient(135deg, #6366f1, #4f46e5); color: white;
+                           padding: 0.6rem 1.5rem; border: none; border-radius: 8px;
+                           font-size: 0.95rem; font-weight: 600;
+                           font-family: 'Luciole-regular'; cursor: pointer;
+                           box-shadow: 0 2px 8px rgba(99,102,241,0.3);"
+                    data-testid="export-fiscal-submit">
+                <i class="fas fa-download" aria-hidden="true"></i>
+                {% translate "Download archive" %}
+            </button>
+
+            <a href="javascript:history.back()"
+               style="color: #a0a0a0; text-decoration: none; font-family: 'Luciole-regular';
+                      font-size: 0.85rem;"
+               data-testid="export-fiscal-cancel">
+                {% translate "Cancel" %}
+            </a>
+        </div>
+    </form>
+
+    <p style="color: #666; margin-top: 1.5rem; font-family: 'Luciole-regular'; font-size: 0.75rem;">
+        <i class="fas fa-lock" aria-hidden="true" style="margin-right: 0.3rem;"></i>
+        {% translate "HMAC-SHA256 integrity — independently verifiable" %}
+    </p>
+</div>

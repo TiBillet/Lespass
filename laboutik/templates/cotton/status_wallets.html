@@ -1,0 +1,10 @@
+{% load static i18n %}
+
+<div class="status-wallets" {{ attrs }}>
+	<div class="status-wallets-name">{{ name }}</div>
+	<div class="status-wallets-list">
+		<div>{{ monnaie_name }} = {{ wallets.monnaie }}</div>
+		<div>{{ monnaie_name }} {% translate "cadeau" %} = {{ wallets.gift_monnaie }}</div>
+	</div>
+</div>
+
