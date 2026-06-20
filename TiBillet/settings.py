@@ -153,6 +153,7 @@ SHARED_APPS = (
     'root_billet',
     'wsocket',
     'fedow_public',
+    'fedow_core',
     'discovery',
     'seo',
     'onboard',
@@ -163,6 +164,7 @@ SHARED_APPS = (
     'corsheaders',
     'django_htmx',
     'import_export',
+    'django_cotton',
 )
 
 if DEBUG and not TEST :
@@ -187,6 +189,8 @@ TENANT_APPS = (
     'fedow_connect',
     'crowds',
     'comptabilite',
+    'laboutik',
+    'inventaire',
 )
 
 INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]
@@ -254,9 +258,21 @@ TEMPLATES = [
             BASE_DIR / "Administration/templates",  # Pour le dashboard d'admin unfold
             BASE_DIR / "templates",  # Templates réutilisables projet (widgets, etc.)
         ],
-        'APP_DIRS': True,
+        # APP_DIRS doit etre False quand on utilise des loaders explicites (django-cotton).
+        # app_directories.Loader conserve la decouverte des templates d'apps.
+        # / APP_DIRS must be False with explicit loaders (django-cotton). app_directories.Loader
+        # keeps app template discovery working.
+        'APP_DIRS': False,
 
         'OPTIONS': {
+            'loaders': [
+                'django_cotton.cotton_loader.Loader',
+                'django.template.loaders.filesystem.Loader',
+                'django.template.loaders.app_directories.Loader',
+            ],
+            'builtins': [
+                'django_cotton.templatetags.cotton',
+            ],
             'context_processors': [
                 'django.template.context_processors.debug',
                 'django.template.context_processors.request',
@@ -564,3 +580,15 @@ if DEBUG:
     os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"  # only use in development
 
 
+
+
+# --- Cartes NFC de demonstration (fixtures POS laboutik) — portage S6 ---
+# / Demo NFC cards for laboutik POS fixtures
+DEMO_TAGID_CM = os.environ.get('DEMO_TAGID_CM', 'A49E8E2A')
+DEMO_TAGID_CLIENT1 = os.environ.get('DEMO_TAGID_CLIENT1', 'B52F9F3B')
+DEMO_TAGID_CLIENT2 = os.environ.get('DEMO_TAGID_CLIENT2', 'C63A0A4C')
+DEMO_TAGID_CLIENT3 = os.environ.get('DEMO_TAGID_CLIENT3', 'D74B1B5D')
+DEMO_TAGID_CLIENT4 = os.environ.get('DEMO_TAGID_CLIENT4', 'E85C2C6E')
+DEMO_EMAIL_CLIENT1 = os.environ.get('DEMO_EMAIL_CLIENT1', 'client1@test.loc')
+DEMO_EMAIL_CLIENT2 = os.environ.get('DEMO_EMAIL_CLIENT2', 'client2@test.loc')
+DEMO_EMAIL_CLIENT3 = os.environ.get('DEMO_EMAIL_CLIENT3', 'client3@test.loc')

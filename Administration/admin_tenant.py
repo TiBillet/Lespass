@@ -5,7 +5,9 @@ from Administration.admin.dashboard import (  # noqa: F401
 
 from Administration.admin import (
     products,
-    prices
+    prices,
+    laboutik,
+    inventaire,
 )
 from Administration.admin.help_messages_dictionnary import HELP_MESSAGES_DICT
 from Administration.admin.mixins import HelpDisplayMixin
@@ -4643,3 +4645,22 @@ class InitiativeAdmin(ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
+
+
+# --- Terminaux hardware POS (TermUser) — portage S6 ---
+# Enregistrement minimal : le dashboard reference 'termuser_changelist'.
+# / Minimal registration: the dashboard references 'termuser_changelist'.
+# Alignement complet via Administration/admin/users.py prevu au chantier modulaire.
+from AuthBillet.models import TermUser as _TermUserProxy
+from unfold.admin import ModelAdmin as _UnfoldModelAdmin
+
+
+@admin.register(_TermUserProxy, site=staff_admin_site)
+class TermUserAdmin(_UnfoldModelAdmin):
+    list_display = ('email', 'terminal_role', 'is_active')
+    list_filter = ('terminal_role', 'is_active')
+    search_fields = ('email',)
+
+    def has_add_permission(self, request, obj=None):
+        # Terminaux crees uniquement via le flow discovery / Terminals created via discovery only
+        return False

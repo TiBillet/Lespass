@@ -4,7 +4,20 @@ from datetime import timedelta
 from django.conf import settings
 from django.core.cache import cache
 from django.db import connection
-from django.urls import reverse_lazy, reverse
+from django.urls import reverse_lazy, reverse, NoReverseMatch
+from django.utils.functional import lazy as _lazy
+
+
+# Portage S6 : certains liens du dashboard/sidebar pointent vers des admins d'apps
+# pas encore portees en V1 (booking, controlvanne, cards/QrcodeCashless). On tolere
+# les liens absents (-> "#") au lieu de faire planter tout l'admin.
+# / Tolerate missing admin reverse links (-> "#") instead of crashing the whole admin.
+def _safe_rev_inner(*args, **kwargs):
+    try:
+        return reverse(*args, **kwargs)
+    except NoReverseMatch:
+        return "#"
+_safe_rev = _lazy(_safe_rev_inner, str)
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -53,13 +66,13 @@ def get_sidebar_navigation(request):
                 {
                     "title": _("Dashboard"),
                     "icon": "dashboard",
-                    "link": reverse_lazy("admin:index"),
+                    "link": _safe_rev("admin:index"),
                     "permission": admin_permission,
                 },
                 {
                     "title": _("Settings"),
                     "icon": "manufacturing",
-                    "link": reverse_lazy(
+                    "link": _safe_rev(
                         "staff_admin:BaseBillet_configuration_changelist"
                     ),
                     "permission": admin_permission,
@@ -67,14 +80,14 @@ def get_sidebar_navigation(request):
                 {
                     "title": _("User accounts"),
                     "icon": "person_add",
-                    "link": reverse_lazy("staff_admin:AuthBillet_humanuser_changelist"),
+                    "link": _safe_rev("staff_admin:AuthBillet_humanuser_changelist"),
                     "permission": admin_permission,
                 },
                 # This menu option is here only for debug purpose
                 # {
                 #     "title": _("Produit"),
                 #     "icon": "sports_bar",
-                #     "link": reverse_lazy(
+                #     "link": _safe_rev(
                 #         "staff_admin:BaseBillet_product_changelist"
                 #     ),
                 #     "permission": admin_permission,
@@ -96,7 +109,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Membership products"),
                         "icon": "loyalty",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:BaseBillet_membershipproduct_changelist"
                         ),
                         "permission": admin_permission,
@@ -104,7 +117,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Adhésion / Pass"),
                         "icon": "card_membership",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:BaseBillet_membership_changelist"
                         ),
                         "badge": "Administration.admin.dashboard.adhesion_badge_callback",
@@ -127,13 +140,13 @@ def get_sidebar_navigation(request):
                     # {
                     #     "title": _("Dashboard"),
                     #     "icon": "monitoring",
-                    #     "link": reverse_lazy("staff_admin:BaseBillet_event_dashboard"),
+                    #     "link": _safe_rev("staff_admin:BaseBillet_event_dashboard"),
                     #     "permission": admin_permission,
                     # },
                     {
                         "title": _("Ticket products"),
                         "icon": "storefront",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:BaseBillet_ticketproduct_changelist"
                         ),
                         "permission": admin_permission,
@@ -141,7 +154,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Carousel"),
                         "icon": "photo_library",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:BaseBillet_carrousel_changelist"
                         ),
                         "permission": admin_permission,
@@ -149,7 +162,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Promotional codes"),
                         "icon": "local_offer",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:BaseBillet_promotionalcode_changelist"
                         ),
                         "permission": admin_permission,
@@ -157,13 +170,13 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Tags"),
                         "icon": "style",
-                        "link": reverse_lazy("staff_admin:BaseBillet_tag_changelist"),
+                        "link": _safe_rev("staff_admin:BaseBillet_tag_changelist"),
                         "permission": admin_permission,
                     },
                     {
                         "title": _("Addresses"),
                         "icon": "signpost",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:BaseBillet_postaladdress_changelist"
                         ),
                         "permission": admin_permission,
@@ -171,7 +184,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Events"),
                         "icon": "event",
-                        "link": reverse_lazy("staff_admin:BaseBillet_event_changelist"),
+                        "link": _safe_rev("staff_admin:BaseBillet_event_changelist"),
                         # Badge "+ N" uniquement s'il y a des propositions en attente.
                         # On appelle le callback ici et on passe "" quand il n'y a rien.
                         # Le template Unfold teste {% if item.badge %} : une chaine vide
@@ -184,7 +197,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Bookings"),
                         "icon": "event_upcoming",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:BaseBillet_reservation_changelist"
                         ),
                         "permission": admin_permission,
@@ -192,7 +205,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Tickets"),
                         "icon": "confirmation_number",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:BaseBillet_ticket_changelist"
                         ),
                         "permission": admin_permission,
@@ -200,7 +213,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Scan App"),
                         "icon": "qr_code_scanner",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:BaseBillet_scanapp_changelist"
                         ),
                         "permission": admin_permission,
@@ -221,7 +234,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Options"),
                         "icon": "tune",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:BaseBillet_federationconfiguration_changelist"
                         ),
                         "permission": admin_permission,
@@ -229,7 +242,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Espaces"),
                         "icon": "linked_services",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:BaseBillet_federatedplace_changelist"
                         ),
                         "permission": admin_permission,
@@ -237,7 +250,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Assets"),
                         "icon": "currency_exchange",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:fedow_public_assetfedowpublic_changelist"
                         ),
                         "permission": admin_permission,
@@ -260,7 +273,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("POS products"),
                         "icon": "point_of_sale",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:BaseBillet_posproduct_changelist"
                         ),
                         "permission": admin_permission,
@@ -268,7 +281,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("POS categories"),
                         "icon": "category",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:BaseBillet_categorieproduct_changelist"
                         ),
                         "permission": admin_permission,
@@ -276,7 +289,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Points of sale"),
                         "icon": "store",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:laboutik_pointdevente_changelist"
                         ),
                         "permission": admin_permission,
@@ -284,7 +297,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Primary cards"),
                         "icon": "badge",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:laboutik_carteprimaire_changelist"
                         ),
                         "permission": admin_permission,
@@ -292,7 +305,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Device pairing (PIN)"),
                         "icon": "phonelink_setup",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:discovery_pairingdevice_changelist"
                         ),
                         "permission": admin_permission,
@@ -300,19 +313,19 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Printers"),
                         "icon": "print",
-                        "link": reverse_lazy("staff_admin:laboutik_printer_changelist"),
+                        "link": _safe_rev("staff_admin:laboutik_printer_changelist"),
                         "permission": admin_permission,
                     },
                     # {
                     #     "title": _("Orders"),
                     #     "icon": "receipt",
-                    #     "link": reverse_lazy("staff_admin:laboutik_commandesauvegarde_changelist"),
+                    #     "link": _safe_rev("staff_admin:laboutik_commandesauvegarde_changelist"),
                     #     "permission": admin_permission,
                     # },
                     {
                         "title": _("Closures"),
                         "icon": "summarize",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:laboutik_cloturecaisse_changelist"
                         ),
                         "permission": admin_permission,
@@ -320,7 +333,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Cash float history"),
                         "icon": "account_balance_wallet",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:laboutik_historiquefonddecaisse_changelist"
                         ),
                         "permission": admin_permission,
@@ -328,7 +341,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("POS settings"),
                         "icon": "settings",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:laboutik_laboutikconfiguration_changelist"
                         ),
                         "permission": admin_permission,
@@ -357,7 +370,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Terminals"),
                         "icon": "tablet",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:AuthBillet_termuser_changelist"
                         ),
                         "permission": admin_permission,
@@ -378,13 +391,13 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Monnaies et tokens"),
                         "icon": "toll",
-                        "link": reverse_lazy("staff_admin:fedow_core_asset_changelist"),
+                        "link": _safe_rev("staff_admin:fedow_core_asset_changelist"),
                         "permission": admin_permission,
                     },
                     {
                         "title": _("Transactions"),
                         "icon": "receipt_long",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:fedow_core_transaction_changelist"
                         ),
                         "permission": admin_permission,
@@ -392,7 +405,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Federations"),
                         "icon": "hub",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:fedow_core_federation_changelist"
                         ),
                         "permission": admin_permission,
@@ -400,7 +413,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Cartes NFC"),
                         "icon": "credit_card",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:QrcodeCashless_cartecashless_changelist"
                         ),
                         "permission": admin_permission,
@@ -421,13 +434,13 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Stocks"),
                         "icon": "warehouse",
-                        "link": reverse_lazy("staff_admin:inventaire_stock_changelist"),
+                        "link": _safe_rev("staff_admin:inventaire_stock_changelist"),
                         "permission": admin_permission,
                     },
                     {
                         "title": _("Mouvements de stock"),
                         "icon": "inventory_2",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:inventaire_mouvementstock_changelist"
                         ),
                         "permission": admin_permission,
@@ -454,7 +467,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Taps"),
                         "icon": "local_bar",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:controlvanne_tireusebec_changelist"
                         ),
                         "permission": admin_permission,
@@ -462,7 +475,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Keg products"),
                         "icon": "sports_bar",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:BaseBillet_futproduct_changelist"
                         ),
                         "permission": admin_permission,
@@ -470,7 +483,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Flow meters"),
                         "icon": "speed",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:controlvanne_debimetre_changelist"
                         ),
                         "permission": admin_permission,
@@ -478,7 +491,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Maintenance cards"),
                         "icon": "build",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:controlvanne_cartemaintenance_changelist"
                         ),
                         "permission": admin_permission,
@@ -486,7 +499,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Sessions"),
                         "icon": "history",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:controlvanne_rfidsession_changelist"
                         ),
                         "permission": admin_permission,
@@ -494,7 +507,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Tap history"),
                         "icon": "timeline",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:controlvanne_historiquetireuse_changelist"
                         ),
                         "permission": admin_permission,
@@ -502,7 +515,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Card history"),
                         "icon": "manage_search",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:controlvanne_historiquecarte_changelist"
                         ),
                         "permission": admin_permission,
@@ -510,7 +523,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Maintenance history"),
                         "icon": "plumbing",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:controlvanne_historiquemaintenance_changelist"
                         ),
                         "permission": admin_permission,
@@ -518,7 +531,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Calibration"),
                         "icon": "tune",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:controlvanne_sessioncalibration_changelist"
                         ),
                         "permission": admin_permission,
@@ -526,7 +539,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Server configuration"),
                         "icon": "settings",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:controlvanne_configurationtireuse_changelist"
                         ),
                         "permission": admin_permission,
@@ -547,31 +560,31 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Resources"),
                         "icon": "chair",
-                        "link": reverse_lazy("staff_admin:booking_resource_changelist"),
+                        "link": _safe_rev("staff_admin:booking_resource_changelist"),
                         "permission": admin_permission,
                     },
                     {
                         "title": _("Resource groups"),
                         "icon": "stacks",
-                        "link": reverse_lazy("staff_admin:booking_resourcegroup_changelist"),
+                        "link": _safe_rev("staff_admin:booking_resourcegroup_changelist"),
                         "permission": admin_permission,
                     },
                     {
                         "title": _("Calendars"),
                         "icon": "calendar_month",
-                        "link": reverse_lazy("staff_admin:booking_calendar_changelist"),
+                        "link": _safe_rev("staff_admin:booking_calendar_changelist"),
                         "permission": admin_permission,
                     },
                     {
                         "title": _("Weekly openings"),
                         "icon": "schedule",
-                        "link": reverse_lazy("staff_admin:booking_weeklyopening_changelist"),
+                        "link": _safe_rev("staff_admin:booking_weeklyopening_changelist"),
                         "permission": admin_permission,
                     },
                     {
                         "title": _("Bookings"),
                         "icon": "event_available",
-                        "link": reverse_lazy("staff_admin:booking_booking_changelist"),
+                        "link": _safe_rev("staff_admin:booking_booking_changelist"),
                         "permission": admin_permission,
                     },
                 ],
@@ -589,7 +602,7 @@ def get_sidebar_navigation(request):
                 {
                     "title": _("Rapports"),
                     "icon": "lock",
-                    "link": reverse_lazy(
+                    "link": _safe_rev(
                         "staff_admin:comptabilite_cloturecaisse_changelist"
                     ),
                     "permission": admin_permission,
@@ -597,7 +610,7 @@ def get_sidebar_navigation(request):
                 {
                     "title": _("Entries"),
                     "icon": "receipt_long",
-                    "link": reverse_lazy(
+                    "link": _safe_rev(
                         "staff_admin:BaseBillet_lignearticle_changelist"
                     ),
                     "permission": admin_permission,
@@ -606,13 +619,13 @@ def get_sidebar_navigation(request):
                 # {
                 #     "title": _("Operation logs"),
                 #     "icon": "history",
-                #     "link": reverse_lazy("staff_admin:laboutik_journaloperation_changelist"),
+                #     "link": _safe_rev("staff_admin:laboutik_journaloperation_changelist"),
                 #     "permission": admin_permission,
                 # },
                 # {
                 #     "title": _("Accounting accounts"),
                 #     "icon": "account_balance",
-                #     "link": reverse_lazy(
+                #     "link": _safe_rev(
                 #         "staff_admin:comptabilite_comptecomptable_changelist"
                 #     ),
                 #     "permission": admin_permission,
@@ -620,7 +633,7 @@ def get_sidebar_navigation(request):
                 # {
                 #     "title": _("Payment method mapping"),
                 #     "icon": "swap_horiz",
-                #     "link": reverse_lazy(
+                #     "link": _safe_rev(
                 #         "staff_admin:comptabilite_mappingmoyendepaiement_changelist"
                 #     ),
                 #     "permission": admin_permission,
@@ -641,7 +654,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Configuration"),
                         "icon": "manufacturing",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:crowds_crowdconfig_changelist"
                         ),
                         "permission": admin_permission,
@@ -649,7 +662,7 @@ def get_sidebar_navigation(request):
                     {
                         "title": _("Initiative"),
                         "icon": "crowdsource",
-                        "link": reverse_lazy(
+                        "link": _safe_rev(
                             "staff_admin:crowds_initiative_changelist"
                         ),
                         "permission": admin_permission,
@@ -668,7 +681,7 @@ def get_sidebar_navigation(request):
                 {
                     "title": _("API Key"),
                     "icon": "api",
-                    "link": reverse_lazy(
+                    "link": _safe_rev(
                         "staff_admin:BaseBillet_externalapikey_changelist"
                     ),
                     "permission": admin_permission,
@@ -676,13 +689,13 @@ def get_sidebar_navigation(request):
                 {
                     "title": _("Webhook"),
                     "icon": "webhook",
-                    "link": reverse_lazy("staff_admin:BaseBillet_webhook_changelist"),
+                    "link": _safe_rev("staff_admin:BaseBillet_webhook_changelist"),
                     "permission": admin_permission,
                 },
                 {
                     "title": _("Ghost"),
                     "icon": "circle",
-                    "link": reverse_lazy(
+                    "link": _safe_rev(
                         "staff_admin:BaseBillet_ghostconfig_changelist"
                     ),
                     "permission": admin_permission,
@@ -690,7 +703,7 @@ def get_sidebar_navigation(request):
                 {
                     "title": _("Formbricks"),
                     "icon": "list_alt",
-                    "link": reverse_lazy(
+                    "link": _safe_rev(
                         "staff_admin:BaseBillet_formbricksforms_changelist"
                     ),
                     "permission": admin_permission,
@@ -698,7 +711,7 @@ def get_sidebar_navigation(request):
                 {
                     "title": _("Brevo"),
                     "icon": "alternate_email",
-                    "link": reverse_lazy(
+                    "link": _safe_rev(
                         "staff_admin:BaseBillet_brevoconfig_changelist"
                     ),
                     "permission": admin_permission,
@@ -717,7 +730,7 @@ def get_sidebar_navigation(request):
                 {
                     "title": _("Waiting Configuration"),
                     "icon": "linked_services",
-                    "link": reverse_lazy(
+                    "link": _safe_rev(
                         "staff_admin:MetaBillet_waitingconfiguration_changelist"
                     ),
                     "permission": root_permission,
@@ -725,13 +738,13 @@ def get_sidebar_navigation(request):
                 {
                     "title": _("Tenants"),
                     "icon": "domain",
-                    "link": reverse_lazy("staff_admin:Customers_client_changelist"),
+                    "link": _safe_rev("staff_admin:Customers_client_changelist"),
                     "permission": root_permission,
                 },
                 # {
                 #     "title": _("Virements pot central"),
                 #     "icon": "account_balance",
-                #     "link": reverse_lazy("staff_admin:bank_transfers_dashboard"),
+                #     "link": _safe_rev("staff_admin:bank_transfers_dashboard"),
                 #     "permission": root_permission,
                 # },
             ],
@@ -775,26 +788,26 @@ MODULE_FIELDS = {
         "testid": "dashboard-card-federation",
     },
     # FROM V2 : TO IMPLEMENT LATER ON
-    # "module_monnaie_locale": {
-    #     "name": _("Local currency & cashless"),
-    #     "description": _("Local currency tokens, federated wallet"),
-    #     "testid": "dashboard-card-monnaie-locale",
-    # },
-    # "module_caisse": {
-    #     "name": _("POS & restaurant"),
-    #     "description": _("Point of sale, orders, and cash register"),
-    #     "testid": "dashboard-card-caisse",
-    #     "link_url": "/laboutik/caisse/",
-    #     "link_label": _("Open POS"),
-    #     "link_icon": "fa-cash-register",
-    # },
-    # "module_inventaire": {
-    #     "name": _("Inventory"),
-    #     "description": _(
-    #         "Stock management for POS products: tracking, alerts, movements."
-    #     ),
-    #     "testid": "dashboard-card-inventaire",
-    # },
+    "module_monnaie_locale": {
+        "name": _("Local currency & cashless"),
+        "description": _("Local currency tokens, federated wallet"),
+        "testid": "dashboard-card-monnaie-locale",
+    },
+    "module_caisse": {
+        "name": _("POS & restaurant"),
+        "description": _("Point of sale, orders, and cash register"),
+        "testid": "dashboard-card-caisse",
+        "link_url": "/laboutik/caisse/",
+        "link_label": _("Open POS"),
+        "link_icon": "fa-cash-register",
+    },
+    "module_inventaire": {
+        "name": _("Inventory"),
+        "description": _(
+            "Stock management for POS products: tracking, alerts, movements."
+        ),
+        "testid": "dashboard-card-inventaire",
+    },
     # # Tireuses connectees avec paiement NFC (controlvanne)
     # # / Connected beer taps with NFC payment (controlvanne)
     # "module_tireuse": {

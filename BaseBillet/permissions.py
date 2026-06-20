@@ -1,7 +1,9 @@
 import logging
 import typing
 
+from django.db import connection
 from django.http import HttpRequest
+from rest_framework import permissions
 from rest_framework.exceptions import PermissionDenied
 from rest_framework_api_key.permissions import BaseHasAPIKey
 
@@ -40,3 +42,75 @@ class HasLaBoutikApi(BaseHasAPIKey):
 
         request.laboutik_api_key = api_key
         return super().has_permission(request, view)
+
+
+class HasLaBoutikAccess(BaseHasAPIKey):
+    """
+    Permission souple : accepte une clé API LaBoutik OU un admin tenant connecté.
+    Flexible permission: accepts a LaBoutik API key OR a logged-in tenant admin.
+
+    Deux chemins d'accès / Two access paths :
+    1. Clé API (header Authorization: Api-Key xxx) → terminal de caisse
+       API key (Authorization: Api-Key xxx header) → cash register terminal
+    2. Session admin tenant (cookie sessionid) → accès navigateur pour debug/admin
+       Tenant admin session (sessionid cookie) → browser access for debug/admin
+    """
+    model = LaBoutikAPIKey
+
+    def has_permission(self, request: HttpRequest, view: typing.Any) -> bool:
+        # Chemin 1 : admin tenant connecté via session navigateur
+        # Path 1: tenant admin logged in via browser session
+        utilisateur = request.user
+        if utilisateur and utilisateur.is_authenticated:
+            est_admin_du_tenant = utilisateur.is_tenant_admin(connection.tenant)
+            if est_admin_du_tenant:
+                return True
+
+        # Chemin 2 : clé API LaBoutik (header Authorization: Api-Key xxx)
+        # Path 2: LaBoutik API key (Authorization: Api-Key xxx header)
+        key = self.get_key(request)
+        if not key:
+            raise PermissionDenied("Missing LaBoutik API key or admin session.")
+
+        try:
+            api_key = LaBoutikAPIKey.objects.get_from_key(key)
+        except LaBoutikAPIKey.DoesNotExist:
+            raise PermissionDenied("Invalid LaBoutik API key.")
+
+        # Attacher la clé à la requête pour usage dans les vues
+        # Attach the key to the request for use in views
+        request.laboutik_api_key = api_key
+        return super().has_permission(request, view)
+
+
+class HasLaBoutikTerminalAccess(permissions.BasePermission):
+    """
+    Permission V2 : accepte les TermUser authentifiés via le bridge (session),
+    avec fallback V1 sur HasLaBoutikAccess (admin session OU header Api-Key).
+    / V2 permission: accepts bridge-authenticated TermUsers (session),
+    with V1 fallback on HasLaBoutikAccess (admin session OR Api-Key header).
+
+    LOCALISATION : BaseBillet/permissions.py
+
+    Utilisée sur les routes Laboutik V2 qui adoptent le pattern bridge→session.
+    Les routes V1 legacy continuent d'utiliser HasLaBoutikAccess directement.
+    / Used on V2 Laboutik routes that adopt the bridge→session pattern.
+    Legacy V1 routes keep using HasLaBoutikAccess directly.
+    """
+
+    def has_permission(self, request, view):
+        from AuthBillet.models import TibilletUser
+
+        user = request.user
+
+        # Chemin V2 : TermUser avec rôle LaBoutik lié à ce tenant
+        # / V2 path: TermUser with LaBoutik role linked to this tenant
+        if user and user.is_authenticated:
+            if user.espece == TibilletUser.TYPE_TERM:
+                if user.terminal_role == TibilletUser.ROLE_LABOUTIK:
+                    if user.client_source_id == connection.tenant.pk:
+                        return True
+
+        # Fallback V1 : délègue à HasLaBoutikAccess
+        # / V1 fallback: delegate to HasLaBoutikAccess
+        return HasLaBoutikAccess().has_permission(request, view)

@@ -929,6 +929,119 @@ class Tva(models.Model):
         verbose_name = _("TVA rate")
         verbose_name_plural = _("TVA rate")
 
+class CategorieProduct(models.Model):
+    """
+    Categorie de produit pour le point de vente (POS) et au-dela.
+    Regroupe les produits par famille (boissons, nourriture, etc.).
+    Reutilisable hors POS (vente en ligne, etc.).
+    / Product category for POS and beyond. Groups products by family.
+
+    LOCALISATION : BaseBillet/models.py
+    """
+
+    uuid = models.UUIDField(
+        primary_key=True,
+        default=uuid4,
+        editable=False,
+        unique=True,
+        db_index=True,
+    )
+    name = models.CharField(
+        max_length=200,
+        verbose_name=_("Name"),
+        help_text=_("Category name displayed on the POS interface."),
+    )
+    icon = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        verbose_name=_("Icon"),
+        help_text=_("Icon name (e.g. Bootstrap Icons class)."),
+    )
+    couleur_texte = models.CharField(
+        max_length=7,
+        blank=True,
+        null=True,
+        verbose_name=_("Text color"),
+        help_text=_("Hexadecimal color code for text (e.g. #FFFFFF)."),
+    )
+    couleur_fond = models.CharField(
+        max_length=7,
+        blank=True,
+        null=True,
+        verbose_name=_("Background color"),
+        help_text=_("Hexadecimal color code for background (e.g. #000000)."),
+    )
+    poid_liste = models.SmallIntegerField(
+        default=0,
+        verbose_name=_("Display order"),
+        help_text=_("Lower values are displayed first."),
+    )
+    # TVA par defaut pour les produits de cette categorie
+    # / Default VAT rate for products in this category
+    tva = models.ForeignKey(
+        Tva,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        verbose_name=_("Default VAT rate"),
+        help_text=_("Default VAT rate applied to products in this category."),
+    )
+    # Indique si la categorie concerne des articles cashless (tokens)
+    # / Whether this category is for cashless (token) items
+    cashless = models.BooleanField(
+        default=False,
+        verbose_name=_("Cashless"),
+        help_text=_("Check if this category is for cashless token items."),
+    )
+
+    # Imprimante pour les tickets de commande de cette categorie (cuisine, bar, etc.)
+    # FK vers laboutik.Printer — meme schema tenant, pas de probleme cross-app.
+    # / Printer for order tickets of this category (kitchen, bar, etc.)
+    # FK to laboutik.Printer — same tenant schema, no cross-app issue.
+    printer = models.ForeignKey(
+        "laboutik.Printer",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="categories_produit",
+        verbose_name=_("Order printer"),
+        help_text=_(
+            "Printer for order tickets (kitchen, bar). "
+            "When an order contains products from this category, "
+            "the ticket is sent to this printer."
+        ),
+    )
+
+    # Compte comptable de vente associe a cette categorie (classe 7 du PCG).
+    # Utilise pour l'export FEC et CSV comptable.
+    # / Sales accounting code for this category (PCG class 7).
+    # Used for FEC and CSV accounting export.
+    compte_comptable = models.ForeignKey(
+        "laboutik.CompteComptable",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="categories_produit",
+        verbose_name=_("Accounting code"),
+        help_text=_(
+            "Compte comptable de vente associe a cette categorie. "
+            "Utilise pour l'export FEC et CSV comptable. "
+            "/ Sales accounting code for this category. "
+            "Used for FEC and CSV accounting export."
+        ),
+    )
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        ordering = ("poid_liste", "name")
+        verbose_name = _("Product category")
+        verbose_name_plural = _("Product categories")
+
+
+
 class Product(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
 
@@ -1101,6 +1214,123 @@ class Product(models.Model):
         help_text=_("'Subscribe' If empty. Only useful for membership or subscription products.")
     )
 
+
+    VENTE = "VT"
+    RECHARGE_EUROS = "RE"
+    RECHARGE_CADEAU = "RC"
+    RECHARGE_TEMPS = "TM"
+    ADHESION_POS = "AD"
+    RETOUR_CONSIGNE = "CR"
+    VIDER_CARTE = "VC"
+    FRACTIONNE_POS = "FR"
+    BILLET_POS = "BI"
+    FIDELITE = "FD"
+    VIREMENT_RECU = "VR"
+
+    METHODE_CAISSE_CHOICES = [
+        (VENTE, _("Sale")),
+        (RECHARGE_EUROS, _("Euro top-up")),
+        (RECHARGE_CADEAU, _("Gift top-up")),
+        (RECHARGE_TEMPS, _("Time top-up")),
+        (ADHESION_POS, _("Membership")),
+        (RETOUR_CONSIGNE, _("Deposit return")),
+        (VIDER_CARTE, _("Empty card")),
+        (FRACTIONNE_POS, _("Split payment")),
+        (BILLET_POS, _("Ticket")),
+        (FIDELITE, _("Loyalty")),
+        (VIREMENT_RECU, _("Bank transfer received")),
+    ]
+
+    methode_caisse = models.CharField(
+        max_length=2,
+        choices=METHODE_CAISSE_CHOICES,
+        blank=True,
+        null=True,
+        verbose_name=_("POS method"),
+        help_text=_(
+            "Payment/action method at the cash register. Leave empty if this product is not sold at the POS."
+        ),
+    )
+    categorie_pos = models.ForeignKey(
+        CategorieProduct,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="products_pos",
+        verbose_name=_("POS category"),
+        help_text=_("Display category on the POS interface."),
+    )
+    couleur_texte_pos = models.CharField(
+        max_length=7,
+        blank=True,
+        null=True,
+        verbose_name=_("POS text color"),
+        help_text=_("Hexadecimal color for the product button text (e.g. #FFFFFF)."),
+    )
+    couleur_fond_pos = models.CharField(
+        max_length=7,
+        blank=True,
+        null=True,
+        verbose_name=_("POS background color"),
+        help_text=_(
+            "Hexadecimal color for the product button background (e.g. #3B82F6)."
+        ),
+    )
+    # Paiement fractionne autorise pour cet article
+    # / Whether split payment is allowed for this product
+    fractionne = models.BooleanField(
+        default=False,
+        verbose_name=_("Split payment allowed"),
+        help_text=_("Allow partial/split payment for this product at the POS."),
+    )
+    # Necessite un scan de carte NFC avant ajout au panier
+    # / Requires NFC card scan before adding to cart
+    besoin_tag_id = models.BooleanField(
+        default=False,
+        verbose_name=_("Requires NFC tag"),
+        help_text=_(
+            "An NFC card must be scanned before this product can be added to the cart."
+        ),
+    )
+    icon_pos = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        verbose_name=_("POS icon"),
+        help_text=_("Icon name for the POS button (e.g. Bootstrap Icons class)."),
+    )
+
+    # Prix d'achat unitaire en centimes (uniquement pour les articles POS).
+    # Utilise pour le calcul du benefice estime dans les rapports de cloture.
+    # / Unit purchase price in cents (POS articles only).
+    # Used for estimated profit calculation in closure reports.
+    prix_achat = models.IntegerField(
+        default=0,
+        verbose_name=_("Purchase price (cents)"),
+        help_text=_(
+            "Prix d'achat unitaire en centimes. "
+            "Utilise pour le calcul du benefice estime. "
+            "/ Unit purchase price in cents. "
+            "Used for estimated profit calculation."
+        ),
+    )
+
+    # Asset fedow_core lie a ce produit de recharge.
+    # Rempli automatiquement par le signal post_save de fedow_core.Asset.
+    # Null pour les produits non-cashless (VT, AD, BI, etc.).
+    # / fedow_core Asset linked to this top-up product.
+    asset = models.ForeignKey(
+        "fedow_core.Asset",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="products",
+        verbose_name=_("Asset"),
+        help_text=_(
+            "Asset fedow lie a ce produit de recharge. "
+            "/ Fedow asset linked to this top-up product."
+        ),
+    )
 
     def fedow_category(self):
         self_category_map = {
@@ -1306,6 +1536,57 @@ class Price(models.Model):
                                      help_text=_(
                                          "Number of valid memberships possible simultaneously or maximum capacity for this price per event. Leave this field blank if the quantity is unlimited."),
                                      )
+
+    poids_mesure = models.BooleanField(
+        default=False,
+        verbose_name=_("Sale by weight/volume"),
+        help_text=_(
+            "If checked, the cashier enters the weight or volume at each sale. "
+            "The price is per kg (grams) or per liter (centiliters). "
+            "Stock is decremented by the exact quantity entered."
+        ),
+    )
+    contenance = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Contenance"),
+        help_text=_(
+            "Stock quantity consumed per unit sold (in stock unit). "
+            "Use this when selling by unit but decrementing stock by weight/volume. "
+            "E.g.: pint=50 (cl), half=25 (cl), portion=150 (g). "
+            "Empty = 1 unit. Incompatible with 'Sale by weight/volume' "
+            "(where the cashier enters the exact quantity)."
+        ),
+    )
+    # Prix multi-asset : null = EUR, set = unites de l'asset (tokens). FK tenant -> shared.
+    # / Multi-asset pricing: null = EUR, set = asset units. Same cross-schema pattern as fedow_reward_asset.
+    asset = models.ForeignKey(
+        "fedow_core.Asset",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="prices",
+        verbose_name=_("Asset"),
+        help_text=_(
+            "If set, the price is in asset units (tokens). If empty, the price is in euros."
+        ),
+    )
+    # Tarif en monnaie non-fiduciaire (temps, fidélité, crypto, etc.)
+    # Si True, le champ `asset` ci-dessus DOIT être renseigné
+    # et doit pointer vers un asset non-fiduciaire (TIM, FID).
+    # Si False (défaut), le prix est en euros et `asset` est ignoré.
+    # / Non-fiduciary price (time, loyalty, crypto, etc.)
+    # If True, the `asset` field above MUST be set
+    # and must point to a non-fiduciary asset (TIM, FID).
+    # If False (default), price is in euros and `asset` is ignored.
+    non_fiduciaire = models.BooleanField(
+        default=False,
+        verbose_name=_("Non-fiduciary price"),
+        help_text=_(
+            "If checked, the price is in tokens (time, loyalty, etc.) "
+            "instead of euros. You must select the asset below."
+        ),
+    )
 
     def out_of_stock(self, event=None):
         if self.stock is None or self.stock < 1:
@@ -2993,6 +3274,90 @@ class LigneArticle(models.Model):
         'self', on_delete=models.PROTECT, blank=True, null=True,
         related_name='credit_notes',
         verbose_name=_("Credit note for"),  # Avoir pour
+    )
+
+    # Point de vente d'ou provient cette vente
+    # / Point of sale where this sale originated
+    point_de_vente = models.ForeignKey(
+        "laboutik.PointDeVente",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="lignes_articles",
+        verbose_name=_("Point of sale"),
+        help_text=_(
+            "Point de vente ou cette vente a ete realisee. "
+            "/ Point of sale where this sale was made."
+        ),
+    )
+    # Identifiant de transaction — regroupe les lignes d'un meme paiement.
+    # Toutes les LigneArticle creees dans un meme paiement partagent ce UUID.
+    # Permet de reconstruire un ticket pour re-impression.
+    # / Transaction ID — groups lines from the same payment.
+    # All LigneArticle created in one payment share this UUID.
+    # Allows reconstructing a ticket for reprinting.
+    uuid_transaction = models.UUIDField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name=_("Transaction ID"),
+        help_text=_("Groups all lines from the same payment for reprinting."),
+    )
+    # --- Chainage HMAC-SHA256 (conformite LNE exigence 8) ---
+    # Chaque ligne est chainee avec la precedente via HMAC.
+    # La cle secrete est par tenant (LaboutikConfiguration.hmac_key).
+    # / HMAC-SHA256 chaining (LNE compliance requirement 8).
+    # Each line is chained with the previous one via HMAC.
+    # Secret key is per tenant (LaboutikConfiguration.hmac_key).
+    hmac_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        verbose_name=_("HMAC hash"),
+        help_text=_(
+            "HMAC-SHA256 de cette ligne, chainee avec la precedente. "
+            "/ HMAC-SHA256 of this line, chained with the previous one."
+        ),
+    )
+    previous_hmac = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        verbose_name=_("Previous HMAC"),
+        help_text=_(
+            "HMAC de la LigneArticle precedente dans la chaine. "
+            "/ HMAC of the previous LigneArticle in the chain."
+        ),
+    )
+    # --- Donnee elementaire HT (conformite LNE exigence 3) ---
+    # Le referentiel LNE exige le total HT comme donnee elementaire,
+    # pas seulement comme valeur calculee.
+    # / LNE requirement 3: HT must be stored as elementary data,
+    # not just computed.
+    total_ht = models.IntegerField(
+        default=0,
+        verbose_name=_("Total HT (cents)"),
+        help_text=_(
+            "Total hors taxes en centimes. "
+            "Calcule : TTC / (1 + taux_tva/100). "
+            "/ Total excluding tax in cents. "
+            "Computed: TTC / (1 + vat_rate/100)."
+        ),
+    )
+    # Quantite saisie par le caissier pour les ventes au poids/volume (en unite stock : g ou cl).
+    # Null pour les ventes classiques (tarif fixe ou prix libre).
+    # Donnee elementaire LNE (exigence 3) : necessaire au calcul du total HT.
+    # / Weight/volume entered by cashier for weight-based sales (in stock unit: g or cl).
+    # Null for standard sales (fixed or free price).
+    # LNE elementary data (requirement 3): necessary to compute total excl. tax.
+    weight_quantity = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Quantity by weight/volume"),
+        help_text=_(
+            "Amount entered by cashier in stock unit (g or cl). "
+            "Null for standard sales."
+        ),
     )
 
     class Meta:

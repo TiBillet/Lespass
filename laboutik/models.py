@@ -868,7 +868,7 @@ class ClotureCaisse(models.Model):
     responsable = models.ForeignKey(
         TibilletUser, on_delete=models.SET_NULL,
         blank=True, null=True,
-        related_name='clotures_caisse',
+        related_name='clotures_caisse_lb',
         verbose_name=_("Operator"),
         help_text=_("Cashier who performed the closure."),
     )

@@ -41,7 +41,10 @@ class Command(BaseCommand):
         # utilisent la recharge V2 (Session 31).
         # / V2 FED infrastructure bootstrap. Idempotent. Needed for tests using V2 refill.
         from django.core.management import call_command
-        call_command('bootstrap_fed_asset')
+        # S6 : PAS de FED local (garde anti-FED-local). bootstrap_fed_asset cree un
+        # Client.FED + tenant federation_fed, interdit en S6 (le FED reste sur le Fedow legacy).
+        # / S6: no local FED. bootstrap_fed_asset skipped (FED stays on the legacy Fedow).
+        # call_command('bootstrap_fed_asset')
 
         # Si on est deja dans un tenant_context (schema != "public"), on l'utilise.
         # Sinon (lancement standalone via docker exec), on prend le premier tenant non-public.

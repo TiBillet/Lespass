@@ -62,6 +62,10 @@ urlpatterns = [
     # creation flow, removed).
     path('stripe/', include('PaiementStripe.urls')),
 
+    # Caisse POS laboutik V2 + endpoints inventaire (stock) — portage S6
+    path('laboutik/', include('laboutik.urls')),
+    path('api/inventaire/', include('inventaire.urls')),
+
     # pour carte GEN1 Bisik
     # re_path(r'(?P<numero_carte>^[qsdf974]{5}$)', include('QrcodeCashless.urls')),
 

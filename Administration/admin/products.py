@@ -31,8 +31,8 @@ from BaseBillet.models import (
     TicketProduct,
     MembershipProduct,
     POSProduct,
-    #FutProduct,
-    #CategorieProduct,
+    FutProduct,
+    CategorieProduct,
     Price,
     FormbricksForms,
     ProductFormField,
@@ -1348,292 +1348,292 @@ class MembershipProductAdmin(HelpDisplayMixin, ProductAdmin):
 
 # FROM V2 : TO ADD WHEN POS AND LABOUTIK
 #
-# class POSProductForm(ProductAdminCustomForm):
-#     """Formulaire produit pour les articles de caisse.
-#     Product form for POS items.
-#     Le champ categorie_article est cache (pas pertinent en caisse).
-#     LOCALISATION : Administration/admin/products.py"""
-#
-#     class Meta(ProductAdminCustomForm.Meta):
-#         model = POSProduct
-#
-#     # En caisse, pas de categorie_article billetterie/adhesion :
-#     # on cache le champ et on met NONE par defaut.
-#     # / At POS, no ticket/membership category: hide the field, default to NONE.
-#     categorie_article = forms.ChoiceField(
-#         choices=[
-#             (Product.NONE, _("Select a category")),
-#         ],
-#         widget=forms.HiddenInput(),
-#         label=_("Product type"),
-#         initial=Product.NONE,
-#         required=False,
-#     )
-#
-#     # Methode de caisse : obligatoire pour un produit POS
-#     # / POS method: required for a POS product
-#     methode_caisse = forms.ChoiceField(
-#         choices=Product.METHODE_CAISSE_CHOICES,
-#         widget=UnfoldAdminSelectWidget(),
-#         label=_("POS method"),
-#         help_text=_("Payment/action method at the cash register."),
-#     )
-#
-#     # --- Champs d'affichage POS / POS display fields ---
-#
-#     # Palette de couleurs prédéfinie (champ formulaire uniquement, non sauvegardé directement)
-#     # Pre-defined color palette (form-only field, not saved directly to the model)
-#     palette_pos = forms.ChoiceField(
-#         choices=[("", _("— Aucune palette —"))]
-#         + [(key, label) for key, label, _t, _b in PALETTE_POS],
-#         required=False,
-#         label=_("Color palette"),
-#         help_text=_(
-#             "Choisissez une combinaison de couleurs prête à l'emploi. "
-#             "Elle remplacera les champs couleur ci-dessous. "
-#             "/ Choose a ready-to-use color combination. It will override the color fields below."
-#         ),
-#         widget=PalettePickerWidget(),
-#     )
-#
-#     # Couleur du texte avec sélecteur natif (override palette si renseigné manuellement)
-#     # Text color with native picker (overrides palette if filled manually)
-#     couleur_texte_pos = forms.CharField(
-#         max_length=7,
-#         required=False,
-#         label=_("POS text color"),
-#         help_text=_("Par défaut, couleur de la catégorie. / Default: category color."),
-#         widget=UnfoldAdminColorInputWidget(),
-#     )
-#
-#     # Couleur du fond avec sélecteur natif
-#     # Background color with native picker
-#     couleur_fond_pos = forms.CharField(
-#         max_length=7,
-#         required=False,
-#         label=_("POS background color"),
-#         help_text=_("Par défaut, couleur de la catégorie. / Default: category color."),
-#         widget=UnfoldAdminColorInputWidget(),
-#     )
-#
-#     # Icône avec sélecteur visuel Material Symbols
-#     # Icon with visual Material Symbols picker
-#     icon_pos = forms.ChoiceField(
-#         choices=[("", _("— Aucune icône —"))] + list(ICON_POS),
-#         required=False,
-#         label=_("POS icon"),
-#         help_text=_(
-#             "Si une image produit est définie ci-dessous, elle sera affichée à la place de cette icône. / If a product image is set below, it will be displayed instead of this icon."
-#         ),
-#         widget=IconPickerWidget(),
-#     )
-#
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#
-#         instance = kwargs.get("instance")
-#
-#         # Pré-sélection de la palette si les couleurs actuelles correspondent à un preset
-#         # Pre-select the palette if the current colors match a preset
-#         if instance and instance.couleur_texte_pos and instance.couleur_fond_pos:
-#             for key, _label, text_hex, bg_hex in PALETTE_POS:
-#                 couleurs_correspondent = (
-#                     instance.couleur_texte_pos.upper() == text_hex.upper()
-#                     and instance.couleur_fond_pos.upper() == bg_hex.upper()
-#                 )
-#                 if couleurs_correspondent:
-#                     self.fields["palette_pos"].initial = key
-#                     break
-#
-#         # Help_text TVA dynamique : affiche le taux de la catégorie si disponible
-#         # Dynamic VAT help_text: shows category rate if available
-#         if (
-#             instance
-#             and getattr(instance, "categorie_pos", None)
-#             and getattr(instance.categorie_pos, "tva", None)
-#         ):
-#             taux = instance.categorie_pos.tva.tva_rate
-#             self.fields["tva"].help_text = _(
-#                 f"Même TVA que la catégorie ({taux}%) si laissé vide. Surchargeable ici. "
-#                 f"/ Same VAT as category ({taux}%) if left empty. Can be overridden here."
-#             )
-#         else:
-#             self.fields["tva"].help_text = _(
-#                 "Même TVA que la catégorie si laissé vide. / Same VAT as category if left empty."
-#             )
-#
-#     def clean_categorie_article(self):
-#         """Pas de validation de categorie pour les produits POS.
-#         No category validation for POS products."""
-#         return self.cleaned_data.get("categorie_article", Product.NONE)
-#
-#     def clean(self):
-#         """Applique la palette sélectionnée sur les champs couleur, puis valide.
-#         Applies the selected palette to the color fields, then validates."""
-#
-#         # On saute la validation de ProductAdminCustomForm (pas de tarif obligatoire en caisse)
-#         # Skip ProductAdminCustomForm validation (no mandatory price at POS)
-#         cleaned = super(ProductAdminCustomForm, self).clean()
-#
-#         # Décodage de la palette : si une palette est choisie, elle écrase les couleurs
-#         # Decode palette: if a palette is chosen, it overrides the color fields
-#         palette_key = cleaned.get("palette_pos")
-#         if palette_key and palette_key in PALETTE_POS_MAP:
-#             text_hex, bg_hex = PALETTE_POS_MAP[palette_key]
-#             cleaned["couleur_texte_pos"] = text_hex
-#             cleaned["couleur_fond_pos"] = bg_hex
-#
-#         return cleaned
-#
-#
-# @admin.register(POSProduct, site=staff_admin_site)
-# class POSProductAdmin(ProductAdmin):
-#     """Vue admin filtree : uniquement les produits de caisse (methode_caisse IS NOT NULL).
-#     Filtered admin view: only POS products (methode_caisse IS NOT NULL).
-#     LOCALISATION : Administration/admin/products.py"""
-#
-#     form = POSProductForm
-#     inlines = [POSPriceInline]
-#     change_form_after_template = "admin/product/inline_conditional_fields.html"
-#
-#     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
-#         # Collecte les regles conditionnelles de chaque inline qui en declare
-#         # / Collect conditional rules from each inline that declares them
-#         extra_context = extra_context or {}
-#         regles_conditionnelles = {}
-#         for inline_class in self.get_inlines(request, None):
-#             regles_inline = getattr(inline_class, "inline_conditional_fields", None)
-#             if regles_inline:
-#                 prefixe = inline_class.model._meta.model_name + "s"
-#                 regles_conditionnelles[prefixe] = regles_inline
-#         if regles_conditionnelles:
-#             extra_context["inline_conditional_rules"] = json.dumps(
-#                 regles_conditionnelles
-#             )
-#         return super().changeform_view(request, object_id, form_url, extra_context)
-#
-#     def save_related(self, request, form, formsets, change):
-#         """Apres sauvegarde des inlines : si un tarif a poids_mesure=True
-#         et que le produit n'a pas de Stock, en creer un vide.
-#         Si le Stock existe mais est en unite UN (pieces), avertir.
-#         / After saving inlines: if a price has poids_mesure=True
-#         and the product has no Stock, create an empty one.
-#         If Stock exists but uses UN (pieces), warn."""
-#         super().save_related(request, form, formsets, change)
-#         produit = form.instance
-#
-#         # Verifier si un tarif poids_mesure existe pour ce produit
-#         # / Check if a weight-based price exists for this product
-#         a_tarif_poids = produit.prices.filter(poids_mesure=True).exists()
-#         if not a_tarif_poids:
-#             return
-#
-#         # Verifier si le produit a deja un Stock
-#         # / Check if the product already has a Stock
-#         from inventaire.models import Stock, UniteStock
-#
-#         try:
-#             stock_existant = produit.stock_inventaire
-#             # Verifier que l'unite n'est pas UN (pieces)
-#             # / Check that the unit is not UN (pieces)
-#             if stock_existant.unite == UniteStock.UN:
-#                 messages.warning(
-#                     request,
-#                     _(
-#                         "Warning: the stock unit is 'Pieces' (UN). "
-#                         "Weight/volume sales require grams (GR) or centiliters (CL). "
-#                         "Please change the unit in the stock settings."
-#                     ),
-#                 )
-#         except Exception:
-#             # Pas de stock → en creer un vide en grammes
-#             # / No stock → create an empty one in grams
-#             Stock.objects.create(
-#                 product=produit,
-#                 quantite=0,
-#                 unite=UniteStock.GR,
-#                 seuil_alerte=0,
-#                 autoriser_vente_hors_stock=True,
-#             )
-#             messages.info(
-#                 request,
-#                 _(
-#                     "Stock automatically created in grams (quantity=0). "
-#                     "Remember to add stock via a reception."
-#                 ),
-#             )
-#
-#     fieldsets = (
-#         (
-#             _("General"),
-#             {
-#                 "fields": (
-#                     "name",
-#                     "categorie_article",
-#                     "methode_caisse",
-#                     "categorie_pos",
-#                     "tva",
-#                     "prix_achat",
-#                 ),
-#             },
-#         ),
-#         (
-#             _("POS display"),
-#             {
-#                 "fields": (
-#                     "palette_pos",
-#                     "couleur_texte_pos",
-#                     "couleur_fond_pos",
-#                     "icon_pos",
-#                     "img",
-#                     "poids",
-#                 ),
-#             },
-#         ),
-#         # (_('POS options'), {
-#         #     'fields': (
-#         #         'fractionne',
-#         #         'besoin_tag_id',
-#         #     ),
-#         # }),
-#         (
-#             _("Publication"),
-#             {
-#                 "fields": (
-#                     "publish",
-#                     "archive",
-#                 ),
-#             },
-#         ),
-#     )
-#
-#     list_display = (
-#         "name",
-#         "methode_caisse",
-#         "categorie_pos",
-#         "publish",
-#         "poids",
-#     )
-#
-#     list_filter = ["publish", "methode_caisse", "categorie_pos"]
-#     search_fields = ["name"]
-#
-#     def get_inlines(self, request, obj):
-#         # En mode add (pas d'obj) : StockInline pour créer le stock initial
-#         # En mode change : pas de StockInline (le stock se gère via admin/inventaire/stock/)
-#         # / In add mode: StockInline for initial stock creation
-#         # In change mode: no StockInline (stock managed via admin/inventaire/stock/)
-#         if obj is None:
-#             from Administration.admin.inventaire import StockInline
-#
-#             return [StockInline, POSPriceInline]
-#         return [POSPriceInline]
-#
-#     def get_queryset(self, request):
-#         # Uniquement les produits avec une methode de caisse definie
-#         # / Only products with a POS method set
-#         qs = super().get_queryset(request)
-#         return qs.filter(methode_caisse__isnull=False)
+class POSProductForm(ProductAdminCustomForm):
+    """Formulaire produit pour les articles de caisse.
+    Product form for POS items.
+    Le champ categorie_article est cache (pas pertinent en caisse).
+    LOCALISATION : Administration/admin/products.py"""
+
+    class Meta(ProductAdminCustomForm.Meta):
+        model = POSProduct
+
+    # En caisse, pas de categorie_article billetterie/adhesion :
+    # on cache le champ et on met NONE par defaut.
+    # / At POS, no ticket/membership category: hide the field, default to NONE.
+    categorie_article = forms.ChoiceField(
+        choices=[
+            (Product.NONE, _("Select a category")),
+        ],
+        widget=forms.HiddenInput(),
+        label=_("Product type"),
+        initial=Product.NONE,
+        required=False,
+    )
+
+    # Methode de caisse : obligatoire pour un produit POS
+    # / POS method: required for a POS product
+    methode_caisse = forms.ChoiceField(
+        choices=Product.METHODE_CAISSE_CHOICES,
+        widget=UnfoldAdminSelectWidget(),
+        label=_("POS method"),
+        help_text=_("Payment/action method at the cash register."),
+    )
+
+    # --- Champs d'affichage POS / POS display fields ---
+
+    # Palette de couleurs prédéfinie (champ formulaire uniquement, non sauvegardé directement)
+    # Pre-defined color palette (form-only field, not saved directly to the model)
+    palette_pos = forms.ChoiceField(
+        choices=[("", _("— Aucune palette —"))]
+        + [(key, label) for key, label, _t, _b in PALETTE_POS],
+        required=False,
+        label=_("Color palette"),
+        help_text=_(
+            "Choisissez une combinaison de couleurs prête à l'emploi. "
+            "Elle remplacera les champs couleur ci-dessous. "
+            "/ Choose a ready-to-use color combination. It will override the color fields below."
+        ),
+        widget=PalettePickerWidget(),
+    )
+
+    # Couleur du texte avec sélecteur natif (override palette si renseigné manuellement)
+    # Text color with native picker (overrides palette if filled manually)
+    couleur_texte_pos = forms.CharField(
+        max_length=7,
+        required=False,
+        label=_("POS text color"),
+        help_text=_("Par défaut, couleur de la catégorie. / Default: category color."),
+        widget=UnfoldAdminColorInputWidget(),
+    )
+
+    # Couleur du fond avec sélecteur natif
+    # Background color with native picker
+    couleur_fond_pos = forms.CharField(
+        max_length=7,
+        required=False,
+        label=_("POS background color"),
+        help_text=_("Par défaut, couleur de la catégorie. / Default: category color."),
+        widget=UnfoldAdminColorInputWidget(),
+    )
+
+    # Icône avec sélecteur visuel Material Symbols
+    # Icon with visual Material Symbols picker
+    icon_pos = forms.ChoiceField(
+        choices=[("", _("— Aucune icône —"))] + list(ICON_POS),
+        required=False,
+        label=_("POS icon"),
+        help_text=_(
+            "Si une image produit est définie ci-dessous, elle sera affichée à la place de cette icône. / If a product image is set below, it will be displayed instead of this icon."
+        ),
+        widget=IconPickerWidget(),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        instance = kwargs.get("instance")
+
+        # Pré-sélection de la palette si les couleurs actuelles correspondent à un preset
+        # Pre-select the palette if the current colors match a preset
+        if instance and instance.couleur_texte_pos and instance.couleur_fond_pos:
+            for key, _label, text_hex, bg_hex in PALETTE_POS:
+                couleurs_correspondent = (
+                    instance.couleur_texte_pos.upper() == text_hex.upper()
+                    and instance.couleur_fond_pos.upper() == bg_hex.upper()
+                )
+                if couleurs_correspondent:
+                    self.fields["palette_pos"].initial = key
+                    break
+
+        # Help_text TVA dynamique : affiche le taux de la catégorie si disponible
+        # Dynamic VAT help_text: shows category rate if available
+        if (
+            instance
+            and getattr(instance, "categorie_pos", None)
+            and getattr(instance.categorie_pos, "tva", None)
+        ):
+            taux = instance.categorie_pos.tva.tva_rate
+            self.fields["tva"].help_text = _(
+                f"Même TVA que la catégorie ({taux}%) si laissé vide. Surchargeable ici. "
+                f"/ Same VAT as category ({taux}%) if left empty. Can be overridden here."
+            )
+        else:
+            self.fields["tva"].help_text = _(
+                "Même TVA que la catégorie si laissé vide. / Same VAT as category if left empty."
+            )
+
+    def clean_categorie_article(self):
+        """Pas de validation de categorie pour les produits POS.
+        No category validation for POS products."""
+        return self.cleaned_data.get("categorie_article", Product.NONE)
+
+    def clean(self):
+        """Applique la palette sélectionnée sur les champs couleur, puis valide.
+        Applies the selected palette to the color fields, then validates."""
+
+        # On saute la validation de ProductAdminCustomForm (pas de tarif obligatoire en caisse)
+        # Skip ProductAdminCustomForm validation (no mandatory price at POS)
+        cleaned = super(ProductAdminCustomForm, self).clean()
+
+        # Décodage de la palette : si une palette est choisie, elle écrase les couleurs
+        # Decode palette: if a palette is chosen, it overrides the color fields
+        palette_key = cleaned.get("palette_pos")
+        if palette_key and palette_key in PALETTE_POS_MAP:
+            text_hex, bg_hex = PALETTE_POS_MAP[palette_key]
+            cleaned["couleur_texte_pos"] = text_hex
+            cleaned["couleur_fond_pos"] = bg_hex
+
+        return cleaned
+
+
+@admin.register(POSProduct, site=staff_admin_site)
+class POSProductAdmin(ProductAdmin):
+    """Vue admin filtree : uniquement les produits de caisse (methode_caisse IS NOT NULL).
+    Filtered admin view: only POS products (methode_caisse IS NOT NULL).
+    LOCALISATION : Administration/admin/products.py"""
+
+    form = POSProductForm
+    inlines = [POSPriceInline]
+    change_form_after_template = "admin/product/inline_conditional_fields.html"
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        # Collecte les regles conditionnelles de chaque inline qui en declare
+        # / Collect conditional rules from each inline that declares them
+        extra_context = extra_context or {}
+        regles_conditionnelles = {}
+        for inline_class in self.get_inlines(request, None):
+            regles_inline = getattr(inline_class, "inline_conditional_fields", None)
+            if regles_inline:
+                prefixe = inline_class.model._meta.model_name + "s"
+                regles_conditionnelles[prefixe] = regles_inline
+        if regles_conditionnelles:
+            extra_context["inline_conditional_rules"] = json.dumps(
+                regles_conditionnelles
+            )
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
+    def save_related(self, request, form, formsets, change):
+        """Apres sauvegarde des inlines : si un tarif a poids_mesure=True
+        et que le produit n'a pas de Stock, en creer un vide.
+        Si le Stock existe mais est en unite UN (pieces), avertir.
+        / After saving inlines: if a price has poids_mesure=True
+        and the product has no Stock, create an empty one.
+        If Stock exists but uses UN (pieces), warn."""
+        super().save_related(request, form, formsets, change)
+        produit = form.instance
+
+        # Verifier si un tarif poids_mesure existe pour ce produit
+        # / Check if a weight-based price exists for this product
+        a_tarif_poids = produit.prices.filter(poids_mesure=True).exists()
+        if not a_tarif_poids:
+            return
+
+        # Verifier si le produit a deja un Stock
+        # / Check if the product already has a Stock
+        from inventaire.models import Stock, UniteStock
+
+        try:
+            stock_existant = produit.stock_inventaire
+            # Verifier que l'unite n'est pas UN (pieces)
+            # / Check that the unit is not UN (pieces)
+            if stock_existant.unite == UniteStock.UN:
+                messages.warning(
+                    request,
+                    _(
+                        "Warning: the stock unit is 'Pieces' (UN). "
+                        "Weight/volume sales require grams (GR) or centiliters (CL). "
+                        "Please change the unit in the stock settings."
+                    ),
+                )
+        except Exception:
+            # Pas de stock → en creer un vide en grammes
+            # / No stock → create an empty one in grams
+            Stock.objects.create(
+                product=produit,
+                quantite=0,
+                unite=UniteStock.GR,
+                seuil_alerte=0,
+                autoriser_vente_hors_stock=True,
+            )
+            messages.info(
+                request,
+                _(
+                    "Stock automatically created in grams (quantity=0). "
+                    "Remember to add stock via a reception."
+                ),
+            )
+
+    fieldsets = (
+        (
+            _("General"),
+            {
+                "fields": (
+                    "name",
+                    "categorie_article",
+                    "methode_caisse",
+                    "categorie_pos",
+                    "tva",
+                    "prix_achat",
+                ),
+            },
+        ),
+        (
+            _("POS display"),
+            {
+                "fields": (
+                    "palette_pos",
+                    "couleur_texte_pos",
+                    "couleur_fond_pos",
+                    "icon_pos",
+                    "img",
+                    "poids",
+                ),
+            },
+        ),
+        # (_('POS options'), {
+        #     'fields': (
+        #         'fractionne',
+        #         'besoin_tag_id',
+        #     ),
+        # }),
+        (
+            _("Publication"),
+            {
+                "fields": (
+                    "publish",
+                    "archive",
+                ),
+            },
+        ),
+    )
+
+    list_display = (
+        "name",
+        "methode_caisse",
+        "categorie_pos",
+        "publish",
+        "poids",
+    )
+
+    list_filter = ["publish", "methode_caisse", "categorie_pos"]
+    search_fields = ["name"]
+
+    def get_inlines(self, request, obj):
+        # En mode add (pas d'obj) : StockInline pour créer le stock initial
+        # En mode change : pas de StockInline (le stock se gère via admin/inventaire/stock/)
+        # / In add mode: StockInline for initial stock creation
+        # In change mode: no StockInline (stock managed via admin/inventaire/stock/)
+        if obj is None:
+            from Administration.admin.inventaire import StockInline
+
+            return [StockInline, POSPriceInline]
+        return [POSPriceInline]
+
+    def get_queryset(self, request):
+        # Uniquement les produits avec une methode de caisse definie
+        # / Only products with a POS method set
+        qs = super().get_queryset(request)
+        return qs.filter(methode_caisse__isnull=False)
 
 
 # ---------------------------------------------------------------------------
@@ -1642,448 +1642,448 @@ class MembershipProductAdmin(HelpDisplayMixin, ProductAdmin):
 # / Keg products proxy admin. Same pattern as POS proxy admin.
 # ---------------------------------------------------------------------------
 
-#  FROM V2 : TO ADD WHEN FUT
-# class FutProductForm(ProductAdminCustomForm):
-#     """Formulaire produit pour les futs de tireuse.
-#     Le champ categorie_article est cache et force a FUT.
-#     Memes champs visuels que POSProductForm (palette, couleurs, icone).
-#     / Product form for beer kegs.
-#     categorie_article is hidden and forced to FUT.
-#     Same visual fields as POSProductForm (palette, colors, icon).
-#     LOCALISATION : Administration/admin/products.py"""
-#
-#     class Meta(ProductAdminCustomForm.Meta):
-#         model = FutProduct
-#
-#     # Categorie forcee a FUT — cachee dans le formulaire
-#     # / Category forced to FUT — hidden in the form
-#     categorie_article = forms.ChoiceField(
-#         choices=[
-#             (Product.FUT, _("Keg (connected tap)")),
-#         ],
-#         widget=forms.HiddenInput(),
-#         label=_("Product type"),
-#         initial=Product.FUT,
-#     )
-#
-#     # --- Champs d'affichage POS / POS display fields ---
-#
-#     # Palette de couleurs predefinie (champ formulaire uniquement, non sauvegarde directement)
-#     # / Pre-defined color palette (form-only field, not saved directly to the model)
-#     palette_pos = forms.ChoiceField(
-#         choices=[("", _("— Aucune palette —"))]
-#         + [(key, label) for key, label, _t, _b in PALETTE_POS],
-#         required=False,
-#         label=_("Color palette"),
-#         help_text=_(
-#             "Choisissez une combinaison de couleurs prête à l'emploi. "
-#             "Elle remplacera les champs couleur ci-dessous. "
-#             "/ Choose a ready-to-use color combination. It will override the color fields below."
-#         ),
-#         widget=PalettePickerWidget(),
-#     )
-#
-#     # Couleur du texte avec selecteur natif
-#     # / Text color with native picker
-#     couleur_texte_pos = forms.CharField(
-#         max_length=7,
-#         required=False,
-#         label=_("POS text color"),
-#         help_text=_("Par défaut, couleur de la catégorie. / Default: category color."),
-#         widget=UnfoldAdminColorInputWidget(),
-#     )
-#
-#     # Couleur du fond avec selecteur natif
-#     # / Background color with native picker
-#     couleur_fond_pos = forms.CharField(
-#         max_length=7,
-#         required=False,
-#         label=_("POS background color"),
-#         help_text=_("Par défaut, couleur de la catégorie. / Default: category color."),
-#         widget=UnfoldAdminColorInputWidget(),
-#     )
-#
-#     # Icone avec selecteur visuel Material Symbols
-#     # / Icon with visual Material Symbols picker
-#     icon_pos = forms.ChoiceField(
-#         choices=[("", _("— Aucune icône —"))] + list(ICON_POS),
-#         required=False,
-#         label=_("POS icon"),
-#         help_text=_(
-#             "Si une image produit est définie ci-dessous, elle sera affichée à la place de cette icône. "
-#             "/ If a product image is set below, it will be displayed instead of this icon."
-#         ),
-#         widget=IconPickerWidget(),
-#     )
-#
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#
-#         instance = kwargs.get("instance")
-#
-#         # Pre-selection de la palette si les couleurs actuelles correspondent a un preset
-#         # / Pre-select the palette if the current colors match a preset
-#         if instance and instance.couleur_texte_pos and instance.couleur_fond_pos:
-#             for key, _label, text_hex, bg_hex in PALETTE_POS:
-#                 couleurs_correspondent = (
-#                     instance.couleur_texte_pos.upper() == text_hex.upper()
-#                     and instance.couleur_fond_pos.upper() == bg_hex.upper()
-#                 )
-#                 if couleurs_correspondent:
-#                     self.fields["palette_pos"].initial = key
-#                     break
-#
-#     def clean_categorie_article(self):
-#         """Pas de validation de categorie pour les futs.
-#         No category validation for keg products."""
-#         return self.cleaned_data.get("categorie_article", Product.FUT)
-#
-#     def clean(self):
-#         """Applique la palette selectionnee sur les champs couleur, puis valide.
-#         Applies the selected palette to the color fields, then validates."""
-#
-#         # On saute la validation de ProductAdminCustomForm (pas de tarif obligatoire)
-#         # / Skip ProductAdminCustomForm validation (no mandatory price)
-#         cleaned = super(ProductAdminCustomForm, self).clean()
-#
-#         # Decodage de la palette : si une palette est choisie, elle ecrase les couleurs
-#         # / Decode palette: if a palette is chosen, it overrides the color fields
-#         palette_key = cleaned.get("palette_pos")
-#         if palette_key and palette_key in PALETTE_POS_MAP:
-#             text_hex, bg_hex = PALETTE_POS_MAP[palette_key]
-#             cleaned["couleur_texte_pos"] = text_hex
-#             cleaned["couleur_fond_pos"] = bg_hex
-#
-#         return cleaned
-#
-#
-# class FutPriceInline(BasePriceInline):
-#     """Inline tarifs pour les produits fut.
-#     Ajoute contenance (volume par vente) et poids_mesure (vente au poids/volume).
-#     Champs conditionnels : contenance cache si poids_mesure coche.
-#     / Price inline for keg products.
-#     Adds contenance (volume per sale) and poids_mesure (weight/volume sales).
-#     Conditional fields: contenance hidden if poids_mesure checked.
-#     LOCALISATION : Administration/admin/products.py"""
-#
-#     fields = ("name", "prix", "poids_mesure", "contenance", ("publish", "order"))
-#
-#     # Champs conditionnels : contenance cache si poids_mesure coche
-#     # (la quantite est saisie a chaque vente, pas fixe).
-#     # / Conditional fields: contenance hidden if poids_mesure checked
-#     # (quantity is entered at each sale, not fixed).
-#     inline_conditional_fields = {
-#         "contenance": "poids_mesure == false",
-#     }
-#
-#     class Media:
-#         js = ("admin/js/inline_conditional_fields.js",)
-#
-#
-# @admin.register(FutProduct, site=staff_admin_site)
-# class FutProductAdmin(ProductAdmin):
-#     """Vue admin filtree : uniquement les produits de type fut (tireuses).
-#     Filtered admin view: only keg products (connected taps).
-#     LOCALISATION : Administration/admin/products.py"""
-#
-#     compressed_fields = True
-#     warn_unsaved_form = True
-#     form = FutProductForm
-#     inlines = [FutPriceInline]
-#     change_form_after_template = "admin/product/inline_conditional_fields.html"
-#
-#     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
-#         # Collecte les regles conditionnelles de chaque inline qui en declare
-#         # / Collect conditional rules from each inline that declares them
-#         extra_context = extra_context or {}
-#         regles_conditionnelles = {}
-#         for inline_class in self.get_inlines(request, None):
-#             regles_inline = getattr(inline_class, "inline_conditional_fields", None)
-#             if regles_inline:
-#                 prefixe = inline_class.model._meta.model_name + "s"
-#                 regles_conditionnelles[prefixe] = regles_inline
-#         if regles_conditionnelles:
-#             extra_context["inline_conditional_rules"] = json.dumps(
-#                 regles_conditionnelles
-#             )
-#         return super().changeform_view(request, object_id, form_url, extra_context)
-#
-#     def save_related(self, request, form, formsets, change):
-#         """Apres sauvegarde des inlines : si un tarif a poids_mesure=True
-#         et que le produit n'a pas de Stock, en creer un vide en centilitres.
-#         Si le Stock existe mais est en unite UN (pieces), avertir.
-#         / After saving inlines: if a price has poids_mesure=True
-#         and the product has no Stock, create an empty one in centiliters.
-#         If Stock exists but uses UN (pieces), warn."""
-#         super().save_related(request, form, formsets, change)
-#         produit = form.instance
-#
-#         # Verifier si un tarif poids_mesure existe pour ce produit
-#         # / Check if a weight-based price exists for this product
-#         a_tarif_poids = produit.prices.filter(poids_mesure=True).exists()
-#         if not a_tarif_poids:
-#             return
-#
-#         # Verifier si le produit a deja un Stock
-#         # / Check if the product already has a Stock
-#         from inventaire.models import Stock, UniteStock
-#
-#         try:
-#             stock_existant = produit.stock_inventaire
-#             # Verifier que l'unite n'est pas UN (pieces)
-#             # / Check that the unit is not UN (pieces)
-#             if stock_existant.unite == UniteStock.UN:
-#                 messages.warning(
-#                     request,
-#                     _(
-#                         "Warning: the stock unit is 'Pieces' (UN). "
-#                         "Weight/volume sales require grams (GR) or centiliters (CL). "
-#                         "Please change the unit in the stock settings."
-#                     ),
-#                 )
-#         except Exception:
-#             # Pas de stock → en creer un vide en centilitres (futs = liquides)
-#             # / No stock → create an empty one in centiliters (kegs = liquids)
-#             Stock.objects.create(
-#                 product=produit,
-#                 quantite=0,
-#                 unite=UniteStock.CL,
-#                 seuil_alerte=0,
-#                 autoriser_vente_hors_stock=True,
-#             )
-#             messages.info(
-#                 request,
-#                 _(
-#                     "Stock automatically created in centiliters (quantity=0). "
-#                     "Remember to add stock via a reception."
-#                 ),
-#             )
-#
-#     fieldsets = (
-#         (
-#             _("General"),
-#             {
-#                 "fields": (
-#                     "name",
-#                     "categorie_article",
-#                     "short_description",
-#                     "long_description",
-#                 ),
-#             },
-#         ),
-#         (
-#             _("POS display"),
-#             {
-#                 "fields": (
-#                     "palette_pos",
-#                     "couleur_texte_pos",
-#                     "couleur_fond_pos",
-#                     "icon_pos",
-#                     "img",
-#                 ),
-#             },
-#         ),
-#         (
-#             _("Publication"),
-#             {
-#                 "fields": (
-#                     "publish",
-#                     "archive",
-#                 ),
-#             },
-#         ),
-#     )
-#
-#     list_display = (
-#         "name",
-#         "short_description",
-#         "publish",
-#     )
-#
-#     list_filter = ["publish"]
-#     search_fields = ["name"]
-#
-#     def get_inlines(self, request, obj):
-#         # En mode add (pas d'obj) : StockInline pour creer le stock initial
-#         # En mode change : pas de StockInline (le stock se gere via admin/inventaire/stock/)
-#         # / In add mode: StockInline for initial stock creation
-#         # In change mode: no StockInline (stock managed via admin/inventaire/stock/)
-#         if obj is None:
-#             from Administration.admin.inventaire import StockInline
-#
-#             return [StockInline, FutPriceInline]
-#         return [FutPriceInline]
-#
-#     def get_queryset(self, request):
-#         # Uniquement les produits de type FUT
-#         # / Only keg products
-#         qs = super().get_queryset(request)
-#         return qs.filter(categorie_article=Product.FUT)
-#
-#
-# # ---------------------------------------------------------------------------
-# # CategorieProduct — categories de produits POS (boissons, nourriture, etc.)
-# # / POS product categories (drinks, food, etc.)
-# # ---------------------------------------------------------------------------
-#
-#
-# class CategorieProductForm(forms.ModelForm):
-#     """Formulaire pour les catégories de produits POS.
-#     Ajoute un sélecteur de palette et un sélecteur d'icône visuels,
-#     identiques à ceux du formulaire POSProduct.
-#     / Form for POS product categories.
-#     Adds visual palette and icon pickers, identical to POSProductForm.
-#     LOCALISATION : Administration/admin/products.py"""
-#
-#     class Meta:
-#         model = CategorieProduct
-#         fields = (
-#             "name",
-#             "couleur_texte",
-#             "couleur_fond",
-#             "icon",
-#             "poid_liste",
-#             "tva",
-#             "cashless",
-#         )
-#
-#     # Palette de couleurs prédéfinie (form-only — pilote couleur_texte + couleur_fond)
-#     # Pre-defined color palette (form-only — drives couleur_texte + couleur_fond)
-#     palette = forms.ChoiceField(
-#         choices=[("", _("— Aucune palette —"))]
-#         + [(key, label) for key, label, _t, _b in PALETTE_POS],
-#         required=False,
-#         label=_("Color palette"),
-#         help_text=_(
-#             "Choisissez une combinaison prête à l'emploi. "
-#             "Elle remplacera les champs couleur ci-dessous. "
-#             "/ Choose a ready-to-use color combination. It will override the color fields below."
-#         ),
-#         # texte_field / fond_field correspondent aux noms de champs du modèle CategorieProduct
-#         # texte_field / fond_field match the CategorieProduct model field names
-#         widget=PalettePickerWidget(
-#             texte_field="couleur_texte", fond_field="couleur_fond"
-#         ),
-#     )
-#
-#     # Couleur du texte avec sélecteur natif
-#     # Text color with native color picker
-#     couleur_texte = forms.CharField(
-#         max_length=7,
-#         required=False,
-#         label=_("Text color"),
-#         help_text=_("Hexadecimal color for the button text (e.g. #FFFFFF)."),
-#         widget=UnfoldAdminColorInputWidget(),
-#     )
-#
-#     # Couleur du fond avec sélecteur natif
-#     # Background color with native color picker
-#     couleur_fond = forms.CharField(
-#         max_length=7,
-#         required=False,
-#         label=_("Background color"),
-#         help_text=_("Hexadecimal color for the button background (e.g. #1E40AF)."),
-#         widget=UnfoldAdminColorInputWidget(),
-#     )
-#
-#     # Icône avec sélecteur visuel Material Symbols
-#     # Icon with visual Material Symbols picker
-#     icon = forms.ChoiceField(
-#         choices=[("", _("— Aucune icône —"))] + list(ICON_POS),
-#         required=False,
-#         label=_("Icon"),
-#         help_text=_(
-#             "Icône affichée sur le bouton de catégorie dans l'interface caisse. / Icon displayed on the category button in the POS interface."
-#         ),
-#         widget=IconPickerWidget(),
-#     )
-#
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#         instance = kwargs.get("instance")
-#
-#         # Pré-sélection de la palette si les couleurs actuelles correspondent à un preset
-#         # Pre-select palette if the current colors match a preset
-#         if instance and instance.couleur_texte and instance.couleur_fond:
-#             for key, _label, text_hex, bg_hex in PALETTE_POS:
-#                 couleurs_correspondent = (
-#                     instance.couleur_texte.upper() == text_hex.upper()
-#                     and instance.couleur_fond.upper() == bg_hex.upper()
-#                 )
-#                 if couleurs_correspondent:
-#                     self.fields["palette"].initial = key
-#                     break
-#
-#     def clean(self):
-#         """Applique la palette sélectionnée sur les champs couleur.
-#         Applies the selected palette to the color fields."""
-#         cleaned = super().clean()
-#
-#         # Si une palette est choisie, elle écrase les couleurs saisies manuellement
-#         # If a palette is chosen, it overrides manually entered colors
-#         palette_key = cleaned.get("palette")
-#         if palette_key and palette_key in PALETTE_POS_MAP:
-#             text_hex, bg_hex = PALETTE_POS_MAP[palette_key]
-#             cleaned["couleur_texte"] = text_hex
-#             cleaned["couleur_fond"] = bg_hex
-#
-#         return cleaned
-#
-#
-# @admin.register(CategorieProduct, site=staff_admin_site)
-# class CategorieProductAdmin(ModelAdmin):
-#     """Admin pour les categories de produits POS.
-#     Admin for POS product categories.
-#     LOCALISATION : Administration/admin/products.py"""
-#
-#     compressed_fields = True
-#     warn_unsaved_form = True
-#     form = CategorieProductForm
-#
-#     list_display = ("name", "icon", "tva", "poid_liste", "cashless")
-#     search_fields = ["name"]
-#     ordering = ("poid_liste", "name")
-#
-#     fieldsets = (
-#         (
-#             None,
-#             {
-#                 "fields": (
-#                     "name",
-#                     "poid_liste",
-#                     "tva",
-#                     "cashless",
-#                 ),
-#             },
-#         ),
-#         (
-#             _("Apparence / Appearance"),
-#             {
-#                 "fields": (
-#                     "palette",
-#                     "couleur_texte",
-#                     "couleur_fond",
-#                     "icon",
-#                 ),
-#             },
-#         ),
-#         (
-#             _("Accounting / Comptabilite"),
-#             {
-#                 "fields": ("compte_comptable",),
-#             },
-#         ),
-#     )
-#     autocomplete_fields = ["compte_comptable"]
-#
-#     def has_add_permission(self, request):
-#         return TenantAdminPermissionWithRequest(request)
-#
-#     def has_change_permission(self, request, obj=None):
-#         return TenantAdminPermissionWithRequest(request)
-#
-#     def has_delete_permission(self, request, obj=None):
-#         return TenantAdminPermissionWithRequest(request)
-#
-#     def has_view_permission(self, request, obj=None):
-#         return TenantAdminPermissionWithRequest(request)
+
+class FutProductForm(ProductAdminCustomForm):
+    """Formulaire produit pour les futs de tireuse.
+    Le champ categorie_article est cache et force a FUT.
+    Memes champs visuels que POSProductForm (palette, couleurs, icone).
+    / Product form for beer kegs.
+    categorie_article is hidden and forced to FUT.
+    Same visual fields as POSProductForm (palette, colors, icon).
+    LOCALISATION : Administration/admin/products.py"""
+
+    class Meta(ProductAdminCustomForm.Meta):
+        model = FutProduct
+
+    # Categorie forcee a FUT — cachee dans le formulaire
+    # / Category forced to FUT — hidden in the form
+    categorie_article = forms.ChoiceField(
+        choices=[
+            (Product.FUT, _("Keg (connected tap)")),
+        ],
+        widget=forms.HiddenInput(),
+        label=_("Product type"),
+        initial=Product.FUT,
+    )
+
+    # --- Champs d'affichage POS / POS display fields ---
+
+    # Palette de couleurs predefinie (champ formulaire uniquement, non sauvegarde directement)
+    # / Pre-defined color palette (form-only field, not saved directly to the model)
+    palette_pos = forms.ChoiceField(
+        choices=[("", _("— Aucune palette —"))]
+        + [(key, label) for key, label, _t, _b in PALETTE_POS],
+        required=False,
+        label=_("Color palette"),
+        help_text=_(
+            "Choisissez une combinaison de couleurs prête à l'emploi. "
+            "Elle remplacera les champs couleur ci-dessous. "
+            "/ Choose a ready-to-use color combination. It will override the color fields below."
+        ),
+        widget=PalettePickerWidget(),
+    )
+
+    # Couleur du texte avec selecteur natif
+    # / Text color with native picker
+    couleur_texte_pos = forms.CharField(
+        max_length=7,
+        required=False,
+        label=_("POS text color"),
+        help_text=_("Par défaut, couleur de la catégorie. / Default: category color."),
+        widget=UnfoldAdminColorInputWidget(),
+    )
+
+    # Couleur du fond avec selecteur natif
+    # / Background color with native picker
+    couleur_fond_pos = forms.CharField(
+        max_length=7,
+        required=False,
+        label=_("POS background color"),
+        help_text=_("Par défaut, couleur de la catégorie. / Default: category color."),
+        widget=UnfoldAdminColorInputWidget(),
+    )
+
+    # Icone avec selecteur visuel Material Symbols
+    # / Icon with visual Material Symbols picker
+    icon_pos = forms.ChoiceField(
+        choices=[("", _("— Aucune icône —"))] + list(ICON_POS),
+        required=False,
+        label=_("POS icon"),
+        help_text=_(
+            "Si une image produit est définie ci-dessous, elle sera affichée à la place de cette icône. "
+            "/ If a product image is set below, it will be displayed instead of this icon."
+        ),
+        widget=IconPickerWidget(),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        instance = kwargs.get("instance")
+
+        # Pre-selection de la palette si les couleurs actuelles correspondent a un preset
+        # / Pre-select the palette if the current colors match a preset
+        if instance and instance.couleur_texte_pos and instance.couleur_fond_pos:
+            for key, _label, text_hex, bg_hex in PALETTE_POS:
+                couleurs_correspondent = (
+                    instance.couleur_texte_pos.upper() == text_hex.upper()
+                    and instance.couleur_fond_pos.upper() == bg_hex.upper()
+                )
+                if couleurs_correspondent:
+                    self.fields["palette_pos"].initial = key
+                    break
+
+    def clean_categorie_article(self):
+        """Pas de validation de categorie pour les futs.
+        No category validation for keg products."""
+        return self.cleaned_data.get("categorie_article", Product.FUT)
+
+    def clean(self):
+        """Applique la palette selectionnee sur les champs couleur, puis valide.
+        Applies the selected palette to the color fields, then validates."""
+
+        # On saute la validation de ProductAdminCustomForm (pas de tarif obligatoire)
+        # / Skip ProductAdminCustomForm validation (no mandatory price)
+        cleaned = super(ProductAdminCustomForm, self).clean()
+
+        # Decodage de la palette : si une palette est choisie, elle ecrase les couleurs
+        # / Decode palette: if a palette is chosen, it overrides the color fields
+        palette_key = cleaned.get("palette_pos")
+        if palette_key and palette_key in PALETTE_POS_MAP:
+            text_hex, bg_hex = PALETTE_POS_MAP[palette_key]
+            cleaned["couleur_texte_pos"] = text_hex
+            cleaned["couleur_fond_pos"] = bg_hex
+
+        return cleaned
+
+
+class FutPriceInline(BasePriceInline):
+    """Inline tarifs pour les produits fut.
+    Ajoute contenance (volume par vente) et poids_mesure (vente au poids/volume).
+    Champs conditionnels : contenance cache si poids_mesure coche.
+    / Price inline for keg products.
+    Adds contenance (volume per sale) and poids_mesure (weight/volume sales).
+    Conditional fields: contenance hidden if poids_mesure checked.
+    LOCALISATION : Administration/admin/products.py"""
+
+    fields = ("name", "prix", "poids_mesure", "contenance", ("publish", "order"))
+
+    # Champs conditionnels : contenance cache si poids_mesure coche
+    # (la quantite est saisie a chaque vente, pas fixe).
+    # / Conditional fields: contenance hidden if poids_mesure checked
+    # (quantity is entered at each sale, not fixed).
+    inline_conditional_fields = {
+        "contenance": "poids_mesure == false",
+    }
+
+    class Media:
+        js = ("admin/js/inline_conditional_fields.js",)
+
+
+@admin.register(FutProduct, site=staff_admin_site)
+class FutProductAdmin(ProductAdmin):
+    """Vue admin filtree : uniquement les produits de type fut (tireuses).
+    Filtered admin view: only keg products (connected taps).
+    LOCALISATION : Administration/admin/products.py"""
+
+    compressed_fields = True
+    warn_unsaved_form = True
+    form = FutProductForm
+    inlines = [FutPriceInline]
+    change_form_after_template = "admin/product/inline_conditional_fields.html"
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        # Collecte les regles conditionnelles de chaque inline qui en declare
+        # / Collect conditional rules from each inline that declares them
+        extra_context = extra_context or {}
+        regles_conditionnelles = {}
+        for inline_class in self.get_inlines(request, None):
+            regles_inline = getattr(inline_class, "inline_conditional_fields", None)
+            if regles_inline:
+                prefixe = inline_class.model._meta.model_name + "s"
+                regles_conditionnelles[prefixe] = regles_inline
+        if regles_conditionnelles:
+            extra_context["inline_conditional_rules"] = json.dumps(
+                regles_conditionnelles
+            )
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
+    def save_related(self, request, form, formsets, change):
+        """Apres sauvegarde des inlines : si un tarif a poids_mesure=True
+        et que le produit n'a pas de Stock, en creer un vide en centilitres.
+        Si le Stock existe mais est en unite UN (pieces), avertir.
+        / After saving inlines: if a price has poids_mesure=True
+        and the product has no Stock, create an empty one in centiliters.
+        If Stock exists but uses UN (pieces), warn."""
+        super().save_related(request, form, formsets, change)
+        produit = form.instance
+
+        # Verifier si un tarif poids_mesure existe pour ce produit
+        # / Check if a weight-based price exists for this product
+        a_tarif_poids = produit.prices.filter(poids_mesure=True).exists()
+        if not a_tarif_poids:
+            return
+
+        # Verifier si le produit a deja un Stock
+        # / Check if the product already has a Stock
+        from inventaire.models import Stock, UniteStock
+
+        try:
+            stock_existant = produit.stock_inventaire
+            # Verifier que l'unite n'est pas UN (pieces)
+            # / Check that the unit is not UN (pieces)
+            if stock_existant.unite == UniteStock.UN:
+                messages.warning(
+                    request,
+                    _(
+                        "Warning: the stock unit is 'Pieces' (UN). "
+                        "Weight/volume sales require grams (GR) or centiliters (CL). "
+                        "Please change the unit in the stock settings."
+                    ),
+                )
+        except Exception:
+            # Pas de stock → en creer un vide en centilitres (futs = liquides)
+            # / No stock → create an empty one in centiliters (kegs = liquids)
+            Stock.objects.create(
+                product=produit,
+                quantite=0,
+                unite=UniteStock.CL,
+                seuil_alerte=0,
+                autoriser_vente_hors_stock=True,
+            )
+            messages.info(
+                request,
+                _(
+                    "Stock automatically created in centiliters (quantity=0). "
+                    "Remember to add stock via a reception."
+                ),
+            )
+
+    fieldsets = (
+        (
+            _("General"),
+            {
+                "fields": (
+                    "name",
+                    "categorie_article",
+                    "short_description",
+                    "long_description",
+                ),
+            },
+        ),
+        (
+            _("POS display"),
+            {
+                "fields": (
+                    "palette_pos",
+                    "couleur_texte_pos",
+                    "couleur_fond_pos",
+                    "icon_pos",
+                    "img",
+                ),
+            },
+        ),
+        (
+            _("Publication"),
+            {
+                "fields": (
+                    "publish",
+                    "archive",
+                ),
+            },
+        ),
+    )
+
+    list_display = (
+        "name",
+        "short_description",
+        "publish",
+    )
+
+    list_filter = ["publish"]
+    search_fields = ["name"]
+
+    def get_inlines(self, request, obj):
+        # En mode add (pas d'obj) : StockInline pour creer le stock initial
+        # En mode change : pas de StockInline (le stock se gere via admin/inventaire/stock/)
+        # / In add mode: StockInline for initial stock creation
+        # In change mode: no StockInline (stock managed via admin/inventaire/stock/)
+        if obj is None:
+            from Administration.admin.inventaire import StockInline
+
+            return [StockInline, FutPriceInline]
+        return [FutPriceInline]
+
+    def get_queryset(self, request):
+        # Uniquement les produits de type FUT
+        # / Only keg products
+        qs = super().get_queryset(request)
+        return qs.filter(categorie_article=Product.FUT)
+
+
+# ---------------------------------------------------------------------------
+# CategorieProduct — categories de produits POS (boissons, nourriture, etc.)
+# / POS product categories (drinks, food, etc.)
+# ---------------------------------------------------------------------------
+
+
+class CategorieProductForm(forms.ModelForm):
+    """Formulaire pour les catégories de produits POS.
+    Ajoute un sélecteur de palette et un sélecteur d'icône visuels,
+    identiques à ceux du formulaire POSProduct.
+    / Form for POS product categories.
+    Adds visual palette and icon pickers, identical to POSProductForm.
+    LOCALISATION : Administration/admin/products.py"""
+
+    class Meta:
+        model = CategorieProduct
+        fields = (
+            "name",
+            "couleur_texte",
+            "couleur_fond",
+            "icon",
+            "poid_liste",
+            "tva",
+            "cashless",
+        )
+
+    # Palette de couleurs prédéfinie (form-only — pilote couleur_texte + couleur_fond)
+    # Pre-defined color palette (form-only — drives couleur_texte + couleur_fond)
+    palette = forms.ChoiceField(
+        choices=[("", _("— Aucune palette —"))]
+        + [(key, label) for key, label, _t, _b in PALETTE_POS],
+        required=False,
+        label=_("Color palette"),
+        help_text=_(
+            "Choisissez une combinaison prête à l'emploi. "
+            "Elle remplacera les champs couleur ci-dessous. "
+            "/ Choose a ready-to-use color combination. It will override the color fields below."
+        ),
+        # texte_field / fond_field correspondent aux noms de champs du modèle CategorieProduct
+        # texte_field / fond_field match the CategorieProduct model field names
+        widget=PalettePickerWidget(
+            texte_field="couleur_texte", fond_field="couleur_fond"
+        ),
+    )
+
+    # Couleur du texte avec sélecteur natif
+    # Text color with native color picker
+    couleur_texte = forms.CharField(
+        max_length=7,
+        required=False,
+        label=_("Text color"),
+        help_text=_("Hexadecimal color for the button text (e.g. #FFFFFF)."),
+        widget=UnfoldAdminColorInputWidget(),
+    )
+
+    # Couleur du fond avec sélecteur natif
+    # Background color with native color picker
+    couleur_fond = forms.CharField(
+        max_length=7,
+        required=False,
+        label=_("Background color"),
+        help_text=_("Hexadecimal color for the button background (e.g. #1E40AF)."),
+        widget=UnfoldAdminColorInputWidget(),
+    )
+
+    # Icône avec sélecteur visuel Material Symbols
+    # Icon with visual Material Symbols picker
+    icon = forms.ChoiceField(
+        choices=[("", _("— Aucune icône —"))] + list(ICON_POS),
+        required=False,
+        label=_("Icon"),
+        help_text=_(
+            "Icône affichée sur le bouton de catégorie dans l'interface caisse. / Icon displayed on the category button in the POS interface."
+        ),
+        widget=IconPickerWidget(),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        instance = kwargs.get("instance")
+
+        # Pré-sélection de la palette si les couleurs actuelles correspondent à un preset
+        # Pre-select palette if the current colors match a preset
+        if instance and instance.couleur_texte and instance.couleur_fond:
+            for key, _label, text_hex, bg_hex in PALETTE_POS:
+                couleurs_correspondent = (
+                    instance.couleur_texte.upper() == text_hex.upper()
+                    and instance.couleur_fond.upper() == bg_hex.upper()
+                )
+                if couleurs_correspondent:
+                    self.fields["palette"].initial = key
+                    break
+
+    def clean(self):
+        """Applique la palette sélectionnée sur les champs couleur.
+        Applies the selected palette to the color fields."""
+        cleaned = super().clean()
+
+        # Si une palette est choisie, elle écrase les couleurs saisies manuellement
+        # If a palette is chosen, it overrides manually entered colors
+        palette_key = cleaned.get("palette")
+        if palette_key and palette_key in PALETTE_POS_MAP:
+            text_hex, bg_hex = PALETTE_POS_MAP[palette_key]
+            cleaned["couleur_texte"] = text_hex
+            cleaned["couleur_fond"] = bg_hex
+
+        return cleaned
+
+
+@admin.register(CategorieProduct, site=staff_admin_site)
+class CategorieProductAdmin(ModelAdmin):
+    """Admin pour les categories de produits POS.
+    Admin for POS product categories.
+    LOCALISATION : Administration/admin/products.py"""
+
+    compressed_fields = True
+    warn_unsaved_form = True
+    form = CategorieProductForm
+
+    list_display = ("name", "icon", "tva", "poid_liste", "cashless")
+    search_fields = ["name"]
+    ordering = ("poid_liste", "name")
+
+    fieldsets = (
+        (
+            None,
+            {
+                "fields": (
+                    "name",
+                    "poid_liste",
+                    "tva",
+                    "cashless",
+                ),
+            },
+        ),
+        (
+            _("Apparence / Appearance"),
+            {
+                "fields": (
+                    "palette",
+                    "couleur_texte",
+                    "couleur_fond",
+                    "icon",
+                ),
+            },
+        ),
+        (
+            _("Accounting / Comptabilite"),
+            {
+                "fields": ("compte_comptable",),
+            },
+        ),
+    )
+    autocomplete_fields = ["compte_comptable"]
+
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)

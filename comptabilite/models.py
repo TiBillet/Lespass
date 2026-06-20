@@ -219,4 +219,4 @@ class MappingMoyenDePaiement(models.Model):
         verbose_name_plural = _("Mappings moyens de paiement")
 
     def __str__(self):
-        return f"{self.get_payment_method_display()} → {self.compte}"
+        return f"{self.payment_method} → {self.compte}"
