@@ -61,6 +61,17 @@ pour les clients. Zéro modification requise.**
 
 ## 3. Inventaire fedow_core réactualisé (branche `new_pairing_and_nfc`)
 
+> **Re-validation 2026-06-20 (point 5).** Inventaire confirmé **valide en nature** : mêmes
+> services, mêmes fichiers, mêmes flux. **37 appels de services** comptés (l'« ~35 » tenait).
+> **3 écarts** depuis le 10/06 : `creer_vente` 7→**9** sites (flux vente/cascade enrichi),
+> `rembourser_en_especes` 1→**3** sites (flux vidage étoffé), et un **nouveau fichier**
+> `laboutik/utils/test_helpers.py` (imports fedow_core).
+> ⚠️ **Les numéros de ligne ci-dessous sont périmés.** `lespass-main/laboutik/views.py` est
+> en développement actif — modifié le 20/06 à 10:03 *pendant* la session de recherche
+> (+70 lignes). Au port, cartographier **par nom de fonction/symbole, jamais par ligne** ;
+> figer un **commit précis** de `new_pairing_and_nfc` comme base, puis acter `lespass-main`
+> comme « référence morte » pour `laboutik`.
+
 Imports : `laboutik/views.py:47-49`. ~35 appels :
 
 | Service | Lignes (views.py) | Flux |

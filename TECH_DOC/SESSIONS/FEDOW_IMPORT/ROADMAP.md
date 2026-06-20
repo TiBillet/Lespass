@@ -39,6 +39,74 @@ Prérequis transverses :
 
 ---
 
+## 1bis. Compléments issus du creusage (docs 10 et 11)
+
+Le creusage des zones ouvertes — relance des contre-expertises ([doc 10](./10-contre-expertises-relance-s6.md))
+et spike sémantique du segment legacy ([doc 11](./11-spec-cc-segment-legacy.md)) — ajoute
+les items suivants aux lots, **sans changer le découpage**.
+
+### Pour C-A
+- **G6 (doc 10)** — corriger le crash admin assets : entourer `get_accepted_assets()` d'un
+  try/except non bloquant dans `AssetAdmin.get_queryset` (`admin_tenant.py:3981`) + masquer
+  la section sidebar « Fédération » V1 pour les tenants V2. **Bug pré-existant** (touche
+  déjà les tenants V1 si Fedow est down).
+- **P3 (doc 10)** — `services_refund.py` est **couplé** aux constantes `Product.VIDER_CARTE`
+  / `VIREMENT_RECU` (champs POS, étape A3) : les porter dans le même lot, sinon
+  `AttributeError` au 1er remboursement/virement.
+- **P4 (doc 10) — NE PAS porter `Client.FED`** : son absence **est** la garde anti-FED-local
+  (étape A4), pas un manque. Finding retourné/caduc — ne pas le « corriger ».
+- **Inventaire re-validé (point 5)** — **37 call sites** `fedow_core` dans `laboutik`,
+  **valides en nature** (mêmes services/flux ; `creer_vente` 9 sites, `rembourser_en_especes`
+  3 sites, + nouveau `utils/test_helpers.py`). ⚠️ `lespass-main` est en **dev actif** :
+  cartographier au port **par symbole, jamais par ligne**, et **figer un commit de base** de
+  `new_pairing_and_nfc`.
+
+### Pour C-B
+- **G1 (doc 10)** — dispatch dans `create_tenant` (`validators.py:1082`) + `install.py:201` :
+  si `server_cashless` vide (tenant V2), **ne pas instancier `FedowAPI()`** (→ pas de
+  `create_place` automatique). + robustesse `MyAccount` : try/except timeout au lieu d'un
+  500. **C'est le même geste que le handshake C-D** (doc 11 §6).
+- **G8 (doc 10)** — gardes `server_cashless` sur `trigger_A` + `send_membership_and_badge_product_to_fedow`,
+  try/except sur `cached_retrieve_by_signature`, dispatch `clean_card_number`.
+  (`get_or_create_wallet` reste conforme S6.)
+- **G10 (doc 10)** — documenter la liste des flux « V1-only par design S6 » (double-compta
+  largement déjà résolue depuis l'audit).
+
+### Pour C-C
+- **Spec actée → [doc 11](./11-spec-cc-segment-legacy.md) (révisée 2026-06-20).** Le FED est
+  un **cran de cascade TRANSPARENT** (`TNF→TLF→FED`), **pas un bouton** : aucun geste opérateur.
+  Solde lu en **temps réel (sans cache, `retrieve_by_signature` — pas `cached_…`)**, débit FED
+  **à la validation** (ordre : FED HTTP d'abord, atomic local ensuite). Dépendance Fedow assumée
+  → **dégradé** (locaux + espèces/CB) si Fedow down, jamais de blocage.
+- **Appel Fedow SYSTÉMATIQUE à chaque transaction carte (doc 11 §4 + §4bis)** : on affiche le
+  **solde complet (locaux + FED)** à chaque fois → impact **transversal** sur ~4 vues + ~3
+  templates (`retour_carte`/`hx_card_feedback`, succès, récap, complément), enrichis via **un
+  helper commun** `obtenir_solde_complet_carte`. **Aucun impact V1.** Coût : ~3 lectures Fedow +
+  1 débit par vente carte avec FED → à monitorer.
+- **Micro-extension `fedow_connect`** (validée) : variante de lecture **sans cache**
+  (`retrieve_by_signature` direct ou `get_total_fiducial(..., use_cache=False)`).
+- **Pont carte (doc 11 §5bis) — vérifié safe** : invariant `user.wallet.uuid == uuid_legacy`
+  garanti par `get_or_create_wallet` + garde native « Wallet and member mismatch ». Cartes
+  **liées** seulement ; **jamais de wallet éphémère miroir**.
+- **FED partiel naturel** : il couvre ce qu'il peut (comme les locaux), le reste va en
+  complément espèces/CB. Pas de seuil, pas de cas spécial — le **débit à la validation**
+  garantit zéro débit FED orphelin (le FED n'est pas annulable).
+- **Embranchement tranché (point 4, 2026-06-20)** : voie **S6 réseau unique** actée ; voie
+  **V2-pure (FED local) écartée**. Confirme le §0 « jamais de FED local » et les findings
+  P4/P5 (ne pas porter `Client.FED` / `bootstrap_fed_asset` / `CASHLESS_REFILL`).
+
+### Pour C-D
+- **Handshake place du tenant V2 (doc 11 §6)** — repositionner `create_place` (idempotent,
+  garde « Place already created ») : appelé **explicitement à l'activation de l'interop**
+  (action admin consciente), pas à la création du tenant. Pas de handshake *cashless* en
+  phase 1. **Symétrique du fix G1 (C-B).**
+- **G7 (doc 10)** — verrou `Onboard_laboutik` dans la **vue** (refus 409 si `module_caisse`/
+  `module_monnaie_locale` actifs), pas dans `clean()` (que `save()` direct bypasse).
+- **G5 (doc 10)** — corriger la FK `Price.fedow_reward_asset` (→ `fedow_core.Asset`) avant
+  d'ouvrir les rewards aux nouveaux tenants.
+
+---
+
 ## 2. C-A — Copier-coller du socle (1 grosse session)
 
 Règle des 3 fichiers **relâchée** pour cette session (transport, pas

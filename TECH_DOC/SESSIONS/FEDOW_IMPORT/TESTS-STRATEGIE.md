@@ -73,6 +73,19 @@ Checklist manuelle des 8 critères ROADMAP §6, supervisée, dont :
 | Payloads JSON legacy | capturés sur Fedow docker | contrat des mocks pytest |
 | `demo_data` (Fedow) | existant côté Fedow | peuplement du docker de dev |
 
+**Scénario de fixtures cible (hybride S6) — à rendre explicite et lisible** (décision
+2026-06-20). Le jeu de test doit montrer le cas réel d'un seul coup d'œil :
+- **des lieux ANCIENS** (tenants V1, `server_cashless` configuré, sur le Fedow standalone)
+  avec leurs cartes et du solde FED ;
+- **un lieu NOUVEAU = `lespass`**, **HYBRIDE** : il a **sa propre monnaie locale** (TLF/TNF)
+  et **sa caisse V2** (`fedow_core` local), ET il sait **lire les cartes des autres lieux**
+  pour payer en **FED** (interop legacy via `to_place_from_qrcode`) ;
+- la **carte d'un client d'un lieu ancien** doit pouvoir payer au POS de `lespass` (preuve
+  du réseau unique), et son débit doit être visible côté Fedow standalone.
+
+Cartes de test fournies : une **carte legacy liée** à un user (chemin nominal C-C) et une
+**carte legacy anonyme** (chemin « liez votre carte » + complément espèces/CB).
+
 ## Rythme
 
 - Tests du domaine touché à CHAQUE session (règle projet existante).

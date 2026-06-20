@@ -4,6 +4,12 @@ Date : 2026-06-10
 Source : `lespass-main/TECH DOC/SESSIONS/LABOUTIK/PLAN_LABOUTIK.md` (4 717 l.),
 sections « Vision », « Coexistence V1/V2 », « Statut par phase ».
 
+> **DÉCISION ACTÉE 2026-06-20 (point 4).** L'embranchement est tranché : **voie S6 —
+> réseau unique** (interop legacy). La voie **V2-pure (FED local) est écartée** : pas de
+> `bootstrap_fed_asset`, pas de tenant `federation_fed`, **jamais de FED en local**. Les
+> nouveaux lieux rejoignent le réseau des 500 dès le départ. Ce document garde le
+> raisonnement qui a mené là ; le « décider au 1er tenant réel » plus bas est donc **résolu**.
+
 ## Le scénario implicite de la V2
 
 | Axe | Choix V2 (PLAN_LABOUTIK) |

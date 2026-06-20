@@ -4,7 +4,17 @@ Date : 2026-06-10. Générée automatiquement depuis le workflow `audit-fedow-im
 (42 agents, ~700 lectures de code, contre-expertise adversariale).
 Synthèse et verdict : voir `02-audit-profond.md`.
 
-Légende statut : ✅ confirmé par contre-expertise · ❌ réfuté · ⏳ non contre-expertisé (limite de session atteinte).
+Légende statut : ✅ confirmé · ❌ réfuté · 🔶 confirmé mais nuancé/reclassé à la lumière de S6 (relance 2026-06-20) · ⏳ non contre-expertisé.
+
+> **Mise à jour 2026-06-20 — relance des contre-expertises ([doc 10](./10-contre-expertises-relance-s6.md)).**
+> Les 17 findings ⏳ des dimensions **gap-fonctionnel** et **portage-V1** ont été
+> contre-expertisés (workflow 17 agents, lecture du code réel des deux repos). Leur symbole
+> de titre est passé à ✅ (confirmé) ou 🔶 (confirmé mais nuancé/reclassé S6). **Pour ces
+> findings, la mention _« Contre-expertise échouée (limite de session) »_ en bas de section
+> est caduque** — verdict, reclassement S6 et net actionnable dans le
+> [doc 10](./10-contre-expertises-relance-s6.md) (§2, §4, §5). Les **6 findings ⏳ de
+> migration-données** n'ont pas été relancés (hors scope phase 1 + chiffres prod non
+> vérifiables) et conservent leur statut.
 
 
 ---
@@ -407,7 +417,7 @@ _Non contre-expertisé (sous le seuil majeur)._
 **Synthèse de l'auditeur :** Matrice des 12 flux V1 → V2 dans lespass-main (base du portage) : PORTÉ avec dispatch propre pour la recharge Stripe FED (peut_recharger_v2 + RefillService + webhook ApiBillet:1141), les cartes NFC côté my_account (scan QR, liaison, perte, liste — CarteService), les soldes/historiques (tokens_table_v2, transactions_table_v2), la fédération V2 (fedow_core.Federation + flow invitation) et l'admin assets V2 (fedow_core/admin.py sous module_monnaie_locale). L'adhésion vendue en caisse V2 est saine : laboutik crée la Membership directement (status LABOUTIK) et la vérifie au scan NFC via Membership.is_valid() — la décision 3 fonctionne pour ce chemin. Les dépôts bancaires V2 sont couverts par BankTransferService (dette pot central + virements). En revanche, 3 flux sont ABSENTS (badge/pointeuse, paiement QR/NFC caisse, rewards/gift) et 4 PARTIELS (remboursement en ligne, adhésion web/admin, wallet — création encore 100% V1 HTTP, webhook transfer.created). Le point le plus structurant : la création de tenant ET de wallet user exige toujours le serveur Fedow distant (can_fedow obligatoire), ce qui contredit la cible « nouveaux tenants V2 autonomes » et crée une comptabilité double (tokens locaux fedow_core + tokens distants Fedow pour le même user). Côté migration, aucune commande d'import n'existe encore et le webhook adhésion de Fedow est fire-and-forget sans retry : la réconciliation SUB ↔ Membership avant suppression des assets SUB/BDG est indispensable pour ne pas perdre d'adhésions payées.
 
 
-### ⏳ [BLOQUANT] Création de tenant et de wallet user exige toujours le serveur Fedow distant
+### 🔶 [BLOQUANT] Création de tenant et de wallet user exige toujours le serveur Fedow distant
 
 `/home/jonas/TiBillet/dev/lespass-main/BaseBillet/validators.py:1059`
 
@@ -418,7 +428,7 @@ La décision 2 dit 'nouveaux tenants = V2 automatiquement', mais dans lespass-ma
 _Contre-expertise échouée (limite de session)._
 
 
-### ⏳ [MAJEUR] Flux 5 badge/pointeuse : ABSENT en V2, aucun remplacement
+### 🔶 [MAJEUR] Flux 5 badge/pointeuse : ABSENT en V2, aucun remplacement
 
 `/home/jonas/TiBillet/dev/lespass-main/BaseBillet/views.py:3471`
 
@@ -429,7 +439,7 @@ La vue Badge.badge_in appelle FedowAPI().badge.badge_in(user, product) sans aucu
 _Contre-expertise échouée (limite de session)._
 
 
-### ⏳ [MAJEUR] Flux 7 paiement QR/NFC caisse (to_place_from_qrcode) : ABSENT en V2
+### ✅ [MAJEUR] Flux 7 paiement QR/NFC caisse (to_place_from_qrcode) : ABSENT en V2
 
 `/home/jonas/TiBillet/dev/lespass-main/BaseBillet/views.py:2265`
 
@@ -440,7 +450,7 @@ Tout le flux QrCodeScanPay est V1-only sans dispatch : fedowAPI.transaction.to_p
 _Contre-expertise échouée (limite de session)._
 
 
-### ⏳ [MAJEUR] Flux 3 remboursement en ligne (refund_fed_by_signature) : pas de branche V2
+### ✅ [MAJEUR] Flux 3 remboursement en ligne (refund_fed_by_signature) : pas de branche V2
 
 `/home/jonas/TiBillet/dev/lespass-main/BaseBillet/views.py:1401`
 
@@ -451,7 +461,7 @@ refund_online appelle cached_retrieve_by_signature puis refund_fed_by_signature 
 _Contre-expertise échouée (limite de session)._
 
 
-### ⏳ [MAJEUR] Flux 8 récompenses/gift : aucun équivalent V2 + FK fedow_reward_asset incohérente
+### ✅ [MAJEUR] Flux 8 récompenses/gift : aucun équivalent V2 + FK fedow_reward_asset incohérente
 
 `/home/jonas/TiBillet/dev/lespass-main/BaseBillet/tasks.py:1869`
 
@@ -462,7 +472,7 @@ Les deux tâches Celery de reward (refill_from_lespass_to_user_wallet_from_price
 _Contre-expertise échouée (limite de session)._
 
 
-### ⏳ [MAJEUR] Admin V1 des assets (AssetFedowPublic) toujours visible et crashe sans Fedow
+### 🔶 [MAJEUR] Admin V1 des assets (AssetFedowPublic) toujours visible et crashe sans Fedow
 
 `/home/jonas/TiBillet/dev/lespass-main/Administration/admin/fedow.py:91`
 
@@ -473,7 +483,7 @@ AssetAdmin.get_queryset appelle inconditionnellement FedowAPI().asset.get_accept
 _Contre-expertise échouée (limite de session)._
 
 
-### ⏳ [MAJEUR] Onboard_laboutik peut basculer silencieusement un tenant V2 actif en V1
+### 🔶 [MAJEUR] Onboard_laboutik peut basculer silencieusement un tenant V2 actif en V1
 
 `/home/jonas/TiBillet/dev/lespass-main/ApiBillet/views.py:910`
 
@@ -484,7 +494,7 @@ Onboard_laboutik (AllowAny) pose config.server_cashless sur le tenant. Sa seule 
 _Contre-expertise échouée (limite de session)._
 
 
-### ⏳ [MAJEUR] Adhésion : formulaire admin et trigger web encore 100% V1
+### ✅ [MAJEUR] Adhésion : formulaire admin et trigger web encore 100% V1
 
 `/home/jonas/TiBillet/dev/lespass-main/Administration/admin/membership.py:122`
 
@@ -495,7 +505,7 @@ Le flux adhésion caisse V2 est bien porté (laboutik crée Membership directe, 
 _Contre-expertise échouée (limite de session)._
 
 
-### ⏳ [MAJEUR] Import V1→V2 : sort des tokens/transactions SUB et BDG indéfini, webhook adhésion non fiable
+### 🔶 [MAJEUR] Import V1→V2 : sort des tokens/transactions SUB et BDG indéfini, webhook adhésion non fiable
 
 `/home/jonas/TiBillet/dev/Fedow/fedow_core/signals.py:26`
 
@@ -504,7 +514,7 @@ fedow_core/management ne contient que bootstrap_fed_asset et verify_transactions
 **Recommandation :** Spécifier dans le plan d'import : (1) réconciliation Transaction SUBSCRIBE Fedow ↔ BaseBillet.Membership avant suppression, avec création des Membership manquantes ; (2) export d'archive des transactions BDG ; (3) nettoyage/dépréciation de Membership.asset_fedow.
 
 
-### ⏳ [MAJEUR] Comptabilité double pendant la coexistence : un tenant V2 écrit dans les deux systèmes
+### 🔶 [MAJEUR] Comptabilité double pendant la coexistence : un tenant V2 écrit dans les deux systèmes
 
 `/home/jonas/TiBillet/dev/lespass-main/BaseBillet/views.py:805`
 
@@ -715,7 +725,7 @@ _Non contre-expertisé (sous le seuil majeur)._
 **Synthèse de l'auditeur :** Audit des prérequis du portage fedow_core V2 (lespass-main, branche V2) vers le repo V1 (Lespass, branche main-fedow-import). Les deux repos sont des clones du même remote, divergés de 209/357 commits depuis le merge-base 10a9e914. Le socle fedow_core pur est étonnamment portable : ses imports inter-apps (Wallet, CarteCashless.detail/origine, Client, staff_admin_site, TenantAdminPermissionWithRequest, TibilletUser.get_private_key, Membership.card_number) existent tous en V1 avec la même interface, les migrations AuthBillet/QrcodeCashless/Customers sont copiables sans conflit, les templates admin asset/federation sont déjà présents et identiques en V1, et la sidebar/dashboard V1 est déjà pré-câblée (marqueurs « FROM V2 »). Le portage achoppe sur quatre points durs : (1) collision frontale des migrations BaseBillet 0204-0217 (numéros identiques, contenus différents, proxies créés deux fois) qui impose une régénération complète côté V1 ; (2) la dépendance non gardée de fedow_core/signals.py à laboutik.models et aux champs POS de Product/CategorieProduct, absents de V1 — le portage « fedow_core seul » crashe au premier Asset créé ; (3) le chemin Stripe de recharge FED (refill_federation.py, source CASHLESS_REFILL, dispatch webhook refill_type=FED, BaseBillet/services_refund.py) entièrement absent de V1, avec un Webhook_stripe qui a divergé et exige une réinsertion manuelle ; (4) le front V2 du flow recharge vit dans un arbre de templates htmx/views/ qui n'existe pas en V1 (thème reunion). S'y ajoutent des pièges latents : résidus pycache fedow_core dans le working tree V1 (migrations peut-être déjà appliquées sur la DB dev), POSPriceInline V1 prêt à exploser au décommentage, et une incohérence bool()/is not None sur server_cashless dans le dispatch V1/V2 qui sera importée telle quelle. Conformément aux décisions du mainteneur, fedow_core V2 ne contient bien aucune catégorie SUB/BDG (adhésions via BaseBillet.Membership) et la chaîne Transaction utilise id BigAutoField + uuid d'import.
 
 
-### ⏳ [BLOQUANT] Collision de numérotation des migrations BaseBillet 0204–0217 entre branches
+### ✅ [BLOQUANT] Collision de numérotation des migrations BaseBillet 0204–0217 entre branches
 
 `/home/jonas/TiBillet/dev/Lespass/BaseBillet/migrations/:0`
 
@@ -726,7 +736,7 @@ Les deux branches (même repo NothRen/Lespass, merge-base 10a9e914, divergence 2
 _Contre-expertise échouée (limite de session)._
 
 
-### ⏳ [BLOQUANT] fedow_core/signals.py importe laboutik.models sans garde — laboutik absent de V1
+### ✅ [BLOQUANT] fedow_core/signals.py importe laboutik.models sans garde — laboutik absent de V1
 
 `/home/jonas/TiBillet/dev/lespass-main/fedow_core/signals.py:65`
 
@@ -737,7 +747,7 @@ Le signal post_save sur Asset fait `from laboutik.models import PointDeVente` (l
 _Contre-expertise échouée (limite de session)._
 
 
-### ⏳ [MAJEUR] BaseBillet/services_refund.py absent du repo V1, requis par fedow_core/services.py
+### ✅ [MAJEUR] BaseBillet/services_refund.py absent du repo V1, requis par fedow_core/services.py
 
 `/home/jonas/TiBillet/dev/lespass-main/fedow_core/services.py:548`
 
@@ -748,7 +758,7 @@ rembourser_en_especes (ligne 548) et enregistrer_virement (ligne 1094) importent
 _Contre-expertise échouée (limite de session)._
 
 
-### ⏳ [MAJEUR] Client.FED et tenant federation_fed absents de V1
+### 🔶 [MAJEUR] Client.FED et tenant federation_fed absents de V1
 
 `/home/jonas/TiBillet/dev/Lespass/Customers/models.py:17`
 
@@ -759,7 +769,7 @@ V1 Customers/models.py ligne 17 : catégories A,S,F,T,P,M,W,R — pas de FED ('E
 _Contre-expertise échouée (limite de session)._
 
 
-### ⏳ [MAJEUR] Chemin Stripe recharge V2 absent de V1 : refill_federation.py, source CASHLESS_REFILL, dispatch webhook
+### ✅ [MAJEUR] Chemin Stripe recharge V2 absent de V1 : refill_federation.py, source CASHLESS_REFILL, dispatch webhook
 
 `/home/jonas/TiBillet/dev/Lespass/ApiBillet/views.py:1082`
 
@@ -770,7 +780,7 @@ Trois pièces manquantes en V1 : (1) PaiementStripe/refill_federation.py (gatewa
 _Contre-expertise échouée (limite de session)._
 
 
-### ⏳ [MAJEUR] Templates du flow recharge V2 dans un arbre htmx/views/ inexistant en V1
+### 🔶 [MAJEUR] Templates du flow recharge V2 dans un arbre htmx/views/ inexistant en V1
 
 `/home/jonas/TiBillet/dev/lespass-main/BaseBillet/views.py:1856`
 
@@ -781,7 +791,7 @@ Les branches V2 de MyAccount rendent htmx/views/my_account/refill_form_v2.html (
 _Contre-expertise échouée (limite de session)._
 
 
-### ⏳ [MAJEUR] Sidebar V1 déjà câblée sur des URLs admin fedow_core inexistantes (NoReverseMatch latent)
+### ✅ [MAJEUR] Sidebar V1 déjà câblée sur des URLs admin fedow_core inexistantes (NoReverseMatch latent)
 
 `/home/jonas/TiBillet/dev/Lespass/Administration/admin/dashboard.py:381`
 
