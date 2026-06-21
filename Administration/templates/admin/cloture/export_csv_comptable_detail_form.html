@@ -1,0 +1,46 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{# Mini-formulaire choix profil CSV comptable pour une cloture unique.           #}
+{# / Mini form for accounting CSV profile choice for a single closure.           #}
+
+{% block title %}{% translate "CSV accounting export" %}{% endblock %}
+
+{% block content %}
+<div style="max-width: 500px; margin: 40px auto; padding: 24px; background: #f8f9fa; border-radius: 8px;">
+    <h2 style="margin: 0 0 16px;">{% translate "CSV accounting export" %}</h2>
+    <p style="margin: 0 0 16px; color: #666; font-size: 0.9em;">
+        {% translate "Choose the accounting software format, then download the CSV file for this closure." %}
+    </p>
+
+    <form method="post" aria-label="{% translate 'CSV accounting export' %}">
+        {% csrf_token %}
+
+        <div style="margin-bottom: 16px;">
+            <label for="id_detail_profil" style="display: block; font-size: 0.85em; font-weight: 500; margin-bottom: 4px;">
+                {% translate "Accounting software" %}
+            </label>
+            <select id="id_detail_profil" name="profil"
+                    style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.9em;"
+                    data-testid="export-csv-comptable-detail-profil">
+                {% for cle, profil in profils.items %}
+                <option value="{{ cle }}">{{ profil.nom }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <button type="submit"
+                    style="display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; background: #8B5CF6; color: white; border: none; border-radius: 6px; font-size: 0.9em; font-weight: 500; cursor: pointer;"
+                    data-testid="export-csv-comptable-detail-submit">
+                <i class="fas fa-download" aria-hidden="true"></i>
+                {% translate "Download CSV" %}
+            </button>
+            <a href="../voir-rapport/"
+               style="font-size: 0.85em; color: #6b7280; text-decoration: none;"
+               data-testid="export-csv-comptable-detail-cancel">
+                {% translate "Cancel" %}
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,27 @@
+<!--
+FORMULAIRE D'ACTIONS STOCK — 4 boutons : réception, ajustement, offert, perte
+/ STOCK ACTIONS FORM — 4 buttons: reception, adjustment, offered, loss
+
+LOCALISATION : Administration/templates/admin/inventaire/stock_actions.html
+
+Affiché sous le formulaire Stock (change_form_after_template sur StockAdmin).
+Chaque bouton envoie un hx-post vers StockAdmin._stock_action_view()
+qui appelle StockService. Le partial stock_actions_partial.html est renvoyé
+et remplace le contenu du conteneur #stock-actions-container.
+
+CONTEXT :
+- stock : instance Stock (via original dans Unfold)
+- product_name : nom du produit
+- derniers_mouvements : 5 derniers MouvementStock
+- stock_action_url : URL POST pour l'action
+-->
+{% load i18n %}
+
+{% if original %}
+<div id="stock-actions-container"
+     style="margin-top: 24px;"
+     aria-live="polite"
+     data-testid="stock-actions-container">
+    {% include "admin/inventaire/stock_actions_partial.html" %}
+</div>
+{% endif %}

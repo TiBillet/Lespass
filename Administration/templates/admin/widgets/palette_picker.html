@@ -1,0 +1,105 @@
+{% load i18n %}
+{# Sélecteur visuel de palette de couleurs pour les boutons POS #}
+{# Visual color palette picker for POS product buttons #}
+
+{# Les noms de champs couleur cibles sont injectés via data-attributes #}
+{# Target color field names are injected via data-attributes #}
+<div class="palette-picker-container flex flex-wrap gap-3 py-2"
+     data-texte-field="{{ texte_field }}"
+     data-fond-field="{{ fond_field }}">
+
+  {# Option "aucune palette" #}
+  {# "No palette" option #}
+  <label title="{% trans 'Aucune palette' %}" class="cursor-pointer">
+    <input
+      type="radio"
+      name="{{ widget_name }}"
+      value=""
+      {% if not current_value %}checked{% endif %}
+      class="sr-only palette-radio"
+    >
+    <span class="palette-swatch flex items-center justify-center w-16 h-10 rounded-lg font-bold text-sm select-none border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500">
+      ✕
+    </span>
+  </label>
+
+  {% for key, label, text_hex, bg_hex in palettes %}
+    <label title="{{ label }}" class="cursor-pointer">
+      <input
+        type="radio"
+        name="{{ widget_name }}"
+        value="{{ key }}"
+        {% if current_value == key %}checked{% endif %}
+        class="sr-only palette-radio"
+        data-text-hex="{{ text_hex }}"
+        data-bg-hex="{{ bg_hex }}"
+      >
+      <span
+        class="palette-swatch flex items-center justify-center w-16 h-10 rounded-lg font-bold text-sm select-none border-2"
+        style="color: {{ text_hex }}; background-color: {{ bg_hex }}; border-color: transparent;"
+      >Aa</span>
+    </label>
+  {% endfor %}
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // Met en évidence le swatch sélectionné et met à jour les champs couleur
+  // Highlights the selected swatch and updates the color input fields
+  // Les noms des champs cibles sont lus depuis data-attributes du container
+  // Target field names are read from the container's data-attributes
+  function mettreEnEvidencePaletteSelectionnee(container) {
+    // Lecture des noms de champs couleur configurés sur ce widget
+    // Read the color field names configured on this widget instance
+    var champTexte = container.dataset.texteField || "couleur_texte_pos";
+    var champFond  = container.dataset.fondField  || "couleur_fond_pos";
+
+    container.querySelectorAll(".palette-radio").forEach(function (radio) {
+      var swatch = radio.closest("label").querySelector(".palette-swatch");
+      if (radio.checked) {
+        swatch.style.outline = "3px solid #3B82F6";
+        swatch.style.outlineOffset = "2px";
+
+        // Récupération des couleurs hex stockées en data-attributes
+        // Retrieve hex colors stored in data-attributes
+        var textHex = radio.dataset.textHex;
+        var bgHex   = radio.dataset.bgHex;
+
+        if (textHex && bgHex) {
+          // Mise à jour des champs couleur individuels (et déclenchement de l'événement change)
+          // Update individual color fields (and trigger change event for visual refresh)
+          var inputTexte = document.querySelector('[name="' + champTexte + '"]');
+          var inputFond  = document.querySelector('[name="' + champFond  + '"]');
+          if (inputTexte) {
+            inputTexte.value = textHex;
+            inputTexte.dispatchEvent(new Event("input"));
+          }
+          if (inputFond) {
+            inputFond.value = bgHex;
+            inputFond.dispatchEvent(new Event("input"));
+          }
+        }
+      } else {
+        swatch.style.outline = "none";
+      }
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".palette-picker-container").forEach(function (container) {
+      // Highlight initial au chargement de la page
+      // Initial highlight on page load
+      mettreEnEvidencePaletteSelectionnee(container);
+
+      // Mise à jour au changement de sélection
+      // Update on selection change
+      container.addEventListener("change", function () {
+        mettreEnEvidencePaletteSelectionnee(container);
+      });
+    });
+  });
+}());
+</script>

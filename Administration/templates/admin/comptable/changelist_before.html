@@ -1,0 +1,50 @@
+{% load i18n unfold %}
+{# Bandeau pour charger un plan comptable par defaut (bar/resto ou association). #}
+{# Les boutons envoient un POST HTMX vers le ViewSet charger-plan-comptable.    #}
+{# / Banner to load a default chart of accounts (bar/restaurant or association). #}
+{# Buttons send an HTMX POST to the charger-plan-comptable ViewSet action.      #}
+
+{% if charger_plan_url %}
+<div class="p-4 flex flex-col gap-4" data-testid="bandeau-charger-plan">
+
+    {% component "unfold/components/card.html" with title=_("Load a default chart of accounts") %}
+        <div id="zone-charger-plan">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 py-2">
+
+                <div class="flex flex-col gap-1 min-w-0">
+                    <span class="text-sm text-font-subtle-light dark:text-font-subtle-dark">
+                        {% translate "Pre-fill accounting codes for your activity type. Existing accounts will not be overwritten." %}
+                    </span>
+                </div>
+
+                <div class="flex gap-2 flex-shrink-0">
+                    <button type="button"
+                            hx-post="{{ charger_plan_url }}"
+                            hx-vals='{"jeu": "bar_resto"}'
+                            hx-target="#zone-charger-plan"
+                            hx-swap="innerHTML"
+                            hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                            class="font-medium flex items-center gap-2 px-5 py-2.5 rounded-default justify-center whitespace-nowrap cursor-pointer bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-base-900 transition-colors"
+                            data-testid="btn-plan-bar-resto">
+                        <span class="material-symbols-outlined" style="font-size: 18px;" aria-hidden="true">restaurant</span>
+                        {% translate "Bar / Restaurant" %}
+                    </button>
+
+                    <button type="button"
+                            hx-post="{{ charger_plan_url }}"
+                            hx-vals='{"jeu": "association"}'
+                            hx-target="#zone-charger-plan"
+                            hx-swap="innerHTML"
+                            hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                            class="font-medium flex items-center gap-2 px-5 py-2.5 rounded-default justify-center whitespace-nowrap cursor-pointer bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-base-900 transition-colors"
+                            data-testid="btn-plan-association">
+                        <span class="material-symbols-outlined" style="font-size: 18px;" aria-hidden="true">groups</span>
+                        {% translate "Association" %}
+                    </button>
+                </div>
+            </div>
+        </div>
+    {% endcomponent %}
+
+</div>
+{% endif %}
