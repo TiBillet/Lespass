@@ -1,5 +1,53 @@
 # Changelog / Journal des modifications
 
+## C-C / C2 (sortie « couverte ») — Débit FED au POS, distinction fine des moyens / FED debit at POS, fine-grained methods
+
+**Date :** 2026-06-21
+**Migration :** Non / No
+
+**Quoi / What :** Au POS, quand le solde du réseau d'une carte (FED + TLF fédérés) couvre TOUT le
+reste d'un panier après les monnaies locales, la vente est validée et le legacy est débité sur le
+Fedow distant (`to_place_from_qrcode`). Chaque part débitée crée une `LigneArticle` avec le BON
+moyen de paiement — **distinction fine** : FED → `STRIPE_FED` (géré par la **coopérative**), TLF
+fédéré → `LOCAL_EURO` (géré par les **lieux**).
+/ At the POS, when a card's network balance covers ALL the cart remainder after local currencies,
+the sale is validated and the legacy is debited on the remote Fedow. Each debited part creates a
+`LigneArticle` with the right method (FED → `STRIPE_FED`, federated TLF → `LOCAL_EURO`).
+
+**Comment / How :** débit **hors atomic** (appel réseau) **à la validation**, puis bloc atomic
+local. Échec (solde baissé, fail-fast) → « rescannez la carte », aucun débit local. Helpers :
+`lire_depensable_fed_frais`, `_debiter_legacy` (résout la catégorie par transaction),
+`_repartir_legacy_sur_articles` (répartit les transactions sur les articles, moyen distinct).
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `laboutik/views.py` | helpers `_debiter_legacy` / `_categorie_asset_transaction` / `_repartir_legacy_sur_articles` ; cran legacy + débit dans `_payer_par_nfc` ; `_creer_lignes_articles_cascade` accepte un uuid d'asset legacy ; journal d'incident |
+| `tests/pytest/test_c2_legacy_repartition.py` | **Nouveau** — 3 tests de répartition (distinction fine) |
+| doc 11 §3 / ROADMAP §4 | représentation `STRIPE_FED` + N `LigneArticle` |
+
+**C2.3 — complément (FED partiel + espèces/CB) :** quand le legacy ne couvre pas tout, il couvre ce
+qu'il peut et le reste passe au moyen complémentaire (espèces/CB). Géré dans `payer_complementaire`
+(re-lecture fraîche du FED, débit hors atomic, helper `_decouper_lignes_complement`). L'écran
+complément affiche la part « Réseau (FED) » et le « Reste à payer ».
+/ C2.3 — complement (partial FED + cash/CC): legacy covers what it can, the rest goes to the
+complement method. Handled in `payer_complementaire`.
+
+**Preuve / Proof :** smokes Chrome + vérif base — **les 4 scénarios** :
+- **Vente classique** (bière 5 €) couverte FED → `STRIPE_FED` 5 €.
+- **Adhésion** (10 €) **multi-asset** → **5 € `LOCAL_EURO` (lieu) + 5 € `STRIPE_FED` (coopérative)**
+  + `Membership` créée.
+- **Billetterie** (billet 8 €, catégorie B) → `STRIPE_FED` 8 €.
+- **Complément** (40 €, carte 37 € FED + 0 local) → **37 € `STRIPE_FED` + 3 € `CASH`**.
+Dans chaque cas, le FED est débité sur le Fedow distant et la `LigneArticle` porte le bon moyen
+(distinction fine local/fédéré confirmée en base).
+
+**Reste / Remaining :** complément **2ᵉ carte NFC** (branche `nfc` de `payer_complementaire`) non
+traité — le FED s'applique aux compléments espèces/CB, pas encore à la 2ᵉ carte.
+
+**Tests :** `pytest` → 271 passed, 1 skipped (zéro régression) ; 4 tests helpers C2 (répartition +
+découpe).
+
 ## Fix compta : la monnaie fédérée (FED) n'est plus comptée comme du cashless local / Accounting fix: federated currency (FED) no longer counted as local cashless
 
 **Date :** 2026-06-21

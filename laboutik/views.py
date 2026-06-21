@@ -1108,6 +1108,176 @@ def obtenir_solde_complet_carte(carte):
     }
 
 
+def _repartir_legacy_sur_articles(lignes_complement, transactions_legacy):
+    """
+    Répartit les transactions du débit legacy (renvoyées par Fedow) sur les parts d'articles
+    NON couvertes par les monnaies locales, en gardant chaque asset / moyen de paiement DISTINCT.
+    / Distributes the legacy debit transactions (returned by Fedow) over the article parts NOT
+    covered by local currencies, keeping each asset / payment method DISTINCT.
+
+    LOCALISATION : laboutik/views.py
+
+    POURQUOI la distinction fine : les monnaies LOCALES (TLF) sont gérées par les LIEUX, la
+    monnaie FÉDÉRÉE (FED) est gérée par la COOPÉRATIVE. Un débit legacy peut puiser dans les deux
+    (TLF fédérés d'autres lieux → `LOCAL_EURO`, et FED → `STRIPE_FED`). On crée donc une
+    LigneArticle par (article, asset legacy) avec le BON moyen de paiement, pour que la compta
+    attribue chaque euro au bon responsable.
+    / LOCAL currencies (TLF) are managed by the VENUES, the FEDERATED currency (FED) by the
+    COOPERATIVE. A legacy debit can draw from both; we keep them finely distinct for accounting.
+
+    :param lignes_complement: liste de tuples (article_dict, None, montant_centimes, None)
+        — les parts d'articles non couvertes par les locaux (asset=None), dans l'ordre.
+    :param transactions_legacy: liste de tuples (asset_uuid, montant_centimes, payment_method)
+        — ce que Fedow a réellement débité (1 par asset legacy), moyen déjà résolu, dans l'ordre.
+        INVARIANT : somme des montants legacy == somme des montants de lignes_complement.
+    :return: liste de tuples (article_dict, asset_uuid, montant_centimes, payment_method)
+        — 1 par recouvrement (article × transaction), prête pour _creer_lignes_articles_cascade.
+    """
+    lignes_legacy = []
+
+    # File des transactions à consommer, dans l'ordre renvoyé par Fedow (mutable : on décrémente).
+    # / Queue of transactions to consume, in Fedow's order (mutable: we decrement amounts).
+    file_transactions = [
+        [asset_uuid, montant, payment_method]
+        for (asset_uuid, montant, payment_method) in transactions_legacy
+    ]
+    index_transaction = 0
+
+    # Pour chaque part d'article à couvrir, on pioche dans les transactions tant qu'il reste
+    # un montant à couvrir. Une part peut être couverte par plusieurs transactions (donc
+    # plusieurs LigneArticle), et une transaction peut couvrir plusieurs articles.
+    # / For each article part, draw from transactions until covered. A part may span several
+    # transactions (several LigneArticle); a transaction may cover several articles.
+    for (article, _asset_none, montant_article, _pm_none) in lignes_complement:
+        reste_a_couvrir = montant_article
+        while reste_a_couvrir > 0:
+            asset_uuid, montant_transaction, payment_method = file_transactions[index_transaction]
+            couvert = min(reste_a_couvrir, montant_transaction)
+            lignes_legacy.append((article, asset_uuid, couvert, payment_method))
+            reste_a_couvrir -= couvert
+            file_transactions[index_transaction][1] -= couvert
+            # Transaction épuisée → on passe à la suivante.
+            # / Transaction exhausted → move to the next one.
+            if file_transactions[index_transaction][1] == 0:
+                index_transaction += 1
+
+    return lignes_legacy
+
+
+def _decouper_lignes_complement(lignes_complement, montant_a_couvrir):
+    """
+    Découpe les lignes complément (asset=None) en deux : la part couverte par `montant_a_couvrir`
+    (ex: le FED disponible) et le reste (qui ira en espèces/CB).
+    / Splits the complement lines (asset=None) in two: the part covered by `montant_a_couvrir`
+    (e.g. the available FED) and the rest (which will be paid by cash/CC).
+
+    LOCALISATION : laboutik/views.py
+
+    Sert au paiement COMPLÉMENTAIRE : quand la carte a un peu de FED mais pas assez, le FED couvre
+    `montant_a_couvrir` centimes des articles non couverts par les locaux, et le solde restant est
+    réglé par le moyen complémentaire (espèces, CB).
+    / Used for the COMPLEMENT payment: FED covers `montant_a_couvrir`, the rest by cash/CC.
+
+    :param lignes_complement: liste de tuples (article_dict, None, montant_centimes, None)
+    :param montant_a_couvrir: int — centimes que le FED va couvrir (≤ somme des lignes_complement)
+    :return: tuple (lignes_couvertes, lignes_reste), même format de tuples, l'une comme l'autre.
+        lignes_couvertes : la part FED (somme == montant_a_couvrir).
+        lignes_reste : la part restante (espèces/CB).
+    """
+    lignes_couvertes = []
+    lignes_reste = []
+    restant_a_couvrir = montant_a_couvrir
+    for (article, _none, montant, _pm) in lignes_complement:
+        if restant_a_couvrir >= montant:
+            # Toute la part de cet article est couverte par le FED.
+            # / This whole article part is covered by FED.
+            lignes_couvertes.append((article, None, montant, None))
+            restant_a_couvrir -= montant
+        elif restant_a_couvrir > 0:
+            # Cet article est coupé en deux : une part FED, une part complément.
+            # / This article is split: a FED part and a complement part.
+            lignes_couvertes.append((article, None, restant_a_couvrir, None))
+            lignes_reste.append((article, None, montant - restant_a_couvrir, None))
+            restant_a_couvrir = 0
+        else:
+            # Plus de FED disponible : tout en complément.
+            # / No FED left: everything goes to complement.
+            lignes_reste.append((article, None, montant, None))
+    return lignes_couvertes, lignes_reste
+
+
+def _categorie_asset_transaction(transaction, fedow_api):
+    """
+    Catégorie de l'asset d'une transaction legacy ('FED', 'TLF', ...).
+    / Asset category of a legacy transaction.
+
+    LOCALISATION : laboutik/views.py
+
+    Si Fedow a renvoyé l'asset sérialisé dans la transaction, on lit la catégorie dedans (zéro
+    appel). Sinon, on la récupère via un appel Fedow (`asset.retrieve`), comme le flux QR V1.
+    / If Fedow returned the serialized asset inline, read the category from it (no call). Otherwise
+    fetch it via a Fedow call, like the V1 QR flow.
+    """
+    asset_serialise = transaction.get("serialized_asset")
+    if asset_serialise and asset_serialise.get("category"):
+        return asset_serialise["category"]
+    asset_info = fedow_api.asset.retrieve(str(transaction["asset"]))
+    return asset_info["category"]
+
+
+def _debiter_legacy(user, montant_centimes, uuid_transaction):
+    """
+    Débite le legacy (FED + TLF fédérés) via Fedow et renvoie les transactions, moyen DÉJÀ résolu.
+    / Debits the legacy (FED + federated TLF) via Fedow; returns transactions with resolved method.
+
+    LOCALISATION : laboutik/views.py
+
+    `to_place_from_qrcode(asset_type="EURO")` lance la cascade legacy CÔTÉ SERVEUR Fedow (TLF
+    fédérés d'abord, puis FED) et renvoie UNE liste de transactions (1 par asset débité). Pour
+    chaque transaction, on résout le moyen de paiement selon la catégorie de l'asset — distinction
+    FINE car la responsabilité diffère :
+    - FED (monnaie fédérée, gérée par la COOPÉRATIVE) → `STRIPE_FED`
+    - TLF (monnaie locale d'un autre lieu, fédérée, gérée par les LIEUX) → `LOCAL_EURO`
+    / Fedow runs the legacy cascade server-side and returns one transaction per debited asset.
+    We resolve the payment method per asset category (who holds the money differs).
+
+    Lève une Exception si le débit échoue (solde insuffisant côté Fedow, réseau injoignable) :
+    fail-fast, AUCUN débit partiel — l'appelant rebascule alors sur le complément.
+    / Raises on failure: fail-fast, NO partial debit — caller falls back to complement.
+
+    :param user: TibilletUser (carte liée, signable)
+    :param montant_centimes: int — montant à débiter
+    :param uuid_transaction: UUID de la vente POS (traçabilité POS ↔ Fedow)
+    :return: liste de tuples (asset_uuid, montant_centimes, payment_method)
+    """
+    fedow_api = FedowAPI()
+    transactions = fedow_api.transaction.to_place_from_qrcode(
+        user=user,
+        amount=montant_centimes,
+        asset_type="EURO",
+        comment=f"Vente POS {uuid_transaction}",
+        metadata={"uuid_transaction": str(uuid_transaction)},
+    )
+    if not transactions:
+        raise Exception("Débit legacy : Fedow n'a renvoyé aucune transaction")
+
+    transactions_legacy = []
+    for transaction in transactions:
+        categorie = _categorie_asset_transaction(transaction, fedow_api)
+        # 'FED' = monnaie fédérée (coopérative) ; 'TLF' = monnaie locale fédérée (lieux).
+        # / 'FED' = federated currency (cooperative); 'TLF' = federated local currency (venues).
+        if categorie == "FED":
+            payment_method = PaymentMethod.STRIPE_FED
+        elif categorie == "TLF":
+            payment_method = PaymentMethod.LOCAL_EURO
+        else:
+            raise Exception(f"Débit legacy : catégorie d'asset inattendue '{categorie}'")
+        transactions_legacy.append(
+            (transaction["asset"], transaction["amount"], payment_method)
+        )
+    return transactions_legacy
+
+
 def _render_erreur_toast(request, msg):
     """
     Rend un partial d'erreur compatible avec le pattern POS (toast dans #messages).
@@ -4230,7 +4400,12 @@ def _creer_lignes_articles_cascade(
             # / Determine asset UUID (None for cash/CC)
             asset_uuid = None
             if asset_ou_none is not None:
-                asset_uuid = asset_ou_none.pk
+                # Asset local = objet fedow_core (`.pk` = uuid). Asset legacy distant (FED / TLF
+                # fédéré débité via Fedow) = uuid déjà résolu (pas d'objet local). On accepte les deux.
+                # / Local asset = fedow_core object (`.pk`). Remote legacy asset = already-resolved uuid.
+                asset_uuid = (
+                    asset_ou_none.pk if hasattr(asset_ou_none, "pk") else asset_ou_none
+                )
 
             # Toujours associer la carte principale à la LigneArticle.
             # La carte identifie le client pour le paiement (même pour les
@@ -5890,6 +6065,34 @@ class PaiementViewSet(viewsets.ViewSet):
                 total_complementaire += amount_ligne
 
         # ================================================================ #
+        #  CRAN LEGACY (C2) : FED + TLF fédérés du réseau comme cran de cascade  #
+        # ================================================================ #
+        # Après les monnaies locales, AVANT le complément. On regarde si le legacy (FED + TLF
+        # fédérés, lu FRAIS sur Fedow) couvre TOUT le reste du panier. Si oui → sortie « couverte » :
+        # le débit part à la validation (PHASE 7, hors atomic). Sinon, on ne touche à rien et le
+        # complément reste (le legacy PARTIEL sera géré par payer_complementaire — C2.3).
+        # / LEGACY tier: after locals, before complement. If the fresh legacy balance covers ALL the
+        # remainder → "covered" sale (debit at validation). Otherwise keep the complement.
+        legacy_couvre_tout = False
+        montant_legacy = 0
+        if total_complementaire > 0 and carte_client.user is not None:
+            depensable_legacy, legacy_disponible = lire_depensable_fed_frais(carte_client.user)
+            if legacy_disponible and depensable_legacy > 0:
+                # Le legacy couvre ce qu'il peut (tout ou une PARTIE) ; le reste ira au complément.
+                # / Legacy covers what it can (all or PART); the rest goes to the complement.
+                montant_legacy = min(depensable_legacy, total_complementaire)
+                total_complementaire -= montant_legacy
+                if total_complementaire == 0:
+                    # Couvert entièrement (locaux + legacy) → sortie « couverte » : débit à la
+                    # validation (PHASE 7), on saute l'écran complément.
+                    # / Fully covered → "covered" sale: debit at validation (PHASE 7).
+                    legacy_couvre_tout = True
+                # Sinon : legacy PARTIEL → l'écran complément s'affiche avec le reste réduit. Le
+                # débit FED partiel se fera dans payer_complementaire (qui re-lit le FED frais).
+                # / Otherwise: PARTIAL legacy → complement screen shows the reduced remainder; the
+                # partial FED debit happens in payer_complementaire (which re-reads fresh FED).
+
+        # ================================================================ #
         #  PHASE 6 : Si complémentaire > 0 → écran fonds insuffisants       #
         #  PHASE 6: If complement > 0 → insufficient funds screen           #
         # ================================================================ #
@@ -5908,6 +6111,18 @@ class PaiementViewSet(viewsets.ViewSet):
                     {
                         "name": asset_debite.name,
                         "montant_euros": f"{montant_debite / 100:.2f}",
+                    }
+                )
+
+            # Le legacy PARTIEL (FED + TLF fédérés) couvre `montant_legacy` du reste : on l'affiche
+            # dans le détail pour que le caissier voie ce qui est pris sur le réseau. Le débit réel
+            # se fera à la validation (payer_complementaire, re-lecture fraîche du FED).
+            # / Partial legacy covers `montant_legacy` of the remainder: show it in the detail.
+            if montant_legacy > 0:
+                detail_cascade_affichage.append(
+                    {
+                        "name": _("Réseau (FED)"),
+                        "montant_euros": f"{montant_legacy / 100:.2f}",
                     }
                 )
 
@@ -5947,6 +6162,39 @@ class PaiementViewSet(viewsets.ViewSet):
 
         ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
         uuid_transaction = uuid_module.uuid4()
+
+        # ----- Débit LEGACY (HORS atomic : c'est un appel réseau) -----
+        # Si le legacy couvre tout le reste, on le débite MAINTENANT, avant le bloc atomic local.
+        # Fedow fait sa cascade (TLF fédérés → FED) et renvoie les transactions ; on les répartit
+        # sur les articles non couverts en gardant chaque moyen DISTINCT (LOCAL_EURO vs STRIPE_FED).
+        # Échec (solde baissé entre lecture et débit, réseau) → fail-fast : AUCUN débit local, on
+        # invite à rescanner (le solde fait foi). On n'entre dans l'atomic qu'après un débit réussi.
+        # / LEGACY debit (OUTSIDE atomic: network call). If it covers all the remainder, debit now.
+        # Fail-fast on error: no local debit, ask to rescan.
+        lignes_legacy = []
+        if legacy_couvre_tout:
+            lignes_complement = [t for t in lignes_nfc if t[1] is None]
+            try:
+                transactions_legacy = _debiter_legacy(
+                    carte_client.user, montant_legacy, uuid_transaction
+                )
+            except Exception as erreur_legacy:
+                logger.warning(f"Débit legacy échoué (rescan demandé) : {erreur_legacy}")
+                context_erreur = {
+                    "msg_type": "warning",
+                    "msg_content": _("Le solde du réseau a changé, rescannez la carte"),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request, "laboutik/partial/hx_messages.html", context_erreur, status=409
+                )
+            lignes_legacy = _repartir_legacy_sur_articles(
+                lignes_complement, transactions_legacy
+            )
+            # Les parts complément (asset=None) sont désormais couvertes par le legacy : on les
+            # retire de lignes_nfc pour qu'elles ne soient ni recréées en double, ni laissées impayées.
+            # / The complement parts are now covered by legacy: drop them from lignes_nfc.
+            lignes_nfc = [t for t in lignes_nfc if t[1] is not None]
 
         try:
             with db_transaction.atomic():
@@ -6006,9 +6254,13 @@ class PaiementViewSet(viewsets.ViewSet):
                         ip=ip_client,
                     )
 
-                # ----- 7d) Créer toutes les LigneArticle (non-fidu + cascade) -----
-                # / Create all LigneArticle (non-fidu + cascade)
-                toutes_les_lignes_pre_calculees = lignes_non_fidu + lignes_nfc
+                # ----- 7d) Créer toutes les LigneArticle (non-fidu + cascade locale + legacy) -----
+                # Les lignes_legacy (FED/TLF fédérés débités plus haut hors atomic) portent déjà
+                # leur moyen de paiement résolu (LOCAL_EURO / STRIPE_FED) et l'uuid de l'asset distant.
+                # / Create all LigneArticle (non-fidu + local cascade + legacy lines).
+                toutes_les_lignes_pre_calculees = (
+                    lignes_non_fidu + lignes_nfc + lignes_legacy
+                )
                 lignes_creees, produits_stock_negatif = _creer_lignes_articles_cascade(
                     lignes_pre_calculees=toutes_les_lignes_pre_calculees,
                     carte=carte_client,
@@ -6046,6 +6298,16 @@ class PaiementViewSet(viewsets.ViewSet):
         except SoldeInsuffisant:
             # Race condition : solde a changé entre le check et le débit
             # / Race condition: balance changed between check and debit
+            # INCIDENT rarissime : si le legacy a déjà été débité (hors atomic) et que l'atomic
+            # local échoue ensuite, le FED/TLF fédéré est prélevé SANS LigneArticle. On le
+            # JOURNALISE pour régularisation manuelle (le legacy n'est pas annulable automatiquement).
+            # / Rare INCIDENT: legacy already debited but local atomic failed → log for manual fix.
+            if legacy_couvre_tout and lignes_legacy:
+                logger.error(
+                    f"INCIDENT legacy débité sans LigneArticle (atomic local échoué) — "
+                    f"uuid_transaction={uuid_transaction} carte={carte_client.tag_id} "
+                    f"montant_legacy={montant_legacy} : régularisation manuelle requise."
+                )
             nom_monnaie_fallback = _("Monnaie locale")
             premier_asset_fallback = assets_accessibles.filter(
                 category__in=[Asset.TLF, Asset.TNF, Asset.FED],
@@ -6805,6 +7067,49 @@ class PaiementViewSet(viewsets.ViewSet):
             else:
                 pm_complement = PaymentMethod.CC
 
+            # ===== CRAN LEGACY (C2.3) : le FED couvre une partie du reste, le solde en espèces/CB =====
+            # On re-lit le FED FRAIS (anti-race), il couvre ce qu'il peut du reste. Débit HORS atomic
+            # (appel réseau). Échec → fail-fast : rescan (aucun débit local). Le solde restant sera
+            # réglé par le moyen complémentaire choisi (espèces/CB).
+            # / LEGACY tier (C2.3): fresh FED read; cover what it can; debit OUTSIDE atomic; the
+            # remaining balance is settled by the chosen complement method (cash/CC).
+            lignes_legacy = []
+            montant_legacy = 0
+            lignes_locales_c1 = [t for t in lignes_nfc_carte1 if t[1] is not None]
+            lignes_complement_c1 = [t for t in lignes_nfc_carte1 if t[1] is None]
+            if carte1.user is not None and lignes_complement_c1:
+                depensable_legacy, legacy_disponible = lire_depensable_fed_frais(carte1.user)
+                if legacy_disponible and depensable_legacy > 0:
+                    montant_legacy = min(depensable_legacy, total_complementaire)
+            if montant_legacy > 0:
+                lignes_pour_fed, lignes_reste = _decouper_lignes_complement(
+                    lignes_complement_c1, montant_legacy
+                )
+                try:
+                    transactions_legacy = _debiter_legacy(
+                        carte1.user, montant_legacy, uuid_transaction
+                    )
+                except Exception as erreur_legacy:
+                    logger.warning(f"Débit legacy (complément) échoué : {erreur_legacy}")
+                    context_erreur = {
+                        "msg_type": "warning",
+                        "msg_content": _("Le solde du réseau a changé, rescannez la carte"),
+                        "selector_bt_retour": "#messages",
+                    }
+                    return render(
+                        request,
+                        "laboutik/partial/hx_messages.html",
+                        context_erreur,
+                        status=409,
+                    )
+                lignes_legacy = _repartir_legacy_sur_articles(
+                    lignes_pour_fed, transactions_legacy
+                )
+                # Les parts complément couvertes par le FED sont retirées : il ne reste que les
+                # locaux + la part à régler en espèces/CB (lignes_reste).
+                # / FED-covered parts removed: only locals + cash/CC part (lignes_reste) remain.
+                lignes_nfc_carte1 = lignes_locales_c1 + lignes_reste
+
             try:
                 with db_transaction.atomic():
                     # 6a) Recharges gratuites
@@ -6881,7 +7186,10 @@ class PaiementViewSet(viewsets.ViewSet):
                         else:
                             lignes_finales.append((art_c, asset_c, amount_c, pm_c))
 
-                    toutes_les_lignes = lignes_non_fidu + lignes_finales
+                    # + lignes_legacy : parts couvertes par le FED (débit déjà fait hors atomic),
+                    # avec leur moyen résolu (STRIPE_FED / LOCAL_EURO) et l'uuid de l'asset distant.
+                    # / + lignes_legacy: FED-covered parts (already debited outside atomic).
+                    toutes_les_lignes = lignes_non_fidu + lignes_finales + lignes_legacy
                     lignes_creees, produits_stock_negatif = (
                         _creer_lignes_articles_cascade(
                             lignes_pre_calculees=toutes_les_lignes,
@@ -6917,6 +7225,16 @@ class PaiementViewSet(viewsets.ViewSet):
                                     ligne_ad.save(update_fields=["membership"])
 
             except SoldeInsuffisant:
+                # INCIDENT rarissime : si le legacy a déjà été débité (hors atomic) et que l'atomic
+                # local échoue, le FED/TLF fédéré est prélevé SANS LigneArticle → on JOURNALISE pour
+                # régularisation manuelle (le legacy n'est pas annulable automatiquement).
+                # / Rare INCIDENT: legacy debited but local atomic failed → log for manual fix.
+                if lignes_legacy:
+                    logger.error(
+                        f"INCIDENT legacy débité sans LigneArticle (complément, atomic échoué) — "
+                        f"uuid_transaction={uuid_transaction} carte={carte1.tag_id} "
+                        f"montant_legacy={montant_legacy} : régularisation manuelle requise."
+                    )
                 context_erreur = {
                     "msg_type": "warning",
                     "msg_content": _(
