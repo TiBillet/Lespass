@@ -12,8 +12,8 @@ La fusion complète (S4, strangler fig) reste documentée comme option future.
 
 | Doc | Contenu | Statut |
 |---|---|---|
-| [HANDOFF.md](./HANDOFF.md) | **Point d'entrée pour reprendre le chantier** : état, baseline tests verte, prochain lot (C-A), prompt de démarrage | 2026-06-11 |
-| [ROADMAP.md](./ROADMAP.md) | **Feuille de route S6** : lots C-A (socle) → C-B (durcissement) → C-C (interop legacy) → C-D (pilote), checkpoints et critères de recette | 2026-06-10 — **ACTÉE, pilote le chantier** |
+| [HANDOFF.md](./HANDOFF.md) | **Point d'entrée pour reprendre le chantier** : état, prochain lot, prompt de démarrage. **Maj 2026-06-20 : C-A FAIT + admin + révision conception (handshake auto)** | 2026-06-20 |
+| [ROADMAP.md](./ROADMAP.md) | **Feuille de route S6** : C-A → C-B → C-C → C-D. **Maj 2026-06-20 : C-A ✅ + C-B ✅ (G1/G8 caducs), prochain = C-C (interop FED), + dette admin ([doc 12](./12-dette-admin-modulaire.md))** | 2026-06-20 |
 | [TESTS-STRATEGIE.md](./TESTS-STRATEGIE.md) | Stratégie de tests : non-régression (735 tests), invariant de conservation de la monnaie, concurrence/stress, mocks à payloads réels, intégration Fedow docker, fixture « pont » | 2026-06-10 |
 | [SPEC.md](./SPEC.md) | Spec S5 d'origine (D1-D6) — D3-D6 toujours valables, découpage remplacé par ROADMAP | 2026-06-10 — révisée |
 | [01-recherche-etat-des-lieux.md](./01-recherche-etat-des-lieux.md) | Recherche initiale : cartographie des deux moteurs, points durs, questions ouvertes | 2026-06-10 — terminé |
@@ -28,6 +28,7 @@ La fusion complète (S4, strangler fig) reste documentée comme option future.
 | [09-philosophie-v2-vs-s6.md](./09-philosophie-v2-vs-s6.md) | La V2 a choisi S2-présent + S1-différé (réseau scindé, migration repoussée). S6 = V2 moins une décision. **C-A + C-B = tronc commun**, embranchement au C-C. **→ Tranché 2026-06-20 : voie S6 réseau unique (V2-pure écartée)** | 2026-06-10 / 06-20 |
 | [10-contre-expertises-relance-s6.md](./10-contre-expertises-relance-s6.md) | Relance des 17 contre-expertises ⏳ (gap+portage) recadrées S6 : 0 réfuté, **3 vrais bugs résiduels** (G1/G6/G8), **P4 retourné** (ne PAS porter Client.FED), G10 déjà résolu. Net actionnable par lot C-A/C-B/C-D | 2026-06-20 |
 | [11-spec-cc-segment-legacy.md](./11-spec-cc-segment-legacy.md) | **Spec C-C** : le FED legacy = **cran de cascade TRANSPARENT** (pas un bouton), lu en **temps réel (sans cache)**, **appel Fedow à chaque paiement carte même en V2**, débité **à la validation** (FED partiel naturel). Pont carte safe + handshake place. **Aucune modif JS** | 2026-06-20 |
+| [12-dette-admin-modulaire.md](./12-dette-admin-modulaire.md) | **Dette C-A** : admin rendu fonctionnel mais `admin_tenant.py` reste monolithique (180 Ko). Cadre le lot de modularisation : porter/retirer booking/controlvanne/cards, aligner TermUser, **retirer `_safe_rev`** (tolérance provisoire), vider le monolithe modèle par modèle | 2026-06-20 |
 
 ## Branche de travail
 

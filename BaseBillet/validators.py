@@ -1076,6 +1076,10 @@ class TenantCreateValidator:
             config.save()
 
             # Liaison / création du lieu coté Fedow :
+            # S6 : TOUS les tenants (V1 et V2) ont un place sur le Fedow.
+            # Le place V2 sert a accepter l'asset federe (FED) du reseau.
+            # / S6: every tenant (V1 and V2) has a Fedow place; the V2 place is
+            # used to accept the network's federated asset (FED).
             from fedow_connect.fedow_api import FedowAPI
             from fedow_connect.models import FedowConfig
             FedowAPI()

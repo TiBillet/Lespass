@@ -582,6 +582,12 @@ if DEBUG:
 
 
 
+# --- Mode demonstration POS (simulateur de scan NFC) — portage S6 ---
+# DEMO active le simulateur de carte du POS (boutons cartes demo + saisie manuelle).
+# Defaut : True en dev (DEBUG), False en prod ; override via la variable d'env DEMO.
+# / DEMO enables the POS NFC card simulator. Defaults to True in dev (DEBUG), False in prod.
+DEMO = os.environ.get("DEMO", "1" if DEBUG else "0") == "1"
+
 # --- Cartes NFC de demonstration (fixtures POS laboutik) — portage S6 ---
 # / Demo NFC cards for laboutik POS fixtures
 DEMO_TAGID_CM = os.environ.get('DEMO_TAGID_CM', 'A49E8E2A')

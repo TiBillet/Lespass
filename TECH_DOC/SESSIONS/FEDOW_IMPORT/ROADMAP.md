@@ -19,13 +19,13 @@ Branche de travail : `main-fedow-import`.
 
 ## 1. Vue d'ensemble des lots
 
-| Lot | Contenu | Sessions | Dépend de |
+| Lot | Contenu | Statut (maj 2026-06-20) | Dépend de |
 |---|---|---|---|
-| C-A | Copier-coller du socle | 1 grosse (2 si débordement) | — |
-| C-B | Durcissement (audit + parades S6) | 2 | C-A |
-| C-C | Interop legacy au POS | 3-4 | C-A, C-B |
-| C-D | Onboarding, ops, pilote | 2-3 | C-B, C-C |
-| **Total** | | **8-10** | |
+| C-A | Socle + champs BaseBillet + **admin laboutik/inventaire** | ✅ **FAIT** — pytest 262/263, admin (changelists + change views) + POS espèce/CB sur Chrome, env V2 connecté au Fedow (`can_fedow=True`, place créé) | — |
+| C-B | Durcissement (audit + parades S6) | ✅ **COUVERT par le portage** — corrections génériques (verrous, atomicité, `SoldeInsuffisant`) validées pytest. **G1/G8 CADUQUES** (cf. §1bis) | C-A |
+| C-C | **Interop FED au POS** (segment cascade transparent) | ⏳ **PROCHAIN LOT** | C-A, C-B |
+| C-D | Onboarding, ops, pilote | ⏳ | C-B, C-C |
+| **Dette** | **Admin modulaire** : `admin_tenant.py` (180 Ko) → modules ; booking/controlvanne/cards ; retrait `_safe_rev` | ⏳ **lot dédié** ([doc 12](./12-dette-admin-modulaire.md)) | C-A |
 
 Prérequis transverses :
 - [ ] **drift=0 confirmé** sur la prod Fedow (reconcile_tokens passé la nuit
@@ -61,16 +61,21 @@ les items suivants aux lots, **sans changer le découpage**.
   cartographier au port **par symbole, jamais par ligne**, et **figer un commit de base** de
   `new_pairing_and_nfc`.
 
-### Pour C-B
-- **G1 (doc 10)** — dispatch dans `create_tenant` (`validators.py:1082`) + `install.py:201` :
-  si `server_cashless` vide (tenant V2), **ne pas instancier `FedowAPI()`** (→ pas de
-  `create_place` automatique). + robustesse `MyAccount` : try/except timeout au lieu d'un
-  500. **C'est le même geste que le handshake C-D** (doc 11 §6).
-- **G8 (doc 10)** — gardes `server_cashless` sur `trigger_A` + `send_membership_and_badge_product_to_fedow`,
-  try/except sur `cached_retrieve_by_signature`, dispatch `clean_card_number`.
-  (`get_or_create_wallet` reste conforme S6.)
-- **G10 (doc 10)** — documenter la liste des flux « V1-only par design S6 » (double-compta
-  largement déjà résolue depuis l'audit).
+### Pour C-B — ⚠️ RÉVISÉ 2026-06-20 : G1/G8 CADUQUES, NE PAS LES IMPLÉMENTER
+**Décision mainteneur (2026-06-20)** : **pas d'activation consciente** de Fedow —
+**chaque nouveau tenant (V1 ET V2) est connecté au Fedow** (`create_place` AUTOMATIQUE à la
+création), car un tenant V2 a besoin d'un **place Fedow** pour accepter l'**asset fédéré (FED)**
+du réseau.
+- **G1 et G8 sont CADUQUES.** Ils visaient à « couper Fedow si V2 » (ne pas instancier
+  `FedowAPI()`, gardes `server_cashless` sur `send_membership_and_badge`/`trigger_product_update`).
+  C'était **à l'envers**. Gardes implémentées puis **retirées** (`create_tenant`, `install.py`,
+  `signals.py` restaurés à l'original, re-validé pytest 262). La distinction V1/V2 porte
+  **uniquement sur où vit la monnaie locale cashless** : `fedow_core` LOCAL (V2) vs Fedow distant
+  (V1) — dispatch déjà géré dans le code laboutik porté (`CaisseViewSet`).
+- **C-B se résume aux corrections GÉNÉRIQUES de l'audit** (verrous `select_for_update`, atomicité,
+  `SoldeInsuffisant`, `tenant_origin`, UniqueConstraint FED) — **déjà dans le code porté**
+  (lespass-main durci) et **validées par pytest**. Rien à ajouter côté dispatch.
+- **G10 (doc 10)** — seul reste (doc only) : documenter les flux « V1-only par design S6 ».
 
 ### Pour C-C
 - **Spec actée → [doc 11](./11-spec-cc-segment-legacy.md) (révisée 2026-06-20).** Le FED est
@@ -95,11 +100,13 @@ les items suivants aux lots, **sans changer le découpage**.
   **V2-pure (FED local) écartée**. Confirme le §0 « jamais de FED local » et les findings
   P4/P5 (ne pas porter `Client.FED` / `bootstrap_fed_asset` / `CASHLESS_REFILL`).
 
-### Pour C-D
-- **Handshake place du tenant V2 (doc 11 §6)** — repositionner `create_place` (idempotent,
-  garde « Place already created ») : appelé **explicitement à l'activation de l'interop**
-  (action admin consciente), pas à la création du tenant. Pas de handshake *cashless* en
-  phase 1. **Symétrique du fix G1 (C-B).**
+### Pour C-D — ⚠️ handshake RÉVISÉ 2026-06-20
+- **Handshake place du tenant V2 — RÉVISÉ (décision mainteneur)** : handshake **AUTOMATIQUE
+  à la création** (PAS d'activation consciente). `create_place` reste appelé dans
+  `create_tenant`/`install.py` pour **tous** les tenants (idempotent, garde « Place already
+  created »). Le tenant V2 a son place Fedow dès sa création (vérifié : lespass `can_fedow=True`,
+  place `96e9d347…`). **Plus de geste d'activation à coder.** Pas de handshake *cashless* en
+  phase 1 (le cashless V2 est local `fedow_core`). ⚠️ Caduque aussi le « symétrique de G1 ».
 - **G7 (doc 10)** — verrou `Onboard_laboutik` dans la **vue** (refus 409 si `module_caisse`/
   `module_monnaie_locale` actifs), pas dans `clean()` (que `save()` direct bypasse).
 - **G5 (doc 10)** — corriger la FK `Price.fedow_reward_asset` (→ `fedow_core.Asset`) avant
