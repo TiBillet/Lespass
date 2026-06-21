@@ -48,6 +48,11 @@ from fedow_core.exceptions import SoldeInsuffisant
 from fedow_core.models import Asset, Transaction
 from fedow_core.services import AssetService, TransactionService, WalletService
 
+# Interop reseau federe (FED) : lecture du solde FED sur le serveur Fedow distant.
+# / Federated network interop (FED): reads the FED balance from the remote Fedow server.
+from fedow_connect.fedow_api import FedowAPI
+from fedow_connect.models import FedowConfig
+
 from AuthBillet.models import Wallet
 from AuthBillet.utils import get_or_create_user
 from django.utils import timezone as dj_timezone
@@ -998,6 +1003,109 @@ def _obtenir_ou_creer_wallet(carte):
     carte.save(update_fields=["wallet_ephemere"])
     logger.info(f"Wallet éphémère créé pour carte {carte.tag_id}: {wallet.uuid}")
     return wallet
+
+
+def lire_depensable_fed_frais(user):
+    """
+    Lit le solde FED dépensable d'un user EN TEMPS RÉEL (sans cache) sur le Fedow distant.
+    / Reads a user's spendable FED balance in real time (no cache) from the remote Fedow.
+
+    LOCALISATION : laboutik/views.py
+
+    POURQUOI un helper dédié : ce solde sert à DEUX endroits — l'affichage du solde complet
+    (obtenir_solde_complet_carte) ET la cascade de paiement (le FED comme cran transparent).
+    Dans les deux cas on veut le solde FRAIS (le FED peut être débité juste après), donc
+    `use_cache=False`. Dégradé en silence si le Fedow ne répond pas (jamais de blocage).
+    / Dedicated helper because this balance is used in TWO places: full-balance display AND the
+    payment cascade (FED as a transparent tier). Both need a FRESH value (FED may be spent right
+    after), hence use_cache=False. Degraded silently if Fedow is unreachable (never blocks).
+
+    :param user: TibilletUser (la carte doit être liée ; ne pas appeler si user is None)
+    :return: tuple (fed_centimes: int, fed_disponible: bool)
+        fed_disponible=False si pas de place Fedow ou Fedow injoignable.
+    """
+    try:
+        fedow_config = FedowConfig.get_solo()
+        # On teste can_fedow() AVANT d'instancier FedowAPI : sinon, sur un tenant sans place,
+        # l'instanciation déclencherait une création de place (effet de bord).
+        # / Check can_fedow() BEFORE instantiating FedowAPI (avoids a place creation side effect).
+        if not fedow_config.can_fedow():
+            return 0, False
+        fedow_api = FedowAPI(fedow_config=fedow_config)
+        fed_centimes = int(
+            fedow_api.wallet.get_total_fiducial_and_all_federated_token(user, use_cache=False)
+        )
+        return fed_centimes, True
+    except Exception as erreur_fedow:
+        # Fedow injoignable ou lent : on dégrade en silence.
+        # / Fedow unreachable or slow: degrade silently.
+        logger.warning(f"lire_depensable_fed_frais : solde FED indisponible — {erreur_fedow}")
+        return 0, False
+
+
+def obtenir_solde_complet_carte(carte):
+    """
+    Lit le solde complet d'une carte : monnaies locales (fedow_core) + solde FED du réseau (Fedow).
+    / Reads a card's full balance: local currencies (fedow_core) + FED network balance (Fedow).
+
+    LOCALISATION : laboutik/views.py
+
+    POURQUOI : au POS V2, une carte peut porter deux sortes de monnaie :
+    - les monnaies locales du lieu, stockées dans la base locale (fedow_core) ;
+    - le solde FED du réseau fédéré, stocké sur le serveur Fedow distant.
+    On veut afficher (et plus tard débiter) les DEUX, donc on lit les deux sources.
+
+    Le solde FED est lu EN TEMPS RÉEL (sans cache) car il peut servir tout de suite à un
+    paiement. Si le Fedow ne répond pas, on dégrade en silence : on garde les soldes locaux
+    et on signale le réseau comme indisponible (jamais de blocage de la vente).
+
+    / At a V2 POS, a card may carry two kinds of money: local currencies (fedow_core, local DB)
+    / and the FED network balance (remote Fedow). We read both. The FED balance is read in real
+    / time (no cache) as it may be spent right away; degraded silently if Fedow is unreachable.
+
+    :param carte: CarteCashless
+    :return: dict avec / dict with
+        - tokens_locaux : liste de dicts (asset_name, asset_category, value_euros, provenance)
+        - locaux_centimes : total des monnaies locales (int, centimes)
+        - fed_centimes : solde FED dépensable (int, centimes), 0 si indisponible
+        - fed_disponible : bool, False si carte anonyme / pas de place Fedow / Fedow injoignable
+        - total_centimes : locaux_centimes + fed_centimes (int, centimes)
+    """
+    # Wallet local de la carte (crée un éphémère si la carte est anonyme).
+    # / Card's local wallet (creates an ephemeral one if the card is anonymous).
+    wallet = _obtenir_ou_creer_wallet(carte)
+
+    # 1. Monnaies locales : on lit tous les tokens du wallet dans la base locale (fedow_core).
+    # 1. Local currencies: read all wallet tokens from the local database (fedow_core).
+    tokens_locaux = []
+    locaux_centimes = 0
+    for token in WalletService.obtenir_tous_les_soldes(wallet):
+        tokens_locaux.append(
+            {
+                "asset_name": token.asset.name,
+                "asset_category": token.asset.category,
+                "value_euros": token.value / 100,
+                "provenance": token.asset.tenant_origin.name,
+            }
+        )
+        locaux_centimes += token.value
+
+    # 2. Solde FED du réseau : uniquement si la carte est liée à un user (signature RSA).
+    #    Délégué à lire_depensable_fed_frais (lecture fraîche, dégradée si Fedow injoignable).
+    # 2. FED network balance: only if the card is linked to a user. Delegated to
+    #    lire_depensable_fed_frais (fresh read, degraded if Fedow is unreachable).
+    fed_centimes = 0
+    fed_disponible = False
+    if carte.user is not None:
+        fed_centimes, fed_disponible = lire_depensable_fed_frais(carte.user)
+
+    return {
+        "tokens_locaux": tokens_locaux,
+        "locaux_centimes": locaux_centimes,
+        "fed_centimes": fed_centimes,
+        "fed_disponible": fed_disponible,
+        "total_centimes": locaux_centimes + fed_centimes,
+    }
 
 
 def _render_erreur_toast(request, msg):
@@ -3313,7 +3421,7 @@ ORDRE_CASCADE_FIDUCIAIRE = [Asset.TNF, Asset.TLF, Asset.FED]
 MAPPING_ASSET_CATEGORY_PAYMENT_METHOD = {
     Asset.TNF: PaymentMethod.LOCAL_GIFT,  # LG — cadeau
     Asset.TLF: PaymentMethod.LOCAL_EURO,  # LE — monnaie locale
-    Asset.FED: PaymentMethod.LOCAL_EURO,  # LE — fédéré (assimilé local)
+    Asset.FED: PaymentMethod.STRIPE_FED,  # SF — monnaie fédérée du réseau (PAS de la monnaie locale)
     Asset.TIM: PaymentMethod.LOCAL_EURO,  # LE — temps
     Asset.FID: PaymentMethod.LOCAL_EURO,  # LE — fidélité
 }
@@ -7282,34 +7390,11 @@ class PaiementViewSet(viewsets.ViewSet):
             }
             return render(request, "laboutik/partial/hx_card_feedback.html", context)
 
-        # 2. Déterminer le wallet (get or create éphémère si besoin)
-        # 2. Determine the wallet (get or create ephemeral if needed)
-        wallet = _obtenir_ou_creer_wallet(carte)
-
-        # 3. Vrais soldes depuis fedow_core
-        # 3. Real balances from fedow_core
-        tokens_qs = WalletService.obtenir_tous_les_soldes(wallet)
-
-        # Préparer les données pour le template (centimes → euros)
-        # Prepare data for the template (cents → euros)
-        tokens = []
-        total_centimes = 0
-        solde_tlf_centimes = 0
-        solde_tnf_centimes = 0
-        for t in tokens_qs:
-            tokens.append(
-                {
-                    "asset_name": t.asset.name,
-                    "asset_category": t.asset.category,
-                    "value_euros": t.value / 100,
-                    "provenance": t.asset.tenant_origin.name,
-                }
-            )
-            total_centimes += t.value
-            if t.asset.category == Asset.TLF:
-                solde_tlf_centimes += t.value
-            elif t.asset.category == Asset.TNF:
-                solde_tnf_centimes += t.value
+        # 2. + 3. Solde complet de la carte : monnaies locales (fedow_core) + FED réseau (Fedow).
+        #    Le helper lit les locaux en base et le FED frais sur le Fedow distant (si carte liée).
+        # 2. + 3. Card full balance: local currencies (fedow_core) + FED network (Fedow).
+        solde = obtenir_solde_complet_carte(carte)
+        tokens = solde["tokens_locaux"]
 
         # 4. Adhésions actives (si user connu)
         # 4. Active memberships (if user known)
@@ -7334,10 +7419,10 @@ class PaiementViewSet(viewsets.ViewSet):
 
         context = {
             "card": {"email": email_carte, "first_name": prenom_carte},
-            "total_monnaie": total_centimes / 100,
-            "solde_tlf": solde_tlf_centimes / 100,
-            "solde_tnf": solde_tnf_centimes / 100,
+            "total_monnaie": solde["total_centimes"] / 100,
             "tokens": tokens,
+            "fed_euros": solde["fed_centimes"] / 100,
+            "fed_disponible": solde["fed_disponible"],
             "adhesions": adhesions,
             "tag_id": tag_id_scanne,
             "background": couleur_fond,

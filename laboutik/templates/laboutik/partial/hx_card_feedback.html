@@ -87,6 +87,34 @@ Note: 'tarifSelection' listener is on #articles-zone (tarif.js), not #messages.
     </div>
     {% endfor %}
 
+    <!--
+    SOLDE RESEAU FEDERE (FED) — lu en temps reel sur le Fedow distant.
+    Affiche seulement pour une carte liee : si le reseau repond (montant), sinon "Indisponible".
+    / Federated network balance (FED) — read live from the remote Fedow. Shown only for a
+    / linked card: the amount if the network answers, otherwise "Unavailable".
+    -->
+    {% if fed_disponible and fed_euros %}
+    <div class="cf-token-row" data-testid="retour-carte-solde-fed">
+      <div class="cf-token-icon">
+        <i class="fas fa-globe" aria-hidden="true"></i>
+      </div>
+      <div class="cf-token-info">
+        <div class="cf-token-name">{% trans "Réseau" %}</div>
+        <div class="cf-token-place">{% trans "Monnaie fédérée (FED)" %}</div>
+      </div>
+      <div class="cf-token-value test-return-fed-value">{{ fed_euros|floatformat:2 }}</div>
+    </div>
+    {% elif card.email and not fed_disponible %}
+    <div class="cf-token-row cf-token-empty" data-testid="retour-carte-fed-indisponible">
+      <div class="cf-token-icon"><i class="fas fa-globe" aria-hidden="true"></i></div>
+      <div class="cf-token-info">
+        <div class="cf-token-name">{% trans "Réseau" %}</div>
+        <div class="cf-token-place">{% trans "Indisponible" %}</div>
+      </div>
+      <div class="cf-token-value">&mdash;</div>
+    </div>
+    {% endif %}
+
     <!-- ADHESIONS ACTIVES / ACTIVE MEMBERSHIPS -->
     {% if adhesions %}
     <div class="cf-section-title">

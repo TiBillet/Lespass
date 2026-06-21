@@ -82,6 +82,7 @@ LIBELLES_MOYENS = {
     'LG': 'Cashless cadeau',
     'QR': 'QR / NFC',
     'SN': 'Stripe (en ligne)',
+    'SF': 'Federe (FED reseau)',
     'NA': 'Offert',
 }
 
@@ -102,6 +103,12 @@ MAPPING_BAR_RESTO = {
     'LG': None,  # Cadeau = pas d'encaissement, pas d'avance. Ignorer dans le FEC.
     'QR': '51120001',  # QR/NFC = paiement en ligne (vrais euros). / QR/NFC = online payment (real euros).
     'SN': '51120001',
+    # Federe (FED reseau) : avances clients FEDEREES — l'argent a ete encaisse lors de la
+    # recharge sur le Stripe federe. DISTINCT du cashless local (LE). Compte a configurer
+    # par le gerant dans l'admin (None = non ventile tant que non configure).
+    # / Federated (FED network): FEDERATED customer advances — money collected at top-up on the
+    # federated Stripe. DISTINCT from local cashless (LE). Account to configure in admin.
+    'SF': None,
     'NA': None,
 }
 
@@ -119,6 +126,10 @@ MAPPING_ASSOCIATION = {
     'LG': None,  # Cadeau = pas d'encaissement. / Gift = no collection.
     'QR': '512000',  # QR/NFC = paiement en ligne (vrais euros). / QR/NFC = online payment (real euros).
     'SN': '512000',
+    # Federe (FED reseau) : avances clients FEDEREES, DISTINCT du cashless local (LE).
+    # Compte a configurer par le gerant dans l'admin (None = non ventile tant que non configure).
+    # / Federated (FED network): FEDERATED advances, DISTINCT from local cashless (LE).
+    'SF': None,
     'NA': None,
 }
 

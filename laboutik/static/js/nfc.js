@@ -133,7 +133,7 @@ const NfcReader = class {
       const tagSaisi = input.value.trim().toUpperCase()
       if (tagSaisi === '') return
       localStorage.setItem('nfcSimuManualTag', tagSaisi)
-      this.SendTagIdAndSubmit(tagSaisi, conf)
+      this.SendTagIdAndSubmit(tagSaisi, this.conf)
       this.stop()
     }
 

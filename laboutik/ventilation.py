@@ -25,6 +25,7 @@ CLE_RAPPORT_VERS_CODE_PAIEMENT = {
     'carte_bancaire': 'CC',
     'cheque': 'CH',
     'cashless': 'LE',
+    'federe': 'SF',  # Monnaie FED du reseau — compte de tresorerie distinct du cashless local
 }
 
 

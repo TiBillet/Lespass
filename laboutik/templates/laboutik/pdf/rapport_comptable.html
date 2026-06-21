@@ -75,6 +75,13 @@
             <td>{% translate "Check" %}</td>
             <td class="text-right">{{ section.cheque|euros }}</td>
         </tr>
+        {# Federe : monnaie FED du reseau, distincte du cashless local / Federated FED, distinct from local cashless #}
+        {% if section.federe %}
+        <tr>
+            <td>{% translate "Fédéré (FED)" %}</td>
+            <td class="text-right">{{ section.federe|euros }}</td>
+        </tr>
+        {% endif %}
         <tr class="total-row">
             <td>{% translate "Total" %}</td>
             <td class="text-right">{{ section.total|euros }}</td>

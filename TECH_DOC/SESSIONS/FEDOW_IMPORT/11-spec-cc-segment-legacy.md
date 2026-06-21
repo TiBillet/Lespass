@@ -84,8 +84,10 @@ Dans `_payer_par_nfc`, le solde FED est lu **systématiquement** (carte liée), 
 ### 3.2 Débit du FED, à la validation seulement
 - **Sortie « couverte »** (locaux + FED couvrent tout) → on entre dans le bloc atomic
   (validation). Débit FED `to_place_from_qrcode(fed_couvert, "EURO")` **hors atomic**, puis
-  bloc atomic local (débits locaux + `LigneArticle`). **Une seule `LigneArticle` FED**
-  (`payment_method=LOCAL_EURO`).
+  bloc atomic local (débits locaux + `LigneArticle`). Le FED est un **cran de cascade** : il
+  produit **N `LigneArticle`** (1 par article couvert, comme les locaux — une `LigneArticle` a
+  toujours un `price`), en **`payment_method=STRIPE_FED`** (PAS `LOCAL_EURO` : le FED réseau ≠
+  monnaie locale — cf. fix compta 2026-06-21) + `asset` = uuid de l'asset FED legacy.
 - **Sortie « complément »** → écran complément. `fed_couvert` est propagé (comme les données
   carte1). À la validation finale (`payer_complementaire`), on **re-lit le FED frais**
   (anti-race), on débite FED (hors atomic) puis le bloc atomic local (locaux + FED + complément).
@@ -127,7 +129,7 @@ if fed_couvert > 0:
 
 with db_transaction.atomic():
     _debiter_cascade_locale(...)           # locaux (TNF/TLF)
-    _creer_lignes_articles_cascade(...)    # + 1 LigneArticle FED (LOCAL_EURO) si fed_couvert>0
+    _creer_lignes_articles_cascade(...)    # + N LigneArticle FED (STRIPE_FED) si fed_couvert>0
     _creer_adhesions_si_besoin(...)
 ```
 
@@ -204,7 +206,8 @@ vues/templates sont `laboutik` (caisse V2) ; les tenants V1 (LaBoutik externe) n
    complément espèces/CB.
 2. **Pont carte** : carte du réseau inconnue de `CarteCashless` → résolue au scan, **sans wallet
    éphémère miroir** (§6bis).
-3. **Place Fedow du tenant** présente (§7) — nécessaire pour lire ET débiter.
+3. **Place Fedow du tenant** présente (§7) — nécessaire pour lire ET débiter. Garantie par le
+   handshake **automatique** à la création du tenant (plus d'opt-in — cf. §7).
 
 ---
 
@@ -236,20 +239,30 @@ locale) quand `carte.detail.origine` désigne un réseau legacy.
 
 ---
 
-## 7. Le handshake place du tenant V2 (tension G1 ↔ C-C résolue)
+## 7. Le handshake place du tenant V2 (handshake AUTOMATIQUE — révisé 2026-06-20)
 
 `to_place_from_qrcode` **et** `card_tag_id_retrieve` adressent le tenant via sa **place Fedow**
 (`fedow_config.wallet.uuid`, clé de place). L'interop — lecture **et** écriture — exige donc que
 le tenant V2 ait une **place Fedow**.
 
-**Mécanisme (vérifié, déjà outillé).** `PlaceFedow.__init__` (`fedow_api.py:668`) appelle
-`create_place()` automatiquement dès que `can_fedow()` est False — l'appel implicite que G1
-dénonce. Mais `create_place` (`:685`) est **idempotent et protégé** (garde « Place already
-created ») et **autonome**. La bascule S6 est un simple **repositionnement de l'appel** :
-- **C-B (fix G1)** : à la création d'un tenant V2, ne pas instancier `FedowAPI()` → pas de
-  `create_place` automatique → tenant autonome.
-- **C-D (activation interop)** : une **action admin explicite** appelle `create_place(admin=…)`
-  une fois. Pas de handshake *cashless* en phase 1 ; `FedowAPI.handshake()` est un placeholder.
+**Décision mainteneur (2026-06-20) : handshake AUTOMATIQUE, plus d'opt-in.** Chaque tenant
+(V1 ET V2) est connecté au Fedow **dès sa création** : `create_place()` est appelé
+automatiquement par `create_tenant` / `install.py` — **pas d'activation consciente, pas d'action
+admin à coder**. Un tenant V2 a besoin de ce place pour accepter l'**asset fédéré (FED)** du
+réseau ; la distinction V1/V2 ne porte donc **pas** sur « Fedow ou pas » (les deux y sont) mais
+sur **où vit la monnaie locale cashless** : `fedow_core` LOCAL (V2) vs Fedow distant (V1).
+
+**Mécanisme (vérifié, déjà actif).** `PlaceFedow.__init__` (`fedow_api.py:668`) appelle
+`create_place()` automatiquement dès que `can_fedow()` est False. `create_place` (`:685`) est
+**idempotent et protégé** (garde « Place already created ») et **autonome**. → **Rien à coder
+pour le handshake en C-C/C-D** : il est déjà en place. Vérifié sur `lespass` : `can_fedow()=True`,
+place `96e9d347…` créé à l'installation. Pas de handshake *cashless* en phase 1 (le cashless V2
+est local `fedow_core`) ; `FedowAPI.handshake()` reste un placeholder.
+
+> ⚠️ **G1 CADUC.** L'ancienne conception (« couper Fedow si V2 » : ne pas instancier `FedowAPI()`
+> à la création d'un tenant V2, puis ré-activer via une action admin) était **à l'envers** et a
+> été **retirée** (`create_tenant` / `install.py` / `signals.py` restaurés à l'original,
+> re-validé pytest). Voir ROADMAP §1bis (C-B + C-D) et HANDOFF (MAJ 2026-06-20).
 
 ---
 

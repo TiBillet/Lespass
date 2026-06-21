@@ -75,9 +75,10 @@ class RapportComptableService:
     # ------------------------------------------------------------------
     def calculer_totaux_par_moyen(self):
         """
-        Especes (CA), CB (CC), cashless (LE+LG), cheque (CH), total.
+        Especes (CA), CB (CC), cashless local (LE+LG), cheque (CH), federe (SF), total.
         Enrichi avec le detail cashless par asset et le code devise.
-        / Cash, credit card, cashless, check, total.
+        Le federe (FED reseau) est DISTINCT du cashless local — confusion de compta a ne jamais refaire.
+        / Cash, credit card, local cashless, check, federated (FED network), total.
         Enriched with cashless detail by asset and currency code.
         """
         total_especes = (
@@ -110,8 +111,23 @@ class RapportComptableService:
             or 0
         )
 
+        # Federe : monnaie FED du reseau (Fedow distant), DISTINCTE du cashless local.
+        # Le FED a son propre moyen de paiement (STRIPE_FED) — ne jamais le melanger au cashless.
+        # / Federated: FED network currency (remote Fedow), DISTINCT from local cashless.
+        # FED has its own payment method (STRIPE_FED) — never mix it with local cashless.
+        total_federe = (
+            self.lignes.filter(
+                payment_method=PaymentMethod.STRIPE_FED,
+            ).aggregate(total=Sum("amount"))["total"]
+            or 0
+        )
+
         total_general = (
-            total_especes + total_carte_bancaire + total_cashless + total_cheque
+            total_especes
+            + total_carte_bancaire
+            + total_cashless
+            + total_cheque
+            + total_federe
         )
 
         # Detail cashless par nom de monnaie (pas par UUID d'asset).
@@ -172,6 +188,7 @@ class RapportComptableService:
             "cashless": total_cashless,
             "cashless_detail": cashless_detail,
             "cheque": total_cheque,
+            "federe": total_federe,
             "total": total_general,
             "currency_code": code_devise,
         }

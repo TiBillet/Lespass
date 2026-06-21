@@ -469,8 +469,15 @@ class WalletFedow():
             return serialized_transaction
         raise Exception(f"{serialized_transaction.errors}")
 
-    def get_total_fiducial_and_all_federated_token(self, user) -> Decimal:
-        serialized_wallet = self.cached_retrieve_by_signature(user).validated_data
+    def get_total_fiducial_and_all_federated_token(self, user, use_cache=True) -> Decimal:
+        # Lecture du wallet Fedow. Avec cache (10 s) pour les affichages courants ;
+        # frais (sans cache) quand le solde va servir tout de suite a un paiement.
+        # / Read the Fedow wallet. Cached (10s) for plain displays; fresh (no cache)
+        # / when the balance is about to be used for a payment.
+        if use_cache:
+            serialized_wallet = self.cached_retrieve_by_signature(user).validated_data
+        else:
+            serialized_wallet = self.retrieve_by_signature(user).validated_data
         total_euro = 0
 
         # Prise en compte du tenant d'origine de la demande

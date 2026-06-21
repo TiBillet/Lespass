@@ -1,5 +1,102 @@
 # Changelog / Journal des modifications
 
+## Fix compta : la monnaie fédérée (FED) n'est plus comptée comme du cashless local / Accounting fix: federated currency (FED) no longer counted as local cashless
+
+**Date :** 2026-06-21
+**Migration :** Non / No
+
+**Quoi / What :** La monnaie fédérée du réseau (FED, moyen de paiement `STRIPE_FED`) était partout
+**assimilée au cashless local** (`LOCAL_EURO`) : mapping de cascade, total de clôture, ventilation
+FEC. Résultat : 100 % du FED encaissé aurait été comptabilisé comme de la monnaie locale. Corrigé :
+le FED a maintenant son **total et son compte de trésorerie distincts**.
+/ The federated network currency (FED, `STRIPE_FED`) was everywhere assimilated to local cashless
+(`LOCAL_EURO`): cascade mapping, closure total, FEC ventilation. Fixed: FED now has its own total and
+treasury account.
+
+**Pourquoi / Why :** Erreur de compta **latente** (pas encore déclenchée : pas de FED local, interop
+FED au POS pas encore active) mais critique dès la première vente FED. Le FED (poche du réseau Fedow)
+et la monnaie locale (poche du lieu) sont deux trésoreries différentes.
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `laboutik/views.py` | `MAPPING_ASSET_CATEGORY_PAYMENT_METHOD` : `Asset.FED` → `STRIPE_FED` (était `LOCAL_EURO`) |
+| `laboutik/reports.py` | `calculer_totaux_par_moyen` : nouveau `total_federe` (STRIPE_FED), distinct du cashless, inclus dans le total, exposé sous la clé `federe` |
+| `laboutik/ventilation.py` | `CLE_RAPPORT_VERS_CODE_PAIEMENT` : + `'federe' → 'SF'` |
+| `laboutik/management/commands/charger_plan_comptable.py` | `SF` ajouté aux libellés + aux 2 jeux (compte `None`, à configurer) |
+| 4 templates clôture (PDF officiel + 3 admin) | Ligne « Fédéré (FED) » conditionnelle |
+
+**À configurer / To configure :** le **compte de trésorerie** du moyen `SF` (Fédéré) dans l'admin
+`MappingMoyenDePaiement` (logique : avances clients **fédérées**, distinct du cashless local). Tant
+qu'il est `None`, le FED apparaît dans le total de clôture mais n'est pas ventilé au FEC.
+
+**i18n :** nouveau msgid `"Fédéré (FED)"` (à compiler).
+
+**Tests :** `pytest tests/pytest/test_comptabilite_*.py` → 52 passed.
+
+## Fix simulateur NFC : saisie manuelle de tag cassée (`conf` non défini) / Fix NFC simulator: manual tag input broken
+
+**Date :** 2026-06-21
+**Migration :** Non / No
+
+**Quoi / What :** Dans le simulateur de scan NFC (mode DEV/DEMO), saisir un tag à la main puis
+« Valider » levait `ReferenceError: conf is not defined` et ne scannait rien. Le clic sur les
+cartes démo prédéfinies n'était pas affecté.
+/ In the NFC scan simulator (DEV/DEMO), typing a tag manually then clicking "Valider" raised
+`ReferenceError: conf is not defined`. Clicking the predefined demo cards was not affected.
+
+**Pourquoi / Why :** `soumettreTagManuel` (dans `showUiSimu`) appelait
+`this.SendTagIdAndSubmit(tagSaisi, conf)` avec `conf` non défini dans ce scope — les deux autres
+appels (lecture réelle, clic carte démo) utilisent `this.conf`.
+/ `soumettreTagManuel` used `conf` instead of `this.conf` (the two other call sites use `this.conf`).
+
+**Fix :** `laboutik/static/js/nfc.js:136` — `conf` → `this.conf`. Bug DEV-only (le simulateur
+n'existe qu'en `DEMO=True`, aucun impact prod).
+
+## C-C / C1 — Solde complet (local + FED réseau) au scan carte POS / Full balance (local + FED network) on POS card scan
+
+**Date :** 2026-06-21
+**Migration :** Non / No
+
+**Quoi / What :** Au scan d'une carte au POS V2 (`retour_carte`), l'écran de retour carte
+affiche désormais le solde **complet** : les monnaies locales (fedow_core, base locale) **et** le
+solde **FED du réseau fédéré**, lu en **temps réel** sur le Fedow distant. Un nouveau cran
+« Réseau (FED) » apparaît dans le détail des soldes, et le « Solde total » inclut le FED.
+/ When a card is scanned at the V2 POS, the card feedback screen now shows the **full** balance:
+local currencies (fedow_core) **and** the **FED network balance**, read in real time from the
+remote Fedow. A new "Réseau (FED)" line appears in the balance breakdown, and the total includes FED.
+
+**Pourquoi / Why :** Lot C-C de l'intégration laboutik V2 (scénario S6). Une carte du réseau
+fédéré peut porter du FED (et des monnaies fédérées legacy) qui vit sur le Fedow distant, séparé
+des monnaies locales du tenant. Le caissier et le client doivent voir le solde réel et complet
+de la carte, comme en LaBoutik V1. C'est la **lecture** (C1) ; l'écriture (débit FED dans la
+cascade) viendra en C2.
+/ Batch C-C of the laboutik V2 integration (S6 scenario). This is the read side (C1); the write
+side (FED debit in the cascade) comes in C2.
+
+**Comment / How :**
+- **Helper commun** `obtenir_solde_complet_carte(carte)` (module-level, `laboutik/views.py`) :
+  lit les locaux (`WalletService.obtenir_tous_les_soldes`) et — si la carte est liée à un user
+  et que le tenant a une place Fedow (`can_fedow()`) — le FED **frais** (sans cache). Dégradé
+  silencieux si Fedow injoignable (`fed_disponible=False`, la vente n'est jamais bloquée).
+- **Lecture FED en temps réel** : micro-extension `get_total_fiducial_and_all_federated_token(user, use_cache=True)`
+  dans `fedow_connect/fedow_api.py`. `use_cache=False` lit via `retrieve_by_signature` (frais)
+  au lieu du cache 10 s. Défaut `True` : **aucun changement** pour les appelants existants.
+- **Front** : cran « Réseau (FED) » dans `hx_card_feedback.html` (affichage server-side,
+  **zéro JavaScript**).
+
+### Fichiers / Files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `fedow_connect/fedow_api.py` | + param `use_cache=True` sur `get_total_fiducial_and_all_federated_token` (lecture fraîche si `False`) |
+| `laboutik/views.py` | + helper `obtenir_solde_complet_carte` ; `retour_carte` l'utilise et passe le FED au template ; + imports `FedowAPI`/`FedowConfig` |
+| `laboutik/templates/laboutik/partial/hx_card_feedback.html` | + cran « Réseau (FED) » (montant ou « Indisponible » si dégradé) |
+| `tests/pytest/test_c1_solde_complet_carte.py` | **Nouveau** — 5 tests (FED frais, dégradé, carte anonyme, sans place Fedow, agrégation locaux+FED) |
+
+**Tests :** `pytest tests/pytest/test_c1_solde_complet_carte.py` → 5 passed. Suite complète :
+267 passed, 1 skipped (zéro régression). Voir `A TESTER et DOCUMENTER/c1-solde-complet-carte-fed.md`.
+
 ## Wizard event public : fix email perdu via le chemin Tiers-Lieux / Public event wizard: fix email lost via the Tiers-Lieux path
 
 **Date :** 2026-06-18

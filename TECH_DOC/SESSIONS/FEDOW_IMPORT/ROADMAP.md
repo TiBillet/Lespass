@@ -221,8 +221,9 @@ Le client `fedow_connect` existant suffit : `card_tag_id_retrieve`,
   côté serveur Fedow — le POS n'en connaît que le total.
 - Échec/timeout HTTP → le montant repart en `total_complementaire`
   (écran complément existant : espèces/CB/2e carte). Pas de retry automatique.
-- LigneArticle : `payment_method=LOCAL_EURO` + asset uuid legacy en référence
-  (les clôtures/FEC passent sans modification — vérifié doc 08 §1.4).
+- LigneArticle : `payment_method=STRIPE_FED` (PAS `LOCAL_EURO` : le FED réseau ≠ monnaie locale,
+  fix compta 2026-06-21) + asset uuid legacy en référence. La chaîne compta (cascade, clôture,
+  ventilation FEC) a été corrigée pour ventiler le FED à part (compte `SF` à configurer).
 - Ordre anti-compensation : débit legacy d'abord (hors atomic), puis bloc
   atomic local ; si l'atomic échoue après débit legacy → toast + journal
   d'incident (cas rarissime : race locale) — procédure documentée.
