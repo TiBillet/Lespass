@@ -168,23 +168,66 @@ def test_carte_liee_fedow_down_degrade_sans_bloquer(carte_liee):
 
 
 def test_carte_anonyme_pas_de_lecture_fed(carte_anonyme):
-    """Carte anonyme (sans user) : pas de signature RSA possible → on ne lit PAS le FED
-    et on n'instancie même pas FedowAPI.
-    / Anonymous card (no user): no RSA signature possible → FED is not read and FedowAPI
-    is not even instantiated.
+    """Carte anonyme (sans user) : son wallet est résolu DEPUIS Fedow (source de vérité,
+    wallet éphémère), mais comme il n'y a pas de user → pas de signature RSA possible →
+    on ne LIT PAS le solde FED du réseau (get_total_fiducial... n'est jamais appelé).
+    / Anonymous card (no user): its wallet is resolved FROM Fedow (source of truth, ephemeral
+    wallet), but with no user → no RSA signature → the FED network balance is NOT read
+    (get_total_fiducial... is never called).
     """
     from laboutik.views import obtenir_solde_complet_carte
+
+    # uuid Fedow de la carte anonyme (wallet éphémère). On le garde pour le nettoyage.
+    # / Fedow uuid of the anonymous card (ephemeral wallet). Kept for cleanup.
+    wallet_uuid_fedow = str(uuidlib.uuid4())
 
     with (
         mock.patch("laboutik.views.FedowConfig"),
         mock.patch("laboutik.views.FedowAPI") as MockAPI,
     ):
+        # Fedow connaît la carte : il renvoie un wallet éphémère (carte anonyme).
+        # _obtenir_ou_creer_wallet va le miroir en local avec le MÊME uuid.
+        # / Fedow knows the card: it returns an ephemeral wallet (anonymous card).
+        # _obtenir_ou_creer_wallet mirrors it locally with the SAME uuid.
+        MockAPI.return_value.NFCcard.card_tag_id_retrieve.return_value = {
+            "wallet_uuid": wallet_uuid_fedow,
+            "is_wallet_ephemere": True,
+            "origin": {},
+        }
+        # Référence de la LECTURE FED réseau : elle ne doit JAMAIS être appelée ici.
+        # / Reference to the FED network READ: it must NEVER be called here.
+        lecture_fed = (
+            MockAPI.return_value.wallet.get_total_fiducial_and_all_federated_token
+        )
+
         with tenant_context(carte_anonyme["tenant"]):
             solde = obtenir_solde_complet_carte(carte_anonyme["carte"])
 
     assert solde["fed_disponible"] is False
     assert solde["fed_centimes"] == 0
-    MockAPI.assert_not_called()
+    # Le solde FED réseau n'est PAS lu (pas de user → pas de signature).
+    # / The FED network balance is NOT read (no user → no signature).
+    lecture_fed.assert_not_called()
+
+    # Nettoyage du wallet éphémère miroir créé par la résolution Fedow.
+    # / Cleanup of the mirror ephemeral wallet created by the Fedow resolution.
+    with tenant_context(carte_anonyme["tenant"]):
+        from AuthBillet.models import Wallet
+        from fedow_core.models import Token
+
+        carte_anonyme["carte"].refresh_from_db()
+        wallet_eph = carte_anonyme["carte"].wallet_ephemere
+        if wallet_eph is not None:
+            carte_anonyme["carte"].wallet_ephemere = None
+            carte_anonyme["carte"].save(update_fields=["wallet_ephemere"])
+            Token.objects.filter(wallet=wallet_eph).delete()
+            try:
+                wallet_eph.delete()
+            except Exception:
+                pass
+        # Filet de sécurité : supprimer un wallet orphelin au même uuid si présent.
+        # / Safety net: delete an orphan wallet with the same uuid if present.
+        Wallet.objects.filter(uuid=wallet_uuid_fedow).delete()
 
 
 def test_tenant_sans_place_fedow_pas_de_lecture_fed(carte_liee):

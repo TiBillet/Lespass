@@ -1,0 +1,113 @@
+{% extends "seo/base.html" %}
+{% load i18n static %}
+
+{# ================================================================ #}
+{# PAGE DE DETAIL D'UNE FONCTIONNALITE                               #}
+{# Vraie page indexable (rendu serveur complet). Contenu depuis le   #}
+{# registre seo.features.FEATURE_DETAILS via la vue feature_detail.  #}
+{# Le JSON-LD (BreadcrumbList + TechArticle) est injecte par base.html#}
+{# (variables json_ld + json_ld_org).                                #}
+{# / FEATURE DETAIL PAGE — real indexable page (full server render). #}
+{# Content from the FEATURE_DETAILS registry. JSON-LD injected by     #}
+{# base.html.                                                         #}
+{# ================================================================ #}
+
+{% block main_wrapper %}
+<main class="container-lg my-4 fd-page" data-testid="feature-detail-page">
+
+    {# Fil d'Ariane — les liens vers la landing utilisent le swap anti-blink   #}
+    {# htmx (hx-select="#seo-content") avec un href de repli sans JS.          #}
+    {# / Breadcrumb — landing links use the htmx anti-blink swap with a no-JS  #}
+    {# href fallback.                                                          #}
+    <nav class="fd-breadcrumb" aria-label="{% translate 'Fil d\'Ariane' %}">
+        <a href="/"
+           hx-get="/" hx-target="#seo-content" hx-select="#seo-content"
+           hx-swap="outerHTML" hx-push-url="true"
+           data-testid="fd-crumb-home">{% translate "Accueil" %}</a>
+        <span class="fd-breadcrumb-sep" aria-hidden="true">›</span>
+        <a href="/features/"
+           hx-get="/features/" hx-target="#seo-content" hx-select="#seo-content"
+           hx-swap="outerHTML" hx-push-url="true"
+           data-testid="fd-crumb-features">{% translate "Fonctionnalités" %}</a>
+        <span class="fd-breadcrumb-sep" aria-hidden="true">›</span>
+        <span class="fd-breadcrumb-current" aria-current="page">{{ feature.title }}</span>
+    </nav>
+
+    {# En-tete : icone + titre + accroche. #}
+    {# / Header: icon + title + tagline.   #}
+    <header class="fd-header" data-testid="fd-header">
+        <div class="fd-icon" aria-hidden="true">
+            <i class="bi {{ feature.icon }}"></i>
+        </div>
+        <h1 class="fd-title">{{ feature.title }}</h1>
+        <p class="fd-tagline">{{ feature.tagline }}</p>
+    </header>
+
+    {# Introduction riche (indexable). #}
+    {# / Rich intro (indexable).        #}
+    <p class="fd-lead">{{ feature.lead }}</p>
+
+    {# Sections alternees texte / capture. #}
+    {# / Alternating text / screenshot sections. #}
+    <div class="fd-sections">
+        {% for section in feature.sections %}
+        <section class="fd-section" data-testid="fd-section-{{ forloop.counter }}">
+            <div class="fd-section-text">
+                <h2 class="fd-section-heading">{{ section.heading }}</h2>
+                <p>{{ section.text }}</p>
+            </div>
+            {# Capture d'ecran a venir : placeholder etiquete (pas de fausse      #}
+            {# image). La figcaption porte la description reelle (accessibilite + #}
+            {# valeur SEO).                                                       #}
+            {# / Screenshot to come: labelled placeholder (no fake image). The    #}
+            {# figcaption carries the real description (a11y + SEO value).         #}
+            <figure class="fd-figure">
+                <div class="fd-figure-placeholder" aria-hidden="true">
+                    <i class="bi {{ feature.icon }}"></i>
+                    <span>{% translate "Capture à venir" %}</span>
+                </div>
+                <figcaption class="fd-figcaption">{{ section.capture_alt }}</figcaption>
+            </figure>
+        </section>
+        {% endfor %}
+    </div>
+
+    {# Appels a l'action : documentation + creer son espace. #}
+    {# / Calls to action: documentation + create your space.  #}
+    <div class="fd-cta" data-testid="fd-cta">
+        <a href="{{ feature.doc_url }}" target="_blank" rel="noopener"
+           class="btn btn-lg fd-btn-primary" data-testid="fd-cta-doc">
+            <i class="bi bi-book me-1" aria-hidden="true"></i>
+            {% translate "Lire la documentation" %}
+        </a>
+        <a href="/onboard/" class="btn btn-lg fd-btn-secondary" data-testid="fd-cta-create">
+            {% translate "Créer mon espace" %}
+        </a>
+    </div>
+
+    {# Maillage interne : les autres fonctionnalites (bon pour le SEO). #}
+    {# / Internal linking: the other features (good for SEO).           #}
+    {% if autres_fonctionnalites %}
+    <section class="fd-related" data-testid="fd-related">
+        <h2 class="fd-related-heading">{% translate "Autres fonctionnalités" %}</h2>
+        <ul class="fd-related-list">
+            {% for autre in autres_fonctionnalites %}
+            <li>
+                <a href="/features/{{ autre.slug }}/"
+                   hx-get="/features/{{ autre.slug }}/"
+                   hx-target="#seo-content" hx-select="#seo-content"
+                   hx-swap="outerHTML" hx-push-url="true"
+                   class="fd-related-item"
+                   data-testid="fd-related-{{ autre.slug }}">
+                    <i class="bi {{ autre.icon }}" aria-hidden="true"></i>
+                    {{ autre.title }}
+                    <i class="bi bi-arrow-right ms-auto" aria-hidden="true"></i>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+
+</main>
+{% endblock main_wrapper %}

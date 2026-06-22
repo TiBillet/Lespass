@@ -21,16 +21,20 @@ app_name = "seo"
 
 urlpatterns = [
     path("", views.landing, name="landing"),
+    # Hub des fonctionnalites (page liste). Avant la route <slug> pour la lisibilite.
+    # / Features hub (list page). Before the <slug> route for readability.
+    path("features/", views.features_hub, name="features_hub"),
     # Page de detail d'une fonctionnalite (captures, descriptions, liens doc).
     # / Feature detail page (screenshots, descriptions, doc links).
-    path("fonctionnalites/<slug:slug>/", views.feature_detail, name="feature_detail"),
-    path("lieux/", views.lieux, name="lieux"),
-    path("evenements/", views.evenements, name="evenements"),
+    path("features/<slug:slug>/", views.feature_detail, name="feature_detail"),
     path("recherche/", views.recherche, name="recherche"),
     path("explorer/", views.explorer, name="explorer"),
     path("robots.txt", robots_txt, name="robots_txt"),
     path("humans.txt", humans_txt, name="humans_txt"),
     path("sitemap.xml", views.sitemap_index_view, name="sitemap_index"),
+    # Sitemap des pages ROOT (landing + fonctionnalites), reference dans l'index.
+    # / ROOT pages sitemap (landing + features), referenced in the index.
+    path("sitemap-root.xml", views.sitemap_root_view, name="sitemap_root"),
     # /favicon.ico est demande automatiquement par les navigateurs sur toutes
     # les pages, y compris non-HTML (sitemap.xml, robots.txt). On evite le 404
     # en redirigeant vers le SVG vendore.

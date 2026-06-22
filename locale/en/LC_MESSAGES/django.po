@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-22 03:44+0000\n"
+"POT-Creation-Date: 2026-06-22 06:55+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -600,7 +600,9 @@ msgstr ""
 msgid ""
 "Envoi automatique des rapports de cloture par email (7h locale). / Automatic "
 "closure report email sending (7am local time)."
-msgstr "Automatic closure report email sending (7am local time). / Envoi automatique des rapports de clôture par email (7h locale)."
+msgstr ""
+"Automatic closure report email sending (7am local time). / Envoi automatique "
+"des rapports de clôture par email (7h locale)."
 
 #: Administration/admin/laboutik.py:108 Administration/admin/products.py:1422
 #: Administration/admin/products.py:1709 Administration/admin/products.py:1992
@@ -1483,7 +1485,7 @@ msgstr "Wallet / balance"
 
 #: Administration/admin/products.py:146 laboutik/printing/formatters.py:419
 #: laboutik/printing/formatters.py:516 laboutik/printing/formatters.py:622
-#: laboutik/serializers.py:358 laboutik/views.py:8183
+#: laboutik/serializers.py:358 laboutik/views.py:8253
 msgid "Especes"
 msgstr "Cash"
 
@@ -1493,12 +1495,12 @@ msgstr "Cash"
 #: laboutik/templates/laboutik/partial/hx_cloture_rapport.html:21
 #: laboutik/templates/laboutik/partial/hx_recap_en_cours.html:125
 #: laboutik/templates/laboutik/pdf/cloture_rapport_pdf.html:104
-#: laboutik/views.py:133 laboutik/views.py:3182 laboutik/views.py:8187
+#: laboutik/views.py:133 laboutik/views.py:3182 laboutik/views.py:8257
 msgid "Carte bancaire"
 msgstr "Bank card"
 
 #: Administration/admin/products.py:148 laboutik/printing/formatters.py:446
-#: laboutik/serializers.py:360 laboutik/views.py:8191
+#: laboutik/serializers.py:360 laboutik/views.py:8261
 msgid "Cheque"
 msgstr ""
 
@@ -1578,8 +1580,7 @@ msgstr "Premium / loyalty"
 #: BaseBillet/templates/faire_festival/views/home.html:232
 #: BaseBillet/templates/reunion/views/tenant/emails/welcome_email.html:82
 #: laboutik/templates/laboutik/partial/hx_display_type_payment.html:60
-#: onboard/templates/onboard/emails/ready.html:101
-#: seo/templates/seo/landing.html:113
+#: onboard/templates/onboard/emails/ready.html:101 seo/features.py:111
 msgid "Billetterie"
 msgstr "Ticketing"
 
@@ -1911,7 +1912,9 @@ msgid ""
 "Choisissez une combinaison de couleurs prête à l'emploi. Elle remplacera les "
 "champs couleur ci-dessous. / Choose a ready-to-use color combination. It "
 "will override the color fields below."
-msgstr "Choose a ready-to-use color combination. It will override the color fields below."
+msgstr ""
+"Choose a ready-to-use color combination. It will override the color fields "
+"below."
 
 #: Administration/admin/products.py:1404 Administration/admin/products.py:1691
 #: BaseBillet/models.py:1267
@@ -1938,7 +1941,10 @@ msgid ""
 "Si une image produit est définie ci-dessous, elle sera affichée à la place "
 "de cette icône. / If a product image is set below, it will be displayed "
 "instead of this icon."
-msgstr "Si une image produit est définie ci-dessous, elle sera affichée à la place de cette icône. / If a product image is set below, it will be displayed instead of this icon."
+msgstr ""
+"Si une image produit est définie ci-dessous, elle sera affichée à la place "
+"de cette icône. / If a product image is set below, it will be displayed "
+"instead of this icon."
 
 #: Administration/admin/products.py:1457
 #, python-brace-format
@@ -1949,7 +1955,8 @@ msgstr "Same VAT as category ({taux}%) if left empty. Overridable here. "
 msgid ""
 "Même TVA que la catégorie si laissé vide. / Same VAT as category if left "
 "empty."
-msgstr "Same VAT as category if left empty. / Same VAT as category if left empty."
+msgstr ""
+"Same VAT as category if left empty. / Same VAT as category if left empty."
 
 #: Administration/admin/products.py:1543 Administration/admin/products.py:1839
 msgid ""
@@ -1986,7 +1993,9 @@ msgid ""
 "Choisissez une combinaison prête à l'emploi. Elle remplacera les champs "
 "couleur ci-dessous. / Choose a ready-to-use color combination. It will "
 "override the color fields below."
-msgstr "Choose a ready-to-use color combination. It will override the color fields below."
+msgstr ""
+"Choose a ready-to-use color combination. It will override the color fields "
+"below."
 
 #: Administration/admin/products.py:1974 BaseBillet/models.py:965
 msgid "Text color"
@@ -2563,7 +2572,7 @@ msgstr "Automatic federation by tags"
 msgid "Présentation"
 msgstr "Presentation"
 
-#: Administration/admin_tenant.py:3480 seo/templates/seo/landing.html:187
+#: Administration/admin_tenant.py:3480 seo/features.py:557
 msgid "Agenda participatif"
 msgstr "Participatory agenda"
 
@@ -3326,7 +3335,7 @@ msgstr "Memberships"
 #: BaseBillet/templates/emails/membership_renewal_reminder.html:47
 #: BaseBillet/templates/reunion/views/membership/already_has_membership.html:20
 #: BaseBillet/templates/reunion/views/membership/payment_already_done.html:41
-#: seo/templates/seo/landing.html:20
+#: seo/templates/seo/landing.html:32
 msgid "Adhésion"
 msgstr "Membership"
 
@@ -3391,7 +3400,10 @@ msgid ""
 "Type de mouvement » → « Tout afficher » pour voir l'historique complet. Ce "
 "journal est en lecture seule : chaque mouvement est créé automatiquement "
 "lors d'une opération de stock."
-msgstr "Sales and automatic meter debits are hidden. Use the \"Movement type\" filter → \"Show all\" to see the full history. This log is read-only: each movement is created automatically when a stock operation occurs."
+msgstr ""
+"Sales and automatic meter debits are hidden. Use the \"Movement type\" "
+"filter → \"Show all\" to see the full history. This log is read-only: each "
+"movement is created automatically when a stock operation occurs."
 
 #: Administration/templates/admin/inventaire/stock_actions_partial.html:13
 msgid "Opérations de stock"
@@ -3407,7 +3419,7 @@ msgstr "Help: understanding actions"
 #: inventaire/models.py:24 inventaire/serializers.py:88
 #: laboutik/templates/laboutik/partial/article_panel_stock.html:116
 #: laboutik/templates/laboutik/partial/article_panel_stock.html:165
-#: laboutik/views.py:9225
+#: laboutik/views.py:9295
 msgid "Réception"
 msgstr "Reception"
 
@@ -3415,13 +3427,15 @@ msgstr "Reception"
 msgid ""
 "Ajoute du stock après une livraison. La quantité saisie est ajoutée au stock "
 "actuel."
-msgstr "Adds stock after a delivery. The entered quantity is added to the current stock."
+msgstr ""
+"Adds stock after a delivery. The entered quantity is added to the current "
+"stock."
 
 #: Administration/templates/admin/inventaire/stock_actions_partial.html:39
 #: Administration/templates/admin/inventaire/stock_actions_partial.html:105
 #: inventaire/models.py:25 inventaire/serializers.py:89
 #: laboutik/templates/laboutik/partial/article_panel_stock.html:173
-#: laboutik/views.py:9227
+#: laboutik/views.py:9297
 msgid "Ajustement"
 msgstr ""
 
@@ -3429,7 +3443,9 @@ msgstr ""
 msgid ""
 "Remplace la quantité actuelle par le stock réel compté lors d'un inventaire "
 "physique. Le système calcule le delta automatiquement."
-msgstr "Replaces the current quantity with the actual stock counted during a physical inventory. The system calculates the delta automatically."
+msgstr ""
+"Replaces the current quantity with the actual stock counted during a "
+"physical inventory. The system calculates the delta automatically."
 
 #: Administration/templates/admin/inventaire/stock_actions_partial.html:43
 #: Administration/templates/admin/inventaire/stock_actions_partial.html:116
@@ -3442,7 +3458,10 @@ msgid ""
 "Retire du stock pour un produit offert. Attention : cette action n'apparaît "
 "PAS dans les ventes ni les rapports comptables. Pour offrir un produit avec "
 "traçabilité comptable, utilisez le bouton « Offrir » dans le POS."
-msgstr "Removes stock for a complimentary product. Note: this action does NOT appear in sales or accounting reports. To offer a product with accounting traceability, use the \"Offer\" button in the POS."
+msgstr ""
+"Removes stock for a complimentary product. Note: this action does NOT appear "
+"in sales or accounting reports. To offer a product with accounting "
+"traceability, use the \"Offer\" button in the POS."
 
 #: Administration/templates/admin/inventaire/stock_actions_partial.html:47
 #: Administration/templates/admin/inventaire/stock_actions_partial.html:127
@@ -3490,7 +3509,10 @@ msgid ""
 "Sélectionnez l'article, indiquez la quantité initiale et l'unité de mesure. "
 "Un mouvement de type « Réception » sera automatiquement créé dans le journal "
 "des mouvements pour tracer cette entrée de stock initiale."
-msgstr "Select the item, enter the initial quantity and the unit of measure. A movement of type \"Reception\" will be automatically created in the movement log to trace this initial stock entry."
+msgstr ""
+"Select the item, enter the initial quantity and the unit of measure. A "
+"movement of type \"Reception\" will be automatically created in the movement "
+"log to trace this initial stock entry."
 
 #: Administration/templates/admin/inventaire/stock_list_before.html:10
 msgid "Cliquez sur le nom de l'article pour accéder aux opérations de stock"
@@ -3501,7 +3523,10 @@ msgid ""
 "Réception (livraison), ajustement (inventaire physique), offert, perte/"
 "casse. Le seuil d'alerte et l'autorisation de vente hors stock sont "
 "modifiables directement dans cette liste."
-msgstr "Reception (delivery), adjustment (physical inventory), complimentary, loss/breakage. The alert threshold and out-of-stock sale permission can be changed directly in this list."
+msgstr ""
+"Reception (delivery), adjustment (physical inventory), complimentary, loss/"
+"breakage. The alert threshold and out-of-stock sale permission can be "
+"changed directly in this list."
 
 #: Administration/templates/admin/membership/actions_panel.html:41
 #: crowds/templates/crowds/partial/participations.html:14
@@ -6969,7 +6994,7 @@ msgid "Toggle navigation"
 msgstr ""
 
 #: BaseBillet/templates/faire_festival/partials/navbar.html:91
-#: seo/templates/seo/base.html:123
+#: seo/templates/seo/base.html:140
 msgid "Contact"
 msgstr ""
 
@@ -7031,7 +7056,7 @@ msgid "Rechercher un événement"
 msgstr "Search for an event"
 
 #: BaseBillet/templates/faire_festival/views/event/list.html:130
-#: seo/templates/seo/base.html:132
+#: seo/templates/seo/base.html:149
 #: seo/templates/seo/partials/explorer_widget.html:52
 #: seo/templates/seo/recherche.html:13 seo/templates/seo/recherche.html:14
 msgid "Rechercher"
@@ -7976,7 +8001,7 @@ msgid "Language"
 msgstr ""
 
 #: BaseBillet/templates/reunion/partials/navbar.html:53
-#: seo/templates/seo/base.html:157
+#: seo/templates/seo/base.html:174
 msgid "Toggle theme"
 msgstr ""
 
@@ -8518,7 +8543,6 @@ msgstr ""
 #: onboard/templates/onboard/steps/03_place.html:68
 #: onboard/templates/onboard/steps/04_descriptions.html:165
 #: onboard/templates/onboard/steps/05_events.html:116
-#: seo/templates/seo/evenements.html:45
 msgid "Précédent"
 msgstr "Previous"
 
@@ -9573,8 +9597,7 @@ msgstr ""
 
 #: BaseBillet/templates/reunion/views/tenant/emails/welcome_email.html:86
 #: onboard/templates/onboard/emails/ready.html:105
-#: onboard/templates/onboard/steps/06_launch.html:120
-#: seo/templates/seo/landing.html:103
+#: onboard/templates/onboard/steps/06_launch.html:120 seo/features.py:48
 msgid "Adhésions et abonnements"
 msgstr "Memberships and subscriptions"
 
@@ -10837,6 +10860,8 @@ msgid "Administration TiBillet"
 msgstr "TiBillet Administration"
 
 #: comptabilite/templates/comptabilite/views/rapport_temps_reel.html:15
+#: seo/templates/seo/feature_detail.html:26
+#: seo/templates/seo/feature_hub.html:32 seo/views.py:264 seo/views.py:354
 msgid "Accueil"
 msgstr "Home"
 
@@ -11786,7 +11811,7 @@ msgstr "Please enter a valid duration (> 0)."
 msgid "Rechercher un projet, une description ou un tag"
 msgstr "Search for a project, a description or a tag"
 
-#: crowds/templates/crowds/views/list.html:55 seo/templates/seo/base.html:189
+#: crowds/templates/crowds/views/list.html:55 seo/templates/seo/base.html:210
 #: seo/templates/seo/recherche.html:6
 msgid "Recherche"
 msgstr "Search"
@@ -12089,7 +12114,9 @@ msgstr "The venue « %(name)s » has been excluded from the federation."
 msgid ""
 "Solde insuffisant pour '%(asset_name)s' : solde=%(solde)s centimes, demande="
 "%(demande)s centimes."
-msgstr "Insufficient balance for '%(asset_name)s': balance=%(solde)s cents, requested=%(demande)s cents."
+msgstr ""
+"Insufficient balance for '%(asset_name)s': balance=%(solde)s cents, "
+"requested=%(demande)s cents."
 
 #: fedow_core/exceptions.py:53
 #, python-brace-format
@@ -12115,7 +12142,9 @@ msgstr "This card is already linked to another account."
 msgid ""
 "Vous avez deja une carte TiBillet liee a votre compte. Declarez-la perdue "
 "avant d'en associer une nouvelle."
-msgstr "You already have a TiBillet card linked to your account. Declare it lost before associating a new one."
+msgstr ""
+"You already have a TiBillet card linked to your account. Declare it lost "
+"before associating a new one."
 
 #: fedow_core/models.py:76
 msgid "Token local fiduciaire"
@@ -12181,7 +12210,9 @@ msgstr "Pending invitations"
 msgid ""
 "Lieux invites a partager cet asset. Ils verront l'invitation dans leur admin "
 "et pourront accepter."
-msgstr "Venues invited to share this asset. They will see the invitation in their admin and will be able to accept it."
+msgstr ""
+"Venues invited to share this asset. They will see the invitation in their "
+"admin and will be able to accept it."
 
 #: fedow_core/models.py:208
 msgid "Lieux qui ont accepte de partager cet asset."
@@ -12337,7 +12368,9 @@ msgstr "Venues that have accepted to join this federation."
 msgid ""
 "Lieux invites a rejoindre cette federation. Ils verront l'invitation dans "
 "leur admin et pourront accepter."
-msgstr "Venues invited to join this federation. They will see the invitation in their admin and will be able to accept it."
+msgstr ""
+"Venues invited to join this federation. They will see the invitation in "
+"their admin and will be able to accept it."
 
 #: fedow_core/models.py:768
 msgid "Assets partages"
@@ -12697,7 +12730,9 @@ msgstr "Article font size"
 msgid ""
 "Taille de la police des noms d'articles sur l'interface caisse. / Font size "
 "for article names on the POS interface."
-msgstr "Taille de la police des noms d'articles sur l'interface caisse. / Font size for article names on the POS interface."
+msgstr ""
+"Taille de la police des noms d'articles sur l'interface caisse. / Font size "
+"for article names on the POS interface."
 
 #: laboutik/models.py:60
 msgid "Sunmi App ID (encrypted)"
@@ -12728,7 +12763,8 @@ msgid ""
 "Cle HMAC pour le chainage d'integrite des donnees d'encaissement. Generee "
 "automatiquement, stockee chiffree Fernet. / HMAC key for POS data integrity "
 "chaining. Auto-generated, Fernet-encrypted."
-msgstr "HMAC key for POS data integrity chaining. Auto-generated, Fernet-encrypted."
+msgstr ""
+"HMAC key for POS data integrity chaining. Auto-generated, Fernet-encrypted."
 
 #: laboutik/models.py:94
 msgid "Cash float (cents)"
@@ -12738,7 +12774,9 @@ msgstr ""
 msgid ""
 "Montant initial du tiroir-caisse en centimes. / Initial cash drawer amount "
 "in cents."
-msgstr "Initial cash drawer amount in cents. / Montant initial du tiroir-caisse en centimes."
+msgstr ""
+"Initial cash drawer amount in cents. / Montant initial du tiroir-caisse en "
+"centimes."
 
 #: laboutik/models.py:102
 msgid "Report email recipients"
@@ -12800,7 +12838,10 @@ msgid ""
 "Active le mode ecole. Les ventes sont marquees comme fictives et exclues des "
 "rapports de production. / Enables training mode. Sales are marked as "
 "fictitious and excluded from production reports."
-msgstr "Enables training mode. Sales are marked as fictitious and excluded from production reports. / Active le mode ecole. Les ventes sont marquees comme fictives et exclues des rapports de production."
+msgstr ""
+"Enables training mode. Sales are marked as fictitious and excluded from "
+"production reports. / Active le mode ecole. Les ventes sont marquees comme "
+"fictives et exclues des rapports de production."
 
 #: laboutik/models.py:246
 msgid "LaBoutik Configuration"
@@ -13114,7 +13155,9 @@ msgid ""
 "Point de vente depuis lequel la cloture a ete declenchee (informatif). La "
 "cloture couvre tout le tenant. / POS from which closure was triggered "
 "(informational). Closure covers the entire tenant."
-msgstr "POS from which closure was triggered (informational). Closure covers the entire tenant."
+msgstr ""
+"POS from which closure was triggered (informational). Closure covers the "
+"entire tenant."
 
 #: laboutik/models.py:873
 msgid "Cashier who performed the closure."
@@ -13198,7 +13241,9 @@ msgstr ""
 msgid ""
 "Numero sequentiel par niveau de cloture. Sans trou. Global au tenant. / "
 "Sequential number per closure level. No gap. Global to tenant."
-msgstr "Sequential number per closure level. No gap. Global to tenant. / Sequential number per closure level. No gap. Global to tenant."
+msgstr ""
+"Sequential number per closure level. No gap. Global to tenant. / Sequential "
+"number per closure level. No gap. Global to tenant."
 
 #: laboutik/models.py:963
 msgid ""
@@ -13223,7 +13268,8 @@ msgstr ""
 #: laboutik/models.py:984
 msgid ""
 "Detailed report: par_categorie, par_produit, par_moyen_paiement, commandes."
-msgstr "Detailed report: par_categorie, par_produit, par_moyen_paiement, commandes."
+msgstr ""
+"Detailed report: par_categorie, par_produit, par_moyen_paiement, commandes."
 
 #: laboutik/models.py:992
 msgid "Cash register closure"
@@ -13245,7 +13291,9 @@ msgstr "Article line"
 msgid ""
 "Ligne d'article concernee par cette impression. Null pour les clotures et "
 "billets. / Article line for this print. Null for closures and tickets."
-msgstr "Article line for this print. Null for closures and tickets. / Ligne d'article concernée par cette impression. Null pour les clôtures et billets."
+msgstr ""
+"Article line for this print. Null for closures and tickets. / Ligne "
+"d'article concernée par cette impression. Null pour les clôtures et billets."
 
 #: laboutik/models.py:1045
 msgid "Transaction UUID"
@@ -13266,7 +13314,9 @@ msgid ""
 "Cloture de caisse concernee par cette impression. Null pour les tickets de "
 "vente et billets. / Cash register closure for this print. Null for sale "
 "tickets and event tickets."
-msgstr "Cash register closure for this print. Null for sale tickets and event tickets."
+msgstr ""
+"Cash register closure for this print. Null for sale tickets and event "
+"tickets."
 
 #: laboutik/models.py:1076
 msgid ""
@@ -13343,7 +13393,9 @@ msgstr ""
 msgid ""
 "Ligne d'article dont le moyen de paiement a ete corrige. / Article line "
 "whose payment method was corrected."
-msgstr "Article line whose payment method was corrected. / Ligne d'article dont le moyen de paiement a été corrigé."
+msgstr ""
+"Article line whose payment method was corrected. / Ligne d'article dont le "
+"moyen de paiement a été corrigé."
 
 #: laboutik/models.py:1210
 msgid "Previous payment method"
@@ -13437,7 +13489,9 @@ msgstr ""
 msgid ""
 "Note libre sur le retrait d'especes. / Optional note about the cash "
 "withdrawal."
-msgstr "Optional note about the cash withdrawal. / Optional note about the cash withdrawal."
+msgstr ""
+"Optional note about the cash withdrawal. / Optional note about the cash "
+"withdrawal."
 
 #: laboutik/models.py:1364
 msgid "Cash withdrawal"
@@ -13478,7 +13532,8 @@ msgstr "Details"
 #: laboutik/models.py:1438
 msgid ""
 "Details de l'operation au format JSON. / Operation details in JSON format."
-msgstr "Operation details in JSON format. / Détail de l'opération au format JSON."
+msgstr ""
+"Operation details in JSON format. / Détail de l'opération au format JSON."
 
 #: laboutik/models.py:1450
 msgid ""
@@ -13518,7 +13573,9 @@ msgstr ""
 msgid ""
 "Ancien montant du fond de caisse en centimes. / Previous cash float amount "
 "in cents."
-msgstr "Previous cash float amount in cents. / Ancien montant du fond de caisse en centimes."
+msgstr ""
+"Previous cash float amount in cents. / Ancien montant du fond de caisse en "
+"centimes."
 
 #: laboutik/models.py:1533
 msgid "New amount (cents)"
@@ -13574,7 +13631,8 @@ msgstr ""
 #: laboutik/models.py:1628
 msgid ""
 "Numero du compte PCG (ex: 7072000). / PCG account number (e.g. 7072000)."
-msgstr "PCG account number (e.g. 7072000). / PCG account number (e.g. 7072000)."
+msgstr ""
+"PCG account number (e.g. 7072000). / PCG account number (e.g. 7072000)."
 
 #: laboutik/models.py:1637
 msgid "Account label"
@@ -13584,7 +13642,9 @@ msgstr ""
 msgid ""
 "Libelle descriptif du compte (ex: Ventes de marchandises). / Descriptive "
 "account label (e.g. Merchandise sales)."
-msgstr "Descriptive account label (e.g. Merchandise sales). / Libellé descriptif du compte (ex : Ventes de marchandises)."
+msgstr ""
+"Descriptive account label (e.g. Merchandise sales). / Libellé descriptif du "
+"compte (ex : Ventes de marchandises)."
 
 #: laboutik/models.py:1649
 msgid "Account nature"
@@ -13594,7 +13654,9 @@ msgstr ""
 msgid ""
 "Nature du compte : VENTE (classe 7), TVA (4457), TRESORERIE (5), etc. / "
 "Account nature: SALES (class 7), VAT (4457), TREASURY (5), etc."
-msgstr "Account nature: SALES (class 7), VAT (4457), TREASURY (5), etc. / Account nature: SALES (class 7), VAT (4457), TREASURY (5), etc."
+msgstr ""
+"Account nature: SALES (class 7), VAT (4457), TREASURY (5), etc. / Account "
+"nature: SALES (class 7), VAT (4457), TREASURY (5), etc."
 
 #: laboutik/models.py:1663
 msgid "VAT rate (%)"
@@ -13605,7 +13667,10 @@ msgid ""
 "Taux de TVA en pourcentage (ex: 20.00, 10.00, 5.50). Renseigner uniquement "
 "pour les comptes VENTE et TVA. / VAT rate as percentage (e.g. 20.00, 10.00, "
 "5.50). Only fill for SALES and VAT accounts."
-msgstr "Taux de TVA en pourcentage (ex: 20.00, 10.00, 5.50). Renseigner uniquement pour les comptes VENTE et TVA. / VAT rate as percentage (e.g. 20.00, 10.00, 5.50). Only fill for SALES and VAT accounts."
+msgstr ""
+"Taux de TVA en pourcentage (ex: 20.00, 10.00, 5.50). Renseigner uniquement "
+"pour les comptes VENTE et TVA. / VAT rate as percentage (e.g. 20.00, 10.00, "
+"5.50). Only fill for SALES and VAT accounts."
 
 #: laboutik/models.py:1678
 msgid ""
@@ -13626,7 +13691,9 @@ msgid ""
 "Code du moyen de paiement (ex: CA = especes, CC = carte bancaire, CH = "
 "cheque). Doit correspondre aux codes PaymentMethod. / Payment method code (e."
 "g. CA = cash, CC = credit card, CH = check). Must match PaymentMethod codes."
-msgstr "Payment method code (e.g. CA = cash, CC = credit card, CH = check). Must match PaymentMethod codes."
+msgstr ""
+"Payment method code (e.g. CA = cash, CC = credit card, CH = check). Must "
+"match PaymentMethod codes."
 
 #: laboutik/models.py:1749
 msgid "Payment method label"
@@ -13899,7 +13966,10 @@ msgid ""
 "\n"
 "\t\t\t\t%(vendues)s places vendues sur %(max)s\n"
 "\t\t\t"
-msgstr "\n\t\t\t\t%(vendues)s seats sold out of %(max)s\n\t\t\t"
+msgstr ""
+"\n"
+"\t\t\t\t%(vendues)s seats sold out of %(max)s\n"
+"\t\t\t"
 
 #: laboutik/templates/cotton/bt/paiement.html:23
 #: laboutik/templates/laboutik/partial/hx_recap_en_cours.html:143
@@ -14071,13 +14141,17 @@ msgstr "Adds stock after a delivery."
 msgid ""
 "Remplace la quantité actuelle par le stock réel compté. Le système calcule "
 "le delta."
-msgstr "Replaces the current quantity with the actual counted stock. The system calculates the delta."
+msgstr ""
+"Replaces the current quantity with the actual counted stock. The system "
+"calculates the delta."
 
 #: laboutik/templates/laboutik/partial/article_panel_stock.html:178
 msgid ""
 "Si bloquée, l'article est grisé et invendable en rupture. Si autorisée, la "
 "vente continue même à stock négatif."
-msgstr "If blocked, the item is greyed out and cannot be sold when out of stock. If allowed, sales continue even with negative stock."
+msgstr ""
+"If blocked, the item is greyed out and cannot be sold when out of stock. If "
+"allowed, sales continue even with negative stock."
 
 #: laboutik/templates/laboutik/partial/article_panel_stock.html:181
 msgid "Chaque action est tracée dans le journal des mouvements."
@@ -14376,7 +14450,7 @@ msgid "Achat possible par :"
 msgstr "Purchase possible by:"
 
 #: laboutik/templates/laboutik/partial/hx_impression_ok.html:15
-#: laboutik/views.py:7996
+#: laboutik/views.py:8066
 msgid "Reçu imprimé"
 msgstr "Receipt printed"
 
@@ -14386,7 +14460,10 @@ msgid ""
 "\n"
 "\t\t\t%(vendues)s places vendues sur %(max)s\n"
 "\t\t"
-msgstr "\n\t\t\t%(vendues)s seats sold out of %(max)s\n\t\t"
+msgstr ""
+"\n"
+"\t\t\t%(vendues)s seats sold out of %(max)s\n"
+"\t\t"
 
 #: laboutik/templates/laboutik/partial/hx_lire_nfc_client.html:20
 msgid "Posez la carte du client sur le lecteur"
@@ -14477,7 +14554,7 @@ msgid "REMBOURSEMENT"
 msgstr ""
 
 #: laboutik/templates/laboutik/partial/hx_print_confirmation.html:15
-#: laboutik/views.py:8130
+#: laboutik/views.py:8200
 msgid "Impression lancée"
 msgstr "Print started"
 
@@ -14532,7 +14609,9 @@ msgstr "Close all cash registers"
 msgid ""
 "Cette action va clôturer TOUTES les caisses. Les tables ouvertes seront "
 "fermées et les commandes en cours annulées."
-msgstr "This action will close ALL cash registers. Open tables will be closed and ongoing orders cancelled."
+msgstr ""
+"This action will close ALL cash registers. Open tables will be closed and "
+"ongoing orders cancelled."
 
 #: laboutik/templates/laboutik/partial/hx_recap_en_cours.html:275
 msgid "La clôture est définitive et ne peut pas être annulée."
@@ -14775,7 +14854,7 @@ msgid "Carte client 3"
 msgstr "Customer card 3"
 
 #: laboutik/views.py:244 laboutik/views.py:961 laboutik/views.py:5877
-#: laboutik/views.py:6533 laboutik/views.py:7707
+#: laboutik/views.py:6533 laboutik/views.py:7777
 msgid "Carte inconnue"
 msgstr "Unknown card"
 
@@ -14797,8 +14876,8 @@ msgstr "No point of sale configured"
 
 #: laboutik/views.py:1556 laboutik/views.py:1738 laboutik/views.py:1812
 #: laboutik/views.py:2153 laboutik/views.py:2859 laboutik/views.py:5172
-#: laboutik/views.py:5346 laboutik/views.py:6896 laboutik/views.py:8055
-#: laboutik/views.py:8474 laboutik/views.py:8814
+#: laboutik/views.py:5346 laboutik/views.py:6896 laboutik/views.py:8125
+#: laboutik/views.py:8544 laboutik/views.py:8884
 msgid "Point de vente introuvable"
 msgstr "Point of sale not found"
 
@@ -14822,7 +14901,7 @@ msgstr "No sale to close"
 msgid "Rapport envoyé par email"
 msgstr "Report sent by email"
 
-#: laboutik/views.py:2165 laboutik/views.py:8066
+#: laboutik/views.py:2165 laboutik/views.py:8136
 msgid "Aucune imprimante configuree pour ce point de vente"
 msgstr "No printer configured for this point of sale"
 
@@ -14863,7 +14942,8 @@ msgstr "Chart of accounts loaded successfully."
 #, python-format
 msgid ""
 "Plan comptable remplace avec succes (%(nb)s comptes precedents supprimes)."
-msgstr "Chart of accounts replaced successfully (%(nb)s previous accounts deleted)."
+msgstr ""
+"Chart of accounts replaced successfully (%(nb)s previous accounts deleted)."
 
 #: laboutik/views.py:2894
 msgid "Aucune coupure saisie"
@@ -14931,7 +15011,7 @@ msgstr "Local currency not configured"
 msgid "Réseau (FED)"
 msgstr "Network (FED)"
 
-#: laboutik/views.py:6185 laboutik/views.py:7096
+#: laboutik/views.py:6185 laboutik/views.py:7096 laboutik/views.py:7428
 msgid "Le solde du réseau a changé, rescannez la carte"
 msgstr "The network balance has changed, please rescan the card"
 
@@ -14945,13 +15025,14 @@ msgstr "Card 1 unknown"
 
 #: laboutik/views.py:7040
 msgid "Le solde a changé, le paiement complet est possible. Réessayez."
-msgstr "The balance has changed, full payment is now possible. Please try again."
+msgstr ""
+"The balance has changed, full payment is now possible. Please try again."
 
-#: laboutik/views.py:7241 laboutik/views.py:7595
+#: laboutik/views.py:7241 laboutik/views.py:7665
 msgid "Solde insuffisant. Le solde a changé depuis la lecture."
 msgstr "Insufficient balance. The balance has changed since the last read."
 
-#: laboutik/views.py:7277 laboutik/views.py:7637
+#: laboutik/views.py:7277 laboutik/views.py:7707
 msgid "NFC"
 msgstr ""
 
@@ -14967,136 +15048,136 @@ msgstr "The 2nd card is the same as the 1st. Please use a different card."
 msgid "Carte 2 inconnue"
 msgstr "Card 2 unknown"
 
-#: laboutik/views.py:7659
+#: laboutik/views.py:7729
 msgid "Moyen de complément non reconnu"
 msgstr "Unrecognized complement method"
 
-#: laboutik/views.py:7807 laboutik/views.py:7886
+#: laboutik/views.py:7877 laboutik/views.py:7956
 msgid "Ne peut pas vider une carte primaire."
 msgstr "Cannot empty a primary card."
 
-#: laboutik/views.py:7813 laboutik/views.py:7892
+#: laboutik/views.py:7883 laboutik/views.py:7962
 msgid "Carte client inconnue."
 msgstr ""
 
-#: laboutik/views.py:7817
+#: laboutik/views.py:7887
 msgid "Carte vierge."
 msgstr "Blank card."
 
-#: laboutik/views.py:7835
+#: laboutik/views.py:7905
 msgid "Aucun solde remboursable sur cette carte."
 msgstr "No refundable balance on this card."
 
-#: laboutik/views.py:7900
+#: laboutik/views.py:7970
 msgid "PV introuvable."
 msgstr "POS not found."
 
-#: laboutik/views.py:7907
+#: laboutik/views.py:7977
 msgid "Cette carte caissier n'a pas acces a ce PV."
 msgstr "This cashier card does not have access to this point of sale."
 
-#: laboutik/views.py:7924
+#: laboutik/views.py:7994
 msgid "Aucun solde remboursable (solde a pu changer)."
 msgstr ""
 
-#: laboutik/views.py:7963
+#: laboutik/views.py:8033
 msgid "Parametres manquants."
 msgstr ""
 
-#: laboutik/views.py:7974
+#: laboutik/views.py:8044
 msgid "Pas d'imprimante configuree sur ce PV."
 msgstr "No printer configured on this POS."
 
-#: laboutik/views.py:8039
+#: laboutik/views.py:8109
 msgid "Donnees manquantes pour l'impression"
 msgstr "Missing data for printing"
 
-#: laboutik/views.py:8083
+#: laboutik/views.py:8153
 msgid "Aucune ligne trouvee pour cette transaction"
 msgstr "No line found for this transaction"
 
-#: laboutik/views.py:8160 laboutik/views.py:8173 laboutik/views.py:8278
+#: laboutik/views.py:8230 laboutik/views.py:8243 laboutik/views.py:8348
 msgid "Ligne d'article introuvable"
 msgstr "Article line not found"
 
-#: laboutik/views.py:8296
+#: laboutik/views.py:8366
 msgid "Les paiements cashless ne peuvent pas etre modifies"
 msgstr "Cashless payments cannot be modified"
 
-#: laboutik/views.py:8313
+#: laboutik/views.py:8383
 msgid "Cette vente est couverte par une cloture. Modification interdite."
 msgstr "This sale is covered by a closure. Modification forbidden."
 
-#: laboutik/views.py:8327
+#: laboutik/views.py:8397
 msgid "Le moyen de paiement est deja identique"
 msgstr "The payment method is already the same"
 
-#: laboutik/views.py:8490
+#: laboutik/views.py:8560
 msgid "Table introuvable"
 msgstr "Table not found"
 
-#: laboutik/views.py:8540
+#: laboutik/views.py:8610
 msgid "Aucun article valide dans la commande"
 msgstr "No valid item in the order"
 
-#: laboutik/views.py:8581
+#: laboutik/views.py:8651
 msgid "Commande créée"
 msgstr "Order created"
 
-#: laboutik/views.py:8610 laboutik/views.py:8707 laboutik/views.py:8789
-#: laboutik/views.py:9034
+#: laboutik/views.py:8680 laboutik/views.py:8777 laboutik/views.py:8859
+#: laboutik/views.py:9104
 msgid "Commande introuvable"
 msgstr "Order not found"
 
-#: laboutik/views.py:8622
+#: laboutik/views.py:8692
 msgid "Cette commande n'est plus ouverte"
 msgstr "This order is no longer open"
 
-#: laboutik/views.py:8648
+#: laboutik/views.py:8718
 msgid "Aucun article fourni"
 msgstr ""
 
-#: laboutik/views.py:8680
+#: laboutik/views.py:8750
 msgid "Articles ajoutés"
 msgstr "Items added"
 
-#: laboutik/views.py:8718
+#: laboutik/views.py:8788
 msgid "Cette commande ne peut pas être marquée comme servie"
 msgstr "This order cannot be marked as served"
 
-#: laboutik/views.py:8751
+#: laboutik/views.py:8821
 msgid "Commande servie"
 msgstr "Order served"
 
-#: laboutik/views.py:8799
+#: laboutik/views.py:8869
 msgid "Cette commande ne peut pas être payée"
 msgstr "This order cannot be paid"
 
-#: laboutik/views.py:8847
+#: laboutik/views.py:8917
 msgid "Aucun article à payer dans cette commande"
 msgstr "No item to pay in this order"
 
-#: laboutik/views.py:9044
+#: laboutik/views.py:9114
 msgid "Une commande payée ne peut pas être annulée"
 msgstr "A paid order cannot be cancelled"
 
-#: laboutik/views.py:9079
+#: laboutik/views.py:9149
 msgid "Commande annulée"
 msgstr "Order cancelled"
 
-#: laboutik/views.py:9226
+#: laboutik/views.py:9296
 msgid "Perte"
 msgstr ""
 
-#: laboutik/views.py:9267
+#: laboutik/views.py:9337
 msgid "autorisée"
 msgstr "authorized"
 
-#: laboutik/views.py:9267
+#: laboutik/views.py:9337
 msgid "bloquée"
 msgstr "blocked"
 
-#: laboutik/views.py:9368
+#: laboutik/views.py:9438
 msgid "Legacy API key, bridge flow not available. Please re-pair the device."
 msgstr ""
 
@@ -15837,7 +15918,7 @@ msgstr ""
 #: onboard/templates/onboard/steps/06_launch.html:137
 #: onboard/templates/onboard/steps/06_launch.html:151
 #: onboard/templates/onboard/steps/06_launch.html:158
-#: seo/templates/seo/base.html:116 seo/templates/seo/landing.html:35
+#: seo/templates/seo/base.html:123 seo/templates/seo/landing.html:47
 #: seo/templates/seo/partials/tibillet_community_links.html:36
 msgid "Documentation"
 msgstr ""
@@ -15873,6 +15954,7 @@ msgstr ""
 "measure your impact."
 
 #: onboard/templates/onboard/steps/06_launch.html:144
+#: seo/templates/seo/partials/_features_grid.html:23
 msgid "En savoir plus"
 msgstr "Learn more"
 
@@ -15918,6 +16000,836 @@ msgstr ""
 #: onboard/views.py:1371
 msgid "Wrong code."
 msgstr ""
+
+#: seo/features.py:51
+msgid ""
+"Gérez les adhésions à votre association et proposez des abonnements. Suivez "
+"les renouvellements et offrez des avantages exclusifs aux membres."
+msgstr ""
+"Manage memberships for your association and offer subscriptions. Track "
+"renewals and provide exclusive benefits to members."
+
+#: seo/features.py:54
+msgid "Gérez vos membres et vos abonnements, sans tableur."
+msgstr "Manage your members and subscriptions, without a spreadsheet."
+
+#: seo/features.py:56
+msgid ""
+"TiBillet gère les adhésions de votre association et les abonnements "
+"récurrents. Chaque membre a une fiche, un statut à jour, et accède "
+"automatiquement à ses avantages : tarifs réduits, accès réservés, monnaie "
+"cadeau. Les renouvellements sont suivis, les relances possibles, et tout "
+"reste relié à votre billetterie et à votre caisse."
+msgstr "TiBillet manages your organisation's memberships and recurring subscriptions. Each member has a profile, an up-to-date status, and automatically accesses their benefits: discounted rates, reserved access, gift currency. Renewals are tracked, reminders are possible, and everything stays linked to your ticketing and point of sale."
+
+#: seo/features.py:62
+msgid "Adhésions et abonnements en ligne — TiBillet"
+msgstr "Online memberships and subscriptions — TiBillet"
+
+#: seo/features.py:64
+msgid ""
+"Gérez les adhésions de votre association et les abonnements récurrents : "
+"statut à jour, avantages membres, renouvellements et relances."
+msgstr "Manage your association's memberships and recurring subscriptions: up-to-date status, member benefits, renewals and reminders."
+
+#: seo/features.py:70
+msgid "Une adhésion reliée à tout le reste"
+msgstr "A membership connected to everything else"
+
+#: seo/features.py:72
+msgid ""
+"L'adhésion n'est pas une case isolée : elle débloque des tarifs "
+"préférentiels en billetterie, des accès au bar, des avantages cashless. Le "
+"statut d'un membre est vérifié partout, automatiquement."
+msgstr "Membership is not an isolated checkbox: it unlocks preferential ticket prices, bar access, and cashless benefits. A member's status is verified everywhere, automatically."
+
+#: seo/features.py:77
+msgid ""
+"Fiche d'un membre avec son statut d'adhésion à jour et ses avantages "
+"associés."
+msgstr "Member profile showing current membership status and associated benefits."
+
+#: seo/features.py:82
+msgid "Abonnements récurrents et prélèvement"
+msgstr "Recurring subscriptions and direct debit"
+
+#: seo/features.py:84
+msgid ""
+"Proposez des cotisations annuelles ou des abonnements mensuels, payés en une "
+"fois ou prélevés régulièrement (SEPA). TiBillet suit les échéances et "
+"signale les retards."
+msgstr "Offer annual dues or monthly subscriptions, paid in full or collected regularly (SEPA). TiBillet tracks due dates and flags late payments."
+
+#: seo/features.py:89
+msgid ""
+"Écran de configuration d'un abonnement récurrent avec options de prélèvement."
+msgstr "Configuration screen for a recurring subscription with direct debit options."
+
+#: seo/features.py:94
+msgid "Renouvellements et relances"
+msgstr "Renewals and reminders"
+
+#: seo/features.py:96
+msgid ""
+"Voyez d'un coup d'œil qui est à jour, qui est en retard, qui arrive à "
+"échéance. Relancez par email les personnes concernées, sans exporter de "
+"liste à la main."
+msgstr "See at a glance who is up to date, who is late, who is about to expire. Send reminder emails to the relevant people, without manually exporting a list."
+
+#: seo/features.py:101
+msgid ""
+"Liste des adhérent·es filtrée par statut : à jour, en retard, à renouveler."
+msgstr "Member list filtered by status: up to date, overdue, to be renewed."
+
+#: seo/features.py:114
+msgid ""
+"Événements gratuits et payants avec prix préférentiels pour les adhérents. "
+"Sans frais cachés, sans commission surprise."
+msgstr ""
+"Free and paid events with preferential prices for members. No hidden fees, "
+"no surprise commission."
+
+#: seo/features.py:117
+msgid "Vendez vos billets sans frais cachés ni commission surprise."
+msgstr "Sell your tickets with no hidden fees or surprise commissions."
+
+#: seo/features.py:119
+msgid ""
+"La billetterie de TiBillet gère vos événements gratuits et payants, avec des "
+"tarifs préférentiels pour vos adhérent·es. Pas de commission prélevée sur "
+"chaque billet, pas de frais de dossier dissimulés : le prix affiché est le "
+"prix payé. Tout est relié à votre agenda et à votre base de membres, sur un "
+"logiciel libre que personne ne peut fermer."
+msgstr "TiBillet's ticketing handles your free and paid events, with preferential rates for your members. No commission taken on each ticket, no hidden fees: the displayed price is the price paid. Everything is linked to your calendar and your member database, on free software that no one can shut down."
+
+#: seo/features.py:125
+msgid "Billetterie en ligne sans frais cachés — TiBillet"
+msgstr "Online ticketing with no hidden fees — TiBillet"
+
+#: seo/features.py:127
+msgid ""
+"Billetterie en ligne libre et coopérative : événements gratuits et payants, "
+"tarifs adhérents, sans frais cachés ni commission."
+msgstr "Free and cooperative online ticketing: free and paid events, member pricing, no hidden fees or commission."
+
+#: seo/features.py:133
+msgid "Des billets sans frais cachés"
+msgstr "Tickets with no hidden fees"
+
+#: seo/features.py:135
+msgid ""
+"Vous fixez vos prix, vous encaissez la totalité. TiBillet ne prélève aucune "
+"commission par billet. Les seuls frais éventuels sont ceux, transparents, de "
+"votre prestataire de paiement. Pour une association, chaque euro compte : il "
+"reste chez vous."
+msgstr "You set your prices, you collect everything. TiBillet takes no commission per ticket. The only possible fees are those, transparent, of your payment provider. For an association, every euro counts: it stays with you."
+
+#: seo/features.py:141
+msgid ""
+"Page de réservation d'un événement avec le détail des tarifs et le prix "
+"total sans frais ajoutés."
+msgstr "Event booking page showing the breakdown of rates and the total price with no added fees."
+
+#: seo/features.py:146
+msgid "Tarifs préférentiels pour les adhérent·es"
+msgstr "Preferential rates for members"
+
+#: seo/features.py:148
+msgid ""
+"Proposez un prix réduit aux personnes à jour de cotisation. TiBillet vérifie "
+"l'adhésion au moment de la réservation : pas besoin de gérer des codes promo "
+"à la main. Vos membres bénéficient automatiquement de leur avantage."
+msgstr "Offer a reduced price to members who are up to date with their subscription. TiBillet checks membership at the time of booking: no need to manage promo codes manually. Your members automatically receive their benefit."
+
+#: seo/features.py:154
+msgid ""
+"Formulaire de réservation affichant un tarif adhérent réduit appliqué "
+"automatiquement."
+msgstr "Booking form showing a reduced member rate applied automatically."
+
+#: seo/features.py:159
+msgid "Paiement et billets reliés à votre agenda"
+msgstr "Payments and tickets linked to your calendar"
+
+#: seo/features.py:161
+msgid ""
+"Chaque vente alimente directement votre programmation et vos statistiques. "
+"Les billets sont envoyés par email, scannables à l'entrée. Et comme vos "
+"événements sont structurés pour les moteurs de recherche, ils sont trouvés "
+"par le public."
+msgstr "Every sale feeds directly into your programme and your statistics. Tickets are sent by email, scannable at the entrance. And because your events are structured for search engines, they are found by the public."
+
+#: seo/features.py:167
+msgid ""
+"Billet électronique avec QR code, prêt à être scanné à l'entrée de "
+"l'événement."
+msgstr "Electronic ticket with QR code, ready to be scanned at the event entrance."
+
+#: seo/features.py:177
+msgid "Agenda fédéré"
+msgstr "Federated agenda"
+
+#: seo/features.py:180
+msgid ""
+"Créez un agenda partagé et choisissez les lieux avec qui partager vos "
+"événements. Fédérez votre programmation avec d'autres structures."
+msgstr ""
+"Create a shared calendar and choose the venues to share your events with. "
+"Federate your programming with other organizations."
+
+#: seo/features.py:183
+msgid "Un agenda partagé entre lieux, sans plateforme centrale."
+msgstr "A shared calendar across venues, without a central platform."
+
+#: seo/features.py:185
+msgid ""
+"L'agenda fédéré relie votre programmation à celle d'autres lieux. Vous "
+"choisissez avec qui partager vos événements et lesquels remontent. Chaque "
+"lieu garde son autonomie — son agenda, sa charte, ses choix — tout en "
+"bénéficiant de la visibilité du réseau. Pas de plateforme centrale qui "
+"décide à votre place."
+msgstr "The federated calendar links your programme to that of other venues. You choose who can see your events and which ones are shared. Each venue keeps its autonomy — its own calendar, its own values, its own choices — while benefiting from the network's visibility. No central platform deciding on your behalf."
+
+#: seo/features.py:191
+msgid "Agenda culturel fédéré et partagé — TiBillet"
+msgstr "Federated and shared cultural calendar — TiBillet"
+
+#: seo/features.py:193
+msgid ""
+"Un agenda culturel fédéré entre lieux : choisissez vos partenaires, partagez "
+"vos événements, gardez votre autonomie. Sans plateforme centrale."
+msgstr "A cultural calendar federated across venues: choose your partners, share your events, keep your autonomy. No central platform."
+
+#: seo/features.py:199
+msgid "Vous choisissez avec qui fédérer"
+msgstr "You choose who to federate with"
+
+#: seo/features.py:201
+msgid ""
+"La fédération est un choix, pas une obligation. Vous décidez quels lieux "
+"voient vos événements et lesquels vous affichez chez vous. Une relation de "
+"confiance, réversible à tout moment."
+msgstr "Federation is a choice, not an obligation. You decide which venues can see your events and which ones you display at yours. A trust relationship, reversible at any time."
+
+#: seo/features.py:206
+msgid "Écran de sélection des lieux partenaires avec qui partager l'agenda."
+msgstr "Partner venue selection screen for sharing the calendar."
+
+#: seo/features.py:211
+msgid "Une saisie, plusieurs agendas"
+msgstr "Enter once, appear on multiple calendars"
+
+#: seo/features.py:213
+msgid ""
+"Créez un événement une fois ; il apparaît sur votre agenda et, si vous le "
+"souhaitez, sur ceux de vos partenaires. Pas de double saisie, pas de copier-"
+"coller entre plateformes."
+msgstr "Create an event once; it appears on your calendar and, if you wish, on those of your partners. No double entry, no copy-paste between platforms."
+
+#: seo/features.py:218
+msgid "Un même événement visible sur l'agenda de plusieurs lieux fédérés."
+msgstr "A single event visible on the calendar of several federated venues."
+
+#: seo/features.py:223
+msgid "L'autonomie d'abord"
+msgstr ""
+
+#: seo/features.py:225
+msgid ""
+"Chaque lieu reste maître de son espace : son identité, ses tarifs, ses "
+"conditions. La fédération ajoute de la visibilité sans imposer de règles "
+"communes ni de gouvernance centrale."
+msgstr "Each venue remains in control of its own space: its identity, its prices, its conditions. Federation adds visibility without imposing common rules or central governance."
+
+#: seo/features.py:230
+msgid ""
+"Deux agendas de lieux distincts partageant certains événements en commun."
+msgstr "Two separate venue calendars sharing some events in common."
+
+#: seo/features.py:240
+msgid "Caisse enregistreuse"
+msgstr "Cash register"
+
+#: seo/features.py:243
+msgid ""
+"Solution complète pour gérer vos ventes sur place, avec imprimantes de "
+"préparation en cuisine et gestion des stocks."
+msgstr ""
+"Complete solution to manage your on-site sales, with kitchen preparation "
+"printers and stock management."
+
+#: seo/features.py:246
+msgid "Encaissez au bar et sur les stands, simplement."
+msgstr "Take payments at the bar and at stalls, simply."
+
+#: seo/features.py:248
+msgid ""
+"La caisse TiBillet gère vos ventes sur place : bar, restauration, boutique. "
+"Elle pilote les imprimantes de préparation en cuisine, suit les stocks, et "
+"accepte espèces, carte bancaire et cashless. Pensée pour le rythme d'un "
+"événement, elle reste rapide même quand la file s'allonge."
+msgstr "The TiBillet point of sale handles your on-site sales: bar, catering, shop. It drives kitchen preparation printers, tracks stock, and accepts cash, bank cards, and cashless. Designed for the rhythm of an event, it stays fast even when queues get long."
+
+#: seo/features.py:253
+msgid "Caisse enregistreuse pour lieux culturels — TiBillet"
+msgstr "Cash register for cultural venues — TiBillet"
+
+#: seo/features.py:255
+msgid ""
+"Caisse enregistreuse pour bar et restauration : boutons rapides, impression "
+"en cuisine, gestion des stocks, clôture comptable."
+msgstr "Cash register for bar and catering: quick buttons, kitchen printing, stock management, accounting close."
+
+#: seo/features.py:261
+msgid "Pensée pour le rush"
+msgstr "Built for the rush"
+
+#: seo/features.py:263
+msgid ""
+"Boutons clairs, grands, organisés par catégorie : on encaisse vite, sans se "
+"tromper. Plusieurs points de vente peuvent tourner en parallèle sur le même "
+"événement."
+msgstr "Clear, large buttons organised by category: fast checkout, no mistakes. Multiple points of sale can run in parallel at the same event."
+
+#: seo/features.py:268
+msgid ""
+"Interface de caisse avec les articles organisés en boutons par catégorie."
+msgstr "Point-of-sale interface with items organised into category buttons."
+
+#: seo/features.py:273
+msgid "Cuisine et préparation"
+msgstr "Kitchen and preparation"
+
+#: seo/features.py:275
+msgid ""
+"Chaque commande part à l'imprimante du bon poste : bar, cuisine, planche. Le "
+"personnel prépare sans recopier, le service suit le rythme."
+msgstr "Each order goes to the right printer: bar, kitchen, board. Staff prepare without re-writing orders, service keeps pace."
+
+#: seo/features.py:280
+msgid "Ticket de préparation imprimé automatiquement au poste cuisine."
+msgstr "Preparation ticket automatically printed at the kitchen station."
+
+#: seo/features.py:284
+msgid "Stocks et clôture comptable"
+msgstr "Inventory & accounting close"
+
+#: seo/features.py:286
+msgid ""
+"Les stocks se décrémentent à chaque vente. En fin de service, la clôture "
+"donne le détail des recettes par moyen de paiement, prête pour la "
+"comptabilité."
+msgstr "Stock levels decrease with each sale. At the end of service, the closing report details revenue by payment method, ready for accounting."
+
+#: seo/features.py:291
+msgid ""
+"Écran de clôture de caisse avec le récapitulatif des ventes par moyen de "
+"paiement."
+msgstr "Cash register closing screen with a summary of sales by payment method."
+
+#: seo/features.py:301
+msgid "Cashless et carte NFC"
+msgstr "Cashless and NFC card"
+
+#: seo/features.py:304
+msgid ""
+"Système cashless comme en festival, avec vérification de l'adhésion sur la "
+"carte. Une seule carte pour plusieurs lieux du réseau."
+msgstr ""
+"Cashless system as used at festivals, with membership verification on the "
+"card. One card for multiple venues in the network."
+
+#: seo/features.py:307
+msgid "Une seule carte sans contact pour plusieurs lieux du réseau."
+msgstr "A single contactless card for several venues in the network."
+
+#: seo/features.py:309
+msgid ""
+"Le cashless de TiBillet fonctionne comme en festival : une carte sans "
+"contact rechargée à l'avance, des paiements rapides au bar et sur les "
+"stands. La même carte sert dans plusieurs lieux fédérés, vérifie l'adhésion, "
+"et peut porter plusieurs monnaies — euros, cadeaux, temps — sur une seule "
+"puce."
+msgstr "TiBillet's cashless works like at a festival: a contactless card topped up in advance, fast payments at the bar and at stalls. The same card works across federated venues, verifies membership, and can carry multiple currencies — euros, gifts, time — on a single chip."
+
+#: seo/features.py:315
+msgid "Cashless et carte NFC multi-lieux — TiBillet"
+msgstr "Cashless and multi-venue NFC card — TiBillet"
+
+#: seo/features.py:317
+msgid ""
+"Cashless NFC multi-lieux : une carte sans contact pour payer au bar, "
+"vérifier l'adhésion et porter plusieurs monnaies."
+msgstr "Multi-venue NFC cashless: a contactless card to pay at the bar, verify membership and carry multiple currencies."
+
+#: seo/features.py:323
+msgid "Une carte, plusieurs lieux"
+msgstr "One card, several venues"
+
+#: seo/features.py:325
+msgid ""
+"Grâce à la fédération, une même carte NFC est reconnue dans tous les lieux "
+"connectés du réseau. Le public n'a plus besoin d'une carte par festival ou "
+"par bar associatif : il recharge une fois, il paie partout où le réseau est "
+"présent."
+msgstr "Thanks to federation, a single NFC card is recognised at every connected venue in the network. The public no longer needs one card per festival or per community bar: recharge once, pay everywhere the network is present."
+
+#: seo/features.py:331
+msgid ""
+"Carte NFC TiBillet approchée d'un terminal de paiement au bar d'un lieu "
+"culturel."
+msgstr "TiBillet NFC card held near a payment terminal at the bar of a cultural venue."
+
+#: seo/features.py:336
+msgid "L'adhésion vérifiée sur la carte"
+msgstr "Membership verified on the card"
+
+#: seo/features.py:338
+msgid ""
+"La carte porte l'information d'adhésion. Au moment de payer ou d'accéder à "
+"un espace réservé aux membres, le système vérifie directement sur la carte, "
+"sans connexion permanente. Pratique pour les lieux où le réseau n'est pas "
+"toujours fiable."
+msgstr "The card carries the membership information. When paying or accessing a members-only area, the system checks directly on the card, without a permanent connection. Useful for venues where the network is not always reliable."
+
+#: seo/features.py:344
+msgid ""
+"Écran de caisse affichant le statut d'adhésion lu sur la carte NFC d'un·e "
+"visiteur·euse."
+msgstr "POS screen displaying the membership status read from a visitor's NFC card."
+
+#: seo/features.py:349
+msgid "Multi-monnaies : euros, cadeaux, temps"
+msgstr ""
+
+#: seo/features.py:351
+msgid ""
+"Une seule carte peut contenir plusieurs monnaies : des euros pour le bar, "
+"une monnaie cadeau pour valoriser les bénévoles, une monnaie temps pour "
+"l'entraide. Le cashless devient un outil d'économie locale, pas seulement un "
+"moyen de paiement."
+msgstr "A single card can hold several currencies: euros for the bar, a gift currency to reward volunteers, a time currency for mutual aid. Cashless becomes a tool for the local economy, not just a payment method."
+
+#: seo/features.py:357
+msgid ""
+"Détail d'une carte montrant plusieurs soldes distincts : euros, monnaie "
+"cadeau et monnaie temps."
+msgstr "Card detail showing several separate balances: euros, gift currency and time currency."
+
+#: seo/features.py:367
+msgid "Monnaie locale et temps"
+msgstr "Local currency and time"
+
+#: seo/features.py:370
+msgid ""
+"Monnaie temps, cadeaux et valorisation de bénévoles. Multi-monnaies sur une "
+"seule carte : euros, cadeaux, temps."
+msgstr ""
+"Time currency, gifts and volunteer recognition. Multi-currency on a single "
+"card: euros, gifts, time."
+
+#: seo/features.py:373
+msgid "Plusieurs monnaies sur une carte : euros, cadeaux, temps."
+msgstr "Multiple currencies on one card: euros, gifts, time."
+
+#: seo/features.py:375
+msgid ""
+"Au-delà de l'euro, TiBillet gère des monnaies dédiées : une monnaie cadeau "
+"pour remercier, une monnaie temps pour valoriser le bénévolat, une monnaie "
+"locale pour faire circuler la valeur dans le réseau. Tout tient sur la même "
+"carte, sans mélanger les comptes. Le cashless devient un outil d'économie "
+"locale et solidaire."
+msgstr "Beyond the euro, TiBillet manages dedicated currencies: a gift currency to say thank you, a time currency to value volunteering, a local currency to keep value circulating within the network. Everything fits on the same card, with separate accounts. Cashless becomes a tool for a local and solidarity economy."
+
+#: seo/features.py:381
+msgid "Monnaie locale et monnaie temps — TiBillet"
+msgstr "Local currency and time currency — TiBillet"
+
+#: seo/features.py:383
+msgid ""
+"Monnaie locale, monnaie temps et monnaie cadeau sur une seule carte : "
+"valorisez les bénévoles et faites circuler la valeur dans le réseau."
+msgstr "Local currency, time currency, and gift currency on a single card: reward volunteers and keep value circulating within the network."
+
+#: seo/features.py:389
+msgid "Valoriser les bénévoles"
+msgstr "Rewarding volunteers"
+
+#: seo/features.py:391
+msgid ""
+"Créditez du temps ou des cadeaux aux personnes qui font vivre le lieu. Elles "
+"dépensent au bar ou ailleurs dans le réseau : une reconnaissance concrète, "
+"pas une promesse."
+msgstr "Credit time or gifts to the people who keep the venue alive. They spend at the bar or elsewhere in the network: concrete recognition, not a promise."
+
+#: seo/features.py:396
+msgid "Solde de monnaie temps crédité sur la carte d'un·e bénévole."
+msgstr "Time currency balance credited to a volunteer's card."
+
+#: seo/features.py:400
+msgid "Des comptes séparés, une seule carte"
+msgstr "Separate accounts, one card"
+
+#: seo/features.py:402
+msgid ""
+"Euros, cadeaux, temps : chaque monnaie a son solde, ses règles, sa "
+"traçabilité. On ne paie pas une consommation avec du temps bénévole par "
+"erreur."
+msgstr "Euros, gifts, time: each currency has its own balance, its own rules, its own traceability. You cannot accidentally pay for a drink with volunteer time."
+
+#: seo/features.py:407
+msgid ""
+"Détail d'une carte affichant trois soldes distincts et leurs règles d'usage."
+msgstr "Card detail showing three separate balances and their usage rules."
+
+#: seo/features.py:412
+msgid "Une monnaie qui circule dans le réseau"
+msgstr "A currency that circulates through the network"
+
+#: seo/features.py:414
+msgid ""
+"Grâce à la fédération, une monnaie locale peut être acceptée dans plusieurs "
+"lieux partenaires. La valeur reste dans le réseau plutôt que de fuir vers "
+"les grandes plateformes."
+msgstr "Thanks to federation, a local currency can be accepted at multiple partner venues. Value stays within the network instead of leaking to large platforms."
+
+#: seo/features.py:419
+msgid "Une monnaie locale acceptée dans plusieurs lieux fédérés du réseau."
+msgstr "A local currency accepted at several federated venues in the network."
+
+#: seo/features.py:429
+msgid "Données ouvertes"
+msgstr "Open data"
+
+#: seo/features.py:432
+msgid ""
+"Toutes les données non personnelles de votre lieu sont accessibles par API, "
+"dans un vocabulaire standard (schema.org / JSON-LD), sous licence ouverte. "
+"Vos événements, votre programmation : libres de circuler."
+msgstr ""
+"All non-personal data from your venue is accessible via API, using a "
+"standard vocabulary (schema.org / JSON-LD), under an open licence. Your "
+"events, your programming: free to circulate."
+
+#: seo/features.py:436
+msgid "Vos données publiques, libres de circuler, par API."
+msgstr "Your public data, free to circulate, via API."
+
+#: seo/features.py:438
+msgid ""
+"Les données non personnelles de votre lieu — événements, programmation, "
+"informations pratiques — sont accessibles par une API ouverte, dans un "
+"vocabulaire standard (schema.org / JSON-LD), sous licence libre. Vos "
+"événements peuvent alimenter d'autres agendas, des applications tierces, des "
+"moteurs de recherche. Vous restez propriétaire, mais rien n'est enfermé."
+msgstr "Non-personal data from your venue — events, programme, practical information — is accessible via an open API, using a standard vocabulary (schema.org / JSON-LD), under an open licence. Your events can feed other calendars, third-party applications, and search engines. You remain the owner, but nothing is locked in."
+
+#: seo/features.py:445
+msgid "Données ouvertes par API (schema.org) — TiBillet"
+msgstr "Open data via API (schema.org) — TiBillet"
+
+#: seo/features.py:447
+msgid ""
+"Données ouvertes par API au format schema.org / JSON-LD, sous licence "
+"libre : vos événements et votre programmation, libres de circuler."
+msgstr "Open data via API in schema.org / JSON-LD format, under an open licence: your events and your programme, free to circulate."
+
+#: seo/features.py:453
+msgid "Un vocabulaire standard"
+msgstr "A standard vocabulary"
+
+#: seo/features.py:455
+msgid ""
+"TiBillet expose ses données en schema.org / JSON-LD, le langage que "
+"comprennent Google, les agendas culturels et la plupart des outils. Pas de "
+"format propriétaire à réinventer."
+msgstr "TiBillet exposes its data in schema.org / JSON-LD, the language understood by Google, cultural event calendars, and most tools. No proprietary format to reinvent."
+
+#: seo/features.py:460
+msgid "Réponse de l'API d'un événement structurée en JSON-LD schema.org."
+msgstr "API response for an event structured in JSON-LD schema.org."
+
+#: seo/features.py:464
+msgid "Interopérable par conception"
+msgstr "Interoperable by design"
+
+#: seo/features.py:466
+msgid ""
+"Une API documentée permet à vos outils — site web, application, partenaire — "
+"de lire votre programmation en temps réel. L'interopérabilité avec un ERP "
+"devient possible."
+msgstr "A documented API allows your tools — website, application, partner — to read your programming in real time. Interoperability with an ERP becomes possible."
+
+#: seo/features.py:471
+msgid "Documentation de l'API listant les points d'accès événements et lieux."
+msgstr "API documentation listing event and venue endpoints."
+
+#: seo/features.py:476
+msgid "Sous licence ouverte"
+msgstr ""
+
+#: seo/features.py:478
+msgid ""
+"Vos données publiques circulent sous licence libre : un autre agenda peut "
+"les republier, un développeur peut bâtir dessus. La donnée culturelle "
+"redevient un commun."
+msgstr "Your public data circulates under a free licence: another calendar can republish it, a developer can build on it. Cultural data becomes a commons again."
+
+#: seo/features.py:483
+msgid ""
+"Mention de licence ouverte sur les données publiques exposées par l'API."
+msgstr "Open licence notice on the public data exposed by the API."
+
+#: seo/features.py:493
+msgid "Logiciel libre AGPLv3"
+msgstr "AGPLv3 free software"
+
+#: seo/features.py:496
+msgid ""
+"Le code de TiBillet est publié sous licence AGPLv3. Personne ne peut le "
+"verrouiller, le fermer, le privatiser. C'est la première brique d'un commun "
+"numérique — la coopérative Code Commun fait le reste."
+msgstr ""
+"TiBillet's code is published under the AGPLv3 licence. No one can lock it "
+"down, close it, or privatise it. It is the first building block of a digital "
+"commons — the Code Commun cooperative does the rest."
+
+#: seo/features.py:500
+msgid "Un code libre que personne ne peut fermer."
+msgstr "Open code that no one can shut down."
+
+#: seo/features.py:502
+msgid ""
+"TiBillet est publié sous licence AGPLv3. Le code source est ouvert, "
+"auditable, modifiable. Personne — pas même nous — ne peut le verrouiller, le "
+"privatiser ou vous enfermer. C'est la première brique d'un commun "
+"numérique ; la coopérative Code Commun, à gouvernance partagée, assure le "
+"reste : la communauté, la maintenance, la direction."
+msgstr "TiBillet is published under the AGPLv3 licence. The source code is open, auditable, and modifiable. No one — not even us — can lock it down, privatise it, or trap you in it. It is the first building block of a digital commons; the Code Commun cooperative, with shared governance, takes care of the rest: the community, maintenance, and direction."
+
+#: seo/features.py:508
+msgid "Logiciel libre AGPLv3, commun numérique — TiBillet"
+msgstr "Free software AGPLv3, digital commons — TiBillet"
+
+#: seo/features.py:510
+msgid ""
+"TiBillet est un logiciel libre sous licence AGPLv3 : code ouvert, auditable, "
+"impossible à verrouiller. Un commun numérique coopératif."
+msgstr "TiBillet is free software under the AGPLv3 licence: open, auditable code that cannot be locked down. A cooperative digital commons."
+
+#: seo/features.py:516
+msgid "AGPLv3 : la liberté garantie"
+msgstr "AGPLv3: freedom guaranteed"
+
+#: seo/features.py:518
+msgid ""
+"L'AGPLv3 impose que toute version modifiée et servie en ligne reste libre. "
+"Impossible de prendre le code, de le fermer, et de le revendre enfermé. La "
+"liberté est contagieuse, par conception."
+msgstr "AGPLv3 requires that any modified version served online remains free. It is impossible to take the code, close it, and resell it locked down. Freedom is contagious, by design."
+
+#: seo/features.py:523
+msgid "Dépôt de code source public de TiBillet sous licence AGPLv3."
+msgstr "TiBillet public source code repository under the AGPLv3 licence."
+
+#: seo/features.py:527
+msgid "Un commun, pas seulement du code"
+msgstr "A commons, not just code"
+
+#: seo/features.py:529
+msgid ""
+"Un dépôt Git libre ne suffit pas. Inspiré des travaux d'Elinor Ostrom, "
+"TiBillet est porté par une communauté vivante et une gouvernance organisée — "
+"la coopérative Code Commun, à trois collèges égaux."
+msgstr "A free Git repository is not enough. Inspired by the work of Elinor Ostrom, TiBillet is carried by a living community and organised governance — the Code Commun cooperative, with three equal colleges."
+
+#: seo/features.py:535
+msgid "Schéma de la gouvernance coopérative à trois collèges de Code Commun."
+msgstr "Governance diagram of the three-college cooperative structure of Code Commun."
+
+#: seo/features.py:540
+msgid "Pas de dépendance, pas de rançon"
+msgstr "No dependency, no ransom"
+
+#: seo/features.py:542
+msgid ""
+"Votre outil ne peut pas être racheté puis verrouillé contre vous. Si la "
+"coopérative disparaissait, le code resterait libre et reprenable. Votre "
+"indépendance est structurelle."
+msgstr "Your tool cannot be bought out and then locked against you. If the cooperative were to disappear, the code would remain free and available to be taken over. Your independence is structural."
+
+#: seo/features.py:547
+msgid ""
+"Comparaison entre un outil propriétaire fermé et l'outil libre TiBillet."
+msgstr "Comparison between a closed proprietary tool and the open-source TiBillet tool."
+
+#: seo/features.py:560
+msgid ""
+"Recevez les propositions d'événements de votre réseau via un formulaire "
+"ouvert. Pour chaque proposition, vous choisissez : publier sur votre agenda, "
+"ou inviter l'organisateur·ice à créer son espace et rejoindre votre "
+"fédération."
+msgstr ""
+"Receive event proposals from your network via an open form. For each "
+"proposal, you choose: publish it on your calendar, or invite the organizer "
+"to create their space and join your federation."
+
+#: seo/features.py:565
+msgid "Recevez des propositions d'événements, vous décidez."
+msgstr "Receive event proposals, you decide."
+
+#: seo/features.py:567
+msgid ""
+"L'agenda participatif ouvre votre programmation aux propositions de votre "
+"réseau, via un formulaire public. Pour chaque proposition reçue, vous gardez "
+"la main : publier l'événement sur votre agenda, ou inviter "
+"l'organisateur·ice à créer son propre espace et à rejoindre votre "
+"fédération. La porte est ouverte, mais c'est vous qui décidez qui entre."
+msgstr "The participatory calendar opens your programme to proposals from your network via a public form. For each proposal received, you stay in control: publish the event on your calendar, or invite the organizer to create their own space and join your federation. The door is open, but you decide who comes in."
+
+#: seo/features.py:573
+msgid "Agenda participatif et propositions — TiBillet"
+msgstr "Participatory calendar and event proposals — TiBillet"
+
+#: seo/features.py:575
+msgid ""
+"Agenda participatif : recevez les propositions d'événements via un "
+"formulaire public et gardez le contrôle éditorial sur ce qui est publié."
+msgstr "Participatory calendar: receive event proposals via a public form and keep editorial control over what gets published."
+
+#: seo/features.py:581
+msgid "Un formulaire ouvert à tous"
+msgstr "A form open to everyone"
+
+#: seo/features.py:583
+msgid ""
+"N'importe qui peut proposer un événement via un formulaire public. Vous "
+"recevez la proposition complète sans créer de compte à la place du proposant."
+msgstr "Anyone can submit an event via a public form. You receive the complete proposal without having to create an account on the submitter's behalf."
+
+#: seo/features.py:588
+msgid ""
+"Formulaire public de proposition d'événement rempli par un·e "
+"organisateur·ice."
+msgstr "Public event proposal form filled in by an organizer."
+
+#: seo/features.py:593
+msgid "Vous gardez le contrôle éditorial"
+msgstr "You keep editorial control"
+
+#: seo/features.py:595
+msgid ""
+"Rien n'est publié sans votre accord. Pour chaque proposition, vous "
+"choisissez : publier, refuser, ou demander des précisions. Votre agenda "
+"reste le vôtre."
+msgstr "Nothing is published without your approval. For each proposal, you choose: publish, decline, or ask for clarification. Your calendar remains yours."
+
+#: seo/features.py:600
+msgid ""
+"File des propositions reçues avec les actions publier ou refuser pour "
+"chacune."
+msgstr "Queue of received proposals with publish or reject actions for each one."
+
+#: seo/features.py:605
+msgid "Inviter plutôt que centraliser"
+msgstr "Invite rather than centralise"
+
+#: seo/features.py:607
+msgid ""
+"Plutôt que de tout héberger, vous pouvez inviter un·e organisateur·ice à "
+"créer son espace et à rejoindre votre fédération. Le réseau grandit par la "
+"rencontre, pas par la centralisation."
+msgstr "Rather than hosting everything yourself, you can invite an organizer to create their own space and join your federation. The network grows through connection, not centralisation."
+
+#: seo/features.py:613
+msgid ""
+"Invitation envoyée à un·e organisateur·ice pour créer son propre espace."
+msgstr "Invitation sent to an organizer to create their own space."
+
+#: seo/features.py:623
+msgid "Référencement et SEO"
+msgstr "Search engine optimisation (SEO)"
+
+#: seo/features.py:626
+msgid ""
+"Chaque page de lieu et chaque événement sont structurés en JSON-LD (schema."
+"org) pour être correctement indexés par Google, Bing et les agendas "
+"culturels. Sitemap auto-généré, métadonnées propres."
+msgstr ""
+"Each venue page and each event is structured in JSON-LD (schema.org) to be "
+"correctly indexed by Google, Bing, and cultural event calendars. Auto-"
+"generated sitemap, clean metadata."
+
+#: seo/features.py:630
+msgid "Vos événements trouvés par Google et les agendas."
+msgstr "Your events found by Google and event calendars."
+
+#: seo/features.py:632
+msgid ""
+"Chaque page de lieu et chaque événement TiBillet est structuré en JSON-LD "
+"(schema.org) pour être correctement compris par Google, Bing et les agendas "
+"culturels. Sitemap généré automatiquement, métadonnées propres, données "
+"ouvertes : votre programmation est trouvée par le public qui la cherche, "
+"sans budget publicitaire."
+msgstr "Each venue page and each TiBillet event is structured in JSON-LD (schema.org) to be correctly understood by Google, Bing and cultural calendars. Auto-generated sitemap, clean metadata, open data: your programme is found by the audience looking for it, without an advertising budget."
+
+#: seo/features.py:638
+msgid "Référencement et SEO des événements — TiBillet"
+msgstr "Event search engine optimisation and SEO — TiBillet"
+
+#: seo/features.py:640
+msgid ""
+"Référencement intégré : événements en JSON-LD schema.org, sitemap auto-"
+"généré, métadonnées propres. Votre programmation trouvée par Google."
+msgstr "Built-in SEO: events in JSON-LD schema.org, auto-generated sitemap, clean metadata. Your programme found by Google."
+
+#: seo/features.py:646
+msgid "Structuré pour les moteurs"
+msgstr "Structured for search engines"
+
+#: seo/features.py:648
+msgid ""
+"Vos événements sortent en JSON-LD schema.org : date, lieu, prix, "
+"billetterie. Google les comprend et peut les afficher en résultats enrichis, "
+"pas seulement en lien bleu."
+msgstr "Your events are published in JSON-LD schema.org: date, venue, price, ticketing. Google understands them and can display them as rich results, not just a blue link."
+
+#: seo/features.py:653
+msgid ""
+"Événement TiBillet affiché en résultat enrichi dans une page de résultats "
+"Google."
+msgstr "TiBillet event displayed as a rich result in a Google search results page."
+
+#: seo/features.py:658
+msgid "Trouvable, par conception"
+msgstr "Findable, by design"
+
+#: seo/features.py:660
+msgid ""
+"Sitemap auto-généré, balises title et description propres, URLs lisibles, "
+"fil d'Ariane : les fondamentaux du référencement sont là dès le départ, sans "
+"plugin ni réglage."
+msgstr "Auto-generated sitemap, clean title and description tags, readable URLs, breadcrumbs: the SEO fundamentals are there from day one, without any plugin or configuration."
+
+#: seo/features.py:665
+msgid "Sitemap XML listant les pages d'un lieu et de ses événements."
+msgstr "XML sitemap listing the pages of a venue and its events."
+
+#: seo/features.py:669
+msgid "Une visibilité qui ne s'achète pas"
+msgstr "Visibility you don't have to buy"
+
+#: seo/features.py:671
+msgid ""
+"Pas de budget publicitaire à entretenir : votre visibilité vient de la "
+"qualité technique des pages et du réseau de liens entre lieux fédérés. Le "
+"référencement comme un commun, partagé."
+msgstr "No advertising budget to maintain: your visibility comes from the technical quality of your pages and the network of links between federated venues. SEO as a shared commons."
+
+#: seo/features.py:676
+msgid ""
+"Réseau de liens entre lieux fédérés renforçant leur référencement mutuel."
+msgstr "Network of links between federated venues reinforcing their mutual search ranking."
 
 #: seo/models.py:33
 msgid "Tenant summary (config, stats, domain)"
@@ -15979,39 +16891,38 @@ msgstr ""
 msgid "SEO Cache entries"
 msgstr ""
 
-#: seo/templates/seo/base.html:110 seo/templates/seo/base.html:192
+#: seo/templates/seo/base.html:112 seo/templates/seo/base.html:207
+#: seo/templates/seo/feature_detail.html:31
+#: seo/templates/seo/feature_hub.html:34 seo/templates/seo/feature_hub.html:38
+#: seo/templates/seo/landing.html:114 seo/views.py:268 seo/views.py:355
+msgid "Fonctionnalités"
+msgstr "Features"
+
+#: seo/templates/seo/base.html:117 seo/templates/seo/base.html:213
 msgid "Explorer"
 msgstr ""
 
-#: seo/templates/seo/base.html:132
+#: seo/templates/seo/base.html:133
+msgid "Contribuer"
+msgstr "Contribute"
+
+#: seo/templates/seo/base.html:149
 msgid "Rechercher..."
 msgstr "Search..."
 
-#: seo/templates/seo/base.html:144
+#: seo/templates/seo/base.html:161
 msgid "Changer de langue"
 msgstr "Change language"
 
-#: seo/templates/seo/base.html:180
+#: seo/templates/seo/base.html:204
 msgid "Découvrir TiBillet"
 msgstr "Discover TiBillet"
 
-#: seo/templates/seo/base.html:183
-#: seo/templates/seo/partials/explorer_widget.html:55
-#: seo/templates/seo/recherche.html:26
-msgid "Lieux"
-msgstr "Venues"
-
-#: seo/templates/seo/base.html:186
-#: seo/templates/seo/partials/explorer_widget.html:57
-#: seo/templates/seo/recherche.html:52
-msgid "Événements"
-msgstr "Events"
-
-#: seo/templates/seo/base.html:201
+#: seo/templates/seo/base.html:222
 msgid "Billetterie et lieux culturels coopératifs."
 msgstr "Ticketing and cooperative cultural venues."
 
-#: seo/templates/seo/base.html:204
+#: seo/templates/seo/base.html:225
 msgid ""
 "TiBillet, c'est une boîte à outils d'organisation collective : billetterie "
 "en ligne, adhésion et abonnements, fédération de collectifs, le tout libre "
@@ -16020,7 +16931,7 @@ msgstr ""
 "TiBillet is a collective organisation toolkit: online ticketing, memberships "
 "and subscriptions, federation of collectives — all free and open source."
 
-#: seo/templates/seo/base.html:228
+#: seo/templates/seo/base.html:249
 msgid ""
 "Opération soutenue par l’État dans le cadre du dispositif « Solutions de "
 "billetteries innovantes » de France 2030, opéré par la Caisse des Dépôts."
@@ -16028,67 +16939,83 @@ msgstr ""
 "Operation supported by the State as part of the « Solutions de billetteries "
 "innovantes » programme of France 2030, operated by the Caisse des Dépôts."
 
-#: seo/templates/seo/base.html:232
+#: seo/templates/seo/base.html:253
 msgid "Logo France 2030"
 msgstr "France 2030 Logo"
-
-#: seo/templates/seo/evenements.html:6
-msgid "Événements à venir"
-msgstr "Upcoming events"
-
-#: seo/templates/seo/evenements.html:30
-msgid "Voir l'événement"
-msgstr "View event"
-
-#: seo/templates/seo/evenements.html:41
-msgid "Pagination"
-msgstr "Pagination"
-
-#: seo/templates/seo/evenements.html:57
-msgid "Suivant"
-msgstr "Next"
-
-#: seo/templates/seo/evenements.html:65
-msgid "Aucun événement à venir pour le moment."
-msgstr "No upcoming events at the moment."
 
 #: seo/templates/seo/explorer.html:40
 msgid "Explorer le réseau TiBillet"
 msgstr "Explore the TiBillet network"
 
-#: seo/templates/seo/landing.html:21
+#: seo/templates/seo/feature_detail.html:22
+#: seo/templates/seo/feature_hub.html:28
+msgid "Fil d\\"
+msgstr ""
+
+#: seo/templates/seo/feature_detail.html:67
+msgid "Capture à venir"
+msgstr "Screenshot coming soon"
+
+#: seo/templates/seo/feature_detail.html:81
+msgid "Lire la documentation"
+msgstr "Read the documentation"
+
+#: seo/templates/seo/feature_detail.html:84
+msgid "Créer mon espace"
+msgstr "Create my space"
+
+#: seo/templates/seo/feature_detail.html:92
+msgid "Autres fonctionnalités"
+msgstr "Other features"
+
+#: seo/templates/seo/feature_hub.html:39 seo/templates/seo/landing.html:116
+msgid "Une solution complète pour les lieux culturels et associatifs."
+msgstr "A complete solution for cultural venues and associations."
+
+#: seo/templates/seo/feature_hub.html:43
+msgid ""
+"TiBillet réunit billetterie, adhésions, caisse, cashless et monnaies locales "
+"sur un logiciel libre et fédéré. Cliquez sur une fonctionnalité pour en "
+"savoir plus : captures, descriptions et liens vers la documentation."
+msgstr "TiBillet brings together ticketing, memberships, point of sale, cashless, and local currencies in one free and federated software. Click on a feature to learn more: screenshots, descriptions, and links to the documentation."
+
+#: seo/templates/seo/landing.html:33
 msgid "billetterie,"
 msgstr "ticketing,"
 
-#: seo/templates/seo/landing.html:23
+#: seo/templates/seo/landing.html:35
 msgid "caisse enregistreuse"
 msgstr "cash register"
 
-#: seo/templates/seo/landing.html:24
+#: seo/templates/seo/landing.html:36
 msgid "et"
 msgstr "and"
 
-#: seo/templates/seo/landing.html:26
+#: seo/templates/seo/landing.html:38
 msgid "outils"
 msgstr "tools"
 
-#: seo/templates/seo/landing.html:27
+#: seo/templates/seo/landing.html:39
 msgid "libres et fédérés."
 msgstr "free and federated."
 
-#: seo/templates/seo/landing.html:31
+#: seo/templates/seo/landing.html:43
 msgid "Explorer le réseau"
 msgstr "Explore the network"
 
-#: seo/templates/seo/landing.html:39
+#: seo/templates/seo/landing.html:51
 msgid "Créer son espace"
 msgstr "Create your space"
 
-#: seo/templates/seo/landing.html:59
+#: seo/templates/seo/landing.html:60
+msgid "Contribuer à TiBillet"
+msgstr "Contribute to TiBillet"
+
+#: seo/templates/seo/landing.html:80
 msgid "Un commun numérique coopératif"
 msgstr "A cooperative digital commons"
 
-#: seo/templates/seo/landing.html:63
+#: seo/templates/seo/landing.html:84
 msgid ""
 "\n"
 "                TiBillet est né sur le terrain, dans les festivals et les "
@@ -16106,7 +17033,7 @@ msgstr ""
 "federating agendas between neighbouring organisations.\n"
 "                "
 
-#: seo/templates/seo/landing.html:68
+#: seo/templates/seo/landing.html:89
 msgid ""
 "\n"
 "                Aujourd'hui c'est une boîte à outils complète — billetterie, "
@@ -16122,7 +17049,7 @@ msgstr ""
 "fees, open source.\n"
 "                "
 
-#: seo/templates/seo/landing.html:75
+#: seo/templates/seo/landing.html:96
 msgid ""
 "\n"
 "                TiBillet est porté par la <strong>Coopérative Code Commun</"
@@ -16138,7 +17065,7 @@ msgstr ""
 "the community around it and the shared governance that drives it.\n"
 "                "
 
-#: seo/templates/seo/landing.html:80
+#: seo/templates/seo/landing.html:101
 msgid ""
 "\n"
 "                Inspirés des travaux d'Elinor Ostrom : un dépôt Git avec une "
@@ -16160,275 +17087,90 @@ msgstr ""
 "encounters, not through marketing.\n"
 "                "
 
-#: seo/templates/seo/landing.html:93
-msgid "Fonctionnalités"
-msgstr "Features"
+#: seo/templates/seo/landing.html:137
+msgid "Venez participer à l'élaboration de TiBillet !"
+msgstr "Come and take part in shaping TiBillet!"
 
-#: seo/templates/seo/landing.html:95
-msgid "Une solution complète pour les lieux culturels et associatifs."
-msgstr "A complete solution for cultural venues and associations."
-
-#: seo/templates/seo/landing.html:105
+#: seo/templates/seo/landing.html:140
 msgid ""
-"Gérez les adhésions à votre association et proposez des abonnements. Suivez "
-"les renouvellements et offrez des avantages exclusifs aux membres."
-msgstr ""
-"Manage memberships for your association and offer subscriptions. Track "
-"renewals and provide exclusive benefits to members."
+"TiBillet est un commun numérique en construction, et sa feuille de route est "
+"ouverte. Newsletter intégrée, publication vers les réseaux sociaux, site web "
+"complet, interopérabilité avec les ERP : tout se discute et se construit en "
+"commun. Chacun·e peut proposer une idée, suivre un chantier ou simplement "
+"déclarer son intérêt."
+msgstr "TiBillet is a digital commons under construction, and its roadmap is open. Integrated newsletter, publication to social networks, full website, interoperability with ERPs: everything is discussed and built collectively. Anyone can propose an idea, follow a project, or simply register their interest."
 
-#: seo/templates/seo/landing.html:115
-msgid ""
-"Événements gratuits et payants avec prix préférentiels pour les adhérents. "
-"Sans frais cachés, sans commission surprise."
-msgstr ""
-"Free and paid events with preferential prices for members. No hidden fees, "
-"no surprise commission."
+#: seo/templates/seo/landing.html:145
+msgid "Chantiers ouverts"
+msgstr "Open projects"
 
-#: seo/templates/seo/landing.html:123
-msgid "Agenda fédéré"
-msgstr "Federated agenda"
-
-#: seo/templates/seo/landing.html:125
-msgid ""
-"Créez un agenda partagé et choisissez les lieux avec qui partager vos "
-"événements. Fédérez votre programmation avec d'autres structures."
-msgstr ""
-"Create a shared calendar and choose the venues to share your events with. "
-"Federate your programming with other organizations."
-
-#: seo/templates/seo/landing.html:133
-msgid "Caisse enregistreuse"
-msgstr "Cash register"
-
-#: seo/templates/seo/landing.html:135
-msgid ""
-"Solution complète pour gérer vos ventes sur place, avec imprimantes de "
-"préparation en cuisine et gestion des stocks."
-msgstr ""
-"Complete solution to manage your on-site sales, with kitchen preparation "
-"printers and stock management."
-
-#: seo/templates/seo/landing.html:147
-msgid "Cashless et carte NFC"
-msgstr "Cashless and NFC card"
-
-#: seo/templates/seo/landing.html:149
-msgid ""
-"Système cashless comme en festival, avec vérification de l'adhésion sur la "
-"carte. Une seule carte pour plusieurs lieux du réseau."
-msgstr ""
-"Cashless system as used at festivals, with membership verification on the "
-"card. One card for multiple venues in the network."
-
-#: seo/templates/seo/landing.html:157
-msgid "Monnaie locale et temps"
-msgstr "Local currency and time"
-
-#: seo/templates/seo/landing.html:159
-msgid ""
-"Monnaie temps, cadeaux et valorisation de bénévoles. Multi-monnaies sur une "
-"seule carte : euros, cadeaux, temps."
-msgstr ""
-"Time currency, gifts and volunteer recognition. Multi-currency on a single "
-"card: euros, gifts, time."
-
-#: seo/templates/seo/landing.html:167
-msgid "Données ouvertes"
-msgstr "Open data"
-
-#: seo/templates/seo/landing.html:169
-msgid ""
-"Toutes les données non personnelles de votre lieu sont accessibles par API, "
-"dans un vocabulaire standard (schema.org / JSON-LD), sous licence ouverte. "
-"Vos événements, votre programmation : libres de circuler."
-msgstr ""
-"All non-personal data from your venue is accessible via API, using a "
-"standard vocabulary (schema.org / JSON-LD), under an open licence. Your "
-"events, your programming: free to circulate."
-
-#: seo/templates/seo/landing.html:177
-msgid "Logiciel libre AGPLv3"
-msgstr "AGPLv3 free software"
-
-#: seo/templates/seo/landing.html:179
-msgid ""
-"Le code de TiBillet est publié sous licence AGPLv3. Personne ne peut le "
-"verrouiller, le fermer, le privatiser. C'est la première brique d'un commun "
-"numérique — la coopérative Code Commun fait le reste."
-msgstr ""
-"TiBillet's code is published under the AGPLv3 licence. No one can lock it "
-"down, close it, or privatise it. It is the first building block of a digital "
-"commons — the Code Commun cooperative does the rest."
-
-#: seo/templates/seo/landing.html:189
-msgid ""
-"Recevez les propositions d'événements de votre réseau via un formulaire "
-"ouvert. Pour chaque proposition, vous choisissez : publier sur votre agenda, "
-"ou inviter l'organisateur·ice à créer son espace et rejoindre votre "
-"fédération."
-msgstr ""
-"Receive event proposals from your network via an open form. For each "
-"proposal, you choose: publish it on your calendar, or invite the organizer "
-"to create their space and join your federation."
-
-#: seo/templates/seo/landing.html:197
-msgid "Référencement et SEO"
-msgstr "Search engine optimisation (SEO)"
-
-#: seo/templates/seo/landing.html:199
-msgid ""
-"Chaque page de lieu et chaque événement sont structurés en JSON-LD (schema."
-"org) pour être correctement indexés par Google, Bing et les agendas "
-"culturels. Sitemap auto-généré, métadonnées propres."
-msgstr ""
-"Each venue page and each event is structured in JSON-LD (schema.org) to be "
-"correctly indexed by Google, Bing, and cultural event calendars. Auto-"
-"generated sitemap, clean metadata."
-
-#: seo/templates/seo/landing.html:225
-msgid "Futur de TiBillet — chantiers en cours"
-msgstr "TiBillet's future — ongoing projects"
-
-#: seo/templates/seo/landing.html:230
-msgid "Futur de TiBillet"
-msgstr "Future of TiBillet"
-
-#: seo/templates/seo/landing.html:239
-msgid ""
-"Ce qu'on construit maintenant — venez en discuter, contribuer ou simplement "
-"déclarer votre intérêt."
-msgstr ""
-"What we are building now — come discuss it, contribute or simply express "
-"your interest."
-
-#: seo/templates/seo/landing.html:248
+#: seo/templates/seo/landing.html:148
 msgid "Newsletter intégrée"
 msgstr "Built-in newsletter"
 
-#: seo/templates/seo/landing.html:250
-msgid ""
-"Envoyez des emails ciblés à vos adhérent·es à jour, en retard de cotisation, "
-"ou aux personnes présentes à un événement précis. Une communication "
-"directement reliée à votre agenda et à votre base de membres — sans "
-"Mailchimp, sans tracking tiers."
-msgstr ""
-"Send targeted emails to your up-to-date members, those late on their "
-"subscription, or people who attended a specific event. Communication "
-"directly linked to your calendar and your member base — no Mailchimp, no "
-"third-party tracking."
+#: seo/templates/seo/landing.html:152
+msgid "Réseaux sociaux & Fédiverse"
+msgstr "Social networks & Fediverse"
 
-#: seo/templates/seo/landing.html:258
-msgid "Réseaux sociaux unifiés"
-msgstr "Unified social networks"
+#: seo/templates/seo/landing.html:156
+msgid "Site web complet"
+msgstr "Full website"
 
-#: seo/templates/seo/landing.html:260
-msgid ""
-"Rédigez un message, publiez partout. Nous branchons progressivement des "
-"outils libres de gestion multicanal comme <a href=\"https://github.com/"
-"gitroomhq/postiz-app\" target=\"_blank\" rel=\"noopener\">Postiz</a> pour "
-"éviter d'ouvrir cinq onglets à chaque annonce."
-msgstr ""
-"Write a message, publish everywhere. We are progressively integrating free "
-"multichannel management tools like <a href=\"https://github.com/gitroomhq/"
-"postiz-app\" target=\"_blank\" rel=\"noopener\">Postiz</a> to avoid opening "
-"five tabs for every announcement."
+#: seo/templates/seo/landing.html:160
+msgid "Interopérabilité ERP"
+msgstr "ERP Interoperability"
 
-#: seo/templates/seo/landing.html:268
-msgid "Fédiverse et Mobilizon"
-msgstr "Fediverse and Mobilizon"
-
-#: seo/templates/seo/landing.html:270
-msgid ""
-"Vos événements remontent vers Mobilizon et le Fédiverse pour atteindre les "
-"agendas publics et les comptes Mastodon de votre territoire. Une seule "
-"saisie, une diffusion ouverte et décentralisée, indépendante des plateformes "
-"propriétaires."
-msgstr ""
-"Your events are published to Mobilizon and the Fediverse to reach public "
-"calendars and Mastodon accounts in your area. Enter once, publish openly and "
-"in a decentralised way, independent of proprietary platforms."
-
-#: seo/templates/seo/landing.html:278
+#: seo/templates/seo/landing.html:164
 msgid "Économie en cascade"
 msgstr "Cascade economy"
 
-#: seo/templates/seo/landing.html:280
-msgid ""
-"En partenariat avec <a href=\"https://www.cascade.coop/modele-economique-non-"
-"lucratif\" target=\"_blank\" rel=\"noopener\">cascade.coop</a> : les surplus "
-"de financement participatif ruissellent vers d'autres cascades du réseau. "
-"Pas de capture, pas de perte — une économie contributive entre lieux "
-"solidaires."
-msgstr ""
-"In partnership with <a href=\"https://www.cascade.coop/modele-economique-non-"
-"lucratif\" target=\"_blank\" rel=\"noopener\">cascade.coop</a>: crowdfunding "
-"surpluses flow to other cascades in the network. No capture, no loss — a "
-"contributive economy among solidarity venues."
+#: seo/templates/seo/landing.html:175
+msgid "Participer au projet"
+msgstr "Contribute to the project"
 
-#: seo/templates/seo/landing.html:287
-msgid ""
-"Ces idées vous parlent ? Pour en savoir plus sur les chantiers en cours, "
-"venez discuter avec nous et déclarer votre intérêt sur <a href=\"https://"
-"codecommun.tibillet.coop/contrib\" target=\"_blank\" rel=\"noopener"
-"\"><strong>codecommun.tibillet.coop/contrib</strong></a>."
-msgstr ""
-"Do these ideas resonate with you? To find out more about the ongoing "
-"projects, come and discuss with us and declare your interest at <a href="
-"\"https://codecommun.tibillet.coop/contrib\" target=\"_blank\" rel=\"noopener"
-"\"><strong>codecommun.tibillet.coop/contrib</strong></a>."
+#: seo/templates/seo/landing.html:182
+msgid "Espace coopératif · codecommun.tibillet.coop"
+msgstr "Cooperative space · codecommun.tibillet.coop"
 
-#: seo/templates/seo/landing.html:311
+#: seo/templates/seo/landing.html:207
 msgid "Nos lieux vivants"
 msgstr "Our active venues"
 
-#: seo/templates/seo/landing.html:317 seo/templates/seo/landing.html:357
+#: seo/templates/seo/landing.html:213 seo/templates/seo/landing.html:253
 msgid "Voir tous"
 msgstr "See all"
 
-#: seo/templates/seo/landing.html:321
+#: seo/templates/seo/landing.html:217
 msgid "Lieux du réseau TiBillet"
 msgstr "TiBillet network venues"
 
-#: seo/templates/seo/landing.html:352
+#: seo/templates/seo/landing.html:248
 msgid "Prochains événements"
 msgstr "Upcoming events"
 
-#: seo/templates/seo/landing.html:359
+#: seo/templates/seo/landing.html:255
 msgid "Prochains événements du réseau TiBillet"
 msgstr "Upcoming events from the TiBillet network"
 
-#: seo/templates/seo/landing.html:410
+#: seo/templates/seo/landing.html:306
 msgid "Ils contribuent"
 msgstr "They contribute"
 
-#: seo/templates/seo/landing.html:412
+#: seo/templates/seo/landing.html:308
 msgid "Les structures et les personnes qui font vivre le commun."
 msgstr "The organizations and people who keep the commons alive."
 
-#: seo/templates/seo/landing.html:414
+#: seo/templates/seo/landing.html:310
 msgid "Contributeurs de TiBillet"
 msgstr "TiBillet contributors"
-
-#: seo/templates/seo/lieux.html:6
-msgid "Lieux du réseau"
-msgstr "Network venues"
-
-#: seo/templates/seo/lieux.html:28
-msgid "événement(s)"
-msgstr "event(s)"
-
-#: seo/templates/seo/lieux.html:34
-#: seo/templates/seo/partials/explorer_widget.html:25
-msgid "Visiter le lieu"
-msgstr "Visit the venue"
-
-#: seo/templates/seo/lieux.html:43
-msgid "Aucun lieu référencé pour le moment."
-msgstr "No venue listed at the moment."
 
 #: seo/templates/seo/partials/explorer_widget.html:24
 msgid "Aucun résultat trouvé."
 msgstr "No results found."
+
+#: seo/templates/seo/partials/explorer_widget.html:25
+msgid "Visiter le lieu"
+msgstr "Visit the venue"
 
 #: seo/templates/seo/partials/explorer_widget.html:27
 msgid "Événement"
@@ -16481,6 +17223,16 @@ msgstr ""
 msgid "Rechercher un lieu ou un événement..."
 msgstr "Search for a venue or an event..."
 
+#: seo/templates/seo/partials/explorer_widget.html:55
+#: seo/templates/seo/recherche.html:26
+msgid "Lieux"
+msgstr "Venues"
+
+#: seo/templates/seo/partials/explorer_widget.html:57
+#: seo/templates/seo/recherche.html:52
+msgid "Événements"
+msgstr "Events"
+
 #: seo/templates/seo/partials/explorer_widget.html:70
 msgid "Filtrer par tag"
 msgstr "Filter by tag"
@@ -16517,11 +17269,11 @@ msgstr "No results for this search."
 msgid "Saisissez un terme pour lancer la recherche."
 msgstr "Enter a term to start the search."
 
-#: seo/views.py:187
+#: seo/views.py:210
 msgid "TiBillet — Billetterie coopérative et lieux culturels"
 msgstr "TiBillet — Cooperative ticketing and cultural venues"
 
-#: seo/views.py:189
+#: seo/views.py:212
 msgid ""
 "TiBillet : billetterie en ligne libre et coopérative pour les lieux "
 "culturels et associatifs. Découvrez les lieux et les événements à venir."
@@ -16529,40 +17281,26 @@ msgstr ""
 "TiBillet: free and cooperative online ticketing for cultural and community "
 "venues. Discover venues and upcoming events."
 
-#: seo/views.py:224
-msgid "Lieux - TiBillet"
-msgstr "Venues - TiBillet"
+#: seo/views.py:363
+msgid "Fonctionnalités — TiBillet"
+msgstr "Features — TiBillet"
 
-#: seo/views.py:226
+#: seo/views.py:365
 msgid ""
-"Découvrez les lieux culturels et associatifs du réseau coopératif TiBillet : "
-"salles, cafés, festivals, tiers-lieux."
-msgstr ""
-"Discover the cultural and community venues of the TiBillet cooperative "
-"network: halls, cafés, festivals, shared spaces."
+"Toutes les fonctionnalités de TiBillet : billetterie, adhésions, caisse, "
+"cashless NFC, monnaies locales, agenda fédéré, données ouvertes."
+msgstr "All TiBillet features: ticketing, memberships, point of sale, NFC cashless, local currencies, federated calendar, open data."
 
-#: seo/views.py:264
-msgid "Evenements - TiBillet"
-msgstr "Events - TiBillet"
-
-#: seo/views.py:266
-msgid ""
-"Tous les événements à venir dans le réseau TiBillet : concerts, ateliers, "
-"spectacles, rencontres."
-msgstr ""
-"All upcoming events in the TiBillet network: concerts, workshops, shows, "
-"meetups."
-
-#: seo/views.py:323
+#: seo/views.py:422
 #, python-format
 msgid "Recherche : %(query)s - TiBillet"
 msgstr "Search: %(query)s - TiBillet"
 
-#: seo/views.py:325
+#: seo/views.py:424
 msgid "Recherche - TiBillet"
 msgstr "Search - TiBillet"
 
-#: seo/views.py:329
+#: seo/views.py:428
 #, python-format
 msgid ""
 "Résultats de recherche pour « %(query)s » dans le réseau coopératif "
@@ -16571,15 +17309,15 @@ msgstr ""
 "Search results for « %(query)s » in the TiBillet cooperative network: venues "
 "and events."
 
-#: seo/views.py:334
+#: seo/views.py:433
 msgid "Recherchez un lieu ou un événement dans le réseau coopératif TiBillet."
 msgstr "Search for a venue or an event in the TiBillet cooperative network."
 
-#: seo/views.py:395
+#: seo/views.py:494
 msgid "Explorer - TiBillet"
 msgstr "Explorer - TiBillet"
 
-#: seo/views.py:397
+#: seo/views.py:496
 msgid ""
 "Explorez sur une carte interactive les lieux culturels et événements du "
 "réseau coopératif TiBillet."
@@ -16594,6 +17332,121 @@ msgstr "Street and number"
 #: templates/widgets/widget_carte_adresse.html:108
 msgid "Pays"
 msgstr "Country"
+
+#~ msgid "Événements à venir"
+#~ msgstr "Upcoming events"
+
+#~ msgid "Voir l'événement"
+#~ msgstr "View event"
+
+#~ msgid "Pagination"
+#~ msgstr "Pagination"
+
+#~ msgid "Suivant"
+#~ msgstr "Next"
+
+#~ msgid "Aucun événement à venir pour le moment."
+#~ msgstr "No upcoming events at the moment."
+
+#~ msgid "Futur de TiBillet — chantiers en cours"
+#~ msgstr "TiBillet's future — ongoing projects"
+
+#~ msgid "Futur de TiBillet"
+#~ msgstr "Future of TiBillet"
+
+#~ msgid ""
+#~ "Ce qu'on construit maintenant — venez en discuter, contribuer ou "
+#~ "simplement déclarer votre intérêt."
+#~ msgstr ""
+#~ "What we are building now — come discuss it, contribute or simply express "
+#~ "your interest."
+
+#~ msgid ""
+#~ "Envoyez des emails ciblés à vos adhérent·es à jour, en retard de "
+#~ "cotisation, ou aux personnes présentes à un événement précis. Une "
+#~ "communication directement reliée à votre agenda et à votre base de "
+#~ "membres — sans Mailchimp, sans tracking tiers."
+#~ msgstr ""
+#~ "Send targeted emails to your up-to-date members, those late on their "
+#~ "subscription, or people who attended a specific event. Communication "
+#~ "directly linked to your calendar and your member base — no Mailchimp, no "
+#~ "third-party tracking."
+
+#~ msgid ""
+#~ "Rédigez un message, publiez partout. Nous branchons progressivement des "
+#~ "outils libres de gestion multicanal comme <a href=\"https://github.com/"
+#~ "gitroomhq/postiz-app\" target=\"_blank\" rel=\"noopener\">Postiz</a> pour "
+#~ "éviter d'ouvrir cinq onglets à chaque annonce."
+#~ msgstr ""
+#~ "Write a message, publish everywhere. We are progressively integrating "
+#~ "free multichannel management tools like <a href=\"https://github.com/"
+#~ "gitroomhq/postiz-app\" target=\"_blank\" rel=\"noopener\">Postiz</a> to "
+#~ "avoid opening five tabs for every announcement."
+
+#~ msgid "Fédiverse et Mobilizon"
+#~ msgstr "Fediverse and Mobilizon"
+
+#~ msgid ""
+#~ "Vos événements remontent vers Mobilizon et le Fédiverse pour atteindre "
+#~ "les agendas publics et les comptes Mastodon de votre territoire. Une "
+#~ "seule saisie, une diffusion ouverte et décentralisée, indépendante des "
+#~ "plateformes propriétaires."
+#~ msgstr ""
+#~ "Your events are published to Mobilizon and the Fediverse to reach public "
+#~ "calendars and Mastodon accounts in your area. Enter once, publish openly "
+#~ "and in a decentralised way, independent of proprietary platforms."
+
+#~ msgid ""
+#~ "En partenariat avec <a href=\"https://www.cascade.coop/modele-economique-"
+#~ "non-lucratif\" target=\"_blank\" rel=\"noopener\">cascade.coop</a> : les "
+#~ "surplus de financement participatif ruissellent vers d'autres cascades du "
+#~ "réseau. Pas de capture, pas de perte — une économie contributive entre "
+#~ "lieux solidaires."
+#~ msgstr ""
+#~ "In partnership with <a href=\"https://www.cascade.coop/modele-economique-"
+#~ "non-lucratif\" target=\"_blank\" rel=\"noopener\">cascade.coop</a>: "
+#~ "crowdfunding surpluses flow to other cascades in the network. No capture, "
+#~ "no loss — a contributive economy among solidarity venues."
+
+#~ msgid ""
+#~ "Ces idées vous parlent ? Pour en savoir plus sur les chantiers en cours, "
+#~ "venez discuter avec nous et déclarer votre intérêt sur <a href=\"https://"
+#~ "codecommun.tibillet.coop/contrib\" target=\"_blank\" rel=\"noopener"
+#~ "\"><strong>codecommun.tibillet.coop/contrib</strong></a>."
+#~ msgstr ""
+#~ "Do these ideas resonate with you? To find out more about the ongoing "
+#~ "projects, come and discuss with us and declare your interest at <a href="
+#~ "\"https://codecommun.tibillet.coop/contrib\" target=\"_blank\" rel="
+#~ "\"noopener\"><strong>codecommun.tibillet.coop/contrib</strong></a>."
+
+#~ msgid "Lieux du réseau"
+#~ msgstr "Network venues"
+
+#~ msgid "événement(s)"
+#~ msgstr "event(s)"
+
+#~ msgid "Aucun lieu référencé pour le moment."
+#~ msgstr "No venue listed at the moment."
+
+#~ msgid "Lieux - TiBillet"
+#~ msgstr "Venues - TiBillet"
+
+#~ msgid ""
+#~ "Découvrez les lieux culturels et associatifs du réseau coopératif "
+#~ "TiBillet : salles, cafés, festivals, tiers-lieux."
+#~ msgstr ""
+#~ "Discover the cultural and community venues of the TiBillet cooperative "
+#~ "network: halls, cafés, festivals, shared spaces."
+
+#~ msgid "Evenements - TiBillet"
+#~ msgstr "Events - TiBillet"
+
+#~ msgid ""
+#~ "Tous les événements à venir dans le réseau TiBillet : concerts, ateliers, "
+#~ "spectacles, rencontres."
+#~ msgstr ""
+#~ "All upcoming events in the TiBillet network: concerts, workshops, shows, "
+#~ "meetups."
 
 #~ msgid "Créer votre espace TiBillet — Lieu"
 #~ msgstr "Create your TiBillet space — Venue"
@@ -16644,9 +17497,6 @@ msgstr "Country"
 #, python-format
 #~ msgid "Renvoyer dans %(s)ss"
 #~ msgstr "Resend in %(s)ss"
-
-#~ msgid "La proposition d'évènement n'est pas activée."
-#~ msgstr "Event submission is not enabled."
 
 #~ msgid "Étape 2 — Code de vérification"
 #~ msgstr "Step 2 — Verification code"

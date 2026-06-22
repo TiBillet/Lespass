@@ -22,6 +22,9 @@ import django
 
 django.setup()
 
+import uuid as uuid_module_top
+from unittest import mock
+
 import pytest
 from decimal import Decimal
 
@@ -468,8 +471,22 @@ def test_create_test_pos_data_command(tenant):
     # / Run the command inside schema_context so it uses our test tenant.
     # The command detects it's already in a tenant (schema != "public")
     # and uses that schema. Without this, it would pick the first non-public tenant.
-    with schema_context(TENANT_SCHEMA):
-        call_command('create_test_pos_data')
+    #
+    # On MOCKE FedowAPI : depuis que la resolution du wallet d'une carte passe par
+    # Fedow (source de verite), tout chemin de la commande qui resoudrait un wallet
+    # de carte (_obtenir_ou_creer_wallet) appellerait le vrai Fedow. On renvoie un
+    # wallet ephemere fictif pour que la commande s'execute sans reseau.
+    # / Mock FedowAPI: since card wallet resolution now goes through Fedow (source of
+    # truth), any command path resolving a card wallet would hit the real Fedow. We
+    # return a fake ephemeral wallet so the command runs without network access.
+    with mock.patch('laboutik.views.FedowAPI') as MockAPI:
+        MockAPI.return_value.NFCcard.card_tag_id_retrieve.return_value = {
+            'wallet_uuid': str(uuid_module_top.uuid4()),
+            'is_wallet_ephemere': True,
+            'origin': {},
+        }
+        with schema_context(TENANT_SCHEMA):
+            call_command('create_test_pos_data')
 
     with schema_context(TENANT_SCHEMA):
         from BaseBillet.models import CategorieProduct, Product, Price

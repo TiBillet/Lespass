@@ -727,6 +727,71 @@ class TiBilletLogin(viewsets.ViewSet):
         return HttpResponseRedirect(redirect_url)
 
 
+def _agreger_tokens_locaux(tokens, user, config):
+    """
+    Ajoute les tokens LOCAUX (fedow_core) d'un user a la liste des tokens distants.
+    / Appends a user's LOCAL tokens (fedow_core) to the remote tokens list.
+
+    LOCALISATION : BaseBillet/views.py
+
+    Utilise par deux vues du compte : MyAccount.tokens_table (user connecte) et
+    MyAccount.admin_my_cards (fiche admin d'un user). En V1
+    (module_monnaie_locale=False) ou si l'user n'a pas de wallet, ne fait rien :
+    les soldes vivent alors uniquement sur le Fedow distant.
+    / Used by tokens_table and admin_my_cards. No-op for V1 tenants or no wallet.
+
+    Chaque Token local est converti au format dict attendu par token_table.html
+    (meme forme que les tokens distants), avec un marqueur is_local. On deduplique
+    par asset.uuid : un asset peut etre a la fois local et federe distant, on garde
+    alors la version distante deja presente.
+    / Each local Token is mapped to the template dict shape, flagged is_local,
+    deduplicated by asset.uuid (keep the remote one if already present).
+    """
+    if not config.module_monnaie_locale or not user.wallet:
+        return tokens
+
+    from fedow_core.services import WalletService
+    # On note les assets deja affiches (distants) pour ne pas les remettre en double.
+    # / Track already-shown (remote) assets to avoid duplicates.
+    uuids_deja_affiches = {token['asset'].get('uuid') for token in tokens}
+    for token_local in WalletService.obtenir_tous_les_soldes(user.wallet):
+        if token_local.value <= 0:
+            continue
+        if token_local.asset.category in ['SUB', 'BDG']:
+            continue
+        if str(token_local.asset.uuid) in uuids_deja_affiches:
+            continue
+        # Format dict identique aux tokens distants ; rattache a l'organisation
+        # courante pour ne pas etre grise, marque is_local pour le badge.
+        # / Same dict shape as remote tokens; tied to the current org, flagged local.
+        tokens.append({
+            "value": token_local.value,
+            "name": token_local.asset.name,
+            "asset_category": token_local.asset.category,
+            "asset": {
+                "uuid": str(token_local.asset.uuid),
+                "category": token_local.asset.category,
+                "is_stripe_primary": False,
+                "place_origin": None,
+                "place_uuid_federated_with": [],
+                "names_of_place_federated": [config.organisation],
+                "logo": None,
+            },
+            # Pas de date de derniere transaction fiable sans requete N+1 : le
+            # modele Token n'a pas de champ date, et la derniere Transaction du
+            # wallet pour cet asset se trouve via un OR (sender|receiver) qu'il
+            # faudrait executer une fois par token dans la boucle d'affichage.
+            # On met None (colonne vide propre) plutot que de sur-ingenierer.
+            # / No reliable last-transaction date without an N+1 query: Token has
+            # no date field, and the wallet's last Transaction for this asset
+            # would need a per-token (sender|receiver) OR query in the render
+            # loop. Use None (cleanly empty column) instead of over-engineering.
+            "last_transaction_datetime": None,
+            "is_local": True,
+        })
+    return tokens
+
+
 class MyAccount(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
     permission_classes = [permissions.IsAuthenticated, ]
@@ -802,11 +867,36 @@ class MyAccount(viewsets.ViewSet):
 
     @action(detail=True, methods=['GET'], permission_classes=[TenantAdminPermission])
     def admin_my_cards(self, request, pk):
+        config = Configuration.get_solo()
         fedowAPI = FedowAPI()
         user = get_object_or_404(HumanUser, pk=pk)
-        cards = fedowAPI.NFCcard.retrieve_card_by_signature(user)
-        wallet = fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
-        tokens = [token for token in wallet.get('tokens') if token.get('asset_category') not in ['SUB', 'BDG']]
+
+        # Lecture distante (Fedow) encadree : si le Fedow distant tombe, on affiche
+        # au moins les tokens locaux (fedow_core) plutot que de casser la fiche.
+        # / Remote read (Fedow) wrapped: if it fails, still show local tokens.
+        cards = []
+        tokens = []
+        try:
+            cards = fedowAPI.NFCcard.retrieve_card_by_signature(user)
+            wallet = fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
+            tokens = [token for token in wallet.get('tokens', []) if token.get('asset_category') not in ['SUB', 'BDG']]
+        except Exception as erreur_fedow_distant:
+            logger.error(f"admin_my_cards : Fedow distant indisponible pour {user} : {erreur_fedow_distant}")
+
+        # Agrege les tokens LOCAUX (fedow_core) si tenant V2 (cf. helper module).
+        # Lecture pure (pas d'ecriture, vue GET, pas d'atomic) : encadree pour que,
+        # si la base locale plante, on continue avec les tokens distants deja recuperes
+        # plutot que de casser la page.
+        # / Aggregate local tokens (fedow_core) for V2 tenants. Pure read (no write,
+        # GET view, no atomic): wrapped so that if the local DB fails we keep the
+        # already-fetched remote tokens instead of breaking the page.
+        try:
+            tokens = _agreger_tokens_locaux(tokens, user, config)
+        except Exception as erreur_tokens_locaux:
+            logger.error(
+                f"admin_my_cards : agregation tokens locaux (fedow_core) indisponible "
+                f"pour {user} : {erreur_tokens_locaux}"
+            )
 
         # Transactions des 72 dernieres heures, via la signature de l'user de la fiche.
         # La signature retrouve tout l'historique du wallet (y compris les transactions
@@ -1030,11 +1120,20 @@ class MyAccount(viewsets.ViewSet):
     @action(detail=False, methods=['GET'])
     def tokens_table(self, request):
         config = Configuration.get_solo()
-        fedowAPI = FedowAPI()
-        wallet = fedowAPI.wallet.cached_retrieve_by_signature(request.user).validated_data
 
-        # On retire les adhésions, on les affiche dans l'autre table
-        tokens = [token for token in wallet.get('tokens') if token.get('asset_category') not in ['SUB', 'BDG']]
+        # Lecture des tokens DISTANTS (Fedow). Encadree : si le Fedow distant est
+        # indisponible ou lent, on n'echoue pas — on affichera au moins les tokens
+        # locaux (fedow_core) plus bas, au lieu de bloquer ou casser la page.
+        # / Remote tokens (Fedow), wrapped: if the remote Fedow is down/slow, we
+        # still show the local tokens below instead of breaking the page.
+        tokens = []
+        try:
+            fedowAPI = FedowAPI()
+            wallet = fedowAPI.wallet.cached_retrieve_by_signature(request.user).validated_data
+            # On retire les adhésions, on les affiche dans l'autre table
+            tokens = [token for token in wallet.get('tokens', []) if token.get('asset_category') not in ['SUB', 'BDG']]
+        except Exception as erreur_fedow_distant:
+            logger.error(f"tokens_table : Fedow distant indisponible : {erreur_fedow_distant}")
 
         for token in tokens:
             names_of_place_federated = []
@@ -1057,7 +1156,20 @@ class MyAccount(viewsets.ViewSet):
             # if token['asset']['category'] == 'FED':
             #     last_federated_transaction: datetime = token['last_transaction']['datetime']
 
-        print(tokens)
+        # Agrege les tokens LOCAUX (fedow_core) si tenant V2 (cf. helper module).
+        # Lecture pure (pas d'ecriture, vue GET, pas d'atomic) : encadree pour que,
+        # si la base locale plante, on continue avec les tokens distants deja recuperes
+        # plutot que de casser la page.
+        # / Aggregate local tokens (fedow_core) for V2 tenants. Pure read (no write,
+        # GET view, no atomic): wrapped so that if the local DB fails we keep the
+        # already-fetched remote tokens instead of breaking the page.
+        try:
+            tokens = _agreger_tokens_locaux(tokens, request.user, config)
+        except Exception as erreur_tokens_locaux:
+            logger.error(
+                f"tokens_table : agregation tokens locaux (fedow_core) indisponible "
+                f"pour {request.user} : {erreur_tokens_locaux}"
+            )
 
         # On fait la liste des lieux fédérés pour les pastilles dans le tableau html
         context = {

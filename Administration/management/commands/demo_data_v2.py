@@ -153,6 +153,70 @@ class Command(BaseCommand):
         # tenant is created (--full) or restored (--quick).
         self._seed_e2e_fixtures(options)
 
+        # Cartes du simulateur NFC creees directement dans Fedow (place du
+        # tenant lespass), via l'API key de place. Permet de tester le flux
+        # /qr/<uuid> + le scan NFC du POS SANS lancer LaBoutik V1.
+        # / NFC simulator cards created directly in Fedow (lespass place), via
+        # the place API key. Enables testing /qr/<uuid> + POS NFC scan without
+        # launching LaBoutik V1.
+        self._seed_cartes_nfc_fedow(options)
+
+    def _seed_cartes_nfc_fedow(self, options):
+        """
+        Cree les cartes du simulateur NFC (settings.DEMO_TAGID_*) directement
+        dans Fedow, sur la place du tenant 'lespass', via l'API key de place
+        (extension de permission cote Fedow : une place Lespass sans cashless
+        RSA est authentifiee par sa seule API key). Plus besoin de LaBoutik V1.
+        Idempotent (tolere le 409 si les cartes existent deja). Ne bloque jamais
+        le flush si Fedow est injoignable.
+        / Creates the NFC simulator cards (settings.DEMO_TAGID_*) directly in
+        Fedow, on the 'lespass' tenant place, via the place API key. No LaBoutik
+        V1 needed. Idempotent; never blocks the flush if Fedow is unreachable.
+        """
+        from Customers.models import Client as TenantClient
+        from django_tenants.utils import tenant_context
+        from django.conf import settings
+
+        tenant = TenantClient.objects.filter(schema_name='lespass').first()
+        if tenant is None:
+            return
+
+        # Les 5 cartes du simulateur viennent du .env (settings.DEMO_TAGID_*), qui
+        # DOIT differer des cartes LEGACY de LaBoutik V1 (DEMO_TAGID_*_LEGACY) pour
+        # ne pas creer de doublon dans le Fedow partage (sinon "cards create error
+        # 400" cote V1).
+        # Pour le DEV : le numero imprime ET le qrcode reprennent le tag_id (le 1er
+        # bloc du qrcode = le tag_id), pour reperer une carte d'un coup d'oeil. Le
+        # bloc "4xxx" garde un uuid version 4 valide.
+        # / The 5 simulator cards come from .env (MUST differ from V1 LEGACY tags).
+        # For DEV: printed number AND qrcode echo the tag_id (qrcode 1st block = tag_id).
+        tags_simulateur = [
+            settings.DEMO_TAGID_CM,
+            settings.DEMO_TAGID_CLIENT1,
+            settings.DEMO_TAGID_CLIENT2,
+            settings.DEMO_TAGID_CLIENT3,
+            settings.DEMO_TAGID_CLIENT4,
+        ]
+        cartes = []
+        for tag_id in tags_simulateur:
+            cartes.append({
+                "first_tag_id": tag_id,
+                "qrcode_uuid": f"{tag_id.lower()}-0000-4000-8000-000000000000",
+                "number_printed": tag_id,
+            })
+
+        with tenant_context(tenant):
+            try:
+                from fedow_connect.fedow_api import FedowAPI
+                resultat = FedowAPI().NFCcard.create(cartes)
+                self.stdout.write(self.style.SUCCESS(
+                    f"Cartes NFC simulateur creees dans Fedow : {resultat}"
+                ))
+            except Exception as e:
+                self.stdout.write(self.style.WARNING(
+                    f"Cartes NFC simulateur non creees (Fedow injoignable ?) : {e}"
+                ))
+
     def _handle_seed_ventes(self, options):
         """
         Genere les ventes comptables de demo sur le tenant 'lespass'.

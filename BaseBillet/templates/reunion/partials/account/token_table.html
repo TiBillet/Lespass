@@ -16,6 +16,9 @@
                 TiBillets
                 {% else %}
                 {{ token.name }}
+                {# Badge "Local" : token gere en interne (fedow_core), pas sur le Fedow distant. #}
+                {# / "Local" badge: token managed internally (fedow_core), not on the remote Fedow. #}
+                {% if token.is_local %}<span class="badge bg-info-subtle text-info-emphasis ms-1" data-testid="token-badge-local">{% translate "Local" %}</span>{% endif %}
                 {% endif %}
             </td>
             <td>

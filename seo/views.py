@@ -19,7 +19,6 @@ import json
 import logging
 import random
 
-from django.core.paginator import Paginator
 from django.http import Http404, HttpResponse
 from django.template.response import TemplateResponse
 from django.utils import timezone
@@ -170,17 +169,17 @@ def landing(request):
     }
 
     # JSON-LD ItemList des fonctionnalites qui ont une page de detail.
-    # Ce bloc liste les vraies URLs `/fonctionnalites/<slug>/` : il aide Google
+    # Ce bloc liste les vraies URLs `/features/<slug>/` : il aide Google
     # a comprendre l'ensemble "Fonctionnalites" et favorise l'affichage de
     # sitelinks (sous-menus) dans les resultats de recherche.
     # / JSON-LD ItemList of features that have a detail page. Listing the real
-    # `/fonctionnalites/<slug>/` URLs helps Google understand the "Features" set
+    # `/features/<slug>/` URLs helps Google understand the "Features" set
     # and encourages sitelinks (sub-links) in search results.
     feature_list_items = []
     for feature_slug, feature_data in FEATURE_DETAILS.items():
         feature_list_items.append(
             {
-                "url": request.build_absolute_uri(f"/fonctionnalites/{feature_slug}/"),
+                "url": request.build_absolute_uri(f"/features/{feature_slug}/"),
                 "name": str(feature_data["title"]),
             }
         )
@@ -190,9 +189,9 @@ def landing(request):
         "lieux_pour_bandeau": lieux_pour_bandeau,
         "marquee_lieux_duration_sec": marquee_lieux_duration_sec,
         "top_events": top_events,
-        # Slugs des fonctionnalites cliquables (pour lier les bonnes cartes).
-        # / Slugs of clickable features (to link the right cards).
-        "feature_detail_slugs": list(FEATURE_DETAILS.keys()),
+        # Registre des fonctionnalites (la grille est rendue par un include).
+        # / Features registry (the grid is rendered by an include).
+        "features": FEATURE_DETAILS,
         # ItemList des pages de fonctionnalites (SEO sitelinks).
         # / Feature pages ItemList (SEO sitelinks).
         "json_ld_features": json_ld_features,
@@ -224,7 +223,7 @@ def feature_detail(request, slug):
     Page de detail d'une fonctionnalite : captures, descriptions, liens doc.
     / Feature detail page: screenshots, descriptions, doc links.
 
-    URL: GET /fonctionnalites/<slug>/
+    URL: GET /features/<slug>/
 
     LOCALISATION : seo/views.py
 
@@ -252,9 +251,9 @@ def feature_detail(request, slug):
     titre = str(feature["title"])
     page_url = request.build_absolute_uri()
     accueil_url = request.build_absolute_uri("/")
-    # Le fil d'Ariane pointe vers la section "Fonctionnalites" de la landing.
-    # / Breadcrumb points to the landing "Features" section.
-    fonctionnalites_url = request.build_absolute_uri("/#features")
+    # Le fil d'Ariane pointe vers le hub /features/ (vraie page).
+    # / Breadcrumb points to the /features/ hub (real page).
+    fonctionnalites_url = request.build_absolute_uri("/features/")
 
     # BreadcrumbList : aide Google a afficher le fil d'Ariane dans les resultats.
     # / BreadcrumbList: helps Google show the breadcrumb trail in results.
@@ -306,7 +305,9 @@ def feature_detail(request, slug):
         "autres_fonctionnalites": autres_fonctionnalites,
         "json_ld": json_for_html(breadcrumb_json_ld),
         "json_ld_org": json_for_html(article_json_ld),
-        "page_title": f"{titre} — TiBillet",
+        # <title> SEO du registre (avec mots-cles) ; repli sur le titre simple.
+        # / SEO <title> from the registry (keyword-rich); fallback to plain title.
+        "page_title": str(feature.get("page_title") or f"{titre} — TiBillet"),
         "page_description": str(feature["meta_description"]),
         "canonical_url": page_url,
     }
@@ -314,81 +315,60 @@ def feature_detail(request, slug):
     return TemplateResponse(request, "seo/feature_detail.html", context)
 
 
-def lieux(request):
+def features_hub(request):
     """
-    Liste de tous les lieux actifs du reseau.
-    / List of all active venues in the network.
+    Hub des fonctionnalites : page `/features/`.
+    / Features hub: `/features/` page.
 
-    URL: GET /lieux/
+    URL: GET /features/
+
+    LOCALISATION : seo/views.py
+
+    Vraie page indexable qui reprend la grille de la landing (meme include) avec
+    un H1 propre. Cible du fil d'Ariane des pages de detail et point d'entree
+    pour les sitelinks (ItemList JSON-LD + BreadcrumbList).
+    / Real indexable page reusing the landing features grid with its own H1.
+    Breadcrumb target for detail pages and sitelinks entry point.
     """
-    lieux_data = get_seo_cache(SEOCache.AGGREGATE_LIEUX) or {}
-    all_lieux = lieux_data.get("lieux", [])
+    page_url = request.build_absolute_uri()
+    accueil_url = request.build_absolute_uri("/")
 
-    # JSON-LD ItemList / JSON-LD ItemList
-    items_for_ld = []
-    for lieu in all_lieux:
-        domain = lieu.get("domain", "")
-        url = f"https://{domain}/" if domain else ""
-        items_for_ld.append(
+    # ItemList des pages de fonctionnalites (memes URLs que le sitemap ROOT).
+    # / Features pages ItemList (same URLs as the ROOT sitemap).
+    feature_list_items = []
+    for feature_slug, feature_data in FEATURE_DETAILS.items():
+        feature_list_items.append(
             {
-                "url": url,
-                "name": lieu.get("name", ""),
+                "url": request.build_absolute_uri(f"/features/{feature_slug}/"),
+                "name": str(feature_data["title"]),
             }
         )
-    json_ld_list = build_json_ld_item_list(items_for_ld)
+    json_ld_features = json_for_html(build_json_ld_item_list(feature_list_items))
 
-    context = {
-        "lieux": all_lieux,
-        "json_ld": json_for_html(json_ld_list),
-        "page_title": _("Lieux - TiBillet"),
-        "page_description": _(
-            "Découvrez les lieux culturels et associatifs du réseau coopératif "
-            "TiBillet : salles, cafés, festivals, tiers-lieux."
-        ),
-        "canonical_url": request.build_absolute_uri("/lieux/"),
+    # BreadcrumbList : Accueil > Fonctionnalites.
+    # / BreadcrumbList: Home > Features.
+    breadcrumb_json_ld = {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": _("Accueil"), "item": accueil_url},
+            {"@type": "ListItem", "position": 2, "name": _("Fonctionnalités"), "item": page_url},
+        ],
     }
 
-    return TemplateResponse(request, "seo/lieux.html", context)
-
-
-def evenements(request):
-    """
-    Liste de tous les evenements, pagines par 20.
-    / List of all events, paginated by 20.
-
-    URL: GET /evenements/?page=N
-    """
-    events_data = get_seo_cache(SEOCache.AGGREGATE_EVENTS) or {}
-    all_events = events_data.get("events", [])
-
-    # Pagination : 20 evenements par page / 20 events per page
-    paginator = Paginator(all_events, 20)
-    page_number = request.GET.get("page", 1)
-    page_obj = paginator.get_page(page_number)
-
-    # JSON-LD ItemList pour la page courante / JSON-LD ItemList for current page
-    items_for_ld = []
-    for event in page_obj:
-        items_for_ld.append(
-            {
-                "url": event.get("canonical_url", ""),
-                "name": event.get("name", ""),
-            }
-        )
-    json_ld_list = build_json_ld_item_list(items_for_ld)
-
     context = {
-        "page_obj": page_obj,
-        "json_ld": json_for_html(json_ld_list),
-        "page_title": _("Evenements - TiBillet"),
+        "features": FEATURE_DETAILS,
+        "json_ld_features": json_ld_features,
+        "json_ld": json_for_html(breadcrumb_json_ld),
+        "page_title": _("Fonctionnalités — TiBillet"),
         "page_description": _(
-            "Tous les événements à venir dans le réseau TiBillet : concerts, "
-            "ateliers, spectacles, rencontres."
+            "Toutes les fonctionnalités de TiBillet : billetterie, adhésions, caisse, "
+            "cashless NFC, monnaies locales, agenda fédéré, données ouvertes."
         ),
-        "canonical_url": request.build_absolute_uri("/evenements/"),
+        "canonical_url": page_url,
     }
 
-    return TemplateResponse(request, "seo/evenements.html", context)
+    return TemplateResponse(request, "seo/feature_hub.html", context)
 
 
 def recherche(request):
@@ -545,6 +525,17 @@ def sitemap_index_view(request):
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     ]
+
+    # Sitemap ROOT : pages du schema public (landing + hub + fonctionnalites).
+    # Liste en premier car c'est le coeur editorial du site vitrine.
+    # / ROOT sitemap: public-schema pages (landing + hub + features). Listed first.
+    root_sitemap_url = request.build_absolute_uri("/sitemap-root.xml")
+    root_lastmod = timezone.now().isoformat()[:10]
+    xml_parts.append("  <sitemap>")
+    xml_parts.append(f"    <loc>{xml_escape(root_sitemap_url)}</loc>")
+    xml_parts.append(f"    <lastmod>{xml_escape(root_lastmod)}</lastmod>")
+    xml_parts.append("  </sitemap>")
+
     for tenant in tenants:
         domain = tenant.get("domain", "")
         sitemap_url = tenant.get(
@@ -556,6 +547,47 @@ def sitemap_index_view(request):
         xml_parts.append(f"    <lastmod>{xml_escape(updated[:10])}</lastmod>")
         xml_parts.append("  </sitemap>")
     xml_parts.append("</sitemapindex>")
+
+    xml_content = "\n".join(xml_parts)
+    return HttpResponse(xml_content, content_type="application/xml")
+
+
+def sitemap_root_view(request):
+    """
+    Sitemap des pages ROOT (schema public).
+    Liste la landing, le hub `/features/` et chaque page de fonctionnalite,
+    plus l'explorateur. C'est ce qui rend les pages de fonctionnalites
+    decouvrables par les moteurs (et favorise les sitelinks).
+    / ROOT pages sitemap (public schema): landing, `/features/` hub, each
+    feature page, plus the explorer. Makes feature pages discoverable (sitelinks).
+
+    URL: GET /sitemap-root.xml
+
+    LOCALISATION: seo/views.py
+    """
+    from xml.sax.saxutils import escape as xml_escape
+
+    # Pages fixes du ROOT / Fixed ROOT pages.
+    urls = [
+        request.build_absolute_uri("/"),
+        request.build_absolute_uri("/features/"),
+        request.build_absolute_uri("/explorer/"),
+    ]
+    # Une URL par page de fonctionnalite / One URL per feature page.
+    for feature_slug in FEATURE_DETAILS:
+        urls.append(request.build_absolute_uri(f"/features/{feature_slug}/"))
+
+    lastmod = timezone.now().isoformat()[:10]
+    xml_parts = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
+    for url in urls:
+        xml_parts.append("  <url>")
+        xml_parts.append(f"    <loc>{xml_escape(url)}</loc>")
+        xml_parts.append(f"    <lastmod>{xml_escape(lastmod)}</lastmod>")
+        xml_parts.append("  </url>")
+    xml_parts.append("</urlset>")
 
     xml_content = "\n".join(xml_parts)
     return HttpResponse(xml_content, content_type="application/xml")

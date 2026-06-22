@@ -193,7 +193,7 @@ services:
       - traefik.enable=true
       - traefik.docker.network=frontend
       - traefik.http.routers.lespass_nginx.tls=true
-      - traefik.http.routers.lespass_nginx.rule=Host(`$DOMAIN`) || Host(`lespass.$DOMAIN`)
+      - traefik.http.routers.lespass_nginx.rule=Host(`$DOMAIN`) || HostRegexp(`${DOMAIN_REGEX}`)
       - traefik.http.services.lespass_nginx.loadbalancer.server.port=80
       - traefik.http.routers.lespass_nginx.priority=1 # plus c'est grand, plus c'est prioritaire
 

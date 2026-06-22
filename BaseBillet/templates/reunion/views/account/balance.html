@@ -177,14 +177,27 @@
         <div class="col-md">
             <h2 class="pt-3" id="detail-monnaies">{% translate "Currency list" %}</h2>
 
-            <div hx-get="/my_account/tokens_table/" hx-trigger="revealed" class="mt-4">
-                <span>{% translate "Loading list" %}</span>
-                <div class="d-flex justify-content-center align-items-center ">
-                    <div class="spinner-border text-info"
-                         role="status"
-                    ></div>
+            {# Spinner LOCAL : visible uniquement pendant le chargement de CE tableau. #}
+            {# Le data-loading-target sur le div hx-get ci-dessous remplace l'heritage #}
+            {# du #tibillet-spinner global (quirk htmx : les attributs s'heritent du #}
+            {# parent) — sinon c'est l'overlay de toute la page qui s'ouvrait. #}
+            {# / Local spinner: only while THIS table loads. data-loading-target below #}
+            {# overrides the inherited global overlay. #}
+            {# Pas de d-flex ici : Bootstrap met display:flex !important, ce qui #}
+            {# ecraserait le [data-loading]{display:none} et le spinner ne se #}
+            {# cacherait jamais. On centre avec text-center (n'affecte pas display). #}
+            {# / No d-flex here: it is display:flex !important and would override #}
+            {# [data-loading]{display:none}, keeping the spinner forever. #}
+            <div id="token-table-loader" data-loading data-loading-class="active"
+                 class="text-center mt-4">
+                <div class="spinner-border text-info" role="status">
+                    <span class="visually-hidden">{% translate "Loading list" %}</span>
                 </div>
             </div>
+            <div hx-get="/my_account/tokens_table/" hx-trigger="revealed" class="mt-4"
+                 data-loading-target="#token-table-loader"
+                 data-loading-delay="{{ loading_delay|default:'400' }}"
+                 data-testid="account-tokens-table"></div>
         </div>
 
         {% comment %} HIDE: monnaie temps

@@ -808,6 +808,47 @@ class NFCcardFedow():
 
         return serialized_card.validated_data
 
+    def create(self, cartes: list):
+        """
+        Cree des cartes dans Fedow (POST /card/) avec l'API key de la place
+        Lespass SEULE (sans signature user). Possible grace a l'extension de
+        permission cote Fedow (HasKeyAndPlaceSignature : une place Lespass sans
+        cashless RSA est authentifiee par sa seule API key). Sert aux fixtures
+        de dev (cartes du simulateur NFC) — plus besoin de LaBoutik V1.
+        / Creates cards in Fedow (POST /card/) with the Lespass place API key
+        ONLY (no user signature), thanks to the Fedow permission extension.
+        Used for dev fixtures (NFC simulator cards) — no LaBoutik V1 needed.
+
+        :param cartes: liste de dicts {first_tag_id, qrcode_uuid, number_printed}
+        :return: reponse JSON de Fedow (nombre de cartes creees)
+        """
+        data = [
+            {
+                "first_tag_id": carte["first_tag_id"],
+                "qrcode_uuid": carte["qrcode_uuid"],
+                "number_printed": carte["number_printed"],
+                "generation": 1,
+                "is_primary": False,
+            }
+            for carte in cartes
+        ]
+        response_create = _post(self.fedow_config, path='card', data=data)
+        if response_create.status_code == 409:
+            # Cartes deja presentes dans Fedow (re-flush Lespass sans flush
+            # Fedow) : idempotent, on ne bloque pas le seed.
+            # / Cards already present in Fedow (Lespass re-flush): idempotent.
+            logger.info("NFCcardFedow.create : cartes deja presentes (409).")
+            return response_create.text
+        if response_create.status_code not in (200, 201):
+            logger.error(
+                f"NFCcardFedow.create ERRORS : {response_create.status_code} "
+                f"{response_create.text[:300]}"
+            )
+            raise Exception(
+                f"NFCcardFedow.create ERRORS : {response_create.status_code}"
+            )
+        return response_create.json()
+
     def card_number_retrieve(self, card_number: str):
         response_qr = _get(self.fedow_config, path=f'card/{card_number}/card_number_retrieve')
         if not response_qr.status_code == 200:

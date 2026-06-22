@@ -37,6 +37,14 @@ META='agenda' # the federated agenda for all events on all tenants. If 'agenda',
 
 ADMIN_EMAIL='admin@admin.com'
 
+# Admin de la caisse LaBoutik. Doit correspondre a l'admin du tenant Lespass
+# cible (ex: chantefrein). Optionnel : si absent, le flush LaBoutik retombe sur
+# ADMIN_EMAIL. Le .env etant partage Lespass/LaBoutik, cette variable permet de
+# brancher la caisse V1 sur un autre tenant que lespass.
+# / LaBoutik POS admin. Must match the target Lespass tenant admin (e.g.
+#   chantefrein). Optional: falls back to ADMIN_EMAIL if unset.
+ADMIN_LABOUTIK='admin+cf@admin.com'
+
 # For transactionnal email :
 EMAIL_HOST="SSL0.OVH.NET"
 EMAIL_PORT="465"

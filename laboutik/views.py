@@ -968,6 +968,74 @@ def _charger_carte_primaire(tag_id):
     return carte_primaire_obj, None
 
 
+def obtenir_wallet_carte_depuis_fedow(carte):
+    """
+    Demande a Fedow (source de verite) le wallet de la carte et le miroir en
+    local avec le MEME uuid. C'est le seul moyen d'avoir un wallet capable de
+    recevoir du FED (qui vit dans Fedow), exactement comme le fait LaBoutik V1.
+    / Asks Fedow (source of truth) for the card's wallet and mirrors it locally
+    with the SAME uuid — the only way to hold FED (which lives in Fedow).
+
+    LOCALISATION : laboutik/views.py
+
+    POINT DE DEBRANCHEMENT : le jour ou le Fedow legacy sera debranche, on
+    remplacera UNIQUEMENT le corps de cette fonction par une creation interne
+    (fedow_core), sans toucher au reste du POS.
+    / DEBRANCH POINT: when legacy Fedow is removed, replace ONLY this body with
+    an internal (fedow_core) wallet creation.
+
+    Retourne le Wallet (uuid Fedow) ou None si Fedow ne connait pas la carte.
+    On ne fabrique PAS la carte au scan (comme V1) : le provisioning des cartes
+    se fait en amont (seed / import).
+    / Returns the Wallet (Fedow uuid) or None if Fedow doesn't know the card.
+
+    :param carte: CarteCashless
+    :return: Wallet | None
+    """
+    # Garde indispensable : on teste can_fedow() AVANT d'instancier FedowAPI.
+    # Sinon, sur un tenant sans place Fedow configurée, l'instanciation de
+    # PlaceFedow déclenche create_place() (handshake réseau involontaire) à
+    # chaque scan. Sans Fedow, le wallet ne peut pas être résolu : on retourne
+    # None et l'appelant lèvera son exception "carte inconnue de Fedow".
+    # / Mandatory guard: check can_fedow() BEFORE instantiating FedowAPI. Otherwise,
+    # on a tenant with no Fedow place, instantiating PlaceFedow triggers create_place()
+    # (an unwanted network handshake) on every scan. Without Fedow the wallet cannot be
+    # resolved: return None and let the caller raise its "card unknown to Fedow" error.
+    if not FedowConfig.get_solo().can_fedow():
+        return None
+
+    # On demande a Fedow le wallet de la carte (par son tag_id physique).
+    # / Ask Fedow for the card's wallet (by its physical tag_id).
+    serialized = FedowAPI().NFCcard.card_tag_id_retrieve(carte.tag_id)
+    if serialized is None:
+        # Fedow ne connait pas la carte (404) ou est indisponible : on ne cree
+        # PAS de wallet local, sinon on creerait un doublon deconnecte de Fedow.
+        # / Fedow doesn't know the card / is down: do NOT create a local wallet.
+        logger.warning(
+            f"obtenir_wallet_carte_depuis_fedow : carte {carte.tag_id} inconnue de Fedow"
+        )
+        return None
+
+    # Miroir local du wallet Fedow, avec le MEME uuid (Fedow fait foi).
+    # / Local mirror of the Fedow wallet, with the SAME uuid (Fedow is the source).
+    wallet, _cree = Wallet.objects.get_or_create(
+        uuid=serialized["wallet_uuid"],
+        defaults={
+            "origin": connection.tenant,
+            "name": f"Wallet carte {carte.tag_id}",
+        },
+    )
+
+    # Carte anonyme cote Fedow (wallet ephemere, pas encore d'user) : on rattache
+    # ce wallet a la carte locale pour les prochains scans.
+    # / Anonymous card on Fedow side: attach this wallet to the local card.
+    if serialized["is_wallet_ephemere"] and not carte.user:
+        carte.wallet_ephemere = wallet
+        carte.save(update_fields=["wallet_ephemere"])
+
+    return wallet
+
+
 def _obtenir_ou_creer_wallet(carte):
     """
     Retourne le wallet associé à une CarteCashless.
@@ -993,15 +1061,17 @@ def _obtenir_ou_creer_wallet(carte):
     if carte.wallet_ephemere:
         return carte.wallet_ephemere
 
-    # 3. Pas de wallet → créer un wallet éphémère
-    # 3. No wallet → create an ephemeral wallet
-    wallet = Wallet.objects.create(
-        origin=connection.tenant,
-        name=f"Éphémère - {carte.tag_id}",
-    )
-    carte.wallet_ephemere = wallet
-    carte.save(update_fields=["wallet_ephemere"])
-    logger.info(f"Wallet éphémère créé pour carte {carte.tag_id}: {wallet.uuid}")
+    # 3. Pas de wallet local connu → on demande a Fedow (source de verite) le
+    # wallet de la carte et on le miroir (meme uuid). Obligatoire pour pouvoir
+    # recevoir du FED. On ne fabrique PLUS de wallet local a uuid aleatoire :
+    # sinon doublon deconnecte de Fedow, impossible d'y charger du FED.
+    # / No known local wallet → ask Fedow (source of truth) and mirror its uuid.
+    wallet = obtenir_wallet_carte_depuis_fedow(carte)
+    if wallet is None:
+        raise Exception(
+            f"Carte {carte.tag_id} inconnue de Fedow (ou Fedow indisponible). "
+            f"Elle doit etre provisionnee dans Fedow avant usage."
+        )
     return wallet
 
 
@@ -5531,6 +5601,22 @@ class PaiementViewSet(viewsets.ViewSet):
                 status=400,
             )
 
+        # Resolution du wallet client AVANT le bloc atomic : _obtenir_ou_creer_wallet
+        # peut faire un appel reseau Fedow (latence). Le faire DANS l'atomic
+        # tiendrait un verrou DB pendant toute la latence reseau.
+        # / Resolve the client wallet BEFORE the atomic block: _obtenir_ou_creer_wallet
+        # may do a Fedow network call (latency). Doing it INSIDE the atomic would
+        # hold a DB lock for the whole network latency.
+        carte_client = None
+        wallet_client = None
+        if articles_recharge:
+            tag_id_client = request.POST.get("tag_id", "").upper().strip()
+            if not tag_id_client:
+                raise ValueError(_("Tag NFC client requis pour les recharges"))
+
+            carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
+            wallet_client = _obtenir_ou_creer_wallet(carte_client)
+
         produits_stock_negatif = []
         with db_transaction.atomic():
             # Articles normaux (ventes, adhesions) → LigneArticle
@@ -5559,14 +5645,10 @@ class PaiementViewSet(viewsets.ViewSet):
             )
 
             # Recharges → TransactionService + LigneArticle avec carte et asset
+            # (wallet_client deja resolu hors atomic ci-dessus)
             # Top-ups → TransactionService + LigneArticle with card and asset
+            # (wallet_client already resolved outside the atomic above)
             if articles_recharge:
-                tag_id_client = request.POST.get("tag_id", "").upper().strip()
-                if not tag_id_client:
-                    raise ValueError(_("Tag NFC client requis pour les recharges"))
-
-                carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
-                wallet_client = _obtenir_ou_creer_wallet(carte_client)
                 _executer_recharges(
                     articles_recharge,
                     wallet_client,
@@ -5704,6 +5786,22 @@ class PaiementViewSet(viewsets.ViewSet):
                     status=400,
                 )
 
+            # Resolution du wallet client AVANT le bloc atomic : _obtenir_ou_creer_wallet
+            # peut faire un appel reseau Fedow (latence). Le faire DANS l'atomic
+            # tiendrait un verrou DB pendant toute la latence reseau.
+            # / Resolve the client wallet BEFORE the atomic block: _obtenir_ou_creer_wallet
+            # may do a Fedow network call (latency). Doing it INSIDE the atomic would
+            # hold a DB lock for the whole network latency.
+            carte_client = None
+            wallet_client = None
+            if articles_recharge:
+                tag_id_client = request.POST.get("tag_id", "").upper().strip()
+                if not tag_id_client:
+                    raise ValueError(_("Tag NFC client requis pour les recharges"))
+
+                carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
+                wallet_client = _obtenir_ou_creer_wallet(carte_client)
+
             produits_stock_negatif = []
             # Créer les lignes articles en base (atomique)
             # Create article lines in DB (atomic)
@@ -5734,14 +5832,10 @@ class PaiementViewSet(viewsets.ViewSet):
                 )
 
                 # Recharges → TransactionService + LigneArticle avec carte et asset
+                # (wallet_client deja resolu hors atomic ci-dessus)
                 # Top-ups → TransactionService + LigneArticle with card and asset
+                # (wallet_client already resolved outside the atomic above)
                 if articles_recharge:
-                    tag_id_client = request.POST.get("tag_id", "").upper().strip()
-                    if not tag_id_client:
-                        raise ValueError(_("Tag NFC client requis pour les recharges"))
-
-                    carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
-                    wallet_client = _obtenir_ou_creer_wallet(carte_client)
                     _executer_recharges(
                         articles_recharge,
                         wallet_client,
@@ -7246,6 +7340,22 @@ class PaiementViewSet(viewsets.ViewSet):
                     request, "laboutik/partial/hx_messages.html", context_erreur
                 )
 
+            except Exception as e:
+                # Toute AUTRE exception dans l'atomic : si le legacy a deja ete debite
+                # (hors atomic), le local rollback mais le FED/TLF federe reste preleve
+                # SANS LigneArticle (orphelin). On JOURNALISE l'incident puis on relaie
+                # l'exception (500 volontaire). Pas de journalisation en base, juste le log.
+                # / Any OTHER exception in the atomic: if the legacy debit already happened
+                # (outside the atomic), the local rolls back but the federated FED/TLF stays
+                # debited WITHOUT LigneArticle (orphan). Log the incident then re-raise (500).
+                if lignes_legacy:
+                    logger.error(
+                        f"INCIDENT : débit legacy orphelin (complément, exception atomic) — "
+                        f"carte={carte1.tag_id} montant_legacy_centimes={montant_legacy} "
+                        f"uuid_transaction={uuid_transaction} exception={e}"
+                    )
+                raise
+
             # ---------------------------------------------------------- #
             # Succès espèces/CB → affichage
             # / Cash/CC success → display
@@ -7670,6 +7780,22 @@ class PaiementViewSet(viewsets.ViewSet):
                     request, "laboutik/partial/hx_messages.html", context_erreur
                 )
 
+            except Exception as e:
+                # Toute AUTRE exception dans l'atomic : si le legacy de la carte2 a deja
+                # ete debite (hors atomic), le local rollback mais le FED federe reste
+                # preleve SANS LigneArticle (orphelin). On JOURNALISE l'incident puis on
+                # relaie l'exception (500 volontaire). Pas de journalisation en base.
+                # / Any OTHER exception in the atomic: if the card2 legacy debit already
+                # happened (outside the atomic), the local rolls back but the federated FED
+                # stays debited WITHOUT LigneArticle (orphan). Log then re-raise (500).
+                if lignes_legacy_c2:
+                    logger.error(
+                        f"INCIDENT : débit legacy orphelin (2ème carte, exception atomic) — "
+                        f"carte={carte2.tag_id} montant_legacy_centimes={montant_legacy_c2} "
+                        f"uuid_transaction={uuid_transaction} exception={e}"
+                    )
+                raise
+
             # Succès 2ème carte → affichage multi-soldes
             # / 2nd card success → multi-balance display
             soldes_apres_paiement = []
@@ -7883,8 +8009,6 @@ class PaiementViewSet(viewsets.ViewSet):
             return _render_erreur_toast(request, _("Carte client inconnue."))
 
         wallet = _obtenir_ou_creer_wallet(carte)
-        if wallet is None:
-            return _render_erreur_toast(request, _("Carte vierge."))
 
         tokens = list(
             Token.objects.filter(

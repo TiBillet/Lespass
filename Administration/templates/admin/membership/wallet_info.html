@@ -118,6 +118,10 @@
                                 {% else %}
                                     {{ token.name }}
                                 {% endif %}
+                                {# Badge "Local" : token interne (fedow_core), pas sur le Fedow distant. #}
+                                {# Styles inline car Unfold n'embarque pas les classes Tailwind custom. #}
+                                {# / "Local" badge: internal token (fedow_core). Inline styles for Unfold. #}
+                                {% if token.is_local %}<span style="display:inline-block; padding:1px 8px; margin-left:6px; border-radius:9999px; background-color:#dbeafe; color:#1e40af; font-size:0.75rem; font-weight:600;">{% translate "Local" %}</span>{% endif %}
                             </td>
                         </tr>
 

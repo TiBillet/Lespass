@@ -1,0 +1,26 @@
+{% load i18n %}
+{# ================================================================ #}
+{# GRILLE DES FONCTIONNALITES — partial reutilise                    #}
+{# Inclus par la landing (`/`) et par le hub (`/features/`).  #}
+{# Boucle sur le registre `features` (= seo.features.FEATURE_DETAILS).#}
+{# Chaque carte est un lien vers la page de detail indexable, avec le #}
+{# swap anti-blink htmx (`hx-select="#seo-content"`) + href de repli. #}
+{# / FEATURES GRID — reusable partial. Included by the landing and    #}
+{# the hub. Loops over the `features` registry. Each card links to    #}
+{# the indexable detail page with the htmx anti-blink swap + fallback.#}
+{# ================================================================ #}
+<div class="features-grid">
+    {% for slug, feat in features.items %}
+    <a class="feature-card feature-card--link" href="/features/{{ slug }}/"
+       hx-get="/features/{{ slug }}/" hx-target="#seo-content"
+       hx-select="#seo-content" hx-swap="outerHTML" hx-push-url="true"
+       data-testid="feature-{{ slug }}">
+        <div class="feature-icon">
+            <i class="bi {{ feat.icon }}" aria-hidden="true"></i>
+        </div>
+        <h3 class="feature-title">{{ feat.title }}</h3>
+        <p class="feature-desc">{{ feat.card_desc }}</p>
+        <span class="feature-more">{% translate "En savoir plus" %} <i class="bi bi-arrow-right" aria-hidden="true"></i></span>
+    </a>
+    {% endfor %}
+</div>

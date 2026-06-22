@@ -1,0 +1,51 @@
+{% extends "seo/base.html" %}
+{% load i18n %}
+
+{# ================================================================ #}
+{# HUB DES FONCTIONNALITES — page `/features/`                #}
+{# Vraie page indexable : H1 propre, intro, puis la MEME grille que  #}
+{# la landing (include `_features_grid.html`). Sert de cible au fil  #}
+{# d'Ariane des pages de detail et de point d'entree pour les        #}
+{# sitelinks (avec l'ItemList JSON-LD ci-dessous).                   #}
+{# / FEATURES HUB — `/features/` page. Real indexable page    #}
+{# reusing the landing's features grid. Breadcrumb target + sitelink #}
+{# entry point (ItemList JSON-LD below).                             #}
+{# ================================================================ #}
+
+{# ItemList des fonctionnalites (memes URLs que le sitemap ROOT). #}
+{# / Features ItemList (same URLs as the ROOT sitemap).          #}
+{% block extra_head %}
+{% if json_ld_features %}
+<script type="application/ld+json">{{ json_ld_features|safe }}</script>
+{% endif %}
+{% endblock %}
+
+{% block main_wrapper %}
+<main class="container-lg my-4 fd-page" data-testid="features-hub-page">
+
+    {# Fil d'Ariane (lien Accueil en swap anti-blink). #}
+    {# / Breadcrumb (Home link via anti-blink swap).   #}
+    <nav class="fd-breadcrumb" aria-label="{% translate 'Fil d\'Ariane' %}">
+        <a href="/"
+           hx-get="/" hx-target="#seo-content" hx-select="#seo-content"
+           hx-swap="outerHTML" hx-push-url="true"
+           data-testid="hub-crumb-home">{% translate "Accueil" %}</a>
+        <span class="fd-breadcrumb-sep" aria-hidden="true">›</span>
+        <span class="fd-breadcrumb-current" aria-current="page">{% translate "Fonctionnalités" %}</span>
+    </nav>
+
+    <header class="fd-header" data-testid="hub-header">
+        <h1 class="fd-title">{% translate "Fonctionnalités" %}</h1>
+        <p class="fd-tagline">{% translate "Une solution complète pour les lieux culturels et associatifs." %}</p>
+    </header>
+
+    <p class="fd-lead">
+        {% translate "TiBillet réunit billetterie, adhésions, caisse, cashless et monnaies locales sur un logiciel libre et fédéré. Cliquez sur une fonctionnalité pour en savoir plus : captures, descriptions et liens vers la documentation." %}
+    </p>
+
+    {# Grille des fonctionnalites — meme partial que la landing. #}
+    {# / Features grid — same partial as the landing.           #}
+    {% include "seo/partials/_features_grid.html" %}
+
+</main>
+{% endblock main_wrapper %}

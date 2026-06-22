@@ -1,19 +1,98 @@
 # Changelog / Journal des modifications
 
+## Mon compte — Agrégation des tokens locaux + fix spinner / My account — local tokens aggregation + spinner fix
+
+**Date :** 2026-06-22
+**Migration :** Non / No
+
+**Quoi / What :** Dans « mon compte » (tableau des soldes `tokens_table`) **et sur la fiche admin
+d'un user (`admin_my_cards`)**, on agrège désormais les tokens **locaux** (`fedow_core`, tenants V2)
+avec les tokens **distants** (Fedow : FED, legacy, fédérés). Logique factorisée dans un helper
+partagé `_agreger_tokens_locaux`. Déduplication par `asset.uuid` (un asset peut être local ET
+fédéré distant), et badge « Local » sur les tokens internes. Les tenants **V1**
+(`module_monnaie_locale=False`) sont **inchangés** — leurs soldes restent lus uniquement sur Fedow.
+/ The account balance table now aggregates local tokens (fedow_core, V2) with the remote ones
+(Fedow). Dedup by asset uuid, "Local" badge. V1 tenants are untouched.
+
+**Comment / How :** lecture distante inchangée, puis `if config.module_monnaie_locale` →
+`WalletService.obtenir_tous_les_soldes(user.wallet)` mappé au format dict du template.
+
+**Fix spinner :** le `<div hx-get tokens_table>` héritait du `#tibillet-spinner` **global** (quirk
+htmx : héritage des attributs) → tout l'écran s'assombrissait. Désormais `data-loading-target`
+**local** (`#token-table-loader`) → seul le tableau affiche un spinner pendant son chargement.
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/views.py` | helper partagé `_agreger_tokens_locaux` + agrégation dans `tokens_table` **et** `admin_my_cards`, dédup, lecture Fedow encadrée, retrait du `print` debug |
+| `…/account/balance.html` | spinner scopé localement (fin de l'overlay global) |
+| `…/partials/account/token_table.html` | badge « Local » sur les tokens internes (front public) |
+| `Administration/…/admin/membership/wallet_info.html` | badge « Local » (styles inline Unfold) sur la fiche admin |
+
+---
+
+## Fonctionnalités ROOT — hub, sitemap, 10 pages + retrait /lieux et /evenements / ROOT features — hub, sitemap, 10 pages + remove /lieux & /evenements
+
+**Date :** 2026-06-22
+**Migration :** Non / No
+
+**Quoi / What :** Suite du prototype SEO des fonctionnalités. (1) **Toutes les 10 fonctionnalités** ont
+désormais leur page de détail indexable + fil d'Ariane dédié (registre étendu). (2) Nouvelle **page hub
+`/features/`** : H1 propre + intro + la **même grille** que la landing (via un include partagé),
+qui sert de cible au fil d'Ariane et de point d'entrée sitelinks. (3) Nouveau **sitemap ROOT**
+(`/sitemap-root.xml`) listant landing + hub + explorer + les 10 pages, référencé dans le sitemap index.
+(4) Les pages **`/lieux/` et `/evenements/` sont supprimées** (vues, routes, templates, liens footer).
+(5) Liens **doc en profondeur** par fonctionnalité + balises **`<title>` SEO** enrichies (mots-clés).
+/ All 10 features now have an indexable detail page + breadcrumb. New `/features/` hub reusing
+the landing grid via a shared include. New ROOT sitemap referenced in the index. `/lieux/` and
+`/evenements/` removed. Deep doc links + keyword-rich `<title>` tags.
+
+**Comment / How :** la grille de cartes est extraite dans `seo/partials/_features_grid.html` (boucle sur
+le registre `FEATURE_DETAILS`), incluse par la landing **et** par `feature_hub.html`. Le breadcrumb des
+pages de détail pointe vers le hub `/features/` (vraie page). Le footer ROOT remplace
+Lieux/Événements par un lien « Fonctionnalités » vers le hub. Liens doc vérifiés (HTTP 200) depuis la
+nav de `documentation_v3`.
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/features.py` | Registre étendu aux **10 fonctionnalités** + champs `card_desc`, `page_title`, liens doc profonds |
+| `seo/templates/seo/partials/_features_grid.html` | **Nouveau** : grille en boucle sur le registre (cartes cliquables), partagée landing + hub |
+| `seo/templates/seo/feature_hub.html` | **Nouveau** : page hub `/features/` |
+| `seo/views.py` | Vue `features_hub` ; `sitemap_root_view` + entrée ROOT dans `sitemap_index_view` ; `page_title` registre ; breadcrumb → hub ; **suppression** des vues `lieux`/`evenements` ; landing passe `features` |
+| `seo/urls.py` | Routes `fonctionnalites/` (hub) + `sitemap-root.xml` ; **suppression** des routes `lieux/`/`evenements/` |
+| `seo/templates/seo/feature_detail.html` | Breadcrumb « Fonctionnalités » → `/features/` |
+| `seo/templates/seo/landing.html` | Grille remplacée par l'include `_features_grid.html` |
+| `seo/templates/seo/base.html` | Footer : Lieux/Événements → lien « Fonctionnalités » (hub) |
+| `seo/templates/seo/lieux.html`, `evenements.html` | **Supprimés** |
+
+**URL en anglais + bouton menu :** le préfixe d'URL est passé de `/fonctionnalites/` à **`/features/`**
+(et `/features/<slug>/`) — neutre pour les futures traductions FR/EN et meilleur pour le SEO. Le
+libellé affiché reste « Fonctionnalités » (français, traduisible). Un **bouton « Fonctionnalités »**
+(icône `bi-grid`) a été ajouté en tête du **menu de navigation** ROOT, vers `/features/`.
+
+**i18n :** beaucoup de nouvelles chaînes (contenu des 8 nouvelles fonctionnalités, hub, `page_title`)
+à extraire/traduire par le mainteneur (`makemessages` + `compilemessages`).
+
+**Note lint :** `import json` dans `seo/views.py` est un import mort **pré-existant** (présent avant la
+session, aucun usage) — laissé tel quel (hors scope). `ruff check --fix` le retirerait.
+
+---
+
 ## Pages de détail des fonctionnalités (ROOT) — prototype SEO / Feature detail pages (ROOT) — SEO prototype
 
 **Date :** 2026-06-22
 **Migration :** Non / No
 
 **Quoi / What :** Au clic sur une carte de la section « Fonctionnalités » de la landing ROOT, on
-ouvre une **vraie page de détail indexable** `/fonctionnalites/<slug>/` (captures placeholder, textes
+ouvre une **vraie page de détail indexable** `/features/<slug>/` (captures placeholder, textes
 descriptifs, liens doc, maillage interne). La transition est **anti-blink** (htmx `hx-select`), mais le
 contenu existe à une URL crawlable rendue **entièrement côté serveur** — c'est ce qui permet aux robots
 d'indexer et à Google d'afficher des extraits enrichis / sitelinks. Prototype : **2 fonctionnalités**
 (Billetterie + Cashless NFC) ; les 8 autres cartes restent non cliquables tant qu'elles n'ont pas
 d'entrée dans le registre.
 / Clicking a feature card on the ROOT landing opens a real indexable detail page
-`/fonctionnalites/<slug>/` (placeholder screenshots, descriptions, doc links, internal linking). The
+`/features/<slug>/` (placeholder screenshots, descriptions, doc links, internal linking). The
 transition is anti-blink (htmx `hx-select`), but the content lives at a fully server-rendered crawlable
 URL — which is what lets robots index it and Google show rich results / sitelinks. Prototype: 2
 features (Billetterie + Cashless NFC).
@@ -42,7 +121,7 @@ et carte NFC » a déjà une traduction FR existante (« Monnaie locale et carte
 page cashless s'affiche donc ainsi, par cohérence avec la carte de la landing.
 
 **Pistes pour la suite :** lien doc en profondeur (au lieu de la racine), vraies captures d'écran,
-étendre le registre aux 8 autres fonctionnalités, sitemap ROOT dédié pour les pages `/fonctionnalites/`.
+étendre le registre aux 8 autres fonctionnalités, sitemap ROOT dédié pour les pages `/features/`.
 
 ---
 
