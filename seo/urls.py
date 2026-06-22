@@ -21,6 +21,9 @@ app_name = "seo"
 
 urlpatterns = [
     path("", views.landing, name="landing"),
+    # Page de detail d'une fonctionnalite (captures, descriptions, liens doc).
+    # / Feature detail page (screenshots, descriptions, doc links).
+    path("fonctionnalites/<slug:slug>/", views.feature_detail, name="feature_detail"),
     path("lieux/", views.lieux, name="lieux"),
     path("evenements/", views.evenements, name="evenements"),
     path("recherche/", views.recherche, name="recherche"),

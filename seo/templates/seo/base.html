@@ -116,6 +116,16 @@
                         <i class="bi bi-book" aria-hidden="true"></i> {% translate "Documentation" %}
                     </a>
                 </li>
+                {# Contribuer : lien en dur vers l'espace contributif de la cooperative. #}
+                {# Meme destination que le bouton hero et le panneau "Fonctionnalites".  #}
+                {# / Contribute: hardcoded link to the cooperative contribution space,   #}
+                {# same target as the hero button and the "Features" panel.              #}
+                <li class="nav-item">
+                    <a class="nav-link" href="https://codecommun.tibillet.coop/contrib/"
+                       target="_blank" rel="noopener">
+                        <i class="bi bi-rocket-takeoff" aria-hidden="true"></i> {% translate "Contribuer" %}
+                    </a>
+                </li>
                 {# Contact : simple lien mailto vers l'adresse officielle TiBillet. #}
                 {# / Contact: plain mailto link to the official TiBillet address. #}
                 <li class="nav-item">
@@ -164,7 +174,14 @@
 </nav>
 
 {# Contenu principal / Main content #}
-<div class="flex-fill d-flex flex-column">
+{# #seo-content : cible du swap anti-blink htmx. Les cartes de fonctionnalites #}
+{# font `hx-select="#seo-content"` : htmx extrait ce bloc de la vraie page de   #}
+{# detail et remplace celui-ci. Le <head>, la navbar et le footer ne sont pas   #}
+{# rejoues -> pas de flash, pas de rechargement des assets.                     #}
+{# / #seo-content: htmx anti-blink swap target. Feature cards use              #}
+{# `hx-select="#seo-content"`: htmx pulls this block from the real detail page  #}
+{# and replaces this one. The <head>, navbar and footer are not re-rendered.   #}
+<div id="seo-content" class="flex-fill d-flex flex-column">
     {% block main_wrapper %}
     <main class="container-lg my-4">
         {% block content %}{% endblock %}

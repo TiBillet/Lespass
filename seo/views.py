@@ -20,11 +20,12 @@ import logging
 import random
 
 from django.core.paginator import Paginator
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
 from django.template.response import TemplateResponse
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
+from seo.features import FEATURE_DETAILS
 from seo.models import SEOCache
 from seo.views_common import (
     build_json_ld_federation,
@@ -168,10 +169,33 @@ def landing(request):
         },
     }
 
+    # JSON-LD ItemList des fonctionnalites qui ont une page de detail.
+    # Ce bloc liste les vraies URLs `/fonctionnalites/<slug>/` : il aide Google
+    # a comprendre l'ensemble "Fonctionnalites" et favorise l'affichage de
+    # sitelinks (sous-menus) dans les resultats de recherche.
+    # / JSON-LD ItemList of features that have a detail page. Listing the real
+    # `/fonctionnalites/<slug>/` URLs helps Google understand the "Features" set
+    # and encourages sitelinks (sub-links) in search results.
+    feature_list_items = []
+    for feature_slug, feature_data in FEATURE_DETAILS.items():
+        feature_list_items.append(
+            {
+                "url": request.build_absolute_uri(f"/fonctionnalites/{feature_slug}/"),
+                "name": str(feature_data["title"]),
+            }
+        )
+    json_ld_features = json_for_html(build_json_ld_item_list(feature_list_items))
+
     context = {
         "lieux_pour_bandeau": lieux_pour_bandeau,
         "marquee_lieux_duration_sec": marquee_lieux_duration_sec,
         "top_events": top_events,
+        # Slugs des fonctionnalites cliquables (pour lier les bonnes cartes).
+        # / Slugs of clickable features (to link the right cards).
+        "feature_detail_slugs": list(FEATURE_DETAILS.keys()),
+        # ItemList des pages de fonctionnalites (SEO sitelinks).
+        # / Feature pages ItemList (SEO sitelinks).
+        "json_ld_features": json_ld_features,
         # Contributeurs de TiBillet — section "Ils contribuent" (logos cliquables).
         # / TiBillet contributors — "They contribute" section (clickable logos).
         "contributeurs": CONTRIBUTEURS,
@@ -193,6 +217,101 @@ def landing(request):
     }
 
     return TemplateResponse(request, "seo/landing.html", context)
+
+
+def feature_detail(request, slug):
+    """
+    Page de detail d'une fonctionnalite : captures, descriptions, liens doc.
+    / Feature detail page: screenshots, descriptions, doc links.
+
+    URL: GET /fonctionnalites/<slug>/
+
+    LOCALISATION : seo/views.py
+
+    Le contenu vient du registre `seo.features.FEATURE_DETAILS`. La page est
+    rendue ENTIEREMENT cote serveur (vraie page indexable) ; l'effet "anti-blink"
+    cote landing est obtenu cote client par htmx (`hx-select="#seo-content"`),
+    sans template ni branchement htmx ici. Un slug inconnu leve un 404.
+
+    / Content comes from the `seo.features.FEATURE_DETAILS` registry. The page is
+    fully server-rendered (real indexable page); the landing "anti-blink" effect
+    is client-side via htmx (`hx-select="#seo-content"`), with no dual template
+    or htmx branching here. An unknown slug raises a 404.
+
+    SEO : deux blocs JSON-LD sont injectes dans le <head> via `base.html` :
+    - `json_ld`     = BreadcrumbList (Accueil > Fonctionnalites > <titre>)
+    - `json_ld_org` = TechArticle (le contenu de la page, lisible par les bots)
+    / SEO: two JSON-LD blocks injected in <head> via base.html.
+    """
+    feature = FEATURE_DETAILS.get(slug)
+    if feature is None:
+        # Slug absent du registre : pas de page de detail.
+        # / Slug not in registry: no detail page.
+        raise Http404("Fonctionnalité inconnue / Unknown feature")
+
+    titre = str(feature["title"])
+    page_url = request.build_absolute_uri()
+    accueil_url = request.build_absolute_uri("/")
+    # Le fil d'Ariane pointe vers la section "Fonctionnalites" de la landing.
+    # / Breadcrumb points to the landing "Features" section.
+    fonctionnalites_url = request.build_absolute_uri("/#features")
+
+    # BreadcrumbList : aide Google a afficher le fil d'Ariane dans les resultats.
+    # / BreadcrumbList: helps Google show the breadcrumb trail in results.
+    breadcrumb_json_ld = {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": _("Accueil"), "item": accueil_url},
+            {
+                "@type": "ListItem",
+                "position": 2,
+                "name": _("Fonctionnalités"),
+                "item": fonctionnalites_url,
+            },
+            {"@type": "ListItem", "position": 3, "name": titre, "item": page_url},
+        ],
+    }
+
+    # TechArticle : decrit le contenu de la page pour les moteurs de recherche.
+    # / TechArticle: describes the page content for search engines.
+    article_json_ld = {
+        "@context": "https://schema.org",
+        "@type": "TechArticle",
+        "headline": titre,
+        "description": str(feature["meta_description"]),
+        "inLanguage": "fr",
+        "url": page_url,
+        "isPartOf": {"@type": "WebSite", "name": "TiBillet", "url": accueil_url},
+        "about": {"@type": "SoftwareApplication", "name": "TiBillet", "applicationCategory": "BusinessApplication"},
+    }
+
+    # Autres fonctionnalites (maillage interne = bon pour le SEO).
+    # / Other features (internal linking = good for SEO).
+    autres_fonctionnalites = []
+    for autre_slug, autre_data in FEATURE_DETAILS.items():
+        if autre_slug == slug:
+            continue
+        autres_fonctionnalites.append(
+            {
+                "slug": autre_slug,
+                "title": autre_data["title"],
+                "icon": autre_data["icon"],
+            }
+        )
+
+    context = {
+        "feature": feature,
+        "slug": slug,
+        "autres_fonctionnalites": autres_fonctionnalites,
+        "json_ld": json_for_html(breadcrumb_json_ld),
+        "json_ld_org": json_for_html(article_json_ld),
+        "page_title": f"{titre} — TiBillet",
+        "page_description": str(feature["meta_description"]),
+        "canonical_url": page_url,
+    }
+
+    return TemplateResponse(request, "seo/feature_detail.html", context)
 
 
 def lieux(request):

@@ -246,112 +246,154 @@ body {
 
 
 /* ================================================================ */
-/* ROADMAP / FUTURE — accordeon <details> "Futur de TiBillet"        */
-/* HTML5 natif : zero JS, accessible clavier + lecteur d'ecran.      */
-/* / ROADMAP — native <details> accordion: zero JS, accessible.      */
+/* CONTRIBUER — panneau d'appel a participation (dans Fonctionnalites)*/
+/* Remplace l'ancien accordeon roadmap "Futur de TiBillet".          */
+/* Lien en dur vers l'espace contributif de la cooperative.          */
+/* / CONTRIBUTE — participation call-to-action panel (in Features).   */
+/* Replaces the old roadmap "Futur de TiBillet" accordion.           */
+/* Hardcoded link to the cooperative contribution space.             */
 /* ================================================================ */
 
-.roadmap-section {
-    margin-bottom: 3rem;
-}
-
-.roadmap-details {
-    border-radius: 12px;
-    overflow: hidden;
-    /* Bordure douce + ombre subtile pour distinguer du flux normal. */
-    /* / Soft border + subtle shadow to stand out from the flow.     */
+.contribute-panel {
+    margin-top: 3rem;
+    border-radius: 16px;
+    /* Fond gradient tres doux + anneau vert : se distingue de la grille. */
+    /* / Very soft gradient bg + green ring: stands out from the grid.    */
+    background: linear-gradient(135deg, rgba(37, 157, 73, 0.07) 0%, rgba(66, 150, 204, 0.07) 100%);
     box-shadow:
         0 0 0 1px rgba(37, 157, 73, 0.18),
-        0 2px 8px -2px rgba(0, 0, 0, 0.06);
+        0 8px 24px -12px rgba(0, 0, 0, 0.12);
+    padding: 2.75rem 1.5rem;
 }
 
-.roadmap-summary {
-    /* Reset le triangle natif de <summary> et style en bouton plein. */
-    /* / Reset native <summary> triangle and style as a full button.  */
-    list-style: none;
-    cursor: pointer;
-    padding: 1.1rem 1.5rem;
-    background: linear-gradient(135deg, rgba(37, 157, 73, 0.08) 0%, rgba(66, 150, 204, 0.08) 100%);
+/* Contenu centre, largeur lisible (pas de lignes trop longues). */
+/* / Centered content, readable width (no over-long lines).      */
+.contribute-body {
+    max-width: 720px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+/* Icone fusee dans un cercle gradient plein (palette TiBillet vert/bleu). */
+/* / Rocket icon in a solid gradient circle (TiBillet green/blue palette). */
+.contribute-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #259d49 0%, #4296cc 100%);
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    font-weight: 700;
-    font-size: 1.1rem;
-    color: var(--bs-body-color, #212529);
-    transition: background 200ms ease;
-    user-select: none;
+    justify-content: center;
+    margin: 0 auto 1.25rem;
+    font-size: 1.6rem;
+    color: #fff;
 }
 
-.roadmap-summary::-webkit-details-marker {
-    display: none;
+.contribute-title {
+    font-size: clamp(1.3rem, 2.5vw, 1.7rem);
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    margin-bottom: 0.85rem;
 }
 
-.roadmap-summary:hover {
-    background: linear-gradient(135deg, rgba(37, 157, 73, 0.14) 0%, rgba(66, 150, 204, 0.14) 100%);
+.contribute-lead {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: var(--bs-secondary-color, #6c757d);
+    margin-bottom: 1.5rem;
 }
 
-.roadmap-summary:focus-visible {
-    outline: 2px solid #259d49;
-    outline-offset: -2px;
+/* Pastilles des chantiers ouverts — wrap centre, sans puces de liste. */
+/* / Open-work chips — centered wrap, no list bullets.                 */
+.contribute-chantiers {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1.75rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.6rem;
 }
 
-.roadmap-summary-label {
+.contribute-chantier {
     display: inline-flex;
     align-items: center;
-    color: #259d49;
-}
-
-.roadmap-summary-chevron {
-    transition: transform 250ms ease;
-    color: #259d49;
-    font-size: 1.2rem;
-    line-height: 1;
-}
-
-/* Chevron pivote quand le <details> est ouvert. */
-/* / Chevron rotates when <details> is open.    */
-.roadmap-details[open] .roadmap-summary-chevron {
-    transform: rotate(180deg);
-}
-
-.roadmap-content {
-    padding: 2rem 1.5rem 1.5rem;
+    gap: 0.4rem;
+    padding: 0.4rem 0.85rem;
+    border-radius: 999px;
     background: var(--bs-body-bg, #fff);
+    box-shadow: inset 0 0 0 1px rgba(37, 157, 73, 0.22);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--bs-body-color, #212529);
 }
 
-.roadmap-intro {
+.contribute-chantier i {
+    color: #259d49;
+    font-size: 0.95rem;
+}
+
+/* Bloc bouton + rappel du domaine destination. */
+/* / Button block + destination domain reminder.  */
+.contribute-cta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.contribute-btn {
+    font-weight: 700;
+    padding: 0.7rem 2rem;
+    border-radius: 8px;
+    background: #259d49;
+    border: 1px solid #259d49;
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    /* Le libelle reste sur une seule ligne a toutes les largeurs. */
+    /* / Label stays on a single line at every width.              */
+    white-space: nowrap;
+    transition: background 200ms ease, transform 150ms ease;
+}
+
+.contribute-btn:hover {
+    background: #1e8a3f;
+    border-color: #1e8a3f;
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+/* Anneau de focus visible et instantane (jamais anime). */
+/* / Visible, instant focus ring (never animated).        */
+.contribute-btn:focus-visible {
+    outline: 2px solid #259d49;
+    outline-offset: 2px;
+}
+
+.contribute-cta-hint {
+    font-size: 0.8rem;
     color: var(--bs-secondary-color, #6c757d);
-    margin-bottom: 2rem;
-    max-width: 640px;
-    margin-left: auto;
-    margin-right: auto;
+    display: inline-flex;
+    align-items: center;
 }
 
-/* La grille roadmap utilise les memes regles que .features-grid    */
-/* (responsive 3/2/1 colonnes deja gere par les @media plus haut),  */
-/* on ne surcharge que la couleur d'accent des icones.              */
-/* / Roadmap grid reuses .features-grid rules; we only override the */
-/* icon accent color (orange "futur" instead of green "actuel").    */
-.roadmap-card .feature-icon.roadmap-icon {
-    background: linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(217, 119, 6, 0.12) 100%);
-    color: #d97706;
-}
-
-.roadmap-cta {
-    margin-top: 1.5rem;
-    margin-bottom: 0;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--bs-border-color-translucent, rgba(0, 0, 0, 0.08));
-    color: var(--bs-secondary-color, #6c757d);
-}
-
-/* Reduce-motion : pas de rotation animee du chevron. */
-/* / Reduce-motion: disable chevron rotation.         */
+/* Reduce-motion : pas de translation au survol du bouton. */
+/* / Reduce-motion: no hover translation on the button.    */
 @media (prefers-reduced-motion: reduce) {
-    .roadmap-summary,
-    .roadmap-summary-chevron {
+    .contribute-btn {
         transition: none;
+    }
+    .contribute-btn:hover {
+        transform: none;
+    }
+}
+
+/* Mobile : padding reduit pour ne pas serrer le contenu. */
+/* / Mobile: reduced padding so content isn't cramped.    */
+@media (max-width: 575.98px) {
+    .contribute-panel {
+        padding: 2rem 1rem;
     }
 }
 
@@ -785,5 +827,366 @@ a.contributeur-item:hover .contributeur-logo-box {
     }
     .contributeur-logo {
         max-height: 48px;
+    }
+}
+
+
+/* ================================================================ */
+/* FONCTIONNALITES CLIQUABLES — carte qui mene a la page de detail   */
+/* La carte devient un <a> ; on neutralise le style lien et on ajoute */
+/* un relief au survol + l'affordance "En savoir plus".              */
+/* / CLICKABLE FEATURES — card linking to the detail page.           */
+/* The card becomes an <a>; reset link styling, add hover lift +      */
+/* an "En savoir plus" affordance.                                    */
+/* ================================================================ */
+
+.feature-card--link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    border-radius: 12px;
+    transition: transform 200ms ease, box-shadow 200ms ease, background 200ms ease;
+}
+
+.feature-card--link:hover {
+    transform: translateY(-3px);
+    background: linear-gradient(135deg, rgba(37, 157, 73, 0.05) 0%, rgba(66, 150, 204, 0.05) 100%);
+    box-shadow:
+        0 0 0 1px rgba(37, 157, 73, 0.18),
+        0 10px 24px -12px rgba(0, 0, 0, 0.15);
+}
+
+.feature-card--link:focus-visible {
+    outline: 2px solid #259d49;
+    outline-offset: 2px;
+}
+
+/* Affordance "En savoir plus →" — accent vert, fleche qui avance au survol. */
+/* / "Learn more →" affordance — green accent, arrow nudges on hover.        */
+.feature-more {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 0.85rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #259d49;
+}
+
+.feature-more i {
+    transition: transform 200ms ease;
+}
+
+.feature-card--link:hover .feature-more i {
+    transform: translateX(3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .feature-card--link,
+    .feature-more i {
+        transition: none;
+    }
+    .feature-card--link:hover {
+        transform: none;
+    }
+    .feature-card--link:hover .feature-more i {
+        transform: none;
+    }
+}
+
+
+/* ================================================================ */
+/* PAGE DE DETAIL D'UNE FONCTIONNALITE                               */
+/* Article lisible : fil d'Ariane, en-tete, intro, sections alternees */
+/* texte/capture, appels a l'action, maillage interne.               */
+/* / FEATURE DETAIL PAGE — readable article: breadcrumb, header,     */
+/* intro, alternating text/screenshot sections, CTAs, internal links. */
+/* ================================================================ */
+
+/* Largeur d'article confortable (plus etroit que container-lg). */
+/* / Comfortable article width (narrower than container-lg).     */
+.fd-page {
+    max-width: 1000px;
+}
+
+.fd-breadcrumb {
+    font-size: 0.85rem;
+    margin-bottom: 1.75rem;
+    color: var(--bs-secondary-color, #6c757d);
+}
+
+.fd-breadcrumb a {
+    color: #259d49;
+    text-decoration: none;
+}
+
+.fd-breadcrumb a:hover {
+    text-decoration: underline;
+}
+
+.fd-breadcrumb a:focus-visible {
+    outline: 2px solid #259d49;
+    outline-offset: 2px;
+    border-radius: 3px;
+}
+
+.fd-breadcrumb-sep {
+    margin: 0 0.4rem;
+}
+
+.fd-breadcrumb-current {
+    color: var(--bs-body-color);
+    font-weight: 600;
+}
+
+/* En-tete : icone gradient + titre + accroche. */
+/* / Header: gradient icon + title + tagline.    */
+.fd-header {
+    margin-bottom: 1.5rem;
+}
+
+.fd-icon {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #259d49 0%, #4296cc 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.25rem;
+    font-size: 1.9rem;
+    color: #fff;
+}
+
+.fd-title {
+    font-size: clamp(1.9rem, 4vw, 2.6rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.5rem;
+}
+
+.fd-tagline {
+    font-size: 1.15rem;
+    font-weight: 500;
+    color: #259d49;
+    margin-bottom: 0;
+}
+
+.fd-lead {
+    font-size: 1.05rem;
+    line-height: 1.7;
+    color: var(--bs-body-color);
+    max-width: 740px;
+    margin-bottom: 3rem;
+}
+
+/* Sections alternees texte / capture (2 colonnes sur desktop). */
+/* / Alternating text / screenshot sections (2 columns on desktop). */
+.fd-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 3rem;
+    margin-bottom: 3.5rem;
+}
+
+.fd-section {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 2.5rem;
+    align-items: center;
+}
+
+/* Une section sur deux inverse l'ordre (capture a gauche). */
+/* / Every other section flips the order (screenshot on the left). */
+.fd-section:nth-child(even) .fd-section-text {
+    order: 2;
+}
+
+.fd-section:nth-child(even) .fd-figure {
+    order: 1;
+}
+
+.fd-section-heading {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+}
+
+.fd-section-text p {
+    font-size: 0.98rem;
+    line-height: 1.7;
+    color: var(--bs-secondary-color, #6c757d);
+    margin-bottom: 0;
+}
+
+/* Capture a venir : cadre pointille etiquete, pas de fausse image. */
+/* / Screenshot to come: labelled dashed frame, no fake image.      */
+.fd-figure {
+    margin: 0;
+}
+
+.fd-figure-placeholder {
+    aspect-ratio: 16 / 10;
+    border-radius: 12px;
+    border: 1px dashed rgba(37, 157, 73, 0.35);
+    background: linear-gradient(135deg, rgba(37, 157, 73, 0.06) 0%, rgba(66, 150, 204, 0.06) 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    color: #259d49;
+}
+
+.fd-figure-placeholder i {
+    font-size: 2rem;
+    opacity: 0.7;
+}
+
+.fd-figure-placeholder span {
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.fd-figcaption {
+    margin-top: 0.6rem;
+    font-size: 0.8rem;
+    color: var(--bs-secondary-color, #6c757d);
+    text-align: center;
+}
+
+/* Appels a l'action. / Calls to action. */
+.fd-cta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 3.5rem;
+}
+
+.fd-btn-primary {
+    font-weight: 700;
+    padding: 0.7rem 1.8rem;
+    border-radius: 8px;
+    background: #259d49;
+    border: 1px solid #259d49;
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    transition: background 200ms ease, transform 150ms ease;
+}
+
+.fd-btn-primary:hover {
+    background: #1e8a3f;
+    border-color: #1e8a3f;
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+.fd-btn-primary:focus-visible {
+    outline: 2px solid #259d49;
+    outline-offset: 2px;
+}
+
+.fd-btn-secondary {
+    font-weight: 600;
+    padding: 0.7rem 1.8rem;
+    border-radius: 8px;
+    border: 2px solid var(--bs-border-color, #dee2e6);
+    background: transparent;
+    color: var(--bs-body-color);
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    transition: border-color 200ms ease, color 200ms ease;
+}
+
+.fd-btn-secondary:hover {
+    border-color: #259d49;
+    color: #259d49;
+}
+
+.fd-btn-secondary:focus-visible {
+    outline: 2px solid #259d49;
+    outline-offset: 2px;
+}
+
+/* Maillage interne : autres fonctionnalites. */
+/* / Internal linking: other features.        */
+.fd-related {
+    border-top: 1px solid var(--bs-border-color-translucent, rgba(0, 0, 0, 0.08));
+    padding-top: 2rem;
+}
+
+.fd-related-heading {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+}
+
+.fd-related-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 0.75rem;
+}
+
+.fd-related-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.85rem 1.1rem;
+    border-radius: 10px;
+    text-decoration: none;
+    color: var(--bs-body-color);
+    box-shadow: inset 0 0 0 1px rgba(37, 157, 73, 0.2);
+    font-weight: 600;
+    font-size: 0.92rem;
+    transition: background 200ms ease, box-shadow 200ms ease;
+}
+
+.fd-related-item > i:first-child {
+    color: #259d49;
+    font-size: 1.1rem;
+}
+
+.fd-related-item .ms-auto {
+    color: #259d49;
+}
+
+.fd-related-item:hover {
+    background: linear-gradient(135deg, rgba(37, 157, 73, 0.06) 0%, rgba(66, 150, 204, 0.06) 100%);
+    box-shadow: inset 0 0 0 1px rgba(37, 157, 73, 0.4);
+}
+
+.fd-related-item:focus-visible {
+    outline: 2px solid #259d49;
+    outline-offset: 2px;
+}
+
+/* Mobile : sections en 1 colonne, ordre texte puis capture. */
+/* / Mobile: single-column sections, text then screenshot.    */
+@media (max-width: 767.98px) {
+    .fd-section {
+        grid-template-columns: 1fr;
+        gap: 1.25rem;
+    }
+    .fd-section:nth-child(even) .fd-section-text,
+    .fd-section:nth-child(even) .fd-figure {
+        order: initial;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fd-btn-primary,
+    .fd-btn-secondary,
+    .fd-related-item {
+        transition: none;
+    }
+    .fd-btn-primary:hover {
+        transform: none;
     }
 }

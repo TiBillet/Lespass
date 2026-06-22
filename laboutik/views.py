@@ -7389,6 +7389,60 @@ class PaiementViewSet(viewsets.ViewSet):
                     total_reste_apres_carte2 += reste_complement
                     lignes_nfc_carte2.append((art_c, None, reste_complement, None))
 
+            # ===== CRAN LEGACY (C3) : la 2ème carte du réseau couvre le reste avec son FED =====
+            # Si la cascade LOCALE de la carte2 ne suffit pas et que la carte2 est liée à un user,
+            # on tente son dépensable fédéré (FED réseau). TOUT-OU-RIEN : on ne débite le legacy que
+            # s'il couvre TOUT le reste — sinon le re-render « insuffisant » jetterait la carte2 et le
+            # débit serait perdu. Le solde non couvert part en espèces/CB au tour suivant (FED intact).
+            # / LEGACY tier (C3): the 2nd networked card covers the remainder with its FED. ALL-OR-
+            # NOTHING (a partial debit would be lost by the re-render). Otherwise cash/CC next round.
+            lignes_legacy_c2 = []
+            montant_legacy_c2 = 0
+            if carte2.user is not None and total_reste_apres_carte2 > 0:
+                depensable_legacy_c2, legacy_dispo_c2 = lire_depensable_fed_frais(
+                    carte2.user
+                )
+                if legacy_dispo_c2 and depensable_legacy_c2 >= total_reste_apres_carte2:
+                    montant_legacy_c2 = total_reste_apres_carte2
+            if montant_legacy_c2 > 0:
+                # Les lignes complément (asset=None) de la carte2 sont entièrement couvertes par le FED.
+                # / The card2 complement lines (asset=None) are fully covered by FED.
+                lignes_complement_c2 = [t for t in lignes_nfc_carte2 if t[1] is None]
+                lignes_couvertes_locales_c2 = [
+                    t for t in lignes_nfc_carte2 if t[1] is not None
+                ]
+                lignes_pour_fed_c2, lignes_reste_c2 = _decouper_lignes_complement(
+                    lignes_complement_c2, montant_legacy_c2
+                )
+                try:
+                    transactions_legacy_c2 = _debiter_legacy(
+                        carte2.user, montant_legacy_c2, uuid_transaction
+                    )
+                except Exception as erreur_legacy_c2:
+                    logger.warning(
+                        f"Débit legacy (2ème carte) échoué : {erreur_legacy_c2}"
+                    )
+                    context_erreur = {
+                        "msg_type": "warning",
+                        "msg_content": _(
+                            "Le solde du réseau a changé, rescannez la carte"
+                        ),
+                        "selector_bt_retour": "#messages",
+                    }
+                    return render(
+                        request,
+                        "laboutik/partial/hx_messages.html",
+                        context_erreur,
+                        status=409,
+                    )
+                lignes_legacy_c2 = _repartir_legacy_sur_articles(
+                    lignes_pour_fed_c2, transactions_legacy_c2
+                )
+                # Le FED a couvert tout le reste : plus aucune ligne complément sur la carte2.
+                # / FED covered the whole remainder: no complement line left on card2.
+                lignes_nfc_carte2 = lignes_couvertes_locales_c2 + lignes_reste_c2
+                total_reste_apres_carte2 = 0
+
             if total_reste_apres_carte2 > 0:
                 # Encore insuffisant → re-render complémentaire sans bouton 2ème carte
                 # / Still insufficient → re-render complement without 2nd card button
@@ -7550,8 +7604,14 @@ class PaiementViewSet(viewsets.ViewSet):
                         if asset is not None
                     ]
 
+                    # + lignes_legacy_c2 : parts couvertes par le FED de la carte2 (débit déjà fait
+                    # hors atomic), avec leur moyen résolu (STRIPE_FED / LOCAL_EURO) et l'uuid distant.
+                    # / + lignes_legacy_c2: card2 FED-covered parts (already debited outside atomic).
                     toutes_les_lignes = (
-                        lignes_non_fidu + lignes_couvertes_c1 + lignes_couvertes_c2
+                        lignes_non_fidu
+                        + lignes_couvertes_c1
+                        + lignes_couvertes_c2
+                        + lignes_legacy_c2
                     )
                     lignes_creees, produits_stock_negatif = (
                         _creer_lignes_articles_cascade(
@@ -7589,6 +7649,16 @@ class PaiementViewSet(viewsets.ViewSet):
                                     ligne_ad.save(update_fields=["membership"])
 
             except SoldeInsuffisant:
+                # INCIDENT rarissime : le legacy de la carte2 a été débité (hors atomic) mais l'atomic
+                # local a échoué → le FED de la carte2 est prélevé SANS LigneArticle. On JOURNALISE
+                # pour régularisation manuelle (le legacy n'est pas annulable automatiquement).
+                # / Rare INCIDENT: card2 legacy debited but local atomic failed → log for manual fix.
+                if lignes_legacy_c2:
+                    logger.error(
+                        f"INCIDENT legacy débité sans LigneArticle (2ème carte, atomic échoué) — "
+                        f"uuid_transaction={uuid_transaction} carte2={carte2.tag_id} "
+                        f"montant_legacy={montant_legacy_c2} : régularisation manuelle requise."
+                    )
                 context_erreur = {
                     "msg_type": "warning",
                     "msg_content": _(

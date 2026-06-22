@@ -1,5 +1,117 @@
 # Changelog / Journal des modifications
 
+## Pages de détail des fonctionnalités (ROOT) — prototype SEO / Feature detail pages (ROOT) — SEO prototype
+
+**Date :** 2026-06-22
+**Migration :** Non / No
+
+**Quoi / What :** Au clic sur une carte de la section « Fonctionnalités » de la landing ROOT, on
+ouvre une **vraie page de détail indexable** `/fonctionnalites/<slug>/` (captures placeholder, textes
+descriptifs, liens doc, maillage interne). La transition est **anti-blink** (htmx `hx-select`), mais le
+contenu existe à une URL crawlable rendue **entièrement côté serveur** — c'est ce qui permet aux robots
+d'indexer et à Google d'afficher des extraits enrichis / sitelinks. Prototype : **2 fonctionnalités**
+(Billetterie + Cashless NFC) ; les 8 autres cartes restent non cliquables tant qu'elles n'ont pas
+d'entrée dans le registre.
+/ Clicking a feature card on the ROOT landing opens a real indexable detail page
+`/fonctionnalites/<slug>/` (placeholder screenshots, descriptions, doc links, internal linking). The
+transition is anti-blink (htmx `hx-select`), but the content lives at a fully server-rendered crawlable
+URL — which is what lets robots index it and Google show rich results / sitelinks. Prototype: 2
+features (Billetterie + Cashless NFC).
+
+**Comment / How :** registre de contenu `seo/features.py` (`FEATURE_DETAILS`) ; vue `feature_detail`
+(rendu serveur complet, 404 si slug inconnu) ; JSON-LD `BreadcrumbList` + `TechArticle` par page +
+`ItemList` des fonctionnalités sur la landing (signal sitelinks). Anti-blink sans template dual : les
+cartes font `hx-get` + `hx-select="#seo-content"` (wrapper ajouté dans `base.html`) → htmx extrait le
+bloc contenu de la vraie page, `<head>`/navbar/footer intacts. Suit le système de design existant
+(vert `#259d49` / bleu `#4296cc`). Responsive vérifié à 375 px, focus-visible, `prefers-reduced-motion`.
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/features.py` | **Nouveau** : registre `FEATURE_DETAILS` (contenu des pages de détail) |
+| `seo/views.py` | Vue `feature_detail` + `ItemList` JSON-LD et `feature_detail_slugs` dans la landing |
+| `seo/urls.py` | Route `fonctionnalites/<slug:slug>/` → `feature_detail` |
+| `seo/templates/seo/feature_detail.html` | **Nouveau** : template de la page de détail |
+| `seo/templates/seo/base.html` | Wrapper `#seo-content` (cible du swap anti-blink) |
+| `seo/templates/seo/landing.html` | Cartes Billetterie + Cashless cliquables ; `id="features"` ; `extra_head` ItemList |
+| `seo/static/seo/seo.css` | Styles `.feature-card--link`, `.feature-more`, `.fd-*` (page détail) |
+
+**i18n :** nombreuses nouvelles chaînes (`seo/features.py` + `feature_detail.html` + « En savoir plus »)
+à extraire/traduire par le mainteneur (`makemessages` + `compilemessages`). Note : le msgid « Cashless
+et carte NFC » a déjà une traduction FR existante (« Monnaie locale et carte NFC ») — le titre de la
+page cashless s'affiche donc ainsi, par cohérence avec la carte de la landing.
+
+**Pistes pour la suite :** lien doc en profondeur (au lieu de la racine), vraies captures d'écran,
+étendre le registre aux 8 autres fonctionnalités, sitemap ROOT dédié pour les pages `/fonctionnalites/`.
+
+---
+
+## Landing ROOT — Appel à contribution dans « Fonctionnalités » / ROOT landing — contribution call in "Features"
+
+**Date :** 2026-06-22
+**Migration :** Non / No
+
+**Quoi / What :** Sur la page d'accueil du tenant public ROOT (`/`), l'accordéon « Futur de TiBillet »
+est **retiré** et remplacé par un **panneau d'appel à contribution** intégré en bas de la section
+« Fonctionnalités ». Le panneau résume les chantiers ouverts (newsletter intégrée, réseaux sociaux &
+Fédiverse, site web complet, interopérabilité ERP, économie en cascade) et redirige, via un lien **en
+dur**, vers l'espace contributif de la coopérative : `https://codecommun.tibillet.coop/contrib/`.
+Un bouton **« Contribuer à TiBillet »** est aussi ajouté dans le **hero** (en haut de page), avec les
+autres boutons (Explorateur / Documentation / Créer son espace), et un lien **« Contribuer »** dans le
+**menu de navigation** (navbar partagée par toutes les pages ROOT) — tous vers la **même** destination.
+/ On the public ROOT landing page, the "Futur de TiBillet" accordion is removed and replaced by a
+contribution call-to-action panel inside the "Features" section, linking (hardcoded) to the
+cooperative's contribution space. A "Contribuer à TiBillet" button is also added in the hero, plus a
+"Contribuer" link in the ROOT navbar — all pointing to the same destination.
+
+**Comment / How :** bloc `.contribute-panel` (icône fusée, titre, résumé, pastilles de chantiers,
+bouton + rappel du domaine), suit le système de design existant (palette vert `#259d49` / bleu
+`#4296cc`, cartes en cercle, boutons radius 8px). Responsive vérifié à 375 px (chips qui wrappent,
+bouton sur une seule ligne), focus-visible instantané, `prefers-reduced-motion` géré. Hiérarchie SEO
+préservée : titre du panneau en `h3` sous le `h2` « Fonctionnalités » (plus de `h2` orphelin). CSS
+`.roadmap-*` devenu mort supprimé.
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/templates/seo/landing.html` | Suppression de la section accordéon roadmap ; ajout du panneau `.contribute-panel` dans `.features-section` ; bouton « Contribuer à TiBillet » dans le hero |
+| `seo/templates/seo/base.html` | Lien « Contribuer » dans la navbar ROOT (entre Documentation et Contact) |
+| `seo/static/seo/seo.css` | Remplacement du bloc CSS `.roadmap-*` par les styles `.contribute-*` |
+
+**i18n :** nouvelles chaînes `{% translate %}` (FR source) à extraire/traduire par le mainteneur
+(`makemessages` + `compilemessages`). Anciennes chaînes roadmap désormais inutilisées.
+
+---
+
+## C-C / C3 (cohérence carte + compléments) — Segment legacy sur la 2ᵉ carte NFC / Legacy tier on the 2nd NFC card
+
+**Date :** 2026-06-22
+**Migration :** Non / No
+
+**Quoi / What :** Au POS, dans le complément en **2ᵉ carte NFC** (`payer_complementaire`, branche
+`nfc`), si la cascade **locale** de la 2ᵉ carte ne suffit pas et que cette carte est liée à un user,
+on tente son **FED réseau**. **Tout-ou-rien** : le FED de la 2ᵉ carte ne se débite que s'il couvre
+TOUT le reste — sinon on n'y touche pas (le re-render « insuffisant » jetterait la carte, un débit
+partiel serait perdu) et le solde part en espèces/CB au tour suivant (FED intact).
+/ At the POS, in the 2nd-NFC-card complement, the card's FED network balance covers the remainder
+all-or-nothing; otherwise cash/CC next round (FED untouched).
+
+**Comment / How :** mêmes helpers que C2.3 (`lire_depensable_fed_frais`, `_debiter_legacy`,
+`_decouper_lignes_complement`, `_repartir_legacy_sur_articles`), appliqués à la 2ᵉ carte. Débit
+**hors atomic**, `lignes_legacy_c2` intégrées au bloc atomic, incident journalisé si l'atomic échoue
+après le débit legacy.
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `laboutik/views.py` | `payer_complementaire` branche `nfc` : cran legacy 2ᵉ carte (tout-ou-rien) + `lignes_legacy_c2` dans l'atomic + journal d'incident |
+
+**Hors scope C3 :** « carte perdue legacy » (`lost_my_card_by_signature`) — **pas de point d'accroche**
+dans le POS V1 (fonctionnalité « déclarer carte perdue » absente). À traiter quand la feature locale
+existera. Idempotence re-scan : déjà acquise (re-calcul cascade à chaque POST).
+
+---
+
 ## C-C / C2 (sortie « couverte ») — Débit FED au POS, distinction fine des moyens / FED debit at POS, fine-grained methods
 
 **Date :** 2026-06-21
