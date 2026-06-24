@@ -1,0 +1,4 @@
+#!/bin/bash
+rm -fr ./platforms
+rm -fr ./plugins
+rm -fr ./node_modules

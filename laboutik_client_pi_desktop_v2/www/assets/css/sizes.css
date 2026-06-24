@@ -1,0 +1,11 @@
+:root {
+  /* header */
+  --header-height: 80px;
+
+  /* footer */
+  --footer-container-height: 50px;
+  --footer-height: 90px;
+  
+  /* content */
+  --devices-container-width: 140px;
+}

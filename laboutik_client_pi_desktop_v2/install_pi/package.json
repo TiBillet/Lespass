@@ -1,0 +1,19 @@
+{
+  "name": "laboutik_client_pi_desktop_v2",
+  "version": "1.0.0",
+  "description": "",
+  "main": "env-example.js",
+  "type":"module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "nfc-pcsc": "^0.8.1",
+    "rpio": "^2.4.2",
+    "rpi-softspi": "^1.0.5",
+    "socket.io": "^4.8.3"
+  }
+}

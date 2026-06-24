@@ -177,3 +177,26 @@ AGENTS.md
 /demo_data.sql.gz
 /Administration/Unfold_docs/
 /TECH_DOC/Unfold_docs/
+
+
+docker-compose-filaos.yml
+letsencrypt/acme.json
+
+
+# laboutik client Cordova/android
+**/mobile-app/node_modules/
+**/mobile-app/plugins/
+**/mobile-app/platforms/
+# autoriser www dans les plugins
+!laboutik_client_android_v2/cordova_local_plugins/**/www/
+!laboutik_client_android_v2/cordova_local_plugins/**/www/**
+!laboutik_client_android_v2/mobile-app/www/
+!laboutik_client_android_v2/mobile-app/www/**
+env.js
+
+# laboutik client pi/dektop
+!laboutik_client_pi_desktop_v2/www/
+!laboutik_client_pi_desktop_v2/www/**
+laboutik_client_pi_desktop_v2/configLaboutik.json
+laboutik_client_pi_desktop_v2/package-lock.json
+laboutik_client_android_v2/mobile-app/package-lock.json
