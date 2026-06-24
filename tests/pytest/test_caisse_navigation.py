@@ -291,3 +291,47 @@ class TestSansAuthentification:
                 data={"tag_id": "ANYTHING"},
             )
             assert response.status_code == 403
+
+
+@pytest.mark.usefixtures("test_data")
+class TestGardeModuleCaisse:
+    """Garde d'activation : sans module_caisse actif, les routes POS V2 sont
+    refusees, MEME pour un admin authentifie (HasLaBoutikTerminalAccess).
+    / Activation guard: without module_caisse active, V2 POS routes are denied,
+    even for an authenticated admin."""
+
+    def _make_client(self, admin_user):
+        from rest_framework.test import APIClient
+        client = APIClient()
+        client.force_authenticate(user=admin_user)
+        client.defaults['SERVER_NAME'] = f'{TENANT_SCHEMA}.tibillet.localhost'
+        return client
+
+    def test_module_caisse_inactif_refuse_la_caisse(self, admin_user, tenant):
+        """module_caisse=False → 403, MEME pour un admin authentifie.
+
+        On force la valeur via mock sur Configuration.get_solo (la permission y
+        lit module_caisse). C'est isolation-proof : pas d'ecriture en base, pas
+        de dependance a l'ordre des tests ni au cache django-solo (DB dev
+        partagee). Le cas positif (module actif -> 200) est deja couvert par tous
+        les autres tests POS de ce fichier, qui tournent avec module_caisse=True.
+        / module_caisse=False → 403 even for an admin. Forced via a mock on
+        get_solo (isolation-proof: no DB write, no ordering/cache dependency).
+        The positive case is already covered by the other POS tests here.
+        """
+        from unittest import mock
+
+        with schema_context(TENANT_SCHEMA):
+            client = self._make_client(admin_user)
+
+            # La permission appelle Configuration.get_solo().module_caisse.
+            # On retourne un stub avec module_caisse=False -> garde -> 403.
+            # / Permission reads get_solo().module_caisse; stub it to False -> 403.
+            stub_config = mock.MagicMock(module_caisse=False)
+            with mock.patch(
+                'BaseBillet.models.Configuration.get_solo',
+                return_value=stub_config,
+            ):
+                response = client.get('/laboutik/caisse/')
+
+            assert response.status_code == 403

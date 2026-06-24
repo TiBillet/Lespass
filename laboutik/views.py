@@ -989,6 +989,12 @@ def obtenir_wallet_carte_depuis_fedow(carte):
     se fait en amont (seed / import).
     / Returns the Wallet (Fedow uuid) or None if Fedow doesn't know the card.
 
+    EFFET DE BORD : si Fedow signale une carte anonyme (wallet ephemere) et que la
+    carte locale n'a pas encore d'user, la fonction RATTACHE le wallet a la carte
+    (carte.save(update_fields=["wallet_ephemere"])). Sinon, aucune ecriture.
+    / SIDE EFFECT: for an anonymous card (ephemeral wallet) with no user yet, attaches
+    the wallet to the local card via carte.save(). Otherwise no write.
+
     :param carte: CarteCashless
     :return: Wallet | None
     """
@@ -1154,6 +1160,11 @@ def obtenir_solde_complet_carte(carte):
             {
                 "asset_name": token.asset.name,
                 "asset_category": token.asset.category,
+                # Affichage uniquement (formate par floatformat cote template) : le
+                # total reellement depensable reste calcule en centimes entiers
+                # (locaux_centimes ci-dessous), jamais a partir de ce float.
+                # / Display only (floatformat in template); the spendable total stays
+                # in integer cents (locaux_centimes), never derived from this float.
                 "value_euros": token.value / 100,
                 "provenance": token.asset.tenant_origin.name,
             }

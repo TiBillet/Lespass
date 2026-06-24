@@ -521,9 +521,14 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
             messages.add_message(request, messages.ERROR, _("The \"POS & restaurant\" module required this module. You must disable it before disabling "))
             setattr(configuration, field_name, current_value)
 
+        # La caisse V2 exige la monnaie locale (pas de caisse sans cashless).
+        # On l'active automatiquement plutot que de bloquer l'activation,
+        # pour une mise en route BETA en un seul clic.
+        # / The V2 cash register requires local currency; auto-enable it instead
+        # / of blocking, for a one-click BETA activation.
         if field_name == "module_caisse" and new_value and not configuration.module_monnaie_locale:
-            messages.add_message(request, messages.ERROR, _("The \"Local currency & cashless\" module is required by this module. You must enabled it before"))
-            setattr(configuration, field_name, current_value)
+            configuration.module_monnaie_locale = True
+            messages.add_message(request, messages.INFO, _("\"Local currency & cashless\" was enabled automatically (required by the POS)."))
 
 
         configuration.clean()

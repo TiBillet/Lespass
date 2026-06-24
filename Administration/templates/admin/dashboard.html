@@ -1,103 +1,136 @@
 {% load i18n %}
 
-{% if modules %}
+{% if modules or pos_card %}
 <div id="dashboard-modules" class="flex flex-col gap-4 mb-8">
     <h2 class="font-semibold text-lg text-important">
         {% translate "Modules" %}
     </h2>
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+        {# ----------------------------------------------------------------- #}
+        {# Carte POS unifiee : fusionne LaBoutik V1, LaBoutik V2 et le toggle #}
+        {# du module caisse en une seule carte a 3 etats exclusifs.          #}
+        {# / Unified POS card: merges LaBoutik V1, V2 and the cash register   #}
+        {# toggle into a single 3-state card.                                 #}
+        {# ----------------------------------------------------------------- #}
+        {% if pos_card %}
+        <div data-testid="{{ pos_card.testid }}"
+             class="bg-white flex flex-col p-6 rounded-default shadow-xs border border-base-200 dark:bg-base-900 dark:border-base-800 {% if pos_card.state == 'v1_active' %}opacity-90{% endif %}">
+
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-semibold text-important">
+                    {{ pos_card.name }}
+                </h3>
+
+                {% if pos_card.state == "v1_active" %}
+                    {# V1 en service : etat fige, desactivation impossible. #}
+                    {# V1 online: locked state, cannot be disabled. #}
+                    <span data-testid="dashboard-card-pos-v1-badge"
+                          class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                        {% translate "V1 active" %}
+                    </span>
+                {% else %}
+                    {# Etats V2 (inactif ou actif) : switch d'activation via modal. #}
+                    {# V2 states (inactive/active): activation switch via modal. #}
+                    <button type="button"
+                            role="switch"
+                            aria-checked="{% if pos_card.state == 'v2_active' %}true{% else %}false{% endif %}"
+                            aria-label="{{ pos_card.name }}"
+                            data-testid="dashboard-card-pos-switch"
+                            style="position:relative;display:inline-flex;width:2.75rem;height:1.5rem;flex-shrink:0;cursor:pointer;border-radius:9999px;border:2px solid transparent;transition:background-color .2s;{% if pos_card.state == 'v2_active' %}background-color:var(--color-primary-600,#7c3aed){% else %}background-color:#d1d5db{% endif %}"
+                            hx-get="{{ pos_card.toggle_modal_url }}"
+                            hx-target="#module-modal-container"
+                            hx-swap="innerHTML">
+                        <span style="pointer-events:none;display:inline-block;width:1.25rem;height:1.25rem;border-radius:9999px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .2s;{% if pos_card.state == 'v2_active' %}transform:translateX(1.25rem){% else %}transform:translateX(0){% endif %}"></span>
+                    </button>
+                {% endif %}
+            </div>
+
+            <p class="text-sm text-base-500 dark:text-base-400 mb-3 grow">
+                {{ pos_card.description }}
+            </p>
+
+            {% if pos_card.state == "v1_active" %}
+                {# Migration V2 a demander a l'equipe (pas de bascule en self-service). #}
+                {# V2 migration must be requested from the team (no self-service switch). #}
+                <p class="text-xs text-yellow-600 dark:text-yellow-400 mb-3">
+                    {% translate "To migrate to LaBoutik V2, please contact the TiBillet team." %}
+                </p>
+                {% if pos_card.v1_url %}
+                <a href="{{ pos_card.v1_url }}"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   data-testid="dashboard-card-pos-v1-link"
+                   class="text-sm font-medium"
+                   style="color:var(--color-primary-600,#7c3aed);text-decoration:none">
+                    {% translate "Open LaBoutik V1" %}
+                    <span aria-hidden="true">&rarr;</span>
+                </a>
+                {% endif %}
+
+            {% elif pos_card.state == "v2_active" %}
+                {# V2 active : lien direct vers l'ouverture de la caisse. #}
+                {# V2 active: direct link to open the cash register. #}
+                <div class="flex items-center gap-2">
+                    {% if pos_card.v2_open_url %}
+                    <a href="{{ pos_card.v2_open_url }}"
+                       data-testid="dashboard-card-pos-open-link"
+                       class="text-sm font-medium"
+                       style="color:var(--color-primary-600,#7c3aed);text-decoration:none">
+                        {% translate "Open POS" %}
+                        <span aria-hidden="true">&rarr;</span>
+                    </a>
+                    {% endif %}
+                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200">
+                        {% translate "BETA" %}
+                    </span>
+                </div>
+
+            {% else %}
+                {# Inactif : on invite a activer la V2 (badge BETA, switch ci-dessus). #}
+                {# Inactive: invite to enable V2 (BETA badge, switch above). #}
+                <span data-testid="dashboard-card-pos-beta-badge"
+                      class="inline-flex items-center self-start rounded-full px-2 py-0.5 text-xs font-semibold bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200">
+                    {% translate "Enable LaBoutik V2 — BETA" %}
+                </span>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {# ----------------------------------------------------------------- #}
+        {# Cartes modules generiques (toggles simples).                      #}
+        {# / Generic module cards (simple toggles).                          #}
+        {# ----------------------------------------------------------------- #}
         {% for module in modules %}
         <div data-testid="{{ module.testid }}"
-             class="bg-white flex flex-col p-6 rounded-default shadow-xs border border-base-200 dark:bg-base-900 dark:border-base-800 {% if module.disabled %}opacity-50{% endif %}">
+             class="bg-white flex flex-col p-6 rounded-default shadow-xs border border-base-200 dark:bg-base-900 dark:border-base-800">
 
             <div class="flex items-center justify-between mb-3">
                 <h3 class="font-semibold text-important">
                     {{ module.name }}
                 </h3>
 
-                {% if module.disabled %}
-                    <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
-                        {% translate "V1 active" %}
-                    </span>
-                {% else %}
-                    <button type="button"
-                            role="switch"
-                            aria-checked="{{ module.active|yesno:'true,false' }}"
-                            aria-label="{{ module.name }}"
-                            data-testid="{{ module.testid }}-switch"
-                            style="position:relative;display:inline-flex;width:2.75rem;height:1.5rem;flex-shrink:0;cursor:pointer;border-radius:9999px;border:2px solid transparent;transition:background-color .2s;{% if module.active %}background-color:var(--color-primary-600,#7c3aed){% else %}background-color:#d1d5db{% endif %}"
-                            hx-get="{{ module.modal_url }}"
-                            hx-target="#module-modal-container"
-                            hx-swap="innerHTML">
-                        <span style="pointer-events:none;display:inline-block;width:1.25rem;height:1.25rem;border-radius:9999px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .2s;{% if module.active %}transform:translateX(1.25rem){% else %}transform:translateX(0){% endif %}"></span>
-                    </button>
-                {% endif %}
+                <button type="button"
+                        role="switch"
+                        aria-checked="{{ module.active|yesno:'true,false' }}"
+                        aria-label="{{ module.name }}"
+                        data-testid="{{ module.testid }}-switch"
+                        style="position:relative;display:inline-flex;width:2.75rem;height:1.5rem;flex-shrink:0;cursor:pointer;border-radius:9999px;border:2px solid transparent;transition:background-color .2s;{% if module.active %}background-color:var(--color-primary-600,#7c3aed){% else %}background-color:#d1d5db{% endif %}"
+                        hx-get="{{ module.modal_url }}"
+                        hx-target="#module-modal-container"
+                        hx-swap="innerHTML">
+                    <span style="pointer-events:none;display:inline-block;width:1.25rem;height:1.25rem;border-radius:9999px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .2s;{% if module.active %}transform:translateX(1.25rem){% else %}transform:translateX(0){% endif %}"></span>
+                </button>
             </div>
 
             <p class="text-sm text-base-500 dark:text-base-400 mb-4 grow">
                 {{ module.description }}
             </p>
-
-            {% if module.disabled %}
-                <p class="text-xs text-yellow-600 dark:text-yellow-400">
-                    {% translate "Cashless V1 active — migration required" %}
-                </p>
-            {% endif %}
         </div>
         {% endfor %}
     </div>
 
     <div id="module-modal-container"></div>
-</div>
-{% endif %}
-
-
-{% if integrations %}
-{# Cartes d'integration : non interactives, juste un etat de connexion / un teaser. #}
-{# Integration cards: non-interactive, just a connection state / a teaser. #}
-<div id="dashboard-integrations" class="flex flex-col gap-4 mb-8">
-    <h2 class="font-semibold text-lg text-important">
-        {% translate "Integrations" %}
-    </h2>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {% for integration in integrations %}
-        <div data-testid="{{ integration.testid }}"
-             class="bg-white flex flex-col p-6 rounded-default shadow-xs border border-base-200 dark:bg-base-900 dark:border-base-800 {% if integration.disabled %}opacity-60{% endif %}">
-
-            <div class="flex items-center justify-between mb-3">
-                <h3 class="font-semibold text-important">
-                    {{ integration.name }}
-                </h3>
-
-                {# Switch visuel non cliquable : etat seul, pas de toggle. #}
-                {# Visual switch, not clickable: state only, no toggle. #}
-                <span role="img"
-                      aria-label="{% if integration.active %}{% translate 'Active' %}{% else %}{% translate 'Inactive' %}{% endif %}"
-                      data-testid="{{ integration.testid }}-state"
-                      style="position:relative;display:inline-flex;width:2.75rem;height:1.5rem;flex-shrink:0;border-radius:9999px;border:2px solid transparent;cursor:not-allowed;{% if integration.active %}background-color:var(--color-primary-600,#7c3aed){% else %}background-color:#d1d5db{% endif %}">
-                    <span style="pointer-events:none;display:inline-block;width:1.25rem;height:1.25rem;border-radius:9999px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);{% if integration.active %}transform:translateX(1.25rem){% else %}transform:translateX(0){% endif %}"></span>
-                </span>
-            </div>
-
-            <p class="text-sm text-base-500 dark:text-base-400 mb-3 grow">
-                {{ integration.description }}
-            </p>
-
-            {% if integration.external_link %}
-            <a href="{{ integration.external_link }}"
-               target="_blank"
-               rel="noopener noreferrer"
-               data-testid="{{ integration.testid }}-link"
-               class="text-sm font-medium"
-               style="color:var(--color-primary-600,#7c3aed);text-decoration:none">
-                {{ integration.external_link_label }}
-                <span aria-hidden="true">&rarr;</span>
-            </a>
-            {% endif %}
-        </div>
-        {% endfor %}
-    </div>
 </div>
 {% endif %}

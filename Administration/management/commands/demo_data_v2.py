@@ -1555,6 +1555,22 @@ class Command(BaseCommand):
                     # Adresse principale liée à la config
                     if addr_obj:
                         config.postal_address = addr_obj
+
+                    # Démo/dev : on active TOUS les modules du dashboard par défaut,
+                    # pour que l'admin ET les tests disposent de tout (POS V2,
+                    # monnaie locale, billetterie, adhésion, etc.). La caisse V2
+                    # (module_caisse) exige la monnaie locale : on active les deux.
+                    # / Demo/dev: enable ALL dashboard modules by default so the admin
+                    # / AND the tests get everything. module_caisse requires
+                    # / module_monnaie_locale, so both are enabled.
+                    config.module_billetterie = True
+                    config.module_adhesion = True
+                    config.module_crowdfunding = True
+                    config.module_federation = True
+                    config.module_monnaie_locale = True
+                    config.module_caisse = True
+                    config.module_inventaire = True
+
                     config.save()
 
                     # Active le prélèvement SEPA si la fixture le demande.

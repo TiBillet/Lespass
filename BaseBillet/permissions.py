@@ -100,6 +100,17 @@ class HasLaBoutikTerminalAccess(permissions.BasePermission):
 
     def has_permission(self, request, view):
         from AuthBillet.models import TibilletUser
+        from BaseBillet.models import Configuration
+
+        # Garde d'activation : sans module caisse actif sur ce tenant, AUCUNE
+        # route POS V2 n'est accessible, meme pour un admin. "Verifie toujours
+        # l'activation" : le lien du dashboard est masque ET l'URL directe
+        # (/laboutik/caisse/) est refusee (403).
+        # / Activation guard: without an active cash register module on this
+        # / tenant, NO V2 POS route is reachable, even for an admin. Always check
+        # / activation: dashboard link hidden AND direct URL denied (403).
+        if not Configuration.get_solo().module_caisse:
+            return False
 
         user = request.user
 

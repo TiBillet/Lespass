@@ -169,19 +169,46 @@ def test_vider_carte_serializer_vider_carte_defaut_false():
 
 
 def _login_as_admin():
+    """Cree (ou recupere) un utilisateur ADMIN DU TENANT 'lespass' et renvoie un
+    client HTTP connecte. Le test est autonome : il ne depend PAS d'un user seede
+    (le flush cree l'admin sous ADMIN_EMAIL, pas 'admin@admin.com').
+    / Creates (or gets) a 'lespass' TENANT ADMIN user and returns a logged-in HTTP
+    client. The test is self-contained: it does NOT depend on a seeded user.
+
+    La vue vider_carte exige HasLaBoutikTerminalAccess → fallback HasLaBoutikAccess
+    qui accepte une session dont l'user est admin du tenant (is_tenant_admin).
+    On reutilise le pattern des autres tests : client_admin.add(tenant) +
+    is_active=True + espece=TYPE_HUM (cf. test_caisse_navigation, test_paiement_especes_cb).
+    / The vider_carte view requires HasLaBoutikTerminalAccess → HasLaBoutikAccess
+    fallback that accepts a session whose user is tenant admin (is_tenant_admin).
+    We reuse the pattern from other tests.
+    """
     from django.test import Client as TestClient
-    from django.contrib.auth import get_user_model
+    from AuthBillet.models import TibilletUser
+
+    tenant = Client.objects.get(schema_name="lespass")
 
     client = TestClient(HTTP_HOST="lespass.tibillet.localhost")
-    User = get_user_model()
-    user = User.objects.filter(email="admin@admin.com").first()
-    if user is None:
-        pytest.skip("User admin@admin.com introuvable")
-    # Signal pre_save peut mettre is_active=False (cf. PIEGES.md 9.88).
-    # / Pre_save signal may set is_active=False (see PIEGES.md 9.88).
-    if not user.is_active:
+    email = f"{VC_TEST_PREFIX.strip('[]')}-admin@tibillet.localhost".lower()
+    user, _created = TibilletUser.objects.get_or_create(
+        email=email,
+        defaults={
+            "username": email,
+            "espece": TibilletUser.TYPE_HUM,
+            "is_staff": True,
+            "is_active": True,
+        },
+    )
+    # Admin du tenant 'lespass' : indispensable pour is_tenant_admin(connection.tenant).
+    # / Tenant admin of 'lespass': required for is_tenant_admin(connection.tenant).
+    user.client_admin.add(tenant)
+    # Le signal pre_save peut remettre is_active=False / espece (cf. PIEGES.md 9.88).
+    # On reforce l'etat attendu pour que force_login et la permission passent.
+    # / The pre_save signal may reset is_active/espece. Re-force the expected state.
+    if not user.is_active or user.espece != TibilletUser.TYPE_HUM:
         user.is_active = True
-        user.save(update_fields=["is_active"])
+        user.espece = TibilletUser.TYPE_HUM
+        user.save(update_fields=["is_active", "espece"])
     client.force_login(user)
     return client, user
 
@@ -425,5 +452,18 @@ def cleanup_vc_test_data():
             Detail.objects.filter(base_url__startswith=VC_TEST_PREFIX).delete()
             assets_test.delete()
             wallets_test.delete()
+    except Exception:
+        pass
+    # Cleanup de l'admin tenant cree par _login_as_admin, dans son PROPRE try/except :
+    # si le bloc ci-dessus leve (ex: ProtectedError sur un wallet), l'user resterait
+    # en base (DB partagee, pas de rollback) et polluerait les runs suivants.
+    # / Tenant admin cleanup in its OWN try/except so an exception in the block above
+    # (e.g. ProtectedError) never leaves the user behind (shared DB, no rollback).
+    try:
+        with schema_context("lespass"):
+            from AuthBillet.models import TibilletUser
+
+            admin_email = f"{VC_TEST_PREFIX.strip('[]')}-admin@tibillet.localhost".lower()
+            TibilletUser.objects.filter(email=admin_email).delete()
     except Exception:
         pass

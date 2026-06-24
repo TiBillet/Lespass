@@ -57,7 +57,15 @@ def test_data(tenant):
     """Lance create_test_pos_data pour s'assurer que les donnees existent.
     / Runs create_test_pos_data to ensure test data exists."""
     from django.core.management import call_command
-    call_command('create_test_pos_data')
+    # Forcer le schema lespass : sinon, lancee depuis le schema public, la
+    # commande prend le premier tenant non-public via .first() (souvent un
+    # schema UUID de test orphelin sans tables) -> "relation does not exist".
+    # Meme PIEGE documente que dans test_caisse_navigation.
+    # / Force the lespass schema: otherwise the command (run from public) picks
+    # the first non-public tenant via .first() (often an orphan UUID test schema
+    # without tables). Same documented pitfall as in test_caisse_navigation.
+    with schema_context(TENANT_SCHEMA):
+        call_command('create_test_pos_data')
     return True
 
 

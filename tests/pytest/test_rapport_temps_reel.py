@@ -56,6 +56,17 @@ class TestRapportTempsReel(FastTenantTestCase):
         # / Re-set search_path after previous test's rollback.
         connection.set_tenant(self.tenant)
 
+        # Active la caisse V2 sur ce tenant de test : les routes POS sont gardees
+        # par module_caisse (HasLaBoutikTerminalAccess). Sans ca, acces -> 403.
+        # module_caisse exige module_monnaie_locale : on active les deux.
+        # / Enable V2 POS on this test tenant: POS routes are guarded by
+        # / module_caisse. module_caisse requires module_monnaie_locale.
+        from BaseBillet.models import Configuration
+        config = Configuration.get_solo()
+        config.module_monnaie_locale = True
+        config.module_caisse = True
+        config.save()
+
         # Utilisateur admin (public schema — SHARED_APPS)
         # / Admin user (public schema — SHARED_APPS)
         self.admin, _created = TibilletUser.objects.get_or_create(

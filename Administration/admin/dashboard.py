@@ -830,10 +830,18 @@ MODULE_FIELDS = {
 
 def _build_modules_context(configuration):
     """Construit la liste de modules pour le dashboard.
-    Utilise par dashboard_callback et par le toggle HTMX."""
+    Utilise par dashboard_callback et par le toggle HTMX.
+
+    La caisse (module_caisse) est EXCLUE de cette grille : elle est rendue par
+    la carte POS unifiee (_build_pos_card_context), qui fusionne LaBoutik V1,
+    LaBoutik V2 et l'activation du module en une seule carte a 3 etats.
+    / module_caisse is excluded here: it is rendered by the unified POS card."""
     modules = []
     for field_name, info in MODULE_FIELDS.items():
-        is_caisse = field_name == "module_caisse"
+        # La caisse a sa propre carte (carte POS unifiee). On la saute ici.
+        # / The cash register has its own (unified POS) card; skip it here.
+        if field_name == "module_caisse":
+            continue
         modules.append(
             {
                 "field": field_name,
@@ -841,7 +849,6 @@ def _build_modules_context(configuration):
                 "description": info["description"],
                 "testid": info["testid"],
                 "active": getattr(configuration, field_name),
-                "disabled": is_caisse and bool(configuration.server_cashless),
                 "modal_url": reverse(
                     "staff_admin:configuration-module-modal",
                     args=[field_name],
@@ -854,72 +861,79 @@ def _build_modules_context(configuration):
     return modules
 
 
-def _build_integrations_context(configuration):
-    """Construit la liste des cartes d'integration (lecture seule).
-    / Builds the integrations card list (read-only).
+def _build_pos_card_context(configuration):
+    """Carte unifiee "POS & restaurant" du dashboard (3 etats exclusifs).
+    / Unified "POS & restaurant" dashboard card (3 mutually exclusive states).
 
-    Ces cartes ne sont pas des toggles utilisateur : elles affichent juste un
-    etat de connexion (LaBoutik V1 actif/inactif) ou un teaser (LaBoutik V2
-    en developpement). Pas de bouton, pas de POST possible.
-    / These cards are not user toggles: they just show a connection state
-    (LaBoutik V1 online/offline) or a teaser (LaBoutik V2 in development).
+    LOCALISATION : Administration/admin/dashboard.py
+
+    Remplace les anciennes cartes separees (carte module_caisse + cartes
+    d'integration LaBoutik V1 / V2). Un seul etat est calcule a partir de la
+    configuration du tenant :
+
+      - "v1_active" : server_cashless renseigne -> LaBoutik V1 en service.
+                      Lien vers V1, AUCUN toggle (desactivation impossible :
+                      la migration V2 se demande a l'equipe TiBillet).
+      - "v2_active" : module_caisse=True -> caisse V2 active.
+                      Lien vers l'ouverture de la caisse (/laboutik/caisse/).
+      - "inactive"  : ni V1 ni V2 -> switch d'activation de la V2 (badge BETA).
+
+    Priorite : V1 d'abord (un tenant V1 ne peut pas activer la V2).
+    / Replaces the old separate cards. One state from config: v1_active (link,
+    no toggle, migration note), v2_active (open-POS link), inactive (BETA
+    activation switch). V1 wins (a V1 tenant cannot enable V2).
     """
-    integrations = []
+    # V1 : presence de server_cashless = configuration V1 branchee.
+    # V2 : module_caisse actif.
+    # / V1: server_cashless set. V2: module_caisse enabled.
+    v1_configure = bool(configuration.server_cashless)
+    v2_active = bool(configuration.module_caisse)
 
-    # --- LaBoutik V1 : connecte si check_serveur_cashless() repond OK ---
-    # / --- LaBoutik V1: connected if check_serveur_cashless() responds OK ---
-    #
-    # Le check fait un appel HTTP de timeout 10s — on cache 60s par tenant
-    # pour ne pas bloquer chaque load du dashboard. Le tenant.pk est inclus
-    # dans la cle de cache (isolation multi-tenant).
-    # / The check is a 10s HTTP call — we cache 60s per tenant to avoid
-    # / blocking each dashboard load. tenant.pk is in the cache key.
-    laboutik_v1_url = configuration.server_cashless or ""
-    laboutik_v1_active = False
+    if v1_configure:
+        etat = "v1_active"
+    elif v2_active:
+        etat = "v2_active"
+    else:
+        etat = "inactive"
 
-    if configuration.server_cashless and configuration.key_cashless:
+    # Statut online/offline de la V1 (health-check HTTP, cache 60s par tenant).
+    # Uniquement utile pour l'affichage de l'etat "v1_active".
+    # / V1 online/offline status (HTTP health check, 60s cache per tenant).
+    # / Only used for the "v1_active" display.
+    v1_online = False
+    if etat == "v1_active" and configuration.key_cashless:
         cache_key = f"dashboard:laboutik_v1_status:{connection.tenant.pk}"
         cached_status = cache.get(cache_key)
         if cached_status is None:
             try:
                 cached_status = configuration.check_serveur_cashless()
             except Exception as exc:
-                # Erreur reseau (timeout, DNS, etc.) — on logge, on considere inactif
-                # / Network error — log and consider offline
+                # Erreur reseau (timeout, DNS, etc.) — on logge, on considere offline.
+                # / Network error — log and consider offline.
                 logger.warning(f"LaBoutik V1 health check failed: {exc}")
                 cached_status = False
             cache.set(cache_key, cached_status, timeout=60)
-        laboutik_v1_active = bool(cached_status)
+        v1_online = bool(cached_status)
 
-    integrations.append({
-        "field": "laboutik_v1",
-        "name": _("LaBoutik V1"),
-        "description": _("Cashless cash register, historical interface."),
-        "testid": "dashboard-card-laboutik-v1",
-        "active": laboutik_v1_active,
-        "info_only": True,
-        "external_link": laboutik_v1_url if laboutik_v1_url else None,
-        "external_link_label": _("Open LaBoutik V1") if laboutik_v1_url else None,
-    })
-
-    # --- LaBoutik V2 : en developpement, lien vers la sandbox ---
-    # / --- LaBoutik V2: in development, link to sandbox ---
-    integrations.append({
-        "field": "laboutik_v2",
-        "name": _("LaBoutik V2"),
-        "description": _(
-            "Development in progress. You can try it on https://lespass.devtib.fr/ "
-            "by signing in with the email admin@admin.com."
+    return {
+        "testid": "dashboard-card-pos",
+        "name": MODULE_FIELDS["module_caisse"]["name"],
+        "description": MODULE_FIELDS["module_caisse"]["description"],
+        "state": etat,
+        # V1 : lien vers l'interface historique + statut de connexion.
+        # / V1: link to the historical interface + connection status.
+        "v1_url": configuration.server_cashless or None,
+        "v1_online": v1_online,
+        # V2 : URL d'ouverture de la caisse (depuis MODULE_FIELDS).
+        # / V2: open-POS URL (from MODULE_FIELDS).
+        "v2_open_url": MODULE_FIELDS["module_caisse"].get("link_url"),
+        # Modal de confirmation pour (de)activer le module caisse.
+        # / Confirmation modal to enable/disable the cash register module.
+        "toggle_modal_url": reverse(
+            "staff_admin:configuration-module-modal",
+            args=["module_caisse"],
         ),
-        "testid": "dashboard-card-laboutik-v2",
-        "active": False,
-        "info_only": True,
-        "disabled": True,
-        "external_link": "https://lespass.devtib.fr/",
-        "external_link_label": _("Try LaBoutik V2"),
-    })
-
-    return integrations
+    }
 
 
 def dashboard_callback(request, context):
@@ -929,7 +943,9 @@ def dashboard_callback(request, context):
     context.update(
         {
             "modules": _build_modules_context(configuration),
-            "integrations": _build_integrations_context(configuration),
+            # Carte POS unifiee (remplace les anciennes cartes V1/V2 + caisse).
+            # / Unified POS card (replaces the old V1/V2 + cash register cards).
+            "pos_card": _build_pos_card_context(configuration),
         }
     )
 

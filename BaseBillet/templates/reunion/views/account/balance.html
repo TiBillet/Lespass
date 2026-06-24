@@ -11,7 +11,7 @@
     {% if profile.admin_this_tenant or profile.can_initiate_payment %}
         <div class="alert alert-info d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-2 mb-3">
             <div class="mb-2 mb-md-0">
-                Vous pouvez initier un paiement pour le compte de votre collectif : {{ config.organisation }}
+                {% blocktrans with organisation=config.organisation %}Vous pouvez initier un paiement pour le compte de votre collectif : {{ organisation }}{% endblocktrans %}
             </div>
             <div>
                 <a href="{% url 'qrcodescanpay-get-generator' %}"
@@ -194,7 +194,11 @@
                     <span class="visually-hidden">{% translate "Loading list" %}</span>
                 </div>
             </div>
+            {# aria-live : le tableau arrive en asynchrone (hx-get), on annonce #}
+            {# son chargement aux lecteurs d'ecran sans voler le focus (polite). #}
+            {# / aria-live: the table loads async; announce it politely to screen readers. #}
             <div hx-get="/my_account/tokens_table/" hx-trigger="revealed" class="mt-4"
+                 aria-live="polite"
                  data-loading-target="#token-table-loader"
                  data-loading-delay="{{ loading_delay|default:'400' }}"
                  data-testid="account-tokens-table"></div>

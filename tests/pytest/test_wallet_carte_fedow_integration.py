@@ -107,14 +107,33 @@ def carte_provisionnee_dans_fedow(tenant):
         if tag is not None and FedowAPI().NFCcard.card_tag_id_retrieve(tag) is None:
             tag = None
         if tag is None:
+            # ISOLATION (anti-flaky) : ordre de priorité choisi pour NE PAS entrer en
+            # collision avec les autres tests de la suite qui partagent la base dev :
+            #   - DEMO_TAGID_CM      → carte PRIMAIRE seedée par create_test_pos_data,
+            #                          utilisée par test_caisse_navigation. À ÉVITER.
+            #   - DEMO_TAGID_CLIENT1 → wallet GARNI par la cascade de create_test_pos_data
+            #                          (crédits TNF/FED/TIM/FID). À ÉVITER.
+            #   - DEMO_TAGID_CLIENT2 → carte client liée à un user seedé. À ÉVITER.
+            #   - DEMO_TAGID_CLIENT3 → carte « jetable » resetée à chaque seed. À ÉVITER.
+            #   - DEMO_TAGID_CLIENT4 → DÉDIÉE : provisionnée côté Fedow mais JAMAIS
+            #                          référencée par create_test_pos_data ni par aucun
+            #                          autre test → pas de CartePrimaire, pas de garnissage,
+            #                          pas de user. C'est la carte sûre pour ce test.
+            # On essaie donc CLIENT4 en PREMIER ; les autres ne servent que de filet de
+            # secours si CLIENT4 n'est pas provisionné sur ce Fedow.
+            # / ISOLATION (anti-flaky): priority order chosen to AVOID collisions with the
+            # other tests sharing the dev DB. DEMO_TAGID_CLIENT4 is dedicated (never touched
+            # by create_test_pos_data nor any other test) → tried FIRST. The shared cards
+            # (CM = primary, CLIENT1 = cascade-credited, CLIENT2 = user-linked, CLIENT3 =
+            # disposable/reset) are only a last-resort fallback.
             tags_demo = [
                 getattr(settings, nom, None)
                 for nom in (
-                    "DEMO_TAGID_CM",
-                    "DEMO_TAGID_CLIENT1",
-                    "DEMO_TAGID_CLIENT2",
-                    "DEMO_TAGID_CLIENT3",
                     "DEMO_TAGID_CLIENT4",
+                    "DEMO_TAGID_CLIENT3",
+                    "DEMO_TAGID_CLIENT2",
+                    "DEMO_TAGID_CLIENT1",
+                    "DEMO_TAGID_CM",
                 )
             ]
             for tag_demo in tags_demo:
@@ -151,16 +170,25 @@ def carte_provisionnee_dans_fedow(tenant):
 
         carte.refresh_from_db()
         wallet_eph = carte.wallet_ephemere
+        # On DÉTACHE toujours le wallet éphémère de la carte (état neutre pour la
+        # prochaine run), mais on ne SUPPRIME le wallet miroir QUE si la carte locale
+        # a été créée par ce test. Si on a réutilisé une carte de démo seedée (filet de
+        # secours), son wallet peut être partagé / garni par create_test_pos_data ou
+        # référencé par une CartePrimaire — le supprimer casserait d'autres tests.
+        # / Always DETACH the ephemeral wallet from the card (neutral state for next run),
+        # but only DELETE the mirror wallet if THIS test created the local card. If we
+        # reused a seeded demo card (fallback), its wallet may be shared/credited/primary —
+        # deleting it would break other tests.
         carte.wallet_ephemere = None
         carte.save(update_fields=["wallet_ephemere"])
         if carte_creee_par_le_test:
             carte.delete()
-        if wallet_eph is not None:
-            Token.objects.filter(wallet=wallet_eph).delete()
-            try:
-                wallet_eph.delete()
-            except Exception:
-                pass  # un objet lié peut protéger le wallet — best effort
+            if wallet_eph is not None:
+                Token.objects.filter(wallet=wallet_eph).delete()
+                try:
+                    wallet_eph.delete()
+                except Exception:
+                    pass  # un objet lié peut protéger le wallet — best effort
 
 
 @override_settings(DEBUG=True)

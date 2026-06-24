@@ -1,5 +1,117 @@
 # Changelog / Journal des modifications
 
+## Dashboard — carte POS unifiée (V1/V2) + garde d'activation de la caisse / Dashboard — unified POS card (V1/V2) + cash register activation guard
+
+**Date :** 2026-06-23
+**Migration :** Non / No
+
+**Quoi / What :** Sur le dashboard admin, les **3 anciennes cartes** liées au point de vente
+(carte module « POS & restaurant », carte intégration « LaBoutik V1 », carte teaser « LaBoutik V2 »)
+sont **fusionnées en une seule carte « POS & restaurant »** à **3 états exclusifs** :
+- **V1 active** (`server_cashless` renseigné) : lien vers l'interface V1 + statut online/offline ;
+  **aucun toggle** (désactivation impossible) + message « migration V2 → contactez l'équipe TiBillet ».
+- **V2 active** (`module_caisse=True`) : lien **« Ouvrir la caisse »** → `/laboutik/caisse/` + badge BETA.
+- **Inactif** (ni V1 ni V2) : **switch d'activation** de la V2 + badge **BETA**.
+/ The 3 old POS-related dashboard cards are merged into a single 3-state "POS & restaurant" card
+(V1 active → link, no toggle, migration note ; V2 active → open-POS link ; inactive → BETA activation switch).
+
+**Garde d'activation / Activation guard :** `/laboutik/caisse/` (et **toutes** les routes POS V2 :
+Caisse, Paiement, Commande, ArticlePanel) vérifie désormais **toujours** `module_caisse`. Module
+désactivé → **403**, même pour un admin authentifié. Le lien du dashboard n'apparaît pas ET l'URL
+directe est refusée. Garde centralisé en tête de `HasLaBoutikTerminalAccess.has_permission`.
+/ All V2 POS routes now always check `module_caisse`: disabled → 403 even for an authenticated admin.
+
+**Activation en un clic / One-click activation :** la caisse V2 exige la monnaie locale (décision
+projet : pas de caisse sans cashless). Activer la V2 **active automatiquement** `module_monnaie_locale`
+(au lieu de bloquer avec un message d'erreur) → mise en route BETA en un clic.
+/ Enabling V2 POS auto-enables `module_monnaie_locale` (hard dependency) instead of blocking.
+
+**Dev / tests :** le seed `demo_data_v2` active désormais **tous les modules** par défaut
+(billetterie, adhésion, crowdfunding, fédération, monnaie locale, caisse, inventaire) pour que
+l'admin et les tests disposent de tout. Les tests POS sur tenant neuf (`FastTenantTestCase`)
+activent `module_caisse` dans leur `setUp` (sinon le garde renvoie 403).
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/admin/dashboard.py` | `_build_pos_card_context` (carte POS 3 états) remplace `_build_integrations_context` ; `module_caisse` exclu de la grille générique ; `dashboard_callback` injecte `pos_card` |
+| `Administration/templates/admin/dashboard.html` | carte POS unifiée (3 états, switch + lien + badge BETA) ; section « Integrations » supprimée |
+| `Administration/admin_tenant.py` | `module_toggle` : activation V2 → auto-active la monnaie locale (au lieu d'un message d'erreur) |
+| `BaseBillet/permissions.py` | `HasLaBoutikTerminalAccess` : garde `module_caisse` en tête (403 si inactif) |
+| `Administration/management/commands/demo_data_v2.py` | seed dev : active tous les `module_*` par défaut |
+| `tests/pytest/test_caisse_navigation.py` | nouveau `TestGardeModuleCaisse` (module inactif → 403, mocké, isolation-proof) |
+| `tests/pytest/test_corrections_fond_sortie.py`, `test_rapport_temps_reel.py` | `setUp` active `module_caisse` (routes POS gardées) |
+
+---
+
+## Fedow = source de vérité du wallet de carte (POS V2) + fix « Vider la carte » / Fedow as source of truth for the card wallet + "Empty card" fix
+
+**Date :** 2026-06-22
+**Migration :** Non / No
+
+**Quoi / What :** Au point de vente V2, la résolution du wallet d'une carte NFC passe désormais
+**par Fedow, source de vérité unique**. Toute carte doit exister dans Fedow — c'est le seul moyen
+de porter du **FED** (qui vit dans Fedow), exactement comme LaBoutik V1. Le wallet est **miroité en
+local** (`fedow_core`) avec le **MÊME `uuid`** (Fedow fait foi). Fedow est une **dépendance assumée
+et indispensable : pas de fallback**. S'il est indisponible, la carte est refusée (on alerte) ;
+on ne fabrique **jamais** de wallet local orphelin, qui serait un doublon déconnecté de Fedow.
+Le check carte **relit Fedow à chaque scan** (une recharge FED a pu avoir lieu entre-temps).
+/ At a V2 POS, a card's wallet is now resolved **through Fedow (single source of truth)**. Every
+card must exist in Fedow (only way to hold FED). The wallet is mirrored locally (`fedow_core`) with
+the **same uuid**. Fedow is an assumed, indispensable dependency — **no fallback**: if it's down,
+the card is rejected (we alert), never a local orphan wallet. The card check re-reads Fedow on every
+scan (a FED top-up may have happened).
+
+**Point de débranchement / Debranch point :** la logique est isolée dans **un seul** helper
+`obtenir_wallet_carte_depuis_fedow(carte)`. Le jour où le Fedow legacy sera débranché, on remplacera
+**uniquement le corps** de cette fonction par une création interne (`fedow_core`), sans toucher au
+reste du POS. Garde `can_fedow()` **avant** d'instancier `FedowAPI` (sinon `create_place()` —
+handshake réseau involontaire — à chaque scan sur un tenant sans place Fedow).
+/ Logic isolated in a single helper; only its body changes when legacy Fedow is removed. `can_fedow()`
+guard before instantiating `FedowAPI` to avoid an involuntary `create_place()` handshake.
+
+**Débit legacy hors transaction atomique :** le débit FED legacy (Fedow distant) a lieu **avant** le
+`transaction.atomic()` local. Si l'atomic local échoue ensuite, le débit legacy est orphelin — il est
+**loggé en `INCIDENT`** (pas de commit en 2 phases possible), puis l'exception est relevée.
+/ Legacy FED debit happens outside the local atomic block; an orphaned legacy debit is logged as
+`INCIDENT` then re-raised (no two-phase commit).
+
+**Cartes de seed dans Fedow :** le seed (`demo_data_v2`) crée les cartes simulateur avec des `tag_id`
+issus du `.env` (`DEMO_TAGID_*`, **distincts** des cartes LEGACY pour éviter toute confusion),
+`number_printed = tag_id` et un `qrcode_uuid` **dérivé du tag_id** (lisible en dev). Le doublon
+`_seed_fusion_test_local` a été supprimé.
+/ Seed simulator cards use `.env` tag_ids (distinct from LEGACY), `number_printed = tag_id` and a
+qrcode derived from the tag_id. Removed the `_seed_fusion_test_local` duplicate.
+
+**Fix « Vider la carte » (erreur 500) :** la library de filtres `billet_filters` (`cents_to_euros`,
+`cents_to_asset`) **manquait** au dépôt (oubliée à l'import) → `TemplateSyntaxError: 'billet_filters'
+is not a registered tag library`. Fichier rétabli (arithmétique **entière** sur les centimes,
+séparateurs FR). Toute la suite POS repasse au vert.
+/ The `billet_filters` tag library was missing from the repo → restored (integer-cents arithmetic).
+
+**Tests :** 2 nouveaux fichiers — `test_wallet_carte_fedow.py` (mock `FedowAPI`, 4 cas : carte connue →
+même uuid + rattachement, carte avec user → pas d'appel Fedow, carte inconnue → exception,
+idempotence) et `test_wallet_carte_fedow_integration.py` (**intégration réelle, sans mock**,
+`skipif not can_fedow()`, `tag_id` isolé `DEMO_TAGID_CLIENT4`). `_login_as_admin` crée un tenant-admin
+au lieu de `pytest.skip` (6 skips levés). Suite POS : **59 passed, 0 failed, 0 skipped** (3 runs).
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `laboutik/views.py` | helper `obtenir_wallet_carte_depuis_fedow` (Fedow source de vérité, garde `can_fedow`, miroir même uuid) ; branchement de `_obtenir_ou_creer_wallet` ; résolution wallet **avant** l'atomic ; log `INCIDENT` sur débit legacy orphelin ; retrait d'un code mort `if wallet is None` |
+| `BaseBillet/templatetags/billet_filters.py` | **Rétabli** (manquait) : `cents_to_euros`, `cents_to_asset`, arithmétique entière |
+| `Administration/management/commands/demo_data_v2.py` | cartes simulateur depuis `DEMO_TAGID_*` (`.env`), `number_printed = tag_id`, qrcode dérivé ; suppression `_seed_fusion_test_local` |
+| `tests/pytest/test_wallet_carte_fedow.py` | **Nouveau** : 4 tests mockés |
+| `tests/pytest/test_wallet_carte_fedow_integration.py` | **Nouveau** : intégration réelle (sans mock) |
+| `tests/pytest/test_pos_vider_carte.py` | `_login_as_admin` crée un tenant-admin (skips levés) |
+
+**Note /djc (non bloquant) :** dans `fedow_connect/fedow_api.py`, l'attribut `self.config` vs
+`self.fedow_config` est une incohérence **pré-existante** (hors session) — laissée telle quelle.
+Quelques `data-label` non traduits subsistent dans `admin/membership/wallet_info.html` (pré-existants,
+table responsive) — à regrouper dans une passe i18n du mainteneur.
+
+---
+
 ## Mon compte — Agrégation des tokens locaux + fix spinner / My account — local tokens aggregation + spinner fix
 
 **Date :** 2026-06-22

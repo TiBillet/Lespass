@@ -63,6 +63,17 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
         / Creates minimal data for each test."""
         connection.set_tenant(self.tenant)
 
+        # Active la caisse V2 sur ce tenant de test : les routes POS sont gardees
+        # par module_caisse (HasLaBoutikTerminalAccess). Sans ca, acces -> 403.
+        # module_caisse exige module_monnaie_locale : on active les deux.
+        # / Enable V2 POS on this test tenant: POS routes are guarded by
+        # / module_caisse. module_caisse requires module_monnaie_locale.
+        from BaseBillet.models import Configuration
+        config = Configuration.get_solo()
+        config.module_monnaie_locale = True
+        config.module_caisse = True
+        config.save()
+
         # Categorie POS / POS category
         self.categorie = CategorieProduct.objects.create(
             name='Boissons Test Corr',
