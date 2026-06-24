@@ -9,6 +9,8 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
+from BaseBillet.models import Product, ResourceProduct
+
 WEEK_MINUTES = 7 * 24 * 60  # 10 080 — durée d'une semaine en minutes
 
 
@@ -22,10 +24,13 @@ class Resource(models.Model):
     La disponibilité est calculée à la volée depuis weekly_opening et calendar.
     / Availability is computed on the fly from weekly_opening and calendar.
     """
-    name = models.CharField(
-        max_length=200,
-        verbose_name=_('Name'),
-    )
+    # Replaced by name
+    # name = models.CharField(
+    #     max_length=200,
+    #     verbose_name=_('Name'),
+    # )
+
+    # Replaced by tag
     group = models.ForeignKey(
         'ResourceGroup',
         on_delete=models.PROTECT,
@@ -34,6 +39,14 @@ class Resource(models.Model):
         related_name='resources',
         verbose_name=_('Group'),
     )
+
+    product = models.ForeignKey(
+        ResourceProduct,
+        on_delete=models.PROTECT,
+        related_name='resources',
+        verbose_name=_('Product'),
+    )
+
     calendar = models.ForeignKey(
         'Calendar',
         on_delete=models.PROTECT,
@@ -46,6 +59,7 @@ class Resource(models.Model):
         related_name='resources',
         verbose_name=_('Weekly opening'),
     )
+
     capacity = models.PositiveIntegerField(
         default=1,
         verbose_name=_('Capacity'),
@@ -56,29 +70,36 @@ class Resource(models.Model):
         verbose_name=_('Cancellation deadline (hours)'),
         help_text=_('Hours before slot start within which cancellation is allowed.'),
     )
+
+    # Replaced by futur publish date
     booking_horizon_days = models.PositiveIntegerField(
         default=28,
         verbose_name=_('Booking horizon (days)'),
         help_text=_('How far ahead a member can book.'),
     )
-    description = models.TextField(
-        blank=True,
-        default='',
-        verbose_name=_('Description'),
-    )
-    image = models.URLField(
-        blank=True,
-        default='',
-        verbose_name=_('Image URL'),
-    )
+
+    # Replaced by short/long_description
+    # description = models.TextField(
+    #     blank=True,
+    #     default='',
+    #     verbose_name=_('Description'),
+    # )
+    # Replaced by image
+    # image = models.URLField(
+    #     blank=True,
+    #     default='',
+    #     verbose_name=_('Image URL'),
+    # )
+
+
 
     class Meta:
         verbose_name = _('Resource')
         verbose_name_plural = _('Resources')
-        ordering = ['name']
+        ordering = ['product__name']
 
     def __str__(self):
-        return self.name
+        return self.product.name
 
 
 class ResourceGroup(models.Model):
@@ -291,8 +312,8 @@ class OpeningEntry(models.Model):
     )
 
     class Meta:
-        verbose_name = _('Opening entry')
-        verbose_name_plural = _('Opening entries')
+        verbose_name = _("Période d'ouverture")
+        verbose_name_plural = _("Périodes d'ouvertures")
         ordering = ['weekday', 'start_time']
 
     def _position_minutes(self):
@@ -335,6 +356,9 @@ class OpeningEntry(models.Model):
                     'must not exceed one week (%(week)d minutes).'
                 ) % {'week': WEEK_MINUTES}
             )
+
+        if not self.start_time:
+            raise ValidationError(_("Il faut une date de début valide."))
 
         new_start = self._position_minutes()
         new_end = new_start + self.slot_duration_minutes * self.slot_count

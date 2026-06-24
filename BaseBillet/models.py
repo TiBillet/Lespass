@@ -1001,10 +1001,13 @@ class Product(models.Model):
         verbose_name=_('Product image'),
     )
 
+    # USED CHAR :   A B C D E F G | | | | | M N | P Q R S T U V | | | |
+    # UNUSED CHAR : | | | | | | | H I J K L | | O | | | | | | | W X Y Z
     NONE, BILLET, PACK, RECHARGE_CASHLESS = 'N', 'B', 'P', 'R'
     RECHARGE_FEDERATED, VETEMENT, MERCH, ADHESION, BADGE = 'S', 'T', 'M', 'A', 'G'
     DON, FREERES, NEED_VALIDATION = 'D', 'F', 'V' # DON / Reservation gratuite / Besoin de validation
     QRCODE_MA = 'Q'
+    RESOURCE = 'C'
 
     # FROM V2 : TODO
     # Recharge cashless FED : produit système créé par bootstrap_fed_asset.
@@ -1028,6 +1031,7 @@ class Product(models.Model):
         (ADHESION, _('Subscription or membership')),
         (BADGE, _('Punchclock')),
         (QRCODE_MA, _('QrCode paiement on my account')),
+        (RESOURCE, _('Ressource')),
         # (FUT, _("Keg (connected tap)")), # FROM V2 : TO IMPLEMENT WITH TIHEUREUSE
         # (DON, _('Don')),
         # (NEED_VALIDATION, _('Nécessite une validation manuelle'))
@@ -1142,6 +1146,17 @@ class MembershipProduct(Product):
         proxy = True
         verbose_name = _("Membership product")
         verbose_name_plural = _("Membership products")
+
+class ResourceProduct(Product):
+    """Proxy pour afficher uniquement les produits ressources (réservation de salle/machine) dans l'admin.
+    Proxy to display only resource products in admin.
+    Meme table, zero migration."""
+
+    class Meta:
+        proxy = True
+        verbose_name = _("Resource product")
+        verbose_name_plural = _("Resources products")
+
 
 # FROM V2 : TODO
 class POSProduct(Product):

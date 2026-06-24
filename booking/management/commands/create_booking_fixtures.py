@@ -8,7 +8,8 @@ Données créées :
 - Calendrier "Calendrier général" avec jours fériés français et fermetures.
 - Planning hebdomadaire "Coworking weekdays" (lun–ven, 8 créneaux × 60 min).
 - Planning hebdomadaire "Salles de répét' weekend" (sam–dim, 3 créneaux × 180 min).
-- Ressources : Coworking (capacité 3), Imprimante 3D (capacité 1),
+- Produits communs : Coworking, Imprimante 3D, Petite salle, Grande salle.
+- Ressources liées à ces produits : Coworking (capacité 3), Imprimante 3D (capacité 1),
   Petite salle et Grande salle (groupe "Salle de répét'", capacité 1 chacune).
 
 La commande est idempotente — get_or_create / update_or_create à chaque appel.
@@ -25,8 +26,12 @@ Lancement direct / Direct run:
 """
 import datetime
 
+import requests
+
+from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 
+from BaseBillet.models import Product
 from booking.models import (
     Calendar,
     ClosedPeriod,
@@ -44,7 +49,13 @@ class Command(BaseCommand):
         calendrier = self._create_calendar()
         coworking_opening = self._create_coworking_opening()
         repet_opening = self._create_repet_opening()
-        self._create_resources(calendrier, coworking_opening, repet_opening)
+        products_by_name = self._create_products()
+        self._create_resources(
+            calendrier,
+            coworking_opening,
+            repet_opening,
+            products_by_name,
+        )
 
         self.stdout.write(self.style.SUCCESS("Données booking créées avec succès."))
 
@@ -148,10 +159,103 @@ class Command(BaseCommand):
 
         return opening
 
-    def _create_resources(self, calendrier, coworking_opening, repet_opening):
+    def _create_products(self):
         """
-        Crée les ressources réservables.
-        / Creates the bookable resources.
+        Crée les produits communs aux ressources.
+        / Creates the shared products for bookable resources.
+
+        LOCALISATION : booking/management/commands/create_booking_fixtures.py
+
+        Les champs nom, descriptions et image sont sur le modèle Product.
+        Chaque ressource est ensuite liée à son produit via une ForeignKey.
+        / Name, descriptions and image live on the Product model.
+        Each resource is then linked to its product through a ForeignKey.
+
+        Les images sont téléchargées depuis picsum.photos.
+        / Images are downloaded from picsum.photos.
+        """
+        products_data = [
+            {
+                "name": "Coworking",
+                "short_description": "Espace de travail partagé, 3 postes.",
+                "long_description": (
+                    "Espace de travail partagé, 3 postes disponibles simultanément. "
+                    "Prises, WiFi haut débit, café."
+                ),
+                "image_url": "https://picsum.photos/seed/coworking/800/400",
+            },
+            {
+                "name": "Imprimante 3D",
+                "short_description": "Imprimante FDM Prusa MK4.",
+                "long_description": (
+                    "Imprimante FDM Prusa MK4. Filament PLA fourni. "
+                    "Formation obligatoire avant première utilisation."
+                ),
+                "image_url": "https://picsum.photos/seed/imprimante3d/800/400",
+            },
+            {
+                "name": "Petite salle",
+                "short_description": "Salle de répétition 20 m².",
+                "long_description": (
+                    "Salle de répétition insonorisée, 20 m². "
+                    "Batterie, amplis et câblage inclus. Capacité : 4 musiciens."
+                ),
+                "image_url": "https://picsum.photos/seed/petitesalle/800/400",
+            },
+            {
+                "name": "Grande salle",
+                "short_description": "Grande salle de répétition 40 m².",
+                "long_description": (
+                    "Grande salle de répétition, 40 m². Scène surélevée, sono complète. "
+                    "Idéale pour les groupes de 6 personnes et plus."
+                ),
+                "image_url": "https://picsum.photos/seed/grandesalle/800/400",
+            },
+        ]
+
+        products_by_name = {}
+        for data in products_data:
+            product, _created = Product.objects.update_or_create(
+                name=data["name"],
+                defaults={
+                    "categorie_article": Product.RESOURCE,
+                    "short_description": data["short_description"],
+                    "long_description": data["long_description"],
+                    "publish": True,
+                },
+            )
+
+            if data.get("image_url") and not product.img:
+                try:
+                    response = requests.get(data["image_url"], timeout=10)
+                    response.raise_for_status()
+                    product.img.save(
+                        f"resource_{data['name'].replace(' ', '_').lower()}.jpg",
+                        ContentFile(response.content),
+                        save=True,
+                    )
+                except requests.RequestException as erreur_telechargement:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f"Image non téléchargée pour {data['name']} : {erreur_telechargement}"
+                        )
+                    )
+
+            products_by_name[data["name"]] = product
+
+        return products_by_name
+
+    def _create_resources(self, calendrier, coworking_opening, repet_opening, products_by_name):
+        """
+        Crée les ressources réservables liées à leurs produits.
+        / Creates the bookable resources linked to their products.
+
+        LOCALISATION : booking/management/commands/create_booking_fixtures.py
+
+        Les champs spécifiques (calendrier, planning, capacité, groupe)
+        restent sur le modèle Resource. Le nom et l'image viennent du produit lié.
+        / Specific fields (calendar, schedule, capacity, group) stay on Resource.
+        Name and image come from the linked product.
 
         Ressources sans groupe :
         - Coworking (capacité 3) — planning semaine.
@@ -160,69 +264,49 @@ class Command(BaseCommand):
         Groupe "Salle de répét'" :
         - Petite salle (capacité 1) — planning week-end.
         - Grande salle (capacité 1) — planning week-end.
-
-        Chaque ressource a une description courte et une image de démonstration.
-        Les images viennent de picsum.photos (URL stables, pas de clé API).
-        / Each resource has a short description and a demo image.
-        Images come from picsum.photos (stable URLs, no API key).
         """
         groupe_repet, _created = ResourceGroup.objects.get_or_create(
             name="Salle de répét'",
         )
 
-        Resource.objects.update_or_create(
-            name="Coworking",
-            defaults={
+        resources_data = [
+            {
+                "product_name": "Coworking",
                 "calendar": calendrier,
                 "weekly_opening": coworking_opening,
                 "capacity": 3,
                 "group": None,
-                "description": (
-                    "Espace de travail partagé, 3 postes disponibles simultanément. "
-                    "Prises, WiFi haut débit, café."
-                ),
-                "image": "https://picsum.photos/seed/coworking/800/400",
             },
-        )
-        Resource.objects.update_or_create(
-            name="Imprimante 3D",
-            defaults={
+            {
+                "product_name": "Imprimante 3D",
                 "calendar": calendrier,
                 "weekly_opening": coworking_opening,
                 "capacity": 1,
                 "group": None,
-                "description": (
-                    "Imprimante FDM Prusa MK4. Filament PLA fourni. "
-                    "Formation obligatoire avant première utilisation."
-                ),
-                "image": "https://picsum.photos/seed/imprimante3d/800/400",
             },
-        )
-        Resource.objects.update_or_create(
-            name="Petite salle",
-            defaults={
+            {
+                "product_name": "Petite salle",
                 "calendar": calendrier,
                 "weekly_opening": repet_opening,
                 "capacity": 1,
                 "group": groupe_repet,
-                "description": (
-                    "Salle de répétition insonorisée, 20 m². "
-                    "Batterie, amplis et câblage inclus. Capacité : 4 musiciens."
-                ),
-                "image": "https://picsum.photos/seed/petitesalle/800/400",
             },
-        )
-        Resource.objects.update_or_create(
-            name="Grande salle",
-            defaults={
+            {
+                "product_name": "Grande salle",
                 "calendar": calendrier,
                 "weekly_opening": repet_opening,
                 "capacity": 1,
                 "group": groupe_repet,
-                "description": (
-                    "Grande salle de répétition, 40 m². Scène surélevée, sono complète. "
-                    "Idéale pour les groupes de 6 personnes et plus."
-                ),
-                "image": "https://picsum.photos/seed/grandesalle/800/400",
             },
-        )
+        ]
+
+        for data in resources_data:
+            Resource.objects.update_or_create(
+                product=products_by_name[data["product_name"]],
+                defaults={
+                    "calendar": data["calendar"],
+                    "weekly_opening": data["weekly_opening"],
+                    "capacity": data["capacity"],
+                    "group": data["group"],
+                },
+            )

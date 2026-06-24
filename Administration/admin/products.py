@@ -31,12 +31,12 @@ from BaseBillet.models import (
     TicketProduct,
     MembershipProduct,
     POSProduct,
-    #FutProduct,
-    #CategorieProduct,
+    # FutProduct,
+    # CategorieProduct,
     Price,
     FormbricksForms,
     ProductFormField,
-    Tva,
+    Tva, ResourceProduct,
 )
 
 logger = logging.getLogger(__name__)
@@ -1338,6 +1338,40 @@ class MembershipProductAdmin(HelpDisplayMixin, ProductAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.filter(categorie_article=Product.ADHESION)
+
+class ResourceProductForm(ProductAdminCustomForm):
+    """Formulaire produit force en mode Resource.
+    Product form forced to membership mode.
+    Le champ categorie_article est cache et pre-rempli."""
+
+    class Meta(ProductAdminCustomForm.Meta):
+        model = MembershipProduct
+
+    categorie_article = forms.ChoiceField(
+        choices=[
+            (Product.RESOURCE, _("Ressources")),
+        ],
+        widget=forms.HiddenInput(),
+        label=_("Product type"),
+        initial=Product.RESOURCE,
+    )
+
+
+@admin.register(ResourceProduct, site=staff_admin_site)
+class ResourceProductAdmin(ProductAdmin):
+    """Vue admin filtree : uniquement les produits resources.
+    Filtered admin view: only resources products."""
+
+    form = ResourceProductForm
+    # inlines = [MembershipPriceInline, ProductFormFieldInline]
+    # change_form_after_template + changeform_view : herites de ProductAdmin (base)
+    # / change_form_after_template + changeform_view: inherited from ProductAdmin (base)
+
+    list_filter = ["publish", ProductArchiveFilter]  # categorie_article inutile, deja filtre
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.filter(categorie_article=Product.RESOURCE)
 
 
 # ---------------------------------------------------------------------------

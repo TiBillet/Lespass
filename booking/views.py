@@ -143,7 +143,7 @@ class BookingViewSet(viewsets.ViewSet):
 
         """
         all_resources = list(
-            Resource.objects.select_related('group').order_by('name')
+            Resource.objects.select_related('group').order_by('product__name')
         )
 
         items_by_group  = defaultdict(list)

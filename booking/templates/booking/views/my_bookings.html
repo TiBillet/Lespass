@@ -35,7 +35,7 @@ Section "À venir" — réservations dont la fin est dans le futur.
              {% if booking.pk == highlighted_booking_pk %}list-group-item-success{% endif %}"
       data-testid="booking-upcoming-item-{{ booking.pk }}">
     <div>
-      <strong><a href="{% url 'booking-resource' pk=booking.resource.pk %}">{{ booking.resource.name }}</a></strong><br>
+      <strong><a href="{% url 'booking-resource' pk=booking.resource.pk %}">{{ booking.resource.product.name }}</a></strong><br>
       {{ booking.start_datetime|date:"l d F Y" }}
       {% translate "à" %} {{ booking.start_datetime|date:"H\hi" }}
       – {{ booking.end_datetime|date:"H\hi" }}
@@ -81,7 +81,7 @@ Section "Passées" — réservations terminées.
   {% for booking in past_bookings %}
   <li class="list-group-item text-muted"
       data-testid="booking-past-item-{{ booking.pk }}">
-    <strong>{{ booking.resource.name }}</strong> —
+    <strong>{{ booking.resource.product.name }}</strong> —
     {{ booking.start_datetime|date:"l d F Y" }}
     {% translate "à" %} {{ booking.start_datetime|date:"H\hi" }}
 

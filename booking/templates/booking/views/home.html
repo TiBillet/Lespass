@@ -32,7 +32,7 @@ Ressources sans groupe affichées en premier, par ordre alphabétique.
 <div class="mb-3" data-testid="booking-resource-item-{{ resource.pk }}">
   <a href="{% url 'booking-resource' pk=resource.pk %}"
      class="fs-5">
-    {{ resource.name }}
+    {{ resource.product.name }}
   </a>
   {% if resource.description %}
   <p class="text-muted small mb-0">{{ resource.description }}</p>
@@ -56,10 +56,10 @@ Groupes de ressources, triés par nom alphabétique.
 <div class="mb-3" data-testid="booking-resource-item-{{ resource.pk }}">
   <a href="{% url 'booking-resource' pk=resource.pk %}"
      class="fs-5">
-    {{ resource.name }}
+    {{ resource.product.name }}
   </a>
   {% if resource.description %}
-  <p class="text-muted small mb-0">{{ resource.description }}</p>
+  <p class="text-muted small mb-0">{{ resource.product.short_description }}</p>
   {% endif %}
 </div>
 {% endfor %}
