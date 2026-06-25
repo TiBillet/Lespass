@@ -324,6 +324,14 @@ class TestFlowPaiementStock(FastTenantTestCase):
     def setUp(self):
         connection.set_tenant(self.tenant)
 
+        # Active la caisse V2 (le garde HasLaBoutikTerminalAccess l'exige).
+        # / Enable V2 POS (required by the HasLaBoutikTerminalAccess guard).
+        from BaseBillet.models import Configuration
+        config = Configuration.get_solo()
+        config.module_monnaie_locale = True
+        config.module_caisse = True
+        config.save()
+
         self.categorie = CategorieProduct.objects.create(name="Vrac Flow")
         self.produit = Product.objects.create(
             name="Cacahuetes flow",

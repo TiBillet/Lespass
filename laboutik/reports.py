@@ -15,7 +15,8 @@ LOCALISATION : laboutik/reports.py
 import hashlib
 import logging
 
-from django.db.models import Sum, Count, Q, Min
+from django.db.models import Sum, Count, Q, Min, F, IntegerField
+from django.db.models.functions import Cast, Round
 from django.utils.translation import gettext_lazy as _
 
 from BaseBillet.models import (
@@ -31,6 +32,23 @@ from laboutik.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def montant_ttc_centimes():
+    """Expression d'agrégation du CA TTC en centimes ENTIERS.
+
+    Le total monétaire d'une LigneArticle = amount × qty (prix unitaire × quantité,
+    convention unifiée avec LigneArticle.total). Comme qty peut être fractionnaire
+    (cascade NFC multi-asset), le produit est un Decimal sub-centime : on l'ARRONDIT
+    au centime DANS la requête (Round) puis on le caste en entier (Cast) pour rester
+    en centimes entiers (jamais de float/Decimal qui fuirait dans rapport_json).
+    / TTC revenue aggregation in INTEGER cents: amount × qty, rounded to the cent and
+    cast to int in the query (qty may be fractional for multi-asset NFC cascades).
+    """
+    return Cast(
+        Round(Sum(F("amount") * F("qty"))),
+        output_field=IntegerField(),
+    )
 
 
 class RapportComptableService:
@@ -84,14 +102,14 @@ class RapportComptableService:
         total_especes = (
             self.lignes.filter(
                 payment_method=PaymentMethod.CASH,
-            ).aggregate(total=Sum("amount"))["total"]
+            ).aggregate(total=montant_ttc_centimes())["total"]
             or 0
         )
 
         total_carte_bancaire = (
             self.lignes.filter(
                 payment_method=PaymentMethod.CC,
-            ).aggregate(total=Sum("amount"))["total"]
+            ).aggregate(total=montant_ttc_centimes())["total"]
             or 0
         )
 
@@ -100,14 +118,14 @@ class RapportComptableService:
         total_cashless = (
             self.lignes.filter(
                 payment_method__in=[PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT],
-            ).aggregate(total=Sum("amount"))["total"]
+            ).aggregate(total=montant_ttc_centimes())["total"]
             or 0
         )
 
         total_cheque = (
             self.lignes.filter(
                 payment_method=PaymentMethod.CHEQUE,
-            ).aggregate(total=Sum("amount"))["total"]
+            ).aggregate(total=montant_ttc_centimes())["total"]
             or 0
         )
 
@@ -118,7 +136,7 @@ class RapportComptableService:
         total_federe = (
             self.lignes.filter(
                 payment_method=PaymentMethod.STRIPE_FED,
-            ).aggregate(total=Sum("amount"))["total"]
+            ).aggregate(total=montant_ttc_centimes())["total"]
             or 0
         )
 
@@ -144,7 +162,7 @@ class RapportComptableService:
             )
             .values("asset")
             .annotate(
-                montant=Sum("amount"),
+                montant=montant_ttc_centimes(),
             )
             .order_by("-montant")
         )
@@ -213,7 +231,7 @@ class RapportComptableService:
                 "payment_method",
             )
             .annotate(
-                total_ttc=Sum("amount"),
+                total_ttc=montant_ttc_centimes(),
                 total_qty=Sum("qty"),
             )
             .order_by(
@@ -350,7 +368,7 @@ class RapportComptableService:
         tva_agreg = (
             self.lignes.values("vat")
             .annotate(
-                total_ttc=Sum("amount"),
+                total_ttc=montant_ttc_centimes(),
             )
             .order_by("vat")
         )
@@ -399,7 +417,7 @@ class RapportComptableService:
         entrees_especes = (
             self.lignes.filter(
                 payment_method=PaymentMethod.CASH,
-            ).aggregate(total=Sum("amount"))["total"]
+            ).aggregate(total=montant_ttc_centimes())["total"]
             or 0
         )
 
@@ -451,7 +469,7 @@ class RapportComptableService:
                 "asset",
             )
             .annotate(
-                total=Sum("amount"),
+                total=montant_ttc_centimes(),
                 nb=Count("uuid"),
             )
             .order_by("pricesold__productsold__product__name")
@@ -515,7 +533,7 @@ class RapportComptableService:
                 "payment_method",
             )
             .annotate(
-                total=Sum("amount"),
+                total=montant_ttc_centimes(),
                 nb=Count("uuid"),
             )
             .order_by("pricesold__productsold__product__name", "pricesold__price__name")
@@ -573,7 +591,7 @@ class RapportComptableService:
                 Q(status=LigneArticle.CREDIT_NOTE) | Q(amount__lt=0),
             )
             .aggregate(
-                total=Sum("amount"),
+                total=montant_ttc_centimes(),
                 nb=Count("uuid"),
             )
         )
@@ -600,7 +618,7 @@ class RapportComptableService:
             )
             .values("carte")
             .annotate(
-                total=Sum("amount"),
+                total=montant_ttc_centimes(),
             )
             .values_list("total", flat=True)
         )
@@ -625,7 +643,7 @@ class RapportComptableService:
             )
             .values("carte")
             .annotate(
-                total=Sum("amount"),
+                total=montant_ttc_centimes(),
             )
             .values_list("total", flat=True)
         )
@@ -716,7 +734,7 @@ class RapportComptableService:
             )
             .annotate(
                 nb=Count("uuid"),
-                total=Sum("amount"),
+                total=montant_ttc_centimes(),
             )
             .order_by("reservation__event__datetime", "reservation__event__name")
         )
@@ -798,7 +816,7 @@ class RapportComptableService:
             for nom_moyen, filtre_moyen in moyens.items():
                 montant = (
                     self.lignes.filter(filtre_type & filtre_moyen).aggregate(
-                        total=Sum("amount"),
+                        total=montant_ttc_centimes(),
                     )["total"]
                     or 0
                 )
@@ -841,7 +859,7 @@ class RapportComptableService:
                 "point_de_vente__uuid",
             )
             .annotate(
-                total_ttc=Sum("amount"),
+                total_ttc=montant_ttc_centimes(),
             )
             .order_by("-total_ttc")
         )
@@ -861,7 +879,7 @@ class RapportComptableService:
         total_sans_pv = (
             self.lignes.filter(
                 point_de_vente__isnull=True,
-            ).aggregate(total=Sum("amount"))["total"]
+            ).aggregate(total=montant_ttc_centimes())["total"]
             or 0
         )
         if total_sans_pv > 0:

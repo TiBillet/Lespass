@@ -66,6 +66,15 @@ class TestPaiementEspecesCB(FastTenantTestCase):
         # / Re-set search_path after previous test's rollback.
         connection.set_tenant(self.tenant)
 
+        # Active la caisse V2 (le garde HasLaBoutikTerminalAccess l'exige).
+        # module_caisse exige module_monnaie_locale : on active les deux.
+        # / Enable V2 POS (required by the HasLaBoutikTerminalAccess guard).
+        from BaseBillet.models import Configuration
+        config = Configuration.get_solo()
+        config.module_monnaie_locale = True
+        config.module_caisse = True
+        config.save()
+
         # Categorie POS / POS category
         self.categorie = CategorieProduct.objects.create(
             name='Boissons Test',
