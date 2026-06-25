@@ -44,6 +44,26 @@ class PairingDevice(models.Model):
         help_text=_("6-digit pairing code, cleared after claim"),
     )
 
+    # IMPORTANT : choices dupliqués volontairement — NE PAS importer depuis
+    # AuthBillet.TibilletUser pour éviter l'import circulaire
+    # discovery → AuthBillet → Customers → discovery.
+    # La synchronisation des valeurs est vérifiée par
+    # tests/pytest/test_terminal_role_choices_sync.py.
+    # / IMPORTANT: choices duplicated on purpose — do NOT import from
+    # AuthBillet.TibilletUser (circular import).
+    # Sync is enforced by tests/pytest/test_terminal_role_choices_sync.py.
+    terminal_role = models.CharField(
+        max_length=2,
+        choices=[
+            ('LB', _('LaBoutik POS')),
+            ('TI', _('Connected tap')),
+            ('KI', _('Kiosk / self-service')),
+        ],
+        default='LB',
+        verbose_name=_("Terminal role"),
+        help_text=_("Type of hardware role being paired"),
+    )
+
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name=_("Created at"),

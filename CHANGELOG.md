@@ -1,5 +1,55 @@
 # Changelog / Journal des modifications
 
+## Fix bridge d'appairage hardware (`/laboutik/auth/bridge/`) — fin du portage TermUser / Hardware pairing bridge fix — TermUser port completed
+
+**Date :** 2026-06-25
+**Migration :** **Oui** / Yes — `BaseBillet 0223` (tenant) + `discovery 0003` (shared)
+
+**Quoi / What :** `POST /laboutik/auth/bridge/` plantait en **500** (`AttributeError: 'LaBoutikAPIKey'
+object has no attribute 'user'`). Cause racine : le chantier **C-02c « Appairage & terminaux »**
+avait été **porté à moitié** depuis `lespass-main` — la vue bridge et la permission
+`HasLaBoutikTerminalAccess` attendaient une clé **liée à un `TermUser`**, mais :
+1. le modèle `LaBoutikAPIKey` n'avait **pas** de champ `user` ;
+2. l'appairage (`discovery`) créait une clé **sans** TermUser (pas de routing par rôle) ;
+3. `TermUser.save()` (version « minimale ») ne posait **pas** `client_source` (→ la permission V2
+   aurait refusé l'accès caisse même après login).
+Ce **n'était donc pas une migration manquante** mais un **champ/feature absent du code**.
+/ The bridge crashed with AttributeError because the C-02c pairing port was incomplete:
+`LaBoutikAPIKey` had no `user` field, pairing created no TermUser, and `TermUser.save()` didn't set
+`client_source`. Not a missing migration — missing model field + feature.
+
+**Fix (portage complet depuis `lespass-main`) :**
+- **`LaBoutikAPIKey.user`** = `OneToOneField(AUTH_USER_MODEL, null=True, related_name='laboutik_api_key')`
+  (nullable pour compat V1) + migration `BaseBillet 0223`.
+- **`PairingDevice.terminal_role`** (choices LB/TI/KI, défaut **LB**) + migration `discovery 0003`.
+- **`discovery/views.py`** : routing par `terminal_role` dans `ClaimPinView` + helper
+  `_create_laboutik_terminal` (crée un `TermUser` espèce TE, email `<uuid>@terminals.local`, et
+  `LaBoutikAPIKey.create_key(user=term_user)`). Branche **TI refusée explicitement** (controlvanne
+  pas porté), branche **KI** réutilise le helper LaBoutik.
+- **`TermUser.save()`** pose `client_source = connection.tenant` à la création (indispensable à
+  `HasLaBoutikTerminalAccess`).
+
+**Contrat de la vue inchangé** (clients Cordova) : `POST` form-data `api_key=<key>` → **302** vers
+`/laboutik/caisse` + cookie `sessionid` ; clé legacy `user=None` → **400** (plus de 500) ; clé
+absente/invalide/révoquée → **401**.
+
+**Tests :** `test_hardware_auth_bridge.py` (6 cas, dont la non-régression clé legacy → 400) +
+`test_terminal_role_choices_sync.py` (sync des choices TibilletUser ↔ PairingDevice).
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` (+ `migrations/0223`) | `LaBoutikAPIKey.user` (OneToOne → TermUser, nullable) |
+| `discovery/models.py` (+ `migrations/0003`) | `PairingDevice.terminal_role` (LB/TI/KI, défaut LB) |
+| `discovery/views.py` | routing par rôle + helper `_create_laboutik_terminal` (TermUser + clé liée) |
+| `AuthBillet/models.py` | `TermUser.save()` pose `client_source` à la création |
+| `tests/pytest/test_hardware_auth_bridge.py`, `test_terminal_role_choices_sync.py` | **Nouveaux** |
+
+**Migrations appliquées (dev)** : `migrate_schemas --shared` (discovery 0003) + `--schema=<tenant>`
+(BaseBillet 0223) sur lespass + 5 tenants démo. **À appliquer en prod** sur le serveur concerné.
+
+---
+
 ## Dashboard — carte POS unifiée (V1/V2) + garde d'activation de la caisse / Dashboard — unified POS card (V1/V2) + cash register activation guard
 
 **Date :** 2026-06-23

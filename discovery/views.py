@@ -7,7 +7,6 @@ from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
-from BaseBillet.models import LaBoutikAPIKey
 from discovery.serializers import PinClaimSerializer
 
 logger = logging.getLogger(__name__)
@@ -50,16 +49,53 @@ class ClaimPinView(APIView):
 
         server_url = f"https://{primary_domain.domain}"
 
-        # Basculer dans le schéma du tenant pour créer la clé API LaBoutik
-        # Switch to tenant schema to create the LaBoutik API key
+        # Basculer dans le schéma du tenant pour créer les credentials.
+        # Le type de credentials dépend du rôle du terminal (terminal_role) :
+        # - LB (LaBoutik POS) : TermUser + LaBoutikAPIKey liée
+        # - KI (Kiosque)      : TermUser + LaBoutikAPIKey liée (même pipeline que LB)
+        # - TI (Tireuse)      : non disponible (controlvanne pas encore porté)
+        # / Switch to tenant schema to create credentials, by terminal_role:
+        # - LB / KI: TermUser + linked LaBoutikAPIKey
+        # - TI     : unavailable (controlvanne not ported yet)
         try:
             with tenant_context(tenant_for_this_device):
-                laboutik_key, api_key_string = LaBoutikAPIKey.objects.create_key(
-                    name=f"discovery-{pairing_device.uuid}"
-                )
+                # Routage selon terminal_role du PairingDevice
+                # / Routing based on PairingDevice.terminal_role
+                from AuthBillet.models import TibilletUser
+
+                if pairing_device.terminal_role == TibilletUser.ROLE_LABOUTIK:
+                    # Flow Laboutik V2 : TermUser + clé liée
+                    # / Laboutik V2 flow: TermUser + linked key
+                    api_key_string = _create_laboutik_terminal(pairing_device)
+
+                elif pairing_device.terminal_role == TibilletUser.ROLE_KIOSQUE:
+                    # Flow Kiosque : on réutilise le helper Laboutik
+                    # (TermUser + LaBoutikAPIKey). Une spécialisation pourra
+                    # venir plus tard si les besoins divergent.
+                    # / Kiosk flow: reuse the Laboutik helper (TermUser +
+                    # LaBoutikAPIKey). A dedicated flow may come later.
+                    api_key_string = _create_laboutik_terminal(pairing_device)
+
+                elif pairing_device.terminal_role == TibilletUser.ROLE_TIREUSE:
+                    # Flow Tireuse : controlvanne n'est pas porté dans ce dépôt.
+                    # On refuse explicitement plutôt que d'importer un module absent.
+                    # / Tireuse flow: controlvanne is not ported here. Refuse
+                    # explicitly instead of importing a missing module.
+                    raise ValueError(
+                        "Tireuse pairing not available (controlvanne not ported)"
+                    )
+
+                else:
+                    # Filet de sécurité : rôle inconnu (non prévu dans le modèle).
+                    # Ne JAMAIS laisser passer silencieusement un rôle inattendu.
+                    # / Safety net: unknown role. NEVER silently accept it.
+                    raise ValueError(
+                        f"Unknown PairingDevice.terminal_role: "
+                        f"{pairing_device.terminal_role!r}"
+                    )
         except Exception as error:
             logger.error(
-                f"Discovery claim: failed to create LaBoutikAPIKey "
+                f"Discovery claim: failed to create credentials "
                 f"for tenant {tenant_for_this_device.name}: {error}"
             )
             return Response(
@@ -80,3 +116,46 @@ class ClaimPinView(APIView):
             "api_key": api_key_string,
             "device_name": pairing_device.name,
         }, status=status.HTTP_200_OK)
+
+
+def _create_laboutik_terminal(pairing_device):
+    """
+    Crée un TermUser (rôle LaBoutik ou Kiosque) et sa clé API liée.
+    / Creates a TermUser (LaBoutik or Kiosk role) and its linked API key.
+
+    LOCALISATION : discovery/views.py
+
+    Appelée dans tenant_context() par ClaimPinView.
+    / Called inside tenant_context() by ClaimPinView.
+
+    :param pairing_device: L'objet PairingDevice en cours de claim
+    :return: La clé API string (à retourner au client)
+    """
+    from AuthBillet.models import TermUser
+    from BaseBillet.models import LaBoutikAPIKey
+
+    # Email synthétique : <pairing_uuid>@terminals.local
+    # Format filtrable, jamais confondu avec un vrai email humain
+    # / Synthetic email: <pairing_uuid>@terminals.local
+    # Filterable format, never confused with a real human email
+    email_synthetique = f"{pairing_device.uuid}@terminals.local"
+
+    # NOTE : TibilletUser.username est unique — on le synchronise avec l'email
+    # synthétique. On n'utilise pas create_user car un TermUser n'a ni mot de
+    # passe ni workflow d'activation.
+    # / NOTE: username is unique — synced with the synthetic email. We don't use
+    # create_user since a TermUser has no password nor activation flow.
+    term_user = TermUser.objects.create(
+        email=email_synthetique,
+        username=email_synthetique,
+        terminal_role=pairing_device.terminal_role,
+        accept_newsletter=False,
+    )
+    # espece=TE et client_source=tenant auto-posés par TermUser.save()
+    # / espece=TE and client_source=tenant auto-set by TermUser.save()
+
+    _key_obj, api_key_string = LaBoutikAPIKey.objects.create_key(
+        name=f"discovery-{pairing_device.uuid}",
+        user=term_user,
+    )
+    return api_key_string

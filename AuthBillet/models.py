@@ -375,7 +375,20 @@ class TermUser(TibilletUser):
     objects = TermUserManager()
 
     def save(self, *args, **kwargs):
-        # Si création :
+        # À la création, on force client_source = tenant courant.
+        # Un TermUser appartient toujours au tenant dans lequel il est créé :
+        # un client_source explicite passé via create() sera écrasé (c'est voulu).
+        # Indispensable pour HasLaBoutikTerminalAccess (vérifie client_source_id).
+        # / On creation, force client_source = current tenant. A TermUser always
+        # belongs to the tenant where it is created; required by
+        # HasLaBoutikTerminalAccess (which checks client_source_id).
+        #
+        # Note : self.pk est pré-rempli par uuid4(), donc `not self.pk` ne marche
+        # pas ici. On utilise _state.adding, pattern Django canonique.
+        # / Note: self.pk is pre-filled by uuid4(), so `not self.pk` doesn't work;
+        # we use _state.adding, the canonical Django pattern.
+        if self._state.adding:
+            self.client_source = connection.tenant
 
         self.espece = TibilletUser.TYPE_TERM
         self.email = self.email.lower()
