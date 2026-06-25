@@ -153,6 +153,15 @@ class Command(BaseCommand):
         # tenant is created (--full) or restored (--quick).
         self._seed_e2e_fixtures(options)
 
+        # Donnees de test du POS LaBoutik (points de vente, produits POS, carte
+        # primaire + cartes clientes LOCALES, cartes primaires). SANS ce seed, un
+        # flush complet ne cree aucun PointDeVente ni CartePrimaire → la carte
+        # primaire de test est refusee ("Carte inconnue") a l'ouverture de caisse.
+        # / LaBoutik POS test data (points of sale, POS products, primary card +
+        # LOCAL client cards). Without it, a full flush creates no PointDeVente nor
+        # CartePrimaire → the test primary card is rejected at POS opening.
+        self._seed_pos_test_data(options)
+
         # Cartes du simulateur NFC creees directement dans Fedow (place du
         # tenant lespass), via l'API key de place. Permet de tester le flux
         # /qr/<uuid> + le scan NFC du POS SANS lancer LaBoutik V1.
@@ -160,6 +169,116 @@ class Command(BaseCommand):
         # the place API key. Enables testing /qr/<uuid> + POS NFC scan without
         # launching LaBoutik V1.
         self._seed_cartes_nfc_fedow(options)
+
+        # SMOKE CHECK FINAL : la caisse DOIT pouvoir s'ouvrir avec la carte
+        # primaire du .env, ET la carte CM doit avoir son wallet dans Fedow.
+        # Sinon on PLANTE le flush (CommandError) — jamais de caisse silencieusement
+        # cassee (les tests mockent Fedow et ne voyaient pas le 403 reel).
+        # / FINAL SMOKE CHECK: the POS must open with the .env primary card AND the
+        # CM card must have its Fedow wallet. Otherwise ABORT the flush.
+        self._verifier_caisse_ouvrable_ou_planter(options)
+
+    def _verifier_caisse_ouvrable_ou_planter(self, options):
+        """
+        Smoke check : verifie qu'on peut OUVRIR LA CAISSE avec les cartes du .env,
+        sinon PLANTE le flush (CommandError → arret immediat, flush.sh en set -e).
+
+        Deux conditions, toutes deux requises pour une caisse fonctionnelle :
+        1. La carte primaire LOCALE (DEMO_TAGID_CM) est valide
+           (CarteCashless + CartePrimaire presentes → create_test_pos_data a tourne).
+        2. La carte CM est presente DANS Fedow (donc dote d'un wallet → peut porter
+           du FED). Verifie uniquement si can_fedow() (Fedow configure).
+
+        But : ne JAMAIS laisser un flush se terminer "vert" avec une caisse cassee.
+        Les tests POS mockent Fedow et ne detectaient pas le 403 reel sur POST /card/.
+        / Smoke check: the POS must be openable with the .env cards, else ABORT the
+        flush. POS tests mock Fedow and missed the real 403 on card creation.
+        """
+        from Customers.models import Client as TenantClient
+        from django_tenants.utils import tenant_context
+        from django.core.management.base import CommandError
+        from django.conf import settings
+
+        tenant = TenantClient.objects.filter(schema_name='lespass').first()
+        if tenant is None:
+            return
+
+        tag_cm = settings.DEMO_TAGID_CM
+        erreurs = []
+
+        with tenant_context(tenant):
+            # 1) Carte primaire LOCALE valide ?
+            # / Local primary card valid?
+            from laboutik.views import _charger_carte_primaire
+            obj, err = _charger_carte_primaire(tag_cm)
+            if obj is None:
+                erreurs.append(
+                    f"carte primaire LOCALE {tag_cm} refusee ({err}) "
+                    f"— create_test_pos_data n'a pas seede PointDeVente/CartePrimaire ?"
+                )
+
+            # 2) Carte CM presente dans Fedow (avec wallet) ?
+            # / CM card present in Fedow (with wallet)?
+            from fedow_connect.models import FedowConfig
+            if FedowConfig.get_solo().can_fedow():
+                from fedow_connect.fedow_api import FedowAPI
+                try:
+                    serialized = FedowAPI().NFCcard.card_tag_id_retrieve(tag_cm)
+                except Exception as e:
+                    serialized = None
+                    erreurs.append(f"lecture Fedow de {tag_cm} impossible ({e})")
+                if serialized is None:
+                    erreurs.append(
+                        f"carte {tag_cm} ABSENTE de Fedow (pas de wallet, pas de FED) "
+                        f"— POST /card/ a echoue (403 = extension de permission S6 "
+                        f"absente sur le Fedow qui tourne ?)."
+                    )
+
+        if erreurs:
+            raise CommandError(
+                "FLUSH INTERROMPU — la caisse ne peut PAS s'ouvrir avec les cartes "
+                "du .env (DEMO_TAGID_*) :\n  - " + "\n  - ".join(erreurs)
+            )
+
+        self.stdout.write(self.style.SUCCESS(
+            f"Smoke caisse OK : carte primaire {tag_cm} acceptee en local ET presente "
+            f"dans Fedow."
+        ))
+
+    def _seed_pos_test_data(self, options):
+        """
+        Seede les donnees de test du POS LaBoutik sur le tenant 'lespass' en
+        deleguant a la commande create_test_pos_data, FORCEE dans le schema
+        lespass (sinon, lancee depuis public, elle prend le premier tenant non
+        public via .first()). Cree : PointDeVente, produits POS, carte primaire
+        de test (CartePrimaire + CarteCashless LOCALE), cartes clientes locales.
+        Idempotent (get_or_create) et non bloquant pour le flush.
+        / Seeds LaBoutik POS test data on the 'lespass' tenant via
+        create_test_pos_data, forced into the lespass schema. Creates points of
+        sale, POS products, the test primary card (CartePrimaire + LOCAL
+        CarteCashless) and local client cards. Idempotent, non-blocking.
+        """
+        from Customers.models import Client as TenantClient
+        from django_tenants.utils import tenant_context
+        from django.core.management import call_command
+
+        tenant = TenantClient.objects.filter(schema_name='lespass').first()
+        if tenant is None:
+            return
+
+        try:
+            # En contexte lespass, create_test_pos_data n'active PAS la detection
+            # "public" → elle seede bien le tenant lespass.
+            # / In lespass context, create_test_pos_data targets lespass directly.
+            with tenant_context(tenant):
+                call_command('create_test_pos_data')
+            self.stdout.write(self.style.SUCCESS(
+                "Donnees de test POS LaBoutik creees (PV + carte primaire) sur lespass."
+            ))
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(
+                f"Donnees de test POS non creees : {e}"
+            ))
 
     def _seed_cartes_nfc_fedow(self, options):
         """
@@ -213,8 +332,24 @@ class Command(BaseCommand):
                     f"Cartes NFC simulateur creees dans Fedow : {resultat}"
                 ))
             except Exception as e:
-                self.stdout.write(self.style.WARNING(
-                    f"Cartes NFC simulateur non creees (Fedow injoignable ?) : {e}"
+                # BRUYANT (pas un simple warning) : si les cartes ne sont pas
+                # creees dans Fedow, elles n'auront pas de wallet -> pas de FED, et
+                # le scan POS les refusera. Cause frequente : extension de
+                # permission S6 ABSENTE sur le Fedow qui tourne (POST /card/ -> 403
+                # alors que la cle de place est valide), ou Fedow injoignable.
+                # On NE plante PAS ici : le smoke check final
+                # (_verifier_caisse_ouvrable_ou_planter) tranche.
+                # / LOUD (not a mere warning): without Fedow cards there is no
+                # wallet -> no FED and the POS rejects the scan. Common cause: the
+                # S6 permission extension missing on the running Fedow (403 on POST
+                # /card/). The final smoke check decides whether to abort.
+                self.stdout.write(self.style.ERROR(
+                    "ECHEC creation des cartes NFC dans Fedow :\n"
+                    f"  {e}\n"
+                    "  -> cartes sans wallet Fedow (pas de FED, scan POS refuse).\n"
+                    "  Verifier : extension de permission S6 active sur le Fedow qui "
+                    "tourne (POST /card/ doit accepter une place Lespass key-only), "
+                    "ou Fedow injoignable."
                 ))
 
     def _handle_seed_ventes(self, options):
