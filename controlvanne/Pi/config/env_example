@@ -1,0 +1,20 @@
+# Généré par make claim — ne pas modifier manuellement
+SERVER_URL=__SERVER_URL__
+API_KEY=__API_KEY__
+TIREUSE_UUID=__TIREUSE_UUID__
+DEBUG=False
+# Lecteur RFID
+RFID_TYPE=__RFID_TYPE__
+# GPIO
+GPIO_VANNE=18
+VALVE_ACTIVE_HIGH=True
+GPIO_FLOW_SENSOR=23
+FLOW_CALIBRATION_FACTOR=6.5
+# Réseau
+NETWORK_TIMEOUT=5.0
+MAX_RETRIES=3
+# Systemd
+SYSTEMD_NOTIFY=True
+# Git (mise à jour auto au démarrage)
+GIT_REPO=__GIT_REPO__
+GIT_BRANCH=__GIT_BRANCH__
