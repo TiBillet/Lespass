@@ -25,11 +25,24 @@ réservation est créée côté admin). Effet de bord positif : supprime la fuit
 cross-tenant du `queryset=TibilletUser.objects.all()` (qui listait tous les
 utilisateurs de la plateforme).
 
+**Bonus — choix du tarif :** le champ tarif listait les `PriceSold`, qui
+n'existent **qu'après une première vente** : les évènements payants à venir
+jamais vendus n'apparaissaient pas (un seul tarif visible). Il liste désormais
+les **`Price`** des évènements à venir (libellé cherchable
+« date — évènement — tarif — prix »), et `save()` **matérialise** le
+`ProductSold` + `PriceSold` au moment de la création, comme le flow de vente.
+
+**Bonus — email manquant dans la liste des ventes :** la colonne « user_email »
+de l'admin `LigneArticle` restait **vide** pour les ventes via l'admin.
+`LigneArticle.user_email()` ne gérait que `membership` et `paiement_stripe`,
+jamais `reservation`. Ajout du cas `reservation.user_commande` (en priorité).
+
 ### Fichiers / Files
 | Fichier / File | Changement / Change |
 |---|---|
-| `Administration/admin_tenant.py` | `ReservationAddAdmin` : champ `email` → `EmailField` ; `save()` → `get_or_create_user(email, send_mail=False)` |
-| `tests/pytest/test_admin_reservation_add.py` | **Nouveau** : 2 tests (flow complet de création + garde-fou `EmailField`), formulaire jusque-là non couvert |
+| `Administration/admin_tenant.py` | `ReservationAddAdmin` : champ `email` → `EmailField` ; `save()` → `get_or_create_user(email, send_mail=False)` ; champ tarif `price` (`EventPriceChoiceField`) listant les `Price` des events à venir ; `save()` matérialise `ProductSold`/`PriceSold` |
+| `BaseBillet/models.py` | `LigneArticle.user_email()` : gère le cas `reservation.user_commande` (colonne email des ventes admin) |
+| `tests/pytest/test_admin_reservation_add.py` | **Nouveau** : 4 tests (création gratuit + payant qty=3, tarif d'event futur jamais vendu proposable, garde-fou `EmailField`/`Price`), avec vérification de `user_email()` |
 
 ## Wizard event public : fix email perdu via le chemin Tiers-Lieux / Public event wizard: fix email lost via the Tiers-Lieux path
 

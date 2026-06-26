@@ -3077,12 +3077,16 @@ class LigneArticle(models.Model):
         return f"{self.uuid}"
 
     def user_email(self):
-        if self.membership:
-            if self.membership.user:
-                return self.membership.user.email
-        elif self.paiement_stripe:
-            if self.paiement_stripe.user:
-                return self.paiement_stripe.user.email
+        # Vente liée à une réservation (billetterie, y compris vente via l'admin).
+        # / Sale linked to a reservation (ticketing, including admin sale).
+        if self.reservation and self.reservation.user_commande:
+            return self.reservation.user_commande.email
+        # Adhésion / Membership.
+        if self.membership and self.membership.user:
+            return self.membership.user.email
+        # Paiement en ligne Stripe / Online Stripe payment.
+        if self.paiement_stripe and self.paiement_stripe.user:
+            return self.paiement_stripe.user.email
         return None
 
 class Membership(models.Model):

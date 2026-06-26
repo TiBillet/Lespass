@@ -109,7 +109,7 @@ from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
     FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp, ProductFormField, \
-    PromotionalCode, Tva, MembershipProduct, FederationConfiguration
+    PromotionalCode, Tva, MembershipProduct, FederationConfiguration, ProductSold
 from BaseBillet.tasks import webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
     send_reservation_cancellation_user, send_sale_to_laboutik, forge_connexion_url
@@ -2771,23 +2771,52 @@ class ReservationValidFilter(admin.SimpleListFilter):
             ).distinct()
 
 
+class EventPriceChoiceField(forms.ModelChoiceField):
+    """
+    Select de tarifs (Price) pour le formulaire d'ajout de réservation.
+    Chaque tarif est affiché avec sa date, son évènement et son prix, pour que
+    l'organisateur retrouve facilement le bon tarif via la recherche du select.
+    / Rate (Price) select for the reservation add form: shows date, event and
+      price so the organizer can search for the right rate.
+    """
+
+    def label_from_instance(self, price):
+        # On retrouve l'évènement rattaché au produit du tarif (lien M2M).
+        # / Find the event linked to the rate's product (M2M relation).
+        event = price.product.event_set.first()
+        if event:
+            date_affichee = event.datetime.strftime("%d/%m")
+            nom_evenement = event.name
+        else:
+            date_affichee = "?"
+            nom_evenement = price.product.name
+        # Format : "03/07 - Karaoké - Plein tarif - 12€"
+        # / Format: "03/07 - Karaoke - Full rate - 12€"
+        return f"{date_affichee} - {nom_evenement} - {price.name} - {price.prix}€"
+
+
 class ReservationAddAdmin(ModelForm):
-    # Uniquement les tarif Adhésion
     email = forms.EmailField(
         required=True,
         widget=UnfoldAdminEmailInputWidget(),
         label="Email",
     )
 
-    pricesold = forms.ModelChoiceField(
-        queryset=PriceSold.objects.filter(
-            productsold__event__datetime__gte=timezone.localtime() - timedelta(days=1)).order_by(
-            "productsold__event__datetime"),
-        # Remplis le champ select avec les objets Price
+    # Tous les tarifs (Price) des évènements à venir. Les tarifs existent
+    # toujours, contrairement aux PriceSold qui ne naissent qu'à la première
+    # vente : on liste donc les Price, et save() fabrique le PriceSold au besoin.
+    # / All rates (Price) of upcoming events. Rates always exist, unlike
+    #   PriceSold which only appear after the first sale: we list Price and
+    #   save() materializes the PriceSold when needed.
+    price = EventPriceChoiceField(
+        queryset=Price.objects.filter(
+            product__event__datetime__gte=timezone.localtime() - timedelta(days=1),
+        ).distinct().order_by("product__event__datetime"),
         empty_label=_("Choisir un tarif"),  # Texte affiché par défaut
         required=True,
         widget=UnfoldAdminSelect2Widget,
-        label=_("Rate")
+        label=_("Rate"),
+        help_text=_("Tarif d'un évènement à venir. Le produit vendu est créé automatiquement si besoin."),
     )
 
     # options_checkbox = forms.ModelMultipleChoiceField(
@@ -2832,13 +2861,13 @@ class ReservationAddAdmin(ModelForm):
 
     def clean_payment_method(self):
         cleaned_data = self.cleaned_data
-        pricesold = cleaned_data.get('pricesold')
+        price = cleaned_data.get('price')
         payment_method = cleaned_data.get('payment_method')
-        # pricesold peut être None si le champ a des erreurs de validation ou n'est pas renseigné
-        # On ne valide la méthode de paiement que si on a un produit
-        if pricesold and getattr(pricesold, 'productsold', None):
-            if pricesold.productsold.categorie_article == Product.FREERES and payment_method != PaymentMethod.FREE:
-                raise forms.ValidationError(_("Une reservation gratuite doit être en paiement OFFERT"), code="invalid")
+        # price peut être None si le champ a des erreurs de validation.
+        # On ne valide la méthode de paiement que si on a un tarif.
+        # / price may be None on validation errors; only check when a rate is set.
+        if price and price.product.categorie_article == Product.FREERES and payment_method != PaymentMethod.FREE:
+            raise forms.ValidationError(_("Une reservation gratuite doit être en paiement OFFERT"), code="invalid")
         return payment_method
 
     def clean(self):
@@ -2856,8 +2885,19 @@ class ReservationAddAdmin(ModelForm):
         email = self.cleaned_data.pop('email')
         user = get_or_create_user(email, send_mail=False)
 
-        pricesold: PriceSold = cleaned_data.pop('pricesold')
-        event: Event = pricesold.productsold.event
+        # Le champ "price" liste les tarifs (Price) des évènements à venir.
+        # On matérialise le produit vendu (ProductSold) et le tarif vendu
+        # (PriceSold) si besoin : ils n'existent qu'après une première vente.
+        # / The "price" field lists rates of upcoming events. Materialize the
+        #   sold product and sold price if needed (they only exist after a sale).
+        price = cleaned_data.pop('price')
+        event: Event = price.product.event_set.first()
+        productsold, _created = ProductSold.objects.get_or_create(
+            product=price.product, event=event,
+        )
+        pricesold, _created = PriceSold.objects.get_or_create(
+            productsold=productsold, price=price, prix=price.prix,
+        )
 
         reservation: Reservation = self.instance
         reservation.user_commande = user
