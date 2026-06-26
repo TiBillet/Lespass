@@ -1,5 +1,36 @@
 # Changelog / Journal des modifications
 
+## Admin réservation : fix crash `'TibilletUser' has no attribute 'lower'` / Admin reservation: fix crash on add
+
+**Date :** 2026-06-26
+**Migration :** Non / No
+
+**Quoi / What :** L'ajout d'une réservation depuis l'admin
+(`/admin/BaseBillet/reservation/add/`) plantait avec
+`AttributeError: 'TibilletUser' object has no attribute 'lower'` dès qu'un
+utilisateur était sélectionné (Sentry 7574740199).
+
+**Pourquoi / Why :** un commit du 2026-06-03 avait transformé le champ `email`
+d'un `forms.EmailField` (saisie d'une adresse) en
+`forms.ModelChoiceField(queryset=TibilletUser.objects.all())` (Select2 pour
+chercher un utilisateur existant) — **sans adapter `save()`**. `cleaned_data['email']`
+renvoyait donc un objet `TibilletUser`, que `save()` passait toujours à
+`get_or_create_user()`, lequel appelle `email.lower()` → crash. Bug introduit
+le 3 juin, déclenché en prod le 25.
+
+**Fix :** retour à un **input texte simple** (`forms.EmailField`), l'usage
+historique. `save()` retrouve ou crée l'utilisateur via
+`get_or_create_user(email, send_mail=False)` (pas de mail de validation : la
+réservation est créée côté admin). Effet de bord positif : supprime la fuite
+cross-tenant du `queryset=TibilletUser.objects.all()` (qui listait tous les
+utilisateurs de la plateforme).
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/admin_tenant.py` | `ReservationAddAdmin` : champ `email` → `EmailField` ; `save()` → `get_or_create_user(email, send_mail=False)` |
+| `tests/pytest/test_admin_reservation_add.py` | **Nouveau** : 2 tests (flow complet de création + garde-fou `EmailField`), formulaire jusque-là non couvert |
+
 ## Wizard event public : fix email perdu via le chemin Tiers-Lieux / Public event wizard: fix email lost via the Tiers-Lieux path
 
 **Date :** 2026-06-18

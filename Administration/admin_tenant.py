@@ -2773,12 +2773,10 @@ class ReservationValidFilter(admin.SimpleListFilter):
 
 class ReservationAddAdmin(ModelForm):
     # Uniquement les tarif Adhésion
-    email = forms.ModelChoiceField(
+    email = forms.EmailField(
         required=True,
-        queryset=TibilletUser.objects.all(),
-        empty_label=_("Select a user"),  # Texte affiché par défaut
+        widget=UnfoldAdminEmailInputWidget(),
         label="Email",
-        widget=UnfoldAdminSelect2Widget,
     )
 
     pricesold = forms.ModelChoiceField(
@@ -2786,7 +2784,7 @@ class ReservationAddAdmin(ModelForm):
             productsold__event__datetime__gte=timezone.localtime() - timedelta(days=1)).order_by(
             "productsold__event__datetime"),
         # Remplis le champ select avec les objets Price
-        empty_label=_("Select a product"),  # Texte affiché par défaut
+        empty_label=_("Choisir un tarif"),  # Texte affiché par défaut
         required=True,
         widget=UnfoldAdminSelect2Widget,
         label=_("Rate")
@@ -2849,8 +2847,14 @@ class ReservationAddAdmin(ModelForm):
     def save(self, commit=True):
         cleaned_data = self.cleaned_data
 
+        # Le champ "email" est un EmailField : l'admin saisit une adresse.
+        # get_or_create_user retrouve le compte ou le cree, et l'associe au
+        # tenant courant. send_mail=False : pas de mail de validation, la
+        # reservation est creee directement cote admin.
+        # / The "email" field is an EmailField: get_or_create_user finds or
+        #   creates the account (linked to the current tenant), no validation mail.
         email = self.cleaned_data.pop('email')
-        user = get_or_create_user(email)
+        user = get_or_create_user(email, send_mail=False)
 
         pricesold: PriceSold = cleaned_data.pop('pricesold')
         event: Event = pricesold.productsold.event
