@@ -2771,7 +2771,7 @@ class ReservationValidFilter(admin.SimpleListFilter):
             ).distinct()
 
 
-def _build_event_price_choices():
+def _build_event_price_options():
     """
     Construit les choix du select tarif du formulaire d'ajout de réservation :
     une option par couple (évènement, tarif).
@@ -2791,6 +2791,13 @@ def _build_event_price_choices():
 
     La source est la même que la billetterie publique : event.products -> prices.
     / Same source as the public ticketing: event.products -> prices.
+
+    Renvoie un tuple (choix, donnees) :
+    - choix : liste [(valeur, libellé)] pour le ChoiceField.
+    - donnees : dict {valeur: {"prix": float, "libre": bool}} pour le JS
+      d'auto-remplissage du champ "Prix par billet".
+    / Returns (choices, data): choices for the ChoiceField, and a {value: {...}}
+      map used by the per-ticket price autofill JS.
     """
     limite_date = timezone.localtime() - timedelta(days=1)
     evenements = (
@@ -2799,6 +2806,7 @@ def _build_event_price_choices():
         .prefetch_related("products__prices")
     )
     choix = [("", _("Choisir un tarif"))]
+    donnees = {}
     for evenement in evenements:
         date_affichee = evenement.datetime.strftime("%d/%m")
         for produit in evenement.products.all():
@@ -2806,7 +2814,8 @@ def _build_event_price_choices():
                 valeur = f"{evenement.uuid}:{tarif.uuid}"
                 libelle = f"{date_affichee} - {evenement.name} - {tarif.name} - {tarif.prix}€"
                 choix.append((valeur, libelle))
-    return choix
+                donnees[valeur] = {"prix": float(tarif.prix), "libre": bool(tarif.free_price)}
+    return choix, donnees
 
 
 class ReservationAddAdmin(ModelForm):
@@ -2828,6 +2837,20 @@ class ReservationAddAdmin(ModelForm):
         help_text=_("Tarif d'un évènement à venir. Le produit vendu est créé automatiquement si besoin."),
     )
 
+    # Prix PAR billet (montant unitaire). Rempli automatiquement à la sélection
+    # du tarif (JS), obligatoire pour un tarif à prix libre. Si laissé vide pour
+    # un tarif normal, on utilise le prix du tarif. Le total = prix × quantité.
+    # / Price PER ticket (unit amount). Auto-filled on rate selection (JS),
+    #   required for an open-price rate. If left empty for a normal rate, the
+    #   rate's price is used. Total = price × quantity.
+    amount = forms.FloatField(
+        required=False,
+        min_value=0,
+        widget=UnfoldAdminTextInputWidget(attrs={"type": "number", "step": "0.01", "min": "0"}),
+        label=_("Prix par billet"),
+        help_text=_("Montant payé pour UN billet (multiplié par la quantité). Obligatoire pour un tarif à prix libre."),
+    )
+
     # options_checkbox = forms.ModelMultipleChoiceField(
     #     # Uniquement les options qui sont utilisé dans les évènements futurs
     #     required=False,
@@ -2845,10 +2868,16 @@ class ReservationAddAdmin(ModelForm):
     #     label=_("Single choice menu"),
     # )
 
+    # Obligatoire, avec une option vide en tête : on force un choix conscient.
+    # Sans ça, le 1er choix de PaymentMethod.classic() est "Offert" (FREE) et une
+    # validation distraite créait une vente offerte par erreur.
+    # / Required, with an empty first option: forces a conscious choice. Otherwise
+    #   the first choice of PaymentMethod.classic() is "Offered" (FREE) and an
+    #   inattentive submit created an offered sale by mistake.
     payment_method = forms.ChoiceField(
-        required=False,
-        choices=PaymentMethod.classic(),  # on retire les choix token
-        widget=UnfoldAdminSelectWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
+        required=True,
+        choices=[("", _("Sélectionner un moyen de paiement"))] + PaymentMethod.classic(),
+        widget=UnfoldAdminSelectWidget(),
         label=_("Payment method"),
     )
 
@@ -2868,12 +2897,24 @@ class ReservationAddAdmin(ModelForm):
         # 'last_name',
         # ]
 
+    class Media:
+        # JS d'auto-remplissage du "Prix par billet" à la sélection du tarif.
+        # / JS that autofills the per-ticket price on rate selection.
+        js = ("admin/js/reservation_price_autofill.js",)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Construction des choix du select tarif à chaque instanciation :
-        # une option par couple (évènement, tarif).
-        # / Build the rate select choices on each instantiation: one per pair.
-        self.fields["price"].choices = _build_event_price_choices()
+        # Construction des choix du select tarif (une option par couple
+        # évènement/tarif) et des données pour le JS d'auto-remplissage du prix.
+        # / Build the rate choices (one per event/rate pair) and the data used by
+        #   the price autofill JS.
+        choix, donnees = _build_event_price_options()
+        self.fields["price"].choices = choix
+        # Le JS lit ce mapping {valeur: {prix, libre}} pour pré-remplir le montant
+        # et rendre le champ obligatoire si le tarif est à prix libre.
+        # / The JS reads this {value: {prix, libre}} map to prefill the amount and
+        #   make the field required for open-price rates.
+        self.fields["price"].widget.attrs["data-prices"] = json.dumps(donnees)
 
     @staticmethod
     def _extraire_evenement_et_tarif(valeur):
@@ -2906,7 +2947,18 @@ class ReservationAddAdmin(ModelForm):
         return payment_method
 
     def clean(self):
-        return super().clean()
+        cleaned_data = super().clean()
+        _evenement, tarif = self._extraire_evenement_et_tarif(cleaned_data.get('price'))
+        montant = cleaned_data.get('amount')
+        payment_method = cleaned_data.get('payment_method')
+        # Pour un tarif à prix libre payant, le prix par billet est obligatoire
+        # (le tarif n'a pas de prix fixe à appliquer).
+        # / For a paid open-price rate, the per-ticket price is required
+        #   (there is no fixed rate price to apply).
+        if tarif and tarif.free_price and payment_method != PaymentMethod.FREE:
+            if montant is None or montant <= 0:
+                self.add_error('amount', _("Indiquez le prix par billet pour un tarif à prix libre."))
+        return cleaned_data
 
     def save(self, commit=True):
         cleaned_data = self.cleaned_data
@@ -2951,6 +3003,7 @@ class ReservationAddAdmin(ModelForm):
         ### Création des billets associés
         payment_method = self.cleaned_data.pop('payment_method')
         quantity = self.cleaned_data.pop('quantity', 1) or 1
+        montant_saisi = self.cleaned_data.pop('amount', None)
         for _ in range(quantity):
             Ticket.objects.create(
                 payment_method=payment_method,
@@ -2960,12 +3013,25 @@ class ReservationAddAdmin(ModelForm):
                 pricesold=pricesold,
             )
 
-        # Création de la ligne comptables
-        # Si offert, le montant est 0
+        # Prix unitaire PAR billet : le montant saisi s'il est fourni, sinon le
+        # prix du tarif.
+        # / Per-ticket price: the typed amount if provided, else the rate's price.
+        if montant_saisi is not None and montant_saisi != '':
+            prix_unitaire = dround(Decimal(str(montant_saisi)))
+        else:
+            prix_unitaire = pricesold.prix
+
+        # LigneArticle.amount est le montant UNITAIRE en centimes : la quantité
+        # est portée par le champ qty, et le total = amount × qty (cf.
+        # comptabilite/services.py et LigneArticle.total()). Ne PAS multiplier
+        # par quantity ici, sinon double comptage (amount × qty²).
+        # / LigneArticle.amount is the UNIT amount in cents: quantity is held by
+        #   the qty field and total = amount × qty. Do NOT multiply by quantity
+        #   here, otherwise it is double-counted (amount × qty²).
         if payment_method == PaymentMethod.FREE:
             amount = 0
         else:
-            amount = int(pricesold.prix * quantity * 100)
+            amount = int(prix_unitaire * 100)
 
         vente = LigneArticle.objects.create(
             pricesold=pricesold,

@@ -45,12 +45,32 @@ de l'admin `LigneArticle` restait **vide** pour les ventes via l'admin.
 `LigneArticle.user_email()` ne gérait que `membership` et `paiement_stripe`,
 jamais `reservation`. Ajout du cas `reservation.user_commande` (en priorité).
 
+**Bonus — champ « Prix par billet » :** nouveau champ `amount` (montant unitaire
+**par billet**). Il se **pré-remplit** automatiquement à la sélection du tarif
+(JS) et devient **obligatoire** pour un tarif à **prix libre** (`free_price`).
+Un libellé « prix € × quantité = total € » rappelle que le montant est par billet.
+
+**Bonus — moyen de paiement obligatoire :** le select `payment_method` est
+désormais **requis** et commence par « Sélectionner un moyen de paiement »
+(option vide). Avant, le 1er choix proposé était « Offert » (`FREE`) : une
+validation distraite créait une **vente offerte par erreur**.
+
+**Fix — double comptage du montant (bug pré-existant) :** `save()` stockait
+`LigneArticle.amount = prix × quantité × 100`, or `amount` est le **montant
+UNITAIRE en centimes** (le total est `amount × qty`, cf. `comptabilite/services.py`
+et `LigneArticle.total()`). Une réservation admin de N billets était donc comptée
+`× N` en trop (ex. 8 € × 3 affichait 72 € au lieu de 24 €). Corrigé en
+`amount = prix_unitaire × 100`. **⚠️ Données : les `LigneArticle` payantes créées
+via ce formulaire avant ce correctif (sale_origin = `ADMIN`, qty > 1) ont un
+`amount` surévalué** — à vérifier/corriger en base si nécessaire.
+
 ### Fichiers / Files
 | Fichier / File | Changement / Change |
 |---|---|
-| `Administration/admin_tenant.py` | `ReservationAddAdmin` : champ `email` → `EmailField` ; `save()` → `get_or_create_user(email, send_mail=False)` ; champ tarif `price` (`ChoiceField`, une option par couple évènement/tarif via `_build_event_price_choices`) ; `save()`/`clean_payment_method` parsent `event_uuid:price_uuid` et matérialisent `ProductSold`/`PriceSold` |
+| `Administration/admin_tenant.py` | `ReservationAddAdmin` : champ `email` → `EmailField` ; `save()` → `get_or_create_user(email, send_mail=False)` ; champ tarif `price` (`ChoiceField`, une option par couple évènement/tarif via `_build_event_price_options`) ; champ `amount` (prix par billet) + `clean()` (requis si prix libre) ; `save()`/`clean_payment_method` parsent `event_uuid:price_uuid` ; `class Media` (JS d'auto-remplissage) |
+| `Administration/static/admin/js/reservation_price_autofill.js` | **Nouveau** : auto-remplissage du prix à la sélection du tarif, requis si prix libre, libellé total |
 | `BaseBillet/models.py` | `LigneArticle.user_email()` : gère le cas `reservation.user_commande` (colonne email des ventes admin) |
-| `tests/pytest/test_admin_reservation_add.py` | **Nouveau** : 4 tests (création gratuit + payant qty=3, **tarif partagé entre 2 events → 2 options + bon event**, garde-fou champs `email`/`price`), avec vérification de `user_email()` |
+| `tests/pytest/test_admin_reservation_add.py` | **Nouveau** : 7 tests (gratuit + payant, **tarif partagé → 2 options + bon event**, **prix par billet override**, **prix libre requis**, **moyen de paiement requis**, garde-fous), avec vérif `amount`/`total()` et `user_email()` |
 
 ## Wizard event public : fix email perdu via le chemin Tiers-Lieux / Public event wizard: fix email lost via the Tiers-Lieux path
 

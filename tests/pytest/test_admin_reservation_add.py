@@ -91,8 +91,11 @@ def test_admin_reservation_add_tarif_gratuit_cree_reservation_et_ligne(tenant):
         assert Ticket.objects.filter(reservation=reservation).count() == 2
 
         ligne = LigneArticle.objects.get(reservation=reservation)
+        # amount = montant UNITAIRE (centimes) ; total() = amount × qty.
+        # / amount = UNIT amount (cents); total() = amount × qty.
         assert ligne.amount == 0
         assert int(ligne.qty) == 2
+        assert ligne.total() == 0
         assert ligne.status == LigneArticle.VALID
         assert ligne.payment_method == PaymentMethod.FREE
         assert ligne.sale_origin == SaleOrigin.ADMIN
@@ -161,8 +164,11 @@ def test_admin_reservation_add_tarif_payant_calcule_le_montant_en_centimes(tenan
         assert pricesold.productsold.event == event
 
         ligne = LigneArticle.objects.get(reservation=reservation)
-        assert ligne.amount == 3600
+        # amount = montant UNITAIRE (centimes) ; total() = amount × qty.
+        # / amount = UNIT amount (cents); total() = amount × qty.
+        assert ligne.amount == 1200          # 12,00 € unitaire
         assert int(ligne.qty) == 3
+        assert ligne.total() == 3600         # 12 × 3 = 36 €
         assert ligne.status == LigneArticle.VALID
         assert ligne.payment_method == PaymentMethod.CASH
         assert ligne.sale_origin == SaleOrigin.ADMIN
@@ -241,6 +247,166 @@ def test_admin_reservation_add_tarif_partage_entre_deux_events(tenant):
         LigneArticle.objects.filter(reservation=reservation).delete()
         reservation.delete()
         PriceSold.objects.filter(price=price).delete()
+
+
+def test_admin_reservation_add_montant_par_billet_surcharge_le_prix(tenant):
+    """
+    Le "Prix par billet" saisi surcharge le prix du tarif : tarif BILLET 12€
+    mais l'admin saisit 8€/billet, quantite 2 -> LigneArticle.amount = 1600.
+    / The typed per-ticket price overrides the rate price: 1600 cents.
+    """
+    with tenant_context(tenant):
+        from Administration.admin_tenant import ReservationAddAdmin
+        from AuthBillet.models import TibilletUser
+        from BaseBillet.models import (
+            Event, Product, Price, PriceSold,
+            Ticket, LigneArticle, PaymentMethod,
+        )
+
+        suffix = uuid.uuid4().hex[:8]
+        event = Event.objects.create(
+            name=f"Concert_{suffix}", datetime=timezone.now() + timedelta(days=7),
+        )
+        product = Product.objects.create(
+            name=f"Billet_{suffix}", categorie_article=Product.BILLET,
+        )
+        event.products.add(product)
+        price = Price.objects.create(
+            product=product, name=f"Plein_{suffix}", prix=Decimal("12.00"),
+        )
+        email_saisi = f"override_{suffix}@example.com"
+
+        form_data = {
+            "email": email_saisi,
+            "price": f"{event.uuid}:{price.uuid}",
+            "amount": 8.0,  # prix par billet, surcharge le tarif 12€
+            "payment_method": PaymentMethod.CASH,
+            "quantity": 2,
+        }
+        form = ReservationAddAdmin(data=form_data)
+        with patch("Administration.admin_tenant.send_sale_to_laboutik.delay"), \
+             patch("Administration.admin_tenant.ticket_celery_mailer.delay"):
+            assert form.is_valid(), form.errors
+            reservation = form.save()
+
+        ligne = LigneArticle.objects.get(reservation=reservation)
+        # amount = UNITAIRE par billet ; total() = amount × qty (cf. compta).
+        assert ligne.amount == 800           # 8,00 € unitaire (override du tarif 12€)
+        assert int(ligne.qty) == 2
+        assert ligne.total() == 1600         # 8 × 2 = 16 €
+
+        Ticket.objects.filter(reservation=reservation).delete()
+        ligne.delete()
+        reservation.delete()
+        PriceSold.objects.filter(price=price).delete()
+        TibilletUser.objects.filter(email=email_saisi).delete()
+
+
+def test_admin_reservation_add_prix_libre_montant_obligatoire(tenant):
+    """
+    Tarif a prix libre (free_price=True) paye : le "Prix par billet" est
+    OBLIGATOIRE (form invalide sans montant), puis le montant saisi est utilise.
+    / Open-price paid rate: per-ticket price is required, then used.
+    """
+    with tenant_context(tenant):
+        from Administration.admin_tenant import ReservationAddAdmin
+        from AuthBillet.models import TibilletUser
+        from BaseBillet.models import (
+            Event, Product, Price, PriceSold,
+            Ticket, LigneArticle, PaymentMethod,
+        )
+
+        suffix = uuid.uuid4().hex[:8]
+        event = Event.objects.create(
+            name=f"Don_{suffix}", datetime=timezone.now() + timedelta(days=7),
+        )
+        product = Product.objects.create(
+            name=f"Libre_{suffix}", categorie_article=Product.BILLET,
+        )
+        event.products.add(product)
+        price = Price.objects.create(
+            product=product, name=f"PrixLibre_{suffix}",
+            prix=Decimal("0.00"), free_price=True,
+        )
+
+        base = {
+            "email": f"libre_{suffix}@example.com",
+            "price": f"{event.uuid}:{price.uuid}",
+            "payment_method": PaymentMethod.CASH,
+            "quantity": 2,
+        }
+
+        # Sans montant -> formulaire invalide (erreur sur le champ amount).
+        # / Without amount -> invalid form (error on the amount field).
+        form_sans_montant = ReservationAddAdmin(data=dict(base))
+        assert not form_sans_montant.is_valid()
+        assert "amount" in form_sans_montant.errors
+
+        # Avec 15€/billet, quantite 2 -> amount = 3000 centimes.
+        # / With 15€/ticket, qty 2 -> amount = 3000 cents.
+        form_ok = ReservationAddAdmin(data=dict(base, amount=15.0))
+        with patch("Administration.admin_tenant.send_sale_to_laboutik.delay"), \
+             patch("Administration.admin_tenant.ticket_celery_mailer.delay"):
+            assert form_ok.is_valid(), form_ok.errors
+            reservation = form_ok.save()
+
+        ligne = LigneArticle.objects.get(reservation=reservation)
+        # amount = UNITAIRE par billet ; total() = amount × qty.
+        assert ligne.amount == 1500          # 15,00 € unitaire (prix libre)
+        assert int(ligne.qty) == 2
+        assert ligne.total() == 3000         # 15 × 2 = 30 €
+
+        Ticket.objects.filter(reservation=reservation).delete()
+        ligne.delete()
+        reservation.delete()
+        PriceSold.objects.filter(price=price).delete()
+        TibilletUser.objects.filter(email=base["email"]).delete()
+
+
+def test_admin_reservation_add_moyen_paiement_obligatoire(tenant):
+    """
+    Le moyen de paiement est OBLIGATOIRE et le select commence par une option
+    vide : sans choix explicite, le formulaire est invalide (plus de "Offert"
+    sélectionné par défaut, qui créait des ventes offertes par mégarde).
+    / Payment method is REQUIRED with an empty first option: without an explicit
+      choice, the form is invalid (no more default "Offered").
+    """
+    with tenant_context(tenant):
+        from Administration.admin_tenant import ReservationAddAdmin
+        from BaseBillet.models import Event, Product, Price
+
+        suffix = uuid.uuid4().hex[:8]
+        event = Event.objects.create(
+            name=f"Concert_{suffix}", datetime=timezone.now() + timedelta(days=7),
+        )
+        product = Product.objects.create(
+            name=f"Billet_{suffix}", categorie_article=Product.BILLET,
+        )
+        event.products.add(product)
+        price = Price.objects.create(
+            product=product, name=f"Plein_{suffix}", prix=Decimal("12.00"),
+        )
+
+        # Sans moyen de paiement -> formulaire invalide.
+        # / Without a payment method -> invalid form.
+        form_data = {
+            "email": f"sans_paiement_{suffix}@example.com",
+            "price": f"{event.uuid}:{price.uuid}",
+            "amount": 12.0,
+            "quantity": 1,
+        }
+        form = ReservationAddAdmin(data=form_data)
+        assert not form.is_valid()
+        assert "payment_method" in form.errors
+
+        # L'option vide ("Sélectionner...") est bien la première du select.
+        # / The empty option is the first one in the select.
+        premier_choix = ReservationAddAdmin.base_fields["payment_method"].choices[0]
+        assert premier_choix[0] == ""
+
+        # Form invalide -> rien de créé à nettoyer (pas de réservation/ligne).
+        # / Invalid form -> nothing created to clean up.
+        price.delete()
 
 
 def test_admin_reservation_add_champs_email_et_tarif():
