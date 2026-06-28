@@ -28,9 +28,17 @@ utilisateurs de la plateforme).
 **Bonus — choix du tarif :** le champ tarif listait les `PriceSold`, qui
 n'existent **qu'après une première vente** : les évènements payants à venir
 jamais vendus n'apparaissaient pas (un seul tarif visible). Il liste désormais
-les **`Price`** des évènements à venir (libellé cherchable
-« date — évènement — tarif — prix »), et `save()` **matérialise** le
-`ProductSold` + `PriceSold` au moment de la création, comme le flow de vente.
+**une option par couple (évènement, tarif)** (`ChoiceField`, valeur
+`event_uuid:price_uuid`, libellé cherchable « date — évènement — tarif — prix »),
+et `save()` **matérialise** le `ProductSold` + `PriceSold` au moment de la
+création, comme le flow de vente.
+
+Le couple est nécessaire car un même tarif (`Product`/`Price`) peut être
+**partagé entre plusieurs évènements** — typiquement « Réservation gratuite »
+(`views.py` ajoute le même produit FREERES à chaque évènement gratuit). Un
+select listant les `Price` n'aurait montré qu'**une** option pour N évènements
+et aurait réservé sur le mauvais évènement (le premier). Avec le couple, chaque
+évènement a sa propre entrée et la réservation cible le bon évènement.
 
 **Bonus — email manquant dans la liste des ventes :** la colonne « user_email »
 de l'admin `LigneArticle` restait **vide** pour les ventes via l'admin.
@@ -40,9 +48,9 @@ jamais `reservation`. Ajout du cas `reservation.user_commande` (en priorité).
 ### Fichiers / Files
 | Fichier / File | Changement / Change |
 |---|---|
-| `Administration/admin_tenant.py` | `ReservationAddAdmin` : champ `email` → `EmailField` ; `save()` → `get_or_create_user(email, send_mail=False)` ; champ tarif `price` (`EventPriceChoiceField`) listant les `Price` des events à venir ; `save()` matérialise `ProductSold`/`PriceSold` |
+| `Administration/admin_tenant.py` | `ReservationAddAdmin` : champ `email` → `EmailField` ; `save()` → `get_or_create_user(email, send_mail=False)` ; champ tarif `price` (`ChoiceField`, une option par couple évènement/tarif via `_build_event_price_choices`) ; `save()`/`clean_payment_method` parsent `event_uuid:price_uuid` et matérialisent `ProductSold`/`PriceSold` |
 | `BaseBillet/models.py` | `LigneArticle.user_email()` : gère le cas `reservation.user_commande` (colonne email des ventes admin) |
-| `tests/pytest/test_admin_reservation_add.py` | **Nouveau** : 4 tests (création gratuit + payant qty=3, tarif d'event futur jamais vendu proposable, garde-fou `EmailField`/`Price`), avec vérification de `user_email()` |
+| `tests/pytest/test_admin_reservation_add.py` | **Nouveau** : 4 tests (création gratuit + payant qty=3, **tarif partagé entre 2 events → 2 options + bon event**, garde-fou champs `email`/`price`), avec vérification de `user_email()` |
 
 ## Wizard event public : fix email perdu via le chemin Tiers-Lieux / Public event wizard: fix email lost via the Tiers-Lieux path
 

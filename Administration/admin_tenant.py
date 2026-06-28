@@ -2771,28 +2771,42 @@ class ReservationValidFilter(admin.SimpleListFilter):
             ).distinct()
 
 
-class EventPriceChoiceField(forms.ModelChoiceField):
+def _build_event_price_choices():
     """
-    Select de tarifs (Price) pour le formulaire d'ajout de réservation.
-    Chaque tarif est affiché avec sa date, son évènement et son prix, pour que
-    l'organisateur retrouve facilement le bon tarif via la recherche du select.
-    / Rate (Price) select for the reservation add form: shows date, event and
-      price so the organizer can search for the right rate.
-    """
+    Construit les choix du select tarif du formulaire d'ajout de réservation :
+    une option par couple (évènement, tarif).
+    / Builds the rate select choices: one option per (event, rate) pair.
 
-    def label_from_instance(self, price):
-        # On retrouve l'évènement rattaché au produit du tarif (lien M2M).
-        # / Find the event linked to the rate's product (M2M relation).
-        event = price.product.event_set.first()
-        if event:
-            date_affichee = event.datetime.strftime("%d/%m")
-            nom_evenement = event.name
-        else:
-            date_affichee = "?"
-            nom_evenement = price.product.name
-        # Format : "03/07 - Karaoké - Plein tarif - 12€"
-        # / Format: "03/07 - Karaoke - Full rate - 12€"
-        return f"{date_affichee} - {nom_evenement} - {price.name} - {price.prix}€"
+    Un même tarif (Product/Price) peut être partagé par plusieurs évènements —
+    typiquement "Réservation gratuite", rattaché à tous les évènements gratuits.
+    On génère donc une entrée distincte PAR évènement ; sinon les évènements qui
+    partagent un tarif n'auraient pas d'entrée propre et seraient invisibles.
+    / A rate can be shared across several events (e.g. "Free booking" linked to
+      every free event), so we emit one entry per event; otherwise events sharing
+      a rate would have no entry of their own and stay invisible.
+
+    Valeur : "event_uuid:price_uuid" — l'évènement est explicite (pas de
+    déduction ambiguë). Libellé cherchable : "03/07 - Évènement - Tarif - prix€".
+    / Value: "event_uuid:price_uuid" (explicit event). Searchable label.
+
+    La source est la même que la billetterie publique : event.products -> prices.
+    / Same source as the public ticketing: event.products -> prices.
+    """
+    limite_date = timezone.localtime() - timedelta(days=1)
+    evenements = (
+        Event.objects.filter(datetime__gte=limite_date)
+        .order_by("datetime")
+        .prefetch_related("products__prices")
+    )
+    choix = [("", _("Choisir un tarif"))]
+    for evenement in evenements:
+        date_affichee = evenement.datetime.strftime("%d/%m")
+        for produit in evenement.products.all():
+            for tarif in produit.prices.all():
+                valeur = f"{evenement.uuid}:{tarif.uuid}"
+                libelle = f"{date_affichee} - {evenement.name} - {tarif.name} - {tarif.prix}€"
+                choix.append((valeur, libelle))
+    return choix
 
 
 class ReservationAddAdmin(ModelForm):
@@ -2802,17 +2816,12 @@ class ReservationAddAdmin(ModelForm):
         label="Email",
     )
 
-    # Tous les tarifs (Price) des évènements à venir. Les tarifs existent
-    # toujours, contrairement aux PriceSold qui ne naissent qu'à la première
-    # vente : on liste donc les Price, et save() fabrique le PriceSold au besoin.
-    # / All rates (Price) of upcoming events. Rates always exist, unlike
-    #   PriceSold which only appear after the first sale: we list Price and
-    #   save() materializes the PriceSold when needed.
-    price = EventPriceChoiceField(
-        queryset=Price.objects.filter(
-            product__event__datetime__gte=timezone.localtime() - timedelta(days=1),
-        ).distinct().order_by("product__event__datetime"),
-        empty_label=_("Choisir un tarif"),  # Texte affiché par défaut
+    # Une option par couple (évènement, tarif) — voir _build_event_price_choices.
+    # Les choix sont construits dans __init__ (une requête à chaque affichage du
+    # formulaire). La valeur est "event_uuid:price_uuid".
+    # / One option per (event, rate) pair — see _build_event_price_choices.
+    #   Choices are built in __init__. Value is "event_uuid:price_uuid".
+    price = forms.ChoiceField(
         required=True,
         widget=UnfoldAdminSelect2Widget,
         label=_("Rate"),
@@ -2859,14 +2868,40 @@ class ReservationAddAdmin(ModelForm):
         # 'last_name',
         # ]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Construction des choix du select tarif à chaque instanciation :
+        # une option par couple (évènement, tarif).
+        # / Build the rate select choices on each instantiation: one per pair.
+        self.fields["price"].choices = _build_event_price_choices()
+
+    @staticmethod
+    def _extraire_evenement_et_tarif(valeur):
+        """
+        Décompose la valeur "event_uuid:price_uuid" du champ price en
+        (Event, Price). Renvoie (None, None) si vide ou invalide.
+        / Splits the "event_uuid:price_uuid" value into (Event, Price).
+        """
+        if not valeur or ":" not in valeur:
+            return None, None
+        event_uuid, price_uuid = valeur.split(":", 1)
+        try:
+            evenement = Event.objects.get(uuid=event_uuid)
+            tarif = Price.objects.get(uuid=price_uuid)
+        except (Event.DoesNotExist, Price.DoesNotExist, ValueError):
+            return None, None
+        return evenement, tarif
+
     def clean_payment_method(self):
         cleaned_data = self.cleaned_data
-        price = cleaned_data.get('price')
+        # Le champ "price" vaut "event_uuid:price_uuid" : on récupère le tarif
+        # pour vérifier la cohérence avec la méthode de paiement.
+        # / "price" is "event_uuid:price_uuid": fetch the rate to check coherence.
+        _evenement, tarif = self._extraire_evenement_et_tarif(cleaned_data.get('price'))
         payment_method = cleaned_data.get('payment_method')
-        # price peut être None si le champ a des erreurs de validation.
         # On ne valide la méthode de paiement que si on a un tarif.
-        # / price may be None on validation errors; only check when a rate is set.
-        if price and price.product.categorie_article == Product.FREERES and payment_method != PaymentMethod.FREE:
+        # / Only check the payment method when a rate is set.
+        if tarif and tarif.product.categorie_article == Product.FREERES and payment_method != PaymentMethod.FREE:
             raise forms.ValidationError(_("Une reservation gratuite doit être en paiement OFFERT"), code="invalid")
         return payment_method
 
@@ -2885,13 +2920,13 @@ class ReservationAddAdmin(ModelForm):
         email = self.cleaned_data.pop('email')
         user = get_or_create_user(email, send_mail=False)
 
-        # Le champ "price" liste les tarifs (Price) des évènements à venir.
+        # Le champ "price" vaut "event_uuid:price_uuid" : l'évènement est
+        # explicite (un même tarif peut être partagé entre plusieurs évènements).
         # On matérialise le produit vendu (ProductSold) et le tarif vendu
         # (PriceSold) si besoin : ils n'existent qu'après une première vente.
-        # / The "price" field lists rates of upcoming events. Materialize the
-        #   sold product and sold price if needed (they only exist after a sale).
-        price = cleaned_data.pop('price')
-        event: Event = price.product.event_set.first()
+        # / "price" is "event_uuid:price_uuid": the event is explicit (a rate can
+        #   be shared across events). Materialize ProductSold/PriceSold if needed.
+        event, price = self._extraire_evenement_et_tarif(cleaned_data.pop('price'))
         productsold, _created = ProductSold.objects.get_or_create(
             product=price.product, event=event,
         )
