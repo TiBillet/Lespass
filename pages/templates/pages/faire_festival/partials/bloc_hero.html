@@ -1,0 +1,42 @@
+{% load static i18n %}
+{% comment %}
+    BLOC HERO — skin faire_festival. Reproduit la section hero de la home :
+    badge date (gauche, image_secondaire) + logo (centre, image) + sous-titre.
+    / HERO block — faire_festival skin. Reproduces the home hero: date badge (left,
+    image_secondaire) + logo (center, image) + subtitle.
+{% endcomment %}
+<section class="container py-5 position-relative" data-testid="bloc-hero">
+    <div class="row align-items-start">
+        {# Badge date (gauche, desktop) / Date badge (left, desktop) #}
+        <div class="col-md-2 d-none d-md-block">
+            {% if bloc.image_secondaire %}
+                <img src="{{ bloc.image_secondaire.med.url }}" alt="{{ bloc.sous_titre }}" class="img-fluid date-badge-left">
+            {% endif %}
+        </div>
+
+        {# Logo / titre (centre) / Logo / title (center) #}
+        <div class="col-md-8 text-center position-relative">
+            <div class="titre-principal mb-4">
+                <h1 class="visually-hidden">{{ bloc.titre|default:config.organisation }}</h1>
+                {% if bloc.image %}
+                    <img src="{{ bloc.image.fhd.url }}" alt="{{ bloc.titre|default:config.organisation }}" class="img-fluid logo-homepage">
+                {% elif bloc.titre %}
+                    <h2 class="police-titre texte-bleu text-uppercase">{{ bloc.titre }}</h2>
+                {% endif %}
+            </div>
+            {% if bloc.sous_titre %}
+                <div><h2 class="fw-bold fs-5 mt-5 texte-bleu police-mono">{{ bloc.sous_titre }}</h2></div>
+            {% endif %}
+            {% if bloc.bouton_label %}
+                <div class="mt-4 d-flex gap-3 justify-content-center flex-wrap">
+                    <a href="{{ bloc.bouton_url|default:'#' }}" class="btn bouton-action" style="max-width:300px;">{{ bloc.bouton_label }}</a>
+                    {% if bloc.bouton2_label %}
+                        <a href="{{ bloc.bouton2_url|default:'#' }}" class="btn bouton-action" style="max-width:300px;">{{ bloc.bouton2_label }}</a>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="col-md-2"></div>
+    </div>
+</section>

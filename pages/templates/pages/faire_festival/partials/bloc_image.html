@@ -1,0 +1,27 @@
+{% load static i18n %}
+{% comment %}
+    BLOC IMAGE — skin faire_festival.
+    - Avec titre : image-titre de section centree (style titre-programme, ~50%).
+    - Sans titre : image pleine largeur (style plan-container, ex. plan du festival).
+    / IMAGE block — faire_festival skin. With title: centered section-title image
+    (~50%). Without title: full-width image (e.g. festival map).
+{% endcomment %}
+{% if bloc.titre %}
+    <section class="container py-5">
+        <div class="titre-principal titre-programme mb-5 w-100" data-testid="bloc-image">
+            {% if bloc.image %}
+                <img src="{{ bloc.image.fhd.url }}"
+                     class="img-fluid" alt="{{ bloc.titre }}" loading="lazy">
+            {% endif %}
+        </div>
+    </section>
+{% else %}
+    <section class="container conteneur-principal pb-0 mb-0" data-testid="bloc-image">
+        <div class="plan-container text-center m-0 pb-0 mb-0">
+            {% if bloc.image %}
+                <img src="{{ bloc.image.fhd.url }}"
+                     class="img-fluid d-block mx-auto" style="max-width: 100%; height: auto;" alt="" loading="lazy">
+            {% endif %}
+        </div>
+    </section>
+{% endif %}

@@ -2,23 +2,38 @@
 
 <!-- =======================================================================
      TEMPLATE HEADLESS : Version sans <head> pour les requêtes HTMX
-     Utilisé lorsque le contenu est chargé dynamiquement sans recharger toute la page
+     Utilisé lorsque le contenu est chargé dynamiquement sans recharger toute la page.
+     IMPORTANT : la navbar ET le footer doivent être DANS .skin-faire-festival,
+     sinon le CSS faire_festival (scopé sous cette classe) ne s'applique pas après
+     un swap HTMX (hx-target="body").
+     / The navbar AND footer must be INSIDE .skin-faire-festival, otherwise the
+     faire_festival CSS (scoped under that class) is not applied after an HTMX body swap.
      ======================================================================= -->
 
-<!-- navigation (navbar) incluse même en mode headless -->
-{% if not embed %}
-    {% include "faire_festival/partials/navbar.html" %}
-{% endif %}
+{# title repris automatiquement par htmx quand hx-target == body #}
+<title>{% block title %}{% translate 'Home' %}{% endblock %} | {{ config.organisation }}</title>
 
 <div class="skin-faire-festival">
-    <!-- Contenu principal de la page -->
-    {% block main %}
-    <!-- Le contenu sera remplacé par les templates enfants -->
-    {% endblock %}
+    {% if not embed %}
+        {% include "faire_festival/partials/navbar.html" %}
+    {% endif %}
+
+    <main>
+        {% block main %}{% endblock main %}
+    </main>
+
+    {% if not embed %}
+        {% block footer %}{% endblock footer %}
+    {% endif %}
 </div>
 
 <!-- Bloc pour les offcanvas spécifiques aux vues -->
 {% block offcanvas %}{% endblock %}
+
+{% include "reunion/partials/toasts.html" %}
+
+<!-- spinner -->
+{% include "reunion/loading.html" %}
 
 <!-- Scripts additionnels spécifiques (si nécessaire) -->
 {% block scripts %}{% endblock %}

@@ -12,6 +12,13 @@ from Administration.admin.mixins import HelpDisplayMixin
 
 from Administration.admin.site import staff_admin_site, sanitize_textfields
 
+# Enregistre l'admin de l'app pages sur staff_admin_site (le projet n'utilise
+# pas l'autodiscover admin : il faut importer le module pour declencher les
+# @admin.register).
+# / Registers the pages app admin on staff_admin_site (the project does not use
+# admin autodiscover: importing the module triggers the @admin.register calls).
+import pages.admin  # noqa: F401
+
 
 import json
 import logging
@@ -416,7 +423,8 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 'phone',
                 'email',
                 'site_web',
-                'skin',
+                # 'skin' deplace vers pages.ConfigurationSite (admin « Site web »).
+                # / 'skin' moved to pages.ConfigurationSite (« Site web » admin).
             )
         }),
         ('Options générales', {

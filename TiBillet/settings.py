@@ -157,6 +157,12 @@ SHARED_APPS = (
     'seo',
     'onboard',
 
+    # App pages : dual-list (SHARED + TENANT) pour exister dans le schema public
+    # ET dans chaque schema tenant, chaque schema gardant ses propres pages isolees.
+    # / pages app: dual-list so the table lives in the public schema AND in each
+    # tenant schema, each schema keeping its own isolated pages.
+    'pages',
+
     'django_extensions',
     'solo',
     'stdimage',
@@ -187,6 +193,9 @@ TENANT_APPS = (
     'fedow_connect',
     'crowds',
     'comptabilite',
+    # Voir SHARED_APPS : 'pages' est en dual-list (isolation par schema, public inclus).
+    # / See SHARED_APPS: 'pages' is dual-listed (per-schema isolation, public included).
+    'pages',
 )
 
 INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]

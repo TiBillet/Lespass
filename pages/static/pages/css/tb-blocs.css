@@ -1,0 +1,455 @@
+/*
+ * tb-blocs.css — styles communs des blocs de l'app pages.
+ * / Common styles for the pages app blocks.
+ *
+ * LOCALISATION : pages/static/pages/css/tb-blocs.css
+ *
+ * PRINCIPE : markup neutre (.tb-bloc*) habille ici. Les couleurs s'appuient sur
+ * les variables Bootstrap du skin (--bs-*) pour s'adapter au theme clair/sombre.
+ * Les polices sont HERITEES du skin (on ne fixe pas font-family sur les titres),
+ * ce qui conserve le pairing de polices du theme (regle anti-IA-moche Hallmark).
+ * / Neutral markup (.tb-bloc*) themed here. Colors rely on the skin's Bootstrap
+ * variables (--bs-*) to adapt to light/dark. Fonts are INHERITED from the skin
+ * (we do not set font-family on titles), preserving the theme's font pairing.
+ *
+ * Hallmark : une seule teinte d'accent (pas de degrade violet), asymetrie
+ * (contenu biaise a gauche), boutons plein/contour, etats au focus visibles,
+ * responsive 320/375/414/768, animations sobres (transform/opacity).
+ */
+
+.tb-page {
+    /* Jetons locaux / Local tokens */
+    --tb-espace-section: clamp(2.5rem, 6vw, 5rem);
+    --tb-largeur-max: 72rem;
+    --tb-largeur-lecture: 42rem;
+    --tb-accent: var(--bs-primary, #2b6cb0);
+    --tb-texte: var(--bs-body-color, #1a1a1a);
+    --tb-surface: var(--bs-body-bg, #ffffff);
+    --tb-surface-alt: var(--bs-tertiary-bg, #f2f3f5);
+    --tb-bordure: var(--bs-border-color, #d9dbdf);
+    --tb-rayon: 14px;
+    --tb-transition: 160ms ease;
+
+    /* Pas de scroll horizontal sur mobile / No horizontal scroll on mobile */
+    overflow-x: clip;
+}
+
+/* Conteneur commun a chaque bloc : largeur max + respiration verticale.
+   / Common container for each block: max width + vertical breathing room. */
+.tb-bloc {
+    box-sizing: border-box;
+    padding-block: var(--tb-espace-section);
+    padding-inline: clamp(1.25rem, 5vw, 4rem);
+    color: var(--tb-texte);
+}
+
+.tb-bloc__contenu {
+    max-width: var(--tb-largeur-max);
+    margin-inline: auto;
+    /* Titres qui ne debordent jamais, meme avec un mot tres long.
+       / Titles never overflow, even with a very long word. */
+    min-width: 0;
+}
+
+.tb-bloc__titre {
+    margin: 0 0 0.5em;
+    line-height: 1.1;
+    overflow-wrap: anywhere;
+}
+
+.tb-bloc__sous-titre {
+    margin: 0 0 1rem;
+    font-size: clamp(1.05rem, 2.2vw, 1.35rem);
+    opacity: 0.85;
+    max-width: var(--tb-largeur-lecture);
+}
+
+.tb-bloc__texte {
+    font-size: 1.05rem;
+    line-height: 1.7;
+    max-width: var(--tb-largeur-lecture);
+}
+
+.tb-bloc__texte > :first-child { margin-top: 0; }
+.tb-bloc__texte > :last-child { margin-bottom: 0; }
+
+/* ---------------------------------------------------------------------------
+ * Boutons : plein ou contour, une seule teinte d'accent.
+ * / Buttons: filled or outline, a single accent color.
+ * ------------------------------------------------------------------------- */
+.tb-bloc__boutons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+}
+
+.tb-bloc__bouton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    /* Jamais de texte cliquable sur deux lignes (Hallmark).
+       / Never two-line clickable text (Hallmark). */
+    white-space: nowrap;
+    padding: 0.7rem 1.4rem;
+    border-radius: var(--tb-rayon);
+    border: 2px solid var(--tb-accent);
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: transform var(--tb-transition), opacity var(--tb-transition),
+                background-color var(--tb-transition), color var(--tb-transition);
+}
+
+/* default : plein / filled */
+.tb-bloc__bouton--plein {
+    background-color: var(--tb-accent);
+    color: var(--bs-primary-bg-subtle, #ffffff);
+}
+.tb-bloc__bouton--plein:hover { opacity: 0.92; }
+.tb-bloc__bouton--plein:active { transform: translateY(1px); }
+
+/* default : contour / outline */
+.tb-bloc__bouton--contour {
+    background-color: transparent;
+    color: var(--tb-accent);
+}
+.tb-bloc__bouton--contour:hover { background-color: var(--tb-accent); color: #ffffff; }
+.tb-bloc__bouton--contour:active { transform: translateY(1px); }
+
+/* focus visible : anneau net, jamais anime (Hallmark).
+   / focus visible: crisp ring, never animated (Hallmark). */
+.tb-bloc__bouton:focus-visible {
+    outline: 3px solid var(--tb-accent);
+    outline-offset: 3px;
+}
+
+/* etat desactive / disabled state */
+.tb-bloc__bouton[aria-disabled="true"] {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * HERO — banniere d'ouverture, contenu biaise a gauche (casse la symetrie).
+ * / HERO — opening banner, left-biased content (breaks symmetry).
+ * ------------------------------------------------------------------------- */
+.tb-bloc--hero {
+    background-color: var(--tb-surface-alt);
+    padding-block: clamp(3rem, 9vw, 7rem);
+}
+
+.tb-bloc--hero .tb-bloc__contenu {
+    /* Biais a gauche : large a gauche, espace a droite. Pas de tout-centre.
+       / Left bias: wide on the left, space on the right. Not all-centered. */
+    margin-inline: 0 auto;
+    max-width: 48rem;
+}
+
+.tb-bloc--hero .tb-bloc__titre {
+    font-size: clamp(2.2rem, 6vw, 4rem);
+}
+
+/* HERO avec image de fond + voile sombre neutre pour la lisibilite (pas un
+   degrade colore decoratif : un simple scrim noir transparent).
+   / HERO with background image + neutral dark scrim for legibility (not a
+   decorative colored gradient: a plain transparent black scrim). */
+/* HERO avec image : photo en fond + contenu dans une carte (comme la home
+   historique). La carte assure la lisibilite, pas de voile sombre.
+   / HERO with image: photo background + content inside a card (like the
+   historical home). The card ensures legibility, no dark scrim. */
+.tb-bloc--hero-image {
+    background-image: var(--tb-hero-image);
+    background-size: cover;
+    background-position: center;
+}
+.tb-bloc--hero-image .tb-bloc__contenu {
+    /* Carte posee sur la photo, biaisee a gauche. / Card over the photo, left-biased. */
+    background-color: var(--tb-surface);
+    color: var(--tb-texte);
+    border-radius: 1.5rem;
+    padding: clamp(1.5rem, 4vw, 3rem);
+    box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.18);
+    max-width: 46rem;
+    margin-inline: 0 auto;
+}
+
+/* ---------------------------------------------------------------------------
+ * PARAGRAPHE — colonne de lecture, legerement decalee a gauche.
+ * / PARAGRAPH — reading column, slightly shifted to the left.
+ * ------------------------------------------------------------------------- */
+.tb-bloc--paragraphe .tb-bloc__texte {
+    max-width: var(--tb-largeur-lecture);
+}
+
+/* ---------------------------------------------------------------------------
+ * IMAGE + TEXTE — grille deux colonnes, alternance gauche/droite.
+ * / IMAGE + TEXT — two-column grid, left/right alternation.
+ * ------------------------------------------------------------------------- */
+/* Dans la grille image+texte, le contenu s'aligne a gauche de sa colonne
+   (on annule le margin-inline:auto de la base qui le centrerait).
+   / In the image+text grid, content aligns to the left of its column
+   (we cancel the base margin-inline:auto that would center it). */
+.tb-bloc--image-texte .tb-bloc__contenu {
+    max-width: none;
+    margin-inline: 0;
+}
+
+/* Sans image : on garde une largeur de lecture confortable, alignee a gauche.
+   / No image: keep a comfortable reading width, left-aligned. */
+.tb-bloc--sans-image .tb-bloc__contenu {
+    max-width: var(--tb-largeur-max);
+}
+
+.tb-bloc--image-texte {
+    display: grid;
+    /* minmax(0, 1fr) (jamais 1fr nu) pour que l'image ne deborde pas la grille.
+       / minmax(0, 1fr) (never bare 1fr) so the image never overflows the grid. */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: clamp(1.5rem, 4vw, 3.5rem);
+    align-items: center;
+    max-width: var(--tb-largeur-max);
+    margin-inline: auto;
+}
+
+.tb-bloc--image-texte .tb-bloc__image {
+    width: 100%;
+    height: auto;
+    border-radius: var(--tb-rayon);
+    display: block;
+}
+
+/* Image a droite : on inverse l'ordre des colonnes.
+   / Image on the right: reverse the column order. */
+.tb-bloc--image-droite .tb-bloc__media { order: 2; }
+
+/* Sans image : une seule colonne. / No image: single column. */
+.tb-bloc--sans-image { grid-template-columns: 1fr; }
+
+/* ---------------------------------------------------------------------------
+ * CTA — bande teintee, bordure d'accent a gauche (asymetrie).
+ * / CTA — tinted band, accent border on the left (asymmetry).
+ * ------------------------------------------------------------------------- */
+.tb-bloc--cta {
+    background-color: var(--tb-surface-alt);
+}
+.tb-bloc--cta .tb-bloc__contenu {
+    border-left: 4px solid var(--tb-accent);
+    padding-left: clamp(1rem, 3vw, 2rem);
+    max-width: 54rem;
+    margin-inline: 0 auto;
+}
+.tb-bloc--cta .tb-bloc__titre {
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+}
+
+/* ---------------------------------------------------------------------------
+ * TEMOIGNAGE — citation mise en avant + auteur.
+ * / TESTIMONIAL — highlighted quote + author.
+ * ------------------------------------------------------------------------- */
+.tb-bloc--temoignage {
+    margin: 0;
+}
+.tb-bloc--temoignage .tb-bloc__citation {
+    max-width: 50rem;
+    margin: 0 auto;
+    padding-left: 1.5rem;
+    border-left: 4px solid var(--tb-accent);
+    font-size: clamp(1.25rem, 3vw, 1.7rem);
+    line-height: 1.5;
+    font-style: italic;
+}
+.tb-bloc__auteur {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    max-width: 50rem;
+    margin: 1.25rem auto 0;
+    padding-left: 1.5rem;
+}
+.tb-bloc__auteur-photo {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: 0 0 auto;
+}
+.tb-bloc__auteur-infos { display: flex; flex-direction: column; }
+.tb-bloc__auteur-nom { font-weight: 700; }
+.tb-bloc__auteur-role { opacity: 0.75; font-size: 0.95rem; }
+
+/* ---------------------------------------------------------------------------
+ * Grille de cartes (CARTE consecutives regroupees par la vue).
+ * / Card grid (consecutive CARTE blocks grouped by the view).
+ * ------------------------------------------------------------------------- */
+.tb-grille {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+    gap: clamp(1rem, 3vw, 2rem);
+    max-width: var(--tb-largeur-max);
+    margin-inline: auto;
+    padding-block: var(--tb-espace-section);
+    padding-inline: clamp(1.25rem, 5vw, 4rem);
+}
+.tb-grille .tb-bloc { padding: 0; }
+
+/* Carte (skin classic) : image + surtitre + titre + texte + bouton. */
+/* Card (classic skin). */
+.tb-bloc--carte {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 1.25rem;
+    border: 1px solid var(--tb-bordure);
+    border-radius: var(--tb-rayon);
+    background: var(--tb-surface);
+}
+.tb-bloc__carte-image {
+    width: 100%;
+    height: 160px;
+    object-fit: cover;
+    border-radius: calc(var(--tb-rayon) - 4px);
+}
+.tb-bloc__carte-surtitre {
+    margin: 0;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--tb-accent);
+}
+.tb-bloc__carte-badge {
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0.05rem 0.5rem;
+    border: 1px solid var(--tb-accent);
+    border-radius: 999px;
+    font-size: 0.8rem;
+}
+.tb-bloc__carte-titre { margin: 0; font-size: 1.15rem; }
+.tb-bloc__carte-texte { font-size: 0.95rem; line-height: 1.5; }
+.tb-bloc--carte .tb-bloc__bouton { margin-top: auto; align-self: start; }
+
+/* Carte Leaflet (skin classic) : texte a gauche, carte a droite. */
+/* Leaflet map (classic): text left, map right. */
+.tb-bloc--carte-leaflet .tb-bloc__leaflet-grille {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: clamp(1.5rem, 4vw, 3rem);
+    align-items: start;
+    max-width: var(--tb-largeur-max);
+    margin-inline: auto;
+}
+/* La section composee (infos + carte) recoit la respiration verticale des blocs. */
+/* The composed section (infos + map) gets the blocks' vertical breathing room. */
+.tb-bloc--carte-leaflet {
+    padding-block: var(--tb-espace-section);
+    padding-inline: clamp(1.25rem, 5vw, 4rem);
+}
+.tb-bloc--carte-leaflet .tb-bloc__contenu { margin-inline: 0; }
+.tb-bloc__leaflet-carte {
+    width: 100%;
+    height: 400px;
+    border-radius: var(--tb-rayon);
+    border: 1px solid var(--tb-bordure);
+}
+.tb-bloc__carte-legende { margin-top: 0.75rem; font-weight: 600; }
+@media (max-width: 768px) {
+    .tb-bloc--carte-leaflet .tb-bloc__leaflet-grille { grid-template-columns: 1fr; }
+}
+
+/* ---------------------------------------------------------------------------
+ * INFOS (skin classic) : colonne badges + horaires + adresse + transports.
+ * / INFOS (classic): badges + schedule + address + transport column.
+ * ------------------------------------------------------------------------- */
+.tb-bloc__infos-badge {
+    display: inline-block;
+    margin: 1.5rem 0 0.75rem;
+    padding-bottom: 0.15rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--tb-accent);
+    border-bottom: 3px solid var(--tb-accent);
+}
+.tb-bloc__infos > .tb-bloc__infos-badge:first-child { margin-top: 0; }
+.tb-bloc__infos-horaire { margin: 0.15rem 0; font-weight: 600; }
+.tb-bloc__infos address { font-style: normal; font-weight: 600; line-height: 1.5; }
+.tb-bloc__infos-transport { margin-top: 1.25rem; }
+.tb-bloc__infos-transport h3 {
+    margin-bottom: 0.4rem;
+    padding-bottom: 0.25rem;
+    font-size: 1.05rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    border-bottom: 1px solid var(--tb-bordure);
+}
+.tb-bloc__infos-transport ul { margin: 0; padding-left: 1.1rem; line-height: 1.6; }
+
+/* FAQ (skin classic) : questions reparties en 2 colonnes. */
+/* FAQ (classic): questions split into 2 columns. */
+.tb-faq-colonnes {
+    column-count: 2;
+    column-gap: clamp(1.5rem, 4vw, 3rem);
+    max-width: var(--tb-largeur-max);
+    margin-inline: auto;
+    padding-block: var(--tb-espace-section);
+    padding-inline: clamp(1.25rem, 5vw, 4rem);
+}
+.tb-faq-colonnes .tb-bloc--faq {
+    break-inside: avoid;
+    margin-bottom: 1.5rem;
+}
+.tb-bloc__faq-question { font-weight: 700; margin-bottom: 0.5rem; color: var(--tb-accent); }
+.tb-bloc__faq-reponse { font-size: 0.98rem; line-height: 1.65; }
+.tb-bloc__faq-reponse > :first-child { margin-top: 0; }
+@media (max-width: 768px) {
+    .tb-faq-colonnes { column-count: 1; }
+}
+
+/* Image seule (skin classic) : centree. / Standalone image (classic): centered. */
+.tb-bloc--image { text-align: center; }
+.tb-bloc__image-seule {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--tb-rayon);
+}
+
+/* Video + texte (skin classic) : grille 2 colonnes. / Video + text (classic): 2-col grid. */
+.tb-bloc--video-texte .tb-bloc__video-grille {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: clamp(1.5rem, 4vw, 3rem);
+    align-items: center;
+    max-width: var(--tb-largeur-max);
+    margin-inline: auto;
+}
+.tb-bloc--video-texte .tb-bloc__video-media {
+    width: 100%;
+    border-radius: var(--tb-rayon);
+    display: block;
+}
+.tb-bloc--video-texte .tb-bloc__contenu { margin-inline: 0; }
+@media (max-width: 768px) {
+    .tb-bloc--video-texte .tb-bloc__video-grille { grid-template-columns: 1fr; }
+}
+
+/* ---------------------------------------------------------------------------
+ * Responsive : a partir de 768px on empile l'image+texte.
+ * / Responsive: below 768px, stack image+text.
+ * ------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+    .tb-bloc--image-texte {
+        grid-template-columns: 1fr;
+    }
+    /* On remet l'image au-dessus du texte meme en mode "image a droite".
+       / Put the image above the text even in "image on the right" mode. */
+    .tb-bloc--image-droite .tb-bloc__media { order: 0; }
+}
+
+/* Respecte la preference "moins d'animations".
+   / Respects the "reduced motion" preference. */
+@media (prefers-reduced-motion: reduce) {
+    .tb-bloc__bouton { transition: none; }
+    .tb-bloc__bouton--plein:active,
+    .tb-bloc__bouton--contour:active { transform: none; }
+}

@@ -83,6 +83,40 @@ def get_sidebar_navigation(request):
         },
     ]
 
+    # --- module_pages : section Site web (constructeur de pages) ---
+    # --- module_pages: Website section (page builder) ---
+    if configuration.module_pages:
+        navigation.append(
+            {
+                "title": _("Site web"),
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        # Edition principale : les blocs (approche inversee).
+                        # / Primary editing: the blocks (inverted approach).
+                        "title": _("Blocs"),
+                        "icon": "dashboard",
+                        "link": reverse_lazy("staff_admin:pages_bloc_changelist"),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("Pages"),
+                        "icon": "web",
+                        "link": reverse_lazy("staff_admin:pages_page_changelist"),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("Configuration du site"),
+                        "icon": "palette",
+                        "link": reverse_lazy(
+                            "staff_admin:pages_configurationsite_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                ],
+            }
+        )
 
     # --- module_adhesion : section Adhesions ---
     # --- module_adhesion: Memberships section ---
@@ -773,6 +807,15 @@ MODULE_FIELDS = {
             "c'est l'agenda participatif. Tout se règle dans « Options de fédération »."
         ),
         "testid": "dashboard-card-federation",
+    },
+    "module_pages": {
+        "name": _("Pages / site web"),
+        "description": _(
+            "Composez des pages publiques en empilant des blocs (hero, texte, "
+            "image, appel à l'action, témoignage). Une page peut devenir la page "
+            "d'accueil du site."
+        ),
+        "testid": "dashboard-card-pages",
     },
     # FROM V2 : TO IMPLEMENT LATER ON
     # "module_monnaie_locale": {

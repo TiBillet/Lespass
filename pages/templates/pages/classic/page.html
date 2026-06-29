@@ -1,0 +1,92 @@
+{% extends base_template %}
+{% load static i18n pages_tags %}
+
+{% comment %}
+    Gabarit d'une Page publique (skin "classic" = defaut).
+    Entete/pied herites du skin (base_template), corps = suite ordonnee des blocs.
+    Chaque bloc est rendu via {% templates_bloc %} qui choisit le gabarit du skin
+    courant, avec fallback sur "classic".
+    / Public Page template (skin "classic" = default). Header/footer inherited
+    from the skin; body = ordered sequence of blocks. Each block is rendered via
+    {% templates_bloc %} which picks the current skin template, falling back to
+    "classic".
+
+    LOCALISATION : pages/templates/pages/classic/page.html
+{% endcomment %}
+
+{% block title %}{{ page_courante.titre }}{% endblock %}
+{% block meta_description %}{{ page_courante.meta_description|default:config.organisation }}{% endblock %}
+{% block og_title %}{{ page_courante.titre }} | {{ config.organisation }}{% endblock %}
+{% block og_description %}{{ page_courante.meta_description|default:config.organisation }}{% endblock %}
+
+{% block extra_meta %}
+    {# CSS commun des blocs (classes .tb-bloc*), habille par le skin. #}
+    {# / Common blocks CSS (.tb-bloc* classes), themed by the skin. #}
+    <link rel="stylesheet" href="{% static 'pages/css/tb-blocs.css' %}">
+{% endblock %}
+
+{% block main %}
+    <main class="tb-page" data-testid="page-{{ page_courante.slug }}">
+        {# On parcourt les GROUPES de blocs. Les CARTE consecutives forment une #}
+        {# grille (.tb-grille) ; les autres blocs sont rendus seuls. Chaque bloc #}
+        {# utilise le gabarit du skin courant, fallback classic. #}
+        {# / Iterate block GROUPS. Consecutive CARTE blocks form a grid; others #}
+        {# render standalone. Each block uses the current skin template (fallback classic). #}
+        {% for groupe in groupes_blocs %}
+            {% if groupe.type == "grille" %}
+                <div class="tb-grille">
+                    {% for bloc in groupe.blocs %}
+                        {% templates_bloc bloc as gabarits_bloc %}
+                        {% include gabarits_bloc %}
+                    {% endfor %}
+                </div>
+            {% elif groupe.type == "section_video" %}
+                {# Skin classic : on empile video+texte, puis la grille de cartes, puis le bouton. #}
+                {# / Classic skin: stack video+text, then the card grid, then the button. #}
+                {% with bloc=groupe.video %}
+                    {% templates_bloc bloc as gabarits_bloc %}
+                    {% include gabarits_bloc %}
+                {% endwith %}
+                {% if groupe.cartes %}
+                    <div class="tb-grille">
+                        {% for bloc in groupe.cartes %}
+                            {% templates_bloc bloc as gabarits_bloc %}
+                            {% include gabarits_bloc %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                {% if groupe.cta %}
+                    {% with bloc=groupe.cta %}
+                        {% templates_bloc bloc as gabarits_bloc %}
+                        {% include gabarits_bloc %}
+                    {% endwith %}
+                {% endif %}
+            {% elif groupe.type == "faq" %}
+                <div class="tb-faq-colonnes">
+                    {% for bloc in groupe.blocs %}
+                        {% templates_bloc bloc as gabarits_bloc %}
+                        {% include gabarits_bloc %}
+                    {% endfor %}
+                </div>
+            {% elif groupe.type == "section_carte" %}
+                <div class="tb-bloc--carte-leaflet">
+                    <div class="tb-bloc__leaflet-grille">
+                        {% with bloc=groupe.info %}
+                            {% templates_bloc bloc as gabarits_bloc %}
+                            {% include gabarits_bloc %}
+                        {% endwith %}
+                        {% with bloc=groupe.carte %}
+                            {% templates_bloc bloc as gabarits_bloc %}
+                            {% include gabarits_bloc %}
+                        {% endwith %}
+                    </div>
+                </div>
+            {% else %}
+                {% with bloc=groupe.bloc %}
+                    {% templates_bloc bloc as gabarits_bloc %}
+                    {% include gabarits_bloc %}
+                {% endwith %}
+            {% endif %}
+        {% endfor %}
+    </main>
+{% endblock %}

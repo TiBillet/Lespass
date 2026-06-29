@@ -1093,6 +1093,14 @@ class TenantCreateValidator:
                     categorie_article=Product.FREERES,
                 ) # le post save créera le price 0
 
+            # Création de la page d'accueil par défaut (app pages) qui reproduit
+            # la home : titre, descriptions et boutons selon les modules actifs.
+            # / Create the default home page (pages app) reproducing the home:
+            # title, descriptions and buttons depending on active modules.
+            from pages.models import Bloc, Page
+            from pages.services import construire_page_accueil
+            construire_page_accueil(Page, Bloc, config)
+
         waiting_config.tenant = tenant
         waiting_config.created = True
         waiting_config.save()

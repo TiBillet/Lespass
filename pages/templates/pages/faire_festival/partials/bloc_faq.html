@@ -1,0 +1,12 @@
+{% load i18n %}
+{% comment %}
+    BLOC FAQ — skin faire_festival. Une question / reponse. Le HTML (faq-item,
+    faq-question, faq-reponse) est ICI ; la base ne stocke que le texte
+    (titre = question, texte = reponse). Plusieurs FAQ a la suite sont regroupees
+    en 2 colonnes par le gabarit de page. / One question/answer. HTML lives here;
+    the database stores only text (titre = question, texte = answer).
+{% endcomment %}
+<div class="faq-item mb-5" data-testid="bloc-faq">
+    {% if bloc.titre %}<h3 class="faq-question">→ {{ bloc.titre }}</h3>{% endif %}
+    {% if bloc.texte %}<div class="faq-reponse">{{ bloc.texte|safe }}</div>{% endif %}
+</div>

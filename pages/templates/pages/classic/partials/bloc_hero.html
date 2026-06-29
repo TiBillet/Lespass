@@ -1,0 +1,33 @@
+{% load i18n %}
+{% comment %}
+    BLOC HERO — banniere d'ouverture.
+    / HERO block — opening banner.
+    LOCALISATION : pages/templates/pages/partials/bloc_hero.html
+
+    Champs : titre, sous_titre, image (fond), bouton(s).
+    / Fields: title, subtitle, image (background), button(s).
+{% endcomment %}
+<section class="tb-bloc tb-bloc--hero{% if bloc.image %} tb-bloc--hero-image{% endif %}"
+         data-testid="bloc-hero"
+         {% if bloc.image %}style="--tb-hero-image: url('{{ bloc.image.fhd.url }}');"{% endif %}>
+    <div class="tb-bloc__contenu">
+        {% if bloc.titre %}
+            <h1 class="tb-bloc__titre">{{ bloc.titre }}</h1>
+        {% endif %}
+        {% if bloc.sous_titre %}
+            <p class="tb-bloc__sous-titre">{{ bloc.sous_titre }}</p>
+        {% endif %}
+        {% if bloc.bouton_label %}
+            <div class="tb-bloc__boutons">
+                <a class="tb-bloc__bouton tb-bloc__bouton--plein"
+                   href="{{ bloc.bouton_url|default:'#' }}"
+                   data-testid="bloc-hero-bouton">{{ bloc.bouton_label }}</a>
+                {% if bloc.bouton2_label %}
+                    <a class="tb-bloc__bouton tb-bloc__bouton--contour"
+                       href="{{ bloc.bouton2_url|default:'#' }}"
+                       data-testid="bloc-hero-bouton2">{{ bloc.bouton2_label }}</a>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+</section>

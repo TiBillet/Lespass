@@ -561,6 +561,13 @@ class Configuration(SingletonModel):
         verbose_name=_("Federation module"),
     )
 
+    # Module pages : constructeur de pages / landing pages (app pages).
+    # / Pages module: page / landing page builder (pages app).
+    module_pages = models.BooleanField(
+        default=True,
+        verbose_name=_("Module pages / site web"),
+    )
+
     # NOTE : tout l'agenda participatif (activation + propositions anonymes +
     # tag automatique) vit desormais sur FederationConfiguration. Il s'active
     # dans l'admin "Options de federation", plus dans le dashboard des modules.
@@ -643,19 +650,10 @@ class Configuration(SingletonModel):
     PERSONALISATION
     """
 
-    # Choix du thème graphique (skin) pour l'affichage du site
-    # Par défaut : "reunion" (thème existant)
-    # Option : "faire_festival" (thème brutaliste jaune/bleu)
-    skin = models.CharField(
-        max_length=50,
-        default="reunion",
-        choices=[
-            ("reunion", "Réunion (thème par défaut)"),
-            ("faire_festival", "Faire Festival (thème brutaliste)")
-        ],
-        verbose_name=_("Thème graphique du site"),
-        help_text=_("Sélectionnez le thème visuel à utiliser pour l'affichage du site web.")
-    )
+    # Le choix du thème graphique (skin) a été déplacé vers
+    # pages.models.ConfigurationSite (app pages).
+    # / The graphic theme (skin) choice was moved to
+    # pages.models.ConfigurationSite (pages app).
 
     membership_menu_name = models.CharField(max_length=200,
                                             blank=True, null=True,

@@ -104,11 +104,35 @@ def encode_uid(pk):
     return force_str(urlsafe_base64_encode(force_bytes(pk)))
 
 
+def get_skin_courant():
+    """
+    Retourne le skin actif du tenant courant, lu sur le singleton
+    pages.ConfigurationSite (deplace depuis BaseBillet.Configuration).
+    Defaut "reunion" si indisponible (table absente, schema public, etc.).
+    / Returns the current tenant's active skin, read from the
+    pages.ConfigurationSite singleton (moved from BaseBillet.Configuration).
+    Defaults to "reunion" if unavailable (missing table, public schema, etc.).
+    """
+    try:
+        from pages.models import ConfigurationSite
+        skin = ConfigurationSite.get_solo().skin
+        return skin or "reunion"
+    except Exception:
+        return "reunion"
+
+
 def get_skin_template(config, template_relative_path):
     """
     Résout le chemin du template en fonction du skin configuré.
     Si le template existe dans le dossier du skin, on l'utilise.
     Sinon, on retourne le template du skin par défaut "reunion".
+
+    Le skin est désormais stocké sur le singleton pages.ConfigurationSite
+    (déplacé depuis BaseBillet.Configuration). Le paramètre `config` est conservé
+    pour ne pas changer la signature appelée partout, mais n'est plus utilisé ici.
+    / The skin now lives on the pages.ConfigurationSite singleton (moved from
+    BaseBillet.Configuration). The `config` param is kept to avoid changing the
+    signature used everywhere, but is no longer read here.
 
     Exemple :
         get_skin_template(config, "views/home.html")
@@ -118,8 +142,11 @@ def get_skin_template(config, template_relative_path):
     from django.template.loader import get_template
     from django.template import TemplateDoesNotExist
 
-    # Détermination du skin configuré (par défaut : "reunion")
-    skin = config.skin if hasattr(config, 'skin') and config.skin else "reunion"
+    # Détermination du skin configuré (par défaut : "reunion").
+    # Import local pour éviter un import circulaire avec pages.views.
+    # / Determine the configured skin (default: "reunion").
+    # Local import to avoid a circular import with pages.views.
+    skin = get_skin_courant()
 
     # Si le skin est "reunion", pas besoin de vérifier le fallback
     if skin == "reunion":
@@ -186,21 +213,11 @@ def get_context(request):
 
     navbar: list = context["main_nav"]
 
-    # Le Faire Festival et Infos pratiques : uniquement pour le thème Faire Festival
-    # Le Faire Festival and Practical info pages: only for the Faire Festival skin
-    if config.skin == "faire_festival":
-        # On insère en première position pour que "Le Faire Festival" soit le premier lien
-        # Insert at first position so "Le Faire Festival" is the first link
-        navbar.insert(0,
-            {'name': 'le_faire_festival', 'url': '/le-faire-festival/',
-             'label': _('Le Faire Festival'),
-             'icon': 'star-fill'}
-        )
-        navbar.append(
-            {'name': 'infos_pratiques', 'url': '/infos-pratiques/',
-             'label': _('Infos pratiques'),
-             'icon': 'info-circle'}
-        )
+    # « Le Faire Festival » et « Infos pratiques » NE sont PLUS codes en dur ici :
+    # ce sont desormais des Page de l'app pages (ajoutees plus bas via la boucle
+    # des pages publiees). La navbar n'a donc plus de hardcode specifique au skin.
+    # / "Le Faire Festival" and "Infos pratiques" are NO LONGER hardcoded here: they
+    # are now pages-app Page objects (added below via the published-pages loop).
 
     if config.module_adhesion:
         navbar.append({
@@ -246,6 +263,25 @@ def get_context(request):
             'label': f'{crowd_config.title}',
             'icon': 'people-fill'
         })
+
+    # Pages publiees du tenant (app pages), ajoutees a la navigation.
+    # La page d'accueil (est_accueil) pointe vers la racine "/" ; les autres
+    # pages vers /<slug>/. Le tout uniquement si le module pages est actif.
+    # Import local pour eviter un import circulaire avec pages.views.
+    # / Tenant published pages (pages app), added to the navigation.
+    # The home page (est_accueil) links to the root "/"; the other pages to
+    # /<slug>/. Only if the pages module is active.
+    # Local import to avoid a circular import with pages.views.
+    if config.module_pages:
+        from pages.models import Page
+        for page_publiee in Page.objects.filter(publie=True).order_by("position", "titre"):
+            url_page = "/" if page_publiee.est_accueil else f"/{page_publiee.slug}/"
+            navbar.append({
+                'name': f'page-{page_publiee.slug}',
+                'url': url_page,
+                'label': page_publiee.titre,
+                'icon': 'house-door' if page_publiee.est_accueil else 'file-earmark-text',
+            })
 
     # cache.set(f'get_context_{connection.tenant.uuid}', context, 10)
     return context
@@ -1585,6 +1621,20 @@ def index(request):
     tenant: Client = connection.tenant
     if tenant.categorie in [Client.WAITING_CONFIG, Client.ROOT]:
         return HttpResponseRedirect('https://tibillet.coop/')
+
+    # Si le module pages est actif et qu'une page d'accueil (app pages) est
+    # definie ET publiee, elle est servie sur la racine "/" a la place de la
+    # home par defaut. Import local pour eviter un import circulaire.
+    # / If the pages module is active and a published home page (pages app) is
+    # set, it is served on the root "/" instead of the default home.
+    # Local import to avoid a circular import.
+    if Configuration.get_solo().module_pages:
+        from pages.models import Page
+        page_accueil = Page.objects.filter(est_accueil=True, publie=True).first()
+        if page_accueil:
+            from pages.views import rendre_page
+            return rendre_page(request, page_accueil)
+
     template_context = get_context(request)
 
     # Résolution du template avec fallback vers reunion si le skin n'a pas de home.html

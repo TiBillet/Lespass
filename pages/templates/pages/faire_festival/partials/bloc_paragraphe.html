@@ -1,0 +1,15 @@
+{% load i18n %}
+{% comment %}
+    BLOC PARAGRAPHE — skin faire_festival. Titre rendu en badge de section
+    (badge-festival, comme les labels de la page infos pratiques) + texte mono bleu.
+    / PARAGRAPH block — faire_festival skin. Title rendered as a section badge
+    (badge-festival, like the infos pratiques labels) + blue mono text.
+{% endcomment %}
+<section class="container py-4" data-testid="bloc-paragraphe">
+    {% if bloc.titre %}
+        <h2 class="badge-festival horaire-texte">{{ bloc.titre }}</h2>
+    {% endif %}
+    {% if bloc.texte %}
+        <div class="texte-bleu police-mono lh-sm">{{ bloc.texte|safe }}</div>
+    {% endif %}
+</section>

@@ -1,5 +1,289 @@
 # Changelog / Journal des modifications
 
+## Revue app `pages` : upload d'images, dé-CDN Leaflet, fixes & UX admin / `pages` review: image uploads, de-CDN Leaflet, fixes & admin UX
+
+**Date :** 2026-06-28
+**Migration :** Oui / Yes (pages 0008 → 0009)
+
+**Upload d'images (fin des chemins static) :**
+- Champs `image_statique` / `image_secondaire_statique` / `video_statique`
+  **supprimés**. Remplacés par `image_secondaire` (StdImageField, variations) et
+  `video` (FileField) — vrai moteur d'upload, comme le reste de TiBillet.
+- `charger_demo_faire_festival` **uploade** désormais les assets du skin (helper
+  `_poser_fichier` via les finders staticfiles) → médias par tenant + variations.
+
+**Dé-CDN :** Leaflet 1.9.4 (CSS + JS + images marqueurs) **vendu** dans
+`pages/static/pages/vendor/leaflet/`. Plus aucun appel à unpkg. (Les tuiles de fond
+restent CartoDB : service de carte, non « vendable ».)
+
+**Bugs corrigés :**
+- `construire_page_accueil` ne **partage plus** le fichier `Configuration.img` sur
+  `hero.image` (risque de suppression de l'image du tenant via `delete_orphans`).
+- **Crash django-stdimage** sur StdImageField NULL (`delete_orphans` appelle
+  `.delete()` sur un champ vide) → champs fichier passés en `null=False` (idiomatique
+  Django : vide = `""`), migration 0009 (`atomic=False` : UPDATE puis SET NOT NULL).
+- Code mort `Bloc.nom_template` supprimé ; docstrings à jour.
+
+**Admin (UX) :** `BlocAdmin.list_select_related=["page"]` (anti N+1) ; `PageAdmin`
+gagne le **nombre de blocs** + un lien **« ouvrir »** vers la page publique.
+
+**Skins :** bascule chantefrein → skin `reunion` (= templates `pages/classic`) pour
+valider le rendu de tous les blocs en classic ; ajout du CSS manquant du bloc `INFOS`
+(badges/horaires/transports), `faq-reponse`, légende carte, paddings des sections
+composées. Les deux skins (classic + faire_festival) sont propres et lisibles.
+
+**SEO :** `meta_description` descriptive sur les 3 pages démo (accueil,
+le-faire-festival, infos-pratiques).
+
+**Vérifié (Chrome) :** faire_festival pixel-perfect avec images uploadées + carte
+self-hostée (0 appel CDN) ; classic propre et lisible sur les 3 pages. `check` 0,
+`ruff` clean, **15 tests** pages OK.
+
+## Page « Infos pratiques » reconstruite en blocs (texte en base, HTML en template) / "Infos pratiques" rebuilt with blocks
+
+**Date :** 2026-06-28
+**Migration :** Oui / Yes (pages 0005→0007 : `points_gps`, `contenu` JSONField ; types `CARTE_LEAFLET`, `INFOS`, `FAQ`)
+
+**Principe (correction mainteneur) :** les champs d'un bloc ne contiennent que du
+**TEXTE / données** ; tout le **HTML et les classes** vivent dans les templates.
+
+**Nouveaux blocs :**
+- `CARTE_LEAFLET` : carte Leaflet (marqueurs depuis `points_gps` JSONField). JS isolé
+  dans le template (loader unpkg, tuiles CartoDB). Carte « suffisante », pas pixel-perfect (par choix).
+- `INFOS` : colonne d'infos (badges, horaires, adresse, accessibilité, transports)
+  via `contenu` JSONField (items typés, texte seulement) — HTML rendu par le template.
+- `FAQ` : question (`titre`) / réponse (`texte` riche). Plusieurs FAQ à la suite →
+  regroupées en 2 colonnes par `grouper_blocs` (même principe que les CARTE).
+
+**Regroupements (`grouper_blocs`) :** `section_carte` (INFOS suivi de CARTE_LEAFLET →
+2 colonnes côte à côte) et `faq` (FAQ consécutives → 2 colonnes CSS).
+Le `titre` d'un `PARAGRAPHE` (skin faire_festival) est rendu en badge de section.
+
+**Vérifié (Chrome) :** infos-pratiques de chantefrein = pixel-perfect vs legacy
+(accès + horaires + transports à gauche, logo + carte + adresse à droite ; plan ;
+FAQ 6 questions sur 2 colonnes). Aucun HTML structurel stocké en base.
+
+## Pages legacy faire_festival migrées vers le moteur pages / faire_festival legacy pages migrated to the pages engine
+
+**Date :** 2026-06-28
+**Migration :** Non / No
+
+**Quoi / What :** « Le Faire Festival » et « Infos pratiques » étaient des pages
+statiques (vues + templates BaseBillet) et codées en dur dans la navbar du skin
+faire_festival. On les transforme en **Page** de l'app pages.
+
+**Changements :**
+- `BaseBillet/urls.py` : routes `infos-pratiques/` et `le-faire-festival/` **retirées**.
+- `pages/models.py` : ces 2 slugs **dé-réservés** (deviennent des Page).
+- `BaseBillet/views.py` (`get_context`) : **hardcode navbar retiré** ; ces entrées
+  arrivent maintenant via la boucle des Pages publiées.
+- `faire_festival/views/home.html` : `{% url 'le_faire_festival' %}` → `/le-faire-festival/`
+  (évite `NoReverseMatch` après retrait de la route).
+- `pages/.../faire_festival/partials/bloc_image_texte.html` : image sans bordure
+  (fidélité à la page legacy).
+- `charger_demo_faire_festival` : reproduit `le-faire-festival` en blocs
+  (IMAGE + PARAGRAPHE + 3 IMAGE_TEXTE) — **pixel-perfect, vérifié Chrome**.
+  `infos-pratiques` = **placeholder** (repro complète à faire, cf. ETAT-REPRISE.md §7).
+
+**⚠️ Effet sur le-coeur-en-or (module pages OFF, legacy) :** navbar sans « Le Faire
+Festival »/« Infos pratiques » et bouton « En savoir plus » → 404. À traiter
+(le passer module ON, ou laisser). Cf. `TECH_DOC/SESSIONS/PAGES/ETAT-REPRISE.md`.
+
+## Fix skin faire_festival : navbar + footer en navigation HTMX / faire_festival skin fix: navbar + footer on HTMX nav
+
+**Date :** 2026-06-28
+**Migration :** Non / No
+
+**Quoi / What :** En navigation HTMX (clic sur un lien de la navbar, `hx-target="body"`),
+le skin faire_festival perdait le style de la navbar (header jaune + pills) et le footer.
+
+**Pourquoi / Why :** `faire_festival/headless.html` (utilisé pour les requêtes HTMX)
+plaçait la navbar **hors** du `<div class="skin-faire-festival">` — or tout le CSS
+faire_festival est scopé sous cette classe — et n'incluait **aucun footer**. (Bug
+pré-existant du skin, révélé par la navigation vers les pages du moteur `pages`.)
+
+**Fix :**
+- `faire_festival/headless.html` : navbar **et** `{% block footer %}` désormais DANS
+  `.skin-faire-festival` ; ajout des toasts + spinner (comme le skin reunion).
+- `pages/templates/pages/faire_festival/page.html` : définit `{% block footer %}`
+  (inclut `faire_festival/partials/footer.html`) → footer présent en full load ET HTMX.
+
+**Vérifié / Verified (Chrome) :** clic sur « Chantefrein » (nav HTMX) → navbar jaune +
+pills OK, footer présent et stylé.
+
+## App `pages` : skins des blocs + reproduction du skin faire_festival / `pages` app: per-skin block templates + faire_festival reproduction
+
+**Date :** 2026-06-28
+**Migration :** Oui / Yes — `pages.0004` (nouveaux types de blocs + champs)
+
+**Quoi / What :**
+1. **Niveau de skin dans les templates** : `pages/templates/pages/<skin>/page.html`
+   + `…/<skin>/partials/bloc_<type>.html`. Défaut **`classic`** (renommage de
+   l'existant). Résolution par le skin du tenant (`ConfigurationSite.skin`) avec
+   **fallback `classic`** (template-tag `{% templates_bloc %}` + `select_template`).
+2. **Templates faire_festival** des 5 blocs existants (hero, paragraphe, image+texte,
+   cta, témoignage) habillés brutaliste (classes `texte-bleu`, `bordure-epaisse`,
+   `bouton-action`, `police-titre/mono`…).
+3. **Nouveaux blocs génériques** (template classic **ET** faire_festival pour chacun) :
+   - `CARTE` (surtitre, image, titre, texte, badge, bouton) — les CARTE consécutives
+     sont **regroupées en grille** par la vue (`grouper_blocs`). Un `VIDEO_TEXTE`
+     suivi de CARTE + CTA forme une **section composée** (`section_video`) rendue
+     comme la section 2 du legacy : vidéo à gauche / texte + cartes + bouton à droite.
+   - `VIDEO_TEXTE` (vidéo + texte).
+   - `IMAGE` (image seule / image-titre).
+   - Champs ajoutés : `surtitre`, `badge`, `image_statique`, `image_secondaire_statique`,
+     `video_statique` (chemins static pour réutiliser les visuels d'un skin).
+4. **Reproduction de la home faire_festival** via le moteur pages : commande
+   `charger_demo_faire_festival` (peuple chantefrein avec hero logo+badge, vidéo+texte
+   « c'est quoi ? », 3 cartes JOUR, CTA, image-titre tuto, 3 cartes tuto), en
+   référençant les mêmes assets static que le skin.
+
+**Vérifié / Verified (Chrome) :** chantefrein (moteur pages, skin faire_festival,
+module ON) reproduit **pixel-perfect** la home faire_festival de le-coeur-en-or
+(legacy, module OFF) : hero (logo + badge + sous-titre), section 2 (vidéo à gauche /
+« c'est quoi ? » + texte + cartes JOUR imbriquées + badge gratuit + bouton à droite),
+puis tuto (titre-image + 3 étapes). Mise en page de la section 2 identique au legacy
+grâce au groupe composé `section_video`.
+
+### Fichiers / Files
+| Fichier / File | Changement |
+|---|---|
+| `pages/templates/pages/classic/**` | Templates déplacés sous `classic/` + page.html (groupes) + 3 nouveaux partials |
+| `pages/templates/pages/faire_festival/**` | page.html + 8 partials faire_festival |
+| `pages/templatetags/pages_tags.py` | `{% templates_bloc %}` (résolution skin + fallback) |
+| `pages/services.py` | `grouper_blocs` (CARTE consécutives → grille) |
+| `pages/views.py` | rendre_page : skin + groupes + render `[skin, classic]` |
+| `pages/models.py` | 3 types + 5 champs (`pages.0004`) |
+| `pages/admin.py` | conditional_fields + fields des nouveaux types |
+| `pages/static/pages/css/tb-blocs.css` | grille + carte/image/vidéo (classic) |
+| `pages/management/commands/charger_demo_faire_festival.py` | reproduction home festival |
+
+## App `pages` : admin inversé (bloc-centric) + page d'accueil auto par tenant / `pages` app: inverted admin (block-centric) + auto home page per tenant
+
+**Date :** 2026-06-28
+**Migration :** Oui / Yes — `BaseBillet.0222_creer_page_accueil` (data, par tenant)
+
+**Quoi / What :**
+1. **Admin inversé** : on édite désormais les **Blocs** directement (objet principal,
+   dans la sidebar « Site web → Blocs »). Première action : choisir le **type** →
+   les champs correspondants se déroulent (conditional_fields natif). La **Page**
+   d'appartenance est un select (avec boutons +/✎ pour créer/ouvrir une page sans
+   quitter le bloc). L'ordre des blocs = champ `position` (auto-incrémenté à la
+   création, éditable en liste). `PageAdmin` ne gère plus que les métadonnées
+   (plus d'inline).
+2. **Page d'accueil auto** : `pages/services.py::construire_page_accueil()` crée
+   une page d'accueil (`est_accueil`) reproduisant la home historique (HERO avec
+   image de fond partagée + titre/sous-titre + boutons Agenda/Adhésions selon les
+   modules + PARAGRAPHE pour la description longue). Idempotent.
+   - Exécutée pour les tenants **existants** via migration `0222`.
+   - Exécutée pour les **nouveaux** tenants via le hook onboard
+     (`TenantCreateValidator.create_tenant`).
+3. Le rendu HERO **avec image** affiche le contenu dans une **carte** posée sur la
+   photo (comme la home historique), au lieu d'un voile sombre.
+4. Module `pages` **activé par défaut** (`default=True`) puisque chaque tenant a
+   désormais une page d'accueil.
+
+**Vérifié / Verified :** sur `chantefrein` (module ON, skin faire_festival), la home
+auto s'affiche (carte sur photo + titre + boutons + description) — semblable à la
+home legacy de `le-coeur-en-or` (module OFF → fallback home historique). Bascule de
+skin per-tenant OK.
+
+**Note data / Data note :** le déplacement du skin (singleton) avait fait
+ressortir `reunion` pour `chantefrein` (skin réel `faire_festival`) — restauré, et
+la migration de copie du skin est désormais **durcie** (ne réécrit pas le singleton
+si le champ `skin` a déjà été retiré, pour éviter tout écrasement sur une
+ré-exécution). `le-coeur-en-or` est laissé **module désactivé** (exemple « avant »).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `pages/admin.py` | Admin inversé : suppression inline, BlocAdmin principal (type d'abord, page select, auto-position, list_editable) |
+| `pages/services.py` | `construire_page_accueil()` (réutilisable migration + onboard) |
+| `pages/static/pages/css/tb-blocs.css` | HERO avec image = carte sur la photo |
+| `Administration/admin/dashboard.py` | Sidebar « Site web » : Blocs + Pages + Configuration du site |
+| `BaseBillet/validators.py` | Hook onboard : création de la home auto pour les nouveaux tenants |
+| `BaseBillet/migrations/0222...` | Data migration : home auto pour les tenants existants |
+| `BaseBillet/migrations/0221...` | Durcissement copie skin (anti-écrasement) |
+
+## App `pages` : module activable, page d'accueil dans la navbar, skin déplacé dans un singleton / `pages` app: toggleable module, home page in navbar, skin moved to a singleton
+
+**Date :** 2026-06-28
+**Migration :** Oui / Yes — `BaseBillet.0220` (module_pages), `pages.0003` (ConfigurationSite), `BaseBillet.0221` (copie skin + retrait)
+
+**Quoi / What :**
+1. **Module activable** : champ `Configuration.module_pages` + carte sur le
+   dashboard (comme billetterie/adhésion) pour activer/désactiver l'app `pages`.
+   La section sidebar « Site web », la navbar des pages, le rendu `/<slug>/` et la
+   page d'accueil sont conditionnés à ce module.
+2. **Page d'accueil dans la navbar** : la page marquée `est_accueil` apparaît
+   désormais dans la navbar (titre + icône maison, lien vers `/`).
+3. **Skin déplacé** : le choix du thème graphique (Reunion / Faire Festival) a
+   été déplacé de `BaseBillet.Configuration.skin` vers un nouveau **singleton**
+   `pages.ConfigurationSite` (édité dans l'admin « Site web → Configuration du
+   site »). Migration de données : le skin de chaque tenant est copié avant le
+   retrait du champ (ex : le tenant `chantefrein` en `faire_festival` est préservé).
+
+**Pourquoi / Why :** rendre l'app `pages` activable par tenant (groupware), et
+regrouper la configuration d'apparence du site dans un singleton dédié à l'app.
+
+**Vérifié / Verified :** bascule reunion ↔ faire_festival via le singleton testée
+dans Chrome (le site change bien, y compris les liens de navbar spécifiques au
+skin). Admin « Paramètres » et rendu des tenants OK après retrait du champ.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | + `module_pages` ; retrait de `skin` |
+| `pages/models.py` | + singleton `ConfigurationSite` (champ `skin`) |
+| `pages/admin.py` | + `ConfigurationSiteAdmin` (SingletonModelAdmin) |
+| `BaseBillet/views.py` | `get_skin_courant()` lit le skin du singleton ; navbar (accueil + gating) ; `index` (gating module) |
+| `Administration/admin/dashboard.py` | carte module `module_pages` + entrée sidebar « Configuration du site » + gating section |
+| `Administration/admin_tenant.py` | retrait de `skin` du fieldset `ConfigurationAdmin` |
+| `BaseBillet/migrations/0221...` | copie `skin` → `ConfigurationSite` puis `RemoveField` |
+
+## App `pages` : constructeur de pages par blocs (vague 1) / `pages` app: block-based page builder (wave 1)
+
+**Date :** 2026-06-28
+**Migration :** Oui / Yes — `pages.0001_initial` + `pages.0002_page_est_accueil` (`migrate_schemas`)
+
+**Quoi / What :** Nouvelle app Django `pages` permettant de composer des pages
+publiques en empilant des blocs prefabriques, edites dans l'admin Unfold. Vague 1 :
+5 blocs a champs plats (Hero, Paragraphe riche, Image + texte, CTA, Temoignage).
+Une page peut etre designee comme page d'accueil (`est_accueil`) et est alors
+servie sur la racine `/`.
+
+**Pourquoi / Why :** permettre aux gestionnaires de lieux culturels de
+personnaliser leurs pages sans developpeur. Decision : app maison (pas GrapesJS
+ni CMS tiers), concept StreamField (suite ordonnee de blocs types).
+
+**Architecture :**
+- App `pages` en **dual-list** (`SHARED_APPS` + `TENANT_APPS`, comme `wsocket`) :
+  table isolee par schema, tenant public inclus, zero fuite cross-tenant.
+- 2 modeles : `Page` (titre, slug, position, publie, est_accueil, meta_description)
+  et `Bloc` (FK page, `type_bloc` pivot, champs plats partages).
+- Edition : `Bloc` sur sa propre fiche avec `conditional_fields` **natif** Unfold
+  (Alpine, gere le select `type_bloc`) ; `Page` avec inline leger (drag-drop ordre).
+  **Zero JavaScript maison.**
+- Rendu : vue `page_publique` reutilisant `get_context` + skin ; route attrape-tout
+  `/<slug>/` incluse APRES BaseBillet ; slugs reserves anti-collision. Navbar :
+  pages publiees ajoutees a `main_nav`.
+- CSS `tb-blocs.css` : classes semantiques `.tb-bloc*`, conforme Hallmark.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `pages/` (app) | Nouvelle app : models, admin, views, urls, templates, static, management command demo |
+| `TiBillet/settings.py` | `'pages'` ajoute dans SHARED_APPS **et** TENANT_APPS |
+| `TiBillet/urls_tenants.py` | `include('pages.urls')` apres BaseBillet (catch-all en dernier) |
+| `Administration/admin_tenant.py` | `import pages.admin` (enregistrement sur staff_admin_site) |
+| `Administration/admin/dashboard.py` | Section sidebar « Website » → Pages |
+| `BaseBillet/views.py` | `get_context` : pages publiees dans la navbar ; `index` : sert la page d'accueil si definie |
+| `tests/pytest/test_pages.py` | 11 tests (modeles, vue publique, admin) |
+
+### Migration
+- **Migration necessaire / Migration required :** Oui
+- `docker exec lespass_django poetry run python manage.py migrate_schemas`
+
 ## Admin réservation : fix crash `'TibilletUser' has no attribute 'lower'` / Admin reservation: fix crash on add
 
 **Date :** 2026-06-26

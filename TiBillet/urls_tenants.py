@@ -67,6 +67,12 @@ urlpatterns = [
 
     path('', include('BaseBillet.urls')),
 
+    # App pages : route attrape-tout /<slug>/. Incluse APRES BaseBillet pour que
+    # les routes specifiques (/event/, /my_account/, etc.) restent prioritaires.
+    # / pages app: /<slug>/ catch-all route. Included AFTER BaseBillet so the
+    # specific routes (/event/, /my_account/, etc.) keep priority.
+    path('', include('pages.urls')),
+
     # path('admin/', admin.site.urls, name="public_admin_url"),
 ]
 
