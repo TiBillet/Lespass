@@ -590,11 +590,11 @@ DEMO = os.environ.get("DEMO", "1" if DEBUG else "0") == "1"
 
 # --- Cartes NFC de demonstration (fixtures POS laboutik) — portage S6 ---
 # / Demo NFC cards for laboutik POS fixtures
-DEMO_TAGID_CM = os.environ.get('DEMO_TAGID_CM', 'A49E8E2A')
-DEMO_TAGID_CLIENT1 = os.environ.get('DEMO_TAGID_CLIENT1', 'B52F9F3B')
-DEMO_TAGID_CLIENT2 = os.environ.get('DEMO_TAGID_CLIENT2', 'C63A0A4C')
-DEMO_TAGID_CLIENT3 = os.environ.get('DEMO_TAGID_CLIENT3', 'D74B1B5D')
-DEMO_TAGID_CLIENT4 = os.environ.get('DEMO_TAGID_CLIENT4', 'E85C2C6E')
+DEMO_TAGID_CM = os.environ.get('DEMO_TAGID_CM', 'A49E8E2A').strip().upper()
+DEMO_TAGID_CLIENT1 = os.environ.get('DEMO_TAGID_CLIENT1', '41726643').strip().upper()
+DEMO_TAGID_CLIENT2 = os.environ.get('DEMO_TAGID_CLIENT2', '52be6543').strip().upper()
+DEMO_TAGID_CLIENT3 = os.environ.get('DEMO_TAGID_CLIENT3', '33BC1DC3').strip().upper()
+DEMO_TAGID_CLIENT4 = os.environ.get('DEMO_TAGID_CLIENT4', 'E85C2C6E').strip().upper()
 DEMO_EMAIL_CLIENT1 = os.environ.get('DEMO_EMAIL_CLIENT1', 'client1@test.loc')
 DEMO_EMAIL_CLIENT2 = os.environ.get('DEMO_EMAIL_CLIENT2', 'client2@test.loc')
 DEMO_EMAIL_CLIENT3 = os.environ.get('DEMO_EMAIL_CLIENT3', 'client3@test.loc')

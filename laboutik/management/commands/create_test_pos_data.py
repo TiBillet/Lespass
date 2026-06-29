@@ -1094,7 +1094,7 @@ class Command(BaseCommand):
 
             # Carte primaire (caissier/manager) — liee a tous les PV
             # / Primary card (cashier/manager) — linked to all POS
-            tag_id_cm = getattr(settings, "DEMO_TAGID_CM", "A49E8E2A")
+            tag_id_cm = getattr(settings, "DEMO_TAGID_CM", "A49E8E2A").upper().strip()
             carte_cm, created_cm = CarteCashless.objects.get_or_create(
                 tag_id=tag_id_cm,
                 defaults={
@@ -1213,7 +1213,7 @@ class Command(BaseCommand):
             # / Client card 3 "disposable" — reset on each run in DEBUG mode.
             # Used by Playwright tests to have a clean card for each test.
             # In DEBUG mode, its user and wallet_ephemere are removed.
-            tag_id_client3 = getattr(settings, "DEMO_TAGID_CLIENT3", "D74B1B5D")
+            tag_id_client3 = getattr(settings, "DEMO_TAGID_CLIENT3", "D74B1B5D").upper().strip()
             carte_client3, created_client3 = CarteCashless.objects.get_or_create(
                 tag_id=tag_id_client3,
                 defaults={
