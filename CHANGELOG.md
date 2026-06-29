@@ -1,288 +1,276 @@
 # Changelog / Journal des modifications
 
-## Revue app `pages` : upload d'images, dé-CDN Leaflet, fixes & UX admin / `pages` review: image uploads, de-CDN Leaflet, fixes & admin UX
+## Test carte NFC ↔ wallet Fedow : rendu autonome (plus de skip) / Fedow card test made self-contained
 
-**Date :** 2026-06-28
-**Migration :** Oui / Yes (pages 0008 → 0009)
-
-**Upload d'images (fin des chemins static) :**
-- Champs `image_statique` / `image_secondaire_statique` / `video_statique`
-  **supprimés**. Remplacés par `image_secondaire` (StdImageField, variations) et
-  `video` (FileField) — vrai moteur d'upload, comme le reste de TiBillet.
-- `charger_demo_faire_festival` **uploade** désormais les assets du skin (helper
-  `_poser_fichier` via les finders staticfiles) → médias par tenant + variations.
-
-**Dé-CDN :** Leaflet 1.9.4 (CSS + JS + images marqueurs) **vendu** dans
-`pages/static/pages/vendor/leaflet/`. Plus aucun appel à unpkg. (Les tuiles de fond
-restent CartoDB : service de carte, non « vendable ».)
-
-**Bugs corrigés :**
-- `construire_page_accueil` ne **partage plus** le fichier `Configuration.img` sur
-  `hero.image` (risque de suppression de l'image du tenant via `delete_orphans`).
-- **Crash django-stdimage** sur StdImageField NULL (`delete_orphans` appelle
-  `.delete()` sur un champ vide) → champs fichier passés en `null=False` (idiomatique
-  Django : vide = `""`), migration 0009 (`atomic=False` : UPDATE puis SET NOT NULL).
-- Code mort `Bloc.nom_template` supprimé ; docstrings à jour.
-
-**Admin (UX) :** `BlocAdmin.list_select_related=["page"]` (anti N+1) ; `PageAdmin`
-gagne le **nombre de blocs** + un lien **« ouvrir »** vers la page publique.
-
-**Skins :** bascule chantefrein → skin `reunion` (= templates `pages/classic`) pour
-valider le rendu de tous les blocs en classic ; ajout du CSS manquant du bloc `INFOS`
-(badges/horaires/transports), `faq-reponse`, légende carte, paddings des sections
-composées. Les deux skins (classic + faire_festival) sont propres et lisibles.
-
-**SEO :** `meta_description` descriptive sur les 3 pages démo (accueil,
-le-faire-festival, infos-pratiques).
-
-**Vérifié (Chrome) :** faire_festival pixel-perfect avec images uploadées + carte
-self-hostée (0 appel CDN) ; classic propre et lisible sur les 3 pages. `check` 0,
-`ruff` clean, **15 tests** pages OK.
-
-## Page « Infos pratiques » reconstruite en blocs (texte en base, HTML en template) / "Infos pratiques" rebuilt with blocks
-
-**Date :** 2026-06-28
-**Migration :** Oui / Yes (pages 0005→0007 : `points_gps`, `contenu` JSONField ; types `CARTE_LEAFLET`, `INFOS`, `FAQ`)
-
-**Principe (correction mainteneur) :** les champs d'un bloc ne contiennent que du
-**TEXTE / données** ; tout le **HTML et les classes** vivent dans les templates.
-
-**Nouveaux blocs :**
-- `CARTE_LEAFLET` : carte Leaflet (marqueurs depuis `points_gps` JSONField). JS isolé
-  dans le template (loader unpkg, tuiles CartoDB). Carte « suffisante », pas pixel-perfect (par choix).
-- `INFOS` : colonne d'infos (badges, horaires, adresse, accessibilité, transports)
-  via `contenu` JSONField (items typés, texte seulement) — HTML rendu par le template.
-- `FAQ` : question (`titre`) / réponse (`texte` riche). Plusieurs FAQ à la suite →
-  regroupées en 2 colonnes par `grouper_blocs` (même principe que les CARTE).
-
-**Regroupements (`grouper_blocs`) :** `section_carte` (INFOS suivi de CARTE_LEAFLET →
-2 colonnes côte à côte) et `faq` (FAQ consécutives → 2 colonnes CSS).
-Le `titre` d'un `PARAGRAPHE` (skin faire_festival) est rendu en badge de section.
-
-**Vérifié (Chrome) :** infos-pratiques de chantefrein = pixel-perfect vs legacy
-(accès + horaires + transports à gauche, logo + carte + adresse à droite ; plan ;
-FAQ 6 questions sur 2 colonnes). Aucun HTML structurel stocké en base.
-
-## Pages legacy faire_festival migrées vers le moteur pages / faire_festival legacy pages migrated to the pages engine
-
-**Date :** 2026-06-28
+**Date :** 2026-06-29
 **Migration :** Non / No
 
-**Quoi / What :** « Le Faire Festival » et « Infos pratiques » étaient des pages
-statiques (vues + templates BaseBillet) et codées en dur dans la navbar du skin
-faire_festival. On les transforme en **Page** de l'app pages.
+**Quoi / What :** Le test d'intégration `test_membership_card_wallet_fedow` ne
+**skippe plus** : sa fixture fabrique elle-même une carte NFC éphémère chez Fedow
+si aucune n'est disponible. Il résiste désormais à un reset complet (`down -v`,
+qui vide la base Fedow) et ne dépend plus d'une carte renseignée dans `.env`.
 
-**Changements :**
-- `BaseBillet/urls.py` : routes `infos-pratiques/` et `le-faire-festival/` **retirées**.
-- `pages/models.py` : ces 2 slugs **dé-réservés** (deviennent des Page).
-- `BaseBillet/views.py` (`get_context`) : **hardcode navbar retiré** ; ces entrées
-  arrivent maintenant via la boucle des Pages publiées.
-- `faire_festival/views/home.html` : `{% url 'le_faire_festival' %}` → `/le-faire-festival/`
-  (évite `NoReverseMatch` après retrait de la route).
-- `pages/.../faire_festival/partials/bloc_image_texte.html` : image sans bordure
-  (fidélité à la page legacy).
-- `charger_demo_faire_festival` : reproduit `le-faire-festival` en blocs
-  (IMAGE + PARAGRAPHE + 3 IMAGE_TEXTE) — **pixel-perfect, vérifié Chrome**.
-  `infos-pratiques` = **placeholder** (repro complète à faire, cf. ETAT-REPRISE.md §7).
+**Pourquoi / Why :** Les cartes NFC vivent dans le serveur Fedow (`fedow_django`),
+dont le `start.sh` ne crée aucune carte au démarrage (les cartes de démo sont
+dans `demo_data`, jamais lancé). Après un `down -v`, plus aucune carte → le test
+skippait. Solution : créer la carte **via l'API Fedow** depuis Lespass.
 
-**⚠️ Effet sur le-coeur-en-or (module pages OFF, legacy) :** navbar sans « Le Faire
-Festival »/« Infos pratiques » et bouton « En savoir plus » → 404. À traiter
-(le passer module ON, ou laisser). Cf. `TECH_DOC/SESSIONS/PAGES/ETAT-REPRISE.md`.
-
-## Fix skin faire_festival : navbar + footer en navigation HTMX / faire_festival skin fix: navbar + footer on HTMX nav
-
-**Date :** 2026-06-28
-**Migration :** Non / No
-
-**Quoi / What :** En navigation HTMX (clic sur un lien de la navbar, `hx-target="body"`),
-le skin faire_festival perdait le style de la navbar (header jaune + pills) et le footer.
-
-**Pourquoi / Why :** `faire_festival/headless.html` (utilisé pour les requêtes HTMX)
-plaçait la navbar **hors** du `<div class="skin-faire-festival">` — or tout le CSS
-faire_festival est scopé sous cette classe — et n'incluait **aucun footer**. (Bug
-pré-existant du skin, révélé par la navigation vers les pages du moteur `pages`.)
-
-**Fix :**
-- `faire_festival/headless.html` : navbar **et** `{% block footer %}` désormais DANS
-  `.skin-faire-festival` ; ajout des toasts + spinner (comme le skin reunion).
-- `pages/templates/pages/faire_festival/page.html` : définit `{% block footer %}`
-  (inclut `faire_festival/partials/footer.html`) → footer présent en full load ET HTMX.
-
-**Vérifié / Verified (Chrome) :** clic sur « Chantefrein » (nav HTMX) → navbar jaune +
-pills OK, footer présent et stylé.
-
-## App `pages` : skins des blocs + reproduction du skin faire_festival / `pages` app: per-skin block templates + faire_festival reproduction
-
-**Date :** 2026-06-28
-**Migration :** Oui / Yes — `pages.0004` (nouveaux types de blocs + champs)
-
-**Quoi / What :**
-1. **Niveau de skin dans les templates** : `pages/templates/pages/<skin>/page.html`
-   + `…/<skin>/partials/bloc_<type>.html`. Défaut **`classic`** (renommage de
-   l'existant). Résolution par le skin du tenant (`ConfigurationSite.skin`) avec
-   **fallback `classic`** (template-tag `{% templates_bloc %}` + `select_template`).
-2. **Templates faire_festival** des 5 blocs existants (hero, paragraphe, image+texte,
-   cta, témoignage) habillés brutaliste (classes `texte-bleu`, `bordure-epaisse`,
-   `bouton-action`, `police-titre/mono`…).
-3. **Nouveaux blocs génériques** (template classic **ET** faire_festival pour chacun) :
-   - `CARTE` (surtitre, image, titre, texte, badge, bouton) — les CARTE consécutives
-     sont **regroupées en grille** par la vue (`grouper_blocs`). Un `VIDEO_TEXTE`
-     suivi de CARTE + CTA forme une **section composée** (`section_video`) rendue
-     comme la section 2 du legacy : vidéo à gauche / texte + cartes + bouton à droite.
-   - `VIDEO_TEXTE` (vidéo + texte).
-   - `IMAGE` (image seule / image-titre).
-   - Champs ajoutés : `surtitre`, `badge`, `image_statique`, `image_secondaire_statique`,
-     `video_statique` (chemins static pour réutiliser les visuels d'un skin).
-4. **Reproduction de la home faire_festival** via le moteur pages : commande
-   `charger_demo_faire_festival` (peuple chantefrein avec hero logo+badge, vidéo+texte
-   « c'est quoi ? », 3 cartes JOUR, CTA, image-titre tuto, 3 cartes tuto), en
-   référençant les mêmes assets static que le skin.
-
-**Vérifié / Verified (Chrome) :** chantefrein (moteur pages, skin faire_festival,
-module ON) reproduit **pixel-perfect** la home faire_festival de le-coeur-en-or
-(legacy, module OFF) : hero (logo + badge + sous-titre), section 2 (vidéo à gauche /
-« c'est quoi ? » + texte + cartes JOUR imbriquées + badge gratuit + bouton à droite),
-puis tuto (titre-image + 3 étapes). Mise en page de la section 2 identique au legacy
-grâce au groupe composé `section_video`.
-
-### Fichiers / Files
-| Fichier / File | Changement |
-|---|---|
-| `pages/templates/pages/classic/**` | Templates déplacés sous `classic/` + page.html (groupes) + 3 nouveaux partials |
-| `pages/templates/pages/faire_festival/**` | page.html + 8 partials faire_festival |
-| `pages/templatetags/pages_tags.py` | `{% templates_bloc %}` (résolution skin + fallback) |
-| `pages/services.py` | `grouper_blocs` (CARTE consécutives → grille) |
-| `pages/views.py` | rendre_page : skin + groupes + render `[skin, classic]` |
-| `pages/models.py` | 3 types + 5 champs (`pages.0004`) |
-| `pages/admin.py` | conditional_fields + fields des nouveaux types |
-| `pages/static/pages/css/tb-blocs.css` | grille + carte/image/vidéo (classic) |
-| `pages/management/commands/charger_demo_faire_festival.py` | reproduction home festival |
-
-## App `pages` : admin inversé (bloc-centric) + page d'accueil auto par tenant / `pages` app: inverted admin (block-centric) + auto home page per tenant
-
-**Date :** 2026-06-28
-**Migration :** Oui / Yes — `BaseBillet.0222_creer_page_accueil` (data, par tenant)
-
-**Quoi / What :**
-1. **Admin inversé** : on édite désormais les **Blocs** directement (objet principal,
-   dans la sidebar « Site web → Blocs »). Première action : choisir le **type** →
-   les champs correspondants se déroulent (conditional_fields natif). La **Page**
-   d'appartenance est un select (avec boutons +/✎ pour créer/ouvrir une page sans
-   quitter le bloc). L'ordre des blocs = champ `position` (auto-incrémenté à la
-   création, éditable en liste). `PageAdmin` ne gère plus que les métadonnées
-   (plus d'inline).
-2. **Page d'accueil auto** : `pages/services.py::construire_page_accueil()` crée
-   une page d'accueil (`est_accueil`) reproduisant la home historique (HERO avec
-   image de fond partagée + titre/sous-titre + boutons Agenda/Adhésions selon les
-   modules + PARAGRAPHE pour la description longue). Idempotent.
-   - Exécutée pour les tenants **existants** via migration `0222`.
-   - Exécutée pour les **nouveaux** tenants via le hook onboard
-     (`TenantCreateValidator.create_tenant`).
-3. Le rendu HERO **avec image** affiche le contenu dans une **carte** posée sur la
-   photo (comme la home historique), au lieu d'un voile sombre.
-4. Module `pages` **activé par défaut** (`default=True`) puisque chaque tenant a
-   désormais une page d'accueil.
-
-**Vérifié / Verified :** sur `chantefrein` (module ON, skin faire_festival), la home
-auto s'affiche (carte sur photo + titre + boutons + description) — semblable à la
-home legacy de `le-coeur-en-or` (module OFF → fallback home historique). Bascule de
-skin per-tenant OK.
-
-**Note data / Data note :** le déplacement du skin (singleton) avait fait
-ressortir `reunion` pour `chantefrein` (skin réel `faire_festival`) — restauré, et
-la migration de copie du skin est désormais **durcie** (ne réécrit pas le singleton
-si le champ `skin` a déjà été retiré, pour éviter tout écrasement sur une
-ré-exécution). `le-coeur-en-or` est laissé **module désactivé** (exemple « avant »).
+**Fix / Fix :** nouvelle méthode `NFCcardFedow.create_cards(cards_data)` dans
+`fedow_connect/fedow_api.py` — POST signé par la place du tenant vers l'endpoint
+Fedow `card` (`CardAPI.create`, `HasKeyAndPlaceSignature`), idempotent (201/409).
+La fixture `carte_fedow_ephemere` réutilise `FEDOW_TEST_CARD_NUMBER` s'il pointe
+une carte encore éphémère, sinon **fabrique une carte fraîche** (numéro/tag
+aléatoires). Prérequis : place Fedow signable (cas par défaut en dev).
 
 ### Fichiers modifiés / Modified files
 | Fichier / File | Changement / Change |
 |---|---|
-| `pages/admin.py` | Admin inversé : suppression inline, BlocAdmin principal (type d'abord, page select, auto-position, list_editable) |
-| `pages/services.py` | `construire_page_accueil()` (réutilisable migration + onboard) |
-| `pages/static/pages/css/tb-blocs.css` | HERO avec image = carte sur la photo |
-| `Administration/admin/dashboard.py` | Sidebar « Site web » : Blocs + Pages + Configuration du site |
-| `BaseBillet/validators.py` | Hook onboard : création de la home auto pour les nouveaux tenants |
-| `BaseBillet/migrations/0222...` | Data migration : home auto pour les tenants existants |
-| `BaseBillet/migrations/0221...` | Durcissement copie skin (anti-écrasement) |
-
-## App `pages` : module activable, page d'accueil dans la navbar, skin déplacé dans un singleton / `pages` app: toggleable module, home page in navbar, skin moved to a singleton
-
-**Date :** 2026-06-28
-**Migration :** Oui / Yes — `BaseBillet.0220` (module_pages), `pages.0003` (ConfigurationSite), `BaseBillet.0221` (copie skin + retrait)
-
-**Quoi / What :**
-1. **Module activable** : champ `Configuration.module_pages` + carte sur le
-   dashboard (comme billetterie/adhésion) pour activer/désactiver l'app `pages`.
-   La section sidebar « Site web », la navbar des pages, le rendu `/<slug>/` et la
-   page d'accueil sont conditionnés à ce module.
-2. **Page d'accueil dans la navbar** : la page marquée `est_accueil` apparaît
-   désormais dans la navbar (titre + icône maison, lien vers `/`).
-3. **Skin déplacé** : le choix du thème graphique (Reunion / Faire Festival) a
-   été déplacé de `BaseBillet.Configuration.skin` vers un nouveau **singleton**
-   `pages.ConfigurationSite` (édité dans l'admin « Site web → Configuration du
-   site »). Migration de données : le skin de chaque tenant est copié avant le
-   retrait du champ (ex : le tenant `chantefrein` en `faire_festival` est préservé).
-
-**Pourquoi / Why :** rendre l'app `pages` activable par tenant (groupware), et
-regrouper la configuration d'apparence du site dans un singleton dédié à l'app.
-
-**Vérifié / Verified :** bascule reunion ↔ faire_festival via le singleton testée
-dans Chrome (le site change bien, y compris les liens de navbar spécifiques au
-skin). Admin « Paramètres » et rendu des tenants OK après retrait du champ.
-
-### Fichiers modifiés / Modified files
-| Fichier / File | Changement / Change |
-|---|---|
-| `BaseBillet/models.py` | + `module_pages` ; retrait de `skin` |
-| `pages/models.py` | + singleton `ConfigurationSite` (champ `skin`) |
-| `pages/admin.py` | + `ConfigurationSiteAdmin` (SingletonModelAdmin) |
-| `BaseBillet/views.py` | `get_skin_courant()` lit le skin du singleton ; navbar (accueil + gating) ; `index` (gating module) |
-| `Administration/admin/dashboard.py` | carte module `module_pages` + entrée sidebar « Configuration du site » + gating section |
-| `Administration/admin_tenant.py` | retrait de `skin` du fieldset `ConfigurationAdmin` |
-| `BaseBillet/migrations/0221...` | copie `skin` → `ConfigurationSite` puis `RemoveField` |
-
-## App `pages` : constructeur de pages par blocs (vague 1) / `pages` app: block-based page builder (wave 1)
-
-**Date :** 2026-06-28
-**Migration :** Oui / Yes — `pages.0001_initial` + `pages.0002_page_est_accueil` (`migrate_schemas`)
-
-**Quoi / What :** Nouvelle app Django `pages` permettant de composer des pages
-publiques en empilant des blocs prefabriques, edites dans l'admin Unfold. Vague 1 :
-5 blocs a champs plats (Hero, Paragraphe riche, Image + texte, CTA, Temoignage).
-Une page peut etre designee comme page d'accueil (`est_accueil`) et est alors
-servie sur la racine `/`.
-
-**Pourquoi / Why :** permettre aux gestionnaires de lieux culturels de
-personnaliser leurs pages sans developpeur. Decision : app maison (pas GrapesJS
-ni CMS tiers), concept StreamField (suite ordonnee de blocs types).
-
-**Architecture :**
-- App `pages` en **dual-list** (`SHARED_APPS` + `TENANT_APPS`, comme `wsocket`) :
-  table isolee par schema, tenant public inclus, zero fuite cross-tenant.
-- 2 modeles : `Page` (titre, slug, position, publie, est_accueil, meta_description)
-  et `Bloc` (FK page, `type_bloc` pivot, champs plats partages).
-- Edition : `Bloc` sur sa propre fiche avec `conditional_fields` **natif** Unfold
-  (Alpine, gere le select `type_bloc`) ; `Page` avec inline leger (drag-drop ordre).
-  **Zero JavaScript maison.**
-- Rendu : vue `page_publique` reutilisant `get_context` + skin ; route attrape-tout
-  `/<slug>/` incluse APRES BaseBillet ; slugs reserves anti-collision. Navbar :
-  pages publiees ajoutees a `main_nav`.
-- CSS `tb-blocs.css` : classes semantiques `.tb-bloc*`, conforme Hallmark.
-
-### Fichiers modifies / Modified files
-| Fichier / File | Changement / Change |
-|---|---|
-| `pages/` (app) | Nouvelle app : models, admin, views, urls, templates, static, management command demo |
-| `TiBillet/settings.py` | `'pages'` ajoute dans SHARED_APPS **et** TENANT_APPS |
-| `TiBillet/urls_tenants.py` | `include('pages.urls')` apres BaseBillet (catch-all en dernier) |
-| `Administration/admin_tenant.py` | `import pages.admin` (enregistrement sur staff_admin_site) |
-| `Administration/admin/dashboard.py` | Section sidebar « Website » → Pages |
-| `BaseBillet/views.py` | `get_context` : pages publiees dans la navbar ; `index` : sert la page d'accueil si definie |
-| `tests/pytest/test_pages.py` | 11 tests (modeles, vue publique, admin) |
+| `fedow_connect/fedow_api.py` | + `NFCcardFedow.create_cards()` (POST signé `card`) |
+| `tests/pytest/test_membership_card_wallet_fedow.py` | fixture autonome + test `create_cards` (TDD) |
 
 ### Migration
-- **Migration necessaire / Migration required :** Oui
-- `docker exec lespass_django poetry run python manage.py migrate_schemas`
+- **Migration nécessaire / Migration required :** Non / No.
+
+## Carte explorer : fond de carte MapTiler (style dataviz) avec repli OSM France / MapTiler basemap with OSM France fallback
+
+**Date :** 2026-06-29
+**Migration :** Non / No (front + variable d'env `MAPTILER_KEY`)
+
+**Quoi / What :** Le fond de carte utilise **MapTiler** (style `dataviz-v4`, épuré)
+quand une clé est configurée, sinon **repli** sur les tuiles **Humanitarian (HOT)
+d'OpenStreetMap France**. La clé MapTiler vient de `MAPTILER_KEY` (`.env`), jamais
+en dur dans le code.
+
+**Pourquoi / Why :** CARTO Voyager affichait les régions françaises en anglais.
+MapTiler offre un style épuré (idéal pour faire ressortir les markers) et des
+garanties de prod ; OSM France reste le repli gratuit/sans clé (et le défaut en dev
+si `MAPTILER_KEY` est vide). Branchement : `settings.MAPTILER_KEY` →
+contexte des vues → `data-maptiler-key` sur `#explorer-root` → `explorer.js`.
+
+**Limite langue / Language note :** sur les tuiles **raster** MapTiler, `?language=fr`
+n'a **pas** d'effet (labels figés au rendu). Les villes françaises s'affichent en
+français, mais les pays/villes étrangers restent en anglais (« Geneva »,
+« Switzerland »). Pour un français complet : créer un style FR dans le dashboard
+MapTiler (Customize → langue), ou passer au SDK vectoriel (MapLibre, `language: 'fr'`).
+
+**Sécurité clé :** la clé MapTiler est exposée côté client (URL des tuiles) →
+**à restreindre par domaine** dans le dashboard MapTiler (Allowed origins).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `TiBillet/settings.py` | `MAPTILER_KEY = os.environ.get('MAPTILER_KEY', '')` |
+| `seo/views.py` + `BaseBillet/views.py` | passent `maptiler_key` au contexte (explorer ROOT + federation tenant) |
+| `seo/templates/seo/partials/explorer_widget.html` | `data-maptiler-key` sur `#explorer-root` |
+| `seo/static/seo/explorer.js` | `tileLayer` : MapTiler `dataviz-v4` si clé, sinon repli HOT / OSM France |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No. Renseigner `MAPTILER_KEY`
+  dans `.env` (sinon repli HOT automatique) + redémarrer le conteneur pour charger l'env.
+
+## Carte explorer : markers synchronisés au mode « Événements » + barre de recherche resserrée / Explorer map: markers synced with "Events" mode + tightened search bar
+
+**Date :** 2026-06-29
+**Migration :** Non / No
+
+**Quoi / What :** Sur la carte explorer, en mode « Événements », les markers ne
+montrent plus que les lieux ayant au moins un événement visible (les lieux sans
+événement à venir disparaissent de la carte). La barre de recherche et le toggle
+« Lieux / Événements » forment un groupe compact **centré** (au lieu d'une barre
+pleine largeur avec les boutons collés au bord). Le fondu dégradé qui estompait à
+tort le bouton « Événements » est retiré.
+
+**Pourquoi / Why :** Les markers réagissaient déjà aux filtres texte et tag (via
+`updateMapMarkersByPA`), mais le toggle Lieux/Événements ne changeait que la liste
+de gauche, pas les markers. Côté layout, la barre s'étirait sur toute la largeur
+(boutons collés au bord), puis une 1ʳᵉ tentative laissait un grand vide au milieu.
+
+**Fix / Fix :** Dans `applyFilters()`, la source des markers visibles dépend du
+mode : en mode « événement », `visiblePaIds` est construit depuis les `pa_id` des
+événements visibles (`eventCards`) au lieu de toutes les PA. CSS : le groupe
+`.explorer-search-row` est borné (`max-width: 760px`) et **centré** (`margin: 0 auto`),
+la barre (`flex:1` + `min-width:0`) remplit jusqu'au toggle (plus de vide) ; retrait
+du `mask-image` (fondu droit) sur `.explorer-pills` qui estompait le bouton
+« Événements » (toggle à 2 boutons → jamais de scroll) ; responsive mobile conservé.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/static/seo/explorer.js` | `applyFilters` : markers = lieux avec events visibles en mode « événement » |
+| `seo/static/seo/explorer.css` | groupe recherche+toggle borné et compact à gauche (responsive mobile conservé) |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No (front statique).
+- Note : vider le cache navigateur / hard reload pour récupérer les statiques.
+
+## Infra : limite item Memcached relevée (1 Mo → 8 Mo) pour l'agrégat SEO / Memcached item size raised for the SEO aggregate
+
+**Date :** 2026-06-29
+**Migration :** Non / No (infra — recréation du conteneur memcached)
+
+**Quoi / What :** Le service `lespass_memcached` est lancé avec `-I 8m -m 256`
+(au lieu des défauts 1 Mo / 64 Mo).
+
+**Pourquoi / Why :** L'agrégat SEO `AGGREGATE_EVENTS` pèse ~687 o/event et contient
+tous les events futurs publiés du réseau. À ~1500 events futurs il atteint la limite
+Memcached par défaut (1 Mo) ; au-delà le `set` L1 échoue silencieusement → la page
+relit la DB à chaque fois (cache inutile). `-I 8m` repousse le mur à ~12 000 events
+futurs ; `-m 256` donne la mémoire totale pour ces gros items sans évictions.
+Alternative durable (non faite) : borner l'agrégat aux N prochains mois.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `docker-compose.yml` | `lespass_memcached` : `command: ["memcached", "-m", "256", "-I", "8m"]` |
+| `docker-compose.pre-prod.yml` | idem |
+| `docker-compose.v1.pre-prod.yml` | idem |
+
+### Application / Apply
+- **Recréer le conteneur** (vide le cache, reconstruit au prochain rebuild/MISS) :
+  `docker compose up -d lespass_memcached` (et `-f docker-compose.pre-prod.yml` en prod).
+- Ajuster `-m 256` selon la RAM du serveur.
+
+## Agenda participatif : l'approbation d'une proposition ne rafraîchissait pas la carte / Proposal approval didn't refresh the map
+
+**Date :** 2026-06-29
+**Migration :** Non / No
+
+**Quoi / What :** Approuver une proposition publique (agenda participatif) via
+l'action admin « Approuver et publier les propositions sélectionnées » la publiait
+bien, mais l'event **n'apparaissait sur la carte réseau qu'au beat 4 h**.
+
+**Pourquoi / Why :** L'action utilisait `queryset.update(is_proposal=False,
+published=True)`. Le `.update()` en masse **ne déclenche pas le signal
+`post_save`** → `declencher_refresh_seo_cache` n'était jamais appelé → pas de
+rebuild SEO. (Le toggle « Publier » de la liste et l'édition via le formulaire,
+qui passent par `save()`, déclenchaient bien le signal — seule l'action bulk était
+touchée.)
+
+**Fix / Fix :** L'action publie désormais via `save(update_fields=["is_proposal",
+"published"])` par instance (boucle), ce qui déclenche `post_save` → rebuild SEO
+débouncé → l'event approuvé apparaît sur la carte en ~15-20 s. Vérifié par test +
+en conditions réelles (Chrome) : toggle « Publier » → event présent dans
+`AGGREGATE_EVENTS`, L1 cohérent cross-schema.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/admin_tenant.py` | `approuver_propositions` : `save()` par instance au lieu de `queryset.update()` (déclenche le signal SEO) |
+| `tests/pytest/test_seo_cache_fragments.py` | +1 test : l'approbation d'une proposition déclenche le rebuild SEO |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No.
+
+## Carte réseau : débounce du rebuild rendu global + plafond anti-famine / Global rebuild debounce + maxWait cap
+
+**Date :** 2026-06-29
+**Migration :** Non / No
+
+**Quoi / What :** Le débounce du rebuild d'agrégats est désormais **global** (1 cycle
+pour tout le réseau, plus 1 par tenant) et protégé contre la **famine** par un
+plafond « maxWait ».
+
+**Pourquoi / Why :** (1) Les clés de débounce passaient par le cache `default`
+préfixé par schema (`make_key`) → le verrou « global » était en réalité **par
+tenant** : sous un pic multi-lieux, on lançait N rebuilds redondants (chacun
+recombine pourtant tout le réseau). (2) Le débounce *trailing* seul risquait la
+**famine** : sous un flux continu de modifs (< 15 s d'intervalle : import, grosse
+saison), l'échéance était repoussée indéfiniment et le rebuild ne partait jamais
+avant le beat 4 h — recréant le symptôme corrigé.
+
+**Fix / Fix :** Les 3 clés de débounce (`seo_rebuild_echeance`,
+`seo_rebuild_plafond`, `seo_rebuild_planifie`) sont manipulées sous
+`schema_context("public")` → **réellement globales**. Ajout d'un **plafond maxWait**
+(`REBUILD_MAXWAIT = 60 s`) posé une seule fois au début d'une série : le rebuild
+s'exécute au plus tôt entre l'échéance trailing (dernière modif + 15 s) et le
+plafond (1ʳᵉ modif + 60 s). Conséquences : sous pic simultané → **1 rebuild** au
+lieu de N ; sous flux dense → **≤ 1 rebuild / 60 s** (charge bornée, pas de famine),
+objectif « 500 tenants » du CHANTIER-07 enfin tenu.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/tasks.py` | +`REBUILD_MAXWAIT` + constantes de clés ; `planifier_rebuild_agregats` (plafond + clés globales `schema_context("public")`) ; garde de `rebuild_seo_aggregates` : cible = min(échéance trailing, plafond maxWait) |
+| `tests/pytest/test_seo_cache_fragments.py` | +2 tests : recombinaison au plafond maxWait, plafond posé une seule fois |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No.
+
+## Carte réseau : cache L1 SEO périmé par schema (cause racine du retard ~4h) / SEO L1 cache stale per-schema
+
+**Date :** 2026-06-29
+**Migration :** Non / No
+
+**Quoi / What :** Cause racine confirmée du symptôme « les nouveaux events/adresses
+n'apparaissent qu'au bout de plusieurs heures ». Le cache L1 Memcached lu par les
+pages publiques restait **périmé jusqu'au TTL (4 h)** même après le recalcul.
+
+**Pourquoi / Why :** `CACHES['default']` utilise
+`KEY_FUNCTION = django_tenants.cache.make_key`, qui **préfixe chaque clé de cache
+par le schema courant** (isolation cache par tenant). Or les agrégats SEO sont
+**globaux** (`tenant=None`, partagés par tout le réseau). Le worker Celery exécute
+le rebuild dans le schema du tenant déclencheur → il écrivait la clé sous
+`lespass:…:seo:aggregate_lieux`, **invisible** depuis le schema `public` (page ROOT
+`/explorer/`) et les autres tenants. Chaque schema avait sa propre copie L1 ; seule
+celle du schema déclencheur était fraîche. Les autres lisaient du périmé jusqu'au
+TTL 4 h (ou un MISS). Vérifié : L1 lu valait 19 en `public`/`lespass` mais 15 en
+`le-coeur-en-or`/`chantefrein` pour la même donnée globale.
+
+**Fix / Fix :** Les helpers L1 SEO (`set_memcached_l1` / `get_memcached_l1`)
+épinglent désormais le schema `public` (`with schema_context("public")`) autour de
+l'opération cache. La clé n'est donc plus préfixée par le schema d'exécution : une
+**seule entrée L1 globale** est partagée par le worker, la page ROOT et chaque
+tenant. Vérifié de bout en bout (Chrome) : après création d'un event, L1 identique
+sur tous les schemas (public = lespass = le-coeur-en-or) et carte ROOT à jour en
+~20 s, **sans rebuild manuel**.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/services.py` | `set_memcached_l1` / `get_memcached_l1` : `with schema_context("public")` autour du `cache.set` / `cache.get` (clé L1 globale, non préfixée par tenant) |
+| `tests/pytest/test_seo_cache_fragments.py` | +1 test : agrégat global écrit dans un schema tenant lu identique depuis public + autre tenant |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No. Les anciennes clés L1
+  préfixées par tenant expirent seules (TTL 4 h) et ne sont plus lues.
+
+## Carte réseau : events/adresses fraîchement sauvés n'apparaissaient pas / Network map: freshly saved events & addresses didn't show up
+
+**Date :** 2026-06-29
+**Migration :** Non / No
+
+**Quoi / What :** Sur la carte ROOT (`/explorer/`), un nouvel évènement ou une
+nouvelle adresse pouvait rester invisible jusqu'au prochain passage du beat
+Celery (jusqu'à 4 h), alors que le tenant venait de sauvegarder.
+
+**Pourquoi / Why :** Le rebuild de l'agrégat `AGGREGATE_POINTS` (lu par la carte)
+était déclenché en **débounce « front montant »** : la tâche était planifiée à
+`T_première_modif + 180 s`. Si une modif arrivait tard dans cette fenêtre, son
+fragment `TENANT_POINTS` (countdown plus court) pouvait être recombiné **trop
+tôt** — le rebuild figeait un agrégat à partir d'un fragment pas encore à jour —
+et **aucun rebuild de rattrapage** n'était garanti. Seul le beat 4 h corrigeait.
+Aggravé par une « fenêtre morte » du débounce fragment (countdown 30 s < TTL
+verrou 60 s).
+
+**Fix / Fix :** Passage à un **débounce « front descendant » (trailing)**. Chaque
+`post_save`/`post_delete` Event/PostalAddress repousse une échéance
+(`seo_rebuild_echeance = now + 15 s`) et planifie au plus une tâche rebuild par
+fenêtre. À son réveil, `rebuild_seo_aggregates` recombine **seulement si**
+l'échéance est atteinte ; sinon il se **replanifie** pile à l'échéance. Garantie :
+un rebuild s'exécute **toujours après la dernière modif**, sur des fragments à
+jour. Le beat 4 h appelle `rebuild_seo_aggregates(force=True)` (recombine
+toujours, filet anti-dérive). Countdown du fragment réduit à 5 s et TTL du verrou
+aligné (fin de la fenêtre morte). Latence perçue : ~20 s au lieu de 3 min → 4 h.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/tasks.py` | `planifier_rebuild_agregats()` (débounce trailing) ; garde + `force` dans `rebuild_seo_aggregates` ; beat en `force=True` ; constantes `REBUILD_TRAILING_WINDOW`/`REBUILD_MARGE` |
+| `BaseBillet/signals.py` | `declencher_refresh_seo_cache` : fragment countdown 5 s (TTL aligné) ; rebuild via `planifier_rebuild_agregats()` (remplace le front montant 180 s) |
+| `tests/pytest/test_seo_cache_fragments.py` | +4 tests : abstention/replanification, recombinaison à l'échéance, `force=True`, débounce du helper |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No (logique Celery + cache uniquement).
 
 ## Admin réservation : fix crash `'TibilletUser' has no attribute 'lower'` / Admin reservation: fix crash on add
 

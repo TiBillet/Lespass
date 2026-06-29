@@ -30,10 +30,20 @@
     display: flex;
     align-items: center;
     gap: 12px;
+    /* Le groupe "recherche + toggle" est compact, borne (max-width) et CENTRE dans  */
+    /* la toolbar (margin: 0 auto). La barre remplit l'espace jusqu'au toggle (pas   */
+    /* de vide au milieu) et le groupe ne s'etire pas sur tout l'ecran (toggle non   */
+    /* colle au bord). / The "search + toggle" group is compact, capped and CENTERED */
+    /* (margin: 0 auto): the bar fills up to the toggle (no middle gap), no overstretch. */
+    max-width: 760px;
+    margin: 0 auto;
 }
 
 .explorer-search {
     flex: 1;
+    /* min-width: 0 indispensable en flex pour que la barre puisse retrecir. */
+    /* / min-width: 0 is required so the flex item can shrink. */
+    min-width: 0;
     background: #f5f5f5;
     border: 1px solid #ddd;
     border-radius: 999px;
@@ -52,16 +62,12 @@
     display: flex;
     gap: 8px;
     flex-shrink: 0;
-    /* Scroll horizontal sur petit ecran, masque la scrollbar. */
-    /* Le fade-out a droite indique visuellement qu'on peut scroller. */
-    /* / Horizontal scroll on small screens, hides scrollbar. */
-    /* Right fade-out hints that content can be scrolled. */
-    overflow-x: auto;
-    max-width: 100%;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    -webkit-mask-image: linear-gradient(to right, black 0%, black 92%, transparent 100%);
-    mask-image: linear-gradient(to right, black 0%, black 92%, transparent 100%);
+    /* Le toggle n'a que 2 boutons (Lieux / Événements) : ils tiennent toujours,
+       donc pas de scroll horizontal ni de fondu (le mask-image estompait a tort
+       le bord droit du bouton "Événements"). */
+    /* / The toggle has only 2 buttons: they always fit, so no horizontal scroll
+       and no fade (the mask-image was wrongly dimming the right edge of the
+       "Événements" button). */
 }
 
 .explorer-pills::-webkit-scrollbar {
@@ -619,20 +625,16 @@
     .explorer-search-row {
         flex-direction: column;
         gap: 8px;
+        /* En colonne (mobile), le groupe reprend toute la largeur. */
+        /* / Stacked (mobile): the group takes the full width. */
+        max-width: none;
     }
 
-    /* Pills : retour a la ligne plutot que scroll horizontal sur mobile.   */
-    /* Plus lisible qu'une liste tronquee qu'il faut scroller manuellement. */
-    /* / Pills: wrap instead of horizontal scroll on mobile.                */
-    /* More readable than a truncated list that needs manual scrolling.     */
+    /* Pills : autorise le retour a la ligne si besoin sur petit ecran. */
+    /* / Pills: allow wrapping if needed on small screens. */
     .explorer-pills {
         flex-wrap: wrap;
-        overflow-x: visible;
         row-gap: 6px;
-        /* Retire le mask-image fade (inutile sans scroll). */
-        /* / Remove mask-image fade (useless without scroll). */
-        -webkit-mask-image: none;
-        mask-image: none;
     }
 
     /* Conteneur en bloc / Container becomes block */

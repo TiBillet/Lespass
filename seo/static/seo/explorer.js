@@ -121,6 +121,9 @@
         if (!dom.root) return;
         const ds = dom.root.dataset;
         config.currentTenantUuid = ds.currentTenantUuid || '';
+        // Cle MapTiler (optionnelle) : si presente, on utilise MapTiler ; sinon HOT.
+        // / MapTiler key (optional): if present, use MapTiler; otherwise HOT.
+        config.maptilerKey = ds.maptilerKey || '';
         // Surcharge i18n depuis data-i18n-* / Override i18n from data-i18n-*
         if (ds.i18nEmpty) config.i18n.empty = ds.i18nEmpty;
         if (ds.i18nVisit) config.i18n.visit = ds.i18nVisit;
@@ -406,11 +409,25 @@
         renderList(lieuxCards, eventCards);
         updateCounters(lieuxCards.length, eventCards.length || countEventsInPAs(paVisibles));
 
-        // 3. Markers visibles = PA visibles. Dict pa_id -> true pour update map.
-        // / Visible markers = visible PAs. Dict pa_id -> true for map update.
+        // 3. Markers visibles : la source depend du mode.
+        //    - Mode "lieu" : 1 marker par PA visible (filtre text+tag).
+        //    - Mode "evenement" : seulement les lieux ayant AU MOINS un event
+        //      visible (eventCards porte le pa_id de chaque event). Ainsi les
+        //      puces se synchronisent avec la liste d'evenements : un lieu sans
+        //      event a venir disparait de la carte en mode evenement.
+        // / Visible markers: source depends on the mode.
+        //   - "lieu" mode: 1 marker per visible PA (text+tag filter).
+        //   - "event" mode: only venues with at least one visible event, so the
+        //     markers stay in sync with the event list.
         const visiblePaIds = {};
-        for (let i = 0; i < paVisibles.length; i++) {
-            visiblePaIds[paVisibles[i].pa_id] = true;
+        if (state.filters.view === 'event') {
+            for (let i = 0; i < eventCards.length; i++) {
+                visiblePaIds[eventCards[i].pa_id] = true;
+            }
+        } else {
+            for (let i = 0; i < paVisibles.length; i++) {
+                visiblePaIds[paVisibles[i].pa_id] = true;
+            }
         }
         if (state.mapInitialized) {
             updateMapMarkersByPA(visiblePaIds);
@@ -882,13 +899,36 @@
 
         state.map = L.map('explorer-map', { zoomControl: true, scrollWheelZoom: true });
 
-        // CartoDB Voyager : pas de restriction referer (OSM bloque localhost)
-        // / CartoDB Voyager: no referer restriction (OSM blocks localhost)
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
-            maxZoom: 19,
-            subdomains: 'abcd',
-        }).addTo(state.map);
+        // Fond de carte. Si une cle MapTiler est fournie (settings.MAPTILER_KEY ->
+        // data-maptiler-key), on utilise MapTiler (style "dataviz-v4" epure, en
+        // francais, tuiles HD). Sinon, repli sur les tuiles "Humanitarian" (HOT) par
+        // OpenStreetMap France : labels en francais, sans cle API, OK en localhost.
+        // / Basemap. If a MapTiler key is provided, use MapTiler (epured "dataviz-v4",
+        // HD tiles). Otherwise fall back to Humanitarian (HOT) tiles hosted by OSM
+        // France: French labels, no API key, works on localhost.
+        if (config.maptilerKey) {
+            // tuiles 512px (HD) -> tileSize 512 + zoomOffset -1 cote Leaflet.
+            // language=fr force les labels en francais. crossOrigin pour le retina.
+            // / 512px (HD) tiles -> tileSize 512 + zoomOffset -1. language=fr forces French.
+            L.tileLayer(
+                'https://api.maptiler.com/maps/dataviz-v4/{z}/{x}/{y}.png?key='
+                    + config.maptilerKey + '&language=fr',
+                {
+                    attribution: '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                    tileSize: 512,
+                    zoomOffset: -1,
+                    minZoom: 1,
+                    maxZoom: 20,
+                    crossOrigin: true,
+                }
+            ).addTo(state.map);
+        } else {
+            L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, style <a href="https://www.hotosm.org/">Humanitarian OSM Team</a> &middot; <a href="https://openstreetmap.fr/">OpenStreetMap France</a>',
+                maxZoom: 20,
+                subdomains: 'abc',
+            }).addTo(state.map);
+        }
 
         state.markerCluster = L.markerClusterGroup();
         state.map.addLayer(state.markerCluster);

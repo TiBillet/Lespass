@@ -2728,11 +2728,24 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         Action bulk : pour chaque event selectionne qui est une proposition
         en attente, set is_proposal=False + published=True.
         / Bulk action: approve and publish selected pending proposals.
+
+        IMPORTANT (cf. CHANTIER-08) : on publie via save() par instance, et NON
+        via queryset.update() en masse. .update() ne declenche PAS le signal
+        post_save declencher_refresh_seo_cache -> sans lui, l'event approuve
+        n'apparait sur la carte reseau qu'au prochain beat 4h. save() declenche
+        le signal -> rebuild SEO debounce -> l'event apparait en ~15s.
+        / We publish with per-instance save(), NOT bulk queryset.update():
+        .update() does not fire the post_save signal that refreshes the SEO
+        cache, so the approved event would only appear on the network map at the
+        next 4h beat. save() fires the signal -> debounced SEO rebuild.
         """
-        nb_approuvees = queryset.filter(is_proposal=True, published=False).update(
-            is_proposal=False,
-            published=True,
-        )
+        propositions_en_attente = queryset.filter(is_proposal=True, published=False)
+        nb_approuvees = 0
+        for proposition in propositions_en_attente:
+            proposition.is_proposal = False
+            proposition.published = True
+            proposition.save(update_fields=["is_proposal", "published"])
+            nb_approuvees += 1
         self.message_user(
             request,
             _("%(n)s proposal(s) approved.") % {"n": nb_approuvees},
