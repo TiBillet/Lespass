@@ -3733,11 +3733,18 @@ def _calculer_qty_partielles(lignes_avec_amounts, prix_unitaire_centimes, qty_to
             # / Last line: takes the exact remainder
             ligne["qty"] = qty_totale - somme_qty_precedentes
         else:
-            # Lignes intermédiaires : proportionnel, arrondi 6 décimales
-            # / Intermediate lines: proportional, rounded to 6 decimal places
+            # Lignes intermédiaires : qty = montant_ligne / prix_unitaire.
+            # NE PAS multiplier par qty_totale : amount_centimes est DÉJÀ le montant
+            # monétaire de la part (pas une fraction), et le prix unitaire seul donne
+            # le nombre d'articles que cette part représente. Multiplier par qty_totale
+            # gonflait la qty d'un facteur qty_totale (ex: 3 vins, part 6 € → 3,6 au lieu
+            # de 1,2), rendant la dernière ligne NÉGATIVE.
+            # / qty = part_amount / unit_price. Do NOT multiply by qty_totale: the part
+            # amount already is the monetary share; the unit price alone yields the
+            # number of articles it represents. Multiplying by qty_totale inflated qty
+            # (e.g. 3 wines, 6 € part → 3.6 instead of 1.2), making the last line NEGATIVE.
             qty_proportionnelle = (
-                qty_totale
-                * Decimal(ligne["amount_centimes"])
+                Decimal(ligne["amount_centimes"])
                 / Decimal(prix_unitaire_centimes)
             ).quantize(SIX_DECIMALES)
             ligne["qty"] = qty_proportionnelle
@@ -4499,10 +4506,19 @@ def _creer_lignes_articles_cascade(
             # cash/CC complement lines, the card was scanned).
             carte_pour_cette_ligne = carte
 
+            # amount = prix UNITAIRE (en centimes), PAS le montant total de la part.
+            # Convention unifiée avec le chemin simple (_creer_lignes_articles) et avec
+            # LigneArticle.total = amount × qty : le total de ligne = prix_unitaire × qty.
+            # La part en argent est portée par qty (= montant_part / prix_unitaire),
+            # calculée par _calculer_qty_partielles. Stocker l'argent ici comptait la
+            # quantité deux fois à l'affichage (bug B : 3 vins → 45 € au lieu de 15 €).
+            # / amount = UNIT price (cents), NOT the part's total money. Unified with the
+            # simple path and LigneArticle.total = amount × qty. Storing money here
+            # double-counted the quantity in the display (bug B: 45 € instead of 15 €).
             ligne = LigneArticle.objects.create(
                 pricesold=price_sold,
                 qty=qty_partielle,
-                amount=amount_centimes,
+                amount=prix_centimes,
                 sale_origin=sale_origin_pour_ligne,
                 payment_method=payment_method_code,
                 status=LigneArticle.VALID,
@@ -7458,6 +7474,36 @@ class PaiementViewSet(viewsets.ViewSet):
 
             wallet_carte2 = _obtenir_ou_creer_wallet(carte2)
 
+            # ===== CRAN LEGACY (C2.5) : le FED de carte1 reporté AVANT la cascade carte2 =====
+            # La branche espèces/CB ré-applique le FED legacy de carte1 ; cette branche NFC
+            # l'oubliait (bug C). On le reporte ici, AVANT la cascade de carte2, pour que le
+            # reste à payer soit juste. CALCUL SEUL : on réduit les lignes complément de carte1,
+            # mais le DÉBIT du FED est DIFFÉRÉ au bloc atomic (succès uniquement) — sinon le
+            # re-render « insuffisant » débiterait le FED sans créer de ligne (orphelin).
+            # / LEGACY tier (C2.5): carry over card1's legacy FED BEFORE card2's cascade so the
+            # remaining amount is correct. CALCULATION ONLY: the FED debit is DEFERRED to the
+            # success atomic (a re-render would otherwise orphan the debit).
+            lignes_legacy_c1 = []
+            lignes_pour_fed_c1 = []
+            montant_legacy_c1 = 0
+            lignes_complement_c1 = [t for t in lignes_nfc_carte1 if t[1] is None]
+            lignes_locales_c1 = [t for t in lignes_nfc_carte1 if t[1] is not None]
+            total_complement_c1 = sum(
+                amount for _a, _u, amount, _p in lignes_complement_c1
+            )
+            if carte1.user is not None and total_complement_c1 > 0:
+                depensable_legacy_c1, dispo_c1 = lire_depensable_fed_frais(carte1.user)
+                if dispo_c1 and depensable_legacy_c1 > 0:
+                    montant_legacy_c1 = min(depensable_legacy_c1, total_complement_c1)
+            if montant_legacy_c1 > 0:
+                # On découpe le complément de carte1 : la part couverte par son FED (différée)
+                # et le reste, que la carte2 (puis espèces/CB) devra couvrir.
+                # / Split card1's complement: the FED-covered part (deferred) and the rest.
+                lignes_pour_fed_c1, lignes_reste_c1 = _decouper_lignes_complement(
+                    lignes_complement_c1, montant_legacy_c1
+                )
+                lignes_nfc_carte1 = lignes_locales_c1 + lignes_reste_c1
+
             # Cascade sur la 2ème carte pour le reste
             # / Cascade on 2nd card for the remainder
             soldes_cascade_carte2 = OrderedDict()
@@ -7625,6 +7671,38 @@ class PaiementViewSet(viewsets.ViewSet):
                     context_complement,
                 )
 
+            # Carte2 couvre tout le reste → on finalise.
+            # Débit DIFFÉRÉ du FED legacy de carte1 (calculé plus haut) : on ne le débite
+            # que maintenant, une fois sûr que le paiement se finalise. Hors atomic (appel
+            # réseau), fail-fast : si le solde réseau a changé, on rescanne, aucun débit local.
+            # / Card1's deferred legacy FED debit (network call, fail-fast), only now that the
+            # payment completes.
+            if montant_legacy_c1 > 0:
+                try:
+                    transactions_legacy_c1 = _debiter_legacy(
+                        carte1.user, montant_legacy_c1, uuid_transaction
+                    )
+                except Exception as erreur_legacy_c1:
+                    logger.warning(
+                        f"Débit legacy (carte1, complément NFC) échoué : {erreur_legacy_c1}"
+                    )
+                    context_erreur = {
+                        "msg_type": "warning",
+                        "msg_content": _(
+                            "Le solde du réseau a changé, rescannez la carte"
+                        ),
+                        "selector_bt_retour": "#messages",
+                    }
+                    return render(
+                        request,
+                        "laboutik/partial/hx_messages.html",
+                        context_erreur,
+                        status=409,
+                    )
+                lignes_legacy_c1 = _repartir_legacy_sur_articles(
+                    lignes_pour_fed_c1, transactions_legacy_c1
+                )
+
             # Carte2 couvre tout le reste → bloc atomic
             # / Card2 covers all remainder → atomic block
             try:
@@ -7732,6 +7810,7 @@ class PaiementViewSet(viewsets.ViewSet):
                         lignes_non_fidu
                         + lignes_couvertes_c1
                         + lignes_couvertes_c2
+                        + lignes_legacy_c1
                         + lignes_legacy_c2
                     )
                     lignes_creees, produits_stock_negatif = (

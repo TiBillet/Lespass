@@ -1,0 +1,108 @@
+{# Partial HTMX — formulaire de saisie des volumes de la série #}
+{# Chargé en innerHTML dans #sessions-poll (polling 8s) ou en innerHTML sur erreur. #}
+{# Les champs hx-preserve survivent aux refreshes de polling. #}
+{# Soumission réussie : hx-swap="outerHTML" sur #sessions-poll → arrêt du polling. #}
+{# / HTMX partial — series volume input form #}
+{# Loaded as innerHTML in #sessions-poll (polling 8s) or as innerHTML on error. #}
+{# hx-preserve fields survive polling refreshes. #}
+{# Successful submit: hx-swap="outerHTML" on #sessions-poll → stops polling. #}
+
+{% if erreur %}
+<div class="alert alert-danger mb-3" data-testid="calibration-erreur">{{ erreur }}</div>
+{% endif %}
+
+{% if sessions_en_attente %}
+
+<form hx-post="{% url 'calibration_serie' uuid=tireuse.uuid %}"
+      hx-target="#sessions-poll"
+      hx-swap="outerHTML"
+      data-testid="calibration-form-serie">
+
+  <input type="hidden" name="depuis" value="{{ depuis }}">
+
+  <div class="card mb-4 border-warning" data-testid="calibration-sessions">
+    <div class="card-header bg-warning text-dark d-flex align-items-center justify-content-between">
+      <strong id="sessions-count-label">
+        {{ sessions_en_attente|length }} versement(s) — saisissez les volumes lus sur le verre
+      </strong>
+      <span class="badge bg-dark">mise à jour auto</span>
+    </div>
+
+    <div class="card-body p-0">
+      <table class="table table-sm mb-0" style="color:#111">
+        <thead class="table-light">
+          <tr>
+            <th>Date</th>
+            <th>Mesuré par Django</th>
+            <th>Volume réel dans le verre (ml)</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="sessions-tbody">
+          {% for session in sessions_en_attente %}
+          <tr id="row-{{ session.pk }}" data-testid="session-row-{{ session.pk }}">
+            <td class="align-middle">{{ session.started_at|date:"d/m H:i" }}</td>
+            <td class="align-middle"><strong>{{ session.volume_delta_ml|floatformat:0 }} ml</strong></td>
+            <td>
+              {# hx-preserve : HTMX conserve la valeur saisie lors du polling #}
+              {# L'id doit être unique et stable (basé sur la PK de session) #}
+              {# / hx-preserve: HTMX keeps the typed value during polling #}
+              {# The id must be unique and stable (based on session PK) #}
+              <div id="inp-{{ session.pk }}" hx-preserve>
+                <input type="number"
+                       name="vol_{{ session.pk }}"
+                       min="1" max="2000" step="1"
+                       placeholder="ex : 487"
+                       class="form-control form-control-sm"
+                       style="width:120px"
+                       data-testid="input-vol-{{ session.pk }}">
+              </div>
+            </td>
+            <td class="align-middle">
+              {# Bouton "Ignorer" — masque la ligne côté client et vide l'input #}
+              {# La ligne ignorée n'est pas soumise dans le formulaire (input vide = ignoré) #}
+              {# / "Ignore" button — hides the row client-side and clears the input #}
+              {# The ignored row is not submitted in the form (blank input = ignored) #}
+              <button type="button"
+                      class="btn btn-sm btn-outline-secondary"
+                      title="Ignorer ce versement"
+                      data-testid="btn-ignorer-{{ session.pk }}"
+                      onclick="ignorerLigne('{{ session.pk }}')">
+                ✕
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card-footer d-flex align-items-center gap-3 flex-wrap" style="background:#f8f9fa">
+      <button type="submit"
+              class="btn btn-success"
+              data-testid="btn-calculer-appliquer">
+        ✓ Calculer et appliquer le facteur
+      </button>
+      <span class="text-muted small">
+        Cliquez ✕ pour ignorer un versement.
+      </span>
+    </div>
+  </div>
+
+</form>
+
+{% else %}
+
+{# Aucun versement disponible — message selon l'état de la tireuse #}
+{# / No sessions available — message based on tap state #}
+<div class="alert alert-info" data-testid="calibration-no-sessions">
+  Aucun versement enregistré pour cette série.
+  {% if tireuse.enabled %}
+    Désactivez d'abord la tireuse, puis passez une carte maintenance.
+  {% else %}
+    Passez une carte maintenance pour verser du liquide dans un verre gradué.
+    La liste se met à jour automatiquement toutes les 8 secondes.
+  {% endif %}
+</div>
+
+{% endif %}

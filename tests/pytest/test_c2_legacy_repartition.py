@@ -16,7 +16,13 @@ Helper PUR (pas de DB, pas de réseau) → tests rapides sans fixtures.
 / PURE helper (no DB, no network) → fast tests without fixtures.
 """
 
-from laboutik.views import _repartir_legacy_sur_articles, _decouper_lignes_complement
+from decimal import Decimal
+
+from laboutik.views import (
+    _repartir_legacy_sur_articles,
+    _decouper_lignes_complement,
+    _calculer_qty_partielles,
+)
 from BaseBillet.models import PaymentMethod
 
 UUID_TLF = "11111111-1111-1111-1111-111111111111"  # un TLF fédéré (monnaie locale d'un autre lieu)
@@ -109,3 +115,77 @@ def test_decouper_complement_fed_partiel():
     # / The split preserves amounts: FED-covered + complement = original total.
     assert sum(m for _a, _u, m, _p in couvertes) == 200
     assert sum(m for _a, _u, m, _p in reste) == 300
+
+
+# ---------------------------------------------------------------------------
+# GARANTIE : la somme des quantités tombe TOUJOURS pile sur l'entier
+# / GUARANTEE: partial quantities ALWAYS sum exactly to the whole
+#
+# `_calculer_qty_partielles` découpe la quantité d'un article entre N parts de
+# paiement. La dernière ligne prend le RESTE exact (qty_totale − somme des
+# précédentes) et tout est en Decimal (arithmétique exacte, zéro float dans le
+# calcul) → la somme vaut TOUJOURS qty_totale, jamais 0,99999999.
+# Ces tests verrouillent cet invariant pour des découpages piégeux.
+# / Last line takes the exact remainder; all-Decimal arithmetic → the sum is
+# ALWAYS qty_totale, never 0.99999999. These tests lock that invariant.
+# ---------------------------------------------------------------------------
+
+
+def _amounts(*montants):
+    """Construit la liste d'entrée attendue par _calculer_qty_partielles.
+    / Builds the input list expected by _calculer_qty_partielles."""
+    return [{"amount_centimes": m} for m in montants]
+
+
+def _somme_qty(lignes):
+    return sum(ligne["qty"] for ligne in lignes)
+
+
+def test_qty_somme_exacte_sur_un_tiers():
+    """Article 3,00 € (qty=1) payé 1 €+1 €+1 € : la somme des qty fait EXACTEMENT 1.
+    Les parts valent 0,333333 / 0,333333 / 0,333334 (la dernière absorbe le centième).
+    / 1 article split in thirds → qty sum is EXACTLY 1 (last line absorbs the remainder).
+    """
+    lignes = _calculer_qty_partielles(_amounts(100, 100, 100), 300, Decimal("1"))
+    assert _somme_qty(lignes) == Decimal("1")
+    assert all(ligne["qty"] >= 0 for ligne in lignes)
+
+
+def test_qty_somme_exacte_trois_vins_tlf_espece():
+    """Le cas qui a révélé le bug : 3 vins (5 € pièce) payés 6 € TLF + 9 € espèces.
+    qty = 1,2 et 1,8 (PAS 3,6 et −0,6), somme = 3, aucune négative.
+    / The bug-revealing case: qty = 1.2 and 1.8 (NOT 3.6 and −0.6), sum 3, none negative.
+    """
+    lignes = _calculer_qty_partielles(_amounts(600, 900), 500, Decimal("3"))
+    assert _somme_qty(lignes) == Decimal("3")
+    assert all(ligne["qty"] > 0 for ligne in lignes), (
+        f"Quantité négative/nulle (régression du bug) : "
+        f"{[ligne['qty'] for ligne in lignes]}"
+    )
+
+
+def test_qty_somme_exacte_sur_un_septieme():
+    """Découpage en 7 parts d'un article 7,00 € (qty=1) : décimales infinies → somme = 1 pile.
+    / Split in 7 parts → repeating decimals, yet the sum is exactly 1.
+    """
+    lignes = _calculer_qty_partielles(_amounts(*([100] * 7)), 700, Decimal("1"))
+    assert _somme_qty(lignes) == Decimal("1")
+    assert all(ligne["qty"] >= 0 for ligne in lignes)
+
+
+def test_qty_somme_exacte_article_au_poids():
+    """Article au poids (qty décimale, ex. 0,250 kg) splitté : la somme = 0,250 pile.
+    / Weight-based article (decimal qty) split → sum is exactly 0.250.
+    """
+    # 0,250 kg à 12 €/kg = 300 centimes, payé 100 + 200.
+    lignes = _calculer_qty_partielles(_amounts(100, 200), 1200, Decimal("0.250"))
+    assert _somme_qty(lignes) == Decimal("0.250")
+    assert all(ligne["qty"] >= 0 for ligne in lignes)
+
+
+def test_qty_une_seule_ligne_prend_toute_la_quantite():
+    """Cas trivial : 1 seule part → qty = quantité totale exacte (pas de découpage).
+    / Trivial case: a single part gets the full quantity exactly."""
+    lignes = _calculer_qty_partielles(_amounts(1500), 500, Decimal("3"))
+    assert len(lignes) == 1
+    assert lignes[0]["qty"] == Decimal("3")

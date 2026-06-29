@@ -50,6 +50,79 @@ Règles générales :
 """
 
 
+def aligner_wallet_user_sur_fedow(carte):
+    """
+    Aligne le wallet du user d'une carte sur le wallet Fedow de cette carte (meme uuid).
+    Aligns a card user's wallet onto the card's Fedow wallet (same uuid).
+
+    LOCALISATION : Administration/management/commands/demo_data_v2.py
+
+    POURQUOI : create_test_pos_data cree un Wallet LOCAL a uuid aleatoire pour les cartes
+    clientes liees a un user (CLIENT1/CLIENT2). Or Fedow est la source de verite du wallet
+    de carte (laboutik.views.obtenir_wallet_carte_depuis_fedow). Sans alignement, la carte
+    porte DEUX wallets (le local fantome + le wallet Fedow orphelin) et le scan utilise le
+    mauvais → la carte ne peut pas porter de FED. On corrige le doublon en FUSIONNANT le
+    wallet local dans le wallet Fedow (meme uuid), puis en supprimant le local.
+    / create_test_pos_data creates a random-uuid LOCAL wallet for user-linked client cards,
+    but Fedow is the source of truth for the card wallet. Without alignment the card holds
+    TWO wallets and the scan uses the wrong one. We MERGE the local wallet into the Fedow
+    wallet (same uuid) and delete the local one.
+
+    A appeler DANS le tenant_context du lieu (LigneArticle est en TENANT_APPS).
+    Idempotent : no-op si deja aligne, ou si Fedow ne connait pas la carte.
+    / Call INSIDE the venue tenant_context. Idempotent: no-op if already aligned or if Fedow
+    doesn't know the card.
+
+    :param carte: CarteCashless (doit avoir un user porteur d'un wallet)
+    :return: bool — True si un alignement a eu lieu, False sinon.
+    """
+    # Imports locaux : evite un import circulaire (laboutik.views importe des modeles)
+    # et garde le module de seed leger au chargement.
+    # / Local imports: avoid a circular import and keep the seed module light at load time.
+    from laboutik.views import obtenir_wallet_carte_depuis_fedow
+    from fedow_core.models import Token, Transaction
+    from BaseBillet.models import LigneArticle
+
+    user = getattr(carte, "user", None)
+    if user is None or user.wallet is None:
+        return False
+
+    wallet_local = user.wallet
+    uuid_local = wallet_local.uuid
+
+    wallet_fedow = obtenir_wallet_carte_depuis_fedow(carte)
+    if wallet_fedow is None:
+        # Fedow ne connait pas la carte : on ne cree PAS de wallet, on ne touche a rien.
+        # / Fedow doesn't know the card: create nothing, touch nothing.
+        return False
+    if str(uuid_local) == str(wallet_fedow.uuid):
+        # Deja aligne (idempotence : un 2e passage du seed ne refait rien).
+        # / Already aligned (idempotence: a second seed pass does nothing).
+        return False
+
+    # Fusion : on bascule le solde (Token) et l'historique (Transaction, LigneArticle) du
+    # wallet local vers le wallet Fedow. Token (wallet, asset) est unique mais le wallet
+    # Fedow est neuf (miroir get_or_create), donc aucun conflit d'unicite.
+    # / Merge: move balance (Token) and history (Transaction, LigneArticle) from the local
+    # wallet to the Fedow wallet. The Fedow wallet is brand new, so no Token uniqueness clash.
+    Token.objects.filter(wallet=wallet_local).update(wallet=wallet_fedow)
+    Transaction.objects.filter(sender=wallet_local).update(sender=wallet_fedow)
+    Transaction.objects.filter(receiver=wallet_local).update(receiver=wallet_fedow)
+    LigneArticle.objects.filter(wallet=wallet_local).update(wallet=wallet_fedow)
+
+    # Reassigner le wallet du user, puis supprimer le wallet local (plus aucune FK PROTECT).
+    # / Reassign the user wallet, then delete the now-unreferenced local wallet.
+    user.wallet = wallet_fedow
+    user.save(update_fields=["wallet"])
+    wallet_local.delete()
+
+    logger.info(
+        f"Wallet de la carte {carte.tag_id} aligne sur Fedow "
+        f"(local {uuid_local} -> fedow {wallet_fedow.uuid})."
+    )
+    return True
+
+
 class Command(BaseCommand):
     def add_arguments(self, parser):
         # Options du script
@@ -153,13 +226,138 @@ class Command(BaseCommand):
         # tenant is created (--full) or restored (--quick).
         self._seed_e2e_fixtures(options)
 
-        # Cartes du simulateur NFC creees directement dans Fedow (place du
-        # tenant lespass), via l'API key de place. Permet de tester le flux
-        # /qr/<uuid> + le scan NFC du POS SANS lancer LaBoutik V1.
-        # / NFC simulator cards created directly in Fedow (lespass place), via
-        # the place API key. Enables testing /qr/<uuid> + POS NFC scan without
-        # launching LaBoutik V1.
+        # 1. Cartes du simulateur NFC creees D'ABORD dans Fedow (source de verite des
+        # wallets de carte), via l'API key de place. Doit PRECEDER le seed POS pour que
+        # l'alignement des wallets clients (etape 3) trouve les wallets Fedow.
+        # / 1. NFC simulator cards created FIRST in Fedow (source of truth for card wallets).
+        # Must PRECEDE the POS seed so the client-wallet alignment (step 3) finds them.
         self._seed_cartes_nfc_fedow(options)
+
+        # 2. Donnees de test du POS LaBoutik (points de vente, produits POS, carte
+        # primaire + cartes clientes LOCALES). SANS ce seed, un flush complet ne cree
+        # aucun PointDeVente ni CartePrimaire → la carte primaire est refusee a l'ouverture.
+        # create_test_pos_data cree un Wallet LOCAL pour CLIENT1/CLIENT2 (INCHANGE : les
+        # tests pytest mockent Fedow et s'appuient sur ce wallet local).
+        # / 2. LaBoutik POS test data. create_test_pos_data creates a LOCAL wallet for
+        # CLIENT1/CLIENT2 (UNCHANGED: pytest mocks Fedow and relies on this local wallet).
+        self._seed_pos_test_data(options)
+
+        # 3. Alignement des wallets clients sur Fedow : fusionne le wallet LOCAL de chaque
+        # carte cliente dans son wallet Fedow (meme uuid), supprimant le doublon « wallet
+        # interne fantome ». Demo REEL uniquement (Fedow joignable) ; no-op sinon.
+        # / 3. Align client wallets on Fedow: merge each client card's LOCAL wallet into its
+        # Fedow wallet (same uuid), removing the phantom duplicate. Real demo only; no-op otherwise.
+        self._aligner_wallets_clients_sur_fedow(options)
+
+        # SMOKE CHECK FINAL : la caisse DOIT pouvoir s'ouvrir avec la carte
+        # primaire du .env, ET la carte CM doit avoir son wallet dans Fedow.
+        # Sinon on PLANTE le flush (CommandError) — jamais de caisse silencieusement
+        # cassee (les tests mockent Fedow et ne voyaient pas le 403 reel).
+        # / FINAL SMOKE CHECK: the POS must open with the .env primary card AND the
+        # CM card must have its Fedow wallet. Otherwise ABORT the flush.
+        self._verifier_caisse_ouvrable_ou_planter(options)
+
+    def _verifier_caisse_ouvrable_ou_planter(self, options):
+        """
+        Smoke check : verifie qu'on peut OUVRIR LA CAISSE avec les cartes du .env,
+        sinon PLANTE le flush (CommandError → arret immediat, flush.sh en set -e).
+
+        Deux conditions, toutes deux requises pour une caisse fonctionnelle :
+        1. La carte primaire LOCALE (DEMO_TAGID_CM) est valide
+           (CarteCashless + CartePrimaire presentes → create_test_pos_data a tourne).
+        2. La carte CM est presente DANS Fedow (donc dote d'un wallet → peut porter
+           du FED). Verifie uniquement si can_fedow() (Fedow configure).
+
+        But : ne JAMAIS laisser un flush se terminer "vert" avec une caisse cassee.
+        Les tests POS mockent Fedow et ne detectaient pas le 403 reel sur POST /card/.
+        / Smoke check: the POS must be openable with the .env cards, else ABORT the
+        flush. POS tests mock Fedow and missed the real 403 on card creation.
+        """
+        from Customers.models import Client as TenantClient
+        from django_tenants.utils import tenant_context
+        from django.core.management.base import CommandError
+        from django.conf import settings
+
+        tenant = TenantClient.objects.filter(schema_name='lespass').first()
+        if tenant is None:
+            return
+
+        tag_cm = settings.DEMO_TAGID_CM
+        erreurs = []
+
+        with tenant_context(tenant):
+            # 1) Carte primaire LOCALE valide ?
+            # / Local primary card valid?
+            from laboutik.views import _charger_carte_primaire
+            obj, err = _charger_carte_primaire(tag_cm)
+            if obj is None:
+                erreurs.append(
+                    f"carte primaire LOCALE {tag_cm} refusee ({err}) "
+                    f"— create_test_pos_data n'a pas seede PointDeVente/CartePrimaire ?"
+                )
+
+            # 2) Carte CM presente dans Fedow (avec wallet) ?
+            # / CM card present in Fedow (with wallet)?
+            from fedow_connect.models import FedowConfig
+            if FedowConfig.get_solo().can_fedow():
+                from fedow_connect.fedow_api import FedowAPI
+                try:
+                    serialized = FedowAPI().NFCcard.card_tag_id_retrieve(tag_cm)
+                except Exception as e:
+                    serialized = None
+                    erreurs.append(f"lecture Fedow de {tag_cm} impossible ({e})")
+                if serialized is None:
+                    erreurs.append(
+                        f"carte {tag_cm} ABSENTE de Fedow (pas de wallet, pas de FED) "
+                        f"— POST /card/ a echoue (403 = extension de permission S6 "
+                        f"absente sur le Fedow qui tourne ?)."
+                    )
+
+        if erreurs:
+            raise CommandError(
+                "FLUSH INTERROMPU — la caisse ne peut PAS s'ouvrir avec les cartes "
+                "du .env (DEMO_TAGID_*) :\n  - " + "\n  - ".join(erreurs)
+            )
+
+        self.stdout.write(self.style.SUCCESS(
+            f"Smoke caisse OK : carte primaire {tag_cm} acceptee en local ET presente "
+            f"dans Fedow."
+        ))
+
+    def _seed_pos_test_data(self, options):
+        """
+        Seede les donnees de test du POS LaBoutik sur le tenant 'lespass' en
+        deleguant a la commande create_test_pos_data, FORCEE dans le schema
+        lespass (sinon, lancee depuis public, elle prend le premier tenant non
+        public via .first()). Cree : PointDeVente, produits POS, carte primaire
+        de test (CartePrimaire + CarteCashless LOCALE), cartes clientes locales.
+        Idempotent (get_or_create) et non bloquant pour le flush.
+        / Seeds LaBoutik POS test data on the 'lespass' tenant via
+        create_test_pos_data, forced into the lespass schema. Creates points of
+        sale, POS products, the test primary card (CartePrimaire + LOCAL
+        CarteCashless) and local client cards. Idempotent, non-blocking.
+        """
+        from Customers.models import Client as TenantClient
+        from django_tenants.utils import tenant_context
+        from django.core.management import call_command
+
+        tenant = TenantClient.objects.filter(schema_name='lespass').first()
+        if tenant is None:
+            return
+
+        try:
+            # En contexte lespass, create_test_pos_data n'active PAS la detection
+            # "public" → elle seede bien le tenant lespass.
+            # / In lespass context, create_test_pos_data targets lespass directly.
+            with tenant_context(tenant):
+                call_command('create_test_pos_data')
+            self.stdout.write(self.style.SUCCESS(
+                "Donnees de test POS LaBoutik creees (PV + carte primaire) sur lespass."
+            ))
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(
+                f"Donnees de test POS non creees : {e}"
+            ))
 
     def _seed_cartes_nfc_fedow(self, options):
         """
@@ -213,9 +411,86 @@ class Command(BaseCommand):
                     f"Cartes NFC simulateur creees dans Fedow : {resultat}"
                 ))
             except Exception as e:
-                self.stdout.write(self.style.WARNING(
-                    f"Cartes NFC simulateur non creees (Fedow injoignable ?) : {e}"
+                # BRUYANT (pas un simple warning) : si les cartes ne sont pas
+                # creees dans Fedow, elles n'auront pas de wallet -> pas de FED, et
+                # le scan POS les refusera. Cause frequente : extension de
+                # permission S6 ABSENTE sur le Fedow qui tourne (POST /card/ -> 403
+                # alors que la cle de place est valide), ou Fedow injoignable.
+                # On NE plante PAS ici : le smoke check final
+                # (_verifier_caisse_ouvrable_ou_planter) tranche.
+                # / LOUD (not a mere warning): without Fedow cards there is no
+                # wallet -> no FED and the POS rejects the scan. Common cause: the
+                # S6 permission extension missing on the running Fedow (403 on POST
+                # /card/). The final smoke check decides whether to abort.
+                self.stdout.write(self.style.ERROR(
+                    "ECHEC creation des cartes NFC dans Fedow :\n"
+                    f"  {e}\n"
+                    "  -> cartes sans wallet Fedow (pas de FED, scan POS refuse).\n"
+                    "  Verifier : extension de permission S6 active sur le Fedow qui "
+                    "tourne (POST /card/ doit accepter une place Lespass key-only), "
+                    "ou Fedow injoignable."
                 ))
+
+    def _aligner_wallets_clients_sur_fedow(self, options):
+        """
+        Aligne le wallet des cartes clientes (CLIENT1/CLIENT2) sur leur wallet Fedow.
+        Aligns client cards' (CLIENT1/CLIENT2) wallet onto their Fedow wallet.
+
+        create_test_pos_data lie CLIENT1/CLIENT2 a un user dote d'un Wallet LOCAL (uuid
+        aleatoire) — inchange, car les tests pytest mockent Fedow et s'appuient dessus.
+        En demo REEL, Fedow est la source de verite du wallet de carte : on FUSIONNE donc
+        le wallet local dans le wallet Fedow (meme uuid) via aligner_wallet_user_sur_fedow,
+        ce qui supprime le doublon « wallet interne fantome ». Idempotent ; ne plante jamais
+        le flush (le smoke check final tranche sur l'ouvrabilite de la caisse).
+        / In a REAL demo, Fedow is the source of truth: we MERGE the local wallet into the
+        Fedow wallet (same uuid), removing the phantom duplicate. Idempotent; never aborts
+        the flush.
+        """
+        from Customers.models import Client as TenantClient
+        from django_tenants.utils import tenant_context
+        from django.conf import settings
+        from QrcodeCashless.models import CarteCashless
+
+        tenant = TenantClient.objects.filter(schema_name='lespass').first()
+        if tenant is None:
+            return
+
+        # Seules les cartes clientes liees a un user portent un wallet (la carte primaire CM
+        # n'en a pas). On aligne donc uniquement CLIENT1/CLIENT2.
+        # / Only user-linked client cards carry a wallet (the CM primary card doesn't).
+        tags_clients = [
+            getattr(settings, 'DEMO_TAGID_CLIENT1', None),
+            getattr(settings, 'DEMO_TAGID_CLIENT2', None),
+        ]
+
+        with tenant_context(tenant):
+            for tag_id in tags_clients:
+                if not tag_id:
+                    continue
+                carte = CarteCashless.objects.filter(
+                    tag_id=tag_id.upper().strip()
+                ).first()
+                if carte is None:
+                    continue
+                try:
+                    a_aligne = aligner_wallet_user_sur_fedow(carte)
+                except Exception as e:
+                    # BRUYANT mais non bloquant : un echec d'alignement ne doit pas casser
+                    # tout le flush. Le smoke check final reste le juge de paix.
+                    # / LOUD but non-blocking: an alignment failure must not break the flush.
+                    self.stdout.write(self.style.ERROR(
+                        f"Alignement du wallet de {tag_id} sur Fedow impossible : {e}"
+                    ))
+                    continue
+                if a_aligne:
+                    self.stdout.write(self.style.SUCCESS(
+                        f"Wallet de la carte {tag_id} aligne sur son wallet Fedow "
+                        f"(doublon local supprime)."
+                    ))
+                else:
+                    self.stdout.write(
+                        f"Wallet de la carte {tag_id} : deja aligne ou carte absente de Fedow."
+                    )
 
     def _handle_seed_ventes(self, options):
         """

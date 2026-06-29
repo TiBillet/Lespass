@@ -1,5 +1,122 @@
 # Changelog / Journal des modifications
 
+## Cartes demo : wallet aligné sur Fedow (anti-doublon) + admin Cartes NFC (bouton mort) / Demo cards: wallet aligned on Fedow (anti-duplicate) + NFC cards admin (dead button)
+
+**Date :** 2026-06-25
+**Migration :** Non / No
+
+**Contexte / Context :** chasse aux petits bugs sur la branche `main-fedow-import`. Deux bugs
+distincts, tous deux autour des cartes NFC. / Small-bug hunt on `main-fedow-import`; two distinct
+NFC-card bugs.
+
+### Bug #1 — Doublon de wallet sur les cartes clientes du demo data
+**Symptôme :** les cartes clientes de démo (`DEMO_TAGID_CLIENT1`/`CLIENT2`) portaient **deux
+wallets** : un wallet **LOCAL** à uuid aléatoire (créé par `create_test_pos_data` quand il lie la
+carte à un user) **et** le wallet **Fedow** de la carte (créé par `_seed_cartes_nfc_fedow`), resté
+orphelin. **Cause :** `_obtenir_ou_creer_wallet` priorise `carte.user.wallet` → le scan utilisait
+toujours le wallet local fantôme, jamais le wallet Fedow → la carte ne pouvait pas porter de FED.
+L'invariant validé par `test_wallet_carte_fedow_integration` (wallet local uuid == wallet Fedow
+uuid) était violé, et ce test l'évite justement pour les cartes liées à un user.
+/ Demo client cards carried TWO wallets (a random-uuid LOCAL one + the orphan Fedow one); the scan
+always used the phantom local wallet, so the card couldn't hold FED.
+
+**Fix :** `create_test_pos_data` **inchangé** (les tests pytest mockent Fedow et s'appuient sur son
+wallet local). En **demo réel**, on aligne après coup :
+- Nouvelle fonction `aligner_wallet_user_sur_fedow(carte)` (dans `demo_data_v2.py`) : **fusionne**
+  le wallet local dans le wallet Fedow (même uuid) — migre `Token` (solde) + `Transaction`
+  (sender/receiver) + `LigneArticle` (PROTECT partout), réassigne `user.wallet`, supprime le wallet
+  local. Idempotent (no-op si déjà aligné ou carte absente de Fedow).
+- Le seed `demo_data_v2.handle` est **réordonné** : cartes Fedow **d'abord**, puis seed POS, puis
+  nouvelle étape `_aligner_wallets_clients_sur_fedow` (CLIENT1/CLIENT2), avant le smoke check.
+  Bruyant mais **non bloquant** (le smoke check final reste juge de l'ouvrabilité de la caisse).
+
+### Bug #2 — Bouton « Cartes NFC » du dashboard mort (`#`)
+**Symptôme :** dans l'admin, le bouton « Cartes NFC » (section Fedow du dashboard) pointait vers
+`#`. **Cause :** `dashboard.py` reverse `staff_admin:QrcodeCashless_cartecashless_changelist`, mais
+**aucun `ModelAdmin` n'était enregistré** pour `CarteCashless` → `NoReverseMatch` rattrapé par
+`_safe_rev` → « # ».
+**Fix :** nouveau `QrcodeCashless/admin.py` — `CarteCashlessAdmin` **lecture seule** enregistré sur
+`staff_admin_site`. `CarteCashless` étant en **SHARED_APPS** (cross-tenant), `get_queryset()` filtre
+**par tenant** via `detail.origine` (même discipline que `fedow_core/admin.py`).
+
+### Tests (neufs)
+- `tests/pytest/test_demo_wallet_alignment.py` — alignement : migration solde + suppression du
+  wallet local, idempotence (déjà aligné), no-op (carte inconnue de Fedow). Frontière Fedow mockée.
+- `tests/pytest/test_carte_cashless_admin.py` — reverse résout, changelist HTTP 200, **isolation
+  cross-tenant** du `get_queryset`.
+- Non-régression : `test_paiement_complementaire`, `test_caisse_navigation`,
+  `test_paiement_especes_cb`, `test_cloture_caisse`, `test_wallet_carte_fedow(_integration)` → **39 OK**.
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/management/commands/demo_data_v2.py` | fonction `aligner_wallet_user_sur_fedow` + méthode `_aligner_wallets_clients_sur_fedow` + réordonnancement du seed (Fedow avant POS) |
+| `QrcodeCashless/admin.py` | **Nouveau** : `CarteCashlessAdmin` lecture seule, filtré par tenant (corrige le bouton mort) |
+| `tests/pytest/test_demo_wallet_alignment.py`, `test_carte_cashless_admin.py` | **Nouveaux** |
+
+**Note i18n :** chaînes FR ajoutées dans `QrcodeCashless/admin.py` (« Wallet », « Lieu d'origine »).
+Passe `makemessages` à faire par le mainteneur. / FR strings added; maintainer runs makemessages.
+
+---
+
+## Paiement POS complémentaire — fix montants (bug B) + FED 2e carte (bug C) + tests / Complementary POS payment — amount fix (bug B) + 2nd-card FED (bug C) + tests
+
+**Date :** 2026-06-25
+**Migration :** Non / No
+
+**Contexte / Context :** le flux de paiement « complémentaire » (1ʳᵉ carte NFC partielle, puis
+complément par espèces, CB, ou 2ᵉ carte NFC) n'avait **aucun test d'intégration**. En l'instrumentant,
+deux bugs réels sont apparus. La règle métier confirmée : si la 2ᵉ carte ne suffit pas, le paiement
+**s'arrête** (pas de 3ᵉ étape), on revient à laboutik avec les articles **non payés**, sans débit.
+/ The complementary payment flow had no integration test; instrumenting it surfaced two real bugs.
+
+### Bug B — total de ligne triplé (« 45 € » au lieu de 15 €)
+**Symptôme :** une vente NFC de 3 articles à 5 € s'affichait **45 €** (= 15 × 3) sur la fiche admin et
+le ticket. **Cause :** la cascade NFC (`_creer_lignes_articles_cascade`) stockait `LigneArticle.amount` =
+**montant total** de la part au lieu du **prix unitaire**, alors que `LigneArticle.total = amount × qty` →
+la quantité était comptée deux fois.
+**Fix :**
+- `_creer_lignes_articles_cascade` stocke désormais `amount = prix_centimes` (**unitaire**), aligné sur
+  le chemin simple et sur `LigneArticle.total = amount × qty`.
+- `laboutik/reports.py` : les 18 `Sum("amount")` deviennent un helper `montant_ttc_centimes()` =
+  `Cast(Round(Sum(F("amount") * F("qty"))), IntegerField())` — le CA TTC est **arrondi au centime DANS la
+  requête** (les `qty` fractionnaires de la cascade ne fuient jamais en Decimal dans `rapport_json`).
+- `comptabilite/services.py` utilisait déjà `Sum(amount × qty)` → désormais cohérent.
+
+**Convention unifiée :** `amount` = prix unitaire (centimes), `qty` = quantité (fractionnaire possible),
+**total = `amount × qty`** partout. Arrondi monétaire au centime, dans l'agrégation.
+/ Unified convention: amount = unit price, qty = quantity, total = amount × qty everywhere.
+
+### Bug C — FED de la 1ʳᵉ carte oublié au complément 2ᵉ carte NFC (« reste 7 € » au lieu de 1 €)
+**Symptôme :** carte1 paie une part en **FED legacy** ; au complément par une 2ᵉ carte NFC, le FED de
+carte1 était **ignoré** → reste à payer surévalué (7 € au lieu de 1 €), et impossible de finaliser un
+paiement carte1-FED + carte2. **Cause :** la branche espèces/CB de `payer_complementaire` ré-appliquait
+le FED de carte1, mais **pas** la branche 2ᵉ carte NFC.
+**Fix :** la branche NFC reporte le FED de carte1 dans le calcul du complément (mirroir espèces/CB), avec
+**débit différé** au bloc atomic (fail-fast) — aucun débit en cas d'insuffisance (comportement STOP préservé).
+
+### Tests (tous neufs)
+`tests/pytest/test_paiement_complementaire.py` — matrice complète : NFC1+NFC2 (suffisante / insuffisante →
+STOP), NFC1+espèce, NFC1+CB, bug B (total ligne = 15 €), bug C (reste 1 € + chemin succès FED), et clôture
+d'une vente fractionnée (qty 1,2/1,8 → total 15 €, cashless 6 €, espèces 9 € **pile**). Plus, dans
+`test_c2_legacy_repartition.py`, 5 tests garantissant que la **somme des quantités** tombe pile sur l'entier.
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `laboutik/views.py` | bug C (branche NFC de `payer_complementaire`, FED carte1 reporté + débit différé) ; bug B (`_creer_lignes_articles_cascade` : `amount` = prix unitaire) ; correctif `qty` (plus de quantité négative) |
+| `laboutik/reports.py` | helper `montant_ttc_centimes()` (arrondi centime dans la requête) + 18 agrégations |
+| `tests/pytest/test_paiement_complementaire.py` | **Nouveau** : matrice paiement multiple + bugs B/C + clôture cascade |
+| `tests/pytest/test_c2_legacy_repartition.py` | +5 tests garantie somme des quantités |
+| `tests/pytest/test_paiement_especes_cb.py`, `test_stock_negatif.py` | `setUp` active `module_caisse` (garde POS) |
+
+**Note fiscale :** la chaîne HMAC signe `amount`/`qty` à la création. Les **nouvelles** lignes sont signées
+avec la convention corrigée ; les lignes déjà signées gardent leur signature (pas de réécriture du passé).
+Les tests clôture/FEC existants ne couvraient pas les ventes NFC en cascade — d'où l'incohérence non
+détectée ; le nouveau test de clôture cascade comble ce trou.
+
+---
+
 ## Fix bridge d'appairage hardware (`/laboutik/auth/bridge/`) — fin du portage TermUser / Hardware pairing bridge fix — TermUser port completed
 
 **Date :** 2026-06-25
