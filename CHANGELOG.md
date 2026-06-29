@@ -1,5 +1,246 @@
 # Changelog / Journal des modifications
 
+## Carte explorer : fond de carte MapTiler (style dataviz) avec repli OSM France / MapTiler basemap with OSM France fallback
+
+**Date :** 2026-06-29
+**Migration :** Non / No (front + variable d'env `MAPTILER_KEY`)
+
+**Quoi / What :** Le fond de carte utilise **MapTiler** (style `dataviz-v4`, épuré)
+quand une clé est configurée, sinon **repli** sur les tuiles **Humanitarian (HOT)
+d'OpenStreetMap France**. La clé MapTiler vient de `MAPTILER_KEY` (`.env`), jamais
+en dur dans le code.
+
+**Pourquoi / Why :** CARTO Voyager affichait les régions françaises en anglais.
+MapTiler offre un style épuré (idéal pour faire ressortir les markers) et des
+garanties de prod ; OSM France reste le repli gratuit/sans clé (et le défaut en dev
+si `MAPTILER_KEY` est vide). Branchement : `settings.MAPTILER_KEY` →
+contexte des vues → `data-maptiler-key` sur `#explorer-root` → `explorer.js`.
+
+**Limite langue / Language note :** sur les tuiles **raster** MapTiler, `?language=fr`
+n'a **pas** d'effet (labels figés au rendu). Les villes françaises s'affichent en
+français, mais les pays/villes étrangers restent en anglais (« Geneva »,
+« Switzerland »). Pour un français complet : créer un style FR dans le dashboard
+MapTiler (Customize → langue), ou passer au SDK vectoriel (MapLibre, `language: 'fr'`).
+
+**Sécurité clé :** la clé MapTiler est exposée côté client (URL des tuiles) →
+**à restreindre par domaine** dans le dashboard MapTiler (Allowed origins).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `TiBillet/settings.py` | `MAPTILER_KEY = os.environ.get('MAPTILER_KEY', '')` |
+| `seo/views.py` + `BaseBillet/views.py` | passent `maptiler_key` au contexte (explorer ROOT + federation tenant) |
+| `seo/templates/seo/partials/explorer_widget.html` | `data-maptiler-key` sur `#explorer-root` |
+| `seo/static/seo/explorer.js` | `tileLayer` : MapTiler `dataviz-v4` si clé, sinon repli HOT / OSM France |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No. Renseigner `MAPTILER_KEY`
+  dans `.env` (sinon repli HOT automatique) + redémarrer le conteneur pour charger l'env.
+
+## Carte explorer : markers synchronisés au mode « Événements » + barre de recherche resserrée / Explorer map: markers synced with "Events" mode + tightened search bar
+
+**Date :** 2026-06-29
+**Migration :** Non / No
+
+**Quoi / What :** Sur la carte explorer, en mode « Événements », les markers ne
+montrent plus que les lieux ayant au moins un événement visible (les lieux sans
+événement à venir disparaissent de la carte). La barre de recherche et le toggle
+« Lieux / Événements » forment un groupe compact **centré** (au lieu d'une barre
+pleine largeur avec les boutons collés au bord). Le fondu dégradé qui estompait à
+tort le bouton « Événements » est retiré.
+
+**Pourquoi / Why :** Les markers réagissaient déjà aux filtres texte et tag (via
+`updateMapMarkersByPA`), mais le toggle Lieux/Événements ne changeait que la liste
+de gauche, pas les markers. Côté layout, la barre s'étirait sur toute la largeur
+(boutons collés au bord), puis une 1ʳᵉ tentative laissait un grand vide au milieu.
+
+**Fix / Fix :** Dans `applyFilters()`, la source des markers visibles dépend du
+mode : en mode « événement », `visiblePaIds` est construit depuis les `pa_id` des
+événements visibles (`eventCards`) au lieu de toutes les PA. CSS : le groupe
+`.explorer-search-row` est borné (`max-width: 760px`) et **centré** (`margin: 0 auto`),
+la barre (`flex:1` + `min-width:0`) remplit jusqu'au toggle (plus de vide) ; retrait
+du `mask-image` (fondu droit) sur `.explorer-pills` qui estompait le bouton
+« Événements » (toggle à 2 boutons → jamais de scroll) ; responsive mobile conservé.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/static/seo/explorer.js` | `applyFilters` : markers = lieux avec events visibles en mode « événement » |
+| `seo/static/seo/explorer.css` | groupe recherche+toggle borné et compact à gauche (responsive mobile conservé) |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No (front statique).
+- Note : vider le cache navigateur / hard reload pour récupérer les statiques.
+
+## Infra : limite item Memcached relevée (1 Mo → 8 Mo) pour l'agrégat SEO / Memcached item size raised for the SEO aggregate
+
+**Date :** 2026-06-29
+**Migration :** Non / No (infra — recréation du conteneur memcached)
+
+**Quoi / What :** Le service `lespass_memcached` est lancé avec `-I 8m -m 256`
+(au lieu des défauts 1 Mo / 64 Mo).
+
+**Pourquoi / Why :** L'agrégat SEO `AGGREGATE_EVENTS` pèse ~687 o/event et contient
+tous les events futurs publiés du réseau. À ~1500 events futurs il atteint la limite
+Memcached par défaut (1 Mo) ; au-delà le `set` L1 échoue silencieusement → la page
+relit la DB à chaque fois (cache inutile). `-I 8m` repousse le mur à ~12 000 events
+futurs ; `-m 256` donne la mémoire totale pour ces gros items sans évictions.
+Alternative durable (non faite) : borner l'agrégat aux N prochains mois.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `docker-compose.yml` | `lespass_memcached` : `command: ["memcached", "-m", "256", "-I", "8m"]` |
+| `docker-compose.pre-prod.yml` | idem |
+| `docker-compose.v1.pre-prod.yml` | idem |
+
+### Application / Apply
+- **Recréer le conteneur** (vide le cache, reconstruit au prochain rebuild/MISS) :
+  `docker compose up -d lespass_memcached` (et `-f docker-compose.pre-prod.yml` en prod).
+- Ajuster `-m 256` selon la RAM du serveur.
+
+## Agenda participatif : l'approbation d'une proposition ne rafraîchissait pas la carte / Proposal approval didn't refresh the map
+
+**Date :** 2026-06-29
+**Migration :** Non / No
+
+**Quoi / What :** Approuver une proposition publique (agenda participatif) via
+l'action admin « Approuver et publier les propositions sélectionnées » la publiait
+bien, mais l'event **n'apparaissait sur la carte réseau qu'au beat 4 h**.
+
+**Pourquoi / Why :** L'action utilisait `queryset.update(is_proposal=False,
+published=True)`. Le `.update()` en masse **ne déclenche pas le signal
+`post_save`** → `declencher_refresh_seo_cache` n'était jamais appelé → pas de
+rebuild SEO. (Le toggle « Publier » de la liste et l'édition via le formulaire,
+qui passent par `save()`, déclenchaient bien le signal — seule l'action bulk était
+touchée.)
+
+**Fix / Fix :** L'action publie désormais via `save(update_fields=["is_proposal",
+"published"])` par instance (boucle), ce qui déclenche `post_save` → rebuild SEO
+débouncé → l'event approuvé apparaît sur la carte en ~15-20 s. Vérifié par test +
+en conditions réelles (Chrome) : toggle « Publier » → event présent dans
+`AGGREGATE_EVENTS`, L1 cohérent cross-schema.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/admin_tenant.py` | `approuver_propositions` : `save()` par instance au lieu de `queryset.update()` (déclenche le signal SEO) |
+| `tests/pytest/test_seo_cache_fragments.py` | +1 test : l'approbation d'une proposition déclenche le rebuild SEO |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No.
+
+## Carte réseau : débounce du rebuild rendu global + plafond anti-famine / Global rebuild debounce + maxWait cap
+
+**Date :** 2026-06-29
+**Migration :** Non / No
+
+**Quoi / What :** Le débounce du rebuild d'agrégats est désormais **global** (1 cycle
+pour tout le réseau, plus 1 par tenant) et protégé contre la **famine** par un
+plafond « maxWait ».
+
+**Pourquoi / Why :** (1) Les clés de débounce passaient par le cache `default`
+préfixé par schema (`make_key`) → le verrou « global » était en réalité **par
+tenant** : sous un pic multi-lieux, on lançait N rebuilds redondants (chacun
+recombine pourtant tout le réseau). (2) Le débounce *trailing* seul risquait la
+**famine** : sous un flux continu de modifs (< 15 s d'intervalle : import, grosse
+saison), l'échéance était repoussée indéfiniment et le rebuild ne partait jamais
+avant le beat 4 h — recréant le symptôme corrigé.
+
+**Fix / Fix :** Les 3 clés de débounce (`seo_rebuild_echeance`,
+`seo_rebuild_plafond`, `seo_rebuild_planifie`) sont manipulées sous
+`schema_context("public")` → **réellement globales**. Ajout d'un **plafond maxWait**
+(`REBUILD_MAXWAIT = 60 s`) posé une seule fois au début d'une série : le rebuild
+s'exécute au plus tôt entre l'échéance trailing (dernière modif + 15 s) et le
+plafond (1ʳᵉ modif + 60 s). Conséquences : sous pic simultané → **1 rebuild** au
+lieu de N ; sous flux dense → **≤ 1 rebuild / 60 s** (charge bornée, pas de famine),
+objectif « 500 tenants » du CHANTIER-07 enfin tenu.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/tasks.py` | +`REBUILD_MAXWAIT` + constantes de clés ; `planifier_rebuild_agregats` (plafond + clés globales `schema_context("public")`) ; garde de `rebuild_seo_aggregates` : cible = min(échéance trailing, plafond maxWait) |
+| `tests/pytest/test_seo_cache_fragments.py` | +2 tests : recombinaison au plafond maxWait, plafond posé une seule fois |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No.
+
+## Carte réseau : cache L1 SEO périmé par schema (cause racine du retard ~4h) / SEO L1 cache stale per-schema
+
+**Date :** 2026-06-29
+**Migration :** Non / No
+
+**Quoi / What :** Cause racine confirmée du symptôme « les nouveaux events/adresses
+n'apparaissent qu'au bout de plusieurs heures ». Le cache L1 Memcached lu par les
+pages publiques restait **périmé jusqu'au TTL (4 h)** même après le recalcul.
+
+**Pourquoi / Why :** `CACHES['default']` utilise
+`KEY_FUNCTION = django_tenants.cache.make_key`, qui **préfixe chaque clé de cache
+par le schema courant** (isolation cache par tenant). Or les agrégats SEO sont
+**globaux** (`tenant=None`, partagés par tout le réseau). Le worker Celery exécute
+le rebuild dans le schema du tenant déclencheur → il écrivait la clé sous
+`lespass:…:seo:aggregate_lieux`, **invisible** depuis le schema `public` (page ROOT
+`/explorer/`) et les autres tenants. Chaque schema avait sa propre copie L1 ; seule
+celle du schema déclencheur était fraîche. Les autres lisaient du périmé jusqu'au
+TTL 4 h (ou un MISS). Vérifié : L1 lu valait 19 en `public`/`lespass` mais 15 en
+`le-coeur-en-or`/`chantefrein` pour la même donnée globale.
+
+**Fix / Fix :** Les helpers L1 SEO (`set_memcached_l1` / `get_memcached_l1`)
+épinglent désormais le schema `public` (`with schema_context("public")`) autour de
+l'opération cache. La clé n'est donc plus préfixée par le schema d'exécution : une
+**seule entrée L1 globale** est partagée par le worker, la page ROOT et chaque
+tenant. Vérifié de bout en bout (Chrome) : après création d'un event, L1 identique
+sur tous les schemas (public = lespass = le-coeur-en-or) et carte ROOT à jour en
+~20 s, **sans rebuild manuel**.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/services.py` | `set_memcached_l1` / `get_memcached_l1` : `with schema_context("public")` autour du `cache.set` / `cache.get` (clé L1 globale, non préfixée par tenant) |
+| `tests/pytest/test_seo_cache_fragments.py` | +1 test : agrégat global écrit dans un schema tenant lu identique depuis public + autre tenant |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No. Les anciennes clés L1
+  préfixées par tenant expirent seules (TTL 4 h) et ne sont plus lues.
+
+## Carte réseau : events/adresses fraîchement sauvés n'apparaissaient pas / Network map: freshly saved events & addresses didn't show up
+
+**Date :** 2026-06-29
+**Migration :** Non / No
+
+**Quoi / What :** Sur la carte ROOT (`/explorer/`), un nouvel évènement ou une
+nouvelle adresse pouvait rester invisible jusqu'au prochain passage du beat
+Celery (jusqu'à 4 h), alors que le tenant venait de sauvegarder.
+
+**Pourquoi / Why :** Le rebuild de l'agrégat `AGGREGATE_POINTS` (lu par la carte)
+était déclenché en **débounce « front montant »** : la tâche était planifiée à
+`T_première_modif + 180 s`. Si une modif arrivait tard dans cette fenêtre, son
+fragment `TENANT_POINTS` (countdown plus court) pouvait être recombiné **trop
+tôt** — le rebuild figeait un agrégat à partir d'un fragment pas encore à jour —
+et **aucun rebuild de rattrapage** n'était garanti. Seul le beat 4 h corrigeait.
+Aggravé par une « fenêtre morte » du débounce fragment (countdown 30 s < TTL
+verrou 60 s).
+
+**Fix / Fix :** Passage à un **débounce « front descendant » (trailing)**. Chaque
+`post_save`/`post_delete` Event/PostalAddress repousse une échéance
+(`seo_rebuild_echeance = now + 15 s`) et planifie au plus une tâche rebuild par
+fenêtre. À son réveil, `rebuild_seo_aggregates` recombine **seulement si**
+l'échéance est atteinte ; sinon il se **replanifie** pile à l'échéance. Garantie :
+un rebuild s'exécute **toujours après la dernière modif**, sur des fragments à
+jour. Le beat 4 h appelle `rebuild_seo_aggregates(force=True)` (recombine
+toujours, filet anti-dérive). Countdown du fragment réduit à 5 s et TTL du verrou
+aligné (fin de la fenêtre morte). Latence perçue : ~20 s au lieu de 3 min → 4 h.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/tasks.py` | `planifier_rebuild_agregats()` (débounce trailing) ; garde + `force` dans `rebuild_seo_aggregates` ; beat en `force=True` ; constantes `REBUILD_TRAILING_WINDOW`/`REBUILD_MARGE` |
+| `BaseBillet/signals.py` | `declencher_refresh_seo_cache` : fragment countdown 5 s (TTL aligné) ; rebuild via `planifier_rebuild_agregats()` (remplace le front montant 180 s) |
+| `tests/pytest/test_seo_cache_fragments.py` | +4 tests : abstention/replanification, recombinaison à l'échéance, `force=True`, débounce du helper |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No (logique Celery + cache uniquement).
+
 ## Admin réservation : fix crash `'TibilletUser' has no attribute 'lower'` / Admin reservation: fix crash on add
 
 **Date :** 2026-06-26

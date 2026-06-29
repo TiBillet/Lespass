@@ -29,6 +29,13 @@ BASE_DIR = Path(__file__).resolve(strict=True).parent.parent
 SECRET_KEY = os.environ.get('DJANGO_SECRET')
 FERNET_KEY = os.environ.get('FERNET_KEY')
 
+# Cle MapTiler pour les tuiles de la carte explorer (cf. seo/static/seo/explorer.js).
+# Exposee cote client (URL des tuiles) -> a restreindre par domaine dans le dashboard
+# MapTiler. Si vide, la carte retombe sur les tuiles HOT / OpenStreetMap France.
+# / MapTiler key for the explorer map tiles. Client-exposed -> restrict by domain.
+# Empty -> the map falls back to HOT / OpenStreetMap France tiles.
+MAPTILER_KEY = os.environ.get('MAPTILER_KEY', '')
+
 FEDOW = True
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG') == '1'

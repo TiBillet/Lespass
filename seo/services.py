@@ -18,7 +18,7 @@ import os
 from django.core.cache import cache
 from django.db import connection
 from django.utils import timezone
-from django_tenants.utils import tenant_context
+from django_tenants.utils import schema_context, tenant_context
 
 from Customers.models import Client
 
@@ -43,22 +43,41 @@ def _memcached_key(cache_type, tenant_uuid):
     return f"seo:{cache_type}:{tenant_part}"
 
 
+# Pourquoi forcer le schema public (cf. CHANTIER-08, bug L1) :
+# Le cache 'default' utilise KEY_FUNCTION=django_tenants.cache.make_key, qui
+# prefixe CHAQUE cle par le schema courant (isolation cache par tenant). Or le
+# cache SEO porte des AGREGATS GLOBAUX (tenant=None) partages par tout le reseau.
+# Sans precaution, le worker (qui s'execute dans le schema du tenant declencheur)
+# ecrit la cle sous "lespass:...", invisible depuis le schema public (page ROOT
+# /explorer/) et les autres tenants -> ils lisent une copie perimee jusqu'au TTL
+# (4h). On epingle donc le schema public pour TOUTES les operations L1 SEO : la
+# cle n'est plus prefixee par le schema d'execution, et une seule entree L1 est
+# partagee entre le worker, la page ROOT et chaque tenant.
+# / Why pin the public schema (CHANTIER-08, L1 bug):
+# The 'default' cache uses django-tenants make_key, which prefixes every key with
+# the current schema. SEO holds GLOBAL aggregates shared across the whole network.
+# Pinning the public schema keeps the key un-prefixed, so one shared L1 entry is
+# seen by the worker, the ROOT page and every tenant.
+
+
 def set_memcached_l1(cache_type, tenant_uuid, data):
     """
-    Ecrit dans Memcached L1 avec TTL de 4h.
-    / Write to Memcached L1 with 4h TTL.
+    Ecrit dans Memcached L1 avec TTL de 4h, sous une cle GLOBALE (schema public).
+    / Write to Memcached L1 with 4h TTL, under a GLOBAL key (public schema).
     """
     key = _memcached_key(cache_type, tenant_uuid)
-    cache.set(key, data, MEMCACHED_L1_TTL)
+    with schema_context("public"):
+        cache.set(key, data, MEMCACHED_L1_TTL)
 
 
 def get_memcached_l1(cache_type, tenant_uuid):
     """
-    Lit depuis Memcached L1. Retourne None si absent ou expire.
-    / Read from Memcached L1. Returns None if missing or expired.
+    Lit depuis Memcached L1 (cle GLOBALE, schema public). Retourne None si absent.
+    / Read from Memcached L1 (GLOBAL key, public schema). Returns None if missing.
     """
     key = _memcached_key(cache_type, tenant_uuid)
-    return cache.get(key)
+    with schema_context("public"):
+        return cache.get(key)
 
 
 # ---------------------------------------------------------------------------

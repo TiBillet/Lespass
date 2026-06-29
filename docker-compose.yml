@@ -106,6 +106,13 @@ services:
     container_name: lespass_memcached
     hostname: lespass_memcached
     restart: unless-stopped
+    # Limite item portee a 8 Mo (defaut 1 Mo) : l'agregat SEO AGGREGATE_EVENTS
+    # (~687 o/event) approche 1 Mo vers ~1500 events futurs ; au-dela le set L1
+    # echoue. -m 256 : memoire totale 256 Mo (defaut 64) pour accueillir ces gros
+    # items sans evictions. A ajuster selon la RAM dispo. cf. TECH_DOC SEO CHANTIER-08.
+    # / Item size raised to 8 MB (default 1 MB): SEO AGGREGATE_EVENTS nears 1 MB
+    # around ~1500 future events. -m 256: 256 MB total to avoid evictions.
+    command: ["memcached", "-m", "256", "-I", "8m"]
     networks:
       - backend
 
