@@ -1,619 +1,348 @@
 # Changelog / Journal des modifications
 
-## Cartes demo : wallet aligné sur Fedow (anti-doublon) + admin Cartes NFC (bouton mort) / Demo cards: wallet aligned on Fedow (anti-duplicate) + NFC cards admin (dead button)
+## Test carte NFC ↔ wallet Fedow : rendu autonome (plus de skip) / Fedow card test made self-contained
 
-**Date :** 2026-06-25
+**Date :** 2026-06-29
 **Migration :** Non / No
 
-**Contexte / Context :** chasse aux petits bugs sur la branche `main-fedow-import`. Deux bugs
-distincts, tous deux autour des cartes NFC. / Small-bug hunt on `main-fedow-import`; two distinct
-NFC-card bugs.
+**Quoi / What :** Le test d'intégration `test_membership_card_wallet_fedow` ne
+**skippe plus** : sa fixture fabrique elle-même une carte NFC éphémère chez Fedow
+si aucune n'est disponible. Il résiste désormais à un reset complet (`down -v`,
+qui vide la base Fedow) et ne dépend plus d'une carte renseignée dans `.env`.
 
-### Bug #1 — Doublon de wallet sur les cartes clientes du demo data
-**Symptôme :** les cartes clientes de démo (`DEMO_TAGID_CLIENT1`/`CLIENT2`) portaient **deux
-wallets** : un wallet **LOCAL** à uuid aléatoire (créé par `create_test_pos_data` quand il lie la
-carte à un user) **et** le wallet **Fedow** de la carte (créé par `_seed_cartes_nfc_fedow`), resté
-orphelin. **Cause :** `_obtenir_ou_creer_wallet` priorise `carte.user.wallet` → le scan utilisait
-toujours le wallet local fantôme, jamais le wallet Fedow → la carte ne pouvait pas porter de FED.
-L'invariant validé par `test_wallet_carte_fedow_integration` (wallet local uuid == wallet Fedow
-uuid) était violé, et ce test l'évite justement pour les cartes liées à un user.
-/ Demo client cards carried TWO wallets (a random-uuid LOCAL one + the orphan Fedow one); the scan
-always used the phantom local wallet, so the card couldn't hold FED.
+**Pourquoi / Why :** Les cartes NFC vivent dans le serveur Fedow (`fedow_django`),
+dont le `start.sh` ne crée aucune carte au démarrage (les cartes de démo sont
+dans `demo_data`, jamais lancé). Après un `down -v`, plus aucune carte → le test
+skippait. Solution : créer la carte **via l'API Fedow** depuis Lespass.
 
-**Fix :** `create_test_pos_data` **inchangé** (les tests pytest mockent Fedow et s'appuient sur son
-wallet local). En **demo réel**, on aligne après coup :
-- Nouvelle fonction `aligner_wallet_user_sur_fedow(carte)` (dans `demo_data_v2.py`) : **fusionne**
-  le wallet local dans le wallet Fedow (même uuid) — migre `Token` (solde) + `Transaction`
-  (sender/receiver) + `LigneArticle` (PROTECT partout), réassigne `user.wallet`, supprime le wallet
-  local. Idempotent (no-op si déjà aligné ou carte absente de Fedow).
-- Le seed `demo_data_v2.handle` est **réordonné** : cartes Fedow **d'abord**, puis seed POS, puis
-  nouvelle étape `_aligner_wallets_clients_sur_fedow` (CLIENT1/CLIENT2), avant le smoke check.
-  Bruyant mais **non bloquant** (le smoke check final reste juge de l'ouvrabilité de la caisse).
+**Fix / Fix :** nouvelle méthode `NFCcardFedow.create_cards(cards_data)` dans
+`fedow_connect/fedow_api.py` — POST signé par la place du tenant vers l'endpoint
+Fedow `card` (`CardAPI.create`, `HasKeyAndPlaceSignature`), idempotent (201/409).
+La fixture `carte_fedow_ephemere` réutilise `FEDOW_TEST_CARD_NUMBER` s'il pointe
+une carte encore éphémère, sinon **fabrique une carte fraîche** (numéro/tag
+aléatoires). Prérequis : place Fedow signable (cas par défaut en dev).
 
-### Bug #2 — Bouton « Cartes NFC » du dashboard mort (`#`)
-**Symptôme :** dans l'admin, le bouton « Cartes NFC » (section Fedow du dashboard) pointait vers
-`#`. **Cause :** `dashboard.py` reverse `staff_admin:QrcodeCashless_cartecashless_changelist`, mais
-**aucun `ModelAdmin` n'était enregistré** pour `CarteCashless` → `NoReverseMatch` rattrapé par
-`_safe_rev` → « # ».
-**Fix :** nouveau `QrcodeCashless/admin.py` — `CarteCashlessAdmin` **lecture seule** enregistré sur
-`staff_admin_site`. `CarteCashless` étant en **SHARED_APPS** (cross-tenant), `get_queryset()` filtre
-**par tenant** via `detail.origine` (même discipline que `fedow_core/admin.py`).
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `fedow_connect/fedow_api.py` | + `NFCcardFedow.create_cards()` (POST signé `card`) |
+| `tests/pytest/test_membership_card_wallet_fedow.py` | fixture autonome + test `create_cards` (TDD) |
 
-### Tests (neufs)
-- `tests/pytest/test_demo_wallet_alignment.py` — alignement : migration solde + suppression du
-  wallet local, idempotence (déjà aligné), no-op (carte inconnue de Fedow). Frontière Fedow mockée.
-- `tests/pytest/test_carte_cashless_admin.py` — reverse résout, changelist HTTP 200, **isolation
-  cross-tenant** du `get_queryset`.
-- Non-régression : `test_paiement_complementaire`, `test_caisse_navigation`,
-  `test_paiement_especes_cb`, `test_cloture_caisse`, `test_wallet_carte_fedow(_integration)` → **39 OK**.
+### Migration
+- **Migration nécessaire / Migration required :** Non / No.
+
+## Carte explorer : fond de carte MapTiler (style dataviz) avec repli OSM France / MapTiler basemap with OSM France fallback
+
+**Date :** 2026-06-29
+**Migration :** Non / No (front + variable d'env `MAPTILER_KEY`)
+
+**Quoi / What :** Le fond de carte utilise **MapTiler** (style `dataviz-v4`, épuré)
+quand une clé est configurée, sinon **repli** sur les tuiles **Humanitarian (HOT)
+d'OpenStreetMap France**. La clé MapTiler vient de `MAPTILER_KEY` (`.env`), jamais
+en dur dans le code.
+
+**Pourquoi / Why :** CARTO Voyager affichait les régions françaises en anglais.
+MapTiler offre un style épuré (idéal pour faire ressortir les markers) et des
+garanties de prod ; OSM France reste le repli gratuit/sans clé (et le défaut en dev
+si `MAPTILER_KEY` est vide). Branchement : `settings.MAPTILER_KEY` →
+contexte des vues → `data-maptiler-key` sur `#explorer-root` → `explorer.js`.
+
+**Limite langue / Language note :** sur les tuiles **raster** MapTiler, `?language=fr`
+n'a **pas** d'effet (labels figés au rendu). Les villes françaises s'affichent en
+français, mais les pays/villes étrangers restent en anglais (« Geneva »,
+« Switzerland »). Pour un français complet : créer un style FR dans le dashboard
+MapTiler (Customize → langue), ou passer au SDK vectoriel (MapLibre, `language: 'fr'`).
+
+**Sécurité clé :** la clé MapTiler est exposée côté client (URL des tuiles) →
+**à restreindre par domaine** dans le dashboard MapTiler (Allowed origins).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `TiBillet/settings.py` | `MAPTILER_KEY = os.environ.get('MAPTILER_KEY', '')` |
+| `seo/views.py` + `BaseBillet/views.py` | passent `maptiler_key` au contexte (explorer ROOT + federation tenant) |
+| `seo/templates/seo/partials/explorer_widget.html` | `data-maptiler-key` sur `#explorer-root` |
+| `seo/static/seo/explorer.js` | `tileLayer` : MapTiler `dataviz-v4` si clé, sinon repli HOT / OSM France |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No. Renseigner `MAPTILER_KEY`
+  dans `.env` (sinon repli HOT automatique) + redémarrer le conteneur pour charger l'env.
+
+## Carte explorer : markers synchronisés au mode « Événements » + barre de recherche resserrée / Explorer map: markers synced with "Events" mode + tightened search bar
+
+**Date :** 2026-06-29
+**Migration :** Non / No
+
+**Quoi / What :** Sur la carte explorer, en mode « Événements », les markers ne
+montrent plus que les lieux ayant au moins un événement visible (les lieux sans
+événement à venir disparaissent de la carte). La barre de recherche et le toggle
+« Lieux / Événements » forment un groupe compact **centré** (au lieu d'une barre
+pleine largeur avec les boutons collés au bord). Le fondu dégradé qui estompait à
+tort le bouton « Événements » est retiré.
+
+**Pourquoi / Why :** Les markers réagissaient déjà aux filtres texte et tag (via
+`updateMapMarkersByPA`), mais le toggle Lieux/Événements ne changeait que la liste
+de gauche, pas les markers. Côté layout, la barre s'étirait sur toute la largeur
+(boutons collés au bord), puis une 1ʳᵉ tentative laissait un grand vide au milieu.
+
+**Fix / Fix :** Dans `applyFilters()`, la source des markers visibles dépend du
+mode : en mode « événement », `visiblePaIds` est construit depuis les `pa_id` des
+événements visibles (`eventCards`) au lieu de toutes les PA. CSS : le groupe
+`.explorer-search-row` est borné (`max-width: 760px`) et **centré** (`margin: 0 auto`),
+la barre (`flex:1` + `min-width:0`) remplit jusqu'au toggle (plus de vide) ; retrait
+du `mask-image` (fondu droit) sur `.explorer-pills` qui estompait le bouton
+« Événements » (toggle à 2 boutons → jamais de scroll) ; responsive mobile conservé.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/static/seo/explorer.js` | `applyFilters` : markers = lieux avec events visibles en mode « événement » |
+| `seo/static/seo/explorer.css` | groupe recherche+toggle borné et compact à gauche (responsive mobile conservé) |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No (front statique).
+- Note : vider le cache navigateur / hard reload pour récupérer les statiques.
+
+## Infra : limite item Memcached relevée (1 Mo → 8 Mo) pour l'agrégat SEO / Memcached item size raised for the SEO aggregate
+
+**Date :** 2026-06-29
+**Migration :** Non / No (infra — recréation du conteneur memcached)
+
+**Quoi / What :** Le service `lespass_memcached` est lancé avec `-I 8m -m 256`
+(au lieu des défauts 1 Mo / 64 Mo).
+
+**Pourquoi / Why :** L'agrégat SEO `AGGREGATE_EVENTS` pèse ~687 o/event et contient
+tous les events futurs publiés du réseau. À ~1500 events futurs il atteint la limite
+Memcached par défaut (1 Mo) ; au-delà le `set` L1 échoue silencieusement → la page
+relit la DB à chaque fois (cache inutile). `-I 8m` repousse le mur à ~12 000 events
+futurs ; `-m 256` donne la mémoire totale pour ces gros items sans évictions.
+Alternative durable (non faite) : borner l'agrégat aux N prochains mois.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `docker-compose.yml` | `lespass_memcached` : `command: ["memcached", "-m", "256", "-I", "8m"]` |
+| `docker-compose.pre-prod.yml` | idem |
+| `docker-compose.v1.pre-prod.yml` | idem |
+
+### Application / Apply
+- **Recréer le conteneur** (vide le cache, reconstruit au prochain rebuild/MISS) :
+  `docker compose up -d lespass_memcached` (et `-f docker-compose.pre-prod.yml` en prod).
+- Ajuster `-m 256` selon la RAM du serveur.
+
+## Agenda participatif : l'approbation d'une proposition ne rafraîchissait pas la carte / Proposal approval didn't refresh the map
+
+**Date :** 2026-06-29
+**Migration :** Non / No
+
+**Quoi / What :** Approuver une proposition publique (agenda participatif) via
+l'action admin « Approuver et publier les propositions sélectionnées » la publiait
+bien, mais l'event **n'apparaissait sur la carte réseau qu'au beat 4 h**.
+
+**Pourquoi / Why :** L'action utilisait `queryset.update(is_proposal=False,
+published=True)`. Le `.update()` en masse **ne déclenche pas le signal
+`post_save`** → `declencher_refresh_seo_cache` n'était jamais appelé → pas de
+rebuild SEO. (Le toggle « Publier » de la liste et l'édition via le formulaire,
+qui passent par `save()`, déclenchaient bien le signal — seule l'action bulk était
+touchée.)
+
+**Fix / Fix :** L'action publie désormais via `save(update_fields=["is_proposal",
+"published"])` par instance (boucle), ce qui déclenche `post_save` → rebuild SEO
+débouncé → l'event approuvé apparaît sur la carte en ~15-20 s. Vérifié par test +
+en conditions réelles (Chrome) : toggle « Publier » → event présent dans
+`AGGREGATE_EVENTS`, L1 cohérent cross-schema.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/admin_tenant.py` | `approuver_propositions` : `save()` par instance au lieu de `queryset.update()` (déclenche le signal SEO) |
+| `tests/pytest/test_seo_cache_fragments.py` | +1 test : l'approbation d'une proposition déclenche le rebuild SEO |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No.
+
+## Carte réseau : débounce du rebuild rendu global + plafond anti-famine / Global rebuild debounce + maxWait cap
+
+**Date :** 2026-06-29
+**Migration :** Non / No
+
+**Quoi / What :** Le débounce du rebuild d'agrégats est désormais **global** (1 cycle
+pour tout le réseau, plus 1 par tenant) et protégé contre la **famine** par un
+plafond « maxWait ».
+
+**Pourquoi / Why :** (1) Les clés de débounce passaient par le cache `default`
+préfixé par schema (`make_key`) → le verrou « global » était en réalité **par
+tenant** : sous un pic multi-lieux, on lançait N rebuilds redondants (chacun
+recombine pourtant tout le réseau). (2) Le débounce *trailing* seul risquait la
+**famine** : sous un flux continu de modifs (< 15 s d'intervalle : import, grosse
+saison), l'échéance était repoussée indéfiniment et le rebuild ne partait jamais
+avant le beat 4 h — recréant le symptôme corrigé.
+
+**Fix / Fix :** Les 3 clés de débounce (`seo_rebuild_echeance`,
+`seo_rebuild_plafond`, `seo_rebuild_planifie`) sont manipulées sous
+`schema_context("public")` → **réellement globales**. Ajout d'un **plafond maxWait**
+(`REBUILD_MAXWAIT = 60 s`) posé une seule fois au début d'une série : le rebuild
+s'exécute au plus tôt entre l'échéance trailing (dernière modif + 15 s) et le
+plafond (1ʳᵉ modif + 60 s). Conséquences : sous pic simultané → **1 rebuild** au
+lieu de N ; sous flux dense → **≤ 1 rebuild / 60 s** (charge bornée, pas de famine),
+objectif « 500 tenants » du CHANTIER-07 enfin tenu.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/tasks.py` | +`REBUILD_MAXWAIT` + constantes de clés ; `planifier_rebuild_agregats` (plafond + clés globales `schema_context("public")`) ; garde de `rebuild_seo_aggregates` : cible = min(échéance trailing, plafond maxWait) |
+| `tests/pytest/test_seo_cache_fragments.py` | +2 tests : recombinaison au plafond maxWait, plafond posé une seule fois |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No.
+
+## Carte réseau : cache L1 SEO périmé par schema (cause racine du retard ~4h) / SEO L1 cache stale per-schema
+
+**Date :** 2026-06-29
+**Migration :** Non / No
+
+**Quoi / What :** Cause racine confirmée du symptôme « les nouveaux events/adresses
+n'apparaissent qu'au bout de plusieurs heures ». Le cache L1 Memcached lu par les
+pages publiques restait **périmé jusqu'au TTL (4 h)** même après le recalcul.
+
+**Pourquoi / Why :** `CACHES['default']` utilise
+`KEY_FUNCTION = django_tenants.cache.make_key`, qui **préfixe chaque clé de cache
+par le schema courant** (isolation cache par tenant). Or les agrégats SEO sont
+**globaux** (`tenant=None`, partagés par tout le réseau). Le worker Celery exécute
+le rebuild dans le schema du tenant déclencheur → il écrivait la clé sous
+`lespass:…:seo:aggregate_lieux`, **invisible** depuis le schema `public` (page ROOT
+`/explorer/`) et les autres tenants. Chaque schema avait sa propre copie L1 ; seule
+celle du schema déclencheur était fraîche. Les autres lisaient du périmé jusqu'au
+TTL 4 h (ou un MISS). Vérifié : L1 lu valait 19 en `public`/`lespass` mais 15 en
+`le-coeur-en-or`/`chantefrein` pour la même donnée globale.
+
+**Fix / Fix :** Les helpers L1 SEO (`set_memcached_l1` / `get_memcached_l1`)
+épinglent désormais le schema `public` (`with schema_context("public")`) autour de
+l'opération cache. La clé n'est donc plus préfixée par le schema d'exécution : une
+**seule entrée L1 globale** est partagée par le worker, la page ROOT et chaque
+tenant. Vérifié de bout en bout (Chrome) : après création d'un event, L1 identique
+sur tous les schemas (public = lespass = le-coeur-en-or) et carte ROOT à jour en
+~20 s, **sans rebuild manuel**.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/services.py` | `set_memcached_l1` / `get_memcached_l1` : `with schema_context("public")` autour du `cache.set` / `cache.get` (clé L1 globale, non préfixée par tenant) |
+| `tests/pytest/test_seo_cache_fragments.py` | +1 test : agrégat global écrit dans un schema tenant lu identique depuis public + autre tenant |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No. Les anciennes clés L1
+  préfixées par tenant expirent seules (TTL 4 h) et ne sont plus lues.
+
+## Carte réseau : events/adresses fraîchement sauvés n'apparaissaient pas / Network map: freshly saved events & addresses didn't show up
+
+**Date :** 2026-06-29
+**Migration :** Non / No
+
+**Quoi / What :** Sur la carte ROOT (`/explorer/`), un nouvel évènement ou une
+nouvelle adresse pouvait rester invisible jusqu'au prochain passage du beat
+Celery (jusqu'à 4 h), alors que le tenant venait de sauvegarder.
+
+**Pourquoi / Why :** Le rebuild de l'agrégat `AGGREGATE_POINTS` (lu par la carte)
+était déclenché en **débounce « front montant »** : la tâche était planifiée à
+`T_première_modif + 180 s`. Si une modif arrivait tard dans cette fenêtre, son
+fragment `TENANT_POINTS` (countdown plus court) pouvait être recombiné **trop
+tôt** — le rebuild figeait un agrégat à partir d'un fragment pas encore à jour —
+et **aucun rebuild de rattrapage** n'était garanti. Seul le beat 4 h corrigeait.
+Aggravé par une « fenêtre morte » du débounce fragment (countdown 30 s < TTL
+verrou 60 s).
+
+**Fix / Fix :** Passage à un **débounce « front descendant » (trailing)**. Chaque
+`post_save`/`post_delete` Event/PostalAddress repousse une échéance
+(`seo_rebuild_echeance = now + 15 s`) et planifie au plus une tâche rebuild par
+fenêtre. À son réveil, `rebuild_seo_aggregates` recombine **seulement si**
+l'échéance est atteinte ; sinon il se **replanifie** pile à l'échéance. Garantie :
+un rebuild s'exécute **toujours après la dernière modif**, sur des fragments à
+jour. Le beat 4 h appelle `rebuild_seo_aggregates(force=True)` (recombine
+toujours, filet anti-dérive). Countdown du fragment réduit à 5 s et TTL du verrou
+aligné (fin de la fenêtre morte). Latence perçue : ~20 s au lieu de 3 min → 4 h.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/tasks.py` | `planifier_rebuild_agregats()` (débounce trailing) ; garde + `force` dans `rebuild_seo_aggregates` ; beat en `force=True` ; constantes `REBUILD_TRAILING_WINDOW`/`REBUILD_MARGE` |
+| `BaseBillet/signals.py` | `declencher_refresh_seo_cache` : fragment countdown 5 s (TTL aligné) ; rebuild via `planifier_rebuild_agregats()` (remplace le front montant 180 s) |
+| `tests/pytest/test_seo_cache_fragments.py` | +4 tests : abstention/replanification, recombinaison à l'échéance, `force=True`, débounce du helper |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No (logique Celery + cache uniquement).
+
+## Admin réservation : fix crash `'TibilletUser' has no attribute 'lower'` / Admin reservation: fix crash on add
+
+**Date :** 2026-06-26
+**Migration :** Non / No
+
+**Quoi / What :** L'ajout d'une réservation depuis l'admin
+(`/admin/BaseBillet/reservation/add/`) plantait avec
+`AttributeError: 'TibilletUser' object has no attribute 'lower'` dès qu'un
+utilisateur était sélectionné (Sentry 7574740199).
+
+**Pourquoi / Why :** un commit du 2026-06-03 avait transformé le champ `email`
+d'un `forms.EmailField` (saisie d'une adresse) en
+`forms.ModelChoiceField(queryset=TibilletUser.objects.all())` (Select2 pour
+chercher un utilisateur existant) — **sans adapter `save()`**. `cleaned_data['email']`
+renvoyait donc un objet `TibilletUser`, que `save()` passait toujours à
+`get_or_create_user()`, lequel appelle `email.lower()` → crash. Bug introduit
+le 3 juin, déclenché en prod le 25.
+
+**Fix :** retour à un **input texte simple** (`forms.EmailField`), l'usage
+historique. `save()` retrouve ou crée l'utilisateur via
+`get_or_create_user(email, send_mail=False)` (pas de mail de validation : la
+réservation est créée côté admin). Effet de bord positif : supprime la fuite
+cross-tenant du `queryset=TibilletUser.objects.all()` (qui listait tous les
+utilisateurs de la plateforme).
+
+**Bonus — choix du tarif :** le champ tarif listait les `PriceSold`, qui
+n'existent **qu'après une première vente** : les évènements payants à venir
+jamais vendus n'apparaissaient pas (un seul tarif visible). Il liste désormais
+**une option par couple (évènement, tarif)** (`ChoiceField`, valeur
+`event_uuid:price_uuid`, libellé cherchable « date — évènement — tarif — prix »),
+et `save()` **matérialise** le `ProductSold` + `PriceSold` au moment de la
+création, comme le flow de vente.
+
+Le couple est nécessaire car un même tarif (`Product`/`Price`) peut être
+**partagé entre plusieurs évènements** — typiquement « Réservation gratuite »
+(`views.py` ajoute le même produit FREERES à chaque évènement gratuit). Un
+select listant les `Price` n'aurait montré qu'**une** option pour N évènements
+et aurait réservé sur le mauvais évènement (le premier). Avec le couple, chaque
+évènement a sa propre entrée et la réservation cible le bon évènement.
+
+**Bonus — email manquant dans la liste des ventes :** la colonne « user_email »
+de l'admin `LigneArticle` restait **vide** pour les ventes via l'admin.
+`LigneArticle.user_email()` ne gérait que `membership` et `paiement_stripe`,
+jamais `reservation`. Ajout du cas `reservation.user_commande` (en priorité).
+
+**Bonus — champ « Prix par billet » :** nouveau champ `amount` (montant unitaire
+**par billet**). Il se **pré-remplit** automatiquement à la sélection du tarif
+(JS) et devient **obligatoire** pour un tarif à **prix libre** (`free_price`).
+Un libellé « prix € × quantité = total € » rappelle que le montant est par billet.
+
+**Bonus — moyen de paiement obligatoire :** le select `payment_method` est
+désormais **requis** et commence par « Sélectionner un moyen de paiement »
+(option vide). Avant, le 1er choix proposé était « Offert » (`FREE`) : une
+validation distraite créait une **vente offerte par erreur**.
+
+**Fix — double comptage du montant (bug pré-existant) :** `save()` stockait
+`LigneArticle.amount = prix × quantité × 100`, or `amount` est le **montant
+UNITAIRE en centimes** (le total est `amount × qty`, cf. `comptabilite/services.py`
+et `LigneArticle.total()`). Une réservation admin de N billets était donc comptée
+`× N` en trop (ex. 8 € × 3 affichait 72 € au lieu de 24 €). Corrigé en
+`amount = prix_unitaire × 100`. **⚠️ Données : les `LigneArticle` payantes créées
+via ce formulaire avant ce correctif (sale_origin = `ADMIN`, qty > 1) ont un
+`amount` surévalué** — à vérifier/corriger en base si nécessaire.
 
 ### Fichiers / Files
 | Fichier / File | Changement / Change |
 |---|---|
-| `Administration/management/commands/demo_data_v2.py` | fonction `aligner_wallet_user_sur_fedow` + méthode `_aligner_wallets_clients_sur_fedow` + réordonnancement du seed (Fedow avant POS) |
-| `QrcodeCashless/admin.py` | **Nouveau** : `CarteCashlessAdmin` lecture seule, filtré par tenant (corrige le bouton mort) |
-| `tests/pytest/test_demo_wallet_alignment.py`, `test_carte_cashless_admin.py` | **Nouveaux** |
-
-**Note i18n :** chaînes FR ajoutées dans `QrcodeCashless/admin.py` (« Wallet », « Lieu d'origine »).
-Passe `makemessages` à faire par le mainteneur. / FR strings added; maintainer runs makemessages.
-
----
-
-## Paiement POS complémentaire — fix montants (bug B) + FED 2e carte (bug C) + tests / Complementary POS payment — amount fix (bug B) + 2nd-card FED (bug C) + tests
-
-**Date :** 2026-06-25
-**Migration :** Non / No
-
-**Contexte / Context :** le flux de paiement « complémentaire » (1ʳᵉ carte NFC partielle, puis
-complément par espèces, CB, ou 2ᵉ carte NFC) n'avait **aucun test d'intégration**. En l'instrumentant,
-deux bugs réels sont apparus. La règle métier confirmée : si la 2ᵉ carte ne suffit pas, le paiement
-**s'arrête** (pas de 3ᵉ étape), on revient à laboutik avec les articles **non payés**, sans débit.
-/ The complementary payment flow had no integration test; instrumenting it surfaced two real bugs.
-
-### Bug B — total de ligne triplé (« 45 € » au lieu de 15 €)
-**Symptôme :** une vente NFC de 3 articles à 5 € s'affichait **45 €** (= 15 × 3) sur la fiche admin et
-le ticket. **Cause :** la cascade NFC (`_creer_lignes_articles_cascade`) stockait `LigneArticle.amount` =
-**montant total** de la part au lieu du **prix unitaire**, alors que `LigneArticle.total = amount × qty` →
-la quantité était comptée deux fois.
-**Fix :**
-- `_creer_lignes_articles_cascade` stocke désormais `amount = prix_centimes` (**unitaire**), aligné sur
-  le chemin simple et sur `LigneArticle.total = amount × qty`.
-- `laboutik/reports.py` : les 18 `Sum("amount")` deviennent un helper `montant_ttc_centimes()` =
-  `Cast(Round(Sum(F("amount") * F("qty"))), IntegerField())` — le CA TTC est **arrondi au centime DANS la
-  requête** (les `qty` fractionnaires de la cascade ne fuient jamais en Decimal dans `rapport_json`).
-- `comptabilite/services.py` utilisait déjà `Sum(amount × qty)` → désormais cohérent.
-
-**Convention unifiée :** `amount` = prix unitaire (centimes), `qty` = quantité (fractionnaire possible),
-**total = `amount × qty`** partout. Arrondi monétaire au centime, dans l'agrégation.
-/ Unified convention: amount = unit price, qty = quantity, total = amount × qty everywhere.
-
-### Bug C — FED de la 1ʳᵉ carte oublié au complément 2ᵉ carte NFC (« reste 7 € » au lieu de 1 €)
-**Symptôme :** carte1 paie une part en **FED legacy** ; au complément par une 2ᵉ carte NFC, le FED de
-carte1 était **ignoré** → reste à payer surévalué (7 € au lieu de 1 €), et impossible de finaliser un
-paiement carte1-FED + carte2. **Cause :** la branche espèces/CB de `payer_complementaire` ré-appliquait
-le FED de carte1, mais **pas** la branche 2ᵉ carte NFC.
-**Fix :** la branche NFC reporte le FED de carte1 dans le calcul du complément (mirroir espèces/CB), avec
-**débit différé** au bloc atomic (fail-fast) — aucun débit en cas d'insuffisance (comportement STOP préservé).
-
-### Tests (tous neufs)
-`tests/pytest/test_paiement_complementaire.py` — matrice complète : NFC1+NFC2 (suffisante / insuffisante →
-STOP), NFC1+espèce, NFC1+CB, bug B (total ligne = 15 €), bug C (reste 1 € + chemin succès FED), et clôture
-d'une vente fractionnée (qty 1,2/1,8 → total 15 €, cashless 6 €, espèces 9 € **pile**). Plus, dans
-`test_c2_legacy_repartition.py`, 5 tests garantissant que la **somme des quantités** tombe pile sur l'entier.
-
-### Fichiers / Files
-| Fichier / File | Changement / Change |
-|---|---|
-| `laboutik/views.py` | bug C (branche NFC de `payer_complementaire`, FED carte1 reporté + débit différé) ; bug B (`_creer_lignes_articles_cascade` : `amount` = prix unitaire) ; correctif `qty` (plus de quantité négative) |
-| `laboutik/reports.py` | helper `montant_ttc_centimes()` (arrondi centime dans la requête) + 18 agrégations |
-| `tests/pytest/test_paiement_complementaire.py` | **Nouveau** : matrice paiement multiple + bugs B/C + clôture cascade |
-| `tests/pytest/test_c2_legacy_repartition.py` | +5 tests garantie somme des quantités |
-| `tests/pytest/test_paiement_especes_cb.py`, `test_stock_negatif.py` | `setUp` active `module_caisse` (garde POS) |
-
-**Note fiscale :** la chaîne HMAC signe `amount`/`qty` à la création. Les **nouvelles** lignes sont signées
-avec la convention corrigée ; les lignes déjà signées gardent leur signature (pas de réécriture du passé).
-Les tests clôture/FEC existants ne couvraient pas les ventes NFC en cascade — d'où l'incohérence non
-détectée ; le nouveau test de clôture cascade comble ce trou.
-
----
-
-## Fix bridge d'appairage hardware (`/laboutik/auth/bridge/`) — fin du portage TermUser / Hardware pairing bridge fix — TermUser port completed
-
-**Date :** 2026-06-25
-**Migration :** **Oui** / Yes — `BaseBillet 0223` (tenant) + `discovery 0003` (shared)
-
-**Quoi / What :** `POST /laboutik/auth/bridge/` plantait en **500** (`AttributeError: 'LaBoutikAPIKey'
-object has no attribute 'user'`). Cause racine : le chantier **C-02c « Appairage & terminaux »**
-avait été **porté à moitié** depuis `lespass-main` — la vue bridge et la permission
-`HasLaBoutikTerminalAccess` attendaient une clé **liée à un `TermUser`**, mais :
-1. le modèle `LaBoutikAPIKey` n'avait **pas** de champ `user` ;
-2. l'appairage (`discovery`) créait une clé **sans** TermUser (pas de routing par rôle) ;
-3. `TermUser.save()` (version « minimale ») ne posait **pas** `client_source` (→ la permission V2
-   aurait refusé l'accès caisse même après login).
-Ce **n'était donc pas une migration manquante** mais un **champ/feature absent du code**.
-/ The bridge crashed with AttributeError because the C-02c pairing port was incomplete:
-`LaBoutikAPIKey` had no `user` field, pairing created no TermUser, and `TermUser.save()` didn't set
-`client_source`. Not a missing migration — missing model field + feature.
-
-**Fix (portage complet depuis `lespass-main`) :**
-- **`LaBoutikAPIKey.user`** = `OneToOneField(AUTH_USER_MODEL, null=True, related_name='laboutik_api_key')`
-  (nullable pour compat V1) + migration `BaseBillet 0223`.
-- **`PairingDevice.terminal_role`** (choices LB/TI/KI, défaut **LB**) + migration `discovery 0003`.
-- **`discovery/views.py`** : routing par `terminal_role` dans `ClaimPinView` + helper
-  `_create_laboutik_terminal` (crée un `TermUser` espèce TE, email `<uuid>@terminals.local`, et
-  `LaBoutikAPIKey.create_key(user=term_user)`). Branche **TI refusée explicitement** (controlvanne
-  pas porté), branche **KI** réutilise le helper LaBoutik.
-- **`TermUser.save()`** pose `client_source = connection.tenant` à la création (indispensable à
-  `HasLaBoutikTerminalAccess`).
-
-**Contrat de la vue inchangé** (clients Cordova) : `POST` form-data `api_key=<key>` → **302** vers
-`/laboutik/caisse` + cookie `sessionid` ; clé legacy `user=None` → **400** (plus de 500) ; clé
-absente/invalide/révoquée → **401**.
-
-**Tests :** `test_hardware_auth_bridge.py` (6 cas, dont la non-régression clé legacy → 400) +
-`test_terminal_role_choices_sync.py` (sync des choices TibilletUser ↔ PairingDevice).
-
-### Fichiers / Files
-| Fichier / File | Changement / Change |
-|---|---|
-| `BaseBillet/models.py` (+ `migrations/0223`) | `LaBoutikAPIKey.user` (OneToOne → TermUser, nullable) |
-| `discovery/models.py` (+ `migrations/0003`) | `PairingDevice.terminal_role` (LB/TI/KI, défaut LB) |
-| `discovery/views.py` | routing par rôle + helper `_create_laboutik_terminal` (TermUser + clé liée) |
-| `AuthBillet/models.py` | `TermUser.save()` pose `client_source` à la création |
-| `tests/pytest/test_hardware_auth_bridge.py`, `test_terminal_role_choices_sync.py` | **Nouveaux** |
-
-**Migrations appliquées (dev)** : `migrate_schemas --shared` (discovery 0003) + `--schema=<tenant>`
-(BaseBillet 0223) sur lespass + 5 tenants démo. **À appliquer en prod** sur le serveur concerné.
-
----
-
-## Dashboard — carte POS unifiée (V1/V2) + garde d'activation de la caisse / Dashboard — unified POS card (V1/V2) + cash register activation guard
-
-**Date :** 2026-06-23
-**Migration :** Non / No
-
-**Quoi / What :** Sur le dashboard admin, les **3 anciennes cartes** liées au point de vente
-(carte module « POS & restaurant », carte intégration « LaBoutik V1 », carte teaser « LaBoutik V2 »)
-sont **fusionnées en une seule carte « POS & restaurant »** à **3 états exclusifs** :
-- **V1 active** (`server_cashless` renseigné) : lien vers l'interface V1 + statut online/offline ;
-  **aucun toggle** (désactivation impossible) + message « migration V2 → contactez l'équipe TiBillet ».
-- **V2 active** (`module_caisse=True`) : lien **« Ouvrir la caisse »** → `/laboutik/caisse/` + badge BETA.
-- **Inactif** (ni V1 ni V2) : **switch d'activation** de la V2 + badge **BETA**.
-/ The 3 old POS-related dashboard cards are merged into a single 3-state "POS & restaurant" card
-(V1 active → link, no toggle, migration note ; V2 active → open-POS link ; inactive → BETA activation switch).
-
-**Garde d'activation / Activation guard :** `/laboutik/caisse/` (et **toutes** les routes POS V2 :
-Caisse, Paiement, Commande, ArticlePanel) vérifie désormais **toujours** `module_caisse`. Module
-désactivé → **403**, même pour un admin authentifié. Le lien du dashboard n'apparaît pas ET l'URL
-directe est refusée. Garde centralisé en tête de `HasLaBoutikTerminalAccess.has_permission`.
-/ All V2 POS routes now always check `module_caisse`: disabled → 403 even for an authenticated admin.
-
-**Activation en un clic / One-click activation :** la caisse V2 exige la monnaie locale (décision
-projet : pas de caisse sans cashless). Activer la V2 **active automatiquement** `module_monnaie_locale`
-(au lieu de bloquer avec un message d'erreur) → mise en route BETA en un clic.
-/ Enabling V2 POS auto-enables `module_monnaie_locale` (hard dependency) instead of blocking.
-
-**Dev / tests :** le seed `demo_data_v2` active désormais **tous les modules** par défaut
-(billetterie, adhésion, crowdfunding, fédération, monnaie locale, caisse, inventaire) pour que
-l'admin et les tests disposent de tout. Les tests POS sur tenant neuf (`FastTenantTestCase`)
-activent `module_caisse` dans leur `setUp` (sinon le garde renvoie 403).
-
-### Fichiers / Files
-| Fichier / File | Changement / Change |
-|---|---|
-| `Administration/admin/dashboard.py` | `_build_pos_card_context` (carte POS 3 états) remplace `_build_integrations_context` ; `module_caisse` exclu de la grille générique ; `dashboard_callback` injecte `pos_card` |
-| `Administration/templates/admin/dashboard.html` | carte POS unifiée (3 états, switch + lien + badge BETA) ; section « Integrations » supprimée |
-| `Administration/admin_tenant.py` | `module_toggle` : activation V2 → auto-active la monnaie locale (au lieu d'un message d'erreur) |
-| `BaseBillet/permissions.py` | `HasLaBoutikTerminalAccess` : garde `module_caisse` en tête (403 si inactif) |
-| `Administration/management/commands/demo_data_v2.py` | seed dev : active tous les `module_*` par défaut |
-| `tests/pytest/test_caisse_navigation.py` | nouveau `TestGardeModuleCaisse` (module inactif → 403, mocké, isolation-proof) |
-| `tests/pytest/test_corrections_fond_sortie.py`, `test_rapport_temps_reel.py` | `setUp` active `module_caisse` (routes POS gardées) |
-
----
-
-## Fedow = source de vérité du wallet de carte (POS V2) + fix « Vider la carte » / Fedow as source of truth for the card wallet + "Empty card" fix
-
-**Date :** 2026-06-22
-**Migration :** Non / No
-
-**Quoi / What :** Au point de vente V2, la résolution du wallet d'une carte NFC passe désormais
-**par Fedow, source de vérité unique**. Toute carte doit exister dans Fedow — c'est le seul moyen
-de porter du **FED** (qui vit dans Fedow), exactement comme LaBoutik V1. Le wallet est **miroité en
-local** (`fedow_core`) avec le **MÊME `uuid`** (Fedow fait foi). Fedow est une **dépendance assumée
-et indispensable : pas de fallback**. S'il est indisponible, la carte est refusée (on alerte) ;
-on ne fabrique **jamais** de wallet local orphelin, qui serait un doublon déconnecté de Fedow.
-Le check carte **relit Fedow à chaque scan** (une recharge FED a pu avoir lieu entre-temps).
-/ At a V2 POS, a card's wallet is now resolved **through Fedow (single source of truth)**. Every
-card must exist in Fedow (only way to hold FED). The wallet is mirrored locally (`fedow_core`) with
-the **same uuid**. Fedow is an assumed, indispensable dependency — **no fallback**: if it's down,
-the card is rejected (we alert), never a local orphan wallet. The card check re-reads Fedow on every
-scan (a FED top-up may have happened).
-
-**Point de débranchement / Debranch point :** la logique est isolée dans **un seul** helper
-`obtenir_wallet_carte_depuis_fedow(carte)`. Le jour où le Fedow legacy sera débranché, on remplacera
-**uniquement le corps** de cette fonction par une création interne (`fedow_core`), sans toucher au
-reste du POS. Garde `can_fedow()` **avant** d'instancier `FedowAPI` (sinon `create_place()` —
-handshake réseau involontaire — à chaque scan sur un tenant sans place Fedow).
-/ Logic isolated in a single helper; only its body changes when legacy Fedow is removed. `can_fedow()`
-guard before instantiating `FedowAPI` to avoid an involuntary `create_place()` handshake.
-
-**Débit legacy hors transaction atomique :** le débit FED legacy (Fedow distant) a lieu **avant** le
-`transaction.atomic()` local. Si l'atomic local échoue ensuite, le débit legacy est orphelin — il est
-**loggé en `INCIDENT`** (pas de commit en 2 phases possible), puis l'exception est relevée.
-/ Legacy FED debit happens outside the local atomic block; an orphaned legacy debit is logged as
-`INCIDENT` then re-raised (no two-phase commit).
-
-**Cartes de seed dans Fedow :** le seed (`demo_data_v2`) crée les cartes simulateur avec des `tag_id`
-issus du `.env` (`DEMO_TAGID_*`, **distincts** des cartes LEGACY pour éviter toute confusion),
-`number_printed = tag_id` et un `qrcode_uuid` **dérivé du tag_id** (lisible en dev). Le doublon
-`_seed_fusion_test_local` a été supprimé.
-/ Seed simulator cards use `.env` tag_ids (distinct from LEGACY), `number_printed = tag_id` and a
-qrcode derived from the tag_id. Removed the `_seed_fusion_test_local` duplicate.
-
-**Fix « Vider la carte » (erreur 500) :** la library de filtres `billet_filters` (`cents_to_euros`,
-`cents_to_asset`) **manquait** au dépôt (oubliée à l'import) → `TemplateSyntaxError: 'billet_filters'
-is not a registered tag library`. Fichier rétabli (arithmétique **entière** sur les centimes,
-séparateurs FR). Toute la suite POS repasse au vert.
-/ The `billet_filters` tag library was missing from the repo → restored (integer-cents arithmetic).
-
-**Tests :** 2 nouveaux fichiers — `test_wallet_carte_fedow.py` (mock `FedowAPI`, 4 cas : carte connue →
-même uuid + rattachement, carte avec user → pas d'appel Fedow, carte inconnue → exception,
-idempotence) et `test_wallet_carte_fedow_integration.py` (**intégration réelle, sans mock**,
-`skipif not can_fedow()`, `tag_id` isolé `DEMO_TAGID_CLIENT4`). `_login_as_admin` crée un tenant-admin
-au lieu de `pytest.skip` (6 skips levés). Suite POS : **59 passed, 0 failed, 0 skipped** (3 runs).
-
-### Fichiers / Files
-| Fichier / File | Changement / Change |
-|---|---|
-| `laboutik/views.py` | helper `obtenir_wallet_carte_depuis_fedow` (Fedow source de vérité, garde `can_fedow`, miroir même uuid) ; branchement de `_obtenir_ou_creer_wallet` ; résolution wallet **avant** l'atomic ; log `INCIDENT` sur débit legacy orphelin ; retrait d'un code mort `if wallet is None` |
-| `BaseBillet/templatetags/billet_filters.py` | **Rétabli** (manquait) : `cents_to_euros`, `cents_to_asset`, arithmétique entière |
-| `Administration/management/commands/demo_data_v2.py` | cartes simulateur depuis `DEMO_TAGID_*` (`.env`), `number_printed = tag_id`, qrcode dérivé ; suppression `_seed_fusion_test_local` |
-| `tests/pytest/test_wallet_carte_fedow.py` | **Nouveau** : 4 tests mockés |
-| `tests/pytest/test_wallet_carte_fedow_integration.py` | **Nouveau** : intégration réelle (sans mock) |
-| `tests/pytest/test_pos_vider_carte.py` | `_login_as_admin` crée un tenant-admin (skips levés) |
-
-**Note /djc (non bloquant) :** dans `fedow_connect/fedow_api.py`, l'attribut `self.config` vs
-`self.fedow_config` est une incohérence **pré-existante** (hors session) — laissée telle quelle.
-Quelques `data-label` non traduits subsistent dans `admin/membership/wallet_info.html` (pré-existants,
-table responsive) — à regrouper dans une passe i18n du mainteneur.
-
----
-
-## Mon compte — Agrégation des tokens locaux + fix spinner / My account — local tokens aggregation + spinner fix
-
-**Date :** 2026-06-22
-**Migration :** Non / No
-
-**Quoi / What :** Dans « mon compte » (tableau des soldes `tokens_table`) **et sur la fiche admin
-d'un user (`admin_my_cards`)**, on agrège désormais les tokens **locaux** (`fedow_core`, tenants V2)
-avec les tokens **distants** (Fedow : FED, legacy, fédérés). Logique factorisée dans un helper
-partagé `_agreger_tokens_locaux`. Déduplication par `asset.uuid` (un asset peut être local ET
-fédéré distant), et badge « Local » sur les tokens internes. Les tenants **V1**
-(`module_monnaie_locale=False`) sont **inchangés** — leurs soldes restent lus uniquement sur Fedow.
-/ The account balance table now aggregates local tokens (fedow_core, V2) with the remote ones
-(Fedow). Dedup by asset uuid, "Local" badge. V1 tenants are untouched.
-
-**Comment / How :** lecture distante inchangée, puis `if config.module_monnaie_locale` →
-`WalletService.obtenir_tous_les_soldes(user.wallet)` mappé au format dict du template.
-
-**Fix spinner :** le `<div hx-get tokens_table>` héritait du `#tibillet-spinner` **global** (quirk
-htmx : héritage des attributs) → tout l'écran s'assombrissait. Désormais `data-loading-target`
-**local** (`#token-table-loader`) → seul le tableau affiche un spinner pendant son chargement.
-
-### Fichiers / Files
-| Fichier / File | Changement / Change |
-|---|---|
-| `BaseBillet/views.py` | helper partagé `_agreger_tokens_locaux` + agrégation dans `tokens_table` **et** `admin_my_cards`, dédup, lecture Fedow encadrée, retrait du `print` debug |
-| `…/account/balance.html` | spinner scopé localement (fin de l'overlay global) |
-| `…/partials/account/token_table.html` | badge « Local » sur les tokens internes (front public) |
-| `Administration/…/admin/membership/wallet_info.html` | badge « Local » (styles inline Unfold) sur la fiche admin |
-
----
-
-## Fonctionnalités ROOT — hub, sitemap, 10 pages + retrait /lieux et /evenements / ROOT features — hub, sitemap, 10 pages + remove /lieux & /evenements
-
-**Date :** 2026-06-22
-**Migration :** Non / No
-
-**Quoi / What :** Suite du prototype SEO des fonctionnalités. (1) **Toutes les 10 fonctionnalités** ont
-désormais leur page de détail indexable + fil d'Ariane dédié (registre étendu). (2) Nouvelle **page hub
-`/features/`** : H1 propre + intro + la **même grille** que la landing (via un include partagé),
-qui sert de cible au fil d'Ariane et de point d'entrée sitelinks. (3) Nouveau **sitemap ROOT**
-(`/sitemap-root.xml`) listant landing + hub + explorer + les 10 pages, référencé dans le sitemap index.
-(4) Les pages **`/lieux/` et `/evenements/` sont supprimées** (vues, routes, templates, liens footer).
-(5) Liens **doc en profondeur** par fonctionnalité + balises **`<title>` SEO** enrichies (mots-clés).
-/ All 10 features now have an indexable detail page + breadcrumb. New `/features/` hub reusing
-the landing grid via a shared include. New ROOT sitemap referenced in the index. `/lieux/` and
-`/evenements/` removed. Deep doc links + keyword-rich `<title>` tags.
-
-**Comment / How :** la grille de cartes est extraite dans `seo/partials/_features_grid.html` (boucle sur
-le registre `FEATURE_DETAILS`), incluse par la landing **et** par `feature_hub.html`. Le breadcrumb des
-pages de détail pointe vers le hub `/features/` (vraie page). Le footer ROOT remplace
-Lieux/Événements par un lien « Fonctionnalités » vers le hub. Liens doc vérifiés (HTTP 200) depuis la
-nav de `documentation_v3`.
-
-### Fichiers / Files
-| Fichier / File | Changement / Change |
-|---|---|
-| `seo/features.py` | Registre étendu aux **10 fonctionnalités** + champs `card_desc`, `page_title`, liens doc profonds |
-| `seo/templates/seo/partials/_features_grid.html` | **Nouveau** : grille en boucle sur le registre (cartes cliquables), partagée landing + hub |
-| `seo/templates/seo/feature_hub.html` | **Nouveau** : page hub `/features/` |
-| `seo/views.py` | Vue `features_hub` ; `sitemap_root_view` + entrée ROOT dans `sitemap_index_view` ; `page_title` registre ; breadcrumb → hub ; **suppression** des vues `lieux`/`evenements` ; landing passe `features` |
-| `seo/urls.py` | Routes `fonctionnalites/` (hub) + `sitemap-root.xml` ; **suppression** des routes `lieux/`/`evenements/` |
-| `seo/templates/seo/feature_detail.html` | Breadcrumb « Fonctionnalités » → `/features/` |
-| `seo/templates/seo/landing.html` | Grille remplacée par l'include `_features_grid.html` |
-| `seo/templates/seo/base.html` | Footer : Lieux/Événements → lien « Fonctionnalités » (hub) |
-| `seo/templates/seo/lieux.html`, `evenements.html` | **Supprimés** |
-
-**URL en anglais + bouton menu :** le préfixe d'URL est passé de `/fonctionnalites/` à **`/features/`**
-(et `/features/<slug>/`) — neutre pour les futures traductions FR/EN et meilleur pour le SEO. Le
-libellé affiché reste « Fonctionnalités » (français, traduisible). Un **bouton « Fonctionnalités »**
-(icône `bi-grid`) a été ajouté en tête du **menu de navigation** ROOT, vers `/features/`.
-
-**i18n :** beaucoup de nouvelles chaînes (contenu des 8 nouvelles fonctionnalités, hub, `page_title`)
-à extraire/traduire par le mainteneur (`makemessages` + `compilemessages`).
-
-**Note lint :** `import json` dans `seo/views.py` est un import mort **pré-existant** (présent avant la
-session, aucun usage) — laissé tel quel (hors scope). `ruff check --fix` le retirerait.
-
----
-
-## Pages de détail des fonctionnalités (ROOT) — prototype SEO / Feature detail pages (ROOT) — SEO prototype
-
-**Date :** 2026-06-22
-**Migration :** Non / No
-
-**Quoi / What :** Au clic sur une carte de la section « Fonctionnalités » de la landing ROOT, on
-ouvre une **vraie page de détail indexable** `/features/<slug>/` (captures placeholder, textes
-descriptifs, liens doc, maillage interne). La transition est **anti-blink** (htmx `hx-select`), mais le
-contenu existe à une URL crawlable rendue **entièrement côté serveur** — c'est ce qui permet aux robots
-d'indexer et à Google d'afficher des extraits enrichis / sitelinks. Prototype : **2 fonctionnalités**
-(Billetterie + Cashless NFC) ; les 8 autres cartes restent non cliquables tant qu'elles n'ont pas
-d'entrée dans le registre.
-/ Clicking a feature card on the ROOT landing opens a real indexable detail page
-`/features/<slug>/` (placeholder screenshots, descriptions, doc links, internal linking). The
-transition is anti-blink (htmx `hx-select`), but the content lives at a fully server-rendered crawlable
-URL — which is what lets robots index it and Google show rich results / sitelinks. Prototype: 2
-features (Billetterie + Cashless NFC).
-
-**Comment / How :** registre de contenu `seo/features.py` (`FEATURE_DETAILS`) ; vue `feature_detail`
-(rendu serveur complet, 404 si slug inconnu) ; JSON-LD `BreadcrumbList` + `TechArticle` par page +
-`ItemList` des fonctionnalités sur la landing (signal sitelinks). Anti-blink sans template dual : les
-cartes font `hx-get` + `hx-select="#seo-content"` (wrapper ajouté dans `base.html`) → htmx extrait le
-bloc contenu de la vraie page, `<head>`/navbar/footer intacts. Suit le système de design existant
-(vert `#259d49` / bleu `#4296cc`). Responsive vérifié à 375 px, focus-visible, `prefers-reduced-motion`.
-
-### Fichiers / Files
-| Fichier / File | Changement / Change |
-|---|---|
-| `seo/features.py` | **Nouveau** : registre `FEATURE_DETAILS` (contenu des pages de détail) |
-| `seo/views.py` | Vue `feature_detail` + `ItemList` JSON-LD et `feature_detail_slugs` dans la landing |
-| `seo/urls.py` | Route `fonctionnalites/<slug:slug>/` → `feature_detail` |
-| `seo/templates/seo/feature_detail.html` | **Nouveau** : template de la page de détail |
-| `seo/templates/seo/base.html` | Wrapper `#seo-content` (cible du swap anti-blink) |
-| `seo/templates/seo/landing.html` | Cartes Billetterie + Cashless cliquables ; `id="features"` ; `extra_head` ItemList |
-| `seo/static/seo/seo.css` | Styles `.feature-card--link`, `.feature-more`, `.fd-*` (page détail) |
-
-**i18n :** nombreuses nouvelles chaînes (`seo/features.py` + `feature_detail.html` + « En savoir plus »)
-à extraire/traduire par le mainteneur (`makemessages` + `compilemessages`). Note : le msgid « Cashless
-et carte NFC » a déjà une traduction FR existante (« Monnaie locale et carte NFC ») — le titre de la
-page cashless s'affiche donc ainsi, par cohérence avec la carte de la landing.
-
-**Pistes pour la suite :** lien doc en profondeur (au lieu de la racine), vraies captures d'écran,
-étendre le registre aux 8 autres fonctionnalités, sitemap ROOT dédié pour les pages `/features/`.
-
----
-
-## Landing ROOT — Appel à contribution dans « Fonctionnalités » / ROOT landing — contribution call in "Features"
-
-**Date :** 2026-06-22
-**Migration :** Non / No
-
-**Quoi / What :** Sur la page d'accueil du tenant public ROOT (`/`), l'accordéon « Futur de TiBillet »
-est **retiré** et remplacé par un **panneau d'appel à contribution** intégré en bas de la section
-« Fonctionnalités ». Le panneau résume les chantiers ouverts (newsletter intégrée, réseaux sociaux &
-Fédiverse, site web complet, interopérabilité ERP, économie en cascade) et redirige, via un lien **en
-dur**, vers l'espace contributif de la coopérative : `https://codecommun.tibillet.coop/contrib/`.
-Un bouton **« Contribuer à TiBillet »** est aussi ajouté dans le **hero** (en haut de page), avec les
-autres boutons (Explorateur / Documentation / Créer son espace), et un lien **« Contribuer »** dans le
-**menu de navigation** (navbar partagée par toutes les pages ROOT) — tous vers la **même** destination.
-/ On the public ROOT landing page, the "Futur de TiBillet" accordion is removed and replaced by a
-contribution call-to-action panel inside the "Features" section, linking (hardcoded) to the
-cooperative's contribution space. A "Contribuer à TiBillet" button is also added in the hero, plus a
-"Contribuer" link in the ROOT navbar — all pointing to the same destination.
-
-**Comment / How :** bloc `.contribute-panel` (icône fusée, titre, résumé, pastilles de chantiers,
-bouton + rappel du domaine), suit le système de design existant (palette vert `#259d49` / bleu
-`#4296cc`, cartes en cercle, boutons radius 8px). Responsive vérifié à 375 px (chips qui wrappent,
-bouton sur une seule ligne), focus-visible instantané, `prefers-reduced-motion` géré. Hiérarchie SEO
-préservée : titre du panneau en `h3` sous le `h2` « Fonctionnalités » (plus de `h2` orphelin). CSS
-`.roadmap-*` devenu mort supprimé.
-
-### Fichiers / Files
-| Fichier / File | Changement / Change |
-|---|---|
-| `seo/templates/seo/landing.html` | Suppression de la section accordéon roadmap ; ajout du panneau `.contribute-panel` dans `.features-section` ; bouton « Contribuer à TiBillet » dans le hero |
-| `seo/templates/seo/base.html` | Lien « Contribuer » dans la navbar ROOT (entre Documentation et Contact) |
-| `seo/static/seo/seo.css` | Remplacement du bloc CSS `.roadmap-*` par les styles `.contribute-*` |
-
-**i18n :** nouvelles chaînes `{% translate %}` (FR source) à extraire/traduire par le mainteneur
-(`makemessages` + `compilemessages`). Anciennes chaînes roadmap désormais inutilisées.
-
----
-
-## C-C / C3 (cohérence carte + compléments) — Segment legacy sur la 2ᵉ carte NFC / Legacy tier on the 2nd NFC card
-
-**Date :** 2026-06-22
-**Migration :** Non / No
-
-**Quoi / What :** Au POS, dans le complément en **2ᵉ carte NFC** (`payer_complementaire`, branche
-`nfc`), si la cascade **locale** de la 2ᵉ carte ne suffit pas et que cette carte est liée à un user,
-on tente son **FED réseau**. **Tout-ou-rien** : le FED de la 2ᵉ carte ne se débite que s'il couvre
-TOUT le reste — sinon on n'y touche pas (le re-render « insuffisant » jetterait la carte, un débit
-partiel serait perdu) et le solde part en espèces/CB au tour suivant (FED intact).
-/ At the POS, in the 2nd-NFC-card complement, the card's FED network balance covers the remainder
-all-or-nothing; otherwise cash/CC next round (FED untouched).
-
-**Comment / How :** mêmes helpers que C2.3 (`lire_depensable_fed_frais`, `_debiter_legacy`,
-`_decouper_lignes_complement`, `_repartir_legacy_sur_articles`), appliqués à la 2ᵉ carte. Débit
-**hors atomic**, `lignes_legacy_c2` intégrées au bloc atomic, incident journalisé si l'atomic échoue
-après le débit legacy.
-
-### Fichiers / Files
-| Fichier / File | Changement / Change |
-|---|---|
-| `laboutik/views.py` | `payer_complementaire` branche `nfc` : cran legacy 2ᵉ carte (tout-ou-rien) + `lignes_legacy_c2` dans l'atomic + journal d'incident |
-
-**Hors scope C3 :** « carte perdue legacy » (`lost_my_card_by_signature`) — **pas de point d'accroche**
-dans le POS V1 (fonctionnalité « déclarer carte perdue » absente). À traiter quand la feature locale
-existera. Idempotence re-scan : déjà acquise (re-calcul cascade à chaque POST).
-
----
-
-## C-C / C2 (sortie « couverte ») — Débit FED au POS, distinction fine des moyens / FED debit at POS, fine-grained methods
-
-**Date :** 2026-06-21
-**Migration :** Non / No
-
-**Quoi / What :** Au POS, quand le solde du réseau d'une carte (FED + TLF fédérés) couvre TOUT le
-reste d'un panier après les monnaies locales, la vente est validée et le legacy est débité sur le
-Fedow distant (`to_place_from_qrcode`). Chaque part débitée crée une `LigneArticle` avec le BON
-moyen de paiement — **distinction fine** : FED → `STRIPE_FED` (géré par la **coopérative**), TLF
-fédéré → `LOCAL_EURO` (géré par les **lieux**).
-/ At the POS, when a card's network balance covers ALL the cart remainder after local currencies,
-the sale is validated and the legacy is debited on the remote Fedow. Each debited part creates a
-`LigneArticle` with the right method (FED → `STRIPE_FED`, federated TLF → `LOCAL_EURO`).
-
-**Comment / How :** débit **hors atomic** (appel réseau) **à la validation**, puis bloc atomic
-local. Échec (solde baissé, fail-fast) → « rescannez la carte », aucun débit local. Helpers :
-`lire_depensable_fed_frais`, `_debiter_legacy` (résout la catégorie par transaction),
-`_repartir_legacy_sur_articles` (répartit les transactions sur les articles, moyen distinct).
-
-### Fichiers / Files
-| Fichier / File | Changement / Change |
-|---|---|
-| `laboutik/views.py` | helpers `_debiter_legacy` / `_categorie_asset_transaction` / `_repartir_legacy_sur_articles` ; cran legacy + débit dans `_payer_par_nfc` ; `_creer_lignes_articles_cascade` accepte un uuid d'asset legacy ; journal d'incident |
-| `tests/pytest/test_c2_legacy_repartition.py` | **Nouveau** — 3 tests de répartition (distinction fine) |
-| doc 11 §3 / ROADMAP §4 | représentation `STRIPE_FED` + N `LigneArticle` |
-
-**C2.3 — complément (FED partiel + espèces/CB) :** quand le legacy ne couvre pas tout, il couvre ce
-qu'il peut et le reste passe au moyen complémentaire (espèces/CB). Géré dans `payer_complementaire`
-(re-lecture fraîche du FED, débit hors atomic, helper `_decouper_lignes_complement`). L'écran
-complément affiche la part « Réseau (FED) » et le « Reste à payer ».
-/ C2.3 — complement (partial FED + cash/CC): legacy covers what it can, the rest goes to the
-complement method. Handled in `payer_complementaire`.
-
-**Preuve / Proof :** smokes Chrome + vérif base — **les 4 scénarios** :
-- **Vente classique** (bière 5 €) couverte FED → `STRIPE_FED` 5 €.
-- **Adhésion** (10 €) **multi-asset** → **5 € `LOCAL_EURO` (lieu) + 5 € `STRIPE_FED` (coopérative)**
-  + `Membership` créée.
-- **Billetterie** (billet 8 €, catégorie B) → `STRIPE_FED` 8 €.
-- **Complément** (40 €, carte 37 € FED + 0 local) → **37 € `STRIPE_FED` + 3 € `CASH`**.
-Dans chaque cas, le FED est débité sur le Fedow distant et la `LigneArticle` porte le bon moyen
-(distinction fine local/fédéré confirmée en base).
-
-**Reste / Remaining :** complément **2ᵉ carte NFC** (branche `nfc` de `payer_complementaire`) non
-traité — le FED s'applique aux compléments espèces/CB, pas encore à la 2ᵉ carte.
-
-**Tests :** `pytest` → 271 passed, 1 skipped (zéro régression) ; 4 tests helpers C2 (répartition +
-découpe).
-
-## Fix compta : la monnaie fédérée (FED) n'est plus comptée comme du cashless local / Accounting fix: federated currency (FED) no longer counted as local cashless
-
-**Date :** 2026-06-21
-**Migration :** Non / No
-
-**Quoi / What :** La monnaie fédérée du réseau (FED, moyen de paiement `STRIPE_FED`) était partout
-**assimilée au cashless local** (`LOCAL_EURO`) : mapping de cascade, total de clôture, ventilation
-FEC. Résultat : 100 % du FED encaissé aurait été comptabilisé comme de la monnaie locale. Corrigé :
-le FED a maintenant son **total et son compte de trésorerie distincts**.
-/ The federated network currency (FED, `STRIPE_FED`) was everywhere assimilated to local cashless
-(`LOCAL_EURO`): cascade mapping, closure total, FEC ventilation. Fixed: FED now has its own total and
-treasury account.
-
-**Pourquoi / Why :** Erreur de compta **latente** (pas encore déclenchée : pas de FED local, interop
-FED au POS pas encore active) mais critique dès la première vente FED. Le FED (poche du réseau Fedow)
-et la monnaie locale (poche du lieu) sont deux trésoreries différentes.
-
-### Fichiers / Files
-| Fichier / File | Changement / Change |
-|---|---|
-| `laboutik/views.py` | `MAPPING_ASSET_CATEGORY_PAYMENT_METHOD` : `Asset.FED` → `STRIPE_FED` (était `LOCAL_EURO`) |
-| `laboutik/reports.py` | `calculer_totaux_par_moyen` : nouveau `total_federe` (STRIPE_FED), distinct du cashless, inclus dans le total, exposé sous la clé `federe` |
-| `laboutik/ventilation.py` | `CLE_RAPPORT_VERS_CODE_PAIEMENT` : + `'federe' → 'SF'` |
-| `laboutik/management/commands/charger_plan_comptable.py` | `SF` ajouté aux libellés + aux 2 jeux (compte `None`, à configurer) |
-| 4 templates clôture (PDF officiel + 3 admin) | Ligne « Fédéré (FED) » conditionnelle |
-
-**À configurer / To configure :** le **compte de trésorerie** du moyen `SF` (Fédéré) dans l'admin
-`MappingMoyenDePaiement` (logique : avances clients **fédérées**, distinct du cashless local). Tant
-qu'il est `None`, le FED apparaît dans le total de clôture mais n'est pas ventilé au FEC.
-
-**i18n :** nouveau msgid `"Fédéré (FED)"` (à compiler).
-
-**Tests :** `pytest tests/pytest/test_comptabilite_*.py` → 52 passed.
-
-## Fix simulateur NFC : saisie manuelle de tag cassée (`conf` non défini) / Fix NFC simulator: manual tag input broken
-
-**Date :** 2026-06-21
-**Migration :** Non / No
-
-**Quoi / What :** Dans le simulateur de scan NFC (mode DEV/DEMO), saisir un tag à la main puis
-« Valider » levait `ReferenceError: conf is not defined` et ne scannait rien. Le clic sur les
-cartes démo prédéfinies n'était pas affecté.
-/ In the NFC scan simulator (DEV/DEMO), typing a tag manually then clicking "Valider" raised
-`ReferenceError: conf is not defined`. Clicking the predefined demo cards was not affected.
-
-**Pourquoi / Why :** `soumettreTagManuel` (dans `showUiSimu`) appelait
-`this.SendTagIdAndSubmit(tagSaisi, conf)` avec `conf` non défini dans ce scope — les deux autres
-appels (lecture réelle, clic carte démo) utilisent `this.conf`.
-/ `soumettreTagManuel` used `conf` instead of `this.conf` (the two other call sites use `this.conf`).
-
-**Fix :** `laboutik/static/js/nfc.js:136` — `conf` → `this.conf`. Bug DEV-only (le simulateur
-n'existe qu'en `DEMO=True`, aucun impact prod).
-
-## C-C / C1 — Solde complet (local + FED réseau) au scan carte POS / Full balance (local + FED network) on POS card scan
-
-**Date :** 2026-06-21
-**Migration :** Non / No
-
-**Quoi / What :** Au scan d'une carte au POS V2 (`retour_carte`), l'écran de retour carte
-affiche désormais le solde **complet** : les monnaies locales (fedow_core, base locale) **et** le
-solde **FED du réseau fédéré**, lu en **temps réel** sur le Fedow distant. Un nouveau cran
-« Réseau (FED) » apparaît dans le détail des soldes, et le « Solde total » inclut le FED.
-/ When a card is scanned at the V2 POS, the card feedback screen now shows the **full** balance:
-local currencies (fedow_core) **and** the **FED network balance**, read in real time from the
-remote Fedow. A new "Réseau (FED)" line appears in the balance breakdown, and the total includes FED.
-
-**Pourquoi / Why :** Lot C-C de l'intégration laboutik V2 (scénario S6). Une carte du réseau
-fédéré peut porter du FED (et des monnaies fédérées legacy) qui vit sur le Fedow distant, séparé
-des monnaies locales du tenant. Le caissier et le client doivent voir le solde réel et complet
-de la carte, comme en LaBoutik V1. C'est la **lecture** (C1) ; l'écriture (débit FED dans la
-cascade) viendra en C2.
-/ Batch C-C of the laboutik V2 integration (S6 scenario). This is the read side (C1); the write
-side (FED debit in the cascade) comes in C2.
-
-**Comment / How :**
-- **Helper commun** `obtenir_solde_complet_carte(carte)` (module-level, `laboutik/views.py`) :
-  lit les locaux (`WalletService.obtenir_tous_les_soldes`) et — si la carte est liée à un user
-  et que le tenant a une place Fedow (`can_fedow()`) — le FED **frais** (sans cache). Dégradé
-  silencieux si Fedow injoignable (`fed_disponible=False`, la vente n'est jamais bloquée).
-- **Lecture FED en temps réel** : micro-extension `get_total_fiducial_and_all_federated_token(user, use_cache=True)`
-  dans `fedow_connect/fedow_api.py`. `use_cache=False` lit via `retrieve_by_signature` (frais)
-  au lieu du cache 10 s. Défaut `True` : **aucun changement** pour les appelants existants.
-- **Front** : cran « Réseau (FED) » dans `hx_card_feedback.html` (affichage server-side,
-  **zéro JavaScript**).
-
-### Fichiers / Files
-
-| Fichier / File | Changement / Change |
-|---|---|
-| `fedow_connect/fedow_api.py` | + param `use_cache=True` sur `get_total_fiducial_and_all_federated_token` (lecture fraîche si `False`) |
-| `laboutik/views.py` | + helper `obtenir_solde_complet_carte` ; `retour_carte` l'utilise et passe le FED au template ; + imports `FedowAPI`/`FedowConfig` |
-| `laboutik/templates/laboutik/partial/hx_card_feedback.html` | + cran « Réseau (FED) » (montant ou « Indisponible » si dégradé) |
-| `tests/pytest/test_c1_solde_complet_carte.py` | **Nouveau** — 5 tests (FED frais, dégradé, carte anonyme, sans place Fedow, agrégation locaux+FED) |
-
-**Tests :** `pytest tests/pytest/test_c1_solde_complet_carte.py` → 5 passed. Suite complète :
-267 passed, 1 skipped (zéro régression). Voir `A TESTER et DOCUMENTER/c1-solde-complet-carte-fed.md`.
+| `Administration/admin_tenant.py` | `ReservationAddAdmin` : champ `email` → `EmailField` ; `save()` → `get_or_create_user(email, send_mail=False)` ; champ tarif `price` (`ChoiceField`, une option par couple évènement/tarif via `_build_event_price_options`) ; champ `amount` (prix par billet) + `clean()` (requis si prix libre) ; `save()`/`clean_payment_method` parsent `event_uuid:price_uuid` ; `class Media` (JS d'auto-remplissage) |
+| `Administration/static/admin/js/reservation_price_autofill.js` | **Nouveau** : auto-remplissage du prix à la sélection du tarif, requis si prix libre, libellé total |
+| `BaseBillet/models.py` | `LigneArticle.user_email()` : gère le cas `reservation.user_commande` (colonne email des ventes admin) |
+| `tests/pytest/test_admin_reservation_add.py` | **Nouveau** : 7 tests (gratuit + payant, **tarif partagé → 2 options + bon event**, **prix par billet override**, **prix libre requis**, **moyen de paiement requis**, garde-fous), avec vérif `amount`/`total()` et `user_email()` |
 
 ## Wizard event public : fix email perdu via le chemin Tiers-Lieux / Public event wizard: fix email lost via the Tiers-Lieux path
 

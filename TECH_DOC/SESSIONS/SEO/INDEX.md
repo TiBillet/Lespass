@@ -24,6 +24,8 @@ ou desindexation.
 | 04 | Breadcrumbs JSON-LD + `sameAs` Organization | A faire | Bas | _a creer_ |
 | 05 | Carte explorer ROOT : 1 marker par PostalAddress | Implemente (backend + frontend + cache), E2E Task 10 non ecrit | Moyen | [CHANTIER-05-explorer-markers-per-pa.md](./CHANTIER-05-explorer-markers-per-pa.md) + [PLAN-05-explorer-markers-per-pa.md](./PLAN-05-explorer-markers-per-pa.md) |
 | 06 | Carte explorer ROOT : pills exclusives, tag chips, URL partageable | Implemente — a tester / commiter (12 tasks faites, E2E a valider serveur up) | Moyen | [CHANTIER-06-explorer-ux-pills-tags.md](./CHANTIER-06-explorer-ux-pills-tags.md) + [PLAN-06-explorer-ux-pills-tags.md](./PLAN-06-explorer-ux-pills-tags.md) |
+| 07 | Cache SEO en fragments par tenant + agregats par recombinaison | Implemente | Eleve | [CHANTIER-07-cache-fragments.md](./CHANTIER-07-cache-fragments.md) + [PLAN-07-cache-fragments.md](./PLAN-07-cache-fragments.md) |
+| 08 | Carte reseau : rebuild d'agregats en debounce « trailing » (fix events/adresses invisibles) | Implemente — pytest verts, a tester (worker+beat) / deployer | Urgent | [CHANTIER-08-rebuild-trailing-debounce.md](./CHANTIER-08-rebuild-trailing-debounce.md) |
 
 ## Regles de fond (issues de Google AI Optimization Guide, 15 mai 2026)
 

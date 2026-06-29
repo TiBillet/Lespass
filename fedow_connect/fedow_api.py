@@ -861,6 +861,46 @@ class NFCcardFedow():
 
         return serialized_card.validated_data
 
+    def create_cards(self, cards_data: list):
+        """
+        Cree des cartes NFC chez Fedow (endpoint signe par la place).
+        / Creates NFC cards on Fedow (place-signed endpoint).
+
+        LOCALISATION : fedow_connect/fedow_api.py
+
+        Appelle l'endpoint Fedow CardAPI.create (POST 'card'). La requete est
+        authentifiee par la cle API de la place du tenant (HasKeyAndPlaceSignature),
+        comme get_or_create_token_asset : pas besoin de header user.
+        Fedow attend une LISTE de cartes et cree l'Origin automatiquement depuis
+        la place signataire (une seule generation par requete).
+        Sert a fabriquer des cartes ephemeres (sans utilisateur) pour les tests
+        et le seed de demo.
+        / Calls Fedow's CardAPI.create (POST 'card'), authenticated by the
+        tenant place API key (no user header). Fedow expects a LIST of cards and
+        auto-creates the Origin from the signing place (one generation per request).
+
+        :param cards_data: liste de dict avec les cles first_tag_id,
+            complete_tag_id_uuid, qrcode_uuid, number_printed, generation, is_primary.
+        :return: True si les cartes sont creees (201) ou existent deja (409).
+        """
+        # _post signe avec la cle de la place (apikey du lieu du tenant).
+        # / _post signs with the place key (tenant place api key).
+        response_creation = _post(self.fedow_config, path='card', data=cards_data)
+
+        # 201 = creees ; 409 = numero deja present chez Fedow (idempotent : on
+        # considere OK car la carte voulue existe bien).
+        # / 201 = created; 409 = number already exists (idempotent: the wanted
+        # card does exist, treated as success).
+        if response_creation.status_code in (201, 409):
+            return True
+
+        logger.error(
+            f"create_cards : {response_creation.status_code} {response_creation.content}"
+        )
+        raise Exception(
+            f"create_cards : {response_creation.status_code} {response_creation.content}"
+        )
+
     def qr_retrieve(self, qrcode_uuid: uuid4):
         # On vérifie que l'uuid soit bien un uuid :
         checked_uuid = uuid.UUID(str(qrcode_uuid))

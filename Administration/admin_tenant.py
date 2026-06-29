@@ -111,7 +111,7 @@ from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
     FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp, ProductFormField, \
-    PromotionalCode, Tva, MembershipProduct, FederationConfiguration
+    PromotionalCode, Tva, MembershipProduct, FederationConfiguration, ProductSold
 from BaseBillet.tasks import webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
     send_reservation_cancellation_user, send_sale_to_laboutik, forge_connexion_url
@@ -2727,11 +2727,24 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         Action bulk : pour chaque event selectionne qui est une proposition
         en attente, set is_proposal=False + published=True.
         / Bulk action: approve and publish selected pending proposals.
+
+        IMPORTANT (cf. CHANTIER-08) : on publie via save() par instance, et NON
+        via queryset.update() en masse. .update() ne declenche PAS le signal
+        post_save declencher_refresh_seo_cache -> sans lui, l'event approuve
+        n'apparait sur la carte reseau qu'au prochain beat 4h. save() declenche
+        le signal -> rebuild SEO debounce -> l'event apparait en ~15s.
+        / We publish with per-instance save(), NOT bulk queryset.update():
+        .update() does not fire the post_save signal that refreshes the SEO
+        cache, so the approved event would only appear on the network map at the
+        next 4h beat. save() fires the signal -> debounced SEO rebuild.
         """
-        nb_approuvees = queryset.filter(is_proposal=True, published=False).update(
-            is_proposal=False,
-            published=True,
-        )
+        propositions_en_attente = queryset.filter(is_proposal=True, published=False)
+        nb_approuvees = 0
+        for proposition in propositions_en_attente:
+            proposition.is_proposal = False
+            proposition.published = True
+            proposition.save(update_fields=["is_proposal", "published"])
+            nb_approuvees += 1
         self.message_user(
             request,
             _("%(n)s proposal(s) approved.") % {"n": nb_approuvees},
@@ -2778,25 +2791,84 @@ class ReservationValidFilter(admin.SimpleListFilter):
             ).distinct()
 
 
+def _build_event_price_options():
+    """
+    Construit les choix du select tarif du formulaire d'ajout de réservation :
+    une option par couple (évènement, tarif).
+    / Builds the rate select choices: one option per (event, rate) pair.
+
+    Un même tarif (Product/Price) peut être partagé par plusieurs évènements —
+    typiquement "Réservation gratuite", rattaché à tous les évènements gratuits.
+    On génère donc une entrée distincte PAR évènement ; sinon les évènements qui
+    partagent un tarif n'auraient pas d'entrée propre et seraient invisibles.
+    / A rate can be shared across several events (e.g. "Free booking" linked to
+      every free event), so we emit one entry per event; otherwise events sharing
+      a rate would have no entry of their own and stay invisible.
+
+    Valeur : "event_uuid:price_uuid" — l'évènement est explicite (pas de
+    déduction ambiguë). Libellé cherchable : "03/07 - Évènement - Tarif - prix€".
+    / Value: "event_uuid:price_uuid" (explicit event). Searchable label.
+
+    La source est la même que la billetterie publique : event.products -> prices.
+    / Same source as the public ticketing: event.products -> prices.
+
+    Renvoie un tuple (choix, donnees) :
+    - choix : liste [(valeur, libellé)] pour le ChoiceField.
+    - donnees : dict {valeur: {"prix": float, "libre": bool}} pour le JS
+      d'auto-remplissage du champ "Prix par billet".
+    / Returns (choices, data): choices for the ChoiceField, and a {value: {...}}
+      map used by the per-ticket price autofill JS.
+    """
+    limite_date = timezone.localtime() - timedelta(days=1)
+    evenements = (
+        Event.objects.filter(datetime__gte=limite_date)
+        .order_by("datetime")
+        .prefetch_related("products__prices")
+    )
+    choix = [("", _("Choisir un tarif"))]
+    donnees = {}
+    for evenement in evenements:
+        date_affichee = evenement.datetime.strftime("%d/%m")
+        for produit in evenement.products.all():
+            for tarif in produit.prices.all():
+                valeur = f"{evenement.uuid}:{tarif.uuid}"
+                libelle = f"{date_affichee} - {evenement.name} - {tarif.name} - {tarif.prix}€"
+                choix.append((valeur, libelle))
+                donnees[valeur] = {"prix": float(tarif.prix), "libre": bool(tarif.free_price)}
+    return choix, donnees
+
+
 class ReservationAddAdmin(ModelForm):
-    # Uniquement les tarif Adhésion
-    email = forms.ModelChoiceField(
+    email = forms.EmailField(
         required=True,
-        queryset=TibilletUser.objects.all(),
-        empty_label=_("Select a user"),  # Texte affiché par défaut
+        widget=UnfoldAdminEmailInputWidget(),
         label="Email",
-        widget=UnfoldAdminSelect2Widget,
     )
 
-    pricesold = forms.ModelChoiceField(
-        queryset=PriceSold.objects.filter(
-            productsold__event__datetime__gte=timezone.localtime() - timedelta(days=1)).order_by(
-            "productsold__event__datetime"),
-        # Remplis le champ select avec les objets Price
-        empty_label=_("Select a product"),  # Texte affiché par défaut
+    # Une option par couple (évènement, tarif) — voir _build_event_price_choices.
+    # Les choix sont construits dans __init__ (une requête à chaque affichage du
+    # formulaire). La valeur est "event_uuid:price_uuid".
+    # / One option per (event, rate) pair — see _build_event_price_choices.
+    #   Choices are built in __init__. Value is "event_uuid:price_uuid".
+    price = forms.ChoiceField(
         required=True,
         widget=UnfoldAdminSelect2Widget,
-        label=_("Rate")
+        label=_("Rate"),
+        help_text=_("Tarif d'un évènement à venir. Le produit vendu est créé automatiquement si besoin."),
+    )
+
+    # Prix PAR billet (montant unitaire). Rempli automatiquement à la sélection
+    # du tarif (JS), obligatoire pour un tarif à prix libre. Si laissé vide pour
+    # un tarif normal, on utilise le prix du tarif. Le total = prix × quantité.
+    # / Price PER ticket (unit amount). Auto-filled on rate selection (JS),
+    #   required for an open-price rate. If left empty for a normal rate, the
+    #   rate's price is used. Total = price × quantity.
+    amount = forms.FloatField(
+        required=False,
+        min_value=0,
+        widget=UnfoldAdminTextInputWidget(attrs={"type": "number", "step": "0.01", "min": "0"}),
+        label=_("Prix par billet"),
+        help_text=_("Montant payé pour UN billet (multiplié par la quantité). Obligatoire pour un tarif à prix libre."),
     )
 
     # options_checkbox = forms.ModelMultipleChoiceField(
@@ -2816,10 +2888,16 @@ class ReservationAddAdmin(ModelForm):
     #     label=_("Single choice menu"),
     # )
 
+    # Obligatoire, avec une option vide en tête : on force un choix conscient.
+    # Sans ça, le 1er choix de PaymentMethod.classic() est "Offert" (FREE) et une
+    # validation distraite créait une vente offerte par erreur.
+    # / Required, with an empty first option: forces a conscious choice. Otherwise
+    #   the first choice of PaymentMethod.classic() is "Offered" (FREE) and an
+    #   inattentive submit created an offered sale by mistake.
     payment_method = forms.ChoiceField(
-        required=False,
-        choices=PaymentMethod.classic(),  # on retire les choix token
-        widget=UnfoldAdminSelectWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
+        required=True,
+        choices=[("", _("Sélectionner un moyen de paiement"))] + PaymentMethod.classic(),
+        widget=UnfoldAdminSelectWidget(),
         label=_("Payment method"),
     )
 
@@ -2839,28 +2917,94 @@ class ReservationAddAdmin(ModelForm):
         # 'last_name',
         # ]
 
+    class Media:
+        # JS d'auto-remplissage du "Prix par billet" à la sélection du tarif.
+        # / JS that autofills the per-ticket price on rate selection.
+        js = ("admin/js/reservation_price_autofill.js",)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Construction des choix du select tarif (une option par couple
+        # évènement/tarif) et des données pour le JS d'auto-remplissage du prix.
+        # / Build the rate choices (one per event/rate pair) and the data used by
+        #   the price autofill JS.
+        choix, donnees = _build_event_price_options()
+        self.fields["price"].choices = choix
+        # Le JS lit ce mapping {valeur: {prix, libre}} pour pré-remplir le montant
+        # et rendre le champ obligatoire si le tarif est à prix libre.
+        # / The JS reads this {value: {prix, libre}} map to prefill the amount and
+        #   make the field required for open-price rates.
+        self.fields["price"].widget.attrs["data-prices"] = json.dumps(donnees)
+
+    @staticmethod
+    def _extraire_evenement_et_tarif(valeur):
+        """
+        Décompose la valeur "event_uuid:price_uuid" du champ price en
+        (Event, Price). Renvoie (None, None) si vide ou invalide.
+        / Splits the "event_uuid:price_uuid" value into (Event, Price).
+        """
+        if not valeur or ":" not in valeur:
+            return None, None
+        event_uuid, price_uuid = valeur.split(":", 1)
+        try:
+            evenement = Event.objects.get(uuid=event_uuid)
+            tarif = Price.objects.get(uuid=price_uuid)
+        except (Event.DoesNotExist, Price.DoesNotExist, ValueError):
+            return None, None
+        return evenement, tarif
+
     def clean_payment_method(self):
         cleaned_data = self.cleaned_data
-        pricesold = cleaned_data.get('pricesold')
+        # Le champ "price" vaut "event_uuid:price_uuid" : on récupère le tarif
+        # pour vérifier la cohérence avec la méthode de paiement.
+        # / "price" is "event_uuid:price_uuid": fetch the rate to check coherence.
+        _evenement, tarif = self._extraire_evenement_et_tarif(cleaned_data.get('price'))
         payment_method = cleaned_data.get('payment_method')
-        # pricesold peut être None si le champ a des erreurs de validation ou n'est pas renseigné
-        # On ne valide la méthode de paiement que si on a un produit
-        if pricesold and getattr(pricesold, 'productsold', None):
-            if pricesold.productsold.categorie_article == Product.FREERES and payment_method != PaymentMethod.FREE:
-                raise forms.ValidationError(_("Une reservation gratuite doit être en paiement OFFERT"), code="invalid")
+        # On ne valide la méthode de paiement que si on a un tarif.
+        # / Only check the payment method when a rate is set.
+        if tarif and tarif.product.categorie_article == Product.FREERES and payment_method != PaymentMethod.FREE:
+            raise forms.ValidationError(_("Une reservation gratuite doit être en paiement OFFERT"), code="invalid")
         return payment_method
 
     def clean(self):
-        return super().clean()
+        cleaned_data = super().clean()
+        _evenement, tarif = self._extraire_evenement_et_tarif(cleaned_data.get('price'))
+        montant = cleaned_data.get('amount')
+        payment_method = cleaned_data.get('payment_method')
+        # Pour un tarif à prix libre payant, le prix par billet est obligatoire
+        # (le tarif n'a pas de prix fixe à appliquer).
+        # / For a paid open-price rate, the per-ticket price is required
+        #   (there is no fixed rate price to apply).
+        if tarif and tarif.free_price and payment_method != PaymentMethod.FREE:
+            if montant is None or montant <= 0:
+                self.add_error('amount', _("Indiquez le prix par billet pour un tarif à prix libre."))
+        return cleaned_data
 
     def save(self, commit=True):
         cleaned_data = self.cleaned_data
 
+        # Le champ "email" est un EmailField : l'admin saisit une adresse.
+        # get_or_create_user retrouve le compte ou le cree, et l'associe au
+        # tenant courant. send_mail=False : pas de mail de validation, la
+        # reservation est creee directement cote admin.
+        # / The "email" field is an EmailField: get_or_create_user finds or
+        #   creates the account (linked to the current tenant), no validation mail.
         email = self.cleaned_data.pop('email')
-        user = get_or_create_user(email)
+        user = get_or_create_user(email, send_mail=False)
 
-        pricesold: PriceSold = cleaned_data.pop('pricesold')
-        event: Event = pricesold.productsold.event
+        # Le champ "price" vaut "event_uuid:price_uuid" : l'évènement est
+        # explicite (un même tarif peut être partagé entre plusieurs évènements).
+        # On matérialise le produit vendu (ProductSold) et le tarif vendu
+        # (PriceSold) si besoin : ils n'existent qu'après une première vente.
+        # / "price" is "event_uuid:price_uuid": the event is explicit (a rate can
+        #   be shared across events). Materialize ProductSold/PriceSold if needed.
+        event, price = self._extraire_evenement_et_tarif(cleaned_data.pop('price'))
+        productsold, _created = ProductSold.objects.get_or_create(
+            product=price.product, event=event,
+        )
+        pricesold, _created = PriceSold.objects.get_or_create(
+            productsold=productsold, price=price, prix=price.prix,
+        )
 
         reservation: Reservation = self.instance
         reservation.user_commande = user
@@ -2879,6 +3023,7 @@ class ReservationAddAdmin(ModelForm):
         ### Création des billets associés
         payment_method = self.cleaned_data.pop('payment_method')
         quantity = self.cleaned_data.pop('quantity', 1) or 1
+        montant_saisi = self.cleaned_data.pop('amount', None)
         for _ in range(quantity):
             Ticket.objects.create(
                 payment_method=payment_method,
@@ -2888,12 +3033,25 @@ class ReservationAddAdmin(ModelForm):
                 pricesold=pricesold,
             )
 
-        # Création de la ligne comptables
-        # Si offert, le montant est 0
+        # Prix unitaire PAR billet : le montant saisi s'il est fourni, sinon le
+        # prix du tarif.
+        # / Per-ticket price: the typed amount if provided, else the rate's price.
+        if montant_saisi is not None and montant_saisi != '':
+            prix_unitaire = dround(Decimal(str(montant_saisi)))
+        else:
+            prix_unitaire = pricesold.prix
+
+        # LigneArticle.amount est le montant UNITAIRE en centimes : la quantité
+        # est portée par le champ qty, et le total = amount × qty (cf.
+        # comptabilite/services.py et LigneArticle.total()). Ne PAS multiplier
+        # par quantity ici, sinon double comptage (amount × qty²).
+        # / LigneArticle.amount is the UNIT amount in cents: quantity is held by
+        #   the qty field and total = amount × qty. Do NOT multiply by quantity
+        #   here, otherwise it is double-counted (amount × qty²).
         if payment_method == PaymentMethod.FREE:
             amount = 0
         else:
-            amount = int(pricesold.prix * quantity * 100)
+            amount = int(prix_unitaire * 100)
 
         vente = LigneArticle.objects.create(
             pricesold=pricesold,

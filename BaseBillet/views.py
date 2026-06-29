@@ -1899,10 +1899,12 @@ class FederationViewset(viewsets.ViewSet):
 
         # Contexte standard du skin + variables specifiques a l'explorer
         # / Standard skin context + explorer-specific variables
+        from django.conf import settings
         template_context = get_context(request)
         template_context.update({
             'explorer_data': explorer_data,
             'current_tenant_uuid': current_uuid,
+            'maptiler_key': settings.MAPTILER_KEY,
             'has_other_federated_places': has_other_federated_places,
             'federation_json_ld': federation_json_ld,
             'breadcrumb_json_ld': breadcrumb_json_ld,
