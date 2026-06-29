@@ -19,19 +19,18 @@ FLUX TESTE :
 
 PREREQUIS :
 - Le serveur Fedow de dev tourne (container fedow_django).
-- La variable d'environnement FEDOW_TEST_CARD_NUMBER contient le numero
-  (8 caracteres hexa) d'une carte Fedow SANS utilisateur (wallet ephemere).
-  Pour en trouver une :
-    docker exec fedow_django bash -c "cd /home/fedow/Fedow && poetry run \
-      python manage.py shell -c 'from fedow_core.models import Card; \
-      print(Card.objects.filter(user__isnull=True).first().number_printed)'"
-  Puis lancer :
-    docker exec -e FEDOW_TEST_CARD_NUMBER=XXXXXXXX lespass_django \
-      poetry run pytest tests/pytest/test_membership_card_wallet_fedow.py -q
-  (ou ajouter FEDOW_TEST_CARD_NUMBER au .env pour la rendre permanente)
+- Le tenant 'lespass' a une place Fedow signable (fedow_config) — cas par
+  defaut en dev.
 
-Si la variable est absente ou la carte deja liee : SKIP explicite, pas d'echec.
-/ If the env var is missing or the card already linked: explicit SKIP.
+Le test est AUTONOME : la fixture carte_fedow_ephemere fabrique elle-meme une
+carte fraiche chez Fedow (fedow_api.NFCcard.create_cards) si aucune carte
+ephemere n'est disponible. Il ne skippe donc jamais et resiste a un reset
+complet (down -v) qui vide la base Fedow.
+FEDOW_TEST_CARD_NUMBER reste optionnel : si renseigne et que la carte est
+encore ephemere, elle est reutilisee ; sinon une carte est fabriquee.
+/ Self-contained: the fixture creates a fresh Fedow card (create_cards) if
+needed, so it never skips and survives a full down -v. FEDOW_TEST_CARD_NUMBER
+is optional (reused if still ephemeral, otherwise a card is created).
 """
 import os
 import uuid as uuid_module
@@ -53,35 +52,44 @@ pytestmark = [pytest.mark.django_db, pytest.mark.integration]
 
 @pytest.fixture(scope="module")
 def carte_fedow_ephemere(tenant):
-    """Retourne le numero d'une carte Fedow encore ephemere (sans user).
-    Skip explicite si la variable d'env est absente ou la carte deja liee.
-    / Returns the number of a still-ephemeral Fedow card (no user).
-    Explicit skip if the env var is missing or the card already linked.
+    """Retourne le numero d'une carte Fedow ephemere (sans utilisateur).
+
+    Le test est AUTONOME : si FEDOW_TEST_CARD_NUMBER pointe une carte ephemere
+    existante, on la reutilise ; sinon on FABRIQUE une carte fraiche chez Fedow
+    via create_cards. Ainsi le test ne skippe jamais et resiste a un reset
+    complet (down -v) qui vide la base Fedow.
+    / Self-contained: reuse FEDOW_TEST_CARD_NUMBER if it still points to an
+    ephemeral card, otherwise create a fresh card on Fedow. Never skips.
     """
-    numero_carte = os.environ.get("FEDOW_TEST_CARD_NUMBER", "").strip()
-    if not numero_carte:
-        pytest.skip(
-            "FEDOW_TEST_CARD_NUMBER absent de l'environnement — "
-            "voir le docstring du fichier pour trouver une carte de test."
-        )
+    import secrets
 
     with override_settings(DEBUG=True), tenant_context(tenant):
         from fedow_connect.fedow_api import FedowAPI
         fedow_api = FedowAPI()
-        carte_serialisee = fedow_api.NFCcard.card_number_retrieve(numero_carte)
 
-        if not carte_serialisee:
-            pytest.skip(
-                f"La carte {numero_carte} est inconnue chez Fedow — "
-                "renseigner un autre numero dans FEDOW_TEST_CARD_NUMBER."
-            )
-        if not carte_serialisee.get("is_wallet_ephemere"):
-            pytest.skip(
-                f"La carte {numero_carte} est deja liee a un utilisateur — "
-                "renseigner une carte libre dans FEDOW_TEST_CARD_NUMBER."
-            )
+        # 1) Numero fourni par l'environnement : on le reutilise s'il pointe
+        # encore une carte ephemere (libre). / Reuse the env number if it
+        # still points to a free (ephemeral) card.
+        numero_env = os.environ.get("FEDOW_TEST_CARD_NUMBER", "").strip().upper()
+        if numero_env:
+            carte = fedow_api.NFCcard.card_number_retrieve(numero_env)
+            if carte and carte.get("is_wallet_ephemere"):
+                return numero_env
 
-    return numero_carte
+        # 2) Sinon, on fabrique une carte fraiche (numero + tag aleatoires de
+        # 8 hexa) : garantie ephemere, et pas de conflit 409. / Otherwise,
+        # create a fresh card (random 8-hex number + tag): guaranteed ephemeral.
+        numero_carte = secrets.token_hex(4).upper()
+        tag_rfid = secrets.token_hex(4).upper()
+        fedow_api.NFCcard.create_cards([{
+            "first_tag_id": tag_rfid,
+            "complete_tag_id_uuid": str(uuid_module.uuid4()),
+            "qrcode_uuid": str(uuid_module.uuid4()),
+            "number_printed": numero_carte,
+            "generation": 1,
+            "is_primary": False,
+        }])
+        return numero_carte
 
 
 @override_settings(DEBUG=True)
@@ -210,3 +218,43 @@ def test_carte_liee_au_wallet_via_formulaire_admin_avec_verif_fedow(
                     f"Nettoyage carte impossible ({erreur_nettoyage}) — "
                     "le prochain run skipera tant que la carte reste liee."
                 )
+
+
+def test_create_cards_cree_une_carte_ephemere_chez_fedow(tenant):
+    """create_cards() cree une carte NFC ephemere (sans utilisateur) chez Fedow,
+    ensuite retrouvable par son numero imprime.
+    / create_cards() creates an ephemeral NFC card on Fedow, then retrievable
+    by its printed number.
+
+    LOCALISATION : tests/pytest/test_membership_card_wallet_fedow.py
+
+    C'est la brique qui rend le test d'integration ci-dessus autonome : la
+    fixture carte_fedow_ephemere peut fabriquer sa carte si Fedow n'en a pas.
+    """
+    import secrets
+
+    # Numero + tag aleatoires (8 hexa) pour ne pas entrer en conflit avec une
+    # carte deja presente (l'endpoint renvoie 409 si le numero existe deja).
+    # / Random number + tag (8 hex) to avoid a 409 conflict with an existing card.
+    numero_imprime = secrets.token_hex(4).upper()
+    tag_rfid = secrets.token_hex(4).upper()
+
+    with override_settings(DEBUG=True), tenant_context(tenant):
+        from fedow_connect.fedow_api import FedowAPI
+
+        fedow_api = FedowAPI()
+        fedow_api.NFCcard.create_cards([{
+            "first_tag_id": tag_rfid,
+            "complete_tag_id_uuid": str(uuid_module.uuid4()),
+            "qrcode_uuid": str(uuid_module.uuid4()),
+            "number_printed": numero_imprime,
+            "generation": 1,
+            "is_primary": False,
+        }])
+
+        carte = fedow_api.NFCcard.card_number_retrieve(numero_imprime)
+
+    assert carte, f"La carte {numero_imprime} devrait exister chez Fedow apres create_cards"
+    assert carte.get("is_wallet_ephemere") is True, (
+        "Une carte fraichement creee doit etre ephemere (sans utilisateur)."
+    )
