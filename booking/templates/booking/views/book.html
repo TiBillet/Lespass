@@ -24,7 +24,7 @@ Flux créneau commencé / Slot-already-started flow:
 {% block booking_content %}
 
     <h1 class="mb-1">{% translate "Confirmer la réservation" %}</h1>
-    <p class="text-muted mb-4">{{ resource.name }}</p>
+    <p class="text-muted mb-4">{{ resource.product.name }}</p>
 
     <!--
     Lien retour vers le détail de la ressource.
@@ -154,7 +154,7 @@ Flux créneau commencé / Slot-already-started flow:
             <div class="mb-3 has-validation">
                 <h4>Tarif(s) : </h4>
                 {#            {% for price in published_prices %}#}
-                {% for price in resource.prices.all %}
+                {% for price in resource.product.prices.all %}
                     {% if resource.prices.count == 1 and price.free_price %}
                         <!-- Prix libre SEUL : on affiche directement l'input -->
                         <div class="mb-4 p-3 border border-primary-subtle rounded bg-body-tertiary">

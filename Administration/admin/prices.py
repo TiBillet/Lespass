@@ -228,28 +228,6 @@ class PriceAdmin(ModelAdmin):
 
     search_fields = ['name']
 
-    def get_search_results(self, request, queryset, search_term):
-        """
-        Pour la recherche de prix dans la page Resource.
-        On est sur un Many2Many, il faut bidouiller la réponde de ce coté
-        Le but est que cela n'affiche dans le auto complete fields que les catégories Billets
-        """
-        queryset, use_distinct = super().get_search_results(
-            request, queryset, search_term
-        )
-        if request.headers.get("Referer") and "admin/autocomplete" in request.path:
-            referer = request.headers["Referer"]
-            logger.info(referer)
-            if "resource" in referer:
-                # Autocomplete depuis ResourceAdmin : uniquement ressource
-                queryset = queryset.filter(
-                    product__categorie_article=Product.RESOURCE
-                ).exclude(product__archive=True)
-
-        return queryset, use_distinct
-
-
-
     conditional_fields = {
         "iteration": "recurring_payment == true",
         "commitment": "iteration > 0",

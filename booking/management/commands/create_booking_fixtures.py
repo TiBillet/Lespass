@@ -49,12 +49,12 @@ class Command(BaseCommand):
         calendrier = self._create_calendar()
         coworking_opening = self._create_coworking_opening()
         repet_opening = self._create_repet_opening()
-        prices_by_name = self._create_products_and_prices()
+        products_by_name = self._create_products_and_prices()
         self._create_resources(
             calendrier,
             coworking_opening,
             repet_opening,
-            prices_by_name,
+            products_by_name,
         )
 
         self.stdout.write(self.style.SUCCESS("Données booking créées avec succès."))
@@ -221,7 +221,7 @@ class Command(BaseCommand):
             },
         ]
 
-        prices_by_name = {}
+        products_by_name = {}
         for data in products_data:
             product, _created = Product.objects.update_or_create(
                 name=data["name"],
@@ -249,7 +249,7 @@ class Command(BaseCommand):
                         )
                     )
 
-            price, _created = Price.objects.update_or_create(
+            Price.objects.update_or_create(
                 product=product,
                 name=data["price_name"],
                 defaults={
@@ -257,11 +257,12 @@ class Command(BaseCommand):
                     "publish": True,
                 },
             )
-            prices_by_name[data["name"]] = [price]
 
-        return prices_by_name
 
-    def _create_resources(self, calendrier, coworking_opening, repet_opening, prices_by_name):
+            products_by_name[data["name"]] = product
+        return products_by_name
+
+    def _create_resources(self, calendrier, coworking_opening, repet_opening, products_by_name):
         """
         Crée les ressources réservables liées à leurs tarifs.
         / Creates the bookable resources linked to their prices.
@@ -287,28 +288,28 @@ class Command(BaseCommand):
 
         resources_data = [
             {
-                "name": "Coworking",
+                "product_name": "Coworking",
                 "calendar": calendrier,
                 "weekly_opening": coworking_opening,
                 "capacity": 3,
                 "group": None,
             },
             {
-                "name": "Imprimante 3D",
+                "product_name": "Imprimante 3D",
                 "calendar": calendrier,
                 "weekly_opening": coworking_opening,
                 "capacity": 1,
                 "group": None,
             },
             {
-                "name": "Petite salle",
+                "product_name": "Petite salle",
                 "calendar": calendrier,
                 "weekly_opening": repet_opening,
                 "capacity": 1,
                 "group": groupe_repet,
             },
             {
-                "name": "Grande salle",
+                "product_name": "Grande salle",
                 "calendar": calendrier,
                 "weekly_opening": repet_opening,
                 "capacity": 1,
@@ -317,8 +318,8 @@ class Command(BaseCommand):
         ]
 
         for data in resources_data:
-            resource, _created = Resource.objects.update_or_create(
-                name=data["name"],
+            Resource.objects.update_or_create(
+                product=products_by_name[data["product_name"]],
                 defaults={
                     "calendar": data["calendar"],
                     "weekly_opening": data["weekly_opening"],
@@ -326,4 +327,3 @@ class Command(BaseCommand):
                     "group": data["group"],
                 },
             )
-            resource.prices.set(prices_by_name[data["name"]])

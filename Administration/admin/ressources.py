@@ -193,9 +193,24 @@ class BookingAddAdmin(ModelForm):
 
 @admin.register(Booking, site=staff_admin_site)
 class BookingAdmin(ModelAdmin):
-    list_filter = ['status', 'start_datetime']
 
-    # form = BookingAddAdmin
+    ordering = ("-booked_at",)
+
+    list_display = (
+        'booked_at',
+        'user',
+        'resource',
+        'status',
+        'total_time',
+        'total_paid',
+    )
+
+
+    # search_fields = ['event__name', 'user_commande__email', 'datetime', 'custom_form']
+    list_filter = [
+        'status',
+        'start_datetime'
+    ]
 
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -255,7 +270,7 @@ class ResourceAddAdmin(ModelForm):
 @admin.register(Resource, site=staff_admin_site)
 class ResourceAdmin(ModelAdmin):
     # list_display = ['name', 'get_product_name', 'get_product_tags', 'capacity', 'weekly_opening', 'calendar']
-    list_display = ['name', 'capacity', 'weekly_opening', 'calendar']
+    list_display = ['get_product_name', 'capacity', 'weekly_opening', 'calendar']
 
     form = ResourceAddAdmin
 
@@ -268,7 +283,7 @@ class ResourceAdmin(ModelAdmin):
 
         # Le autocomplete fields + many2many ne permet pas de filtrage facile
         # Pour filter les produits de type billet, regarder le get_search_results dans ProductAdmin
-        "prices",
+        "product",
     ]
 
     @admin.display(description=_('Product Name'))

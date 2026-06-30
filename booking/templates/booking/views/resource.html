@@ -11,9 +11,8 @@ Flux / Flow:
   GET /booking/resource/<pk>/
   Contexte / Context: resource, slot_groups
 -->
-
 {% block title %}{{ resource.product.name }}{% endblock %}
-{% block meta_description %}{{ resource.description|truncatewords:20 }}{% endblock %}
+{% block meta_description %}{{ resource.product.long_description|truncatewords:20 }}{% endblock %}
 
 {% block booking_content %}
 
@@ -39,7 +38,6 @@ En-tête : nom, image, description de la ressource.
   {% endif %}
 
   <h1>{{ resource.product.name }}</h1>
-
   {% if resource.product.long_description %}
   <p class="text-muted">{{ resource.product.long_description }}</p>
   {% endif %}

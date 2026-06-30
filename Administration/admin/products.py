@@ -1206,6 +1206,13 @@ class ProductAdmin(ModelAdmin):
                     methode_caisse=Product.VENTE,
                     archive=False,
                 )
+            elif "resource" in referer:
+                # Autocomplete depuis ResourceAdmin : uniquement produit ressource
+                queryset = queryset.filter(
+                    categorie_article=Product.RESOURCE,
+                    archive=False,
+                )
+
         return queryset, use_distinct
 
     def save_model(self, request, obj: Product, form, change):

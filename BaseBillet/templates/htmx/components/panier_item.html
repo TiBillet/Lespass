@@ -52,7 +52,7 @@
             </div>
         {% endif %}
         <div class="flex-grow-1">
-            <div class="fw-semibold">{{ detail.resource.name }} - {{ detail.hours }}h à partir du {{ detail.start_datetime }} </div>
+            <div class="fw-semibold">{{ detail.resource.product.name }} - {{ detail.hours }}h à partir du {{ detail.start_datetime }} </div>
             <small class="text-muted">
                 {% trans "Resource" %} &middot; {{ detail.price.name }}
                 {% if detail.price.prix and detail.price.free_price %}

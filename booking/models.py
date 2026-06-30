@@ -9,7 +9,8 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from BaseBillet.models import Product, ResourceProduct, Price
+from BaseBillet.models import Product, ResourceProduct, Price, LigneArticle
+from fedow_connect.utils import dround
 
 WEEK_MINUTES = 7 * 24 * 60  # 10 080 — durée d'une semaine en minutes
 
@@ -24,10 +25,6 @@ class Resource(models.Model):
     La disponibilité est calculée à la volée depuis weekly_opening et calendar.
     / Availability is computed on the fly from weekly_opening and calendar.
     """
-    name = models.CharField(
-        max_length=200,
-        verbose_name=_('Name'),
-    )
 
     # Replaced by tag
     group = models.ForeignKey(
@@ -39,11 +36,11 @@ class Resource(models.Model):
         verbose_name=_('Group'),
     )
 
-    prices = models.ManyToManyField(
-        Price,
-        # on_delete=models.PROTECT,
-        related_name='resources',
-        verbose_name=_('Prices'),
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.PROTECT,
+        related_name='product',
+        verbose_name=_('Produit'),
     )
 
     calendar = models.ForeignKey(
@@ -95,10 +92,9 @@ class Resource(models.Model):
     class Meta:
         verbose_name = _('Resource')
         verbose_name_plural = _('Resources')
-        ordering = ['name']
 
     def __str__(self):
-        return self.name
+        return self.product.name
 
 class ResourceGroup(models.Model):
     """
@@ -504,6 +500,17 @@ class Booking(models.Model):
             minutes=self.slot_duration_minutes * self.slot_count
         )
         super().save(*args, **kwargs)
+
+    def total_time(self):
+        return str(self.slot_duration_minutes * self.slot_count) + "min"
+
+    def total_paid(self):
+        total_paid = 0
+        for ligne_article in self.lignearticles.filter(status__in=[LigneArticle.PAID, LigneArticle.VALID, LigneArticle.REFUNDED]):
+            ligne_article: LigneArticle
+            total_paid += int(ligne_article.amount * ligne_article.qty)  # int car on multiplie un int par un float
+        return dround(total_paid)
+
 
     def __str__(self):
         return f'{self.resource} — {self.user} — {self.start_datetime}'
