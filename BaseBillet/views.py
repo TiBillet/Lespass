@@ -5,7 +5,7 @@ import re
 import uuid
 
 from Administration.utils import clean_text
-from datetime import date as date_type, timedelta
+from datetime import date as date_type, timedelta, datetime
 from decimal import Decimal
 from io import BytesIO
 
@@ -71,6 +71,7 @@ from fedow_connect.utils import dround
 from fedow_connect.validators import TransactionSimpleValidator
 from fedow_public.models import AssetFedowPublic
 from root_billet.models import RootConfiguration
+from django.utils.dateparse import parse_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -4845,7 +4846,11 @@ class PanierMVT(viewsets.ViewSet):
             backup_last_name = ""
 
             # Get the user first name and last name from a membership
-            membership_temp = panier.memberships()[0]
+            membership_temp = None
+            if len(panier.memberships()) > 0:
+                membership_temp = panier.memberships()[0]
+            elif len(panier.resources()) > 0:
+                membership_temp = panier.resources()[0]
 
             if membership_temp:
                 backup_first_name = membership_temp.get("firstname")
@@ -5028,3 +5033,156 @@ class PanierMVT(viewsets.ViewSet):
         if request.POST.get('then') == 'checkout':
             return self.checkout(request)
         return self._render_badge_and_toast(request, message=message)
+
+    @action(detail=False, methods=["POST"], url_path="add/resource")
+    def add_resource(self, request):
+        """
+        TODO-ANTO : re check
+        Ajoute plusieurs billets au panier à partir du formulaire page event
+
+        / Add multiple tickets to the cart from the event page form (legacy
+        """
+
+        from booking.models import Resource
+        from booking.booking_engine import Interval, compute_slots,validate_new_booking
+        from booking.views import annotate_slots_for_display
+        from BaseBillet.services_panier import PanierSession, InvalidItemError
+        from booking.serializers import BookingCreateSerializer
+        from decimal import Decimal
+
+        start_datetime_raw = request.POST.get('start_datetime', '')
+        group_end_raw   = request.POST.get('group_end', '')
+        resource_uuid_param = request.POST.get('resource')
+        price_uuid = request.POST.get('price_uuid') or request.POST.get('price')
+
+        # Get first and lastname
+        firstname = request.POST.get('firstname') or None
+        lastname = request.POST.get('lastname') or None
+
+        # Get the resource_uuid and check if it exist
+        resource = None
+        if resource_uuid_param:
+            try:
+                resource = get_object_or_404(
+                    Resource.objects.select_related('calendar', 'weekly_opening'),
+                    pk=resource_uuid_param,
+                )
+            except (Event.DoesNotExist, ValueError):
+                resource = None
+
+        # If it doesn't exist, return an error
+        if resource is None:
+            return self._render_badge_and_toast(
+                request, message=_("Resource not found."), level='error',
+            )
+
+        # Parse le datetime naïf depuis le champ caché du formulaire.
+        # / Parse the naive datetime from the form hidden field.
+        tz = timezone.get_current_timezone()
+        start_datetime_raw   = request.POST.get('start_datetime', '')
+        start_datetime_naive = parse_datetime(start_datetime_raw)
+        if start_datetime_naive is None:
+            return HttpResponse()
+
+        start_datetime = timezone.make_aware(start_datetime_naive, tz)
+
+        # Dérive slot_duration_minutes en recalculant les créneaux depuis
+        # start_datetime. Utilise group_end comme borne de fenêtre si disponible.
+        # / Derive slot_duration_minutes by recomputing slots from start_datetime.
+        # Uses group_end as the window boundary if available.
+        group_end_raw   = request.POST.get('group_end', '')
+        group_end_naive = parse_datetime(group_end_raw)
+        if group_end_naive is not None:
+            window_end_derive = timezone.make_aware(group_end_naive, tz)
+        else:
+            window_end_derive = timezone.make_aware(
+                datetime.datetime.combine(
+                    start_datetime.astimezone(tz).date()
+                    + datetime.timedelta(days=resource.booking_horizon_days + 1),
+                    datetime.time.min,
+                    ),
+                tz,
+            )
+        window_derive = Interval(start=start_datetime, end=window_end_derive)
+        slot_groups_derive   = annotate_slots_for_display(compute_slots(resource, window_derive))
+        slot_duration_minutes = None
+        for group in slot_groups_derive:
+            for slot in group.slots:
+                if slot.start == start_datetime:
+                    slot_duration_minutes = slot.slot_duration_minutes
+                    break
+            if slot_duration_minutes:
+                break
+
+        if slot_duration_minutes is None:
+            return HttpResponse()
+
+        serializer_body = BookingCreateSerializer(data=request.POST)
+        if not serializer_body.is_valid():
+            context = get_context(request)
+            context.update({
+                'resource':       resource,
+                'start_datetime': start_datetime,
+                'error':          serializer_body.errors,
+            })
+            return render(request, 'booking/views/book.html', context)
+
+        slot_count = serializer_body.validated_data['slot_count']
+
+        # Cherche d'abord custom_amount direct, puis custom_amount_{uuid}.
+        # / Look for direct custom_amount first, then custom_amount_{uuid}.
+        custom_amount = request.POST.get('custom_amount')
+        if not custom_amount and price_uuid:
+            custom_amount = request.POST.get(f'custom_amount_{price_uuid}')
+        custom_amount = custom_amount or None
+
+        # Code promo : lie a un Product specifique (FK). On ne passe que si
+        # ce code existe pour le product de l'adhesion cible — sinon None.
+        # Validation complete (actif, is_usable, match) dans add_membership.
+        # / Promo code linked to a specific Product (FK). Passed only if it
+        # matches target product; else None. Full validation in add_membership.
+        promotional_code_name = (request.POST.get('promotional_code') or '').strip() or None
+        item_promo = None
+        if promotional_code_name and price_uuid:
+            from BaseBillet.models import PromotionalCode, Price as PriceModel
+            try:
+                _target_price = PriceModel.objects.get(uuid=price_uuid)
+                if PromotionalCode.objects.filter(
+                        name=promotional_code_name,
+                        product=_target_price.product,
+                ).exists():
+                    item_promo = promotional_code_name
+            except PriceModel.DoesNotExist:
+                pass  # add_membership levera l'erreur Price not found
+
+        panier = PanierSession(request)
+        try:
+            panier.add_resource(
+                resource_uuid=resource.pk,
+
+                start_datetime=start_datetime,
+                slot_duration_minutes=slot_duration_minutes,
+                slot_count=slot_count,
+
+                price_uuid=price_uuid,
+                custom_amount=custom_amount,
+                options=[],
+                custom_form={},
+                firstname=firstname,
+                lastname=lastname,
+                promotional_code_name=item_promo,
+            )
+        except InvalidItemError as exc:
+            return self._render_badge_and_toast(request, message=str(exc), level='error')
+        except Exception as exc:
+            logger.error(f"add_resource unexpected error: {exc}")
+            return self._render_badge_and_toast(
+                request, message=_("Unable to add resource."), level='error'
+            )
+        # Si le bouton "Ajouter au panier et payer" a envoye `then=checkout`,
+        # on enchaine directement sur le checkout (redirect Stripe ou gratuit).
+        # / If the "Add to cart and pay" button sent `then=checkout`, chain
+        # directly to checkout (Stripe redirect or free order).
+        if request.POST.get('then') == 'checkout':
+            return self.checkout(request)
+        return self._render_badge_and_toast(request, message=_("Resource added to cart."))

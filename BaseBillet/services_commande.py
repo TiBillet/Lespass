@@ -8,6 +8,7 @@ Responsabilité unique : transformer un PanierSession en Commande + N Reservatio
 / Single responsibility: transform a PanierSession into Commande + N Reservations
 + M Memberships + LigneArticle + optional Paiement_stripe. Atomic.
 """
+from datetime import datetime
 import logging
 from decimal import Decimal
 
@@ -141,8 +142,6 @@ class CommandeService:
                 continue
             price = Price.objects.get(uuid=item['price_uuid'])
             amount_dec = CommandeService._resolve_amount(price, item)
-            logger.error(f"PANIUER {item}")
-            logger.error(f"PANIUER {price}")
 
             # Code promo de cet item specifiquement (pas du panier global).
             # / Promo code for this specific item (not cart-global).
@@ -153,8 +152,8 @@ class CommandeService:
             # (issus de user.first_name / user.last_name).
             # / First/last name: prioritize item values (collected by the
             # membership form), fallback to function args (user.first_name).
-            item_firstname = (item.get('firstname') or '').strip() # TODO : n'existe pas dans l'item panier
-            item_lastname = (item.get('lastname') or '').strip() # PAREIL
+            item_firstname = (item.get('firstname') or '').strip()
+            item_lastname = (item.get('lastname') or '').strip()
             resolved_firstname = item_firstname or first_name
             resolved_lastname = item_lastname or last_name
 
@@ -169,7 +168,6 @@ class CommandeService:
                 newsletter=False,
                 custom_form=item.get('custom_form') or None,
             )
-            logger.error(f" ALED {membership.price.prix}")
 
             if item.get('options'):
                 from BaseBillet.models import OptionGenerale
@@ -196,9 +194,6 @@ class CommandeService:
                 sale_origin=SaleOrigin.LESPASS,
                 promotional_code=applicable_promo,
             )
-            logger.error(f" ALED2 {line.membership.price.prix}")
-            logger.error(f" ALED3 {line.pricesold.prix}")
-            logger.error(f" ALED4 {line.amount}")
 
             all_lines.append(line)
             total_centimes += amount_cts
@@ -274,6 +269,73 @@ class CommandeService:
             for line in creator.list_line_article_sold:
                 all_lines.append(line)
                 total_centimes += int(line.amount * line.qty)
+
+        # -- Phase 3 : Reservation de resource -- #
+        # -- Phase 3 : Reservation de resource -- #
+        from booking.models import Resource
+        from booking.booking_engine import validate_new_booking
+        tickets_par_event = {}
+        for item in panier.items():
+            if item['type'] != 'resource':
+                continue
+
+            price = Price.objects.get(uuid=item['price_uuid'])
+            amount_dec = CommandeService._resolve_amount(price, item)
+
+            # Get the price from previously computed price
+            # TODO-ANTO : add checks
+            amount_dec = Decimal(item.get('total_estimation'))
+
+            # Code promo de cet item specifiquement (pas du panier global).
+            # / Promo code for this specific item (not cart-global).
+            item_promo_code = _resolve_promo(item)
+
+            # Prenom/nom : priorite aux valeurs de l'item (collectees par
+            # membership/form.html), puis fallback sur les args de la fonction
+            # (issus de user.first_name / user.last_name).
+            # / First/last name: prioritize item values (collected by the
+            # membership form), fallback to function args (user.first_name).
+            item_firstname = (item.get('firstname') or '').strip()
+            item_lastname = (item.get('lastname') or '').strip()
+
+            resolved_firstname = item_firstname or first_name
+            resolved_lastname = item_lastname or last_name
+
+            resource = Resource.objects.get(pk=item.get('resource_uuid'))
+
+            is_valid, result = validate_new_booking(
+                resource              = resource,
+                start_datetime        = datetime.fromisoformat(item.get('start_datetime')),
+                slot_duration_minutes = int(item.get('slot_duration_minutes')),
+                slot_count            = int(item.get('slot_count')),
+                # TODO-ANTO add firstname ?
+                member                = user,
+            )
+            if not is_valid:
+                raise Exception(_("Booking not valide : ") + result)
+
+            price_sold = get_or_create_price_sold(price, custom_amount=amount_dec)
+            amount_cts = dec_to_int(amount_dec)
+            # Le code n'est applique que si lie au product (double-check
+            # redondant avec la validation a l'ajout, mais safe).
+            # / Code applied only if linked to the product (redundant safety check).
+            applicable_promo = item_promo_code if (
+                    item_promo_code and item_promo_code.product_id == price.product_id
+            ) else None
+
+            line = LigneArticle.objects.create(
+                pricesold=price_sold,
+                booking=result,
+                payment_method=PaymentMethod.STRIPE_NOFED,
+                amount=amount_cts,
+                qty=1,
+                sale_origin=SaleOrigin.LESPASS,
+                promotional_code=applicable_promo,
+            )
+
+            all_lines.append(line)
+            total_centimes += amount_cts
+
 
         # -- Phase 3/4 : Stripe ou gratuit --
         # -- Phase 3/4: Stripe or free --

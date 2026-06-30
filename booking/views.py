@@ -143,7 +143,7 @@ class BookingViewSet(viewsets.ViewSet):
 
         """
         all_resources = list(
-            Resource.objects.select_related('group').order_by('product__name')
+            Resource.objects.select_related('group').order_by('name')
         )
 
         items_by_group  = defaultdict(list)
@@ -531,13 +531,13 @@ class BookingViewSet(viewsets.ViewSet):
 
         upcoming_bookings = (
             Booking.objects
-            .filter(user=request.user, status=Booking.STATUS_CONFIRMED, end_datetime__gt=now)
+            .filter(user=request.user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID,], end_datetime__gt=now)
             .select_related('resource')
             .order_by('start_datetime')
         )
         past_bookings = (
             Booking.objects
-            .filter(user=request.user, status=Booking.STATUS_CONFIRMED, end_datetime__lte=now)
+            .filter(user=request.user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID,], end_datetime__lte=now)
             .select_related('resource')
             .order_by('-start_datetime')
         )
@@ -584,7 +584,7 @@ class BookingViewSet(viewsets.ViewSet):
             Booking.objects.select_related('resource'),
             pk     = booking_pk,
             user   = request.user,
-            status = Booking.STATUS_CONFIRMED,
+            status__in = [Booking.PAID_BY_USER, Booking.ADMIN_VALID,],
         )
 
         deadline = booking.start_datetime - datetime.timedelta(

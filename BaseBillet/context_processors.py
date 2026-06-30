@@ -5,8 +5,11 @@ Context processors BaseBillet.
 Expose le panier courant a tous les templates via {{ panier }}.
 / Exposes the current cart to all templates via {{ panier }}.
 """
+from datetime import datetime
 import logging
 from decimal import Decimal
+
+from booking.models import Resource
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +99,19 @@ def _build_items_with_details(panier):
                 detail['event'] = event
             except Event.DoesNotExist:
                 continue
+        if item['type'] == 'resource':
+            try:
+                resource = Resource.objects.get(pk=item['resource_uuid'])
+                detail['resource'] = resource
+                detail['start_datetime'] = datetime.fromisoformat(item.get("start_datetime"))
+                detail['slot_duration_minutes'] = item.get("slot_duration_minutes")
+                detail['slot_count'] = item.get("slot_count")
+                detail['total_estimation'] = item.get("total_estimation")
+
+                detail['hours'] = item.get("hours")
+            except Resource.DoesNotExist:
+                continue
+
         result.append(detail)
     return result
 

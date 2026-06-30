@@ -3101,6 +3101,9 @@ class LigneArticle(models.Model):
                                      related_name="lignearticles", verbose_name=_("Reservation"))
     membership = models.ForeignKey("Membership", on_delete=models.PROTECT, blank=True, null=True,
                                    verbose_name=_("Linked subscription"), related_name="lignearticles")
+    booking = models.ForeignKey("booking.Booking", on_delete=models.PROTECT, blank=True, null=True,
+                                   verbose_name=_("Resources reservation"), related_name="lignearticles")
+
 
     ### INFO DE PAIEMENT
     sale_origin = models.CharField(max_length=2, choices=SaleOrigin.choices, default=SaleOrigin.LESPASS,

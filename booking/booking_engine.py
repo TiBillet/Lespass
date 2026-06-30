@@ -310,7 +310,9 @@ def get_existing_bookings_for_resource(resource, window: Interval = None):
     """
     from booking.models import Booking
 
-    requete_de_base = Booking.objects.filter(resource=resource)
+
+    # Récupère seulement les réservations (Booking) qui ont été payé ou validé par l'admin
+    requete_de_base = Booking.objects.filter(resource=resource,status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID,])
 
     if window is None:
         return requete_de_base
@@ -565,7 +567,7 @@ def validate_new_booking(resource, start_datetime, slot_duration_minutes,
                 start_datetime=start_datetime,
                 slot_duration_minutes=slot_duration_minutes,
                 slot_count=slot_count,
-                status=Booking.STATUS_CONFIRMED,
+                status=Booking.WAITING_PAYMENT,
             )
 
     except OperationalError as e:

@@ -31,7 +31,7 @@ import requests
 from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 
-from BaseBillet.models import Product
+from BaseBillet.models import Price, Product
 from booking.models import (
     Calendar,
     ClosedPeriod,
@@ -49,12 +49,12 @@ class Command(BaseCommand):
         calendrier = self._create_calendar()
         coworking_opening = self._create_coworking_opening()
         repet_opening = self._create_repet_opening()
-        products_by_name = self._create_products()
+        prices_by_name = self._create_products_and_prices()
         self._create_resources(
             calendrier,
             coworking_opening,
             repet_opening,
-            products_by_name,
+            prices_by_name,
         )
 
         self.stdout.write(self.style.SUCCESS("Données booking créées avec succès."))
@@ -90,7 +90,7 @@ class Command(BaseCommand):
             )
 
         fermetures = [
-            (datetime.date(y, 7, 1),  datetime.date(y, 8, 31),      "Fermeture estivale"),
+            # (datetime.date(y, 7, 1),  datetime.date(y, 8, 31),      "Fermeture estivale"),
             (datetime.date(y, 12, 21), datetime.date(y + 1, 1, 2),  "Fermeture fin d'année"),
         ]
         for start, end, label in fermetures:
@@ -159,17 +159,17 @@ class Command(BaseCommand):
 
         return opening
 
-    def _create_products(self):
+    def _create_products_and_prices(self):
         """
-        Crée les produits communs aux ressources.
-        / Creates the shared products for bookable resources.
+        Crée les produits et leurs tarifs associés pour les ressources.
+        / Creates products and their associated prices for resources.
 
         LOCALISATION : booking/management/commands/create_booking_fixtures.py
 
         Les champs nom, descriptions et image sont sur le modèle Product.
-        Chaque ressource est ensuite liée à son produit via une ForeignKey.
+        Chaque ressource est ensuite liée à des tarifs via une ManyToMany.
         / Name, descriptions and image live on the Product model.
-        Each resource is then linked to its product through a ForeignKey.
+        Each resource is then linked to prices through a ManyToMany.
 
         Les images sont téléchargées depuis picsum.photos.
         / Images are downloaded from picsum.photos.
@@ -183,6 +183,8 @@ class Command(BaseCommand):
                     "Prises, WiFi haut débit, café."
                 ),
                 "image_url": "https://picsum.photos/seed/coworking/800/400",
+                "price_name": "Créneau 1h",
+                "price": 5.00,
             },
             {
                 "name": "Imprimante 3D",
@@ -192,6 +194,8 @@ class Command(BaseCommand):
                     "Formation obligatoire avant première utilisation."
                 ),
                 "image_url": "https://picsum.photos/seed/imprimante3d/800/400",
+                "price_name": "Créneau 1h",
+                "price": 8.00,
             },
             {
                 "name": "Petite salle",
@@ -201,6 +205,8 @@ class Command(BaseCommand):
                     "Batterie, amplis et câblage inclus. Capacité : 4 musiciens."
                 ),
                 "image_url": "https://picsum.photos/seed/petitesalle/800/400",
+                "price_name": "Répétition 1h",
+                "price": 12.00,
             },
             {
                 "name": "Grande salle",
@@ -210,10 +216,12 @@ class Command(BaseCommand):
                     "Idéale pour les groupes de 6 personnes et plus."
                 ),
                 "image_url": "https://picsum.photos/seed/grandesalle/800/400",
+                "price_name": "Répétition 1h",
+                "price": 18.00,
             },
         ]
 
-        products_by_name = {}
+        prices_by_name = {}
         for data in products_data:
             product, _created = Product.objects.update_or_create(
                 name=data["name"],
@@ -241,14 +249,22 @@ class Command(BaseCommand):
                         )
                     )
 
-            products_by_name[data["name"]] = product
+            price, _created = Price.objects.update_or_create(
+                product=product,
+                name=data["price_name"],
+                defaults={
+                    "prix": data["price"],
+                    "publish": True,
+                },
+            )
+            prices_by_name[data["name"]] = [price]
 
-        return products_by_name
+        return prices_by_name
 
-    def _create_resources(self, calendrier, coworking_opening, repet_opening, products_by_name):
+    def _create_resources(self, calendrier, coworking_opening, repet_opening, prices_by_name):
         """
-        Crée les ressources réservables liées à leurs produits.
-        / Creates the bookable resources linked to their products.
+        Crée les ressources réservables liées à leurs tarifs.
+        / Creates the bookable resources linked to their prices.
 
         LOCALISATION : booking/management/commands/create_booking_fixtures.py
 
@@ -271,28 +287,28 @@ class Command(BaseCommand):
 
         resources_data = [
             {
-                "product_name": "Coworking",
+                "name": "Coworking",
                 "calendar": calendrier,
                 "weekly_opening": coworking_opening,
                 "capacity": 3,
                 "group": None,
             },
             {
-                "product_name": "Imprimante 3D",
+                "name": "Imprimante 3D",
                 "calendar": calendrier,
                 "weekly_opening": coworking_opening,
                 "capacity": 1,
                 "group": None,
             },
             {
-                "product_name": "Petite salle",
+                "name": "Petite salle",
                 "calendar": calendrier,
                 "weekly_opening": repet_opening,
                 "capacity": 1,
                 "group": groupe_repet,
             },
             {
-                "product_name": "Grande salle",
+                "name": "Grande salle",
                 "calendar": calendrier,
                 "weekly_opening": repet_opening,
                 "capacity": 1,
@@ -301,8 +317,8 @@ class Command(BaseCommand):
         ]
 
         for data in resources_data:
-            Resource.objects.update_or_create(
-                product=products_by_name[data["product_name"]],
+            resource, _created = Resource.objects.update_or_create(
+                name=data["name"],
                 defaults={
                     "calendar": data["calendar"],
                     "weekly_opening": data["weekly_opening"],
@@ -310,3 +326,4 @@ class Command(BaseCommand):
                     "group": data["group"],
                 },
             )
+            resource.prices.set(prices_by_name[data["name"]])

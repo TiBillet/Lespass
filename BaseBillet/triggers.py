@@ -9,6 +9,7 @@ from BaseBillet.models import LigneArticle, Product, Membership, Price, Configur
 from BaseBillet.tasks import send_to_ghost, send_membership_invoice_to_email, send_sale_to_laboutik, webhook_membership, \
     send_to_brevo, refill_from_lespass_to_user_wallet_from_price_solded
 from BaseBillet.templatetags.tibitags import dround
+from booking.models import Booking
 from fedow_connect.fedow_api import FedowAPI
 from root_billet.models import RootConfiguration
 
@@ -124,6 +125,24 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
         # self.ligne_article = update_sale_if_free_price(self.ligne_article)
         # self.ligne_article.status = LigneArticle.VALID
         # logger.info(f"TRIGGER DON")
+
+    # Catégorie reservation de ressource
+    def trigger_C(self):
+        ligne_article: LigneArticle = self.ligne_article
+        logger.info(f"    START TRIGGER_C BOOKING PAID ligne_article.uuid : {ligne_article.uuid}")
+
+        # On va chercher l'article vendu et l'adhésion associéé
+        booking = ligne_article.booking
+
+        booking.status = Booking.PAID_BY_USER
+        booking.save()
+
+
+        logger.info(f"        TRIGGER_C BOOKING PAID -> set ligne_article VALID (no save)")
+        self.ligne_article.status = LigneArticle.VALID
+
+        logger.info(f"    END TRIGGER_C BOOKING PAID\n")
+
 
     # Category BILLET
     def trigger_B(self):

@@ -35,7 +35,7 @@ Section "À venir" — réservations dont la fin est dans le futur.
              {% if booking.pk == highlighted_booking_pk %}list-group-item-success{% endif %}"
       data-testid="booking-upcoming-item-{{ booking.pk }}">
     <div>
-      <strong><a href="{% url 'booking-resource' pk=booking.resource.pk %}">{{ booking.resource.product.name }}</a></strong><br>
+      <strong><a href="{% url 'booking-resource' pk=booking.resource.pk %}">{{ booking.resource.name }}</a></strong><br>
       {{ booking.start_datetime|date:"l d F Y" }}
       {% translate "à" %} {{ booking.start_datetime|date:"H\hi" }}
       – {{ booking.end_datetime|date:"H\hi" }}

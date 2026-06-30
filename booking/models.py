@@ -9,7 +9,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from BaseBillet.models import Product, ResourceProduct
+from BaseBillet.models import Product, ResourceProduct, Price
 
 WEEK_MINUTES = 7 * 24 * 60  # 10 080 — durée d'une semaine en minutes
 
@@ -24,11 +24,10 @@ class Resource(models.Model):
     La disponibilité est calculée à la volée depuis weekly_opening et calendar.
     / Availability is computed on the fly from weekly_opening and calendar.
     """
-    # Replaced by name
-    # name = models.CharField(
-    #     max_length=200,
-    #     verbose_name=_('Name'),
-    # )
+    name = models.CharField(
+        max_length=200,
+        verbose_name=_('Name'),
+    )
 
     # Replaced by tag
     group = models.ForeignKey(
@@ -40,11 +39,11 @@ class Resource(models.Model):
         verbose_name=_('Group'),
     )
 
-    product = models.ForeignKey(
-        ResourceProduct,
-        on_delete=models.PROTECT,
+    prices = models.ManyToManyField(
+        Price,
+        # on_delete=models.PROTECT,
         related_name='resources',
-        verbose_name=_('Product'),
+        verbose_name=_('Prices'),
     )
 
     calendar = models.ForeignKey(
@@ -96,11 +95,10 @@ class Resource(models.Model):
     class Meta:
         verbose_name = _('Resource')
         verbose_name_plural = _('Resources')
-        ordering = ['product__name']
+        ordering = ['name']
 
     def __str__(self):
-        return self.product.name
-
+        return self.name
 
 class ResourceGroup(models.Model):
     """
@@ -425,10 +423,14 @@ class Booking(models.Model):
     no 'cancelled' status.
     """
 
-    STATUS_CONFIRMED = 'confirmed'
-
+    WAITING_PAYMENT, ADMIN_CANCELED, ADMIN_VALID, ADMIN_WAITING, PAID_BY_USER, NO_ADMIN_VALID = "WP", "CA", "VA", "WA", "PA", "AU"
     STATUS_CHOICES = [
-        (STATUS_CONFIRMED, _('Confirmed')),
+        (WAITING_PAYMENT, _("Waiting for payment")),
+        (ADMIN_CANCELED, _('Cancelled')),
+        (ADMIN_WAITING, _('Waiting for admin validation')),
+        (ADMIN_VALID, _('Confirmed by admin, waiting for payment')),
+        (PAID_BY_USER, _('Paid by user')),
+        (NO_ADMIN_VALID, _('Confirmed by system')),
     ]
 
     resource = models.ForeignKey(
@@ -473,9 +475,9 @@ class Booking(models.Model):
         verbose_name=_('Slot end'),
     )
     status = models.CharField(
-        max_length=20,
+        max_length=2,
         choices=STATUS_CHOICES,
-        default=STATUS_CONFIRMED,
+        default=WAITING_PAYMENT,
         verbose_name=_('Status'),
     )
     booked_at = models.DateTimeField(

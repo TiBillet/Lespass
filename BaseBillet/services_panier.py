@@ -349,9 +349,14 @@ class PanierSession:
         return list(self._data.get('items', []))
 
     def memberships(self):
-        """Liste des items (dicts) actuellement dans le panier.
-        / List of items (dicts) currently in the cart."""
+        """Liste des items de type adhésion (dicts) actuellement dans le panier.
+        / List of items of type membership (dicts) currently in the cart."""
         return list(item for item in self._data.get('items', []) if item.get('type') == 'membership')
+
+    def resources(self):
+        """Liste des items de type ressource (dicts) actuellement dans le panier.
+        / List of items of type resource (dicts) currently in the cart."""
+        return list(item for item in self._data.get('items', []) if item.get('type') == 'resource')
 
 
     def count(self):
@@ -706,8 +711,7 @@ class PanierSession:
         # Stockes sur l'item pour etre prioritaires a la materialisation.
         # / Clean names: trim, fallback to empty string if None.
         # Stored on the item to override user.first_name at materialization.
-        logger.error(f"HIIII {firstname}")
-        logger.error(f"HIIII {lastname}")
+
         clean_firstname = (firstname or '').strip()
         clean_lastname = (lastname or '').strip()
 
@@ -724,6 +728,143 @@ class PanierSession:
         self._data['items'].append(item)
         self._save()
         return item
+
+    def add_resource(self, resource_uuid, price_uuid, start_datetime,
+                       slot_duration_minutes, slot_count,
+                       custom_amount=None, options=None, custom_form=None,
+                       firstname=None, lastname=None,
+                       promotional_code_name=None):
+
+        """
+        TODO-ANTO - recheck all
+        Ajoute un item adhésion au panier après validation.
+        / Adds a membership item to the cart after validation.
+
+        `firstname` / `lastname` sont collectés par le formulaire d'adhésion
+        (`membership/form.html`, champs `name="firstname"` et `name="lastname"`).
+        Ils sont stockés sur l'item et priorisés dans `CommandeService.materialiser`
+        sur `user.first_name` / `user.last_name` — ainsi un utilisateur sans profil
+        renseigné obtient quand même une Membership/Commande avec les vrais noms.
+
+        / `firstname` / `lastname` collected by the membership form
+        (`name="firstname"` / `name="lastname"` fields). Stored on the item and
+        prioritized in `CommandeService.materialiser` over `user.first_name` /
+        `user.last_name` — users without a filled profile still get proper names.
+
+        Raises:
+            InvalidItemError: si price invalide, categorie non ADHESION,
+                recurring_payment ou manual_validation (exclus du panier v1).
+        """
+        from BaseBillet.models import Price, Product
+        from booking.models import Resource
+
+        # # Validation 1 : Price existe et publié
+        # # Validation 1: Price exists and published
+        try:
+            price = Price.objects.get(uuid=price_uuid)
+        except Price.DoesNotExist:
+            raise InvalidItemError(_("Price not found."))
+        if not price.publish:
+            raise InvalidItemError(_("This rate is not available."))
+        if price.product.archive:
+            raise InvalidItemError(_("This product is archived."))
+
+        try:
+            resource = Resource.objects.get(pk=resource_uuid)
+        except Exception:
+            raise InvalidItemError(_("Resource does not exist"))
+
+
+        # Validation 2 : Product doit être categorie ADHESION
+        # Validation 2: Product must be ADHESION category
+        if price.product.categorie_article != Product.RESOURCE:
+            raise InvalidItemError(_("This rate is not a resource."))
+
+        # # Validation 3 : pas de paiement récurrent (exclu du panier en v1)
+        # # Validation 3: no recurring payment (excluded from cart in v1)
+        if price.recurring_payment:
+            raise InvalidItemError(
+                _("Recurring memberships require a direct payment and cannot be added to the cart.")
+            )
+
+        # Validation 4 : pas de validation manuelle (exclue du panier en v1)
+        # Validation 4: no manual validation (excluded from cart in v1)
+        if price.manual_validation:
+            raise InvalidItemError(
+                _("Memberships with manual validation cannot be added to the cart.")
+            )
+
+        # Validation 5 : pas de doublon (1 adhésion du même price max)
+        # Validation 5: no duplicate (1 membership of the same price max)
+        for existing in self._data.get('items', []):
+            if existing.get('type') == 'membership' and existing.get('price_uuid') == str(price_uuid):
+                raise InvalidItemError(_("This membership is already in your cart."))
+
+        # Validation 6 : free_price → custom_amount >= min
+        # Validation 6: free_price → custom_amount >= min
+        if price.free_price:
+            if custom_amount is None:
+                raise InvalidItemError(_("An amount is required for the free price."))
+            try:
+                amount_dec = Decimal(str(custom_amount))
+            except Exception:
+                raise InvalidItemError(_("Invalid amount."))
+            if price.prix and amount_dec < price.prix:
+                raise InvalidItemError(
+                    _("The amount must be greater than or equal to the minimum.")
+                )
+            if amount_dec > Decimal("999999.99"):
+                raise InvalidItemError(_("The amount is too high."))
+
+        # Validation 7 : code promo (si fourni) — doit etre actif, utilisable,
+        # et lie au product de l'adhesion. Meme regle que add_ticket.
+        # / Validation 7: promo code (if provided) — active, usable, linked to product.
+        validated_promo_name = None
+
+        if promotional_code_name:
+            from BaseBillet.models import PromotionalCode
+            try:
+                promo = PromotionalCode.objects.get(
+                    name=promotional_code_name, is_active=True,
+                )
+            except PromotionalCode.DoesNotExist:
+                raise InvalidItemError(_("Invalid or inactive promotional code."))
+            if not promo.is_usable():
+                raise InvalidItemError(_("This promotional code is no longer available."))
+            if promo.product_id != price.product_id:
+                raise InvalidItemError(
+                    _("This promotional code does not apply to this product.")
+                )
+            validated_promo_name = promo.name
+
+        # Nettoyage des noms : trim, fallback a chaine vide si None.
+        # Stockes sur l'item pour etre prioritaires a la materialisation.
+        # / Clean names: trim, fallback to empty string if None.
+        # Stored on the item to override user.first_name at materialization.
+        clean_firstname = (firstname or '').strip()
+        clean_lastname = (lastname or '').strip()
+
+        item = {
+            'type': 'resource',
+            'price_uuid': str(price.uuid),
+            'start_datetime': str(start_datetime),
+            'slot_duration_minutes': str(slot_duration_minutes),
+            'slot_count': str(slot_count),
+            'total_estimation' : float(slot_duration_minutes) / 60 * float(slot_count) * float(price.prix),
+            'resource_uuid': str(resource_uuid),
+            'custom_amount': str(custom_amount) if custom_amount is not None else None,
+            'options': [str(o) for o in (options or [])],
+            'custom_form': dict(custom_form or {}),
+            'firstname': clean_firstname,
+            'lastname': clean_lastname,
+            'promotional_code_name': (validated_promo_name or ""),
+            'hours' : float(slot_duration_minutes)/60*float(slot_count)
+        }
+        self._data['items'].append(item)
+        self._save()
+
+        return item
+
 
     def remove_item(self, index):
         """
@@ -809,6 +950,8 @@ class PanierSession:
                     break
             except Price.DoesNotExist:
                 continue
+            except Exception:
+                return
         if not present:
             raise InvalidItemError(
                 _("This promotional code does not apply to any item in your cart.")
@@ -860,8 +1003,12 @@ class PanierSession:
                 price = Price.objects.get(uuid=item['price_uuid'])
             except Price.DoesNotExist:
                 continue
+
             if price.free_price and item.get('custom_amount'):
                 amount_eur = Decimal(str(item['custom_amount']))
+            elif item.get('type') == "resource":
+                # Calcul customisé pour les ressources, comme c'est un taux horaires
+                amount_eur = float(item.get("slot_duration_minutes")) / 60 * float(item.get("slot_count")) * float(price.prix)
             else:
                 amount_eur = price.prix or Decimal("0.00")
             qty = int(item.get('qty', 1))
@@ -898,4 +1045,20 @@ class PanierSession:
                     custom_amount=item.get('custom_amount'),
                     options=item.get('options', []),
                     custom_form=item.get('custom_form', {}),
+                    firstname=item.get('firstname'),
+                    lastname=item.get('lastname'),
                 )
+            elif item['type'] == 'resource':
+                self.add_resource(
+                    price_uuid=item['price_uuid'],
+                    resource_uuid=item['resource_uuid'],
+                    start_datetime = item.get('start_datetime'),
+                    slot_duration_minutes = item.get('slot_duration_minutes'),
+                    slot_count = item.get('slot_count'),
+                    custom_amount=item.get('custom_amount'),
+                    options=item.get('options', []),
+                    custom_form=item.get('custom_form', {}),
+                    firstname=item.get('firstname'),
+                    lastname=item.get('lastname'),
+                )
+
