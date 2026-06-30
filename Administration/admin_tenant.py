@@ -1569,7 +1569,7 @@ class MembershipPublishedFilter(admin.SimpleListFilter):
         # Return only product that are not archived to display in the filter
         return [
             (product.pk, product.name)
-            for product in MembershipProduct.objects.filter(categorie_article=Product.ADHESION,archive=False)
+            for product in MembershipProduct.objects.filter(archive=False)
         ]
 
     def queryset(self, request, queryset):

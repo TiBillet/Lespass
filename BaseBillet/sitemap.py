@@ -1,7 +1,8 @@
 from django.contrib.sitemaps import Sitemap
 from django.urls import reverse
 from django.db import connection
-from BaseBillet.models import Event, Product
+from BaseBillet.models import Event, Product, MembershipProduct
+
 
 # This file defines the sitemaps for the TiBillet application.
 # The sitemaps are accessible at:
@@ -76,7 +77,7 @@ class ProductSitemap(TenantSitemap):
 
     def items(self):
         # Only include published membership products
-        return Product.objects.filter(publish=True, categorie_article=Product.ADHESION)
+        return MembershipProduct.objects.filter(publish=True)
 
     def location(self, obj):
         # URL for each membership product - returns absolute path without protocol or domain
