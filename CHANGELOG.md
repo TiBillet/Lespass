@@ -1,5 +1,180 @@
 # Changelog / Journal des modifications
 
+## App `pages` — Embed PeerTube + durcissement sécurité (audit XSS) / Pages: PeerTube embed + security hardening (XSS audit)
+
+**Date :** 2026-06-30
+**Migration :** Non / No
+
+**Quoi / What :**
+- **Embed PeerTube.** Le tag `embed_iframe` accepte désormais les vidéos PeerTube
+  des **instances autorisées**. PeerTube étant fédéré (n'importe quel hôte), on ne
+  peut pas tout accepter sans rouvrir la faille d'iframe arbitraire : on part d'une
+  liste par défaut (`framatube.org`, `makertube.net`), **extensible via le setting
+  optionnel `PAGES_PEERTUBE_HOSTS`** (tuple de domaines) sans modifier le code.
+  L'URL d'embed est reconstruite (`/videos/embed/<id>`) sur le même hôte autorisé,
+  l'identifiant est validé (caractères sûrs uniquement).
+- **Audit XSS / sérialisation des entrées.** Vérification de tous les chemins
+  entrée→sortie de l'app pages :
+  - **Faille corrigée (classic ET faire_festival)** : le popup Leaflet construisait
+    son HTML par concaténation du label (`bindPopup('<b>' + p.label)`) → un label
+    malveillant dans `points_gps` pouvait injecter du JS. Désormais construit en DOM
+    avec `textContent` (jamais d'HTML concaténé). Aucun changement visuel.
+  - **Liens** : `bouton_url`/`bouton2_url`/`embed_url` à schéma dangereux
+    (`javascript:`, `data:`, `vbscript:`, y compris obfusqués) sont neutralisés à
+    l'enregistrement admin.
+  - **JSON-LD** : échappement renforcé `<`, `>`, `&` (comme Django `json_script`).
+  - **Confirmés sûrs** : `texte|safe` (assaini par nh3 au save), `points_gps`
+    (`json_script`), tous les autres champs auto-échappés par Django, embed reconstruit
+    + échappé.
+
+**Pourquoi / Why :** demande explicite (PeerTube + sécurité). Le moteur de pages
+doit être robuste aux entrées malveillantes, même côté éditeur (la whitelist embed
+et l'assainissement sont la seule barrière, le champ texte étant déjà nettoyé).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `pages/templatetags/pages_tags.py` | PeerTube (hosts allowlist + setting) ; embed http(s)-only ; JSON-LD échappement `<>&` |
+| `pages/admin.py` | `_url_a_schema_dangereux` + neutralisation des liens à l'enregistrement |
+| `pages/templates/pages/classic/partials/bloc_carte_leaflet.html` | popup via `textContent` (anti-XSS) |
+| `pages/templates/pages/faire_festival/partials/bloc_carte_leaflet.html` | popup via `textContent` (anti-XSS, style inchangé) |
+| `pages/models.py` | help_text embed (PeerTube) |
+| `tests/pytest/test_pages.py` | + tests PeerTube whitelist + schémas dangereux (22 au total) |
+
+## App `pages` — Lot 4 : blocs Galerie, Embed (whitelist) & Accordéon FAQ / Pages lot 4: Gallery, Embed (whitelist) & collapsible FAQ blocks
+
+**Date :** 2026-06-30
+**Migration :** Oui / Yes — `pages.0012` (champs `repliable`, `embed_url`, types `GALERIE`/`EMBED`, modèle `ImageGalerie`)
+
+**Quoi / What :**
+- **Galerie** : nouveau type `GALERIE` + modèle `ImageGalerie` (plusieurs images par
+  bloc, édité en `TabularInline` dans l'admin). Rendu en grille responsive avec
+  légendes.
+- **Embed** : nouveau type `EMBED` + champ `embed_url`. Template tag `embed_iframe`
+  qui **valide l'hôte contre une liste blanche stricte (YouTube, Vimeo)**, reconstruit
+  l'URL d'embed lui-même (jamais l'URL brute), rend un iframe 16:9 responsive — et
+  **n'affiche RIEN pour un hôte non autorisé** (anti-injection d'iframe). YouTube
+  passe par `youtube-nocookie`.
+- **Accordéon** : champ booléen `repliable` sur les blocs FAQ. Si coché, la FAQ
+  devient un accordéon natif `<details>/<summary>` (repliable, accessible, **zéro
+  JS**, marqueur +/− d'accent). Sinon : comportement historique (réponse ouverte).
+  Choix laissé à l'éditeur — non destructif.
+
+**Pourquoi / Why :** compléter le moteur de pages pour couvrir les besoins courants
+d'un site (galerie photo, vidéo intégrée, FAQ repliable) tout en gardant la sécurité
+(pas d'iframe arbitraire) et le principe djc (rendu serveur, zéro JS pour l'accordéon).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `pages/models.py` | types `GALERIE`/`EMBED`, champs `repliable`/`embed_url`, modèle `ImageGalerie` |
+| `pages/migrations/0012_*.py` | migration des champs + modèle ImageGalerie |
+| `pages/admin.py` | inline `ImageGalerieInline`, champs + conditional_fields |
+| `pages/templatetags/pages_tags.py` | tag `embed_iframe` (whitelist YouTube/Vimeo) |
+| `pages/templates/pages/classic/partials/bloc_galerie.html` | nouveau partial galerie |
+| `pages/templates/pages/classic/partials/bloc_embed.html` | nouveau partial embed |
+| `pages/templates/pages/classic/partials/bloc_faq.html` | variante repliable `<details>` |
+| `pages/static/pages/css/tb-blocs.css` | styles galerie, embed 16:9, accordéon |
+| `pages/management/commands/charger_demo_blocs.py` | blocs Galerie/Embed + cas FAQ repliable |
+| `tests/pytest/test_pages.py` | + tests embed whitelist (sécurité) + galerie/repliable (21 au total) |
+
+## App `pages` — Lots 2 & 3 : JSON-LD + sitemap + bloc dynamique « Prochains évènements » / Pages lots 2 & 3: JSON-LD + sitemap + dynamic events block
+
+**Date :** 2026-06-30
+**Migration :** Oui / Yes — `pages.0011` (champ `nombre_max` + type de bloc `EVENEMENTS`)
+
+**Quoi / What :**
+- **Lot 2 — SEO structuré.** Template tag `jsonld_page` : émet un JSON-LD
+  `WebPage` + un `FAQPage` (questions/réponses) si la page contient des blocs FAQ
+  → éligible aux résultats enrichis Google. Inclus dans `extra_meta` du gabarit
+  classic. Construit côté serveur (pas d'API), échappé contre l'injection.
+  Sitemap : nouveau `PageSitemap` (pages publiées, hors brouillon/noindex/accueil)
+  branché sur le `/sitemap.xml` **existant** du tenant (`django.contrib.sitemaps`,
+  même module que events/products) — pas de système concurrent.
+- **Lot 3 — Bloc dynamique `EVENEMENTS`.** Liste automatique des prochains
+  évènements publiés (tag `evenements_a_venir`, requête directe sur `Event`, pas
+  d'API), avec un champ `nombre_max`. Rendu en cartes (réutilise `.tb-bloc--carte`)
+  avec date, titre, description et lien `/event/<slug>/`. Empty state honnête.
+
+**Pourquoi / Why :** une « page web complète » a besoin de données structurées
+(partage/SEO), d'un sitemap, et de **contenu vivant** (l'agenda) — pas seulement
+des blocs statiques. La vitrine devient un vrai site de plateforme.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `pages/templatetags/pages_tags.py` | + `jsonld_page` (JSON-LD) + `evenements_a_venir` (events à venir) |
+| `pages/sitemap.py` | nouveau `PageSitemap` (branché sur le sitemap.xml tenant existant) |
+| `TiBillet/urls_tenants.py` | `PageSitemap` ajouté au dict `sitemaps` (pas de settings touché) |
+| `pages/models.py` | type `EVENEMENTS` + champ `nombre_max` |
+| `pages/migrations/0011_*.py` | `nombre_max` + choix `EVENEMENTS` |
+| `pages/admin.py` | `nombre_max` (champ + conditional) ; `EVENEMENTS` dans titre |
+| `pages/templates/pages/classic/partials/bloc_evenements.html` | nouveau partial (cartes events dynamiques) |
+| `pages/templates/pages/classic/page.html` | `{% jsonld_page %}` dans extra_meta |
+| `pages/management/commands/charger_demo_blocs.py` | bloc EVENEMENTS dans la démo |
+| `tests/pytest/test_pages.py` | + tests JSON-LD/FAQPage, sitemap, EVENEMENTS (19 au total) |
+
+## App `pages` — Lot 1 : champs SEO par page + corrections groupement (marges/padding) / Pages lot 1: per-page SEO fields + grouping fixes
+
+**Date :** 2026-06-29
+**Migration :** Oui / Yes — `pages.0010` (champs `image`, `meta_title`, `noindex` sur Page)
+
+**Quoi / What :** Le modèle `Page` porte désormais ses propres métadonnées SEO :
+`meta_title` (titre `<title>` optionnel), `image` (image de partage og:image /
+twitter:image, variation `social_card` 1200×630) et `noindex` (exclusion moteurs).
+Le gabarit classic `page.html` branche ces champs sur les blocs `<meta>` hérités
+du base (repli sur l'image du site via `{{ block.super }}`). Nouveau fieldset
+« Référencement & partage » dans `PageAdmin`.
+
+Corrections UX du groupement de blocs (cas limites, skin classic) : une carte
+isolée ne s'étire plus sur toute la largeur (capée + centrée via `:only-child`) ;
+un bloc INFOS ou une carte Leaflet rendus **seuls** retrouvent leur gutter et leur
+container (ils ne sont plus collés au bord / full-bleed) ; rythme vertical resserré.
+
+**Pourquoi / Why :** une « page web complète » a besoin de SEO par page (titre,
+aperçu de partage) et d'un rendu correct quel que soit l'agencement des blocs.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `pages/models.py` | + `meta_title`, `image` (social_card), `noindex` sur Page + `VARIATIONS_PARTAGE` |
+| `pages/migrations/0010_*.py` | migration des 3 champs SEO |
+| `pages/admin.py` | fieldset « Référencement & partage » dans PageAdmin |
+| `pages/templates/pages/classic/page.html` | blocs `title`/`meta_robots`/`og_image`/`twitter_image` par page |
+| `pages/static/pages/css/tb-blocs.css` | fix carte isolée, INFOS/Leaflet solo, rythme vertical |
+| `pages/management/commands/charger_demo_blocs.py` | 2ᵉ page « cas limites de groupement » + image/titre SEO sur l'accueil |
+| `tests/pytest/test_pages.py` | + `test_meta_seo_titre_et_noindex` |
+
+## App `pages` : refonte éditoriale du skin classic + commande de démo tous-blocs / Pages app: editorial redesign of the classic skin + all-blocks demo command
+
+**Date :** 2026-06-29
+**Migration :** Non / No
+
+**Quoi / What :** Le skin **classic** (`tb-blocs.css`) passe d'un rendu Bootstrap
+générique à un **thème éditorial autonome** : titres en serif système (zéro CDN),
+accent unique discipliné (couleur du tenant `--bs-primary`), filets d'accent
+(« kicker ») sur les titres de section, cartes avec image en tête + profondeur +
+lift au survol, témoignage avec grand guillemet typographique, CTA en bande
+teintée, FAQ serif sur 2 colonnes. Nouvelle commande `charger_demo_blocs` qui pose
+**tous les types de blocs** sur la page d'accueil pour la revue visuelle.
+
+**Pourquoi / Why :** Le rendu classic était fade (police/accent génériques hérités
+de Bootstrap, cartes plates). Objectif : un thème par défaut joli et lisible,
+distinctif sans dépendre du thème du tenant, et un moyen rapide de vérifier les
+11 types de blocs + les 5 types de groupe d'un coup.
+
+**Portée / Scope :** `tb-blocs.css` est chargé **uniquement** par le skin classic.
+Le skin **faire_festival n'est pas touché** (gabarits + CSS propres). Aucun
+template ni modèle modifié, aucune migration. Polices = piles système, aucune
+ressource externe ajoutée.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `pages/static/pages/css/tb-blocs.css` | refonte éditoriale complète (tokens, serif, cartes, témoignage, CTA, FAQ) |
+| `pages/management/commands/charger_demo_blocs.py` | nouvelle commande : accueil de démo avec tous les blocs (force skin classic) |
+| `pages/management/commands/charger_demo_faire_festival.py` | flag `--no-skin` + forçage skin faire_festival (one-shot complet) |
+
 ## Test carte NFC ↔ wallet Fedow : rendu autonome (plus de skip) / Fedow card test made self-contained
 
 **Date :** 2026-06-29

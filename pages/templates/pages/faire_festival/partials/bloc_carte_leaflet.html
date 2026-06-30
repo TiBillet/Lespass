@@ -56,7 +56,21 @@
             });
             points.forEach(function (p) {
                 var m = L.marker([p.lat, p.lng], { icon: icone }).addTo(map);
-                if (p.label) { m.bindPopup('<div style="font-family:monospace;text-align:center;"><b style="color:#0077F5;">' + p.label + '</b></div>'); }
+                if (p.label) {
+                    // Sécurité : on construit le popup en DOM avec textContent (jamais
+                    // d'HTML concatené) -> pas d'injection XSS via le label points_gps.
+                    // Style identique (monospace, centré, bleu) : aucun changement visuel.
+                    // / Security: build the popup via DOM + textContent (never concatenated
+                    // HTML) -> no XSS via the points_gps label. Same look, no visual change.
+                    var wrap = document.createElement('div');
+                    wrap.style.fontFamily = 'monospace';
+                    wrap.style.textAlign = 'center';
+                    var b = document.createElement('b');
+                    b.style.color = '#0077F5';
+                    b.textContent = p.label;
+                    wrap.appendChild(b);
+                    m.bindPopup(wrap);
+                }
             });
         }
         function chargerLeafletPuis(cb) {

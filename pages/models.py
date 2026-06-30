@@ -102,6 +102,15 @@ class ConfigurationSite(SingletonModel):
         return f"Configuration du site (skin : {self.skin})"
 
 
+# Variations de l'image de partage d'une Page : social_card (format og:image) +
+# med (apercu dans l'admin). / Page share image variations: social_card (og:image
+# format) + med (admin preview).
+VARIATIONS_PARTAGE = {
+    "social_card": (1200, 630, True),
+    "med": (480, 480),
+}
+
+
 class Page(models.Model):
     """
     Une page publique composee de blocs (relation un-a-plusieurs vers Bloc).
@@ -174,6 +183,43 @@ class Page(models.Model):
         help_text=_("Resume court affiche par les moteurs de recherche."),
     )
 
+    # Titre SEO optionnel : si vide, on retombe sur `titre`. Permet un <title>
+    # different du libelle de navigation (ex. plus long, avec mots-cles).
+    # / Optional SEO title: if empty, falls back to `titre`. Lets the <title> differ
+    # from the navigation label (e.g. longer, with keywords).
+    meta_title = models.CharField(
+        max_length=70,
+        blank=True,
+        verbose_name=_("Titre SEO"),
+        help_text=_("Titre pour les moteurs/onglets. Si vide : reprend le titre de la page."),
+    )
+
+    # Image de PARTAGE (og:image / twitter:image) : aperu affiche quand la page est
+    # partagee sur les reseaux sociaux. Si vide : repli sur l'image du site (config).
+    # Variation social_card (1200x630) = format standard des cartes sociales.
+    # / SHARE image (og:image / twitter:image): preview shown when the page is shared
+    # on social networks. If empty: falls back to the site image (config). The
+    # social_card variation (1200x630) is the standard social card format.
+    image = StdImageField(
+        upload_to="images/pages/seo/",
+        blank=True,
+        variations=VARIATIONS_PARTAGE,
+        delete_orphans=True,
+        verbose_name=_("Image de partage (reseaux sociaux)"),
+        help_text=_("Aperu lors d'un partage sur les reseaux (1200x630 conseille). "
+                    "Si vide : image du site par defaut."),
+    )
+
+    # Si True, la page demande aux moteurs de ne pas l'indexer (noindex, nofollow)
+    # et elle est exclue du sitemap.
+    # / If True, the page asks search engines not to index it (noindex, nofollow)
+    # and it is excluded from the sitemap.
+    noindex = models.BooleanField(
+        default=False,
+        verbose_name=_("Masquer des moteurs (noindex)"),
+        help_text=_("Si coche : la page n'est pas indexee et reste hors du sitemap."),
+    )
+
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Cree le"))
     updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Modifie le"))
 
@@ -230,6 +276,9 @@ class Bloc(models.Model):
     CARTE_LEAFLET = "CARTE_LEAFLET"
     FAQ = "FAQ"
     INFOS = "INFOS"
+    EVENEMENTS = "EVENEMENTS"
+    GALERIE = "GALERIE"
+    EMBED = "EMBED"
 
     TYPE_BLOC_CHOICES = [
         (HERO, _("Hero (banniere d'ouverture)")),
@@ -243,6 +292,9 @@ class Bloc(models.Model):
         (CARTE_LEAFLET, _("Carte Leaflet (points GPS)")),
         (INFOS, _("Infos structurees (badges, horaires, transports) - a cote d'une carte")),
         (FAQ, _("Question / reponse (regroupee en 2 colonnes si plusieurs a la suite)")),
+        (EVENEMENTS, _("Prochains evenements (liste automatique depuis l'agenda)")),
+        (GALERIE, _("Galerie d'images (plusieurs photos en grille)")),
+        (EMBED, _("Contenu integre (video YouTube/Vimeo/PeerTube, carte OSM)")),
     ]
 
     # --- Position de l'image pour le bloc Image+texte / Image side for Image+text ---
@@ -408,6 +460,39 @@ class Bloc(models.Model):
         help_text=_('Items typés (texte seulement) : [{"type": "transport", "titre": "BUS", "lignes": ["..."]}].'),
     )
 
+    # Nombre maximum d'evenements affiches par le bloc EVENEMENTS (liste auto).
+    # / Maximum number of events shown by the EVENEMENTS block (auto list).
+    nombre_max = models.PositiveSmallIntegerField(
+        default=6,
+        verbose_name=_("Nombre d'évènements"),
+        help_text=_("Nombre maximum d'évènements à venir affichés (bloc Prochains évènements)."),
+    )
+
+    # Bloc FAQ : si True, chaque question est repliable (accordéon <details>).
+    # Sinon (défaut), la réponse reste ouverte (comportement historique).
+    # / FAQ block: if True, each question is collapsible (accordion <details>).
+    # Otherwise (default), the answer stays open (historical behavior).
+    repliable = models.BooleanField(
+        default=False,
+        verbose_name=_("FAQ repliable (accordéon)"),
+        help_text=_("Si coché, les réponses de la FAQ sont repliées et s'ouvrent au clic."),
+    )
+
+    # Bloc EMBED : URL du contenu à intégrer (YouTube ou Vimeo). Seuls les hôtes
+    # d'une liste blanche sont rendus (cf. tag embed_iframe) : on n'injecte JAMAIS
+    # un iframe vers un hôte arbitraire (sécurité). Pour une carte, utiliser plutôt
+    # le bloc CARTE_LEAFLET.
+    # / EMBED block: URL of the content to embed (YouTube or Vimeo). Only whitelisted
+    # hosts are rendered (see embed_iframe tag): we NEVER inject an iframe to an
+    # arbitrary host (security). For a map, use the CARTE_LEAFLET block instead.
+    embed_url = models.URLField(
+        max_length=500,
+        blank=True,
+        verbose_name=_("URL à intégrer (embed)"),
+        help_text=_("Lien YouTube, Vimeo ou PeerTube (instance autorisée). "
+                    "Les autres hôtes sont ignorés (sécurité)."),
+    )
+
     # Cote ou s'affiche l'image dans le bloc Image+texte.
     # / Side where the image is shown in the Image+text block.
     image_position = models.CharField(
@@ -482,3 +567,65 @@ class Bloc(models.Model):
         if self.titre:
             return f"{libelle_type} — {self.titre}"
         return f"{libelle_type} (#{self.position})"
+
+
+class ImageGalerie(models.Model):
+    """
+    Une image d'un bloc GALERIE. Relation plusieurs-images-vers-un-bloc : c'est le
+    seul cas du moteur où un bloc porte plusieurs fichiers (les autres blocs ont des
+    champs image plats). Édité en inline (TabularInline) dans l'admin du Bloc.
+    / One image of a GALERIE block. Many-images-to-one-block relation: the only case
+    in the engine where a block carries several files (other blocks use flat image
+    fields). Edited as an inline (TabularInline) in the Bloc admin.
+
+    LOCALISATION : pages/models.py
+    """
+
+    uuid = models.UUIDField(
+        primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True
+    )
+
+    # Le bloc GALERIE auquel cette image appartient. Suppression en cascade.
+    # / The GALERIE block this image belongs to. Cascade delete.
+    bloc = models.ForeignKey(
+        Bloc,
+        on_delete=models.CASCADE,
+        related_name="images_galerie",
+        verbose_name=_("Bloc galerie"),
+    )
+
+    # Vrai moteur d'upload (comme le reste de TiBillet), avec variations.
+    # / Real upload engine (like the rest of TiBillet), with variations.
+    image = StdImageField(
+        upload_to="images/pages/galerie/",
+        blank=True,
+        variations=VARIATIONS_PARTAGE,
+        delete_orphans=True,
+        verbose_name=_("Image"),
+        help_text=_("Une photo de la galerie."),
+    )
+
+    # Légende optionnelle (texte d'alternative + sous-titre affiché).
+    # / Optional caption (alt text + displayed subtitle).
+    legende = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name=_("Légende"),
+        help_text=_("Texte alternatif et légende de l'image (optionnel)."),
+    )
+
+    # Ordre de l'image dans la galerie (croissant).
+    # / Image order in the gallery (ascending).
+    position = models.PositiveIntegerField(
+        default=0,
+        verbose_name=_("Position"),
+        help_text=_("Ordre de l'image dans la galerie (croissant)."),
+    )
+
+    class Meta:
+        verbose_name = _("Image de galerie")
+        verbose_name_plural = _("Images de galerie")
+        ordering = ["position"]
+
+    def __str__(self):
+        return self.legende or f"Image #{self.position}"

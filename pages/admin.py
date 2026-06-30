@@ -36,13 +36,13 @@ from django.db.models import Count, Max
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from solo.admin import SingletonModelAdmin
-from unfold.admin import ModelAdmin
+from unfold.admin import ModelAdmin, TabularInline
 from unfold.contrib.forms.widgets import WysiwygWidget
 from unfold.decorators import display
 
 from Administration.admin.site import sanitize_textfields, staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
-from pages.models import Bloc, ConfigurationSite, Page
+from pages.models import Bloc, ConfigurationSite, ImageGalerie, Page
 
 
 @admin.register(ConfigurationSite, site=staff_admin_site)
@@ -131,7 +131,21 @@ class PageAdmin(ModelAdmin):
                     "slug",
                     "position",
                     ("publie", "est_accueil"),
+                ),
+            },
+        ),
+        (
+            _("Référencement & partage (SEO)"),
+            {
+                "fields": (
+                    "meta_title",
                     "meta_description",
+                    "image",
+                    "noindex",
+                ),
+                "description": _(
+                    "Métadonnées pour les moteurs de recherche et le partage sur "
+                    "les réseaux sociaux. Tous ces champs sont optionnels."
                 ),
             },
         ),
@@ -175,6 +189,32 @@ class PageAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
 
+def _url_a_schema_dangereux(valeur):
+    """
+    Vrai si l'URL utilise un schéma dangereux (javascript:, data:, vbscript:).
+    On retire d'abord espaces et caractères de contrôle pour déjouer les
+    obfuscations type "java\\tscript:" ou "javascript\\x00:". On ne teste que le début.
+    / True if the URL uses a dangerous scheme. We first strip whitespace and control
+    chars to defeat obfuscations, then test the start only.
+    """
+    if not valeur or not isinstance(valeur, str):
+        return False
+    compact = "".join(
+        c for c in valeur if not c.isspace() and ord(c) >= 0x20
+    ).lower()
+    return compact.startswith(("javascript:", "data:", "vbscript:"))
+
+
+class ImageGalerieInline(TabularInline):
+    """Images d'un bloc GALERIE, éditées en ligne dans la fiche du bloc.
+    / Images of a GALERIE block, edited inline in the block form."""
+
+    model = ImageGalerie
+    extra = 1
+    fields = ("image", "legende", "position")
+    ordering = ("position",)
+
+
 class BlocAdminForm(forms.ModelForm):
     """Formulaire du Bloc : editeur WYSIWYG sur le champ texte.
     / Bloc form: WYSIWYG editor on the text field."""
@@ -213,6 +253,9 @@ class BlocAdmin(ModelAdmin):
     compressed_fields = True
     warn_unsaved_form = True
     form = BlocAdminForm
+    # Images du bloc GALERIE (inline). Vide/ignoré pour les autres types.
+    # / GALERIE block images (inline). Empty/ignored for other types.
+    inlines = [ImageGalerieInline]
 
     # Liste : on peut reordonner via "position" (editable en ligne), filtrer par page.
     # / List: reorder via "position" (inline editable), filter by page.
@@ -236,6 +279,9 @@ class BlocAdmin(ModelAdmin):
         "video",
         "points_gps",
         "contenu",
+        "nombre_max",
+        "repliable",
+        "embed_url",
         "image_position",
         "badge",
         "bouton_label",
@@ -253,7 +299,10 @@ class BlocAdmin(ModelAdmin):
     # Alpine.js expressions: == for a single type, .includes() for several.
     conditional_fields = {
         "surtitre": "type_bloc == 'CARTE'",
-        "titre": "['HERO','PARAGRAPHE','IMAGE_TEXTE','CTA','VIDEO_TEXTE','CARTE','IMAGE','CARTE_LEAFLET','FAQ'].includes(type_bloc)",
+        "titre": "['HERO','PARAGRAPHE','IMAGE_TEXTE','CTA','VIDEO_TEXTE','CARTE','IMAGE','CARTE_LEAFLET','FAQ','EVENEMENTS','GALERIE','EMBED'].includes(type_bloc)",
+        "nombre_max": "type_bloc == 'EVENEMENTS'",
+        "repliable": "type_bloc == 'FAQ'",
+        "embed_url": "type_bloc == 'EMBED'",
         "sous_titre": "['HERO','CTA'].includes(type_bloc)",
         "texte": "['PARAGRAPHE','IMAGE_TEXTE','CTA','TEMOIGNAGE','VIDEO_TEXTE','CARTE','FAQ'].includes(type_bloc)",
         "image": "['HERO','IMAGE_TEXTE','CARTE','IMAGE','CARTE_LEAFLET'].includes(type_bloc)",
@@ -276,6 +325,15 @@ class BlocAdmin(ModelAdmin):
         # Nettoie le HTML du champ texte (WYSIWYG) avant enregistrement.
         # / Sanitize the WYSIWYG text field HTML before saving.
         sanitize_textfields(obj)
+
+        # Sécurité : neutralise les URLs à schéma dangereux (javascript:, data:,
+        # vbscript:) dans les champs lien, qui pourraient produire un XSS au clic.
+        # / Security: neutralize dangerous-scheme URLs (javascript:, data:, vbscript:)
+        # in link fields, which could trigger an XSS on click.
+        for champ_url in ("bouton_url", "bouton2_url", "embed_url"):
+            valeur = getattr(obj, champ_url, "")
+            if _url_a_schema_dangereux(valeur):
+                setattr(obj, champ_url, "")
 
         # A la creation, si aucune position n'est saisie, on place le bloc en fin
         # de page (max + 1) pour qu'il s'ajoute naturellement a la suite.

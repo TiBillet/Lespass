@@ -14,15 +14,25 @@
     LOCALISATION : pages/templates/pages/classic/page.html
 {% endcomment %}
 
-{% block title %}{{ page_courante.titre }}{% endblock %}
+{% block title %}{{ page_courante.meta_title|default:page_courante.titre }}{% endblock %}
 {% block meta_description %}{{ page_courante.meta_description|default:config.organisation }}{% endblock %}
+{# noindex si la page le demande (sinon comportement par defaut du base). #}
+{# / noindex if the page asks for it (otherwise base default behavior). #}
+{% block meta_robots %}{% if page_courante.noindex %}noindex, nofollow{% else %}{{ block.super }}{% endif %}{% endblock %}
 {% block og_title %}{{ page_courante.titre }} | {{ config.organisation }}{% endblock %}
 {% block og_description %}{{ page_courante.meta_description|default:config.organisation }}{% endblock %}
+{# Image de partage de la page (og + twitter), repli sur l'image du site (base). #}
+{# / Page share image (og + twitter), falling back to the site image (base). #}
+{% block og_image %}{% if page_courante.image %}https://{{ request.get_host }}{{ page_courante.image.social_card.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block twitter_image %}{% if page_courante.image %}https://{{ request.get_host }}{{ page_courante.image.social_card.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
 
 {% block extra_meta %}
     {# CSS commun des blocs (classes .tb-bloc*), habille par le skin. #}
     {# / Common blocks CSS (.tb-bloc* classes), themed by the skin. #}
     <link rel="stylesheet" href="{% static 'pages/css/tb-blocs.css' %}">
+    {# Donnees structurees JSON-LD (WebPage + FAQPage si la page a des FAQ). #}
+    {# / JSON-LD structured data (WebPage + FAQPage if the page has FAQ). #}
+    {% jsonld_page page_courante %}
 {% endblock %}
 
 {% block main %}

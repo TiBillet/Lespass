@@ -39,6 +39,16 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--schema", default="chantefrein")
+        # Par defaut on force le skin faire_festival (mode complet « one-shot »).
+        # --no-skin laisse le skin existant intact (charge seulement les pages).
+        # / By default we force the faire_festival skin (full one-shot mode).
+        # --no-skin keeps the existing skin untouched (only loads the pages).
+        parser.add_argument(
+            "--no-skin",
+            action="store_false",
+            dest="skin",
+            help="Ne pas forcer le skin 'faire_festival' (laisse le skin actuel).",
+        )
 
     def handle(self, *args, **options):
         schema = options["schema"]
@@ -51,10 +61,24 @@ class Command(BaseCommand):
             self._charger_accueil()
             self._charger_le_faire_festival()
             self._charger_infos_pratiques()
+            if options["skin"]:
+                self._forcer_skin()
         self.stdout.write(
             f"Pages faire_festival (accueil + le-faire-festival + infos-pratiques) "
             f"chargees sur '{schema}'."
         )
+
+    # ------------------------------------------------------------------
+    # Helper : force le skin 'faire_festival' sur la config du tenant.
+    # / Helper: force the 'faire_festival' skin on the tenant config.
+    # ------------------------------------------------------------------
+    def _forcer_skin(self):
+        from pages.models import ConfigurationSite
+
+        config = ConfigurationSite.get_solo()
+        config.skin = "faire_festival"
+        config.save()
+        self.stdout.write("  → skin force a 'faire_festival'.")
 
     # ------------------------------------------------------------------
     # Helper : recupere une Page par slug, ou la cree (puis vide ses blocs).

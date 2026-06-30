@@ -208,6 +208,166 @@ def test_page_publiee_est_rendue(tenant, api_client, nettoyer_pages):
     assert "Mon Hero Pytest" in contenu
 
 
+def test_meta_seo_titre_et_noindex(tenant, api_client, nettoyer_pages):
+    """meta_title remplace le <title> et noindex force robots=noindex,nofollow."""
+    from pages.models import Page
+
+    with tenant_context(tenant):
+        Page.objects.create(
+            titre="Titre navigation",
+            slug="pytest-seo",
+            publie=True,
+            meta_title="Titre SEO distinct",
+            noindex=True,
+        )
+
+    reponse = api_client.get("/pytest-seo/")
+    assert reponse.status_code == 200
+    contenu = reponse.content.decode()
+    # Le <title> reprend meta_title (pas le titre de navigation).
+    assert "Titre SEO distinct" in contenu
+    # noindex demande explicitement par la page.
+    assert "noindex, nofollow" in contenu
+
+
+def test_jsonld_faqpage(tenant, api_client, nettoyer_pages):
+    """Une page avec des blocs FAQ emet un JSON-LD WebPage + FAQPage."""
+    from pages.models import Bloc, Page
+
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Aide", slug="pytest-jsonld", publie=True)
+        Bloc.objects.create(
+            page=page, type_bloc=Bloc.FAQ, position=1,
+            titre="Une question pytest ?", texte="<p>Une reponse pytest.</p>",
+        )
+
+    reponse = api_client.get("/pytest-jsonld/")
+    contenu = reponse.content.decode()
+    assert 'application/ld+json' in contenu
+    assert '"FAQPage"' in contenu
+    assert "Une question pytest ?" in contenu
+    # Le HTML de la reponse est strippe dans le JSON-LD.
+    assert "Une reponse pytest." in contenu
+
+
+def test_sitemap_inclut_pages_publiees(tenant, api_client, nettoyer_pages):
+    """Le sitemap liste les pages publiees, exclut brouillon, noindex et accueil."""
+    from pages.models import Page
+
+    with tenant_context(tenant):
+        Page.objects.create(titre="Visible", slug="pytest-sitemap-ok", publie=True)
+        Page.objects.create(titre="Brouillon", slug="pytest-sitemap-draft", publie=False)
+        Page.objects.create(
+            titre="Cachee", slug="pytest-sitemap-noindex", publie=True, noindex=True
+        )
+
+    reponse = api_client.get("/sitemap.xml")
+    assert reponse.status_code == 200
+    contenu = reponse.content.decode()
+    assert "pytest-sitemap-ok" in contenu
+    assert "pytest-sitemap-draft" not in contenu
+    assert "pytest-sitemap-noindex" not in contenu
+
+
+def test_bloc_evenements_liste_les_a_venir(tenant, api_client, nettoyer_pages):
+    """Le bloc EVENEMENTS liste les évènements à venir, jamais les passés."""
+    import uuid as uuidlib
+
+    from django.utils import timezone
+
+    from BaseBillet.models import Event
+    from pages.models import Bloc, Page
+
+    marqueur = uuidlib.uuid4().hex[:6]
+    with tenant_context(tenant):
+        Event.objects.create(
+            name=f"Evenement futur {marqueur}",
+            datetime=timezone.now() + timezone.timedelta(days=3),
+        )
+        Event.objects.create(
+            name=f"Evenement passe {marqueur}",
+            datetime=timezone.now() - timezone.timedelta(days=3),
+        )
+        page = Page.objects.create(titre="Agenda", slug="pytest-evts", publie=True)
+        Bloc.objects.create(
+            page=page, type_bloc=Bloc.EVENEMENTS, position=1,
+            titre="À venir", nombre_max=100,
+        )
+
+    try:
+        reponse = api_client.get("/pytest-evts/")
+        contenu = reponse.content.decode()
+        assert "bloc-evenements-liste" in contenu
+        assert f"Evenement futur {marqueur}" in contenu
+        assert f"Evenement passe {marqueur}" not in contenu
+    finally:
+        # Base dev live : on supprime les évènements créés.
+        # / Live dev DB: delete the events we created.
+        with tenant_context(tenant):
+            Event.objects.filter(name__endswith=marqueur).delete()
+
+
+def test_embed_iframe_whitelist():
+    """Le tag embed_iframe n'accepte QUE les hôtes en liste blanche (sécurité)."""
+    from pages.templatetags.pages_tags import embed_iframe
+
+    # YouTube autorisé -> iframe reconstruit en youtube-nocookie.
+    youtube = embed_iframe("https://www.youtube.com/watch?v=aqz-KE-bpKQ")
+    assert "youtube-nocookie.com/embed/aqz-KE-bpKQ" in youtube
+    assert "<iframe" in youtube
+    # youtu.be aussi.
+    assert "youtube-nocookie.com/embed/abc123" in embed_iframe("https://youtu.be/abc123")
+    # Vimeo autorisé (identifiant numérique).
+    assert "player.vimeo.com/video/12345" in embed_iframe("https://vimeo.com/12345")
+    # PeerTube : instance AUTORISÉE -> embed reconstruit sur le même hôte.
+    peertube = embed_iframe("https://framatube.org/w/abc123")
+    assert "framatube.org/videos/embed/abc123" in peertube
+    # PeerTube : instance NON autorisée -> rien (fédération non whitelistée).
+    assert embed_iframe("https://peertube-pirate.example/w/abc123") == ""
+    # Hôtes NON autorisés -> chaîne vide (jamais d'iframe arbitraire).
+    assert embed_iframe("https://evil.example.com/x") == ""
+    assert embed_iframe("https://notyoutube.com/watch?v=x") == ""
+    # Schémas dangereux -> rien.
+    assert embed_iframe("javascript:alert(1)") == ""
+    assert embed_iframe("data:text/html,<script>alert(1)</script>") == ""
+    assert embed_iframe("") == ""
+    assert embed_iframe(None) == ""
+
+
+def test_url_schema_dangereux():
+    """L'admin neutralise les URLs à schéma dangereux (anti-XSS au clic)."""
+    from pages.admin import _url_a_schema_dangereux
+
+    assert _url_a_schema_dangereux("javascript:alert(1)") is True
+    assert _url_a_schema_dangereux("JavaScript:alert(1)") is True
+    assert _url_a_schema_dangereux("  java\tscript:x") is True  # obfuscation
+    assert _url_a_schema_dangereux("data:text/html,x") is True
+    # URLs légitimes (relatives ou http) -> non dangereuses.
+    assert _url_a_schema_dangereux("/event/") is False
+    assert _url_a_schema_dangereux("https://exemple.fr") is False
+    assert _url_a_schema_dangereux("") is False
+    assert _url_a_schema_dangereux(None) is False
+
+
+def test_bloc_galerie_et_faq_repliable(tenant, api_client, nettoyer_pages):
+    """La galerie rend sa section ; une FAQ repliable rend un <details>."""
+    from pages.models import Bloc, Page
+
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Médias", slug="pytest-media", publie=True)
+        Bloc.objects.create(page=page, type_bloc=Bloc.GALERIE, position=1, titre="Galerie")
+        Bloc.objects.create(
+            page=page, type_bloc=Bloc.FAQ, position=2, repliable=True,
+            titre="Repliable ?", texte="<p>Oui.</p>",
+        )
+
+    reponse = api_client.get("/pytest-media/")
+    contenu = reponse.content.decode()
+    assert "tb-bloc--galerie" in contenu
+    # FAQ repliable -> accordéon natif <details>.
+    assert "<details" in contenu
+
+
 def test_page_non_publiee_renvoie_404(tenant, api_client, nettoyer_pages):
     """Une page en brouillon renvoie 404 pour un visiteur non administrateur."""
     from pages.models import Page

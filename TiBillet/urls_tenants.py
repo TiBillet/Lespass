@@ -7,6 +7,7 @@ from Administration.admin_tenant import staff_admin_site
 # on modifie la creation du token pour rajouter access_token dans la réponse pour Postman
 from ApiBillet.views import Webhook_stripe
 from BaseBillet.sitemap import EventSitemap, ProductSitemap, StaticViewSitemap
+from pages.sitemap import PageSitemap
 
 urlpatterns = [
     # path('jet/', include('jet.urls', 'jet')),  # Django JET URLS
@@ -23,6 +24,7 @@ urlpatterns = [
         'events': EventSitemap,
         'products': ProductSitemap,
         'static': StaticViewSitemap,
+        'pages': PageSitemap,
     }, 'template_name': 'sitemaps/sitemap.xml'}, name='django.contrib.sitemaps.views.sitemap'),
 
     re_path(r'api/user/', include('AuthBillet.urls')),

@@ -32,7 +32,15 @@
             }).addTo(map);
             pts.forEach(function (p) {
                 var m = L.marker([p.lat, p.lng]).addTo(map);
-                if (p.label) { m.bindPopup(p.label); }
+                if (p.label) {
+                    // textContent (pas innerHTML) : le label est traite comme du
+                    // TEXTE, jamais du HTML -> pas d'injection XSS via points_gps.
+                    // / textContent (not innerHTML): the label is TEXT, never HTML
+                    // -> no XSS injection via points_gps.
+                    var span = document.createElement('span');
+                    span.textContent = p.label;
+                    m.bindPopup(span);
+                }
             });
         }
         function charger(cb) {
