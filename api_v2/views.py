@@ -2,7 +2,7 @@ import datetime
 import re
 import uuid as uuid_module
 
-from django.db import connection
+from django.db import connection, transaction
 from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404
@@ -39,7 +39,17 @@ from .serializers import (
     BudgetItemCreateSerializer,
     ParticipationSchemaSerializer,
     ParticipationCreateSerializer,
+    PageSchemaSerializer,
+    PageCreateSerializer,
+    BlocSchemaSerializer,
+    BlocCreateSerializer,
+    CHAMPS_PAGE_AUTORISES,
+    CHAMPS_BLOC_AUTORISES,
+    CHAMPS_TEXTE_RICHE,
+    _validate_uploaded_image,
 )
+from pages.models import Page, Bloc, valider_slug_non_reserve
+from Administration.utils import clean_html
 
 
 def get_objet_par_uuid_ou_404(model, uuid_recu, **filtres_supplementaires):
@@ -123,6 +133,15 @@ def get_event_par_identifiant_ou_404(identifiant):
     if event is None:
         raise Http404("Event not found")
     return event
+
+
+def _ressemble_uuid(valeur) -> bool:
+    """True si la chaine est un UUID valide. / True if the string is a valid UUID."""
+    try:
+        uuid_module.UUID(str(valeur))
+        return True
+    except (ValueError, TypeError):
+        return False
 
 
 class CrowdInitiativeViewSet(viewsets.ViewSet):
@@ -854,3 +873,102 @@ class SaleViewSet(viewsets.ViewSet):
         # - clé API valide avec droit "sale"
         # - utilisateur admin du tenant
         return get_permission_Api_ALL_Admin(self)
+
+
+class PageViewSet(viewsets.ViewSet):
+    """API semantique des Pages (WebPage). / Semantic Pages API (WebPage).
+
+    Header: Authorization: Api-Key <key> (droit `page`).
+    """
+    permission_classes = [SemanticApiKeyPermission]
+    lookup_field = "uuid"
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+    def list(self, request):
+        qs = Page.objects.all().order_by("position", "titre")
+        return Response({"results": PageSchemaSerializer(qs, many=True).data})
+
+    def retrieve(self, request, uuid=None):
+        # uuid OU slug. / uuid OR slug.
+        page = Page.objects.filter(uuid=uuid).first() if _ressemble_uuid(uuid) \
+            else Page.objects.filter(slug=uuid).first()
+        if not page:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        return Response(PageSchemaSerializer(page).data)
+
+    def create(self, request):
+        ser = PageCreateSerializer(data=request.data, context={"request": request})
+        ser.is_valid(raise_exception=True)
+        # Page + blocs imbriques crees ensemble (tout ou rien).
+        # / Page + nested blocks created together (all or nothing).
+        with transaction.atomic():
+            page = ser.save()
+        return Response(PageSchemaSerializer(page).data, status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, uuid=None):
+        page = get_object_or_404(Page, uuid=uuid)
+        # PATCH meta seulement. / PATCH meta only.
+        meta = {}
+        for prop in (request.data.get("additionalProperty") or []):
+            if prop.get("name") in CHAMPS_PAGE_AUTORISES:
+                meta[prop["name"]] = prop.get("value")
+        if "name" in request.data:
+            page.titre = request.data["name"]
+        if "description" in request.data:
+            page.meta_description = request.data["description"]
+        for nom_champ, valeur in meta.items():
+            if nom_champ == "slug":
+                valider_slug_non_reserve(valeur)
+            setattr(page, nom_champ, valeur)
+        page.full_clean(exclude=["uuid"])
+        page.save()
+        return Response(PageSchemaSerializer(page).data)
+
+    def destroy(self, request, uuid=None):
+        page = get_object_or_404(Page, uuid=uuid)
+        page.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["post"], url_path="blocs")
+    def ajouter_bloc(self, request, uuid=None):
+        page = get_object_or_404(Page, uuid=uuid)
+        donnees = dict(request.data)
+        donnees.setdefault("position", page.blocs.count())
+        ser = BlocCreateSerializer(data=donnees, context={"page": page})
+        ser.is_valid(raise_exception=True)
+        bloc = ser.save()
+        return Response(BlocSchemaSerializer(bloc).data, status=status.HTTP_201_CREATED)
+
+
+class BlocViewSet(viewsets.ViewSet):
+    """API semantique des Blocs (WebPageElement). / Semantic Blocs API."""
+    permission_classes = [SemanticApiKeyPermission]
+    lookup_field = "uuid"
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+    def retrieve(self, request, uuid=None):
+        bloc = get_object_or_404(Bloc, uuid=uuid)
+        return Response(BlocSchemaSerializer(bloc).data)
+
+    def partial_update(self, request, uuid=None):
+        bloc = get_object_or_404(Bloc, uuid=uuid)
+        if "headline" in request.data:
+            bloc.titre = request.data["headline"] or ""
+        if "alternativeHeadline" in request.data:
+            bloc.sous_titre = request.data["alternativeHeadline"] or ""
+        if "text" in request.data:
+            bloc.texte = clean_html(request.data["text"] or "")
+        for prop in (request.data.get("additionalProperty") or []):
+            nom = prop.get("name")
+            if nom in CHAMPS_BLOC_AUTORISES:
+                valeur = prop.get("value")
+                if nom in CHAMPS_TEXTE_RICHE:
+                    valeur = clean_html(valeur or "")
+                setattr(bloc, nom, valeur)
+        bloc.save()
+        return Response(BlocSchemaSerializer(bloc).data)
+
+    def destroy(self, request, uuid=None):
+        bloc = get_object_or_404(Bloc, uuid=uuid)
+        bloc.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

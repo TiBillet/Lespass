@@ -1,5 +1,112 @@
 # Changelog / Journal des modifications
 
+## Démo lespass — page unique (landing) au lieu de 5 pages / Lespass demo: single landing page
+
+**Date :** 2026-06-30
+**Migration :** Non / No
+
+**Quoi / What :** `charger_site_lespass` construit désormais **une seule landing page**
+(l'accueil) qui enchaîne **les 14 types de blocs** dans un flow cohérent (hero →
+présentation → agenda → le lieu → galerie/vidéo → activités → témoignage → embed →
+adhésion → CTA → FAQ → infos+carte → FAQ → CTA final), au lieu de 5 pages séparées.
+Les 4 anciennes pages secondaires (le-lieu, programmation, adhesion, infos-pratiques)
+sont supprimées par la commande. Bénéfice annexe : la navbar n'a plus qu'un item
+« Accueil » → une seule ligne, propre.
+
+**Vérifié (Chrome + JS)** : 1 seule page publiée, 14 types présents (31 blocs),
+`overflowHorizontal = 0`, tous les groupements OK (3 grilles dont la grille interne
+EVENEMENTS, 2 groupes FAQ, section INFOS+carte, vidéo, embed PeerTube, galerie).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `pages/management/commands/charger_site_lespass.py` | réécrit en page unique (tous les blocs) + suppression des 4 pages secondaires |
+
+## Navbar — allègement (hauteur, logo, texte, libellés, anti-wrap) / Navbar cleanup
+
+**Date :** 2026-06-30
+**Migration :** Non / No
+**Portée / Scope :** ⚠️ `tibillet.css` est chargé par les **DEUX skins** (reunion ET faire_festival → `faire_festival/base.html:77`). Les réglages `.navbar` s'appliquent donc aux deux. Vérifié : la navbar faire_festival (chantefrein) reste correcte (chips intacts via `faire_festival.css`, logo bien dimensionné, plus compacte). Les libellés FF gardent leur style propre (plus spécifique).
+
+**Quoi / What :** La navbar reunion était lourde et débordait (libellés trop longs,
+texte 20px, logo 6rem) :
+- **Libellés de menu** : les pages du site Lespass ont des titres courts pour la
+  navigation (`Accueil`, `Adhésion`…) ; le texte descriptif reste dans `meta_title`
+  (SEO). Modif locale à `charger_site_lespass` (lespass uniquement).
+- **Texte de menu** : `20px → 16px` (`tibillet.css`).
+- **Hauteur navbar** : `padding-block 20px → 10px` (`tibillet.css`).
+- **Logo** : `max-width 6rem → 3.5rem` (`navbar.html`) + cap de **hauteur** à `2.5rem`
+  et `object-fit: contain` sur `.navbar-brand img` (le logo ne s'étire plus sur toute
+  la hauteur de la navbar, plus de recadrage).
+- **Anti-coupure** : `.nav-link { white-space: nowrap }` (un libellé ne se coupe plus
+  en « RÉSEAU / LOCAL ») + `.navbar-nav { flex-wrap: wrap }` (l'item entier passe à la
+  ligne si la place manque → jamais de scroll horizontal).
+
+**Vérifié (Chrome, JS)** : `overflowHorizontal = 0`, aucun libellé sur 2 lignes,
+navbar sur 1 ligne en large / wrap propre par item en étroit. 22 tests OK.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/static/reunion/css/tibillet.css` | nav-link 16px + nowrap ; navbar-nav flex-wrap (PARTAGÉ) |
+| `BaseBillet/templates/reunion/partials/navbar.html` | logo max-width 3.5rem (PARTAGÉ) |
+| `pages/management/commands/charger_site_lespass.py` | titres de page courts (Accueil, Adhésion) |
+
+## App `pages` — Audit mobile 390px du skin classic (Hallmark + ui-ux-pro-max) / Pages: mobile 390px audit of the classic skin
+
+**Date :** 2026-06-30
+**Migration :** Non / No
+
+**Quoi / What :** Audit du rendu mobile du skin classic (skills Hallmark + ui-ux-pro-max).
+**Aucun bug visuel bloquant** : tous les blocs s'empilent en une colonne sous 768px,
+aucun débordement horizontal, galerie/cartes/carte Leaflet/FAQ responsive. Raffinements
+appliqués (`tb-blocs.css` uniquement, zéro changement de template) :
+- **Cibles tactiles** : boutons et résumés de FAQ accordéon passent à `min-height: 44px`
+  (Apple HIG / WCAG) — vérifié 44–45px en live.
+- **`touch-action: manipulation`** sur les éléments cliquables (supprime le délai de tap
+  300ms mobile).
+- Marqueur +/− de l'accordéon recentré verticalement (rangée tactile 44px).
+
+**Vérifié (Chrome, JS)** : `overflowHorizontal = 0`, boutons ≥ 44px, aucun bouton ne
+déborde, empilement 1 colonne. Le CSS utilise `min(100%, Xrem)` partout → aucun
+débordement possible de 320 à 390px par construction. Desktop inchangé. 22 tests OK.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `pages/static/pages/css/tb-blocs.css` | cibles tactiles 44px (boutons + summary FAQ), touch-action, marqueur centré |
+
+## Fixtures — Site web complet pour le tenant `lespass` + PeerTube videos-libr.es / Fixtures: complete website for the `lespass` tenant
+
+**Date :** 2026-06-30
+**Migration :** Non / No
+
+**Quoi / What :**
+- **Nouvelle commande `charger_site_lespass`** : construit un **site web complet** pour
+  le tenant `lespass` via le moteur pages (skin classic éditorial). **5 pages
+  cohérentes** (Accueil, Le lieu, Programmation, Adhésion & soutien, Infos pratiques)
+  utilisant **les 14 types de blocs**, avec SEO par page (meta_title, meta_description,
+  image de partage). Le bloc EVENEMENTS affiche les vrais évènements de lespass ;
+  l'EMBED est une vidéo PeerTube (`videos-libr.es`).
+- **Branchée dans les fixtures** : `demo_data_v2.py` appelle `charger_site_lespass`
+  en fin de seed (après config + events), via une méthode gardée (un échec pages ne
+  casse jamais le seed).
+- **PeerTube `videos-libr.es`** ajouté à `DEFAULT_PEERTUBE_HOSTS` (instance libre).
+- **Images** : réutilise les images génériques du projet `BaseBillet/static/images/
+  404-*.jpg` (déjà utilisées pour lespass).
+
+**Vérifié (Chrome)** : site lespass complet rendu (hero, EVENEMENTS dynamique avec
+vrais events, grille de cartes, galerie, **embed PeerTube qui charge la vraie vidéo**,
+témoignages, INFOS+carte, FAQ accordéon) ; skin **faire_festival** de chantefrein OK
+y compris le **popup Leaflet** (fix XSS `textContent`, style FF préservé).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `pages/management/commands/charger_site_lespass.py` | **nouveau** — site complet 5 pages, 14 blocs |
+| `Administration/management/commands/demo_data_v2.py` | +`_seed_site_pages_lespass` (call_command gardé) |
+| `pages/templatetags/pages_tags.py` | `videos-libr.es` ajouté à la whitelist PeerTube |
+
 ## App `pages` — Embed PeerTube + durcissement sécurité (audit XSS) / Pages: PeerTube embed + security hardening (XSS audit)
 
 **Date :** 2026-06-30

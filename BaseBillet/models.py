@@ -3425,6 +3425,11 @@ class ExternalApiKey(models.Model):
     sale = models.BooleanField(default=False, verbose_name=_("Sales"))
     crowd = models.BooleanField(default=False, verbose_name=_("Crowds"))
 
+    # Droit sur l'API du site web (app pages) : ouvre la creation/edition des
+    # Pages ET des Blocs (un seul booleen pour fabriquer un site via l'API).
+    # / Website API right (pages app): opens create/edit of Pages AND Blocs.
+    page = models.BooleanField(default=False, verbose_name=_("Pages / Site web"))
+
     # Asset cadeau (TNF) que cette cle peut recharger via /api/v2/wallet-refills/.
     # La presence de cet asset sert a la fois d'interrupteur du droit "walletrefill"
     # et de restriction : la cle ne peut recharger QUE cet asset.
@@ -3461,6 +3466,10 @@ class ExternalApiKey(models.Model):
             # Basename de la route des ventes
             "sale": self.sale,
             "crowd": self.crowd,
+            # Site web (app pages) : meme droit pour pages et blocs.
+            # / Website (pages app): same right for pages and blocs.
+            "page": self.page,
+            "bloc": self.page,
             # Recharge cadeau : autorisee seulement si un asset cadeau est defini
             # / Gift refill: allowed only if a gift asset is set
             "walletrefill": bool(self.gift_asset_id),

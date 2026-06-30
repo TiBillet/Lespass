@@ -50,7 +50,7 @@ body {
 }
 
 .navbar {
-    padding-block: 20px;
+    padding-block: 10px;
 
     .badge {
         font-family: luciole, sans-serif;
@@ -58,7 +58,31 @@ body {
     }
 
     .nav-link, .navbar-brand {
-        font: 20px staatliches, sans-serif;
+        font: 16px staatliches, sans-serif;
+    }
+
+    /* Logo : on cape sa HAUTEUR et on annule le h-100/object-fit-cover hérité de
+       picture.html (sinon le logo s'étire sur toute la hauteur de la navbar et
+       paraît trop haut). object-fit: contain = pas de recadrage du logo.
+       / Logo: cap its HEIGHT and cancel the inherited h-100/object-fit-cover from
+       picture.html (otherwise the logo stretches to the full navbar height).
+       object-fit: contain = no logo cropping. */
+    .navbar-brand img {
+        height: auto !important;
+        width: auto !important;
+        max-height: 2.5rem;
+        object-fit: contain !important;
+    }
+
+    /* Chaque libellé de menu reste sur UNE ligne (pas de coupure « RÉSEAU /
+       LOCAL »), et le menu wrappe l'item ENTIER si la place manque (jamais de
+       scroll horizontal). / Each label stays on ONE line (no « RÉSEAU / LOCAL »
+       break); the menu wraps the WHOLE item when space runs out (never h-scroll). */
+    .nav-link {
+        white-space: nowrap;
+    }
+    .navbar-nav {
+        flex-wrap: wrap;
     }
 }
 

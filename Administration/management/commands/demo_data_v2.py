@@ -153,6 +153,31 @@ class Command(BaseCommand):
         # tenant is created (--full) or restored (--quick).
         self._seed_e2e_fixtures(options)
 
+        # Site web complet (app pages) du tenant lespass : 5 pages cohérentes
+        # utilisant tous les types de blocs (skin classic). Lancé en dernier, une
+        # fois la Configuration remplie et les évènements créés (le bloc EVENEMENTS
+        # est dynamique). / Complete website (pages app) for the lespass tenant: 5
+        # coherent pages using all block types (classic skin). Run last, once the
+        # Configuration is filled and the events created (EVENEMENTS is dynamic).
+        self._seed_site_pages_lespass()
+
+    def _seed_site_pages_lespass(self):
+        """
+        Construit le site web complet du tenant lespass via la commande
+        `charger_site_lespass`. Gardé (try/except) : un échec côté pages ne doit
+        jamais casser le seed des données de démo.
+        / Builds the lespass complete website via `charger_site_lespass`. Guarded:
+        a pages failure must never break the demo data seed.
+        """
+        from django.core.management import call_command
+
+        try:
+            call_command("charger_site_lespass", schema="lespass")
+        except Exception as erreur:
+            self.stderr.write(self.style.WARNING(
+                f"Site web pages 'lespass' non généré (non bloquant) : {erreur}"
+            ))
+
     def _handle_seed_ventes(self, options):
         """
         Genere les ventes comptables de demo sur le tenant 'lespass'.

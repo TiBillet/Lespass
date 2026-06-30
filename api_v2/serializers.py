@@ -1590,3 +1590,215 @@ class MembershipStatusSerializer(serializers.Serializer):
 
     def get_is_valid(self, obj):
         return obj.is_valid()
+
+
+# ---------------------------------------------------------------------------
+# App pages : Bloc <-> schema.org/WebPageElement
+# / pages app: Bloc <-> schema.org/WebPageElement
+# ---------------------------------------------------------------------------
+from pages.models import Bloc, Page, valider_slug_non_reserve
+from pages.blocs_catalogue import CHAMPS_BLOC_AUTORISES
+
+# Champs « standard » schema.org mappes a un champ modele (les autres passent
+# par additionalProperty). / schema.org standard fields mapped to a model field.
+MAPPING_STANDARD_VERS_CHAMP = {
+    "headline": "titre",
+    "alternativeHeadline": "sous_titre",
+    "text": "texte",
+}
+# Champs modele dont la valeur est du texte riche a nettoyer (clean_html).
+# / Model fields whose value is rich text to sanitize.
+CHAMPS_TEXTE_RICHE = {"texte"}
+
+
+class BlocSchemaSerializer(serializers.Serializer):
+    """Represente un Bloc en JSON-LD schema.org/WebPageElement (lecture seule).
+    / Renders a Bloc as schema.org/WebPageElement JSON-LD (read-only)."""
+
+    def to_representation(self, instance: "Bloc") -> Dict[str, Any]:
+        # Image principale -> URL (vide si pas d'image). / Main image -> URL.
+        image_url = None
+        try:
+            if instance.image:
+                image_url = instance.image.url
+        except Exception:
+            image_url = None
+
+        # additionalProperty : tous les champs du catalogue NON mappes en standard,
+        # exposes sous {"@type":"PropertyValue","name":<champ>,"value":..}.
+        # / additionalProperty: all catalogue fields not in the standard mapping.
+        champs_standard = set(MAPPING_STANDARD_VERS_CHAMP.values()) | {"image"}
+        props: List[Dict[str, Any]] = []
+        for nom_champ in CHAMPS_BLOC_AUTORISES:
+            if nom_champ in champs_standard:
+                continue
+            valeur = getattr(instance, nom_champ, None)
+            # Les FileField/StdImage exposent .url ; on serialise en URL.
+            # hasattr() ne convient pas : .url peut lever ValueError (pas AttributeError).
+            # / FileField/StdImage expose .url; hasattr won't work — .url may raise ValueError.
+            from django.db.models.fields.files import FieldFile
+            if isinstance(valeur, FieldFile):
+                try:
+                    valeur = valeur.url if valeur else None
+                except Exception:
+                    valeur = None
+            if valeur in (None, "", [], {}):
+                continue
+            props.append({"@type": "PropertyValue", "name": nom_champ, "value": valeur})
+
+        payload = {
+            "@context": "https://schema.org",
+            "@type": "WebPageElement",
+            "identifier": str(instance.uuid),
+            "additionalType": instance.type_bloc,
+            "headline": instance.titre or None,
+            "alternativeHeadline": instance.sous_titre or None,
+            "text": instance.texte or None,
+            "image": image_url,
+            "position": instance.position,
+            "additionalProperty": props or None,
+        }
+        return {k: v for k, v in payload.items() if v not in (None, "", [])}
+
+
+class BlocCreateSerializer(serializers.Serializer):
+    """Valide un WebPageElement entrant et cree un Bloc rattache a une Page.
+    / Validates an incoming WebPageElement and creates a Bloc on a Page.
+
+    Contexte requis : context={"page": <Page>}.
+    """
+    additionalType = serializers.CharField()  # type_bloc (pivot)
+    headline = serializers.CharField(required=False, allow_blank=True)
+    alternativeHeadline = serializers.CharField(required=False, allow_blank=True)
+    text = serializers.CharField(required=False, allow_blank=True)
+    image = serializers.CharField(required=False, allow_blank=True, allow_null=True)  # URL (Session B)
+    position = serializers.IntegerField(required=False)
+    additionalProperty = serializers.ListField(child=serializers.DictField(), required=False)
+
+    def validate_additionalType(self, value: str) -> str:
+        codes = {code for code, _ in Bloc.TYPE_BLOC_CHOICES}
+        if value not in codes:
+            raise serializers.ValidationError(
+                _("Type de bloc inconnu : %(t)s") % {"t": value})
+        return value
+
+    def create(self, validated_data: Dict[str, Any]) -> "Bloc":
+        page = self.context["page"]
+        bloc = Bloc(page=page, type_bloc=validated_data["additionalType"])
+        if "position" in validated_data:
+            bloc.position = validated_data["position"]
+
+        # Champs standard -> champs modele. / Standard fields -> model fields.
+        for cle_std, nom_champ in MAPPING_STANDARD_VERS_CHAMP.items():
+            if cle_std in validated_data:
+                valeur = validated_data[cle_std]
+                if nom_champ in CHAMPS_TEXTE_RICHE:
+                    valeur = clean_html(valeur or "")
+                setattr(bloc, nom_champ, valeur or "")
+
+        # additionalProperty -> champs modele (whitelist stricte).
+        # / additionalProperty -> model fields (strict whitelist).
+        for prop in (validated_data.get("additionalProperty") or []):
+            nom = prop.get("name")
+            valeur = prop.get("value")
+            if nom not in CHAMPS_BLOC_AUTORISES:
+                continue  # securite : jamais setattr hors whitelist
+            if nom in CHAMPS_TEXTE_RICHE:
+                valeur = clean_html(valeur or "")
+            setattr(bloc, nom, valeur)
+
+        bloc.save()
+        return bloc
+
+
+# ---------------------------------------------------------------------------
+# App pages : Page <-> schema.org/WebPage
+# / pages app: Page <-> schema.org/WebPage
+# ---------------------------------------------------------------------------
+from django.core.exceptions import ValidationError as DjangoValidationError
+
+# Champs meta de Page acceptes via additionalProperty (whitelist).
+# / Page meta fields accepted via additionalProperty (whitelist).
+CHAMPS_PAGE_AUTORISES = frozenset({
+    "slug", "position", "publie", "est_accueil", "noindex",
+    "meta_title", "meta_description",
+})
+
+
+class PageSchemaSerializer(serializers.Serializer):
+    """Represente une Page en JSON-LD schema.org/WebPage (lecture seule).
+    / Renders a Page as schema.org/WebPage JSON-LD (read-only)."""
+
+    def to_representation(self, instance: "Page") -> Dict[str, Any]:
+        blocs = [BlocSchemaSerializer(b).data
+                 for b in instance.blocs.all().order_by("position")]
+        props: List[Dict[str, Any]] = []
+        for nom_champ in CHAMPS_PAGE_AUTORISES:
+            if nom_champ == "meta_description":
+                continue  # expose en `description`
+            valeur = getattr(instance, nom_champ, None)
+            if valeur in (None, "", [], {}):
+                continue
+            props.append({"@type": "PropertyValue", "name": nom_champ, "value": valeur})
+
+        payload = {
+            "@context": "https://schema.org",
+            "@type": "WebPage",
+            "identifier": str(instance.uuid),
+            "name": instance.titre,
+            "url": f"/{instance.slug}/",
+            "description": instance.meta_description or None,
+            "hasPart": blocs or None,
+            "additionalProperty": props or None,
+        }
+        return {k: v for k, v in payload.items() if v not in (None, "", [])}
+
+
+class PageCreateSerializer(serializers.Serializer):
+    """Cree une Page et (option) ses blocs imbriques via hasPart.
+    / Creates a Page and (optionally) its nested blocks via hasPart."""
+    name = serializers.CharField(max_length=200)
+    description = serializers.CharField(required=False, allow_blank=True)
+    additionalProperty = serializers.ListField(child=serializers.DictField(), required=False)
+    hasPart = serializers.ListField(child=serializers.DictField(), required=False)
+
+    def _meta_depuis_props(self, validated_data: Dict[str, Any]) -> Dict[str, Any]:
+        # Deballe additionalProperty -> dict de champs meta autorises.
+        # / Unpack additionalProperty -> dict of allowed meta fields.
+        meta: Dict[str, Any] = {}
+        for prop in (validated_data.get("additionalProperty") or []):
+            nom = prop.get("name")
+            if nom in CHAMPS_PAGE_AUTORISES:
+                meta[nom] = prop.get("value")
+        return meta
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        meta = self._meta_depuis_props(attrs)
+        slug = meta.get("slug")
+        # Slug obligatoire (sinon collision/SlugField unique) + anti-reserve.
+        # / Slug required + reserved check.
+        if not slug:
+            raise serializers.ValidationError({"slug": _("Le slug est obligatoire.")})
+        try:
+            valider_slug_non_reserve(slug)
+        except DjangoValidationError as e:
+            raise serializers.ValidationError({"slug": e.messages})
+        return attrs
+
+    def create(self, validated_data: Dict[str, Any]) -> "Page":
+        meta = self._meta_depuis_props(validated_data)
+        page = Page(titre=validated_data["name"])
+        if validated_data.get("description"):
+            page.meta_description = validated_data["description"]
+        for nom_champ, valeur in meta.items():
+            setattr(page, nom_champ, valeur)
+        page.full_clean(exclude=["uuid"])  # valide slug unique + reserves
+        page.save()
+
+        # Blocs imbriques (hasPart). / Nested blocks (hasPart).
+        for index, donnees_bloc in enumerate(validated_data.get("hasPart") or []):
+            donnees_bloc.setdefault("position", index)
+            bloc_ser = BlocCreateSerializer(data=donnees_bloc, context={"page": page})
+            bloc_ser.is_valid(raise_exception=True)
+            bloc_ser.save()
+        return page

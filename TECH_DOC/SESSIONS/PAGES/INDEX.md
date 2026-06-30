@@ -26,6 +26,7 @@ une séquence ordonnée de blocs typés.
 | 02 | Support tenant public (admin public + cohabitation `seo`) | À faire (isolé) | 1.5 | _à créer_ |
 | 03 | Blocs riches : galerie (M2M), carte+puces (JSON), FAQ, horaires | À faire | 2 | _à créer_ |
 | 04 | Pont métier : programme événements + bouton billetterie | À faire | 3 | _à créer_ |
+| 05 | API v2 pages : fabriquer un site via API (perm. clé + CRUD + catalogue) | Spec validée | 4 | [CHANTIER-05-api-v2-pages.md](./CHANTIER-05-api-v2-pages.md) |
 
 ## Décisions verrouillées (résumé — détail dans SPEC.md)
 

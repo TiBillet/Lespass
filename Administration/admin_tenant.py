@@ -149,6 +149,7 @@ class ExternalApiKeyAdmin(ModelAdmin):
         'ticket',
         'wallet',
         'sale',
+        'page',
     ]
 
     fields = [
@@ -162,6 +163,8 @@ class ExternalApiKeyAdmin(ModelAdmin):
         # membership : requis pour que LaBoutik lise les adhesions (route by-wallet).
         # / membership: required so LaBoutik can read memberships (by-wallet route).
         ('membership', 'crowd'),
+        # Droit API du site web (app pages) / Website API right (pages app)
+        ('page',),
         # Recharge cadeau : asset TNF que cette cle peut crediter via l'API v2
         # / Gift refill: TNF asset this key may top-up via API v2
         'gift_asset',

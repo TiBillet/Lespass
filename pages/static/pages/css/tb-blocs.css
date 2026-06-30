@@ -138,13 +138,16 @@ h2.tb-bloc__titre::before {
     align-items: center;
     justify-content: center;
     white-space: nowrap; /* jamais cliquable sur deux lignes (Hallmark) */
-    padding: 0.72rem 1.5rem;
+    min-height: 44px; /* cible tactile mobile (>= 44px, Apple HIG / WCAG) */
+    padding: 0.6rem 1.5rem;
     border-radius: var(--tb-rayon-sm);
     border: 1.5px solid var(--tb-accent);
     font-weight: 600;
     letter-spacing: 0.01em;
     text-decoration: none;
     cursor: pointer;
+    /* Supprime le delai de tap 300ms sur mobile. / Removes the 300ms tap delay. */
+    touch-action: manipulation;
     transition: transform var(--tb-transition), box-shadow var(--tb-transition),
                 background-color var(--tb-transition), color var(--tb-transition);
 }
@@ -528,15 +531,22 @@ h2.tb-bloc__titre::before {
     cursor: pointer;
     list-style: none; /* on remplace le triangle natif par notre marqueur */
     position: relative;
+    /* Rangée cliquable confortable au doigt (cible tactile >= 44px). */
+    /* Comfortable clickable row for touch (>= 44px target). */
+    display: flex;
+    align-items: center;
+    min-height: 44px;
     padding-right: 1.75rem;
     margin-bottom: 0;
+    touch-action: manipulation;
 }
 .tb-bloc__faq-details summary::-webkit-details-marker { display: none; }
 .tb-bloc__faq-details summary::after {
     content: "+";
     position: absolute;
     right: 0;
-    top: 0;
+    top: 50%;
+    transform: translateY(-50%);
     font-weight: 400;
     color: var(--tb-accent);
 }

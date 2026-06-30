@@ -1,0 +1,44 @@
+"""
+Source UNIQUE du catalogue des champs par type de bloc.
+/ SINGLE source of the per-type block field catalogue.
+
+LOCALISATION : pages/blocs_catalogue.py
+
+Utilise par : l'API v2 (validation + endpoint block-types/) et, a terme,
+l'admin (conditional_fields derive). Derive de la matrice SPEC.md.
+/ Used by: API v2 (validation + block-types endpoint) and, later, the admin.
+"""
+
+# Pour chaque type de bloc : la liste des champs modele qu'il utilise.
+# / For each block type: the list of model fields it uses.
+CHAMPS_PAR_TYPE = {
+    "HERO": ["titre", "sous_titre", "image", "image_secondaire",
+             "bouton_label", "bouton_url", "bouton2_label", "bouton2_url"],
+    "PARAGRAPHE": ["titre", "texte"],
+    "IMAGE_TEXTE": ["titre", "texte", "image", "image_position",
+                    "bouton_label", "bouton_url"],
+    "CTA": ["titre", "sous_titre", "texte",
+            "bouton_label", "bouton_url", "bouton2_label", "bouton2_url"],
+    "TEMOIGNAGE": ["texte", "auteur_nom", "auteur_role", "auteur_photo"],
+    "VIDEO_TEXTE": ["titre", "texte", "video"],
+    "CARTE": ["surtitre", "titre", "badge", "texte", "image",
+              "bouton_label", "bouton_url"],
+    "IMAGE": ["titre", "image"],
+    "CARTE_LEAFLET": ["titre", "badge", "image", "image_secondaire", "points_gps"],
+    "INFOS": ["contenu"],
+    "FAQ": ["titre", "texte", "repliable"],
+    "EVENEMENTS": ["titre", "nombre_max"],
+    "GALERIE": ["titre"],  # les images sont portees par ImageGalerie (cf. Session B)
+    "EMBED": ["titre", "embed_url"],
+}
+
+# Les 14 codes de type, dans l'ordre du catalogue.
+# / The 14 type codes, in catalogue order.
+TYPES_BLOC = list(CHAMPS_PAR_TYPE.keys())
+
+# Union de tous les champs : whitelist pour additionalProperty (securite : on ne
+# laisse JAMAIS setattr un champ hors de cette liste, ex. page/uuid/position).
+# / Union of all fields: whitelist for additionalProperty (never setattr outside).
+CHAMPS_BLOC_AUTORISES = frozenset(
+    champ for champs in CHAMPS_PAR_TYPE.values() for champ in champs
+)

@@ -81,6 +81,7 @@ def jsonld_page(context, page):
 DEFAULT_PEERTUBE_HOSTS = (
     "framatube.org",
     "makertube.net",
+    "videos-libr.es",
 )
 
 
