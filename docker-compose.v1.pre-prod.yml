@@ -113,6 +113,7 @@ services:
       - fedow.${DOMAIN}:172.17.0.1
       - laboutik.${DOMAIN}:172.17.0.1
       - lespass.${DOMAIN}:172.17.0.1
+      - chantefrein.${DOMAIN}:172.17.0.1
     command: "bash start_dev.sh"
 
   lespass_celery:
@@ -240,6 +241,7 @@ services:
       - fedow.${DOMAIN}:172.17.0.1
       - laboutik.${DOMAIN}:172.17.0.1
       - lespass.${DOMAIN}:172.17.0.1
+      - chantefrein.${DOMAIN}:172.17.0.1
     networks:
       - backend
 
@@ -269,6 +271,7 @@ services:
       - fedow.${DOMAIN}:172.17.0.1
       - laboutik.${DOMAIN}:172.17.0.1
       - lespass.${DOMAIN}:172.17.0.1
+      - chantefrein.${DOMAIN}:172.17.0.1
     networks:
       - backend
 

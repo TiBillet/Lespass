@@ -64,6 +64,7 @@ services:
       - lespass.tibillet.localhost:172.17.0.1
       - laboutik.tibillet.localhost:172.17.0.1
       - laboutik2.tibillet.localhost:172.17.0.1
+      - chantefrein.tibillet.localhost:172.17.0.1
 
   fedow_nginx:
     image: nginx
@@ -149,6 +150,7 @@ services:
       - lespass.tibillet.localhost:172.17.0.1
       - laboutik.tibillet.localhost:172.17.0.1
       - laboutik2.tibillet.localhost:172.17.0.1
+      - chantefrein.tibillet.localhost:172.17.0.1
     command: 'bash start_dev.sh'
 
 
@@ -175,6 +177,7 @@ services:
       - lespass.tibillet.localhost:172.17.0.1
       - laboutik.tibillet.localhost:172.17.0.1
       - laboutik2.tibillet.localhost:172.17.0.1
+      - chantefrein.tibillet.localhost:172.17.0.1
     command: "poetry run celery -A TiBillet worker -l INFO -B --concurrency=6"
 
 
@@ -258,6 +261,7 @@ services:
       - lespass.tibillet.localhost:172.17.0.1
       - laboutik.tibillet.localhost:172.17.0.1
       - laboutik2.tibillet.localhost:172.17.0.1
+      - chantefrein.tibillet.localhost:172.17.0.1
     networks:
       - backend
 
@@ -287,6 +291,7 @@ services:
       - lespass.tibillet.localhost:172.17.0.1
       - laboutik.tibillet.localhost:172.17.0.1
       - laboutik2.tibillet.localhost:172.17.0.1
+      - chantefrein.tibillet.localhost:172.17.0.1
     networks:
       - backend
 
