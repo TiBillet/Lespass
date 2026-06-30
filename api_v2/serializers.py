@@ -9,7 +9,7 @@ from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 
 from BaseBillet.models import Event, PostalAddress, Tag, OptionGenerale, LigneArticle, Price, PriceSold, Product, ProductFormField, Reservation, Membership
-from crowds.models import Initiative, BudgetItem, Participation, Vote
+from crowds.models import Initiative, BudgetItem, Participation
 from fedow_connect.utils import dround
 from Administration.utils import clean_html
 
@@ -140,7 +140,10 @@ SCHEMA_TYPE_TO_CATEGORY = {
 
 # Build a normalized mapping from translated display label -> internal code
 # so that clients may pass additionalType with the human-readable label.
-_display_norm = lambda s: str(s).strip().lower() if s is not None else ""
+def _display_norm(s):
+    return str(s).strip().lower() if s is not None else ""
+
+
 DISPLAY_TO_CATEGORY = { _display_norm(lbl): code for code, lbl in Event.TYPE_CHOICES }
 
 
@@ -826,18 +829,59 @@ class ProductCreateSerializer(serializers.Serializer):
                 return prop.get("value")
         return None
 
-    def _extract_event_uuid(self, related: Any, add_props: List[Dict[str, Any]]) -> Optional[str]:
-        if isinstance(related, str):
-            return related
-        if isinstance(related, dict):
-            identifier = related.get("identifier") or related.get("id") or related.get("uuid")
+    def _extract_one_event_uuid(self, element: Any) -> Optional[str]:
+        """
+        Extrait l'UUID d'un seul element isRelatedTo (string ou objet schema.org).
+        / Extract the UUID from a single isRelatedTo element (string or object).
+        """
+        if isinstance(element, str):
+            valeur = element.strip()
+            return valeur or None
+        if isinstance(element, dict):
+            identifier = element.get("identifier") or element.get("id") or element.get("uuid")
             if identifier:
-                return str(identifier)
-
-        fallback = self._extract_additional_property(add_props, "eventUuid")
-        if isinstance(fallback, str) and fallback.strip():
-            return fallback.strip()
+                valeur = str(identifier).strip()
+                return valeur or None
         return None
+
+    def _extract_event_uuids(self, related: Any, add_props: List[Dict[str, Any]]) -> List[str]:
+        """
+        Retourne la liste des UUID d'evenements a relier au produit.
+        / Return the list of event UUIDs to link to the product.
+
+        isRelatedTo accepte trois formes :
+        - une string (un seul event)              -> ["uuid"]
+        - un objet schema.org {identifier: ...}   -> ["uuid"]
+        - une liste de strings et/ou d'objets     -> ["uuidA", "uuidB", ...]
+        En dernier recours, on lit additionalProperty["eventUuid"].
+        / isRelatedTo accepts a string, a schema.org object, or a list of both.
+        Falls back to additionalProperty["eventUuid"].
+        """
+        uuids: List[str] = []
+
+        # Cas liste : on parcourt chaque element / List case: iterate each element
+        if isinstance(related, list):
+            for element in related:
+                uuid_trouve = self._extract_one_event_uuid(element)
+                if uuid_trouve:
+                    uuids.append(uuid_trouve)
+        # Cas simple : string ou objet unique / Single case: string or object
+        else:
+            uuid_trouve = self._extract_one_event_uuid(related)
+            if uuid_trouve:
+                uuids.append(uuid_trouve)
+
+        # Repli : additionalProperty["eventUuid"] (string unique)
+        # / Fallback: additionalProperty["eventUuid"] (single string)
+        if not uuids:
+            fallback = self._extract_additional_property(add_props, "eventUuid")
+            if isinstance(fallback, str) and fallback.strip():
+                uuids.append(fallback.strip())
+
+        # Dedoublonnage en gardant l'ordre d'apparition
+        # / De-duplicate while keeping the order of appearance
+        uuids_uniques = list(dict.fromkeys(uuids))
+        return uuids_uniques
 
     def _parse_form_fields(self, add_props: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         raw_fields = self._extract_additional_property(add_props, "formFields")
@@ -999,12 +1043,18 @@ class ProductCreateSerializer(serializers.Serializer):
                     help_text=field.get("helpText"),
                 )
 
-            event_uuid = self._extract_event_uuid(related, add_props)
-            if event_uuid:
+            # On relie le produit a un ou plusieurs evenements.
+            # Un meme produit peut etre partage sur N evenements (M2M Event.products).
+            # / Link the product to one or several events.
+            # The same product can be shared across N events (M2M Event.products).
+            event_uuids = self._extract_event_uuids(related, add_props)
+            for event_uuid in event_uuids:
                 try:
                     event = Event.objects.get(uuid=event_uuid)
                 except Event.DoesNotExist:
-                    raise serializers.ValidationError({"isRelatedTo": "Event not found."})
+                    raise serializers.ValidationError(
+                        {"isRelatedTo": f"Event not found: {event_uuid}"}
+                    )
                 event.products.add(product)
 
         return product
@@ -1295,7 +1345,7 @@ class MembershipCreateSerializer(serializers.Serializer):
         from types import SimpleNamespace
 
         from BaseBillet.validators import MembershipValidator
-        from BaseBillet.models import Membership, SaleOrigin, PaymentMethod
+        from BaseBillet.models import Membership, SaleOrigin
 
         member = validated_data.get("member") or {}
         plan = validated_data.get("membershipPlan") or {}

@@ -2,7 +2,7 @@ import datetime
 import re
 import uuid as uuid_module
 
-from django.db import connection
+from django.db import connection, IntegrityError, transaction
 from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404
@@ -316,7 +316,95 @@ class EventViewSet(viewsets.ViewSet):
             address = pa_serializer.save()
         # Link and save
         event.postal_address = address
-        event.save(update_fields=["postal_address"]) 
+        event.save(update_fields=["postal_address"])
+        return Response(EventSchemaSerializer(event).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="link-product", permission_classes=[SemanticApiKeyPermission])
+    def link_product(self, request, uuid=None, **kwargs):
+        """
+        Attache un ou plusieurs produits EXISTANTS a cet evenement.
+        / Attach one or several EXISTING products to this event.
+
+        LOCALISATION : api_v2/views.py — EventViewSet
+
+        Un meme produit peut etre partage sur plusieurs evenements grace a la
+        relation ManyToMany Event.products. Cette route relie des produits
+        DEJA crees, sans en creer de nouveau (contrairement a
+        POST /api/v2/products/ qui cree le produit puis l'attache).
+        / The same product can be shared across several events via the
+        ManyToMany Event.products. This route links ALREADY created products
+        without creating a new one.
+
+        Formes de body acceptees (souples) :
+        - {"productId": "<uuid>"}                          (un seul produit)
+        - {"productIds": ["<uuidA>", "<uuidB>"]}           (plusieurs)
+        - {"product": {"@type": "Product", "identifier": "<uuid>"}}
+        - {"products": ["<uuid>", {"identifier": "<uuid>"}]}
+
+        Renvoie l'evenement mis a jour (schema.org/Event).
+        / Returns the updated Event (schema.org/Event).
+        """
+        event = get_objet_par_uuid_ou_404(Event, uuid)
+
+        # On rassemble les valeurs depuis les cles tolerees.
+        # / Collect values from the accepted keys.
+        valeurs_brutes = []
+        for cle in ("productIds", "products", "productId", "product"):
+            valeur = request.data.get(cle)
+            if valeur is None:
+                continue
+            if isinstance(valeur, list):
+                valeurs_brutes.extend(valeur)
+            else:
+                valeurs_brutes.append(valeur)
+
+        # On extrait l'UUID de chaque valeur (string directe ou objet schema.org).
+        # / Extract the UUID from each value (plain string or schema.org object).
+        product_uuids = []
+        for valeur in valeurs_brutes:
+            if isinstance(valeur, str):
+                nettoye = valeur.strip()
+                if nettoye:
+                    product_uuids.append(nettoye)
+            elif isinstance(valeur, dict):
+                identifier = valeur.get("identifier") or valeur.get("id") or valeur.get("uuid")
+                if identifier:
+                    product_uuids.append(str(identifier).strip())
+
+        # Dedoublonnage en gardant l'ordre / De-duplicate keeping order
+        product_uuids = list(dict.fromkeys(product_uuids))
+
+        if not product_uuids:
+            return Response(
+                {"detail": _("No product identifier provided. Use productId or productIds.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # On verifie que TOUS les produits existent AVANT d'attacher quoi que ce
+        # soit (pas d'attachement partiel si un uuid est faux).
+        # / Verify ALL products exist BEFORE attaching anything (no partial link).
+        produits = []
+        for product_uuid in product_uuids:
+            try:
+                uuid_module.UUID(str(product_uuid))
+            except (ValueError, TypeError, AttributeError):
+                return Response(
+                    {"detail": f"Invalid product identifier: {product_uuid}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            try:
+                produits.append(Product.objects.get(uuid=product_uuid))
+            except Product.DoesNotExist:
+                return Response(
+                    {"detail": f"Product not found: {product_uuid}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Attachement M2M (idempotent : add() ne cree pas de doublon)
+        # / M2M attachment (idempotent: add() does not duplicate)
+        for produit in produits:
+            event.products.add(produit)
+
         return Response(EventSchemaSerializer(event).data, status=status.HTTP_200_OK)
 
 
@@ -483,7 +571,12 @@ class WalletRefillViewSet(viewsets.ViewSet):
 
     Header : Authorization: Api-Key <key> (cle restreinte a un asset cadeau via
     ExternalApiKey.gift_asset).
-    Header optionnel : Idempotency-Key (anti double-credit, cache best-effort).
+    Header OBLIGATOIRE : Idempotency-Key. Comme cet endpoint credite des tokens,
+    la cle d'idempotence est exigee (anti double-credit). Elle est stockee en
+    base sur LigneArticle.idempotency_key (contrainte d'unicite = verrou).
+    / MANDATORY header: Idempotency-Key. This endpoint credits tokens, so the
+    idempotency key is required (anti double-credit). Stored in DB on
+    LigneArticle.idempotency_key (unique constraint = lock).
 
     FLUX :
     1. Recupere l'objet cle API pour connaitre l'asset cadeau autorise.
@@ -491,8 +584,9 @@ class WalletRefillViewSet(viewsets.ViewSet):
     3. Resout l'asset et verifie qu'il est de categorie cadeau (TNF).
     4. Verifie que l'asset demande est bien celui autorise sur la cle.
     5. Verifie le plafond.
-    6. Idempotence (cache par tenant).
-    7. Cree/recupere l'user, verifie Fedow, credite la tirelire.
+    6. Exige la cle d'idempotence (400 si absente).
+    7. Cree/recupere l'user, verifie Fedow.
+    8. Verrou d'idempotence en base, puis credite la tirelire.
     """
     permission_classes = [SemanticApiKeyPermission]
     parser_classes = (MultiPartParser, FormParser, JSONParser)
@@ -537,43 +631,112 @@ class WalletRefillViewSet(viewsets.ViewSet):
             return Response({"detail": _("Amount above the maximum allowed.")},
                             status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
-        # 7. Idempotence (cache best-effort, cle par tenant)
-        # / Idempotency (best-effort cache, per-tenant key)
-        idempotency_key = request.META.get("HTTP_IDEMPOTENCY_KEY")
-        cache_key = None
-        if idempotency_key:
-            cache_key = f"api:gift_refill:idem:{connection.tenant.pk}:{idempotency_key}"
-            cached = cache.get(cache_key)
-            if cached is not None:
-                # Rejeu idempotent : la transaction a deja ete creee, on renvoie
-                # la reponse stockee sans recrediter. 208 = deja traite.
-                # / Idempotent replay: transaction already created, return the
-                # stored response without re-crediting. 208 = already reported.
-                return Response(cached, status=status.HTTP_208_ALREADY_REPORTED)
+        # 6. Cle d'idempotence OBLIGATOIRE (anti double-credit, stockee en base).
+        # La cle est fournie par le client (header Idempotency-Key). Comme cet
+        # endpoint credite des tokens, on l'EXIGE : sans cle, pas de filet.
+        # / Mandatory idempotency key (anti double-credit, stored in DB). The key
+        # is client-provided (Idempotency-Key header). This endpoint credits
+        # tokens, so we REQUIRE it: no key, no safety net.
+        from BaseBillet.models import LigneArticle
 
-        # 8. User / User
+        idempotency_key = request.META.get("HTTP_IDEMPOTENCY_KEY")
+        if not idempotency_key or not str(idempotency_key).strip():
+            return Response(
+                {"detail": _("Idempotency-Key header is required.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        idempotency_key = str(idempotency_key).strip()
+
+        # 7. User / User
         user = get_or_create_user(email)
         if not user:
             return Response({"detail": _("Invalid email.")},
                             status=status.HTTP_406_NOT_ACCEPTABLE)
 
-        # 9. Fedow dispo ? / Fedow available?
+        # Fedow dispo ? / Fedow available?
         if not FedowConfig.get_solo().can_fedow():
             return Response({"detail": _("Fedow service unavailable.")},
                             status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-        # 10. Tracabilite comptable : on cree une LigneArticle "recharge cadeau"
-        # AVANT d'appeler Fedow. Deux raisons : (a) Fedow exige
-        # metadata.ligne_article_uuid ; (b) on doit garder une trace de tout ce
-        # qui a ete credite (comme une recharge offerte sur LaBoutik V1).
-        # / Accounting trace: create a "gift refill" LigneArticle BEFORE calling
-        # Fedow. (a) Fedow requires metadata.ligne_article_uuid; (b) we must keep
-        # a trace of everything credited (like an offered refill on LaBoutik V1).
-        from BaseBillet.models import LigneArticle
+        # 8. Verrou d'idempotence en base.
+        # La contrainte d'unicite sur LigneArticle.idempotency_key garantit
+        # qu'une seule ligne existe par cle. On gere les rejeux :
+        # - meme cle + corps DIFFERENT -> 409 (cle reutilisee a tort)
+        # - meme cle + ligne VALID     -> 208 (on renvoie la transaction stockee)
+        # - meme cle + ligne CREATED   -> 409 (un credit est deja en cours)
+        # - meme cle + ligne FAILED    -> on RETENTE (rien n'a ete credite)
+        # / DB idempotency lock. Unique constraint guarantees one line per key.
+        ligne_existante = LigneArticle.objects.filter(
+            idempotency_key=idempotency_key,
+        ).first()
 
-        ligne_article = self._creer_ligne_article_recharge(asset, amount, user, api_key)
+        if ligne_existante is not None:
+            # Le corps doit etre identique a la 1ere requete portant cette cle.
+            # On compare l'email du DESTINATAIRE RESOLU (user.email), pas l'email
+            # brut du payload : get_or_create_user peut normaliser l'email, et on
+            # veut qu'un meme destinataire ne declenche pas un faux 409. Un
+            # destinataire different (autre user) declenche bien un 409.
+            # / The body must match the first request using this key. We compare
+            # the RESOLVED recipient email (user.email), not the raw payload email:
+            # get_or_create_user may normalize it. A different recipient -> 409.
+            email_precedent = (ligne_existante.metadata or {}).get("email", "")
+            corps_identique = (
+                ligne_existante.amount == amount
+                and str(ligne_existante.asset) == str(asset.uuid)
+                and email_precedent == getattr(user, "email", "")
+            )
+            if not corps_identique:
+                return Response(
+                    {"detail": _("Idempotency-Key already used with different parameters.")},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
-        # 11. Credit / Refill
+            if ligne_existante.status == LigneArticle.VALID:
+                # Rejeu d'une recharge deja faite : on renvoie la transaction
+                # stockee sans recrediter. / Replay of a done refill.
+                return Response(
+                    self._payload_money_transfer_depuis_ligne(ligne_existante),
+                    status=status.HTTP_208_ALREADY_REPORTED,
+                )
+
+            if ligne_existante.status == LigneArticle.CREATED:
+                # Un credit est en cours (requete concurrente ou interrompue).
+                # / A credit is in progress (concurrent or interrupted request).
+                return Response(
+                    {"detail": _("A refill with this key is already in progress.")},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            # Statut FAILED : le credit precedent a echoue, rien n'a ete credite.
+            # On REUTILISE la ligne et on retente. / FAILED: retry with same line.
+            ligne_article = ligne_existante
+            LigneArticle.objects.filter(pk=ligne_article.pk).update(
+                status=LigneArticle.CREATED,
+            )
+        else:
+            # Premiere requete pour cette cle : on cree la ligne "recharge cadeau"
+            # AVANT d'appeler Fedow (Fedow exige metadata.ligne_article_uuid, et
+            # on garde une trace comptable). La contrainte d'unicite fait office
+            # de verrou contre les requetes concurrentes : la 2e create leve
+            # IntegrityError -> 409. On enveloppe dans un savepoint atomic pour
+            # que l'IntegrityError n'invalide pas une transaction de requete plus
+            # large (ATOMIC_REQUESTS).
+            # / First request for this key: create the line BEFORE calling Fedow.
+            # The unique constraint acts as a lock; concurrent create raises
+            # IntegrityError -> 409. Wrapped in an atomic savepoint so the error
+            # does not break a wider request transaction.
+            try:
+                with transaction.atomic():
+                    ligne_article = self._creer_ligne_article_recharge(
+                        asset, amount, user, api_key, idempotency_key,
+                    )
+            except IntegrityError:
+                return Response(
+                    {"detail": _("A refill with this key is already in progress.")},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+        # 9. Credit / Refill
         # IMPORTANT : l'endpoint Fedow refill_from_lespass_to_user_wallet est, par
         # defaut, concu pour la RECOMPENSE D'ADHESION : son serializer exige
         # membership_uuid / product_uuid / price_uuid (cf Fedow
@@ -593,9 +756,8 @@ class WalletRefillViewSet(viewsets.ViewSet):
             "api_key": api_key.name,
             "ligne_article_uuid": str(ligne_article.uuid),
             "rewarded_from_ticket_scanned": True,  # bypass validation vente Fedow
+            "idempotency_key": idempotency_key,
         }
-        if idempotency_key:
-            metadata["idempotency_key"] = idempotency_key
         try:
             reward_tx = fedowAPI.transaction.refill_from_lespass_to_user_wallet(
                 user=user, amount=amount, asset=asset, metadata=metadata,
@@ -614,26 +776,50 @@ class WalletRefillViewSet(viewsets.ViewSet):
             return Response({"detail": _("Wallet provider error.")},
                             status=status.HTTP_502_BAD_GATEWAY)
 
-        # Succes : la ligne passe VALID (via .update() -> aucun trigger).
-        # / Success: the line becomes VALID (via .update() -> no trigger).
+        # Succes : on stocke l'uuid de la transaction Fedow dans la metadata
+        # (pour pouvoir reconstruire la reponse sur un rejeu idempotent), et la
+        # ligne passe VALID (via .update() -> aucun trigger).
+        # / Success: store the Fedow transaction uuid in metadata (to rebuild the
+        # response on an idempotent replay), and mark the line VALID.
+        tx_uuid = str(reward_tx.get("uuid"))
+        metadata_ligne = dict(ligne_article.metadata or {})
+        metadata_ligne["fedow_tx_uuid"] = tx_uuid
         LigneArticle.objects.filter(pk=ligne_article.pk).update(
             status=LigneArticle.VALID,
+            metadata=metadata_ligne,
         )
 
-        # 12. Reponse schema.org MoneyTransfer
+        # 10. Reponse schema.org MoneyTransfer
         payload = {
             "@context": "https://schema.org",
             "@type": "MoneyTransfer",
-            "identifier": str(reward_tx.get("uuid")),
+            "identifier": tx_uuid,
             "amount": amount,
             "asset": str(asset.uuid),
             "recipient": {"@type": "Person", "email": email},
         }
-        if cache_key:
-            cache.set(cache_key, payload, timeout=60 * 60 * 48)  # 48h
         return Response(payload, status=status.HTTP_201_CREATED)
 
-    def _creer_ligne_article_recharge(self, asset, amount, user, api_key):
+    def _payload_money_transfer_depuis_ligne(self, ligne_article):
+        """
+        Reconstruit le payload schema.org MoneyTransfer depuis une LigneArticle
+        deja creditee (utilise pour le rejeu idempotent en 208).
+        / Rebuild the schema.org MoneyTransfer payload from an already-credited
+        LigneArticle (used for the idempotent 208 replay).
+
+        LOCALISATION : api_v2/views.py — WalletRefillViewSet
+        """
+        meta = ligne_article.metadata or {}
+        return {
+            "@context": "https://schema.org",
+            "@type": "MoneyTransfer",
+            "identifier": meta.get("fedow_tx_uuid", ""),
+            "amount": ligne_article.amount,
+            "asset": str(ligne_article.asset) if ligne_article.asset else "",
+            "recipient": {"@type": "Person", "email": meta.get("email", "")},
+        }
+
+    def _creer_ligne_article_recharge(self, asset, amount, user, api_key, idempotency_key=None):
         """
         Cree une LigneArticle qui trace une recharge cadeau (audit comptable).
         / Create a LigneArticle tracing a gift refill (accounting audit).
@@ -694,6 +880,7 @@ class WalletRefillViewSet(viewsets.ViewSet):
             payment_method=PaymentMethod.FREE,  # recharge offerte / offered refill
             sale_origin=SaleOrigin.LESPASS,
             status=LigneArticle.CREATED,
+            idempotency_key=idempotency_key,
             metadata={
                 "source": "api_v2_wallet_refill",
                 "api_key": api_key.name,
