@@ -178,6 +178,93 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Event'
+  /api/v2/events/{uuid}/link-product/:
+    post:
+      operationId: linkEventProduct
+      summary: Attach one or several EXISTING products to an Event
+      description: |
+        Link already-created Product(s) to this Event via the ManyToMany
+        Event.products. The same product can be shared across several events.
+        Unlike POST /api/v2/products/ (which creates a product and attaches it),
+        this route never creates a product. All product UUIDs are validated
+        before anything is attached (no partial link on a bad UUID).
+      tags: [Event]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: |
+                Accepts several flexible shapes. Provide at least one product
+                identifier via productId, productIds, product or products.
+              properties:
+                productId:
+                  type: string
+                  format: uuid
+                  description: A single product UUID
+                productIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  description: Several product UUIDs
+                product:
+                  oneOf:
+                    - type: string
+                      format: uuid
+                    - type: object
+                      properties:
+                        '@type':
+                          type: string
+                          example: Product
+                        identifier:
+                          type: string
+                          format: uuid
+                products:
+                  type: array
+                  items:
+                    oneOf:
+                      - type: string
+                        format: uuid
+                      - type: object
+                        properties:
+                          identifier:
+                            type: string
+                            format: uuid
+            examples:
+              singleProduct:
+                summary: Attach one existing product
+                value:
+                  productId: "c2a9f2a2-3e6a-4c1e-8d5c-3f8b2d6a9b01"
+              severalProducts:
+                summary: Attach several existing products
+                value:
+                  productIds:
+                    - "c2a9f2a2-3e6a-4c1e-8d5c-3f8b2d6a9b01"
+                    - "d3b8e3b3-4f7b-5d2f-9e6d-4a9c3e7b0c12"
+      responses:
+        '200':
+          description: Updated Event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '400':
+          description: No/invalid product identifier, or a product was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/v2/initiatives/:
     get:
       operationId: listInitiatives
@@ -905,18 +992,24 @@ paths:
         excluded. The API key must have a gift_asset set in the admin (this both
         enables the permission and restricts the key to that single asset). The
         requested asset must be in a refillable category and must match the
-        key's gift_asset. Per-call cap: 10000 (raw unit). Pass an Idempotency-Key
-        header to avoid double credits on retry (best-effort cache, returns 208
-        Already Reported with the stored transaction).
+        key's gift_asset. Per-call cap: 10000 (raw unit). The Idempotency-Key
+        header is REQUIRED (this endpoint credits tokens): it is stored in DB
+        (LigneArticle.idempotency_key, unique constraint = lock). A repeat with
+        the same key and the same body returns 208 Already Reported with the
+        stored transaction; the same key with a DIFFERENT body is rejected with
+        409 Conflict.
       security:
         - ApiKeyAuth: []
       parameters:
         - in: header
           name: Idempotency-Key
-          required: false
+          required: true
           schema:
             type: string
-          description: Optional dedup key; a repeat returns the stored transaction (208).
+          description: |
+            Required client-provided dedup key. Same key + same body -> 208
+            (stored transaction). Same key + different body -> 409. A key whose
+            previous attempt failed (Fedow error) may be retried.
       requestBody:
         required: true
         content:
@@ -947,15 +1040,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/MoneyTransfer'
         '208':
-          description: Idempotent replay; returns the previously stored MoneyTransfer
+          description: Idempotent replay (same key, same body); returns the stored MoneyTransfer
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/MoneyTransfer'
         '400':
-          description: Invalid payload
+          description: Invalid payload, or missing required Idempotency-Key header
         '403':
           description: Key not allowed, or asset not authorized for this key
+        '409':
+          description: |
+            Idempotency-Key reused with different parameters, or a refill with
+            this key is already in progress.
         '422':
           description: Asset category is not refillable (fiat/subscription), or amount above the cap
         '503':
@@ -1150,7 +1247,11 @@ components:
           description: Human-readable category or internal code
           example: Ticket booking
         isRelatedTo:
-          description: Optional link to an Event by UUID
+          description: |
+            Optional link to one OR several Events. Accepts a single UUID, a
+            single schema.org Event object, or an array mixing both. The product
+            is attached to every resolved Event (M2M Event.products), so the
+            same product can be shared across multiple events.
           oneOf:
             - type: string
               format: uuid
@@ -1162,6 +1263,20 @@ components:
                 identifier:
                   type: string
                   format: uuid
+            - type: array
+              description: Several events (UUID strings and/or Event objects)
+              items:
+                oneOf:
+                  - type: string
+                    format: uuid
+                  - type: object
+                    properties:
+                      '@type':
+                        type: string
+                        example: Event
+                      identifier:
+                        type: string
+                        format: uuid
         offers:
           type: array
           items:

@@ -3285,6 +3285,18 @@ class LigneArticle(models.Model):
 
     metadata = models.JSONField(blank=True, null=True)
 
+    # Cle d'idempotence fournie par le client (header Idempotency-Key de l'API).
+    # Sert a empecher les double-credits : une meme cle = une seule ligne.
+    # NULL pour toutes les ventes classiques (billets, adhesions, POS) : la
+    # contrainte d'unicite ne s'applique qu'aux lignes qui portent une cle.
+    # / Client-provided idempotency key (API Idempotency-Key header). Prevents
+    # double credits: one key = one line. NULL for all classic sales; the
+    # unique constraint only applies to lines that carry a key.
+    idempotency_key = models.CharField(
+        max_length=255, blank=True, null=True, db_index=True,
+        verbose_name=_("Idempotency key"),
+    )
+
     # Avoir : lien vers la ligne originale / Credit note: link to original line
     credit_note_for = models.ForeignKey(
         'self', on_delete=models.PROTECT, blank=True, null=True,
@@ -3378,6 +3390,17 @@ class LigneArticle(models.Model):
 
     class Meta:
         ordering = ('-datetime',)
+        constraints = [
+            # Unicite de la cle d'idempotence, uniquement quand elle est presente.
+            # Le schema etant isole par tenant, l'unicite est de fait par tenant.
+            # / Idempotency key uniqueness, only when present. Schema is isolated
+            # per tenant, so uniqueness is effectively per tenant.
+            models.UniqueConstraint(
+                fields=['idempotency_key'],
+                condition=Q(idempotency_key__isnull=False),
+                name='unique_lignearticle_idempotency_key',
+            ),
+        ]
 
     def uuid_8(self):
         return f"{self.uuid}".partition('-')[0]

@@ -215,8 +215,18 @@ class TicketCreator():
             trigger = getattr(self, trigger_name)
             self.tickets = trigger(prices_dict)
 
-        # Methode Action : On a pas de produit
-        if reservation.event.categorie == Event.ACTION:
+        # Methode Action : evenement benevolat SANS produit reservable.
+        # On ne cree la "place benevole" via method_A QUE si aucun produit
+        # n'a ete traite par la boucle ci-dessus. Sinon, un sous-evenement
+        # (categorie forcee a ACTION car il a un parent) qui possede AUSSI
+        # un produit billet generait DEUX tickets : le bon (via la boucle)
+        # et un second vide sans pricesold (via method_A).
+        # / Volunteering event WITHOUT a bookable product. We only create the
+        # "volunteer slot" via method_A if the loop above handled no product.
+        # Otherwise a sub-event (category forced to ACTION because it has a
+        # parent) that ALSO has a ticket product would create TWO tickets:
+        # the correct one (loop) and an empty one without pricesold (method_A).
+        if reservation.event.categorie == Event.ACTION and not products_dict:
             self.tickets = self.method_A()
 
     # Methode ACTION

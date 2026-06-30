@@ -411,6 +411,7 @@ def test_refill_fedow_indisponible_503(gift_setup):
                 "amount": 500,
             },
             key=gift_setup["key"],
+            idem=uuidlib.uuid4().hex,
         )
     assert resp.status_code == 503
 
@@ -444,6 +445,7 @@ def test_refill_fedow_echec_502_et_ligne_failed(gift_setup):
                 "amount": 250,
             },
             key=gift_setup["key"],
+            idem=uuidlib.uuid4().hex,
         )
         # On récupère l'uuid de la ligne via le metadata passé à Fedow.
         # / Get the line uuid from the metadata passed to Fedow.
@@ -458,6 +460,242 @@ def test_refill_fedow_echec_502_et_ligne_failed(gift_setup):
         assert ligne.status == LigneArticle.FAILED, (
             f"La ligne aurait dû passer FAILED, obtenu {ligne.status}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Tests d'IDEMPOTENCE (Fedow mocke) — verrou en base sur LigneArticle
+# / IDEMPOTENCY tests (mocked Fedow) — DB lock on LigneArticle
+# ---------------------------------------------------------------------------
+
+
+def test_refill_sans_idempotency_key_400(gift_setup):
+    """L'Idempotency-Key est OBLIGATOIRE : sans le header -> 400.
+    / Idempotency-Key is REQUIRED: without the header -> 400.
+
+    Le controle a lieu AVANT l'appel a Fedow : pas besoin de mock.
+    / The check runs BEFORE the Fedow call: no mock needed.
+    """
+    resp = _post(
+        payload={
+            "email": "user@example.org",
+            "asset": str(gift_setup["asset_gift"].uuid),
+            "amount": 100,
+        },
+        key=gift_setup["key"],
+    )
+    assert resp.status_code == 400
+
+
+def test_refill_idempotent_meme_corps_208(gift_setup):
+    """Deux appels avec la MEME cle et le MEME corps : 201 puis 208, et Fedow
+    n'est appele qu'UNE fois (pas de double credit).
+    / Same key + same body: 201 then 208, Fedow called only once.
+    """
+    from BaseBillet.models import LigneArticle
+
+    idem = uuidlib.uuid4().hex
+    tx_uuid = str(uuidlib.uuid4())
+    payload = {
+        "email": gift_setup["user"].email,
+        "asset": str(gift_setup["asset_gift"].uuid),
+        "amount": 300,
+    }
+    with (
+        mock.patch(
+            "AuthBillet.utils.get_or_create_user", return_value=gift_setup["user"]
+        ),
+        mock.patch("fedow_connect.models.FedowConfig.can_fedow", return_value=True),
+        mock.patch("fedow_connect.fedow_api.FedowAPI") as MockFedow,
+    ):
+        refill = MockFedow.return_value.transaction.refill_from_lespass_to_user_wallet
+        refill.return_value = {"uuid": tx_uuid}
+        resp1 = _post(payload=payload, key=gift_setup["key"], idem=idem)
+        resp2 = _post(payload=payload, key=gift_setup["key"], idem=idem)
+
+    assert resp1.status_code == 201, f"1er appel : {resp1.status_code} {resp1.content[:200]}"
+    assert resp2.status_code == 208, "le rejeu idempotent doit renvoyer 208"
+    assert resp1.json()["identifier"] == tx_uuid
+    assert resp2.json()["identifier"] == tx_uuid
+    assert refill.call_count == 1, "Fedow ne doit etre credite qu'UNE fois"
+
+    with tenant_context(gift_setup["tenant"]):
+        LigneArticle.objects.filter(idempotency_key=idem).delete()
+
+
+def test_refill_meme_cle_corps_different_409(gift_setup):
+    """Reutiliser la MEME cle avec un corps DIFFERENT (montant change) -> 409,
+    et Fedow n'est PAS appele une 2e fois. C'est la faille signalee : changer le
+    montant ne doit PAS permettre un second credit.
+    / Reusing the SAME key with a DIFFERENT body (changed amount) -> 409, and
+    Fedow is NOT called a second time.
+    """
+    from BaseBillet.models import LigneArticle
+
+    idem = uuidlib.uuid4().hex
+    tx_uuid = str(uuidlib.uuid4())
+    base = {
+        "email": gift_setup["user"].email,
+        "asset": str(gift_setup["asset_gift"].uuid),
+    }
+    with (
+        mock.patch(
+            "AuthBillet.utils.get_or_create_user", return_value=gift_setup["user"]
+        ),
+        mock.patch("fedow_connect.models.FedowConfig.can_fedow", return_value=True),
+        mock.patch("fedow_connect.fedow_api.FedowAPI") as MockFedow,
+    ):
+        refill = MockFedow.return_value.transaction.refill_from_lespass_to_user_wallet
+        refill.return_value = {"uuid": tx_uuid}
+        resp1 = _post(payload={**base, "amount": 400}, key=gift_setup["key"], idem=idem)
+        resp2 = _post(payload={**base, "amount": 300}, key=gift_setup["key"], idem=idem)
+
+    assert resp1.status_code == 201, f"1er appel : {resp1.status_code} {resp1.content[:200]}"
+    assert resp2.status_code == 409, "meme cle + montant different doit etre refuse (409)"
+    assert refill.call_count == 1, "le 2e appel (montant different) ne doit PAS crediter"
+
+    with tenant_context(gift_setup["tenant"]):
+        LigneArticle.objects.filter(idempotency_key=idem).delete()
+
+
+def test_refill_retry_apres_echec_recredite(gift_setup):
+    """Si le 1er appel echoue cote Fedow (ligne FAILED), un retry avec la MEME
+    cle est autorise et credite (rien n'avait ete credite au 1er essai).
+    / If the 1st call fails on Fedow (FAILED line), a retry with the SAME key is
+    allowed and credits (nothing was credited on the first attempt).
+    """
+    from BaseBillet.models import LigneArticle
+
+    idem = uuidlib.uuid4().hex
+    tx_uuid = str(uuidlib.uuid4())
+    payload = {
+        "email": gift_setup["user"].email,
+        "asset": str(gift_setup["asset_gift"].uuid),
+        "amount": 200,
+    }
+    with (
+        mock.patch(
+            "AuthBillet.utils.get_or_create_user", return_value=gift_setup["user"]
+        ),
+        mock.patch("fedow_connect.models.FedowConfig.can_fedow", return_value=True),
+        mock.patch("fedow_connect.fedow_api.FedowAPI") as MockFedow,
+    ):
+        refill = MockFedow.return_value.transaction.refill_from_lespass_to_user_wallet
+        # 1er appel : Fedow echoue -> 502 + ligne FAILED
+        # / 1st call: Fedow fails -> 502 + FAILED line
+        refill.side_effect = Exception("boom")
+        resp1 = _post(payload=payload, key=gift_setup["key"], idem=idem)
+        assert resp1.status_code == 502, f"1er appel attendu 502, obtenu {resp1.status_code}"
+
+        # 2e appel meme cle : Fedow OK -> 201 (re-credit autorise apres FAILED)
+        # / 2nd call same key: Fedow OK -> 201 (retry allowed after FAILED)
+        refill.side_effect = None
+        refill.return_value = {"uuid": tx_uuid}
+        resp2 = _post(payload=payload, key=gift_setup["key"], idem=idem)
+
+    assert resp2.status_code == 201, f"retry apres FAILED doit recrediter, obtenu {resp2.status_code}"
+    assert resp2.json()["identifier"] == tx_uuid
+
+    with tenant_context(gift_setup["tenant"]):
+        # Une seule ligne (reutilisee), desormais VALID.
+        # / A single line (reused), now VALID.
+        lignes = LigneArticle.objects.filter(idempotency_key=idem)
+        assert lignes.count() == 1, "le retry doit reutiliser la meme ligne, pas en creer une 2e"
+        assert lignes.first().status == LigneArticle.VALID
+        lignes.delete()
+
+
+# ---------------------------------------------------------------------------
+# Tests de la CONTRAINTE D'UNICITE sur LigneArticle.idempotency_key
+# / Tests of the UNIQUE constraint on LigneArticle.idempotency_key
+#
+# Point critique : la contrainte est un index PARTIEL (condition
+# idempotency_key IS NOT NULL). Elle ne doit PAS bloquer les autres moteurs
+# (caisse, billetterie) qui creent des LigneArticle SANS cle (NULL).
+# / Critical point: the constraint is a PARTIAL index. It must NOT block the
+# other engines (POS, ticketing) that create LigneArticle WITHOUT a key.
+# ---------------------------------------------------------------------------
+
+
+def _creer_pricesold(tenant):
+    """Cree un PriceSold minimal (FK obligatoire de LigneArticle).
+    / Create a minimal PriceSold (mandatory FK of LigneArticle)."""
+    from decimal import Decimal
+    from BaseBillet.models import Product, Price, ProductSold, PriceSold
+
+    with tenant_context(tenant):
+        produit = Product.objects.create(
+            name=f"Contrainte test {_suffix()}",
+            categorie_article=Product.FREERES,
+        )
+        prix = Price.objects.create(
+            product=produit, name=f"T {_suffix()}", prix=Decimal("0"),
+        )
+        productsold = ProductSold.objects.create(product=produit, event=None)
+        return PriceSold.objects.create(
+            productsold=productsold, price=prix, prix=Decimal("0"),
+        )
+
+
+def test_lignearticle_sans_cle_non_bloquant(tenant):
+    """Plusieurs LigneArticle SANS cle d'idempotence (NULL) coexistent sans
+    erreur : la contrainte ne s'applique qu'aux lignes qui PORTENT une cle.
+    C'est la garantie que les autres moteurs (caisse, billetterie) ne sont
+    jamais bloques.
+    / Several LigneArticle WITHOUT idempotency key (NULL) coexist: the
+    constraint only applies to lines that CARRY a key. Other engines are safe.
+    """
+    from decimal import Decimal
+    from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin
+
+    pricesold = _creer_pricesold(tenant)
+    with tenant_context(tenant):
+        l1 = LigneArticle.objects.create(
+            pricesold=pricesold, amount=10, qty=Decimal("1"),
+            payment_method=PaymentMethod.FREE, sale_origin=SaleOrigin.LESPASS,
+            status=LigneArticle.VALID,
+        )
+        l2 = LigneArticle.objects.create(
+            pricesold=pricesold, amount=20, qty=Decimal("1"),
+            payment_method=PaymentMethod.FREE, sale_origin=SaleOrigin.LESPASS,
+            status=LigneArticle.VALID,
+        )
+        # Deux lignes sans cle (idempotency_key=NULL) : pas de conflit.
+        # / Two key-less lines (idempotency_key=NULL): no conflict.
+        assert l1.pk != l2.pk
+        assert l1.idempotency_key is None
+        assert l2.idempotency_key is None
+        LigneArticle.objects.filter(pk__in=[l1.pk, l2.pk]).delete()
+
+
+def test_lignearticle_cle_dupliquee_bloquee(tenant):
+    """Deux LigneArticle avec la MEME cle d'idempotence (non NULL) -> la 2e leve
+    IntegrityError. C'est le verrou anti double-credit.
+    / Two LigneArticle with the SAME idempotency key -> the 2nd raises
+    IntegrityError. This is the anti double-credit lock.
+    """
+    from decimal import Decimal
+    from django.db import IntegrityError, transaction
+    from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin
+
+    pricesold = _creer_pricesold(tenant)
+    cle = f"idem-{_suffix()}"
+    with tenant_context(tenant):
+        LigneArticle.objects.create(
+            pricesold=pricesold, amount=10, qty=Decimal("1"),
+            payment_method=PaymentMethod.FREE, sale_origin=SaleOrigin.LESPASS,
+            status=LigneArticle.VALID, idempotency_key=cle,
+        )
+        # La 2e ligne avec la meme cle est refusee par la contrainte.
+        # On enveloppe dans un savepoint pour contenir l'IntegrityError.
+        # / The 2nd line with the same key is rejected. Wrapped in a savepoint.
+        with pytest.raises(IntegrityError):
+            with transaction.atomic():
+                LigneArticle.objects.create(
+                    pricesold=pricesold, amount=20, qty=Decimal("1"),
+                    payment_method=PaymentMethod.FREE, sale_origin=SaleOrigin.LESPASS,
+                    status=LigneArticle.VALID, idempotency_key=cle,
+                )
+        LigneArticle.objects.filter(idempotency_key=cle).delete()
 
 
 # ---------------------------------------------------------------------------
@@ -510,6 +748,7 @@ def test_refill_reel_credite_le_wallet(fedow_real_setup, type_asset):
     resp = _post(
         payload={"email": email, "asset": str(asset.uuid), "amount": montant},
         key=key,
+        idem=uuidlib.uuid4().hex,
     )
     assert resp.status_code == 201, (
         f"{type_asset} : recharge échouée ({resp.status_code}) {resp.content[:300]}"
@@ -533,8 +772,7 @@ def test_refill_reel_idempotent_ne_recredite_pas(fedow_real_setup):
     le wallet qu'UNE seule fois (208 au rejeu).
     / REAL: two calls with the same Idempotency-Key credit the wallet only once.
     """
-    from django.core.cache import cache
-    from django.db import connection
+    from BaseBillet.models import LigneArticle
 
     asset = fedow_real_setup["assets"]["cadeau"]
     key = fedow_real_setup["keys"]["cadeau"]
@@ -559,5 +797,7 @@ def test_refill_reel_idempotent_ne_recredite_pas(fedow_real_setup):
         f"Idempotence cassée : solde {solde_apres} != {solde_avant}+{montant} (double crédit ?)"
     )
 
+    # Nettoyage : la trace d'idempotence est desormais en base (LigneArticle),
+    # plus dans le cache. / Cleanup: idempotency trace is now in DB.
     with tenant_context(fedow_real_setup["tenant"]):
-        cache.delete(f"api:gift_refill:idem:{connection.tenant.pk}:{idem}")
+        LigneArticle.objects.filter(idempotency_key=idem).delete()
