@@ -66,6 +66,29 @@ def valider_slug_non_reserve(valeur):
         )
 
 
+# Limite de taille des images uploadees (octets). Genereuse pour ne pas bloquer la
+# prod ; alignee sur la limite nginx (client_max_body_size 12M) et l'API v2.
+# / Upload size limit for images (bytes). Generous so as not to block production;
+# aligned with the nginx limit (client_max_body_size 12M) and the v2 API.
+LIMITE_TAILLE_IMAGE = 10 * 1024 * 1024  # 10 Mo
+
+
+def valider_taille_image(fichier):
+    """
+    Refuse une image uploadee trop lourde (> LIMITE_TAILLE_IMAGE).
+    / Rejects an uploaded image that is too large (> LIMITE_TAILLE_IMAGE).
+
+    Appele automatiquement par full_clean() (donc par les formulaires admin).
+    / Called automatically by full_clean() (so by admin forms).
+    """
+    if fichier and getattr(fichier, "size", 0) > LIMITE_TAILLE_IMAGE:
+        raise ValidationError(
+            _("Image trop volumineuse (max %(mo)s Mo)."),
+            params={"mo": LIMITE_TAILLE_IMAGE // (1024 * 1024)},
+            code="image_trop_grande",
+        )
+
+
 class ConfigurationSite(SingletonModel):
     """
     Configuration du site web (app pages) — un singleton par tenant.
@@ -205,6 +228,7 @@ class Page(models.Model):
         blank=True,
         variations=VARIATIONS_PARTAGE,
         delete_orphans=True,
+        validators=[valider_taille_image],
         verbose_name=_("Image de partage (reseaux sociaux)"),
         help_text=_("Aperu lors d'un partage sur les reseaux (1200x630 conseille). "
                     "Si vide : image du site par defaut."),
@@ -460,6 +484,7 @@ class Bloc(models.Model):
         blank=True,
         variations=VARIATIONS_IMAGE,
         delete_orphans=True,
+        validators=[valider_taille_image],
         verbose_name=_("Image"),
         help_text=_("Image du bloc (fond du Hero ou illustration laterale)."),
     )
@@ -473,6 +498,7 @@ class Bloc(models.Model):
         blank=True,
         variations=VARIATIONS_IMAGE,
         delete_orphans=True,
+        validators=[valider_taille_image],
         verbose_name=_("Seconde image"),
         help_text=_("Image secondaire (ex. badge date, logo a cote d'une carte)."),
     )
@@ -607,6 +633,7 @@ class Bloc(models.Model):
         blank=True,
         variations=VARIATIONS_PHOTO_AUTEUR,
         delete_orphans=True,
+        validators=[valider_taille_image],
         verbose_name=_("Photo de l'auteur"),
         help_text=_("Portrait de la personne qui temoigne (optionnel)."),
     )
@@ -655,6 +682,7 @@ class ImageGalerie(models.Model):
         blank=True,
         variations=VARIATIONS_PARTAGE,
         delete_orphans=True,
+        validators=[valider_taille_image],
         verbose_name=_("Image"),
         help_text=_("Une photo de la galerie."),
     )

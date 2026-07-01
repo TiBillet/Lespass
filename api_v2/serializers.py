@@ -1790,82 +1790,119 @@ class BlocCreateSerializer(serializers.Serializer):
                 _("Type de bloc inconnu : %(t)s") % {"t": value})
         return value
 
-    def create(self, validated_data: Dict[str, Any]) -> "Bloc":
-        with transaction.atomic():
-            page = self.context["page"]
-            bloc = Bloc(page=page, type_bloc=validated_data["additionalType"])
-            if "position" in validated_data:
-                bloc.position = validated_data["position"]
+    def _pre_telecharger_images(self, validated_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Phase 1 (HORS transaction) : telecharge toutes les images distantes.
+        / Phase 1 (OUTSIDE any transaction): download all remote images.
 
-            # Champs standard -> champs modele. / Standard fields -> model fields.
-            for cle_std, nom_champ in MAPPING_STANDARD_VERS_CHAMP.items():
-                if cle_std in validated_data:
-                    valeur = validated_data[cle_std]
-                    if nom_champ in CHAMPS_TEXTE_RICHE:
-                        valeur = clean_html(valeur or "")
-                    setattr(bloc, nom_champ, valeur or "")
+        Renvoie un dict de fichiers prets a persister. Leve ValidationError si une URL
+        est invalide / dangereuse / interne (SSRF). AUCUNE ecriture DB ici.
+        / Returns a dict of ready-to-persist files. Raises ValidationError on any
+        invalid/dangerous/internal URL. NO DB write here.
+        """
+        type_bloc = validated_data["additionalType"]
+        fichier_image = None
+        fichiers_galerie = []          # liste de (ContentFile, legende, position)
+        fichiers_additional = {}       # nom_champ -> ContentFile
 
-            # additionalProperty -> champs modele (whitelist stricte).
-            # / additionalProperty -> model fields (strict whitelist).
-            for prop in (validated_data.get("additionalProperty") or []):
-                nom = prop.get("name")
-                valeur = prop.get("value")
-                if nom not in CHAMPS_BLOC_AUTORISES:
-                    continue  # securite : jamais setattr hors whitelist
-                # Garde de structure : points_gps et contenu doivent etre des listes.
-                # / Structure guard: points_gps and contenu must be lists.
-                if nom in ("points_gps", "contenu") and not isinstance(valeur, list):
-                    raise serializers.ValidationError(
-                        {nom: _("Ce champ doit etre une liste.")})
-                if nom in CHAMPS_FICHIER:
-                    # Champ fichier : seules les IMAGES par URL sont telechargees.
-                    # Une URL invalide / dangereuse / interne leve ValidationError (400),
-                    # comme pour le champ standard `image` (coherence, pas d'echec silencieux).
-                    # / File field: only IMAGE fields are downloaded. An invalid/dangerous/
-                    # internal URL raises ValidationError (400), like the standard `image`
-                    # field (consistency, no silent failure).
-                    if nom in CHAMPS_IMAGE_URL and isinstance(valeur, str) and valeur:
-                        fichier = telecharger_et_valider_image(valeur)
-                        if fichier:
-                            setattr(bloc, nom, fichier)
-                    continue  # jamais de string brute sur un champ fichier
-                if nom in CHAMPS_TEXTE_RICHE:
-                    valeur = clean_html(valeur or "")
-                setattr(bloc, nom, valeur)
-
-            # Securite : vide les champs lien a schema dangereux (javascript:, data:, vbscript:).
-            # / Security: empty link fields with a dangerous scheme.
-            for champ_url in CHAMPS_URL_A_NEUTRALISER:
-                if url_a_schema_dangereux(getattr(bloc, champ_url, "")):
-                    setattr(bloc, champ_url, "")
-
-            bloc.save()
-
-            # image : URL string -> telechargement ; liste d'ImageObject (GALERIE) -> ImageGalerie.
-            # / image: URL string -> download; list of ImageObject (GALLERY) -> ImageGalerie.
-            # IMPORTANT : bloc.save() doit preceder la creation des ImageGalerie (FK exige un bloc persiste).
-            # / IMPORTANT: bloc.save() must precede ImageGalerie creation (FK requires a persisted block).
-            valeur_image = validated_data.get("image")
-            if isinstance(valeur_image, str) and valeur_image:
-                fichier = telecharger_et_valider_image(valeur_image)
+        # Champs image passes en additionalProperty (image_secondaire, auteur_photo).
+        # / Image fields passed via additionalProperty.
+        for prop in (validated_data.get("additionalProperty") or []):
+            nom = prop.get("name")
+            valeur = prop.get("value")
+            if (nom in CHAMPS_FICHIER and nom in CHAMPS_IMAGE_URL
+                    and isinstance(valeur, str) and valeur):
+                fichier = telecharger_et_valider_image(valeur)
                 if fichier:
-                    bloc.image = fichier
-                    bloc.save(update_fields=["image"])
-            elif isinstance(valeur_image, list) and bloc.type_bloc == "GALERIE":
-                from pages.models import ImageGalerie
-                for index, img in enumerate(valeur_image):
-                    url = img.get("contentUrl") if isinstance(img, dict) else img
-                    fichier = telecharger_et_valider_image(url)
-                    if fichier:
-                        ImageGalerie.objects.create(
-                            bloc=bloc, image=fichier,
-                            legende=(img.get("caption") if isinstance(img, dict) else "") or "",
-                            position=index)
-            elif isinstance(valeur_image, list):
-                # Une liste d'images n'est acceptee que pour le type GALERIE.
-                # / A list of images is only accepted for the GALLERY type.
+                    fichiers_additional[nom] = fichier
+
+        # Champ image standard : URL string -> 1 image ; liste -> GALERIE.
+        # / Standard image field: URL string -> 1 image; list -> GALLERY.
+        valeur_image = validated_data.get("image")
+        if isinstance(valeur_image, str) and valeur_image:
+            fichier_image = telecharger_et_valider_image(valeur_image)
+        elif isinstance(valeur_image, list) and type_bloc == "GALERIE":
+            for index, img in enumerate(valeur_image):
+                url = img.get("contentUrl") if isinstance(img, dict) else img
+                fichier = telecharger_et_valider_image(url)
+                if fichier:
+                    legende = (img.get("caption") if isinstance(img, dict) else "") or ""
+                    fichiers_galerie.append((fichier, legende, index))
+        elif isinstance(valeur_image, list):
+            # Une liste d'images n'est acceptee que pour le type GALERIE.
+            # / A list of images is only accepted for the GALLERY type.
+            raise serializers.ValidationError(
+                {"image": _("Une liste d'images n'est acceptee que pour le bloc GALERIE.")})
+
+        return {"image": fichier_image, "galerie": fichiers_galerie,
+                "additional": fichiers_additional}
+
+    def _persister(self, validated_data: Dict[str, Any], fichiers: Dict[str, Any],
+                   page) -> "Bloc":
+        """Phase 2 (DANS une transaction) : cree le bloc avec les fichiers deja
+        telecharges. AUCUN I/O reseau ici. / Phase 2 (INSIDE a transaction): create the
+        block with the already-downloaded files. NO network I/O here.
+        """
+        bloc = Bloc(page=page, type_bloc=validated_data["additionalType"])
+        if "position" in validated_data:
+            bloc.position = validated_data["position"]
+
+        # Champs standard -> champs modele. / Standard fields -> model fields.
+        for cle_std, nom_champ in MAPPING_STANDARD_VERS_CHAMP.items():
+            if cle_std in validated_data:
+                valeur = validated_data[cle_std]
+                if nom_champ in CHAMPS_TEXTE_RICHE:
+                    valeur = clean_html(valeur or "")
+                setattr(bloc, nom_champ, valeur or "")
+
+        # additionalProperty NON-fichier -> champs modele (whitelist stricte).
+        # Les champs fichier sont geres via `fichiers` (pre-telecharges en phase 1).
+        # / Non-file additionalProperty -> model fields; file fields come from `fichiers`.
+        for prop in (validated_data.get("additionalProperty") or []):
+            nom = prop.get("name")
+            valeur = prop.get("value")
+            if nom not in CHAMPS_BLOC_AUTORISES:
+                continue
+            if nom in ("points_gps", "contenu") and not isinstance(valeur, list):
                 raise serializers.ValidationError(
-                    {"image": _("Une liste d'images n'est acceptee que pour le bloc GALERIE.")})
+                    {nom: _("Ce champ doit etre une liste.")})
+            if nom in CHAMPS_FICHIER:
+                continue  # gere en phase 1
+            if nom in CHAMPS_TEXTE_RICHE:
+                valeur = clean_html(valeur or "")
+            setattr(bloc, nom, valeur)
+
+        # Images fichier pre-telechargees (image_secondaire, auteur_photo).
+        # / Pre-downloaded file images.
+        for nom_champ, fichier in fichiers["additional"].items():
+            setattr(bloc, nom_champ, fichier)
+
+        # Securite : vide les champs lien a schema dangereux. / Empty dangerous-scheme links.
+        for champ_url in CHAMPS_URL_A_NEUTRALISER:
+            if url_a_schema_dangereux(getattr(bloc, champ_url, "")):
+                setattr(bloc, champ_url, "")
+
+        # Image standard pre-telechargee. / Pre-downloaded standard image.
+        if fichiers["image"]:
+            bloc.image = fichiers["image"]
+
+        bloc.save()
+
+        # Galerie pre-telechargee (FK : bloc deja persiste). / Pre-downloaded gallery.
+        if fichiers["galerie"]:
+            from pages.models import ImageGalerie
+            for fichier, legende, position in fichiers["galerie"]:
+                ImageGalerie.objects.create(
+                    bloc=bloc, image=fichier, legende=legende, position=position)
+        return bloc
+
+    def create(self, validated_data: Dict[str, Any]) -> "Bloc":
+        # Phase 1 : telechargements HORS transaction (I/O reseau).
+        # Phase 2 : persistance en transaction courte (aucun reseau).
+        # / Phase 1: downloads OUTSIDE any transaction. Phase 2: short DB transaction.
+        page = self.context["page"]
+        fichiers = self._pre_telecharger_images(validated_data)
+        with transaction.atomic():
+            bloc = self._persister(validated_data, fichiers, page)
         return bloc
 
 
@@ -1881,6 +1918,22 @@ CHAMPS_PAGE_AUTORISES = frozenset({
     "slug", "position", "publie", "est_accueil", "noindex",
     "meta_title", "meta_description",
 })
+
+
+def _resoudre_page(identifiant):
+    """Trouve une Page par uuid OU slug. Renvoie None si introuvable/vide.
+    / Finds a Page by uuid OR slug. Returns None if not found/empty."""
+    import uuid as _uuid_mod
+    if not identifiant:
+        return None
+    try:
+        _uuid_mod.UUID(str(identifiant))
+        page = Page.objects.filter(uuid=identifiant).first()
+        if page:
+            return page
+    except (ValueError, TypeError):
+        pass
+    return Page.objects.filter(slug=identifiant).first()
 
 
 class PageSchemaSerializer(serializers.Serializer):
@@ -1899,6 +1952,18 @@ class PageSchemaSerializer(serializers.Serializer):
                 continue
             props.append({"@type": "PropertyValue", "name": nom_champ, "value": valeur})
 
+        # Page parente (schema.org isPartOf). Null si page de premier niveau.
+        # / Parent page (schema.org isPartOf). Null if top-level page.
+        parent = getattr(instance, "parent", None)
+        is_part_of = None
+        if parent:
+            is_part_of = {
+                "@type": "WebPage",
+                "identifier": str(parent.uuid),
+                "url": f"/{parent.slug}/",
+                "name": parent.titre,
+            }
+
         payload = {
             "@context": "https://schema.org",
             "@type": "WebPage",
@@ -1906,6 +1971,7 @@ class PageSchemaSerializer(serializers.Serializer):
             "name": instance.titre,
             "url": f"/{instance.slug}/",
             "description": instance.meta_description or None,
+            "isPartOf": is_part_of,
             "hasPart": blocs or None,
             "additionalProperty": props or None,
         }
@@ -1917,6 +1983,9 @@ class PageCreateSerializer(serializers.Serializer):
     / Creates a Page and (optionally) its nested blocks via hasPart."""
     name = serializers.CharField(max_length=200)
     description = serializers.CharField(required=False, allow_blank=True)
+    # isPartOf : uuid ou slug de la page parente (schema.org). Vide = pas de parent.
+    # / isPartOf: uuid or slug of the parent page (schema.org). Empty = no parent.
+    isPartOf = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     additionalProperty = serializers.ListField(child=serializers.DictField(), required=False)
     hasPart = serializers.ListField(child=serializers.DictField(), required=False)
 
@@ -1944,20 +2013,43 @@ class PageCreateSerializer(serializers.Serializer):
         return attrs
 
     def create(self, validated_data: Dict[str, Any]) -> "Page":
+        # --- Phase 1 : validation + PRE-TELECHARGEMENT de tous les blocs (HORS transaction) ---
+        # / Phase 1: validate + pre-download every block's images (OUTSIDE any transaction).
+        meta = self._meta_depuis_props(validated_data)
+        blocs_prepares = []  # liste de (bloc_ser, fichiers)
+        for index, donnees_bloc in enumerate(validated_data.get("hasPart") or []):
+            donnees_bloc.setdefault("position", index)
+            bloc_ser = BlocCreateSerializer(data=donnees_bloc, context={"page": None})
+            bloc_ser.is_valid(raise_exception=True)
+            fichiers = bloc_ser._pre_telecharger_images(bloc_ser.validated_data)
+            blocs_prepares.append((bloc_ser, fichiers))
+
+        # --- Phase 2 : transaction courte, AUCUN I/O reseau ---
+        # / Phase 2: short transaction, NO network I/O.
         with transaction.atomic():
-            meta = self._meta_depuis_props(validated_data)
             page = Page(titre=validated_data["name"])
             if validated_data.get("description"):
                 page.meta_description = validated_data["description"]
             for nom_champ, valeur in meta.items():
                 setattr(page, nom_champ, valeur)
-            page.full_clean(exclude=["uuid"])  # valide slug unique + reserves
-            page.save()
 
-            # Blocs imbriques (hasPart). / Nested blocks (hasPart).
-            for index, donnees_bloc in enumerate(validated_data.get("hasPart") or []):
-                donnees_bloc.setdefault("position", index)
-                bloc_ser = BlocCreateSerializer(data=donnees_bloc, context={"page": page})
-                bloc_ser.is_valid(raise_exception=True)
-                bloc_ser.save()
+            # Page parente (schema.org isPartOf) : uuid ou slug d'une autre page.
+            # La validation de hierarchie (un seul niveau) est faite par page.full_clean() -> clean().
+            # / Parent page (isPartOf): uuid or slug of another page. Hierarchy validation
+            # (one level only) is enforced by page.full_clean() -> clean().
+            identifiant_parent = validated_data.get("isPartOf")
+            if identifiant_parent:
+                parent = _resoudre_page(identifiant_parent)
+                if not parent:
+                    raise serializers.ValidationError(
+                        {"isPartOf": _("Page parente introuvable : %(id)s") % {"id": identifiant_parent}})
+                page.parent = parent
+
+            try:
+                page.full_clean(exclude=["uuid"])  # valide slug unique + reserves + hierarchie
+            except DjangoValidationError as e:
+                raise serializers.ValidationError(e.message_dict)
+            page.save()
+            for bloc_ser, fichiers in blocs_prepares:
+                bloc_ser._persister(bloc_ser.validated_data, fichiers, page)
         return page

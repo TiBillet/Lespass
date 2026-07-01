@@ -192,9 +192,50 @@ identifier = uuid
 name       = titre
 url        = "/<slug>/"
 description = meta_description
+isPartOf   = WebPage minimal {identifier, url, name} si la page a un parent ; absent sinon
 hasPart    = [WebPageElement, ...]
 additionalProperty = PropertyValue[] : slug, position, publie,
                      est_accueil, noindex, meta_title
+```
+
+#### Sous-pages (champ `isPartOf`)
+
+`isPartOf` expose la page parente en **sortie** (objet WebPage minimal : `@type`, `identifier`, `url`, `name`).
+En **entrée** (POST / PATCH), `isPartOf` accepte un **uuid ou slug** de la page parente.
+
+Règles (validées par `Page.clean()` via `full_clean()`) :
+- Un seul niveau de hiérarchie (la page parente ne peut pas elle-même avoir un parent).
+- La page d'accueil (`est_accueil=True`) ne peut pas être sous-page.
+- Une page ayant des enfants ne peut pas devenir sous-page.
+
+Violation → **400** avec le message d'erreur du modèle.
+
+**En PATCH** : `isPartOf: ""` (chaîne vide) ou `isPartOf: null` retire le parent (la page redevient top-level).
+
+Exemple création avec parent :
+```json
+POST /api/v2/pages/
+{
+  "name": "Sous-page",
+  "isPartOf": "slug-du-parent",
+  "additionalProperty": [{"@type": "PropertyValue", "name": "slug", "value": "ma-sous-page"}],
+  "hasPart": []
+}
+```
+
+Exemple sortie avec parent :
+```json
+{
+  "@type": "WebPage",
+  "identifier": "...",
+  "name": "Sous-page",
+  "isPartOf": {
+    "@type": "WebPage",
+    "identifier": "...",
+    "url": "/slug-du-parent/",
+    "name": "Page parente"
+  }
+}
 ```
 
 ### Mapping Bloc → WebPageElement (schema.org)

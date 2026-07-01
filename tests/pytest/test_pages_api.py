@@ -644,3 +644,133 @@ def test_http_ajouter_bloc_multipart_video_est_ignoree(cle_pages):
     with tenant_context(tenant):
         bloc = Bloc.objects.get(uuid=r.json()["identifier"])
         assert not bloc.video  # la video n'a PAS ete uploadee par l'API
+
+
+@pytest.mark.django_db
+def test_page_create_avec_parent_ispartof(cle_pages):
+    """Créer une page enfant en référençant le parent via isPartOf (slug).
+    / Create a child page referencing the parent via isPartOf (slug)."""
+    from rest_framework.test import APIClient
+    from django_tenants.utils import tenant_context
+    from Customers.models import Client
+    from pages.models import Page
+    client = APIClient()
+    auth = {"HTTP_AUTHORIZATION": f"Api-Key {cle_pages}",
+            "HTTP_HOST": "lespass.tibillet.localhost"}
+    # Page parente
+    rp = client.post("/api/v2/pages/", {
+        "name": "Parent", "additionalProperty": [
+            {"@type": "PropertyValue", "name": "slug", "value": "le-parent"}], "hasPart": []},
+        format="json", **auth)
+    assert rp.status_code == 201, rp.content
+    # Page enfant avec isPartOf = slug du parent
+    re = client.post("/api/v2/pages/", {
+        "name": "Enfant", "isPartOf": "le-parent",
+        "additionalProperty": [{"@type": "PropertyValue", "name": "slug", "value": "l-enfant"}],
+        "hasPart": []}, format="json", **auth)
+    assert re.status_code == 201, re.content
+    # Sortie : isPartOf expose le parent
+    assert re.json()["isPartOf"]["@type"] == "WebPage"
+    assert re.json()["isPartOf"]["name"] == "Parent"
+    # En base : le parent est bien relie
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        enfant = Page.objects.get(slug="l-enfant")
+        assert enfant.parent is not None
+        assert enfant.parent.slug == "le-parent"
+
+
+@pytest.mark.django_db
+def test_page_create_parent_introuvable_400(cle_pages):
+    """isPartOf pointant vers une page inexistante -> 400.
+    / isPartOf pointing to a non-existent page -> 400."""
+    from rest_framework.test import APIClient
+    client = APIClient()
+    auth = {"HTTP_AUTHORIZATION": f"Api-Key {cle_pages}",
+            "HTTP_HOST": "lespass.tibillet.localhost"}
+    r = client.post("/api/v2/pages/", {
+        "name": "Orphelin", "isPartOf": "slug-qui-nexiste-pas",
+        "additionalProperty": [{"@type": "PropertyValue", "name": "slug", "value": "orphelin"}],
+        "hasPart": []}, format="json", **auth)
+    assert r.status_code == 400, r.content
+
+
+@pytest.mark.django_db
+def test_page_create_hierarchie_deux_niveaux_refusee_400(cle_pages):
+    """Un seul niveau : rattacher une page à un parent qui a déjà un parent -> 400.
+    / One level only: attaching to a parent that already has a parent -> 400."""
+    from rest_framework.test import APIClient
+    client = APIClient()
+    auth = {"HTTP_AUTHORIZATION": f"Api-Key {cle_pages}",
+            "HTTP_HOST": "lespass.tibillet.localhost"}
+    for slug in ("niveau-a",):
+        client.post("/api/v2/pages/", {"name": "A", "additionalProperty": [
+            {"@type": "PropertyValue", "name": "slug", "value": "niveau-a"}], "hasPart": []},
+            format="json", **auth)
+    # B enfant de A (OK)
+    rb = client.post("/api/v2/pages/", {"name": "B", "isPartOf": "niveau-a",
+        "additionalProperty": [{"@type": "PropertyValue", "name": "slug", "value": "niveau-b"}],
+        "hasPart": []}, format="json", **auth)
+    assert rb.status_code == 201, rb.content
+    # C enfant de B -> refuse (B a deja un parent = 2 niveaux)
+    rc = client.post("/api/v2/pages/", {"name": "C", "isPartOf": "niveau-b",
+        "additionalProperty": [{"@type": "PropertyValue", "name": "slug", "value": "niveau-c"}],
+        "hasPart": []}, format="json", **auth)
+    assert rc.status_code == 400, rc.content
+
+
+@pytest.mark.django_db
+def test_page_patch_retire_le_parent(cle_pages):
+    """PATCH isPartOf vide -> la page redevient top-level (parent = None).
+    / PATCH with empty isPartOf -> page becomes top-level again (parent = None)."""
+    from rest_framework.test import APIClient
+    from django_tenants.utils import tenant_context
+    from Customers.models import Client
+    from pages.models import Page
+    client = APIClient()
+    auth = {"HTTP_AUTHORIZATION": f"Api-Key {cle_pages}",
+            "HTTP_HOST": "lespass.tibillet.localhost"}
+    client.post("/api/v2/pages/", {"name": "P", "additionalProperty": [
+        {"@type": "PropertyValue", "name": "slug", "value": "patch-parent"}], "hasPart": []},
+        format="json", **auth)
+    re = client.post("/api/v2/pages/", {"name": "E", "isPartOf": "patch-parent",
+        "additionalProperty": [{"@type": "PropertyValue", "name": "slug", "value": "patch-enfant"}],
+        "hasPart": []}, format="json", **auth)
+    enfant_uuid = re.json()["identifier"]
+    rp = client.patch(f"/api/v2/pages/{enfant_uuid}/", {"isPartOf": ""}, format="json", **auth)
+    assert rp.status_code == 200, rp.content
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        assert Page.objects.get(uuid=enfant_uuid).parent is None
+
+
+@pytest.mark.django_db
+def test_page_nested_galerie_url_dangereuse_ne_cree_rien(monkeypatch):
+    """Si une URL de galerie est dangereuse, la creation ECHOUE en 400 et NE laisse
+    NI page NI bloc NI image (atomicite preservee malgre le pre-telechargement).
+    / If a gallery URL is dangerous, creation fails 400 and leaves NO page/block/image."""
+    from django_tenants.utils import tenant_context
+    from Customers.models import Client
+    from pages.models import Page
+    from api_v2.serializers import PageCreateSerializer
+    from rest_framework import serializers as drf
+    import pytest as _pytest
+
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        nb_pages_avant = Page.objects.count()
+        payload = {
+            "name": "Galerie KO",
+            "additionalProperty": [{"@type": "PropertyValue", "name": "slug", "value": "galerie-ko"}],
+            "hasPart": [{
+                "additionalType": "GALERIE",
+                "image": [{"@type": "ImageObject", "contentUrl": "javascript:alert(1)"}],
+            }],
+        }
+        ser = PageCreateSerializer(data=payload, context={"request": None})
+        assert ser.is_valid(), ser.errors
+        with _pytest.raises(drf.ValidationError):
+            ser.save()
+        # Rien n'a ete cree (ni la page au slug galerie-ko).
+        assert Page.objects.count() == nb_pages_avant
+        assert not Page.objects.filter(slug="galerie-ko").exists()

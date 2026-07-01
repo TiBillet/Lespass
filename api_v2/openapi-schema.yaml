@@ -2146,6 +2146,23 @@ components:
           type: string
           nullable: true
           description: meta_description (SEO)
+        isPartOf:
+          nullable: true
+          description: >
+            Page parente (un seul niveau de hiérarchie). Absent si la page est top-level.
+            Objet WebPage minimal : @type, identifier (uuid), url, name.
+          type: object
+          properties:
+            '@type':
+              type: string
+              example: WebPage
+            identifier:
+              type: string
+              format: uuid
+            url:
+              type: string
+            name:
+              type: string
         hasPart:
           type: array
           description: Blocs de contenu ordonnés par position
@@ -2174,6 +2191,12 @@ components:
         description:
           type: string
           nullable: true
+        isPartOf:
+          type: string
+          nullable: true
+          description: >
+            UUID ou slug de la page parente (optionnel). Un seul niveau de hiérarchie.
+            Violation des règles du modèle → 400.
         additionalProperty:
           type: array
           description: >
@@ -2195,6 +2218,12 @@ components:
         description:
           type: string
           nullable: true
+        isPartOf:
+          type: string
+          nullable: true
+          description: >
+            UUID ou slug de la page parente pour définir un parent.
+            Chaîne vide ou null pour retirer le parent (page redevient top-level).
         additionalProperty:
           type: array
           description: >

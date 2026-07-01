@@ -1,5 +1,47 @@
 # Changelog / Journal des modifications
 
+## API v2 — Construire des sites web via l'API (app `pages`) / API v2: build websites via the API (pages app)
+
+**Date :** 2026-07-01
+**Migration :** Oui / Yes — `BaseBillet.0223` (permission `page` sur `ExternalApiKey`) + `pages.0014` (validators de taille sur les champs image)
+
+**Quoi / What :** API REST v2 pour l'app `pages` : créer/éditer/supprimer des pages et
+leurs blocs (14 types) via l'API, en JSON-LD schema.org (`WebPage` / `WebPageElement`).
+Permet de fabriquer un site de A à Z par API (et un futur MCP).
+- **Permission clé API** `page` (booléen sur `ExternalApiKey`) → ouvre les routes `pages` et `blocs`.
+- **Création imbriquée** (page + tous ses blocs en un POST) **atomique**, + édition bloc par bloc.
+- **Catalogue** `GET /api/v2/pages/block-types/` : les 14 types + champs autorisés (pour agents/MCP).
+- **Images** : par URL distante (téléchargée, **anti-SSRF**) ou upload **multipart** ; GALERIE via `ImageObject[]`.
+- **Vidéos** : via le bloc EMBED (`embed_url` YouTube/Vimeo/PeerTube) — pas d'upload de fichier vidéo par l'API.
+- **Mapping** : `additionalType` = type de bloc ; champs riches en `additionalProperty` (schema.org PropertyValue).
+
+**Sécurité / Security :**
+- **XSS** : schémas d'URL dangereux (`javascript:`/`data:`/`vbscript:`) neutralisés sur les champs lien (create ET patch), source unique partagée admin + API.
+- **SSRF** : le téléchargement d'image refuse les hôtes internes/privés/loopback (IP résolue), http/https uniquement, sans redirection.
+- **DoS** : téléchargement borné (lecture par blocs, coupée à 10 Mo) ; **aucun I/O réseau dans une transaction DB** (pré-téléchargement hors transaction).
+- **Limites d'upload** : images ≤ 10 Mo (API + validator modèle admin) ; `DATA_UPLOAD_MAX_MEMORY_SIZE` = 12 Mo, `FILE_UPLOAD_MAX_MEMORY_SIZE` = 5 Mo ; nginx `client_max_body_size` 4M → 12M (dev + prod).
+- Sanitisation nh3 du texte riche ; slugs réservés rejetés ; isolation multi-tenant.
+
+**Vérifié / Verified :** 25 tests pytest (`tests/pytest/test_pages_api.py`) + non-régression `test_pages.py`. `manage.py check` : 0 issue.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | permission `page` sur `ExternalApiKey` (basenames `page` + `bloc`) |
+| `BaseBillet/migrations/0223_externalapikey_page.py` | champ booléen `page` |
+| `Administration/admin_tenant.py` | `page` dans l'admin des clés API |
+| `Administration/utils.py` | `url_a_schema_dangereux` (neutralisation XSS, source unique admin + API) |
+| `pages/blocs_catalogue.py` | catalogue des champs par type de bloc (source unique) |
+| `pages/models.py` | `valider_taille_image` + validators sur les 5 champs image |
+| `api_v2/serializers.py` | serializers Page/Bloc (WebPage/WebPageElement) + download anti-SSRF borné (hors transaction) |
+| `api_v2/views.py` | `PageViewSet` + `BlocViewSet` + catalogue `block-types` |
+| `api_v2/urls.py` | routes `pages` / `blocs` |
+| `api_v2/openapi-schema.yaml`, `api_v2/GUIDELINES.md` | doc API |
+| `TiBillet/settings.py` | `DATA_UPLOAD_MAX_MEMORY_SIZE` + `FILE_UPLOAD_MAX_MEMORY_SIZE` |
+| `nginx/lespass_dev.conf`, `nginx_prod/lespass_prod.conf` | `client_max_body_size` 4M → 12M |
+| `tests/pytest/test_pages_api.py` | 25 tests (permission, XSS, SSRF, DoS, atomicité, multipart, catalogue, cross-tenant) |
+| `A TESTER et DOCUMENTER/api-v2-pages.md` | scénarios de test manuels |
+
 ## App `pages` — Sous-pages (parent/enfant) + menus déroulants + fil d'Ariane / Pages: parent/child sub-pages + dropdown menus + breadcrumb
 
 **Date :** 2026-06-30

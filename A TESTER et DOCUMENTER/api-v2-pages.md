@@ -46,9 +46,11 @@ Django. Ce droit unique couvre toutes les routes pages ET blocs. Sans ce droit :
 docker exec lespass_django poetry run pytest tests/pytest/test_pages_api.py -q
 ```
 
-24 tests : CRUD page, catalogue block-types, ajout/édition/suppression bloc,
+29 tests : CRUD page, catalogue block-types, ajout/édition/suppression bloc,
 images par URL, upload multipart (images uniquement), anti-SSRF, neutralisation XSS,
-isolation tenant, slug réservé, atomicité, vérification que l'upload vidéo est ignoré.
+isolation tenant, slug réservé, atomicité, vérification que l'upload vidéo est ignoré,
+sous-pages via `isPartOf` (création avec parent par slug, parent introuvable → 400,
+hiérarchie deux niveaux refusée → 400, PATCH retire le parent).
 
 **Vidéo** : l'upload de fichier vidéo n'est **pas exposé** par l'API. Pour intégrer
 une vidéo, utiliser le bloc **EMBED** avec `embed_url` (YouTube, Vimeo, PeerTube —
@@ -340,6 +342,59 @@ curl -sk https://lespass.tibillet.localhost/test-api-pages/ | grep -i "bienvenue
 Attendu : la page HTML contient le contenu du bloc HERO (titre "Bienvenue…").
 Vérification visuelle : ouvrir `https://lespass.tibillet.localhost/test-api-pages/`
 dans Chrome → la page s'affiche avec les blocs empilés dans l'ordre.
+
+---
+
+### Scénario 16 — Créer une sous-page via isPartOf
+
+```bash
+# Créer la page parente
+curl -sk -X POST $BASE/api/v2/pages/ \
+  -H "Authorization: Api-Key $CLE" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Page parente",
+    "additionalProperty": [
+      {"@type": "PropertyValue", "name": "slug", "value": "page-parente"},
+      {"@type": "PropertyValue", "name": "publie", "value": true}
+    ],
+    "hasPart": []
+  }' | python3 -m json.tool
+
+# Créer la sous-page en référençant le parent par son slug
+curl -sk -X POST $BASE/api/v2/pages/ \
+  -H "Authorization: Api-Key $CLE" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Sous-page",
+    "isPartOf": "page-parente",
+    "additionalProperty": [
+      {"@type": "PropertyValue", "name": "slug", "value": "sous-page"},
+      {"@type": "PropertyValue", "name": "publie", "value": true}
+    ],
+    "hasPart": []
+  }' | python3 -m json.tool
+```
+
+Attendu : 201 avec `isPartOf: { "@type": "WebPage", "name": "Page parente", ... }`.
+
+Tester aussi `isPartOf` = UUID (au lieu du slug) → même résultat.
+
+Tenter un parent inexistant (`isPartOf: "slug-qui-nexiste-pas"`) → 400.
+
+Tenter deux niveaux (sous-page d'une sous-page) → 400 (un seul niveau autorisé).
+
+Pour retirer le parent (PATCH) :
+
+```bash
+export SOUS_PAGE_UUID="<uuid-sous-page>"
+curl -sk -X PATCH $BASE/api/v2/pages/$SOUS_PAGE_UUID/ \
+  -H "Authorization: Api-Key $CLE" \
+  -H "Content-Type: application/json" \
+  -d '{"isPartOf": ""}' | python3 -m json.tool
+```
+
+Attendu : 200 et `isPartOf` absent de la réponse (page redevenue top-level).
 
 ---
 

@@ -2,6 +2,7 @@ import datetime
 import re
 import uuid as uuid_module
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import connection, transaction
 from django.db.models import Q
 from django.http import Http404
@@ -946,7 +947,25 @@ class PageViewSet(viewsets.ViewSet):
             if nom_champ == "slug":
                 valider_slug_non_reserve(valeur)
             setattr(page, nom_champ, valeur)
-        page.full_clean(exclude=["uuid"])
+
+        # Page parente (isPartOf) : uuid/slug pour definir, vide/null pour retirer.
+        # / Parent page (isPartOf): uuid/slug to set, empty/null to remove.
+        if "isPartOf" in request.data:
+            identifiant_parent = request.data["isPartOf"]
+            if identifiant_parent:
+                from api_v2.serializers import _resoudre_page
+                parent = _resoudre_page(identifiant_parent)
+                if not parent:
+                    return Response({"isPartOf": [_("Page parente introuvable.")]},
+                                    status=status.HTTP_400_BAD_REQUEST)
+                page.parent = parent
+            else:
+                page.parent = None
+
+        try:
+            page.full_clean(exclude=["uuid"])
+        except DjangoValidationError as e:
+            return Response(e.message_dict, status=status.HTTP_400_BAD_REQUEST)
         page.save()
         return Response(PageSchemaSerializer(page).data)
 
