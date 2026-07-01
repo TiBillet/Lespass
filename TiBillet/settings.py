@@ -412,6 +412,18 @@ STATICFILES_DIRS = [
 MEDIA_ROOT = os.path.join(BASE_DIR, "www", "media")
 MEDIA_URL = '/media/'
 
+# --- Limites d'upload / Upload limits ---
+# Borne la taille des donnees POST NON-fichier gardees en memoire (formulaires,
+# JSON de l'API). Ne compte PAS les fichiers uploades (exclus par Django). Aligne
+# sur la limite nginx (client_max_body_size). / Caps in-memory NON-file POST data
+# (forms, API JSON). Does NOT count uploaded files. Aligned with the nginx limit.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 12 * 1024 * 1024  # 12 Mo
+
+# Seuil au-dela duquel un fichier uploade est ecrit sur disque (temp) au lieu de
+# rester en RAM. Protege la memoire lors des uploads. / Threshold above which an
+# uploaded file is streamed to a temp file on disk instead of RAM.
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024  # 5 Mo
+
 # EMAIL
 EMAIL_HOST = os.environ.get('EMAIL_HOST')
 EMAIL_PORT = os.environ.get('EMAIL_PORT')
