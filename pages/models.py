@@ -220,6 +220,27 @@ class Page(models.Model):
         help_text=_("Si coche : la page n'est pas indexee et reste hors du sitemap."),
     )
 
+    # Page parente (auto-relation) : si renseignee, cette page devient un sous-menu
+    # deroulant sous la page parente dans la navbar. UN SEUL NIVEAU de profondeur
+    # (verifie dans clean()). L'URL reste plate (/<slug>/) ; la hierarchie sert a la
+    # navigation et au fil d'Ariane (BreadcrumbList). Si le parent est supprime, les
+    # enfants redeviennent top-level (SET_NULL).
+    # / Parent page (self-relation): if set, this page becomes a dropdown sub-item
+    # under the parent in the navbar. ONE level only (checked in clean()). The URL
+    # stays flat (/<slug>/); the hierarchy drives navigation + breadcrumb. On parent
+    # deletion, children become top-level (SET_NULL).
+    parent = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="enfants",
+        limit_choices_to={"parent__isnull": True, "est_accueil": False},
+        verbose_name=_("Page parente (sous-menu)"),
+        help_text=_("Si renseignée, cette page apparaît dans un menu déroulant sous "
+                    "la page parente. Un seul niveau de profondeur."),
+    )
+
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Cree le"))
     updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Modifie le"))
 
@@ -231,6 +252,39 @@ class Page(models.Model):
     def __str__(self):
         statut = _("publiee") if self.publie else _("brouillon")
         return f"{self.titre} ({statut})"
+
+    def clean(self):
+        """
+        Valide la hiérarchie parent/enfant : un seul niveau, pas d'auto-parent,
+        l'accueil ne peut pas être une sous-page.
+        / Validates the parent/child hierarchy: one level only, no self-parent, the
+        home page cannot be a sub-page.
+        """
+        super().clean()
+        if self.parent_id:
+            if self.parent_id == self.pk:
+                raise ValidationError(
+                    {"parent": _("Une page ne peut pas être sa propre page parente.")}
+                )
+            if self.est_accueil:
+                raise ValidationError(
+                    {"parent": _("La page d'accueil ne peut pas être une sous-page.")}
+                )
+            # Un seul niveau : le parent ne doit pas lui-même avoir un parent.
+            # / One level only: the parent must not itself have a parent.
+            if self.parent.parent_id is not None:
+                raise ValidationError(
+                    {"parent": _("Un seul niveau de sous-menu est permis : la page "
+                                 "parente ne peut pas elle-même être une sous-page.")}
+                )
+            # Un seul niveau : une page qui a déjà des sous-pages ne peut pas devenir
+            # elle-même une sous-page. / One level: a page that already has children
+            # cannot itself become a child.
+            if self.pk and self.enfants.exists():
+                raise ValidationError(
+                    {"parent": _("Cette page a déjà des sous-pages : elle ne peut pas "
+                                 "devenir elle-même une sous-page.")}
+                )
 
     def save(self, *args, **kwargs):
         """

@@ -41,6 +41,7 @@ from unfold.contrib.forms.widgets import WysiwygWidget
 from unfold.decorators import display
 
 from Administration.admin.site import sanitize_textfields, staff_admin_site
+from Administration.utils import url_a_schema_dangereux
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from pages.models import Bloc, ConfigurationSite, ImageGalerie, Page
 
@@ -106,6 +107,7 @@ class PageAdmin(ModelAdmin):
     list_display = [
         "titre",
         "slug",
+        "parent",
         "display_publie",
         "display_accueil",
         "position",
@@ -113,8 +115,9 @@ class PageAdmin(ModelAdmin):
         "display_voir",
         "updated_at",
     ]
-    list_filter = ["publie", "est_accueil"]
+    list_filter = ["publie", "est_accueil", "parent"]
     search_fields = ["titre", "slug"]
+    list_select_related = ["parent"]
     ordering = ["position", "titre"]
 
     def get_queryset(self, request):
@@ -131,6 +134,7 @@ class PageAdmin(ModelAdmin):
                     "slug",
                     "position",
                     ("publie", "est_accueil"),
+                    "parent",
                 ),
             },
         ),
@@ -187,22 +191,6 @@ class PageAdmin(ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
-
-
-def _url_a_schema_dangereux(valeur):
-    """
-    Vrai si l'URL utilise un schéma dangereux (javascript:, data:, vbscript:).
-    On retire d'abord espaces et caractères de contrôle pour déjouer les
-    obfuscations type "java\\tscript:" ou "javascript\\x00:". On ne teste que le début.
-    / True if the URL uses a dangerous scheme. We first strip whitespace and control
-    chars to defeat obfuscations, then test the start only.
-    """
-    if not valeur or not isinstance(valeur, str):
-        return False
-    compact = "".join(
-        c for c in valeur if not c.isspace() and ord(c) >= 0x20
-    ).lower()
-    return compact.startswith(("javascript:", "data:", "vbscript:"))
 
 
 class ImageGalerieInline(TabularInline):
@@ -332,7 +320,7 @@ class BlocAdmin(ModelAdmin):
         # in link fields, which could trigger an XSS on click.
         for champ_url in ("bouton_url", "bouton2_url", "embed_url"):
             valeur = getattr(obj, champ_url, "")
-            if _url_a_schema_dangereux(valeur):
+            if url_a_schema_dangereux(valeur):
                 setattr(obj, champ_url, "")
 
         # A la creation, si aucune position n'est saisie, on place le bloc en fin

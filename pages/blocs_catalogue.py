@@ -20,7 +20,11 @@ CHAMPS_PAR_TYPE = {
     "CTA": ["titre", "sous_titre", "texte",
             "bouton_label", "bouton_url", "bouton2_label", "bouton2_url"],
     "TEMOIGNAGE": ["texte", "auteur_nom", "auteur_role", "auteur_photo"],
-    "VIDEO_TEXTE": ["titre", "texte", "video"],
+    # VIDEO_TEXTE : via l'API, seuls titre + texte sont settables. Le fichier video n'est
+    # PAS expose par l'API (pour une video, utiliser le bloc EMBED). Le champ modele `video`
+    # reste editable dans l'admin. / Via the API only titre + texte are settable; the video
+    # file is NOT exposed by the API (use EMBED for videos). The model field stays admin-editable.
+    "VIDEO_TEXTE": ["titre", "texte"],
     "CARTE": ["surtitre", "titre", "badge", "texte", "image",
               "bouton_label", "bouton_url"],
     "IMAGE": ["titre", "image"],
@@ -42,3 +46,13 @@ TYPES_BLOC = list(CHAMPS_PAR_TYPE.keys())
 CHAMPS_BLOC_AUTORISES = frozenset(
     champ for champs in CHAMPS_PAR_TYPE.values() for champ in champs
 )
+
+# Champs FICHIER : ne se settent JAMAIS via additionalProperty (string arbitraire =
+# corruption). Ils passent par URL (telechargement) ou upload multipart.
+# / FILE fields: never set via additionalProperty. They go through URL download or
+# multipart upload.
+CHAMPS_FICHIER = frozenset({"image", "image_secondaire", "video", "auteur_photo"})
+
+# Champs IMAGE telechargeables par URL distante (pas la video : multipart only).
+# / IMAGE fields downloadable from a remote URL (not video: multipart only).
+CHAMPS_IMAGE_URL = frozenset({"image", "image_secondaire", "auteur_photo"})

@@ -7,7 +7,7 @@ from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, serializers
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
@@ -46,10 +46,12 @@ from .serializers import (
     CHAMPS_PAGE_AUTORISES,
     CHAMPS_BLOC_AUTORISES,
     CHAMPS_TEXTE_RICHE,
+    CHAMPS_FICHIER,
+    CHAMPS_URL_A_NEUTRALISER,
     _validate_uploaded_image,
 )
 from pages.models import Page, Bloc, valider_slug_non_reserve
-from Administration.utils import clean_html
+from Administration.utils import clean_html, url_a_schema_dangereux
 
 
 def get_objet_par_uuid_ou_404(model, uuid_recu, **filtres_supplementaires):
@@ -142,6 +144,30 @@ def _ressemble_uuid(valeur) -> bool:
         return True
     except (ValueError, TypeError):
         return False
+
+
+def _appliquer_fichiers_multipart(request, bloc):
+    """Applique les fichiers uploades IMAGE (multipart) sur les champs fichier du bloc.
+    / Applies uploaded IMAGE (multipart) files onto the block's file fields.
+
+    Images validees par Pillow. L'upload de fichier VIDEO est volontairement retire :
+    pour une video, utiliser le bloc EMBED (embed_url YouTube/Vimeo/PeerTube, rendu en iframe).
+    / Images validated by Pillow. Video file upload is intentionally removed:
+    use the EMBED block (embed_url) for videos.
+    """
+    if not hasattr(request, "FILES"):
+        return
+    from api_v2.serializers import _validate_uploaded_image
+    # Upload de fichiers IMAGE uniquement (image principale, secondaire, photo d'auteur).
+    # L'upload de fichiers VIDEO est volontairement retire : pour une video, utiliser le
+    # bloc EMBED (embed_url YouTube/Vimeo/PeerTube, rendu en iframe). Cela evite d'heberger
+    # des fichiers video lourds. / IMAGE files only. Video file upload is intentionally
+    # removed: use the EMBED block (embed_url) for videos. Avoids hosting heavy video files.
+    for nom_fichier in ("image", "image_secondaire", "auteur_photo"):
+        fichier = request.FILES.get(nom_fichier)
+        if fichier:
+            _validate_uploaded_image(fichier)
+            setattr(bloc, nom_fichier, fichier)
 
 
 class CrowdInitiativeViewSet(viewsets.ViewSet):
@@ -929,14 +955,44 @@ class PageViewSet(viewsets.ViewSet):
         page.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    @action(detail=False, methods=["get"], url_path="block-types")
+    def block_types(self, request):
+        """Catalogue des types de blocs + champs autorises (pour les agents/MCP).
+        / Catalogue of block types + allowed fields (for agents/MCP)."""
+        from pages.blocs_catalogue import CHAMPS_PAR_TYPE
+        libelles = dict(Bloc.TYPE_BLOC_CHOICES)
+        types = [
+            {"type": code, "label": str(libelles.get(code, code)), "fields": champs}
+            for code, champs in CHAMPS_PAR_TYPE.items()
+        ]
+        return Response({"blockTypes": types})
+
     @action(detail=True, methods=["post"], url_path="blocs")
     def ajouter_bloc(self, request, uuid=None):
         page = get_object_or_404(Page, uuid=uuid)
-        donnees = dict(request.data)
+        # JSON -> dict normal ; multipart -> QueryDict (on aplatit en scalaires).
+        # / JSON -> plain dict; multipart -> QueryDict (flatten to scalars).
+        # Note : en DRF, request.data = _full_data qui inclut les fichiers uploadés.
+        # On utilise .dict() pour aplatir les scalaires, puis on retire les champs fichier
+        # qui sont des objets File (pas des chaînes). Ces fichiers seront appliqués
+        # après le save du sérialiseur via _appliquer_fichiers_multipart.
+        # / In DRF, request.data = _full_data which includes uploaded files.
+        # We use .dict() to flatten scalars, then remove file fields (File objects, not strings).
+        # These files are applied after the serializer save via _appliquer_fichiers_multipart.
+        if hasattr(request.data, "dict"):
+            donnees = request.data.dict()
+            # Retire les champs fichier : ce sont des objets File, pas des scalaires.
+            # / Remove file fields: they are File objects, not scalars.
+            for champ_fichier in CHAMPS_FICHIER:
+                donnees.pop(champ_fichier, None)
+        else:
+            donnees = dict(request.data)
         donnees.setdefault("position", page.blocs.count())
         ser = BlocCreateSerializer(data=donnees, context={"page": page})
         ser.is_valid(raise_exception=True)
         bloc = ser.save()
+        _appliquer_fichiers_multipart(request, bloc)
+        bloc.save()
         return Response(BlocSchemaSerializer(bloc).data, status=status.HTTP_201_CREATED)
 
 
@@ -958,13 +1014,33 @@ class BlocViewSet(viewsets.ViewSet):
             bloc.sous_titre = request.data["alternativeHeadline"] or ""
         if "text" in request.data:
             bloc.texte = clean_html(request.data["text"] or "")
-        for prop in (request.data.get("additionalProperty") or []):
-            nom = prop.get("name")
-            if nom in CHAMPS_BLOC_AUTORISES:
+        # En multipart, additionalProperty est absent ou une string brute (pas une liste).
+        # On protege la boucle pour n'iterer que sur de vraies listes.
+        # / In multipart, additionalProperty is absent or a raw string (not a list).
+        # Guard the loop so we only iterate over actual lists.
+        proprietes = request.data.get("additionalProperty")
+        if isinstance(proprietes, list):
+            for prop in proprietes:
+                nom = prop.get("name")
+                if nom not in CHAMPS_BLOC_AUTORISES:
+                    continue  # securite : jamais setattr hors whitelist
+                if nom in CHAMPS_FICHIER:
+                    continue  # securite : les fichiers ne se settent jamais via string
                 valeur = prop.get("value")
                 if nom in CHAMPS_TEXTE_RICHE:
                     valeur = clean_html(valeur or "")
+                if nom in ("points_gps", "contenu") and not isinstance(valeur, list):
+                    raise serializers.ValidationError(
+                        {nom: _("Ce champ doit etre une liste.")})
                 setattr(bloc, nom, valeur)
+        # Securite : vide les champs lien a schema dangereux (javascript:, data:, vbscript:).
+        # / Security: empty link fields with a dangerous scheme.
+        for champ_url in CHAMPS_URL_A_NEUTRALISER:
+            if url_a_schema_dangereux(getattr(bloc, champ_url, "")):
+                setattr(bloc, champ_url, "")
+        # Fichiers multipart (image, video, etc.) appliques avant le save unique.
+        # / Multipart files (image, video, etc.) applied before the single save.
+        _appliquer_fichiers_multipart(request, bloc)
         bloc.save()
         return Response(BlocSchemaSerializer(bloc).data)
 

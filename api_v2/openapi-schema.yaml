@@ -960,6 +960,402 @@ paths:
           description: Asset category is not refillable (fiat/subscription), or amount above the cap
         '503':
           description: Fedow service unavailable
+  /api/v2/pages/:
+    get:
+      operationId: listPages
+      summary: List all Pages of the current tenant
+      tags: [Page]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WebPage'
+    post:
+      operationId: createPage
+      summary: Create a Page with nested blocs (schema.org/WebPage, atomic)
+      description: |
+        FR: Crée une page et ses blocs en une seule requête atomique. Si la création
+        d'un bloc échoue (URL image invalide, slug réservé, etc.), l'ensemble est
+        annulé. Requiert une clé API avec permission `page`.
+
+        EN: Atomically creates a page and its blocs. Any bloc error (invalid image
+        URL, reserved slug, etc.) rolls back the entire creation.
+        Requires an API key with `page` permission.
+      tags: [Page]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebPageCreate'
+            examples:
+              pageWithBlocs:
+                summary: "Page d'accueil avec un bloc HERO et un bloc PARAGRAPHE"
+                value:
+                  "@context": "https://schema.org"
+                  "@type": "WebPage"
+                  name: "Accueil"
+                  additionalProperty:
+                    - "@type": "PropertyValue"
+                      name: "slug"
+                      value: "accueil"
+                    - "@type": "PropertyValue"
+                      name: "publie"
+                      value: true
+                  hasPart:
+                    - additionalType: "HERO"
+                      headline: "Bienvenue"
+                      image: "https://exemple.fr/hero.jpg"
+                      additionalProperty:
+                        - "@type": "PropertyValue"
+                          name: "bouton_label"
+                          value: "Voir l'agenda"
+                        - "@type": "PropertyValue"
+                          name: "bouton_url"
+                          value: "/event/"
+                    - additionalType: "PARAGRAPHE"
+                      headline: "À propos"
+                      text: "<p>Un lieu culturel <strong>coopératif</strong>.</p>"
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebPage'
+        '400':
+          description: "Bad Request — slug réservé, URL image invalide, champ requis manquant"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: "Forbidden — clé API sans permission `page`"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v2/pages/block-types/:
+    get:
+      operationId: listBlockTypes
+      summary: "Catalogue des 14 types de blocs et leurs champs autorisés"
+      description: |
+        FR: Catalogue de référence des 14 types de blocs disponibles et de leurs
+        champs autorisés. Source unique : `pages/blocs_catalogue.py`.
+
+        EN: Reference catalogue of the 14 available bloc types and their allowed
+        fields. Single source of truth: `pages/blocs_catalogue.py`.
+      tags: [Page]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  blockTypes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BlockType'
+              examples:
+                catalogue:
+                  summary: "Extrait du catalogue (2 premiers types)"
+                  value:
+                    blockTypes:
+                      - type: "HERO"
+                        label: "Héro"
+                        fields:
+                          - "titre"
+                          - "sous_titre"
+                          - "image"
+                          - "bouton_label"
+                          - "bouton_url"
+                          - "bouton2_label"
+                          - "bouton2_url"
+                      - type: "PARAGRAPHE"
+                        label: "Paragraphe"
+                        fields:
+                          - "titre"
+                          - "texte"
+  /api/v2/pages/{uuid}/:
+    get:
+      operationId: retrievePage
+      summary: "Récupère une Page par UUID ou slug"
+      description: |
+        FR: Accepte un UUID ou un slug en paramètre de chemin. Retourne 404 si aucune
+        page ne correspond.
+
+        EN: Accepts either a UUID or a slug as the path lookup.
+        Returns 404 when nothing matches.
+      tags: [Page]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          description: "UUID ou slug de la page / Page UUID or slug."
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebPage'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      operationId: patchPage
+      summary: "Modifie les méta d'une Page (titre, slug, publie, SEO…)"
+      description: |
+        FR: Édite uniquement les méta de la page (titre, slug, description, noindex,
+        meta_title, publie, est_accueil, position). Les blocs sont gérés par les
+        routes /api/v2/pages/{uuid}/blocs/ et /api/v2/blocs/{uuid}/.
+
+        EN: Updates page metadata only (title, slug, description, noindex,
+        meta_title, publie, est_accueil, position). Blocs are managed via their
+        own routes.
+      tags: [Page]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebPagePatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebPage'
+        '400':
+          description: "Bad Request — slug réservé ou valeur invalide"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      operationId: deletePage
+      summary: "Supprime une Page (et ses blocs en cascade)"
+      tags: [Page]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+  /api/v2/pages/{uuid}/blocs/:
+    post:
+      operationId: createBloc
+      summary: "Ajoute un bloc à une Page (JSON ou multipart)"
+      description: |
+        FR: Ajoute un bloc à la page identifiée par uuid. Accepte du JSON (image par
+        URL, téléchargée par le serveur, ≤ 10 Mo) ou du multipart/form-data (upload
+        de fichier image). Protection anti-SSRF : les URL vers des hôtes internes/privés/
+        loopback sont rejetées (400). Les schémas non http/https sont refusés.
+        Pour une vidéo, utiliser le bloc EMBED (embed_url = YouTube/Vimeo/PeerTube).
+        L'upload de fichier vidéo n'est pas exposé par l'API.
+
+        EN: Adds a bloc to the page. Accepts JSON (image by URL, server-downloaded,
+        ≤ 10 MB) or multipart/form-data (image file upload).
+        Anti-SSRF: URLs pointing to internal/private/loopback hosts are rejected (400).
+        For video, use the EMBED block (embed_url = YouTube/Vimeo/PeerTube).
+        Video file upload is not exposed by the API.
+      tags: [Page]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebPageElementCreate'
+            examples:
+              heroBloc:
+                summary: "Bloc HERO avec image par URL"
+                value:
+                  additionalType: "HERO"
+                  headline: "Bienvenue"
+                  image: "https://exemple.fr/hero.jpg"
+                  additionalProperty:
+                    - "@type": "PropertyValue"
+                      name: "bouton_label"
+                      value: "Réserver"
+                    - "@type": "PropertyValue"
+                      name: "bouton_url"
+                      value: "/event/"
+              galerieBloc:
+                summary: "Bloc GALERIE avec liste ImageObject[]"
+                value:
+                  additionalType: "GALERIE"
+                  headline: "Notre galerie"
+                  image:
+                    - "@type": "ImageObject"
+                      contentUrl: "https://exemple.fr/img1.jpg"
+                      caption: "Salle principale"
+                    - "@type": "ImageObject"
+                      contentUrl: "https://exemple.fr/img2.jpg"
+                      caption: "Terrasse"
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                additionalType:
+                  type: string
+                  example: HERO
+                headline:
+                  type: string
+                alternativeHeadline:
+                  type: string
+                text:
+                  type: string
+                  description: "Contenu HTML (nettoyé par nh3 côté serveur)"
+                image:
+                  type: string
+                  format: binary
+                  description: "Fichier image (JPEG/PNG/WebP, ≤ 10 Mo)"
+                image_secondaire:
+                  type: string
+                  format: binary
+                auteur_photo:
+                  type: string
+                  format: binary
+                position:
+                  type: integer
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebPageElement'
+        '400':
+          description: "Bad Request — tentative SSRF, image invalide, type de bloc inconnu"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v2/blocs/{uuid}/:
+    patch:
+      operationId: patchBloc
+      summary: "Modifie un bloc (JSON ou multipart)"
+      description: |
+        FR: Édite un bloc par son uuid. Mêmes formats que POST (JSON ou multipart).
+        Protection anti-SSRF identique. Les schémas dangereux dans les champs lien
+        (bouton_url, bouton2_url, embed_url) sont neutralisés automatiquement
+        (champ vidé, pas d'erreur retournée).
+
+        EN: Updates a bloc by its uuid. Same formats as POST (JSON or multipart).
+        Same anti-SSRF protection. Dangerous URL schemes in link fields
+        (bouton_url, bouton2_url, embed_url) are silently neutralized (field cleared).
+      tags: [Page]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebPageElementCreate'
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                headline:
+                  type: string
+                alternativeHeadline:
+                  type: string
+                text:
+                  type: string
+                  description: "HTML nettoyé par nh3"
+                image:
+                  type: string
+                  format: binary
+                image_secondaire:
+                  type: string
+                  format: binary
+                auteur_photo:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebPageElement'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      operationId: deleteBloc
+      summary: Supprime un bloc
+      tags: [Page]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
 components:
   securitySchemes:
     ApiKeyAuth:
@@ -1726,3 +2122,204 @@ components:
             email:
               type: string
               format: email
+    WebPage:
+      type: object
+      description: "schema.org/WebPage — page publique composée de blocs"
+      properties:
+        '@context':
+          type: string
+          example: https://schema.org
+        '@type':
+          type: string
+          example: WebPage
+        identifier:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Titre de la page
+        url:
+          type: string
+          format: uri
+          description: "URL publique de la page (/<slug>/)"
+        description:
+          type: string
+          nullable: true
+          description: meta_description (SEO)
+        hasPart:
+          type: array
+          description: Blocs de contenu ordonnés par position
+          items:
+            $ref: '#/components/schemas/WebPageElement'
+        additionalProperty:
+          type: array
+          description: >
+            Méta-champs complémentaires portés en PropertyValue[].
+            Clés : slug (string), position (int), publie (bool),
+            est_accueil (bool), noindex (bool), meta_title (string).
+          items:
+            $ref: '#/components/schemas/PropertyValue'
+    WebPageCreate:
+      type: object
+      description: Payload de création de page (avec blocs imbriqués optionnels)
+      properties:
+        '@context':
+          type: string
+          example: https://schema.org
+        '@type':
+          type: string
+          example: WebPage
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        additionalProperty:
+          type: array
+          description: >
+            Méta-champs : slug (string), publie (bool), est_accueil (bool),
+            noindex (bool), meta_title (string), position (int).
+          items:
+            $ref: '#/components/schemas/PropertyValue'
+        hasPart:
+          type: array
+          description: "Blocs à créer atomiquement avec la page (optionnel)"
+          items:
+            $ref: '#/components/schemas/WebPageElementCreate'
+    WebPagePatch:
+      type: object
+      description: "Champs modifiables sur une page existante (méta uniquement, pas les blocs)"
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        additionalProperty:
+          type: array
+          description: >
+            Méta-champs à modifier : slug, publie, est_accueil, noindex,
+            meta_title, position.
+          items:
+            $ref: '#/components/schemas/PropertyValue'
+    WebPageElement:
+      type: object
+      description: "schema.org/WebPageElement — un bloc de contenu"
+      properties:
+        '@type':
+          type: string
+          example: WebPageElement
+        identifier:
+          type: string
+          format: uuid
+        additionalType:
+          type: string
+          description: >
+            Type de bloc (champ pivot du mapping). Valeurs possibles :
+            HERO, PARAGRAPHE, IMAGE_TEXTE, CTA, TEMOIGNAGE, VIDEO_TEXTE,
+            CARTE, IMAGE, CARTE_LEAFLET, INFOS, FAQ, EVENEMENTS, GALERIE, EMBED.
+          example: HERO
+        headline:
+          type: string
+          description: Titre du bloc
+        alternativeHeadline:
+          type: string
+          description: Sous-titre du bloc
+        text:
+          type: string
+          description: "Contenu HTML nettoyé par nh3 (whitelist de balises autorisées)"
+        image:
+          description: >
+            URL de l'image principale (string), ou liste ImageObject[]
+            pour les blocs GALERIE.
+          oneOf:
+            - type: string
+              format: uri
+            - type: array
+              items:
+                $ref: '#/components/schemas/ImageObject'
+        position:
+          type: integer
+          description: Ordre du bloc dans la page (croissant)
+        additionalProperty:
+          type: array
+          description: >
+            Tous les champs supplémentaires du bloc sous forme PropertyValue[].
+            Clés possibles : surtitre, badge, image_secondaire (URL),
+            image_position, bouton_label, bouton_url,
+            bouton2_label, bouton2_url, auteur_nom, auteur_role,
+            auteur_photo (URL), points_gps (JSON), contenu (JSON),
+            nombre_max (int), repliable (bool), embed_url.
+            Le champ video n'est pas settable via l'API (admin uniquement) ;
+            pour une vidéo, utiliser le bloc EMBED (embed_url).
+            Format value : string | nombre | booléen | liste | objet JSON.
+          items:
+            $ref: '#/components/schemas/PropertyValue'
+    WebPageElementCreate:
+      type: object
+      description: Payload pour créer ou modifier un bloc
+      properties:
+        additionalType:
+          type: string
+          description: "Type de bloc (requis à la création)"
+          example: HERO
+        headline:
+          type: string
+        alternativeHeadline:
+          type: string
+        text:
+          type: string
+          description: "HTML (sera nettoyé par nh3 côté serveur)"
+        image:
+          description: >
+            URL http/https (téléchargée par le serveur, ≤ 10 Mo) ou liste
+            ImageObject[] pour GALERIE. URLs internes/privées/loopback refusées
+            (protection SSRF). Vidéos : multipart uniquement, pas par URL.
+          oneOf:
+            - type: string
+              format: uri
+            - type: array
+              items:
+                $ref: '#/components/schemas/ImageObject'
+        position:
+          type: integer
+        additionalProperty:
+          type: array
+          description: >
+            Champs complémentaires en PropertyValue[].
+            Champs lien (bouton_url, bouton2_url, embed_url) :
+            les schémas dangereux (javascript:, data:, vbscript:)
+            sont neutralisés automatiquement (champ vidé).
+          items:
+            $ref: '#/components/schemas/PropertyValue'
+    BlockType:
+      type: object
+      description: "Type de bloc disponible avec ses champs autorisés"
+      properties:
+        type:
+          type: string
+          description: Code du type de bloc
+          example: HERO
+        label:
+          type: string
+          description: Libellé lisible
+          example: "Héro"
+        fields:
+          type: array
+          description: Noms des champs autorisés pour ce type
+          items:
+            type: string
+    ImageObject:
+      type: object
+      description: "schema.org/ImageObject — image dans un bloc GALERIE"
+      properties:
+        '@type':
+          type: string
+          example: ImageObject
+        contentUrl:
+          type: string
+          format: uri
+          description: "URL publique de l'image (téléchargée par le serveur)"
+        caption:
+          type: string
+          description: "Légende de l'image"

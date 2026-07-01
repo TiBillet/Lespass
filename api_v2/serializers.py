@@ -2,16 +2,22 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 import random
 import string
+import socket
+import ipaddress
+import requests
+from urllib.parse import urlparse
 
 from rest_framework import serializers
 from django.db import transaction
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
+from django.core.files.base import ContentFile
 
 from BaseBillet.models import Event, PostalAddress, Tag, OptionGenerale, LigneArticle, Price, PriceSold, Product, ProductFormField, Reservation, Membership
 from crowds.models import Initiative, BudgetItem, Participation, Vote
 from fedow_connect.utils import dround
-from Administration.utils import clean_html
+from Administration.utils import clean_html, url_a_schema_dangereux
+from django.db.models.fields.files import FieldFile
 
 # Image validation utilities
 from PIL import Image, UnidentifiedImageError
@@ -61,6 +67,91 @@ def _validate_uploaded_image(file_obj):
                 file_obj.seek(pos)
         except Exception:
             pass
+
+
+def _hote_est_interne(hote: str) -> bool:
+    """Vrai si l'hote resout vers une IP interne/privee (anti-SSRF).
+    / True if the host resolves to an internal/private IP (anti-SSRF).
+
+    On refuse loopback, prive, link-local, reserve, multicast, non specifie.
+    Si l'hote ne resout pas, on refuse aussi (prudence).
+    """
+    if not hote:
+        return True
+    try:
+        infos = socket.getaddrinfo(hote, None)
+    except Exception:
+        return True
+    for famille, type_socket, proto, nom_canon, sockaddr in infos:
+        ip_txt = sockaddr[0]
+        try:
+            adr = ipaddress.ip_address(ip_txt)
+        except ValueError:
+            return True
+        if (adr.is_private or adr.is_loopback or adr.is_link_local
+                or adr.is_reserved or adr.is_multicast or adr.is_unspecified):
+            return True
+    return False
+
+
+def telecharger_et_valider_image(url: str):
+    """Telecharge une image distante, la valide (Pillow), renvoie un ContentFile.
+    / Downloads a remote image, validates it (Pillow), returns a ContentFile.
+
+    Securite : schema http/https uniquement, anti-SSRF (refuse les hotes internes),
+    pas de redirection, timeout, content-type image/*, taille max 10 Mo, verify Pillow.
+    Renvoie None si url vide. Leve ValidationError si invalide ou dangereuse.
+
+    NB (limite connue) : il subsiste un petit TOCTOU entre la resolution DNS du
+    controle anti-SSRF et la requete reelle ; allow_redirects=False reduit le risque.
+    """
+    if not url:
+        return None
+    parse = urlparse(url)
+    if parse.scheme not in ("http", "https"):
+        raise serializers.ValidationError(_("Schema d'URL non autorise (http/https seulement)."))
+    if not parse.hostname or _hote_est_interne(parse.hostname):
+        raise serializers.ValidationError(_("Hote d'image non autorise (cible interne refusee)."))
+    MAX_OCTETS = 10 * 1024 * 1024  # 10 Mo
+    try:
+        resp = requests.get(url, timeout=10, allow_redirects=False, stream=True)
+        resp.raise_for_status()
+    except serializers.ValidationError:
+        raise
+    except Exception:
+        raise serializers.ValidationError(_("Image distante inaccessible : %(u)s") % {"u": url})
+
+    ctype = resp.headers.get("Content-Type", "")
+    if ctype and not ctype.lower().startswith("image/"):
+        raise serializers.ValidationError(_("L'URL ne pointe pas vers une image."))
+
+    # Refus precoce si l'entete Content-Length annonce deja trop gros.
+    # / Early refusal if the Content-Length header already announces too big.
+    taille_annoncee = resp.headers.get("Content-Length")
+    if taille_annoncee:
+        try:
+            if int(taille_annoncee) > MAX_OCTETS:
+                raise serializers.ValidationError(_("Image trop grande (> 10 Mo)."))
+        except (TypeError, ValueError):
+            pass  # entete non numerique : on se rabat sur la lecture bornee ci-dessous
+
+    # Lecture bornee : on accumule par blocs et on stoppe des qu'on depasse 10 Mo,
+    # sans jamais charger un corps geant en memoire. / Bounded read: accumulate by
+    # chunks and stop as soon as we exceed 10 MB, never loading a huge body in memory.
+    contenu = b""
+    for bloc_octets in resp.iter_content(chunk_size=65536):
+        if not bloc_octets:
+            continue
+        contenu += bloc_octets
+        if len(contenu) > MAX_OCTETS:
+            resp.close()
+            raise serializers.ValidationError(_("Image trop grande (> 10 Mo)."))
+    fichier = ContentFile(contenu)
+    fichier.content_type = ctype or "image/*"
+    _validate_uploaded_image(fichier)
+    nom = url.split("?")[0].rsplit("/", 1)[-1] or "image"
+    fichier.name = nom
+    return fichier
 
 
 class PostalAddressAsSchemaSerializer(serializers.ModelSerializer):
@@ -1597,7 +1688,7 @@ class MembershipStatusSerializer(serializers.Serializer):
 # / pages app: Bloc <-> schema.org/WebPageElement
 # ---------------------------------------------------------------------------
 from pages.models import Bloc, Page, valider_slug_non_reserve
-from pages.blocs_catalogue import CHAMPS_BLOC_AUTORISES
+from pages.blocs_catalogue import CHAMPS_BLOC_AUTORISES, CHAMPS_FICHIER, CHAMPS_IMAGE_URL
 
 # Champs « standard » schema.org mappes a un champ modele (les autres passent
 # par additionalProperty). / schema.org standard fields mapped to a model field.
@@ -1609,6 +1700,10 @@ MAPPING_STANDARD_VERS_CHAMP = {
 # Champs modele dont la valeur est du texte riche a nettoyer (clean_html).
 # / Model fields whose value is rich text to sanitize.
 CHAMPS_TEXTE_RICHE = {"texte"}
+
+# Champs lien neutralises contre les schemas dangereux (anti-XSS au clic).
+# / Link fields neutralized against dangerous schemes (anti-XSS on click).
+CHAMPS_URL_A_NEUTRALISER = ("bouton_url", "bouton2_url", "embed_url")
 
 
 class BlocSchemaSerializer(serializers.Serializer):
@@ -1624,6 +1719,18 @@ class BlocSchemaSerializer(serializers.Serializer):
         except Exception:
             image_url = None
 
+        # GALERIE : on expose la liste d'images comme ImageObject[].
+        # / GALLERY: expose the image list as ImageObject[].
+        if instance.type_bloc == "GALERIE":
+            image_sortie = [
+                {"@type": "ImageObject", "contentUrl": ig.image.url,
+                 "caption": ig.legende or None}
+                for ig in instance.images_galerie.all().order_by("position")
+                if ig.image
+            ]
+        else:
+            image_sortie = image_url
+
         # additionalProperty : tous les champs du catalogue NON mappes en standard,
         # exposes sous {"@type":"PropertyValue","name":<champ>,"value":..}.
         # / additionalProperty: all catalogue fields not in the standard mapping.
@@ -1636,7 +1743,6 @@ class BlocSchemaSerializer(serializers.Serializer):
             # Les FileField/StdImage exposent .url ; on serialise en URL.
             # hasattr() ne convient pas : .url peut lever ValueError (pas AttributeError).
             # / FileField/StdImage expose .url; hasattr won't work — .url may raise ValueError.
-            from django.db.models.fields.files import FieldFile
             if isinstance(valeur, FieldFile):
                 try:
                     valeur = valeur.url if valeur else None
@@ -1654,7 +1760,7 @@ class BlocSchemaSerializer(serializers.Serializer):
             "headline": instance.titre or None,
             "alternativeHeadline": instance.sous_titre or None,
             "text": instance.texte or None,
-            "image": image_url,
+            "image": image_sortie or None,
             "position": instance.position,
             "additionalProperty": props or None,
         }
@@ -1671,7 +1777,9 @@ class BlocCreateSerializer(serializers.Serializer):
     headline = serializers.CharField(required=False, allow_blank=True)
     alternativeHeadline = serializers.CharField(required=False, allow_blank=True)
     text = serializers.CharField(required=False, allow_blank=True)
-    image = serializers.CharField(required=False, allow_blank=True, allow_null=True)  # URL (Session B)
+    # image accepte une URL (string) OU une liste d'ImageObject (GALERIE).
+    # / image accepts a URL (string) OR a list of ImageObject (GALLERY).
+    image = serializers.JSONField(required=False)
     position = serializers.IntegerField(required=False)
     additionalProperty = serializers.ListField(child=serializers.DictField(), required=False)
 
@@ -1683,31 +1791,81 @@ class BlocCreateSerializer(serializers.Serializer):
         return value
 
     def create(self, validated_data: Dict[str, Any]) -> "Bloc":
-        page = self.context["page"]
-        bloc = Bloc(page=page, type_bloc=validated_data["additionalType"])
-        if "position" in validated_data:
-            bloc.position = validated_data["position"]
+        with transaction.atomic():
+            page = self.context["page"]
+            bloc = Bloc(page=page, type_bloc=validated_data["additionalType"])
+            if "position" in validated_data:
+                bloc.position = validated_data["position"]
 
-        # Champs standard -> champs modele. / Standard fields -> model fields.
-        for cle_std, nom_champ in MAPPING_STANDARD_VERS_CHAMP.items():
-            if cle_std in validated_data:
-                valeur = validated_data[cle_std]
-                if nom_champ in CHAMPS_TEXTE_RICHE:
+            # Champs standard -> champs modele. / Standard fields -> model fields.
+            for cle_std, nom_champ in MAPPING_STANDARD_VERS_CHAMP.items():
+                if cle_std in validated_data:
+                    valeur = validated_data[cle_std]
+                    if nom_champ in CHAMPS_TEXTE_RICHE:
+                        valeur = clean_html(valeur or "")
+                    setattr(bloc, nom_champ, valeur or "")
+
+            # additionalProperty -> champs modele (whitelist stricte).
+            # / additionalProperty -> model fields (strict whitelist).
+            for prop in (validated_data.get("additionalProperty") or []):
+                nom = prop.get("name")
+                valeur = prop.get("value")
+                if nom not in CHAMPS_BLOC_AUTORISES:
+                    continue  # securite : jamais setattr hors whitelist
+                # Garde de structure : points_gps et contenu doivent etre des listes.
+                # / Structure guard: points_gps and contenu must be lists.
+                if nom in ("points_gps", "contenu") and not isinstance(valeur, list):
+                    raise serializers.ValidationError(
+                        {nom: _("Ce champ doit etre une liste.")})
+                if nom in CHAMPS_FICHIER:
+                    # Champ fichier : seules les IMAGES par URL sont telechargees.
+                    # Une URL invalide / dangereuse / interne leve ValidationError (400),
+                    # comme pour le champ standard `image` (coherence, pas d'echec silencieux).
+                    # / File field: only IMAGE fields are downloaded. An invalid/dangerous/
+                    # internal URL raises ValidationError (400), like the standard `image`
+                    # field (consistency, no silent failure).
+                    if nom in CHAMPS_IMAGE_URL and isinstance(valeur, str) and valeur:
+                        fichier = telecharger_et_valider_image(valeur)
+                        if fichier:
+                            setattr(bloc, nom, fichier)
+                    continue  # jamais de string brute sur un champ fichier
+                if nom in CHAMPS_TEXTE_RICHE:
                     valeur = clean_html(valeur or "")
-                setattr(bloc, nom_champ, valeur or "")
+                setattr(bloc, nom, valeur)
 
-        # additionalProperty -> champs modele (whitelist stricte).
-        # / additionalProperty -> model fields (strict whitelist).
-        for prop in (validated_data.get("additionalProperty") or []):
-            nom = prop.get("name")
-            valeur = prop.get("value")
-            if nom not in CHAMPS_BLOC_AUTORISES:
-                continue  # securite : jamais setattr hors whitelist
-            if nom in CHAMPS_TEXTE_RICHE:
-                valeur = clean_html(valeur or "")
-            setattr(bloc, nom, valeur)
+            # Securite : vide les champs lien a schema dangereux (javascript:, data:, vbscript:).
+            # / Security: empty link fields with a dangerous scheme.
+            for champ_url in CHAMPS_URL_A_NEUTRALISER:
+                if url_a_schema_dangereux(getattr(bloc, champ_url, "")):
+                    setattr(bloc, champ_url, "")
 
-        bloc.save()
+            bloc.save()
+
+            # image : URL string -> telechargement ; liste d'ImageObject (GALERIE) -> ImageGalerie.
+            # / image: URL string -> download; list of ImageObject (GALLERY) -> ImageGalerie.
+            # IMPORTANT : bloc.save() doit preceder la creation des ImageGalerie (FK exige un bloc persiste).
+            # / IMPORTANT: bloc.save() must precede ImageGalerie creation (FK requires a persisted block).
+            valeur_image = validated_data.get("image")
+            if isinstance(valeur_image, str) and valeur_image:
+                fichier = telecharger_et_valider_image(valeur_image)
+                if fichier:
+                    bloc.image = fichier
+                    bloc.save(update_fields=["image"])
+            elif isinstance(valeur_image, list) and bloc.type_bloc == "GALERIE":
+                from pages.models import ImageGalerie
+                for index, img in enumerate(valeur_image):
+                    url = img.get("contentUrl") if isinstance(img, dict) else img
+                    fichier = telecharger_et_valider_image(url)
+                    if fichier:
+                        ImageGalerie.objects.create(
+                            bloc=bloc, image=fichier,
+                            legende=(img.get("caption") if isinstance(img, dict) else "") or "",
+                            position=index)
+            elif isinstance(valeur_image, list):
+                # Une liste d'images n'est acceptee que pour le type GALERIE.
+                # / A list of images is only accepted for the GALLERY type.
+                raise serializers.ValidationError(
+                    {"image": _("Une liste d'images n'est acceptee que pour le bloc GALERIE.")})
         return bloc
 
 
@@ -1786,19 +1944,20 @@ class PageCreateSerializer(serializers.Serializer):
         return attrs
 
     def create(self, validated_data: Dict[str, Any]) -> "Page":
-        meta = self._meta_depuis_props(validated_data)
-        page = Page(titre=validated_data["name"])
-        if validated_data.get("description"):
-            page.meta_description = validated_data["description"]
-        for nom_champ, valeur in meta.items():
-            setattr(page, nom_champ, valeur)
-        page.full_clean(exclude=["uuid"])  # valide slug unique + reserves
-        page.save()
+        with transaction.atomic():
+            meta = self._meta_depuis_props(validated_data)
+            page = Page(titre=validated_data["name"])
+            if validated_data.get("description"):
+                page.meta_description = validated_data["description"]
+            for nom_champ, valeur in meta.items():
+                setattr(page, nom_champ, valeur)
+            page.full_clean(exclude=["uuid"])  # valide slug unique + reserves
+            page.save()
 
-        # Blocs imbriques (hasPart). / Nested blocks (hasPart).
-        for index, donnees_bloc in enumerate(validated_data.get("hasPart") or []):
-            donnees_bloc.setdefault("position", index)
-            bloc_ser = BlocCreateSerializer(data=donnees_bloc, context={"page": page})
-            bloc_ser.is_valid(raise_exception=True)
-            bloc_ser.save()
+            # Blocs imbriques (hasPart). / Nested blocks (hasPart).
+            for index, donnees_bloc in enumerate(validated_data.get("hasPart") or []):
+                donnees_bloc.setdefault("position", index)
+                bloc_ser = BlocCreateSerializer(data=donnees_bloc, context={"page": page})
+                bloc_ser.is_valid(raise_exception=True)
+                bloc_ser.save()
         return page

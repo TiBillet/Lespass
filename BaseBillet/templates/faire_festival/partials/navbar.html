@@ -52,7 +52,26 @@
                     {%comment%} On n'affiche pas les pages fédération et contrib dans ce skin {%endcomment%}
 {% for nav_item in main_nav %}
     {% if nav_item.name != "federation" and nav_item.name != "crowd-list" %}
-        {% if nav_item.name == 'memberships_mvt' and 'membership' in url_name %}
+        {% if nav_item.children %}
+        {# Page avec sous-pages : pilule + menu deroulant. Le 1er item mene a la #}
+        {# page parente. / Page with sub-pages: pill + dropdown; 1st item = parent. #}
+        <div class="dropdown">
+            <a href="{{ nav_item.url }}" id="ddff-{{ nav_item.name }}" role="button"
+               class="btn bouton-pilule bg-white texte-bleu text-center dropdown-toggle{% if url_name == nav_item.name %} active{% endif %}"
+               data-bs-toggle="dropdown" aria-expanded="false">
+                {{ nav_item.label }}
+            </a>
+            <ul class="dropdown-menu" aria-labelledby="ddff-{{ nav_item.name }}">
+                <li><a class="dropdown-item" href="{{ nav_item.url }}"
+                       hx-get="{{ nav_item.url }}" hx-target="body" hx-push-url="true">{{ nav_item.label }}</a></li>
+                <li><hr class="dropdown-divider"></li>
+                {% for enfant in nav_item.children %}
+                <li><a class="dropdown-item{% if url_name == enfant.name %} active{% endif %}"
+                       href="{{ enfant.url }}" hx-get="{{ enfant.url }}" hx-target="body" hx-push-url="true">{{ enfant.label }}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% elif nav_item.name == 'memberships_mvt' and 'membership' in url_name %}
             <a href="{{ nav_item.url }}"
                class="btn bouton-pilule bg-white texte-bleu text-center active"
                hx-get="{{ nav_item.url }}"

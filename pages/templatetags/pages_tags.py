@@ -55,6 +55,25 @@ def jsonld_page(context, page):
             ],
         })
 
+    # BreadcrumbList : fil d'Ariane si la page est une sous-page (Accueil > Parent >
+    # Page) -> éligible au résultat enrichi « fil d'Ariane » Google.
+    # / BreadcrumbList: breadcrumb if the page is a sub-page (Home > Parent > Page)
+    # -> eligible for Google's breadcrumb rich result.
+    if page.parent_id:
+        racine = request.build_absolute_uri("/") if request else "/"
+        parent = page.parent
+        url_parent = (
+            request.build_absolute_uri(f"/{parent.slug}/") if request else f"/{parent.slug}/"
+        )
+        graphe.append({
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+                {"@type": "ListItem", "position": 1, "name": "Accueil", "item": racine},
+                {"@type": "ListItem", "position": 2, "name": parent.titre, "item": url_parent},
+                {"@type": "ListItem", "position": 3, "name": page.titre, "item": url},
+            ],
+        })
+
     data = {"@context": "https://schema.org", "@graph": graphe}
     # ensure_ascii=False garde les accents ; on echappe <, > et & (comme Django
     # json_script) pour neutraliser toute fermeture </script> ou commentaire.

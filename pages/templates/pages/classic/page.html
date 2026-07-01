@@ -37,6 +37,17 @@
 
 {% block main %}
     <main class="tb-page" data-testid="page-{{ page_courante.slug }}">
+        {# Fil d'Ariane visible pour les sous-pages (correspond au BreadcrumbList #}
+        {# JSON-LD). / Visible breadcrumb for sub-pages (matches the JSON-LD). #}
+        {% if page_courante.parent %}
+            <nav class="tb-fil-ariane" aria-label="{% translate 'Fil d’Ariane' %}">
+                <a href="/">{% translate 'Accueil' %}</a>
+                <span aria-hidden="true">›</span>
+                <a href="/{{ page_courante.parent.slug }}/">{{ page_courante.parent.titre }}</a>
+                <span aria-hidden="true">›</span>
+                <span aria-current="page">{{ page_courante.titre }}</span>
+            </nav>
+        {% endif %}
         {# On parcourt les GROUPES de blocs. Les CARTE consecutives forment une #}
         {# grille (.tb-grille) ; les autres blocs sont rendus seuls. Chaque bloc #}
         {# utilise le gabarit du skin courant, fallback classic. #}

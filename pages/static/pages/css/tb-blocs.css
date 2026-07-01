@@ -58,6 +58,24 @@
     background-color: var(--tb-surface);
 }
 
+/* Fil d'Ariane (sous-pages) : discret, accent sur les liens, aligné aux blocs.
+   / Breadcrumb (sub-pages): discreet, accent links, aligned with the blocks. */
+.tb-fil-ariane {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    max-width: var(--tb-largeur-max);
+    margin-inline: auto;
+    padding-top: 1.5rem;
+    padding-inline: clamp(1.25rem, 5vw, 4rem);
+    font-size: 0.85rem;
+    color: var(--tb-texte-doux);
+}
+.tb-fil-ariane a { color: var(--tb-accent); text-decoration: none; }
+.tb-fil-ariane a:hover { text-decoration: underline; }
+.tb-fil-ariane a:focus-visible { outline: 2px solid var(--tb-accent); outline-offset: 2px; }
+
 /* Conteneur commun à chaque bloc : largeur max + respiration verticale.
    / Common container for each block: max width + vertical breathing room. */
 .tb-bloc {

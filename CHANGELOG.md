@@ -1,5 +1,47 @@
 # Changelog / Journal des modifications
 
+## App `pages` — Sous-pages (parent/enfant) + menus déroulants + fil d'Ariane / Pages: parent/child sub-pages + dropdown menus + breadcrumb
+
+**Date :** 2026-06-30
+**Migration :** Oui / Yes — `pages.0013` (champ `parent` auto-FK sur Page)
+
+**Quoi / What :** Une page peut avoir une **page parente** (`Page.parent`, auto-FK,
+`SET_NULL`). Si renseignée, la page devient une **sous-page d'un menu déroulant** sous
+la page parente dans la navbar.
+- **Un seul niveau** de profondeur, validé par `Page.clean()` (pas d'auto-parent, le
+  parent ne peut pas lui-même être enfant, une page avec sous-pages ne peut pas devenir
+  enfant, l'accueil ne peut pas être enfant).
+- **URLs plates** conservées (`/<slug>/`) → **zéro routing/migration d'URL**. La
+  hiérarchie sert à la navigation et au SEO, pas à l'URL.
+- **Navbar** : `get_context` construit un `main_nav` imbriqué (parent + `children`) ;
+  les **deux skins** (reunion `navbar.html` + faire_festival `navbar.html`) rendent un
+  dropdown Bootstrap. Le 1er item du menu mène à la page parente (atteignable + crawlable).
+- **SEO** : `jsonld_page` émet un **BreadcrumbList** (`Accueil › Parent › Page`) sur les
+  sous-pages → éligible au fil d'Ariane enrichi Google. **Fil d'Ariane visible** ajouté
+  dans le gabarit classic (correspond au JSON-LD).
+- **Sitemap** : inchangé — `PageSitemap` liste déjà toutes les pages publiées non-noindex
+  (les sous-pages incluses, en URL plate).
+
+**Vérifié (Chrome + tests)** : dropdown OK sur **reunion ET faire_festival** (testé en
+live), fil d'Ariane visible + BreadcrumbList JSON-LD sur les sous-pages classic, HTMX OK.
+25 tests pages (3 nouveaux : hiérarchie un niveau, breadcrumb JSON-LD, dropdown navbar).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `pages/models.py` | champ `parent` (auto-FK) + `clean()` (un seul niveau) |
+| `pages/migrations/0013_*.py` | champ `parent` |
+| `pages/admin.py` | `parent` dans le fieldset + colonne/filtre liste |
+| `BaseBillet/views.py` | `main_nav` imbriqué (parent + `children`) |
+| `BaseBillet/templates/reunion/partials/navbar.html` | dropdown Bootstrap |
+| `BaseBillet/templates/faire_festival/partials/navbar.html` | dropdown (pilule) |
+| `pages/templatetags/pages_tags.py` | `jsonld_page` : BreadcrumbList |
+| `pages/templates/pages/classic/page.html` | fil d'Ariane visible |
+| `pages/static/pages/css/tb-blocs.css` | style `.tb-fil-ariane` |
+| `pages/management/commands/charger_site_lespass.py` | démo sous-menu (classic) : « À propos » + sous-page « Notre histoire » (image en-tête → texte → vidéo) |
+| `pages/management/commands/charger_demo_faire_festival.py` | démo sous-menu (faire_festival) : « Notre démarche » sous « Le Faire Festival » (image en-tête → texte → vidéo) |
+| `tests/pytest/test_pages.py` | + 3 tests (25 au total) |
+
 ## Démo lespass — page unique (landing) au lieu de 5 pages / Lespass demo: single landing page
 
 **Date :** 2026-06-30

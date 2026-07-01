@@ -155,3 +155,144 @@ Examples:
 Notes:
 - The `--api-key` and `--api-base-url` flags are injected into environment variables `API_KEY` and `API_BASE_URL` by a session fixture in `tests/pytest/conftest.py`.
 - Tests also honor pre-set environment variables if you prefer `export API_KEY=...`.
+
+---
+
+## Pages API (schema.org/WebPage)
+
+### Permission
+
+La clé API (`ExternalApiKey`) doit avoir le booléen **`page`** coché dans l'admin.
+Ce droit ouvre à la fois les routes `/api/v2/pages/` et `/api/v2/blocs/`.
+Sans ce droit : 403.
+
+_The API key (`ExternalApiKey`) must have the `page` boolean enabled in the admin.
+This single permission covers both `/api/v2/pages/` and `/api/v2/blocs/` routes._
+
+### Endpoints
+
+| Méthode | URL | Rôle | Réponse |
+|---|---|---|---|
+| GET | `/api/v2/pages/` | Liste des pages du tenant | 200 `{"results":[WebPage,...]}` |
+| POST | `/api/v2/pages/` | Crée une page + ses blocs (nested `hasPart`), **atomique** | 201 WebPage |
+| GET | `/api/v2/pages/block-types/` | **Catalogue** des 14 types de blocs et champs autorisés | 200 `{"blockTypes":[...]}` |
+| GET | `/api/v2/pages/{uuid}/` | Détail (lookup par **uuid OU slug**) | 200 WebPage / 404 |
+| PATCH | `/api/v2/pages/{uuid}/` | Édite les **méta** de la page (titre, slug, publie, SEO…) | 200 WebPage |
+| DELETE | `/api/v2/pages/{uuid}/` | Supprime la page (cascade blocs) | 204 |
+| POST | `/api/v2/pages/{uuid}/blocs/` | Ajoute **un** bloc (JSON ou multipart) | 201 WebPageElement |
+| PATCH | `/api/v2/blocs/{uuid}/` | Édite un bloc (JSON ou multipart) | 200 WebPageElement |
+| DELETE | `/api/v2/blocs/{uuid}/` | Supprime un bloc | 204 |
+
+### Mapping Page → WebPage (schema.org)
+
+```
+@context  = "https://schema.org"
+@type     = "WebPage"
+identifier = uuid
+name       = titre
+url        = "/<slug>/"
+description = meta_description
+hasPart    = [WebPageElement, ...]
+additionalProperty = PropertyValue[] : slug, position, publie,
+                     est_accueil, noindex, meta_title
+```
+
+### Mapping Bloc → WebPageElement (schema.org)
+
+```
+@type              = "WebPageElement"
+identifier         = uuid
+additionalType     = type_bloc   ← champ pivot (ex: "HERO", "GALERIE"…)
+headline           = titre
+alternativeHeadline = sous_titre
+text               = texte HTML nettoyé par nh3
+image              = URL (string) ou ImageObject[] pour GALERIE
+position           = ordre dans la page
+additionalProperty = PropertyValue[] pour tout le reste (voir ci-dessous)
+```
+
+Champs portés par `additionalProperty` (PropertyValue[]) :
+`surtitre`, `badge`, `image_secondaire`, `video`, `image_position`,
+`bouton_label`, `bouton_url`, `bouton2_label`, `bouton2_url`,
+`auteur_nom`, `auteur_role`, `auteur_photo`,
+`points_gps`, `contenu`, `nombre_max`, `repliable`, `embed_url`.
+
+Format PropertyValue : `{"@type":"PropertyValue","name":"<clé>","value":<valeur>}`.
+`value` accepte string, nombre, booléen, liste ou objet JSON.
+
+### Les 14 types de blocs (additionalType)
+
+`HERO`, `PARAGRAPHE`, `IMAGE_TEXTE`, `CTA`, `TEMOIGNAGE`, `VIDEO_TEXTE`,
+`CARTE`, `IMAGE`, `CARTE_LEAFLET`, `INFOS`, `FAQ`, `EVENEMENTS`, `GALERIE`, `EMBED`.
+
+Les champs autorisés par type sont donnés par `GET /api/v2/pages/block-types/`
+(source unique : `pages/blocs_catalogue.py`).
+
+### Images
+
+**Par URL (JSON)** — champ `image` = URL `http`/`https` → téléchargée par le serveur
+(validation Pillow, ≤ 10 Mo).
+Pour **GALERIE** : `image` = liste d'ImageObject
+`[{"@type":"ImageObject","contentUrl":"https://...","caption":"..."}]`.
+
+**Upload multipart** (`POST /api/v2/pages/{uuid}/blocs/` ou `PATCH /api/v2/blocs/{uuid}/`) :
+champs fichier `image`, `image_secondaire`, `auteur_photo` en `multipart/form-data`.
+
+**Vidéo** : utiliser le bloc **EMBED** (`embed_url` = URL YouTube/Vimeo/PeerTube, rendu en iframe).
+L'upload de fichier vidéo n'est **pas exposé** par l'API pour éviter d'héberger des fichiers lourds.
+Le champ modèle `video` reste accessible via l'admin Django.
+
+### Sécurité
+
+- **Anti-SSRF** : une URL vers un hôte interne/privé/loopback est refusée (400).
+  Les schémas non `http`/`https` sont également refusés.
+- **Neutralisation des champs lien** (`bouton_url`, `bouton2_url`, `embed_url`) :
+  les schémas dangereux (`javascript:`, `data:`, `vbscript:`) sont vidés
+  silencieusement à la création/édition (pas d'erreur, champ vide).
+- **Sanitisation HTML** : `text` (WYSIWYG) est nettoyé par nh3 (whitelist de balises),
+  rendu sûr côté serveur.
+- **Slug réservé** : `admin`, `event`, `api`, etc. sont refusés à la création/édition (400).
+- **Création atomique** : une erreur dans un bloc (URL image invalide, slug réservé)
+  annule toute la création — pas d'enregistrement partiel.
+- **Isolation multi-tenant** : chaque clé ne voit que les pages de son propre tenant.
+
+### Exemple de payload — création nested
+
+```json
+POST /api/v2/pages/
+{
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  "name": "Accueil",
+  "additionalProperty": [
+    {"@type": "PropertyValue", "name": "slug",   "value": "accueil"},
+    {"@type": "PropertyValue", "name": "publie", "value": true}
+  ],
+  "hasPart": [
+    {
+      "additionalType": "HERO",
+      "headline": "Bienvenue",
+      "image": "https://exemple.fr/hero.jpg",
+      "additionalProperty": [
+        {"@type": "PropertyValue", "name": "bouton_label", "value": "Voir l'agenda"},
+        {"@type": "PropertyValue", "name": "bouton_url",   "value": "/event/"}
+      ]
+    },
+    {
+      "additionalType": "PARAGRAPHE",
+      "headline": "À propos",
+      "text": "<p>Un lieu culturel <strong>coopératif</strong>.</p>"
+    }
+  ]
+}
+```
+
+### Tests automatisés
+
+```bash
+docker exec -e API_KEY=dummy lespass_django poetry run pytest tests/pytest/test_api_v2_pages.py -v
+```
+
+21 tests : CRUD page, catalogue block-types, ajout/édition/suppression bloc,
+images par URL, upload multipart, anti-SSRF, neutralisation XSS dans les champs lien,
+isolation tenant, slug réservé, atomicité.

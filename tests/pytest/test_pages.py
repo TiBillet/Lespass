@@ -336,17 +336,17 @@ def test_embed_iframe_whitelist():
 
 def test_url_schema_dangereux():
     """L'admin neutralise les URLs à schéma dangereux (anti-XSS au clic)."""
-    from pages.admin import _url_a_schema_dangereux
+    from Administration.utils import url_a_schema_dangereux
 
-    assert _url_a_schema_dangereux("javascript:alert(1)") is True
-    assert _url_a_schema_dangereux("JavaScript:alert(1)") is True
-    assert _url_a_schema_dangereux("  java\tscript:x") is True  # obfuscation
-    assert _url_a_schema_dangereux("data:text/html,x") is True
+    assert url_a_schema_dangereux("javascript:alert(1)") is True
+    assert url_a_schema_dangereux("JavaScript:alert(1)") is True
+    assert url_a_schema_dangereux("  java\tscript:x") is True  # obfuscation
+    assert url_a_schema_dangereux("data:text/html,x") is True
     # URLs légitimes (relatives ou http) -> non dangereuses.
-    assert _url_a_schema_dangereux("/event/") is False
-    assert _url_a_schema_dangereux("https://exemple.fr") is False
-    assert _url_a_schema_dangereux("") is False
-    assert _url_a_schema_dangereux(None) is False
+    assert url_a_schema_dangereux("/event/") is False
+    assert url_a_schema_dangereux("https://exemple.fr") is False
+    assert url_a_schema_dangereux("") is False
+    assert url_a_schema_dangereux(None) is False
 
 
 def test_bloc_galerie_et_faq_repliable(tenant, api_client, nettoyer_pages):
@@ -366,6 +366,64 @@ def test_bloc_galerie_et_faq_repliable(tenant, api_client, nettoyer_pages):
     assert "tb-bloc--galerie" in contenu
     # FAQ repliable -> accordéon natif <details>.
     assert "<details" in contenu
+
+
+def test_page_hierarchie_un_seul_niveau(tenant, nettoyer_pages):
+    """La hiérarchie parent/enfant est limitée à UN niveau (validé par clean)."""
+    from pages.models import Page
+
+    with tenant_context(tenant):
+        parent = Page.objects.create(titre="Parent", slug="pytest-parent")
+        enfant = Page.objects.create(titre="Enfant", slug="pytest-enfant", parent=parent)
+
+        # Un petit-enfant (enfant d'un enfant) est refusé.
+        petit = Page(titre="Petit", slug="pytest-petit", parent=enfant)
+        with pytest.raises(ValidationError):
+            petit.full_clean()
+
+        # Une page qui a déjà des sous-pages ne peut pas devenir elle-même enfant.
+        autre = Page.objects.create(titre="Autre", slug="pytest-autre")
+        parent.parent = autre
+        with pytest.raises(ValidationError):
+            parent.full_clean()
+
+        # L'accueil ne peut pas être une sous-page.
+        acc = Page(titre="Acc", slug="pytest-acc", est_accueil=True, parent=autre)
+        with pytest.raises(ValidationError):
+            acc.full_clean()
+
+
+def test_jsonld_breadcrumb_sous_page(tenant, api_client, nettoyer_pages):
+    """Une sous-page émet un BreadcrumbList JSON-LD + un fil d'Ariane visible."""
+    from pages.models import Page
+
+    with tenant_context(tenant):
+        parent = Page.objects.create(titre="Le lieu pytest", slug="pytest-bc-parent", publie=True)
+        Page.objects.create(
+            titre="La salle pytest", slug="pytest-bc-enfant", publie=True, parent=parent
+        )
+
+    reponse = api_client.get("/pytest-bc-enfant/")
+    contenu = reponse.content.decode()
+    assert '"BreadcrumbList"' in contenu
+    assert "Le lieu pytest" in contenu      # le parent dans le fil d'Ariane
+    assert "tb-fil-ariane" in contenu        # fil d'Ariane visible (classic)
+
+
+def test_navbar_dropdown_sous_pages(tenant, api_client, nettoyer_pages):
+    """Une page avec des sous-pages publiées rend un menu déroulant dans la navbar."""
+    from pages.models import Page
+
+    with tenant_context(tenant):
+        parent = Page.objects.create(titre="Parent nav", slug="pytest-navparent", publie=True)
+        Page.objects.create(
+            titre="Sous-page nav", slug="pytest-navenfant", publie=True, parent=parent
+        )
+
+    reponse = api_client.get("/pytest-navparent/")
+    contenu = reponse.content.decode()
+    assert "dropdown-menu" in contenu
+    assert "Sous-page nav" in contenu        # le libellé de la sous-page dans le menu
 
 
 def test_page_non_publiee_renvoie_404(tenant, api_client, nettoyer_pages):

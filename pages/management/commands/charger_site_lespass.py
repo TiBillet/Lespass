@@ -62,10 +62,11 @@ class Command(BaseCommand):
             # / Cleanup: remove the old secondary pages (multi-page version).
             Page.objects.filter(slug__in=ANCIENNES_PAGES).delete()
             self._construire_landing()
+            self._construire_sous_menu()
             if options["skin"]:
                 self._forcer_skin()
         self.stdout.write(
-            f"Landing page de démo (page unique, tous les blocs) chargée sur '{schema}'."
+            f"Landing page + sous-menu de démo chargés sur '{schema}'."
         )
 
     # ------------------------------------------------------------------
@@ -87,6 +88,102 @@ class Command(BaseCommand):
         nom = os.path.basename(chemin_static)
         with open(chemin, "rb") as fichier:
             getattr(obj, champ).save(nom, File(fichier), save=True)
+
+    def _creer_page(self, slug, titre, position, meta_title, meta_description,
+                    parent=None, image_partage=None):
+        """Crée/récupère une page (publiée, non-accueil), la nettoie de ses blocs."""
+        from pages.models import Page
+
+        page, _cree = Page.objects.get_or_create(slug=slug, defaults={"titre": titre})
+        page.titre = titre
+        page.position = position
+        page.publie = True
+        page.est_accueil = False
+        page.parent = parent
+        page.meta_title = meta_title
+        page.meta_description = meta_description
+        page.save()
+        if image_partage:
+            self._poser_fichier(page, "image", IMG + image_partage)
+        page.blocs.all().delete()
+        return page
+
+    # ------------------------------------------------------------------
+    # Sous-menu de démo : page parente « À propos » + sous-page « Notre histoire »
+    # (image en en-tête → texte brut → vidéo sous le texte).
+    # / Demo sub-menu: parent page "À propos" + sub-page "Notre histoire"
+    # (header image → plain text → video below the text).
+    # ------------------------------------------------------------------
+    def _construire_sous_menu(self):
+        from pages.models import Bloc
+
+        # --- Page parente « À propos » (top-level → dropdown dans la navbar) ---
+        a_propos = self._creer_page(
+            "a-propos", "À propos", 1,
+            "À propos de Lespass — le projet coopératif",
+            "Découvrez le projet coopératif de Lespass : sa raison d'être, son "
+            "fonctionnement et son histoire.",
+            image_partage="404-6.jpg",
+        )
+        Bloc.objects.create(
+            page=a_propos, type_bloc=Bloc.PARAGRAPHE, position=1,
+            titre="À propos de Lespass",
+            texte=(
+                "<p>Lespass est un lieu culturel géré en coopérative d'usage : "
+                "adhérent·e·s, bénévoles et salarié·e·s décident ensemble de la "
+                "programmation, des tarifs et des grands choix du lieu.</p>"
+            ),
+        )
+        b = Bloc.objects.create(
+            page=a_propos, type_bloc=Bloc.IMAGE_TEXTE, position=2,
+            image_position=Bloc.GAUCHE, titre="Une gouvernance partagée",
+            texte=(
+                "<p>Une personne, une voix : chaque adhérent·e peut prendre part aux "
+                "assemblées et aux commissions. La coopérative appartient à celles et "
+                "ceux qui la font vivre.</p>"
+            ),
+        )
+        self._poser_fichier(b, "image", IMG + "404-7.jpg")
+        Bloc.objects.create(
+            page=a_propos, type_bloc=Bloc.CTA, position=3,
+            titre="Envie de participer ?",
+            sous_titre="Rejoignez la coopérative et prenez part aux décisions.",
+            bouton_label="Adhérer", bouton_url="/memberships/",
+        )
+
+        # --- Sous-page « Notre histoire » : image en-tête → texte → vidéo ---
+        histoire = self._creer_page(
+            "notre-histoire", "Notre histoire", 1,
+            "Notre histoire — Lespass",
+            "L'histoire de Lespass : de l'idée d'un collectif d'habitant·e·s à un "
+            "tiers-lieu culturel coopératif.",
+            parent=a_propos, image_partage="404-8.jpg",
+        )
+        # 1 — Image en en-tête.
+        b = Bloc.objects.create(
+            page=histoire, type_bloc=Bloc.IMAGE, position=1, titre="Notre histoire",
+        )
+        self._poser_fichier(b, "image", IMG + "404-8.jpg")
+        # 2 — Texte brut.
+        Bloc.objects.create(
+            page=histoire, type_bloc=Bloc.PARAGRAPHE, position=2,
+            titre="D'une idée à un lieu",
+            texte=(
+                "<p>Tout a commencé autour d'une table, avec l'envie d'un groupe "
+                "d'habitant·e·s : disposer d'un lieu à soi pour se réunir, créer et "
+                "faire vivre la culture localement.</p>"
+                "<p>De réunions en chantiers participatifs, le projet a grandi jusqu'à "
+                "ouvrir ses portes : une salle, des ateliers, un café associatif — et "
+                "une coopérative pour en prendre soin ensemble.</p>"
+            ),
+        )
+        # 3 — Vidéo sous le texte.
+        b = Bloc.objects.create(
+            page=histoire, type_bloc=Bloc.VIDEO_TEXTE, position=3,
+            titre="Le lieu en mouvement",
+            texte="<p>Quelques images de la vie quotidienne du lieu.</p>",
+        )
+        self._poser_fichier(b, "video", VIDEO)
 
     # ------------------------------------------------------------------
     # La landing unique

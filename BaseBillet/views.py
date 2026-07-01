@@ -274,13 +274,41 @@ def get_context(request):
     # Local import to avoid a circular import with pages.views.
     if config.module_pages:
         from pages.models import Page
-        for page_publiee in Page.objects.filter(publie=True).order_by("position", "titre"):
+
+        pages_publiees = (
+            Page.objects.filter(publie=True)
+            .select_related("parent")
+            .order_by("position", "titre")
+        )
+        # Index des sous-pages publiees par parent (uuid) pour les menus deroulants.
+        # / Index of published sub-pages by parent (uuid) for the dropdown menus.
+        enfants_par_parent: dict = {}
+        for page_publiee in pages_publiees:
+            if page_publiee.parent_id:
+                enfants_par_parent.setdefault(page_publiee.parent_id, []).append(page_publiee)
+
+        for page_publiee in pages_publiees:
+            # Les sous-pages sont rendues DANS le dropdown de leur parent, pas a plat.
+            # / Sub-pages are rendered IN their parent's dropdown, not flat.
+            if page_publiee.parent_id:
+                continue
             url_page = "/" if page_publiee.est_accueil else f"/{page_publiee.slug}/"
             navbar.append({
                 'name': f'page-{page_publiee.slug}',
                 'url': url_page,
                 'label': page_publiee.titre,
                 'icon': 'house-door' if page_publiee.est_accueil else 'file-earmark-text',
+                # Sous-pages (menu deroulant) : liste vide si la page n'en a pas.
+                # / Sub-pages (dropdown menu): empty list if the page has none.
+                'children': [
+                    {
+                        'name': f'page-{enfant.slug}',
+                        'url': f'/{enfant.slug}/',
+                        'label': enfant.titre,
+                        'icon': 'file-earmark-text',
+                    }
+                    for enfant in enfants_par_parent.get(page_publiee.pk, [])
+                ],
             })
 
     # cache.set(f'get_context_{connection.tenant.uuid}', context, 10)

@@ -205,7 +205,12 @@ def test_http_isolation_cross_tenant(cle_pages):
     page_uuid = r.json()["identifier"]
 
     # Cle sur un AUTRE tenant. On choisit le premier tenant != lespass/public.
-    autre = Client.objects.exclude(schema_name__in=["lespass", "public"]).first()
+    # order_by pour un choix de tenant DETERMINISTE (evite un test flaky selon
+    # l'ordre non garanti de la base). / order_by for a DETERMINISTIC tenant pick
+    # (avoids a flaky test depending on the DB's unguaranteed ordering).
+    autre = Client.objects.exclude(
+        schema_name__in=["lespass", "public"]
+    ).order_by("schema_name").first()
     assert autre is not None, "Besoin d'un second tenant pour le test cross-tenant"
     with tenant_context(autre):
         api_key_obj, raw_autre = APIKey.objects.create_key(name="autre-pages")
@@ -215,3 +220,427 @@ def test_http_isolation_cross_tenant(cle_pages):
     # L'uuid de la page lespass n'existe pas dans le schema de l'autre tenant -> 404.
     r2 = client.get(f"/api/v2/pages/{page_uuid}/", **auth_autre)
     assert r2.status_code == 404
+
+
+@pytest.mark.django_db
+def test_bloc_create_neutralise_url_javascript():
+    """Un bouton_url avec schema javascript: est vide a la creation (anti-XSS).
+    / A bouton_url with a javascript: scheme is emptied on create (anti-XSS)."""
+    from django_tenants.utils import tenant_context
+    from Customers.models import Client
+    from pages.models import Page
+    from api_v2.serializers import BlocCreateSerializer
+
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="x", slug="xss-bouton")
+        ser = BlocCreateSerializer(data={
+            "additionalType": "CTA",
+            "headline": "Clique",
+            "additionalProperty": [
+                {"@type": "PropertyValue", "name": "bouton_label", "value": "Go"},
+                {"@type": "PropertyValue", "name": "bouton_url", "value": "javascript:alert(document.cookie)"},
+                {"@type": "PropertyValue", "name": "embed_url", "value": "vbscript:msgbox(1)"},
+            ],
+        }, context={"page": page})
+        assert ser.is_valid(), ser.errors
+        bloc = ser.save()
+        assert bloc.bouton_url == ""   # neutralise
+        assert bloc.embed_url == ""    # neutralise
+        assert bloc.bouton_label == "Go"  # champ sain conserve
+
+
+@pytest.mark.django_db
+def test_bloc_create_ignore_champ_video_en_additional_property():
+    """Un champ fichier NON telechargeable (video) passe en string via additionalProperty
+    est IGNORE (jamais de string brute sur un FileField).
+    / A non-downloadable file field (video) passed as a string via additionalProperty is
+    IGNORED (never a raw string on a FileField)."""
+    from django_tenants.utils import tenant_context
+    from Customers.models import Client
+    from pages.models import Page
+    from api_v2.serializers import BlocCreateSerializer
+
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="x", slug="video-string")
+        ser = BlocCreateSerializer(data={
+            "additionalType": "VIDEO_TEXTE",
+            "additionalProperty": [
+                {"@type": "PropertyValue", "name": "video", "value": "javascript:alert(1)"},
+            ],
+        }, context={"page": page})
+        assert ser.is_valid(), ser.errors
+        bloc = ser.save()
+        assert not bloc.video  # vide, pas de corruption
+
+
+@pytest.mark.django_db
+def test_bloc_create_image_secondaire_url_dangereuse_leve_400():
+    """Une URL d'image dangereuse/interne via additionalProperty leve ValidationError
+    (coherence avec le champ standard image, pas d'echec silencieux).
+    / A dangerous/internal image URL via additionalProperty raises ValidationError
+    (consistent with the standard image field, no silent failure)."""
+    from django_tenants.utils import tenant_context
+    from Customers.models import Client
+    from pages.models import Page
+    from api_v2.serializers import BlocCreateSerializer
+    from rest_framework import serializers as drf_serializers
+    import pytest as _pytest
+
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="x", slug="img-sec-danger")
+        ser = BlocCreateSerializer(data={
+            "additionalType": "CARTE_LEAFLET",
+            "additionalProperty": [
+                {"@type": "PropertyValue", "name": "image_secondaire", "value": "javascript:alert(1)"},
+            ],
+        }, context={"page": page})
+        assert ser.is_valid(), ser.errors
+        with _pytest.raises(drf_serializers.ValidationError):
+            ser.save()
+
+
+def test_url_a_schema_dangereux_promu_dans_utils():
+    """La fonction de neutralisation est disponible dans Administration.utils.
+    / The neutralization function is available in Administration.utils."""
+    from Administration.utils import url_a_schema_dangereux
+    assert url_a_schema_dangereux("javascript:alert(1)") is True
+    assert url_a_schema_dangereux("java\tscript:alert(1)") is True  # obfuscation
+    assert url_a_schema_dangereux("https://exemple.fr") is False
+    assert url_a_schema_dangereux("/event/") is False
+    assert url_a_schema_dangereux("") is False
+
+
+@pytest.mark.django_db
+def test_bloc_image_par_url_ok(monkeypatch):
+    import io
+    from PIL import Image as PILImage
+    from django_tenants.utils import tenant_context
+    from Customers.models import Client
+    from pages.models import Page
+    from api_v2.serializers import BlocCreateSerializer
+
+    buf = io.BytesIO()
+    PILImage.new("RGB", (10, 10), "blue").save(buf, format="PNG")
+    contenu_png = buf.getvalue()
+
+    class FakeResp:
+        status_code = 200
+        headers = {"Content-Type": "image/png"}
+        content = contenu_png
+        def raise_for_status(self): pass
+        def iter_content(self, chunk_size=65536):
+            # Renvoie le contenu en un seul bloc (suffit pour le test).
+            yield self.content
+        def close(self): pass
+
+    # On neutralise le check SSRF (hote public simule) + la requete reseau.
+    monkeypatch.setattr("api_v2.serializers._hote_est_interne", lambda h: False)
+    monkeypatch.setattr("api_v2.serializers.requests.get", lambda *a, **k: FakeResp())
+
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="img", slug="img-url-ok")
+        ser = BlocCreateSerializer(data={
+            "additionalType": "IMAGE",
+            "image": "https://exemple.fr/photo.png",
+        }, context={"page": page})
+        assert ser.is_valid(), ser.errors
+        bloc = ser.save()
+        assert bloc.image  # fichier enregistre
+
+
+@pytest.mark.django_db
+def test_telecharger_image_bloque_ssrf_loopback():
+    """Une URL pointant vers une IP loopback/interne est refusee (anti-SSRF).
+    / A URL pointing to a loopback/internal IP is refused (anti-SSRF)."""
+    from rest_framework import serializers as drf_serializers
+    from api_v2.serializers import telecharger_et_valider_image
+    import pytest as _pytest
+    for url in ("http://127.0.0.1/x.png",
+                "http://169.254.169.254/latest/meta-data/",
+                "http://localhost/x.png",
+                "file:///etc/passwd",
+                "ftp://exemple.fr/x.png"):
+        with _pytest.raises(drf_serializers.ValidationError):
+            telecharger_et_valider_image(url)
+
+
+@pytest.mark.django_db
+def test_http_patch_bloc_neutralise_url_javascript(cle_pages):
+    """PATCH d'un bloc : un bouton_url javascript: est neutralise (gap B0).
+    / PATCH a block: a javascript: bouton_url is neutralized."""
+    from rest_framework.test import APIClient
+    client = APIClient()
+    auth = {"HTTP_AUTHORIZATION": f"Api-Key {cle_pages}",
+            "HTTP_HOST": "lespass.tibillet.localhost"}
+    body = {"@type": "WebPage", "name": "XSS patch",
+            "additionalProperty": [{"@type": "PropertyValue", "name": "slug", "value": "xss-patch"}],
+            "hasPart": [{"additionalType": "CTA", "headline": "x"}]}
+    r = client.post("/api/v2/pages/", body, format="json", **auth)
+    assert r.status_code == 201, r.content
+    bloc_uuid = r.json()["hasPart"][0]["identifier"]
+    # PATCH avec une URL dangereuse via additionalProperty.
+    r2 = client.patch(f"/api/v2/blocs/{bloc_uuid}/", {
+        "additionalProperty": [
+            {"@type": "PropertyValue", "name": "bouton_url", "value": "javascript:alert(1)"},
+        ]}, format="json", **auth)
+    assert r2.status_code == 200, r2.content
+    # La sortie ne doit PAS exposer une URL javascript: ; le champ est vide.
+    props = {p["name"]: p["value"] for p in (r2.json().get("additionalProperty") or [])}
+    assert props.get("bouton_url", "") == ""
+
+
+def _png_bytes():
+    import io
+    from PIL import Image as PILImage
+    buf = io.BytesIO()
+    PILImage.new("RGB", (8, 8), "red").save(buf, format="PNG")
+    return buf.getvalue()
+
+
+@pytest.mark.django_db
+def test_http_ajouter_bloc_multipart_upload_image(cle_pages):
+    """POST multipart sur /pages/{uuid}/blocs/ : le fichier image est enregistre.
+    / Multipart POST on the sub-action: the uploaded image file is stored."""
+    from rest_framework.test import APIClient
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    from django_tenants.utils import tenant_context
+    from Customers.models import Client
+    from pages.models import Page, Bloc
+
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="m", slug="multipart-add")
+        page_uuid = str(page.uuid)
+
+    client = APIClient()
+    auth = {"HTTP_AUTHORIZATION": f"Api-Key {cle_pages}",
+            "HTTP_HOST": "lespass.tibillet.localhost"}
+    fichier = SimpleUploadedFile("p.png", _png_bytes(), content_type="image/png")
+    r = client.post(f"/api/v2/pages/{page_uuid}/blocs/",
+                    {"additionalType": "IMAGE", "image": fichier},
+                    format="multipart", **auth)
+    assert r.status_code == 201, r.content
+    with tenant_context(tenant):
+        bloc = Bloc.objects.get(uuid=r.json()["identifier"])
+        assert bloc.image  # fichier enregistre
+
+
+@pytest.mark.django_db
+def test_http_patch_bloc_multipart_upload_image(cle_pages):
+    """PATCH multipart sur /blocs/{uuid}/ : le fichier image remplace l'image.
+    / Multipart PATCH: the uploaded image replaces the block image."""
+    from rest_framework.test import APIClient
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    from django_tenants.utils import tenant_context
+    from Customers.models import Client
+    from pages.models import Page, Bloc
+
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="m2", slug="multipart-patch")
+        bloc = Bloc.objects.create(page=page, type_bloc="IMAGE")
+        bloc_uuid = str(bloc.uuid)
+
+    client = APIClient()
+    auth = {"HTTP_AUTHORIZATION": f"Api-Key {cle_pages}",
+            "HTTP_HOST": "lespass.tibillet.localhost"}
+    fichier = SimpleUploadedFile("q.png", _png_bytes(), content_type="image/png")
+    r = client.patch(f"/api/v2/blocs/{bloc_uuid}/", {"image": fichier},
+                     format="multipart", **auth)
+    assert r.status_code == 200, r.content
+    with tenant_context(tenant):
+        bloc.refresh_from_db()
+        assert bloc.image
+
+
+@pytest.mark.django_db
+def test_http_block_types_catalogue(cle_pages):
+    from rest_framework.test import APIClient
+    client = APIClient()
+    auth = {"HTTP_AUTHORIZATION": f"Api-Key {cle_pages}",
+            "HTTP_HOST": "lespass.tibillet.localhost"}
+    r = client.get("/api/v2/pages/block-types/", **auth)
+    assert r.status_code == 200, r.content
+    types = {b["type"] for b in r.json()["blockTypes"]}
+    assert len(types) == 14
+    faq = next(b for b in r.json()["blockTypes"] if b["type"] == "FAQ")
+    assert set(faq["fields"]) == {"titre", "texte", "repliable"}
+    # Chaque entree a un label non vide (i18n display).
+    assert all(b["label"] for b in r.json()["blockTypes"])
+
+
+@pytest.mark.django_db
+def test_bloc_carte_leaflet_points_gps_roundtrip():
+    """points_gps (JSON) via additionalProperty est stocke et re-expose tel quel.
+    / points_gps (JSON) via additionalProperty is stored and re-exposed as-is."""
+    from django_tenants.utils import tenant_context
+    from Customers.models import Client
+    from pages.models import Page
+    from api_v2.serializers import BlocCreateSerializer, BlocSchemaSerializer
+
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="c", slug="leaflet-rt")
+        pts = [{"lat": 43.6, "lng": 1.44, "label": "La Cite"}]
+        ser = BlocCreateSerializer(data={
+            "additionalType": "CARTE_LEAFLET",
+            "additionalProperty": [
+                {"@type": "PropertyValue", "name": "points_gps", "value": pts},
+            ],
+        }, context={"page": page})
+        assert ser.is_valid(), ser.errors
+        bloc = ser.save()
+        assert bloc.points_gps == pts
+        out = BlocSchemaSerializer(bloc).data
+        props = {p["name"]: p["value"] for p in (out.get("additionalProperty") or [])}
+        assert props["points_gps"] == pts
+
+
+@pytest.mark.django_db
+def test_bloc_points_gps_doit_etre_une_liste():
+    """points_gps non-liste -> 400 (garde de structure).
+    / points_gps not a list -> 400 (structure guard)."""
+    from django_tenants.utils import tenant_context
+    from Customers.models import Client
+    from pages.models import Page
+    from api_v2.serializers import BlocCreateSerializer
+    from rest_framework import serializers as drf
+    import pytest as _pytest
+
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="c2", slug="leaflet-bad")
+        ser = BlocCreateSerializer(data={
+            "additionalType": "CARTE_LEAFLET",
+            "additionalProperty": [
+                {"@type": "PropertyValue", "name": "points_gps", "value": {"lat": 1}},
+            ],
+        }, context={"page": page})
+        assert ser.is_valid(), ser.errors
+        with _pytest.raises(drf.ValidationError):
+            ser.save()
+
+
+@pytest.mark.django_db
+def test_bloc_galerie_cree_et_expose_imageobjects(monkeypatch):
+    """GALERIE : liste d'ImageObject (URL) -> ImageGalerie ; sortie = ImageObject[].
+    / GALLERY: list of ImageObject (URL) -> ImageGalerie; output = ImageObject[]."""
+    import io
+    from PIL import Image as PILImage
+    from django_tenants.utils import tenant_context
+    from Customers.models import Client
+    from pages.models import Page
+    from api_v2.serializers import BlocCreateSerializer, BlocSchemaSerializer
+
+    buf = io.BytesIO()
+    PILImage.new("RGB", (8, 8), "green").save(buf, format="PNG")
+    png = buf.getvalue()
+
+    class FakeResp:
+        status_code = 200
+        headers = {"Content-Type": "image/png"}
+        content = png
+        def raise_for_status(self): pass
+        def iter_content(self, chunk_size=65536):
+            # Renvoie le contenu en un seul bloc (suffit pour le test).
+            yield self.content
+        def close(self): pass
+
+    monkeypatch.setattr("api_v2.serializers._hote_est_interne", lambda h: False)
+    monkeypatch.setattr("api_v2.serializers.requests.get", lambda *a, **k: FakeResp())
+
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="g", slug="galerie-rt")
+        ser = BlocCreateSerializer(data={
+            "additionalType": "GALERIE",
+            "image": [
+                {"@type": "ImageObject", "contentUrl": "https://ex.fr/a.png", "caption": "A"},
+                {"@type": "ImageObject", "contentUrl": "https://ex.fr/b.png", "caption": "B"},
+            ],
+        }, context={"page": page})
+        assert ser.is_valid(), ser.errors
+        bloc = ser.save()
+        assert bloc.images_galerie.count() == 2
+        out = BlocSchemaSerializer(bloc).data
+        # En sortie, image = liste d'ImageObject.
+        assert isinstance(out["image"], list)
+        assert out["image"][0]["@type"] == "ImageObject"
+        assert [img["caption"] for img in out["image"]] == ["A", "B"]
+
+
+@pytest.mark.django_db
+def test_telecharger_image_refuse_corps_trop_gros(monkeypatch):
+    """Un corps distant > 10 Mo est refuse SANS tout charger en memoire (cap borne).
+    / A remote body > 10 MB is refused without loading it all in memory (bounded cap)."""
+    from rest_framework import serializers as drf
+    from api_v2.serializers import telecharger_et_valider_image
+    import pytest as _pytest
+
+    class GrosResp:
+        status_code = 200
+        headers = {"Content-Type": "image/png"}  # pas de Content-Length -> lecture bornee
+        def raise_for_status(self): pass
+        def iter_content(self, chunk_size=65536):
+            # 3 blocs de 5 Mo = 15 Mo > 10 Mo : doit stopper avant la fin.
+            for _ in range(3):
+                yield b"x" * (5 * 1024 * 1024)
+        def close(self): pass
+
+    monkeypatch.setattr("api_v2.serializers._hote_est_interne", lambda h: False)
+    monkeypatch.setattr("api_v2.serializers.requests.get", lambda *a, **k: GrosResp())
+    with _pytest.raises(drf.ValidationError):
+        telecharger_et_valider_image("https://exemple.fr/gros.png")
+
+
+@pytest.mark.django_db
+def test_http_patch_bloc_points_gps_doit_etre_liste(cle_pages):
+    """PATCH d'un bloc avec points_gps non-liste -> 400 (coherence avec CREATE).
+    / PATCH a block with a non-list points_gps -> 400 (consistency with CREATE)."""
+    from rest_framework.test import APIClient
+    client = APIClient()
+    auth = {"HTTP_AUTHORIZATION": f"Api-Key {cle_pages}",
+            "HTTP_HOST": "lespass.tibillet.localhost"}
+    body = {"@type": "WebPage", "name": "pg",
+            "additionalProperty": [{"@type": "PropertyValue", "name": "slug", "value": "patch-gps"}],
+            "hasPart": [{"additionalType": "CARTE_LEAFLET", "headline": "c"}]}
+    r = client.post("/api/v2/pages/", body, format="json", **auth)
+    assert r.status_code == 201, r.content
+    bloc_uuid = r.json()["hasPart"][0]["identifier"]
+    r2 = client.patch(f"/api/v2/blocs/{bloc_uuid}/", {
+        "additionalProperty": [{"@type": "PropertyValue", "name": "points_gps", "value": {"lat": 1}}],
+    }, format="json", **auth)
+    assert r2.status_code == 400, r2.content
+
+
+@pytest.mark.django_db
+def test_http_ajouter_bloc_multipart_video_est_ignoree(cle_pages):
+    """L'API n'uploade plus de fichier video (multipart) : le champ video reste vide.
+    Pour une video, utiliser le bloc EMBED. / The API no longer uploads a video file;
+    the video field stays empty. Use the EMBED block for videos."""
+    from rest_framework.test import APIClient
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    from django_tenants.utils import tenant_context
+    from Customers.models import Client
+    from pages.models import Page, Bloc
+
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="v", slug="no-video-upload")
+        page_uuid = str(page.uuid)
+
+    client = APIClient()
+    auth = {"HTTP_AUTHORIZATION": f"Api-Key {cle_pages}",
+            "HTTP_HOST": "lespass.tibillet.localhost"}
+    faux_video = SimpleUploadedFile("clip.mp4", b"\x00\x00\x00\x18ftypmp42", content_type="video/mp4")
+    r = client.post(f"/api/v2/pages/{page_uuid}/blocs/",
+                    {"additionalType": "VIDEO_TEXTE", "video": faux_video},
+                    format="multipart", **auth)
+    assert r.status_code == 201, r.content
+    with tenant_context(tenant):
+        bloc = Bloc.objects.get(uuid=r.json()["identifier"])
+        assert not bloc.video  # la video n'a PAS ete uploadee par l'API

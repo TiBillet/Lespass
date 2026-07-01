@@ -60,12 +60,13 @@ class Command(BaseCommand):
         with tenant_context(tenant):
             self._charger_accueil()
             self._charger_le_faire_festival()
+            self._charger_sous_menu()
             self._charger_infos_pratiques()
             if options["skin"]:
                 self._forcer_skin()
         self.stdout.write(
-            f"Pages faire_festival (accueil + le-faire-festival + infos-pratiques) "
-            f"chargees sur '{schema}'."
+            f"Pages faire_festival (accueil + le-faire-festival + sous-menu + "
+            f"infos-pratiques) chargees sur '{schema}'."
         )
 
     # ------------------------------------------------------------------
@@ -84,7 +85,8 @@ class Command(BaseCommand):
     # Helper : recupere une Page par slug, ou la cree (puis vide ses blocs).
     # / Helper: get a Page by slug, or create it (then clear its blocks).
     # ------------------------------------------------------------------
-    def _page_propre(self, slug, titre, position=0, est_accueil=False, meta_description=""):
+    def _page_propre(self, slug, titre, position=0, est_accueil=False,
+                     meta_description="", parent=None):
         from pages.models import Page
 
         page, _cree = Page.objects.get_or_create(slug=slug, defaults={"titre": titre})
@@ -93,6 +95,7 @@ class Command(BaseCommand):
         page.publie = True
         page.est_accueil = est_accueil
         page.meta_description = meta_description
+        page.parent = parent
         page.save()
         page.blocs.all().delete()
         return page
@@ -109,6 +112,56 @@ class Command(BaseCommand):
         nom = os.path.basename(chemin_static)
         with open(chemin, "rb") as fichier:
             getattr(bloc, champ).save(nom, File(fichier), save=True)
+
+    def _charger_sous_menu(self):
+        """
+        Sous-menu de démo : sous-page « Notre démarche » RATTACHÉE à la page
+        « Le Faire Festival » (menu déroulant dans la navbar FF). Structure demandée :
+        IMAGE en en-tête → texte brut → vidéo sous le texte. Assets du skin festival.
+        / Demo sub-menu: sub-page "Notre démarche" attached to "Le Faire Festival"
+        (dropdown in the FF navbar). Requested layout: header IMAGE → plain text →
+        video below. Festival-skin assets.
+        """
+        from pages.models import Bloc, Page
+
+        # La page parente existe déjà (créée par _charger_le_faire_festival, appelé
+        # avant dans handle). / The parent page already exists.
+        parent = Page.objects.get(slug="le-faire-festival")
+
+        page = self._page_propre(
+            "notre-demarche", "Notre démarche", position=1, parent=parent,
+            meta_description="La démarche du Faire Festival : documenter, transmettre "
+            "et fabriquer ensemble des communs, au-delà de l'objet fini.",
+        )
+
+        # 1 — IMAGE en en-tête.
+        bloc = Bloc.objects.create(
+            page=page, type_bloc=Bloc.IMAGE, position=1, titre="Notre démarche",
+        )
+        self._poser_fichier(bloc, "image", IMG + "Fichier-16.webp")
+
+        # 2 — Texte brut.
+        Bloc.objects.create(
+            page=page, type_bloc=Bloc.PARAGRAPHE, position=2,
+            texte=(
+                "<h2 class='fs-3 fw-bold my-3'>Faire, c'est bien. Transmettre "
+                "comment faire, c'est encore mieux.</h2>"
+                "<p>Le Faire Festival met à l'honneur la documentation : guides, "
+                "vidéos, pas-à-pas, protocoles ouverts... tout ce qui permet "
+                "d'apprendre en faisant et de partager les savoir-faire.</p>"
+                "<p>Open source, collectif et évolutif comme tout prototype, le "
+                "festival produit des communs de fabrication et repense le lien "
+                "entre production et consommation.</p>"
+            ),
+        )
+
+        # 3 — Vidéo sous le texte.
+        bloc = Bloc.objects.create(
+            page=page, type_bloc=Bloc.VIDEO_TEXTE, position=3,
+            titre="En mouvement",
+            texte="<p>Un aperçu de l'ambiance des trois jours du festival.</p>",
+        )
+        self._poser_fichier(bloc, "video", IMG + "motion-table.mp4")
 
     def _charger_le_faire_festival(self):
         """Page « Le Faire Festival » : IMAGE titre + PARAGRAPHE intro + 3 IMAGE_TEXTE."""
