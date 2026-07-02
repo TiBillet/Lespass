@@ -43,7 +43,7 @@
                 <td class="text-end">
                     {% if bi.state == 'requested' %}
                         {% if user.is_authenticated %}
-                            {% if user.is_staff or user.is_superuser %}
+                            {% if user.is_staff or user.is_superuser or user.is_current_tenant_admin %}
                                 <div class="btn-group" role="group" aria-label="{% translate 'Validation' %}">
                                     <button class="btn btn-sm btn-outline-success"
                                             title="{% translate 'Approuver la proposition' %}"
