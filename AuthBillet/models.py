@@ -181,6 +181,10 @@ class TibilletUser(AbstractUser):
         """Vérifie si le tenant est dans le client_admin de l'utilisateur."""
         return self.client_admin.filter(pk=tenant.pk).exists()
 
+    def is_current_tenant_admin(self):
+        """Vérifie si l'utilisateur est admin du tenant actuel"""
+        return self.client_admin.filter(pk=connection.tenant.pk).exists()
+
     initiate_payment = models.ManyToManyField(Client, verbose_name=_("Can initiate payments"), related_name="initiate_payment",
                                            help_text=_("Can initiate payments on behalf of the location from My Account area"))
 

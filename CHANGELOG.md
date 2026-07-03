@@ -1,370 +1,95 @@
 # Changelog / Journal des modifications
 
-## API v2 — Construire des sites web via l'API (app `pages`) / API v2: build websites via the API (pages app)
+## Corrections : relance d'adhésion tronquée, tâche welcome morte, bouton fermer du panneau ticket / Fixes: truncated membership reminder, dead welcome task, ticket panel close button
 
-**Date :** 2026-07-01
-**Migration :** Oui / Yes — `BaseBillet.0223` (permission `page` sur `ExternalApiKey`) + `pages.0014` (validators de taille sur les champs image)
-
-**Quoi / What :** API REST v2 pour l'app `pages` : créer/éditer/supprimer des pages et
-leurs blocs (14 types) via l'API, en JSON-LD schema.org (`WebPage` / `WebPageElement`).
-Permet de fabriquer un site de A à Z par API (et un futur MCP).
-- **Permission clé API** `page` (booléen sur `ExternalApiKey`) → ouvre les routes `pages` et `blocs`.
-- **Création imbriquée** (page + tous ses blocs en un POST) **atomique**, + édition bloc par bloc.
-- **Catalogue** `GET /api/v2/pages/block-types/` : les 14 types + champs autorisés (pour agents/MCP).
-- **Images** : par URL distante (téléchargée, **anti-SSRF**) ou upload **multipart** ; GALERIE via `ImageObject[]`.
-- **Vidéos** : via le bloc EMBED (`embed_url` YouTube/Vimeo/PeerTube) — pas d'upload de fichier vidéo par l'API.
-- **Mapping** : `additionalType` = type de bloc ; champs riches en `additionalProperty` (schema.org PropertyValue).
-
-**Sécurité / Security :**
-- **XSS** : schémas d'URL dangereux (`javascript:`/`data:`/`vbscript:`) neutralisés sur les champs lien (create ET patch), source unique partagée admin + API.
-- **SSRF** : le téléchargement d'image refuse les hôtes internes/privés/loopback (IP résolue), http/https uniquement, sans redirection.
-- **DoS** : téléchargement borné (lecture par blocs, coupée à 10 Mo) ; **aucun I/O réseau dans une transaction DB** (pré-téléchargement hors transaction).
-- **Limites d'upload** : images ≤ 10 Mo (API + validator modèle admin) ; `DATA_UPLOAD_MAX_MEMORY_SIZE` = 12 Mo, `FILE_UPLOAD_MAX_MEMORY_SIZE` = 5 Mo ; nginx `client_max_body_size` 4M → 12M (dev + prod).
-- Sanitisation nh3 du texte riche ; slugs réservés rejetés ; isolation multi-tenant.
-
-**Vérifié / Verified :** 25 tests pytest (`tests/pytest/test_pages_api.py`) + non-régression `test_pages.py`. `manage.py check` : 0 issue.
-
-### Fichiers modifiés / Modified files
-| Fichier / File | Changement / Change |
-|---|---|
-| `BaseBillet/models.py` | permission `page` sur `ExternalApiKey` (basenames `page` + `bloc`) |
-| `BaseBillet/migrations/0223_externalapikey_page.py` | champ booléen `page` |
-| `Administration/admin_tenant.py` | `page` dans l'admin des clés API |
-| `Administration/utils.py` | `url_a_schema_dangereux` (neutralisation XSS, source unique admin + API) |
-| `pages/blocs_catalogue.py` | catalogue des champs par type de bloc (source unique) |
-| `pages/models.py` | `valider_taille_image` + validators sur les 5 champs image |
-| `api_v2/serializers.py` | serializers Page/Bloc (WebPage/WebPageElement) + download anti-SSRF borné (hors transaction) |
-| `api_v2/views.py` | `PageViewSet` + `BlocViewSet` + catalogue `block-types` |
-| `api_v2/urls.py` | routes `pages` / `blocs` |
-| `api_v2/openapi-schema.yaml`, `api_v2/GUIDELINES.md` | doc API |
-| `TiBillet/settings.py` | `DATA_UPLOAD_MAX_MEMORY_SIZE` + `FILE_UPLOAD_MAX_MEMORY_SIZE` |
-| `nginx/lespass_dev.conf`, `nginx_prod/lespass_prod.conf` | `client_max_body_size` 4M → 12M |
-| `tests/pytest/test_pages_api.py` | 25 tests (permission, XSS, SSRF, DoS, atomicité, multipart, catalogue, cross-tenant) |
-| `A TESTER et DOCUMENTER/api-v2-pages.md` | scénarios de test manuels |
-
-## App `pages` — Sous-pages (parent/enfant) + menus déroulants + fil d'Ariane / Pages: parent/child sub-pages + dropdown menus + breadcrumb
-
-**Date :** 2026-06-30
-**Migration :** Oui / Yes — `pages.0013` (champ `parent` auto-FK sur Page)
-
-**Quoi / What :** Une page peut avoir une **page parente** (`Page.parent`, auto-FK,
-`SET_NULL`). Si renseignée, la page devient une **sous-page d'un menu déroulant** sous
-la page parente dans la navbar.
-- **Un seul niveau** de profondeur, validé par `Page.clean()` (pas d'auto-parent, le
-  parent ne peut pas lui-même être enfant, une page avec sous-pages ne peut pas devenir
-  enfant, l'accueil ne peut pas être enfant).
-- **URLs plates** conservées (`/<slug>/`) → **zéro routing/migration d'URL**. La
-  hiérarchie sert à la navigation et au SEO, pas à l'URL.
-- **Navbar** : `get_context` construit un `main_nav` imbriqué (parent + `children`) ;
-  les **deux skins** (reunion `navbar.html` + faire_festival `navbar.html`) rendent un
-  dropdown Bootstrap. Le 1er item du menu mène à la page parente (atteignable + crawlable).
-- **SEO** : `jsonld_page` émet un **BreadcrumbList** (`Accueil › Parent › Page`) sur les
-  sous-pages → éligible au fil d'Ariane enrichi Google. **Fil d'Ariane visible** ajouté
-  dans le gabarit classic (correspond au JSON-LD).
-- **Sitemap** : inchangé — `PageSitemap` liste déjà toutes les pages publiées non-noindex
-  (les sous-pages incluses, en URL plate).
-
-**Vérifié (Chrome + tests)** : dropdown OK sur **reunion ET faire_festival** (testé en
-live), fil d'Ariane visible + BreadcrumbList JSON-LD sur les sous-pages classic, HTMX OK.
-25 tests pages (3 nouveaux : hiérarchie un niveau, breadcrumb JSON-LD, dropdown navbar).
-
-### Fichiers modifiés / Modified files
-| Fichier / File | Changement / Change |
-|---|---|
-| `pages/models.py` | champ `parent` (auto-FK) + `clean()` (un seul niveau) |
-| `pages/migrations/0013_*.py` | champ `parent` |
-| `pages/admin.py` | `parent` dans le fieldset + colonne/filtre liste |
-| `BaseBillet/views.py` | `main_nav` imbriqué (parent + `children`) |
-| `BaseBillet/templates/reunion/partials/navbar.html` | dropdown Bootstrap |
-| `BaseBillet/templates/faire_festival/partials/navbar.html` | dropdown (pilule) |
-| `pages/templatetags/pages_tags.py` | `jsonld_page` : BreadcrumbList |
-| `pages/templates/pages/classic/page.html` | fil d'Ariane visible |
-| `pages/static/pages/css/tb-blocs.css` | style `.tb-fil-ariane` |
-| `pages/management/commands/charger_site_lespass.py` | démo sous-menu (classic) : « À propos » + sous-page « Notre histoire » (image en-tête → texte → vidéo) |
-| `pages/management/commands/charger_demo_faire_festival.py` | démo sous-menu (faire_festival) : « Notre démarche » sous « Le Faire Festival » (image en-tête → texte → vidéo) |
-| `tests/pytest/test_pages.py` | + 3 tests (25 au total) |
-
-## Démo lespass — page unique (landing) au lieu de 5 pages / Lespass demo: single landing page
-
-**Date :** 2026-06-30
+**Date :** 2026-07-03
 **Migration :** Non / No
 
-**Quoi / What :** `charger_site_lespass` construit désormais **une seule landing page**
-(l'accueil) qui enchaîne **les 14 types de blocs** dans un flow cohérent (hero →
-présentation → agenda → le lieu → galerie/vidéo → activités → témoignage → embed →
-adhésion → CTA → FAQ → infos+carte → FAQ → CTA final), au lieu de 5 pages séparées.
-Les 4 anciennes pages secondaires (le-lieu, programmation, adhesion, infos-pratiques)
-sont supprimées par la commande. Bénéfice annexe : la navbar n'a plus qu'un item
-« Accueil » → une seule ligne, propre.
+**Quoi / What :** Trois corrections de bugs découverts pendant l'audit de la session skins.
 
-**Vérifié (Chrome + JS)** : 1 seule page publiée, 14 types présents (31 blocs),
-`overflowHorizontal = 0`, tous les groupements OK (3 grilles dont la grille interne
-EVENEMENTS, 2 groupes FAQ, section INFOS+carte, vidéo, embed PeerTube, galerie).
+**1. `membership_renewal_reminder` s'arrêtait au premier adhérent / stopped at the first member**
+- Le `return mail.sended` était DANS la boucle `for membership` : seul le premier
+  adhérent (du premier tenant) recevait l'email de relance, puis la tâche Celery
+  se terminait. Le `return` est supprimé : chaque adhérent est traité, une erreur
+  d'envoi est loggée et n'interrompt plus les suivants.
+- Correction aussi du message de log copié-collé trompeur (« send_welcome_email »
+  → « membership_renewal_reminder »).
+
+**2. Suppression de la tâche morte `send_welcome_email` / dead task removed**
+- Jamais appelée nulle part, et son template `emails/welcome/welcome_email.html`
+  n'existe pas (l'erreur `TemplateDoesNotExist` était avalée par le `try/except`).
+  Le seul `welcome_email.html` existant est l'email legacy de création d'instance
+  (`reunion/views/tenant/emails/`), au contexte incompatible — remplacé depuis par
+  `onboard/emails/ready.html`. La tâche est supprimée.
+
+**3. Bouton fermer du panneau ticket inopérant / ticket panel close button broken**
+- `data-bs-dismiss="ticketPanel"` (valeur invalide) → `data-bs-dismiss="offcanvas"`.
+  Le bouton ✕ de l'offcanvas `#ticketPanel` (page « Mes réservations ») ferme
+  désormais le panneau.
 
 ### Fichiers modifiés / Modified files
 | Fichier / File | Changement / Change |
 |---|---|
-| `pages/management/commands/charger_site_lespass.py` | réécrit en page unique (tous les blocs) + suppression des 4 pages secondaires |
+| `BaseBillet/tasks.py` | Suppression `send_welcome_email` ; fix `return` dans la boucle de `membership_renewal_reminder` + log |
+| `BaseBillet/templates/reunion/views/account/reservations.html` | `data-bs-dismiss="offcanvas"` sur le bouton close |
 
-## Navbar — allègement (hauteur, logo, texte, libellés, anti-wrap) / Navbar cleanup
+
 
 **Date :** 2026-06-30
-**Migration :** Non / No
-**Portée / Scope :** ⚠️ `tibillet.css` est chargé par les **DEUX skins** (reunion ET faire_festival → `faire_festival/base.html:77`). Les réglages `.navbar` s'appliquent donc aux deux. Vérifié : la navbar faire_festival (chantefrein) reste correcte (chips intacts via `faire_festival.css`, logo bien dimensionné, plus compacte). Les libellés FF gardent leur style propre (plus spécifique).
+**Migration :** Oui / Yes — `BaseBillet/migrations/0220_lignearticle_idempotency_key_and_more.py`
 
-**Quoi / What :** La navbar reunion était lourde et débordait (libellés trop longs,
-texte 20px, logo 6rem) :
-- **Libellés de menu** : les pages du site Lespass ont des titres courts pour la
-  navigation (`Accueil`, `Adhésion`…) ; le texte descriptif reste dans `meta_title`
-  (SEO). Modif locale à `charger_site_lespass` (lespass uniquement).
-- **Texte de menu** : `20px → 16px` (`tibillet.css`).
-- **Hauteur navbar** : `padding-block 20px → 10px` (`tibillet.css`).
-- **Logo** : `max-width 6rem → 3.5rem` (`navbar.html`) + cap de **hauteur** à `2.5rem`
-  et `object-fit: contain` sur `.navbar-brand img` (le logo ne s'étire plus sur toute
-  la hauteur de la navbar, plus de recadrage).
-- **Anti-coupure** : `.nav-link { white-space: nowrap }` (un libellé ne se coupe plus
-  en « RÉSEAU / LOCAL ») + `.navbar-nav { flex-wrap: wrap }` (l'item entier passe à la
-  ligne si la place manque → jamais de scroll horizontal).
+**Quoi / What :** Trois corrections sur l'API v2, remontées par un intégrateur.
 
-**Vérifié (Chrome, JS)** : `overflowHorizontal = 0`, aucun libellé sur 2 lignes,
-navbar sur 1 ligne en large / wrap propre par item en étroit. 22 tests OK.
+**1. Partager un produit sur plusieurs événements / Share a product across several events**
+- `isRelatedTo` accepte désormais une **liste** (UUID et/ou objets schema.org) au
+  `POST /api/v2/products/` : le produit est attaché à tous les events listés.
+  Avant, une liste renvoyait 201 mais n'attachait rien.
+- Nouvelle route `POST /api/v2/events/{uuid}/link-product/` : attache un (ou
+  plusieurs) produit(s) **déjà créé(s)** à un événement (M2M `Event.products`),
+  sans en créer un nouveau. Accepte `productId`, `productIds`, `product`, `products`.
 
-### Fichiers modifiés / Modified files
-| Fichier / File | Changement / Change |
-|---|---|
-| `BaseBillet/static/reunion/css/tibillet.css` | nav-link 16px + nowrap ; navbar-nav flex-wrap (PARTAGÉ) |
-| `BaseBillet/templates/reunion/partials/navbar.html` | logo max-width 3.5rem (PARTAGÉ) |
-| `pages/management/commands/charger_site_lespass.py` | titres de page courts (Accueil, Adhésion) |
+**2. Double ticket sur un sous-événement / Double ticket on a sub-event**
+- Un sous-événement (avec `parent`) est forcé en catégorie `ACTION`. Le
+  `TicketCreator` créait alors DEUX tickets quand l'event avait aussi un produit
+  réservable : le bon, plus un ticket « bénévole » vide (sans `pricesold`, donc
+  `identifier` vide en sortie). Désormais `method_A` n'est appelé que si aucun
+  produit n'a été traité (`products_dict` vide).
 
-## App `pages` — Audit mobile 390px du skin classic (Hallmark + ui-ux-pro-max) / Pages: mobile 390px audit of the classic skin
+**3. Sécurité idempotence de la recharge cadeau / Gift-refill idempotency hardening**
+- `POST /api/v2/wallet-refills/` : l'`Idempotency-Key` est désormais **obligatoire**
+  (400 si absente) et stockée en **base** (`LigneArticle.idempotency_key`,
+  contrainte d'unicité = verrou atomique contre les requêtes concurrentes), au
+  lieu d'un cache best-effort. Même clé + même corps → 208 ; même clé + corps
+  **différent** → 409 ; une clé dont la tentative précédente a échoué (Fedow) peut
+  être ré-essayée. Résout le risque de double-crédit (TOCTOU + réutilisation de clé).
 
-**Date :** 2026-06-30
-**Migration :** Non / No
-
-**Quoi / What :** Audit du rendu mobile du skin classic (skills Hallmark + ui-ux-pro-max).
-**Aucun bug visuel bloquant** : tous les blocs s'empilent en une colonne sous 768px,
-aucun débordement horizontal, galerie/cartes/carte Leaflet/FAQ responsive. Raffinements
-appliqués (`tb-blocs.css` uniquement, zéro changement de template) :
-- **Cibles tactiles** : boutons et résumés de FAQ accordéon passent à `min-height: 44px`
-  (Apple HIG / WCAG) — vérifié 44–45px en live.
-- **`touch-action: manipulation`** sur les éléments cliquables (supprime le délai de tap
-  300ms mobile).
-- Marqueur +/− de l'accordéon recentré verticalement (rangée tactile 44px).
-
-**Vérifié (Chrome, JS)** : `overflowHorizontal = 0`, boutons ≥ 44px, aucun bouton ne
-déborde, empilement 1 colonne. Le CSS utilise `min(100%, Xrem)` partout → aucun
-débordement possible de 320 à 390px par construction. Desktop inchangé. 22 tests OK.
+**Pourquoi / Why :** Limites/risques signalés sur l'API v2 (réutilisation produit,
+tickets parasites, double-crédit possible sur recharge).
 
 ### Fichiers modifiés / Modified files
 | Fichier / File | Changement / Change |
 |---|---|
-| `pages/static/pages/css/tb-blocs.css` | cibles tactiles 44px (boutons + summary FAQ), touch-action, marqueur centré |
+| `api_v2/serializers.py` | `isRelatedTo` en liste (`_extract_event_uuids`), boucle d'attachement ; nettoyage ruff |
+| `api_v2/views.py` | route `link_product` ; refonte idempotence wallet-refill (verrou DB, 208/409/retry) |
+| `api_v2/openapi-schema.yaml` | doc route `link-product`, `isRelatedTo` liste, header `Idempotency-Key` requis + 409 |
+| `api_v2/README.md` | doc idempotence en base, header obligatoire |
+| `BaseBillet/validators.py` | `method_A` appelé seulement si `products_dict` vide |
+| `BaseBillet/models.py` | `LigneArticle.idempotency_key` + `UniqueConstraint` conditionnelle |
+| `tests/pytest/test_api_v2_product_link_event.py` | **nouveau** — 6 tests (multi-events + link-product) |
+| `tests/pytest/test_reservation_subevent_tickets.py` | **nouveau** — 4 tests (1 ticket par cas) |
+| `tests/pytest/test_api_v2_wallet_refill.py` | + 4 tests idempotence (208/409/400/retry), maj des tests existants |
 
-## Fixtures — Site web complet pour le tenant `lespass` + PeerTube videos-libr.es / Fixtures: complete website for the `lespass` tenant
+### Migration
+- **Migration nécessaire / Migration required :** Oui / Yes
+- `migrate_schemas --executor=multiprocessing` (ajout colonne `idempotency_key`
+  nullable + contrainte unique conditionnelle sur `LigneArticle` ; additif, sans risque).
 
-**Date :** 2026-06-30
-**Migration :** Non / No
-
-**Quoi / What :**
-- **Nouvelle commande `charger_site_lespass`** : construit un **site web complet** pour
-  le tenant `lespass` via le moteur pages (skin classic éditorial). **5 pages
-  cohérentes** (Accueil, Le lieu, Programmation, Adhésion & soutien, Infos pratiques)
-  utilisant **les 14 types de blocs**, avec SEO par page (meta_title, meta_description,
-  image de partage). Le bloc EVENEMENTS affiche les vrais évènements de lespass ;
-  l'EMBED est une vidéo PeerTube (`videos-libr.es`).
-- **Branchée dans les fixtures** : `demo_data_v2.py` appelle `charger_site_lespass`
-  en fin de seed (après config + events), via une méthode gardée (un échec pages ne
-  casse jamais le seed).
-- **PeerTube `videos-libr.es`** ajouté à `DEFAULT_PEERTUBE_HOSTS` (instance libre).
-- **Images** : réutilise les images génériques du projet `BaseBillet/static/images/
-  404-*.jpg` (déjà utilisées pour lespass).
-
-**Vérifié (Chrome)** : site lespass complet rendu (hero, EVENEMENTS dynamique avec
-vrais events, grille de cartes, galerie, **embed PeerTube qui charge la vraie vidéo**,
-témoignages, INFOS+carte, FAQ accordéon) ; skin **faire_festival** de chantefrein OK
-y compris le **popup Leaflet** (fix XSS `textContent`, style FF préservé).
-
-### Fichiers modifiés / Modified files
-| Fichier / File | Changement / Change |
-|---|---|
-| `pages/management/commands/charger_site_lespass.py` | **nouveau** — site complet 5 pages, 14 blocs |
-| `Administration/management/commands/demo_data_v2.py` | +`_seed_site_pages_lespass` (call_command gardé) |
-| `pages/templatetags/pages_tags.py` | `videos-libr.es` ajouté à la whitelist PeerTube |
-
-## App `pages` — Embed PeerTube + durcissement sécurité (audit XSS) / Pages: PeerTube embed + security hardening (XSS audit)
-
-**Date :** 2026-06-30
-**Migration :** Non / No
-
-**Quoi / What :**
-- **Embed PeerTube.** Le tag `embed_iframe` accepte désormais les vidéos PeerTube
-  des **instances autorisées**. PeerTube étant fédéré (n'importe quel hôte), on ne
-  peut pas tout accepter sans rouvrir la faille d'iframe arbitraire : on part d'une
-  liste par défaut (`framatube.org`, `makertube.net`), **extensible via le setting
-  optionnel `PAGES_PEERTUBE_HOSTS`** (tuple de domaines) sans modifier le code.
-  L'URL d'embed est reconstruite (`/videos/embed/<id>`) sur le même hôte autorisé,
-  l'identifiant est validé (caractères sûrs uniquement).
-- **Audit XSS / sérialisation des entrées.** Vérification de tous les chemins
-  entrée→sortie de l'app pages :
-  - **Faille corrigée (classic ET faire_festival)** : le popup Leaflet construisait
-    son HTML par concaténation du label (`bindPopup('<b>' + p.label)`) → un label
-    malveillant dans `points_gps` pouvait injecter du JS. Désormais construit en DOM
-    avec `textContent` (jamais d'HTML concaténé). Aucun changement visuel.
-  - **Liens** : `bouton_url`/`bouton2_url`/`embed_url` à schéma dangereux
-    (`javascript:`, `data:`, `vbscript:`, y compris obfusqués) sont neutralisés à
-    l'enregistrement admin.
-  - **JSON-LD** : échappement renforcé `<`, `>`, `&` (comme Django `json_script`).
-  - **Confirmés sûrs** : `texte|safe` (assaini par nh3 au save), `points_gps`
-    (`json_script`), tous les autres champs auto-échappés par Django, embed reconstruit
-    + échappé.
-
-**Pourquoi / Why :** demande explicite (PeerTube + sécurité). Le moteur de pages
-doit être robuste aux entrées malveillantes, même côté éditeur (la whitelist embed
-et l'assainissement sont la seule barrière, le champ texte étant déjà nettoyé).
-
-### Fichiers modifiés / Modified files
-| Fichier / File | Changement / Change |
-|---|---|
-| `pages/templatetags/pages_tags.py` | PeerTube (hosts allowlist + setting) ; embed http(s)-only ; JSON-LD échappement `<>&` |
-| `pages/admin.py` | `_url_a_schema_dangereux` + neutralisation des liens à l'enregistrement |
-| `pages/templates/pages/classic/partials/bloc_carte_leaflet.html` | popup via `textContent` (anti-XSS) |
-| `pages/templates/pages/faire_festival/partials/bloc_carte_leaflet.html` | popup via `textContent` (anti-XSS, style inchangé) |
-| `pages/models.py` | help_text embed (PeerTube) |
-| `tests/pytest/test_pages.py` | + tests PeerTube whitelist + schémas dangereux (22 au total) |
-
-## App `pages` — Lot 4 : blocs Galerie, Embed (whitelist) & Accordéon FAQ / Pages lot 4: Gallery, Embed (whitelist) & collapsible FAQ blocks
-
-**Date :** 2026-06-30
-**Migration :** Oui / Yes — `pages.0012` (champs `repliable`, `embed_url`, types `GALERIE`/`EMBED`, modèle `ImageGalerie`)
-
-**Quoi / What :**
-- **Galerie** : nouveau type `GALERIE` + modèle `ImageGalerie` (plusieurs images par
-  bloc, édité en `TabularInline` dans l'admin). Rendu en grille responsive avec
-  légendes.
-- **Embed** : nouveau type `EMBED` + champ `embed_url`. Template tag `embed_iframe`
-  qui **valide l'hôte contre une liste blanche stricte (YouTube, Vimeo)**, reconstruit
-  l'URL d'embed lui-même (jamais l'URL brute), rend un iframe 16:9 responsive — et
-  **n'affiche RIEN pour un hôte non autorisé** (anti-injection d'iframe). YouTube
-  passe par `youtube-nocookie`.
-- **Accordéon** : champ booléen `repliable` sur les blocs FAQ. Si coché, la FAQ
-  devient un accordéon natif `<details>/<summary>` (repliable, accessible, **zéro
-  JS**, marqueur +/− d'accent). Sinon : comportement historique (réponse ouverte).
-  Choix laissé à l'éditeur — non destructif.
-
-**Pourquoi / Why :** compléter le moteur de pages pour couvrir les besoins courants
-d'un site (galerie photo, vidéo intégrée, FAQ repliable) tout en gardant la sécurité
-(pas d'iframe arbitraire) et le principe djc (rendu serveur, zéro JS pour l'accordéon).
-
-### Fichiers modifiés / Modified files
-| Fichier / File | Changement / Change |
-|---|---|
-| `pages/models.py` | types `GALERIE`/`EMBED`, champs `repliable`/`embed_url`, modèle `ImageGalerie` |
-| `pages/migrations/0012_*.py` | migration des champs + modèle ImageGalerie |
-| `pages/admin.py` | inline `ImageGalerieInline`, champs + conditional_fields |
-| `pages/templatetags/pages_tags.py` | tag `embed_iframe` (whitelist YouTube/Vimeo) |
-| `pages/templates/pages/classic/partials/bloc_galerie.html` | nouveau partial galerie |
-| `pages/templates/pages/classic/partials/bloc_embed.html` | nouveau partial embed |
-| `pages/templates/pages/classic/partials/bloc_faq.html` | variante repliable `<details>` |
-| `pages/static/pages/css/tb-blocs.css` | styles galerie, embed 16:9, accordéon |
-| `pages/management/commands/charger_demo_blocs.py` | blocs Galerie/Embed + cas FAQ repliable |
-| `tests/pytest/test_pages.py` | + tests embed whitelist (sécurité) + galerie/repliable (21 au total) |
-
-## App `pages` — Lots 2 & 3 : JSON-LD + sitemap + bloc dynamique « Prochains évènements » / Pages lots 2 & 3: JSON-LD + sitemap + dynamic events block
-
-**Date :** 2026-06-30
-**Migration :** Oui / Yes — `pages.0011` (champ `nombre_max` + type de bloc `EVENEMENTS`)
-
-**Quoi / What :**
-- **Lot 2 — SEO structuré.** Template tag `jsonld_page` : émet un JSON-LD
-  `WebPage` + un `FAQPage` (questions/réponses) si la page contient des blocs FAQ
-  → éligible aux résultats enrichis Google. Inclus dans `extra_meta` du gabarit
-  classic. Construit côté serveur (pas d'API), échappé contre l'injection.
-  Sitemap : nouveau `PageSitemap` (pages publiées, hors brouillon/noindex/accueil)
-  branché sur le `/sitemap.xml` **existant** du tenant (`django.contrib.sitemaps`,
-  même module que events/products) — pas de système concurrent.
-- **Lot 3 — Bloc dynamique `EVENEMENTS`.** Liste automatique des prochains
-  évènements publiés (tag `evenements_a_venir`, requête directe sur `Event`, pas
-  d'API), avec un champ `nombre_max`. Rendu en cartes (réutilise `.tb-bloc--carte`)
-  avec date, titre, description et lien `/event/<slug>/`. Empty state honnête.
-
-**Pourquoi / Why :** une « page web complète » a besoin de données structurées
-(partage/SEO), d'un sitemap, et de **contenu vivant** (l'agenda) — pas seulement
-des blocs statiques. La vitrine devient un vrai site de plateforme.
-
-### Fichiers modifiés / Modified files
-| Fichier / File | Changement / Change |
-|---|---|
-| `pages/templatetags/pages_tags.py` | + `jsonld_page` (JSON-LD) + `evenements_a_venir` (events à venir) |
-| `pages/sitemap.py` | nouveau `PageSitemap` (branché sur le sitemap.xml tenant existant) |
-| `TiBillet/urls_tenants.py` | `PageSitemap` ajouté au dict `sitemaps` (pas de settings touché) |
-| `pages/models.py` | type `EVENEMENTS` + champ `nombre_max` |
-| `pages/migrations/0011_*.py` | `nombre_max` + choix `EVENEMENTS` |
-| `pages/admin.py` | `nombre_max` (champ + conditional) ; `EVENEMENTS` dans titre |
-| `pages/templates/pages/classic/partials/bloc_evenements.html` | nouveau partial (cartes events dynamiques) |
-| `pages/templates/pages/classic/page.html` | `{% jsonld_page %}` dans extra_meta |
-| `pages/management/commands/charger_demo_blocs.py` | bloc EVENEMENTS dans la démo |
-| `tests/pytest/test_pages.py` | + tests JSON-LD/FAQPage, sitemap, EVENEMENTS (19 au total) |
-
-## App `pages` — Lot 1 : champs SEO par page + corrections groupement (marges/padding) / Pages lot 1: per-page SEO fields + grouping fixes
-
-**Date :** 2026-06-29
-**Migration :** Oui / Yes — `pages.0010` (champs `image`, `meta_title`, `noindex` sur Page)
-
-**Quoi / What :** Le modèle `Page` porte désormais ses propres métadonnées SEO :
-`meta_title` (titre `<title>` optionnel), `image` (image de partage og:image /
-twitter:image, variation `social_card` 1200×630) et `noindex` (exclusion moteurs).
-Le gabarit classic `page.html` branche ces champs sur les blocs `<meta>` hérités
-du base (repli sur l'image du site via `{{ block.super }}`). Nouveau fieldset
-« Référencement & partage » dans `PageAdmin`.
-
-Corrections UX du groupement de blocs (cas limites, skin classic) : une carte
-isolée ne s'étire plus sur toute la largeur (capée + centrée via `:only-child`) ;
-un bloc INFOS ou une carte Leaflet rendus **seuls** retrouvent leur gutter et leur
-container (ils ne sont plus collés au bord / full-bleed) ; rythme vertical resserré.
-
-**Pourquoi / Why :** une « page web complète » a besoin de SEO par page (titre,
-aperçu de partage) et d'un rendu correct quel que soit l'agencement des blocs.
-
-### Fichiers modifiés / Modified files
-| Fichier / File | Changement / Change |
-|---|---|
-| `pages/models.py` | + `meta_title`, `image` (social_card), `noindex` sur Page + `VARIATIONS_PARTAGE` |
-| `pages/migrations/0010_*.py` | migration des 3 champs SEO |
-| `pages/admin.py` | fieldset « Référencement & partage » dans PageAdmin |
-| `pages/templates/pages/classic/page.html` | blocs `title`/`meta_robots`/`og_image`/`twitter_image` par page |
-| `pages/static/pages/css/tb-blocs.css` | fix carte isolée, INFOS/Leaflet solo, rythme vertical |
-| `pages/management/commands/charger_demo_blocs.py` | 2ᵉ page « cas limites de groupement » + image/titre SEO sur l'accueil |
-| `tests/pytest/test_pages.py` | + `test_meta_seo_titre_et_noindex` |
-
-## App `pages` : refonte éditoriale du skin classic + commande de démo tous-blocs / Pages app: editorial redesign of the classic skin + all-blocks demo command
-
-**Date :** 2026-06-29
-**Migration :** Non / No
-
-**Quoi / What :** Le skin **classic** (`tb-blocs.css`) passe d'un rendu Bootstrap
-générique à un **thème éditorial autonome** : titres en serif système (zéro CDN),
-accent unique discipliné (couleur du tenant `--bs-primary`), filets d'accent
-(« kicker ») sur les titres de section, cartes avec image en tête + profondeur +
-lift au survol, témoignage avec grand guillemet typographique, CTA en bande
-teintée, FAQ serif sur 2 colonnes. Nouvelle commande `charger_demo_blocs` qui pose
-**tous les types de blocs** sur la page d'accueil pour la revue visuelle.
-
-**Pourquoi / Why :** Le rendu classic était fade (police/accent génériques hérités
-de Bootstrap, cartes plates). Objectif : un thème par défaut joli et lisible,
-distinctif sans dépendre du thème du tenant, et un moyen rapide de vérifier les
-11 types de blocs + les 5 types de groupe d'un coup.
-
-**Portée / Scope :** `tb-blocs.css` est chargé **uniquement** par le skin classic.
-Le skin **faire_festival n'est pas touché** (gabarits + CSS propres). Aucun
-template ni modèle modifié, aucune migration. Polices = piles système, aucune
-ressource externe ajoutée.
-
-### Fichiers modifiés / Modified files
-| Fichier / File | Changement / Change |
-|---|---|
-| `pages/static/pages/css/tb-blocs.css` | refonte éditoriale complète (tokens, serif, cartes, témoignage, CTA, FAQ) |
-| `pages/management/commands/charger_demo_blocs.py` | nouvelle commande : accueil de démo avec tous les blocs (force skin classic) |
-| `pages/management/commands/charger_demo_faire_festival.py` | flag `--no-skin` + forçage skin faire_festival (one-shot complet) |
+### i18n
+- Nouvelles chaînes `_()` à traduire (FR source) : `Idempotency-Key header is required.`,
+  `Idempotency-Key already used with different parameters.`,
+  `A refill with this key is already in progress.`,
+  `No product identifier provided. Use productId or productIds.`
+  → à passer au workflow `makemessages` / `compilemessages` (côté mainteneur).
 
 ## Test carte NFC ↔ wallet Fedow : rendu autonome (plus de skip) / Fedow card test made self-contained
 
