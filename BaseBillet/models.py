@@ -2219,6 +2219,12 @@ class Reservation(models.Model):
     def user_mail(self):
         return self.user_commande.email
 
+    def valid_tickets_count(self):
+        return self.tickets.filter(status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED]).count()
+
+    def cancelled_tickets_count(self):
+        return self.tickets.filter(status=Ticket.CANCELED).count()
+
     def paiements_paid(self):
         return self.paiements.filter(
             Q(status=Paiement_stripe.PAID) | Q(status=Paiement_stripe.VALID)
