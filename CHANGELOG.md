@@ -1,6 +1,39 @@
 # Changelog / Journal des modifications
 
-## API v2 — 3 corrections : produit multi-events, double ticket sous-event, idempotence recharge / API v2 — 3 fixes
+## Corrections : relance d'adhésion tronquée, tâche welcome morte, bouton fermer du panneau ticket / Fixes: truncated membership reminder, dead welcome task, ticket panel close button
+
+**Date :** 2026-07-03
+**Migration :** Non / No
+
+**Quoi / What :** Trois corrections de bugs découverts pendant l'audit de la session skins.
+
+**1. `membership_renewal_reminder` s'arrêtait au premier adhérent / stopped at the first member**
+- Le `return mail.sended` était DANS la boucle `for membership` : seul le premier
+  adhérent (du premier tenant) recevait l'email de relance, puis la tâche Celery
+  se terminait. Le `return` est supprimé : chaque adhérent est traité, une erreur
+  d'envoi est loggée et n'interrompt plus les suivants.
+- Correction aussi du message de log copié-collé trompeur (« send_welcome_email »
+  → « membership_renewal_reminder »).
+
+**2. Suppression de la tâche morte `send_welcome_email` / dead task removed**
+- Jamais appelée nulle part, et son template `emails/welcome/welcome_email.html`
+  n'existe pas (l'erreur `TemplateDoesNotExist` était avalée par le `try/except`).
+  Le seul `welcome_email.html` existant est l'email legacy de création d'instance
+  (`reunion/views/tenant/emails/`), au contexte incompatible — remplacé depuis par
+  `onboard/emails/ready.html`. La tâche est supprimée.
+
+**3. Bouton fermer du panneau ticket inopérant / ticket panel close button broken**
+- `data-bs-dismiss="ticketPanel"` (valeur invalide) → `data-bs-dismiss="offcanvas"`.
+  Le bouton ✕ de l'offcanvas `#ticketPanel` (page « Mes réservations ») ferme
+  désormais le panneau.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/tasks.py` | Suppression `send_welcome_email` ; fix `return` dans la boucle de `membership_renewal_reminder` + log |
+| `BaseBillet/templates/reunion/views/account/reservations.html` | `data-bs-dismiss="offcanvas"` sur le bouton close |
+
+
 
 **Date :** 2026-06-30
 **Migration :** Oui / Yes — `BaseBillet/migrations/0220_lignearticle_idempotency_key_and_more.py`
