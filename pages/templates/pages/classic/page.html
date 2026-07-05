@@ -27,15 +27,26 @@
 {% block twitter_image %}{% if page_courante.image %}https://{{ request.get_host }}{{ page_courante.image.social_card.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
 
 {% block extra_meta %}
-    {# CSS commun des blocs (classes .tb-bloc*), habille par le skin. #}
-    {# / Common blocks CSS (.tb-bloc* classes), themed by the skin. #}
-    <link rel="stylesheet" href="{% static 'pages/css/tb-blocs.css' %}">
     {# Donnees structurees JSON-LD (WebPage + FAQPage si la page a des FAQ). #}
     {# / JSON-LD structured data (WebPage + FAQPage if the page has FAQ). #}
+    {# RAPPEL : extra_meta n'existe QUE dans shell.html (le <head>). En reponse #}
+    {# HTMX (headless), ce bloc est PERDU — n'y mettre QUE du SEO, jamais un #}
+    {# asset CSS/JS necessaire au rendu. / REMINDER: extra_meta only exists in #}
+    {# shell.html. It is DROPPED in HTMX responses — SEO only, never a required asset. #}
     {% jsonld_page page_courante %}
 {% endblock %}
 
 {% block main %}
+    {# CSS commun des blocs (.tb-bloc*), charge DANS le main et pas dans #}
+    {# extra_meta : le squelette headless (reponses HTMX) n'a pas de <head>, #}
+    {# donc un asset en extra_meta n'arrive jamais lors d'une navigation HTMX #}
+    {# (page sans style). Un <link> dans le body est valide en HTML5 et le #}
+    {# navigateur deduplique via son cache. #}
+    {# / Common blocks CSS, loaded INSIDE main and not in extra_meta: the #}
+    {# headless skeleton (HTMX responses) has no <head>, so an asset in #}
+    {# extra_meta never arrives on HTMX navigation (unstyled page). A <link> #}
+    {# in the body is valid HTML5 and the browser dedupes it via its cache. #}
+    <link rel="stylesheet" href="{% static 'pages/css/tb-blocs.css' %}">
     <main class="tb-page" data-testid="page-{{ page_courante.slug }}">
         {# Fil d'Ariane visible pour les sous-pages (correspond au BreadcrumbList #}
         {# JSON-LD). / Visible breadcrumb for sub-pages (matches the JSON-LD). #}

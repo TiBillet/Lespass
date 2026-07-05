@@ -86,4 +86,7 @@ if settings.DEBUG and not settings.TEST:
     urlpatterns += [path("__reload__/", include("django_browser_reload.urls")),]
 
 # Register custom error handlers
+# handler404 : page 404 skin-aware + HTMX-aware (actif quand DEBUG=0).
+# / handler404: skin-aware + HTMX-aware 404 page (active when DEBUG=0).
+handler404 = 'BaseBillet.views.handler404'
 handler500 = 'BaseBillet.views.handler500'

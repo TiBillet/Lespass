@@ -40,6 +40,12 @@
     --tb-surface-alt: var(--bs-tertiary-bg, #f6f5f1);
     --tb-bordure: var(--bs-border-color, #e3e1da);
 
+    /* Fond du HERO sans image : neutre legerement teinte accent, pour creer un
+       « moment d'arrivee » (le surface-alt seul est trop proche du blanc).
+       / Imageless HERO background: neutral slightly tinted with accent, to create
+       an "arrival" moment (surface-alt alone is too close to white). */
+    --tb-hero-fond: color-mix(in srgb, var(--tb-accent) 4%, var(--tb-surface-alt));
+
     /* Police de titre éditoriale (serif système, zéro téléchargement).
        / Editorial title font (system serif, zero download). */
     --tb-police-titre: ui-serif, Georgia, "Iowan Old Style", "Palatino Linotype",
@@ -201,39 +207,51 @@ h2.tb-bloc__titre::before {
  * HERO — bannière d'ouverture, contenu biaisé à gauche (casse la symétrie).
  * / HERO — opening banner, left-biased content (breaks symmetry).
  * ------------------------------------------------------------------------- */
+/* HERO sans image : banniere d'identite recentree (titre + sous-titre centres)
+   sur un fond neutre teinte. Pas de biais gauche (il laissait un trou a droite
+   sans image), pas de filet decoratif.
+   / Imageless HERO: centered identity banner (title + subtitle centered) on a
+   tinted neutral background. No left bias (it left a hole on the right without an
+   image), no decorative rule. */
 .tb-bloc--hero {
-    background-color: var(--tb-surface-alt);
+    background-color: var(--tb-hero-fond);
     padding-block: clamp(3.5rem, 10vw, 8rem);
     border-bottom: 1px solid var(--tb-bordure);
+    text-align: center;
 }
 .tb-bloc--hero .tb-bloc__contenu {
-    margin-inline: 0 auto; /* biais à gauche / left bias */
-    max-width: 48rem;
+    margin-inline: auto;
+    max-width: 52rem;
 }
 .tb-bloc--hero .tb-bloc__titre {
     font-size: clamp(2.4rem, 6.5vw, 4.5rem);
     font-weight: 600;
     letter-spacing: -0.02em;
 }
-/* Filet d'accent au-dessus du titre hero (signature éditoriale).
-   / Accent rule above the hero title (editorial signature). */
-.tb-bloc--hero .tb-bloc__titre::before {
-    content: "";
-    display: block;
-    width: 3.5rem;
-    height: 4px;
-    margin-bottom: 1.25rem;
-    background-color: var(--tb-accent);
-    border-radius: 2px;
+.tb-bloc--hero .tb-bloc__sous-titre {
+    margin-inline: auto; /* centre le sous-titre / center the subtitle */
 }
 
-/* HERO avec image : photo en fond + contenu dans une carte (lisibilité assurée
-   par la carte, pas de voile). / HERO with image: photo background + content in a
-   card (legibility from the card, no scrim). */
+/* HERO avec image (config.img) : photo en fond + contenu dans une carte alignee
+   a gauche (lisibilité assurée par la carte, pas de voile). / HERO with image
+   (config.img): photo background + content in a left-aligned card (legibility
+   from the card, no scrim). */
 .tb-bloc--hero-image {
     background-image: var(--tb-hero-image);
     background-size: cover;
-    background-position: center;
+    /* Image centrée horizontalement ET verticalement (sinon, sur écran large et
+       court, seul le haut de l'image reste visible).
+       / Image centered horizontally AND vertically (otherwise, on wide short
+       screens, only the top of the image stays visible). */
+    background-position: center center;
+    text-align: left;
+    /* Hauteur minimale : sur écran large, l'image a de la place et la carte est
+       centrée verticalement (pas de bande rognée en haut).
+       / Minimum height: on wide screens the image has room and the card is
+       vertically centered (no cropped top band). */
+    min-height: clamp(360px, 44vh, 600px);
+    display: flex;
+    align-items: center;
 }
 .tb-bloc--hero-image .tb-bloc__contenu {
     background-color: var(--tb-surface);
@@ -242,7 +260,10 @@ h2.tb-bloc__titre::before {
     padding: clamp(1.75rem, 4vw, 3.25rem);
     box-shadow: var(--tb-ombre-forte);
     max-width: 44rem;
-    margin-inline: 0 auto;
+    margin-inline: 0 auto; /* carte alignée à gauche / left-aligned card */
+}
+.tb-bloc--hero-image .tb-bloc__sous-titre {
+    margin-inline: 0; /* annule le centrage du cas sans image / cancel centering */
 }
 
 /* ---------------------------------------------------------------------------

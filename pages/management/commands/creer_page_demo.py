@@ -66,7 +66,9 @@ class Command(BaseCommand):
         # / Start from a clean page: delete existing blocks.
         page.blocs.all().delete()
 
-        # 1 — HERO
+        # 1 — HERO : bannière d'identité (titre + sous-titre). Le fond est
+        # l'image générale du lieu (config.img), pas un champ du bloc. Les actions
+        # sont portées par le bloc CTA plus bas.
         Bloc.objects.create(
             page=page,
             type_bloc=Bloc.HERO,
@@ -74,10 +76,6 @@ class Command(BaseCommand):
             titre="Bienvenue à Lespass",
             sous_titre="Un lieu culturel, sa programmation et ses adhésions, "
             "réunis sur une page composée de blocs.",
-            bouton_label="Voir l'agenda",
-            bouton_url="/event/",
-            bouton2_label="Adhérer",
-            bouton2_url="/memberships/",
         )
 
         # 2 — PARAGRAPHE

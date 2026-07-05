@@ -218,16 +218,26 @@ class Command(BaseCommand):
             pos += 1
             return pos
 
-        # 1 — HERO (solo) : titre + sous-titre + image de fond + 2 boutons.
-        hero = Bloc.objects.create(
+        # Fond du HERO : image générale du lieu (Configuration.img), lue au rendu
+        # (le HERO n'a plus de champ image propre).
+        # / HERO background: the venue's general image (Configuration.img).
+        from BaseBillet.models import Configuration
+        self._poser_fichier(Configuration.get_solo(), "img", IMG + "fond.png")
+
+        # 1 — HERO (solo) : bannière d'identité (titre + sous-titre).
+        Bloc.objects.create(
             page=page, type_bloc=Bloc.HERO, position=suivant(),
             titre="La Cité des Faiseuses",
             sous_titre="Un tiers-lieu coopératif pour fabriquer, apprendre et "
                        "transmettre — au cœur de la ville.",
+        )
+
+        # 1bis — CTA (solo) : actions (agenda / adhésions).
+        Bloc.objects.create(
+            page=page, type_bloc=Bloc.CTA, position=suivant(),
             bouton_label="Voir l'agenda", bouton_url="/event/",
             bouton2_label="Adhérer", bouton2_url="/memberships/",
         )
-        self._poser_fichier(hero, "image", IMG + "fond.png")
 
         # 2 — PARAGRAPHE (solo) : titre + texte riche (paragraphes + liste).
         Bloc.objects.create(

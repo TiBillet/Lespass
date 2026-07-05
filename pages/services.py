@@ -170,17 +170,23 @@ def _slug_accueil_libre(PageModel):
     return slug
 
 
-def construire_page_accueil(PageModel, BlocModel, config):
+def construire_page_accueil(PageModel, BlocModel, config, description_longue=None):
     """
-    Cree une page d'accueil par defaut reproduisant la home historique.
+    Cree une page d'accueil par defaut : HERO (identite) -> PARAGRAPHE (description
+    longue) -> CTA (actions selon les modules actifs).
     Idempotent : ne fait rien si une page d'accueil (est_accueil=True) existe deja.
-    / Creates a default home page reproducing the historical home.
+    / Creates a default home page: HERO (identity) -> PARAGRAPH (long description)
+    -> CTA (actions depending on active modules).
     Idempotent: does nothing if a home page (est_accueil=True) already exists.
 
     :param PageModel: la classe Page (reelle ou historique).
     :param BlocModel: la classe Bloc (reelle ou historique).
     :param config: l'instance Configuration du tenant (organisation, descriptions,
-        modules, image...).
+        modules...).
+    :param description_longue: texte du bloc PARAGRAPHE (TOUJOURS cree, meme vide).
+        None = on prend celle de la config (flux migration tenants existants).
+        Une chaine, meme vide = on l'utilise telle quelle (flux onboarding : evite
+        le texte d'accueil hardcode ecrit par create_tenant).
     :return: la Page creee, ou None si une page d'accueil existait deja.
     """
     # Idempotence : on ne touche pas a un tenant qui a deja une page d'accueil.
@@ -188,9 +194,22 @@ def construire_page_accueil(PageModel, BlocModel, config):
     if PageModel.objects.filter(est_accueil=True).exists():
         return None
 
+    # gettext (pas lazy) : les libelles CTA sont figes en base a la creation,
+    # dans la langue active du tenant (activate(config.language) est fait par
+    # create_tenant avant l'appel). / gettext (not lazy): CTA labels are frozen
+    # in DB at creation, in the tenant's active language.
+    from django.utils.translation import gettext as _
+
     nom_lieu = getattr(config, "organisation", "") or "Accueil"
     description_courte = getattr(config, "short_description", "") or ""
-    description_longue = getattr(config, "long_description", "") or ""
+
+    # Description longue : fournie explicitement (flux onboarding, pour ne pas
+    # etre trompe par le texte d'accueil hardcode), sinon celle de la config
+    # (flux migration tenants existants).
+    # / Long description: explicit (onboarding, to avoid the hardcoded welcome
+    # text) or the config's one (existing-tenants migration).
+    if description_longue is None:
+        description_longue = getattr(config, "long_description", "") or ""
 
     page = PageModel.objects.create(
         titre=nom_lieu,
@@ -201,9 +220,12 @@ def construire_page_accueil(PageModel, BlocModel, config):
         meta_description=description_courte[:255],
     )
 
-    # --- Bloc HERO : titre + sous-titre + image de fond + boutons ---
-    # / HERO block: title + subtitle + background image + buttons.
-    hero = BlocModel(
+    # --- Bloc HERO (pos 1) : banniere d'identite, titre + sous-titre ---
+    # Pas de champ image : le fond est l'image generique du lieu (config.img),
+    # lue au rendu par le template. / HERO block (pos 1): identity banner, title
+    # + subtitle. No image field: the background is the venue's generic image
+    # (config.img), read at render time by the template.
+    BlocModel.objects.create(
         page=page,
         type_bloc="HERO",
         position=1,
@@ -211,46 +233,43 @@ def construire_page_accueil(PageModel, BlocModel, config):
         sous_titre=description_courte,
     )
 
-    # NB : on NE partage PAS le fichier Configuration.img sur hero.image. Bloc.image
-    # a delete_orphans=True : pointer le bloc sur le meme fichier que la Configuration
-    # ferait supprimer l'image du tenant si le bloc d'accueil etait change/supprime.
-    # Le hero auto-genere reste donc sans image de fond (titre + sous-titre sur le
-    # fond du theme) ; la vraie home « riche » est construite par la commande de demo
-    # qui UPLOAD ses propres fichiers.
-    # / We do NOT share Configuration.img on hero.image: Bloc.image has
-    # delete_orphans=True, so pointing the block at the Configuration's file would
-    # delete the tenant image if the home block were changed/deleted. The auto home
-    # hero stays background-less; the rich home is built by the demo command (uploads).
+    # --- Bloc PARAGRAPHE (pos 2) : description longue (texte riche deja nettoye) ---
+    # TOUJOURS cree, meme vide : l'utilisateur pourra le remplir plus tard depuis
+    # l'admin (le template ne rend rien tant que le texte est vide).
+    # / PARAGRAPH block (pos 2): long description. ALWAYS created, even empty: the
+    # user can fill it later from the admin (the template renders nothing while
+    # the text is empty).
+    BlocModel.objects.create(
+        page=page,
+        type_bloc="PARAGRAPHE",
+        position=2,
+        texte=description_longue,
+    )
 
-    # Boutons selon les modules actifs (comme la home historique).
-    # / Buttons depending on active modules (like the historical home).
-    label_agenda = getattr(config, "event_menu_name", "") or "Agenda"
-    label_adhesions = getattr(config, "membership_menu_name", "") or "Adhésions"
+    # --- Bloc CTA (pos 3) : actions selon les modules actifs ---
+    # Memes URL et memes libelles que la navbar (get_context) : agenda puis
+    # adhesions. Cree uniquement s'il porte au moins une action.
+    # / CTA block (pos 3): actions depending on active modules. Same URLs and
+    # labels as the navbar (agenda then memberships). Created only if it carries
+    # at least one action.
+    cta = BlocModel(page=page, type_bloc="CTA", position=3)
 
     if getattr(config, "module_billetterie", False):
-        hero.bouton_label = label_agenda
-        hero.bouton_url = "/event/"
+        cta.bouton_label = getattr(config, "event_menu_name", "") or _("Calendar")
+        cta.bouton_url = "/event/"
 
     if getattr(config, "module_adhesion", False):
-        if hero.bouton_label:
+        label_adhesions = getattr(config, "membership_menu_name", "") or _("Subscriptions")
+        if cta.bouton_label:
             # L'agenda occupe deja le bouton principal : adhesions en second.
             # / Calendar already took the primary button: memberships as second.
-            hero.bouton2_label = label_adhesions
-            hero.bouton2_url = "/memberships/"
+            cta.bouton2_label = label_adhesions
+            cta.bouton2_url = "/memberships/"
         else:
-            hero.bouton_label = label_adhesions
-            hero.bouton_url = "/memberships/"
+            cta.bouton_label = label_adhesions
+            cta.bouton_url = "/memberships/"
 
-    hero.save()
-
-    # --- Bloc PARAGRAPHE : description longue (texte riche deja nettoye) ---
-    # / PARAGRAPH block: long description (rich text, already sanitized).
-    if description_longue.strip():
-        BlocModel.objects.create(
-            page=page,
-            type_bloc="PARAGRAPHE",
-            position=2,
-            texte=description_longue,
-        )
+    if cta.bouton_label:
+        cta.save()
 
     return page

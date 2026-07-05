@@ -12,8 +12,13 @@ l'admin (conditional_fields derive). Derive de la matrice SPEC.md.
 # Pour chaque type de bloc : la liste des champs modele qu'il utilise.
 # / For each block type: the list of model fields it uses.
 CHAMPS_PAR_TYPE = {
-    "HERO": ["titre", "sous_titre", "image", "image_secondaire",
-             "bouton_label", "bouton_url", "bouton2_label", "bouton2_url"],
+    # HERO = banniere d'identite pure : titre + sous-titre.
+    # L'image de fond est l'image generique du lieu (Configuration.img), lue au
+    # rendu -> pas de champ image sur le bloc. Les actions vont dans un bloc CTA.
+    # / HERO = pure identity banner: title + subtitle. The background image is the
+    # venue's generic image (Configuration.img), read at render time -> no image
+    # field on the block. Actions go into a separate CTA block.
+    "HERO": ["titre", "sous_titre"],
     "PARAGRAPHE": ["titre", "texte"],
     "IMAGE_TEXTE": ["titre", "texte", "image", "image_position",
                     "bouton_label", "bouton_url"],

@@ -82,9 +82,47 @@ class SmallAnonRateThrottle(UserRateThrottle):
 
 
 @requires_csrf_token
+def _contexte_page_erreur(request):
+    """
+    Contexte pour les pages d'erreur 404/500 : celui de get_context, qui
+    résout base_template selon le skin du tenant ET selon HTMX (shell complet
+    en navigation normale, fragment headless en réponse HTMX — la page
+    d'erreur devient ainsi swappable par le listener htmx:beforeSwap des
+    shells). Repli minimal si get_context échoue (tenant cassé, DB down :
+    on veut TOUJOURS pouvoir afficher une page d'erreur).
+    / Context for the 404/500 error pages: get_context's one, which resolves
+    base_template by tenant skin AND by HTMX (full shell on normal navigation,
+    headless fragment on HTMX responses — making the error page swappable by
+    the shells' htmx:beforeSwap listener). Minimal fallback if get_context
+    fails (broken tenant, DB down: an error page must ALWAYS render).
+
+    LOCALISATION : BaseBillet/views.py
+    """
+    try:
+        return get_context(request)
+    except Exception as erreur_contexte:
+        logger.warning(f"page erreur : get_context indisponible, repli classic ({erreur_contexte})")
+        return {"base_template": "pages/classic/shell.html", "main_nav": []}
+
+
+def handler404(request, exception=None):
+    """
+    404 personnalisée, consciente du skin et d'HTMX (actif quand DEBUG=0).
+    / Custom 404, skin-aware and HTMX-aware (active when DEBUG=0).
+
+    LOCALISATION : BaseBillet/views.py — déclaré dans TiBillet/urls_tenants.py
+    """
+    template_context = _contexte_page_erreur(request)
+    return render(request, '404.html', template_context, status=404)
+
+
 def handler500(request, exception=None):
     """
     Custom 500 error handler that passes the exception to the template.
+    Enrichi (2026-07-05) : contexte de get_context pour que la page 500 prenne
+    le skin du tenant et soit swappable en HTMX (cf. _contexte_page_erreur).
+    / Enriched: get_context's context so the 500 page follows the tenant skin
+    and is HTMX-swappable.
     """
     import sys
     exc_type, exc_value, exc_traceback = sys.exc_info()
@@ -92,11 +130,12 @@ def handler500(request, exception=None):
     # Use the passed exception if available, otherwise use the one from sys.exc_info()
     exception_to_use = exception if exception else exc_value
 
-    context = {
+    context = _contexte_page_erreur(request)
+    context.update({
         'exception': str(exception_to_use) if exception_to_use else None,
         'type_exception': type(exception_to_use).__name__ if exception_to_use else None,
-    }
-    logger.info(context)
+    })
+    logger.info({'exception': context.get('exception'), 'type_exception': context.get('type_exception')})
     return render(request, '500.html', context, status=500)
 
 
@@ -189,21 +228,14 @@ def get_context(request):
     # / "Le Faire Festival" and "Infos pratiques" are NO LONGER hardcoded here: they
     # are now pages-app Page objects (added below via the published-pages loop).
 
-    if config.module_adhesion:
-        navbar.append({
-            'name': 'memberships_mvt',
-            'url': '/memberships/',
-            'label': config.membership_menu_name if config.membership_menu_name else _('Subscriptions'),
-            'icon': 'person-badge'
-        })
-
-    if config.module_billetterie:
-        navbar.append({
-            'name': 'event-list',
-            'url': '/event/',
-            'label': config.event_menu_name if config.event_menu_name else _('Calendar'),
-            'icon': 'calendar-date'
-        })
+    # ORDRE DE LA NAVBAR : les pages de l'app pages d'abord (ajoutees plus bas
+    # via navbar_pages, inseres EN TETE), puis reseau/crowdfunding, et EN FIN de
+    # menu : agenda, adhesions, contact (le contact est code dans le gabarit
+    # navbar, toujours dernier).
+    # / NAVBAR ORDER: pages-app pages first (built below in navbar_pages and
+    # inserted at the head), then network/crowdfunding, and at the END of the
+    # menu: agenda, memberships, contact (contact lives in the navbar template,
+    # always last).
 
     # Activation du menu "Réseau local" : pilotee UNIQUEMENT par le flag
     # config.module_federation. Le test d'existence de FederatedPlace est
@@ -242,6 +274,7 @@ def get_context(request):
     # The home page (est_accueil) links to the root "/"; the other pages to
     # /<slug>/. Only if the pages module is active.
     # Local import to avoid a circular import with pages.views.
+    navbar_pages: list = []
     if config.module_pages:
         from pages.models import Page
 
@@ -263,7 +296,7 @@ def get_context(request):
             if page_publiee.parent_id:
                 continue
             url_page = "/" if page_publiee.est_accueil else f"/{page_publiee.slug}/"
-            navbar.append({
+            navbar_pages.append({
                 'name': f'page-{page_publiee.slug}',
                 'url': url_page,
                 'label': page_publiee.titre,
@@ -280,6 +313,30 @@ def get_context(request):
                     for enfant in enfants_par_parent.get(page_publiee.pk, [])
                 ],
             })
+
+    # Fin de menu, toujours dans cet ordre : agenda puis adhesions
+    # (le bouton contact est dans le gabarit navbar, toujours apres eux).
+    # / End of menu, always in this order: agenda then memberships
+    # (the contact button lives in the navbar template, always after them).
+    if config.module_billetterie:
+        navbar.append({
+            'name': 'event-list',
+            'url': '/event/',
+            'label': config.event_menu_name if config.event_menu_name else _('Calendar'),
+            'icon': 'calendar-date'
+        })
+
+    if config.module_adhesion:
+        navbar.append({
+            'name': 'memberships_mvt',
+            'url': '/memberships/',
+            'label': config.membership_menu_name if config.membership_menu_name else _('Subscriptions'),
+            'icon': 'person-badge'
+        })
+
+    # Assemblage final : pages en tete, puis le reste (reseau, crowdfunding,
+    # agenda, adhesions). / Final assembly: pages first, then the rest.
+    context["main_nav"] = navbar_pages + navbar
 
     # cache.set(f'get_context_{connection.tenant.uuid}', context, 10)
     return context
@@ -777,6 +834,16 @@ class MyAccount(viewsets.ViewSet):
         if not request.user.is_authenticated:
             messages.add_message(request, messages.WARNING,
                                  _("Please login to access this page."))
+            # Session expirée pendant une navigation HTMX (onglets du compte en
+            # hx-get) : un redirect() classique serait suivi EN SILENCE par le
+            # XHR et la home serait swappée DANS l'onglet, URL inchangée.
+            # HX-Redirect fait faire au navigateur une vraie navigation vers /.
+            # / Session expired during an HTMX navigation (account tabs use
+            # hx-get): a classic redirect() would be silently followed by the
+            # XHR and the home page swapped INSIDE the tab, URL unchanged.
+            # HX-Redirect makes the browser do a real navigation to /.
+            if request.htmx:
+                return HttpResponseClientRedirect('/?login=1')
             return redirect('/')
 
         # check que le wallet existe bien :
@@ -1635,6 +1702,19 @@ def index(request):
 
     template_context = get_context(request)
 
+    # Slugs des pages CMS publiées : la vieille home ff (gabarit de repli)
+    # conditionne ses boutons « Infos pratiques » / « Le Faire Festival » sur
+    # cette liste — leurs routes en dur n'existent plus, seules les pages CMS
+    # publiées répondent sur /<slug>/. Liste vide si le module est éteint.
+    # / Published CMS page slugs: the legacy ff home (fallback template) shows
+    # its buttons only when the matching CMS page is published — the hardcoded
+    # routes are gone, only published CMS pages answer on /<slug>/.
+    slugs_pages_publiees = []
+    if Configuration.get_solo().module_pages:
+        from pages.models import Page
+        slugs_pages_publiees = list(Page.objects.filter(publie=True).values_list('slug', flat=True))
+    template_context['slugs_pages_publiees'] = slugs_pages_publiees
+
     # Résolution du gabarit par le resolver unifié (CHANTIER-05).
     # / Unified skin resolver (skins migration).
     from pages.services import gabarit_skin
@@ -1643,36 +1723,13 @@ def index(request):
     return render(request, template_path, context=template_context)
 
 
-@require_GET
-def infos_pratiques(request):
-    """
-    FR: Page statique "Infos pratiques" pour le festival
-    EN: Static page "Practical information" for the festival
-    """
-    template_context = get_context(request)
-
-    # Résolution du gabarit par le resolver unifié (CHANTIER-05).
-    # / Unified skin resolver (skins migration).
-    from pages.services import gabarit_skin
-    template_path = gabarit_skin("vues/infos_pratiques.html")
-
-    return render(request, template_path, context=template_context)
-
-
-@require_GET
-def le_faire_festival(request):
-    """
-    FR: Page de présentation "Le Faire Festival" - description de l'événement
-    EN: Presentation page "Le Faire Festival" - event description
-    """
-    template_context = get_context(request)
-
-    # Résolution du gabarit par le resolver unifié (CHANTIER-05).
-    # / Unified skin resolver (skins migration).
-    from pages.services import gabarit_skin
-    template_path = gabarit_skin("vues/le_faire_festival.html")
-
-    return render(request, template_path, context=template_context)
+# NOTE nettoyage 2026-07-05 : les vues infos_pratiques() et le_faire_festival()
+# ont été SUPPRIMÉES. Leurs routes avaient déjà été retirées de BaseBillet/urls.py :
+# ces contenus sont des pages CMS de l'app pages (seedées par
+# charger_demo_faire_festival), servies par le catch-all /<slug>/.
+# / Cleanup note: the infos_pratiques() and le_faire_festival() views were
+# REMOVED. Their routes were already gone from BaseBillet/urls.py: these
+# contents are pages-app CMS pages served by the /<slug>/ catch-all.
 
 
 class FederationViewset(viewsets.ViewSet):

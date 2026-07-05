@@ -242,6 +242,13 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_htmx.middleware.HtmxMiddleware',
+    # Vary: HX-Request + Cache-Control par défaut : indispensable en prod, les
+    # vues rendent 2 corps différents (shell/fragment) sur la même URL selon
+    # HX-Request. Doit être APRÈS AuthenticationMiddleware (lit request.user).
+    # / Vary: HX-Request + default Cache-Control: required in prod, views render
+    # 2 different bodies (shell/fragment) on the same URL depending on
+    # HX-Request. Must come AFTER AuthenticationMiddleware (reads request.user).
+    'BaseBillet.middleware.ProtectionCacheHtmxMiddleware',
     'Customers.views.TimezoneMiddleware',
 ]
 

@@ -1,4 +1,4 @@
-{% extends "pages/faire_festival/shell.html" %}
+{% extends base_template %}{# CHANTIER post-revue 2026-07-05 : comme le skin classic, on étend base_template (shell.html en navigation complète, headless.html en réponse HTMX — fragment léger au lieu du document complet). / Like the classic skin: shell for full navigation, headless (light fragment) for HTMX responses. #}
 {% load static i18n tibitags %}
 
 {% block title %}{% translate "Festival du Faire — Toulouse, 28-30 mai 2026" %}{% endblock %}
@@ -175,7 +175,13 @@
                     </div>
                 </div> <!-- Fin Row Jours -->
                 
-                <!-- Bouton En savoir plus sur le Faire Festival -->
+                <!-- Bouton En savoir plus sur le Faire Festival.
+                     Affiché UNIQUEMENT si la page CMS correspondante est publiée :
+                     la route en dur n'existe plus, seule la page pages-app répond
+                     sur /le-faire-festival/ (sinon 404).
+                     / Shown ONLY when the matching CMS page is published: the
+                     hardcoded route is gone, only the pages-app page answers. -->
+                {% if 'le-faire-festival' in slugs_pages_publiees %}
                 <div class="mt-4">
                     <a href="/le-faire-festival/"
                        class="btn bouton-action police-titre pe-3"
@@ -186,6 +192,7 @@
                         {% translate "En savoir plus sur le Faire Festival" %}
                     </a>
                 </div>
+                {% endif %}
             </div> <!-- Fin Col Droite -->
         </div> <!-- Fin Row Principale -->
     </section>
@@ -279,7 +286,11 @@
                         {% translate "Venez profiter les 28, 29 et 30 mai lors du Faire Festival !" %}
                     </p>
                     
-                    <!-- Bouton d'action -->
+                    <!-- Bouton d'action. Même règle que « Le Faire Festival » :
+                         visible seulement si la page CMS est publiée (la route
+                         en dur n'existe plus). / Same rule: only shown when the
+                         CMS page is published (the hardcoded route is gone). -->
+                    {% if 'infos-pratiques' in slugs_pages_publiees %}
                     <a href="/infos-pratiques/"
                        class="btn bouton-action w-100"
                        hx-get="/infos-pratiques/"
@@ -287,6 +298,7 @@
                        hx-push-url="true">
                         {% translate "Infos pratiques" %}
                     </a>
+                    {% endif %}
                 </div>
             </div>
             

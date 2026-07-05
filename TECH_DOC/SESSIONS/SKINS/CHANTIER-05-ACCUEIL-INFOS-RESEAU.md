@@ -1,6 +1,13 @@
 # CHANTIER-05 — Accueil / infos pratiques / le faire festival / réseau
 
-**Statut :** en cours (2026-07-04).
+> **CORRECTIF 2026-07-05** : les migrations `vues/infos_pratiques.html` et
+> `vues/le_faire_festival.html` décrites ci-dessous étaient du **code mort** —
+> leurs routes avaient déjà été retirées de `BaseBillet/urls.py` au profit de
+> pages CMS homonymes (catch-all `/<slug>/`). Vues et gabarits supprimés le
+> 2026-07-05 (cf. CHANGELOG). Seuls `vues/accueil.html` et `vues/reseau.html`
+> restent actifs.
+
+**Statut :** terminé (2026-07-04), corrigé le 2026-07-05.
 **Objectif :** dernières vues skin-aware de `get_skin_template` → `pages/<skin>/vues/`.
 
 ## Mapping

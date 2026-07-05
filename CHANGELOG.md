@@ -1,5 +1,210 @@
 # Changelog / Journal des modifications
 
+## Squash des migrations de la branche main-pages / main-pages branch migrations squash
+
+**Date :** 2026-07-05
+**Migration :** Oui — 3 fichiers neufs, jamais déployés / Yes — 3 fresh files, never deployed
+
+Les migrations intermédiaires de la branche (jamais passées en prod, qui
+s'arrête à `BaseBillet/0220_lignearticle_idempotency_key` et `seo/0004`) ont
+été supprimées et régénérées en UNE migration par app :
+- **`pages/0001_initial`** (remplace 0001→0013) — app entière.
+- **`BaseBillet/0221_remove_configuration_skin_configuration_module_pages_and_more`**
+  (remplace 0220_configuration_module_pages→0225) — schéma (module_pages,
+  externalapikey.page, retrait de Configuration.skin) + les 2 opérations de
+  données pour les tenants de PROD : copie `skin` → `pages.ConfigurationSite`
+  AVANT le RemoveField, et création de la home par défaut (idempotente, dans
+  la langue du tenant via `translation.override`). L'ex-0222 (redondante avec
+  la home 0225) n'est pas reprise.
+- **`seo/0005_alter_seocache_unique_together_and_more`** (régénérée) —
+  dédoublonnage RunPython AVANT les 2 contraintes uniques partielles.
+
+Validé : `makemigrations --check` → « No changes detected », `migrate --plan`
+sans erreur. Le `down -v` + flush repartira sur ce graphe propre ; en prod, la
+chaîne s'ancre exactement sur l'état déployé.
+
+## Dette de revue soldée : 404/500 skin-aware et parlantes sous HTMX + rangements / Review debt paid: skin-aware and HTMX-visible 404/500 + housekeeping
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+- **`handler404` (nouveau) + `handler500` enrichi** : les pages d'erreur
+  passent par `get_context` → elles prennent le skin du tenant (fini la 404
+  au look classic sur un tenant faire_festival) ET sont servies en fragment
+  headless sous HTMX. Repli minimal si `get_context` échoue (une page
+  d'erreur doit TOUJOURS s'afficher). Actifs quand DEBUG=0 — d'où le test
+  direct `tests/pytest/test_handlers_erreur.py` (3 tests, RequestFactory).
+- **Listener `htmx:beforeSwap` global (2 shells)** : par défaut htmx ignore
+  les réponses non-2xx — un clic qui tombait en 404/500 ne produisait RIEN.
+  Désormais la page d'erreur est swappée dans le body entier (HTML
+  uniquement, les réponses JSON gardent leur traitement).
+- **Rangements** : param `bloc` → `objet_cible` dans `_poser_fichier`
+  (recevait aussi une Configuration), commentaire obsolète corrigé dans
+  `seo/partials/tibillet_community_links.html`.
+- **Finding retiré** : le `#paginator` « dupliqué en scroll infini » n'existe
+  pas — les 4 emplacements (classic + ff) utilisent `hx-swap="outerHTML"`
+  (remplacement, pas imbrication). L'agent d'audit avait supposé le swap par
+  défaut sans lire l'attribut.
+
+## Revue post-sessions : fix i18n CTA de la home auto-créée + vues ff sur base_template + test E2E skin ff / Post-sessions review: auto-home CTA i18n fix + ff views on base_template + ff skin E2E test
+
+**Date :** 2026-07-05
+**Migration :** Non (la 0225, non committée, est corrigée en place) / No (0225, uncommitted, fixed in place)
+
+- **Fix i18n CTA (bug confirmé en base)** : `construire_page_accueil` fige les
+  libellés CTA via `gettext()` non-lazy, mais la migration 0225 tournait sans
+  langue activée → 22 tenants FR migrés avaient « Calendar »/« Subscriptions »
+  gravés en anglais. Fix : `translation.override(config.language or 'fr')`
+  autour de l'appel dans la migration ET au step 6ter d'`onboard/tasks.py`
+  (l'`activate()` implicite de create_tenant était fragile). Les 22 tenants
+  dev touchés ont été réparés (Agenda / Adhésions).
+- **Vues faire_festival → `base_template`** : `accueil/agenda/evenement/
+  adhesions.html` étendaient `shell.html` en dur → chaque navigation HTMX
+  recevait le document COMPLET (htmx s'en sortait via DOMParser mais ~15 %
+  de transfert en trop et incohérence avec classic). Elles étendent désormais
+  `base_template` comme classic (fragment headless en HTMX). Iso-rendu
+  vérifié : 0 diff sur les pages complètes (hors token CSRF).
+- **Nouveau test E2E `test_skin_faire_festival_navigation.py`** : le skin ff
+  n'était couvert par AUCUN test E2E (angle mort qui a laissé passer le bug
+  des panneaux). Le test verrouille : swap HTMX → fragment headless (pas de
+  document imbriqué, une seule navbar) + ouverture des panneaux contact et
+  connexion après swap.
+
+## Refonte du bloc HERO : bannière d'identité (image = config, actions → CTA) / HERO block redesign: identity banner (image from config, actions → CTA)
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+**Quoi / What :** Le bloc HERO devient une bannière d'identité pure (titre +
+sous-titre) : plus de champ image ni de boutons sur le bloc.
+- **Image** lue au rendu depuis la Configuration du lieu : `config.img`
+  (fond photo en skin classic, image/logo centré en skin faire_festival).
+  Le bloc ne porte plus de fichier → le risque `delete_orphans` disparaît.
+- **Sans image** : le HERO passe en « recentré sobre » (titre + sous-titre
+  centrés sur un fond neutre teinté accent ; ni filet décoratif, ni trou à droite).
+- **Actions** : les boutons vivent désormais dans un bloc CTA séparé.
+- **Image du HERO avec image** : centrée horizontalement ET verticalement
+  (`background-position: center center`) + `min-height` (sur écran large et court,
+  on ne voyait que le haut de l'image).
+- **Home auto-générée** (onboarding) : HERO → PARAGRAPHE (**toujours créé**, avec
+  la description longue saisie au wizard, ou vide pour être rempli plus tard) →
+  CTA (module-aware, mêmes URL et libellés que la navbar). Créée **à la fin de la
+  tâche d'onboarding** (`onboard/tasks.py::create_tenant_from_draft`, étape 6ter),
+  une fois l'image et la description longue posées, juste avant l'email « espace
+  prêt » — au lieu de `create_tenant()`.
+
+**Pourquoi / Why :** simplifier l'objet bloc (1 bloc = 1 responsabilité),
+corriger la « première rencontre » d'un tenant neuf (le HERO imageless laissait
+~51 % de vide à droite) et brancher l'image de l'onboarding, qui n'apparaissait
+nulle part sur la home.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `pages/blocs_catalogue.py` | HERO = `["titre", "sous_titre"]` (retrait image/boutons) |
+| `pages/templates/pages/classic/partials/bloc_hero.html` | Fond = `config.img`, sans boutons |
+| `pages/templates/pages/faire_festival/partials/bloc_hero.html` | Image = `config.img`, sans badge date ni boutons |
+| `pages/static/pages/css/tb-blocs.css` | HERO imageless recentré + fond teinté, retrait du filet ; image centrée H+V + min-height |
+| `pages/admin.py` | `conditional_fields` (retrait HERO de image/boutons) + note d'aide |
+| `pages/templates/admin/pages/bloc/hero_aide_before.html` | Note d'aide (Alpine, visible sur type HERO) |
+| `pages/services.py` | `construire_page_accueil` : param `description_longue`, HERO sans image/boutons, PARAGRAPHE **toujours créé**, CTA module-aware |
+| `onboard/tasks.py` | Création de la home en fin de tâche (étape 6ter), avant l'email |
+| `BaseBillet/validators.py` | Ne crée plus la home dans `create_tenant` (déplacée dans la tâche) |
+| `BaseBillet/migrations/0225_home_hero_paragraphe_cta_tous_tenants.py` | Migration data : home pour tous les tenants sans home (idempotente, préserve les homes existantes) |
+| `pages/management/commands/{creer_page_demo,charger_demo_blocs,charger_site_lespass,charger_demo_faire_festival}.py` | HERO sans image/boutons ; image posée sur config ; CTA |
+| `api_v2/openapi-schema.yaml` | Champs HERO + exemples mis à jour |
+| `tests/pytest/test_pages.py` | 2 tests `construire_page_accueil` |
+
+### Migration
+- **Migration nécessaire / Migration required :** Oui — `BaseBillet 0225` (data,
+  tenant-only). Crée la home HERO/PARAGRAPHE/CTA pour chaque tenant sans home ;
+  **idempotente et non destructive** (n'écrase aucune home existante).
+  `migrate_schemas`. Aucune migration de schéma (les colonnes image/bouton restent
+  sur `Bloc`, utilisées par CTA, IMAGE_TEXTE, CARTE…).
+
+### Suites manuelles / Manual follow-ups
+- Re-jouer `charger_demo_faire_festival --schema=chantefrein` pour poser le logo « Faire » sur `config.img` (sinon chantefrein affiche l'image de fond actuelle).
+- i18n : `makemessages` / `compilemessages` (nouvelles chaînes FR de la note d'aide admin ; `Calendar` / `Subscriptions` existent déjà).
+
+## Fix : liens morts de la home ff de repli + nettoyage vues sans route / Fix: dead links in ff fallback home + dead views cleanup
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+Contexte (audit « que se passe-t-il si module_pages est désactivé ? ») : les
+routes en dur `/infos-pratiques/` et `/le-faire-festival/` avaient été retirées
+de `BaseBillet/urls.py` (remplacées par des pages CMS servies par le catch-all
+`/<slug>/`), mais deux restes traînaient :
+- **La vieille home ff** (`pages/faire_festival/vues/accueil.html`, gabarit de
+  repli quand module_pages est off ou sans page d'accueil publiée) gardait ses
+  deux boutons en dur → 404 garanti précisément quand cette home s'affiche.
+  Fix : `index()` expose `slugs_pages_publiees` et les boutons ne s'affichent
+  que si la page CMS correspondante est publiée.
+- **Code mort** : vues `infos_pratiques()` / `le_faire_festival()` (plus aucune
+  route) et gabarits `pages/faire_festival/vues/{infos_pratiques,le_faire_festival}.html`
+  (jamais rendus — les 200 observés venaient des pages CMS homonymes) SUPPRIMÉS.
+
+Comportement module_pages OFF (vérifié) : `/` → home de repli du skin,
+`/<slug>/` → 404 (y compris préview admin), navbar sans pages, section admin
+« Site web » masquée, carte du dashboard pour réactiver.
+
+**Fix test fragile** : `test_bloc_evenements_liste_les_a_venir` échouait selon
+l'état de la base dev (200+ évènements futurs accumulés par les suites E2E →
+l'évènement du test à +3 jours sortait du slice `[:100]`). `nombre_max=32000`
+dans le test = déterministe. À noter pour plus tard : les E2E ne nettoient pas
+leurs évènements (~160 résidus E2E/API/Playwright/Refund/Smoke sur lespass).
+
+## Fix : CSS des pages CMS perdu en navigation HTMX + ordre de la navbar / Fix: CMS pages CSS dropped on HTMX navigation + navbar ordering
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+**Bug CSS (tenant la-fourmiliere)** : `pages/classic/page.html` chargeait
+`tb-blocs.css` dans le bloc `extra_meta`, qui n'existe QUE dans le `<head>` de
+`shell.html`. En navigation HTMX (réponse headless, sans `<head>`), le CSS
+n'arrivait jamais → page CMS sans style si la session avait commencé sur une
+vue non-CMS ; un F5 (rendu complet) le réparait, d'où le côté insaisissable.
+Fix : le `<link>` est chargé dans le bloc `main` (valide HTML5, présent dans
+les deux rendus, dédupliqué par le cache navigateur). Règle ajoutée au
+CONTRAT-DE-SKIN : **extra_meta = SEO uniquement, jamais d'asset nécessaire**.
+
+**Navbar** : ordre unifié — pages de l'app pages d'abord, puis réseau/
+crowdfunding, et en fin de menu : agenda, adhésions, contact (dans cet ordre).
+Construction dans `get_context` (`navbar_pages + navbar`), le gabarit navbar
+garde le contact en dernier.
+
+**Audit HTMX complet (2 agents, templates + vues) — 4 fixes supplémentaires :**
+- `pages/faire_festival/headless.html` : les panneaux `#contactPanel` et
+  `#loginPanel` n'existaient PAS dans le fragment headless ff → après toute
+  navigation HTMX sous ce skin, les boutons Contact/Connexion ne s'ouvraient
+  plus (échec silencieux). Bloc `offcanvas_globaux` ajouté (dans
+  `.skin-faire-festival` pour le CSS scopé), aligné sur classic.
+- `fonctionnel/event_wizard/_base.html` : `wizard.css` chargé dans `extra_meta`
+  (même famille que tb-blocs.css, dormant car le wizard n'est pas encore
+  navigué en HTMX) → déplacé dans `main`.
+- `MyAccount.dispatch` : session expirée pendant une navigation HTMX →
+  `HX-Redirect: /?login=1` (vraie navigation + panneau de connexion) au lieu
+  d'un 302 suivi en silence qui swappait la home DANS l'onglet du compte.
+- `CrowdDetailView.retrieve` : pk invalide sous HTMX → `HX-Redirect: /contrib`
+  au lieu d'un 302 qui laissait l'URL du navigateur sur `/crowd/<invalide>/`.
+
+**Protection cache HTTP pour la prod (validée par le mainteneur, 3 mesures)** :
+- Nouveau middleware `BaseBillet.middleware.ProtectionCacheHtmxMiddleware`
+  (branché dans settings.py, après AuthenticationMiddleware) :
+  `Vary: HX-Request` sur TOUTES les réponses (les caches indexent enfin les
+  deux variantes shell/fragment séparément) + `Cache-Control` par défaut sur
+  le HTML : `private, no-store` si connecté, `no-cache` sinon — uniquement si
+  la vue n'a pas déjà posé le sien.
+- Meta `htmx-config` dans les 2 shells : `historyCacheSize: 0` (plus de cliché
+  DOM dans le localStorage → un « retour » ne peut plus restaurer une page
+  d'un déploiement précédent) + `refreshOnHistoryMiss: true` (un « retour »
+  fait un vrai rechargement complet).
+
+**Restent documentés (non corrigés, non bloquants)** : 404/500 muets sous HTMX
+(pas de feedback utilisateur sur erreur de swap), vues ff qui étendent
+shell.html en dur (fonctionne via DOMParser htmx mais transfert lourd),
+id `#paginator` dupliqué en scroll infini.
+
 ## Migration skins CHANTIERS-05→08 : fin de la migration — contrat de skin, `demarrer_skin`, suppression des anciennes arborescences / Skins migration C05→08: contract, scaffolding command, legacy trees removed
 
 **Date :** 2026-07-04

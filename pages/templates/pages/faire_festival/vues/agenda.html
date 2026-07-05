@@ -1,4 +1,4 @@
-{% extends "pages/faire_festival/shell.html" %}
+{% extends base_template %}{# CHANTIER post-revue 2026-07-05 : comme le skin classic, on étend base_template (shell.html en navigation complète, headless.html en réponse HTMX — fragment léger au lieu du document complet). / Like the classic skin: shell for full navigation, headless (light fragment) for HTMX responses. #}
 {% load static i18n tibitags %}
 
 {% block title %}{% if config.event_menu_name %}{{ config.event_menu_name }}{% else %}{% translate 'Calendar' %}{% endif %}{% endblock %}

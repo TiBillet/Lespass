@@ -1098,7 +1098,7 @@ paths:
               $ref: '#/components/schemas/WebPageCreate'
             examples:
               pageWithBlocs:
-                summary: "Page d'accueil avec un bloc HERO et un bloc PARAGRAPHE"
+                summary: "Page d'accueil : HERO (identité) + PARAGRAPHE + CTA"
                 value:
                   "@context": "https://schema.org"
                   "@type": "WebPage"
@@ -1113,7 +1113,10 @@ paths:
                   hasPart:
                     - additionalType: "HERO"
                       headline: "Bienvenue"
-                      image: "https://exemple.fr/hero.jpg"
+                    - additionalType: "PARAGRAPHE"
+                      headline: "À propos"
+                      text: "<p>Un lieu culturel <strong>coopératif</strong>.</p>"
+                    - additionalType: "CTA"
                       additionalProperty:
                         - "@type": "PropertyValue"
                           name: "bouton_label"
@@ -1121,9 +1124,6 @@ paths:
                         - "@type": "PropertyValue"
                           name: "bouton_url"
                           value: "/event/"
-                    - additionalType: "PARAGRAPHE"
-                      headline: "À propos"
-                      text: "<p>Un lieu culturel <strong>coopératif</strong>.</p>"
       responses:
         '201':
           description: Created
@@ -1178,11 +1178,6 @@ paths:
                         fields:
                           - "titre"
                           - "sous_titre"
-                          - "image"
-                          - "bouton_label"
-                          - "bouton_url"
-                          - "bouton2_label"
-                          - "bouton2_url"
                       - type: "PARAGRAPHE"
                         label: "Paragraphe"
                         fields:
@@ -1311,12 +1306,13 @@ paths:
             schema:
               $ref: '#/components/schemas/WebPageElementCreate'
             examples:
-              heroBloc:
-                summary: "Bloc HERO avec image par URL"
+              imageTexteBloc:
+                summary: "Bloc IMAGE_TEXTE avec image par URL et bouton"
                 value:
-                  additionalType: "HERO"
-                  headline: "Bienvenue"
-                  image: "https://exemple.fr/hero.jpg"
+                  additionalType: "IMAGE_TEXTE"
+                  headline: "Nos ateliers"
+                  text: "<p>Découvrez nos ateliers hebdomadaires.</p>"
+                  image: "https://exemple.fr/atelier.jpg"
                   additionalProperty:
                     - "@type": "PropertyValue"
                       name: "bouton_label"
@@ -1342,7 +1338,7 @@ paths:
               properties:
                 additionalType:
                   type: string
-                  example: HERO
+                  example: IMAGE_TEXTE
                 headline:
                   type: string
                 alternativeHeadline:

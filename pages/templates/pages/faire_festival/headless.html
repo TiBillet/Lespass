@@ -25,6 +25,24 @@
     {% if not embed %}
         {% block footer %}{% endblock footer %}
     {% endif %}
+
+    {% block offcanvas_globaux %}
+        {% comment %}
+        Chrome partagé : panneaux contact + connexion, indispensables AUSSI en
+        réponse HTMX — hx-target="body" remplace tout le contenu, donc sans ces
+        includes les boutons Contact/Connexion de la navbar pointeraient vers
+        des ids (#contactPanel, #loginPanel) absents du DOM après le premier
+        swap (échec silencieux). Ils restent DANS .skin-faire-festival pour que
+        le CSS scopé du skin s'applique (même raison que navbar/footer).
+        / Shared chrome: contact + login panels, required in HTMX responses too —
+        hx-target="body" replaces the whole content, so without these includes
+        the navbar triggers would point to ids missing from the DOM after the
+        first swap (silent failure). Kept INSIDE .skin-faire-festival so the
+        skin's scoped CSS applies (same reason as navbar/footer).
+        {% endcomment %}
+        {% include "commun/offcanvas/contact.html" %}
+        {% include "commun/offcanvas/connexion.html" %}
+    {% endblock offcanvas_globaux %}
 </div>
 
 <!-- Bloc pour les offcanvas spécifiques aux vues -->

@@ -241,6 +241,13 @@ class BlocAdmin(ModelAdmin):
     compressed_fields = True
     warn_unsaved_form = True
     form = BlocAdminForm
+    # Note d'aide affichee au-dessus du formulaire, visible uniquement quand le
+    # type choisi est HERO (via Alpine, meme mecanisme que conditional_fields) :
+    # elle explique que l'image de fond vient de la Configuration, pas du bloc.
+    # / Help note above the form, shown only when the chosen type is HERO (via
+    # Alpine, same mechanism as conditional_fields): explains that the background
+    # image comes from the Configuration, not from the block.
+    change_form_before_template = "admin/pages/bloc/hero_aide_before.html"
     # Images du bloc GALERIE (inline). Vide/ignoré pour les autres types.
     # / GALERIE block images (inline). Empty/ignored for other types.
     inlines = [ImageGalerieInline]
@@ -293,17 +300,22 @@ class BlocAdmin(ModelAdmin):
         "embed_url": "type_bloc == 'EMBED'",
         "sous_titre": "['HERO','CTA'].includes(type_bloc)",
         "texte": "['PARAGRAPHE','IMAGE_TEXTE','CTA','TEMOIGNAGE','VIDEO_TEXTE','CARTE','FAQ'].includes(type_bloc)",
-        "image": "['HERO','IMAGE_TEXTE','CARTE','IMAGE','CARTE_LEAFLET'].includes(type_bloc)",
-        "image_secondaire": "['HERO','CARTE_LEAFLET'].includes(type_bloc)",
+        # HERO n'a plus de champ image : son fond est l'image generique du lieu
+        # (Configuration.img), lue au rendu. / HERO has no image field anymore:
+        # its background is the venue's generic image (Configuration.img).
+        "image": "['IMAGE_TEXTE','CARTE','IMAGE','CARTE_LEAFLET'].includes(type_bloc)",
+        "image_secondaire": "type_bloc == 'CARTE_LEAFLET'",
         "video": "type_bloc == 'VIDEO_TEXTE'",
         "points_gps": "type_bloc == 'CARTE_LEAFLET'",
         "contenu": "type_bloc == 'INFOS'",
         "image_position": "type_bloc == 'IMAGE_TEXTE'",
         "badge": "['CARTE','CARTE_LEAFLET'].includes(type_bloc)",
-        "bouton_label": "['HERO','IMAGE_TEXTE','CTA','CARTE'].includes(type_bloc)",
-        "bouton_url": "['HERO','IMAGE_TEXTE','CTA','CARTE'].includes(type_bloc)",
-        "bouton2_label": "['HERO','CTA'].includes(type_bloc)",
-        "bouton2_url": "['HERO','CTA'].includes(type_bloc)",
+        # HERO n'a plus de boutons : les actions vont dans un bloc CTA separe.
+        # / HERO has no buttons anymore: actions go into a separate CTA block.
+        "bouton_label": "['IMAGE_TEXTE','CTA','CARTE'].includes(type_bloc)",
+        "bouton_url": "['IMAGE_TEXTE','CTA','CARTE'].includes(type_bloc)",
+        "bouton2_label": "type_bloc == 'CTA'",
+        "bouton2_url": "type_bloc == 'CTA'",
         "auteur_nom": "type_bloc == 'TEMOIGNAGE'",
         "auteur_role": "type_bloc == 'TEMOIGNAGE'",
         "auteur_photo": "type_bloc == 'TEMOIGNAGE'",

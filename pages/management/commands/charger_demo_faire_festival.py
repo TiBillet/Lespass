@@ -101,17 +101,21 @@ class Command(BaseCommand):
         return page
 
     # ------------------------------------------------------------------
-    # Helper : UPLOAD d'un asset static du skin dans un champ image/fichier du bloc.
-    # / Helper: UPLOAD a static skin asset into a block image/file field.
+    # Helper : UPLOAD d'un asset static du skin dans un champ image/fichier
+    # d'un objet modèle — un Bloc le plus souvent, mais aussi la Configuration
+    # du lieu (ex : config.img pour le HERO). D'où le nom générique.
+    # / Helper: UPLOAD a static skin asset into a model object's image/file
+    # field — usually a Bloc, but also the venue Configuration (e.g. config.img
+    # for the HERO). Hence the generic parameter name.
     # ------------------------------------------------------------------
-    def _poser_fichier(self, bloc, champ, chemin_static):
+    def _poser_fichier(self, objet_cible, champ, chemin_static):
         chemin = finders.find(chemin_static)
         if not chemin:
             self.stdout.write(f"  ⚠ asset static introuvable : {chemin_static}")
             return
         nom = os.path.basename(chemin_static)
         with open(chemin, "rb") as fichier:
-            getattr(bloc, champ).save(nom, File(fichier), save=True)
+            getattr(objet_cible, champ).save(nom, File(fichier), save=True)
 
     def _charger_sous_menu(self):
         """
@@ -398,15 +402,21 @@ class Command(BaseCommand):
             "fabrication partagée, les 28, 29 et 30 mai 2026 à La Cité.",
         )
 
-        # 1 — HERO : logo + badge date + sous-titre (section hero de la maquette).
-        bloc = Bloc.objects.create(
+        # 1 — HERO : image d'identité (config.img) + sous-titre. L'image est posée
+        # sur la Configuration du lieu ; le template HERO faire_festival lit
+        # config.img. Plus de badge date : le HERO est une bannière d'identité simple.
+        # / HERO: identity image (config.img) + subtitle. The image is set on the
+        # venue Configuration; the faire_festival HERO template reads config.img.
+        # No date badge anymore: the HERO is a simple identity banner.
+        from BaseBillet.models import Configuration
+        self._poser_fichier(Configuration.get_solo(), "img", IMG + "logopage.webp")
+
+        Bloc.objects.create(
             page=page, type_bloc=Bloc.HERO, position=1,
             titre="Faire Festival",
             sous_titre="Le grand rendez-vous toulousain pour réinventer notre façon "
                        "de produire, de consommer et de transmettre !",
         )
-        self._poser_fichier(bloc, "image", IMG + "logopage.webp")
-        self._poser_fichier(bloc, "image_secondaire", IMG + "dateaccueil.webp")
 
         # 2 — VIDEO + TEXTE : « Le Faire Festival, c'est quoi ? »
         bloc = Bloc.objects.create(

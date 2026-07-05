@@ -25,18 +25,18 @@ Variables attendues :
 
 {% block title %}{{ wizard_title|default:_("Wizard") }}{% endblock %}
 
-{% block extra_meta %}
+{% block main %}
 {# Import du CSS du wizard onboard pour reutiliser le meme look. #}
 {# Le selecteur racine `.onboard-wizard` scope les styles a ce conteneur #}
-{# uniquement — pas de fuite sur le reste du site. Inclus dans le block #}
-{# `extra_meta` (le seul block injectable dans <head> du base reunion). #}
-{# / Reuse the onboard wizard CSS. The `.onboard-wizard` root selector #}
-{# scopes styles to this container — no global leakage. Injected via #}
-{# `extra_meta` block (only block injectable in reunion base <head>). #}
+{# uniquement — pas de fuite sur le reste du site. Charge DANS main et pas #}
+{# dans extra_meta : ce bloc n'existe que dans le <head> de shell.html et #}
+{# serait PERDU en reponse HTMX (headless, sans <head>) — regle du #}
+{# CONTRAT-DE-SKIN : extra_meta = SEO uniquement, jamais d'asset requis. #}
+{# / Reuse the onboard wizard CSS (scoped under `.onboard-wizard`). Loaded #}
+{# INSIDE main, not in extra_meta: that block only exists in shell.html's #}
+{# <head> and would be DROPPED in HTMX responses (headless has no <head>) — #}
+{# skin contract rule: extra_meta = SEO only, never a required asset. #}
 <link rel="stylesheet" href="{% static 'onboard/wizard.css' %}">
-{% endblock %}
-
-{% block main %}
 <main class="onboard-wizard container my-4" style="max-width: 720px;"
       data-testid="event-wizard">
     <header class="mb-4 pt-2">

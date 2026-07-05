@@ -289,9 +289,18 @@ def test_bloc_evenements_liste_les_a_venir(tenant, api_client, nettoyer_pages):
             datetime=timezone.now() - timezone.timedelta(days=3),
         )
         page = Page.objects.create(titre="Agenda", slug="pytest-evts", publie=True)
+        # nombre_max TRES haut : la base dev est VIVANTE et accumule les
+        # evenements des suites E2E (200+ futurs observes le 2026-07-05).
+        # Avec nombre_max=100, l'evenement du test (+3 jours) se classait
+        # au-dela du slice [:100] du tag evenements_a_venir et le test
+        # echouait selon l'etat de la base. 32000 = deterministe.
+        # / Very high nombre_max: the dev DB is LIVE and accumulates events
+        # from the E2E suites (200+ upcoming observed). With nombre_max=100
+        # the test event (+3 days) could rank beyond the [:100] slice and the
+        # test failed depending on DB state. 32000 = deterministic.
         Bloc.objects.create(
             page=page, type_bloc=Bloc.EVENEMENTS, position=1,
-            titre="À venir", nombre_max=100,
+            titre="À venir", nombre_max=32000,
         )
 
     try:
@@ -480,3 +489,126 @@ def test_texte_du_bloc_est_nettoye(tenant):
     sanitize_textfields(bloc)
     assert "<script>" not in bloc.texte
     assert "Bonjour" in bloc.texte
+
+
+# ---------------------------------------------------------------------------
+# construire_page_accueil (home auto-generee : HERO -> PARAGRAPHE -> CTA)
+# / construire_page_accueil (auto home: HERO -> PARAGRAPH -> CTA)
+# ---------------------------------------------------------------------------
+def test_construire_page_accueil_hero_paragraphe_cta(tenant, nettoyer_pages):
+    """
+    Home auto : HERO(1) sans image ni boutons, PARAGRAPHE(2) avec la description
+    PASSEE (pas celle de config), CTA(3) avec les 2 boutons module-aware.
+    / Auto home: HERO(1) with no image/buttons, PARAGRAPH(2) with the PASSED
+    description (not config's), CTA(3) with both module-aware buttons.
+    """
+    from types import SimpleNamespace
+
+    from pages.models import Bloc, Page
+    from pages.services import construire_page_accueil
+
+    # Config factice : les deux modules actifs, pas de libelle de menu custom.
+    # / Fake config: both modules active, no custom menu labels.
+    config = SimpleNamespace(
+        organisation="Lieu Pytest",
+        short_description="Court pytest",
+        long_description="NE DOIT PAS SERVIR",
+        module_billetterie=True,
+        module_adhesion=True,
+        event_menu_name="",
+        membership_menu_name="",
+    )
+
+    with tenant_context(tenant):
+        # On libere l'etat d'accueil pour que la fonction idempotente s'execute.
+        # / Free the home state so the idempotent function actually runs.
+        homes = list(
+            Page.objects.filter(est_accueil=True).values_list("pk", flat=True)
+        )
+        Page.objects.filter(pk__in=homes).update(est_accueil=False)
+
+        page = None
+        try:
+            page = construire_page_accueil(
+                Page, Bloc, config, description_longue="<p>Ma description longue</p>"
+            )
+            assert page is not None
+
+            blocs = list(page.blocs.order_by("position"))
+            assert [b.type_bloc for b in blocs] == ["HERO", "PARAGRAPHE", "CTA"]
+
+            # HERO : titre + sous-titre, PAS d'image ni de boutons.
+            # / HERO: title + subtitle, NO image, NO buttons.
+            hero = blocs[0]
+            assert hero.titre == "Lieu Pytest"
+            assert hero.sous_titre == "Court pytest"
+            assert not hero.image
+            assert not hero.bouton_label
+            assert not hero.bouton2_label
+
+            # PARAGRAPHE : la description PASSEE, pas le long_description de config.
+            # / PARAGRAPH: the PASSED description, not config's long_description.
+            para = blocs[1]
+            assert "Ma description longue" in para.texte
+            assert "NE DOIT PAS SERVIR" not in para.texte
+
+            # CTA : agenda en principal, adhesions en second (memes URL que la navbar).
+            # / CTA: calendar primary, memberships second (same URLs as the navbar).
+            cta = blocs[2]
+            assert cta.bouton_url == "/event/"
+            assert cta.bouton2_url == "/memberships/"
+        finally:
+            if page is not None:
+                page.delete()
+
+
+def test_construire_page_accueil_sans_desc_longue_paragraphe_vide(tenant, nettoyer_pages):
+    """
+    Sans description longue : le bloc PARAGRAPHE est quand meme cree (texte vide),
+    pour pouvoir etre rempli plus tard. Un seul module actif (adhesion) : le CTA
+    n'a qu'un bouton principal.
+    / No long description: the PARAGRAPH block is still created (empty text) so it
+    can be filled later. A single active module (membership): CTA has only a
+    primary button.
+    """
+    from types import SimpleNamespace
+
+    from pages.models import Bloc, Page
+    from pages.services import construire_page_accueil
+
+    config = SimpleNamespace(
+        organisation="X pytest",
+        short_description="",
+        long_description="hardcode ignore",
+        module_billetterie=False,
+        module_adhesion=True,
+        event_menu_name="",
+        membership_menu_name="",
+    )
+
+    with tenant_context(tenant):
+        homes = list(
+            Page.objects.filter(est_accueil=True).values_list("pk", flat=True)
+        )
+        Page.objects.filter(pk__in=homes).update(est_accueil=False)
+
+        page = None
+        try:
+            # description_longue="" (chaine vide) = onboarding sans saisie.
+            # / empty string = onboarding with no input.
+            page = construire_page_accueil(Page, Bloc, config, description_longue="")
+            blocs = list(page.blocs.order_by("position"))
+            types = [b.type_bloc for b in blocs]
+            # Le PARAGRAPHE est present meme vide.
+            # / The PARAGRAPH is present even when empty.
+            assert types == ["HERO", "PARAGRAPHE", "CTA"]
+            assert blocs[1].texte == ""
+
+            # Seul le module adhesion est actif -> bouton principal = adhesions.
+            # / Only the membership module is active -> primary button = memberships.
+            cta = page.blocs.get(type_bloc="CTA")
+            assert cta.bouton_url == "/memberships/"
+            assert not cta.bouton2_label
+        finally:
+            if page is not None:
+                page.delete()

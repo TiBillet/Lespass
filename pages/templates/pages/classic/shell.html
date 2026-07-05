@@ -92,7 +92,49 @@
     <link rel="stylesheet" href="{% static 'commun/css/swal.css' %}">
 
     <script src="{% static 'commun/js/bootstrap.bundle.min.5.3.3.js' %}"></script>
+    {% comment %}
+    Config htmx (lue par htmx à son chargement) :
+    - historyCacheSize 0 : pas de cliché du DOM dans le localStorage — après un
+      déploiement, un « retour » ne peut plus restaurer une page de l'ancienne
+      version du site.
+    - refreshOnHistoryMiss true : sans cliché, un « retour » fait un vrai
+      rechargement complet (page garantie fraîche et cohérente).
+    / htmx config (read by htmx at load time): no DOM snapshot in localStorage
+    (a back navigation can never restore a page from a previous deployment),
+    and without a snapshot, back triggers a real full reload (guaranteed fresh).
+    {% endcomment %}
+    <meta name="htmx-config" content='{"historyCacheSize": 0, "refreshOnHistoryMiss": true}'>
     <script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
+    <script>
+        /**
+         * Erreurs 404/500 sous HTMX : afficher la page d'erreur au lieu de ne rien faire.
+         * / 404/500 under HTMX: show the error page instead of doing nothing.
+         *
+         * LOCALISATION : pages/templates/pages/classic/shell.html (idem skin faire_festival)
+         *
+         * Par defaut htmx IGNORE les reponses non-2xx : un clic qui tombe en
+         * 404/500 ne produit RIEN a l'ecran (UX muette). Le serveur renvoie
+         * pourtant une page d'erreur utile (handler404/handler500, au look du
+         * skin, en fragment headless quand la requete est HTMX). On force donc
+         * le swap de cette page dans le BODY entier — pas dans la cible du clic
+         * (une 404 dans un petit offcanvas serait illisible).
+         * On ne touche qu'au HTML : les reponses JSON (ex : paiement Stripe de
+         * crowds, qui a son propre listener) ne sont pas concernees.
+         * / By default htmx IGNORES non-2xx responses: a click hitting a 404/500
+         * shows NOTHING. The server does return a useful error page (skin-aware,
+         * headless fragment under HTMX), so we swap it into the whole BODY (not
+         * the click's target). HTML only: JSON responses keep their own handling.
+         */
+        document.addEventListener("htmx:beforeSwap", function (evenement) {
+            const statut = evenement.detail.xhr.status;
+            const type_de_contenu = evenement.detail.xhr.getResponseHeader("Content-Type") || "";
+            if ((statut === 404 || statut === 500) && type_de_contenu.indexOf("text/html") === 0) {
+                evenement.detail.shouldSwap = true;
+                evenement.detail.isError = false;
+                evenement.detail.target = document.body;
+            }
+        });
+    </script>
     <script src="{% static 'mvt_htmx/js/loading-states.js' %}"></script>
     <script src="{% static 'commun/js/sweetalert2@11.js' %}"></script>
     {% if formbricks_api_host %}

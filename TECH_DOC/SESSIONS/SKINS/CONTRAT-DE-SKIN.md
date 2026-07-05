@@ -67,6 +67,13 @@ corrections futures, et on ne perd pas les blocs invisibles type SEO).
 | `offcanvas` | offcanvas spécifiques posés par les vues (tunnels) |
 | `scripts` | scripts additionnels de la vue |
 
+> ⚠️ **`extra_meta` = SEO uniquement (meta, JSON-LD).** Ce bloc ne vit que dans
+> le `<head>` de shell.html : en réponse HTMX (headless, pas de `<head>`), son
+> contenu est PERDU. Un asset CSS/JS nécessaire au rendu d'une vue se charge
+> dans le bloc `main` (un `<link>` dans le body est valide en HTML5, le
+> navigateur déduplique) ou dans `scripts`. Bug historique : `tb-blocs.css`
+> des pages CMS, invisible en navigation HTMX (corrigé le 2026-07-05).
+
 ### vues/agenda.html
 `agenda_carrousel` / `agenda_description` / `agenda_filtres` (inclut la LOGIQUE
 commune `commun/agenda/filtres.html`) / `agenda_liste`.

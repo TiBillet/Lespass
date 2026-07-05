@@ -219,16 +219,27 @@ class Command(BaseCommand):
         def titre_section(texte):
             bloc(type_bloc=Bloc.PARAGRAPHE, titre=texte)
 
-        # === 1. HERO ===
-        b = bloc(
+        # Fond du HERO : image générale du lieu (Configuration.img), lue au rendu
+        # par le template (le HERO n'a plus de champ image propre).
+        # / HERO background: the venue's general image (Configuration.img), read at
+        # render time by the template (the HERO has no own image field anymore).
+        from BaseBillet.models import Configuration
+        self._poser_fichier(Configuration.get_solo(), "img", IMG + "404-1.jpg")
+
+        # === 1. HERO — bannière d'identité (titre + sous-titre) ===
+        bloc(
             type_bloc=Bloc.HERO,
             titre="Bienvenue à Lespass",
             sous_titre="Un lieu culturel coopératif : concerts, ateliers, "
                        "résidences et convivialité — porté par ses adhérent·e·s.",
+        )
+
+        # === 1bis. CTA — actions (agenda / adhésions) ===
+        bloc(
+            type_bloc=Bloc.CTA,
             bouton_label="Voir l'agenda", bouton_url="/event/",
             bouton2_label="Adhérer", bouton2_url="/memberships/",
         )
-        self._poser_fichier(b, "image", IMG + "404-1.jpg")
 
         # === 2. PARAGRAPHE — présentation ===
         bloc(
