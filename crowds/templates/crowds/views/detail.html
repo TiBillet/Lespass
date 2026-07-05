@@ -24,7 +24,7 @@
 {% block main %}
     <main class="container-lg pb-5">
         <header class="mb-3">
-            {% include 'reunion/partials/picture.html' with img=initiative.get_img alt=initiative.name style='max-height: 33vh' %}
+            {% include 'commun/partials/picture.html' with img=initiative.get_img alt=initiative.name style='max-height: 33vh' %}
             <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mt-3">
                 <h1 class="mb-0">{{ initiative.name }}
                     {% if initiative.closed %}

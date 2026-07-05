@@ -1953,7 +1953,7 @@ def send_payment_success_admin(amount: int, payment_time_str: str, place: str, u
     mail = CeleryMailerClass(
         emails,
         title,
-        template="reunion/views/qrcode_scan_pay/email/payment_success_admin.html",
+        template="emails/qrcode_scan_pay/payment_success_admin.html",
         context=context,
     )
     mail.send()
@@ -1991,7 +1991,7 @@ def send_payment_success_user(user_email: str, amount: int, payment_time_str: st
     mail = CeleryMailerClass(
         user_email,
         title,
-        template="reunion/views/qrcode_scan_pay/email/payment_success_user.html",
+        template="emails/qrcode_scan_pay/payment_success_user.html",
         context=context,
     )
     mail.send()

@@ -301,7 +301,7 @@ class TestSepaDuplicateProtection:
         # / Step 4: Verify that the template file exists on the filesystem
         template_check = django_shell(
             "import os\n"
-            "path = '/DjangoFiles/BaseBillet/templates/reunion/views/membership/payment_already_pending.html'\n"
+            "path = '/DjangoFiles/BaseBillet/templates/fonctionnel/adhesion/payment_already_pending.html'\n"
             "exists = os.path.isfile(path)\n"
             "print(f'TEMPLATE_EXISTS={exists}')\n"
         )
@@ -325,7 +325,7 @@ class TestSepaDuplicateProtection:
         # Lire le template via django_shell et chercher les data-testid.
         # / Read the template via django_shell and look for data-testid attributes.
         template_result = django_shell(
-            "with open('/DjangoFiles/BaseBillet/templates/reunion/views/membership/payment_already_pending.html') as f:\n"
+            "with open('/DjangoFiles/BaseBillet/templates/fonctionnel/adhesion/payment_already_pending.html') as f:\n"
             "    content = f.read()\n"
             "testids = [\n"
             "    'membership-payment-already-pending',\n"

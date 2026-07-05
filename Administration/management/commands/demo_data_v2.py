@@ -161,6 +161,13 @@ class Command(BaseCommand):
         # Configuration is filled and the events created (EVENEMENTS is dynamic).
         self._seed_site_pages_lespass()
 
+        # Site vitrine du tenant chantefrein en skin faire_festival : la démo
+        # couvre ainsi LES DEUX skins après un flush (toujours deux peaux à
+        # comparer, sans manipulation manuelle — utile pour la migration skins).
+        # / Showcase website for the chantefrein tenant with the faire_festival
+        # skin: after a flush the demo covers BOTH skins.
+        self._seed_site_pages_chantefrein()
+
     def _seed_site_pages_lespass(self):
         """
         Construit le site web complet du tenant lespass via la commande
@@ -176,6 +183,27 @@ class Command(BaseCommand):
         except Exception as erreur:
             self.stderr.write(self.style.WARNING(
                 f"Site web pages 'lespass' non généré (non bloquant) : {erreur}"
+            ))
+
+    def _seed_site_pages_chantefrein(self):
+        """
+        Construit le site vitrine du tenant chantefrein via la commande
+        `charger_demo_faire_festival` (qui force le skin faire_festival).
+        Gardé (try/except) : en mode light le tenant chantefrein n'existe pas,
+        et un échec côté pages ne doit jamais casser le seed.
+        / Builds the chantefrein showcase website via `charger_demo_faire_festival`
+        (which forces the faire_festival skin). Guarded: in light mode the
+        chantefrein tenant does not exist, and a pages failure must never
+        break the seed.
+        """
+        from django.core.management import call_command
+
+        try:
+            call_command("charger_demo_faire_festival", schema="chantefrein")
+        except Exception as erreur:
+            self.stderr.write(self.style.WARNING(
+                f"Site vitrine 'chantefrein' (faire_festival) non généré "
+                f"(non bloquant) : {erreur}"
             ))
 
     def _handle_seed_ventes(self, options):

@@ -1,5 +1,240 @@
 # Changelog / Journal des modifications
 
+## Migration skins CHANTIERS-05→08 : fin de la migration — contrat de skin, `demarrer_skin`, suppression des anciennes arborescences / Skins migration C05→08: contract, scaffolding command, legacy trees removed
+
+**Date :** 2026-07-04
+**Migration :** Non / No
+
+**CHANTIER-05** — dernières vues skin-aware → `pages/<skin>/vues/` :
+`accueil.html` (ex home, 2 skins), `infos_pratiques.html` + `le_faire_festival.html`
+(ff uniquement — jamais existé côté reunion, résolution identique),
+`reseau.html` (ex federation/explorer). Plus AUCUN appelant de `get_skin_template`.
+
+**CHANTIER-06** — plus rien de fonctionnel dans les arbos de skin :
+- Habillage skinnable : navbar + footer des 2 skins → `pages/<skin>/partials/`.
+- 39 templates fonctionnels → **`BaseBillet/templates/fonctionnel/`**
+  (compte/, connexion/, qrcode_scan_pay/, event_wizard/, event/, adhesion/,
+  register, account_base, blank_base) — ils héritent du shell via
+  `base_template`, donc prennent le look du skin sans copie.
+- Utilitaires partagés `field_errors.html`, `picture_url_string.html` →
+  `commun/partials/`.
+- Emails mal rangés → `emails/qrcode_scan_pay/` (+ maj `tasks.py` ×2) et
+  `emails/legacy/welcome_email.html`.
+- 41 fichiers de références réécrits (render(), includes, extends, tasks).
+
+**CHANTIER-07** — le contrat :
+- **`TECH_DOC/SESSIONS/SKINS/CONTRAT-DE-SKIN.md` v1.0** : arborescence, blocs
+  FIGÉS, ids du chrome, variables de contexte par vue, règle d'autonomie.
+- Commande **`manage.py demarrer_skin <nom>`** : copie `pages/classic/` →
+  `pages/<nom>/`, refus d'écrasement, marche à suivre FALC.
+  Tests : `tests/pytest/test_demarrer_skin.py` (3 tests).
+
+**CHANTIER-08** — nettoyage :
+- `404.html`, `500.html`, `crowds/success.html` étendent
+  `pages/classic/shell.html` en direct.
+- `get_skin_template` SUPPRIMÉ (`gabarit_skin` est l'unique resolver).
+- Arborescences `BaseBillet/templates/{reunion,faire_festival}/` SUPPRIMÉES
+  (maquette ff archivée dans `TECH_DOC/SESSIONS/SKINS/maquette-faire-festival/`).
+- Restent volontairement : `static/reunion/…` (qr-scanner, leaflet, media —
+  namespace statics, hors périmètre du plan) et `static/faire_festival/…`.
+
+**Vérifié** : 0 diff sur tous les snapshots publics (2 skins, pages + HTMX),
+zéro référence template `reunion/`/`faire_festival/` restante hors statics,
+404/500/crowds rendent via le shell, suites pytest + E2E complètes via agent,
+vérification Chrome finale (voir rapport de session).
+
+## Migration skins CHANTIER-04 : adhésions → `pages/<skin>/vues/adhesions.html` / Skins migration CHANTIER-04: memberships moved to `pages/<skin>/vues/`
+
+**Date :** 2026-07-04
+**Migration :** Non / No
+
+**Quoi / What :** Même recette que le CHANTIER-03, pour les adhésions (spec :
+`TECH_DOC/SESSIONS/SKINS/CHANTIER-04-ADHESIONS.md`).
+- Vue liste des 2 skins → `pages/{classic,faire_festival}/vues/adhesions.html`
+  (ff étend directement son shell) ; rendus de `MembershipMVT` sur
+  `gabarit_skin()`, **y compris `embed`** (même correction qu'au C3 : l'iframe
+  suit désormais le skin du tenant au lieu d'un chemin reunion en dur).
+- Les 5 partiels HTMX du tunnel (`form`, `404`, `free_confirmed`,
+  `pending_manual_validation`, `already_has_membership`) → `commun/adhesion/`
+  (chrome). Conformément au piège 9.8 : ce sont des PARTIELS purs (pas de base
+  template), chargés par HTMX dans `#offcanvas-membership` — contenu et ids
+  strictement intacts.
+- Blocs du contrat FIGÉS : `adhesions_entete`, `adhesions_tunnel`,
+  `adhesions_grille`, `adhesions_federees`.
+- Restent dans reunion (C6, pages fonctionnelles) : `formbricks.html` et les 3
+  `payment_already_*` / `payment_link_invalid` (elles étendent `base_template`).
+
+**Vérifié** : snapshots avant/après 0 diff de contenu (3 pages adhésions,
+2 skins, page + HTMX), embed 200 ×2 skins, partiel form.html toujours pur
+(`<form hx-post` sans base), tests + E2E via agent, parcours Chrome (voir
+rapport de session).
+
+## Migration skins CHANTIER-03 : agenda + détail événement → `pages/<skin>/vues/` / Skins migration CHANTIER-03: agenda + event detail moved to `pages/<skin>/vues/`
+
+**Date :** 2026-07-04
+**Migration :** Non / No
+
+**Quoi / What :** Les vues agenda et détail événement des deux skins déménagent
+vers `pages/<skin>/vues/` et les 5 sites de rendu d'`EventMVT` passent sur le
+resolver unifié `gabarit_skin()` (spec :
+`TECH_DOC/SESSIONS/SKINS/CHANTIER-03-AGENDA-EVENEMENT.md`).
+
+- reunion → `pages/classic/` : `vues/agenda.html`, `vues/evenement.html`,
+  `vues/agenda_liste.html`, `vues/agenda_liste_suite.html` + partials habillage
+  (`carrousel_evenements`, `evenement_accordeon`, `evenement_geoloc`,
+  `evenement_benevoles`, `reservation_declencheur`) ; la logique de recherche →
+  `commun/agenda/filtres.html` (chrome).
+- faire_festival → `pages/faire_festival/vues/{agenda,evenement,agenda_liste_suite}.html`
+  (extends directement le shell ff).
+- **Contrat de skin — premiers blocs FIGÉS** : `agenda_carrousel`,
+  `agenda_description`, `agenda_filtres`, `agenda_liste` ; `evenement_entete`,
+  `evenement_tags`, `evenement_description`, `evenement_reservation`,
+  `evenement_complements` ; partial `carte_evenement.html` (dédoublonne la carte
+  entre liste et « voir plus »).
+- **`embed` corrigé** : l'iframe agenda suivait TOUJOURS le look reunion (chemin
+  en dur) ; elle suit désormais le skin du tenant.
+- Originaux supprimés (plus aucune référence) ; restent dans reunion :
+  formbricks, reservation_ok, wizard (CHANTIER-06).
+
+**Vérifié** : snapshots avant/après identiques (0 diff de contenu, 2 skins,
+pages + HTMX), retrieve/embed/pagination 200, 33 pytest event/pages verts,
+E2E complets (voir rapport de session).
+
+## Migration skins CHANTIER-02 (lots A, B, C1) : extraction du commun — statics, templates partagés, offcanvas / Skins migration CHANTIER-02 (batches A, B, C1): shared assets extraction
+
+**Date :** 2026-07-03
+**Migration :** Non / No
+
+**Quoi / What :** Tout ce qui est partagé entre les skins déménage vers `commun/`
+(décisions P1-P4, spec `TECH_DOC/SESSIONS/SKINS/CHANTIER-02-EXTRACTION-COMMUN.md`).
+
+**Lot A — statics** : 21 fichiers `static/reunion/` → `static/commun/` (5 CSS,
+4 familles de polices, 6 JS, 2 images) ; références basculées dans 10 fichiers
+(shells, seo/base, blank_base, footers, mails/base, redirection favicon urls.py).
+
+**Lot B — templates partagés** : `forms/contact.html` et `forms/login.html` →
+`commun/formulaires/`, `partials/toasts.html` → `commun/toasts.html`,
+`loading.html` → `commun/loading.html`, `booking_form.html` →
+`commun/formulaires/reservation.html`, `partials/picture.html` →
+`commun/partials/picture.html` (utilisé aussi par crowds). 28 références basculées.
+**Le skin faire_festival ne référence plus aucun fichier reunion** (règle P3).
+
+**Lot C1 — offcanvas unifiés** : les 5 offcanvas publics extraits vers
+`commun/offcanvas/{contact,connexion,adhesion_tunnel,reservation,filtres_agenda}.html`,
+inclus au même endroit du DOM par les templates hôtes des deux skins (définitions
+doublées unifiées). Formulaire de recherche → `commun/formulaires/
+recherche_evenements.html`. Largeur responsive des tunnels factorisée en classe
+`.offcanvas-tunnel` dans `tibillet.css` (4 blocs `<style>` inline supprimés).
+Ids inchangés (contrat) : `#contactPanel`, `#loginPanel`, `#subscribePanel`,
+`#offcanvas-membership`, `#bookingPanel`, `#filterPanel`.
+
+**Lot C2 — blocs offcanvas dans les squelettes** : `pages/classic/shell.html` et
+`headless.html` exposent désormais `{% block offcanvas_globaux %}` (contact +
+connexion, inclus par le squelette en fin de body — retirés du partial navbar,
+qui ne garde que les déclencheurs) et `{% block offcanvas %}` (rempli par les
+vues : tunnels réservation/adhésion). Aligne le socle classic sur le pattern
+faire_festival. Exception documentée : sur faire_festival, le panneau contact
+reste DANS `.skin-faire-festival` (le CSS brutaliste y est scopé). Le headless
+inclut les mêmes panneaux : ils survivent aux swaps HTMX `hx-target="body"`.
+Diff HTML : déplacement pur des 2 panneaux (contenu identique, vérifié).
+
+**Pourquoi / Why :** un skin ne doit référencer que lui-même, le socle classic et
+`commun/` — préalable à la suppression de l'arborescence reunion (CHANTIER-08) et
+à la création de skins tiers.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/static/commun/` | NOUVEAU — 21 statics partagés (+ règle `.offcanvas-tunnel` dans tibillet.css) |
+| `BaseBillet/templates/commun/` | NOUVEAU — formulaires/, offcanvas/, partials/, toasts, loading |
+| Shells `pages/{classic,faire_festival}/` + `seo/base.html` + `blank_base.html` + footers + `ApiBillet/mails/base.html` | chemins statics → `commun/` |
+| `BaseBillet/urls.py` | redirection favicon → `commun/img/favicon.png` |
+| `reunion/partials/navbar.html`, vues membership/event des 2 skins, `partial/search.html`, `partial/booking.html` | définitions offcanvas → includes `commun/offcanvas/` |
+| `crowds/templates/` (detail, card) | include picture → `commun/partials/picture.html` |
+
+## Seed : la démo faire_festival (chantefrein) est branchée au flush / Seed: the faire_festival demo (chantefrein) is now wired into the flush
+
+**Date :** 2026-07-03
+**Migration :** Non / No
+
+**Quoi / What :** La commande `charger_demo_faire_festival` (vitrine brutaliste sur
+le tenant chantefrein + skin forcé à faire_festival) existait mais n'était appelée
+par personne : après un flush, tous les tenants restaient en skin reunion.
+`demo_data_v2` l'appelle désormais en fin de seed (`_seed_site_pages_chantefrein()`,
+même pattern try/except non bloquant que `_seed_site_pages_lespass()`).
+**Pourquoi / Why :** chaque flush produit maintenant les DEUX skins de démo —
+indispensable pour comparer les peaux pendant la migration skins.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/management/commands/demo_data_v2.py` | + `_seed_site_pages_chantefrein()` appelé après le seed lespass |
+
+## Fix : doublons SEOCache au flush (contrainte unique partielle) / Fix: SEOCache duplicates on flush (partial unique constraint)
+
+**Date :** 2026-07-03
+**Migration :** Oui / Yes — `seo/migrations/0005_alter_seocache_unique_together_and_more.py`
+(dédoublonne puis pose les contraintes / dedupes then adds the constraints)
+
+**Quoi / What :** Le flush crashait en fin de course sur
+`SEOCache.MultipleObjectsReturned` (reproductible). Cause : `unique_together
+(cache_type, tenant)` ne protège PAS les lignes d'agrégats globaux (`tenant=None`) —
+PostgreSQL considère les NULL comme distincts dans un index unique. Deux rebuilds
+concurrents (worker Celery déclenché par les signaux du seed + commande manuelle
+`refresh_seo_cache` de flush.sh, qui bypasse le verrou debounce avec `force=True`)
+créaient donc des doublons, et tous les rebuilds suivants crashaient.
+**Fix :** remplacement de `unique_together` par deux `UniqueConstraint` partielles
+(`tenant` non-null : couple unique ; `tenant` null : `cache_type` unique — compatible
+PostgreSQL 13). En cas de course, `get_or_create` rattrape l'`IntegrityError` et
+relit la ligne. Vérifié par deux `refresh_seo_cache` lancés en parallèle : zéro
+crash, zéro doublon.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/models.py` | `unique_together` → 2 `UniqueConstraint` partielles |
+| `seo/migrations/0005_alter_seocache_unique_together_and_more.py` | Dédoublonnage (garde la plus récente) + contraintes |
+
+## Migration skins CHANTIER-01 : resolver unifié `gabarit_skin` + squelettes déplacés vers `pages/<skin>/` / Skins migration CHANTIER-01: unified resolver + skeletons moved to `pages/<skin>/`
+
+**Date :** 2026-07-03
+**Migration :** Non / No (une migration de fusion technique a été créée à part :
+`BaseBillet/migrations/0224_merge_20260703_0914.py`, exigée par les deux feuilles
+0220/0223 issues du merge de `main` — vide, aucun changement de schéma)
+
+**Quoi / What :** Première étape de la migration skins (plan :
+`TECH_DOC/SESSIONS/SKINS/`). Nouveau resolver `pages.services.gabarit_skin(nom)` :
+retourne `pages/<skin>/<nom>` si le skin fournit le gabarit, sinon fallback
+automatique sur le socle `pages/classic/<nom>`. Les 4 squelettes (`base.html` et
+`headless.html` des skins reunion et faire_festival) sont déplacés vers
+`pages/templates/pages/{classic,faire_festival}/{shell,headless}.html`. Les anciens
+fichiers deviennent des redirections d'héritage (`{% extends %}` une ligne) — une
+seule source de vérité, zéro drift, et les `extends` en dur existants (404.html,
+500.html, crowds/success.html, vues faire_festival) continuent de fonctionner.
+`get_context()` branche `base_template` sur le nouveau resolver.
+
+**Pourquoi / Why :** Unifier les deux systèmes de skin parallèles
+(`get_skin_template`/reunion et app pages/classic) sous un seul mécanisme avec
+filet de sécurité. **Iso-rendu prouvé** : snapshots curl normalisés identiques
+avant/après sur `/`, `/event/`, `/memberships/` (+ variantes HTMX) pour un tenant
+reunion ET un tenant faire_festival.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `pages/services.py` | + `gabarit_skin()` (resolver unifié avec fallback classic) |
+| `pages/templates/pages/classic/shell.html` | NOUVEAU — ex `reunion/base.html` (contenu intégral) |
+| `pages/templates/pages/classic/headless.html` | NOUVEAU — ex `reunion/headless.html` |
+| `pages/templates/pages/faire_festival/shell.html` | NOUVEAU — ex `faire_festival/base.html` |
+| `pages/templates/pages/faire_festival/headless.html` | NOUVEAU — ex `faire_festival/headless.html` |
+| `BaseBillet/templates/reunion/base.html` | Devient `{% extends "pages/classic/shell.html" %}` |
+| `BaseBillet/templates/reunion/headless.html` | Devient `{% extends "pages/classic/headless.html" %}` |
+| `BaseBillet/templates/faire_festival/base.html` | Devient `{% extends "pages/faire_festival/shell.html" %}` |
+| `BaseBillet/templates/faire_festival/headless.html` | Devient `{% extends "pages/faire_festival/headless.html" %}` |
+| `BaseBillet/views.py` | `get_context()` : `base_template` résolu par `gabarit_skin("shell.html"/"headless.html")` |
+| `tests/pytest/test_gabarit_skin.py` | NOUVEAU — 4 tests (fallback reunion→classic, skin existant, gabarit manquant, chaîne d'héritage) |
+| `BaseBillet/migrations/0224_merge_20260703_0914.py` | NOUVEAU — merge technique des feuilles 0220/0223 (vide) |
+
 ## Corrections : relance d'adhésion tronquée, tâche welcome morte, bouton fermer du panneau ticket / Fixes: truncated membership reminder, dead welcome task, ticket panel close button
 
 **Date :** 2026-07-03

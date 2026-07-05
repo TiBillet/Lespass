@@ -1,7 +1,12 @@
 # Migration Skins — État de reprise
 
-**Dernière mise à jour :** 2026-07-03 (gros check complet du plan contre le code)
-**Statut :** PLAN écrit — **aucun code**. En attente du go pour démarrer.
+**Dernière mise à jour :** 2026-07-04
+**Statut : 🎉 MIGRATION TERMINÉE — les 8 chantiers sont faits (01→08).**
+Le contrat de skin est publié : `CONTRAT-DE-SKIN.md` (v1.0, FIGÉ).
+Reste côté mainteneur : commit + tests manuels des parcours fonctionnels
+(fiche `A TESTER et DOCUMENTER/skins-chantiers-05-a-08-final.md`).
+Assumé/documenté : les namespaces STATICS `static/reunion/…` et
+`static/faire_festival/…` restent (seuls les templates ont migré).
 
 ## Où on en est
 - Le plan complet est écrit : `PLAN-MIGRATION-SKINS.md`.
@@ -26,9 +31,9 @@
    **CSS global** uniquement (classes sémantiques). Décision réévaluable plus tard,
    mais **hors de ce chantier** (éviter d'alourdir le refacto).
 
-## Propositions à valider par le mainteneur (check 2026-07-03)
+## Décisions complémentaires VALIDÉES par le mainteneur le 2026-07-03 (ex-propositions P1-P5)
 
-### P1 — Renommer `chrome/` → `commun/`
+### P1 ✅ — Renommer `chrome/` → `commun/`
 « Chrome » vient du jargon navigateur (*browser chrome* = tout ce qui entoure le
 contenu : barres, menus). C'est opaque pour un non-anglophone — contraire au FALC.
 Proposition : `BaseBillet/templates/commun/` avec un sens simple : **« partagé entre
@@ -37,7 +42,7 @@ filtres) ET les partials déjà partagés de fait : `forms/contact.html`,
 `forms/login.html`, `partials/toasts.html`, `loading.html`,
 `views/event/partial/booking_form.html`.
 
-### P2 — Dossier statics communs `BaseBillet/static/commun/`
+### P2 ✅ — Dossier statics communs `BaseBillet/static/commun/`
 Le check montre que la majorité de `static/reunion/` est **du commun déguisé** :
 faire_festival charge `reunion/css/{bootstrap.min.5.3.3,bootstrap-icons.min,vars,
 tibillet,swal}.css`, `reunion/js/{bootstrap.bundle,sweetalert2@11,theme-switcher,
@@ -48,7 +53,7 @@ mettre à jour les chemins dans les templates, relancer collectstatic.
 Restent spécifiques reunion : qr-scanner, qrcode.min.js, booking-calculator.mjs,
 form-spinner.mjs, htmx.min (chargé par reunion/base.html), media/ de démo.
 
-### P3 — Règle d'autonomie des skins
+### P3 ✅ — Règle d'autonomie des skins
 Un skin ne référence QUE : (a) ses propres fichiers `pages/<skin>/…`, (b) le fallback
 `pages/classic/…`, (c) le partagé `commun/…` (templates et statics). **Jamais un autre
 skin.** Aujourd'hui faire_festival référence `reunion/` à 7 endroits (templates) +
@@ -56,7 +61,7 @@ skin.** Aujourd'hui faire_festival référence `reunion/` à 7 endroits (templat
 CHANTIER-08. On ne « supprime » donc pas `reunion/partials/…` : on **déplace vers
 commun/** ce qui est partagé, vers `pages/classic/` ce qui est du socle skinnable.
 
-### P4 — Pattern offcanvas unifié (méthode)
+### P4 ✅ — Pattern offcanvas unifié (méthode)
 Constat : 8 offcanvas publics, 0 modal. Incohérences relevées :
 - Emplacement DOM : reunion définit `#loginPanel`/`#contactPanel` **dans le partial
   navbar** ; faire_festival les définit **dans base.html** + a déjà un
@@ -80,7 +85,7 @@ rapport de session du 03/07 — `#contactPanel`, `#loginPanel`, `#subscribePanel
 (+corps `#offcanvas-membership`), `#bookingPanel`, `#filterPanel`, `#ticketPanel`
 (+corps `#ticketPanelBody`), `#refundPanel`.
 
-### P5 — Emails : hors skin, confirmé par le code
+### P5 ✅ — Emails : hors skin, confirmé par le code
 Les 3 templates email rangés sous `reunion/` (`views/qrcode_scan_pay/email/
 payment_success_{user,admin}.html`, `views/tenant/emails/welcome_email.html`) font
 tous `{% extends 'emails/base.html' %}` — **zéro dépendance au skin** (styles inline,
@@ -127,24 +132,66 @@ Autres (hors pages) :
    `emails/welcome/welcome_email.html` **inexistant** (erreur avalée par try/except).
 8. `membership_renewal_reminder` (`tasks.py:1769-1772`) : `return` DANS la boucle
    `for membership` → seul le premier adhérent reçoit la relance. Log copié-collé
-   trompeur (« send_welcome_email »).
+   trompeur (« send_welcome_email »). *(6-7-8 corrigés le 03/07 sur `main`.)*
+9. **`seo.SEOCache` : course sur `update_or_create` sans contrainte unique**
+   (`seo/tasks.py:282`) : deux exécutions concurrentes de `rebuild_seo_aggregates`
+   (beat au démarrage + commande manuelle `refresh_seo_cache`) créent des doublons
+   `(cache_type, tenant=None)` → tous les rebuilds suivants crashent en
+   `MultipleObjectsReturned` (constaté au flush du 03/07 : 12 doublons, nettoyés à
+   la main). **✅ CORRIGÉ le 03/07** : 2 `UniqueConstraint` partielles (PG13 ne
+   supporte pas NULLS NOT DISTINCT) + migration de dédoublonnage
+   (`seo/migrations/0005`). Vérifié par 2 refresh concurrents : 0 doublon.
 Lacunes tests : aucun test parent-brouillon/enfant-publié, aucun test breadcrumb en
 skin faire_festival, aucun test « accueil comme parent » via API.
 
-## Prochaine étape (au go)
-1. **CHANTIER-01** — resolver unifié `pages.services.gabarit_skin()` (ajout dans le
-   `services.py` existant) + porter `reunion/base.html` → `pages/classic/shell.html`
-   (+ faire_festival). Brancher `base_template` dessus. *Sécurité : iso-rendu tous
-   tenants.*
-2. **CHANTIER-02** — extraction du chrome/commun (modals/offcanvas/filtres + statics
-   communs, cf. P1-P4) vers `BaseBillet/templates/commun/` et `static/commun/`.
-   **Le point dur (60-70 % du risque)** — à faire tôt, testable seul, zéro changement
-   visible.
+## Prochaine étape
+1. **CHANTIER-01 — EN COURS** (spec : `CHANTIER-01-RESOLVER-SHELL.md`) — resolver
+   unifié `pages.services.gabarit_skin()` (ajout dans le `services.py` existant) +
+   porter `reunion/base.html` → `pages/classic/shell.html` (+ faire_festival).
+   Brancher `base_template` dessus. *Sécurité : iso-rendu tous tenants (snapshots
+   curl avant/après).*
+2. **CHANTIER-02 — TERMINÉ (lots A, B, C1 le 03/07 ; C2 le 04/07)** (`CHANTIER-02-EXTRACTION-COMMUN.md`) —
+   Lot C2 : blocs `offcanvas_globaux` (contact+connexion en fin de body, retirés
+   de la navbar) et `offcanvas` (tunnels de vue) dans classic/{shell,headless} ;
+   exception ff-contact (CSS scopé) documentée dans le shell ff. Déplacement DOM
+   pur vérifié par snapshots. —
+   Lot B : 6 templates déplacés (dont `picture.html`, partagé avec crowds, ajouté au
+   périmètre) — le skin faire_festival ne référence PLUS AUCUN template reunion.
+   Lot C1 : 5 offcanvas extraits vers `commun/offcanvas/` (contact, connexion,
+   adhesion_tunnel, reservation, filtres_agenda) + formulaire recherche →
+   `commun/formulaires/recherche_evenements.html` + CSS largeur factorisé
+   `.offcanvas-tunnel` dans tibillet.css (4 <style> inline supprimés). Unification
+   des doublons reunion/ff : canonique = structure reunion + spinner ff dans le
+   corps du tunnel d'adhésion ; titre 'Subscribe' (conditionnel mort
+   `product.validate_button_text` retiré — product hors scope à cet endroit).
+   **Lot C1 VÉRIFIÉ le 04/07** : 353 pytest + 64 E2E verts (0 échec), et parcours
+   Chrome réels — les 5 offcanvas ouverts sur les 2 skins, vente Stripe CB 4242
+   (adhésion 10 €), recharge tirelire en ligne (10 €), vente par QR code
+   qrcodescanpay (5 € débités de la tirelire). NB : un run E2E précédent avait
+   21 échecs → cause = runserver ASGI suspendu (tâche Channels tuée par le
+   watchdog), redémarré via byobu ; aucun rapport avec les templates. —
+   extraction du commun (templates + statics + offcanvas, cf. P1-P4) en 4 lots :
+   A statics → `static/commun/`, B templates partagés → `commun/`, C1 extraction
+   des 5 offcanvas → `commun/offcanvas/` (iso-bytes), C2 blocs dans les shells
+   (iso-visuel). **Le point dur (60-70 % du risque).**
+   NB seed : `demo_data_v2` branche désormais `charger_demo_faire_festival`
+   (chantefrein) → chaque flush fournit les 2 skins de démo.
 
-Puis CHANTIER-03 (agenda + détail événement — **inclut les méthodes `embed`**),
-04 (adhésions — idem), 05 (accueil/infos/réseau), 06 (pages fonctionnelles → héritent
-du shell ; déplacer les templates email mal rangés), 07 (doc contrat + `demarrer_skin`),
-08 (nettoyage `get_skin_template` + vieilles arbos, possible seulement après P3).
+3. **CHANTIER-03 — TERMINÉ (04/07)** (`CHANTIER-03-AGENDA-EVENEMENT.md`) —
+   agenda + détail événement → `pages/<skin>/vues/` (2 skins), 5 sites EventMVT
+   sur `gabarit_skin()`, méthode `embed` corrigée (suit le skin du tenant),
+   premiers blocs du contrat FIGÉS (agenda_*, evenement_*, carte_evenement),
+   recherche → `commun/agenda/filtres.html`. Snapshots 0 diff, E2E verts.
+
+4. **CHANTIER-04 — TERMINÉ (04/07)** (`CHANTIER-04-ADHESIONS.md`) — adhésions →
+   `pages/<skin>/vues/adhesions.html` (2 skins), `embed` corrigé, 5 partiels
+   HTMX du tunnel → `commun/adhesion/` (piège 9.8 respecté : partiels purs
+   intacts), blocs FIGÉS adhesions_*. payment_*/formbricks restent pour le C6.
+
+Puis CHANTIER-05 (accueil/infos/réseau),
+06 (pages fonctionnelles → héritent du shell ; déplacer les templates email mal
+rangés ; wizard/formbricks/reservation_ok), 07 (doc contrat + `demarrer_skin`),
+08 (nettoyage `get_skin_template` + vieilles arbos).
 
 ## Pièges / rappels
 - **Ne JAMAIS casser le skin `reunion`** (défaut, le plus utilisé). Tests Playwright
@@ -161,6 +208,13 @@ du shell ; déplacer les templates email mal rangés), 07 (doc contrat + `demarr
 - Un template de vue surchargé intégralement par un skin peut « perdre » des blocs
   invisibles (SEO/JSON-LD) sans que rien ne casse visuellement — cf. bug n°2. Le
   contrat de skin devra pousser l'`extends` + override plutôt que la copie.
+- **`{# … #}` ne supporte PAS le multi-ligne** en Django : un `{#` non refermé sur
+  la même ligne est rendu comme du TEXTE dans la page. Tout commentaire de plus
+  d'une ligne = `{% comment %}…{% endcomment %}` (piège rencontré au lot C2,
+  fuite de commentaires dans le HTML détectée par les snapshots).
+- Le panneau contact de faire_festival vit DANS `.skin-faire-festival` (CSS du
+  skin scopé sous cette classe) — le sortir changerait son look. Exception
+  documentée dans le bloc `offcanvas_globaux` du shell ff.
 - Ne pas faire d'opération git ni de makemessages (mainteneur).
 
 ## Fichiers de référence (pour situer le code)

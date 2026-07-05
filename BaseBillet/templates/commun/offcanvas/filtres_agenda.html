@@ -1,0 +1,24 @@
+{% load i18n %}{% comment %}
+OFFCANVAS FILTRES DE L'AGENDA (#filterPanel)
+/ Agenda search filters offcanvas (#filterPanel)
+
+LOCALISATION : BaseBillet/templates/commun/offcanvas/filtres_agenda.html
+
+Chrome partagé, NON skinnable : inclus par le partial search de l'agenda
+(skin reunion aujourd'hui ; le formulaire est un brouillon non branché, cf.
+TODO dans commun/formulaires/recherche_evenements.html).
+Déclencheur : bouton filtre de la barre de recherche
+(data-bs-toggle="offcanvas" data-bs-target="#filterPanel").
+L'id #filterPanel fait partie du contrat de skin : ne JAMAIS le renommer.
+/ Shared chrome. The inner form is a non-wired draft (see TODO). The
+#filterPanel id is part of the skin contract.
+{% endcomment %}
+<div class="offcanvas-start offcanvas" tabindex="-1" id="filterPanel" aria-labelledby="filterPanelLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="filterPanelLabel">{% translate "Search filters" %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% trans 'Close' %}"></button>
+    </div>
+    <div class="offcanvas-body">
+        {% include 'commun/formulaires/recherche_evenements.html' %}
+    </div>
+</div>

@@ -1,0 +1,23 @@
+{% load i18n %}{% comment %}
+OFFCANVAS CONNEXION — panneau de login (#loginPanel)
+/ Login offcanvas (#loginPanel)
+
+LOCALISATION : BaseBillet/templates/commun/offcanvas/connexion.html
+
+Chrome partagé, NON skinnable : inclus par la navbar reunion et par le shell
+faire_festival. Déclencheurs : boutons navbar + footer + partial volunteers.
+Un JS d'auto-ouverture (paramètre ?login=1) vit dans la navbar reunion et
+cible #loginPanel par id. L'id fait partie du contrat de skin : ne JAMAIS
+le renommer.
+/ Shared chrome, NOT skinnable. An auto-open JS (?login=1 param) targets
+#loginPanel by id. The id is part of the skin contract.
+{% endcomment %}
+<div class="offcanvas-start offcanvas" tabindex="-1" id="loginPanel" aria-labelledby="loginPanelLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="loginPanelLabel">{% translate 'Login' %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% translate 'Close' %}"></button>
+    </div>
+    <div class="offcanvas-body">
+        {% include 'commun/formulaires/login.html' %}
+    </div>
+</div>

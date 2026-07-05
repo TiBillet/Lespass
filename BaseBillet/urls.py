@@ -61,7 +61,7 @@ urlpatterns = [
     # Redirect to the reunion skin favicon (PNG) to avoid 404s.
     path(
         'favicon.ico',
-        RedirectView.as_view(url=static('reunion/img/favicon.png'), permanent=True),
+        RedirectView.as_view(url=static('commun/img/favicon.png'), permanent=True),
         name='favicon_ico',
     ),
 

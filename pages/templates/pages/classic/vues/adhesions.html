@@ -1,0 +1,121 @@
+{% extends base_template %}
+{% load tibitags static %}
+{% load i18n %}
+
+{% block title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Subscriptions' %}{% endif %}{% endblock %}
+{% block meta_description %}{% translate 'Join our community by subscribing to one of our membership options' %} - {{ config.organisation }}{% endblock %}
+{% block og_title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Subscriptions' %}{% endif %} | {{ config.organisation }}{% endblock %}
+{% block og_description %}{% translate 'Join our community by subscribing to one of our membership options' %} - {{ config.organisation }}{% endblock %}
+{% block og_image %}{% if products.0.img %}{{ products.0.img.social_card.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block og_image_alt %}{% if products.0.name %}{{ products.0.name }} - {% endif %}{% translate 'Memberships' %} - {{ config.organisation }}{% endblock %}
+{% block twitter_title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Subscriptions' %}{% endif %} | {{ config.organisation }}{% endblock %}
+{% block twitter_description %}{% translate 'Join our community by subscribing to one of our membership options' %} - {{ config.organisation }}{% endblock %}
+{% block twitter_image %}{% if products.0.img %}{{ products.0.img.social_card.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block twitter_image_alt %}{% if products.0.name %}{{ products.0.name }} - {% endif %}{% translate 'Memberships' %} - {{ config.organisation }}{% endblock %}
+
+{% block main %}
+    {% comment %}
+    CONTRAT DE SKIN (blocs FIGÉS, ne jamais renommer — décision 2) :
+    adhesions_entete / adhesions_tunnel (chrome commun, non skinnable) /
+    adhesions_grille / adhesions_federees.
+    / SKIN CONTRACT (FROZEN block names). The membership tunnel is shared
+    chrome; a skin only re-skins the page around it.
+    {% endcomment %}
+    <div class="container-lg py-5">
+        {% block adhesions_entete %}
+        {% if config.description_membership_page %}
+            <div>{{ config.description_membership_page | safe }}</div>
+        {% else %}
+            <h1>{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}
+                {% trans 'Subscriptions' %}{% endif %}</h1>
+        {% endif %}
+        {% endblock adhesions_entete %}
+
+        {% block adhesions_tunnel %}
+        <!-- Tunnel d'adhésion (chrome partagé, extrait vers commun/ au CHANTIER-02).
+             La largeur responsive vient de .offcanvas-tunnel (tibillet.css). -->
+        {% include 'commun/offcanvas/adhesion_tunnel.html' %}
+        {% endblock adhesions_tunnel %}
+
+        {% block adhesions_grille %}
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-3 mb-5">
+            {% for product in products %}
+                {% if product.publish %}
+                    <div class="col">
+                        <div class="card h-100">
+                            {% include 'commun/partials/picture.html' with img=product.img alt=product.name class='card-img-top' ratio='16x9' %}
+                            <div class="card-body">
+                                <h3 class="card-title">{{ product.name }}</h3>
+                                {% if product.short_description %}
+                                    <p class="card-text">{{ product.short_description }}</p>
+                                {% endif %}
+                                {% if product.long_description %}
+                                    <p class="card-text">{{ product.long_description | safe }}</p>
+                                {% endif %}
+                            </div>
+                            <div class="card-footer">
+                                {% if embed %}
+                                    <a class="btn btn-primary w-100 my-3 js-membership-form-btn"
+                                       type="button"
+                                       href="/memberships/?open={{ product.uuid }}" target="_blank">
+                                        <i class="bi bi-plus"></i>
+                                        {% if product.validate_button_text %}
+                                            {{ product.validate_button_text }}{% else %}
+                                            {% translate 'Subscribe' %}{% endif %}
+                                    </a>
+                                {% else %}
+                                    <button
+                                            class="btn btn-primary w-100 my-3 js-membership-form-btn"
+                                            type="button"
+                                            hx-get="/memberships/{{ product.uuid }}/" hx-swap="innerHTML"
+                                            hx-target="#offcanvas-membership"
+
+                                            data-bs-toggle="offcanvas"
+                                            data-bs-target="#subscribePanel"
+                                            aria-controls="subscribePanel"
+                                            data-testid="membership-open-{{ product.uuid }}">
+                                        <i class="bi bi-plus"></i>
+                                        {% if product.validate_button_text %}
+                                            {{ product.validate_button_text }}{% else %}
+                                            {% translate 'Subscribe' %}{% endif %}
+                                    </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+        {% endblock adhesions_grille %}
+
+    {% block adhesions_federees %}
+    {% if federated_tenants %}
+        <h4>{% trans "Découvrez les adhésions des espaces fédérés :" %}</h4>
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-3 mb-5">
+            {% for tenant in federated_tenants %}
+                <div class="col">
+                    <div class="card h-100">
+                        {% if tenant.img_url %}
+                            <img src="{{ tenant.img_url }}" class="card-img-top" alt="{{ tenant.name }}" style="aspect-ratio: 16/9; object-fit: cover;">
+                        {% endif %}
+                        <div class="card-body">
+                            <h3 class="card-title">{{ tenant.name }}</h3>
+                            {% if tenant.short_description %}
+                                <p class="card-text">{{ tenant.short_description }}</p>
+                            {% endif %}
+                        </div>
+                        <div class="card-footer">
+                            <a href="https://{{ tenant.domain }}/memberships/" class="btn btn-primary w-100 my-3" target="_blank">
+                                <i class="bi bi-arrow-right"></i>
+                                Voir les adhésions
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+    {% endblock adhesions_federees %}
+
+    </div>
+{% endblock main %}

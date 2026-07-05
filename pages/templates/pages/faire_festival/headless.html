@@ -1,0 +1,40 @@
+{% load static i18n %}{# Squelette du skin — déplacé depuis BaseBillet/templates (migration skins CHANTIER-01). Ce commentaire ne produit aucune sortie HTML. / Skin skeleton moved from BaseBillet/templates (skins migration). #}
+
+<!-- =======================================================================
+     TEMPLATE HEADLESS : Version sans <head> pour les requêtes HTMX
+     Utilisé lorsque le contenu est chargé dynamiquement sans recharger toute la page.
+     IMPORTANT : la navbar ET le footer doivent être DANS .skin-faire-festival,
+     sinon le CSS faire_festival (scopé sous cette classe) ne s'applique pas après
+     un swap HTMX (hx-target="body").
+     / The navbar AND footer must be INSIDE .skin-faire-festival, otherwise the
+     faire_festival CSS (scoped under that class) is not applied after an HTMX body swap.
+     ======================================================================= -->
+
+{# title repris automatiquement par htmx quand hx-target == body #}
+<title>{% block title %}{% translate 'Home' %}{% endblock %} | {{ config.organisation }}</title>
+
+<div class="skin-faire-festival">
+    {% if not embed %}
+        {% include "pages/faire_festival/partials/navbar.html" %}
+    {% endif %}
+
+    <main>
+        {% block main %}{% endblock main %}
+    </main>
+
+    {% if not embed %}
+        {% block footer %}{% endblock footer %}
+    {% endif %}
+</div>
+
+<!-- Bloc pour les offcanvas spécifiques aux vues -->
+{% block offcanvas %}{% endblock %}
+
+{% include "commun/toasts.html" %}
+
+<!-- spinner -->
+{% include "commun/loading.html" %}
+
+<!-- Scripts additionnels spécifiques (si nécessaire) -->
+{% block scripts %}{% endblock %}
+{% block extra_scripts %}{% endblock %}

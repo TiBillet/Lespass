@@ -19,6 +19,56 @@ type_bloc (pas les constantes de classe, absentes des modeles historiques).
 migration (historical models) and from the onboarding flow (real models). It
 imports no model at module level and uses string literals for type_bloc.
 """
+from django.template import TemplateDoesNotExist
+from django.template.loader import get_template
+
+
+def gabarit_skin(nom_du_gabarit):
+    """
+    Resolveur unifié des gabarits de skin (migration skins, CHANTIER-01).
+    / Unified skin template resolver (skins migration, CHANTIER-01).
+
+    LOCALISATION : pages/services.py
+
+    Retourne le CHEMIN du gabarit à utiliser pour le skin courant :
+    - "pages/<skin>/<nom>" si le skin fournit ce gabarit,
+    - sinon "pages/classic/<nom>" — le socle, filet de sécurité permanent.
+
+    Le skin par défaut "reunion" n'a pas de dossier pages/reunion/ : il retombe
+    donc toujours sur pages/classic/ (voulu — décision 1 du plan de migration,
+    zéro migration de données sur ConfigurationSite.skin).
+    / The default skin "reunion" has no pages/reunion/ folder: it always falls
+    back to pages/classic/ (by design — decision 1 of the migration plan).
+
+    À terme, cette fonction remplace BaseBillet.views.get_skin_template pour
+    tout le templating public. Pendant la migration, les deux coexistent.
+    / Eventually replaces get_skin_template for all public templating. Both
+    coexist during the migration.
+
+    :param nom_du_gabarit: chemin relatif dans le skin, ex "shell.html"
+        ou "vues/agenda.html".
+    :return: chemin complet du gabarit (str) — utilisable par render()
+        et par {% extends base_template %}.
+    """
+    # Import local pour éviter l'import circulaire BaseBillet <-> pages
+    # (même pattern que dans pages/views.py).
+    # / Local import to avoid the circular import between BaseBillet and pages.
+    from BaseBillet.views import get_skin_courant
+
+    skin = get_skin_courant()
+
+    chemin_dans_le_skin = f"pages/{skin}/{nom_du_gabarit}"
+    chemin_dans_le_socle = f"pages/classic/{nom_du_gabarit}"
+
+    try:
+        # Le gabarit existe-t-il dans le skin courant ?
+        # / Does the template exist in the current skin?
+        get_template(chemin_dans_le_skin)
+        return chemin_dans_le_skin
+    except TemplateDoesNotExist:
+        # Non : on retombe sur le socle classic.
+        # / No: fall back to the classic base.
+        return chemin_dans_le_socle
 
 
 def grouper_blocs(blocs):
