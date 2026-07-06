@@ -76,7 +76,7 @@
     {% if not qrcode_processed %}
     <!-- QR Scanner Script - Only load when not in processed mode -->
     <script type="module">
-        import QrScanner from "{% static 'reunion/js/qr-scanner.min.js' %}";
+        import QrScanner from "{% static 'commun/js/qr-scanner.min.js' %}";
         
         // DOM elements
         const video = document.getElementById('qr-video');
