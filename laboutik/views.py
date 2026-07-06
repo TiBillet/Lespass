@@ -6754,7 +6754,7 @@ class PaiementViewSet(viewsets.ViewSet):
             # Construire donnees_paiement minimal pour le template de succes
             # / Build minimal payment data for the success template
             donnees_paiement = {
-                "total": total_en_euros,
+                "total": total_en_euros * 100,
                 "give_back": 0,
                 "uuid_transaction": "",
             }
