@@ -16,7 +16,7 @@ Gère la lecture NFC, le contrôle de vanne et la communication avec le serveur 
 Un seul prérequis côté serveur : créer une `TireuseBec` dans **Admin → Tireuses → Taps** — le code PIN à 6 chiffres s'affiche directement dans la colonne **PIN code** de la liste.
 
 ```bash
-wget https://raw.githubusercontent.com/TiBillet/Lespass/V2/controlvanne/Pi/install_pi.sh && chmod +x install_pi.sh && ./install_pi.sh
+wget https://raw.githubusercontent.com/TiBillet/Lespass/main-fedow-import/controlvanne/Pi/install_pi.sh && chmod +x install_pi.sh && ./install_pi.sh
 ```
 
 Le script pose quelques questions puis délègue à `make`. À la fin, redémarrer le Pi.
@@ -24,13 +24,13 @@ Le script pose quelques questions puis délègue à `make`. À la fin, redémarr
 ### Ce que fait `install_pi.sh`
 
 1. Installe les prérequis minimaux (`git`, `make`, `python3`)
-2. Clone uniquement `controlvanne/Pi/` via git sparse-checkout dans `/home/sysop/tibeer/`
+2. Clone le dépôt Lespass (`--depth=1`, sans historique git) dans `/home/sysop/tibeer/`
 3. Lance `make all` (claim → install → deploy → start)
 
 ### Structure sur le Pi après installation
 
 ```
-/home/sysop/tibeer/          ← dépôt git sparse (seul controlvanne/Pi/ est présent)
+/home/sysop/tibeer/          ← dépôt git Lespass (clone complet, --depth=1)
   .git/
   controlvanne/
     Pi/                      ← répertoire de travail des services
@@ -50,7 +50,7 @@ make help
 | Commande | Description |
 |----------|-------------|
 | `make all PIN=123456 [SERVER=...] [RFID=RC522]` | Installation complète |
-| `make claim PIN=123456 [SERVER=...] [RFID=...]` | Appairage : génère `.env` |
+| `make claim PIN=123456 [SERVER=...] [RFID=...]` | Appairage : génère `.env`. `SERVER` repris du `.env` (`CLAIM_SERVER_URL`) s'il existe |
 | `make install [RFID=RC522]` | Dépendances système + virtualenv |
 | `make deploy` | Copie les services systemd et fichiers de config |
 | `make start` | Active et démarre `tibeer` + `kiosk` |
@@ -85,17 +85,18 @@ journalctl -u tibeer -f
 make update
 ```
 
-Effectue un `git pull` sur le dépôt sparse (seul `controlvanne/Pi/` est mis à jour), réinstalle les dépendances Python si nécessaire, et redémarre `tibeer`.
+Effectue un `git pull` sur le dépôt, réinstalle les dépendances Python si nécessaire, et redémarre `tibeer`.
 
 Le service `tibeer` fait aussi un `git pull` automatique à chaque démarrage via `git-update.sh`.
 
 ## Variables d'environnement (`.env`)
 
-Généré par `make claim`, jamais modifié manuellement. Variables principales :
+Généré par `make claim`. Les adresses (`SERVER_URL`, `CLAIM_SERVER_URL`) sont modifiables à la main si le serveur change de domaine — puis `sudo systemctl restart tibeer kiosk`. Variables principales :
 
 | Variable | Rôle |
 |----------|------|
-| `SERVER_URL` | URL du tenant Lespass |
+| `SERVER_URL` | URL du tenant Lespass (API + kiosk au quotidien) |
+| `CLAIM_SERVER_URL` | URL racine du serveur — utilisée par `make claim` pour (re)appairer |
 | `API_KEY` | Clé d'API `TireuseAPIKey` |
 | `TIREUSE_UUID` | UUID de la `TireuseBec` |
 | `RFID_TYPE` | `RC522`, `VMA405` ou `ACR122U` |
@@ -103,7 +104,7 @@ Généré par `make claim`, jamais modifié manuellement. Variables principales 
 | `GPIO_FLOW_SENSOR` | Pin GPIO du débitmètre (défaut : 23) |
 | `VALVE_ACTIVE_HIGH` | `True` si GPIO HIGH = vanne ouverte (défaut : `True`) |
 | `SSL_VERIFY` | `True` pour vérifier le certificat TLS (défaut : `True`, mettre `False` en dev local) |
-| `GIT_BRANCH` | Branche git tirée au démarrage du service (ex: `V2`, `main`) |
+| `GIT_BRANCH` | Branche git tirée au démarrage du service (défaut : `main-fedow-import`, à repointer après merge) |
 | `GIT_REPO` | URL du dépôt git (défaut : `https://github.com/TiBillet/Lespass`) |
 
 ## Dépannage

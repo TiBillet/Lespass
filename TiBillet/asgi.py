@@ -7,7 +7,7 @@ from django.core.asgi import get_asgi_application
 
 from wsocket.middlewares import WebSocketTenantMiddleware
 from wsocket.routing import websocket_urlpatterns
-# from controlvanne.routing import websocket_urlpatterns as controlvanne_ws_urlpatterns
+from controlvanne.routing import websocket_urlpatterns as controlvanne_ws_urlpatterns
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "TiBillet.settings")
 
@@ -19,8 +19,7 @@ application = ProtocolTypeRouter(
         "websocket": AllowedHostsOriginValidator(
             WebSocketTenantMiddleware(
                 AuthMiddlewareStack(
-                    # URLRouter(websocket_urlpatterns + controlvanne_ws_urlpatterns)
-                    URLRouter(websocket_urlpatterns)
+                    URLRouter(websocket_urlpatterns + controlvanne_ws_urlpatterns)
                 )
             )
         ),

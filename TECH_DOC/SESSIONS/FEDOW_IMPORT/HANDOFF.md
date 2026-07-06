@@ -2,6 +2,28 @@
 
 Date : 2026-06-11. Rédigé en clôture de la session de recherche + baseline.
 
+## ⏩ MISE À JOUR 2026-07-06 — C-C réalisé + controlvanne câblée
+
+- **C-C est FAIT et committé** (la maj 2026-06-20 ci-dessous est dépassée) :
+  C1 lecture solde FED (`A TESTER et DOCUMENTER/c1-solde-complet-carte-fed.md`),
+  C2 débit fin FED/TLF (commit `d8396a64`), C3 fallback tout-ou-rien 2e carte
+  (`68188286`), tests (`c3da37dc`). ⚠️ Docs de session C2/C3 jamais rédigées.
+- **Controlvanne câblée** (hub dédié : `TECH_DOC/SESSIONS/CONTROLVANNE/INDEX.md`) :
+  settings/urls/asgi (WS `ws/rfid/`), migrations (dép. 0205→0222 + 0004 générée
+  + `SaleOrigin.TIREUSE` 0226), appairage TI réactivé dans discovery, fix
+  `TermUserManager` (filtre `client_source`), menu « Terminaux hardware » →
+  changelist PairingDevice, carte dashboard tireuse active. 51 tests. Suite :
+  **689 passed, 0 failed** (46 errors setup flaky préexistantes).
+- **Prochain chantier controlvanne : WebSocket PROD** (rien ne sert `/ws/` en
+  prod, gunicorn WSGI) — décision actée : supervisord mono-conteneur
+  (gunicorn 8002 + daphne 7999 + celery), pattern `../LaBoutik`, `location /ws/`
+  nginx, retrait du service celery du compose.
+- **booking** : portée sur une autre branche, HORS scope ici.
+- Bugs préexistants découverts (à traiter un jour) : `SaleOrigin.LABOUTIK_TEST`
+  référencé mais absent du modèle (archivage/views laboutik) ; tout 500 sur le
+  schéma public casse l'email d'erreur admin (reverse_lazy SIDEBAR évalué sous
+  urls_public) ; `admin@admin.com` sans `client_admin` en base.
+
 ## Prompt de démarrage suggéré pour la nouvelle session
 
 > On reprend le chantier FEDOW_IMPORT (scénario S6 acté). Lis dans l'ordre :

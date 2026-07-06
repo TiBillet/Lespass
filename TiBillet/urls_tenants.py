@@ -75,6 +75,10 @@ urlpatterns = [
     path('laboutik/', include('laboutik.urls')),
     path('api/inventaire/', include('inventaire.urls')),
 
+    # Tireuses connectées (controlvanne) — API Pi + kiosk + calibration
+    # / Connected beer taps (controlvanne) — Pi API + kiosk + calibration
+    path('controlvanne/', include('controlvanne.urls')),
+
     # pour carte GEN1 Bisik
     # re_path(r'(?P<numero_carte>^[qsdf974]{5}$)', include('QrcodeCashless.urls')),
 

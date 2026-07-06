@@ -1,6 +1,6 @@
 #!/bin/bash
-# Mise à jour au démarrage : git pull sur le dépôt sparse.
-# / Startup update: git pull on the sparse repo.
+# Mise à jour au démarrage : git pull sur le dépôt.
+# / Startup update: git pull on the repo.
 
 REPO_DIR="/home/sysop/tibeer"
 

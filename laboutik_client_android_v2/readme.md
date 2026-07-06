@@ -1,7 +1,7 @@
 # Création de l'application android(apk) 
 
 ## l'application
-Elle se trouve dans laboutit_client_android_v2/mobile-app/www.
+Elle se trouve dans laboutik_client_android_v2/mobile-app/www.
 Cordova est un pont entre le hardware et le js du front.
 La seule chose à changer est 'server_pin_code'
 
@@ -26,7 +26,7 @@ docker compose up -d
 
 ## Entrer dans le conteneur docker
 ```bash
-docker exect -it cordova bash
+docker exec -it cordova bash
 ```
 
 ## Installer l'application sur mobile, tablette
@@ -80,7 +80,7 @@ cordova requirements
 ```
 
 ## Infos divers
-### Création et installaion de l'application sur mobile
+### Création et installation de l'application sur mobile
 ```bash
 # build debug for only Android
 cordova run android --debug
@@ -106,6 +106,6 @@ adb logcat | grep SunmiPrintHelper
 
 ## Attention
 - En cas de souci d'installation supprimer l'ancienne application sur le mobile
-- Lors d'un build si proplème npm (TODO: add to reset_projet) :   
+- Lors d'un build si problème npm (TODO: add to reset_projet) :   
   . supprimer le package-lock.json   
-  . Dans package.json, modifier les propriétées cordova: {} et devDependencies: {} .
+  . Dans package.json, modifier les propriétés cordova: {} et devDependencies: {} .

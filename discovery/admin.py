@@ -17,6 +17,7 @@ class PairingDeviceAdmin(ModelAdmin):
 
     list_display = [
         'name',
+        'terminal_role',
         'pin_code_list_display',
         'is_claimed_display',
         'created_at',
@@ -24,12 +25,36 @@ class PairingDeviceAdmin(ModelAdmin):
 
     fields = [
         'name',
+        'terminal_role',
         'pin_code_display',
     ]
 
     readonly_fields = [
         'pin_code_display',
     ]
+
+    def get_readonly_fields(self, request, obj=None):
+        # En édition, le rôle ne change plus : un PIN garde le rôle choisi
+        # à sa création (le claim s'appuie dessus).
+        # / On edit, the role is frozen: a PIN keeps the role chosen at
+        # creation time (the claim relies on it).
+        if obj is not None:
+            return ['pin_code_display', 'terminal_role']
+        return ['pin_code_display']
+
+    def formfield_for_choice_field(self, db_field, request, **kwargs):
+        # TI (tireuse) exclu de la création manuelle : le PIN d'une tireuse
+        # est auto-créé avec sa TireuseBec (admin controlvanne). Un PIN TI
+        # sans TireuseBec liée ferait échouer le claim.
+        # / TI (tap) excluded from manual creation: a tap PIN is auto-created
+        # with its TireuseBec (controlvanne admin). A TI PIN without a linked
+        # TireuseBec would make the claim fail.
+        if db_field.name == 'terminal_role':
+            kwargs['choices'] = [
+                choice for choice in db_field.get_choices(include_blank=False)
+                if choice[0] != 'TI'
+            ]
+        return super().formfield_for_choice_field(db_field, request, **kwargs)
 
     def pin_code_display(self, obj):
         """Affichage du PIN dans le formulaire de détail.

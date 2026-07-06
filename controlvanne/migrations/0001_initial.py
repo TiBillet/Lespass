@@ -13,7 +13,12 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('QrcodeCashless', '0021_cartecashless_wallet_ephemere'),
-        ('BaseBillet', '0205_lignearticle_point_de_vente_and_more'),
+        # Dépendance réécrite pour ce repo : les champs POS de LigneArticle
+        # (point_de_vente, etc.) vivent dans la 0222 (portage S6, migrations
+        # fraîches — la 0205 de lespass-main n'existe pas ici).
+        # / Dependency rewritten for this repo: LigneArticle POS fields live
+        # in 0222 (S6 port, fresh migrations).
+        ('BaseBillet', '0222_lignearticle_hmac_hash_lignearticle_point_de_vente_and_more'),
         ('discovery', '0002_alter_pairingdevice_pin_code'),
         ('laboutik', '0001_initial'),
     ]

@@ -1,5 +1,67 @@
 # Changelog / Journal des modifications
 
+## Controlvanne branchée : tireuses connectées + appairage terminaux dans l'admin / Controlvanne wired: connected taps + terminal pairing in the admin
+
+**Date :** 2026-07-06
+**Migration :** Oui / Yes — `migrate_schemas` (controlvanne 0001→0004 + BaseBillet 0226)
+
+L'app `controlvanne` (tireuse à bière connectée, version mergée par Mike) est
+câblée : TENANT_APPS, URLs `/controlvanne/`, routes WebSocket `ws/rfid/`,
+migrations (dépendance BaseBillet réécrite 0205→0222 + 0004 générée pour
+`reservoir_illimite`). L'appairage TI est réactivé dans discovery (claim PIN →
+`TireuseAPIKey` + `tireuse_uuid`). `SaleOrigin.TIREUSE` ajouté (requis par la
+facturation tireuse). Fix `TermUserManager` : filtre par `client_source` (le
+champ que le claim remplit et que les permissions vérifient) au lieu de
+`client_admin` — les terminaux appairés étaient invisibles dans l'admin, et un
+terminal ne doit jamais passer `is_tenant_admin()`. Le menu « Terminaux
+hardware » pointe vers la changelist PairingDevice (process d'appairage
+complet : création du PIN avec choix du rôle LB/KI, suivi des PIN en attente
+et des appareils réclamés — TI exclu du formulaire manuel, auto-créé avec sa
+TireuseBec). Carte dashboard « Connected taps » activée. 51 tests portés/écrits
+(controlvanne models/api/billing + discovery pairing). Suite complète :
+689 passed, 0 failed.
+
+/ The `controlvanne` app (connected beer tap, Mike's merged version) is wired:
+TENANT_APPS, `/controlvanne/` URLs, `ws/rfid/` WebSocket routes, migrations.
+TI pairing re-enabled in discovery (PIN claim → `TireuseAPIKey`).
+`SaleOrigin.TIREUSE` added. `TermUserManager` fixed to filter by
+`client_source` (paired terminals were invisible; a terminal must never pass
+`is_tenant_admin()`). The "Hardware terminals" menu now targets the
+PairingDevice changelist (full pairing process, LB/KI role choice, TI
+auto-created with its TireuseBec). "Connected taps" dashboard card enabled.
+51 tests ported/written; full suite: 689 passed, 0 failed.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `TiBillet/settings.py` | TENANT_APPS += `controlvanne` |
+| `TiBillet/urls_tenants.py` | `path('controlvanne/', ...)` |
+| `TiBillet/asgi.py` | Routes WS controlvanne décommentées |
+| `controlvanne/migrations/0001_initial.py` | Dépendance BaseBillet 0205→0222 |
+| `controlvanne/migrations/0004_*.py` | Générée : reservoir_illimite/reservoir_ml |
+| `BaseBillet/models.py` + migration 0226 | `SaleOrigin.TIREUSE` |
+| `discovery/views.py` | Flow claim TI réactivé |
+| `discovery/admin.py` | `terminal_role` exposé, TI exclu du form, rôle figé |
+| `AuthBillet/models.py` | `TermUserManager` → filtre `client_source` |
+| `Administration/admin_tenant.py` | `TermUserAdmin` : 4 permissions, last_login |
+| `Administration/admin/dashboard.py` | Menu Terminals → PairingDevice ; carte `module_tireuse` activée |
+| `tests/pytest/test_controlvanne_*.py` (×3) | Portés (36 tests) |
+| `tests/pytest/test_discovery_*.py` (×2) | Portés + 2 tests TI (TDD) |
+
+**Tuto Pi remis à jour / Pi tutorial refreshed** : `controlvanne/README.md` +
+`Pi/README.md` (champs réels du form tireuse, comptes de tests, E2E non portés
+signalés) ; `install_pi.sh` passe en **clone complet** (`--depth=1`, plus de
+sparse-checkout) ; plus d'adresse de dev en dur — le `Makefile` lit ses défauts
+dans le **`.env`** (`CLAIM_SERVER_URL` = adresse racine pour ré-appairer,
+`SERVER_URL` = tenant, `GIT_REPO`/`GIT_BRANCH`) : l'adresse du serveur se
+change en éditant le `.env`. Branche par défaut : `main-fedow-import`
+(à repointer au merge, action notée dans le hub CONTROLVANNE). Chaîne
+`make claim` testée en réel contre le serveur dev (avec et sans `SERVER=`).
+
+Voir `A TESTER et DOCUMENTER/controlvanne-cablage.md` pour les scénarios de
+test manuels et les dettes signalées (WebSocket prod → chantier supervisor,
+PRs déférées de Mike, bugs préexistants découverts).
+
 ## Statics : fin des namespaces reunion/ et faire_festival hors de leur app / Statics: reunion/ namespace removed, faire_festival moved to its app
 
 **Date :** 2026-07-06

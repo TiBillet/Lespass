@@ -365,9 +365,20 @@ class TibilletUser(AbstractUser):
 
 class TermUserManager(TibilletManager):
     def get_queryset(self):
-        return super().get_queryset().filter(espece=TibilletUser.TYPE_TERM,
-                                             client_admin__pk__in=[connection.tenant.pk, ],
-                                             )
+        # Filtre par client_source (tenant d'origine du terminal).
+        # On n'utilise PAS client_admin : un TermUser n'est pas un admin humain,
+        # il ne doit pas passer is_tenant_admin() sans raison. C'est aussi le
+        # champ que remplit le claim discovery (TermUser.save force
+        # client_source) et que vérifie HasLaBoutikTerminalAccess.
+        # / Filter by client_source (terminal's origin tenant).
+        # We do NOT use client_admin: a TermUser is not a human admin,
+        # it must not pass is_tenant_admin() accidentally. It is also the
+        # field set by the discovery claim (TermUser.save forces
+        # client_source) and checked by HasLaBoutikTerminalAccess.
+        return super().get_queryset().filter(
+            espece=TibilletUser.TYPE_TERM,
+            client_source__pk=connection.tenant.pk,
+        )
 
 
 class TermUser(TibilletUser):

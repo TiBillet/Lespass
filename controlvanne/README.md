@@ -118,7 +118,7 @@ Le Raspberry Pi s'appaire via le systeme `discovery` existant :
 
 ### Prerequis
 
-- Le module tireuse est active sur le tenant (Dashboard → carte "Tireuse" → switch ON)
+- Le module tireuse est active sur le tenant (Dashboard → carte "Connected taps" → switch ON)
 - Un asset TLF (monnaie locale) est actif sur le tenant
 - Le materiel est pret et cablé (Pi, lecteur RFID, electrovanne, debitmetre)
 
@@ -157,12 +157,11 @@ Puis ajouter un **Price** sur ce produit :
 
 | Champ | Valeur |
 |-------|--------|
-| Nom tireuse | `Biere` (affiche sur le kiosk) |
-| Fut actif | `Blonde Pression` (le produit FUT cree a l'etape 2) |
-| Debitmetre | `YF-S201` (cree a l'etape 1) |
-| Seuil minimum (ml) | `500` (reserve de securite) |
-| Appliquer reserve | cocher |
+| Nom tireuse (Tap name) | `Biere` (affiche sur le kiosk) |
+| Fut actif (Active keg) | `Blonde Pression` (le produit FUT cree a l'etape 2) |
+| Debitmetre (Flow meter) | `YF-S201` (cree a l'etape 1) |
 | En service | cocher |
+| Reservoir illimite (Unlimited reservoir) | cocher (aucun suivi de volume) — ou decocher pour suivre le niveau du fut (`reservoir_ml`, rempli a l'activation) |
 
 A la sauvegarde, un `PairingDevice` et un `PointDeVente` de type TIREUSE sont crees automatiquement par signal.
 
@@ -173,7 +172,7 @@ A la sauvegarde, un `PairingDevice` et un `PointDeVente` de type TIREUSE sont cr
 Puis sur le Raspberry Pi en SSH, lancer le script d'installation avec ce PIN :
 
 ```bash
-wget https://raw.githubusercontent.com/TiBillet/Lespass/V2/controlvanne/Pi/install_pi.sh \
+wget https://raw.githubusercontent.com/TiBillet/Lespass/main-fedow-import/controlvanne/Pi/install_pi.sh \
   && chmod +x install_pi.sh && ./install_pi.sh
 ```
 
@@ -265,7 +264,7 @@ Le Pi appelle `POST /controlvanne/auth-kiosk/` (cle API dans le header) et recoi
 Connectez-vous en SSH au Pi puis executez :
 
 ```bash
-wget https://raw.githubusercontent.com/TiBillet/Lespass/V2/controlvanne/Pi/install_pi.sh \
+wget https://raw.githubusercontent.com/TiBillet/Lespass/main-fedow-import/controlvanne/Pi/install_pi.sh \
   && chmod +x install_pi.sh && ./install_pi.sh
 ```
 
@@ -294,7 +293,10 @@ Le script appelle automatiquement `/api/discovery/claim/` avec le PIN et recoit 
 ### Le fichier .env genere
 
 ```env
+# Adresse du TENANT (le lieu) — API + kiosk au quotidien
 SERVER_URL=https://lespass.mondomaine.tld
+# Adresse RACINE du serveur — uniquement pour (re)appairer (make claim)
+CLAIM_SERVER_URL=https://mondomaine.tld
 API_KEY=xxxxxxx.yyyyyyy
 TIREUSE_UUID=abc123-def456-...
 RFID_TYPE=RC522
@@ -302,7 +304,15 @@ GPIO_VANNE=18
 GPIO_FLOW_SENSOR=23
 FLOW_CALIBRATION_FACTOR=6.5
 SYSTEMD_NOTIFY=True
+GIT_REPO=https://github.com/TiBillet/Lespass.git
+GIT_BRANCH=main-fedow-import
 ```
+
+**Changer l'adresse du serveur ou du tenant** : editer ces deux lignes dans le
+`.env` puis `sudo systemctl restart tibeer kiosk`. Le Makefile reprend aussi
+ses valeurs par defaut (`CLAIM_SERVER_URL`, `GIT_REPO`, `GIT_BRANCH`,
+`RFID_TYPE`) depuis ce fichier : un `make claim PIN=<code>` sans argument
+`SERVER=` re-appaire sur la meme adresse.
 
 ### Commandes utiles sur le Pi
 
@@ -320,8 +330,9 @@ sudo systemctl stop tibeer.service kiosk.service
 nano /home/sysop/tibeer/controlvanne/Pi/.env
 
 # Re-appairer (nouveau PIN visible dans Admin → Tireuses → Taps)
+# SERVER est optionnel : repris du .env (CLAIM_SERVER_URL) s'il existe
 cd /home/sysop/tibeer/controlvanne/Pi
-make claim PIN=<code> SERVER=https://votre-domaine.tld
+make claim PIN=<code> [SERVER=https://votre-domaine.tld]
 ```
 
 ### Demarrage automatique
@@ -668,18 +679,21 @@ Le consumer `PanelConsumer` gere deux groupes :
 ## Tests
 
 ```bash
-# Tests pytest DB-only (32 tests, ~4s)
+# Tests pytest DB-only (36 tests, ~8s)
 docker exec lespass_django poetry run pytest \
   tests/pytest/test_controlvanne_api.py \
   tests/pytest/test_controlvanne_billing.py \
   tests/pytest/test_controlvanne_models.py -v
 
-# Tests E2E Playwright (3 tests, serveur requis)
-docker exec lespass_django poetry run pytest tests/e2e/test_controlvanne_admin.py -v -s
+# Tests d'appairage discovery (dont le flow tireuse TI)
+docker exec lespass_django poetry run pytest \
+  tests/pytest/test_discovery_claim_creates_termuser.py \
+  tests/pytest/test_discovery_pin_pairing.py -v
 ```
 
 Couverture :
-- `test_controlvanne_api.py` (13 tests) : TireuseAPIKey, HasTireuseAccess, ping, authorize, event, auth-kiosk
+- `test_controlvanne_api.py` (17 tests) : TireuseAPIKey, HasTireuseAccess, ping, authorize, event, auth-kiosk
 - `test_controlvanne_billing.py` (7 tests) : calcul volume, facturation, Transaction, LigneArticle
 - `test_controlvanne_models.py` (12 tests) : proprietes modeles, maintenance, events complementaires
-- `test_controlvanne_admin.py` (3 tests E2E) : sidebar, liste tireuses, historique
+- Tests E2E Playwright : non portes depuis lespass-main pour l'instant
+  (`test_controlvanne_admin.py`, `test_controlvanne_kiosk.py`) — a porter dans un prochain lot
