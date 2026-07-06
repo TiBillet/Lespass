@@ -37,6 +37,10 @@ from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from solo.admin import SingletonModelAdmin
 from unfold.admin import ModelAdmin, TabularInline
+from unfold.contrib.filters.admin import (
+    AutocompleteSelectFilter,
+    ChoicesDropdownFilter,
+)
 from unfold.contrib.forms.widgets import WysiwygWidget
 from unfold.decorators import display
 
@@ -110,11 +114,16 @@ class PageAdmin(ModelAdmin):
         "parent",
         "display_publie",
         "display_accueil",
-        "position",
         "nb_blocs",
         "display_voir",
         "updated_at",
     ]
+    # Tri par GLISSER-DÉPOSER (sortable Unfold, comme les blocs) : la poignée
+    # remplace la colonne position ; l'ordre enregistré pilote la navbar.
+    # / DRAG-AND-DROP sorting (Unfold sortable, like the blocks): the handle
+    # replaces the position column; the saved order drives the navbar.
+    ordering_field = "position"
+    hide_ordering_field = True
     list_filter = ["publie", "est_accueil", "parent"]
     search_fields = ["titre", "slug"]
     list_select_related = ["parent"]
@@ -133,7 +142,7 @@ class PageAdmin(ModelAdmin):
                     "titre",
                     "slug",
                     "position",
-                    ("publie", "est_accueil"),
+                    ("publie", "est_accueil", "est_blog"),
                     "parent",
                 ),
             },
@@ -201,11 +210,44 @@ class ImageGalerieInline(TabularInline):
     extra = 1
     fields = ("image", "legende", "position")
     ordering = ("position",)
+    # Tri par glisser-déposer (sortable Unfold) : la poignée remplace la
+    # saisie manuelle du nombre, le champ position est masqué.
+    # / Drag-and-drop sorting (Unfold sortable): the handle replaces manual
+    # number input, the position field is hidden.
+    ordering_field = "position"
+    hide_ordering_field = True
 
 
 class BlocAdminForm(forms.ModelForm):
-    """Formulaire du Bloc : editeur WYSIWYG sur le champ texte.
-    / Bloc form: WYSIWYG editor on the text field."""
+    """Formulaire du Bloc : editeur WYSIWYG sur le champ texte, et editeur
+    MARKDOWN (EasyMDE, vendorise) sur le champ de formulaire texte_markdown.
+
+    POURQUOI DEUX CHAMPS pour un seul champ modele (texte) : le WYSIWYG Trix
+    produit du HTML — taper de la source Markdown dedans est penible et la
+    mutile. Le bloc MARKDOWN a donc SON champ de formulaire (texte_markdown,
+    affiche uniquement pour ce type via conditional_fields), edite avec
+    EasyMDE (barre d'outils + apercu), et recopie dans obj.texte a la
+    sauvegarde (save_model).
+    / Bloc form: WYSIWYG editor on the text field, and a MARKDOWN editor
+    (vendored EasyMDE) on the texte_markdown form field. WHY TWO form fields
+    for one model field: Trix produces HTML — typing Markdown source in it is
+    painful. The MARKDOWN block gets its own form field (shown only for that
+    type), edited with EasyMDE, copied into obj.texte on save."""
+
+    # Source Markdown de l'article (bloc MARKDOWN uniquement). Champ de
+    # FORMULAIRE : la valeur vit dans Bloc.texte.
+    # / Article Markdown source (MARKDOWN block only). FORM field: the value
+    # lives in Bloc.texte.
+    texte_markdown = forms.CharField(
+        required=False,
+        label=_("Texte de l'article (Markdown)"),
+        help_text=_(
+            "Syntaxe Markdown : ## titre, **gras**, [lien](url), "
+            "![légende](galerie:1) pour vos images. Aperçu via l'œil de la "
+            "barre d'outils."
+        ),
+        widget=forms.Textarea(attrs={"class": "editeur-markdown", "rows": 16}),
+    )
 
     class Meta:
         model = Bloc
@@ -213,6 +255,40 @@ class BlocAdminForm(forms.ModelForm):
         widgets = {
             "texte": WysiwygWidget,
         }
+
+    class Media:
+        css = {"all": (
+            "pages/vendor/easymde/easymde.min.css",
+            "pages/admin/editeur_markdown.css",
+        )}
+        js = (
+            "pages/vendor/easymde/easymde.min.js",
+            "pages/admin/editeur_markdown.js",
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Bloc MARKDOWN existant : la source est dans instance.texte.
+        # / Existing MARKDOWN block: the source lives in instance.texte.
+        if self.instance.pk and self.instance.type_bloc == Bloc.MARKDOWN:
+            self.fields["texte_markdown"].initial = self.instance.texte
+        # Table position -> URL des images de l'inline, embarquée en
+        # data-attribute : l'APERÇU EasyMDE (rendu côté navigateur) peut
+        # ainsi résoudre les références ![légende](galerie:N) au lieu
+        # d'afficher une image cassée.
+        # / position -> URL table of the inline images, embedded as a data
+        # attribute so the EasyMDE PREVIEW (browser-side rendering) can
+        # resolve ![caption](galerie:N) references instead of showing a
+        # broken image.
+        if self.instance.pk:
+            import json
+
+            urls_galerie = {
+                img.position: img.image.med.url
+                for img in self.instance.images_galerie.all()
+                if img.image
+            }
+            self.fields["texte_markdown"].widget.attrs["data-galerie"] = json.dumps(urls_galerie)
 
 
 @admin.register(Bloc, site=staff_admin_site)
@@ -248,27 +324,89 @@ class BlocAdmin(ModelAdmin):
     # Alpine, same mechanism as conditional_fields): explains that the background
     # image comes from the Configuration, not from the block.
     change_form_before_template = "admin/pages/bloc/hero_aide_before.html"
-    # Images du bloc GALERIE (inline). Vide/ignoré pour les autres types.
-    # / GALERIE block images (inline). Empty/ignored for other types.
+    # Images du bloc GALERIE (inline).
+    # / GALERIE block images (inline).
     inlines = [ImageGalerieInline]
 
-    # Liste : on peut reordonner via "position" (editable en ligne), filtrer par page.
-    # / List: reorder via "position" (inline editable), filter by page.
-    list_display = ["__str__", "page", "type_bloc", "position"]
-    list_editable = ["position"]
-    list_filter = ["page", "type_bloc"]
+    def get_inlines(self, request, obj=None):
+        """
+        N'affiche l'inline « Images » QUE sur les blocs GALERIE et MARKDOWN.
+        / Show the images inline ONLY on GALERIE and MARKDOWN blocks.
+
+        LOCALISATION : pages/admin.py — BlocAdmin.get_inlines
+
+        Avant, l'inline apparaissait sur TOUS les types de blocs (bruit dans
+        le formulaire). À la CRÉATION (obj=None), le type n'est pas encore
+        connu côté serveur : on masque l'inline, il apparaît après le premier
+        enregistrement du bloc GALERIE (flux Django standard).
+        / Before, the inline appeared on ALL block types (form noise). On
+        CREATION (obj=None) the type is not yet known server-side: the inline
+        is hidden and appears after the GALERIE block's first save.
+        """
+        if obj is not None and obj.type_bloc in (Bloc.GALERIE, Bloc.MARKDOWN):
+            # GALERIE : les images SONT le contenu du bloc. MARKDOWN : les
+            # images illustrent l'article et se referencent dans le texte via
+            # ![legende](galerie:N) (N = position dans l'inline).
+            # / GALERIE: the images ARE the block content. MARKDOWN: the
+            # images illustrate the article, referenced in the text via
+            # ![caption](galerie:N) (N = position in the inline).
+            return [ImageGalerieInline]
+        return []
+
+    # Liste : réordonnancement par GLISSER-DÉPOSER (sortable Unfold, comme la
+    # démo formula/circuit). ordering_field ajoute la poignée de tri et
+    # enregistre les positions dans l'ordre affiché ; hide_ordering_field
+    # masque la colonne du nombre. Conseil d'usage : filtrer par page d'abord
+    # (le tri mélange sinon les blocs de toutes les pages).
+    # / List: DRAG-AND-DROP reordering (Unfold sortable, like the
+    # formula/circuit demo). ordering_field adds the drag handle and saves the
+    # positions in the displayed order; hide_ordering_field hides the number
+    # column. Usage tip: filter by page first.
+    list_display = ["__str__", "page", "type_bloc"]
+    ordering_field = "position"
+    hide_ordering_field = True
+    # Filtres avancés Unfold (pattern « driverwithfilters » de la démo) :
+    # - page : AUTOCOMPLETE (la liste brute de liens explosait avec le blog,
+    #   chaque article étant une page) ;
+    # - page__parent : tous les blocs des sous-pages d'une page (ex. tous les
+    #   blocs des articles du Journal) ;
+    # - type_bloc : menu déroulant compact (16 types).
+    # list_filter_submit : bouton « Filtrer » (une requête, pas une par clic).
+    # / Unfold advanced filters (demo's "driverwithfilters" pattern):
+    # autocomplete on page (the raw link list exploded with the blog), parent
+    # page filter (all blocks of a page's sub-pages), compact dropdown for
+    # the 16 types, and a submit button (one query, not one per click).
+    list_filter = [
+        "page",  # liens cliquables (préférence mainteneur) / clickable links
+        ("page__parent", AutocompleteSelectFilter),
+        ("type_bloc", ChoicesDropdownFilter),
+    ]
+    # Filtres SUR la page, au-dessus de la liste (pattern « driverwithfilters »
+    # de la démo Unfold) : le filtre page devient une barre de LIENS cliquables,
+    # les selects s'appliquent à la sélection (auto-submit) — plus de tiroir
+    # latéral ni de bouton « Filtrer ».
+    # / Filters ON the page, above the list (Unfold demo's "driverwithfilters"
+    # pattern): the page filter renders as a clickable LINKS bar, selects
+    # auto-submit — no more side sheet nor "Filter" button.
+    list_filter_sheet = False
     list_select_related = ["page"]
     search_fields = ["titre", "texte"]
     ordering = ["page", "position"]
 
+    # "position" RETIRÉ du formulaire : l'ordre se règle par glisser-déposer
+    # dans la liste (sortable Unfold) ; à la création, save_model place le bloc
+    # en fin de page automatiquement.
+    # / "position" REMOVED from the form: ordering is done by drag-and-drop in
+    # the changelist (Unfold sortable); on creation, save_model appends the
+    # block at the end of the page automatically.
     fields = (
         "type_bloc",
         "page",
-        "position",
         "surtitre",
         "titre",
         "sous_titre",
         "texte",
+        "texte_markdown",
         "image",
         "image_secondaire",
         "video",
@@ -278,6 +416,7 @@ class BlocAdmin(ModelAdmin):
         "repliable",
         "embed_url",
         "image_position",
+        "affichage_image",
         "badge",
         "bouton_label",
         "bouton_url",
@@ -294,12 +433,13 @@ class BlocAdmin(ModelAdmin):
     # Alpine.js expressions: == for a single type, .includes() for several.
     conditional_fields = {
         "surtitre": "type_bloc == 'CARTE'",
-        "titre": "['HERO','PARAGRAPHE','IMAGE_TEXTE','CTA','VIDEO_TEXTE','CARTE','IMAGE','CARTE_LEAFLET','FAQ','EVENEMENTS','GALERIE','EMBED'].includes(type_bloc)",
-        "nombre_max": "type_bloc == 'EVENEMENTS'",
+        "titre": "['HERO','PARAGRAPHE','IMAGE_TEXTE','CTA','VIDEO_TEXTE','CARTE','IMAGE','CARTE_LEAFLET','FAQ','EVENEMENTS','GALERIE','EMBED','MARKDOWN','LISTE_SOUS_PAGES'].includes(type_bloc)",
+        "nombre_max": "['EVENEMENTS','LISTE_SOUS_PAGES'].includes(type_bloc)",
         "repliable": "type_bloc == 'FAQ'",
         "embed_url": "type_bloc == 'EMBED'",
         "sous_titre": "['HERO','CTA'].includes(type_bloc)",
         "texte": "['PARAGRAPHE','IMAGE_TEXTE','CTA','TEMOIGNAGE','VIDEO_TEXTE','CARTE','FAQ'].includes(type_bloc)",
+        "texte_markdown": "type_bloc == 'MARKDOWN'",
         # HERO n'a plus de champ image : son fond est l'image generique du lieu
         # (Configuration.img), lue au rendu. / HERO has no image field anymore:
         # its background is the venue's generic image (Configuration.img).
@@ -309,6 +449,7 @@ class BlocAdmin(ModelAdmin):
         "points_gps": "type_bloc == 'CARTE_LEAFLET'",
         "contenu": "type_bloc == 'INFOS'",
         "image_position": "type_bloc == 'IMAGE_TEXTE'",
+        "affichage_image": "type_bloc == 'IMAGE'",
         "badge": "['CARTE','CARTE_LEAFLET'].includes(type_bloc)",
         # HERO n'a plus de boutons : les actions vont dans un bloc CTA separe.
         # / HERO has no buttons anymore: actions go into a separate CTA block.
@@ -323,8 +464,23 @@ class BlocAdmin(ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         # Nettoie le HTML du champ texte (WYSIWYG) avant enregistrement.
-        # / Sanitize the WYSIWYG text field HTML before saving.
-        sanitize_textfields(obj)
+        # EXCEPTION bloc MARKDOWN : `texte` est de la SOURCE Markdown, pas du
+        # HTML — clean_html la mutilerait (autoliens <https://…>, exemples de
+        # code contenant des balises). La sécurité est assurée AU RENDU par le
+        # filtre rendre_markdown (markdown puis nh3.clean sur le HTML produit).
+        # / Sanitize the WYSIWYG text field HTML before saving. EXCEPTION for
+        # the MARKDOWN block: `texte` is Markdown SOURCE, not HTML — clean_html
+        # would mangle it (<https://…> autolinks, code samples with tags).
+        # Safety is enforced AT RENDER TIME by the rendre_markdown filter.
+        if obj.type_bloc == Bloc.MARKDOWN:
+            sanitize_textfields(obj)
+            # La source Markdown vient du champ de formulaire dedie (editeur
+            # EasyMDE), posee APRES sanitize pour ne pas etre mutilee.
+            # / The Markdown source comes from the dedicated form field
+            # (EasyMDE editor), set AFTER sanitize so it is not mangled.
+            obj.texte = form.cleaned_data.get("texte_markdown", "")
+        else:
+            sanitize_textfields(obj)
 
         # Sécurité : neutralise les URLs à schéma dangereux (javascript:, data:,
         # vbscript:) dans les champs lien, qui pourraient produire un XSS au clic.

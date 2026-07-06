@@ -47,6 +47,21 @@ def rendre_page(request, page):
     blocs = page.blocs.all()
     context["page_courante"] = page
     context["blocs"] = blocs
+    # Le <h1> d'une page CMS est porté par le bloc HERO. S'il n'y en a pas,
+    # page.html affiche un h1 de secours avec le titre de la page (audit SEO
+    # 2026-07-05 : 0 h1 sur toute page sans HERO — blog, pages simples).
+    # / A CMS page's <h1> comes from the HERO block. Without one, page.html
+    # shows a fallback h1 with the page title (SEO audit: 0 h1 otherwise).
+    context["page_a_un_bloc_hero"] = any(b.type_bloc == "HERO" for b in blocs)
+    # Une page est un ARTICLE si son parent est une page BLOG (champ explicite
+    # est_blog — le bloc LISTE_SOUS_PAGES est de la pure présentation et ne
+    # type rien, décision mainteneur 2026-07-05). Les articles affichent une
+    # ligne date/auteur (E-E-A-T) et émettent un JSON-LD Article.
+    # / A page is an ARTICLE when its parent is a BLOG page (explicit est_blog
+    # field — the LISTE_SOUS_PAGES block is purely presentational and types
+    # nothing). Articles show a visible date/author byline (E-E-A-T) and emit
+    # an Article JSON-LD.
+    context["page_est_un_article"] = bool(page.parent_id and page.parent.est_blog)
     # Groupes pour le rendu : les CARTE consecutives sont regroupees en grille.
     # / Render groups: consecutive CARTE blocks are bundled into a grid.
     context["groupes_blocs"] = grouper_blocs(blocs)

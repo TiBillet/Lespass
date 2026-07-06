@@ -33,7 +33,7 @@ Contexte attendu :
                 {% if event.image %}
                 {# Vignette du brouillon (image stockee en temp, servie via MEDIA_URL). #}
                 {# / Draft thumbnail (temp-stored image served via MEDIA_URL).         #}
-                <img src="/media/{{ event.image }}" alt=""
+                <img src="/media/{{ event.image }}" alt="{{ event.name|default:'' }}"
                      class="rounded flex-shrink-0"
                      style="width: 64px; height: 64px; object-fit: cover;"
                      data-testid="wizard-event-{{ forloop.counter0 }}-thumb">

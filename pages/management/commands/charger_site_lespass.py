@@ -63,10 +63,11 @@ class Command(BaseCommand):
             Page.objects.filter(slug__in=ANCIENNES_PAGES).delete()
             self._construire_landing()
             self._construire_sous_menu()
+            self._construire_blog()
             if options["skin"]:
                 self._forcer_skin()
         self.stdout.write(
-            f"Landing page + sous-menu de démo chargés sur '{schema}'."
+            f"Landing page + sous-menu + blog de démo chargés sur '{schema}'."
         )
 
     # ------------------------------------------------------------------
@@ -184,6 +185,113 @@ class Command(BaseCommand):
             texte="<p>Quelques images de la vie quotidienne du lieu.</p>",
         )
         self._poser_fichier(b, "video", VIDEO)
+
+    # ------------------------------------------------------------------
+    # Blog de démo : page « Journal » (bloc LISTE_SOUS_PAGES) + 2 articles
+    # (blocs MARKDOWN). Vitrine du duo de blocs du CHANTIER-09 : le parent est
+    # l'index du blog, les sous-pages sont les articles.
+    # / Demo blog: "Journal" page (LISTE_SOUS_PAGES block) + 2 articles
+    # (MARKDOWN blocks). Showcases the CHANTIER-09 block duo: the parent is
+    # the blog index, the sub-pages are the articles.
+    # ------------------------------------------------------------------
+    def _construire_blog(self):
+        from pages.models import Bloc
+
+        journal = self._creer_page(
+            "journal", "Journal", 2,
+            "Journal — les nouvelles du lieu",
+            "Les nouvelles du lieu : récits d'ateliers, coulisses et "
+            "annonces de la coopérative, publiés au fil de l'eau.",
+            image_partage="404-2.jpg",
+        )
+        # Typage explicite : les sous-pages du journal sont des ARTICLES
+        # (signature date/auteur, hors dropdown navbar).
+        # / Explicit typing: the journal's sub-pages are ARTICLES.
+        journal.est_blog = True
+        journal.save()
+        Bloc.objects.create(
+            page=journal, type_bloc=Bloc.PARAGRAPHE, position=1,
+            titre="",
+            texte="<p>Ce que l'on fabrique, rate et réussit — raconté au fil "
+                  "de l'eau par l'équipe et les bénévoles.</p>",
+        )
+        Bloc.objects.create(
+            page=journal, type_bloc=Bloc.LISTE_SOUS_PAGES, position=2,
+            titre="Derniers articles", nombre_max=6,
+        )
+
+        article_fresque = self._creer_page(
+            "atelier-fresque-participative", "Une fresque participative sur le mur du hangar",
+            1,
+            "Une fresque participative sur le mur du hangar",
+            "Trois week-ends, quarante paires de mains et beaucoup de peinture : "
+            "récit de la fresque participative du hangar.",
+            parent=journal, image_partage="404-3.jpg",
+        )
+        bloc_fresque = Bloc.objects.create(
+            page=article_fresque, type_bloc=Bloc.MARKDOWN, position=1,
+            texte=(
+                "Trois week-ends, quarante paires de mains, et un mur de vingt "
+                "mètres qui ne ressemble plus à rien de ce qu'il était.\n\n"
+                "![La fresque terminée, un samedi de juin](galerie:1)\n\n"
+                "## Comment on s'est organisés\n\n"
+                "- **Week-end 1** : nettoyage du mur et sous-couche, ouvert à "
+                "toutes et tous.\n"
+                "- **Week-end 2** : report du dessin à la craie, par carrés "
+                "numérotés.\n"
+                "- **Week-end 3** : mise en couleur, du sol à la nacelle.\n\n"
+                "> « Je n'avais jamais tenu un pinceau plus grand que ma main. "
+                "Maintenant il y a un morceau de mur qui est à moi. » — Nadia, "
+                "bénévole\n\n"
+                "## Ce qu'on referait autrement\n\n"
+                "Prévoir plus de bâches. Vraiment. Le reste — la cantine "
+                "partagée, les enfants aux pochoirs, la playlist commune — "
+                "était parfait.\n\n"
+                "Envie de proposer le prochain chantier ? Passez nous voir ou "
+                "écrivez-nous depuis la page [contact](/#contact)."
+            ),
+        )
+        # Image d'illustration de l'article, référencée dans le markdown via
+        # ![légende](galerie:1). / Article illustration image, referenced in
+        # the markdown via ![caption](galerie:1).
+        from pages.models import ImageGalerie
+        illustration = ImageGalerie.objects.create(
+            bloc=bloc_fresque, position=1, legende="La fresque terminée",
+        )
+        self._poser_fichier(illustration, "image", IMG + "404-5.jpg")
+
+        article_repair = self._creer_page(
+            "repair-cafe-bilan-un-an", "Repair café : le bilan après un an",
+            2,
+            "Repair café : le bilan après un an",
+            "127 objets sauvés de la benne en douze rencontres : chiffres et "
+            "leçons d'un an de repair café mensuel.",
+            parent=journal, image_partage="404-4.jpg",
+        )
+        Bloc.objects.create(
+            page=article_repair, type_bloc=Bloc.MARKDOWN, position=1,
+            texte=(
+                "Un samedi par mois depuis un an, l'atelier se remplit de "
+                "grille-pain muets, de vélos qui grincent et de lampes "
+                "capricieuses. Bilan chiffré de la première saison.\n\n"
+                "## Les chiffres\n\n"
+                "| | Apportés | Réparés | Taux |\n"
+                "|---|---|---|---|\n"
+                "| Petit électroménager | 84 | 61 | 73 % |\n"
+                "| Vélos | 37 | 34 | 92 % |\n"
+                "| Textile | 41 | 32 | 78 % |\n\n"
+                "**127 objets** sont repartis en état de marche — autant qui "
+                "ne finissent pas à la benne.\n\n"
+                "## Ce qui fait que ça marche\n\n"
+                "1. Le café est gratuit, la réparation se fait *avec* vous, "
+                "jamais à votre place.\n"
+                "2. Les pannes reviennent souvent aux mêmes causes : on "
+                "affiche désormais les plus courantes à l'entrée.\n"
+                "3. Les adhérent·es de la coopérative prêtent l'outillage "
+                "spécialisé d'un mois sur l'autre.\n\n"
+                "Prochaine session : voir [l'agenda](/event/)."
+            ),
+        )
 
     # ------------------------------------------------------------------
     # La landing unique

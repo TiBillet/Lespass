@@ -1,7 +1,7 @@
 from django.contrib.sitemaps import Sitemap
 from django.urls import reverse
 from django.db import connection
-from BaseBillet.models import Event, Product
+from BaseBillet.models import Event
 
 # This file defines the sitemaps for the TiBillet application.
 # The sitemaps are accessible at:
@@ -65,23 +65,10 @@ class EventSitemap(TenantSitemap):
         # This follows Django's sitemap documentation requirements
         return reverse('event-detail', kwargs={'pk': obj.slug})
 
-class ProductSitemap(TenantSitemap):
-    """
-    Sitemap for membership products.
-    Includes all published membership/subscription products.
-    Access at: https://yourdomain.com/sitemap.xml?section=products
-    """
-    changefreq = "weekly"  # Membership products change less frequently
-    priority = 0.6  # Medium-high priority for search engines
+# ProductSitemap SUPPRIMÉ (audit SEO 2026-07-05) : listait les fragments
+# HTMX /memberships/<uuid>/ — retiré de urls_tenants.py en même temps.
+# / ProductSitemap REMOVED: listed the /memberships/<uuid>/ HTMX fragments.
 
-    def items(self):
-        # Only include published membership products
-        return Product.objects.filter(publish=True, categorie_article=Product.ADHESION)
-
-    def location(self, obj):
-        # URL for each membership product - returns absolute path without protocol or domain
-        # This follows Django's sitemap documentation requirements
-        return reverse('membership_mvt-detail', kwargs={'pk': obj.uuid})
 
 class StaticViewSitemap(TenantSitemap):
     """

@@ -18,6 +18,11 @@ wizard event unifié (cf. SESSIONS/EVENT_WIZARD/CHANTIER-03).
 {% block twitter_image_alt %}{{ config.organisation }} - {% translate 'Events calendar' %}{% endblock %}
 
 {% block main %}
+    {# h1 masqué visuellement : la page agenda n'affiche pas de grand titre par #}
+    {# design, mais Google et les lecteurs d'écran ont besoin d'un h1 (pattern #}
+    {# maison, cf. vues/reseau.html). / Visually-hidden h1: the agenda shows no #}
+    {# big title by design, but Google and screen readers need one. #}
+    <h1 class="visually-hidden">{% translate 'Agenda' %} - {{ config.organisation }}</h1>
     {% if not embed %}
         {% comment %}
         CONTRAT DE SKIN (blocs FIGÉS, ne jamais renommer — décision 2) :
@@ -38,7 +43,7 @@ wizard event unifié (cf. SESSIONS/EVENT_WIZARD/CHANTIER-03).
 
         {% block agenda_description %}
         {% if config.description_event_page %}
-            <section class="container-lg p-3 sticky-top bg-body" style="height: fit-content;">
+            <section class="container-lg p-3 sticky-top bg-body" style="height: fit-content; z-index: 999; /* sous les dropdowns navbar (1000) — Bootstrap met sticky-top à 1020 par défaut et cachait les menus / below navbar dropdowns (1000), Bootstrap defaults sticky-top to 1020 which hid the menus */">
                 <div>{{ config.description_event_page | safe }}</div>
             </section>
         {% endif %}
@@ -46,7 +51,7 @@ wizard event unifié (cf. SESSIONS/EVENT_WIZARD/CHANTIER-03).
 
         {% block agenda_filtres %}
         <!-- search bar and filtering -->
-        <section class="container-lg p-3 sticky-top bg-body" style="height: fit-content;">
+        <section class="container-lg p-3 sticky-top bg-body" style="height: fit-content; z-index: 999; /* sous les dropdowns navbar (1000) — Bootstrap met sticky-top à 1020 par défaut et cachait les menus / below navbar dropdowns (1000), Bootstrap defaults sticky-top to 1020 which hid the menus */">
             {% include "commun/agenda/filtres.html" %}
 
             {# Barre de filtres par tags (inspirée de crowds) - Sur mobile: collapse; Sur ≥ md: affichage direct #}

@@ -283,11 +283,19 @@ def get_context(request):
             .select_related("parent")
             .order_by("position", "titre")
         )
-        # Index des sous-pages publiees par parent (uuid) pour les menus deroulants.
-        # / Index of published sub-pages by parent (uuid) for the dropdown menus.
+
+        # Index des sous-pages publiees par parent (uuid) pour les menus
+        # deroulants. EXCEPTION : les enfants d'une page BLOG (est_blog, champ
+        # explicite) ne vont pas dans le dropdown — un blog en accumulerait
+        # des dizaines ; le clic navbar mene directement a l'index qui liste
+        # les articles en cartes.
+        # / Index of published sub-pages by parent (uuid) for the dropdown
+        # menus. EXCEPTION: children of a BLOG page (explicit est_blog field)
+        # do not go in the dropdown — a blog would pile up dozens; the navbar
+        # click goes straight to the index, which lists the articles as cards.
         enfants_par_parent: dict = {}
         for page_publiee in pages_publiees:
-            if page_publiee.parent_id:
+            if page_publiee.parent_id and not page_publiee.parent.est_blog:
                 enfants_par_parent.setdefault(page_publiee.parent_id, []).append(page_publiee)
 
         for page_publiee in pages_publiees:

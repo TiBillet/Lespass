@@ -182,6 +182,7 @@ class Command(BaseCommand):
         bloc = Bloc.objects.create(
             page=page, type_bloc=Bloc.IMAGE, position=1,
             titre="Bienvenue au Faire Festival",
+            affichage_image=Bloc.VIGNETTE_TITRE,  # image-titre dessinée / drawn title-image
         )
         self._poser_fichier(bloc, "image", IMG + "Fichier-18.png")
 
@@ -463,6 +464,7 @@ class Command(BaseCommand):
         bloc = Bloc.objects.create(
             page=page, type_bloc=Bloc.IMAGE, position=7,
             titre="Comment créer son programme",
+            affichage_image=Bloc.VIGNETTE_TITRE,  # image-titre dessinée / drawn title-image
         )
         self._poser_fichier(bloc, "image", IMG + "Fichier-14.png")
 

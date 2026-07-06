@@ -22,13 +22,16 @@ def test_apikey_page_permission_maps_page_and_bloc():
 
 
 @pytest.mark.django_db
-def test_catalogue_blocs_couvre_les_14_types():
+def test_catalogue_blocs_couvre_les_16_types():
     from pages.blocs_catalogue import CHAMPS_PAR_TYPE, CHAMPS_BLOC_AUTORISES, TYPES_BLOC
     from pages.models import Bloc
-    # Les 14 types du modele sont presents dans le catalogue.
+    # Les 16 types du modele sont presents dans le catalogue
+    # (14 d'origine + MARKDOWN + LISTE_SOUS_PAGES, CHANTIER-09).
+    # / The model's 16 types are in the catalogue (14 original +
+    # MARKDOWN + LISTE_SOUS_PAGES, CHANTIER-09).
     types_modele = {code for code, _label in Bloc.TYPE_BLOC_CHOICES}
     assert set(CHAMPS_PAR_TYPE.keys()) == types_modele
-    assert len(TYPES_BLOC) == 14
+    assert len(TYPES_BLOC) == 16
     # La whitelist est l'union, et ne contient que de vrais champs du modele.
     noms_champs_modele = {f.name for f in Bloc._meta.get_fields()}
     assert CHAMPS_BLOC_AUTORISES <= noms_champs_modele
@@ -466,7 +469,10 @@ def test_http_block_types_catalogue(cle_pages):
     r = client.get("/api/v2/pages/block-types/", **auth)
     assert r.status_code == 200, r.content
     types = {b["type"] for b in r.json()["blockTypes"]}
-    assert len(types) == 14
+    # 16 types : 14 d'origine + MARKDOWN + LISTE_SOUS_PAGES (CHANTIER-09).
+    # / 16 types: 14 original + MARKDOWN + LISTE_SOUS_PAGES (CHANTIER-09).
+    assert len(types) == 16
+    assert {"MARKDOWN", "LISTE_SOUS_PAGES"} <= types
     faq = next(b for b in r.json()["blockTypes"] if b["type"] == "FAQ")
     assert set(faq["fields"]) == {"titre", "texte", "repliable"}
     # Chaque entree a un label non vide (i18n display).

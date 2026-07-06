@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load static i18n %}
 <div class="modal-header">
     <h5 class="modal-title">{% translate "Diagramme des flux" %}</h5>
     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -47,7 +47,10 @@
         // ----- Rendu du Sankey / Sankey rendering -----
         // FR: On fixe l'arrangement et on affiche les unités.
         // EN: Use fixed arrangement and show value suffix (currency).
-        const PLOTLY_CDN_URL = 'https://cdn.plot.ly/plotly-2.27.0.min.js';
+        // Plotly servi en LOCAL (crowds/static/crowds/vendor/) — plus de CDN
+        // (vendorisation générale du projet, audit SEO 2026-07-05).
+        // / Plotly served LOCALLY — no CDN (project-wide vendoring).
+        const PLOTLY_CDN_URL = '{% static "crowds/vendor/plotly-2.27.0.min.js" %}';
         const VALUE_SUFFIX = ' {{ global_funding_currency|default:"€" }}';
 
         function renderSankey() {

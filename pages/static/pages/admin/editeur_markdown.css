@@ -1,0 +1,87 @@
+/*
+ * Habillage de l'éditeur Markdown (EasyMDE) dans l'admin Unfold : accordage
+ * aux variables de thème (clair/sombre — Unfold pose la classe .dark sur html).
+ * / Markdown editor (EasyMDE) skinning for the Unfold admin: tuned to the
+ * theme variables (light/dark — Unfold sets the .dark class on html).
+ *
+ * LOCALISATION : pages/static/pages/admin/editeur_markdown.css
+ */
+.EasyMDEContainer .CodeMirror {
+    border-radius: 0.375rem;
+    border-color: var(--color-base-200, #e5e7eb);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.875rem;
+    line-height: 1.6;
+}
+.EasyMDEContainer .editor-toolbar {
+    border-radius: 0.375rem 0.375rem 0 0;
+    border-color: var(--color-base-200, #e5e7eb);
+}
+.EasyMDEContainer .CodeMirror,
+.EasyMDEContainer .editor-toolbar {
+    background-color: white;
+}
+
+/* Mode sombre / Dark mode */
+.dark .EasyMDEContainer .CodeMirror,
+.dark .EasyMDEContainer .editor-toolbar {
+    background-color: var(--color-base-900, #111827);
+    border-color: var(--color-base-700, #374151);
+    color: var(--color-base-100, #f3f4f6);
+}
+.dark .EasyMDEContainer .CodeMirror-cursor {
+    border-color: var(--color-base-100, #f3f4f6);
+}
+.dark .EasyMDEContainer .editor-toolbar button {
+    color: var(--color-base-300, #d1d5db) !important;
+}
+.dark .EasyMDEContainer .editor-toolbar button:hover,
+.dark .EasyMDEContainer .editor-toolbar button.active {
+    background-color: var(--color-base-700, #374151);
+    border-color: var(--color-base-600, #4b5563);
+}
+.dark .EasyMDEContainer .editor-toolbar i.separator {
+    border-color: var(--color-base-700, #374151);
+}
+.dark .EasyMDEContainer .editor-preview {
+    background-color: var(--color-base-800, #1f2937);
+    color: var(--color-base-100, #f3f4f6);
+}
+
+/* Plein écran / côte-à-côte AU-DESSUS de l'admin : EasyMDE pose ses calques
+   position:fixed à z-index 8-9, sous le menu d'Unfold (z-40) — l'éditeur
+   passait DERRIÈRE. Un plein écran doit couvrir tout l'écran, menus compris.
+   / Fullscreen / side-by-side ABOVE the admin: EasyMDE's fixed layers use
+   z-index 8-9, below Unfold's menu (z-40) — the editor went BEHIND. A
+   fullscreen must cover the whole screen, menus included. */
+.EasyMDEContainer .CodeMirror-fullscreen,
+.EasyMDEContainer .editor-toolbar.fullscreen,
+.EasyMDEContainer .editor-preview-side {
+    z-index: 60;
+}
+/* L'aperçu simple (dans la fiche) au-dessus des éléments du formulaire.
+   / The in-form preview above the form elements. */
+.EasyMDEContainer .editor-preview-full { z-index: 10; }
+/* Mode sombre : les dégradés blancs décoratifs de la barre plein écran.
+   / Dark mode: the fullscreen toolbar's white decorative gradients. */
+.dark .editor-toolbar.fullscreen::before,
+.dark .editor-toolbar.fullscreen::after { display: none; }
+
+/* Typographie de l'APERÇU : le reset Tailwind de l'admin aplatit les titres,
+   listes et citations — on leur rend une hiérarchie lisible.
+   / PREVIEW typography: the admin's Tailwind reset flattens headings, lists
+   and quotes — give them back a readable hierarchy. */
+.EasyMDEContainer .editor-preview h1 { font-size: 1.5rem; font-weight: 700; margin: 1rem 0 0.5rem; }
+.EasyMDEContainer .editor-preview h2 { font-size: 1.3rem; font-weight: 700; margin: 1rem 0 0.5rem; }
+.EasyMDEContainer .editor-preview h3 { font-size: 1.1rem; font-weight: 600; margin: 0.75rem 0 0.5rem; }
+.EasyMDEContainer .editor-preview p { margin-block: 0.5rem; }
+.EasyMDEContainer .editor-preview ul { list-style: disc; padding-left: 1.5rem; margin-block: 0.5rem; }
+.EasyMDEContainer .editor-preview ol { list-style: decimal; padding-left: 1.5rem; margin-block: 0.5rem; }
+.EasyMDEContainer .editor-preview blockquote {
+    border-left: 3px solid var(--color-base-300, #d1d5db);
+    padding-left: 0.75rem;
+    font-style: italic;
+    margin-block: 0.75rem;
+}
+.EasyMDEContainer .editor-preview img { max-width: 100%; height: auto; border-radius: 0.375rem; }
+.EasyMDEContainer .editor-preview a { text-decoration: underline; }

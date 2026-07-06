@@ -196,6 +196,23 @@ class Page(models.Model):
         help_text=_("Si coche, cette page est servie sur la racine du site (/). Une seule a la fois."),
     )
 
+    # Typage EXPLICITE « blog » (meme pattern que est_accueil, decision
+    # mainteneur 2026-07-05) : les sous-pages d'un blog sont des ARTICLES —
+    # JSON-LD Article + signature date/auteur, et elles ne s'etalent pas dans
+    # le menu deroulant de la navbar (le clic mene a l'index). Le bloc
+    # LISTE_SOUS_PAGES reste de la pure presentation, posable sur n'importe
+    # quelle page (accueil comprise) sans effet de bord.
+    # / EXPLICIT "blog" typing (same pattern as est_accueil): a blog's
+    # sub-pages are ARTICLES — Article JSON-LD + date/author byline, and they
+    # do not pile up in the navbar dropdown (the click goes to the index).
+    # The LISTE_SOUS_PAGES block stays purely presentational, usable on any
+    # page (home included) without side effects.
+    est_blog = models.BooleanField(
+        default=False,
+        verbose_name=_("Page blog"),
+        help_text=_("Si coche, les sous-pages sont des articles : signature date/auteur, pas de menu deroulant dans la barre de navigation."),
+    )
+
     # Description courte pour les moteurs de recherche (donnee SEO = champ de modele,
     # jamais un bloc de contenu).
     # / Short description for search engines (SEO data = model field, never a block).
@@ -357,6 +374,8 @@ class Bloc(models.Model):
     EVENEMENTS = "EVENEMENTS"
     GALERIE = "GALERIE"
     EMBED = "EMBED"
+    MARKDOWN = "MARKDOWN"
+    LISTE_SOUS_PAGES = "LISTE_SOUS_PAGES"
 
     TYPE_BLOC_CHOICES = [
         (HERO, _("Hero (banniere d'ouverture)")),
@@ -373,6 +392,8 @@ class Bloc(models.Model):
         (EVENEMENTS, _("Prochains evenements (liste automatique depuis l'agenda)")),
         (GALERIE, _("Galerie d'images (plusieurs photos en grille)")),
         (EMBED, _("Contenu integre (video YouTube/Vimeo/PeerTube, carte OSM)")),
+        (MARKDOWN, _("Markdown (texte long : article, page de blog)")),
+        (LISTE_SOUS_PAGES, _("Liste des sous-pages (cartes - index de blog)")),
     ]
 
     # --- Position de l'image pour le bloc Image+texte / Image side for Image+text ---
@@ -381,6 +402,19 @@ class Bloc(models.Model):
     IMAGE_POSITION_CHOICES = [
         (GAUCHE, _("Image a gauche")),
         (DROITE, _("Image a droite")),
+    ]
+
+    # --- Affichage du bloc IMAGE (choix EXPLICITE, decision mainteneur
+    # 2026-07-05). Avant, le skin faire_festival choisissait selon la presence
+    # du titre : un interrupteur cache, mauvais pattern — une photo titree
+    # devenait une vignette minuscule. / IMAGE block display (EXPLICIT choice).
+    # Before, the faire_festival skin switched on the title presence: a hidden
+    # toggle, bad pattern — a titled photo became a tiny thumbnail. ---
+    PLEINE_LARGEUR = "PLEINE_LARGEUR"
+    VIGNETTE_TITRE = "VIGNETTE_TITRE"
+    AFFICHAGE_IMAGE_CHOICES = [
+        (PLEINE_LARGEUR, _("Pleine largeur (photo)")),
+        (VIGNETTE_TITRE, _("Vignette centree (image-titre dessinee)")),
     ]
 
     # Variations d'image generees automatiquement (memes tailles que Event).
@@ -540,12 +574,14 @@ class Bloc(models.Model):
         help_text=_('Items typés (texte seulement) : [{"type": "transport", "titre": "BUS", "lignes": ["..."]}].'),
     )
 
-    # Nombre maximum d'evenements affiches par le bloc EVENEMENTS (liste auto).
-    # / Maximum number of events shown by the EVENEMENTS block (auto list).
+    # Nombre maximum d'elements affiches par les blocs a liste automatique
+    # (EVENEMENTS et LISTE_SOUS_PAGES).
+    # / Maximum number of items shown by the auto-list blocks
+    # (EVENEMENTS and LISTE_SOUS_PAGES).
     nombre_max = models.PositiveSmallIntegerField(
         default=6,
-        verbose_name=_("Nombre d'évènements"),
-        help_text=_("Nombre maximum d'évènements à venir affichés (bloc Prochains évènements)."),
+        verbose_name=_("Nombre d'éléments"),
+        help_text=_("Nombre maximum d'éléments affichés (blocs Prochains évènements et Liste des sous-pages)."),
     )
 
     # Bloc FAQ : si True, chaque question est repliable (accordéon <details>).
@@ -582,6 +618,18 @@ class Bloc(models.Model):
         blank=True,
         verbose_name=_("Position de l'image"),
         help_text=_("Cote ou afficher l'image (bloc Image + texte)."),
+    )
+
+    # Affichage du bloc IMAGE : photo pleine largeur (defaut) ou vignette
+    # centree a taille naturelle (images-titres dessinees du skin festival).
+    # / IMAGE block display: full-width photo (default) or natural-size
+    # centered thumbnail (the festival skin's drawn title-images).
+    affichage_image = models.CharField(
+        max_length=20,
+        choices=AFFICHAGE_IMAGE_CHOICES,
+        default=PLEINE_LARGEUR,
+        verbose_name=_("Affichage de l'image"),
+        help_text=_("Bloc Image seule : pleine largeur pour une photo, vignette centree pour une petite image-titre."),
     )
 
     # --- Boutons (Hero, Image+texte, CTA) / Buttons ---

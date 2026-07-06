@@ -1,5 +1,5 @@
 {% extends base_template %}
-{% load tibitags i18n static %}
+{% load tibitags i18n static pages_tags %}
 
 {% block title %}{{ event.name }}{% endblock %}
 {% block meta_description %}{% if event.short_description %}{{ event.short_description|striptags }}
@@ -10,13 +10,13 @@
 {% block og_description %}{% if event.short_description %}{{ event.short_description|striptags }}
 {% elif event.long_description %}{{ event.long_description|striptags|truncatechars:150 }}{% else %}{{ event.name }}
 {% endif %} - Un évènement publié sur le logiciel libre TiBillet{% endblock %}
-{% block og_image %}{{ event.get_social_card }}{% endblock %}
+{% block og_image %}https://{{ request.get_host }}{{ event.get_social_card }}{% endblock %}
 {% block og_image_alt %}{{ event.name }} - {{ config.organisation }}{% endblock %}
 {% block twitter_title %}{{ event.name }}{% endblock %}
 {% block twitter_description %}{% if event.short_description %}{{ event.short_description|striptags }}
 {% elif event.long_description %}{{ event.long_description|striptags|truncatechars:150 }}{% else %}{{ event.name }}
 {% endif %} - Un évènement publié sur le logiciel libre TiBillet{% endblock %}
-{% block twitter_image %}{{ event.get_social_card }}{% endblock %}
+{% block twitter_image %}https://{{ request.get_host }}{{ event.get_social_card }}{% endblock %}
 {% block twitter_image_alt %}{{ event.name }} - {{ config.organisation }}{% endblock %}
 {% block extra_meta %}
     {% if event.postal_address %}
@@ -56,51 +56,12 @@
     </script>
 
     <!-- Schema.org Event structured data -->
-    <script type="application/ld+json">
-        {
-						"@context": "https://schema.org",
-						"@type": "Event",
-						"name": "{{ event.name }}",
-        "description": "{% if event.short_description %}
-        {{ event.short_description|striptags }}{% elif event.long_description %}
-        {{ event.long_description|striptags|truncatechars:150 }}{% else %}{{ event.name }}{% endif %} - Un évènement publié sur le logiciel libre TiBillet",
-        "image": "{% if event.img %}{{ event.img.hdr.url }}{% else %}{% static 'commun/img/favicon.png' %}{% endif %}",
-        "startDate": "{{ event.datetime|date:'c' }}",
-        {% if event.end_datetime %}"endDate": "{{ event.end_datetime|date:'c' }}",{% endif %}
-        "eventStatus": "https://schema.org/EventScheduled",
-        {% if event.complet %}"eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",{% endif %}
-        "location": {
-            "@type": "Place",
-            "name": "{{ config.organisation }}",
-        {% if event.postal_address %}"address": {
-                "@type": "PostalAddress",
-            {% if event.postal_address.name %}"name": "{{ event.postal_address.name }}",{% endif %}
-            "streetAddress": "{{ event.postal_address.street_address }}",
-                "addressLocality": "{{ event.postal_address.address_locality }}",
-                "postalCode": "{{ event.postal_address.postal_code }}",
-                "addressCountry": "{{ event.postal_address.address_country }}"
-            },
-            {% if event.postal_address.latitude and event.postal_address.longitude %}"geo": {
-                "@type": "GeoCoordinates",
-                "latitude": "{{ event.postal_address.latitude }}",
-                "longitude": "{{ event.postal_address.longitude }}"
-            }{% endif %}{% endif %}
-        },
-        "organizer": {
-            "@type": "Organization",
-            "name": "{{ config.organisation }}",
-            "url": "{{ request.build_absolute_uri|slice:':-6' }}"
-        },
-        {% if event.price_min %}"offers": {
-            "@type": "Offer",
-            "price": "{{ event.price_min }}",
-            "priceCurrency": "EUR",
-            "availability": "{% if event.complet %}https://schema.org/SoldOut{% else %}https://schema.org/InStock
-        {% endif %}",
-            "url": "{{ request.build_absolute_uri }}"
-        }{% endif %}
-        }
-    </script>
+    {# JSON-LD Event construit côté Python (json.dumps) — l'ancien JSON fait
+   main était invalide (audit SEO 2026-07-05) : retours à la ligne non
+   échappés, virgule traînante, virgule décimale dans geo, offers jamais
+   rendu (event.price_min inexistant). / Python-built Event JSON-LD — the
+   old hand-made JSON was invalid. #}
+    {% jsonld_event event %}
 {% endblock %}
 
 {% block main %}

@@ -6,11 +6,17 @@
 {# style: string|null #}
 {# ratio: string|null #}
 <picture class="d-block {% if ratio %}ratio ratio-{{ ratio }}{% else %}h-100{% endif %}">
-    <source srcset="{{ img.fhd.url }}" media="(min-width: 1920px), (min-height: 1920px)" />
-    <source srcset="{{ img.hdr.url }}" media="(min-width: 1280px), (min-height: 1280px)" />
-    <source srcset="{{ img.crop_hdr.url }}" media="(min-width: 960px), (min-height: 540px)" />
-    <source srcset="{{ img.med.url }}" media="(min-width: 480px), (min-height: 480px)" />
-    <source srcset="{{ img.crop.url }}" media="(min-width: 480px), (min-height: 270px)" />
+    {# Chaque <source> est GARDÉE : les images venues du cache SEO fédéré #}
+    {# n'ont pas toujours toutes les variations → sans garde on émettait des #}
+    {# srcset="" vides par centaines (audit SEO 2026-07-05 : 317× sur la page #}
+    {# adhésions). / Each <source> is GUARDED: federated SEO-cache images do #}
+    {# not always carry every variation → without the guard we emitted empty #}
+    {# srcset="" by the hundreds. #}
+    {% if img.fhd.url %}<source srcset="{{ img.fhd.url }}" media="(min-width: 1920px), (min-height: 1920px)" />{% endif %}
+    {% if img.hdr.url %}<source srcset="{{ img.hdr.url }}" media="(min-width: 1280px), (min-height: 1280px)" />{% endif %}
+    {% if img.crop_hdr.url %}<source srcset="{{ img.crop_hdr.url }}" media="(min-width: 960px), (min-height: 540px)" />{% endif %}
+    {% if img.med.url %}<source srcset="{{ img.med.url }}" media="(min-width: 480px), (min-height: 480px)" />{% endif %}
+    {% if img.crop.url %}<source srcset="{{ img.crop.url }}" media="(min-width: 480px), (min-height: 270px)" />{% endif %}
     <img
         class="object-fit-cover w-100 h-100{% if class %} {{ class }}{% endif %}"
         {% if style %}style="{{ style }}"{% endif %}

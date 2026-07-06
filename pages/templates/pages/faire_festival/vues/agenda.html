@@ -2,8 +2,21 @@
 {% load static i18n tibitags %}
 
 {% block title %}{% if config.event_menu_name %}{{ config.event_menu_name }}{% else %}{% translate 'Calendar' %}{% endif %}{% endblock %}
+{# Metas alignées sur le skin classic (audit SEO 2026-07-05 : seul title était #}
+{# surchargé → description/og dupliqués avec la home). / Metas aligned with the #}
+{# classic skin (only title was overridden → description/og duplicated the home). #}
+{% block meta_description %}{{ config.organisation }} : {% translate 'Découvrez tous nos événements et activités à venir' %} - {{ config.short_description }}{% endblock %}
+{% block og_title %}{% if config.event_menu_name %}{{ config.event_menu_name }}{% else %}{% translate 'Calendar' %}{% endif %} | {{ config.organisation }}{% endblock %}
+{% block og_description %}{{ config.organisation }} : {% translate 'Découvrez tous nos événements et activités à venir' %} - {{ config.short_description }}{% endblock %}
+{% block twitter_title %}{% if config.event_menu_name %}{{ config.event_menu_name }}{% else %}{% translate 'Calendar' %}{% endif %} | {{ config.organisation }}{% endblock %}
+{% block twitter_description %}{{ config.organisation }} : {% translate 'Découvrez tous nos événements et activités à venir' %} - {{ config.short_description }}{% endblock %}
 
 {% block main %}
+    {# h1 masqué visuellement : la page agenda n'affiche pas de grand titre par #}
+    {# design, mais Google et les lecteurs d'écran ont besoin d'un h1 (pattern #}
+    {# maison, cf. vues/reseau.html). / Visually-hidden h1: the agenda shows no #}
+    {# big title by design, but Google and screen readers need one. #}
+    <h1 class="visually-hidden">{% if config.event_menu_name %}{{ config.event_menu_name }}{% else %}{% translate 'Calendar' %}{% endif %} - {{ config.organisation }}</h1>
 
 <!-- =====================================================================
      PAGE LISTE DES ÉVÉNEMENTS - Structure inspirée de la maquette

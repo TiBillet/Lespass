@@ -33,8 +33,36 @@ def jsonld_page(context, page):
 
     nom = page.meta_title or page.titre
     description = page.meta_description or (getattr(config, "organisation", "") or "")
+    nom_organisation = getattr(config, "organisation", "") or ""
 
-    page_web = {"@type": "WebPage", "name": nom, "url": url}
+    # ARTICLE ou WebPage ? Une page dont le parent est une page BLOG (champ
+    # explicite est_blog) est un article : on émet le type schema.org/Article
+    # avec datePublished/dateModified (champs created_at/updated_at du modèle)
+    # et author = l'Organization du lieu (pas de champ auteur sur Page : pour
+    # un blog d'organisation, c'est le bon auteur).
+    # / ARTICLE or WebPage? A page whose parent is a BLOG page (explicit
+    # est_blog field) is an article: emit schema.org/Article with
+    # datePublished/dateModified and author = the venue's Organization.
+    page_est_un_article = bool(page.parent_id and page.parent.est_blog)
+    if page_est_un_article:
+        page_web = {
+            "@type": "Article",
+            "headline": nom,
+            "url": url,
+            "datePublished": page.created_at.isoformat(),
+            "dateModified": page.updated_at.isoformat(),
+            "author": {"@type": "Organization", "name": nom_organisation},
+            "publisher": {"@type": "Organization", "name": nom_organisation},
+        }
+        if page.image:
+            # URL absolue obligatoire pour les parseurs d'images structurées.
+            # / Absolute URL required by structured-image parsers.
+            page_web["image"] = (
+                request.build_absolute_uri(page.image.social_card.url)
+                if request else page.image.social_card.url
+            )
+    else:
+        page_web = {"@type": "WebPage", "name": nom, "url": url}
     if description:
         page_web["description"] = description
     graphe = [page_web]
@@ -61,18 +89,23 @@ def jsonld_page(context, page):
     # -> eligible for Google's breadcrumb rich result.
     if page.parent_id:
         racine = request.build_absolute_uri("/") if request else "/"
+        maillons = [{"@type": "ListItem", "position": 1, "name": "Accueil", "item": racine}]
+        # Maillon parent seulement s'il est PUBLIÉ (même règle que le fil
+        # d'ariane visible : pas de lien structuré vers un brouillon → 404).
+        # / Parent crumb only if PUBLISHED (same rule as the visible
+        # breadcrumb: no structured link to a draft → 404).
         parent = page.parent
-        url_parent = (
-            request.build_absolute_uri(f"/{parent.slug}/") if request else f"/{parent.slug}/"
+        if parent.publie:
+            url_parent = (
+                request.build_absolute_uri(f"/{parent.slug}/") if request else f"/{parent.slug}/"
+            )
+            maillons.append(
+                {"@type": "ListItem", "position": 2, "name": parent.titre, "item": url_parent}
+            )
+        maillons.append(
+            {"@type": "ListItem", "position": len(maillons) + 1, "name": page.titre, "item": url}
         )
-        graphe.append({
-            "@type": "BreadcrumbList",
-            "itemListElement": [
-                {"@type": "ListItem", "position": 1, "name": "Accueil", "item": racine},
-                {"@type": "ListItem", "position": 2, "name": parent.titre, "item": url_parent},
-                {"@type": "ListItem", "position": 3, "name": page.titre, "item": url},
-            ],
-        })
+        graphe.append({"@type": "BreadcrumbList", "itemListElement": maillons})
 
     data = {"@context": "https://schema.org", "@graph": graphe}
     # ensure_ascii=False garde les accents ; on echappe <, > et & (comme Django
@@ -196,6 +229,240 @@ def embed_iframe(url):
         f"</iframe></div>"
     )
     return mark_safe(iframe)
+
+
+@register.simple_tag(takes_context=True)
+def jsonld_event(context, event):
+    """
+    Rend les données structurées JSON-LD schema.org/Event d'un évènement,
+    construites côté Python (json.dumps) — JAMAIS à la main dans le gabarit.
+    / Renders the schema.org/Event JSON-LD of an event, built in Python
+    (json.dumps) — NEVER hand-crafted in the template.
+
+    LOCALISATION : pages/templatetags/pages_tags.py
+
+    POURQUOI (audit SEO 2026-07-05) : l'ancien JSON écrit à la main dans
+    vues/evenement.html était INVALIDE (retour à la ligne littéral dans la
+    description, virgule traînante quand offers manquait, latitude avec
+    virgule décimale française) → Google rejetait tout le bloc, zéro rich
+    snippet. json.dumps garantit l'échappement ; les nombres géo passent par
+    float() (point décimal) ; offers est calculé depuis published_prices
+    (l'ancien event.price_min n'existait pas : offers n'était jamais rendu).
+    / WHY: the hand-written JSON was INVALID (literal newline in description,
+    trailing comma, French decimal comma in geo) → Google rejected the whole
+    block. json.dumps guarantees escaping; geo goes through float(); offers is
+    computed from published_prices (the old event.price_min never existed).
+
+    Utilisation : {% jsonld_event event %}
+    """
+    request = context.get("request")
+    config = context.get("config")
+    url = request.build_absolute_uri() if request else ""
+    racine = request.build_absolute_uri("/") if request else "/"
+
+    description = (
+        strip_tags(event.short_description or "")
+        or strip_tags(event.long_description or "")[:150]
+        or event.name
+    )
+
+    donnees = {
+        "@context": "https://schema.org",
+        "@type": "Event",
+        "name": event.name,
+        "description": description,
+        "url": url,
+        "startDate": event.datetime.isoformat(),
+        "eventStatus": "https://schema.org/EventScheduled",
+    }
+    if event.end_datetime:
+        donnees["endDate"] = event.end_datetime.isoformat()
+
+    # Image : URL ABSOLUE obligatoire pour les parseurs (même règle qu'og:image).
+    # / Image: ABSOLUTE URL required by parsers (same rule as og:image).
+    if event.img:
+        donnees["image"] = request.build_absolute_uri(event.img.hdr.url) if request else event.img.hdr.url
+
+    lieu = {"@type": "Place", "name": getattr(config, "organisation", "") or event.name}
+    adresse = event.postal_address
+    if adresse:
+        lieu["address"] = {
+            "@type": "PostalAddress",
+            "streetAddress": adresse.street_address or "",
+            "addressLocality": adresse.address_locality or "",
+            "postalCode": adresse.postal_code or "",
+            "addressCountry": adresse.address_country or "",
+        }
+        if adresse.name:
+            lieu["address"]["name"] = adresse.name
+        if adresse.latitude and adresse.longitude:
+            # float() impose le POINT décimal (l'ancien gabarit sortait la
+            # virgule française, illisible par les parseurs schema.org).
+            # / float() enforces the decimal POINT (the old template output
+            # the French comma, unreadable by schema.org parsers).
+            lieu["geo"] = {
+                "@type": "GeoCoordinates",
+                "latitude": float(adresse.latitude),
+                "longitude": float(adresse.longitude),
+            }
+    donnees["location"] = lieu
+
+    donnees["organizer"] = {
+        "@type": "Organization",
+        "name": getattr(config, "organisation", "") or "",
+        "url": racine,
+    }
+
+    # Offers : prix minimum des tarifs PUBLIÉS (rich snippet billetterie).
+    # published_prices est une @property (pas un appel).
+    # / Offers: minimum price of the PUBLISHED prices (ticketing rich snippet).
+    # published_prices is a @property (not a call).
+    prix_publies = [float(p.prix) for p in event.published_prices]
+    if prix_publies:
+        donnees["offers"] = {
+            "@type": "Offer",
+            "price": min(prix_publies),
+            "priceCurrency": "EUR",
+            "url": url,
+            "availability": (
+                "https://schema.org/SoldOut" if event.complet
+                else "https://schema.org/InStock"
+            ),
+        }
+
+    # Même échappement que jsonld_page (neutralise </script> et commentaires).
+    # / Same escaping as jsonld_page (neutralizes </script> and comments).
+    json_str = (
+        json.dumps(donnees, ensure_ascii=False)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
+    return mark_safe(f'<script type="application/ld+json">{json_str}</script>')
+
+
+@register.filter
+def rendre_bloc_markdown(bloc):
+    """
+    Rend le texte Markdown d'un bloc, en résolvant d'abord ses références
+    d'images : ![légende](galerie:N) pointe la N-ième image de l'inline
+    « Images » du bloc (modèle ImageGalerie, champ position).
+    / Renders a block's Markdown text, first resolving its image references:
+    ![caption](galerie:N) points to the N-th image of the block's images
+    inline (ImageGalerie model, position field).
+
+    LOCALISATION : pages/templatetags/pages_tags.py
+
+    Règles FALC :
+    - (galerie:N) est remplacé par l'URL réelle de la variation med (480px,
+      la plus grande variation NON croppée d'ImageGalerie — .tb-markdown img
+      est déjà en max-width 100 %).
+    - ![](galerie:N) sans légende : la légende de l'inline devient le texte
+      alternatif.
+    - Référence inconnue (position sans image) : remplacée par un marqueur
+      texte visible « [image galerie:N introuvable] » — l'auteur voit son
+      erreur (la référence brute deviendrait un <img> sans src, invisible).
+    / (galerie:N) is replaced by the med variation URL; an empty ![] alt falls
+    back to the inline caption; an unknown reference becomes a visible text
+    marker so the author sees the mistake instead of a silent hole.
+
+    Utilisation : {{ bloc|rendre_bloc_markdown }}
+    """
+    import re as bibliotheque_re
+
+    texte = bloc.texte or ""
+
+    # Index position -> image de l'inline. / position -> inline image index.
+    images_par_position = {img.position: img for img in bloc.images_galerie.all()}
+
+    def remplacer(correspondance):
+        alt = correspondance.group("alt")
+        position = int(correspondance.group("position"))
+        image = images_par_position.get(position)
+        if image is None or not image.image:
+            # Référence inconnue : marqueur texte VISIBLE (la réf brute
+            # deviendrait un <img> sans src, invisible après sanitize).
+            # / Unknown ref: VISIBLE text marker (the raw ref would become
+            # a src-less <img>, invisible after sanitizing).
+            return f"*[image galerie:{position} introuvable]*"
+        texte_alternatif = alt or image.legende or ""
+        return f"![{texte_alternatif}]({image.image.med.url})"
+
+    texte = bibliotheque_re.sub(
+        r"!\[(?P<alt>[^\]]*)\]\(galerie:(?P<position>\d+)\)",
+        remplacer,
+        texte,
+    )
+    return rendre_markdown(texte)
+
+
+@register.filter
+def rendre_markdown(texte_markdown):
+    """
+    Convertit un texte Markdown en HTML SÛR (bloc MARKDOWN).
+    / Converts Markdown text into SAFE HTML (MARKDOWN block).
+
+    LOCALISATION : pages/templatetags/pages_tags.py
+
+    Deux étapes, dans cet ordre :
+    1. markdown.markdown() avec l'extension "extra" (tableaux, code clôturé,
+       notes) et "sane_lists" (listes prévisibles).
+    2. nh3.clean() : sanitize du HTML produit. NON NÉGOCIABLE — même si seuls
+       les admins du tenant écrivent, un XSS stocké dans une page publique
+       reste un XSS (vol de session d'un autre admin, defacement).
+       nh3 garde les balises de contenu (titres, listes, liens, tableaux,
+       images, code) et retire scripts, handlers on*, javascript: etc.
+    / Two steps: markdown.markdown() with "extra" + "sane_lists", then
+    nh3.clean() — non-negotiable sanitize (a stored XSS in a public page is
+    still an XSS). nh3 keeps content tags and strips scripts/on*/javascript:.
+
+    Utilisation : {{ bloc.texte|rendre_markdown }}
+    """
+    import markdown as bibliotheque_markdown
+    import nh3
+
+    if not texte_markdown:
+        return ""
+
+    html_genere = bibliotheque_markdown.markdown(
+        texte_markdown,
+        extensions=["extra", "sane_lists"],
+    )
+    html_nettoye = nh3.clean(html_genere)
+
+    # DÉMOTION des titres d'un niveau (h1→h2 … h5→h6) : le h1 de la page
+    # appartient à la Page (bloc HERO ou titre de page.html), jamais au
+    # contenu markdown — sinon un auteur qui tape « # » crée un double h1
+    # (audit SEO 2026-07-05). Ordre décroissant pour ne pas re-décaler.
+    # / Heading DEMOTION by one level (h1→h2 … h5→h6): the page's h1 belongs
+    # to the Page (HERO block or page.html title), never to markdown content —
+    # otherwise a "# " author creates a duplicate h1. Descending order so
+    # nothing gets shifted twice.
+    for niveau in (5, 4, 3, 2, 1):
+        html_nettoye = html_nettoye.replace(f"<h{niveau}>", f"<h{niveau + 1}>")
+        html_nettoye = html_nettoye.replace(f"</h{niveau}>", f"</h{niveau + 1}>")
+
+    return mark_safe(html_nettoye)
+
+
+@register.simple_tag
+def sous_pages_publiees(page_courante, nombre_max=6):
+    """
+    Retourne les sous-pages PUBLIÉES de la page courante (bloc LISTE_SOUS_PAGES),
+    triées comme la navbar (position puis titre), limitées à nombre_max.
+    Requête DIRECTE sur le modèle — même pattern que evenements_a_venir.
+    / Returns the current page's PUBLISHED sub-pages (LISTE_SOUS_PAGES block),
+    sorted like the navbar (position then title), limited to nombre_max.
+    DIRECT model query — same pattern as evenements_a_venir.
+
+    Utilisation : {% sous_pages_publiees page_courante bloc.nombre_max as sous_pages %}
+    """
+    if page_courante is None:
+        return []
+    return (
+        page_courante.enfants.filter(publie=True)
+        .order_by("position", "titre")[: nombre_max or 6]
+    )
 
 
 @register.simple_tag

@@ -1,5 +1,301 @@
 # Changelog / Journal des modifications
 
+## Admin : éditeur Markdown EasyMDE pour le bloc MARKDOWN / Admin: EasyMDE Markdown editor for the MARKDOWN block
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+Le bloc MARKDOWN s'éditait dans le WYSIWYG Trix (qui produit du HTML) —
+pénible et destructeur pour de la source Markdown. Après étude des options
+(ToastUI trop lourd, Milkdown/MDXEditor exigent un bundler, TinyMDE plus
+maintenu), choix : **EasyMDE 2.21.0** (release mai 2026, activement
+maintenu), VENDORISÉ (`pages/static/pages/vendor/easymde/`, ~330 Ko,
+zéro CDN, zéro dépendance pip).
+- **Deux champs de formulaire pour un champ modèle** : `texte` garde Trix
+  (types HTML), le nouveau champ de FORMULAIRE `texte_markdown` (affiché
+  seulement pour MARKDOWN via conditional_fields) porte EasyMDE ; la valeur
+  vit toujours dans `Bloc.texte` (initial au chargement, recopie APRÈS
+  sanitize dans save_model — retours à la ligne préservés, aller-retour
+  testé en shell).
+- Éditeur : coloration markdown live, barre d'outils essentielle (sans
+  upload d'image — les images passent par l'encart + `galerie:N`), aperçu,
+  côte-à-côte, plein écran ; correcteur anglais désactivé.
+- `editeur_markdown.js` : init + PIÈGE géré — CodeMirror mesuré dans le
+  conteneur caché par Alpine se dessine à 0px → refresh au changement de
+  type et après chargement. `editeur_markdown.css` : accordage clair/sombre
+  (classe .dark d'Unfold).
+- Vérifié en capture authentifiée (fiche de l'article de démo).
+- **Plein écran / côte-à-côte au-dessus de l'admin** : les calques
+  position:fixed d'EasyMDE (z-index 8-9) passaient DERRIÈRE les menus
+  d'Unfold (z-40) → remontés à z-60 (un plein écran couvre tout l'écran,
+  menus compris). Signalé par le mainteneur, vérifié par capture avec clic
+  réel sur le bouton côte-à-côte.
+- **Aperçu fidèle** : `previewRender` résout `![légende](galerie:N)` vers
+  les vraies URLs (table position→URL embarquée par le formulaire en
+  data-attribute — même règle que le rendu serveur) au lieu d'une image
+  cassée ; typographie de l'aperçu restaurée (le reset Tailwind de l'admin
+  aplatissait titres, listes et citations).
+
+## Admin blocs : filtres avancés Unfold / Blocks admin: Unfold advanced filters
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+La liste des blocs passe aux filtres avancés Unfold (pattern
+« driverwithfilters » de la démo), affichés SUR la page
+(`list_filter_sheet = False`) :
+- **Par Page** : liste de LIENS cliquables (préférence mainteneur, réitérée
+  contre l'autocomplete d'abord proposé) ;
+- **Par Page parente** : autocomplete — tous les blocs des sous-pages d'une
+  page (ex. tous les blocs des articles du Journal) ;
+- **Par Type de bloc** : menu déroulant compact (16 types).
+NOTE responsive : l'affichage sur la page n'existe qu'à partir du breakpoint
+2xl (fenêtre ≥ 1536 px) — en dessous, Unfold retombe automatiquement sur le
+bouton « Filtres » + tiroir latéral (mêmes filtres). Vérifié en captures
+authentifiées 1440/1720 px (Playwright + force_login E2E).
+
+## Admin pages : tri par glisser-déposer / Pages admin: drag-and-drop sorting
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+La liste des Pages passe au sortable Unfold (comme les blocs) : poignée de
+glisser-déposer à la place de la colonne `position` — l'ordre enregistré
+pilote directement l'ordre de la navbar.
+
+## Blog : images d'illustration dans les articles Markdown / Blog: illustration images in Markdown articles
+
+**Date :** 2026-07-05
+**Migration :** Non (réutilise ImageGalerie) / No (reuses ImageGalerie)
+
+Un article Markdown peut désormais être illustré avec de VRAIES images
+uploadées (proposition mainteneur : « inline image + balise dans le
+markdown ») :
+- **L'inline « Images »** (le même que la galerie, avec son tri par
+  glisser-déposer) apparaît aussi sur les blocs MARKDOWN
+  (`BlocAdmin.get_inlines`).
+- **Dans le texte** : syntaxe markdown standard `![légende](galerie:N)` —
+  N = position de l'image dans l'inline. Le nouveau filtre
+  `rendre_bloc_markdown` résout la référence vers l'URL réelle (variation
+  `med`, non croppée) AVANT le rendu markdown+nh3. Alt vide → la légende de
+  l'inline ; référence inconnue → marqueur texte visible
+  « [image galerie:N introuvable] » (jamais de trou silencieux).
+- **Aide dans l'admin** : note contextuelle sur la fiche du bloc MARKDOWN
+  (même mécanisme Alpine que l'aide HERO) documentant la syntaxe.
+- **Fixture** : l'article « fresque participative » du blog de démo est
+  illustré (image dans l'inline + référence dans le texte) — rendu vérifié.
+- Les images externes `![alt](https://…)` fonctionnent aussi (nh3 conserve
+  `<img src=https>`). Tests : résolution, fallback légende, réf inconnue.
+
+## Admin bloc : l'inline « Images de galerie » n'apparaît que sur un bloc GALERIE / Block admin: the gallery-images inline only shows on GALERIE blocks
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+`ImageGalerie` ne sert qu'au bloc GALERIE (modèle porteur de ses images) mais
+l'inline s'affichait sur TOUS les types de blocs (bruit dans le formulaire).
+`BlocAdmin.get_inlines` ne le retourne plus que pour un bloc GALERIE
+enregistré ; à la création (type inconnu côté serveur), il apparaît après le
+premier enregistrement — flux Django standard.
+
+## Bloc IMAGE : champ explicite `affichage_image` (fin de l'interrupteur caché) / IMAGE block: explicit `affichage_image` field (no more hidden toggle)
+
+**Date :** 2026-07-05
+**Migration :** Non pour la branche (champ plié dans `pages/0001` régénérée ; colonne posée à la main sur la base dev) / Folded into the regenerated `pages/0001`
+
+Le skin faire_festival choisissait le rendu du bloc IMAGE selon la PRÉSENCE
+du titre (interrupteur caché, jugé mauvais pattern par le mainteneur) : une
+photo titrée devenait une vignette minuscule (« Notre démarche »). Désormais :
+- **`Bloc.affichage_image`** (choices, pattern `image_position`) :
+  `PLEINE_LARGEUR` (défaut, photos) ou `VIGNETTE_TITRE` (petite image-titre
+  dessinée, centrée à taille naturelle). Le champ `titre` redevient un simple
+  texte alternatif.
+- Honoré par les DEUX skins : ff (les 2 modes historiques, choisis
+  explicitement) et classic (nouvelle variante `--vignette`).
+- Intégré partout : catalogue API v2, openapi, admin (`conditional_fields`
+  sur le type IMAGE), seeder ff (les 2 images-titres dessinées passent en
+  VIGNETTE_TITRE, la photo d'en-tête de notre-démarche en pleine largeur —
+  reseedé et vérifié par captures : home ff inchangée au pixel).
+
+## Grille des blocs homogénéisée + position hors du formulaire bloc / Unified block grid + position removed from the block form
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+**Audit visuel (captures Playwright pleine page avant/après)** — chaque bloc
+vivait sur sa propre grille : gouttières différentes, cartes « plus à
+l'intérieur » que les titres, trous verticaux géants entre un titre et sa
+grille. Corrections dans `tb-blocs.css` :
+- **Jeton unique `--tb-gouttiere`** (clamp 1.25rem→4rem) : les 6 gouttières
+  codées en dur basculent dessus (blocs, grille, fil d'ariane, leaflet, FAQ).
+- **Jeton `--tb-largeur-boite`** = largeur-max + 2×gouttière : les boîtes
+  AUTONOMES (grille de cartes, fil d'ariane, infos/carte leaflet, colonnes
+  FAQ, titre/signature de page) portaient `max-width + padding gouttière` →
+  leur contenu était décalé de +gouttière par rapport aux sections (le
+  « cartes plus à l'intérieur » signalé). Le calc les aligne au pixel.
+- **Rythme vertical titre→grille** : une section-titre (évènements,
+  liste-sous-pages, paragraphe) suivie d'une grille lui colle désormais
+  (avant : padding bas + padding haut s'additionnaient ≈ 2× l'espace de
+  section de vide).
+- **`text-wrap: balance`** sur les titres de blocs, de cartes et de page
+  (règle /ui : pas de mot orphelin).
+- Le h1/la signature de page (ajoutés à l'audit SEO) rejoignent le système
+  (ils étaient sur 72ch + 1rem, collés au bord gauche).
+- **Gouttière ALIGNANTE (2e passe, tous les blocs)** : deux logiques
+  coexistaient — contenu centré dans largeur-max (titres, textes → bord à
+  144px sur un écran de 1440) vs contenu calé à gauche de sa section (CTA
+  « Rejoignez la coopérative », témoignage, grande image, image+texte,
+  médias → gouttière brute à 64px). Le padding des sections devient
+  `max(gouttière, (100% − largeur-max)/2)` : chaque section contraint son
+  contenu dans le conteneur commun quel que soit son alignement interne.
+  Vérifié par captures Playwright pleine page : grande image, embed vidéo,
+  CTA (filet à 144), témoignage, Soutenir, FAQ, infos/Leaflet — tous sur la
+  même verticale que les titres. Le fond des bandes (hero, CTA) reste
+  pleine largeur.
+- **Bloc IMAGE_TEXTE réparé (« Une salle modulable »)** : le bloc se
+  double-conteneurisait (max-width + margin auto sur une section qui porte
+  déjà la gouttière alignante) → colonnes rétrécies, images timbre-poste,
+  décalées d'une gouttière. Double contrainte supprimée : l'image occupe
+  toute sa moitié, bord posé sur le conteneur, la quinconce gauche/droite
+  (image_position) est conservée.
+- **Skin faire_festival vérifié** (home, infos-pratiques, notre-démarche) :
+  cohérent par design (grille Bootstrap centrée, brutalisme voulu) — h1 de
+  secours et fil d'ariane tombent dans le même container. Seul point
+  signalé, non corrigé (choix de maquette) : le bloc IMAGE *avec titre* est
+  rendu en « image-titre de section » (~50 %, centrée) — peu adapté aux
+  photos d'en-tête comme celle de la démo notre-démarche.
+
+**Admin** : le champ `position` disparaît aussi du FORMULAIRE du bloc
+(l'ordre se règle au glisser-déposer dans la liste ; à la création,
+save_model place le bloc en fin de page).
+
+## Admin blocs : tri par glisser-déposer (sortable Unfold) / Blocks admin: drag-and-drop sorting (Unfold sortable)
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+La liste des Blocs (`/admin/pages/bloc/`) et l'inline des images de galerie
+utilisent le **sortable d'Unfold** (comme la démo formula/circuit) :
+`ordering_field = "position"` + `hide_ordering_field = True` — poignée de
+glisser-déposer à la place de la saisie manuelle du nombre, positions
+enregistrées dans l'ordre affiché. Conseil d'usage : filtrer par page avant
+de trier (sinon les blocs de toutes les pages se mélangent dans la liste).
+
+## Champ `Page.est_blog` + fix z-index des dropdowns sur l'agenda / `Page.est_blog` field + agenda dropdowns z-index fix
+
+**Date :** 2026-07-05
+**Migration :** Non pour la branche (champ plié dans `pages/0001` régénérée, non committée ; colonne ajoutée à la main sur la base dev) / Folded into the regenerated, uncommitted `pages/0001`
+
+- **`Page.est_blog` (typage EXPLICITE, décision mainteneur)** : le critère
+  implicite « le parent porte un bloc LISTE_SOUS_PAGES » posait problème — le
+  bloc doit rester de la pure présentation (posable sur l'accueil pour vitrine
+  ses rubriques, sans transformer ses sous-pages en articles). Le champ
+  booléen (pattern `est_accueil`, case à cocher dans l'admin) pilote désormais
+  les trois comportements : sous-pages = ARTICLES (JSON-LD Article + signature
+  date/auteur) et PAS de menu déroulant dans la navbar — le clic sur la page
+  blog mène directement à l'index en cartes. Seeder : `journal` est_blog=True.
+- **Fix z-index (bug signalé)** : les sections sticky de l'agenda classic
+  (description + barre de recherche, `sticky-top` = z-index 1020 Bootstrap)
+  passaient DEVANT les menus déroulants de la navbar (dropdown = 1000).
+  `z-index: 999` posé sur les deux sections — les dropdowns repassent devant,
+  la barre reste au-dessus du contenu qui défile.
+
+## SEO éditorial : JSON-LD Article + date/auteur visibles sur les pages de blog / Editorial SEO: Article JSON-LD + visible date/author on blog pages
+
+**Date :** 2026-07-05
+**Migration :** Non — `Page.created_at`/`updated_at` existaient déjà, l'auteur est l'Organization / No — the date fields already existed, the author is the Organization
+
+Critère « article » : une page dont le PARENT porte un bloc LISTE_SOUS_PAGES
+(l'index d'un blog). Pour ces pages :
+- **JSON-LD `Article`** (au lieu de WebPage) dans `jsonld_page` : headline,
+  datePublished/dateModified (champs du modèle), author + publisher =
+  Organization du lieu, image de partage en URL absolue.
+- **Signature visible** (E-E-A-T — Google veut VOIR qui publie et quand) :
+  « Publié le … par … (· mis à jour le …) » sous le titre, dans les 2 skins
+  (`data-testid="page-signature"`), et date de publication en surtitre des
+  cartes du bloc LISTE_SOUS_PAGES.
+- Les autres sous-pages (ex. « Notre histoire ») restent des WebPage sans
+  signature — critère vérifié dans les deux sens en live et par pytest.
+
+## Blog dans la fixture de démo + zéro CDN (Leaflet et Plotly vendorisés) / Demo fixture blog + zero CDN (Leaflet and Plotly vendored)
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+- **Blog de démo** : `charger_site_lespass` construit désormais une page
+  « Journal » (blocs PARAGRAPHE + LISTE_SOUS_PAGES) et 2 articles complets en
+  blocs MARKDOWN (fresque participative, bilan repair café — titres, listes,
+  citation, tableau, liens internes), avec images de partage et
+  meta_description. Vitrine du duo CHANTIER-09 dans la démo. Les 2 pages de
+  démo manuelles (`demo-journal`/`demo-article-1`) sont supprimées, la fixture
+  fait foi.
+- **Plus aucun CDN dans les templates publics** :
+  - Leaflet du détail événement classic (`evenement_geoloc.html`) : unpkg →
+    `pages/vendor/leaflet/` (déjà vendorisé pour le bloc CARTE_LEAFLET et
+    l'explorer), avec `L.Icon.Default.imagePath` local.
+  - Plotly du sankey crowds : cdn.plot.ly → `crowds/static/crowds/vendor/
+    plotly-2.27.0.min.js` (3,5 Mo, chargé paresseusement uniquement quand un
+    diagramme s'affiche — comportement inchangé).
+
+## Audit SEO : rich results Event réparés, h1 partout, sitemap propre / SEO audit: Event rich results fixed, h1 everywhere, clean sitemap
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+Suite à l'audit SEO complet (2 agents + contre-vérifications), 6 lots corrigés :
+1. **JSON-LD Event** : l'ancien JSON écrit à la main dans `vues/evenement.html`
+   était INVALIDE (retours à la ligne non échappés, virgule traînante, virgule
+   décimale française dans geo) → Google rejetait tout, zéro rich snippet sur
+   les pages les plus importantes. Nouveau tag `jsonld_event` (json.dumps,
+   pattern `jsonld_page`) — et `offers` est enfin rendu (l'ancien
+   `event.price_min` n'existait pas : prix jamais émis). Vérifié : JSON valide,
+   geo en float, offers avec prix et disponibilité.
+2. **og:image/twitter:image ABSOLUES** sur le détail événement (2 skins) et la
+   page adhésions (les crawlers sociaux exigent une URL complète — les partages
+   d'événements n'avaient AUCUNE image).
+3. **Sitemap** : `ProductSitemap` retiré — il listait 63 fragments HTMX
+   `/memberships/<uuid>/` (formulaires de tunnel sans `<html>`), pas des pages.
+4. **h1 partout** : titre de secours visible sur les pages CMS sans bloc HERO
+   (`page.html` ×2 + flag `page_a_un_bloc_hero` dans `rendre_page`), h1
+   `visually-hidden` sur les agendas (2 skins), et DÉMOTION des titres
+   markdown d'un niveau (`#` → h2 : le h1 appartient à la Page, jamais au
+   contenu — fini le double h1). Avant : 6 pages sur 10 sans aucun h1.
+5. **Skin ff aligné** : `ff/page.html` émet enfin JSON-LD WebPage/FAQPage/
+   Breadcrumb + fil d'Ariane + twitter/og_image/noindex (vieux backlog) ;
+   vues ff agenda/adhésions : metas complètes (avant : title seul, description
+   dupliquée avec la home).
+6. **`srcset=""` éradiqué** : gardes sur chaque `<source>` de
+   `commun/partials/picture.html` (avant : 86 vides sur /event/, 317 sur
+   /memberships/) + alt du wizard événement.
+
+Vérifié en live sur les 2 tenants : 1 h1 exact partout, JSON-LD 100 % parsables
+(WebPage+FAQPage sur les pages ff !), 0 srcset vide, sitemap sans fragments.
+Rapport complet : audit dans la conversation du 2026-07-05 ; à re-vérifier
+après déploiement avec Google Rich Results Test sur une page événement.
+
+## Blocs MARKDOWN + LISTE_SOUS_PAGES : une page devient un blog / MARKDOWN + LISTE_SOUS_PAGES blocks: a page becomes a blog
+
+**Date :** 2026-07-05
+**Migration :** Non (choices intégrées dans `pages/0001_initial` régénérée, non committée) / No (choices folded into the regenerated, uncommitted `pages/0001_initial`)
+
+Deux nouveaux types dans le catalogue de blocs (16 désormais) :
+- **MARKDOWN** (`titre` + `texte` = source MD, zéro nouveau champ) : rendu par
+  le filtre `rendre_markdown` — `markdown` (extensions extra + sane_lists)
+  puis **`nh3.clean()`** sur le HTML produit (XSS stocké neutralisé, testé).
+  Exception dans `BlocAdmin.save_model` : la source MD n'est PAS passée dans
+  `clean_html` au save (elle serait mutilée) — la sécurité se fait au rendu.
+  Styles `.tb-markdown` dans tb-blocs.css (titres, listes, code, citations,
+  tableaux), surchargeables par skin.
+- **LISTE_SOUS_PAGES** (`titre` + `nombre_max`) : cartes des sous-pages
+  publiées de la page courante (tag `sous_pages_publiees`, tri position/titre,
+  brouillons exclus). Parent = index du blog, enfants = articles.
+
+Intégré partout : `blocs_catalogue.CHAMPS_PAR_TYPE` (API v2), enum openapi,
+`conditional_fields` admin Unfold, gabarits classic (ff par fallback).
+Tests : `tests/pytest/test_blocs_markdown_sous_pages.py` (5 tests dont XSS).
+Spec : `TECH_DOC/SESSIONS/SKINS/CHANTIER-09-BLOCS-MARKDOWN-SOUS-PAGES.md`.
+Démo laissée en place sur lespass : `/demo-journal/` + `/demo-article-1/`.
+
 ## Squash des migrations de la branche main-pages / main-pages branch migrations squash
 
 **Date :** 2026-07-05

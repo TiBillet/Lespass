@@ -6,7 +6,7 @@ from django.urls import path, include, re_path
 from Administration.admin_tenant import staff_admin_site
 # on modifie la creation du token pour rajouter access_token dans la réponse pour Postman
 from ApiBillet.views import Webhook_stripe
-from BaseBillet.sitemap import EventSitemap, ProductSitemap, StaticViewSitemap
+from BaseBillet.sitemap import EventSitemap, StaticViewSitemap
 from pages.sitemap import PageSitemap
 
 urlpatterns = [
@@ -20,9 +20,16 @@ urlpatterns = [
     # - Events sitemap: https://yourdomain.com/sitemap.xml?section=events
     # - Products sitemap: https://yourdomain.com/sitemap.xml?section=products
     # - Static pages sitemap: https://yourdomain.com/sitemap.xml?section=static
+    # 'products' (ProductSitemap) RETIRÉ (audit SEO 2026-07-05) : il listait
+    # /memberships/<uuid>/ — des FRAGMENTS HTMX purs (formulaire du tunnel,
+    # sans <html>/<head>) chargés dans #offcanvas-membership, pas des pages
+    # indexables. La vraie page indexable est /memberships/ (déjà dans
+    # StaticViewSitemap). / 'products' REMOVED: it listed /memberships/<uuid>/
+    # — pure HTMX fragments (tunnel form, no <html>/<head>), not indexable
+    # pages. The real indexable page is /memberships/ (already in
+    # StaticViewSitemap).
     path('sitemap.xml', sitemap, {'sitemaps': {
         'events': EventSitemap,
-        'products': ProductSitemap,
         'static': StaticViewSitemap,
         'pages': PageSitemap,
     }, 'template_name': 'sitemaps/sitemap.xml'}, name='django.contrib.sitemaps.views.sitemap'),

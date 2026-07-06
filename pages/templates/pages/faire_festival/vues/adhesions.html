@@ -2,6 +2,15 @@
 {% load static i18n tibitags %}
 
 {% block title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Subscriptions' %}{% endif %}{% endblock %}
+{# Metas alignées sur le skin classic (audit SEO 2026-07-05). #}
+{# / Metas aligned with the classic skin (SEO audit). #}
+{% block meta_description %}{% translate 'Join our community by subscribing to one of our membership options' %} - {{ config.organisation }}{% endblock %}
+{% block og_title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Subscriptions' %}{% endif %} | {{ config.organisation }}{% endblock %}
+{% block og_description %}{% translate 'Join our community by subscribing to one of our membership options' %} - {{ config.organisation }}{% endblock %}
+{% block og_image %}{% if products.0.img %}https://{{ request.get_host }}{{ products.0.img.social_card.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block twitter_title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Subscriptions' %}{% endif %} | {{ config.organisation }}{% endblock %}
+{% block twitter_description %}{% translate 'Join our community by subscribing to one of our membership options' %} - {{ config.organisation }}{% endblock %}
+{% block twitter_image %}{% if products.0.img %}https://{{ request.get_host }}{{ products.0.img.social_card.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
 
 {% block offcanvas %}
     <!-- Tunnel d'adhésion (chrome partagé, extrait vers commun/ au CHANTIER-02).

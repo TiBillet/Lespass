@@ -32,17 +32,28 @@ CHAMPS_PAR_TYPE = {
     "VIDEO_TEXTE": ["titre", "texte"],
     "CARTE": ["surtitre", "titre", "badge", "texte", "image",
               "bouton_label", "bouton_url"],
-    "IMAGE": ["titre", "image"],
+    "IMAGE": ["titre", "image", "affichage_image"],
     "CARTE_LEAFLET": ["titre", "badge", "image", "image_secondaire", "points_gps"],
     "INFOS": ["contenu"],
     "FAQ": ["titre", "texte", "repliable"],
     "EVENEMENTS": ["titre", "nombre_max"],
     "GALERIE": ["titre"],  # les images sont portees par ImageGalerie (cf. Session B)
     "EMBED": ["titre", "embed_url"],
+    # MARKDOWN : texte long (article/blog). La source Markdown vit dans `texte`,
+    # le rendu HTML est fait au gabarit (filtre rendre_markdown + sanitize nh3).
+    # / MARKDOWN: long-form text (article/blog). The Markdown source lives in
+    # `texte`; HTML rendering happens in the template (rendre_markdown + nh3).
+    "MARKDOWN": ["titre", "texte"],
+    # LISTE_SOUS_PAGES : index des sous-pages publiees de la page courante,
+    # en cartes (parent = index de blog, enfants = articles). `nombre_max`
+    # limite la liste (defaut 6, comme EVENEMENTS).
+    # / LISTE_SOUS_PAGES: cards index of the current page's published
+    # sub-pages (parent = blog index, children = articles).
+    "LISTE_SOUS_PAGES": ["titre", "nombre_max"],
 }
 
-# Les 14 codes de type, dans l'ordre du catalogue.
-# / The 14 type codes, in catalogue order.
+# Les 16 codes de type, dans l'ordre du catalogue.
+# / The 16 type codes, in catalogue order.
 TYPES_BLOC = list(CHAMPS_PAR_TYPE.keys())
 
 # Union de tous les champs : whitelist pour additionalProperty (securite : on ne

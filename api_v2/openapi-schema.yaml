@@ -2357,7 +2357,8 @@ components:
           description: >
             Type de bloc (champ pivot du mapping). Valeurs possibles :
             HERO, PARAGRAPHE, IMAGE_TEXTE, CTA, TEMOIGNAGE, VIDEO_TEXTE,
-            CARTE, IMAGE, CARTE_LEAFLET, INFOS, FAQ, EVENEMENTS, GALERIE, EMBED.
+            CARTE, IMAGE, CARTE_LEAFLET, INFOS, FAQ, EVENEMENTS, GALERIE, EMBED,
+            MARKDOWN, LISTE_SOUS_PAGES.
           example: HERO
         headline:
           type: string
@@ -2386,7 +2387,8 @@ components:
           description: >
             Tous les champs supplémentaires du bloc sous forme PropertyValue[].
             Clés possibles : surtitre, badge, image_secondaire (URL),
-            image_position, bouton_label, bouton_url,
+            image_position, affichage_image (PLEINE_LARGEUR|VIGNETTE_TITRE),
+            bouton_label, bouton_url,
             bouton2_label, bouton2_url, auteur_nom, auteur_role,
             auteur_photo (URL), points_gps (JSON), contenu (JSON),
             nombre_max (int), repliable (bool), embed_url.

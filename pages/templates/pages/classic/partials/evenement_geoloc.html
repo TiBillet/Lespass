@@ -1,15 +1,18 @@
 {% load static %}
 {% load i18n %}
 
-<!-- Leaflet CSS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-      crossorigin=""/>
-
-<!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-        crossorigin=""></script>
+<!-- Leaflet servi en LOCAL (pages/static/pages/vendor/leaflet/), comme le
+     bloc CARTE_LEAFLET et l'explorer — plus de CDN unpkg (audit SEO
+     2026-07-05 : dépendance tierce bloquante, incohérente avec le reste du
+     projet vendorisé). imagePath pointe les icônes de marqueur locales.
+     / Leaflet served LOCALLY like the CARTE_LEAFLET block and the explorer —
+     no more unpkg CDN (third-party blocking dependency, inconsistent with
+     the vendored project). imagePath points to the local marker icons. -->
+<link rel="stylesheet" href="{% static 'pages/vendor/leaflet/leaflet.css' %}"/>
+<script src="{% static 'pages/vendor/leaflet/leaflet.js' %}"></script>
+<script>
+    L.Icon.Default.imagePath = '{% static "pages/vendor/leaflet/images/" %}';
+</script>
 
 <style>
     .map-section {

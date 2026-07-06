@@ -26,6 +26,21 @@
     --tb-espace-section: clamp(2.5rem, 5.5vw, 4.5rem);
     --tb-largeur-max: 72rem;
     --tb-largeur-lecture: 40rem;
+    /* LA gouttière horizontale unique de tous les blocs (audit grille
+       2026-07-05 : chaque bloc avait la sienne, rien ne s'alignait).
+       / THE single horizontal gutter of every block. */
+    --tb-gouttiere: clamp(1.25rem, 5vw, 4rem);
+    /* Largeur d'une boîte AUTONOME (qui porte sa gouttière en padding).
+       Géométriquement identique à une section pleine largeur + contenu
+       centré : contenu à max((100vw - largeur-max)/2, gouttière) du bord.
+       Sans ce calc, une boîte « max-width + padding gouttière » décale son
+       contenu de +gouttière par rapport aux sections (les cartes semblaient
+       « plus à l'intérieur » que les titres).
+       / Width of a SELF-CONTAINED box (carrying its gutter as padding).
+       Geometrically identical to a full-width section with centered content.
+       Without this calc, such boxes shift their content by +gutter vs
+       sections (cards looked more inset than titles). */
+    --tb-largeur-boite: calc(var(--tb-largeur-max) + 2 * var(--tb-gouttiere));
 
     /* Accent unique : couleur du tenant, repli bleu éditorial sobre.
        / Single accent: tenant color, sober editorial blue fallback. */
@@ -71,10 +86,10 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 0.4rem;
-    max-width: var(--tb-largeur-max);
+    max-width: var(--tb-largeur-boite);
     margin-inline: auto;
     padding-top: 1.5rem;
-    padding-inline: clamp(1.25rem, 5vw, 4rem);
+    padding-inline: var(--tb-gouttiere);
     font-size: 0.85rem;
     color: var(--tb-texte-doux);
 }
@@ -87,7 +102,17 @@
 .tb-bloc {
     box-sizing: border-box;
     padding-block: var(--tb-espace-section);
-    padding-inline: clamp(1.25rem, 5vw, 4rem);
+    /* Gouttière ALIGNANTE : au moins la gouttière, et au moins ce qu'il faut
+       pour poser le bord du contenu sur le conteneur commun (largeur-max
+       centrée). Sans ce max(), les blocs à contenu calé à gauche (CTA,
+       témoignage, images, médias) démarraient à la gouttière brute (64px sur
+       un écran de 1440) pendant que les blocs à contenu centré (titres,
+       textes) démarraient au conteneur (144px) — « tout semble non aligné ».
+       / ALIGNING gutter: at least the gutter, and at least enough to sit the
+       content edge on the shared container (centered max-width). Without the
+       max(), left-anchored blocks (CTA, testimonial, images) started at the
+       raw gutter while centered ones started at the container. */
+    padding-inline: max(var(--tb-gouttiere), calc((100% - var(--tb-largeur-max)) / 2));
     color: var(--tb-texte);
 }
 
@@ -282,8 +307,14 @@ h2.tb-bloc__titre::before {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: clamp(1.75rem, 5vw, 4rem);
     align-items: center;
-    max-width: var(--tb-largeur-max);
-    margin-inline: auto;
+    /* PAS de max-width/margin ici : le padding alignant de .tb-bloc pose déjà
+       le contenu sur le conteneur commun. La double contrainte rétrécissait
+       les colonnes (images timbre-poste) et les décalait d'une gouttière
+       (audit 2026-07-05, « Une salle modulable »). L'image occupe ainsi toute
+       sa moitié, bord posé sur le conteneur, quinconce via --image-droite.
+       / NO max-width/margin here: .tb-bloc's aligning padding already sits
+       the content on the shared container. The double constraint shrank the
+       columns (stamp-sized images) and shifted them by one gutter. */
 }
 .tb-bloc--image-texte .tb-bloc__contenu { max-width: none; margin-inline: 0; }
 .tb-bloc--image-texte .tb-bloc__titre { font-size: clamp(1.6rem, 3.5vw, 2.2rem); }
@@ -372,10 +403,10 @@ h2.tb-bloc__titre::before {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
     gap: clamp(1.25rem, 3vw, 2rem);
-    max-width: var(--tb-largeur-max);
+    max-width: var(--tb-largeur-boite);
     margin-inline: auto;
     padding-block: var(--tb-espace-section);
-    padding-inline: clamp(1.25rem, 5vw, 4rem);
+    padding-inline: var(--tb-gouttiere);
 }
 /* Carte ISOLEE : ne pas s'etirer sur toute la largeur (auto-fit 1fr l'etirerait).
    On la cape et on la centre. 2-4 cartes remplissent normalement leurs colonnes.
@@ -450,7 +481,7 @@ h2.tb-bloc__titre::before {
  * ------------------------------------------------------------------------- */
 .tb-bloc--carte-leaflet {
     padding-block: var(--tb-espace-section);
-    padding-inline: clamp(1.25rem, 5vw, 4rem);
+    padding-inline: max(var(--tb-gouttiere), calc((100% - var(--tb-largeur-max)) / 2));
 }
 .tb-bloc--carte-leaflet .tb-bloc__leaflet-grille {
     display: grid;
@@ -490,8 +521,8 @@ h2.tb-bloc__titre::before {
 .tb-bloc__carte {
     box-sizing: border-box;
     padding-block: var(--tb-espace-section);
-    padding-inline: clamp(1.25rem, 5vw, 4rem);
-    max-width: var(--tb-largeur-max);
+    padding-inline: var(--tb-gouttiere);
+    max-width: var(--tb-largeur-boite);
     margin-inline: auto;
 }
 .tb-bloc__leaflet-grille .tb-bloc__infos,
@@ -538,10 +569,10 @@ h2.tb-bloc__titre::before {
 .tb-faq-colonnes {
     column-count: 2;
     column-gap: clamp(2rem, 5vw, 4rem);
-    max-width: var(--tb-largeur-max);
+    max-width: var(--tb-largeur-boite);
     margin-inline: auto;
     padding-block: var(--tb-espace-section);
-    padding-inline: clamp(1.25rem, 5vw, 4rem);
+    padding-inline: var(--tb-gouttiere);
 }
 .tb-faq-colonnes .tb-bloc--faq {
     break-inside: avoid;
@@ -695,4 +726,108 @@ h2.tb-bloc__titre::before {
     .tb-bloc--carte { transition: none; }
     .tb-bloc__bouton--plein:hover,
     .tb-bloc--carte:hover { transform: none; box-shadow: var(--tb-ombre); }
+}
+
+/* ============================================================
+   BLOC MARKDOWN — texte long (article/blog).
+   Habille le HTML produit par le filtre rendre_markdown (titres,
+   listes, code, citations, tableaux). Le skin peut surcharger via
+   son propre CSS. / MARKDOWN block — long-form text. Styles the
+   HTML produced by the rendre_markdown filter.
+   ============================================================ */
+.tb-markdown { line-height: 1.65; max-width: 72ch; }
+.tb-markdown h1, .tb-markdown h2, .tb-markdown h3,
+.tb-markdown h4, .tb-markdown h5, .tb-markdown h6 {
+    margin: 1.4em 0 .5em;
+    line-height: 1.25;
+}
+.tb-markdown p { margin: 0 0 1em; }
+.tb-markdown ul, .tb-markdown ol { margin: 0 0 1em; padding-left: 1.5em; }
+.tb-markdown li { margin-bottom: .35em; }
+.tb-markdown blockquote {
+    margin: 1em 0;
+    padding: .5em 1em;
+    border-left: 4px solid var(--tb-accent, currentColor);
+    opacity: .9;
+}
+.tb-markdown code {
+    font-family: ui-monospace, monospace;
+    font-size: .9em;
+    padding: .1em .35em;
+    border-radius: .25em;
+    background: var(--tb-surface-alt, rgba(127, 127, 127, .15));
+}
+.tb-markdown pre {
+    overflow-x: auto;
+    padding: 1em;
+    border-radius: .5em;
+    background: var(--tb-surface-alt, rgba(127, 127, 127, .12));
+}
+.tb-markdown pre code { padding: 0; background: none; }
+.tb-markdown table { border-collapse: collapse; margin: 0 0 1em; width: 100%; }
+.tb-markdown th, .tb-markdown td {
+    border: 1px solid var(--tb-surface-alt, rgba(127, 127, 127, .35));
+    padding: .4em .6em;
+    text-align: left;
+}
+.tb-markdown img { max-width: 100%; height: auto; }
+.tb-markdown hr { margin: 2em 0; border: 0; border-top: 1px solid var(--tb-surface-alt, rgba(127, 127, 127, .35)); }
+
+/* Titre de secours d'une page CMS sans bloc HERO (h1 SEO/a11y).
+   / Fallback title of a CMS page without a HERO block. */
+.tb-page__titre {
+    margin: 1.2em auto .4em;
+    max-width: var(--tb-largeur-boite);
+    padding-inline: var(--tb-gouttiere);
+    line-height: 1.2;
+    text-wrap: balance;
+}
+
+/* Signature date/auteur des articles (E-E-A-T).
+   / Article date/author byline (E-E-A-T). */
+.tb-page__signature {
+    margin: 0 auto .5em;
+    max-width: var(--tb-largeur-boite);
+    padding-inline: var(--tb-gouttiere);
+    font-size: .9em;
+}
+
+
+/* ============================================================
+   RYTHME VERTICAL TITRE -> GRILLE (audit grille 2026-07-05).
+   Une section-titre suivie d'une grille de cartes lui colle : sans ces
+   règles, l'espacement bas de la section + l'espacement haut de la grille
+   s'additionnaient (~2 x espace-section de vide entre « Nos prochains
+   rendez-vous » et ses cartes).
+   / TITLE -> GRID VERTICAL RHYTHM. A title section followed by a card grid
+   sticks to it: without these rules, the section's bottom spacing + the
+   grid's top spacing stacked up (~2 x section spacing of emptiness).
+   ============================================================ */
+.tb-bloc--evenements-titre,
+.tb-bloc--liste-sous-pages-titre {
+    padding-block-end: 0;
+}
+.tb-bloc--evenements-titre + .tb-grille,
+.tb-bloc--liste-sous-pages-titre + .tb-grille,
+.tb-bloc--paragraphe + .tb-grille {
+    padding-block-start: 1.5rem;
+}
+
+/* Titres équilibrés : pas de mot orphelin sur la dernière ligne.
+   / Balanced titles: no orphan word on the last line. */
+.tb-bloc__titre,
+.tb-bloc__carte-titre {
+    text-wrap: balance;
+}
+
+
+/* Bloc IMAGE en mode vignette-titre (champ explicite affichage_image) :
+   taille naturelle, centrée — pour les petites images-titres dessinées.
+   / IMAGE block in title-thumbnail mode (explicit affichage_image field):
+   natural size, centered — for small drawn title-images. */
+.tb-bloc__image-seule--vignette {
+    width: auto;
+    max-width: min(100%, 32rem);
+    margin-inline: auto;
+    display: block;
 }
