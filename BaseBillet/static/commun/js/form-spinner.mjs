@@ -3,7 +3,7 @@
  * Utilise la classe .active (coherent avec loading-states HTMX)
  * / Shows/hides the loading spinner using .active class
  *
- * LOCALISATION : reunion/js/form-spinner.mjs
+ * LOCALISATION : commun/js/form-spinner.mjs
  */
 const spinner = document.getElementById('tibillet-spinner')
 
