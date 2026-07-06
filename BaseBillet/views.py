@@ -13,7 +13,7 @@ import segno
 import stripe
 from django.contrib import messages
 from django.contrib.auth import logout, login
-from django.contrib.messages import MessageFailure
+from django.contrib.messages import MessageFailure, get_messages
 from django.core import signing
 from django.core.cache import cache
 from django.core.paginator import Paginator
@@ -899,14 +899,32 @@ class MyAccount(viewsets.ViewSet):
             except Exception as ce:
                 logger.error(f"Failed to queue cancellation email for ticket {ticket.uuid}: {ce}")
             if request.headers.get('HX-Request'):
-                return HttpResponse("")
+                # FR: Issue #431 — pattern GUIDELINES "HX-Trigger + django.messages" :
+                #     on draine les messages en attente et on les envoie au client via
+                #     l'entête HX-Trigger pour afficher le toast sans rechargement.
+                # EN: Issue #431 — GUIDELINES "HX-Trigger + django.messages" pattern:
+                #     drain queued messages and ship them through the HX-Trigger header
+                #     so the toast shows without a full page reload.
+                payload = [{"level": m.level_tag, "text": str(m)} for m in get_messages(request)]
+                response = HttpResponse("")
+                response["HX-Trigger"] = json.dumps({"toast": {"items": payload}})
+                return response
             return HttpResponseClientRedirect('/my_account/my_reservations/')
         except Exception as e:
             logger.error(f"Error canceling ticket {pk}: {e}")
             messages.add_message(request, messages.ERROR,
                                  _("An error occurred while cancelling your ticket.") + f" : {e}")
             if request.headers.get('HX-Request'):
-                return HttpResponse("", status=400)
+                # FR: Statut 400 — htmx ne swappe pas (le billet n'est PAS annulé, la ligne
+                #     reste affichée) mais traite quand même l'entête HX-Trigger : le toast
+                #     d'erreur s'affiche. (Issue #431)
+                # EN: Status 400 — htmx does not swap (ticket NOT cancelled, row stays)
+                #     but still processes the HX-Trigger header: the error toast shows.
+                #     (Issue #431)
+                payload = [{"level": m.level_tag, "text": str(m)} for m in get_messages(request)]
+                response = HttpResponse("", status=400)
+                response["HX-Trigger"] = json.dumps({"toast": {"items": payload}})
+                return response
             return HttpResponseClientRedirect('/my_account/my_reservations/')
 
     @action(detail=False, methods=['GET'])
