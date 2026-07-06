@@ -254,10 +254,26 @@ Le Pi appelle `POST /controlvanne/auth-kiosk/` (cle API dans le header) et recoi
 ### Prerequis
 
 - Un Raspberry Pi (teste sur 3B+, tout modele avec GPIO)
-- Raspberry Pi OS Lite (Legacy, 32-bit) flashe avec [Raspberry Pi Imager](https://www.raspberrypi.com/software/)
-- SSH active, utilisateur **`sysop`**, cle publique injectee via Imager
 - Le materiel connecte (lecteur RFID, debitmetre, electrovanne, ecran) — voir section cablage ci-dessous
 - Une tireuse deja creee dans l'admin Django (etapes 1-4 du tuto ci-dessus)
+
+### Flasher la carte SD avec Raspberry Pi Imager
+
+Telecharger [Raspberry Pi Imager](https://www.raspberrypi.com/software/) puis :
+
+1. **Choose Device** : votre modele de Pi (ex : Raspberry Pi 3)
+2. **Choose OS** : `Raspberry Pi OS (other)` → **Raspberry Pi OS Lite (Legacy, 32-bit)**
+   (pas de bureau — le kiosk Chromium est installe par le script)
+3. **Choose Storage** : la carte SD
+4. Cliquer **Suivant** → **Modifier les reglages** (la roue dentee) :
+   - Nom d'utilisateur : **`sysop`** (obligatoire — les scripts et services systemd
+     utilisent ce nom) + un mot de passe
+   - Wi-Fi : SSID + mot de passe si pas de cable Ethernet
+   - Onglet **Services** : activer **SSH**, de preference avec une cle publique
+     (sinon par mot de passe)
+5. Ecrire l'image, inserer la carte dans le Pi, brancher, attendre le demarrage
+6. Trouver l'IP du Pi (box internet, ou `ping raspberrypi.local`) puis :
+   `ssh sysop@<ip-du-pi>`
 
 ### Lancer l'installation
 

@@ -35,6 +35,27 @@ else
   echo "Skip migrate (MIGRATE=${MIGRATE:-0})"
 fi
 
-echo "Gunicorn start"
-poetry run gunicorn TiBillet.wsgi --log-level=info --access-logfile /DjangoFiles/logs/gunicorn.logs --log-file /DjangoFiles/logs/gunicorn.logs --error-logfile /DjangoFiles/logs/gunicorn.logs --log-level info --capture-output --reload -w 5 -b 0.0.0.0:8002
-# Pour relancer les worker à chaud: pkill -HUP -f "gunicorn TiBillet.wsgi"
+# Dossiers de logs pour supervisord et ses programmes
+# / Log folders for supervisord and its programs
+mkdir -p /DjangoFiles/logs/supervisor
+touch /DjangoFiles/logs/gunicorn.logs /DjangoFiles/logs/daphne.logs /DjangoFiles/logs/celery.logs
+
+# Supervisord orchestre les 3 processus du conteneur :
+# - gunicorn : HTTP (port 8002)
+# - daphne   : WebSockets (port 7999) — ws/laboutik, ws/printer, ws/rfid...
+# - celery   : worker + beat (remplace l'ancien conteneur lespass_celery)
+# Gestion : poetry run supervisorctl status|restart gunicorn|daphne|celery
+# / Supervisord orchestrates the container's 3 processes:
+# gunicorn (HTTP :8002), daphne (WebSockets :7999), celery (worker + beat).
+echo "Supervisord start (gunicorn + daphne + celery)"
+/usr/bin/supervisord -c /DjangoFiles/supervisor/supervisord.conf &
+
+# Laisse supervisord démarrer puis suit tous les logs (sortie du conteneur).
+# Ctrl+C sur le tail n'arrête PAS les services.
+# / Give supervisord a moment then tail all logs (container output).
+sleep 2
+exec tail -f /DjangoFiles/logs/gunicorn.logs /DjangoFiles/logs/daphne.logs /DjangoFiles/logs/celery.logs /DjangoFiles/logs/supervisor/supervisord.log
+
+# Pour relancer les workers gunicorn à chaud :
+# supervisorctl -c /DjangoFiles/supervisor/supervisord.conf restart gunicorn
+# ou : pkill -HUP -f "gunicorn TiBillet.wsgi"

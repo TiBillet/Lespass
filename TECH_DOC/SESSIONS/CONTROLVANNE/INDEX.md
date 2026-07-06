@@ -29,15 +29,18 @@ chantiers de review appliqués), câblée dans Lespass le 2026-07-06.
 
 ## Reste à faire (par priorité)
 
-1. **CHANTIER-02 — WebSocket prod** : supervisord mono-conteneur
-   (gunicorn 8002 + daphne 7999 + celery), `location /ws/` nginx,
-   retrait du service celery du compose. Pattern copié de `../LaBoutik`
-   (`supervisor/`, `start_services.sh`).
+1. ~~**CHANTIER-02 — WebSocket prod**~~ ✅ **FAIT 2026-07-06** : supervisord
+   mono-conteneur (gunicorn 8002 + daphne 7999 + celery), `location /ws/`
+   dans `nginx_prod/lespass_prod.conf`, service celery retiré du compose
+   pre-prod, fix `AppRegistryNotReady` dans asgi.py. Recette pre-prod à
+   faire après rebuild : `A TESTER et DOCUMENTER/supervisor-websockets-prod.md`.
 2. **PRs déférées de Mike** (cf. Synthese, section « PRs déférées ») :
    PR 2 balance estimée JS kiosk, PR 3 URL http:// Pi LAN en DEBUG,
    PR 4 AUTH_KIOSK complet (TermUser + django.login), simplification calibration.
-3. Smokes Chrome après restart serveur : WS `ws/rfid/`, kiosk DEMO,
-   appairage bout en bout (cf. `A TESTER et DOCUMENTER/controlvanne-cablage.md`).
+3. **Tests E2E controlvanne** à porter depuis lespass-main
+   (`test_controlvanne_admin.py`, `test_controlvanne_kiosk.py`).
+4. ~~Smokes Chrome~~ ✅ faits en session (2026-07-06) : appairage LB/TI bout en
+   bout, kiosk, WS, tirage complet avec facturation vérifiée en base.
 
 ## Specs Atomic
 

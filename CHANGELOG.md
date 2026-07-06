@@ -1,5 +1,41 @@
 # Changelog / Journal des modifications
 
+## WebSockets en production : supervisord mono-conteneur / Production WebSockets: single-container supervisord
+
+**Date :** 2026-07-06
+**Migration :** Non / No — mais **rebuild de l'image requis** (paquet supervisor) / but **image rebuild required** (supervisor package)
+
+En production, rien ne servait les WebSockets (gunicorn est WSGI) : le POS
+laboutik et les tireuses controlvanne n'avaient pas de temps réel. Décision
+(pattern LaBoutik, un seul conteneur) : **supervisord** orchestre gunicorn
+(HTTP :8002), **daphne** (WebSockets :7999) et celery (worker + beat) dans le
+conteneur `lespass_django`. nginx prod route `/(wss|ws)/` vers daphne. Le
+service `lespass_celery` du compose pre-prod disparaît. Au passage, fix du
+bug dormant `AppRegistryNotReady` dans `TiBillet/asgi.py`
+(`get_asgi_application()` avant les imports applicatifs — fatal sous daphne
+standalone). Testé : handshake WS 101 sous supervisord, 403 sans Origin
+(validateur actif), dev intact. Détail et tests :
+`A TESTER et DOCUMENTER/supervisor-websockets-prod.md`.
+
+/ In production nothing served WebSockets (gunicorn is WSGI). Single-container
+decision (LaBoutik pattern): **supervisord** orchestrates gunicorn (:8002),
+**daphne** (:7999, WebSockets) and celery (worker + beat) inside
+`lespass_django`. Prod nginx routes `/(wss|ws)/` to daphne. The separate
+`lespass_celery` service is removed. Also fixes the dormant
+`AppRegistryNotReady` bug in `TiBillet/asgi.py`. Tested: WS handshake 101
+under supervisord, dev untouched.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `supervisor/supervisord.conf` + `conf.d/{gunicorn,daphne,celery}.conf` | Créés / Created |
+| `start.sh` | supervisord + tail (plus de gunicorn direct) |
+| `dockerfile` | + paquet supervisor |
+| `nginx_prod/lespass_prod.conf` | location `/(wss\|ws)/` → daphne :7999 |
+| `docker-compose.pre-prod.yml` | django → `start.sh`, nginx → conf prod, service celery supprimé |
+| `TiBillet/asgi.py` | Fix AppRegistryNotReady (ordre des imports) |
+| `launch_ws.sh` | Supprimé (remplacé par conf.d/daphne.conf) |
+
 ## Controlvanne branchée : tireuses connectées + appairage terminaux dans l'admin / Controlvanne wired: connected taps + terminal pairing in the admin
 
 **Date :** 2026-07-06
