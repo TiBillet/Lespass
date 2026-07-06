@@ -72,7 +72,7 @@
           </td>
           <td class="text-end">
             {% if user.is_authenticated %}
-              {% if user.is_staff or user.is_superuser %}
+              {% if user.is_staff or user.is_superuser or user.is_current_tenant_admin %}
                 {% if p.state == 'requested' %}
                   <button class="btn btn-sm btn-outline-success"
                           title="{% translate 'Valider la demande' %}"
