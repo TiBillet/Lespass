@@ -13,35 +13,37 @@ FLUX :
 2. Ce partial s'affiche avec le moyen de paiement et le total
 3. Clic VALIDER → soumet le formulaire d'addition vers laboutik-paiement-payer
 -->
-
-<div id="confirm" class="BF-col" data-testid="paiement-confirmation" aria-live="polite">
+<div id="confirm"
+     class="BF-col"
+     data-testid="paiement-confirmation"
+     aria-live="polite">
   <h1>{% translate "Confirmez le paiement par" %} {{ payment_translation }}</h1>
   {% if method == 'espece' %}
-  <!-- total a encaisser, bien visible pour le caissier / total to collect, clearly visible -->
-  <div class="confirm-total">
-    {% translate "A encaisser" %} : {{ total|floatformat:2 }} {{ currency_data.symbol }}
-  </div>
-  <div class="info-sum-given">
-    <i class="fas fa-coins" aria-hidden="true"></i> {% translate "Somme donnée" %}
-  </div>
-  <!-- champ de saisie de la somme donnee par le client / input for amount given by customer -->
-  <div class="confirm-input-wrapper">
-    <input type="number" id="given-sum" class="addition-fractionnee-input"
-      inputmode="decimal" autofocus
-      aria-label="{% translate "Somme donnée" %}"
-      data-testid="paiement-input-somme-donnee">
-    <span class="confirm-currency" aria-hidden="true">{{ currency_data.symbol }}</span>
-  </div>
-  <small id="given-sum-msg-erreur" role="alert"></small>
+    <!-- total a encaisser, bien visible pour le caissier / total to collect, clearly visible -->
+    <div class="confirm-total">{% translate "A encaisser" %} : {{ total|floatformat:2 }} {{ currency_data.symbol }}</div>
+    <div class="info-sum-given">
+      <i class="fas fa-coins" aria-hidden="true"></i> {% translate "Somme donnée" %}
+    </div>
+    <!-- champ de saisie de la somme donnee par le client / input for amount given by customer -->
+    <div class="confirm-input-wrapper">
+      <input type="number"
+             id="given-sum"
+             class="addition-fractionnee-input"
+             inputmode="decimal"
+             autofocus
+             aria-label="{% translate "Somme donnée" %}"
+             data-testid="paiement-input-somme-donnee">
+      <span class="confirm-currency" aria-hidden="true">{{ currency_data.symbol }}</span>
+    </div>
+    <small id="given-sum-msg-erreur" role="alert"></small>
   {% endif %}
-
   <div id="confirm-action-container">
     <!-- bouton retour / back button -->
     <c-bt.return selector="#confirm" layer="2" />
-
-    <div id="bt-valider-layer2" class="bt-basic-container bt-basic-bg-success"
-      onclick="askManageAddition('{{ method }}' {% if method == 'espece' %}, {{ total|force_dot }} {% endif %})"
-      data-testid="paiement-btn-valider">
+    <div id="bt-valider-layer2"
+         class="bt-basic-container bt-basic-bg-success"
+         onclick="askManageAddition('{{ method }}' {% if method == 'espece' %}, {{ total|force_dot }}{% endif %});openCashDrawer()"
+         data-testid="paiement-btn-valider">
       <div class="bt-basic-icon">
         <i class="fas fa-check-circle" aria-hidden="true"></i>
       </div>
@@ -50,8 +52,23 @@ FLUX :
       </div>
     </div>
   </div>
-
   <script>
+    /** 
+     * open cash drawer
+     * for sunmi pos
+     */
+    async function openCashDrawer() {
+      console.log('-> openCashDrawer !')
+      try {
+        if(SunmiPrinterPlugin) {
+          await SunmiPrinterPlugin.initSunmiPrinterService()
+          SunmiPrinterPlugin.openDrawer()
+        }
+      } catch (error) {
+        console.log('-> openCashDrawer -', error)
+      }
+    }
+
     /**
      * Valide et soumet le paiement
      * Verifie que la somme donnee est suffisante (si especes),
