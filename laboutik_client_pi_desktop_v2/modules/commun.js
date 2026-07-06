@@ -69,6 +69,30 @@ export function startBrowser(url) {
   })
 }
 
+/**
+ * Test dicovery server
+ * @param {*} url 
+ * @param {*} timeoutMs 
+ * @returns 
+ */
+export async function testDiscoveryServer(url, timeoutMs = 5000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    await fetch(url, {
+      mode: 'no-cors',
+      cache: 'no-store',
+      signal: controller.signal
+    });
+    return 'available'
+  } catch (error) {
+    return 'disable'
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
 export async function testNetworkStatus(timeoutMs = 5000) {
   // 1. Premier filtre rapide
   if (navigator.onLine === false) {

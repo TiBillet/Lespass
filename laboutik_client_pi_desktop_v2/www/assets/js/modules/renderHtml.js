@@ -4,6 +4,8 @@ import { goServer, confirmDeleteServer } from "./utils.js"
 function showInputPinCode() {
   // putLog('info', '-> showInputPinCode')
   document.querySelector('.content-input').style.display = 'flex'
+  document.querySelector('#label-server-pin-code').innerText = state.server_pin_code
+  document.querySelector('#update-server-pin-code').value = state.server_pin_code
 }
 
 export function renderHtml(state) {

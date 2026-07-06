@@ -1,5 +1,5 @@
 import { addAllMenuItems } from './modules/menuPlugins/addAllMenuPlugins.js'
-import { initBridgeHardFront, managedPinCode, readConfFile, setGeneralStatus, deleteServer } from './modules/utils.js'
+import { initBridgeHardFront, managedPinCode, readConfFile, setGeneralStatus, deleteServer, managedServerPinCode } from './modules/utils.js'
 import { renderHtml } from './modules/renderHtml.js'
 
 // Ouvrir/fermer le menu burger / Toggle burger menu
@@ -23,6 +23,12 @@ function hideContentInput() {
 function hideConfirmDeleteServer() {
   document.querySelector('.confirm-container').style.display = 'none'
 }
+
+function showInputServeurPincode() {
+  document.querySelector('.infos-server-pin-code').style.display = "none"
+  document.querySelector('#update-server-pin-code').style.display = "flex"
+}
+
 
 document.addEventListener('DOMContentLoaded', async () => {
   // init menu plugins
@@ -63,4 +69,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // validate delete server
   document.querySelector('.bt-delete-validate').addEventListener('click', deleteServer)
+
+  // affiche le input d'édition du serveur pin-code
+  document.querySelector('#icon-update-server-pin-code').addEventListener('click', showInputServeurPincode)
+
+  // permet l'édition du serveur pin-code
+  document.querySelector('#update-server-pin-code').addEventListener('keydown', managedServerPinCode)
 })

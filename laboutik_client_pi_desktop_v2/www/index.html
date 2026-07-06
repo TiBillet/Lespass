@@ -28,12 +28,25 @@
     </header>
     <main></main>
     <div class="content-input">
+        <div class="content-server-pincode">
+            <h2>Serveur pin-code</h2>
+            <div class="input-group-row infos-server-pin-code">
+                <label id="label-server-pin-code"></label>
+                <svg id="icon-update-server-pin-code" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 20h9"/>
+                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+                </svg>
+            </div>
+            <input type="text" id="update-server-pin-code" />
+            <div id="retour-server-pin-code"></div>
+        </div>
         <input type="number" id="pin-code"  placeholder="pin-code"/>
         <!-- TODO afficher et gérer le clavier pour un pi -->
         <label id="pin-code-message" style="color: var(--yellow00);"></label>
         <div class="bt bt-input-return">Return</div>
     </div>
     <div class="logs-content"></div>
+    <div class="divers-content"></div>
     <div class="menu-burger-container" aria-label="Menu principal">
         <nav class="menu-burger-content"></nav>
     </div>

@@ -1,4 +1,11 @@
-const listMenuToAdd = ['logs']
+// ébauche
+const listMenuToAdd = []
+
+// pas de plugins pas de munu burger 
+if (listMenuToAdd.length === 0){
+  document.querySelector('.header-menu').style.display = "none"
+}
+
 export function addAllMenuItems() {
   // console.log('-> addAllMenuItems')
   listMenuToAdd.forEach(async (plug) => {

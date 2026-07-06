@@ -1,5 +1,5 @@
 import { MTE } from './httpServer/index.js'
-import { readConfigFile, writeConfigFile, startBrowser, testNetworkStatus, readfile } from './modules/commun.js'
+import { readConfigFile, writeConfigFile, startBrowser, testNetworkStatus, readfile, testDiscoveryServer } from './modules/commun.js'
 import { env } from './env.js'
 import * as os from 'node:os'
 import { cors } from './modules/cors.js'
@@ -135,6 +135,50 @@ function readConfFile(req, res, headers, options) {
   }
 }
 
+async function changeServerDiscovery(req, res, body, headers, data) {
+  try {
+    console.log('-> changeServerDiscovery - data =', data);
+
+    // 1 - url conforme
+    const url = data.server_discovery
+    const urlRegex = /^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(\/[^\s]*)?$/
+    const urlOk = urlRegex.test(url)
+    console.log('urlOk =', urlOk)
+    if (urlOk === false) {
+      throw new Error("Url non conforme.")
+    }
+
+    // 2 - serveur joignable
+    const testServer = await testDiscoveryServer(url)
+    console.log('testServer =', testServer)
+    if (testServer !== 'available') {
+      throw new Error("Serveur non disponible ou inconnu")
+    }
+
+    // 3 - read conf
+    const confFile = readConfigFile()
+    console.log('confFile =', confFile)
+
+    // 4 - change serveur discovery in config file
+    confFile.server_pin_code = url
+
+    // 5 save conf
+    const result = writeConfigFile(confFile)
+    if (result.status !== true) {
+      throw new Error("Error - save  config file.")
+    }
+
+    // send url to say ok
+    res.writeHead(200, headers)
+    res.write(JSON.stringify({url}))
+    res.end()
+  } catch (error) {
+    res.writeHead(400, headers)
+    res.write(JSON.stringify({ error: error.message }))
+    res.end()
+  }
+}
+
 // encapsulate all errors
 try {
   // initialise le nfc
@@ -206,6 +250,7 @@ try {
   app.addRoute('/read_config_file', readConfFile)
   app.addRoute('/write_config_file', writeConfFile)
   app.addRoute('/', renderIndexHtml)
+  app.addRoute('/change_server_discovery', changeServerDiscovery)
 
   app.listen((host, port) => {
     console.log(`Lancement du serveur à l'adresse : ${port === 443 ? 'https' : 'http'}://${host}:${port}/`)
