@@ -82,9 +82,47 @@ class SmallAnonRateThrottle(UserRateThrottle):
 
 
 @requires_csrf_token
+def _contexte_page_erreur(request):
+    """
+    Contexte pour les pages d'erreur 404/500 : celui de get_context, qui
+    résout base_template selon le skin du tenant ET selon HTMX (shell complet
+    en navigation normale, fragment headless en réponse HTMX — la page
+    d'erreur devient ainsi swappable par le listener htmx:beforeSwap des
+    shells). Repli minimal si get_context échoue (tenant cassé, DB down :
+    on veut TOUJOURS pouvoir afficher une page d'erreur).
+    / Context for the 404/500 error pages: get_context's one, which resolves
+    base_template by tenant skin AND by HTMX (full shell on normal navigation,
+    headless fragment on HTMX responses — making the error page swappable by
+    the shells' htmx:beforeSwap listener). Minimal fallback if get_context
+    fails (broken tenant, DB down: an error page must ALWAYS render).
+
+    LOCALISATION : BaseBillet/views.py
+    """
+    try:
+        return get_context(request)
+    except Exception as erreur_contexte:
+        logger.warning(f"page erreur : get_context indisponible, repli classic ({erreur_contexte})")
+        return {"base_template": "pages/classic/shell.html", "main_nav": []}
+
+
+def handler404(request, exception=None):
+    """
+    404 personnalisée, consciente du skin et d'HTMX (actif quand DEBUG=0).
+    / Custom 404, skin-aware and HTMX-aware (active when DEBUG=0).
+
+    LOCALISATION : BaseBillet/views.py — déclaré dans TiBillet/urls_tenants.py
+    """
+    template_context = _contexte_page_erreur(request)
+    return render(request, '404.html', template_context, status=404)
+
+
 def handler500(request, exception=None):
     """
     Custom 500 error handler that passes the exception to the template.
+    Enrichi (2026-07-05) : contexte de get_context pour que la page 500 prenne
+    le skin du tenant et soit swappable en HTMX (cf. _contexte_page_erreur).
+    / Enriched: get_context's context so the 500 page follows the tenant skin
+    and is HTMX-swappable.
     """
     import sys
     exc_type, exc_value, exc_traceback = sys.exc_info()
@@ -92,11 +130,12 @@ def handler500(request, exception=None):
     # Use the passed exception if available, otherwise use the one from sys.exc_info()
     exception_to_use = exception if exception else exc_value
 
-    context = {
+    context = _contexte_page_erreur(request)
+    context.update({
         'exception': str(exception_to_use) if exception_to_use else None,
         'type_exception': type(exception_to_use).__name__ if exception_to_use else None,
-    }
-    logger.info(context)
+    })
+    logger.info({'exception': context.get('exception'), 'type_exception': context.get('type_exception')})
     return render(request, '500.html', context, status=500)
 
 
@@ -104,37 +143,29 @@ def encode_uid(pk):
     return force_str(urlsafe_base64_encode(force_bytes(pk)))
 
 
-def get_skin_template(config, template_relative_path):
+def get_skin_courant():
     """
-    Résout le chemin du template en fonction du skin configuré.
-    Si le template existe dans le dossier du skin, on l'utilise.
-    Sinon, on retourne le template du skin par défaut "reunion".
-
-    Exemple :
-        get_skin_template(config, "views/home.html")
-        → "faire_festival/views/home.html"  (si le fichier existe)
-        → "reunion/views/home.html"         (sinon, fallback)
+    Retourne le skin actif du tenant courant, lu sur le singleton
+    pages.ConfigurationSite (deplace depuis BaseBillet.Configuration).
+    Defaut "reunion" si indisponible (table absente, schema public, etc.).
+    / Returns the current tenant's active skin, read from the
+    pages.ConfigurationSite singleton (moved from BaseBillet.Configuration).
+    Defaults to "reunion" if unavailable (missing table, public schema, etc.).
     """
-    from django.template.loader import get_template
-    from django.template import TemplateDoesNotExist
-
-    # Détermination du skin configuré (par défaut : "reunion")
-    skin = config.skin if hasattr(config, 'skin') and config.skin else "reunion"
-
-    # Si le skin est "reunion", pas besoin de vérifier le fallback
-    if skin == "reunion":
-        return f"reunion/{template_relative_path}"
-
-    # On essaie le template du skin configuré
-    skin_template_path = f"{skin}/{template_relative_path}"
     try:
-        get_template(skin_template_path)
-        return skin_template_path
-    except TemplateDoesNotExist:
-        # Le template n'existe pas dans le skin configuré
-        # On retombe sur le template "reunion" par défaut
-        logger.debug(f"Template '{skin_template_path}' introuvable, fallback vers reunion/{template_relative_path}")
-        return f"reunion/{template_relative_path}"
+        from pages.models import ConfigurationSite
+        skin = ConfigurationSite.get_solo().skin
+        return skin or "reunion"
+    except Exception:
+        return "reunion"
+
+
+# NOTE migration skins (CHANTIER-08) : l'ancien resolver get_skin_template a été
+# supprimé. Toute résolution de gabarit passe par pages.services.gabarit_skin()
+# (pages/<skin>/… avec fallback pages/classic/). Contrat complet :
+# TECH_DOC/SESSIONS/SKINS/CONTRAT-DE-SKIN.md
+# / The legacy get_skin_template resolver was removed. All skin template
+# resolution goes through pages.services.gabarit_skin().
 
 
 def get_context(request):
@@ -145,12 +176,17 @@ def get_context(request):
     config = Configuration.get_solo()
     crowd_config = CrowdConfig.get_solo()
 
-    # SYSTÈME DE SKIN : Le template de base est résolu via get_skin_template()
-    # Si le skin configuré a un base.html, on l'utilise. Sinon fallback vers reunion.
+    # SYSTÈME DE SKIN (CHANTIER-01) : le squelette est résolu par le nouveau
+    # resolver unifié pages.services.gabarit_skin(). Si le skin fournit le
+    # gabarit (pages/<skin>/shell.html), on l'utilise. Sinon fallback
+    # automatique sur le socle pages/classic/.
+    # / SKIN SYSTEM: the skeleton is resolved by the unified resolver
+    # pages.services.gabarit_skin(), with automatic fallback to pages/classic/.
+    from pages.services import gabarit_skin
     if request.htmx:
-        base_template = get_skin_template(config, "headless.html")
+        base_template = gabarit_skin("headless.html")
     else:
-        base_template = get_skin_template(config, "base.html")
+        base_template = gabarit_skin("shell.html")
 
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
 
@@ -186,37 +222,20 @@ def get_context(request):
 
     navbar: list = context["main_nav"]
 
-    # Le Faire Festival et Infos pratiques : uniquement pour le thème Faire Festival
-    # Le Faire Festival and Practical info pages: only for the Faire Festival skin
-    if config.skin == "faire_festival":
-        # On insère en première position pour que "Le Faire Festival" soit le premier lien
-        # Insert at first position so "Le Faire Festival" is the first link
-        navbar.insert(0,
-            {'name': 'le_faire_festival', 'url': '/le-faire-festival/',
-             'label': _('Le Faire Festival'),
-             'icon': 'star-fill'}
-        )
-        navbar.append(
-            {'name': 'infos_pratiques', 'url': '/infos-pratiques/',
-             'label': _('Infos pratiques'),
-             'icon': 'info-circle'}
-        )
+    # « Le Faire Festival » et « Infos pratiques » NE sont PLUS codes en dur ici :
+    # ce sont desormais des Page de l'app pages (ajoutees plus bas via la boucle
+    # des pages publiees). La navbar n'a donc plus de hardcode specifique au skin.
+    # / "Le Faire Festival" and "Infos pratiques" are NO LONGER hardcoded here: they
+    # are now pages-app Page objects (added below via the published-pages loop).
 
-    if config.module_adhesion:
-        navbar.append({
-            'name': 'memberships_mvt',
-            'url': '/memberships/',
-            'label': config.membership_menu_name if config.membership_menu_name else _('Subscriptions'),
-            'icon': 'person-badge'
-        })
-
-    if config.module_billetterie:
-        navbar.append({
-            'name': 'event-list',
-            'url': '/event/',
-            'label': config.event_menu_name if config.event_menu_name else _('Calendar'),
-            'icon': 'calendar-date'
-        })
+    # ORDRE DE LA NAVBAR : les pages de l'app pages d'abord (ajoutees plus bas
+    # via navbar_pages, inseres EN TETE), puis reseau/crowdfunding, et EN FIN de
+    # menu : agenda, adhesions, contact (le contact est code dans le gabarit
+    # navbar, toujours dernier).
+    # / NAVBAR ORDER: pages-app pages first (built below in navbar_pages and
+    # inserted at the head), then network/crowdfunding, and at the END of the
+    # menu: agenda, memberships, contact (contact lives in the navbar template,
+    # always last).
 
     # Activation du menu "Réseau local" : pilotee UNIQUEMENT par le flag
     # config.module_federation. Le test d'existence de FederatedPlace est
@@ -246,6 +265,86 @@ def get_context(request):
             'label': f'{crowd_config.title}',
             'icon': 'people-fill'
         })
+
+    # Pages publiees du tenant (app pages), ajoutees a la navigation.
+    # La page d'accueil (est_accueil) pointe vers la racine "/" ; les autres
+    # pages vers /<slug>/. Le tout uniquement si le module pages est actif.
+    # Import local pour eviter un import circulaire avec pages.views.
+    # / Tenant published pages (pages app), added to the navigation.
+    # The home page (est_accueil) links to the root "/"; the other pages to
+    # /<slug>/. Only if the pages module is active.
+    # Local import to avoid a circular import with pages.views.
+    navbar_pages: list = []
+    if config.module_pages:
+        from pages.models import Page
+
+        pages_publiees = (
+            Page.objects.filter(publie=True)
+            .select_related("parent")
+            .order_by("position", "titre")
+        )
+
+        # Index des sous-pages publiees par parent (uuid) pour les menus
+        # deroulants. EXCEPTION : les enfants d'une page BLOG (est_blog, champ
+        # explicite) ne vont pas dans le dropdown — un blog en accumulerait
+        # des dizaines ; le clic navbar mene directement a l'index qui liste
+        # les articles en cartes.
+        # / Index of published sub-pages by parent (uuid) for the dropdown
+        # menus. EXCEPTION: children of a BLOG page (explicit est_blog field)
+        # do not go in the dropdown — a blog would pile up dozens; the navbar
+        # click goes straight to the index, which lists the articles as cards.
+        enfants_par_parent: dict = {}
+        for page_publiee in pages_publiees:
+            if page_publiee.parent_id and not page_publiee.parent.est_blog:
+                enfants_par_parent.setdefault(page_publiee.parent_id, []).append(page_publiee)
+
+        for page_publiee in pages_publiees:
+            # Les sous-pages sont rendues DANS le dropdown de leur parent, pas a plat.
+            # / Sub-pages are rendered IN their parent's dropdown, not flat.
+            if page_publiee.parent_id:
+                continue
+            url_page = "/" if page_publiee.est_accueil else f"/{page_publiee.slug}/"
+            navbar_pages.append({
+                'name': f'page-{page_publiee.slug}',
+                'url': url_page,
+                'label': page_publiee.titre,
+                'icon': 'house-door' if page_publiee.est_accueil else 'file-earmark-text',
+                # Sous-pages (menu deroulant) : liste vide si la page n'en a pas.
+                # / Sub-pages (dropdown menu): empty list if the page has none.
+                'children': [
+                    {
+                        'name': f'page-{enfant.slug}',
+                        'url': f'/{enfant.slug}/',
+                        'label': enfant.titre,
+                        'icon': 'file-earmark-text',
+                    }
+                    for enfant in enfants_par_parent.get(page_publiee.pk, [])
+                ],
+            })
+
+    # Fin de menu, toujours dans cet ordre : agenda puis adhesions
+    # (le bouton contact est dans le gabarit navbar, toujours apres eux).
+    # / End of menu, always in this order: agenda then memberships
+    # (the contact button lives in the navbar template, always after them).
+    if config.module_billetterie:
+        navbar.append({
+            'name': 'event-list',
+            'url': '/event/',
+            'label': config.event_menu_name if config.event_menu_name else _('Calendar'),
+            'icon': 'calendar-date'
+        })
+
+    if config.module_adhesion:
+        navbar.append({
+            'name': 'memberships_mvt',
+            'url': '/memberships/',
+            'label': config.membership_menu_name if config.membership_menu_name else _('Subscriptions'),
+            'icon': 'person-badge'
+        })
+
+    # Assemblage final : pages en tete, puis le reste (reseau, crowdfunding,
+    # agenda, adhesions). / Final assembly: pages first, then the rest.
+    context["main_nav"] = navbar_pages + navbar
 
     # cache.set(f'get_context_{connection.tenant.uuid}', context, 10)
     return context
@@ -461,10 +560,10 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
                 logger.info("Wallet ephemere, on demande le mail")
                 template_context = get_context(request)
                 template_context['qrcode_uuid'] = qrcode_uuid
-                template_context['base_template'] = 'reunion/blank_base.html'
+                template_context['base_template'] = 'fonctionnel/blank_base.html'
                 # Logout au cas où on scanne les cartes à la suite.
                 logout(request)
-                return render(request, "reunion/views/register.html", context=template_context)
+                return render(request, "fonctionnel/register.html", context=template_context)
 
             # Si wallet non ephemere, alors on a un user :
             wallet = Wallet.objects.get(uuid=serialized_qrcode_card['wallet_uuid'])
@@ -647,8 +746,8 @@ class TiBilletLogin(viewsets.ViewSet):
             if next_url:
                 template_context['next'] = next_url
             if request.htmx:
-                return render(request, "reunion/views/login/partials/fullpage_inner.html", context=template_context)
-            return render(request, "reunion/views/login/fullpage.html", context=template_context)
+                return render(request, "fonctionnel/connexion/partials/fullpage_inner.html", context=template_context)
+            return render(request, "fonctionnel/connexion/fullpage.html", context=template_context)
 
         # POST: email submitted
         validator = LoginEmailValidator(data=request.POST)
@@ -657,14 +756,14 @@ class TiBilletLogin(viewsets.ViewSet):
             template_context['errors'] = validator.errors
             template_context['email'] = request.POST.get('email', '')
             if request.htmx:
-                return render(request, "reunion/views/login/partials/fullpage_inner.html", context=template_context)
-            return render(request, "reunion/views/login/fullpage.html", context=template_context)
+                return render(request, "fonctionnel/connexion/partials/fullpage_inner.html", context=template_context)
+            return render(request, "fonctionnel/connexion/fullpage.html", context=template_context)
 
         email = validator.validated_data['email']
         user = get_or_create_user(email=email, send_mail=True, force_mail=True, next_url=next_url)
 
         # On success: swap only main content for HTMX and push URL
-        return render(request, "reunion/views/login/partials/confirmation_inner.html", context=template_context)
+        return render(request, "fonctionnel/connexion/partials/confirmation_inner.html", context=template_context)
 
     @action(detail=True, methods=['GET'], permission_classes=[permissions.IsAuthenticated])
     def redirect_session_to_another_tenant(self, request, pk):
@@ -808,6 +907,16 @@ class MyAccount(viewsets.ViewSet):
         if not request.user.is_authenticated:
             messages.add_message(request, messages.WARNING,
                                  _("Please login to access this page."))
+            # Session expirée pendant une navigation HTMX (onglets du compte en
+            # hx-get) : un redirect() classique serait suivi EN SILENCE par le
+            # XHR et la home serait swappée DANS l'onglet, URL inchangée.
+            # HX-Redirect fait faire au navigateur une vraie navigation vers /.
+            # / Session expired during an HTMX navigation (account tabs use
+            # hx-get): a classic redirect() would be silently followed by the
+            # XHR and the home page swapped INSIDE the tab, URL unchanged.
+            # HX-Redirect makes the browser do a real navigation to /.
+            if request.htmx:
+                return HttpResponseClientRedirect('/?login=1')
             return redirect('/')
 
         # check que le wallet existe bien :
@@ -845,7 +954,7 @@ class MyAccount(viewsets.ViewSet):
             messages.add_message(request, messages.WARNING,
                                  _("Please validate your email to access all the features of your profile area."))
 
-        return render(request, "reunion/views/account/index.html", context=template_context)
+        return render(request, "fonctionnel/compte/index.html", context=template_context)
 
     @action(detail=False, methods=['GET'])
     def balance(self, request: HttpRequest):
@@ -854,7 +963,7 @@ class MyAccount(viewsets.ViewSet):
         template_context['header'] = False
         template_context['account_tab'] = 'balance'
 
-        return render(request, "reunion/views/account/balance.html", context=template_context)
+        return render(request, "fonctionnel/compte/balance.html", context=template_context)
 
     @action(detail=False, methods=['GET'])
     def my_cards(self, request):
@@ -863,7 +972,7 @@ class MyAccount(viewsets.ViewSet):
         context = {
             'cards': cards
         }
-        return render(request, "reunion/partials/account/card_table.html", context=context)
+        return render(request, "fonctionnel/compte/partials/card_table.html", context=context)
 
     @action(detail=True, methods=['GET'], permission_classes=[TenantAdminPermission])
     def admin_my_cards(self, request, pk):
@@ -950,7 +1059,7 @@ class MyAccount(viewsets.ViewSet):
         context['reservations'] = reservations
         context['account_tab'] = 'reservations'
 
-        return render(request, "reunion/views/account/reservations.html", context=context)
+        return render(request, "fonctionnel/compte/reservations.html", context=context)
 
     @action(detail=True, methods=['POST'])
     def cancel_reservation(self, request, pk):
@@ -1177,7 +1286,7 @@ class MyAccount(viewsets.ViewSet):
             'tokens': tokens,
         }
 
-        return render(request, "reunion/partials/account/token_table.html", context=context)
+        return render(request, "fonctionnel/compte/partials/token_table.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def transactions_table(self, request):
@@ -1199,7 +1308,7 @@ class MyAccount(viewsets.ViewSet):
             'next_url': next_url,
             'previous_url': previous_url,
         }
-        return render(request, "reunion/partials/account/transaction_history.html", context=context)
+        return render(request, "fonctionnel/compte/partials/transaction_history.html", context=context)
 
     ### ONGLET ADHESION
     @action(detail=False, methods=['GET'])
@@ -1233,19 +1342,19 @@ class MyAccount(viewsets.ViewSet):
                         memberships_dict[False].append(membership)
 
         context['memberships_dict'] = memberships_dict
-        return render(request, "reunion/views/account/membership/memberships.html", context=context)
+        return render(request, "fonctionnel/compte/membership/memberships.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def card(self, request: HttpRequest) -> HttpResponse:
         context = get_context(request)
         context['account_tab'] = 'card'
-        return render(request, "reunion/views/account/card.html", context=context)
+        return render(request, "fonctionnel/compte/card.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def profile(self, request: HttpRequest) -> HttpResponse:
         context = get_context(request)
         context['account_tab'] = 'profile'
-        return render(request, "reunion/views/account/preferences.html", context=context)
+        return render(request, "fonctionnel/compte/preferences.html", context=context)
 
     #### REFILL STRIPE PRIMARY ####
 
@@ -1302,7 +1411,7 @@ class QrCodeScanPay(viewsets.ViewSet):
             "is_valid": is_valid,
             "ligne_article_uuid_hex": la_uuid.hex,
         }
-        return render(request, "reunion/views/qrcode_scan_pay/fragments/check_payment.html", context=context)
+        return render(request, "fonctionnel/qrcode_scan_pay/fragments/check_payment.html", context=context)
 
     @action(detail=False, methods=['GET'], permission_classes=[CanInitiatePaymentPermission, ])
     def get_generator(self, request: HttpRequest):
@@ -1311,7 +1420,7 @@ class QrCodeScanPay(viewsets.ViewSet):
         # GET de la route /qrcodegenerator
         # On livre le template qui permet de générer un qrcode
         template_context = get_context(request)
-        return render(request, "reunion/views/qrcode_scan_pay/generator.html", context=template_context)
+        return render(request, "fonctionnel/qrcode_scan_pay/generator.html", context=template_context)
 
     @action(detail=False, methods=['POST'], permission_classes=[CanInitiatePaymentPermission, ])
     def generate_qrcode(self, request: HttpRequest):
@@ -1360,7 +1469,7 @@ class QrCodeScanPay(viewsets.ViewSet):
         template_context['qrcode_content'] = qr_code_content
         template_context['ligne_article_uuid_hex'] = qr_data
 
-        return render(request, "reunion/views/qrcode_scan_pay/generator.html", context=template_context)
+        return render(request, "fonctionnel/qrcode_scan_pay/generator.html", context=template_context)
 
     @action(detail=False, methods=['GET'], permission_classes=[permissions.IsAuthenticated, ])
     def get_scanner(self, request: HttpRequest):
@@ -1373,7 +1482,7 @@ class QrCodeScanPay(viewsets.ViewSet):
             # GET de la route /qrcodescanpay
             # On livre le template qui lance la caméra pour scanner un qrcode
             template_context = get_context(request)
-            return render(request, "reunion/views/qrcode_scan_pay/scanner.html", context=template_context)
+            return render(request, "fonctionnel/qrcode_scan_pay/scanner.html", context=template_context)
 
         # if request.method == 'POST' : # C'est le résultat du scanner
         #     import ipdb; ipdb.set_trace()
@@ -1492,7 +1601,7 @@ class QrCodeScanPay(viewsets.ViewSet):
 
         if not ligne_article_uuid_hex:
             messages.add_message(request, messages.ERROR, _("No QR code content received"))
-            return render(request, "reunion/views/qrcode_scan_pay/scanner.html", context=template_context)
+            return render(request, "fonctionnel/qrcode_scan_pay/scanner.html", context=template_context)
 
         # Process the QR code content
         try:
@@ -1522,19 +1631,19 @@ class QrCodeScanPay(viewsets.ViewSet):
             # Check if the LigneArticle is already validated
             if ligne_article.status == LigneArticle.VALID:
                 template_context['error_message'] = _("This payment has already been processed")
-                return render(request, "reunion/views/qrcode_scan_pay/payment_error.html", context=template_context)
+                return render(request, "fonctionnel/qrcode_scan_pay/payment_error.html", context=template_context)
 
             logger.info(f"Processed LigneArticle: {ligne_article_uuid}")
 
         except LigneArticle.DoesNotExist:
             logger.error(f"No LigneArticle found with UUID: {ligne_article_uuid_hex}")
             template_context['error_message'] = _("Invalid QR code: payment not found")
-            return render(request, "reunion/views/qrcode_scan_pay/payment_error.html", context=template_context)
+            return render(request, "fonctionnel/qrcode_scan_pay/payment_error.html", context=template_context)
 
         except Exception as e:
             logger.error(f"Error processing QR code: {str(e)}")
             messages.add_message(request, messages.ERROR, _("Invalid QR code format"))
-            return render(request, "reunion/views/qrcode_scan_pay/scanner.html")
+            return render(request, "fonctionnel/qrcode_scan_pay/scanner.html")
 
         # Check the wallet on fedow
         user = request.user
@@ -1546,7 +1655,7 @@ class QrCodeScanPay(viewsets.ViewSet):
         template_context['insufficient_funds'] = amount > user_balance
 
         # Render the payment validation template
-        return render(request, "reunion/views/qrcode_scan_pay/payment_validation.html", context=template_context)
+        return render(request, "fonctionnel/qrcode_scan_pay/payment_validation.html", context=template_context)
 
     @action(detail=False, methods=['POST'], permission_classes=[permissions.IsAuthenticated, ])
     def valid_payment(self, request: HttpRequest):
@@ -1571,12 +1680,12 @@ class QrCodeScanPay(viewsets.ViewSet):
         except LigneArticle.DoesNotExist:
             logger.error(f"No LigneArticle found with UUID: {ligne_article_uuid_hex}")
             template_context['error_message'] = _("Invalid QR code: payment not found")
-            return render(request, "reunion/views/qrcode_scan_pay/payment_error.html", context=template_context)
+            return render(request, "fonctionnel/qrcode_scan_pay/payment_error.html", context=template_context)
 
         except Exception as e:
             logger.error(f"Error processing QR code: {str(e)}")
             messages.add_message(request, messages.ERROR, _("Invalid QR code format"))
-            return render(request, "reunion/views/qrcode_scan_pay/scanner.html")
+            return render(request, "fonctionnel/qrcode_scan_pay/scanner.html")
 
         if not ligne_article_uuid_hex:
             messages.add_message(request, messages.ERROR, _("Missing QR code content"))
@@ -1602,7 +1711,7 @@ class QrCodeScanPay(viewsets.ViewSet):
             template_context['payment_location'] = tenant.name
             template_context['amout'] = amount
             template_context['user_balance'] = user_balance  # Example balance
-            return render(request, "reunion/views/qrcode_scan_pay/insufficient_funds.html", context=template_context)
+            return render(request, "fonctionnel/qrcode_scan_pay/insufficient_funds.html", context=template_context)
 
         # lancement de la transaction via Fedow api
         try:
@@ -1666,13 +1775,13 @@ class QrCodeScanPay(viewsets.ViewSet):
             except Exception as e_mail:
                 logger.error(f"Error sending payment confirmation emails: {e_mail}")
 
-            return render(request, "reunion/views/qrcode_scan_pay/payment_confirmation.html", context=template_context)
+            return render(request, "fonctionnel/qrcode_scan_pay/payment_confirmation.html", context=template_context)
 
 
         except Exception as e:
             logger.error(f"Error validating payment: {str(e)}")
             template_context['error_message'] = _("Error validating payment")
-            return render(request, "reunion/views/qrcode_scan_pay/payment_error.html", context=template_context)
+            return render(request, "fonctionnel/qrcode_scan_pay/payment_error.html", context=template_context)
 
     '''
     def get_permissions(self):
@@ -1697,43 +1806,50 @@ def index(request):
     tenant: Client = connection.tenant
     if tenant.categorie in [Client.WAITING_CONFIG, Client.ROOT]:
         return HttpResponseRedirect('https://tibillet.coop/')
+
+    # Si le module pages est actif et qu'une page d'accueil (app pages) est
+    # definie ET publiee, elle est servie sur la racine "/" a la place de la
+    # home par defaut. Import local pour eviter un import circulaire.
+    # / If the pages module is active and a published home page (pages app) is
+    # set, it is served on the root "/" instead of the default home.
+    # Local import to avoid a circular import.
+    if Configuration.get_solo().module_pages:
+        from pages.models import Page
+        page_accueil = Page.objects.filter(est_accueil=True, publie=True).first()
+        if page_accueil:
+            from pages.views import rendre_page
+            return rendre_page(request, page_accueil)
+
     template_context = get_context(request)
 
-    # Résolution du template avec fallback vers reunion si le skin n'a pas de home.html
-    config = Configuration.get_solo()
-    template_path = get_skin_template(config, "views/home.html")
+    # Slugs des pages CMS publiées : la vieille home ff (gabarit de repli)
+    # conditionne ses boutons « Infos pratiques » / « Le Faire Festival » sur
+    # cette liste — leurs routes en dur n'existent plus, seules les pages CMS
+    # publiées répondent sur /<slug>/. Liste vide si le module est éteint.
+    # / Published CMS page slugs: the legacy ff home (fallback template) shows
+    # its buttons only when the matching CMS page is published — the hardcoded
+    # routes are gone, only published CMS pages answer on /<slug>/.
+    slugs_pages_publiees = []
+    if Configuration.get_solo().module_pages:
+        from pages.models import Page
+        slugs_pages_publiees = list(Page.objects.filter(publie=True).values_list('slug', flat=True))
+    template_context['slugs_pages_publiees'] = slugs_pages_publiees
+
+    # Résolution du gabarit par le resolver unifié (CHANTIER-05).
+    # / Unified skin resolver (skins migration).
+    from pages.services import gabarit_skin
+    template_path = gabarit_skin("vues/accueil.html")
 
     return render(request, template_path, context=template_context)
 
 
-@require_GET
-def infos_pratiques(request):
-    """
-    FR: Page statique "Infos pratiques" pour le festival
-    EN: Static page "Practical information" for the festival
-    """
-    template_context = get_context(request)
-
-    # Résolution du template avec fallback vers reunion si le skin n'a pas de infos_pratiques.html
-    config = Configuration.get_solo()
-    template_path = get_skin_template(config, "views/infos_pratiques.html")
-
-    return render(request, template_path, context=template_context)
-
-
-@require_GET
-def le_faire_festival(request):
-    """
-    FR: Page de présentation "Le Faire Festival" - description de l'événement
-    EN: Presentation page "Le Faire Festival" - event description
-    """
-    template_context = get_context(request)
-
-    # Résolution du template avec fallback vers reunion si le skin n'a pas de le_faire_festival.html
-    config = Configuration.get_solo()
-    template_path = get_skin_template(config, "views/le_faire_festival.html")
-
-    return render(request, template_path, context=template_context)
+# NOTE nettoyage 2026-07-05 : les vues infos_pratiques() et le_faire_festival()
+# ont été SUPPRIMÉES. Leurs routes avaient déjà été retirées de BaseBillet/urls.py :
+# ces contenus sont des pages CMS de l'app pages (seedées par
+# charger_demo_faire_festival), servies par le catch-all /<slug>/.
+# / Cleanup note: the infos_pratiques() and le_faire_festival() views were
+# REMOVED. Their routes were already gone from BaseBillet/urls.py: these
+# contents are pages-app CMS pages served by the /<slug>/ catch-all.
 
 
 class FederationViewset(viewsets.ViewSet):
@@ -1912,7 +2028,10 @@ class FederationViewset(viewsets.ViewSet):
             'texte_introduction': config_federation.texte_introduction,
         })
 
-        template_path = get_skin_template(config, "views/federation/explorer.html")
+        # Résolution du gabarit par le resolver unifié (CHANTIER-05).
+        # / Unified skin resolver (skins migration).
+        from pages.services import gabarit_skin
+        template_path = gabarit_skin("vues/reseau.html")
         return render(request, template_path, context=template_context)
 
 
@@ -2276,13 +2395,15 @@ class EventMVT(viewsets.ViewSet):
             search=search, tags=tags, thematique=thematique_slug
         )
 
-        # Résolution du template avec fallback vers reunion
-        # Si page > 1, on utilise le template append (sans header RSS)
-        config = Configuration.get_solo()
+        # Résolution du gabarit par le resolver unifié (CHANTIER-03) :
+        # pages/<skin>/vues/…, sinon fallback pages/classic/.
+        # Si page > 1, on utilise le gabarit « suite » (sans header RSS).
+        # / Unified skin resolver: pages/<skin>/vues/…, fallback pages/classic/.
+        from pages.services import gabarit_skin
         if page > 1:
-            template_path = get_skin_template(config, "views/event/partial/list_append.html")
+            template_path = gabarit_skin("vues/agenda_liste_suite.html")
         else:
-            template_path = get_skin_template(config, "views/event/partial/list.html")
+            template_path = gabarit_skin("vues/agenda_liste.html")
 
         return render(request, template_path, context=ctx)
 
@@ -2345,9 +2466,10 @@ class EventMVT(viewsets.ViewSet):
             search=search, tags=tags, thematique=thematique_slug
         )
 
-        # Résolution du template avec fallback vers reunion
-        config = Configuration.get_solo()
-        template_path = get_skin_template(config, "views/event/list.html")
+        # Résolution du gabarit par le resolver unifié (CHANTIER-03).
+        # / Unified skin resolver (skins migration).
+        from pages.services import gabarit_skin
+        template_path = gabarit_skin("vues/agenda.html")
 
         # On renvoie la page en entier
         return render(request, template_path, context=context)
@@ -2357,8 +2479,14 @@ class EventMVT(viewsets.ViewSet):
         template_context = get_context(request)
         template_context['dated_events'], template_context['paginated_info'], _dates, _tags, _thematiques = self.federated_events_filter()
         template_context['embed'] = True
+        # CHANTIER-03 : l'embed suivait TOUJOURS le look reunion (chemin en dur).
+        # Il suit désormais le skin du tenant, comme la page agenda normale
+        # (les guards {% if not embed %} des squelettes masquent navbar/footer).
+        # / The embed iframe now follows the tenant skin instead of a hardcoded
+        # reunion path. The shells' embed guards still hide navbar/footer.
+        from pages.services import gabarit_skin
         response = render(
-            request, "reunion/views/event/list.html",
+            request, gabarit_skin("vues/agenda.html"),
             context=template_context,
         )
         # Pour rendre la page dans un iframe, on vide le header X-Frame-Options pour dire au navigateur que c'est ok.
@@ -2487,9 +2615,10 @@ class EventMVT(viewsets.ViewSet):
                                                          'total_value'] or 0
             template_context['inscrits'] = Ticket.objects.filter(reservation__event__parent=event).count()
 
-        # Résolution du template avec fallback vers reunion
-        config = Configuration.get_solo()
-        template_path = get_skin_template(config, "views/event/retrieve.html")
+        # Résolution du gabarit par le resolver unifié (CHANTIER-03).
+        # / Unified skin resolver (skins migration).
+        from pages.services import gabarit_skin
+        template_path = gabarit_skin("vues/evenement.html")
 
         return render(request, template_path, context=template_context)
 
@@ -2550,7 +2679,7 @@ class EventMVT(viewsets.ViewSet):
                            'checkout_stripe': checkout_stripe,
                            }
 
-                return render(request, "reunion/views/event/formbricks.html", context=context)
+                return render(request, "fonctionnel/event/formbricks.html", context=context)
 
         # SI on a un besoin de paiement, on redirige vers :
         if validator.checkout_link:
@@ -2562,7 +2691,7 @@ class EventMVT(viewsets.ViewSet):
         # Le template choisit son message selon user.is_active : il doit refleter
         # l'etat reel utilise par TicketCreator.method_F pour decider d'envoyer
         # les billets immediatement (user actif) ou un mail de validation (user inactif).
-        return render(request, "reunion/views/event/reservation_ok.html", context={
+        return render(request, "fonctionnel/event/reservation_ok.html", context={
             "user": validator.reservation.user_commande,
         })
 
@@ -2606,7 +2735,7 @@ class Badge(viewsets.ViewSet):
         template_context = get_context(request)
         template_context["badges"] = Product.objects.filter(categorie_article=Product.BADGE, publish=True)
         template_context["account_tab"] = "punchclock"
-        return render(request, "reunion/views/account/punchclock.html", context=template_context)
+        return render(request, "fonctionnel/compte/punchclock.html", context=template_context)
 
     @action(detail=True, methods=['GET'])
     def badge_in(self, request: HttpRequest, pk):
@@ -2617,7 +2746,7 @@ class Badge(viewsets.ViewSet):
 
         messages.add_message(request, messages.SUCCESS, _(f"Check in registered!"))
 
-        return render(request, "reunion/partials/account/badge_switch.html", context={})
+        return render(request, "fonctionnel/compte/partials/badge_switch.html", context={})
 
     @action(detail=False, methods=['GET'])
     def check_out(self, request: HttpRequest):
@@ -2664,13 +2793,13 @@ class MembershipMVT(viewsets.ViewSet):
                        'membership': membership,
                        'checkout_stripe': checkout_stripe,
                        }
-            return render(request, "reunion/views/membership/formbricks.html", context=context)
+            return render(request, "fonctionnel/adhesion/formbricks.html", context=context)
 
         if membership_validator.price.manual_validation:
             # Dans le cas d'une validation manuelle, on affiche un message dans l'offcanvas via un template partiel
             membership: Membership = membership_validator.membership
             context = {'membership': membership}
-            return render(request, "reunion/views/membership/pending_manual_validation.html", context=context)
+            return render(request, "commun/adhesion/pending_manual_validation.html", context=context)
 
         # Le lien de paiement a été généré, on envoi sur Stripe
         elif membership_validator.checkout_stripe_url:
@@ -2681,7 +2810,7 @@ class MembershipMVT(viewsets.ViewSet):
         elif membership_validator.membership.status == Membership.ONCE:
             membership: Membership = membership_validator.membership
             context = {'membership': membership}
-            return render(request, "reunion/views/membership/free_confirmed.html", context=context)
+            return render(request, "commun/adhesion/free_confirmed.html", context=context)
 
         else:
             msg = "Une erreur lors de la gestion de vos adhésion est survenue, merci de contacter un administrateur."
@@ -2708,9 +2837,10 @@ class MembershipMVT(viewsets.ViewSet):
         template_context['products'] = Product.objects.filter(categorie_article=Product.ADHESION,
                                                               publish=True).prefetch_related('tag')
 
-        # Résolution du template avec fallback vers reunion
-        config = Configuration.get_solo()
-        template_path = get_skin_template(config, "views/membership/list.html")
+        # Résolution du gabarit par le resolver unifié (CHANTIER-04).
+        # / Unified skin resolver (skins migration).
+        from pages.services import gabarit_skin
+        template_path = gabarit_skin("vues/adhesions.html")
 
         return render(
             request, template_path,
@@ -2723,8 +2853,12 @@ class MembershipMVT(viewsets.ViewSet):
         template_context['products'] = Product.objects.filter(categorie_article=Product.ADHESION,
                                                               publish=True).prefetch_related('tag')
         template_context['embed'] = True
+        # CHANTIER-04 : l'embed suivait TOUJOURS le look reunion (chemin en dur).
+        # Il suit désormais le skin du tenant, comme la page adhésions normale.
+        # / The embed iframe now follows the tenant skin instead of a hardcoded path.
+        from pages.services import gabarit_skin
         response = render(
-            request, "reunion/views/membership/list.html",
+            request, gabarit_skin("vues/adhesions.html"),
             context=template_context,
         )
         # Pour rendre la page dans un iframe, on vide le header X-Frame-Options pour dire au navigateur que c'est ok.
@@ -2769,7 +2903,7 @@ class MembershipMVT(viewsets.ViewSet):
             price_max_per_user_reached = []
             if request.user.is_authenticated:
                 if product.max_per_user_reached(user=request.user):
-                    return render(request, "reunion/views/membership/already_has_membership.html", context=context)
+                    return render(request, "commun/adhesion/already_has_membership.html", context=context)
 
                 # Vérification des limites par tarif (Price)
                 # / Check per-rate (Price) limits
@@ -2815,7 +2949,7 @@ class MembershipMVT(viewsets.ViewSet):
             # / Truthiness check: an empty CharField is '' (not None) when blanked via admin.
             context["newsletter_active"] = bool(GhostConfig.get_solo().ghost_key) or bool(BrevoConfig.get_solo().api_key)
 
-            return render(request, "reunion/views/membership/form.html", context=context)
+            return render(request, "commun/adhesion/form.html", context=context)
 
         except Product.DoesNotExist:
             try:
@@ -2826,15 +2960,15 @@ class MembershipMVT(viewsets.ViewSet):
                 else:
                     # Si le produit n'existe pas dans les tenants fédérés, on affiche la page 404 personnalisée
                     context = get_context(request)
-                    return render(request, "reunion/views/membership/404.html", context=context, status=404)
+                    return render(request, "commun/adhesion/404.html", context=context, status=404)
             except Exception as e:
                 # En cas d'erreur lors de la recherche dans les tenants fédérés, on affiche la page 404 personnalisée
                 context = get_context(request)
-                return render(request, "reunion/views/membership/404.html", context=context, status=404)
+                return render(request, "commun/adhesion/404.html", context=context, status=404)
         except Exception as e:
             # Pour toute autre erreur, on affiche la page 404 personnalisée
             context = get_context(request)
-            return render(request, "reunion/views/membership/404.html", context=context, status=404)
+            return render(request, "commun/adhesion/404.html", context=context, status=404)
 
     @action(detail=True, methods=['GET'])
     def get_checkout_for_membership(self, request, pk):
@@ -2868,7 +3002,7 @@ class MembershipMVT(viewsets.ViewSet):
             context = get_context(request)
             return render(
                 request,
-                "reunion/views/membership/payment_link_invalid.html",
+                "fonctionnel/adhesion/payment_link_invalid.html",
                 context=context,
                 status=404,
             )
@@ -2881,7 +3015,7 @@ class MembershipMVT(viewsets.ViewSet):
         if membership.status in [Membership.ONCE, Membership.AUTO]:
             return render(
                 request,
-                "reunion/views/membership/payment_already_done.html",
+                "fonctionnel/adhesion/payment_already_done.html",
                 context=context,
             )
 
@@ -2892,7 +3026,7 @@ class MembershipMVT(viewsets.ViewSet):
         if membership.status == Membership.PAYMENT_PENDING:
             return render(
                 request,
-                "reunion/views/membership/payment_already_pending.html",
+                "fonctionnel/adhesion/payment_already_pending.html",
                 context=context,
             )
 
@@ -2901,7 +3035,7 @@ class MembershipMVT(viewsets.ViewSet):
         if membership.status != Membership.ADMIN_VALID:
             return render(
                 request,
-                "reunion/views/membership/payment_link_invalid.html",
+                "fonctionnel/adhesion/payment_link_invalid.html",
                 context=context,
                 status=409,
             )
@@ -2948,7 +3082,7 @@ class MembershipMVT(viewsets.ViewSet):
                     context['membership'] = membership
                     return render(
                         request,
-                        "reunion/views/membership/payment_already_pending.html",
+                        "fonctionnel/adhesion/payment_already_pending.html",
                         context=context,
                     )
 
@@ -2972,7 +3106,7 @@ class MembershipMVT(viewsets.ViewSet):
                     f"affichage page paiement en cours (pas de nouveau checkout) : {e}")
                 return render(
                     request,
-                    "reunion/views/membership/payment_already_pending.html",
+                    "fonctionnel/adhesion/payment_already_pending.html",
                     context=context,
                 )
 
@@ -4063,7 +4197,7 @@ def _wizard_render_events_inner(request, *, session_prefix, inner_context, statu
     contexte["events"] = _wizard_get_drafts(request, session_prefix)
     return render(
         request,
-        "reunion/views/event/wizard/_events_inner.html",
+        "fonctionnel/event_wizard/_events_inner.html",
         context=contexte,
         status=status,
     )
@@ -4354,7 +4488,7 @@ class EventWizard(viewsets.ViewSet):
         }
         return _wizard_etape_choix_lieu(
             request,
-            template="reunion/views/event/wizard/public_step1_place.html",
+            template="fonctionnel/event_wizard/public_step1_place.html",
             contexte_commun=contexte_commun,
             session_prefix=self.SESSION_PREFIX,
             map_url_name="event-wizard-map",
@@ -4376,7 +4510,7 @@ class EventWizard(viewsets.ViewSet):
         }
         return _wizard_etape_carte_lieu(
             request,
-            template="reunion/views/event/wizard/public_step_map.html",
+            template="fonctionnel/event_wizard/public_step_map.html",
             contexte_commun=contexte_commun,
             session_prefix=self.SESSION_PREFIX,
             choix_url_name="event-wizard-place",
@@ -4406,7 +4540,7 @@ class EventWizard(viewsets.ViewSet):
                 "errors": {}, "initial": {},
             })
             context.update(self._inner_context_events(request, postal_address))
-            return render(request, "reunion/views/event/wizard/step2_event.html",
+            return render(request, "fonctionnel/event_wizard/step2_event.html",
                           context=context)
 
         # POST = finalisation.
@@ -4594,7 +4728,7 @@ class EventWizard(viewsets.ViewSet):
         federation_config = FederationConfiguration.get_solo()
         tags_a_suggerer = [tag.name for tag in federation_config.tags_federation.all()]
 
-        return render(request, "reunion/views/event/wizard/_instance_trouvee.html", {
+        return render(request, "fonctionnel/event_wizard/_instance_trouvee.html", {
             "instances": instances,
             "tags_a_suggerer": tags_a_suggerer,
         })
@@ -4623,7 +4757,7 @@ class EventWizard(viewsets.ViewSet):
         # / The client tells whether the local list is empty: we only show the
         # "nothing found" + create CTA then (otherwise empty response).
         local_vide = request.GET.get("local_vide") == "1"
-        return render(request, "reunion/views/event/wizard/_tierslieux_resultats.html", {
+        return render(request, "fonctionnel/event_wizard/_tierslieux_resultats.html", {
             "fiches": fiches,
             "terme": terme,
             "local_vide": local_vide,
@@ -4724,5 +4858,5 @@ class EventWizard(viewsets.ViewSet):
             "wizard_title": _("Merci !"),
             "wizard_step_label": "",
         })
-        return render(request, "reunion/views/event/wizard/public_done.html",
+        return render(request, "fonctionnel/event_wizard/public_done.html",
                       context=context)

@@ -1,0 +1,345 @@
+{% extends base_template %}{# CHANTIER post-revue 2026-07-05 : comme le skin classic, on étend base_template (shell.html en navigation complète, headless.html en réponse HTMX — fragment léger au lieu du document complet). / Like the classic skin: shell for full navigation, headless (light fragment) for HTMX responses. #}
+{% load static i18n tibitags %}
+
+{% block title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Subscriptions' %}{% endif %}{% endblock %}
+{# Metas alignées sur le skin classic (audit SEO 2026-07-05). #}
+{# / Metas aligned with the classic skin (SEO audit). #}
+{% block meta_description %}{% translate 'Join our community by subscribing to one of our membership options' %} - {{ config.organisation }}{% endblock %}
+{% block og_title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Subscriptions' %}{% endif %} | {{ config.organisation }}{% endblock %}
+{% block og_description %}{% translate 'Join our community by subscribing to one of our membership options' %} - {{ config.organisation }}{% endblock %}
+{% block og_image %}{% if products.0.img %}https://{{ request.get_host }}{{ products.0.img.social_card.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block twitter_title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Subscriptions' %}{% endif %} | {{ config.organisation }}{% endblock %}
+{% block twitter_description %}{% translate 'Join our community by subscribing to one of our membership options' %} - {{ config.organisation }}{% endblock %}
+{% block twitter_image %}{% if products.0.img %}https://{{ request.get_host }}{{ products.0.img.social_card.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+
+{% block offcanvas %}
+    <!-- Tunnel d'adhésion (chrome partagé, extrait vers commun/ au CHANTIER-02).
+         La largeur responsive vient de .offcanvas-tunnel (tibillet.css). -->
+    {% include 'commun/offcanvas/adhesion_tunnel.html' %}
+{% endblock %}
+
+{% block main %}
+
+<!-- =======================================================================
+     PAGE LISTE DES ADHÉSIONS / BILLETS
+     Adaptée depuis la maquette tickets.html du Faire Festival
+     Affiche tous les produits d'adhésion disponibles
+     ======================================================================= -->
+<div class="container py-5 conteneur-principal">
+
+    <!-- Titre de la page -->
+    <div class="row mb-5">
+        <div class="col-12 text-center">
+            <h1 class="texte-bleu police-titre" style="font-size: 3rem;">
+                {% if config.membership_menu_name %}
+                    {{ config.membership_menu_name|upper }}
+                {% else %}
+                    {% translate 'Subscriptions'|upper %}
+                {% endif %}
+            </h1>
+
+            <!-- Description introductive (si disponible dans la config) -->
+            {% if config.short_description %}
+                <p class="texte-bleu police-mono mt-3">
+                    {{ config.short_description }}
+                </p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ===================================================================
+         DESCRIPTION DE LA PAGE D'ADHÉSION
+         Affichée en entier si courte, tronquée avec "Lire la suite" si longue
+         =================================================================== -->
+    {% if config.description_membership_page %}
+        <div class="mb-4 description-membership-wrapper">
+            <div class="description-membership-content bordure-epaisse bg-white p-4"
+                 id="descriptionMembershipContent">
+                {{ config.description_membership_page | safe }}
+            </div>
+            <button class="btn bg-white bordure-epaisse w-100 text-center mt-2 texte-bleu police-mono d-none"
+                    id="descriptionMembershipToggle"
+                    type="button"
+                    data-testid="membership-description-toggle">
+                {% translate "Lire la suite" %} <i class="bi bi-chevron-down" aria-hidden="true"></i>
+            </button>
+        </div>
+    {% endif %}
+    <!-- ===================================================================
+         GRILLE DES CARTES DE PRODUITS (Adhésions / Billets)
+         Affiche les différents produits disponibles à l'achat
+         =================================================================== -->
+    <div class="row g-4 justify-content-center">
+
+        {% for product in products %}
+
+            <!-- ============================================================
+                 CARTE PRODUIT (une carte par produit d'adhésion)
+                 Colonnes responsives : col-md-4 (3 cartes par ligne sur desktop)
+                 ============================================================ -->
+            <div class="col-md-4">
+                <div class="carte-billet">
+
+                    <!-- ================================================
+                         IMAGE DU PRODUIT
+                         Affiche l'image ou un placeholder jaune
+                         ================================================ -->
+                    <div class="image-billet ratio ratio-4x3 mb-4"
+                         style="background-image: url('{% if product.img %}{{ product.img.med.url }}{% else %}{{ ""|randCardImg }}{% endif %}');">
+                    </div>
+
+                    <!-- ================================================
+                         INFORMATIONS DU PRODUIT
+                         ================================================ -->
+                    <!-- Nom du produit (ex: "BILLET JOUR") -->
+                    <h2 class="titre-billet mb-2 flex">
+                        {{ product.name|upper }}
+                    </h2>
+
+                    <!-- Description courte du produit (optionnelle) -->
+                    {% if product.short_description %}
+                        <h3 class="date-billet mb-4">
+                            {{ product.short_description|truncatewords:10 }}
+                        </h3>
+                    {% endif %}
+
+                    <!-- Tags/Catégories du produit -->
+                    {% if product.tag.exists %}
+                        <div class="mb-3">
+                            {% for tag in product.tag.all %}
+                                <span class="etiquette-categorie">{{ tag.name|lower }}</span>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <!-- ================================================
+                         PRIX DU PRODUIT
+                         Affiche tous les tarifs disponibles pour ce produit
+                         ================================================ -->
+                    {% if product.prices.exists %}
+                        <div class="mb-4">
+                            {% for price in product.prices.all %}
+                                <div class="texte-bleu police-mono fw-bold mb-2">
+                                    <!-- Nom du tarif (ex: "Tarif normal", "Tarif réduit") -->
+                                    {% if price.name %}
+                                        <span class="text-uppercase">{{ price.name }}:</span>
+                                    {% endif %}
+
+                                    <!-- Prix -->
+                                    <span class="h4">
+                                        {% if price.prix > 0 %}
+                                            {{ price.prix }} €
+                                        {% else %}
+                                            {% translate 'Free' %}
+                                        {% endif %}
+                                    </span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <!-- ================================================
+                         BOUTON D'ACHAT / INSCRIPTION
+                         ================================================ -->
+                    <button type="button"
+                       class="btn bouton-achat w-100"
+                       hx-get="/memberships/{{ product.uuid }}/"
+                       hx-target="#offcanvas-membership"
+                       hx-swap="innerHTML"
+                       data-bs-toggle="offcanvas"
+                       data-bs-target="#subscribePanel"
+                       aria-controls="subscribePanel"
+                        data-tibi-testid="membership-open-{{ product.uuid }}">
+                        {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}{% translate 'Subscribe' %}{% endif %}
+                    </button>
+
+                </div> <!-- Fin carte-billet -->
+            </div> <!-- Fin colonne -->
+
+        {% empty %}
+
+            <!-- ====================================================
+                 MESSAGE SI AUCUN PRODUIT DISPONIBLE
+                 ==================================================== -->
+            <div class="col-12">
+                <div class="bordure-epaisse p-5 text-center bg-white">
+                    <h3 class="texte-bleu police-titre mb-3">
+                        {% translate 'No subscriptions available' %}
+                    </h3>
+                    <p class="texte-bleu police-mono">
+                        {% translate 'There are currently no subscription products available. Please check back later.' %}
+                    </p>
+                    <a href="{% url 'event-list' %}"
+                       class="btn bouton-pilule fond-bleu text-white mt-3"
+                       hx-get="{% url 'event-list' %}"
+                       hx-target="body"
+                       hx-push-url="true">
+                        {% translate 'View events' %}
+                    </a>
+                </div>
+            </div>
+
+        {% endfor %}
+
+    </div> <!-- Fin row -->
+
+    {% comment %}
+    <!-- ===================================================================
+         SECTION FÉDÉRATION (Optionnel)
+         Affiche les autres lieux/organisations de la fédération
+         =================================================================== -->
+    {% if federated_tenants %}
+        <div class="row mt-5">
+            <div class="col-12">
+                <div class="bordure-epaisse bg-white p-4">
+                    <h3 class="texte-bleu police-titre mb-4 text-center">
+                        {% translate "Découvrez les adhésions des espaces fédérés :" %}
+                    </h3>
+
+                    <div class="row g-3">
+                        {% for tenant in federated_tenants %}
+                            <div class="col-md-3">
+                                <a href="https://{{ tenant.domain }}/memberships/"
+                                   target="_blank"
+                                   class="text-decoration-none">
+                                    <div class="carte-evenement text-center">
+                                        <!-- Image du tenant -->
+                                        <div class="image-evenement"
+                                             style="background-image: url('{% if tenant.img_url %}{{ tenant.img_url }}{% else %}{{ ""|randCardImg }}{% endif %}'); background-size: cover; background-position: center;">
+                                        </div>
+
+                                        <!-- Nom du lieu -->
+                                        <h4 class="titre-evenement h6 mt-3">
+                                            {{ tenant.name }}
+                                        </h4>
+
+                                        <!-- Description courte -->
+                                        {% if tenant.short_description %}
+                                            <p class="small texte-bleu police-mono">
+                                                {{ tenant.short_description|truncatewords:10 }}
+                                            </p>
+                                        {% endif %}
+
+                                        <!-- Bouton vers le site -->
+                                        <div class="pied-carte mt-3">
+                                            <span class="bouton-petit-bleu w-100">
+                                                {% translate 'Voir les adhésions' %}
+                                                <i class="bi bi-box-arrow-up-right ms-1"></i>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </a>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+    {% endcomment %}
+
+    <!-- ===================================================================
+         INFORMATIONS COMPLÉMENTAIRES (Optionnel)
+         Texte explicatif sur les adhésions, conditions, etc.
+         =================================================================== -->
+    {% comment %}
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="boite-description bordure-epaisse">
+                <h3 class="texte-bleu police-titre mb-3">
+                    {% translate 'Why become a member?' %}
+                </h3>
+                <div class="texte-description texte-bleu police-mono">
+                    <p>
+                        {% translate 'Membership gives you access to all our events, activities and resources throughout the year.' %}
+                    </p>
+                    <ul>
+                        <li>{% translate 'Unlimited access to all events' %}</li>
+                        <li>{% translate 'Preferential rates on workshops' %}</li>
+                        <li>{% translate 'Priority registration' %}</li>
+                        <li>{% translate 'Access to members-only areas' %}</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endcomment %}
+
+</div>
+
+{% endblock main %}
+
+{% block scripts %}
+<style>
+    .description-membership-content.is-truncated {
+        max-height: 250px;
+        overflow: hidden;
+        position: relative;
+    }
+    .description-membership-content.is-truncated::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 60px;
+        background: linear-gradient(transparent, white);
+        pointer-events: none;
+    }
+</style>
+<script>
+/* Initialise le collapse de la description d'adhésion.
+ * Appelé sur DOMContentLoaded ET sur htmx:afterSettle pour gérer
+ * la première visite via navigation HTMX (pas de rechargement complet).
+ * / Called on DOMContentLoaded AND htmx:afterSettle to handle
+ * first visit via HTMX navigation (no full page reload).
+ *
+ * LOCALISATION : faire_festival/views/membership/list.html
+ */
+function initDescriptionMembershipCollapse() {
+    const content = document.getElementById("descriptionMembershipContent");
+    const toggle = document.getElementById("descriptionMembershipToggle");
+    if (!content || !toggle) return;
+
+    /* Seuil en px — environ 10-12 lignes de texte
+     * / Threshold in px — about 10-12 lines of text
+     */
+    const SEUIL = 250;
+
+    if (content.scrollHeight > SEUIL) {
+        content.classList.add("is-truncated");
+        toggle.classList.remove("d-none");
+
+        /* Eviter d'ajouter plusieurs fois le même listener si la fonction
+         * est appelée plusieurs fois (navigation HTMX répétée).
+         * / Avoid adding the listener multiple times on repeated HTMX navigations.
+         */
+        if (!toggle.dataset.collapseInitialized) {
+            toggle.dataset.collapseInitialized = "true";
+            toggle.addEventListener("click", function () {
+                const isTruncated = content.classList.contains("is-truncated");
+                if (isTruncated) {
+                    content.classList.remove("is-truncated");
+                    content.style.maxHeight = content.scrollHeight + "px";
+                    toggle.innerHTML = '{% translate "Réduire" %} <i class="bi bi-chevron-up" aria-hidden="true"></i>';
+                } else {
+                    content.style.maxHeight = "";
+                    content.classList.add("is-truncated");
+                    toggle.innerHTML = '{% translate "Lire la suite" %} <i class="bi bi-chevron-down" aria-hidden="true"></i>';
+                }
+            });
+        }
+    }
+}
+
+document.addEventListener("DOMContentLoaded", initDescriptionMembershipCollapse);
+document.addEventListener("htmx:afterSettle", initDescriptionMembershipCollapse);
+</script>
+{% endblock scripts %}
+
+{% block footer %}
+<!-- =======================================================================
+     FOOTER - Version locale du skin Faire Festival
+     ======================================================================= -->
+{% include "pages/faire_festival/partials/footer.html" %}
+{% endblock footer %}

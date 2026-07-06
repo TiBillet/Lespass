@@ -1107,6 +1107,18 @@ class TenantCreateValidator:
                     categorie_article=Product.FREERES,
                 ) # le post save créera le price 0
 
+            # NB : la page d'accueil par défaut (app pages) n'est PLUS créée ici.
+            # Elle est fabriquée en fin de tâche d'onboarding
+            # (onboard/tasks.py::create_tenant_from_draft, étape 6ter), une fois
+            # l'image (config.img) et la description longue posées, juste avant
+            # l'email « espace prêt ». Cela garantit un HERO avec la bonne image
+            # et un PARAGRAPHE avec la vraie description.
+            # / NB: the default home page is NO LONGER created here. It is built at
+            # the end of the onboarding task (create_tenant_from_draft, step 6ter),
+            # once the image (config.img) and long description are set, right
+            # before the "space ready" email. This guarantees a HERO with the
+            # correct image and a PARAGRAPH with the real description.
+
         waiting_config.tenant = tenant
         waiting_config.created = True
         waiting_config.save()

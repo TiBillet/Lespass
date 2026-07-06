@@ -1,0 +1,28 @@
+{% load static i18n %}
+{% comment %}
+    BLOC IMAGE + TEXTE — skin faire_festival. Image encadree (bordure-epaisse) +
+    texte mono bleu. image_position GAUCHE/DROITE inverse l'ordre.
+    / IMAGE + TEXT block — faire_festival skin. Framed image + blue mono text.
+{% endcomment %}
+<section class="container py-5" data-testid="bloc-image-texte">
+    <div class="row align-items-center g-4">
+        {% if bloc.image %}
+            <div class="col-md-6 mb-3 mb-md-0 {% if bloc.image_position == 'DROITE' %}order-md-2{% endif %}">
+                <img class="img-fluid w-100"
+                     src="{{ bloc.image.hdr.url }}"
+                     alt="{{ bloc.titre }}" loading="lazy">
+            </div>
+        {% endif %}
+        <div class="col-md-6">
+            {% if bloc.titre %}
+                <h2 class="police-titre texte-bleu text-uppercase">{{ bloc.titre }}</h2>
+            {% endif %}
+            {% if bloc.texte %}
+                <div class="texte-bleu police-mono lh-sm">{{ bloc.texte|safe }}</div>
+            {% endif %}
+            {% if bloc.bouton_label %}
+                <a href="{{ bloc.bouton_url|default:'#' }}" class="btn bouton-action mt-3" style="max-width: 300px;">{{ bloc.bouton_label }}</a>
+            {% endif %}
+        </div>
+    </div>
+</section>

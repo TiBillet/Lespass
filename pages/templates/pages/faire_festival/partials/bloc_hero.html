@@ -1,0 +1,29 @@
+{% load static i18n %}
+{% comment %}
+    BLOC HERO — skin faire_festival. Image d'identite (centre) + sous-titre.
+    L'image est l'image generique du lieu (config.img), lue au rendu. Le fond
+    (motif « + ») vient du CSS du skin. Plus de badge date (image_secondaire) ni
+    de boutons : les actions vont dans un bloc CTA separe.
+    / HERO block — faire_festival skin. Identity image (center) + subtitle. The
+    image is the venue's generic image (config.img), read at render time. The
+    background ("+" pattern) comes from the skin CSS. No date badge and no buttons
+    anymore: actions go into a separate CTA block.
+{% endcomment %}
+<section class="container py-5 position-relative" data-testid="bloc-hero">
+    <div class="row justify-content-center">
+        {# Logo / titre (centre) / Logo / title (center) #}
+        <div class="col-md-8 text-center position-relative">
+            <div class="titre-principal mb-4">
+                <h1 class="visually-hidden">{{ bloc.titre|default:config.organisation }}</h1>
+                {% if config.img %}
+                    <img src="{{ config.img.fhd.url }}" alt="{{ bloc.titre|default:config.organisation }}" class="img-fluid logo-homepage">
+                {% elif bloc.titre %}
+                    <h2 class="police-titre texte-bleu text-uppercase">{{ bloc.titre }}</h2>
+                {% endif %}
+            </div>
+            {% if bloc.sous_titre %}
+                <div><h2 class="fw-bold fs-5 mt-5 texte-bleu police-mono">{{ bloc.sous_titre }}</h2></div>
+            {% endif %}
+        </div>
+    </div>
+</section>

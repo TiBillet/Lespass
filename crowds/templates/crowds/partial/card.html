@@ -7,7 +7,7 @@
            hx-target="body"
            hx-swap="innerHTML"
            hx-push-url="true">
-            {% include 'reunion/partials/picture.html' with img=initiative.get_img alt=initiative.name style='aspect-ratio:16/9;max-height:12rem;object-fit:cover' %}
+            {% include 'commun/partials/picture.html' with img=initiative.get_img alt=initiative.name style='aspect-ratio:16/9;max-height:12rem;object-fit:cover' %}
         </a>
         <div class="card-body d-flex flex-column">
             {% if initiative.closed %}

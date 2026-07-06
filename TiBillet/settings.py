@@ -165,6 +165,12 @@ SHARED_APPS = (
     'seo',
     'onboard',
 
+    # App pages : dual-list (SHARED + TENANT) pour exister dans le schema public
+    # ET dans chaque schema tenant, chaque schema gardant ses propres pages isolees.
+    # / pages app: dual-list so the table lives in the public schema AND in each
+    # tenant schema, each schema keeping its own isolated pages.
+    'pages',
+
     'django_extensions',
     'solo',
     'stdimage',
@@ -198,6 +204,9 @@ TENANT_APPS = (
     'comptabilite',
     'laboutik',
     'inventaire',
+    # Voir SHARED_APPS : 'pages' est en dual-list (isolation par schema, public inclus).
+    # / See SHARED_APPS: 'pages' is dual-listed (per-schema isolation, public included).
+    'pages',
 )
 
 INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]
@@ -237,6 +246,13 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_htmx.middleware.HtmxMiddleware',
+    # Vary: HX-Request + Cache-Control par défaut : indispensable en prod, les
+    # vues rendent 2 corps différents (shell/fragment) sur la même URL selon
+    # HX-Request. Doit être APRÈS AuthenticationMiddleware (lit request.user).
+    # / Vary: HX-Request + default Cache-Control: required in prod, views render
+    # 2 different bodies (shell/fragment) on the same URL depending on
+    # HX-Request. Must come AFTER AuthenticationMiddleware (reads request.user).
+    'BaseBillet.middleware.ProtectionCacheHtmxMiddleware',
     'Customers.views.TimezoneMiddleware',
 ]
 
@@ -418,6 +434,18 @@ STATICFILES_DIRS = [
 
 MEDIA_ROOT = os.path.join(BASE_DIR, "www", "media")
 MEDIA_URL = '/media/'
+
+# --- Limites d'upload / Upload limits ---
+# Borne la taille des donnees POST NON-fichier gardees en memoire (formulaires,
+# JSON de l'API). Ne compte PAS les fichiers uploades (exclus par Django). Aligne
+# sur la limite nginx (client_max_body_size). / Caps in-memory NON-file POST data
+# (forms, API JSON). Does NOT count uploaded files. Aligned with the nginx limit.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 12 * 1024 * 1024  # 12 Mo
+
+# Seuil au-dela duquel un fichier uploade est ecrit sur disque (temp) au lieu de
+# rester en RAM. Protege la memoire lors des uploads. / Threshold above which an
+# uploaded file is streamed to a temp file on disk instead of RAM.
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024  # 5 Mo
 
 # EMAIL
 EMAIL_HOST = os.environ.get('EMAIL_HOST')

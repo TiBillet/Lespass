@@ -561,6 +561,13 @@ class Configuration(SingletonModel):
         verbose_name=_("Federation module"),
     )
 
+    # Module pages : constructeur de pages / landing pages (app pages).
+    # / Pages module: page / landing page builder (pages app).
+    module_pages = models.BooleanField(
+        default=True,
+        verbose_name=_("Module pages / site web"),
+    )
+
     # NOTE : tout l'agenda participatif (activation + propositions anonymes +
     # tag automatique) vit desormais sur FederationConfiguration. Il s'active
     # dans l'admin "Options de federation", plus dans le dashboard des modules.
@@ -643,19 +650,10 @@ class Configuration(SingletonModel):
     PERSONALISATION
     """
 
-    # Choix du thème graphique (skin) pour l'affichage du site
-    # Par défaut : "reunion" (thème existant)
-    # Option : "faire_festival" (thème brutaliste jaune/bleu)
-    skin = models.CharField(
-        max_length=50,
-        default="reunion",
-        choices=[
-            ("reunion", "Réunion (thème par défaut)"),
-            ("faire_festival", "Faire Festival (thème brutaliste)")
-        ],
-        verbose_name=_("Thème graphique du site"),
-        help_text=_("Sélectionnez le thème visuel à utiliser pour l'affichage du site web.")
-    )
+    # Le choix du thème graphique (skin) a été déplacé vers
+    # pages.models.ConfigurationSite (app pages).
+    # / The graphic theme (skin) choice was moved to
+    # pages.models.ConfigurationSite (pages app).
 
     membership_menu_name = models.CharField(max_length=200,
                                             blank=True, null=True,
@@ -3831,6 +3829,11 @@ class ExternalApiKey(models.Model):
     sale = models.BooleanField(default=False, verbose_name=_("Sales"))
     crowd = models.BooleanField(default=False, verbose_name=_("Crowds"))
 
+    # Droit sur l'API du site web (app pages) : ouvre la creation/edition des
+    # Pages ET des Blocs (un seul booleen pour fabriquer un site via l'API).
+    # / Website API right (pages app): opens create/edit of Pages AND Blocs.
+    page = models.BooleanField(default=False, verbose_name=_("Pages / Site web"))
+
     # Asset cadeau (TNF) que cette cle peut recharger via /api/v2/wallet-refills/.
     # La presence de cet asset sert a la fois d'interrupteur du droit "walletrefill"
     # et de restriction : la cle ne peut recharger QUE cet asset.
@@ -3867,6 +3870,10 @@ class ExternalApiKey(models.Model):
             # Basename de la route des ventes
             "sale": self.sale,
             "crowd": self.crowd,
+            # Site web (app pages) : meme droit pour pages et blocs.
+            # / Website (pages app): same right for pages and blocs.
+            "page": self.page,
+            "bloc": self.page,
             # Recharge cadeau : autorisee seulement si un asset cadeau est defini
             # / Gift refill: allowed only if a gift asset is set
             "walletrefill": bool(self.gift_asset_id),

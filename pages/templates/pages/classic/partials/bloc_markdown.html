@@ -1,0 +1,28 @@
+{% load i18n pages_tags %}
+{% comment %}
+    BLOC MARKDOWN — texte long (article, page de blog).
+    / MARKDOWN block — long-form text (article, blog page).
+    LOCALISATION : pages/templates/pages/classic/partials/bloc_markdown.html
+
+    Champs : titre (optionnel), texte (SOURCE Markdown).
+    Le rendu HTML est produit ICI par le filtre rendre_markdown :
+    markdown (extensions extra + sane_lists) puis nh3.clean — le HTML inséré
+    est donc déjà nettoyé, pas besoin de |safe supplémentaire (le filtre
+    retourne un SafeString).
+    / Fields: titre (optional), texte (Markdown SOURCE). HTML is produced HERE
+    by the rendre_markdown filter (markdown then nh3.clean) — the inserted
+    HTML is already sanitized, the filter returns a SafeString.
+{% endcomment %}
+<section class="tb-bloc tb-bloc--markdown" data-testid="bloc-markdown">
+    <div class="tb-bloc__contenu">
+        {% if bloc.titre %}
+            <h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>
+        {% endif %}
+        {% if bloc.texte %}
+            {# rendre_bloc_markdown résout d'abord les références ![..](galerie:N) #}
+            {# vers les images de l'inline du bloc. / Resolves the block's #}
+            {# inline-image references first. #}
+            <div class="tb-bloc__texte tb-markdown">{{ bloc|rendre_bloc_markdown }}</div>
+        {% endif %}
+    </div>
+</section>

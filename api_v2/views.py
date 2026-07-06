@@ -2,12 +2,14 @@ import datetime
 import re
 import uuid as uuid_module
 
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import connection, transaction
 from django.db import connection, IntegrityError, transaction
 from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, serializers
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
@@ -39,7 +41,19 @@ from .serializers import (
     BudgetItemCreateSerializer,
     ParticipationSchemaSerializer,
     ParticipationCreateSerializer,
+    PageSchemaSerializer,
+    PageCreateSerializer,
+    BlocSchemaSerializer,
+    BlocCreateSerializer,
+    CHAMPS_PAGE_AUTORISES,
+    CHAMPS_BLOC_AUTORISES,
+    CHAMPS_TEXTE_RICHE,
+    CHAMPS_FICHIER,
+    CHAMPS_URL_A_NEUTRALISER,
+    _validate_uploaded_image,
 )
+from pages.models import Page, Bloc, valider_slug_non_reserve
+from Administration.utils import clean_html, url_a_schema_dangereux
 
 
 def get_objet_par_uuid_ou_404(model, uuid_recu, **filtres_supplementaires):
@@ -123,6 +137,39 @@ def get_event_par_identifiant_ou_404(identifiant):
     if event is None:
         raise Http404("Event not found")
     return event
+
+
+def _ressemble_uuid(valeur) -> bool:
+    """True si la chaine est un UUID valide. / True if the string is a valid UUID."""
+    try:
+        uuid_module.UUID(str(valeur))
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
+def _appliquer_fichiers_multipart(request, bloc):
+    """Applique les fichiers uploades IMAGE (multipart) sur les champs fichier du bloc.
+    / Applies uploaded IMAGE (multipart) files onto the block's file fields.
+
+    Images validees par Pillow. L'upload de fichier VIDEO est volontairement retire :
+    pour une video, utiliser le bloc EMBED (embed_url YouTube/Vimeo/PeerTube, rendu en iframe).
+    / Images validated by Pillow. Video file upload is intentionally removed:
+    use the EMBED block (embed_url) for videos.
+    """
+    if not hasattr(request, "FILES"):
+        return
+    from api_v2.serializers import _validate_uploaded_image
+    # Upload de fichiers IMAGE uniquement (image principale, secondaire, photo d'auteur).
+    # L'upload de fichiers VIDEO est volontairement retire : pour une video, utiliser le
+    # bloc EMBED (embed_url YouTube/Vimeo/PeerTube, rendu en iframe). Cela evite d'heberger
+    # des fichiers video lourds. / IMAGE files only. Video file upload is intentionally
+    # removed: use the EMBED block (embed_url) for videos. Avoids hosting heavy video files.
+    for nom_fichier in ("image", "image_secondaire", "auteur_photo"):
+        fichier = request.FILES.get(nom_fichier)
+        if fichier:
+            _validate_uploaded_image(fichier)
+            setattr(bloc, nom_fichier, fichier)
 
 
 class CrowdInitiativeViewSet(viewsets.ViewSet):
@@ -1041,3 +1088,170 @@ class SaleViewSet(viewsets.ViewSet):
         # - clé API valide avec droit "sale"
         # - utilisateur admin du tenant
         return get_permission_Api_ALL_Admin(self)
+
+
+class PageViewSet(viewsets.ViewSet):
+    """API semantique des Pages (WebPage). / Semantic Pages API (WebPage).
+
+    Header: Authorization: Api-Key <key> (droit `page`).
+    """
+    permission_classes = [SemanticApiKeyPermission]
+    lookup_field = "uuid"
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+    def list(self, request):
+        qs = Page.objects.all().order_by("position", "titre")
+        return Response({"results": PageSchemaSerializer(qs, many=True).data})
+
+    def retrieve(self, request, uuid=None):
+        # uuid OU slug. / uuid OR slug.
+        page = Page.objects.filter(uuid=uuid).first() if _ressemble_uuid(uuid) \
+            else Page.objects.filter(slug=uuid).first()
+        if not page:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        return Response(PageSchemaSerializer(page).data)
+
+    def create(self, request):
+        ser = PageCreateSerializer(data=request.data, context={"request": request})
+        ser.is_valid(raise_exception=True)
+        # Page + blocs imbriques crees ensemble (tout ou rien).
+        # / Page + nested blocks created together (all or nothing).
+        with transaction.atomic():
+            page = ser.save()
+        return Response(PageSchemaSerializer(page).data, status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, uuid=None):
+        page = get_object_or_404(Page, uuid=uuid)
+        # PATCH meta seulement. / PATCH meta only.
+        meta = {}
+        for prop in (request.data.get("additionalProperty") or []):
+            if prop.get("name") in CHAMPS_PAGE_AUTORISES:
+                meta[prop["name"]] = prop.get("value")
+        if "name" in request.data:
+            page.titre = request.data["name"]
+        if "description" in request.data:
+            page.meta_description = request.data["description"]
+        for nom_champ, valeur in meta.items():
+            if nom_champ == "slug":
+                valider_slug_non_reserve(valeur)
+            setattr(page, nom_champ, valeur)
+
+        # Page parente (isPartOf) : uuid/slug pour definir, vide/null pour retirer.
+        # / Parent page (isPartOf): uuid/slug to set, empty/null to remove.
+        if "isPartOf" in request.data:
+            identifiant_parent = request.data["isPartOf"]
+            if identifiant_parent:
+                from api_v2.serializers import _resoudre_page
+                parent = _resoudre_page(identifiant_parent)
+                if not parent:
+                    return Response({"isPartOf": [_("Page parente introuvable.")]},
+                                    status=status.HTTP_400_BAD_REQUEST)
+                page.parent = parent
+            else:
+                page.parent = None
+
+        try:
+            page.full_clean(exclude=["uuid"])
+        except DjangoValidationError as e:
+            return Response(e.message_dict, status=status.HTTP_400_BAD_REQUEST)
+        page.save()
+        return Response(PageSchemaSerializer(page).data)
+
+    def destroy(self, request, uuid=None):
+        page = get_object_or_404(Page, uuid=uuid)
+        page.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=["get"], url_path="block-types")
+    def block_types(self, request):
+        """Catalogue des types de blocs + champs autorises (pour les agents/MCP).
+        / Catalogue of block types + allowed fields (for agents/MCP)."""
+        from pages.blocs_catalogue import CHAMPS_PAR_TYPE
+        libelles = dict(Bloc.TYPE_BLOC_CHOICES)
+        types = [
+            {"type": code, "label": str(libelles.get(code, code)), "fields": champs}
+            for code, champs in CHAMPS_PAR_TYPE.items()
+        ]
+        return Response({"blockTypes": types})
+
+    @action(detail=True, methods=["post"], url_path="blocs")
+    def ajouter_bloc(self, request, uuid=None):
+        page = get_object_or_404(Page, uuid=uuid)
+        # JSON -> dict normal ; multipart -> QueryDict (on aplatit en scalaires).
+        # / JSON -> plain dict; multipart -> QueryDict (flatten to scalars).
+        # Note : en DRF, request.data = _full_data qui inclut les fichiers uploadés.
+        # On utilise .dict() pour aplatir les scalaires, puis on retire les champs fichier
+        # qui sont des objets File (pas des chaînes). Ces fichiers seront appliqués
+        # après le save du sérialiseur via _appliquer_fichiers_multipart.
+        # / In DRF, request.data = _full_data which includes uploaded files.
+        # We use .dict() to flatten scalars, then remove file fields (File objects, not strings).
+        # These files are applied after the serializer save via _appliquer_fichiers_multipart.
+        if hasattr(request.data, "dict"):
+            donnees = request.data.dict()
+            # Retire les champs fichier : ce sont des objets File, pas des scalaires.
+            # / Remove file fields: they are File objects, not scalars.
+            for champ_fichier in CHAMPS_FICHIER:
+                donnees.pop(champ_fichier, None)
+        else:
+            donnees = dict(request.data)
+        donnees.setdefault("position", page.blocs.count())
+        ser = BlocCreateSerializer(data=donnees, context={"page": page})
+        ser.is_valid(raise_exception=True)
+        bloc = ser.save()
+        _appliquer_fichiers_multipart(request, bloc)
+        bloc.save()
+        return Response(BlocSchemaSerializer(bloc).data, status=status.HTTP_201_CREATED)
+
+
+class BlocViewSet(viewsets.ViewSet):
+    """API semantique des Blocs (WebPageElement). / Semantic Blocs API."""
+    permission_classes = [SemanticApiKeyPermission]
+    lookup_field = "uuid"
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+    def retrieve(self, request, uuid=None):
+        bloc = get_object_or_404(Bloc, uuid=uuid)
+        return Response(BlocSchemaSerializer(bloc).data)
+
+    def partial_update(self, request, uuid=None):
+        bloc = get_object_or_404(Bloc, uuid=uuid)
+        if "headline" in request.data:
+            bloc.titre = request.data["headline"] or ""
+        if "alternativeHeadline" in request.data:
+            bloc.sous_titre = request.data["alternativeHeadline"] or ""
+        if "text" in request.data:
+            bloc.texte = clean_html(request.data["text"] or "")
+        # En multipart, additionalProperty est absent ou une string brute (pas une liste).
+        # On protege la boucle pour n'iterer que sur de vraies listes.
+        # / In multipart, additionalProperty is absent or a raw string (not a list).
+        # Guard the loop so we only iterate over actual lists.
+        proprietes = request.data.get("additionalProperty")
+        if isinstance(proprietes, list):
+            for prop in proprietes:
+                nom = prop.get("name")
+                if nom not in CHAMPS_BLOC_AUTORISES:
+                    continue  # securite : jamais setattr hors whitelist
+                if nom in CHAMPS_FICHIER:
+                    continue  # securite : les fichiers ne se settent jamais via string
+                valeur = prop.get("value")
+                if nom in CHAMPS_TEXTE_RICHE:
+                    valeur = clean_html(valeur or "")
+                if nom in ("points_gps", "contenu") and not isinstance(valeur, list):
+                    raise serializers.ValidationError(
+                        {nom: _("Ce champ doit etre une liste.")})
+                setattr(bloc, nom, valeur)
+        # Securite : vide les champs lien a schema dangereux (javascript:, data:, vbscript:).
+        # / Security: empty link fields with a dangerous scheme.
+        for champ_url in CHAMPS_URL_A_NEUTRALISER:
+            if url_a_schema_dangereux(getattr(bloc, champ_url, "")):
+                setattr(bloc, champ_url, "")
+        # Fichiers multipart (image, video, etc.) appliques avant le save unique.
+        # / Multipart files (image, video, etc.) applied before the single save.
+        _appliquer_fichiers_multipart(request, bloc)
+        bloc.save()
+        return Response(BlocSchemaSerializer(bloc).data)
+
+    def destroy(self, request, uuid=None):
+        bloc = get_object_or_404(Bloc, uuid=uuid)
+        bloc.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

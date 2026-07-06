@@ -1,0 +1,30 @@
+{% load i18n %}{% comment %}
+OFFCANVAS CONTACT — panneau « Contact et support » (#contactPanel)
+/ Contact offcanvas — "Contact and support" panel (#contactPanel)
+
+LOCALISATION : BaseBillet/templates/commun/offcanvas/contact.html
+
+Chrome partagé, NON skinnable (décision 3 du plan skins) : inclus par la navbar
+reunion et par le shell faire_festival. Déclencheurs : boutons navbar + footer
+des deux skins (data-bs-toggle="offcanvas" data-bs-target="#contactPanel").
+L'id #contactPanel fait partie du contrat de skin : ne JAMAIS le renommer.
+/ Shared chrome, NOT skinnable. Included by the reunion navbar and the
+faire_festival shell. The #contactPanel id is part of the skin contract.
+{% endcomment %}
+<div class="offcanvas-start offcanvas" tabindex="-1" id="contactPanel" aria-labelledby="contactPanelLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="contactPanelLabel">{% translate 'Contact and support' %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% translate 'Close' %}"></button>
+    </div>
+    <div class="offcanvas-body">
+        {# Lien direct vers la documentation, proposé avant le formulaire de contact. #}
+        {# / Direct documentation link, offered before the contact form. #}
+        <div class="alert alert-light border d-flex align-items-start gap-2 mb-4" role="note">
+            <i class="bi bi-info-circle fs-5 mt-1" aria-hidden="true"></i>
+            <span>
+                {% blocktranslate with orga=config.organisation %}Ce formulaire écrit directement à l'équipe de « {{ orga }} ».<br>Pour une question sur TiBillet (le logiciel lui-même), la <a href="https://tibillet.github.io/documentation_v3/" target="_blank" rel="noopener">documentation</a> a peut-être déjà la réponse.{% endblocktranslate %}
+            </span>
+        </div>
+        {% include 'commun/formulaires/contact.html' %}
+    </div>
+</div>

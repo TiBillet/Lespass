@@ -14,6 +14,13 @@ from Administration.admin.mixins import HelpDisplayMixin
 
 from Administration.admin.site import staff_admin_site, sanitize_textfields
 
+# Enregistre l'admin de l'app pages sur staff_admin_site (le projet n'utilise
+# pas l'autodiscover admin : il faut importer le module pour declencher les
+# @admin.register).
+# / Registers the pages app admin on staff_admin_site (the project does not use
+# admin autodiscover: importing the module triggers the @admin.register calls).
+import pages.admin  # noqa: F401
+
 
 import json
 import logging
@@ -144,6 +151,7 @@ class ExternalApiKeyAdmin(ModelAdmin):
         'ticket',
         'wallet',
         'sale',
+        'page',
     ]
 
     fields = [
@@ -157,6 +165,8 @@ class ExternalApiKeyAdmin(ModelAdmin):
         # membership : requis pour que LaBoutik lise les adhesions (route by-wallet).
         # / membership: required so LaBoutik can read memberships (by-wallet route).
         ('membership', 'crowd'),
+        # Droit API du site web (app pages) / Website API right (pages app)
+        ('page',),
         # Recharge cadeau : asset TNF que cette cle peut crediter via l'API v2
         # / Gift refill: TNF asset this key may top-up via API v2
         'gift_asset',
@@ -418,7 +428,8 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 'phone',
                 'email',
                 'site_web',
-                'skin',
+                # 'skin' deplace vers pages.ConfigurationSite (admin « Site web »).
+                # / 'skin' moved to pages.ConfigurationSite (« Site web » admin).
             )
         }),
         ('Options générales', {

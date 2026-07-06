@@ -1,0 +1,198 @@
+{% load static i18n %}{# Squelette du skin — déplacé depuis BaseBillet/templates (migration skins CHANTIER-01). Ce commentaire ne produit aucune sortie HTML. / Skin skeleton moved from BaseBillet/templates (skins migration). #}
+
+{% get_current_language as LANGUAGE_CODE %}
+
+<!doctype html>
+<html lang="{{ LANGUAGE_CODE }}">
+
+<head>
+    {% load i18n %}
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="
+            {% block meta_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
+    <meta name="robots" content="{% block meta_robots %}{% if noindex_seo %}noindex, nofollow{% else %}index, follow{% endif %}{% endblock %}">
+    <title>{% block title %}{% translate 'Home' %}{% endblock %} | {{ config.organisation }}</title>
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+    <meta property="og:url" content="{{ request.build_absolute_uri }}">
+    <meta property="og:title"
+          content="{% block og_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
+    <meta property="og:image" content="{% block og_image %}{% if config.get_social_card %}https://{{ request.get_host }}{{ config.get_social_card }}{% endif %}{% endblock %}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="{% block og_image_alt %}{{ config.organisation }}{% endblock %}">
+    <meta property="og:site_name" content="{{ config.organisation }}">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="{{ request.build_absolute_uri }}">
+    <meta name="twitter:domain" content="{{ request.get_host }}">
+    <meta name="twitter:title"
+          content="{% block twitter_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
+    <meta name="twitter:description"
+          content="{% block twitter_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
+    <meta name="twitter:image" content="{% block twitter_image %}{% if config.get_social_card %}https://{{ request.get_host }}{{ config.get_social_card }}{% endif %}{% endblock %}">
+    <meta name="twitter:image:alt" content="{% block twitter_image_alt %}{{ config.organisation }}{% endblock %}">
+    {% if config.twitter %}
+        <meta name="twitter:site"
+              content="@{{ config.twitter|cut:'https://twitter.com/'|cut:'https://x.com/'|cut:'/' }}">{% endif %}
+
+    <!-- URL canonique pour eviter les doublons dans les moteurs de recherche -->
+    <link rel="canonical" href="{{ request.build_absolute_uri }}">
+
+    <!-- Donnees structurees JSON-LD (SEO)
+         Organization : Knowledge Panel Google (logo, reseaux sociaux, nom)
+         WebSite : identifie le site pour les moteurs de recherche -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@graph": [
+            {
+                "@type": "Organization",
+                "name": "{{ config.organisation }}",
+                "url": "https://{{ request.get_host }}",
+                {% if config.get_social_card %}"logo": "https://{{ request.get_host }}{{ config.get_social_card }}",{% endif %}
+                {% if config.short_description %}"description": "{{ config.short_description|striptags }}",{% endif %}
+                "sameAs": [{% if config.facebook %}"{{ config.facebook }}"{% endif %}{% if config.facebook and config.instagram %}, {% endif %}{% if config.instagram %}"{{ config.instagram }}"{% endif %}{% if config.twitter %}{% if config.facebook or config.instagram %}, {% endif %}"{{ config.twitter }}"{% endif %}]
+                {% if config.postal_address %},
+                "address": {
+                    "@type": "PostalAddress",
+                    {% if config.postal_address.street_address %}"streetAddress": "{{ config.postal_address.street_address }}",{% endif %}
+                    {% if config.postal_address.address_locality %}"addressLocality": "{{ config.postal_address.address_locality }}",{% endif %}
+                    {% if config.postal_address.postal_code %}"postalCode": "{{ config.postal_address.postal_code }}",{% endif %}
+                    {% if config.postal_address.address_country %}"addressCountry": "{{ config.postal_address.address_country }}"{% endif %}
+                }
+                {% endif %}
+            },
+            {
+                "@type": "WebSite",
+                "name": "{{ config.organisation }}",
+                "url": "https://{{ request.get_host }}"
+            }
+        ]
+    }
+    </script>
+
+    {% block extra_meta %}{% endblock %}
+
+    <link rel="preload" as="style" href="{% static 'commun/css/tibillet.css' %}">
+    <link rel="modulepreload" href="{% static 'commun/js/theme-switcher.mjs' %}">
+    <link rel="modulepreload" href="{% static 'commun/js/language-switcher.mjs' %}">
+    <link rel="modulepreload" href="{% static 'commun/js/membership-form.mjs' %}">
+
+    <link rel="icon" type="image/png" href="{% static 'commun/img/favicon.png' %}">
+    <link data-bs-stylesheet="bootstrap" href="{% static 'commun/css/bootstrap.min.5.3.3.css' %}" rel="stylesheet">
+    <link data-bs-stylesheet="bootstrap-icons" rel="stylesheet"
+          href="{% static 'commun/css/bootstrap-icons.min.css' %}">
+    <link rel="stylesheet" href="{% static 'commun/css/vars.css' %}">
+    <link rel="stylesheet" href="{% static 'commun/css/tibillet.css' %}">
+    <link rel="stylesheet" href="{% static 'commun/css/swal.css' %}">
+
+    <script src="{% static 'commun/js/bootstrap.bundle.min.5.3.3.js' %}"></script>
+    {% comment %}
+    Config htmx (lue par htmx à son chargement) :
+    - historyCacheSize 0 : pas de cliché du DOM dans le localStorage — après un
+      déploiement, un « retour » ne peut plus restaurer une page de l'ancienne
+      version du site.
+    - refreshOnHistoryMiss true : sans cliché, un « retour » fait un vrai
+      rechargement complet (page garantie fraîche et cohérente).
+    / htmx config (read by htmx at load time): no DOM snapshot in localStorage
+    (a back navigation can never restore a page from a previous deployment),
+    and without a snapshot, back triggers a real full reload (guaranteed fresh).
+    {% endcomment %}
+    <meta name="htmx-config" content='{"historyCacheSize": 0, "refreshOnHistoryMiss": true}'>
+    <script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
+    <script>
+        /**
+         * Erreurs 404/500 sous HTMX : afficher la page d'erreur au lieu de ne rien faire.
+         * / 404/500 under HTMX: show the error page instead of doing nothing.
+         *
+         * LOCALISATION : pages/templates/pages/classic/shell.html (idem skin faire_festival)
+         *
+         * Par defaut htmx IGNORE les reponses non-2xx : un clic qui tombe en
+         * 404/500 ne produit RIEN a l'ecran (UX muette). Le serveur renvoie
+         * pourtant une page d'erreur utile (handler404/handler500, au look du
+         * skin, en fragment headless quand la requete est HTMX). On force donc
+         * le swap de cette page dans le BODY entier — pas dans la cible du clic
+         * (une 404 dans un petit offcanvas serait illisible).
+         * On ne touche qu'au HTML : les reponses JSON (ex : paiement Stripe de
+         * crowds, qui a son propre listener) ne sont pas concernees.
+         * / By default htmx IGNORES non-2xx responses: a click hitting a 404/500
+         * shows NOTHING. The server does return a useful error page (skin-aware,
+         * headless fragment under HTMX), so we swap it into the whole BODY (not
+         * the click's target). HTML only: JSON responses keep their own handling.
+         */
+        document.addEventListener("htmx:beforeSwap", function (evenement) {
+            const statut = evenement.detail.xhr.status;
+            const type_de_contenu = evenement.detail.xhr.getResponseHeader("Content-Type") || "";
+            if ((statut === 404 || statut === 500) && type_de_contenu.indexOf("text/html") === 0) {
+                evenement.detail.shouldSwap = true;
+                evenement.detail.isError = false;
+                evenement.detail.target = document.body;
+            }
+        });
+    </script>
+    <script src="{% static 'mvt_htmx/js/loading-states.js' %}"></script>
+    <script src="{% static 'commun/js/sweetalert2@11.js' %}"></script>
+    {% if formbricks_api_host %}
+        <script src="{{ formbricks_api_host }}/js/formbricks.umd.cjs" async></script>
+    {% endif %}
+    <script type="module">
+        import * as ThemeSwitcher from '{% static "commun/js/theme-switcher.mjs" %}'
+        import * as LanguageSwitcher from '{% static "commun/js/language-switcher.mjs" %}'
+        import * as MembershipForm from '{% static "commun/js/membership-form.mjs" %}'
+
+        // components
+        import '{% static "commun/js/bs-counter.mjs" %}'
+
+        ThemeSwitcher.init()
+        LanguageSwitcher.init()
+        MembershipForm.init()
+    </script>
+
+</head>
+
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-ext="loading-states" class="min-vh-100 d-flex flex-column">
+
+{% if not embed %} <!-- Pas de navbar si embed -->
+    {% include "pages/classic/partials/navbar.html" %}
+{% endif %}
+
+<main class="flex-fill d-flex flex-column">
+    {% block main %}{% endblock main %}
+</main>
+
+{% if not embed %} <!-- Pas de footer si embed -->
+    {% include "pages/classic/partials/footer.html" %}
+{% endif %}
+
+{% if not embed %}
+    {% block offcanvas_globaux %}
+        {% comment %}
+        Chrome partagé : panneaux globaux, en fin de body (CHANTIER-02 lot C2).
+        Un skin peut surcharger CE BLOC pour changer leur emplacement, jamais
+        leur contenu (décision 3 : chrome non-skinnable).
+        / Shared chrome: global panels at end of body. A skin may override THIS
+        BLOCK to change their placement, never their content.
+        {% endcomment %}
+        {% include "commun/offcanvas/contact.html" %}
+        {% include "commun/offcanvas/connexion.html" %}
+    {% endblock offcanvas_globaux %}
+{% endif %}
+
+{# Offcanvas spécifiques aux vues (tunnels réservation, adhésion…). #}
+{# / View-specific offcanvas (booking and membership tunnels…). #}
+{% block offcanvas %}{% endblock offcanvas %}
+
+{% include "commun/toasts.html" %}
+
+<!-- spinner -->
+{% include "commun/loading.html" %}
+
+{% block scripts %}{% endblock scripts %}
+
+</body>
+</html>

@@ -572,7 +572,7 @@ class CancelSubscription(DeprecatedV1Mixin, APIView):
             if is_htmx:
                 # Can't render a specific card without a valid UUID → keep JSON error
                 return HttpResponse(render_to_string(
-                    'reunion/views/account/membership/membership_card.html',
+                    'fonctionnel/compte/membership/membership_card.html',
                     {
                         # no membership to render; return a minimal error block instead
                         'message_error': _('Invalid request.'),
@@ -596,7 +596,7 @@ class CancelSubscription(DeprecatedV1Mixin, APIView):
 
         if membership.status != Membership.AUTO:
             if is_htmx:
-                html = render_to_string('reunion/views/account/membership/membership_card.html', {
+                html = render_to_string('fonctionnel/compte/membership/membership_card.html', {
                     'membership': membership,
                     'message_error': _('No automatic renewal on this.'),
                 })
@@ -605,7 +605,7 @@ class CancelSubscription(DeprecatedV1Mixin, APIView):
 
         if not membership.stripe_id_subscription:
             if is_htmx:
-                html = render_to_string('reunion/views/account/membership/membership_card.html', {
+                html = render_to_string('fonctionnel/compte/membership/membership_card.html', {
                     'membership': membership,
                     'message_error': _('Stripe subscription ID missing'),
                 })
@@ -624,7 +624,7 @@ class CancelSubscription(DeprecatedV1Mixin, APIView):
         except stripe.error.InvalidRequestError as e:
             logging.getLogger(__name__).exception("Stripe InvalidRequestError while canceling subscription")
             if is_htmx:
-                html = render_to_string('reunion/views/account/membership/membership_card.html', {
+                html = render_to_string('fonctionnel/compte/membership/membership_card.html', {
                     'membership': membership,
                     'message_error': _('Stripe error'),
                 })
@@ -633,7 +633,7 @@ class CancelSubscription(DeprecatedV1Mixin, APIView):
         except Exception as e:
             logging.getLogger(__name__).exception("Unexpected error while canceling subscription")
             if is_htmx:
-                html = render_to_string('reunion/views/account/membership/membership_card.html', {
+                html = render_to_string('fonctionnel/compte/membership/membership_card.html', {
                     'membership': membership,
                     'message_error': _('Unexpected error'),
                 })
@@ -647,7 +647,7 @@ class CancelSubscription(DeprecatedV1Mixin, APIView):
         # HTMX response: re-render the updated card with a success message
         success_message = _('Automatic renewal turned off. Your subscription remains active until the end of the current period.')
         if is_htmx:
-            html = render_to_string('reunion/views/account/membership/membership_card.html', {
+            html = render_to_string('fonctionnel/compte/membership/membership_card.html', {
                 'membership': membership,
                 'message_success': success_message,
             })

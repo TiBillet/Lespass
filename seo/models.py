@@ -65,7 +65,28 @@ class SEOCache(models.Model):
     )
 
     class Meta:
-        unique_together = [("cache_type", "tenant")]
+        # Deux contraintes uniques PARTIELLES au lieu d'un unique_together :
+        # PostgreSQL 13 considere les NULL comme distincts dans un index unique,
+        # donc unique_together ne protegeait PAS les agregats globaux (tenant=None).
+        # Resultat : deux rebuilds concurrents (worker Celery + commande manuelle
+        # refresh_seo_cache du flush) creaient des doublons, et tous les rebuilds
+        # suivants crashaient en MultipleObjectsReturned.
+        # / Two PARTIAL unique constraints instead of unique_together: PostgreSQL 13
+        # treats NULLs as distinct in a unique index, so unique_together did NOT
+        # protect global aggregate rows (tenant=None). Concurrent rebuilds created
+        # duplicates and every later rebuild crashed with MultipleObjectsReturned.
+        constraints = [
+            models.UniqueConstraint(
+                fields=["cache_type", "tenant"],
+                condition=models.Q(tenant__isnull=False),
+                name="seo_cache_unique_type_par_tenant",
+            ),
+            models.UniqueConstraint(
+                fields=["cache_type"],
+                condition=models.Q(tenant__isnull=True),
+                name="seo_cache_unique_type_global",
+            ),
+        ]
         verbose_name = _("SEO Cache")
         verbose_name_plural = _("SEO Cache entries")
 

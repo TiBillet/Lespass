@@ -1,0 +1,33 @@
+{% load i18n %}{% comment %}
+OFFCANVAS TUNNEL D'ADHÉSION (#subscribePanel)
+/ Membership tunnel offcanvas (#subscribePanel)
+
+LOCALISATION : BaseBillet/templates/commun/offcanvas/adhesion_tunnel.html
+
+Chrome partagé, NON skinnable : inclus par les vues membership/list des deux
+skins. Le corps #offcanvas-membership est la CIBLE HTMX du formulaire
+d'adhésion : les cartes produits font
+hx-get="/memberships/<uuid>/" hx-target="#offcanvas-membership"
+data-bs-toggle="offcanvas" data-bs-target="#subscribePanel".
+Les ids #subscribePanel et #offcanvas-membership font partie du contrat de
+skin : ne JAMAIS les renommer.
+La largeur responsive vient de la classe .offcanvas-tunnel (tibillet.css).
+/ Shared chrome. #offcanvas-membership is the HTMX target of the membership
+form. Both ids are part of the skin contract. Responsive width comes from
+the .offcanvas-tunnel class (tibillet.css).
+{% endcomment %}
+<div class="offcanvas-start offcanvas offcanvas-tunnel" tabindex="-1" id="subscribePanel" aria-labelledby="subscribePanelLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="subscribePanelLabel">{% translate 'Subscribe' %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"
+                aria-label="{% translate 'Close' %}"></button>
+    </div>
+    <div class="offcanvas-body" id="offcanvas-membership">
+        {# Contenu chargé par HTMX au clic sur une carte produit. #}
+        {# / Content loaded by HTMX when a product card is clicked. #}
+        <p class="text-center py-5">
+            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            {% translate 'Loading...' %}
+        </p>
+    </div>
+</div>

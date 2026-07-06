@@ -10,6 +10,8 @@ from .views import (
     MembershipViewSet,
     WalletRefillViewSet,
     CrowdInitiativeViewSet,
+    PageViewSet,
+    BlocViewSet,
 )
 
 router = DefaultRouter()
@@ -28,6 +30,9 @@ router.register(r"memberships", MembershipViewSet, basename="membership")
 # Wallet gift-refill endpoint (basename 'walletrefill' -> ExternalApiKey.gift_asset)
 router.register(r"wallet-refills", WalletRefillViewSet, basename="walletrefill")
 router.register(r"initiatives", CrowdInitiativeViewSet, basename="crowd")
+# basename = cle de api_permissions() (page / bloc)
+router.register(r"pages", PageViewSet, basename="page")
+router.register(r"blocs", BlocViewSet, basename="bloc")
 urlpatterns = [
     path("", include(router.urls)),
 ]

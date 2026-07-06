@@ -61,7 +61,7 @@ urlpatterns = [
     # Redirect to the reunion skin favicon (PNG) to avoid 404s.
     path(
         'favicon.ico',
-        RedirectView.as_view(url=static('reunion/img/favicon.png'), permanent=True),
+        RedirectView.as_view(url=static('commun/img/favicon.png'), permanent=True),
         name='favicon_ico',
     ),
 
@@ -99,8 +99,11 @@ urlpatterns = [
     path('connexion/', base_view.connexion, name='connexion'),
     path('deconnexion/', base_view.deconnexion, name='deconnexion'),
     path('emailconfirmation/<str:token>', base_view.emailconfirmation, name='emailconfirmation'),
-    path('infos-pratiques/', base_view.infos_pratiques, name='infos_pratiques'),
-    path('le-faire-festival/', base_view.le_faire_festival, name='le_faire_festival'),
+    # Routes legacy 'infos-pratiques' et 'le-faire-festival' RETIREES : ces pages
+    # sont desormais des Page de l'app pages (slugs liberes). La route attrape-tout
+    # /<slug>/ de pages.urls les sert.
+    # / Legacy 'infos-pratiques' and 'le-faire-festival' routes REMOVED: now pages-app
+    # Page objects (slugs freed), served by the pages.urls catch-all.
 
     ##### TEST NICO
     # path("create_tenant/", base_view.create_tenant, name='create_tenant'),
