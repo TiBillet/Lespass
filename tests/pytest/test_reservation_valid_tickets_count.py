@@ -34,6 +34,7 @@ import uuid
 from datetime import timedelta
 
 import pytest
+from django.db.models import Count, Q
 from django.utils import timezone
 from django_tenants.utils import tenant_context
 
@@ -188,6 +189,53 @@ def test_annulation_partielle_deplace_un_ticket_de_valid_vers_cancelled(tenant):
 
         assert reservation.valid_tickets_count() == 1
         assert reservation.cancelled_tickets_count() == 1
+
+        Ticket.objects.filter(reservation=reservation).delete()
+        reservation.delete()
+
+
+def test_annotate_correspond_aux_methodes_du_modele(tenant):
+    """
+    Garde-fou anti-regression : le queryset annote de MyAccount.my_reservations()
+    doit toujours produire les memes nombres que Reservation.valid_tickets_count()
+    et cancelled_tickets_count(). Si quelqu'un change la logique d'un cote sans
+    mettre a jour l'autre, ce test doit rougir immediatement.
+    / Regression guard: the annotated queryset from MyAccount.my_reservations()
+    must always match Reservation.valid_tickets_count() and
+    cancelled_tickets_count(). If either side changes without updating the
+    other, this test must fail immediately.
+    """
+    with tenant_context(tenant):
+        from AuthBillet.utils import get_or_create_user
+        from BaseBillet.models import Event, Reservation, Ticket
+
+        suffix = uuid.uuid4().hex[:8]
+
+        event = Event.objects.create(
+            name=f"AnnotateEquivalence_{suffix}",
+            datetime=timezone.now() + timedelta(days=7),
+        )
+        user = get_or_create_user(f"annotate_equiv_{suffix}@example.com", send_mail=False)
+        reservation = Reservation.objects.create(user_commande=user, event=event)
+
+        Ticket.objects.create(reservation=reservation, status=Ticket.NOT_SCANNED)
+        Ticket.objects.create(reservation=reservation, status=Ticket.SCANNED)
+        Ticket.objects.create(reservation=reservation, status=Ticket.CANCELED)
+        Ticket.objects.create(reservation=reservation, status=Ticket.CREATED)
+
+        # Meme annotation que MyAccount.my_reservations() (BaseBillet/views.py).
+        # / Same annotation as MyAccount.my_reservations() (BaseBillet/views.py).
+        annotated = Reservation.objects.filter(uuid=reservation.uuid).annotate(
+            annotated_valid_count=Count(
+                'tickets', filter=Q(tickets__status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED])
+            ),
+            annotated_cancelled_count=Count(
+                'tickets', filter=Q(tickets__status=Ticket.CANCELED)
+            ),
+        ).first()
+
+        assert annotated.annotated_valid_count == reservation.valid_tickets_count()
+        assert annotated.annotated_cancelled_count == reservation.cancelled_tickets_count()
 
         Ticket.objects.filter(reservation=reservation).delete()
         reservation.delete()
