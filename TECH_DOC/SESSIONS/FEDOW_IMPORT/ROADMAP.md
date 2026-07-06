@@ -19,13 +19,14 @@ Branche de travail : `main-fedow-import`.
 
 ## 1. Vue d'ensemble des lots
 
-| Lot | Contenu | Statut (maj 2026-06-20) | Dépend de |
+| Lot | Contenu | Statut (maj 2026-07-06) | Dépend de |
 |---|---|---|---|
 | C-A | Socle + champs BaseBillet + **admin laboutik/inventaire** | ✅ **FAIT** — pytest 262/263, admin (changelists + change views) + POS espèce/CB sur Chrome, env V2 connecté au Fedow (`can_fedow=True`, place créé) | — |
 | C-B | Durcissement (audit + parades S6) | ✅ **COUVERT par le portage** — corrections génériques (verrous, atomicité, `SoldeInsuffisant`) validées pytest. **G1/G8 CADUQUES** (cf. §1bis) | C-A |
-| C-C | **Interop FED au POS** (segment cascade transparent) | ⏳ **PROCHAIN LOT** | C-A, C-B |
-| C-D | Onboarding, ops, pilote | ⏳ | C-B, C-C |
-| **Dette** | **Admin modulaire** : `admin_tenant.py` (180 Ko) → modules ; booking/controlvanne/cards ; retrait `_safe_rev` | ⏳ **lot dédié** ([doc 12](./12-dette-admin-modulaire.md)) | C-A |
+| C-C | **Interop FED au POS** (segment cascade transparent) | ✅ **FAIT (code committé)** — C1 lecture (`c1-solde-complet-carte-fed.md`), C2 débit fin FED/TLF (`d8396a64`), C3 fallback 2e carte (`68188286`) + tests (`c3da37dc`). ⚠️ Docs sessions C2/C3 jamais rédigées | C-A, C-B |
+| C-D | Onboarding, ops, pilote | ⏳ **PROCHAIN LOT** | C-B, C-C |
+| **Controlvanne** | Tireuses connectées : câblage app + appairage TI + admin | ✅ **FAIT 2026-07-06** — hub dédié [TECH_DOC/SESSIONS/CONTROLVANNE/](../CONTROLVANNE/INDEX.md). Reste : WebSocket **prod** (supervisord, CHANTIER-02) | C-A |
+| **Dette** | **Admin modulaire** : `admin_tenant.py` (180 Ko) → modules ; booking (autre branche)/cards ; retrait `_safe_rev` | ⏳ **lot dédié** ([doc 12](./12-dette-admin-modulaire.md)) | C-A |
 
 Prérequis transverses :
 - [ ] **drift=0 confirmé** sur la prod Fedow (reconcile_tokens passé la nuit

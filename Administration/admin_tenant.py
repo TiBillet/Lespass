@@ -4831,10 +4831,29 @@ from unfold.admin import ModelAdmin as _UnfoldModelAdmin
 
 @admin.register(_TermUserProxy, site=staff_admin_site)
 class TermUserAdmin(_UnfoldModelAdmin):
-    list_display = ('email', 'terminal_role', 'is_active')
+    compressed_fields = True
+    warn_unsaved_form = True
+
+    list_display = ('email', 'terminal_role', 'is_active', 'last_login')
     list_filter = ('terminal_role', 'is_active')
     search_fields = ('email',)
 
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
     def has_add_permission(self, request, obj=None):
-        # Terminaux crees uniquement via le flow discovery / Terminals created via discovery only
+        # Un TermUser naît UNIQUEMENT d'un claim discovery réussi (PIN).
+        # L'appairage se pilote depuis l'admin PairingDevice (menu
+        # « Terminaux hardware ») ; le compte apparaît ici après le claim.
+        # / A TermUser is born ONLY from a successful discovery claim (PIN).
+        # Pairing is driven from the PairingDevice admin ("Hardware
+        # terminals" menu); the account shows up here after the claim.
         return False
+
+    def has_change_permission(self, request, obj=None):
+        # Autorisé pour révoquer un terminal (is_active) / Allowed to revoke
+        # a terminal (is_active).
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)

@@ -115,33 +115,13 @@ services:
       - laboutik.${DOMAIN}:172.17.0.1
       - lespass.${DOMAIN}:172.17.0.1
       - chantefrein.${DOMAIN}:172.17.0.1
-    command: "bash start_dev.sh"
-
-  lespass_celery:
-    build: .
-#    image: tibillet/lespass:latest
-    container_name: lespass_celery
-    restart: unless-stopped
-    hostname: lespass_celery
-    env_file: .env
-    volumes:
-      - ./:/DjangoFiles
-    depends_on:
-      - lespass_postgres
-      - lespass_redis
-      - lespass_memcached
-    links:
-      - lespass_postgres:postgres
-      - lespass_redis:redis
-      - lespass_memcached:memcached
-    networks:
-      - backend
-    extra_hosts:
-      - fedow.${DOMAIN}:172.17.0.1
-      - laboutik.${DOMAIN}:172.17.0.1
-      - lespass.${DOMAIN}:172.17.0.1
-      - chantefrein.${DOMAIN}:172.17.0.1
-    command: "poetry run celery -A TiBillet worker -l INFO -B --concurrency=6"
+    # start.sh lance supervisord qui orchestre gunicorn (HTTP :8002),
+    # daphne (WebSockets :7999) et celery (worker + beat) dans CE conteneur.
+    # Plus de service lespass_celery séparé : un seul conteneur en prod.
+    # / start.sh runs supervisord which orchestrates gunicorn (HTTP :8002),
+    # daphne (WebSockets :7999) and celery (worker + beat) in THIS container.
+    # No more separate lespass_celery service: a single production container.
+    command: "bash start.sh"
 
   lespass_nginx:
     image: nginx:latest
@@ -151,7 +131,10 @@ services:
     links:
       - lespass_django:lespass_django
     volumes:
-      - ./nginx/lespass_dev.conf:/etc/nginx/conf.d/default.conf:ro
+      # Conf PROD : route /ws/ et /wss/ vers daphne (:7999), le reste vers
+      # gunicorn (:8002). / PROD conf: /ws/ and /wss/ → daphne (:7999),
+      # everything else → gunicorn (:8002).
+      - ./nginx_prod/lespass_prod.conf:/etc/nginx/conf.d/default.conf:ro
       - ./www:/www
       - ./logs:/logs
     labels:

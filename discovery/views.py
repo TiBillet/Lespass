@@ -52,11 +52,14 @@ class ClaimPinView(APIView):
         # Basculer dans le schéma du tenant pour créer les credentials.
         # Le type de credentials dépend du rôle du terminal (terminal_role) :
         # - LB (LaBoutik POS) : TermUser + LaBoutikAPIKey liée
+        # - TI (Tireuse)      : TireuseAPIKey (flow inchangé)
         # - KI (Kiosque)      : TermUser + LaBoutikAPIKey liée (même pipeline que LB)
-        # - TI (Tireuse)      : non disponible (controlvanne pas encore porté)
-        # / Switch to tenant schema to create credentials, by terminal_role:
-        # - LB / KI: TermUser + linked LaBoutikAPIKey
-        # - TI     : unavailable (controlvanne not ported yet)
+        # / Switch to tenant schema to create credentials.
+        # Credential type depends on terminal_role:
+        # - LB (LaBoutik POS): TermUser + linked LaBoutikAPIKey
+        # - TI (Tireuse)     : TireuseAPIKey (unchanged flow)
+        # - KI (Kiosk)       : TermUser + linked LaBoutikAPIKey (same pipeline as LB)
+        tireuse_uuid = None
         try:
             with tenant_context(tenant_for_this_device):
                 # Routage selon terminal_role du PairingDevice
@@ -77,13 +80,20 @@ class ClaimPinView(APIView):
                     api_key_string = _create_laboutik_terminal(pairing_device)
 
                 elif pairing_device.terminal_role == TibilletUser.ROLE_TIREUSE:
-                    # Flow Tireuse : controlvanne n'est pas porté dans ce dépôt.
-                    # On refuse explicitement plutôt que d'importer un module absent.
-                    # / Tireuse flow: controlvanne is not ported here. Refuse
-                    # explicitly instead of importing a missing module.
-                    raise ValueError(
-                        "Tireuse pairing not available (controlvanne not ported)"
+                    # Flow Tireuse INCHANGÉ pour cette phase
+                    # / Tireuse flow UNCHANGED for this phase
+                    from controlvanne.models import TireuseBec, TireuseAPIKey
+                    tireuse = TireuseBec.objects.filter(
+                        pairing_device=pairing_device
+                    ).first()
+                    if not tireuse:
+                        raise ValueError(
+                            "Pairing role TIREUSE but no TireuseBec linked"
+                        )
+                    _key_obj, api_key_string = TireuseAPIKey.objects.create_key(
+                        name=f"discovery-{pairing_device.uuid}"
                     )
+                    tireuse_uuid = str(tireuse.uuid)
 
                 else:
                     # Filet de sécurité : rôle inconnu (non prévu dans le modèle).
@@ -111,11 +121,17 @@ class ClaimPinView(APIView):
             f"paired to tenant '{tenant_for_this_device.name}'"
         )
 
-        return Response({
+        response_data = {
             "server_url": server_url,
             "api_key": api_key_string,
             "device_name": pairing_device.name,
-        }, status=status.HTTP_200_OK)
+        }
+        # Si le device est lié à une tireuse, inclure l'UUID
+        # / If the device is linked to a tap, include the UUID
+        if tireuse_uuid:
+            response_data["tireuse_uuid"] = tireuse_uuid
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 def _create_laboutik_terminal(pairing_device):

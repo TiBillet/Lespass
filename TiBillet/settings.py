@@ -204,6 +204,9 @@ TENANT_APPS = (
     'comptabilite',
     'laboutik',
     'inventaire',
+    # Tireuses connectées (controlvanne) — paiement NFC via fedow_core local.
+    # / Connected beer taps (controlvanne) — NFC payment via local fedow_core.
+    'controlvanne',
     # Voir SHARED_APPS : 'pages' est en dual-list (isolation par schema, public inclus).
     # / See SHARED_APPS: 'pages' is dual-listed (per-schema isolation, public included).
     'pages',

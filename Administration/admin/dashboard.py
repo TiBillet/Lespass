@@ -336,14 +336,12 @@ def get_sidebar_navigation(request):
                         ),
                         "permission": admin_permission,
                     },
-                    {
-                        "title": _("Device pairing (PIN)"),
-                        "icon": "phonelink_setup",
-                        "link": _safe_rev(
-                            "staff_admin:discovery_pairingdevice_changelist"
-                        ),
-                        "permission": admin_permission,
-                    },
+                    # « Device pairing (PIN) » retiré d'ici : l'appairage vit
+                    # dans la section « Hardware terminals » plus bas (l'entrée
+                    # pointait déjà sur la même changelist PairingDevice).
+                    # / "Device pairing (PIN)" removed from here: pairing lives
+                    # in the "Hardware terminals" section below (same
+                    # PairingDevice changelist).
                     {
                         "title": _("Printers"),
                         "icon": "print",
@@ -386,10 +384,14 @@ def get_sidebar_navigation(request):
 
     # --- Section terminaux hardware : visible si caisse, monnaie locale ou tireuse ---
     # --- Hardware terminals section: visible if caisse, local currency or taps ---
-    # Les TermUser couvrent caisse (CA), tireuses (TI) et kiosques (KI) ;
-    # on affiche donc l'entree des que l'un des modules hardware est actif.
-    # / TermUsers cover cash register (CA), taps (TI) and kiosks (KI);
-    # so we show the entry as soon as any hardware module is active.
+    # L'entree pointe vers les PairingDevice (discovery) : c'est la que vit
+    # tout le process d'appairage — creation du PIN (caisse LB, kiosque KI),
+    # suivi des PIN en attente et des appareils reclames. Les comptes
+    # TermUser crees par les claims restent visibles via l'app AuthBillet.
+    # / The entry points to PairingDevices (discovery): the whole pairing
+    # process lives there — PIN creation (LB pos, KI kiosk), pending PINs
+    # and claimed devices. The TermUser accounts created by claims remain
+    # reachable through the AuthBillet app.
     if (
         configuration.module_caisse
         or configuration.module_monnaie_locale
@@ -405,7 +407,7 @@ def get_sidebar_navigation(request):
                         "title": _("Terminals"),
                         "icon": "tablet",
                         "link": _safe_rev(
-                            "staff_admin:AuthBillet_termuser_changelist"
+                            "staff_admin:discovery_pairingdevice_changelist"
                         ),
                         "permission": admin_permission,
                     },
@@ -851,18 +853,18 @@ MODULE_FIELDS = {
         ),
         "testid": "dashboard-card-inventaire",
     },
-    # # Tireuses connectees avec paiement NFC (controlvanne)
-    # # / Connected beer taps with NFC payment (controlvanne)
-    # "module_tireuse": {
-    #     "name": _("Connected taps"),
-    #     "description": _(
-    #         "Connected beer tap management: RFID authorization, flow metering, kiosk display."
-    #     ),
-    #     "testid": "dashboard-card-tireuse",
-    #     "link_url": "/controlvanne/kiosk/",
-    #     "link_label": _("Open kiosk"),
-    #     "link_icon": "fa-display",
-    # },
+    # Tireuses connectees avec paiement NFC (controlvanne)
+    # / Connected beer taps with NFC payment (controlvanne)
+    "module_tireuse": {
+        "name": _("Connected taps"),
+        "description": _(
+            "Connected beer tap management: RFID authorization, flow metering, kiosk display."
+        ),
+        "testid": "dashboard-card-tireuse",
+        "link_url": "/controlvanne/kiosk/",
+        "link_label": _("Open kiosk"),
+        "link_icon": "fa-display",
+    },
     # "module_booking": {
     #     "name": _("Booking"),
     #     "description": _("Resource booking: rooms, equipment, coworking desks."),
