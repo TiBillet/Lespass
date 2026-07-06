@@ -1,0 +1,16 @@
+{% load static i18n %}
+{% comment %}
+    BLOC IMAGE — skin classic. Image seule, centree (ex. image-titre de section).
+    / IMAGE block — classic skin. Standalone centered image (e.g. section title image).
+{% endcomment %}
+{# Le champ EXPLICITE affichage_image choisit le rendu : pleine largeur #}
+{# (photo, défaut) ou vignette centrée à taille naturelle (image-titre). #}
+{# / The EXPLICIT affichage_image field picks the rendering: full width #}
+{# (photo, default) or natural-size centered thumbnail (title-image). #}
+<section class="tb-bloc tb-bloc--image" data-testid="bloc-image">
+    {% if bloc.image %}
+        <img class="tb-bloc__image-seule{% if bloc.affichage_image == 'VIGNETTE_TITRE' %} tb-bloc__image-seule--vignette{% endif %}"
+             src="{{ bloc.image.fhd.url }}"
+             alt="{{ bloc.titre }}" loading="lazy">
+    {% endif %}
+</section>

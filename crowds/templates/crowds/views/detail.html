@@ -24,7 +24,7 @@
 {% block main %}
     <main class="container-lg pb-5">
         <header class="mb-3">
-            {% include 'reunion/partials/picture.html' with img=initiative.get_img alt=initiative.name style='max-height: 33vh' %}
+            {% include 'commun/partials/picture.html' with img=initiative.get_img alt=initiative.name style='max-height: 33vh' %}
             <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mt-3">
                 <h1 class="mb-0">{{ initiative.name }}
                     {% if initiative.closed %}
@@ -41,7 +41,7 @@
                 </h1>
 
                 {# Admin buttons #}
-                {% if user.is_staff or user.is_superuser %}
+                {% if user.is_staff or user.is_superuser or user.is_current_tenant_admin %}
                     <div class="d-flex gap-2 flex-shrink-0" data-testid="admin-actions">
                         {% if not initiative.closed %}
                             <form method="post" action="{{ initiative.get_absolute_url }}close/" style="display:inline;">

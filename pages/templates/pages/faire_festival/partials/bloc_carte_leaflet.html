@@ -1,0 +1,94 @@
+{% load static i18n %}
+{% comment %}
+    BLOC CARTE_LEAFLET — skin faire_festival. La CARTE seule : logo + carte Leaflet
+    (marqueurs depuis points_gps) + badge adresse. Sans wrapper de section : le
+    gabarit de page place ce bloc (seul, ou a droite d'un bloc INFOS via le groupe
+    "section_carte"). Les infos texte sont dans un bloc INFOS separe.
+    / CARTE_LEAFLET block — the MAP only: logo + Leaflet map + address badge. No
+    section wrapper; the page template positions it. Text info lives in a separate
+    INFOS block.
+{% endcomment %}
+{% with uid=bloc.uuid|stringformat:"s" %}
+<div data-testid="bloc-carte-leaflet">
+    <div class="logo-carte-container">
+        {% if bloc.image %}
+            <div class="text-center position-relative">
+                <img src="{{ bloc.image.hdr.url }}" alt="{{ config.organisation }}" class="img-fluid" style="max-height: 150px;">
+                {% if bloc.image_secondaire %}
+                    <div class="badge-dates"><img src="{{ bloc.image_secondaire.med.url }}" class="img-fluid" alt=""></div>
+                {% endif %}
+            </div>
+        {% endif %}
+        <div id="carte-leaflet-{{ uid }}"
+             style="width: 100%; height: 400px; border-radius: 8px; border: 3px solid var(--couleur-bleu-vif, #0077F5);"
+             aria-label="{% translate 'Carte interactive' %}"></div>
+    </div>
+    {% if bloc.badge %}
+        <div class="text-center badge-adresse-container">
+            <span class="badge-adresse text-white">{{ bloc.badge }}</span>
+        </div>
+    {% endif %}
+
+    {% with json_id="points-"|add:uid %}{{ bloc.points_gps|json_script:json_id }}{% endwith %}
+
+    <script>
+    (function () {
+        var uid = "{{ uid }}";
+        function initCarte() {
+            var conteneur = document.getElementById('carte-leaflet-' + uid);
+            if (!conteneur || conteneur._leaflet_id) { return; }
+            var noeudJson = document.getElementById('points-' + uid);
+            var points = [];
+            try { points = JSON.parse(noeudJson.textContent) || []; } catch (e) { points = []; }
+            if (!points.length) { return; }
+            var premier = points[0];
+            var map = L.map('carte-leaflet-' + uid, {
+                scrollWheelZoom: true, touchZoom: true, dragging: true, zoomControl: true
+            }).setView([premier.lat, premier.lng], 13);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+                maxZoom: 19
+            }).addTo(map);
+            var icone = L.divIcon({
+                className: '',
+                html: '<div style="background:#FFD700;border:3px solid #0077F5;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#0077F5;font-size:22px;font-family:monospace;box-shadow:0 3px 8px rgba(0,0,0,.25);">F</div>',
+                iconSize: [44, 44], iconAnchor: [22, 22], popupAnchor: [0, -26]
+            });
+            points.forEach(function (p) {
+                var m = L.marker([p.lat, p.lng], { icon: icone }).addTo(map);
+                if (p.label) {
+                    // Sécurité : on construit le popup en DOM avec textContent (jamais
+                    // d'HTML concatené) -> pas d'injection XSS via le label points_gps.
+                    // Style identique (monospace, centré, bleu) : aucun changement visuel.
+                    // / Security: build the popup via DOM + textContent (never concatenated
+                    // HTML) -> no XSS via the points_gps label. Same look, no visual change.
+                    var wrap = document.createElement('div');
+                    wrap.style.fontFamily = 'monospace';
+                    wrap.style.textAlign = 'center';
+                    var b = document.createElement('b');
+                    b.style.color = '#0077F5';
+                    b.textContent = p.label;
+                    wrap.appendChild(b);
+                    m.bindPopup(wrap);
+                }
+            });
+        }
+        function chargerLeafletPuis(cb) {
+            if (typeof L !== 'undefined') { cb(); return; }
+            if (!document.getElementById('leaflet-css')) {
+                var css = document.createElement('link');
+                css.id = 'leaflet-css'; css.rel = 'stylesheet';
+                css.href = '{% static "pages/vendor/leaflet/leaflet.css" %}';
+                document.head.appendChild(css);
+            }
+            var js = document.getElementById('leaflet-js');
+            if (js) { js.addEventListener('load', cb); return; }
+            js = document.createElement('script');
+            js.id = 'leaflet-js'; js.src = '{% static "pages/vendor/leaflet/leaflet.js" %}';
+            js.onload = cb; document.head.appendChild(js);
+        }
+        chargerLeafletPuis(initCarte);
+    })();
+    </script>
+</div>
+{% endwith %}

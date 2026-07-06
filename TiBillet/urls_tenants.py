@@ -6,7 +6,8 @@ from django.urls import path, include, re_path
 from Administration.admin_tenant import staff_admin_site
 # on modifie la creation du token pour rajouter access_token dans la réponse pour Postman
 from ApiBillet.views import Webhook_stripe
-from BaseBillet.sitemap import EventSitemap, ProductSitemap, StaticViewSitemap
+from BaseBillet.sitemap import EventSitemap, StaticViewSitemap
+from pages.sitemap import PageSitemap
 
 urlpatterns = [
     # path('jet/', include('jet.urls', 'jet')),  # Django JET URLS
@@ -19,10 +20,18 @@ urlpatterns = [
     # - Events sitemap: https://yourdomain.com/sitemap.xml?section=events
     # - Products sitemap: https://yourdomain.com/sitemap.xml?section=products
     # - Static pages sitemap: https://yourdomain.com/sitemap.xml?section=static
+    # 'products' (ProductSitemap) RETIRÉ (audit SEO 2026-07-05) : il listait
+    # /memberships/<uuid>/ — des FRAGMENTS HTMX purs (formulaire du tunnel,
+    # sans <html>/<head>) chargés dans #offcanvas-membership, pas des pages
+    # indexables. La vraie page indexable est /memberships/ (déjà dans
+    # StaticViewSitemap). / 'products' REMOVED: it listed /memberships/<uuid>/
+    # — pure HTMX fragments (tunnel form, no <html>/<head>), not indexable
+    # pages. The real indexable page is /memberships/ (already in
+    # StaticViewSitemap).
     path('sitemap.xml', sitemap, {'sitemaps': {
         'events': EventSitemap,
-        'products': ProductSitemap,
         'static': StaticViewSitemap,
+        'pages': PageSitemap,
     }, 'template_name': 'sitemaps/sitemap.xml'}, name='django.contrib.sitemaps.views.sitemap'),
 
     re_path(r'api/user/', include('AuthBillet.urls')),
@@ -71,6 +80,12 @@ urlpatterns = [
 
     path('', include('BaseBillet.urls')),
 
+    # App pages : route attrape-tout /<slug>/. Incluse APRES BaseBillet pour que
+    # les routes specifiques (/event/, /my_account/, etc.) restent prioritaires.
+    # / pages app: /<slug>/ catch-all route. Included AFTER BaseBillet so the
+    # specific routes (/event/, /my_account/, etc.) keep priority.
+    path('', include('pages.urls')),
+
     # path('admin/', admin.site.urls, name="public_admin_url"),
 ]
 
@@ -82,4 +97,7 @@ if settings.DEBUG and not settings.TEST:
     urlpatterns += [path("__reload__/", include("django_browser_reload.urls")),]
 
 # Register custom error handlers
+# handler404 : page 404 skin-aware + HTMX-aware (actif quand DEBUG=0).
+# / handler404: skin-aware + HTMX-aware 404 page (active when DEBUG=0).
+handler404 = 'BaseBillet.views.handler404'
 handler500 = 'BaseBillet.views.handler500'

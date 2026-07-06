@@ -1,6 +1,811 @@
 # Changelog / Journal des modifications
 
-## API v2 — 3 corrections : produit multi-events, double ticket sous-event, idempotence recharge / API v2 — 3 fixes
+## Statics : fin des namespaces reunion/ et faire_festival hors de leur app / Statics: reunion/ namespace removed, faire_festival moved to its app
+
+**Date :** 2026-07-06
+**Migration :** Non / No
+
+Les templates avaient migré mais pas les statics. Nettoyage vérifié par
+références :
+- **Déplacés vers `commun/js/`** (5 réfs template mises à jour) :
+  form-spinner.mjs, booking-calculator.mjs, qrcode.min.js,
+  qr-scanner.min.js + worker (+ source maps, déplacés ensemble : le worker
+  est importé en chemin relatif).
+- **`static/faire_festival/` → app pages** (`pages/static/faire_festival/`),
+  namespace d'URL inchangé → zéro référence à modifier (templates ff et
+  seeders continuent de pointer `faire_festival/...`).
+- **Supprimés (zéro référence)** : reunion/leaflet/ (remplacé par
+  pages/vendor/leaflet), reunion/js/htmx.min.1.9.12.js (tout le monde charge
+  mvt_htmx/js/), reunion/media/*.jpg (3 photos orphelines). Le dossier
+  `BaseBillet/static/reunion/` n'existe plus.
+- **Vérifié** : findstatic sur chaque fichier migré, statuts HTTP 200 sur
+  les URLs servies, page événement (réservation) chargeant commun/js/*,
+  home ff chargeant ses statics — et suite pytest complète : 368 passed.
+
+## Fil d'ariane : plus de lien vers un parent brouillon / Breadcrumb: no more link to a draft parent
+
+**Date :** 2026-07-06
+**Migration :** Non / No
+
+Backlog re-vérifié (3 points) : jsonld_page dans ff/page.html ✅ déjà réglé ;
+références motif/*.svg fantômes ✅ parties avec static/reunion ; restait le
+fil d'ariane d'une sous-page dont le PARENT est dépublié — lien visible ET
+maillon BreadcrumbList JSON-LD pointaient vers un brouillon (→ 404, et
+signal SEO incohérent). Le maillon parent est désormais conditionné à
+`parent.publie` aux 3 endroits (page.html classic + ff, jsonld_page), le
+fil retombe sur « Accueil › page ». Test pytest aller-retour
+(brouillon → masqué, republié → maillon de retour).
+
+## Admin : éditeur Markdown EasyMDE pour le bloc MARKDOWN / Admin: EasyMDE Markdown editor for the MARKDOWN block
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+Le bloc MARKDOWN s'éditait dans le WYSIWYG Trix (qui produit du HTML) —
+pénible et destructeur pour de la source Markdown. Après étude des options
+(ToastUI trop lourd, Milkdown/MDXEditor exigent un bundler, TinyMDE plus
+maintenu), choix : **EasyMDE 2.21.0** (release mai 2026, activement
+maintenu), VENDORISÉ (`pages/static/pages/vendor/easymde/`, ~330 Ko,
+zéro CDN, zéro dépendance pip).
+- **Deux champs de formulaire pour un champ modèle** : `texte` garde Trix
+  (types HTML), le nouveau champ de FORMULAIRE `texte_markdown` (affiché
+  seulement pour MARKDOWN via conditional_fields) porte EasyMDE ; la valeur
+  vit toujours dans `Bloc.texte` (initial au chargement, recopie APRÈS
+  sanitize dans save_model — retours à la ligne préservés, aller-retour
+  testé en shell).
+- Éditeur : coloration markdown live, barre d'outils essentielle (sans
+  upload d'image — les images passent par l'encart + `galerie:N`), aperçu,
+  côte-à-côte, plein écran ; correcteur anglais désactivé.
+- `editeur_markdown.js` : init + PIÈGE géré — CodeMirror mesuré dans le
+  conteneur caché par Alpine se dessine à 0px → refresh au changement de
+  type et après chargement. `editeur_markdown.css` : accordage clair/sombre
+  (classe .dark d'Unfold).
+- Vérifié en capture authentifiée (fiche de l'article de démo).
+- **Plein écran / côte-à-côte au-dessus de l'admin** : les calques
+  position:fixed d'EasyMDE (z-index 8-9) passaient DERRIÈRE les menus
+  d'Unfold (z-40) → remontés à z-60 (un plein écran couvre tout l'écran,
+  menus compris). Signalé par le mainteneur, vérifié par capture avec clic
+  réel sur le bouton côte-à-côte.
+- **Aperçu fidèle** : `previewRender` résout `![légende](galerie:N)` vers
+  les vraies URLs (table position→URL embarquée par le formulaire en
+  data-attribute — même règle que le rendu serveur) au lieu d'une image
+  cassée ; typographie de l'aperçu restaurée (le reset Tailwind de l'admin
+  aplatissait titres, listes et citations).
+
+## Admin blocs : filtres avancés Unfold / Blocks admin: Unfold advanced filters
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+La liste des blocs passe aux filtres avancés Unfold (pattern
+« driverwithfilters » de la démo), affichés SUR la page
+(`list_filter_sheet = False`) :
+- **Par Page** : liste de LIENS cliquables (préférence mainteneur, réitérée
+  contre l'autocomplete d'abord proposé) ;
+- **Par Page parente** : autocomplete — tous les blocs des sous-pages d'une
+  page (ex. tous les blocs des articles du Journal) ;
+- **Par Type de bloc** : menu déroulant compact (16 types).
+NOTE responsive : l'affichage sur la page n'existe qu'à partir du breakpoint
+2xl (fenêtre ≥ 1536 px) — en dessous, Unfold retombe automatiquement sur le
+bouton « Filtres » + tiroir latéral (mêmes filtres). Vérifié en captures
+authentifiées 1440/1720 px (Playwright + force_login E2E).
+
+## Admin pages : tri par glisser-déposer / Pages admin: drag-and-drop sorting
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+La liste des Pages passe au sortable Unfold (comme les blocs) : poignée de
+glisser-déposer à la place de la colonne `position` — l'ordre enregistré
+pilote directement l'ordre de la navbar.
+
+## Blog : images d'illustration dans les articles Markdown / Blog: illustration images in Markdown articles
+
+**Date :** 2026-07-05
+**Migration :** Non (réutilise ImageGalerie) / No (reuses ImageGalerie)
+
+Un article Markdown peut désormais être illustré avec de VRAIES images
+uploadées (proposition mainteneur : « inline image + balise dans le
+markdown ») :
+- **L'inline « Images »** (le même que la galerie, avec son tri par
+  glisser-déposer) apparaît aussi sur les blocs MARKDOWN
+  (`BlocAdmin.get_inlines`).
+- **Dans le texte** : syntaxe markdown standard `![légende](galerie:N)` —
+  N = position de l'image dans l'inline. Le nouveau filtre
+  `rendre_bloc_markdown` résout la référence vers l'URL réelle (variation
+  `med`, non croppée) AVANT le rendu markdown+nh3. Alt vide → la légende de
+  l'inline ; référence inconnue → marqueur texte visible
+  « [image galerie:N introuvable] » (jamais de trou silencieux).
+- **Aide dans l'admin** : note contextuelle sur la fiche du bloc MARKDOWN
+  (même mécanisme Alpine que l'aide HERO) documentant la syntaxe.
+- **Fixture** : l'article « fresque participative » du blog de démo est
+  illustré (image dans l'inline + référence dans le texte) — rendu vérifié.
+- Les images externes `![alt](https://…)` fonctionnent aussi (nh3 conserve
+  `<img src=https>`). Tests : résolution, fallback légende, réf inconnue.
+
+## Admin bloc : l'inline « Images de galerie » n'apparaît que sur un bloc GALERIE / Block admin: the gallery-images inline only shows on GALERIE blocks
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+`ImageGalerie` ne sert qu'au bloc GALERIE (modèle porteur de ses images) mais
+l'inline s'affichait sur TOUS les types de blocs (bruit dans le formulaire).
+`BlocAdmin.get_inlines` ne le retourne plus que pour un bloc GALERIE
+enregistré ; à la création (type inconnu côté serveur), il apparaît après le
+premier enregistrement — flux Django standard.
+
+## Bloc IMAGE : champ explicite `affichage_image` (fin de l'interrupteur caché) / IMAGE block: explicit `affichage_image` field (no more hidden toggle)
+
+**Date :** 2026-07-05
+**Migration :** Non pour la branche (champ plié dans `pages/0001` régénérée ; colonne posée à la main sur la base dev) / Folded into the regenerated `pages/0001`
+
+Le skin faire_festival choisissait le rendu du bloc IMAGE selon la PRÉSENCE
+du titre (interrupteur caché, jugé mauvais pattern par le mainteneur) : une
+photo titrée devenait une vignette minuscule (« Notre démarche »). Désormais :
+- **`Bloc.affichage_image`** (choices, pattern `image_position`) :
+  `PLEINE_LARGEUR` (défaut, photos) ou `VIGNETTE_TITRE` (petite image-titre
+  dessinée, centrée à taille naturelle). Le champ `titre` redevient un simple
+  texte alternatif.
+- Honoré par les DEUX skins : ff (les 2 modes historiques, choisis
+  explicitement) et classic (nouvelle variante `--vignette`).
+- Intégré partout : catalogue API v2, openapi, admin (`conditional_fields`
+  sur le type IMAGE), seeder ff (les 2 images-titres dessinées passent en
+  VIGNETTE_TITRE, la photo d'en-tête de notre-démarche en pleine largeur —
+  reseedé et vérifié par captures : home ff inchangée au pixel).
+
+## Grille des blocs homogénéisée + position hors du formulaire bloc / Unified block grid + position removed from the block form
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+**Audit visuel (captures Playwright pleine page avant/après)** — chaque bloc
+vivait sur sa propre grille : gouttières différentes, cartes « plus à
+l'intérieur » que les titres, trous verticaux géants entre un titre et sa
+grille. Corrections dans `tb-blocs.css` :
+- **Jeton unique `--tb-gouttiere`** (clamp 1.25rem→4rem) : les 6 gouttières
+  codées en dur basculent dessus (blocs, grille, fil d'ariane, leaflet, FAQ).
+- **Jeton `--tb-largeur-boite`** = largeur-max + 2×gouttière : les boîtes
+  AUTONOMES (grille de cartes, fil d'ariane, infos/carte leaflet, colonnes
+  FAQ, titre/signature de page) portaient `max-width + padding gouttière` →
+  leur contenu était décalé de +gouttière par rapport aux sections (le
+  « cartes plus à l'intérieur » signalé). Le calc les aligne au pixel.
+- **Rythme vertical titre→grille** : une section-titre (évènements,
+  liste-sous-pages, paragraphe) suivie d'une grille lui colle désormais
+  (avant : padding bas + padding haut s'additionnaient ≈ 2× l'espace de
+  section de vide).
+- **`text-wrap: balance`** sur les titres de blocs, de cartes et de page
+  (règle /ui : pas de mot orphelin).
+- Le h1/la signature de page (ajoutés à l'audit SEO) rejoignent le système
+  (ils étaient sur 72ch + 1rem, collés au bord gauche).
+- **Gouttière ALIGNANTE (2e passe, tous les blocs)** : deux logiques
+  coexistaient — contenu centré dans largeur-max (titres, textes → bord à
+  144px sur un écran de 1440) vs contenu calé à gauche de sa section (CTA
+  « Rejoignez la coopérative », témoignage, grande image, image+texte,
+  médias → gouttière brute à 64px). Le padding des sections devient
+  `max(gouttière, (100% − largeur-max)/2)` : chaque section contraint son
+  contenu dans le conteneur commun quel que soit son alignement interne.
+  Vérifié par captures Playwright pleine page : grande image, embed vidéo,
+  CTA (filet à 144), témoignage, Soutenir, FAQ, infos/Leaflet — tous sur la
+  même verticale que les titres. Le fond des bandes (hero, CTA) reste
+  pleine largeur.
+- **Bloc IMAGE_TEXTE réparé (« Une salle modulable »)** : le bloc se
+  double-conteneurisait (max-width + margin auto sur une section qui porte
+  déjà la gouttière alignante) → colonnes rétrécies, images timbre-poste,
+  décalées d'une gouttière. Double contrainte supprimée : l'image occupe
+  toute sa moitié, bord posé sur le conteneur, la quinconce gauche/droite
+  (image_position) est conservée.
+- **Skin faire_festival vérifié** (home, infos-pratiques, notre-démarche) :
+  cohérent par design (grille Bootstrap centrée, brutalisme voulu) — h1 de
+  secours et fil d'ariane tombent dans le même container. Seul point
+  signalé, non corrigé (choix de maquette) : le bloc IMAGE *avec titre* est
+  rendu en « image-titre de section » (~50 %, centrée) — peu adapté aux
+  photos d'en-tête comme celle de la démo notre-démarche.
+
+**Admin** : le champ `position` disparaît aussi du FORMULAIRE du bloc
+(l'ordre se règle au glisser-déposer dans la liste ; à la création,
+save_model place le bloc en fin de page).
+
+## Admin blocs : tri par glisser-déposer (sortable Unfold) / Blocks admin: drag-and-drop sorting (Unfold sortable)
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+La liste des Blocs (`/admin/pages/bloc/`) et l'inline des images de galerie
+utilisent le **sortable d'Unfold** (comme la démo formula/circuit) :
+`ordering_field = "position"` + `hide_ordering_field = True` — poignée de
+glisser-déposer à la place de la saisie manuelle du nombre, positions
+enregistrées dans l'ordre affiché. Conseil d'usage : filtrer par page avant
+de trier (sinon les blocs de toutes les pages se mélangent dans la liste).
+
+## Champ `Page.est_blog` + fix z-index des dropdowns sur l'agenda / `Page.est_blog` field + agenda dropdowns z-index fix
+
+**Date :** 2026-07-05
+**Migration :** Non pour la branche (champ plié dans `pages/0001` régénérée, non committée ; colonne ajoutée à la main sur la base dev) / Folded into the regenerated, uncommitted `pages/0001`
+
+- **`Page.est_blog` (typage EXPLICITE, décision mainteneur)** : le critère
+  implicite « le parent porte un bloc LISTE_SOUS_PAGES » posait problème — le
+  bloc doit rester de la pure présentation (posable sur l'accueil pour vitrine
+  ses rubriques, sans transformer ses sous-pages en articles). Le champ
+  booléen (pattern `est_accueil`, case à cocher dans l'admin) pilote désormais
+  les trois comportements : sous-pages = ARTICLES (JSON-LD Article + signature
+  date/auteur) et PAS de menu déroulant dans la navbar — le clic sur la page
+  blog mène directement à l'index en cartes. Seeder : `journal` est_blog=True.
+- **Fix z-index (bug signalé)** : les sections sticky de l'agenda classic
+  (description + barre de recherche, `sticky-top` = z-index 1020 Bootstrap)
+  passaient DEVANT les menus déroulants de la navbar (dropdown = 1000).
+  `z-index: 999` posé sur les deux sections — les dropdowns repassent devant,
+  la barre reste au-dessus du contenu qui défile.
+
+## SEO éditorial : JSON-LD Article + date/auteur visibles sur les pages de blog / Editorial SEO: Article JSON-LD + visible date/author on blog pages
+
+**Date :** 2026-07-05
+**Migration :** Non — `Page.created_at`/`updated_at` existaient déjà, l'auteur est l'Organization / No — the date fields already existed, the author is the Organization
+
+Critère « article » : une page dont le PARENT porte un bloc LISTE_SOUS_PAGES
+(l'index d'un blog). Pour ces pages :
+- **JSON-LD `Article`** (au lieu de WebPage) dans `jsonld_page` : headline,
+  datePublished/dateModified (champs du modèle), author + publisher =
+  Organization du lieu, image de partage en URL absolue.
+- **Signature visible** (E-E-A-T — Google veut VOIR qui publie et quand) :
+  « Publié le … par … (· mis à jour le …) » sous le titre, dans les 2 skins
+  (`data-testid="page-signature"`), et date de publication en surtitre des
+  cartes du bloc LISTE_SOUS_PAGES.
+- Les autres sous-pages (ex. « Notre histoire ») restent des WebPage sans
+  signature — critère vérifié dans les deux sens en live et par pytest.
+
+## Blog dans la fixture de démo + zéro CDN (Leaflet et Plotly vendorisés) / Demo fixture blog + zero CDN (Leaflet and Plotly vendored)
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+- **Blog de démo** : `charger_site_lespass` construit désormais une page
+  « Journal » (blocs PARAGRAPHE + LISTE_SOUS_PAGES) et 2 articles complets en
+  blocs MARKDOWN (fresque participative, bilan repair café — titres, listes,
+  citation, tableau, liens internes), avec images de partage et
+  meta_description. Vitrine du duo CHANTIER-09 dans la démo. Les 2 pages de
+  démo manuelles (`demo-journal`/`demo-article-1`) sont supprimées, la fixture
+  fait foi.
+- **Plus aucun CDN dans les templates publics** :
+  - Leaflet du détail événement classic (`evenement_geoloc.html`) : unpkg →
+    `pages/vendor/leaflet/` (déjà vendorisé pour le bloc CARTE_LEAFLET et
+    l'explorer), avec `L.Icon.Default.imagePath` local.
+  - Plotly du sankey crowds : cdn.plot.ly → `crowds/static/crowds/vendor/
+    plotly-2.27.0.min.js` (3,5 Mo, chargé paresseusement uniquement quand un
+    diagramme s'affiche — comportement inchangé).
+
+## Audit SEO : rich results Event réparés, h1 partout, sitemap propre / SEO audit: Event rich results fixed, h1 everywhere, clean sitemap
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+Suite à l'audit SEO complet (2 agents + contre-vérifications), 6 lots corrigés :
+1. **JSON-LD Event** : l'ancien JSON écrit à la main dans `vues/evenement.html`
+   était INVALIDE (retours à la ligne non échappés, virgule traînante, virgule
+   décimale française dans geo) → Google rejetait tout, zéro rich snippet sur
+   les pages les plus importantes. Nouveau tag `jsonld_event` (json.dumps,
+   pattern `jsonld_page`) — et `offers` est enfin rendu (l'ancien
+   `event.price_min` n'existait pas : prix jamais émis). Vérifié : JSON valide,
+   geo en float, offers avec prix et disponibilité.
+2. **og:image/twitter:image ABSOLUES** sur le détail événement (2 skins) et la
+   page adhésions (les crawlers sociaux exigent une URL complète — les partages
+   d'événements n'avaient AUCUNE image).
+3. **Sitemap** : `ProductSitemap` retiré — il listait 63 fragments HTMX
+   `/memberships/<uuid>/` (formulaires de tunnel sans `<html>`), pas des pages.
+4. **h1 partout** : titre de secours visible sur les pages CMS sans bloc HERO
+   (`page.html` ×2 + flag `page_a_un_bloc_hero` dans `rendre_page`), h1
+   `visually-hidden` sur les agendas (2 skins), et DÉMOTION des titres
+   markdown d'un niveau (`#` → h2 : le h1 appartient à la Page, jamais au
+   contenu — fini le double h1). Avant : 6 pages sur 10 sans aucun h1.
+5. **Skin ff aligné** : `ff/page.html` émet enfin JSON-LD WebPage/FAQPage/
+   Breadcrumb + fil d'Ariane + twitter/og_image/noindex (vieux backlog) ;
+   vues ff agenda/adhésions : metas complètes (avant : title seul, description
+   dupliquée avec la home).
+6. **`srcset=""` éradiqué** : gardes sur chaque `<source>` de
+   `commun/partials/picture.html` (avant : 86 vides sur /event/, 317 sur
+   /memberships/) + alt du wizard événement.
+
+Vérifié en live sur les 2 tenants : 1 h1 exact partout, JSON-LD 100 % parsables
+(WebPage+FAQPage sur les pages ff !), 0 srcset vide, sitemap sans fragments.
+Rapport complet : audit dans la conversation du 2026-07-05 ; à re-vérifier
+après déploiement avec Google Rich Results Test sur une page événement.
+
+## Blocs MARKDOWN + LISTE_SOUS_PAGES : une page devient un blog / MARKDOWN + LISTE_SOUS_PAGES blocks: a page becomes a blog
+
+**Date :** 2026-07-05
+**Migration :** Non (choices intégrées dans `pages/0001_initial` régénérée, non committée) / No (choices folded into the regenerated, uncommitted `pages/0001_initial`)
+
+Deux nouveaux types dans le catalogue de blocs (16 désormais) :
+- **MARKDOWN** (`titre` + `texte` = source MD, zéro nouveau champ) : rendu par
+  le filtre `rendre_markdown` — `markdown` (extensions extra + sane_lists)
+  puis **`nh3.clean()`** sur le HTML produit (XSS stocké neutralisé, testé).
+  Exception dans `BlocAdmin.save_model` : la source MD n'est PAS passée dans
+  `clean_html` au save (elle serait mutilée) — la sécurité se fait au rendu.
+  Styles `.tb-markdown` dans tb-blocs.css (titres, listes, code, citations,
+  tableaux), surchargeables par skin.
+- **LISTE_SOUS_PAGES** (`titre` + `nombre_max`) : cartes des sous-pages
+  publiées de la page courante (tag `sous_pages_publiees`, tri position/titre,
+  brouillons exclus). Parent = index du blog, enfants = articles.
+
+Intégré partout : `blocs_catalogue.CHAMPS_PAR_TYPE` (API v2), enum openapi,
+`conditional_fields` admin Unfold, gabarits classic (ff par fallback).
+Tests : `tests/pytest/test_blocs_markdown_sous_pages.py` (5 tests dont XSS).
+Spec : `TECH_DOC/SESSIONS/SKINS/CHANTIER-09-BLOCS-MARKDOWN-SOUS-PAGES.md`.
+Démo laissée en place sur lespass : `/demo-journal/` + `/demo-article-1/`.
+
+## Squash des migrations de la branche main-pages / main-pages branch migrations squash
+
+**Date :** 2026-07-05
+**Migration :** Oui — 3 fichiers neufs, jamais déployés / Yes — 3 fresh files, never deployed
+
+Les migrations intermédiaires de la branche (jamais passées en prod, qui
+s'arrête à `BaseBillet/0220_lignearticle_idempotency_key` et `seo/0004`) ont
+été supprimées et régénérées en UNE migration par app :
+- **`pages/0001_initial`** (remplace 0001→0013) — app entière.
+- **`BaseBillet/0221_remove_configuration_skin_configuration_module_pages_and_more`**
+  (remplace 0220_configuration_module_pages→0225) — schéma (module_pages,
+  externalapikey.page, retrait de Configuration.skin) + les 2 opérations de
+  données pour les tenants de PROD : copie `skin` → `pages.ConfigurationSite`
+  AVANT le RemoveField, et création de la home par défaut (idempotente, dans
+  la langue du tenant via `translation.override`). L'ex-0222 (redondante avec
+  la home 0225) n'est pas reprise.
+- **`seo/0005_alter_seocache_unique_together_and_more`** (régénérée) —
+  dédoublonnage RunPython AVANT les 2 contraintes uniques partielles.
+
+Validé : `makemigrations --check` → « No changes detected », `migrate --plan`
+sans erreur. Le `down -v` + flush repartira sur ce graphe propre ; en prod, la
+chaîne s'ancre exactement sur l'état déployé.
+
+## Dette de revue soldée : 404/500 skin-aware et parlantes sous HTMX + rangements / Review debt paid: skin-aware and HTMX-visible 404/500 + housekeeping
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+- **`handler404` (nouveau) + `handler500` enrichi** : les pages d'erreur
+  passent par `get_context` → elles prennent le skin du tenant (fini la 404
+  au look classic sur un tenant faire_festival) ET sont servies en fragment
+  headless sous HTMX. Repli minimal si `get_context` échoue (une page
+  d'erreur doit TOUJOURS s'afficher). Actifs quand DEBUG=0 — d'où le test
+  direct `tests/pytest/test_handlers_erreur.py` (3 tests, RequestFactory).
+- **Listener `htmx:beforeSwap` global (2 shells)** : par défaut htmx ignore
+  les réponses non-2xx — un clic qui tombait en 404/500 ne produisait RIEN.
+  Désormais la page d'erreur est swappée dans le body entier (HTML
+  uniquement, les réponses JSON gardent leur traitement).
+- **Rangements** : param `bloc` → `objet_cible` dans `_poser_fichier`
+  (recevait aussi une Configuration), commentaire obsolète corrigé dans
+  `seo/partials/tibillet_community_links.html`.
+- **Finding retiré** : le `#paginator` « dupliqué en scroll infini » n'existe
+  pas — les 4 emplacements (classic + ff) utilisent `hx-swap="outerHTML"`
+  (remplacement, pas imbrication). L'agent d'audit avait supposé le swap par
+  défaut sans lire l'attribut.
+
+## Revue post-sessions : fix i18n CTA de la home auto-créée + vues ff sur base_template + test E2E skin ff / Post-sessions review: auto-home CTA i18n fix + ff views on base_template + ff skin E2E test
+
+**Date :** 2026-07-05
+**Migration :** Non (la 0225, non committée, est corrigée en place) / No (0225, uncommitted, fixed in place)
+
+- **Fix i18n CTA (bug confirmé en base)** : `construire_page_accueil` fige les
+  libellés CTA via `gettext()` non-lazy, mais la migration 0225 tournait sans
+  langue activée → 22 tenants FR migrés avaient « Calendar »/« Subscriptions »
+  gravés en anglais. Fix : `translation.override(config.language or 'fr')`
+  autour de l'appel dans la migration ET au step 6ter d'`onboard/tasks.py`
+  (l'`activate()` implicite de create_tenant était fragile). Les 22 tenants
+  dev touchés ont été réparés (Agenda / Adhésions).
+- **Vues faire_festival → `base_template`** : `accueil/agenda/evenement/
+  adhesions.html` étendaient `shell.html` en dur → chaque navigation HTMX
+  recevait le document COMPLET (htmx s'en sortait via DOMParser mais ~15 %
+  de transfert en trop et incohérence avec classic). Elles étendent désormais
+  `base_template` comme classic (fragment headless en HTMX). Iso-rendu
+  vérifié : 0 diff sur les pages complètes (hors token CSRF).
+- **Nouveau test E2E `test_skin_faire_festival_navigation.py`** : le skin ff
+  n'était couvert par AUCUN test E2E (angle mort qui a laissé passer le bug
+  des panneaux). Le test verrouille : swap HTMX → fragment headless (pas de
+  document imbriqué, une seule navbar) + ouverture des panneaux contact et
+  connexion après swap.
+
+## Refonte du bloc HERO : bannière d'identité (image = config, actions → CTA) / HERO block redesign: identity banner (image from config, actions → CTA)
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+**Quoi / What :** Le bloc HERO devient une bannière d'identité pure (titre +
+sous-titre) : plus de champ image ni de boutons sur le bloc.
+- **Image** lue au rendu depuis la Configuration du lieu : `config.img`
+  (fond photo en skin classic, image/logo centré en skin faire_festival).
+  Le bloc ne porte plus de fichier → le risque `delete_orphans` disparaît.
+- **Sans image** : le HERO passe en « recentré sobre » (titre + sous-titre
+  centrés sur un fond neutre teinté accent ; ni filet décoratif, ni trou à droite).
+- **Actions** : les boutons vivent désormais dans un bloc CTA séparé.
+- **Image du HERO avec image** : centrée horizontalement ET verticalement
+  (`background-position: center center`) + `min-height` (sur écran large et court,
+  on ne voyait que le haut de l'image).
+- **Home auto-générée** (onboarding) : HERO → PARAGRAPHE (**toujours créé**, avec
+  la description longue saisie au wizard, ou vide pour être rempli plus tard) →
+  CTA (module-aware, mêmes URL et libellés que la navbar). Créée **à la fin de la
+  tâche d'onboarding** (`onboard/tasks.py::create_tenant_from_draft`, étape 6ter),
+  une fois l'image et la description longue posées, juste avant l'email « espace
+  prêt » — au lieu de `create_tenant()`.
+
+**Pourquoi / Why :** simplifier l'objet bloc (1 bloc = 1 responsabilité),
+corriger la « première rencontre » d'un tenant neuf (le HERO imageless laissait
+~51 % de vide à droite) et brancher l'image de l'onboarding, qui n'apparaissait
+nulle part sur la home.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `pages/blocs_catalogue.py` | HERO = `["titre", "sous_titre"]` (retrait image/boutons) |
+| `pages/templates/pages/classic/partials/bloc_hero.html` | Fond = `config.img`, sans boutons |
+| `pages/templates/pages/faire_festival/partials/bloc_hero.html` | Image = `config.img`, sans badge date ni boutons |
+| `pages/static/pages/css/tb-blocs.css` | HERO imageless recentré + fond teinté, retrait du filet ; image centrée H+V + min-height |
+| `pages/admin.py` | `conditional_fields` (retrait HERO de image/boutons) + note d'aide |
+| `pages/templates/admin/pages/bloc/hero_aide_before.html` | Note d'aide (Alpine, visible sur type HERO) |
+| `pages/services.py` | `construire_page_accueil` : param `description_longue`, HERO sans image/boutons, PARAGRAPHE **toujours créé**, CTA module-aware |
+| `onboard/tasks.py` | Création de la home en fin de tâche (étape 6ter), avant l'email |
+| `BaseBillet/validators.py` | Ne crée plus la home dans `create_tenant` (déplacée dans la tâche) |
+| `BaseBillet/migrations/0225_home_hero_paragraphe_cta_tous_tenants.py` | Migration data : home pour tous les tenants sans home (idempotente, préserve les homes existantes) |
+| `pages/management/commands/{creer_page_demo,charger_demo_blocs,charger_site_lespass,charger_demo_faire_festival}.py` | HERO sans image/boutons ; image posée sur config ; CTA |
+| `api_v2/openapi-schema.yaml` | Champs HERO + exemples mis à jour |
+| `tests/pytest/test_pages.py` | 2 tests `construire_page_accueil` |
+
+### Migration
+- **Migration nécessaire / Migration required :** Oui — `BaseBillet 0225` (data,
+  tenant-only). Crée la home HERO/PARAGRAPHE/CTA pour chaque tenant sans home ;
+  **idempotente et non destructive** (n'écrase aucune home existante).
+  `migrate_schemas`. Aucune migration de schéma (les colonnes image/bouton restent
+  sur `Bloc`, utilisées par CTA, IMAGE_TEXTE, CARTE…).
+
+### Suites manuelles / Manual follow-ups
+- Re-jouer `charger_demo_faire_festival --schema=chantefrein` pour poser le logo « Faire » sur `config.img` (sinon chantefrein affiche l'image de fond actuelle).
+- i18n : `makemessages` / `compilemessages` (nouvelles chaînes FR de la note d'aide admin ; `Calendar` / `Subscriptions` existent déjà).
+
+## Fix : liens morts de la home ff de repli + nettoyage vues sans route / Fix: dead links in ff fallback home + dead views cleanup
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+Contexte (audit « que se passe-t-il si module_pages est désactivé ? ») : les
+routes en dur `/infos-pratiques/` et `/le-faire-festival/` avaient été retirées
+de `BaseBillet/urls.py` (remplacées par des pages CMS servies par le catch-all
+`/<slug>/`), mais deux restes traînaient :
+- **La vieille home ff** (`pages/faire_festival/vues/accueil.html`, gabarit de
+  repli quand module_pages est off ou sans page d'accueil publiée) gardait ses
+  deux boutons en dur → 404 garanti précisément quand cette home s'affiche.
+  Fix : `index()` expose `slugs_pages_publiees` et les boutons ne s'affichent
+  que si la page CMS correspondante est publiée.
+- **Code mort** : vues `infos_pratiques()` / `le_faire_festival()` (plus aucune
+  route) et gabarits `pages/faire_festival/vues/{infos_pratiques,le_faire_festival}.html`
+  (jamais rendus — les 200 observés venaient des pages CMS homonymes) SUPPRIMÉS.
+
+Comportement module_pages OFF (vérifié) : `/` → home de repli du skin,
+`/<slug>/` → 404 (y compris préview admin), navbar sans pages, section admin
+« Site web » masquée, carte du dashboard pour réactiver.
+
+**Fix test fragile** : `test_bloc_evenements_liste_les_a_venir` échouait selon
+l'état de la base dev (200+ évènements futurs accumulés par les suites E2E →
+l'évènement du test à +3 jours sortait du slice `[:100]`). `nombre_max=32000`
+dans le test = déterministe. À noter pour plus tard : les E2E ne nettoient pas
+leurs évènements (~160 résidus E2E/API/Playwright/Refund/Smoke sur lespass).
+
+## Fix : CSS des pages CMS perdu en navigation HTMX + ordre de la navbar / Fix: CMS pages CSS dropped on HTMX navigation + navbar ordering
+
+**Date :** 2026-07-05
+**Migration :** Non / No
+
+**Bug CSS (tenant la-fourmiliere)** : `pages/classic/page.html` chargeait
+`tb-blocs.css` dans le bloc `extra_meta`, qui n'existe QUE dans le `<head>` de
+`shell.html`. En navigation HTMX (réponse headless, sans `<head>`), le CSS
+n'arrivait jamais → page CMS sans style si la session avait commencé sur une
+vue non-CMS ; un F5 (rendu complet) le réparait, d'où le côté insaisissable.
+Fix : le `<link>` est chargé dans le bloc `main` (valide HTML5, présent dans
+les deux rendus, dédupliqué par le cache navigateur). Règle ajoutée au
+CONTRAT-DE-SKIN : **extra_meta = SEO uniquement, jamais d'asset nécessaire**.
+
+**Navbar** : ordre unifié — pages de l'app pages d'abord, puis réseau/
+crowdfunding, et en fin de menu : agenda, adhésions, contact (dans cet ordre).
+Construction dans `get_context` (`navbar_pages + navbar`), le gabarit navbar
+garde le contact en dernier.
+
+**Audit HTMX complet (2 agents, templates + vues) — 4 fixes supplémentaires :**
+- `pages/faire_festival/headless.html` : les panneaux `#contactPanel` et
+  `#loginPanel` n'existaient PAS dans le fragment headless ff → après toute
+  navigation HTMX sous ce skin, les boutons Contact/Connexion ne s'ouvraient
+  plus (échec silencieux). Bloc `offcanvas_globaux` ajouté (dans
+  `.skin-faire-festival` pour le CSS scopé), aligné sur classic.
+- `fonctionnel/event_wizard/_base.html` : `wizard.css` chargé dans `extra_meta`
+  (même famille que tb-blocs.css, dormant car le wizard n'est pas encore
+  navigué en HTMX) → déplacé dans `main`.
+- `MyAccount.dispatch` : session expirée pendant une navigation HTMX →
+  `HX-Redirect: /?login=1` (vraie navigation + panneau de connexion) au lieu
+  d'un 302 suivi en silence qui swappait la home DANS l'onglet du compte.
+- `CrowdDetailView.retrieve` : pk invalide sous HTMX → `HX-Redirect: /contrib`
+  au lieu d'un 302 qui laissait l'URL du navigateur sur `/crowd/<invalide>/`.
+
+**Protection cache HTTP pour la prod (validée par le mainteneur, 3 mesures)** :
+- Nouveau middleware `BaseBillet.middleware.ProtectionCacheHtmxMiddleware`
+  (branché dans settings.py, après AuthenticationMiddleware) :
+  `Vary: HX-Request` sur TOUTES les réponses (les caches indexent enfin les
+  deux variantes shell/fragment séparément) + `Cache-Control` par défaut sur
+  le HTML : `private, no-store` si connecté, `no-cache` sinon — uniquement si
+  la vue n'a pas déjà posé le sien.
+- Meta `htmx-config` dans les 2 shells : `historyCacheSize: 0` (plus de cliché
+  DOM dans le localStorage → un « retour » ne peut plus restaurer une page
+  d'un déploiement précédent) + `refreshOnHistoryMiss: true` (un « retour »
+  fait un vrai rechargement complet).
+
+**Restent documentés (non corrigés, non bloquants)** : 404/500 muets sous HTMX
+(pas de feedback utilisateur sur erreur de swap), vues ff qui étendent
+shell.html en dur (fonctionne via DOMParser htmx mais transfert lourd),
+id `#paginator` dupliqué en scroll infini.
+
+## Migration skins CHANTIERS-05→08 : fin de la migration — contrat de skin, `demarrer_skin`, suppression des anciennes arborescences / Skins migration C05→08: contract, scaffolding command, legacy trees removed
+
+**Date :** 2026-07-04
+**Migration :** Non / No
+
+**CHANTIER-05** — dernières vues skin-aware → `pages/<skin>/vues/` :
+`accueil.html` (ex home, 2 skins), `infos_pratiques.html` + `le_faire_festival.html`
+(ff uniquement — jamais existé côté reunion, résolution identique),
+`reseau.html` (ex federation/explorer). Plus AUCUN appelant de `get_skin_template`.
+
+**CHANTIER-06** — plus rien de fonctionnel dans les arbos de skin :
+- Habillage skinnable : navbar + footer des 2 skins → `pages/<skin>/partials/`.
+- 39 templates fonctionnels → **`BaseBillet/templates/fonctionnel/`**
+  (compte/, connexion/, qrcode_scan_pay/, event_wizard/, event/, adhesion/,
+  register, account_base, blank_base) — ils héritent du shell via
+  `base_template`, donc prennent le look du skin sans copie.
+- Utilitaires partagés `field_errors.html`, `picture_url_string.html` →
+  `commun/partials/`.
+- Emails mal rangés → `emails/qrcode_scan_pay/` (+ maj `tasks.py` ×2) et
+  `emails/legacy/welcome_email.html`.
+- 41 fichiers de références réécrits (render(), includes, extends, tasks).
+
+**CHANTIER-07** — le contrat :
+- **`TECH_DOC/SESSIONS/SKINS/CONTRAT-DE-SKIN.md` v1.0** : arborescence, blocs
+  FIGÉS, ids du chrome, variables de contexte par vue, règle d'autonomie.
+- Commande **`manage.py demarrer_skin <nom>`** : copie `pages/classic/` →
+  `pages/<nom>/`, refus d'écrasement, marche à suivre FALC.
+  Tests : `tests/pytest/test_demarrer_skin.py` (3 tests).
+
+**CHANTIER-08** — nettoyage :
+- `404.html`, `500.html`, `crowds/success.html` étendent
+  `pages/classic/shell.html` en direct.
+- `get_skin_template` SUPPRIMÉ (`gabarit_skin` est l'unique resolver).
+- Arborescences `BaseBillet/templates/{reunion,faire_festival}/` SUPPRIMÉES
+  (maquette ff archivée dans `TECH_DOC/SESSIONS/SKINS/maquette-faire-festival/`).
+- Restent volontairement : `static/reunion/…` (qr-scanner, leaflet, media —
+  namespace statics, hors périmètre du plan) et `static/faire_festival/…`.
+
+**Vérifié** : 0 diff sur tous les snapshots publics (2 skins, pages + HTMX),
+zéro référence template `reunion/`/`faire_festival/` restante hors statics,
+404/500/crowds rendent via le shell, suites pytest + E2E complètes via agent,
+vérification Chrome finale (voir rapport de session).
+
+## Migration skins CHANTIER-04 : adhésions → `pages/<skin>/vues/adhesions.html` / Skins migration CHANTIER-04: memberships moved to `pages/<skin>/vues/`
+
+**Date :** 2026-07-04
+**Migration :** Non / No
+
+**Quoi / What :** Même recette que le CHANTIER-03, pour les adhésions (spec :
+`TECH_DOC/SESSIONS/SKINS/CHANTIER-04-ADHESIONS.md`).
+- Vue liste des 2 skins → `pages/{classic,faire_festival}/vues/adhesions.html`
+  (ff étend directement son shell) ; rendus de `MembershipMVT` sur
+  `gabarit_skin()`, **y compris `embed`** (même correction qu'au C3 : l'iframe
+  suit désormais le skin du tenant au lieu d'un chemin reunion en dur).
+- Les 5 partiels HTMX du tunnel (`form`, `404`, `free_confirmed`,
+  `pending_manual_validation`, `already_has_membership`) → `commun/adhesion/`
+  (chrome). Conformément au piège 9.8 : ce sont des PARTIELS purs (pas de base
+  template), chargés par HTMX dans `#offcanvas-membership` — contenu et ids
+  strictement intacts.
+- Blocs du contrat FIGÉS : `adhesions_entete`, `adhesions_tunnel`,
+  `adhesions_grille`, `adhesions_federees`.
+- Restent dans reunion (C6, pages fonctionnelles) : `formbricks.html` et les 3
+  `payment_already_*` / `payment_link_invalid` (elles étendent `base_template`).
+
+**Vérifié** : snapshots avant/après 0 diff de contenu (3 pages adhésions,
+2 skins, page + HTMX), embed 200 ×2 skins, partiel form.html toujours pur
+(`<form hx-post` sans base), tests + E2E via agent, parcours Chrome (voir
+rapport de session).
+
+## Migration skins CHANTIER-03 : agenda + détail événement → `pages/<skin>/vues/` / Skins migration CHANTIER-03: agenda + event detail moved to `pages/<skin>/vues/`
+
+**Date :** 2026-07-04
+**Migration :** Non / No
+
+**Quoi / What :** Les vues agenda et détail événement des deux skins déménagent
+vers `pages/<skin>/vues/` et les 5 sites de rendu d'`EventMVT` passent sur le
+resolver unifié `gabarit_skin()` (spec :
+`TECH_DOC/SESSIONS/SKINS/CHANTIER-03-AGENDA-EVENEMENT.md`).
+
+- reunion → `pages/classic/` : `vues/agenda.html`, `vues/evenement.html`,
+  `vues/agenda_liste.html`, `vues/agenda_liste_suite.html` + partials habillage
+  (`carrousel_evenements`, `evenement_accordeon`, `evenement_geoloc`,
+  `evenement_benevoles`, `reservation_declencheur`) ; la logique de recherche →
+  `commun/agenda/filtres.html` (chrome).
+- faire_festival → `pages/faire_festival/vues/{agenda,evenement,agenda_liste_suite}.html`
+  (extends directement le shell ff).
+- **Contrat de skin — premiers blocs FIGÉS** : `agenda_carrousel`,
+  `agenda_description`, `agenda_filtres`, `agenda_liste` ; `evenement_entete`,
+  `evenement_tags`, `evenement_description`, `evenement_reservation`,
+  `evenement_complements` ; partial `carte_evenement.html` (dédoublonne la carte
+  entre liste et « voir plus »).
+- **`embed` corrigé** : l'iframe agenda suivait TOUJOURS le look reunion (chemin
+  en dur) ; elle suit désormais le skin du tenant.
+- Originaux supprimés (plus aucune référence) ; restent dans reunion :
+  formbricks, reservation_ok, wizard (CHANTIER-06).
+
+**Vérifié** : snapshots avant/après identiques (0 diff de contenu, 2 skins,
+pages + HTMX), retrieve/embed/pagination 200, 33 pytest event/pages verts,
+E2E complets (voir rapport de session).
+
+## Migration skins CHANTIER-02 (lots A, B, C1) : extraction du commun — statics, templates partagés, offcanvas / Skins migration CHANTIER-02 (batches A, B, C1): shared assets extraction
+
+**Date :** 2026-07-03
+**Migration :** Non / No
+
+**Quoi / What :** Tout ce qui est partagé entre les skins déménage vers `commun/`
+(décisions P1-P4, spec `TECH_DOC/SESSIONS/SKINS/CHANTIER-02-EXTRACTION-COMMUN.md`).
+
+**Lot A — statics** : 21 fichiers `static/reunion/` → `static/commun/` (5 CSS,
+4 familles de polices, 6 JS, 2 images) ; références basculées dans 10 fichiers
+(shells, seo/base, blank_base, footers, mails/base, redirection favicon urls.py).
+
+**Lot B — templates partagés** : `forms/contact.html` et `forms/login.html` →
+`commun/formulaires/`, `partials/toasts.html` → `commun/toasts.html`,
+`loading.html` → `commun/loading.html`, `booking_form.html` →
+`commun/formulaires/reservation.html`, `partials/picture.html` →
+`commun/partials/picture.html` (utilisé aussi par crowds). 28 références basculées.
+**Le skin faire_festival ne référence plus aucun fichier reunion** (règle P3).
+
+**Lot C1 — offcanvas unifiés** : les 5 offcanvas publics extraits vers
+`commun/offcanvas/{contact,connexion,adhesion_tunnel,reservation,filtres_agenda}.html`,
+inclus au même endroit du DOM par les templates hôtes des deux skins (définitions
+doublées unifiées). Formulaire de recherche → `commun/formulaires/
+recherche_evenements.html`. Largeur responsive des tunnels factorisée en classe
+`.offcanvas-tunnel` dans `tibillet.css` (4 blocs `<style>` inline supprimés).
+Ids inchangés (contrat) : `#contactPanel`, `#loginPanel`, `#subscribePanel`,
+`#offcanvas-membership`, `#bookingPanel`, `#filterPanel`.
+
+**Lot C2 — blocs offcanvas dans les squelettes** : `pages/classic/shell.html` et
+`headless.html` exposent désormais `{% block offcanvas_globaux %}` (contact +
+connexion, inclus par le squelette en fin de body — retirés du partial navbar,
+qui ne garde que les déclencheurs) et `{% block offcanvas %}` (rempli par les
+vues : tunnels réservation/adhésion). Aligne le socle classic sur le pattern
+faire_festival. Exception documentée : sur faire_festival, le panneau contact
+reste DANS `.skin-faire-festival` (le CSS brutaliste y est scopé). Le headless
+inclut les mêmes panneaux : ils survivent aux swaps HTMX `hx-target="body"`.
+Diff HTML : déplacement pur des 2 panneaux (contenu identique, vérifié).
+
+**Pourquoi / Why :** un skin ne doit référencer que lui-même, le socle classic et
+`commun/` — préalable à la suppression de l'arborescence reunion (CHANTIER-08) et
+à la création de skins tiers.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/static/commun/` | NOUVEAU — 21 statics partagés (+ règle `.offcanvas-tunnel` dans tibillet.css) |
+| `BaseBillet/templates/commun/` | NOUVEAU — formulaires/, offcanvas/, partials/, toasts, loading |
+| Shells `pages/{classic,faire_festival}/` + `seo/base.html` + `blank_base.html` + footers + `ApiBillet/mails/base.html` | chemins statics → `commun/` |
+| `BaseBillet/urls.py` | redirection favicon → `commun/img/favicon.png` |
+| `reunion/partials/navbar.html`, vues membership/event des 2 skins, `partial/search.html`, `partial/booking.html` | définitions offcanvas → includes `commun/offcanvas/` |
+| `crowds/templates/` (detail, card) | include picture → `commun/partials/picture.html` |
+
+## Seed : la démo faire_festival (chantefrein) est branchée au flush / Seed: the faire_festival demo (chantefrein) is now wired into the flush
+
+**Date :** 2026-07-03
+**Migration :** Non / No
+
+**Quoi / What :** La commande `charger_demo_faire_festival` (vitrine brutaliste sur
+le tenant chantefrein + skin forcé à faire_festival) existait mais n'était appelée
+par personne : après un flush, tous les tenants restaient en skin reunion.
+`demo_data_v2` l'appelle désormais en fin de seed (`_seed_site_pages_chantefrein()`,
+même pattern try/except non bloquant que `_seed_site_pages_lespass()`).
+**Pourquoi / Why :** chaque flush produit maintenant les DEUX skins de démo —
+indispensable pour comparer les peaux pendant la migration skins.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/management/commands/demo_data_v2.py` | + `_seed_site_pages_chantefrein()` appelé après le seed lespass |
+
+## Fix : doublons SEOCache au flush (contrainte unique partielle) / Fix: SEOCache duplicates on flush (partial unique constraint)
+
+**Date :** 2026-07-03
+**Migration :** Oui / Yes — `seo/migrations/0005_alter_seocache_unique_together_and_more.py`
+(dédoublonne puis pose les contraintes / dedupes then adds the constraints)
+
+**Quoi / What :** Le flush crashait en fin de course sur
+`SEOCache.MultipleObjectsReturned` (reproductible). Cause : `unique_together
+(cache_type, tenant)` ne protège PAS les lignes d'agrégats globaux (`tenant=None`) —
+PostgreSQL considère les NULL comme distincts dans un index unique. Deux rebuilds
+concurrents (worker Celery déclenché par les signaux du seed + commande manuelle
+`refresh_seo_cache` de flush.sh, qui bypasse le verrou debounce avec `force=True`)
+créaient donc des doublons, et tous les rebuilds suivants crashaient.
+**Fix :** remplacement de `unique_together` par deux `UniqueConstraint` partielles
+(`tenant` non-null : couple unique ; `tenant` null : `cache_type` unique — compatible
+PostgreSQL 13). En cas de course, `get_or_create` rattrape l'`IntegrityError` et
+relit la ligne. Vérifié par deux `refresh_seo_cache` lancés en parallèle : zéro
+crash, zéro doublon.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/models.py` | `unique_together` → 2 `UniqueConstraint` partielles |
+| `seo/migrations/0005_alter_seocache_unique_together_and_more.py` | Dédoublonnage (garde la plus récente) + contraintes |
+
+## Migration skins CHANTIER-01 : resolver unifié `gabarit_skin` + squelettes déplacés vers `pages/<skin>/` / Skins migration CHANTIER-01: unified resolver + skeletons moved to `pages/<skin>/`
+
+**Date :** 2026-07-03
+**Migration :** Non / No (une migration de fusion technique a été créée à part :
+`BaseBillet/migrations/0224_merge_20260703_0914.py`, exigée par les deux feuilles
+0220/0223 issues du merge de `main` — vide, aucun changement de schéma)
+
+**Quoi / What :** Première étape de la migration skins (plan :
+`TECH_DOC/SESSIONS/SKINS/`). Nouveau resolver `pages.services.gabarit_skin(nom)` :
+retourne `pages/<skin>/<nom>` si le skin fournit le gabarit, sinon fallback
+automatique sur le socle `pages/classic/<nom>`. Les 4 squelettes (`base.html` et
+`headless.html` des skins reunion et faire_festival) sont déplacés vers
+`pages/templates/pages/{classic,faire_festival}/{shell,headless}.html`. Les anciens
+fichiers deviennent des redirections d'héritage (`{% extends %}` une ligne) — une
+seule source de vérité, zéro drift, et les `extends` en dur existants (404.html,
+500.html, crowds/success.html, vues faire_festival) continuent de fonctionner.
+`get_context()` branche `base_template` sur le nouveau resolver.
+
+**Pourquoi / Why :** Unifier les deux systèmes de skin parallèles
+(`get_skin_template`/reunion et app pages/classic) sous un seul mécanisme avec
+filet de sécurité. **Iso-rendu prouvé** : snapshots curl normalisés identiques
+avant/après sur `/`, `/event/`, `/memberships/` (+ variantes HTMX) pour un tenant
+reunion ET un tenant faire_festival.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `pages/services.py` | + `gabarit_skin()` (resolver unifié avec fallback classic) |
+| `pages/templates/pages/classic/shell.html` | NOUVEAU — ex `reunion/base.html` (contenu intégral) |
+| `pages/templates/pages/classic/headless.html` | NOUVEAU — ex `reunion/headless.html` |
+| `pages/templates/pages/faire_festival/shell.html` | NOUVEAU — ex `faire_festival/base.html` |
+| `pages/templates/pages/faire_festival/headless.html` | NOUVEAU — ex `faire_festival/headless.html` |
+| `BaseBillet/templates/reunion/base.html` | Devient `{% extends "pages/classic/shell.html" %}` |
+| `BaseBillet/templates/reunion/headless.html` | Devient `{% extends "pages/classic/headless.html" %}` |
+| `BaseBillet/templates/faire_festival/base.html` | Devient `{% extends "pages/faire_festival/shell.html" %}` |
+| `BaseBillet/templates/faire_festival/headless.html` | Devient `{% extends "pages/faire_festival/headless.html" %}` |
+| `BaseBillet/views.py` | `get_context()` : `base_template` résolu par `gabarit_skin("shell.html"/"headless.html")` |
+| `tests/pytest/test_gabarit_skin.py` | NOUVEAU — 4 tests (fallback reunion→classic, skin existant, gabarit manquant, chaîne d'héritage) |
+| `BaseBillet/migrations/0224_merge_20260703_0914.py` | NOUVEAU — merge technique des feuilles 0220/0223 (vide) |
+
+## Corrections : relance d'adhésion tronquée, tâche welcome morte, bouton fermer du panneau ticket / Fixes: truncated membership reminder, dead welcome task, ticket panel close button
+
+**Date :** 2026-07-03
+**Migration :** Non / No
+
+**Quoi / What :** Trois corrections de bugs découverts pendant l'audit de la session skins.
+
+**1. `membership_renewal_reminder` s'arrêtait au premier adhérent / stopped at the first member**
+- Le `return mail.sended` était DANS la boucle `for membership` : seul le premier
+  adhérent (du premier tenant) recevait l'email de relance, puis la tâche Celery
+  se terminait. Le `return` est supprimé : chaque adhérent est traité, une erreur
+  d'envoi est loggée et n'interrompt plus les suivants.
+- Correction aussi du message de log copié-collé trompeur (« send_welcome_email »
+  → « membership_renewal_reminder »).
+
+**2. Suppression de la tâche morte `send_welcome_email` / dead task removed**
+- Jamais appelée nulle part, et son template `emails/welcome/welcome_email.html`
+  n'existe pas (l'erreur `TemplateDoesNotExist` était avalée par le `try/except`).
+  Le seul `welcome_email.html` existant est l'email legacy de création d'instance
+  (`reunion/views/tenant/emails/`), au contexte incompatible — remplacé depuis par
+  `onboard/emails/ready.html`. La tâche est supprimée.
+
+**3. Bouton fermer du panneau ticket inopérant / ticket panel close button broken**
+- `data-bs-dismiss="ticketPanel"` (valeur invalide) → `data-bs-dismiss="offcanvas"`.
+  Le bouton ✕ de l'offcanvas `#ticketPanel` (page « Mes réservations ») ferme
+  désormais le panneau.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/tasks.py` | Suppression `send_welcome_email` ; fix `return` dans la boucle de `membership_renewal_reminder` + log |
+| `BaseBillet/templates/reunion/views/account/reservations.html` | `data-bs-dismiss="offcanvas"` sur le bouton close |
+
+
 
 **Date :** 2026-06-30
 **Migration :** Oui / Yes — `BaseBillet/migrations/0220_lignearticle_idempotency_key_and_more.py`

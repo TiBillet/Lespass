@@ -1,4 +1,4 @@
-{% extends "reunion/base.html" %}
+{% extends base_template %}{# Erreur skin-aware : base_template résolu par le handler (shell du skin, ou fragment headless en HTMX). / Skin-aware error: base_template resolved by the handler. #}
 {% load i18n %}
 
 {% block title %}{% translate "Page not found" %}{% endblock %}

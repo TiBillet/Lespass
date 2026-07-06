@@ -1,0 +1,26 @@
+{% load i18n %}{% comment %}
+OFFCANVAS TUNNEL DE RÉSERVATION (#bookingPanel)
+/ Booking tunnel offcanvas (#bookingPanel)
+
+LOCALISATION : BaseBillet/templates/commun/offcanvas/reservation.html
+
+Chrome partagé, NON skinnable : inclus par reunion (partial booking.html du
+détail événement) et par faire_festival (retrieve.html, bloc offcanvas).
+Contient le formulaire de réservation commun/formulaires/reservation.html.
+Un JS d'auto-ouverture (?openbookingPanel=true) cible #bookingPanel par id
+dans les vues retrieve des deux skins. L'id fait partie du contrat de skin :
+ne JAMAIS le renommer.
+La largeur responsive vient de la classe .offcanvas-tunnel (tibillet.css).
+/ Shared chrome. Auto-open JS (?openbookingPanel=true) targets #bookingPanel
+by id. The id is part of the skin contract. Responsive width comes from the
+.offcanvas-tunnel class (tibillet.css).
+{% endcomment %}
+<div class="offcanvas-start offcanvas offcanvas-tunnel" tabindex="-1" id="bookingPanel" aria-labelledby="bookingPanelLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="bookingPanelLabel">{% translate 'Request booking' %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% trans 'Close' %}"></button>
+    </div>
+    <div class="offcanvas-body">
+        {% include 'commun/formulaires/reservation.html' %}
+    </div>
+</div>

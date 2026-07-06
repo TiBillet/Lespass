@@ -1,0 +1,66 @@
+{% extends base_template %}
+{% load i18n static %}
+{% comment %}
+PAGE "ADHESION DEJA ACTIVE" — LIEN DE PAIEMENT DEJA HONORE
+/ "Membership already active" page — payment link already honored
+
+LOCALISATION : BaseBillet/templates/fonctionnel/adhesion/payment_already_done.html
+
+Affichee quand un utilisateur reclique sur le lien de paiement alors que son
+adhesion est deja payee (CB) ou active (abonnement). On ne propose plus de
+nouveau paiement.
+/ Shown when a user clicks the payment link again while the membership is
+already paid (card) or active (subscription). No new payment is offered.
+{% endcomment %}
+
+{% block main %}
+<div class="container py-5" data-testid="membership-payment-already-done">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+
+                    <div class="text-center mb-4">
+                        <i class="bi bi-check-circle fs-1 text-success" aria-hidden="true"></i>
+                        <h2 class="mt-3">{% translate "Votre adhésion est déjà active" %}</h2>
+                    </div>
+
+                    <div class="alert alert-success" role="alert" aria-live="polite">
+                        <p class="mb-0">
+                            {% translate "Ce paiement a déjà été effectué. Il n'y a rien de plus à régler. Merci !" %}
+                        </p>
+                    </div>
+
+                    {% if membership %}
+                    <div class="card bg-light mb-4" data-testid="membership-payment-done-summary">
+                        <div class="card-body">
+                            <h6 class="card-subtitle text-muted mb-2">{% translate "Récapitulatif" %}</h6>
+                            <ul class="list-unstyled mb-0">
+                                <li>
+                                    <strong>{% translate "Adhésion" %} :</strong>
+                                    {{ membership.price.product.name }} — {{ membership.price.name }}
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="text-center" role="group" aria-label="{% translate 'Navigation' %}">
+                        <a href="/memberships/" class="btn btn-primary"
+                           data-testid="membership-payment-done-link-memberships">
+                            {% translate "Voir les adhésions" %}
+                        </a>
+                        <a href="/" class="btn btn-outline-secondary ms-2"
+                           data-testid="membership-payment-done-link-home">
+                            {% translate "Retour à l'accueil" %}
+                        </a>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock main %}

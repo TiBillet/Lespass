@@ -1,0 +1,10 @@
+{% extends "fonctionnel/event_wizard/_base.html" %}
+{% load i18n %}
+
+{% block step_content %}
+<p class="text-muted mb-3">
+    {% translate "Choisissez le lieu de l'évènement." %}
+</p>
+
+{% include "fonctionnel/event_wizard/_form_lieu.html" %}
+{% endblock %}

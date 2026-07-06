@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.shortcuts import render, redirect
 from django.shortcuts import get_object_or_404
+from django_htmx.http import HttpResponseClientRedirect
 from django.http import HttpResponse, JsonResponse, HttpResponseRedirect
 from django.conf import settings
 import logging
@@ -329,7 +330,7 @@ class GlobalFundingViewset(viewsets.ViewSet):
         """
         if not request.user.is_authenticated:
             return JsonResponse({"error": _("Authentication required.")}, status=401)
-        if not (request.user.is_staff or request.user.is_superuser):
+        if not (request.user.is_staff or request.user.is_superuser or request.user.is_current_tenant_admin):
             return JsonResponse({"error": _("Permission denied.")}, status=403)
 
         serializer = GlobalFundingAllocateSerializer(data=request.data)
@@ -754,12 +755,24 @@ class InitiativeViewSet(viewsets.ViewSet):
         EN: Displays complete detail of a specific project.
             Includes contributions, budget items, and participations.
         """
+        # FR: Sous HTMX (cartes de la liste en hx-boost), un redirect() classique
+        # est suivi en silence par le XHR : le fragment de /contrib remplacerait
+        # la cible mais l'URL du navigateur resterait sur /crowd/<pk-invalide>/.
+        # HX-Redirect force une vraie navigation, URL et contenu restent alignés.
+        # EN: Under HTMX (hx-boost list cards), a classic redirect() is silently
+        # followed by the XHR: the /contrib fragment would replace the target but
+        # the browser URL would stay on /crowd/<invalid-pk>/. HX-Redirect forces
+        # a real navigation so URL and content stay aligned.
         try:
             # FR: On vérifie l'existence de l'initiative / EN: Check initiative existence
             if not Initiative.objects.filter(pk=pk).exists():
+                if request.htmx:
+                    return HttpResponseClientRedirect('/contrib')
                 return redirect('/contrib')
         except ValidationError:
             # FR: pk n'est pas un UUID valide / EN: pk is not a valid UUID
+            if request.htmx:
+                return HttpResponseClientRedirect('/contrib')
             return redirect('/contrib')
 
         initiative_obj = get_object_or_404(
@@ -945,7 +958,7 @@ class InitiativeViewSet(viewsets.ViewSet):
 
         if not request.user.is_authenticated:
             return _render_updated_fragment(status_code=401)
-        if not (request.user.is_staff or request.user.is_superuser):
+        if not (request.user.is_staff or request.user.is_superuser or request.user.is_current_tenant_admin):
             return _render_updated_fragment(status_code=403)
 
         budget_item = get_object_or_404(BudgetItem, pk=bid, initiative=initiative)
@@ -978,7 +991,7 @@ class InitiativeViewSet(viewsets.ViewSet):
 
         if not request.user.is_authenticated:
             return _render_updated_fragment(status_code=401)
-        if not (request.user.is_staff or request.user.is_superuser):
+        if not (request.user.is_staff or request.user.is_superuser or request.user.is_current_tenant_admin):
             return _render_updated_fragment(status_code=403)
 
         budget_item = get_object_or_404(BudgetItem, pk=bid, initiative=initiative)
@@ -1057,7 +1070,7 @@ class InitiativeViewSet(viewsets.ViewSet):
 
         if not request.user.is_authenticated:
             return _render_participations(401)
-        if not (request.user.is_staff or request.user.is_superuser):
+        if not (request.user.is_staff or request.user.is_superuser or request.user.is_current_tenant_admin):
             return _render_participations(403)
             
         if participation_obj.state != Participation.State.REQUESTED:
@@ -1088,7 +1101,7 @@ class InitiativeViewSet(viewsets.ViewSet):
 
         if not request.user.is_authenticated:
             return _render_participations(401)
-        if not (request.user.is_staff or request.user.is_superuser):
+        if not (request.user.is_staff or request.user.is_superuser or request.user.is_current_tenant_admin):
             return _render_participations(403)
             
         if participation_obj.state != Participation.State.COMPLETED_USER:
@@ -1248,7 +1261,7 @@ class InitiativeViewSet(viewsets.ViewSet):
 
         if not request.user.is_authenticated:
             return _render_contributions(status_code=401)
-        if not (request.user.is_staff or request.user.is_superuser):
+        if not (request.user.is_staff or request.user.is_superuser or request.user.is_current_tenant_admin):
             return _render_contributions(status_code=403)
             
         contribution_obj = get_object_or_404(Contribution, pk=cid, initiative=initiative)
@@ -1276,7 +1289,7 @@ class InitiativeViewSet(viewsets.ViewSet):
         """
         if not request.user.is_authenticated:
             return JsonResponse({"error": _("Authentication required.")}, status=401)
-        if not (request.user.is_staff or request.user.is_superuser):
+        if not (request.user.is_staff or request.user.is_superuser or request.user.is_current_tenant_admin):
             return JsonResponse({"error": _("Permission denied.")}, status=403)
 
         initiative = get_object_or_404(Initiative, pk=pk)
@@ -1305,7 +1318,7 @@ class InitiativeViewSet(viewsets.ViewSet):
         """
         if not request.user.is_authenticated:
             return JsonResponse({"error": _("Authentication required.")}, status=401)
-        if not (request.user.is_staff or request.user.is_superuser):
+        if not (request.user.is_staff or request.user.is_superuser or request.user.is_current_tenant_admin):
             return JsonResponse({"error": _("Permission denied.")}, status=403)
 
         initiative = get_object_or_404(Initiative, pk=pk)

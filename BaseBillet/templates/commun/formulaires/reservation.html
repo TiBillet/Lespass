@@ -1,0 +1,535 @@
+{% load i18n l10n tibitags static %}
+
+<style>
+    form summary::marker {
+        content: "";
+    }
+</style>
+
+
+<form id="reservation_form"
+      hx-post="{% if reservation_url %}{{ reservation_url }}{% else %}reservation/{% endif %}"
+      class="d-flex flex-column justify-content-between h-100"
+      data-loading-target="#tibillet-spinner"
+      data-loading-class="active"
+      data-testid="booking-form">
+    <div>
+        <input type="hidden" name="event" value="{{ event.uuid }}">
+        {% if user.is_anonymous %}
+            <div class="mb-3">
+                <label for="booking-email" class="form-label">{% trans "Email" %}</label>
+                <input type="email" name="email" class="form-control" id="booking-email" required data-testid="booking-email">
+            </div>
+            <div class="mb-3">
+                <label for="booking-confirm" class="form-label">{% trans "Email confirmation" %}</label>
+                <input type="email" name="email-confirm" class="form-control" id="booking-confirm" required data-testid="booking-email-confirm">
+            </div>
+
+            <div id="email-error" class="invalid-feedback" role="heading" style="display: block" data-testid="booking-email-error"></div>
+            <script>
+                const reservationForm = document.getElementById("reservation_form");
+                const validateEmails = () => {
+                    const emailEl = document.getElementById("booking-email");
+                    const confirmEl = document.getElementById("booking-confirm");
+                    const errorDiv = document.getElementById("email-error");
+                    if (!emailEl || !confirmEl || !errorDiv) {
+                        return true;
+                    }
+                    const email = emailEl.value || "";
+                    const confirmEmail = confirmEl.value || "";
+
+                    if (email !== confirmEmail) {
+                        confirmEl.setCustomValidity("{% translate 'Les emails ne correspondent pas.' %}");
+                        errorDiv.textContent = "{% translate 'Les emails ne correspondent pas.' %}";
+                        return false;
+                    }
+                    confirmEl.setCustomValidity("");
+                    errorDiv.textContent = "";
+                    return true;
+                };
+
+                // Check on HTMX request
+                reservationForm.addEventListener("htmx:configRequest", function (event) {
+                    if (!validateEmails()) {
+                        event.preventDefault();
+                    }
+                });
+
+                // Also check on normal submit (fallback)
+                reservationForm.addEventListener("submit", function (event) {
+                    if (!validateEmails()) {
+                        event.preventDefault();
+                    }
+                });
+
+                // Live check while typing (simple feedback)
+                const emailInput = document.getElementById("booking-email");
+                const confirmInput = document.getElementById("booking-confirm");
+                if (emailInput && confirmInput) {
+                    emailInput.addEventListener("input", validateEmails);
+                    confirmInput.addEventListener("input", validateEmails);
+                }
+            </script>
+            {#            <p><code>{{ user.email }}</code></p>#}
+        {% elif user.is_active %}
+            <div class="mb-3">
+                <label for="booking-email" class="form-label">{% trans "Email" %}</label>
+                <input type="email" class="form-control" id="booking-email" name="email" value="{{ user.email }}"
+                       readonly data-testid="booking-email">
+            </div>
+        {% else %}
+            <div class="alert alert-danger" role="alert">
+                {% translate "Your email is not confirmed. Please check your spam folder :)" %}
+            </div>
+        {% endif %}
+
+        <div class="mb-3">
+            {% for price in event.published_prices %}
+                <div class="p-3 js-order" data-testid="booking-price-{{ price.uuid }}">
+                    <label for="amount-{{ price.uuid }}" class="form-label">
+                        <strong>{{ price.name }}</strong>{% if not price.free_price and price.prix > 0 %}&nbsp;:
+                        <span class="js-order-price">{{ price.prix }}</span>&nbsp;€
+                    {% elif price.free_price %}
+                        <span class="js-order-price-alt d-none">{% trans 'at an open price' %}</span>
+                    {% endif %}
+                    </label>
+                    {% if price.product|in_list:product_max_per_user_reached %}
+                        <div class="alert alert-danger" role="alert">
+                            {% trans "You have reached the maximum number of reservations possible for this event." %}
+                        </div>
+                    {% elif price|in_list:price_max_per_user_reached %}
+                        <div class="alert alert-danger" role="alert">
+                            {% trans "You have reached the maximum number of reservations possible for this price." %}
+                        </div>
+                    {% elif price|price_out_of_stock:event %}
+                        <div class="alert alert-danger" role="alert">
+                            {% trans "This price is no longer available." %}
+                        </div>
+                    {% elif price.adhesions_obligatoires.exists %}
+                        {% if not user.is_authenticated %}
+                            <div class="alert alert-danger" role="alert">
+                                {% trans "Log in to access this rate." %}
+                            </div>
+                        {% elif not user|is_membership:price.adhesions_obligatoires %}
+                            <!-- Adhésion obligatoire pour selectionner ce produit ! -->
+                            <div class="alert alert-info" role="alert">
+                                {% trans "You must have" %}
+                                {% for adhesion in price.adhesions_obligatoires.all %}
+                                    <a href="/memberships/?open={{ adhesion.uuid }}">{{ adhesion.name }}</a>{% if not forloop.last %}
+                                    {% trans "or" %}{% endif %}
+                                {% endfor %}
+                                {% trans "to book this rate." %}
+                            </div>
+                        {% else %}
+                            <span class="d-flex align-items-baseline gap-3">
+                                <bs-counter
+                                        id="amount-{{ price.uuid }}"
+                                        name="{{ price.uuid }}"
+                                        step="1" min="0"
+                                        max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% elif price.max_per_user %}{{ price.max_per_user }}{% else %}{{ event.max_per_user }}{% endif %}"
+                                        class="flex-grow-1 js-order-amount"
+                                        data-testid="booking-amount-{{ price.uuid }}">
+                                </bs-counter>
+                                {% trans 'ticket(s)' %}
+                            </span>
+                        {% endif %}
+                    {% else %}
+                        <span class="d-flex align-items-baseline gap-3">
+                            <bs-counter
+                                    id="amount-{{ price.uuid }}"
+                                    name="{{ price.uuid }}"
+                                    step="1" min="0"
+                                    max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% elif price.max_per_user %}{{ price.max_per_user }}{% else %}{{ event.max_per_user }}{% endif %}"
+                                    class="flex-grow-1 js-order-amount"
+                                    data-testid="booking-amount-{{ price.uuid }}"
+                            ></bs-counter>
+                            {% trans 'ticket(s)' %}
+                        </span>
+                    {% endif %}
+
+                    {% if price.free_price %}
+                        <div id="custom-amount-container-{{ price.uuid }}"
+                             class="custom-amount-container mt-3 p-3 border border-primary-subtle rounded bg-body-tertiary"
+                             style="display: none;"
+                             data-testid="booking-custom-amount-container-{{ price.uuid }}">
+                            <input id="custom_amount-{{ price.uuid }}"
+                                   class="form-control form-control-lg custom-amount-input js-order-custom-price"
+                                   type="number"
+                                   name="custom_amount_{{ price.uuid }}"
+                                   {# unlocalize : en locale FR, min="5,00" (virgule) est invalide en HTML #}
+                                   {# / unlocalize: in FR locale, min="5,00" (comma) is invalid HTML #}
+                                   min="{{ price.prix|unlocalize }}"
+                                   max="999999.99"
+                                   step="0.10"
+                                   placeholder="{% trans "Enter the amount (minimum" %} {{ price.prix }}€)"
+                                   aria-describedby="custom-amount-help-{{ price.uuid }}"
+                                   data-testid="booking-custom-amount-{{ price.uuid }}">
+                            <div class="invalid-feedback"
+                                 id="custom-amount-error-{{ price.uuid }}"
+                                 data-testid="booking-custom-amount-error-{{ price.uuid }}"></div>
+                            <small id="custom-amount-help-{{ price.uuid }}" class="form-text text-muted">
+                                {% trans "Enter the desired amount per ticket" %}
+                            </small>
+                        </div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+        {% for option in event.options_radio.all %}
+            <div class="mb-3 has-validation">
+                <div class="form-check me-3">
+                    <input id="option-radio-{{ option.uuid }}" name="options"
+                           class="form-check-input" type="radio" value="{{ option.uuid }}"
+                           required data-testid="booking-option-radio-{{ option.uuid }}">
+                    <label class="custom-control-label" for="option-radio-{{ option.uuid }}">
+                        {{ option.name }}
+                    </label>
+                </div>
+            </div>
+        {% endfor %}
+        {% for option in event.options_checkbox.all %}
+            <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" role="switch" id="option-checkbox-{{ option.uuid }}"
+                       name="options" value="{{ option.uuid }}" data-testid="booking-option-checkbox-{{ option.uuid }}">
+                <label class="form-check-label" for="option-checkbox-{{ option.uuid }}">
+                    {{ option.name }}
+                </label>
+            </div>
+        {% endfor %}
+
+        {# Dynamic product form fields (same method as membership form) #}
+        {% with products=event.products.all %}
+            {% for product in products %}
+                {% with fields=product.form_fields.all %}
+                    {% if fields %}
+                        <hr>
+                        {% if products|length > 1 %}
+                            <h5 class="h6 mb-2">{{ product.name }}</h5>
+                        {% endif %}
+                        <h4 class="h5 mb-3">{% translate "Additional information" %}</h4>
+                        {% for field in fields %}
+                            {% if field.field_type == 'ST' %}
+                                <div class="form-floating mb-3">
+                                    <input id="ff-{{ field.uuid }}" name="form__{{ field.name }}" type="text"
+                                           class="form-control"
+                                           placeholder="{{ field.placeholder|default:field.label }}"
+                                           {% if field.required %}required{% endif %}
+                                           data-testid="booking-form-field-{{ field.name }}">
+                                    <label for="ff-{{ field.uuid }}">{{ field.label }}{% if field.required %}
+                                        <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
+                                    {% if field.help_text %}
+                                        <div class="form-text">{{ field.help_text }}</div>
+                                    {% endif %}
+                                </div>
+                            {% elif field.field_type == 'LT' %}
+                                <div class="form-floating mb-3">
+                                    <textarea id="ff-{{ field.uuid }}" name="form__{{ field.name }}"
+                                              class="form-control" style="height: 120px"
+                                              placeholder="{{ field.placeholder|default:field.label }}"
+                                              {% if field.required %}required{% endif %}
+                                              data-testid="booking-form-field-{{ field.name }}"></textarea>
+                                    <label for="ff-{{ field.uuid }}">{{ field.label }}{% if field.required %}
+                                        <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
+                                    {% if field.help_text %}
+                                        <div class="form-text">{{ field.help_text }}</div>
+                                    {% endif %}
+                                </div>
+                            {% elif field.field_type == 'SS' %}
+                                <div class="mb-3">
+                                    <label class="form-label" for="ff-{{ field.uuid }}">{{ field.label }}{% if field.required %}
+                                        <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
+                                    <select id="ff-{{ field.uuid }}" name="form__{{ field.name }}" class="form-select"
+                                            {% if field.required %}required{% endif %}
+                                            data-testid="booking-form-field-{{ field.name }}">
+                                        <option value="" {% if field.required %}disabled selected{% endif %}>—</option>
+                                        {% for opt in field.options %}
+                                            <option value="{{ opt }}">{{ opt }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    {% if field.help_text %}
+                                        <div class="form-text">{{ field.help_text }}</div>
+                                    {% endif %}
+                                </div>
+                            {% elif field.field_type == 'SR' %}
+                                <div class="mb-3">
+                                    <div class="form-label">
+                                        {{ field.label }}{% if field.required %}
+                                            <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                                    </div>
+                                    {% for opt in field.options %}
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio"
+                                                   id="ff-{{ field.uuid }}-{{ forloop.counter }}"
+                                                   name="form__{{ field.name }}" value="{{ opt }}"
+                                                   {% if field.required and forloop.first %}required{% endif %}
+                                                   data-testid="booking-form-field-{{ field.name }}">
+                                            <label class="form-check-label"
+                                                   for="ff-{{ field.uuid }}-{{ forloop.counter }}">{{ opt }}</label>
+                                        </div>
+                                    {% endfor %}
+                                    {% if field.help_text %}
+                                        <div class="form-text">{{ field.help_text }}</div>
+                                    {% endif %}
+                                </div>
+                            {% elif field.field_type == 'BL' %}
+                                <div class="form-check form-switch mb-3" {% if field.required %}data-bl-required="true"
+                                     data-input-id="ff-{{ field.uuid }}"
+                                     data-error-message="{% translate 'Please check this box.' %}"{% endif %}
+                                     data-testid="booking-form-group-{{ field.name }}">
+                                    <input class="form-check-input" type="checkbox" role="switch"
+                                           id="ff-{{ field.uuid }}" name="form__{{ field.name }}" value="on"
+                                           {% if field.required %}required aria-required="true"{% endif %}
+                                           data-testid="booking-form-field-{{ field.name }}">
+                                    <label class="form-check-label" for="ff-{{ field.uuid }}">
+                                        {{ field.label }}{% if field.required %}
+                                            <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                                    </label>
+                                    {% if field.help_text %}
+                                        <div class="form-text">{{ field.help_text }}</div>
+                                    {% endif %}
+                                    {% if field.required %}
+                                        <div class="text-danger small mt-1" data-bl-error style="display:none;" data-testid="booking-form-error-{{ field.name }}"></div>
+                                    {% endif %}
+                                </div>
+                            {% elif field.field_type == 'MS' %}
+                                <div class="mb-3" {% if field.required %}data-ms-required="true"
+                                     data-input-name="form__{{ field.name }}"
+                                     data-error-message="{% translate 'Please select at least one option.' %}"{% endif %}
+                                     data-testid="booking-form-group-{{ field.name }}">
+                                    <div class="form-label">
+                                        {{ field.label }}{% if field.required %}
+                                            <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                                    </div>
+                                    {% for opt in field.options %}
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox"
+                                                   id="ff-{{ field.uuid }}-{{ forloop.counter }}"
+                                                   name="form__{{ field.name }}" value="{{ opt }}"
+                                                   {% if field.required %}aria-required="true"{% endif %}
+                                                   data-testid="booking-form-field-{{ field.name }}">
+                                            <label class="form-check-label"
+                                                   for="ff-{{ field.uuid }}-{{ forloop.counter }}">{{ opt }}</label>
+                                        </div>
+                                    {% endfor %}
+                                    {% if field.help_text %}
+                                        <div class="form-text">{{ field.help_text }}</div>
+                                    {% endif %}
+                                    {% if field.required %}
+                                        <div class="text-danger small mt-1" data-ms-error style="display:none;" data-testid="booking-form-error-{{ field.name }}"></div>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+            {% endfor %}
+        {% endwith %}
+
+        <script>
+            (function () {
+                const form = document.getElementById('reservation_form');
+                if (!form) return;
+
+                function validateMsRequired() {
+                    let ok = true;
+                    const groups = form.querySelectorAll('[data-ms-required="true"]');
+                    groups.forEach(group => {
+                        const inputName = group.getAttribute('data-input-name');
+                        const boxes = group.querySelectorAll('input[type="checkbox"][name="' + inputName + '"]');
+                        const anyChecked = Array.from(boxes).some(cb => cb.checked);
+                        const error = group.querySelector('[data-ms-error]');
+                        if (!anyChecked) {
+                            ok = false;
+                            if (error) {
+                                error.textContent = group.getAttribute('data-error-message') || "{% translate 'Veuillez cocher au moins une option.' %}";
+                                error.style.display = 'block';
+                            }
+                            boxes.forEach(cb => cb.setAttribute('aria-invalid', 'true'));
+                        } else {
+                            if (error) {
+                                error.textContent = '';
+                                error.style.display = 'none';
+                            }
+                            boxes.forEach(cb => cb.removeAttribute('aria-invalid'));
+                        }
+                    });
+                    return ok;
+                }
+
+                function validateBlRequired() {
+                    let ok = true;
+                    const groups = form.querySelectorAll('[data-bl-required="true"]');
+                    groups.forEach(group => {
+                        const input = group.querySelector('input[type="checkbox"]');
+                        const error = group.querySelector('[data-bl-error]');
+                        if (!input) return;
+                        if (!input.checked) {
+                            ok = false;
+                            if (error) {
+                                error.textContent = group.getAttribute('data-error-message') || "{% translate 'Veuillez cocher cette case.' %}";
+                                error.style.display = 'block';
+                            }
+                            input.setAttribute('aria-invalid', 'true');
+                        } else {
+                            if (error) {
+                                error.textContent = '';
+                                error.style.display = 'none';
+                            }
+                            input.removeAttribute('aria-invalid');
+                        }
+                    });
+                    return ok;
+                }
+
+                // Validate before HTMX sends the request
+                form.addEventListener('htmx:configRequest', function (event) {
+                    const okMs = validateMsRequired();
+                    const okBl = validateBlRequired();
+                    if (!(okMs && okBl)) {
+                        event.preventDefault();
+                    }
+                });
+
+                // Live update on change within a required MS/BL group
+                form.addEventListener('change', function (e) {
+                    if (e.target && e.target.closest('[data-ms-required="true"]')) {
+                        validateMsRequired();
+                    }
+                    if (e.target && e.target.closest('[data-bl-required="true"]')) {
+                        validateBlRequired();
+                    }
+                });
+
+                // Validation des prix libres : montant obligatoire, et respect du minimum Stripe (0 ou >= 0.50€)
+                // Free price validation: amount required, and Stripe minimum respected (0 or >= €0.50)
+                function validateFreePrices() {
+                    let ok = true;
+                    const stripeMinimumEuros = 0.50;
+                    const orders = form.querySelectorAll('.js-order');
+                    orders.forEach(order => {
+                        const amountInput = order.querySelector('.js-order-amount');
+                        const customPriceInput = order.querySelector('.js-order-custom-price');
+                        if (!amountInput || !customPriceInput) return;
+                        // Le tarif libre n'est pas selectionne (quantite = 0, ou bs-counter pas encore upgrade) : on saute la validation.
+                        // bs-counter.value peut etre "null", "" ou undefined → parseInt() renvoie NaN, et NaN <= 0 est false.
+                        // / Free price not selected (qty = 0, or bs-counter not yet upgraded): skip validation.
+                        const ticketsQuantity = Number(amountInput.value) || 0;
+                        if (ticketsQuantity <= 0) return;
+
+                        const errorDiv = customPriceInput.parentElement.querySelector('.invalid-feedback');
+                        const rawValue = customPriceInput.value;
+                        const parsedAmount = parseFloat(rawValue);
+                        const configuredMinimum = parseFloat(customPriceInput.min || 0);
+
+                        const amountIsEmpty = !rawValue;
+                        const amountIsBelowStripeMinimum = parsedAmount > 0 && parsedAmount < stripeMinimumEuros;
+                        const amountIsBelowConfiguredMinimum = configuredMinimum > 0 && parsedAmount < configuredMinimum;
+
+                        if (amountIsEmpty) {
+                            ok = false;
+                            customPriceInput.classList.add('is-invalid');
+                            if (errorDiv) errorDiv.textContent = "{% translate 'Please enter an amount.' %}";
+                        } else if (amountIsBelowStripeMinimum) {
+                            ok = false;
+                            customPriceInput.classList.add('is-invalid');
+                            if (errorDiv) errorDiv.textContent = "{% translate 'The amount must be 0 (free) or at least €0.50.' %}";
+                        } else if (amountIsBelowConfiguredMinimum) {
+                            ok = false;
+                            customPriceInput.classList.add('is-invalid');
+                            if (errorDiv) errorDiv.textContent = "{% translate 'The amount must be greater than the minimum amount.' %}";
+                        } else {
+                            customPriceInput.classList.remove('is-invalid');
+                            if (errorDiv) errorDiv.textContent = '';
+                        }
+                    });
+                    return ok;
+                }
+
+                form.addEventListener('htmx:configRequest', function (event) {
+                    if (!validateFreePrices()) {
+                        event.preventDefault();
+                    }
+                });
+
+                // Efface l'erreur en temps réel quand l'utilisateur corrige le montant
+                // Clears the error live as the user corrects the amount
+                form.addEventListener('input', function (e) {
+                    if (e.target && e.target.classList.contains('js-order-custom-price')) {
+                        validateFreePrices();
+                    }
+                });
+            })();
+        </script>
+
+        <h4>
+            {% trans 'Total&nbsp;:' %} <span class="js-total-amount" data-testid="booking-total-amount">0</span> {% trans 'ticket(s)' %}
+            <span class="js-total-has-price">
+                {% trans 'for' %}
+                <span class="fs-5 badge bg-secondary-subtle mb-md-0"><span
+                        class="js-total-price" data-testid="booking-total-price">1,00</span>&nbsp;€</span>
+            </span>
+        </h4>
+        {% if event.max_per_user %}
+        <p>
+            {% trans "Maximum capacity of tickets limited to" %}<span
+                class="js-max-amount"> {{ event.max_per_user }} </span>{% trans 'per buyer' %}.
+        </p>
+        {% endif %}
+    </div>
+
+    <div class="p-3">
+        {# Promotional code input - show if any product has promotional codes #}
+        {% if event.products.all %}
+            {% for product in event.products.all %}
+                {% if product.promotional_codes.exists %}
+                    <div class="mb-3">
+                        <label for="promotional-code" class="form-label">{% trans "Promotional code" %}</label>
+                        <input type="text" name="promotional_code" class="form-control" id="promotional-code"
+                               placeholder="{% trans 'Enter your promotional code' %}" data-testid="booking-promo-code">
+                    </div>
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+
+
+        <button type="submit" class="btn btn-primary w-100 mb-3" data-loading-disable data-testid="booking-submit">{% trans 'Send booking request' %}</button>
+        <a href="." class="btn btn-danger d-block" data-testid="booking-cancel">{% trans 'Cancel' %}</a>
+    </div>
+</form>
+
+<script type="module">
+    import * as BookingCalculator from '{% static "commun/js/booking-calculator.mjs" %}'
+    import * as Spinner from '{% static "commun/js/form-spinner.mjs" %}'
+
+    // Spinner initialisé par loading-states (HTMX)
+    // / Spinner initialized by loading-states (HTMX)
+    const form = document.getElementById('reservation_form')
+    BookingCalculator.init()
+
+    // Prevent HTMX request if no quantity selected (> 0 required)
+    form.addEventListener('htmx:configRequest', (event) => {
+        try {
+            const totalEl = document.querySelector('.js-total-amount')
+            const total = parseInt((totalEl?.textContent || '0').replace(/\D+/g, ''), 10) || 0
+            if (total <= 0) {
+                event.preventDefault()
+                // Show a simple inline error (Bootstrap alert if available)
+                let err = document.getElementById('booking-form-error')
+                if (!err) {
+                    err = document.createElement('div')
+                    err.id = 'booking-form-error'
+                    err.setAttribute('data-testid', 'booking-no-ticket-error')
+                    err.className = 'alert alert-danger mt-2'
+                    // Insert the error right above the submit buttons
+                    const footer = form.querySelector('.p-3')
+                    ;(footer?.parentElement || form).insertBefore(err, footer || null)
+                }
+                err.textContent = "Veuillez sélectionner au moins 1 billet avant d'envoyer la demande."
+                // Also scroll into view for visibility
+                err.scrollIntoView({behavior: 'smooth', block: 'center'})
+            }
+        } catch (e) {
+            // Fail open: if any unexpected error occurs, do not block the request
+        }
+    })
+</script>

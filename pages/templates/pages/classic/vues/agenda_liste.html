@@ -1,0 +1,36 @@
+{% load i18n %}
+{% load tibitags %}
+
+<p class="text-end mb-5">
+    <a href="/rss/latest/feed/" target="_blank" rel="noopener noreferrer" aria-label="{% trans 'Event feed' %}">
+        <i class="bi bi-rss-fill"></i> {% trans "Event feed" %}
+    </a>
+</p>
+
+{% for date_key, events in dated_events.items %}
+    <h2 class="fs-5 p-3 text-dark" style="background: var(--mayaj-pons);">
+        {{ date_key|date:'l j F'|capfirst }}
+    </h2>
+    {% for event in events %}
+        {% include 'pages/classic/partials/carte_evenement.html' %}
+        {% if not forloop.last %}
+            <hr/>{% endif %}
+    {% endfor %}
+{% empty %}
+    {% trans 'No results for this search.' %}
+{% endfor %}
+
+{% if paginated_info.has_next %}
+    {#TODO : Le paginator ne classe pas. Dans le cas d'un calendrier partagé, les dates ne sont pas cohérentes. #}
+    <div id="paginator">
+        <p class="py-3 mb-5 text-center">
+            <a class="btn btn-outline-primary d-block d-sm-inline"
+               hx-boost="true" hx-post="/event/partial_list/?page={{ paginated_info.page | add:1 }}"
+               hx-include="#search_form" hx-target="#paginator" hx-swap="outerHTML">
+                {% translate "Load more events" %}
+            </a>
+        </p>
+    </div>
+{% else %}
+    <div class="mb-5"></div>
+{% endif %}

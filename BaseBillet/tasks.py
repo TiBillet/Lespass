@@ -1688,40 +1688,6 @@ def send_to_ghost(membership_pk):
 
 
 @app.task
-def send_welcome_email(email: str, username: str = None):
-    """
-    Envoie un email de bienvenue aux nouveaux utilisateurs.
-
-    Args:
-        email: L'adresse email du destinataire
-        username: Le nom d'utilisateur (optionnel)
-    """
-    logger.info(f"Envoi d'un email de bienvenue à {email}")
-
-    context = {
-        'title': _("Bienvenue sur TiBillet"),
-        'username': username or email.split('@')[0],
-        'now': timezone.now(),
-        'objet': _("Bienvenue"),
-        'image_url': "https://tibillet.coop/static/assets/logo-couleur.svg",
-    }
-
-    try:
-        mail = CeleryMailerClass(
-            email,
-            f"{context.get('title')}",
-            template="emails/welcome/welcome_email.html",
-            context=context,
-        )
-        mail.send()
-        logger.info(f"send_welcome_email : mail.sended : {mail.sended}")
-        return mail.sended
-    except Exception as e:
-        logger.error(f"ERROR {timezone.now()} Erreur lors de l'envoi de l'email de bienvenue à {email}: {e}")
-        return False
-
-
-@app.task
 def membership_renewal_reminder():
     """
     Envoie d'un mail de renouvellement si l'adhésion arrive a expiration le lendemain
@@ -1758,6 +1724,10 @@ def membership_renewal_reminder():
                         'renewal_url': f"https://{tenant.get_primary_domain().domain}/memberships/"
                     }
 
+                    # On ne sort JAMAIS de la boucle ici : chaque adhérent doit recevoir
+                    # sa relance. Une erreur sur un email ne bloque pas les suivants.
+                    # / Never return inside this loop: every member must get their
+                    # reminder. One failed email must not block the others.
                     try:
                         mail = CeleryMailerClass(
                             email,
@@ -1766,12 +1736,10 @@ def membership_renewal_reminder():
                             context=context,
                         )
                         mail.send()
-                        logger.info(f"send_welcome_email : mail.sended : {mail.sended}")
-                        return mail.sended
+                        logger.info(f"membership_renewal_reminder : mail.sended : {mail.sended}")
                     except Exception as e:
                         logger.error(
                             f"ERROR {timezone.now()} Erreur lors de l'envoi de membership_renewal_reminder à {email}: {e}")
-                        return False
 
 
 @app.task
@@ -1985,7 +1953,7 @@ def send_payment_success_admin(amount: int, payment_time_str: str, place: str, u
     mail = CeleryMailerClass(
         emails,
         title,
-        template="reunion/views/qrcode_scan_pay/email/payment_success_admin.html",
+        template="emails/qrcode_scan_pay/payment_success_admin.html",
         context=context,
     )
     mail.send()
@@ -2023,7 +1991,7 @@ def send_payment_success_user(user_email: str, amount: int, payment_time_str: st
     mail = CeleryMailerClass(
         user_email,
         title,
-        template="reunion/views/qrcode_scan_pay/email/payment_success_user.html",
+        template="emails/qrcode_scan_pay/payment_success_user.html",
         context=context,
     )
     mail.send()

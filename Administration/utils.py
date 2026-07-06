@@ -45,6 +45,20 @@ def _attribute_filter(tag: str, attr: str, value: str) -> Optional[str]:
 
 
 
+def url_a_schema_dangereux(valeur):
+    """
+    Vrai si l'URL utilise un schema dangereux (javascript:, data:, vbscript:).
+    On retire d'abord espaces et caracteres de controle pour dejouer les
+    obfuscations type "java\\tscript:". On ne teste que le debut.
+    / True if the URL uses a dangerous scheme. Strips whitespace/control chars first
+    to defeat obfuscations, then tests the start only.
+    """
+    if not valeur or not isinstance(valeur, str):
+        return False
+    compact = "".join(c for c in valeur if not c.isspace() and ord(c) >= 0x20).lower()
+    return compact.startswith(("javascript:", "data:", "vbscript:"))
+
+
 def clean_text(text: str) -> str:
     """Nettoie une chaîne de texte brut en supprimant tout HTML.
     Clean a plain text string by stripping all HTML tags.
