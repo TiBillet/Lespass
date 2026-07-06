@@ -855,6 +855,21 @@ class MyAccount(viewsets.ViewSet):
                 Reservation.PAID_NOMAIL,
                 Reservation.VALID,
             ]
+        ).annotate(
+            # Noms distincts des methodes Reservation.valid_tickets_count() /
+            # cancelled_tickets_count() : une annotation portant le meme nom
+            # qu'une methode ecraserait celle-ci sur les instances de ce
+            # queryset (TypeError si un autre code appelle encore la methode).
+            # / Names distinct from Reservation.valid_tickets_count() /
+            # cancelled_tickets_count() methods: an annotation with the same
+            # name would shadow the method on this queryset's instances
+            # (TypeError if other code still calls the method).
+            annotated_valid_count=Count(
+                'tickets', filter=Q(tickets__status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED])
+            ),
+            annotated_cancelled_count=Count(
+                'tickets', filter=Q(tickets__status=Ticket.CANCELED)
+            ),
         )
         context = get_context(request)
         context['reservations'] = reservations

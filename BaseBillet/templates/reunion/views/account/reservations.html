@@ -67,8 +67,8 @@
                 </h3>
                 <div class="card-text hstack gap-3 mb-3">
                     <div class="p-2">
-                        {{ resa.valid_tickets_count }} {% trans "seats" %}
-                        {% with cancelled=resa.cancelled_tickets_count %}
+                        {{ resa.annotated_valid_count }} {% trans "seats" %}
+                        {% with cancelled=resa.annotated_cancelled_count %}
                             {% if cancelled %}
                                 (+ {{ cancelled }} {% trans "Canceled" %})
                             {% endif %}
