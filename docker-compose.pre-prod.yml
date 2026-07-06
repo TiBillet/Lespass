@@ -112,6 +112,9 @@ services:
       - backend
     extra_hosts:
       - fedow.${DOMAIN}:172.17.0.1
+      - laboutik.${DOMAIN}:172.17.0.1
+      - lespass.${DOMAIN}:172.17.0.1
+      - chantefrein.${DOMAIN}:172.17.0.1
     command: "bash start_dev.sh"
 
   lespass_celery:
@@ -135,6 +138,9 @@ services:
       - backend
     extra_hosts:
       - fedow.${DOMAIN}:172.17.0.1
+      - laboutik.${DOMAIN}:172.17.0.1
+      - lespass.${DOMAIN}:172.17.0.1
+      - chantefrein.${DOMAIN}:172.17.0.1
     command: "poetry run celery -A TiBillet worker -l INFO -B --concurrency=6"
 
   lespass_nginx:
@@ -175,7 +181,7 @@ services:
       - traefik.http.routers.lespass-simple.entrypoints=websecure
       - traefik.http.routers.lespass-simple.tls=true
       - traefik.http.routers.lespass-simple.tls.certresolver=le-alpn
-      - traefik.http.routers.lespass-simple.rule=Host(`${DOMAIN}`) || Host(`lespass.${DOMAIN}`)
+      - traefik.http.routers.lespass-simple.rule=Host(`${DOMAIN}`) || Host(`lespass.${DOMAIN}`) || Host(`chantefrein.${DOMAIN}`)
       - traefik.http.routers.lespass-simple.middlewares=crowdsec@file
 
 
