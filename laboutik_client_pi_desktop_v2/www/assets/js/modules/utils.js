@@ -94,8 +94,9 @@ export async function writeConfFile(content) {
 }
 
 export async function managedServerPinCode(event) {
-  console.log('-> managedServerPinCode');
+  // console.log('-> managedServerPinCode')
   if (event.key === 'Enter') {
+    event.preventDefault()
     try {
       const url = event.target.value
       showSpinner()
@@ -116,8 +117,15 @@ export async function managedServerPinCode(event) {
         document.querySelector('#retour-server-pin-code').innerText = retour.error
       } else {
         // url ok
-        document.querySelector('#retour-server-pin-code').innerText = ''
         state.server_pin_code = retour.url
+        // cache le input
+        document.querySelector('#update-server-pin-code').style.display = 'none'
+        // enlève un éventuel ancien message d'erreur
+        document.querySelector('#retour-server-pin-code').innerText = ''
+        // maj nouveau serveur
+        document.querySelector('#label-server-pin-code').innerText = url
+        // affiche l'info serveur pin-code
+        document.querySelector('.infos-server-pin-code').style.display = 'flex'
       }
 
     } catch (error) {

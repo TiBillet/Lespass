@@ -138,6 +138,85 @@ async function writeConfigFile(confFile) {
   })
 }
 
+/**
+ * Test dicovery server
+ * @param {*} url 
+ * @param {*} timeoutMs 
+ * @returns 
+ */
+async function testDiscoveryServer(url, timeoutMs = 5000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    await fetch(url, {
+      mode: 'no-cors',
+      cache: 'no-store',
+      signal: controller.signal
+    });
+    return 'available'
+  } catch (error) {
+    return 'disable'
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+export async function managedServerPinCode(event) {
+  console.log('-> managedServerPinCode :')
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    event.target.blur()
+    try {
+      // 1 - url conforme
+      const url = event.target.value
+      const urlRegex = /^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(\/[^\s]*)?$/
+      const urlOk = urlRegex.test(url)
+      console.log('urlOk =', urlOk)
+      if (urlOk === false) {
+        throw new Error("Url non conforme.")
+      }
+
+      // 2 - serveur joignable
+      showSpinner()
+      const testServer = await testDiscoveryServer(url)
+      console.log('testServer =', testServer)
+      if (testServer !== 'available') {
+        throw new Error("Serveur non disponible ou inconnu")
+      }
+
+      // 3 copie l'ancien state
+      let oldState = structuredClone(state)
+
+      // 4 - change serveur discovery in config file
+      state.server_pin_code = url
+
+      // 5 save conf
+      const result = await writeConfigFile(state)
+      console.log('result =', result, ' --  type =', typeof (result));
+
+      if (result === false) {
+        throw new Error("Error - save  config file.")
+        state = structuredClone(oldState)
+      } else {
+        // cache le input
+        document.querySelector('#update-server-pin-code').style.display = 'none'
+        // enlève un éventuel ancien message d'erreur
+        document.querySelector('#retour-server-pin-code').innerText = ''
+        // maj nouveau serveur
+        document.querySelector('#label-server-pin-code').innerText = url
+        // affiche l'info serveur pin-code
+        document.querySelector('.infos-server-pin-code').style.display = 'flex'
+      }
+      oldState = null
+      hideSpinner()
+    } catch (error) {
+      hideSpinner()
+      putLog('error', '-> managedServerPinCode :', error)
+      document.querySelector('#retour-server-pin-code').innerText = error.message
+    }
+  }
+}
+
 
 /**
  * Change background color of general status

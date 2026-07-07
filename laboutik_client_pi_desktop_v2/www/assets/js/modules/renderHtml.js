@@ -3,9 +3,22 @@ import { goServer, confirmDeleteServer } from "./utils.js"
 
 function showInputPinCode() {
   // putLog('info', '-> showInputPinCode')
+  // efface un ancien contenu de pin-code
+  document.querySelector('#pin-code').value = ''
+  // affiche l'interface "add palce"
   document.querySelector('.content-input').style.display = 'flex'
+  // actualise le serveur discovery en cours
   document.querySelector('#label-server-pin-code').innerText = state.server_pin_code
+  // insert dans le input permettant l'édition du serveur discovery le serveur en cours
   document.querySelector('#update-server-pin-code').value = state.server_pin_code
+  // efface le input d'édition du serveur discovery
+  document.querySelector('#update-server-pin-code').style.display = 'none'
+  // supprime un ancien message de pin-code erroné
+  document.querySelector('#pin-code-message').innerText = ''
+  // supprime un ancien message de serveur discovery erroné
+  document.querySelector('#retour-server-pin-code').innerText = ''
+  // affiche l'ui serveur dicovery
+  document.querySelector('.infos-server-pin-code').style.display = 'flex'
 }
 
 export function renderHtml(state) {
@@ -76,5 +89,5 @@ export function renderHtml(state) {
     document.querySelectorAll('.bt-delete-server').forEach((element) => {
       element.addEventListener('click', confirmDeleteServer)
     })
-  } 
+  }
 }

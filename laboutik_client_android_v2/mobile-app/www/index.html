@@ -1,51 +1,79 @@
 <!DOCTYPE html>
 <html>
-
-<head>
-  <meta charset="utf-8" />
-  <meta name="format-detection" content="telephone=no" />
-  <meta name="msapplication-tap-highlight" content="no" />
-  <meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover" />
-  <link rel="stylesheet" href="assets/css/index.css" />
-  <link rel="stylesheet" href="assets/css/palette.css" />
-  <title>LaBoutik</title>
-</head>
-
-<body>
-  <header>
-    <img class="header-img" alt="TiBillet" src="assets/images/icon-complet-blanc.svg" />
-    <div class="header-status"></div>
-    <div class="spinner"></div>
-    <div class="header-menu">
-      <svg width="40" height="40" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <rect x="3" y="5" width="18" height="2" fill="currentColor" />
-        <rect x="3" y="11" width="18" height="2" fill="currentColor" />
-        <rect x="3" y="17" width="18" height="2" fill="currentColor" />
-      </svg>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="msapplication-tap-highlight" content="no" />
+    <meta name="viewport"
+          content="initial-scale=1, width=device-width, viewport-fit=cover" />
+    <link rel="stylesheet" href="assets/css/index.css" />
+    <link rel="stylesheet" href="assets/css/palette.css" />
+    <title>LaBoutik</title>
+  </head>
+  <body>
+    <header>
+      <img class="header-img"
+           alt="TiBillet"
+           src="assets/images/icon-complet-blanc.svg" />
+      <div class="header-status"></div>
+      <div class="spinner"></div>
+      <div class="header-menu">
+        <svg width="40"
+             height="40"
+             viewBox="0 0 24 24"
+             xmlns="http://www.w3.org/2000/svg">
+          <rect x="3" y="5" width="18" height="2" fill="currentColor" />
+          <rect x="3" y="11" width="18" height="2" fill="currentColor" />
+          <rect x="3" y="17" width="18" height="2" fill="currentColor" />
+        </svg>
+      </div>
+    </header>
+    <main>
+    </main>
+    <div class="content-input">
+      <div class="content-server-pincode">
+        <h2>Serveur pin-code</h2>
+        <div class="input-group-row infos-server-pin-code">
+          <label id="label-server-pin-code"></label>
+          <svg id="icon-update-server-pin-code"
+               xmlns="http://www.w3.org/2000/svg"
+               viewBox="0 0 24 24"
+               width="24"
+               height="24"
+               fill="none"
+               stroke="currentColor"
+               stroke-width="2"
+               stroke-linecap="round"
+               stroke-linejoin="round">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+          </svg>
+        </div>
+        <input type="text" id="update-server-pin-code" enterkeyhint="done" />
+        <div id="retour-server-pin-code"></div>
+      </div>
+      <!-- important, enterkeyhint="done" permet de gérer la touche entrée plus surement -->
+      <input type="number" id="pin-code"  placeholder="pin-code" enterkeyhint="done" />
+      <!-- TODO afficher et gérer le clavier pour un pi -->
+      <label id="pin-code-message" style="color: var(--yellow00);"></label>
+      <div class="bt bt-input-return">Return</div>
     </div>
-  </header>
-  <main></main>
-  <div class="content-input">
-    <input type="number" id="pin-code" placeholder="pin-code" />
-    <label id="pin-code-message" style="color: var(--yellow00);"></label>
-    <div class="bt bt-input-return">Return</div>
-  </div>
-  <div class="logs-content"></div>
-  <div class="menu-burger-container" aria-label="Menu principal">
-    <nav class="menu-burger-content"></nav>
-  </div>
-  <div class="confirm-container">
-    <div class="confirm-content">
-      <div class="confirm-title">Confirmation</div>
-      <div class="confirm-body">delete the server</div>
-      <div class="confirm-select">
-        <div class="bt bt-delete-cancel">Cancel</div>
-        <div data-server="" class="bt bt-delete-validate">validate</div>
+    <div class="logs-content"></div>
+    <div class="menu-burger-container" aria-label="Menu principal">
+      <nav class="menu-burger-content">
+      </nav>
+    </div>
+    <div class="confirm-container">
+      <div class="confirm-content">
+        <div class="confirm-title">Confirmation</div>
+        <div class="confirm-body">delete the server</div>
+        <div class="confirm-select">
+          <div class="bt bt-delete-cancel">Cancel</div>
+          <div data-server="" class="bt bt-delete-validate">validate</div>
+        </div>
       </div>
     </div>
-  </div>
-  <script src="http://localhost/cordova.js"></script>
-  <script type="module" src="assets/js/index.js"></script>
-</body>
-
+    <script src="http://localhost/cordova.js"></script>
+    <script type="module" src="assets/js/index.js"></script>
+  </body>
 </html>
