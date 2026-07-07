@@ -2218,7 +2218,17 @@ class Command(BaseCommand):
             logger.warning(f"Erreur lors de l'assignation aléatoire des origines utilisateur: {e}")
 
         # -----------------------------
-        # 4) Images de demo (logos tenants, backgrounds, events)
+
+        # 4) Données booking de démonstration (si booking est installé)
+        # -----------------------------
+        if 'booking' in settings.INSTALLED_APPS:
+            from django.core.management import call_command as _call_command
+            for tenant in created_tenants:
+                with tenant_context(tenant):
+                    self.stdout.write(f"Création des données booking pour {tenant.name}…")
+                    _call_command('create_booking_fixtures')
+
+        # 5) Images de demo (logos tenants, backgrounds, events)
         # Les images sont pre-telechargees dans Administration/fixtures/
         # et assignees aux objets via StdImageField.save().
         # / Demo images (tenant logos, backgrounds, events)
@@ -2243,7 +2253,7 @@ class Command(BaseCommand):
             if f.startswith("404-") and f.endswith(".jpg")
         ]) if os.path.isdir(images_404_dir) else []
 
-        # 4a) Logos des tenants → Configuration.logo
+        # 5a) Logos des tenants → Configuration.logo
         # Le fichier PNG porte le nom du schema (ex: lespass.png)
         # / Tenant logos → Configuration.logo
         # The PNG file is named after the schema (e.g. lespass.png)
@@ -2283,7 +2293,7 @@ class Command(BaseCommand):
                     )
                 self.stdout.write(f"  Logo: {tenant.name}")
 
-        # 4b) Background du tenant → Configuration.img
+        # 5b) Background du tenant → Configuration.img
         # Image de fond + social_card (Open Graph) du lieu.
         # Lespass → image 404 (jolie). Autres → image picsum.
         # / Tenant background → Configuration.img
@@ -2329,7 +2339,7 @@ class Command(BaseCommand):
                 self.stdout.write(f"  Background: {tenant.name}")
             bg_index += 1
 
-        # 4c) Event.img (image principale)
+        # 5c) Event.img (image principale)
         # Pour Lespass → image 404 du projet. Pour les autres → image picsum.
         # / Event main image
         # For Lespass → project 404 image. For others → picsum image.

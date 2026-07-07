@@ -1,0 +1,115 @@
+{% extends "booking/booking_base.html" %}
+{% load i18n %}
+
+<!--
+LOCALISATION : booking/templates/booking/views/my_bookings.html
+
+Mes réservations — liste des réservations à venir et passées du membre.
+/ My bookings — list of the member's upcoming and past bookings.
+
+Flux / Flow:
+  GET /booking/my-bookings/
+  GET /booking/my-bookings/?new=<pk>  (met en évidence la nouvelle résa)
+  / GET /booking/my-bookings/?new=<pk>  (highlights the new booking)
+  Contexte / Context: upcoming_bookings, past_bookings, highlighted_booking_pk
+-->
+
+{% block title %}{% translate "Mes réservations" %}{% endblock %}
+
+{% block booking_content %}
+
+<h1 class="mb-4">{% translate "Mes réservations" %}</h1>
+
+<!--
+Section "À venir" — réservations dont la fin est dans le futur.
+/ "Upcoming" section — bookings whose end is in the future.
+-->
+<h2 class="h4 mb-3" data-testid="booking-upcoming-heading">
+  {% translate "À venir" %}
+</h2>
+
+{% if upcoming_bookings %}
+<ul class="list-group mb-5" data-testid="booking-upcoming-list" aria-live="polite">
+  {% for booking in upcoming_bookings %}
+  <li class="list-group-item d-flex justify-content-between align-items-start
+             {% if booking.pk == highlighted_booking_pk %}list-group-item-success{% endif %}"
+      data-testid="booking-upcoming-item-{{ booking.pk }}">
+    <div>
+      <strong><a href="{% url 'booking-resource' pk=booking.resource.pk %}">{{ booking.resource.name }}</a></strong><br>
+      {{ booking.start_datetime|date:"l d F Y" }}
+      {% translate "à" %} {{ booking.start_datetime|date:"H\hi" }}
+      – {{ booking.end_datetime|date:"H\hi" }}
+
+      {% if booking.slot_count > 1 %}
+      <span class="badge bg-secondary ms-1">
+        {{ booking.slot_count }} {% translate "créneaux" %}
+      </span>
+      {% endif %}
+
+      {% if booking.pk == highlighted_booking_pk %}
+      <span class="badge bg-success ms-1" data-testid="badge-new-booking">
+        {% translate "Nouvelle réservation" %}
+      </span>
+      {% endif %}
+    </div>
+
+    <a href="{% url 'booking-cancel' booking_pk=booking.pk %}"
+       class="btn btn-outline-danger btn-sm"
+       data-testid="booking-cancel-btn-{{ booking.pk }}">
+      {% translate "Annuler" %}
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+
+{% else %}
+<p class="text-muted mb-5" data-testid="booking-upcoming-empty">
+  {% translate "Aucune réservation à venir." %}
+</p>
+{% endif %}
+
+<!--
+Section "Passées" — réservations terminées.
+/ "Past" section — completed bookings.
+-->
+<h2 class="h4 mb-3" data-testid="booking-past-heading">
+  {% translate "Passées" %}
+</h2>
+
+{% if past_bookings %}
+<ul class="list-group" data-testid="booking-past-list">
+  {% for booking in past_bookings %}
+  <li class="list-group-item text-muted"
+      data-testid="booking-past-item-{{ booking.pk }}">
+    <strong>{{ booking.resource.name }}</strong> —
+    {{ booking.start_datetime|date:"l d F Y" }}
+    {% translate "à" %} {{ booking.start_datetime|date:"H\hi" }}
+
+    {% if booking.slot_count > 1 %}
+    <span class="badge bg-secondary ms-1">
+      {{ booking.slot_count }} {% translate "créneaux" %}
+    </span>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+
+{% else %}
+  {% if not upcoming_bookings %}
+  <!--
+  Les deux sections sont vides — affiche un message global avec un lien
+  vers la liste des ressources.
+  / Both sections are empty — show a global message with a link to resources.
+  -->
+  <p class="text-muted" data-testid="booking-all-empty">
+    {% translate "Aucune réservation." %}
+    <a href="{% url 'booking-list' %}">{% translate "Voir les ressources disponibles" %}</a>
+  </p>
+  {% else %}
+  <p class="text-muted" data-testid="booking-past-empty">
+    {% translate "Aucune réservation passée." %}
+  </p>
+  {% endif %}
+{% endif %}
+
+{% endblock booking_content %}

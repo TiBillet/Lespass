@@ -19,9 +19,9 @@ def update_membership_state_after_stripe_paiement(ligne_article: LigneArticle):
 
     paiement_stripe: Paiement_stripe = ligne_article.paiement_stripe
 
-    membership: Membership = paiement_stripe.membership.first()
+    membership = ligne_article.membership
     if not membership:
-        membership = ligne_article.membership
+        membership: Membership = paiement_stripe.membership.first()
 
     price: Price = ligne_article.pricesold.price
     membership.contribution_value = ligne_article.pricesold.prix
