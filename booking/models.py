@@ -480,11 +480,18 @@ class Booking(models.Model):
         auto_now_add=True,
         verbose_name=_('Booked at'),
     )
-    payment_ref = models.CharField(
-        max_length=200,
+
+    commande = models.ForeignKey(
+        Commande,
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        verbose_name=_('Payment reference'),
+        related_name="booking_commande",
+        verbose_name=_("Order"),
+        help_text=_(
+            "Renseignée uniquement si la réservation a été créée via un panier multi-items. "
+            "/ Only set if the booking was created via a multi-item cart."
+        ),
     )
 
     class Meta:
@@ -513,4 +520,4 @@ class Booking(models.Model):
 
 
     def __str__(self):
-        return f'{self.resource} — {self.user} — {self.start_datetime}'
+        return f'{self.resource} — {self.user} {_("de")} {self.start_datetime} {_("à")} {self.end_datetime}'

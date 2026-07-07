@@ -36,6 +36,7 @@ class CreationPaiementStripe():
                  liste_ligne_article: list,
                  metadata: dict,
                  reservation: (Reservation, None),
+                 booking: (Reservation, None) = None,
                  source: str = None,
                  absolute_domain: (str, None) = None,
                  success_url: (str, None) = None,
@@ -60,6 +61,7 @@ class CreationPaiementStripe():
         self.invoice = invoice
         self.liste_ligne_article = liste_ligne_article
         self.reservation = reservation
+        self.booking = booking
         self.source = source
 
         self.metadata = metadata
@@ -101,6 +103,7 @@ class CreationPaiementStripe():
             'user': self.user,
             'metadata_stripe': self.metadata_json,
             'reservation': self.reservation,
+            'booking': self.booking,
             'source': self.source,
             'status': Paiement_stripe.PENDING,
         }

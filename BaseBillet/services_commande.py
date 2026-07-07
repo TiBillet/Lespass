@@ -310,6 +310,7 @@ class CommandeService:
                 slot_count            = int(item.get('slot_count')),
                 # TODO-ANTO add firstname ?
                 member                = user,
+                commande = commande,
             )
             if not is_valid:
                 raise Exception(_("Booking not valide : ") + result)
@@ -397,6 +398,7 @@ class CommandeService:
             liste_ligne_article=lignes,
             metadata=metadata,
             reservation=None,  # Pas de FK : le pivot est Commande
+            booking=None, # Pas de FK : le pivot est Commande
             source=Paiement_stripe.FRONT_BILLETTERIE,
             success_url="stripe_return/",
             cancel_url="stripe_return/",

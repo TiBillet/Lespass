@@ -8,21 +8,29 @@ Flux v0.1 : GET/POST simples, réservation directement en statut 'confirmed'.
 / v0.1 flow: simple GET/POST, booking created directly with status 'confirmed'.
 """
 import datetime
+import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from urllib.parse import urlencode
 
+from django_htmx.http import HttpResponseClientRedirect
 from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework import permissions, viewsets
+from django.contrib import messages
+from django.utils.translation import gettext_lazy as _, ngettext
 
 from BaseBillet.views import get_context
 from booking.booking_engine import Interval, compute_slots, validate_new_booking
 from booking.models import Booking, Resource
 from booking.serializers import BookingCreateSerializer
+from booking.tasks import send_booking_cancellation_user
+
+
+logger = logging.getLogger(__name__)
 
 
 # ── Display layer ────────────────────────────────────────────────────────────
@@ -346,9 +354,9 @@ class BookingViewSet(viewsets.ViewSet):
 
         LOCALISATION : booking/views.py
 
-        Succès    → redirige vers /booking/my-bookings/?new=<pk>
+        Succès    → redirige vers /my_account/my_bookings//?new=<pk>
         Échec     → re-render du formulaire avec message d'erreur
-        / Success → redirect to /booking/my-bookings/?new=<pk>
+        / Success → redirect to /my_account/my_bookings//?new=<pk>
         / Failure → re-render the form with an error message
         """
         # Parse le datetime naïf depuis le champ caché du formulaire.
@@ -415,7 +423,7 @@ class BookingViewSet(viewsets.ViewSet):
             # Réservation créée — redirige vers mes réservations avec mise en évidence.
             # / Booking created — redirect to my bookings with highlight.
             my_bookings_url = (
-                reverse('booking-my-bookings')
+                reverse('my_account-my-bookings')
                 + '?' + urlencode({'new': result.pk})
             )
             return redirect(my_bookings_url)
@@ -500,63 +508,7 @@ class BookingViewSet(viewsets.ViewSet):
         return render(request, 'booking/views/slot_unavailable.html', context)
 
     # ── Mes réservations ─────────────────────────────────────────────────────
-
-    def my_bookings(self, request):
-        """
-        Liste les réservations confirmées du membre : à venir et passées.
-        / Lists the member's confirmed bookings: upcoming and past.
-
-        LOCALISATION : booking/views.py
-
-        Accès :
-          Non authentifié           → 302 vers /connexion/?next=...
-          config.module_booking=False → 404
-          Authentifié + module actif  → HTTP 200
-        / Access:
-          Unauthenticated             → 302 to /connexion/?next=...
-          config.module_booking=False → 404
-          Authenticated + module on   → HTTP 200
-        """
-        if not request.user.is_authenticated:
-            login_url   = reverse('connexion')
-            redirect_url = f'{login_url}?next={request.get_full_path()}'
-            return redirect(redirect_url)
-
-        context = get_context(request)
-        config  = context['config']
-        if not config.module_booking:
-            raise Http404
-
-        now = timezone.now()
-
-        upcoming_bookings = (
-            Booking.objects
-            .filter(user=request.user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID,], end_datetime__gt=now)
-            .select_related('resource')
-            .order_by('start_datetime')
-        )
-        past_bookings = (
-            Booking.objects
-            .filter(user=request.user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID,], end_datetime__lte=now)
-            .select_related('resource')
-            .order_by('-start_datetime')
-        )
-
-        # Clé GET optionnelle pour mettre en évidence la nouvelle réservation.
-        # / Optional GET key to highlight the newly created booking.
-        highlighted_booking_pk = request.GET.get('new')
-        if highlighted_booking_pk:
-            try:
-                highlighted_booking_pk = int(highlighted_booking_pk)
-            except (TypeError, ValueError):
-                highlighted_booking_pk = None
-
-        context.update({
-            'upcoming_bookings':      upcoming_bookings,
-            'past_bookings':          past_bookings,
-            'highlighted_booking_pk': highlighted_booking_pk,
-        })
-        return render(request, 'booking/views/my_bookings.html', context)
+    # Déplacé dans BaseBillet.views.MyAccount pour plus de cohérence
 
     # ── Confirmation d'annulation ────────────────────────────────────────────
 

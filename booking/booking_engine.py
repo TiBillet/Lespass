@@ -410,7 +410,7 @@ def compute_slots(resource, window: Interval = None, reference_now=None):
 
 
 def validate_new_booking(resource, start_datetime, slot_duration_minutes,
-                         slot_count, member, reference_now=None):
+                         slot_count, member, commande, reference_now=None, ):
     """
     Valide B ⊆ E' et crée la réservation dans une transaction SERIALIZABLE.
     / Validates B ⊆ E' and creates the booking in a SERIALIZABLE transaction.
@@ -568,6 +568,7 @@ def validate_new_booking(resource, start_datetime, slot_duration_minutes,
                 slot_duration_minutes=slot_duration_minutes,
                 slot_count=slot_count,
                 status=Booking.WAITING_PAYMENT,
+                commande=commande,
             )
 
     except OperationalError as e:

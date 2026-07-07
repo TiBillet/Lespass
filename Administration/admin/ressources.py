@@ -196,6 +196,8 @@ class BookingAdmin(ModelAdmin):
 
     ordering = ("-booked_at",)
 
+    exclude = ["commande"]
+
     list_display = (
         'booked_at',
         'user',

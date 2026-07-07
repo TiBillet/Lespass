@@ -771,7 +771,7 @@ class PanierSession:
 
         try:
             resource = Resource.objects.get(pk=resource_uuid)
-        except Exception:
+        except (Resource.DoesNotExist, ValueError):
             raise InvalidItemError(_("Resource does not exist"))
 
 
@@ -857,7 +857,7 @@ class PanierSession:
             'custom_form': dict(custom_form or {}),
             'firstname': clean_firstname,
             'lastname': clean_lastname,
-            'promotional_code_name': (validated_promo_name or ""),
+            'promotional_code_name': validated_promo_name,
             'hours' : float(slot_duration_minutes)/60*float(slot_count)
         }
         self._data['items'].append(item)

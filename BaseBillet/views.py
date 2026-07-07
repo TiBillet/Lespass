@@ -64,6 +64,7 @@ from Administration.utils import clean_html as admin_clean_html
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from TiBillet import settings
+from booking.models import Booking
 from crowds.models import CrowdConfig, Initiative
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
@@ -882,6 +883,43 @@ class MyAccount(viewsets.ViewSet):
 
         return render(request, "reunion/views/account/reservations.html", context=context)
 
+    @action(detail=False, methods=['GET'])
+    def my_bookings(self, request):
+        now = timezone.now()
+
+        upcoming_bookings = (
+            Booking.objects
+            .filter(user=request.user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID,], end_datetime__gt=now)
+            .select_related('resource')
+            .order_by('start_datetime')
+        )
+        past_bookings = (
+            Booking.objects
+            .filter(user=request.user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID,], end_datetime__lte=now)
+            .select_related('resource')
+            .order_by('-start_datetime')
+        )
+
+        # Clé GET optionnelle pour mettre en évidence la nouvelle réservation.
+        # / Optional GET key to highlight the newly created booking.
+        highlighted_booking_pk = request.GET.get('new')
+        if highlighted_booking_pk:
+            try:
+                highlighted_booking_pk = int(highlighted_booking_pk)
+            except (TypeError, ValueError):
+                highlighted_booking_pk = None
+
+
+        context = get_context(request)
+        context.update({
+            'upcoming_bookings':      upcoming_bookings,
+            'past_bookings':          past_bookings,
+            'highlighted_booking_pk': highlighted_booking_pk,
+        })
+
+        return render(request, "booking/views/my_bookings.html", context=context)
+
+
     @action(detail=True, methods=['POST'])
     def cancel_reservation(self, request, pk):
         resa = get_object_or_404(Reservation, pk=pk, user_commande=request.user)
@@ -899,11 +937,13 @@ class MyAccount(viewsets.ViewSet):
                 send_reservation_cancellation_user.delay(str(resa.uuid))
             except Exception as ce:
                 logger.error(f"Failed to queue cancellation email for reservation {resa.uuid}: {ce}")
+
             return HttpResponseClientRedirect('/my_account/my_reservations/')
         except Exception as e:
             logger.error(f"Error canceling reservation {pk}: {e}")
             messages.add_message(request, messages.ERROR,
                                  _("An error occurred while cancelling your reservation.") + f" : {e}")
+
             return HttpResponseClientRedirect('/my_account/my_reservations/')
 
     @action(detail=True, methods=['POST'])
@@ -918,15 +958,13 @@ class MyAccount(viewsets.ViewSet):
                 send_ticket_cancellation_user.delay(str(ticket.uuid))
             except Exception as ce:
                 logger.error(f"Failed to queue cancellation email for ticket {ticket.uuid}: {ce}")
-            if request.headers.get('HX-Request'):
-                return HttpResponse("")
+
             return HttpResponseClientRedirect('/my_account/my_reservations/')
         except Exception as e:
             logger.error(f"Error canceling ticket {pk}: {e}")
             messages.add_message(request, messages.ERROR,
                                  _("An error occurred while cancelling your ticket.") + f" : {e}")
-            if request.headers.get('HX-Request'):
-                return HttpResponse("", status=400)
+
             return HttpResponseClientRedirect('/my_account/my_reservations/')
 
     @action(detail=False, methods=['GET'])
@@ -5067,7 +5105,7 @@ class PanierMVT(viewsets.ViewSet):
                     Resource.objects.select_related('calendar', 'weekly_opening'),
                     pk=resource_uuid_param,
                 )
-            except (Event.DoesNotExist, ValueError):
+            except (Resource.DoesNotExist, ValueError):
                 resource = None
 
         # If it doesn't exist, return an error
