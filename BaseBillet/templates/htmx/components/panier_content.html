@@ -64,6 +64,13 @@ replace themselves with the updated cart in a single request.
                         </a>
                     {% endif %}
 
+                    {% if config.module_booking %}
+                        <a href="/booking/" class="btn btn-outline-primary" data-testid="panier-empty-booking">
+                            <i class="bi bi bi-building me-2" aria-hidden="true"></i>
+                            {% trans "Booking" %}
+                        </a>
+                    {% endif %}
+
                 </div>
             </div>
         </div>

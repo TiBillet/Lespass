@@ -539,10 +539,8 @@ class BookingViewSet(viewsets.ViewSet):
             status__in = [Booking.PAID_BY_USER, Booking.ADMIN_VALID,],
         )
 
-        deadline = booking.start_datetime - datetime.timedelta(
-            hours=booking.resource.cancellation_deadline_hours,
-        )
-        deadline_passed = timezone.now() > deadline
+        deadline = booking.deadline()
+        deadline_passed = booking.deadline_passed()
 
         if request.method == 'GET':
             context = get_context(request)
@@ -554,7 +552,7 @@ class BookingViewSet(viewsets.ViewSet):
             return render(request, 'booking/views/cancel_booking.html', context)
 
         # POST — recompute deadline to guard against race condition.
-        deadline_passed = timezone.now() > deadline
+        deadline_passed = booking.deadline_passed()
         if deadline_passed:
             context = get_context(request)
             context.update({
@@ -564,5 +562,21 @@ class BookingViewSet(viewsets.ViewSet):
             })
             return render(request, 'booking/views/cancel_booking.html', context)
 
-        booking.delete()
-        return redirect(reverse('booking-my-bookings'))
+        try:
+            cancel_text = booking.cancel_and_refund_booking()
+
+            try:
+                send_booking_cancellation_user.delay(str(booking.pk))
+            except Exception as ce:
+                logger.error(f"Failed to queue cancellation email for booking {booking.pk}: {ce}")
+
+            messages.add_message(request, messages.SUCCESS, cancel_text)
+            return redirect(reverse('my_account-my-bookings'))
+
+        except Exception as e:
+            logger.error(f"Error canceling booking {booking.pk}: {e}")
+            messages.add_message(request, messages.ERROR,
+                                 _("An error occurred while cancelling your booking.") + f" : {e}")
+            return redirect(reverse('my_account-my-bookings'))
+
+

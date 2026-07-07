@@ -4,13 +4,23 @@ Modèles de l'app booking — réservation de ressources partagées.
 
 LOCALISATION : booking/models.py
 """
+import logging
+
+import stripe
+from django.utils import timezone
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-
-from BaseBillet.models import Product, ResourceProduct, Price, LigneArticle
+from django.db.transaction import atomic
+from datetime import timedelta
+from BaseBillet.models import Product, ResourceProduct, Price, LigneArticle, Configuration, Paiement_stripe, SaleOrigin, Commande
+from PaiementStripe.utils import partial_refund_payment
 from fedow_connect.utils import dround
+from root_billet.models import RootConfiguration
+from stripe import InvalidRequestError
+
+logger = logging.getLogger(__name__)
 
 WEEK_MINUTES = 7 * 24 * 60  # 10 080 — durée d'une semaine en minutes
 
@@ -419,7 +429,7 @@ class Booking(models.Model):
     no 'cancelled' status.
     """
 
-    WAITING_PAYMENT, ADMIN_CANCELED, ADMIN_VALID, ADMIN_WAITING, PAID_BY_USER, NO_ADMIN_VALID = "WP", "CA", "VA", "WA", "PA", "AU"
+    WAITING_PAYMENT, ADMIN_CANCELED, ADMIN_VALID, ADMIN_WAITING, PAID_BY_USER, NO_ADMIN_VALID, USER_CANCELED = "WP", "CA", "VA", "WA", "PA", "AU", "UC"
     STATUS_CHOICES = [
         (WAITING_PAYMENT, _("Waiting for payment")),
         (ADMIN_CANCELED, _('Cancelled')),
@@ -427,6 +437,7 @@ class Booking(models.Model):
         (ADMIN_VALID, _('Confirmed by admin, waiting for payment')),
         (PAID_BY_USER, _('Paid by user')),
         (NO_ADMIN_VALID, _('Confirmed by system')),
+        (USER_CANCELED, _('Canceled by user')),
     ]
 
     resource = models.ForeignKey(
@@ -517,6 +528,112 @@ class Booking(models.Model):
             ligne_article: LigneArticle
             total_paid += int(ligne_article.amount * ligne_article.qty)  # int car on multiplie un int par un float
         return dround(total_paid)
+
+    def _lignes_hors_stripe(self, pricesold_ids=None):
+        """
+        Retrouve les LigneArticle VALID/PAID sans paiement Stripe pour cette reservation.
+        Utilise la FK directe.
+        / Finds VALID/PAID LigneArticle without Stripe payment for this reservation.
+        Uses direct FK if.
+        """
+        # Filtre de base : pas de Stripe, statut VALID ou PAID, pas d'avoir existant
+        # / Base filter: no Stripe, VALID or PAID status, no existing credit note
+        base_filter = {
+            'paiement_stripe__isnull': True,
+            'status__in': [LigneArticle.VALID, LigneArticle.PAID],
+        }
+
+        # Essai via FK directe (nouvelles donnees)
+        # / Try via direct FK (new data)
+        lignes = self.lignearticles.filter(**base_filter).exclude(
+            credit_notes__isnull=False,
+        ).select_related('pricesold', 'pricesold__productsold')
+
+        if pricesold_ids is not None:
+            lignes = lignes.filter(pricesold_id__in=pricesold_ids)
+
+        return lignes
+
+    @staticmethod
+    def _creer_avoir(ligne):
+        """
+        Cree un avoir (credit note) pour une LigneArticle hors-Stripe.
+        / Creates a credit note for a non-Stripe LigneArticle.
+        """
+        metadata = ligne.metadata if ligne.metadata else {}
+        metadata['original_lignearticle_uuid'] = str(ligne.uuid)
+        avoir = LigneArticle.objects.create(
+            pricesold=ligne.pricesold,
+            qty=-ligne.qty,
+            amount=ligne.amount,
+            vat=ligne.vat,
+            paiement_stripe=ligne.paiement_stripe,
+            membership=ligne.membership,
+            payment_method=ligne.payment_method,
+            asset=ligne.asset,
+            wallet=ligne.wallet,
+            sale_origin=SaleOrigin.ADMIN,
+            credit_note_for=ligne,
+            metadata=metadata,
+            status=LigneArticle.CREATED,
+        )
+        avoir.status = LigneArticle.CREDIT_NOTE
+        avoir.save()
+        return avoir
+
+    def deadline(self):
+        deadline = self.start_datetime - timedelta(
+            hours=self.resource.cancellation_deadline_hours,
+        )
+        return deadline
+
+    def deadline_passed(self):
+        deadline_passed = timezone.now() > self.deadline()
+        return deadline_passed
+
+    def can_refund(self):
+        return not self.deadline_passed()
+
+    def cancel_text(self):
+        if self.can_refund():
+            return _("You will be refunded to the credit card used to make the reservation.")
+        else:
+            return _("The deadline for getting a refund has passed.")
+
+    @atomic
+    def cancel_and_refund_booking(self):
+        # 1) Remboursement Stripe (flow existant, inchange)
+        # / Stripe refund (existing flow, unchanged)
+        if self.total_paid() > 0:
+            config = Configuration.get_solo()
+
+            stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+
+            # Si la commande est faite AVEC le panier, récupère la lignearticle depuis self
+            if self.commande and self.lignearticles:
+
+                paiement = self.lignearticles.first().paiement_stripe
+                partial_refund_payment(paiement, config, self.lignearticles.filter(status=LigneArticle.VALID))
+            # Si la commande est faite SANS le panier, récupère la lignearticle depuis le paiement
+            elif self.paiements.count() > 0:
+                for paiement in self.paiements.filter(status__in=[Paiement_stripe.VALID,
+                                                              Paiement_stripe.PAID,
+                                                              Paiement_stripe.NOTSYNC,
+                                                              ]):
+                    partial_refund_payment(paiement, config, paiement.lignearticles.filter(status=LigneArticle.VALID))
+
+        # 2) Avoir pour les lignes hors-Stripe (reservations admin : cheque, especes, etc.)
+        # / Credit note for non-Stripe lines (admin reservations: check, cash, etc.)
+        for ligne in self._lignes_hors_stripe():
+            self._creer_avoir(ligne)
+            logger.info(f"Credit note created for non-Stripe line {ligne.uuid}")
+
+        self.status = Booking.USER_CANCELED
+
+        self.save()
+
+        return self.cancel_text()
+
 
 
     def __str__(self):

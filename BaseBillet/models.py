@@ -40,6 +40,7 @@ from stripe import InvalidRequestError
 import AuthBillet.models
 from AuthBillet.models import HumanUser, RsaKey
 from Customers.models import Client
+from PaiementStripe.utils import partial_refund_payment
 from QrcodeCashless.models import CarteCashless
 from TiBillet import settings
 from fedow_connect.utils import dround, sign_message, verify_signature, data_to_b64
@@ -2399,6 +2400,9 @@ class Reservation(models.Model):
                 articles_paid.append(ligne)
         return articles_paid
 
+    def valid_tickets(self):
+        return self.tickets.filter(status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED])
+
     def total_paid(self):
         total_paid = 0
         for ligne_article in self.articles_paid():
@@ -2493,51 +2497,34 @@ class Reservation(models.Model):
             config = Configuration.get_solo()
             # stripe.api_key = config.get_stripe_api()
             stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-            for paiement in self.paiements.filter(status__in=[Paiement_stripe.VALID,
-                                                              Paiement_stripe.PAID,
-                                                              Paiement_stripe.NOTSYNC,
-                                                              ]):
-                paiement: Paiement_stripe
-                checkout = paiement.get_checkout_session()
-                payment_intent = checkout.payment_intent
 
-                try:
-                    refund = stripe.Refund.create(
-                        payment_intent=payment_intent,
-                        reason='requested_by_customer',
-                        amount=checkout.amount_total,
-                        stripe_account=config.get_stripe_connect_account()
-                    )
-                    logger.info(f"Refund stripe : {refund.status}")
-                    paiement.status = Paiement_stripe.REFUNDED
-                    paiement.save()
+            # Si la commande est faite AVEC le panier, récupère la lignearticle depuis self
+            if self.commande and self.lignearticles:
+                # Récupère le paiement et les lignes articles
+                paiement = self.lignearticles.first().paiement_stripe
+                lignes = self.lignearticles.filter(status=LigneArticle.VALID)
 
-                    for lignearticle in paiement.lignearticles.filter(status=LigneArticle.VALID):
-                        metadata = lignearticle.metadata if lignearticle.metadata else {}
-                        metadata['original_lignearticle_uuid'] = str(lignearticle.uuid)
-                        refunded_line = LigneArticle.objects.create(
-                            datetime=timezone.now(),
-                            pricesold=lignearticle.pricesold,
-                            qty=-lignearticle.qty,  # ! Attention negative
-                            amount=lignearticle.amount,
-                            vat=lignearticle.vat,
-                            paiement_stripe=paiement,
-                            payment_method=lignearticle.payment_method,
-                            asset=lignearticle.asset,
-                            wallet=lignearticle.wallet,
-                            status=LigneArticle.CREATED,
-                            sended_to_laboutik=False,
-                            metadata=metadata,
-                            sale_origin=SaleOrigin.LESPASS,
-                        )
-                        refunded_line.status = LigneArticle.REFUNDED  # pour envoyer le trigger qui va informer LaBoutik
-                        refunded_line.save()
-                except InvalidRequestError as e:
-                    logger.error(f"CheckoutStripe Refund InvalidRequestError {e}")
-                    raise Exception(f"CheckoutStripe Refund InvalidRequestError {e}")
-                except Exception as e:
-                    logger.error(f"CheckoutStripe Refund Exception : {e}")
-                    raise e
+                # Pour chaque ligne récupère le nombre de ticket valid, pour ne pas remboursé des tickets qui l'aurait déjà été
+                for ligne in lignes:
+                    valid_ticket = self.tickets.filter(status__in=[Ticket.NOT_SCANNED,Ticket.SCANNED],pricesold=ligne.pricesold)
+                    ligne.to_refund_qty = valid_ticket.count()
+
+                # Appel la fonction helper pour gérer le refund
+                partial_refund_payment(paiement, config, lignes)
+
+            # Si la commande est faite SANS le panier, récupère la lignearticle depuis le paiement
+            elif self.paiements.count() > 0:
+                for paiement in self.paiements.filter(status__in=[Paiement_stripe.VALID,
+                                                                  Paiement_stripe.PAID,
+                                                                  Paiement_stripe.NOTSYNC,
+                                                                  ]):
+
+                    lignes = paiement.lignearticles.filter(status=LigneArticle.VALID)
+                    for ligne in lignes:
+                        valid_ticket = self.tickets.filter(status__in=[Ticket.NOT_SCANNED,Ticket.SCANNED],pricesold=ligne.pricesold)
+                        ligne.to_refund_qty = valid_ticket.count()
+
+                    partial_refund_payment(paiement, config, lignes)
 
         # 2) Avoir pour les lignes hors-Stripe (reservations admin : cheque, especes, etc.)
         # / Credit note for non-Stripe lines (admin reservations: check, cash, etc.)
@@ -2567,23 +2554,15 @@ class Reservation(models.Model):
         if ticket.status == Ticket.SCANNED:
             raise Exception(_("You cannot cancel a ticket that has been scanned."))
 
-        refunded = False
-        # If reservation had a payment try partial refund
-        if self.total_paid() > 0:
+        refund = False
+        # If reservation had a payment and ticket has a price superior to free, try partial refund
+        if self.total_paid() > 0 and ticket.pricesold.prix > 0:
             config = Configuration.get_solo()
             stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
 
-            # Find the paiement/lignearticle corresponding to this ticket
-            for paiement in self.paiements.filter(status__in=[Paiement_stripe.VALID,
-                                                              Paiement_stripe.PAID,
-                                                              Paiement_stripe.NOTSYNC,
-                                                              ]):
-                try:
-                    checkout = paiement.get_checkout_session()
-                    payment_intent = checkout.payment_intent
-                except Exception:
-                    payment_intent = paiement.payment_intent_id
 
+            if self.commande and self.lignearticles:
+                paiement = self.lignearticles.first().paiement_stripe
                 ligne = paiement.lignearticles.filter(
                     pricesold=ticket.pricesold,
                     status__in=[LigneArticle.PAID, LigneArticle.VALID]
@@ -2591,63 +2570,48 @@ class Reservation(models.Model):
                 if not ligne:
                     raise Exception(_("Ticket does not have a matching LigneArticle."))
 
-                amount = ligne.amount * 1  # un seul ticket !
-                try:
-                    if amount > 0 and payment_intent:
-                        refund = stripe.Refund.create(
-                            payment_intent=payment_intent,
-                            reason='requested_by_customer',
-                            amount=amount,
-                            stripe_account=config.get_stripe_connect_account()
-                        )
-                        logger.info(f"Partial refund stripe for one ticket: {refund.status}")
-                    # Update accounting line status to REFUNDED if it was VALID to trigger signals
-                    if ligne.status == LigneArticle.VALID:
-                        metadata = ligne.metadata if ligne.metadata else {}
-                        metadata['original_lignearticle_uuid'] = str(ligne.uuid)
-                        refunded_line = LigneArticle.objects.create(
-                            datetime=timezone.now(),
-                            pricesold=ligne.pricesold,
-                            qty=-1,  # ! Attention negative
-                            amount=ligne.amount,
-                            vat=ligne.vat,
-                            paiement_stripe=paiement,
-                            payment_method=ligne.payment_method,
-                            asset=ligne.asset,
-                            wallet=ligne.wallet,
-                            status=LigneArticle.CREATED,
-                            sended_to_laboutik=False,
-                            metadata=metadata,
-                            sale_origin=SaleOrigin.LESPASS,
-                        )
-                        refunded_line.status = LigneArticle.REFUNDED  # pour envoyer le trigger qui va informer LaBoutik
-                        refunded_line.save()
-                    refunded = True
+                # Refund only one ticket from the `ligne` using specified_quantity=1
+                refund = partial_refund_payment(paiement, config, [ligne], specified_quantity=1)
+                logger.info(f"Partial refund stripe for one ticket: {refund.status}")
+            elif self.paiements.count() > 0:
+
+                # Find the paiement/lignearticle corresponding to this ticket
+                for paiement in self.paiements.filter(status__in=[Paiement_stripe.VALID,
+                                                                  Paiement_stripe.PAID,
+                                                                  Paiement_stripe.NOTSYNC,
+                                                                  ]):
+
+
+                    ligne = paiement.lignearticles.filter(
+                        pricesold=ticket.pricesold,
+                        status__in=[LigneArticle.PAID, LigneArticle.VALID]
+                    ).first()
+                    if not ligne:
+                        raise Exception(_("Ticket does not have a matching LigneArticle."))
+
+                    # Refund only one ticket from the `ligne` using specified_quantity=1
+                    refund = partial_refund_payment(paiement, config, [ligne], specified_quantity=1)
+                    logger.info(f"Partial refund stripe for one ticket: {refund.status}")
+
                     break
-                except InvalidRequestError as e:
-                    logger.error(f"Partial Refund InvalidRequestError {e}")
-                    raise Exception(f"Stripe refund error: {e}")
-                except Exception as e:
-                    logger.error(f"Partial Refund Exception : {e}")
-                    raise e
 
         # 2) Avoir pour les lignes hors-Stripe (ticket admin : cheque, especes, etc.)
         # / Credit note for non-Stripe lines (admin ticket: check, cash, etc.)
-        if not refunded:
+        if not refund:
             lignes_hors_stripe = self._lignes_hors_stripe(
                 pricesold_ids=[ticket.pricesold_id]
             )
             for ligne in lignes_hors_stripe:
                 self._creer_avoir(ligne)
                 logger.info(f"Credit note created for non-Stripe line {ligne.uuid} (single ticket cancel)")
-                refunded = True
+                refund = True
                 break  # Un seul avoir pour un seul ticket
 
         # Cancel the ticket regardless of refund result
         ticket.status = Ticket.CANCELED
         ticket.save()
 
-        return self.cancel_text() if refunded else _("Ticket cancelled.")
+        return self.cancel_text() if refund else _("Ticket cancelled.")
 
     def __str__(self):
         return f"{self.user_commande.email} - {str(self.uuid).partition('-')[0]}"
@@ -2868,7 +2832,7 @@ class Paiement_stripe(models.Model):
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, blank=True, null=True)
 
-    NON, OPEN, PENDING, EXPIRE, FAILED, PAID, VALID, NOTSYNC, CANCELED, REFUNDED = 'N', 'O', 'W', 'E', 'F', 'P', 'V', 'S', 'C', 'R'
+    NON, OPEN, PENDING, EXPIRE, FAILED, PAID, VALID, NOTSYNC, CANCELED, REFUNDED, PARTIALLY_REFUNDED = 'N', 'O', 'W', 'E', 'F', 'P', 'V', 'S', 'C', 'R', 'H'
     STATUS_CHOICES = (
         (NON, _('Payment link not generated')),
         (OPEN, _('Sent to Stripe')),
@@ -2880,6 +2844,7 @@ class Paiement_stripe(models.Model):
         (NOTSYNC, _('Paid but issues with LaBoutik sync')),  # envoyé sur serveur cashless qui retourne une erreur
         (CANCELED, _('Cancelled')),
         (REFUNDED, _('Refunded')),
+        (PARTIALLY_REFUNDED, _("Partiellement remboursé"))
     )
     status = models.CharField(max_length=1, choices=STATUS_CHOICES, default=NON, verbose_name="Order status")
 
@@ -2898,6 +2863,8 @@ class Paiement_stripe(models.Model):
     reservation = models.ForeignKey(Reservation, on_delete=models.PROTECT, blank=True, null=True,
                                     related_name="paiements")
 
+    booking = models.ForeignKey("booking.Booking", on_delete=models.PROTECT, blank=True, null=True, related_name="paiements")
+
     QRCODE, API_BILLETTERIE, FRONT_BILLETTERIE, FRONT_CROWDS, INVOICE, TRANSFERT = 'Q', 'B', 'F', 'C', 'I', 'T'
     SOURCE_CHOICES = (
         (QRCODE, _('From QR code scan')),  # ancien api. A virer ?
@@ -2912,6 +2879,19 @@ class Paiement_stripe(models.Model):
                               verbose_name="Order source")
 
     fedow_transactions = models.ManyToManyField(FedowTransaction, blank=True, related_name="paiement_stripe")
+
+    def is_fully_refunded(self):
+        # If total is not 0, the paiement is not fully refunded
+        if self.total() != 0:
+            return False
+
+        # If any ligne_article has a status different from REFUNDED or CREDIT_NOTE (avoir), the paiement is not fully refunded
+        for ligne_article in self.lignearticles.all():
+            if ligne_article.status not in [LigneArticle.REFUNDED, LigneArticle.CREDIT_NOTE]:
+                return False
+
+        # Else the paiement is fully refunded
+        return True
 
     # total = models.FloatField(default=0)
     def total(self):
