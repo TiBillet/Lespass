@@ -30,7 +30,7 @@ def partial_refund_payment(paiement, config, ligne_articles, specified_quantity=
             if specified_quantity:
                 total_refunded_amount += ligne_article.amount * specified_quantity
             # If the ligne_article has a to_refund_qty, only refund the to_refund_qty from the LigneBillet
-            elif ligne_article.to_refund_qty:
+            elif hasattr(ligne_article, "to_refund_qty") and ligne_article.to_refund_qty > 0:
                 total_refunded_amount += ligne_article.amount * ligne_article.to_refund_qty
             else:
                 total_refunded_amount += ligne_article.total() # It returns ligne_article.qty * ligne_article.amount
@@ -51,13 +51,16 @@ def partial_refund_payment(paiement, config, ligne_articles, specified_quantity=
             if ligne_article.status == LigneArticle.VALID:
                 metadata = ligne_article.metadata if ligne_article.metadata else {}
                 metadata['original_lignearticle_uuid'] = str(ligne_article.uuid)
+
+                refund_qty = (specified_quantity or ligne_article.to_refund_qty if hasattr(ligne_article, "to_refund_qty") else ligne_article.qty)
+
                 refunded_line = LigneArticle.objects.create(
                     datetime=timezone.now(),
                     pricesold=ligne_article.pricesold,
                     # specified_quantity = Quantité spécifiée en appellant la méthode
                     # lignearticle.to_refund_qty = "surcharge" de qty en modifiant les lignes articles avant l'appel de la méthode
                     # lignearticle.qty = qty classique au moment de la commande
-                    qty=-(specified_quantity or ligne_article.to_refund_qty or ligne_article.qty),  # ! Attention negative
+                    qty=-refund_qty,  # ! Attention negative
                     amount=ligne_article.amount,
                     vat=ligne_article.vat,
                     paiement_stripe=paiement,
