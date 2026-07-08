@@ -118,7 +118,13 @@ class TestHardwareAuthBridge:
         """
         _client, response = _post_bridge(orphan_api_key)
         assert response.status_code == 400
-        assert b'Legacy' in response.content or b'legacy' in response.content
+        # Message bilingue : anglais (source) OU francais (traduit dans le .po).
+        # / Bilingual message: English (source) OR French (translated in the .po).
+        assert (
+            b'Legacy' in response.content
+            or b'legacy' in response.content
+            or b'historique' in response.content
+        )
 
     def test_user_revoque_retourne_401(self, termuser_with_key, tenant_lespass):
         """TermUser.is_active=False → 401."""

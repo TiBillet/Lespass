@@ -15,6 +15,17 @@
   {% block head %}{% endblock %}
 </head>
 <body>
+  {# Bandeau de perte de connexion WebSocket — affiché/masqué par         #}
+  {# panel_kiosk.js (reconnexion automatique, fix review 2026-07-06 C2).  #}
+  {# / WebSocket connection-lost banner — shown/hidden by panel_kiosk.js  #}
+  {# (automatic reconnection).                                            #}
+  <div id="ws-status-banner"
+       class="d-none alert alert-warning text-center mb-0 rounded-0"
+       role="status"
+       aria-live="assertive"
+       data-testid="kiosk-ws-banner">
+    {% translate "Connexion au serveur perdue — reconnexion en cours…" %}
+  </div>
   <nav class="navbar navbar-dark bg-dark mb-3" data-testid="kiosk-navbar">
     <div class="container-fluid">
       <span class="navbar-brand" data-testid="kiosk-venue-name">

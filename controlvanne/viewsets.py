@@ -521,45 +521,92 @@ class TireuseViewSet(viewsets.ViewSet):
             session.save(update_fields=["volume_start_ml"])
 
         elif event_type in ("pour_end", "card_removed"):
-            session.close_with_volume(float(volume_ml))
+            # Verrou anti-double-facturation (fix review 2026-07-06, C1) :
+            # deux événements concurrents (pour_end rejoué par le Pi sur
+            # timeout réseau, ou pour_end + card_removed chevauchés)
+            # lisaient la même session ouverte et facturaient DEUX FOIS le
+            # même tirage. On verrouille la ligne de session et on
+            # re-vérifie qu'elle est toujours ouverte : l'appel concurrent
+            # sort proprement sans re-facturer. Fermeture, réservoir et
+            # facturation partagent désormais la même transaction (fix I1).
+            # / Anti-double-billing lock (2026-07-06 review, C1): two
+            # concurrent events (pour_end retried by the Pi on network
+            # timeout, or overlapping pour_end + card_removed) both read
+            # the same open session and billed the SAME pour TWICE. Lock
+            # the session row and re-check it is still open: the concurrent
+            # call exits cleanly without billing again. Close, reservoir
+            # and billing now share one transaction (I1 fix).
+            from django.db import transaction as db_transaction
 
-            # Décrémenter le réservoir / Decrement reservoir
-            if volume_ml > 0 and not session.is_maintenance:
-                tireuse.reservoir_ml = max(
-                    Decimal("0"),
-                    tireuse.reservoir_ml - Decimal(str(float(volume_ml))),
+            with db_transaction.atomic():
+                session_verrouillee = (
+                    RfidSession.objects.select_for_update()
+                    .filter(pk=session.pk, ended_at__isnull=True)
+                    .first()
                 )
-                tireuse.save(update_fields=["reservoir_ml"])
+                if session_verrouillee is None:
+                    # Un événement concurrent a déjà fermé (et facturé) la
+                    # session : on répond OK sans rien refaire.
+                    # / A concurrent event already closed (and billed) the
+                    # session: answer OK without redoing anything.
+                    logger.info(
+                        f"Event {event_type} ignoré : session {session.pk} "
+                        f"déjà fermée par un événement concurrent (uid={uid})"
+                    )
+                    return Response(
+                        {
+                            "status": "ok",
+                            "message": "Session already closed by a concurrent event.",
+                        }
+                    )
+                session = session_verrouillee
 
-            # --- Facturation (sauf maintenance) ---
-            # / Billing (except maintenance)
-            if not session.is_maintenance and volume_ml > 0 and tireuse.fut_actif:
-                from controlvanne.billing import (
-                    obtenir_contexte_cashless,
-                    facturer_tirage,
-                )
-                from fedow_core.exceptions import SoldeInsuffisant
+                session.close_with_volume(float(volume_ml))
 
-                contexte = obtenir_contexte_cashless(session.carte)
-                if contexte:
-                    try:
-                        resultat_facturation = facturer_tirage(
-                            session=session,
-                            tireuse=tireuse,
-                            carte=session.carte,
-                            volume_ml=volume_ml,
-                            contexte_cashless=contexte,
-                            ip=request.META.get("REMOTE_ADDR", "0.0.0.0"),
-                        )
-                    except SoldeInsuffisant:
-                        # Le solde a changé entre authorize et pour_end (race condition).
-                        # La bière est déjà servie — on log l'erreur mais on ne bloque pas.
-                        # / Balance changed between authorize and pour_end (race condition).
-                        # Beer is already served — log the error but don't block.
-                        logger.error(
-                            f"SoldeInsuffisant au pour_end: carte={uid} "
-                            f"tireuse={tireuse.nom_tireuse} volume={volume_ml}ml"
-                        )
+                # Décrémenter le réservoir / Decrement reservoir
+                if volume_ml > 0 and not session.is_maintenance:
+                    tireuse.reservoir_ml = max(
+                        Decimal("0"),
+                        tireuse.reservoir_ml - Decimal(str(float(volume_ml))),
+                    )
+                    tireuse.save(update_fields=["reservoir_ml"])
+
+                # --- Facturation (sauf maintenance) ---
+                # / Billing (except maintenance)
+                if not session.is_maintenance and volume_ml > 0 and tireuse.fut_actif:
+                    from controlvanne.billing import (
+                        obtenir_contexte_cashless,
+                        facturer_tirage,
+                    )
+                    from fedow_core.exceptions import SoldeInsuffisant
+
+                    contexte = obtenir_contexte_cashless(session.carte)
+                    if contexte:
+                        try:
+                            resultat_facturation = facturer_tirage(
+                                session=session,
+                                tireuse=tireuse,
+                                carte=session.carte,
+                                volume_ml=volume_ml,
+                                contexte_cashless=contexte,
+                                ip=request.META.get("REMOTE_ADDR", "0.0.0.0"),
+                            )
+                        except SoldeInsuffisant:
+                            # Le solde a changé entre authorize et pour_end (race
+                            # condition). La bière est déjà servie — on log sans
+                            # bloquer. L'atomic interne de facturer_tirage
+                            # (savepoint) a annulé la facturation ; la fermeture
+                            # de session et le réservoir sont conservés (réalité
+                            # physique).
+                            # / Balance changed between authorize and pour_end.
+                            # Beer already served — log without blocking. The
+                            # inner atomic of facturer_tirage (savepoint) rolled
+                            # back the billing; session close and reservoir are
+                            # kept (physical reality).
+                            logger.error(
+                                f"SoldeInsuffisant au pour_end: carte={uid} "
+                                f"tireuse={tireuse.nom_tireuse} volume={volume_ml}ml"
+                            )
 
             logger.info(
                 f"Event {event_type}: carte={uid} tireuse={tireuse.nom_tireuse} "

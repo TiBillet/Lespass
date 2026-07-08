@@ -584,6 +584,41 @@ def get_sidebar_navigation(request):
             }
         )
 
+    # --- module_kiosk : Bornes libre-service (Stripe Terminal) ---
+    # / --- module_kiosk: Self-service kiosks (Stripe Terminal) ---
+    if configuration.module_kiosk:
+        navigation.append(
+            {
+                "title": _("Kiosk"),
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": _("Terminaux"),
+                        "icon": "tablet_mac",
+                        "link": _safe_rev("staff_admin:kiosk_terminal_changelist"),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("Emplacements Stripe"),
+                        "icon": "location_on",
+                        "link": _safe_rev(
+                            "staff_admin:kiosk_stripelocation_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("Paiements"),
+                        "icon": "payments",
+                        "link": _safe_rev(
+                            "staff_admin:kiosk_paymentsintent_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                ],
+            }
+        )
+
     # --- module_booking : Réservation de ressources ---
     # / --- module_booking: Resource booking ---
     if configuration.module_booking:
@@ -870,6 +905,16 @@ MODULE_FIELDS = {
     #     "description": _("Resource booking: rooms, equipment, coworking desks."),
     #     "testid": "dashboard-card-booking",
     # },
+    # Kiosk / borne libre-service (Stripe Terminal, paiement autonome)
+    # / Kiosk / self-service (Stripe Terminal, unattended payment)
+    "module_kiosk": {
+        "name": _("Kiosk / borne libre-service"),
+        "description": _(
+            "Bornes de paiement en autonomie : recharge cashless, Stripe Terminal."
+        ),
+        "testid": "dashboard-card-kiosk",
+        "icon": "storefront",
+    },
 }
 
 

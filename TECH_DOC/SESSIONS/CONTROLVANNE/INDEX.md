@@ -9,6 +9,9 @@ chantiers de review appliqués), câblée dans Lespass le 2026-07-06.
 | Doc | Contenu | Statut |
 |---|---|---|
 | [CHANTIER-01-cablage-lespass.md](./CHANTIER-01-cablage-lespass.md) | Câblage complet : settings, urls, asgi/WS, migrations, tests, appairage TI, admin | ✅ FAIT 2026-07-06 (+ écarts documentés dans `A TESTER et DOCUMENTER/controlvanne-cablage.md`) |
+| [CHANTIER-02-websockets-prod-supervisord.md](./CHANTIER-02-websockets-prod-supervisord.md) | WebSockets en prod : supervisord mono-conteneur (gunicorn+daphne+celery), nginx /ws/, fix AppRegistryNotReady, flush.sh conscient | ✅ FAIT 2026-07-06 (recette pre-prod restante) |
+| [REVIEW-2026-07-06-tour-critique.md](./REVIEW-2026-07-06-tour-critique.md) | Tour critique complet (3 reviewers : monétaire, stock/signaux, vues/JS) : **3 Critical confirmés** (double facturation concurrente, pas de reconnexion WS kiosk, 500 carte sans wallet V2), 4 Important, 8 Minor → CHANTIER-03 | 2026-07-06 |
+| [CHANTIER-03-fixes-review.md](./CHANTIER-03-fixes-review.md) | Fixes TDD des findings : C1+I1 (verrou session + atomic, test de concurrence 2 threads), C2 (reconnexion WS backoff + bandeau), C3 (refus propre), I2/I3/I4. Minor en dette | ✅ FAIT 2026-07-06 |
 | `controlvanne/Synthese_merge_vs_chantiers.md` | Synthèse du merge de Mike : 6 chantiers de review vs 11 étapes, divergences, PRs déférées | Référence |
 
 ## Écarts au plan (découverts au câblage)

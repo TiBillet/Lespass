@@ -759,7 +759,10 @@ class NFCcardFedow():
     def __init__(self, fedow_config: FedowConfig or None = None):
         self.fedow_config: FedowConfig = fedow_config
         if fedow_config is None:
-            self.config = FedowConfig.get_solo()
+            # Bugfix : c'etait `self.config`, jamais lu -> NFCcardFedow() direct
+            # crashait dans _get(self.fedow_config=None). / Bugfix: was `self.config`,
+            # never read -> direct NFCcardFedow() crashed in _get(self.fedow_config=None).
+            self.fedow_config = FedowConfig.get_solo()
 
     def retrieve_card_by_signature(self, user: TibilletUser):
         if not user.wallet:
@@ -795,6 +798,40 @@ class NFCcardFedow():
             logger.error(f"lost_my_card_by_signature ERRORS : {response_lost_my_card.status_code}")
             raise Exception(f"lost_my_card_by_signature ERRORS : {response_lost_my_card.status_code}")
         return True
+
+    def retrieve(self, tag_id: str):
+        """
+        Recupere une carte NFC cote Fedow par son tag_id. Appelle la route
+        standard CardAPI.retrieve (vue DRF non decoree -> GET card/{tag_id}/,
+        cf. Fedow fedow_core/views.py:377, Card.objects.get(first_tag_id=pk)).
+        Utilise par le kiosque (RefillWisePoseValidator.validate_tag_id) pour
+        verifier qu'une carte existe avant de lancer une recharge TPE Stripe.
+        Pas de header user : la place Lespass est de confiance (sans cashless
+        RSA), l'Api-Key seule suffit cote Fedow (HasKeyAndPlaceSignature).
+        / Retrieves an NFC card from Fedow by tag_id. Calls the plain (non
+        @action-decorated) DRF retrieve route -> GET card/{tag_id}/. Used by
+        the kiosk (RefillWisePoseValidator.validate_tag_id) to check a card
+        exists before starting a Stripe terminal refill. No user header: the
+        Lespass place is trusted (no cashless RSA), the Api-Key alone is
+        enough on Fedow's side (HasKeyAndPlaceSignature).
+
+        :param tag_id: identifiant hexadecimal 8 caracteres de la carte NFC.
+        :return: donnees validees de la carte (dict).
+        :raises Exception: carte inconnue de Fedow (404) ou erreur HTTP/validation.
+        """
+        response_card = _get(self.fedow_config, path=f'card/{tag_id.upper()}')
+        if response_card.status_code == 404:
+            raise Exception(f"Carte inconnue de Fedow : {tag_id}")
+        if not response_card.status_code == 200:
+            logger.error(f"NFCcardFedow.retrieve ERRORS : {response_card.status_code}")
+            raise Exception(f"NFCcardFedow.retrieve ERRORS : {response_card.status_code}")
+
+        serialized_card = CardValidator(data=response_card.json())
+        if not serialized_card.is_valid():
+            logger.error(serialized_card.errors)
+            raise Exception(serialized_card.errors)
+
+        return serialized_card.validated_data
 
     def card_tag_id_retrieve(self, card_number: str):
         response_qr = _get(self.fedow_config, path=f'card/{card_number}/card_tag_id_retrieve')

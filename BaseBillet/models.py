@@ -634,6 +634,13 @@ class Configuration(SingletonModel):
         verbose_name=_("Booking module"),
         help_text=_("Enable resource booking (rooms, equipment, coworking desks)."),
     )
+    # Module kiosk / borne libre-service — bornes de paiement en autonomie (Stripe Terminal)
+    # / Kiosk / self-service module — unattended payment terminals (Stripe Terminal)
+    module_kiosk = models.BooleanField(
+        default=False,
+        verbose_name=_("Module kiosk / borne libre-service"),
+        help_text=_("Active les bornes de paiement en libre-service (Stripe Terminal)."),
+    )
     # NEW V2 END
 
     currency_code = models.CharField(max_length=3, default="EUR")

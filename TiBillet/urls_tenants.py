@@ -75,6 +75,10 @@ urlpatterns = [
     path('laboutik/', include('laboutik.urls')),
     path('api/inventaire/', include('inventaire.urls')),
 
+    # Parcours de recharge en libre-service (borne kiosque + TPE Stripe) — CHANTIER-02
+    # / Self-service refill flow (kiosk terminal + Stripe card reader)
+    path('kiosk/', include('kiosk.urls')),
+
     # Tireuses connectées (controlvanne) — API Pi + kiosk + calibration
     # / Connected beer taps (controlvanne) — Pi API + kiosk + calibration
     path('controlvanne/', include('controlvanne.urls')),

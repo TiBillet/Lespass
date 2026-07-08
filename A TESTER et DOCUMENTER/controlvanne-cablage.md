@@ -38,7 +38,7 @@ docker exec lespass_django poetry run python /DjangoFiles/manage.py migrate_sche
 ## Tests automatiques
 
 ```bash
-# Ciblés (51 tests)
+# Ciblés (47 tests)
 docker exec lespass_django poetry run pytest tests/pytest/test_controlvanne_models.py tests/pytest/test_controlvanne_api.py tests/pytest/test_controlvanne_billing.py tests/pytest/test_discovery_claim_creates_termuser.py tests/pytest/test_discovery_pin_pairing.py -v
 # Suite complète — attendu : 689 passed, 0 failed (~46 errors de setup flaky préexistantes, connues)
 docker exec lespass_django poetry run pytest tests/pytest/ -q
@@ -57,7 +57,7 @@ docker exec lespass_django poetry run pytest tests/pytest/ -q
 4. Simuler le claim : `curl -sk -X POST https://lespass.tibillet.localhost/api/discovery/claim/ -H "Content-Type: application/json" -d '{"pin_code": "<PIN>"}'` → 200 avec api_key
 5. Rafraîchir : PIN vidé, « Claimed » coché ; le compte terminal apparaît dans
    `/admin/AuthBillet/termuser/` (accessible en URL directe)
-6. Rejouer le même PIN → 404 (consommé)
+6. Rejouer le même PIN → 400 (PIN consommé, refusé par la validation)
 
 ### Test 2 : appairage tireuse (TI)
 1. Activer le module « Connected taps » sur le dashboard admin (carte avec toggle)

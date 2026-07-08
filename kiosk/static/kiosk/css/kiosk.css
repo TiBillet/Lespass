@@ -1,0 +1,312 @@
+:root {
+    --primary-color: #0d6efd;
+    --secondary-color: #6c757d;
+    --success-color: #198754;
+    --danger-color: #dc3545;
+    --light-color: #f8f9fa;
+    --dark-color: #212529;
+}
+
+/* Base styles */
+body {
+    background-color: var(--light-color);
+    color: var(--dark-color);
+    transition: all 0.3s ease;
+    font-size: 1.2rem;
+}
+
+body.dark-mode {
+    background-color: #121212;
+    color: #ffffff;
+}
+
+/* Layout */
+.header-space {
+    height: 80px;
+}
+
+.main-center {
+    padding: 30px 0;
+}
+
+.main-center.dark-mode {
+    background-color: #121212;
+}
+
+/* Card styles */
+.card {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    margin-bottom: 2rem;
+}
+
+.card.dark-mode {
+    background-color: #2d2d2d;
+    color: #ffffff;
+    box-shadow: 0 4px 8px rgba(255, 255, 255, 0.1);
+}
+
+/* Button styles */
+.btn-amount {
+    font-size: 1.8rem;
+    font-weight: bold;
+    padding: 20px 30px;
+    margin: 10px 0;
+    width: 100%;
+    border-radius: 10px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+}
+
+.btn-amount:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+}
+
+.btn-amount.dark-mode {
+    background-color: #3a86ff;
+    color: white;
+    box-shadow: 0 4px 8px rgba(58, 134, 255, 0.3);
+}
+
+.btn-validate {
+    font-size: 1.8rem;
+    font-weight: bold;
+    padding: 15px 30px;
+    margin: 20px 0;
+    border-radius: 10px;
+    background-color: var(--success-color);
+    color: white;
+    border: none;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+}
+
+.btn-validate:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+}
+
+.btn-validate.dark-mode {
+    background-color: #00b4d8;
+    color: white;
+    box-shadow: 0 4px 8px rgba(0, 180, 216, 0.3);
+}
+
+.btn-clear {
+    font-size: 1.2rem;
+    font-weight: bold;
+    padding: 10px 20px;
+    margin: 10px 0;
+    border-radius: 10px;
+    background-color: var(--danger-color);
+    color: white;
+    border: none;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+}
+
+.btn-clear:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+}
+
+.btn-clear.dark-mode {
+    background-color: #e63946;
+    color: white;
+    box-shadow: 0 4px 8px rgba(230, 57, 70, 0.3);
+}
+
+.btn-toggle-dark-mode {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    font-size: 1.2rem;
+    padding: 10px 15px;
+    border-radius: 50px;
+    background-color: var(--secondary-color);
+    color: white;
+    border: none;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+}
+
+.btn-toggle-dark-mode:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+}
+
+.btn-toggle-dark-mode.dark-mode {
+    background-color: #f8f9fa;
+    color: #212529;
+}
+
+/* Text styles */
+.instruction-text {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-bottom: 20px;
+}
+
+.erreur-input {
+    color: var(--danger-color);
+    font-weight: bold;
+    margin: 10px 0;
+}
+
+#totalAmount {
+    font-weight: bold;
+}
+
+/* ConfirmationCB page styles */
+.payment-info {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-bottom: 1.5rem;
+}
+
+.payment-icons {
+    font-size: 2rem;
+    margin: 1.5rem 0;
+}
+
+.dark-mode .spinner_bootstrap {
+    border-color: rgba(255, 255, 255, 0.2);
+    border-top-color: var(--primary-color);
+}
+
+.btn-cancel {
+    font-size: 2.2rem;
+    font-weight: bold;
+    padding: 25px 40px;
+    margin: 30px 0;
+    border-radius: 10px;
+    background-color: var(--danger-color);
+    color: white;
+    border: 3px solid #fff;
+    box-shadow: 0 6px 12px rgba(220, 53, 69, 0.4);
+    transition: all 0.3s ease;
+}
+
+.btn-cancel:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+}
+
+.btn-cancel.dark-mode {
+    background-color: #d00000;
+    color: white;
+    border: 4px solid #ffcc00;
+    box-shadow: 0 6px 15px rgba(255, 204, 0, 0.4), 0 0 5px rgba(255, 255, 255, 0.3);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    font-weight: 900;
+}
+
+/* Cancel page styles */
+.cancel-page {
+    background-color: #dc3545;
+    color: white;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.cancel-page.dark-mode {
+    background-color: #8b0000;
+    color: white;
+}
+
+.cancel-container {
+    padding: 2rem;
+    height: 100vh;
+}
+
+.cancel-title {
+    font-size: 5rem;
+    font-weight: bold;
+    margin-bottom: 2rem;
+    text-transform: uppercase;
+    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Success page styles */
+.success-page {
+    background-color: #198754;
+    color: white;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.success-page.dark-mode {
+    background-color: #0a5d36;
+    color: white;
+}
+
+.success-container {
+    padding: 2rem;
+    height: 100vh;
+}
+
+.success-title {
+    font-size: 5rem;
+    font-weight: bold;
+    margin-bottom: 2rem;
+    text-transform: uppercase;
+    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.timer-container {
+    font-size: 1.8rem;
+    margin-bottom: 2rem;
+}
+
+.button-container {
+    margin-top: 2rem;
+}
+
+.btn-return {
+    font-size: 1.8rem;
+    font-weight: bold;
+    padding: 20px 30px;
+    border-radius: 10px;
+    background-color: white;
+    color: #dc3545;
+    border: none;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+}
+
+.btn-return:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+    background-color: #f8f9fa;
+}
+
+.btn-return.dark-mode {
+    background-color: #2d2d2d;
+    color: white;
+    box-shadow: 0 4px 8px rgba(255, 255, 255, 0.1);
+}
+
+/* Success return button */
+.success-return {
+    color: #198754;
+}
+
+.success-return:hover {
+    color: #0a5d36;
+}
+
+.success-return.dark-mode {
+    color: white;
+}

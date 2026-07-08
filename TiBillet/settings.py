@@ -203,6 +203,7 @@ TENANT_APPS = (
     'crowds',
     'comptabilite',
     'laboutik',
+    'kiosk',
     'inventaire',
     # Tireuses connectées (controlvanne) — paiement NFC via fedow_core local.
     # / Connected beer taps (controlvanne) — NFC payment via local fedow_core.
@@ -249,6 +250,11 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_htmx.middleware.HtmxMiddleware',
+    # Garde central des sessions terminal : un terminal (espece=TE, authentifié via
+    # le bridge) est restreint à son interface (kiosk/laboutik/controlvanne) et ne
+    # peut pas atteindre les vues humaines. Après Authentication + Htmx (lit user + htmx).
+    # / Central terminal-session guard: restricts TE sessions to their interface.
+    'AuthBillet.middleware.TerminalSessionGuardMiddleware',
     # Vary: HX-Request + Cache-Control par défaut : indispensable en prod, les
     # vues rendent 2 corps différents (shell/fragment) sur la même URL selon
     # HX-Request. Doit être APRÈS AuthenticationMiddleware (lit request.user).

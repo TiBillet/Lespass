@@ -229,13 +229,18 @@
     ? "/ws/rfid/all/"
     : "/ws/rfid/" + slug_focus + "/";
 
-  var ws = new WebSocket(protocole_ws + "://" + location.host + chemin_ws);
+  // Reconnexion automatique (fix review 2026-07-06, C2) : le kiosk tourne
+  // 24/7 — sans reconnexion, un restart de daphne ou une micro-coupure
+  // reseau figeait tous les ecrans en silence. Backoff 1s -> 30s max,
+  // bandeau "connexion perdue" pendant la coupure.
+  // / Automatic reconnection (2026-07-06 review fix, C2): the kiosk runs
+  // 24/7 — without reconnection, a daphne restart or a network blip froze
+  // every screen silently. Backoff 1s -> 30s max, "connection lost" banner
+  // while disconnected.
+  var delai_reconnexion_ms = 1000;
+  var ws = null;
 
-  ws.onopen = function () {
-    console.log("WS connect\u00e9 sur " + chemin_ws);
-  };
-
-  ws.onmessage = function (evenement) {
+  function traiterMessageWs(evenement) {
     try {
       var donnees = JSON.parse(evenement.data);
       var payload = donnees.payload || donnees;
@@ -389,7 +394,42 @@
     } catch (erreur) {
       console.error("Erreur traitement message WS :", erreur);
     }
-  };
+  }
+
+  function connecterWebSocket() {
+    ws = new WebSocket(protocole_ws + "://" + location.host + chemin_ws);
+
+    ws.onopen = function () {
+      console.log("WS connect\u00e9 sur " + chemin_ws);
+      // Connexion (re)etablie : backoff remis a zero, bandeau masque
+      // / Connection (re)established: reset backoff, hide banner
+      delai_reconnexion_ms = 1000;
+      var bandeau = document.getElementById("ws-status-banner");
+      if (bandeau) bandeau.classList.add("d-none");
+    };
+
+    ws.onmessage = traiterMessageWs;
+
+    ws.onclose = function () {
+      // Affiche le bandeau et retente avec backoff (1s double jusqu'a 30s)
+      // / Show the banner and retry with backoff (1s doubling up to 30s)
+      var bandeau = document.getElementById("ws-status-banner");
+      if (bandeau) bandeau.classList.remove("d-none");
+      console.warn("WS ferme — reconnexion dans " + delai_reconnexion_ms + " ms");
+      setTimeout(connecterWebSocket, delai_reconnexion_ms);
+      delai_reconnexion_ms = Math.min(delai_reconnexion_ms * 2, 30000);
+    };
+
+    ws.onerror = function () {
+      // onerror est suivi de onclose : on force la fermeture pour
+      // declencher la reconnexion sans attendre.
+      // / onerror is followed by onclose: force close to trigger the
+      // reconnection without waiting.
+      ws.close();
+    };
+  }
+
+  connecterWebSocket();
 
 
   // ──────────────────────────────────────────────────────────────────

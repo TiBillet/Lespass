@@ -158,7 +158,7 @@ Attendu : les 3 migrations controlvanne appliquées sur les schémas tenant, et
 ```bash
 docker exec lespass_django poetry run pytest tests/pytest/ -q
 ```
-Attendu : même compte que la baseline (368 passed au 2026-07-06), 0 failed.
+Attendu : 0 failed. (NOTE post-exécution : la baseline « 368 passed » était un compte partiel périmé — le compte réel constaté à l'exécution était 594-689 passed selon l'état de la suite, seul le « 0 failed » fait foi.)
 
 - [ ] **Étape 1.8 — restart serveur + smoke**
 
