@@ -20,7 +20,7 @@ export class MTE {
     this.socketHandler = options.socketHandler
     this.config = options.config
     this.io = {},
-    logLevel = options.config.logLevel
+      logLevel = options.config.logLevel
   }
 
   addRoute(route, fonction, options) {
@@ -78,7 +78,13 @@ export class MTE {
         req.on("end", () => {
           // recherche dans les routes
           if (route.name === url) {
-            route.fonction.call(this, req, res, body, headers,route.options)
+            const contentType = req.headers["content-type"] || ""
+            if (contentType.startsWith("application/json")) {
+              // Corps JSON
+              route.fonction.call(this, req, res, body, headers,JSON.parse(body))
+            } else {
+              route.fonction.call(this, req, res, body, headers, route.options)
+            }
           }
         })
       }

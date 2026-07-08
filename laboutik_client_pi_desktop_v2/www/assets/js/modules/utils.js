@@ -93,6 +93,49 @@ export async function writeConfFile(content) {
 
 }
 
+export async function managedServerPinCode(event) {
+  // console.log('-> managedServerPinCode')
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    try {
+      const url = event.target.value
+      showSpinner()
+      const response = await fetch('/change_server_discovery', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          server_discovery: url
+        })
+      })
+      const retour = await response.json()
+      // console.log('-> managedServerPinCode - retour =', retour)
+      hideSpinner()
+      // mauvaise url ou inconnue ou erreur de sauvegarde
+      if (response.status !== 200) {
+        document.querySelector('#retour-server-pin-code').innerText = retour.error
+      } else {
+        // url ok
+        state.server_pin_code = retour.url
+        // cache le input
+        document.querySelector('#update-server-pin-code').style.display = 'none'
+        // enlève un éventuel ancien message d'erreur
+        document.querySelector('#retour-server-pin-code').innerText = ''
+        // maj nouveau serveur
+        document.querySelector('#label-server-pin-code').innerText = url
+        // affiche l'info serveur pin-code
+        document.querySelector('.infos-server-pin-code').style.display = 'flex'
+      }
+
+    } catch (error) {
+      hideSpinner()
+      putLog('error', 'error:', error)
+    }
+  }
+}
+
+
 /**
  * Change background color of general status
  * @param {string} status - error|success|info|warning

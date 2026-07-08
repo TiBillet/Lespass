@@ -55,6 +55,7 @@ body {
   align-items: center;
   font-weight: bold;
   border-radius: 6px;
+  padding: 0 6px;
 }
 
 .no-select {
@@ -189,15 +190,15 @@ main {
   flex-direction: row;
   justify-content: center;
   align-items: center;
+}
 
-  .bt {
-    width: 200px;
-    background-color: var(--blanc02);
-    color: var(--noir01);
-    border: 1px solid var(--gris02);
-    box-shadow: 1px 1px 10px rgba(185, 180, 180, 0.3);
-    font-size: 1.5rem;
-  }
+.main-content-footer .bt {
+  width: 200px;
+  background-color: var(--blanc02);
+  color: var(--noir01);
+  border: 1px solid var(--gris02);
+  box-shadow: 1px 1px 10px rgba(185, 180, 180, 0.3);
+  font-size: 1.5rem;
 }
 
 .content-input {
@@ -208,7 +209,7 @@ main {
   height: calc(100vh - var(--header-height));
   display: none;
   flex-direction: column;
-  justify-content: center;
+  justify-content: space-around;
   align-items: center;
   background-color: var(--noir01);
 }
@@ -267,6 +268,7 @@ main {
 }
 
 .status-messages-info {
+  color: var(--blanc01);
   width: 200px;
   padding-left: 6px;
 }
@@ -304,7 +306,7 @@ main {
 }
 
 .bt-input-return {
-  width: 20%;
+  min-width: 30%;
   color: var(--blanc01);
   background-color: var(--bleu05);
   font-size: 2rem;
@@ -329,48 +331,79 @@ main {
 }
 
 .confirm-content {
-  width: 50%;
-  /* height: 20%; */
+  max-width: 390px;
   display: flex;
   flex-direction: column;
-  justify-content:space-around;
+  justify-content: space-around;
   align-items: center;
-  background-color: var( --noir03);
+  background-color: var(--noir03);
   color: var(--blanc01);
   border-radius: 6px;
   padding: 8px 16px;
   border: 1px solid var(--blanc02);
   box-shadow: 2px 2px var(--blanc01);
+}
 
-  .confirm-title {
-    font-size: 2rem;
-  }
+.confirm-title {
+  font-size: 2rem;
+}
 
-  .confirm-body {
-    font-size: 1.5rem;
-  }
+.confirm-body {
+  font-size: 1.5rem;
+}
 
-  .confirm-select {
-    display: flex;
-    flex-direction: row;
-    justify-content: center;
-    align-items: center;
-    margin-top: 16px;
-  }
+.confirm-select {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  margin-top: 16px;
+}
 
-  .bt-delete-cancel {
-    min-width: 150px;
-    background-color: var(--bleu05);
-    font-size: 1.5rem;
-    padding: 0 16px;
-    margin: 0 16px;
-  }
+.bt-delete-cancel {
+  min-width: 150px;
+  background-color: var(--bleu05);
+  font-size: 1.5rem;
+  padding: 0 16px;
+  margin: 0 16px;
+}
 
-  .bt-delete-validate {
-    min-width: 150px;
-    background-color: var(--rouge06);
-    font-size: 1.5rem;
-    padding: 0 16px;
-    margin: 0 16px;
-  }
+.bt-delete-validate {
+  min-width: 150px;
+  background-color: var(--rouge06);
+  font-size: 1.5rem;
+  padding: 0 16px;
+  margin: 0 16px;
+}
+
+.content-server-pincode {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: var(--blanc01)
+}
+
+.input-group-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+#update-server-pin-code {
+  width: 98%;
+  display: none;
+  font-size: 2rem;
+  line-height: 2.4rem;
+}
+
+#icon-update-server-pin-code {
+  cursor: pointer;
+  margin-left: 6px;
+}
+
+#retour-server-pin-code {
+  color: var(--yellow00);
+  font-size: 1.2rem;
 }
