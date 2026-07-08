@@ -1,68 +1,84 @@
 <!DOCTYPE html>
 <html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/x-icon" href="favicon.ico">
-    <link rel="stylesheet" href="assets/css/index.css" />
-    <link rel="stylesheet" href="assets/css/palette.css" />
-    <link rel="stylesheet" href="assets/css/sizes.css" />
-    <title>LaBoutik</title>
-</head>
-
-<body>
-    <!-- spécifique au pi/desktop four lire/écrire le fichier de conf -->
-    <script>const PORT={{ port }};</script>
-    <header>
-        <img class="header-img" alt="TiBillet" src="assets/images/icon-complet-blanc.svg" />
-        <div class="header-status"></div>
-        <div class="spinner"></div>
-        <div class="header-menu">
-            <svg width="40" height="40" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <rect x="3" y="5" width="18" height="2" fill="currentColor" />
-                <rect x="3" y="11" width="18" height="2" fill="currentColor" />
-                <rect x="3" y="17" width="18" height="2" fill="currentColor" />
-            </svg>
-        </div>
-    </header>
-    <main></main>
-    <div class="content-input">
-        <div class="content-server-pincode">
-            <h2>Serveur pin-code</h2>
-            <div class="input-group-row infos-server-pin-code">
-                <label id="label-server-pin-code"></label>
-                <svg id="icon-update-server-pin-code" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 20h9"/>
-                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="icon" type="image/x-icon" href="favicon.ico">
+        <link rel="stylesheet" href="assets/css/index.css" />
+        <link rel="stylesheet" href="assets/css/palette.css" />
+        <link rel="stylesheet" href="assets/css/sizes.css" />
+        <title>LaBoutik</title>
+    </head>
+    <body>
+        <!-- spécifique au pi/desktop four lire/écrire le fichier de conf -->
+        <script>const PORT={{ port }};</script>
+        <header>
+            <img class="header-img"
+                 alt="TiBillet"
+                 src="assets/images/icon-complet-blanc.svg" />
+            <div class="header-status"></div>
+            <div class="spinner"></div>
+            <div class="header-menu">
+                <svg width="40"
+                     height="40"
+                     viewBox="0 0 24 24"
+                     xmlns="http://www.w3.org/2000/svg">
+                    <rect x="3" y="5" width="18" height="2" fill="currentColor" />
+                    <rect x="3" y="11" width="18" height="2" fill="currentColor" />
+                    <rect x="3" y="17" width="18" height="2" fill="currentColor" />
                 </svg>
             </div>
-            <input type="text" id="update-server-pin-code" />
-            <div id="retour-server-pin-code"></div>
+        </header>
+        <main>
+        </main>
+        <div class="content-input">
+            <div class="content-server-pincode">
+                <h2>Serveur pin-code</h2>
+                <div class="input-group-row infos-server-pin-code">
+                    <label id="label-server-pin-code"></label>
+                    <svg id="icon-update-server-pin-code"
+                         xmlns="http://www.w3.org/2000/svg"
+                         viewBox="0 0 24 24"
+                         width="24"
+                         height="24"
+                         fill="none"
+                         stroke="currentColor"
+                         stroke-width="2"
+                         stroke-linecap="round"
+                         stroke-linejoin="round">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                    </svg>
+                </div>
+                <div class="input-server-pin-code">
+                    <label>example server: https://hello.com</label>
+                    <input type="text" id="update-server-pin-code" />
+                    <div id="retour-server-pin-code"></div>
+                </div>
+            </div>
+            <input type="number" id="pin-code"  placeholder="pin-code" />
+            <!-- TODO afficher et gérer le clavier pour un pi -->
+            <label id="pin-code-message" style="color: var(--yellow00);"></label>
+            <div class="bt bt-input-return">Return</div>
         </div>
-        <input type="number" id="pin-code"  placeholder="pin-code"/>
-        <!-- TODO afficher et gérer le clavier pour un pi -->
-        <label id="pin-code-message" style="color: var(--yellow00);"></label>
-        <div class="bt bt-input-return">Return</div>
-    </div>
-    <div class="logs-content"></div>
-    <div class="divers-content"></div>
-    <div class="menu-burger-container" aria-label="Menu principal">
-        <nav class="menu-burger-content"></nav>
-    </div>
-    <div class="confirm-container">
-        <div class="confirm-content">
-            <div class="confirm-title">Confirmation</div>
-            <div class="confirm-body">delete the server</div>
-            <div class="confirm-select">
-                <div class="bt bt-delete-cancel">Cancel</div>
-                <div data-server="" class="bt bt-delete-validate">validate</div>
+        <div class="logs-content"></div>
+        <div class="divers-content"></div>
+        <div class="menu-burger-container" aria-label="Menu principal">
+            <nav class="menu-burger-content">
+            </nav>
+        </div>
+        <div class="confirm-container">
+            <div class="confirm-content">
+                <div class="confirm-title">Confirmation</div>
+                <div class="confirm-body">delete the server</div>
+                <div class="confirm-select">
+                    <div class="bt bt-delete-cancel">Cancel</div>
+                    <div data-server="" class="bt bt-delete-validate">validate</div>
+                </div>
             </div>
         </div>
-    </div>
-    <!-- https://socket.io/fr/docs/v4/client-installation/ -->
-     <script type="module" src="assets/js/socket.io.min.js"></script>
-    <script type="module" src="assets/js/index.js"></script>
-</body>
-
+        <!-- https://socket.io/fr/docs/v4/client-installation/ -->
+        <script type="module" src="assets/js/socket.io.min.js"></script>
+        <script type="module" src="assets/js/index.js"></script>
+    </body>
 </html>

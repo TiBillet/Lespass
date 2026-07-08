@@ -26,7 +26,7 @@ function hideConfirmDeleteServer() {
 
 function showInputServeurPincode() {
   document.querySelector('.infos-server-pin-code').style.display = "none"
-  document.querySelector('#update-server-pin-code').style.display = "flex"
+  document.querySelector('.input-server-pin-code').style.display = "flex"
 }
 
 

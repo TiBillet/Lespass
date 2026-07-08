@@ -387,13 +387,16 @@ main {
   align-items: center;
 }
 
-#update-server-pin-code {
-  display: none;
-}
-
 #icon-update-server-pin-code {
   cursor: pointer;
   margin-left: 6px;
+}
+
+.input-server-pin-code {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 #retour-server-pin-code {

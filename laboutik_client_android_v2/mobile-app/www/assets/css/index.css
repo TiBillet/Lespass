@@ -393,7 +393,6 @@ main {
 
 #update-server-pin-code {
   width: 98%;
-  display: none;
   font-size: 2rem;
   line-height: 2.4rem;
 }
@@ -401,6 +400,13 @@ main {
 #icon-update-server-pin-code {
   cursor: pointer;
   margin-left: 6px;
+}
+
+.input-server-pin-code {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 #retour-server-pin-code {

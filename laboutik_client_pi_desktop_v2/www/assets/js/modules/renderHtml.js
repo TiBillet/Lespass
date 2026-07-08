@@ -11,8 +11,8 @@ function showInputPinCode() {
   document.querySelector('#label-server-pin-code').innerText = state.server_pin_code
   // insert dans le input permettant l'édition du serveur discovery le serveur en cours
   document.querySelector('#update-server-pin-code').value = state.server_pin_code
-  // efface le input d'édition du serveur discovery
-  document.querySelector('#update-server-pin-code').style.display = 'none'
+  // efface les élément permetant l'édition du serveur discovery
+  document.querySelector('.input-server-pin-code').style.display = 'none'
   // supprime un ancien message de pin-code erroné
   document.querySelector('#pin-code-message').innerText = ''
   // supprime un ancien message de serveur discovery erroné

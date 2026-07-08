@@ -1,6 +1,9 @@
 import { renderHtml } from './renderHtml.js'
 import { env } from '../../../env.js'
 
+// pour les vieux navigateur
+const cloneObj = typeof structuredClone === "function" ? structuredClone : (obj) => JSON.parse(JSON.stringify(obj))
+
 export function putLog(typeMsg, msg, options) {
   let msgFinal = ''
   if (options !== undefined) {
@@ -185,7 +188,7 @@ export async function managedServerPinCode(event) {
       }
 
       // 3 copie l'ancien state
-      let oldState = structuredClone(state)
+      let oldState = cloneObj(state)
 
       // 4 - change serveur discovery in config file
       state.server_pin_code = url
@@ -196,10 +199,10 @@ export async function managedServerPinCode(event) {
 
       if (result === false) {
         throw new Error("Error - save  config file.")
-        state = structuredClone(oldState)
+        state = cloneObj(oldState)
       } else {
-        // cache le input
-        document.querySelector('#update-server-pin-code').style.display = 'none'
+        // cache le groupe permettant l'édition du serveur discovery
+        document.querySelector('.input-server-pin-code').style.display = 'none'
         // enlève un éventuel ancien message d'erreur
         document.querySelector('#retour-server-pin-code').innerText = ''
         // maj nouveau serveur
@@ -379,7 +382,7 @@ export async function deleteServer(event) {
   let typeMsg = "success"
 
   // copie l'ancien state
-  const oldState = structuredClone(state)
+  const oldState = cloneObj(state)
 
   // trouver tous les servers sauf url
   const filterServers = state.servers.filter(item => item.server_url !== url)
@@ -390,7 +393,7 @@ export async function deleteServer(event) {
 
   // retour à l'ancien state si fichier pas sauvegardé
   if (updateConfFile === false) {
-    state = structuredClone(oldState)
+    state = cloneObj(oldState)
     oldState = null
     typeMsg = "error"
   }
@@ -441,7 +444,7 @@ export async function managedPinCode(event) {
         document.querySelector('.content-input').style.display = 'none'
 
         // copie l'ancien state
-        const oldState = structuredClone(state)
+        const oldState = cloneObj(state)
 
         // add server in servers list
         state.servers.push(result.server)
@@ -451,7 +454,7 @@ export async function managedPinCode(event) {
 
         // retour à l'ancien state si fichier pas sauvegardé
         if (updateConfFile === false) {
-          state = structuredClone(oldState)
+          state = cloneObj(oldState)
           oldState = null
           typeMsg = "error"
         }
