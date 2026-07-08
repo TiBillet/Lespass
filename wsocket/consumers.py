@@ -29,7 +29,12 @@ import json
 import logging
 import time
 
+from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
+from django.conf import settings
+from django.template.loader import get_template
+
+from AuthBillet.models import TibilletUser
 
 logger = logging.getLogger(__name__)
 
@@ -245,6 +250,141 @@ class PrinterConsumer(AsyncWebsocketConsumer):
                 }
             )
         )
+
+
+# --- TerminalConsumer (kiosk, CHANTIER-02 Task 02B) ---
+class TerminalConsumer(AsyncWebsocketConsumer):
+    """
+    Consumer WebSocket pour le suivi d'un paiement TPE Stripe depuis le kiosk.
+    / WebSocket consumer tracking a Stripe terminal payment from the kiosk.
+
+    Copie rebranchee de LaBoutik htmxview/consumers.py (TerminalConsumer).
+    Le room_name est le `payment_intent_stripe_id` (voir kiosk/routing.py et
+    kiosk/templates/kiosk/waiting_credit_card_terminal.html).
+    / Rebranched copy of LaBoutik htmxview/consumers.py (TerminalConsumer).
+    room_name is the `payment_intent_stripe_id` (see kiosk/routing.py and
+    kiosk/templates/kiosk/waiting_credit_card_terminal.html).
+
+    Garde d'acces : LaBoutik verifie `hasattr(self.user, 'appareil')`
+    (modele Appareil, absent cote Lespass). Ici on verifie le role terminal
+    du user (TibilletUser.ROLE_KIOSQUE), pose par l'auth de session du kiosk.
+    / Access guard: LaBoutik checks `hasattr(self.user, 'appareil')`
+    (Appareil model, absent on Lespass side). Here we check the user's
+    terminal role (TibilletUser.ROLE_KIOSQUE), set by the kiosk's session auth.
+    """
+
+    async def connect(self):
+        self.room_name = self.scope["url_route"]["kwargs"]["room_name"]
+        self.user = self.scope["user"]
+
+        # Si le user n'est pas un terminal Kiosque : on ferme proprement le
+        # websocket au lieu de lever une exception.
+        # / User is not a Kiosk terminal: cleanly close the socket instead of raising.
+        if not settings.DEBUG:
+            if not self.user.is_authenticated or getattr(self.user, "terminal_role", None) != TibilletUser.ROLE_KIOSQUE:
+                logger.error(f"{self.room_name} {self.user} ERROR NOT AUTHENTICATED OR NOT KIOSK TERMINAL")
+                await self.close()
+                return
+
+        logger.info(f"{self.room_name} {self.user} connected")
+
+        # Join room group
+        await self.channel_layer.group_add(self.room_name, self.channel_name)
+
+        await self.accept()
+
+        # REJEU D'ETAT A LA (RE)CONNEXION
+        # / State replay on (re)connect
+        #
+        # Le resultat final du paiement (succes/annule) est pousse une seule fois
+        # par la tache Celery `poll_payment_intent_status`.
+        # Si le reseau de la borne coupe juste a cet instant, ou si le paiement
+        # reussit avant meme que ce websocket soit connecte, le message est perdu :
+        # l'ecran reste bloque sur le spinner alors que Stripe a deja valide.
+        #
+        # Pour eviter ca : des qu'un client (re)connecte, on relit l'etat reel du
+        # paiement en base. S'il est deja termine, on lui renvoie tout de suite le
+        # bon ecran. La tache Celery met l'etat a jour en base meme quand la borne
+        # est deconnectee, donc l'etat lu ici est fiable.
+        #
+        # / The final payment result is pushed only once by the Celery task and can
+        # be lost on a flaky network. On reconnect we re-read the real status from
+        # the database and replay the correct screen.
+        await self.replay_payment_state_if_finished()
+
+    @database_sync_to_async
+    def get_finished_template_name(self):
+        """
+        Lit le statut reel du paiement en base et renvoie le nom du template final
+        si le paiement est termine, sinon None.
+        / Reads the real payment status from DB; returns the final template name
+        if the payment is finished, else None.
+
+        room_name == payment_intent_stripe_id
+        (voir kiosk/routing.py et kiosk/templates/kiosk/waiting_credit_card_terminal.html)
+        """
+        from kiosk.models import PaymentsIntent
+        try:
+            payment_intent = PaymentsIntent.objects.get(payment_intent_stripe_id=self.room_name)
+        except PaymentsIntent.DoesNotExist:
+            return None
+
+        if payment_intent.status == PaymentsIntent.SUCCEEDED:
+            return "success.html"
+        if payment_intent.status == PaymentsIntent.CANCELED:
+            return "cancel.html"
+        # Paiement encore en cours : le polling enverra la suite.
+        # / Still in progress: polling will send the rest.
+        return None
+
+    async def replay_payment_state_if_finished(self):
+        """
+        Renvoie immediatement l'ecran final (succes/annule) si le paiement est
+        deja termine au moment ou ce client (re)connecte. Sinon ne fait rien.
+        / Immediately replays the final screen if the payment is already finished.
+        """
+        template_name = await self.get_finished_template_name()
+        if not template_name:
+            return
+        logger.info(f"Rejeu d'etat WS pour {self.room_name} -> kiosk/{template_name}")
+        # Meme rendu que la methode `template()` : le HTML porte un hx-swap-oob
+        # qui remplace #tb-kiosque cote borne.
+        # / Same render as `template()`: the HTML carries an hx-swap-oob.
+        html = get_template(f"kiosk/{template_name}").render(context={})
+        await self.send(text_data=html)
+
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard(self.room_name, self.channel_name)
+
+    async def receive(self, text_data):
+        """Non utilise cote kiosk : le serveur pousse, la borne ne parle pas.
+        / Not used on the kiosk side: server pushes, the kiosk does not talk back."""
+        pass
+
+    # Recoit un message du group Redis. Doit avoir le meme nom que le type du
+    # message envoye par `group_send` (ex : depuis kiosk/tasks.py).
+    # / Receives a message from the Redis group. Must have the same name as the
+    # `type` sent by `group_send` (e.g. from kiosk/tasks.py).
+    async def template(self, event):
+        logger.info(f"template event: {event}")
+        template_name = event["template"]
+        html = get_template(f"kiosk/{template_name}").render(context={"event": event})
+        await self.send(text_data=html)
+
+    async def message(self, event):
+        """
+        Message de progression du polling (kiosk/tasks.py envoie type='message'
+        a chaque tick, avant l'evenement final type='template'). Le front kiosk
+        garde la zone #message masquee (voir waiting_credit_card_terminal.html) :
+        on logge simplement l'evenement. Sans ce handler, group_send lève une
+        exception (pas de handler pour ce type) qui ferme le websocket a chaque tick.
+        / Polling progress message (kiosk/tasks.py sends type='message' on every
+        tick, before the final type='template' event). The kiosk front keeps the
+        #message zone hidden: we just log the event. Without this handler,
+        group_send raises (no handler for this type), closing the websocket on
+        every tick.
+        """
+        logger.info(f"message event: {event}")
 
 
 # --- ChatConsumer (chat wsocket V1, conserve lors du portage laboutik) ---

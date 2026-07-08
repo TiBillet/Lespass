@@ -1,7 +1,23 @@
 #!/bin/bash
 set -e
 
+# Si le conteneur tourne sous supervisord (prod/pre-prod : gunicorn + daphne
+# + celery), on arrête les services le temps du flush : sinon leurs
+# connexions PostgreSQL font échouer dropdb, et le runserver final entrerait
+# en collision avec gunicorn (port 8002).
+# / If the container runs under supervisord (prod/pre-prod: gunicorn +
+# daphne + celery), stop the services during the flush: their PostgreSQL
+# connections would make dropdb fail, and the final runserver would clash
+# with gunicorn (port 8002).
+SUPERVISOR_CONF=/DjangoFiles/supervisor/supervisord.conf
+SUPERVISOR_SOCK=/DjangoFiles/logs/supervisor/supervisor.sock
+
 if [ "$DEBUG" = "1" ]; then
+  if [ -S "$SUPERVISOR_SOCK" ]; then
+    echo "Supervisord détecté : arrêt des services le temps du flush."
+    supervisorctl -c $SUPERVISOR_CONF stop all
+  fi
+
   export PGPASSWORD=$POSTGRES_PASSWORD
   export PGUSER=$POSTGRES_USER
   export PGHOST=postgres
@@ -28,8 +44,14 @@ if [ "$DEBUG" = "1" ]; then
   # (every 4h).
   poetry run python manage.py refresh_seo_cache
 
-  echo "start dev server : https://"$SUB"."$DOMAIN"/"
-  poetry run python /DjangoFiles/manage.py runserver 0.0.0.0:8002
+  if [ -S "$SUPERVISOR_SOCK" ]; then
+    # Relance gunicorn + daphne + celery / Restart gunicorn + daphne + celery
+    supervisorctl -c $SUPERVISOR_CONF start all
+    echo "Services relancés : https://"$SUB"."$DOMAIN"/"
+  else
+    echo "start dev server : https://"$SUB"."$DOMAIN"/"
+    poetry run python /DjangoFiles/manage.py runserver 0.0.0.0:8002
+  fi
 else
   echo "DEBUG environment variable is not set"
 fi

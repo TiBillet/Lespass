@@ -919,6 +919,12 @@ class MyAccount(viewsets.ViewSet):
                 return HttpResponseClientRedirect('/?login=1')
             return redirect('/')
 
+        # Note : les terminaux (espece=TE) sont deja bloques en amont par
+        # AuthBillet.middleware.TerminalSessionGuardMiddleware (garde central),
+        # qui les redirige vers leur interface. Pas de check specifique ici.
+        # / Note: terminals (espece=TE) are already blocked upstream by the central
+        # TerminalSessionGuardMiddleware, which redirects them to their interface.
+
         # check que le wallet existe bien :
         if not request.user.wallet:
             fedowAPI = FedowAPI()

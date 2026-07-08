@@ -1,0 +1,80 @@
+{% load i18n %}
+<button class="btn btn-validate" id="scan_button" data-testid="kiosk-validate-button"
+        hx-post="/kiosk/refill_with_wisepos/"
+        hx-vals='js:{"totalAmount": totalAmount, "tag_id": document.querySelector("#scan_button").getAttribute("tag-id")}'
+        hx-target="#tb-kiosque" hx-swap="innerHTML" hx-trigger="confirmed" onClick="readNfc()"
+        aria-label="{% translate 'Valider et scanner votre carte' %}" itemprop="potentialAction" itemscope itemtype="https://schema.org/PayAction">
+        {% translate "Valider" %} <span id="totalAmount" itemprop="price">0</span><span itemprop="priceCurrency" content="EUR">€</span>
+</button>
+
+
+<script>
+    function readNfc(event) {
+        // Store a reference to the button for later use
+        const validateButton = document.querySelector('#scan_button');
+
+        function listenTagId(event) {
+            console.log('-> event.detail =', event.detail)
+            validateButton.setAttribute('tag-id', event.detail)
+
+            Swal.clickConfirm()
+            htmx.trigger(validateButton, 'confirmed');
+        }
+
+        // { once: true } : le listener s'auto-supprime apres le premier scan.
+        // Sans ca, chaque appel de readNfc (scan annule puis relance) empilait un
+        // listener de plus -> N triggers 'confirmed' -> N POST refill (double paiement TPE).
+        // / { once: true }: the listener removes itself after the first scan.
+        // Without it, every readNfc call (cancelled then retried scan) stacked one
+        // more listener -> N 'confirmed' triggers -> N refill POSTs (double TPE payment).
+        document.body.addEventListener('nfcResult', listenTagId, { once: true })
+
+        console.log('-> readNfc totalAmount =', totalAmount, '  --  DEMO =', window.DEMO)
+        if (totalAmount > 0) {
+            Swal.fire({
+                title: "{% translate 'Vous avez sélectionné' %} " + totalAmount + "€",
+                html: "<p>{% translate 'Merci de scanner votre carte TiBillet sur le lecteur Sunmi.' %}</p><p aria-hidden='true'>⬆️⬆️⬆️⬆️⬆️⬆️⬆️</p><p>{% translate 'Le lecteur de carte est juste au dessus de cet écran' %}</p>",
+                showCancelButton: true,
+                cancelButtonText: "{% translate 'Annuler' %}",
+
+                timer: 30000,
+                timerProgressBar: true,
+                // after the popup has been shown on screen
+                didOpen: () => {
+                    Swal.showLoading();
+                    // La fenêtre vient de s'ouvrir, on lance la lecture RFID
+                    rfid.startLecture();
+                },
+                // when the popup closes by user
+                willClose: () => {
+                    // La fenêtre se ferme (multiples raisons) : stop lecteur NFC + retrait
+                    // du listener s'il n'a pas ete consomme (annulation/timeout), pour ne pas
+                    // declencher un paiement sur un scan ulterieur.
+                    // / The popup closes (many reasons): stop the NFC reader + remove the
+                    // listener if unconsumed (cancel/timeout), so a later scan does not
+                    // trigger a payment.
+                    rfid.stopLecture();
+                    document.body.removeEventListener('nfcResult', listenTagId);
+                }
+            }).then((result) => {
+                // Read more about handling dismissals below
+                console.log('-> result.dismiss =', result.dismiss)
+                if (result.dismiss === Swal.DismissReason.timer) {
+                    clearAmount();
+                    console.log("I was closed by the timer");
+                } else if (result.dismiss === Swal.DismissReason.cancel) {
+                    clearAmount();
+                    console.log("I was closed by the cancel button");
+                } else if (result.dismiss === Swal.DismissReason.backdrop) {
+                    // Le simulateur DEMO (overlay cliquable, cf. rfid.simule()) couvre
+                    // maintenant tout l'ecran et gere lui-meme le tagId choisi via
+                    // l'evenement nfcResult : plus besoin de ce fallback backdrop.
+                    // / The DEMO simulator (clickable overlay, see rfid.simule()) now
+                    // covers the whole screen and handles the chosen tagId itself via
+                    // the nfcResult event: this backdrop fallback is no longer needed.
+                    console.log("I was closed on external click");
+                }
+            })
+        }
+    }
+</script>

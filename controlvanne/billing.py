@@ -41,7 +41,13 @@ def obtenir_contexte_cashless(carte):
     / Same logic as LaBoutik: TNF → TLF → FED cascade via AssetService.
 
     :param carte: CarteCashless
-    :return: dict avec wallet_client, cascade_assets (liste ordonnée). None si aucun asset.
+    :return: dict avec wallet_client, cascade_assets (liste ordonnée).
+             None si aucun asset OU si le wallet de la carte n'est pas
+             résoluble (carte vierge inconnue du Fedow legacy) — le POS
+             tireuse refuse alors proprement au lieu de renvoyer un 500.
+             / None if no asset OR if the card wallet cannot be resolved
+             (blank card unknown to legacy Fedow) — the tap POS then
+             refuses cleanly instead of returning a 500.
     """
     from laboutik.views import ORDRE_CASCADE_FIDUCIAIRE, _obtenir_ou_creer_wallet
     from fedow_core.models import Asset
@@ -49,7 +55,23 @@ def obtenir_contexte_cashless(carte):
 
     # --- Résoudre le wallet du client ---
     # déléguer à laboutik (logique identique, source unique)
-    wallet_client = _obtenir_ou_creer_wallet(carte)
+    # PIÈGE (fix review 2026-07-06, finding C3) : _obtenir_ou_creer_wallet
+    # LÈVE une Exception si la carte n'a ni user.wallet, ni wallet_ephemere,
+    # et n'est pas résoluble via le Fedow legacy (can_fedow False ou carte
+    # inconnue). Une carte sans wallet n'a de toute façon aucun token :
+    # on transforme l'exception en refus propre (None → authorized: false).
+    # / TRAP: _obtenir_ou_creer_wallet RAISES if the card has no user.wallet,
+    # no wallet_ephemere, and cannot be resolved via legacy Fedow. A card
+    # without a wallet has no tokens anyway: turn the exception into a clean
+    # refusal (None → authorized: false).
+    try:
+        wallet_client = _obtenir_ou_creer_wallet(carte)
+    except Exception as erreur:
+        logger.warning(
+            f"Tireuse : wallet non résoluble pour la carte {carte.tag_id} "
+            f"— refus propre. Détail : {erreur}"
+        )
+        return None
 
     # --- Construire la cascade d'assets accessibles ---
     # / Build the cascade of accessible assets

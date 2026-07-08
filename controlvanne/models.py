@@ -471,6 +471,12 @@ class RfidSession(models.Model):
         vol = Decimal(str(float(served_volume_ml or 0))).quantize(Decimal("0.01"))
         self.volume_delta_ml = max(Decimal("0.00"), vol)
         self.volume_end_ml = self.volume_delta_ml
+        # Aussi mis a jour ici : un tirage court sans aucun pour_update
+        # laissait dernier_volume_ml a 0 et le kiosk affichait "0 cl" servi
+        # (fix review 2026-07-06, finding I4).
+        # / Also updated here: a short pour without any pour_update left
+        # dernier_volume_ml at 0 and the kiosk displayed "0 cl" served.
+        self.dernier_volume_ml = self.volume_delta_ml
         self.save()
 
     def __str__(self):

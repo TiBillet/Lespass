@@ -1,5 +1,79 @@
 # Changelog / Journal des modifications
 
+## Kiosk : borne de recharge cashless TPE Stripe / Kiosk: self-service cashless top-up terminal (Stripe TPE)
+
+**Date :** 2026-07-07
+**Migration :** Oui / Yes — `kiosk` 0001-0003, `BaseBillet` 0227 (Lespass) ; `fedow_core` 0025 (Fedow)
+
+**Quoi / What :** nouvelle app `kiosk` (borne libre-service Android/Cordova + TPE Stripe WisePOS),
+portée depuis LaBoutik et rebranchée sur Lespass. Le crédit de la carte reste **côté Fedow distant**
+(coexistence V1, webhook Stripe). Modèles TPE (`StripeLocation`/`Terminal`/`PaymentsIntent`), admin
+Unfold, `KioskViewSet`, front HTMX, WebSocket `TerminalConsumer`, module Groupware `module_kiosk`,
+routage du bridge d'auth (rôle `KI` → `/kiosk/`).
+
+**Pourquoi / Why :** offrir la recharge cashless en autonomie sur borne, sans caisse.
+
+**Décision sécurité :** une place Lespass **ne signe pas** les metadata TPE ; la route webhook Fedow
+est étendue (miroir « EXTENSION S6 ») pour l'accepter, l'idempotence anti-rejeu étant durcie
+(`unique` + `IntegrityError`). Repose sur l'hypothèse : compte Stripe Root exclusif au serveur de la
+fédération (voir `TECH_DOC/SESSIONS/KIOSK/SPEC.md` §8bis).
+
+### Fichiers principaux / Main files
+| Fichier / File | Changement / Change |
+|---|---|
+| `kiosk/` (app) | Modèles, admin, viewset, validators, tasks, urls, templates, static |
+| `fedow_connect/fedow_api.py` | `NFCcardFedow.retrieve(tag_id)` (+ fix `self.config`→`self.fedow_config`) |
+| `wsocket/consumers.py`, `routing.py` | `TerminalConsumer` + `ws/terminal/<pi_id>/` |
+| `laboutik/views.py` | Bridge routé selon `terminal_role` (KI → `/kiosk/`) |
+| `BaseBillet/models.py`, `Administration/admin/dashboard.py` | `module_kiosk` + sidebar |
+| **Fedow** `fedow_core/views.py`, `models.py` | Extension route TPE place Lespass + idempotence |
+
+### Déploiement / Deployment
+- **Fedow : rebuild d'image** (code baké) + `migrate` (0025) — un restart ne suffit pas.
+- `makemessages`/`compilemessages` pour les `{% translate %}` du front.
+
+## Controlvanne : fixes de la review critique — double facturation, reconnexion kiosk, refus propres / Controlvanne: critical review fixes — double billing, kiosk reconnection, clean refusals
+
+**Date :** 2026-07-06
+**Migration :** Non / No
+
+Tour critique complet de l'app (3 reviewers : circuit monétaire, stock/
+signaux, vues/JS — findings contre-vérifiés) puis correction TDD des
+findings bloquants. **C1** : deux `pour_end` concurrents (retry réseau du Pi)
+facturaient DEUX FOIS le même tirage — prouvé par un test à 2 threads —
+corrigé par verrou `select_for_update` sur la session + transaction atomique
+englobant fermeture/réservoir/facturation (**I1** : compteurs cohérents) ;
+le push WS du signal passe sous `on_commit`. **C2** : le kiosk 24/7 gelait
+en silence à la première coupure — reconnexion automatique avec backoff
+(1 s→30 s) + bandeau « connexion perdue ». **C3** : carte sans wallet
+résoluble → refus propre au lieu d'un 500 (décision : pas de wallet éphémère
+créé à la tireuse, une carte sans wallet n'a aucun token). **I2** : swap de
+fût sans Stock → réservoir remis à 0. **I3** : volume négatif rejeté à la
+validation. **I4** : volume affiché correct sur tirage court. 5 tests de
+garde (`test_controlvanne_review_fixes.py`), 52 tests controlvanne+discovery
+verts. Findings Minor en dette : `TECH_DOC/SESSIONS/CONTROLVANNE/REVIEW-2026-07-06-tour-critique.md`.
+
+/ Full critical review of the app (3 reviewers, findings re-verified) then
+TDD fixes. **C1**: two concurrent `pour_end` (Pi network retry) billed the
+same pour TWICE — proven by a 2-thread test — fixed with a
+`select_for_update` session lock + one atomic transaction around close/
+reservoir/billing (**I1**); the signal's WS push now uses `on_commit`.
+**C2**: the 24/7 kiosk froze silently on any disconnection — automatic
+reconnection with backoff + "connection lost" banner. **C3**: card without
+a resolvable wallet → clean refusal instead of a 500. **I2/I3/I4**: keg-swap
+reservoir reset, negative volume rejected, correct short-pour display.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Fix |
+|---|---|
+| `controlvanne/viewsets.py` | C1+I1 : verrou session + atomic |
+| `controlvanne/signals.py` | on_commit sur le push WS ; I2 swap de fût |
+| `controlvanne/billing.py` | C3 refus propre |
+| `controlvanne/serializers.py` | I3 min_value=0 |
+| `controlvanne/models.py` | I4 dernier_volume_ml |
+| `controlvanne/static/.../panel_kiosk.js` + `templates/base.html` | C2 reconnexion + bandeau |
+| `tests/pytest/test_controlvanne_review_fixes.py` | 5 tests de garde (créé) |
+
 ## WebSockets en production : supervisord mono-conteneur / Production WebSockets: single-container supervisord
 
 **Date :** 2026-07-06
@@ -35,6 +109,8 @@ under supervisord, dev untouched.
 | `docker-compose.pre-prod.yml` | django → `start.sh`, nginx → conf prod, service celery supprimé |
 | `TiBillet/asgi.py` | Fix AppRegistryNotReady (ordre des imports) |
 | `launch_ws.sh` | Supprimé (remplacé par conf.d/daphne.conf) |
+| `flush.sh` | Conscient de supervisord : `stop all` avant le dropdb (sinon les connexions PG le bloquent), `start all` à la fin au lieu du runserver (collision :8002). Dev inchangé. |
+| `dockerfile` (fix build) | `apt-get update &&` sur la ligne d'install : le cache Docker rejouait l'install sur des index apt périmés (404, exit 100) |
 
 ## Controlvanne branchée : tireuses connectées + appairage terminaux dans l'admin / Controlvanne wired: connected taps + terminal pairing in the admin
 
@@ -53,7 +129,7 @@ terminal ne doit jamais passer `is_tenant_admin()`. Le menu « Terminaux
 hardware » pointe vers la changelist PairingDevice (process d'appairage
 complet : création du PIN avec choix du rôle LB/KI, suivi des PIN en attente
 et des appareils réclamés — TI exclu du formulaire manuel, auto-créé avec sa
-TireuseBec). Carte dashboard « Connected taps » activée. 51 tests portés/écrits
+TireuseBec). Carte dashboard « Connected taps » activée. 47 tests portés/écrits
 (controlvanne models/api/billing + discovery pairing). Suite complète :
 689 passed, 0 failed.
 
@@ -65,7 +141,7 @@ TI pairing re-enabled in discovery (PIN claim → `TireuseAPIKey`).
 `is_tenant_admin()`). The "Hardware terminals" menu now targets the
 PairingDevice changelist (full pairing process, LB/KI role choice, TI
 auto-created with its TireuseBec). "Connected taps" dashboard card enabled.
-51 tests ported/written; full suite: 689 passed, 0 failed.
+47 tests ported/written; full suite: 689 passed, 0 failed.
 
 ### Fichiers modifiés / Modified files
 | Fichier / File | Changement / Change |

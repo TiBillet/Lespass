@@ -19,6 +19,7 @@ from decimal import Decimal
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.db import transaction
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 
@@ -112,6 +113,17 @@ def tireusebec_pre_save(sender, instance, **kwargs):
                 # Stock en centilitres → ml (×10)
                 # / Stock in centiliters → ml (×10)
                 instance.reservoir_ml = Decimal(str(stock.quantite)) * 10
+            else:
+                # Fût neuf SANS Stock inventaire : remettre le réservoir à 0
+                # plutôt que de garder la valeur de l'ancien fût (jauge fausse,
+                # « fût vide » prématuré). Pas d'info = pas de réserve connue ;
+                # l'opérateur crée un Stock ou passe en réservoir illimité.
+                # (fix review 2026-07-06, finding I2)
+                # / Fresh keg WITHOUT inventory Stock: reset the reservoir to 0
+                # rather than keeping the old keg's value (wrong gauge). No
+                # info = no known reserve; the operator creates a Stock or
+                # switches to unlimited reservoir.
+                instance.reservoir_ml = Decimal("0")
         except Exception:
             pass
 
@@ -198,22 +210,36 @@ def tireusebec_post_save(sender, instance, created, **kwargs):
         if champs_a_mettre_a_jour:
             TireuseBec.objects.filter(pk=instance.pk).update(**champs_a_mettre_a_jour)
 
-    payload = _snapshot_for_bec(instance)
-
     channel_layer = get_channel_layer()
     if not channel_layer:
         return
 
-    # Canal specifique a cette tireuse (kiosk individuel)
-    # / Channel specific to this tap (individual kiosk)
-    async_to_sync(channel_layer.group_send)(
-        f"rfid_state.{instance.uuid}",
-        {"type": "state_update", "payload": payload},
-    )
+    # Push differe a la fin de la transaction en cours : le save() du
+    # reservoir se fait desormais DANS l'atomic de facturation (fix C1) —
+    # pousser immediatement enverrait un etat pas encore committe (et un
+    # faux etat en cas de rollback). Hors transaction, on_commit s'execute
+    # immediatement : comportement inchange. Piege projet documente
+    # (broadcast dans atomic → on_commit).
+    # / Push deferred to the end of the current transaction: the reservoir
+    # save() now happens INSIDE the billing atomic (C1 fix) — pushing
+    # immediately would send a not-yet-committed state (and a wrong state
+    # on rollback). Outside a transaction, on_commit runs immediately:
+    # unchanged behavior. Documented project trap (broadcast inside atomic).
+    def pousser_snapshot_apres_commit():
+        payload = _snapshot_for_bec(instance)
 
-    # Canal global (tous les kiosks)
-    # / Global channel (all kiosks)
-    async_to_sync(channel_layer.group_send)(
-        "rfid_state.all",
-        {"type": "state_update", "payload": payload},
-    )
+        # Canal specifique a cette tireuse (kiosk individuel)
+        # / Channel specific to this tap (individual kiosk)
+        async_to_sync(channel_layer.group_send)(
+            f"rfid_state.{instance.uuid}",
+            {"type": "state_update", "payload": payload},
+        )
+
+        # Canal global (tous les kiosks)
+        # / Global channel (all kiosks)
+        async_to_sync(channel_layer.group_send)(
+            "rfid_state.all",
+            {"type": "state_update", "payload": payload},
+        )
+
+    transaction.on_commit(pousser_snapshot_apres_commit)

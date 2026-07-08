@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="fr" itemscope itemtype="https://schema.org/WebSite">
+
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <meta name="description" content="Kiosque TiBillet pour recharger votre carte ou enregistrer vos informations"/>
+    <title>Kiosque TiBillet</title>
+    <meta itemprop="name" content="Kiosque TiBillet">
+    <meta itemprop="description" content="Kiosque TiBillet pour recharger votre carte ou enregistrer vos informations">
+    {% load static %}
+
+    {#statics pour la page montant :#}
+    {# Chemins rebranches sur les assets reellement servis par Lespass (les namespaces #}
+    {# LaBoutik bootstrap/ et webview/ n'existent pas ici). htmx + extension ws : memes #}
+    {# fichiers que laboutik/base.html. / Paths rebranched onto the assets actually #}
+    {# served by Lespass (LaBoutik's bootstrap/ and webview/ namespaces do not exist #}
+    {# here). htmx + ws extension: same files as laboutik/base.html. #}
+    <link rel="stylesheet" href="{% static 'commun/css/bootstrap.min.5.3.3.css' %}"/>
+    <link rel="stylesheet" href="{% static 'kiosk/css/kiosk.css' %}"/>
+    <script src="{% static 'js/htmx@2.0.6.min.js' %}"></script>
+    <script src="{% static 'js/ext/ws.js' %}"></script>
+    <script src="{% static 'commun/js/bootstrap.bundle.min.5.3.3.js' %}"></script>
+    <script src="{% static 'mvt_htmx/js/sweetalert2@11.js' %}"></script>
+</head>
+
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-indicator="#spinner" class="h-100">
+
+{% block main %}
+
+{% endblock %}
+
+
+{% if demo %}
+    <script>
+        window.DEMO = {
+            demoVirtualKeyboardActive: true,
+            demoTagIdCm: '{{ demoTagIdCm }}',
+            demoTagIdClient1: '{{ demoTagIdClient1 }}',
+            demoTagIdClient2: '{{ demoTagIdClient2 }}',
+            demoTagIdClient3: '{{ demoTagIdClient3 }}',
+            demoTagIdUnknown: 'XXXXXXXX',
+            demoTagIdTempsReponse: {{ demoTagIdTempsReponse | default:1 }}
+        }
+    </script>
+{% endif %}
+{% if type_app == "cordova" %}
+    <script src="http://localhost/cordova.js"></script>
+{% endif %}
+{# Contexte expose au JS avant nfc.js : type_app choisit le mode NFC hardware #}
+{# (NFCMC cordova / NFCLO pi-desktop), sans dependre d'un localStorage absent #}
+{# sur l'origine serveur. / Context exposed to JS before nfc.js: type_app #}
+{# picks the hardware NFC mode (NFCMC cordova / NFCLO pi-desktop), without #}
+{# relying on a localStorage absent on the server origin. #}
+<script>
+    window.KIOSK = {
+        type_app: "{{ type_app }}",
+        demo: {{ demo|yesno:"true,false" }}
+    };
+</script>
+{# socket.io charge avant nfc.js : necessaire au mode NFCLO (Pi/desktop). #}
+{# / socket.io loaded before nfc.js: required for NFCLO mode (Pi/desktop). #}
+<script src="{% static 'js/socket.io.min.js' %}"></script>
+<script src="{% static 'kiosk/js/nfc.js' %}"></script>
+<script src="{% static 'kiosk/js/main.js' %}"></script>
+
+{% include "kiosk/spinner.html" %}
+
+</body>
+</html>

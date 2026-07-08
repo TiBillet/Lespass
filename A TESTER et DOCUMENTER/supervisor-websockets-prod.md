@@ -18,6 +18,7 @@ d'empreinte mémoire), supervisord orchestre les 3 processus.
 | `docker-compose.pre-prod.yml` | `lespass_django` : `command: "bash start.sh"` ; service **`lespass_celery` supprimé** ; nginx monte **`nginx_prod/lespass_prod.conf`** |
 | `TiBillet/asgi.py` | **Fix `AppRegistryNotReady`** : `get_asgi_application()` déplacé AVANT les imports applicatifs (bug dormant, invisible sous runserver, fatal sous daphne standalone — c'est le fix « étape 2 » documenté par Mike) |
 | `launch_ws.sh` | **Supprimé** (orphelin, remplacé par `conf.d/daphne.conf`) |
+| `flush.sh` | Conscient de supervisord : `stop all` avant le dropdb, `start all` à la fin (dev inchangé : runserver final) |
 
 **Dev : rien ne change.** `docker-compose.yml` + `start_dev.sh` + runserver byobu
 (qui sert HTTP **et** WS sur :8002) restent identiques ; le service celery du

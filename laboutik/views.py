@@ -9601,7 +9601,9 @@ class LaBoutikAuthBridgeView(APIView):
 
     COMMUNICATION :
     Reçoit : POST form-data avec champ 'api_key'=<key>
-    Émet : 302 HttpResponseRedirect vers /laboutik/caisse/ + Set-Cookie: sessionid=<key>
+    Émet : 302 HttpResponseRedirect + Set-Cookie: sessionid=<key>
+           - terminal_role KI (kiosque) → /kiosk/
+           - autres rôles (LB, TI, ...) → /laboutik/caisse/
     Erreurs : 401 si clé absente/invalide/révoquée, 400 si clé V1, 429 si throttle
     """
 
@@ -9677,5 +9679,15 @@ class LaBoutikAuthBridgeView(APIView):
             term_user.email,
         )
         # ajout du paramètres de requête type_app afin d'être récupérer par le front et le back après redirection
+        # / append type_app query param so front and back can pick it up after redirect
+        #
+        # Routage selon le role du terminal : les bornes kiosk (KI) vont vers /kiosk/,
+        # tous les autres roles (LB, TI...) gardent la caisse LaBoutik historique.
+        # / Route by terminal role: kiosk terminals (KI) go to /kiosk/, all other
+        # roles (LB, TI...) keep the historical LaBoutik POS.
+        from AuthBillet.models import TibilletUser
+
+        if term_user.terminal_role == TibilletUser.ROLE_KIOSQUE:
+            return HttpResponseRedirect("/kiosk/?type_app=" + type_app)
         return HttpResponseRedirect("/laboutik/caisse?type_app=" + type_app)
 

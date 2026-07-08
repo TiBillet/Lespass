@@ -25,7 +25,7 @@ Le module reutilise les modeles existants de Lespass :
 
 | Modele | Role |
 |--------|------|
-| `Configuration` | Singleton django-solo, config du module tireuse |
+| `ConfigurationTireuse` | Singleton django-solo, config du module tireuse |
 | `Debimetre` | Modele de capteur de debit + facteur de calibration |
 | `CarteMaintenance` | Carte NFC dediee au rincage (OneToOne `CarteCashless`) |
 | `TireuseBec` | Une tireuse physique (fut actif, debimetre, POS, pairing Pi) |
@@ -54,7 +54,9 @@ controlvanne/
 
   templates/
     base.html                       Base kiosk (Bootstrap local, nom tenant)
-    controlvanne/panel_bootstrap.html  Kiosk : jauges SVG, grille prix, WS
+    controlvanne/kiosk_list.html       Kiosk : toutes les tireuses (jauges, prix, WS)
+    controlvanne/kiosk_detail.html     Kiosk : une tireuse (+ simulateur si DEMO=1)
+    controlvanne/partial/kiosk_card.html  Carte tireuse (partagee list/detail)
     calibration/page.html           Calibration (herite admin Unfold)
     calibration/partial_*.html      Fragments HTMX calibration
     admin/date_range_filter.html    Filtre plage de dates admin
@@ -62,7 +64,8 @@ controlvanne/
   static/controlvanne/
     css/bootstrap.min.css           Bootstrap 5.3 (local, Pi hors-ligne)
     js/bootstrap.bundle.min.js      Bootstrap 5.3 JS
-    js/panel_kiosk.js               JS du kiosk (externalise)
+    js/panel_kiosk.js               JS du kiosk (WS + reconnexion auto)
+    js/simu_pi.js                   Simulateur Pi (panneau debug DEMO=1)
 
   Pi/                               Code embarque Raspberry Pi (chantier separe)
 ```
@@ -135,7 +138,8 @@ Le Raspberry Pi s'appaire via le systeme `discovery` existant :
 
 **Admin → Tireuses → Keg products → Ajouter**
 
-Ou bien : **Admin → Billetterie → Produits → Ajouter** avec categorie = "Keg (connected tap)"
+(La categorie FUT n'est pas selectionnable depuis le formulaire produit generique :
+passer obligatoirement par le proxy « Keg products ».)
 
 | Champ | Valeur |
 |-------|--------|
@@ -198,7 +202,7 @@ Ou directement : `/controlvanne/calibration/<uuid-tireuse>/`
 4. Retirez la carte
 5. Sur la page calibration, saisissez le volume reel lu sur le verre
 6. Repetez 2-3 fois
-7. Cliquez "Appliquer le facteur"
+7. Cliquez « ✓ Calculer et appliquer le facteur »
 
 Reactivez la tireuse (En service = cocher). Les clients peuvent badger leur carte NFC :
 - Solde suffisant → vanne ouverte, biere coule, volume affiche en temps reel sur le kiosk
@@ -223,7 +227,7 @@ Les ventes apparaissent dans les historiques admin et dans la cloture de caisse.
 
 ## Kiosk (ecran du Pi)
 
-L'ecran du Pi affiche le template `panel_bootstrap.html` :
+L'ecran du Pi affiche le template `kiosk_detail.html` (une tireuse) ou `kiosk_list.html` (toutes) :
 - Jauge SVG du fut (niveau en %)
 - Grille de prix (25cl, 33cl, 50cl)
 - Etat vanne (ouverte/fermee)
@@ -429,7 +433,7 @@ Si le serveur est injoignable au demarrage, le Pi continue — le kiosk afficher
 │                                               │           │           │
 │  ┌──────────────┐                    ┌────────▼───────────▼──────┐   │
 │  │  main.py      │                    │      Chromium kiosk       │   │
-│  │  (orchestrateur)                   │  panel_bootstrap.html     │   │
+│  │  (orchestrateur)                   │  kiosk_detail.html        │   │
 │  └──────┬───────┘                    │  ← WebSocket push         │   │
 │         │                            │  jauges SVG + prix + solde│   │
 │  ┌──────▼───────┐                    └──────────────────────────┘   │

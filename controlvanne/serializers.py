@@ -10,6 +10,8 @@ Pas de ModelSerializer — serializers explicites (règle FALC).
 No ModelSerializer — explicit serializers (FALC rule).
 """
 
+from decimal import Decimal
+
 from rest_framework import serializers
 from django.utils.translation import gettext_lazy as _
 
@@ -79,5 +81,11 @@ class EventSerializer(serializers.Serializer):
         decimal_places=2,
         required=False,
         default=0,
+        # Un debitmetre defaillant peut envoyer un volume negatif : on le
+        # refuse a la validation plutot que d'afficher "-100 cl" au kiosk
+        # (fix review 2026-07-06, finding I3).
+        # / A faulty flow meter can send a negative volume: reject it at
+        # validation rather than displaying "-100 cl" on the kiosk.
+        min_value=Decimal("0"),
         help_text=_("Cumulative volume served since session start (ml)."),
     )
