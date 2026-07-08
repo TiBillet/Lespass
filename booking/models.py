@@ -430,6 +430,8 @@ class Booking(models.Model):
     """
 
     WAITING_PAYMENT, ADMIN_CANCELED, ADMIN_VALID, ADMIN_WAITING, PAID_BY_USER, NO_ADMIN_VALID, USER_CANCELED = "WP", "CA", "VA", "WA", "PA", "AU", "UC"
+    FREERES, FREERES_USERACTIV = "FR", "FU"
+
     STATUS_CHOICES = [
         (WAITING_PAYMENT, _("Waiting for payment")),
         (ADMIN_CANCELED, _('Cancelled')),
@@ -437,6 +439,8 @@ class Booking(models.Model):
         (ADMIN_VALID, _('Confirmed by admin, waiting for payment')),
         (PAID_BY_USER, _('Paid by user')),
         (NO_ADMIN_VALID, _('Confirmed by system')),
+        (FREERES, _('Email verification still pending')),
+        (FREERES_USERACTIV, _('Email verified')),
         (USER_CANCELED, _('Canceled by user')),
     ]
 
@@ -521,6 +525,13 @@ class Booking(models.Model):
 
     def total_time(self):
         return str(self.slot_duration_minutes * self.slot_count) + "min"
+
+    def to_pay(self):
+        to_pay = 0
+        for ligne_article in self.lignearticles.filter(status__in=[LigneArticle.UNPAID, LigneArticle.VALID]):
+            ligne_article: LigneArticle
+            to_pay += int(ligne_article.amount * ligne_article.qty)  # int car on multiplie un int par un float
+        return dround(to_pay)
 
     def total_paid(self):
         total_paid = 0

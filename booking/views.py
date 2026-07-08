@@ -12,9 +12,8 @@ import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from urllib.parse import urlencode
-
 from django_htmx.http import HttpResponseClientRedirect
-from django.http import Http404, HttpResponseBadRequest
+from django.http import Http404, HttpResponseBadRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -22,7 +21,9 @@ from django.utils.dateparse import parse_datetime
 from rest_framework import permissions, viewsets
 from django.contrib import messages
 from django.utils.translation import gettext_lazy as _, ngettext
+from rest_framework.decorators import action
 
+from BaseBillet.models import Price, Paiement_stripe
 from BaseBillet.views import get_context
 from booking.booking_engine import Interval, compute_slots, validate_new_booking
 from booking.models import Booking, Resource
@@ -359,6 +360,16 @@ class BookingViewSet(viewsets.ViewSet):
         / Success → redirect to /my_account/my_bookings//?new=<pk>
         / Failure → re-render the form with an error message
         """
+
+        try:
+            price_uuid = request.POST.get('price_uuid') or request.POST.get('price')
+            price = Price.objects.get(uuid=price_uuid)
+        except Price.DoesNotExist:
+            messages.error(request, _("Le prix n'existe pas"))
+            response = HttpResponse("")
+            response["HX-Refresh"] = "true"
+            return response
+
         # Parse le datetime naïf depuis le champ caché du formulaire.
         # / Parse the naive datetime from the form hidden field.
         tz = timezone.get_current_timezone()
@@ -411,12 +422,13 @@ class BookingViewSet(viewsets.ViewSet):
 
         slot_count = serializer_body.validated_data['slot_count']
 
-        is_valid, result = validate_new_booking(
+        is_valid, result, checkout_url = validate_new_booking(
             resource              = resource,
             start_datetime        = start_datetime,
             slot_duration_minutes = slot_duration_minutes,
             slot_count            = slot_count,
             member                = request.user,
+            price=price
         )
 
         if is_valid:
@@ -426,7 +438,7 @@ class BookingViewSet(viewsets.ViewSet):
                 reverse('my_account-my-bookings')
                 + '?' + urlencode({'new': result.pk})
             )
-            return redirect(my_bookings_url)
+            return redirect(checkout_url or my_bookings_url)
 
         # Échec (modification concurrente, créneau commencé, etc.) — re-render avec
         # les créneaux recalculés et le message d'erreur.

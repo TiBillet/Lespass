@@ -303,7 +303,7 @@ class CommandeService:
 
             resource = Resource.objects.get(pk=item.get('resource_uuid'))
 
-            is_valid, result = validate_new_booking(
+            is_valid, result, checkout_url = validate_new_booking(
                 resource              = resource,
                 start_datetime        = datetime.fromisoformat(item.get('start_datetime')),
                 slot_duration_minutes = int(item.get('slot_duration_minutes')),
@@ -311,9 +311,12 @@ class CommandeService:
                 # TODO-ANTO add firstname ?
                 member                = user,
                 commande = commande,
+                price = price,
+                external_payment_method=PaymentMethod.STRIPE_NOFED,
+                create_checkout = False,
             )
             if not is_valid:
-                raise Exception(_("Booking not valide : ") + result)
+                raise CommandeServiceError(_("Booking not valide : ") + result)
 
             price_sold = get_or_create_price_sold(price, custom_amount=amount_dec)
             amount_cts = dec_to_int(amount_dec)
@@ -324,17 +327,8 @@ class CommandeService:
                     item_promo_code and item_promo_code.product_id == price.product_id
             ) else None
 
-            line = LigneArticle.objects.create(
-                pricesold=price_sold,
-                booking=result,
-                payment_method=PaymentMethod.STRIPE_NOFED,
-                amount=amount_cts,
-                qty=1,
-                sale_origin=SaleOrigin.LESPASS,
-                promotional_code=applicable_promo,
-            )
-
-            all_lines.append(line)
+            for ligne in result.lignearticles.all():
+                all_lines.append(ligne)
             total_centimes += amount_cts
 
 

@@ -35,7 +35,7 @@ class CreationPaiementStripe():
                  user: User,
                  liste_ligne_article: list,
                  metadata: dict,
-                 reservation: (Reservation, None),
+                 reservation: (Reservation, None) = None,
                  booking: (Reservation, None) = None,
                  source: str = None,
                  absolute_domain: (str, None) = None,

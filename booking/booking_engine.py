@@ -28,12 +28,22 @@ DÉPENDANCE MOTEUR DE BASE DE DONNÉES :
 """
 import dataclasses
 import datetime
+import logging
+from decimal import Decimal
 
 from django.db import connection, transaction
 from django.db.utils import OperationalError
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from rest_framework import serializers
 
+from ApiBillet.serializers import dec_to_int, get_or_create_price_sold
+from BaseBillet.models import Paiement_stripe, LigneArticle, SaleOrigin, PaymentMethod, PromotionalCode, ProductSold, \
+    PriceSold
+from PaiementStripe.views import CreationPaiementStripe
+from booking.models import Booking
+
+logger = logging.getLogger(__name__)
 
 # ─── Conteneurs de données / Data containers ─────────────────────────────────
 
@@ -409,8 +419,19 @@ def compute_slots(resource, window: Interval = None, reference_now=None):
 
 
 
-def validate_new_booking(resource, start_datetime, slot_duration_minutes,
-                         slot_count, member, commande, reference_now=None, ):
+def validate_new_booking(resource,
+                         start_datetime,
+                         slot_duration_minutes,
+                         slot_count,
+                         member,
+                         price,
+                         sale_origin: str = SaleOrigin.LESPASS,
+                         external_payment_method: str = None,
+                         commande= None,
+                         reference_now=None,
+                         promo_code: PromotionalCode = None,
+                         create_checkout: bool = True,
+                         ):
     """
     Valide B ⊆ E' et crée la réservation dans une transaction SERIALIZABLE.
     / Validates B ⊆ E' and creates the booking in a SERIALIZABLE transaction.
@@ -493,7 +514,7 @@ def validate_new_booking(resource, start_datetime, slot_duration_minutes,
     # / Reject any past slot — without opening a transaction.
     now = reference_now or timezone.now()
     if start_datetime <= now:
-        return False, str(_('Cannot book a slot that has already started.'))
+        return False, str(_('Cannot book a slot that has already started.')), None
 
     last_slot_end_dt = start_datetime + datetime.timedelta(
         minutes=slot_duration_minutes * slot_count
@@ -554,12 +575,12 @@ def validate_new_booking(resource, start_datetime, slot_duration_minutes,
                 if key not in slot_by_key:
                     return False, str(_(
                         'Slot starting at %(start)s is not available.'
-                    ) % {'start': slot_start})
+                    ) % {'start': slot_start}), None
 
                 if slot_by_key[key].remaining_capacity <= 0:
                     return False, str(_(
                         'Slot starting at %(start)s is fully booked.'
-                    ) % {'start': slot_start})
+                    ) % {'start': slot_start}), None
 
             new_booking = Booking.objects.create(
                 resource=resource,
@@ -570,6 +591,24 @@ def validate_new_booking(resource, start_datetime, slot_duration_minutes,
                 status=Booking.WAITING_PAYMENT,
                 commande=commande,
             )
+
+
+            # TODO-ANTO : DETERMINE IF IT IS A PROBLEM THAT PRICE_SOLD AMOUNT IS SET LIKE THAT.
+            amount = Decimal(float(slot_duration_minutes) / 60 * float(slot_count) * float(price.prix))
+            price_sold = get_or_create_price_sold(price=price,promo_code=promo_code, custom_amount=amount)
+
+
+            ligne_article = LigneArticle.objects.create(
+                booking=new_booking,
+                pricesold=price_sold,
+                qty=1,
+                amount=dec_to_int(amount),
+                status=LigneArticle.VALID,
+                payment_method=external_payment_method or PaymentMethod.UNKNOWN,
+                sale_origin=sale_origin,
+                promotional_code=promo_code,
+            )
+
 
     except OperationalError as e:
         # SQLSTATE 40001 : échec de sérialisation — PostgreSQL a détecté que
@@ -583,7 +622,54 @@ def validate_new_booking(resource, start_datetime, slot_duration_minutes,
         if pgcode == '40001':
             return False, str(_(
                 'This slot was just booked by another user. Please try again.'
-            ))
+            )), None
         raise
 
-    return True, new_booking
+    checkout_url = None
+    if create_checkout:
+        if new_booking.to_pay() > 0:
+            new_booking.status = Booking.WAITING_PAYMENT
+
+            for ligne_article in new_booking.lignearticles.all():
+                ligne_article.status = LigneArticle.UNPAID
+                ligne_article.save()
+
+            checkout_url = get_checkout_stripe(new_booking)
+        else:
+            new_booking.status = Booking.FREERES
+
+    return True, new_booking, checkout_url
+
+def get_checkout_stripe(booking):
+    booking: Booking = booking
+    tenant = connection.tenant
+    # Création du checkout stripe
+    metadata = {
+        'booking': f'{booking.pk}',
+        'tenant': f'{tenant.uuid}',
+    }
+
+    # Création de l'objet paiement stripe en base de donnée
+    new_paiement_stripe = CreationPaiementStripe(
+        user=booking.user,
+        liste_ligne_article=booking.lignearticles.all(),
+        metadata=metadata,
+        booking=booking,
+        source=Paiement_stripe.FRONT_BILLETTERIE,
+        success_url=f"stripe_return/",
+        cancel_url=f"stripe_return/",
+        absolute_domain=f"https://{tenant.get_primary_domain()}/event/",
+    )
+
+    if not new_paiement_stripe.is_valid():
+        raise serializers.ValidationError(_(f'checkout strip not valid'))
+
+    paiement_stripe: Paiement_stripe = new_paiement_stripe.paiement_stripe_db
+    paiement_stripe.lignearticles.all().update(status=LigneArticle.UNPAID)
+
+    booking.paiement = paiement_stripe
+    booking.status = booking.WAITING_PAYMENT
+    booking.save()
+
+    logger.debug(f"get_checkout_stripe OK : {new_paiement_stripe.checkout_session.stripe_id}")
+    return new_paiement_stripe.checkout_session.url

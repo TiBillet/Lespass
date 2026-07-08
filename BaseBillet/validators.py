@@ -371,7 +371,17 @@ class TicketCreator():
             reservation.save()
             return tickets
 
-        self.checkout_link = self.get_checkout_stripe()
+        if self.create_checkout:
+            self.checkout_link = self.get_checkout_stripe()
+        # Si create_checkout=False : le caller (CommandeService) appellera
+        # lui-même CreationPaiementStripe avec toutes les lignes consolidées.
+        # / If create_checkout=False: caller (CommandeService) will call
+        # CreationPaiementStripe itself with all consolidated lines.
+
+        # Set tickets as not activ, because else they are not mark as "Ticket.NOT_SCANNED" in the signal "reservation_paid"
+        reservation.tickets.all().update(status=Ticket.NOT_ACTIV)
+
+
         return tickets
 
     def get_checkout_stripe(self):

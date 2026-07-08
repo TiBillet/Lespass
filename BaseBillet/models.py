@@ -2556,7 +2556,7 @@ class Reservation(models.Model):
 
         refund = False
         # If reservation had a payment and ticket has a price superior to free, try partial refund
-        if self.total_paid() > 0 and ticket.pricesold.prix > 0:
+        if self.total_paid() > 0:
             config = Configuration.get_solo()
             stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
 
@@ -2571,8 +2571,8 @@ class Reservation(models.Model):
                     raise Exception(_("Ticket does not have a matching LigneArticle."))
 
                 # Refund only one ticket from the `ligne` using specified_quantity=1
-                refund = partial_refund_payment(paiement, config, [ligne], specified_quantity=1)
-                logger.info(f"Partial refund stripe for one ticket: {refund.status}")
+                partial_refund_payment(paiement, config, [ligne], specified_quantity=1)
+                logger.info(f"Partial refund stripe for one ticket")
             elif self.paiements.count() > 0:
 
                 # Find the paiement/lignearticle corresponding to this ticket
@@ -2590,8 +2590,8 @@ class Reservation(models.Model):
                         raise Exception(_("Ticket does not have a matching LigneArticle."))
 
                     # Refund only one ticket from the `ligne` using specified_quantity=1
-                    refund = partial_refund_payment(paiement, config, [ligne], specified_quantity=1)
-                    logger.info(f"Partial refund stripe for one ticket: {refund.status}")
+                    partial_refund_payment(paiement, config, [ligne], specified_quantity=1)
+                    logger.info(f"Partial refund stripe for one ticket")
 
                     break
 
