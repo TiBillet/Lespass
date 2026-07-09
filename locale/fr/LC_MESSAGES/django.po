@@ -11714,9 +11714,7 @@ msgstr "Code PIN déjà utilisé"
 
 #: discovery/admin.py:73
 msgid "Save to generate a PIN code. (Use 'Save and continue editing')"
-msgstr ""
-"Enregistrez pour générer un code PIN. (Utilisez « Enregistrer et continuer "
-"la modification »)"
+msgstr "Enregistrez pour générer un code PIN. (Utilisez « Enregistrer et afficher »)"
 
 #: discovery/admin.py:86
 msgid "Claimed"
