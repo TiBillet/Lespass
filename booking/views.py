@@ -527,8 +527,8 @@ class BookingViewSet(viewsets.ViewSet):
 
     # ── Confirmation d'annulation ────────────────────────────────────────────
 
-    @action(detail=True, methods=['get'], url_path="cancel", url_name="cancel")
-    def cancel_confirm(self, request, booking_pk=None):
+    @action(detail=True, methods=['get', 'post'], url_path="cancel", url_name="cancel")
+    def cancel_confirm(self, request, pk=None):
         """
         GET  : affiche la page de confirmation d'annulation.
         POST : supprime la réservation et redirige vers mes réservations.
@@ -550,7 +550,7 @@ class BookingViewSet(viewsets.ViewSet):
 
         booking = get_object_or_404(
             Booking.objects.select_related('resource'),
-            pk     = booking_pk,
+            pk     = pk,
             user   = request.user,
             status__in = [Booking.PAID_BY_USER, Booking.ADMIN_VALID,],
         )

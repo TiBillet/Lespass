@@ -11,8 +11,8 @@ def partial_refund_payment(paiement, config, ligne_articles, specified_quantity=
     Refund a part of a payment.
     Refund all "ligne_articles". They must be linked to the "paiement"
 
-    By default, it refund the MAX qty from the ligne_articles. To only refund a part of it, you have two option :
-    - pass the "specified_quantity" parameter : it will refund the indicated quantity on ALL "ligne_articles" -> Common for all lignes_articles
+    By default, it refunds the MAX qty from the ligne_articles. To only refund a part of it, you have two option :
+    - pass the "specified_quantity" parameter : it will refund the indicated quantity on ALL "ligne_articles" -> The same for all lignes_articles
     - add "to_refund_qty" attribute to "ligne_articles" before calling this method, it will override the qty of the ligne_article-> Independent for all lignes_articles
     """
     from BaseBillet.models import Paiement_stripe, LigneArticle, SaleOrigin

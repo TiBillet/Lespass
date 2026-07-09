@@ -73,7 +73,7 @@ Détails de la réservation à annuler.
     <p class="mb-4">{% translate "Confirmez-vous l'annulation de cette réservation ?" %}</p>
 
     <form method="post"
-          action="{% url 'booking-cancel' booking_pk=booking.pk %}"
+          action="{% url 'booking-cancel' pk=booking.pk %}"
           data-testid="booking-cancel-form">
       {% csrf_token %}
 

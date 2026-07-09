@@ -16,7 +16,6 @@ router = DefaultRouter()
 router.register(r"", BookingViewSet, basename="booking") # Booking add from
 
 
-slot_unavailable_view = BookingViewSet.as_view({'get': 'slot_unavailable'})
-cancel_view          = BookingViewSet.as_view({'get': 'cancel_confirm', 'post': 'cancel_confirm'})
+urlpatterns = [
 
-urlpatterns = [] + router.urls
+              ] + router.urls

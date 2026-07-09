@@ -53,7 +53,7 @@ Section "À venir" — réservations dont la fin est dans le futur.
       {% endif %}
     </div>
 
-    <a href="{% url 'booking-cancel' booking_pk=booking.pk %}"
+    <a href="{% url 'booking-cancel' pk=booking.pk %}"
        class="btn btn-outline-danger btn-sm"
        data-testid="booking-cancel-btn-{{ booking.pk }}">
       {% translate "Annuler" %}

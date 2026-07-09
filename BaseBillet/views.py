@@ -5093,8 +5093,6 @@ class PanierMVT(viewsets.ViewSet):
         from booking.serializers import BookingCreateSerializer
         from decimal import Decimal
 
-        start_datetime_raw = request.POST.get('start_datetime', '')
-        group_end_raw   = request.POST.get('group_end', '')
         resource_uuid_param = request.POST.get('resource')
         price_uuid = request.POST.get('price_uuid') or request.POST.get('price')
 
@@ -5102,7 +5100,7 @@ class PanierMVT(viewsets.ViewSet):
         firstname = request.POST.get('firstname') or None
         lastname = request.POST.get('lastname') or None
 
-        # Get the resource_uuid and check if it exist
+        # Get the resource_uuid and check if it exists
         resource = None
         if resource_uuid_param:
             try:
