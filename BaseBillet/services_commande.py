@@ -16,6 +16,7 @@ from django.db import connection, transaction
 from django.utils.translation import gettext_lazy as _
 
 from BaseBillet.models import Membership, Price
+from booking.models import Resource, Booking
 
 logger = logging.getLogger(__name__)
 
@@ -282,10 +283,6 @@ class CommandeService:
             price = Price.objects.get(uuid=item['price_uuid'])
             amount_dec = CommandeService._resolve_amount(price, item)
 
-            # Get the price from previously computed price
-            # TODO-ANTO : add checks
-            amount_dec = Decimal(item.get('total_estimation'))
-
             # Code promo de cet item specifiquement (pas du panier global).
             # / Promo code for this specific item (not cart-global).
             item_promo_code = _resolve_promo(item)
@@ -298,6 +295,7 @@ class CommandeService:
             item_firstname = (item.get('firstname') or '').strip()
             item_lastname = (item.get('lastname') or '').strip()
 
+            # TODO-ANTO : USE this
             resolved_firstname = item_firstname or first_name
             resolved_lastname = item_lastname or last_name
 
@@ -319,7 +317,8 @@ class CommandeService:
                 raise CommandeServiceError(_("Booking not valide : ") + result)
 
             price_sold = get_or_create_price_sold(price, custom_amount=amount_dec)
-            amount_cts = dec_to_int(amount_dec)
+            amount_cts = dec_to_int(price_sold.prix)
+
             # Le code n'est applique que si lie au product (double-check
             # redondant avec la validation a l'ajout, mais safe).
             # / Code applied only if linked to the product (redundant safety check).
@@ -352,6 +351,12 @@ class CommandeService:
         / Compute the Decimal amount to use for this price + item."""
         if price.free_price and item.get('custom_amount'):
             return Decimal(str(item['custom_amount']))
+
+        if item.get('type') == "resource":
+
+            # TODO-ANTO : ADD CHECKS
+            return Decimal(item.get('total_estimation'))
+
         return price.prix or Decimal("0.00")
 
     @staticmethod
@@ -378,6 +383,11 @@ class CommandeService:
             line.reservation is not None for line in lignes
         )
 
+        # Pareil pour les bookings, réservation potentiellement proche dans le temps
+        contains_bookings = any(
+            line.booking is not None for line in lignes
+        )
+
         # Le success_url pointe vers l'action `stripe_return` sur EventMVT
         # (`/event/<paiement_stripe_uuid>/stripe_return/`) — meme flow que
         # pour une reservation directe (validators.py:345). Pas d'action
@@ -397,8 +407,9 @@ class CommandeService:
             success_url="stripe_return/",
             cancel_url="stripe_return/",
             absolute_domain=f"https://{tenant.get_primary_domain()}/event/",
-            accept_sepa=(not contains_tickets),
+            accept_sepa=(not contains_tickets and not contains_bookings),
         )
+
         if not new_paiement.is_valid():
             raise CommandeServiceError(_("Payment creation failed."))
 
@@ -438,6 +449,14 @@ class CommandeService:
                 Reservation.FREERES_USERACTIV if user.is_active else Reservation.FREERES
             )
             reservation.save()
+
+        for booking in commande.bookings.all():
+            user = booking.user
+            booking.status =  (
+                Booking.FREERES_USERACTIV if user.is_active else Booking.FREERES
+            )
+            booking.save()
+
 
         # LigneArticle → VALID + payment_method=FREE
         # / LigneArticle → VALID + payment_method=FREE

@@ -775,8 +775,8 @@ class PanierSession:
             raise InvalidItemError(_("Resource does not exist"))
 
 
-        # Validation 2 : Product doit être categorie ADHESION
-        # Validation 2: Product must be ADHESION category
+        # Validation 2 : Product doit être categorie RESOURCE
+        # Validation 2: Product must be RESOURCE category
         if price.product.categorie_article != Product.RESOURCE:
             raise InvalidItemError(_("This rate is not a resource."))
 
@@ -784,21 +784,22 @@ class PanierSession:
         # # Validation 3: no recurring payment (excluded from cart in v1)
         if price.recurring_payment:
             raise InvalidItemError(
-                _("Recurring memberships require a direct payment and cannot be added to the cart.")
+                _("Recurring resources require a direct payment and cannot be added to the cart.")
             )
 
         # Validation 4 : pas de validation manuelle (exclue du panier en v1)
         # Validation 4: no manual validation (excluded from cart in v1)
         if price.manual_validation:
             raise InvalidItemError(
-                _("Memberships with manual validation cannot be added to the cart.")
+                _("Resources with manual validation cannot be added to the cart.")
             )
 
-        # Validation 5 : pas de doublon (1 adhésion du même price max)
-        # Validation 5: no duplicate (1 membership of the same price max)
-        for existing in self._data.get('items', []):
-            if existing.get('type') == 'membership' and existing.get('price_uuid') == str(price_uuid):
-                raise InvalidItemError(_("This membership is already in your cart."))
+        # TODO-ANTO : Add checks. It is possible to have the same rssource twice, but at different timing
+        # # Validation 5 : pas de doublon (1 ressource du même price max)
+        # # Validation 5: no duplicate (1 resource of the same price max)
+        # for existing in self._data.get('items', []):
+        #     if existing.get('type') == 'resource' and existing.get('price_uuid') == str(price_uuid):
+        #         raise InvalidItemError(_("This resource is already in your cart."))
 
         # Validation 6 : free_price → custom_amount >= min
         # Validation 6: free_price → custom_amount >= min
@@ -1038,6 +1039,7 @@ class PanierSession:
                     custom_amount=item.get('custom_amount'),
                     options=item.get('options', []),
                     custom_form=item.get('custom_form', {}),
+                    promotional_code_name=item.get('promotional_code_name'),
                 )
             elif item['type'] == 'membership':
                 self.add_membership(
@@ -1047,6 +1049,7 @@ class PanierSession:
                     custom_form=item.get('custom_form', {}),
                     firstname=item.get('firstname'),
                     lastname=item.get('lastname'),
+                    promotional_code_name=item.get('promotional_code_name'),
                 )
             elif item['type'] == 'resource':
                 self.add_resource(
@@ -1060,5 +1063,6 @@ class PanierSession:
                     custom_form=item.get('custom_form', {}),
                     firstname=item.get('firstname'),
                     lastname=item.get('lastname'),
+                    promotional_code_name=item.get('promotional_code_name'),
                 )
 

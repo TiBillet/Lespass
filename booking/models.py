@@ -501,7 +501,7 @@ class Booking(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="booking_commande",
+        related_name="bookings",
         verbose_name=_("Order"),
         help_text=_(
             "Renseignée uniquement si la réservation a été créée via un panier multi-items. "
@@ -571,6 +571,7 @@ class Booking(models.Model):
         Cree un avoir (credit note) pour une LigneArticle hors-Stripe.
         / Creates a credit note for a non-Stripe LigneArticle.
         """
+
         metadata = ligne.metadata if ligne.metadata else {}
         metadata['original_lignearticle_uuid'] = str(ligne.uuid)
         avoir = LigneArticle.objects.create(

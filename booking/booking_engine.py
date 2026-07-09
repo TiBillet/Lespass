@@ -322,7 +322,7 @@ def get_existing_bookings_for_resource(resource, window: Interval = None):
 
 
     # Récupère seulement les réservations (Booking) qui ont été payé ou validé par l'admin
-    requete_de_base = Booking.objects.filter(resource=resource,status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID,])
+    requete_de_base = Booking.objects.filter(resource=resource,status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.FREERES_USERACTIV])
 
     if window is None:
         return requete_de_base
@@ -626,6 +626,7 @@ def validate_new_booking(resource,
         raise
 
     checkout_url = None
+
     if create_checkout:
         if new_booking.to_pay() > 0:
             new_booking.status = Booking.WAITING_PAYMENT
@@ -636,7 +637,9 @@ def validate_new_booking(resource,
 
             checkout_url = get_checkout_stripe(new_booking)
         else:
-            new_booking.status = Booking.FREERES
+            new_booking.status = Booking.FREERES_USERACTIV
+            ligne_article.payment_method = PaymentMethod.FREE
+            new_booking.save()
 
     return True, new_booking, checkout_url
 

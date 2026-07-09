@@ -889,13 +889,13 @@ class MyAccount(viewsets.ViewSet):
 
         upcoming_bookings = (
             Booking.objects
-            .filter(user=request.user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID,], end_datetime__gt=now)
+            .filter(user=request.user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.FREERES_USERACTIV], end_datetime__gt=now)
             .select_related('resource')
             .order_by('start_datetime')
         )
         past_bookings = (
             Booking.objects
-            .filter(user=request.user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID,], end_datetime__lte=now)
+            .filter(user=request.user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.FREERES_USERACTIV], end_datetime__lte=now)
             .select_related('resource')
             .order_by('-start_datetime')
         )

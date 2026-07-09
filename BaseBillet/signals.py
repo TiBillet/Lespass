@@ -18,6 +18,7 @@ from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation, \
     trigger_product_update_tasks, send_sale_to_laboutik, send_refund_to_laboutik, webhook_membership, \
     refill_from_lespass_to_user_wallet_from_ticket_scanned
 from BaseBillet.triggers import TRIGGER_LigneArticlePaid_ActionByCategorie
+from booking.models import Booking
 from fedow_connect.fedow_api import AssetFedow
 from fedow_connect.models import FedowConfig
 
@@ -368,7 +369,12 @@ PRE_SAVE_TRANSITIONS = {
         Ticket.NOT_SCANNED: {
             Ticket.SCANNED: check_reward,
         }
-    }
+    },
+    # 'BOOKING' : {
+    #     Booking.WAITING_PAYMENT: {
+    #         Booking.PAID_BY_USER: booking_paid
+    #     }
+    # }
 }
 
 

@@ -1253,7 +1253,7 @@ class Commande(models.Model):
     Liens (FK inverses) :
       - commande.reservations           → Reservation.commande (FK nullable)
       - commande.memberships_commande   → Membership.commande (FK nullable)
-      - commande.booking_commande   → Booking.commande (FK nullable)
+      - commande.bookings   → Booking.commande (FK nullable)
       - commande.paiement_stripe        → Paiement_stripe (OneToOne nullable, reverse=commande_obj)
     """
 

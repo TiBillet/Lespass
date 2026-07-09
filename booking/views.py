@@ -552,7 +552,7 @@ class BookingViewSet(viewsets.ViewSet):
             Booking.objects.select_related('resource'),
             pk     = pk,
             user   = request.user,
-            status__in = [Booking.PAID_BY_USER, Booking.ADMIN_VALID,],
+            status__in = [Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.FREERES_USERACTIV],
         )
 
         deadline = booking.deadline()
