@@ -27,6 +27,25 @@ from fedow_public.models import AssetFedowPublic
 logger = logging.getLogger(__name__)
 
 
+class CarteInconnueDeFedow(Exception):
+    """
+    Fedow ne connait pas cette carte NFC (reponse 404).
+    / Fedow does not know this NFC card (404 response).
+
+    LOCALISATION : fedow_connect/fedow_api.py
+
+    Levee par NFCcardFedow.retrieve() quand le tag_id est absent de Fedow.
+    Elle herite d'Exception : les appelants qui font `except Exception`
+    (kiosk/validators.py, kiosk/views.py) se comportent comme avant.
+    L'admin des cartes, lui, l'attrape specifiquement pour distinguer
+    « carte inconnue, on la cree » de « Fedow injoignable, on abandonne ».
+    / Inherits from Exception so existing `except Exception` callers are
+    unaffected. The card admin catches it specifically to tell
+    "unknown card, create it" from "Fedow unreachable, give up".
+    """
+    pass
+
+
 ### GENERIC GET AND POST ###
 def _post(fedow_config: FedowConfig = None,
           user: TibilletUser = None,
@@ -816,12 +835,13 @@ class NFCcardFedow():
         enough on Fedow's side (HasKeyAndPlaceSignature).
 
         :param tag_id: identifiant hexadecimal 8 caracteres de la carte NFC.
-        :return: donnees validees de la carte (dict).
-        :raises Exception: carte inconnue de Fedow (404) ou erreur HTTP/validation.
+        :return: donnees validees de la carte (dict), dont qrcode_uuid et number_printed.
+        :raises CarteInconnueDeFedow: carte absente de Fedow (404).
+        :raises Exception: erreur HTTP ou de validation.
         """
         response_card = _get(self.fedow_config, path=f'card/{tag_id.upper()}')
         if response_card.status_code == 404:
-            raise Exception(f"Carte inconnue de Fedow : {tag_id}")
+            raise CarteInconnueDeFedow(f"Carte inconnue de Fedow : {tag_id}")
         if not response_card.status_code == 200:
             logger.error(f"NFCcardFedow.retrieve ERRORS : {response_card.status_code}")
             raise Exception(f"NFCcardFedow.retrieve ERRORS : {response_card.status_code}")
@@ -845,46 +865,43 @@ class NFCcardFedow():
 
         return serialized_card.validated_data
 
-    def create(self, cartes: list):
+    def create(self, cartes: list, generation: int = 1):
         """
-        Cree des cartes dans Fedow (POST /card/) avec l'API key de la place
-        Lespass SEULE (sans signature user). Possible grace a l'extension de
-        permission cote Fedow (HasKeyAndPlaceSignature : une place Lespass sans
-        cashless RSA est authentifiee par sa seule API key). Sert aux fixtures
-        de dev (cartes du simulateur NFC) — plus besoin de LaBoutik V1.
-        / Creates cards in Fedow (POST /card/) with the Lespass place API key
-        ONLY (no user signature), thanks to the Fedow permission extension.
-        Used for dev fixtures (NFC simulator cards) — no LaBoutik V1 needed.
+        Facade sur create_cards() : complete les cartes avec generation et is_primary.
+        / Facade over create_cards(): fills in generation and is_primary.
+
+        LOCALISATION : fedow_connect/fedow_api.py
+
+        Sert aux fixtures de dev (cartes du simulateur NFC), qui ne connaissent
+        que les trois identifiants d'une carte. Appelants :
+        Administration/management/commands/demo_data_v2.py et
+        tests/pytest/test_wallet_carte_fedow_integration.py.
+        / Used by dev fixtures which only know a card's three identifiers.
+
+        La generation vaut 1 par defaut. L'admin des cartes, lui, appelle
+        directement create_cards() avec la generation du Detail choisi : Fedow
+        cree un Origin par (place, generation), et se tromper de generation ferait
+        diverger les deux bases en silence.
+        / Generation defaults to 1. The card admin calls create_cards() directly
+        with the chosen Detail's generation: Fedow creates one Origin per
+        (place, generation), and a wrong generation would silently diverge the
+        two databases.
 
         :param cartes: liste de dicts {first_tag_id, qrcode_uuid, number_printed}
-        :return: reponse JSON de Fedow (nombre de cartes creees)
+        :param generation: numero de generation cote Fedow (defaut 1)
+        :return: True si les cartes sont creees.
         """
-        data = [
+        cartes_completes = [
             {
                 "first_tag_id": carte["first_tag_id"],
                 "qrcode_uuid": carte["qrcode_uuid"],
                 "number_printed": carte["number_printed"],
-                "generation": 1,
+                "generation": generation,
                 "is_primary": False,
             }
             for carte in cartes
         ]
-        response_create = _post(self.fedow_config, path='card', data=data)
-        if response_create.status_code == 409:
-            # Cartes deja presentes dans Fedow (re-flush Lespass sans flush
-            # Fedow) : idempotent, on ne bloque pas le seed.
-            # / Cards already present in Fedow (Lespass re-flush): idempotent.
-            logger.info("NFCcardFedow.create : cartes deja presentes (409).")
-            return response_create.text
-        if response_create.status_code not in (200, 201):
-            logger.error(
-                f"NFCcardFedow.create ERRORS : {response_create.status_code} "
-                f"{response_create.text[:300]}"
-            )
-            raise Exception(
-                f"NFCcardFedow.create ERRORS : {response_create.status_code}"
-            )
-        return response_create.json()
+        return self.create_cards(cartes_completes)
 
     def card_number_retrieve(self, card_number: str):
         response_qr = _get(self.fedow_config, path=f'card/{card_number}/card_number_retrieve')
@@ -916,27 +933,52 @@ class NFCcardFedow():
         tenant place API key (no user header). Fedow expects a LIST of cards and
         auto-creates the Origin from the signing place (one generation per request).
 
+        ATTENTION — le 409 de Fedow ne se declenche jamais. Fedow ne renvoie 409
+        que si l'erreur porte sur la cle 'uuid' (cf. Fedow fedow_core/views.py).
+        Or Card.uuid est la cle primaire : DRF la met en read_only, donc aucun
+        validateur d'unicite ne s'y applique. Un doublon reel porte sur
+        first_tag_id, qrcode_uuid ou number_printed, et produit un 400.
+        / WARNING — Fedow's 409 is dead code. It only fires when the error is on
+        the 'uuid' key, but Card.uuid is the primary key (read_only in DRF), so
+        it never carries a unique error. A real duplicate yields a 400.
+
         :param cards_data: liste de dict avec les cles first_tag_id,
             complete_tag_id_uuid, qrcode_uuid, number_printed, generation, is_primary.
-        :return: True si les cartes sont creees (201) ou existent deja (409).
+        :return: True si les cartes sont creees (201).
+        :raises Exception: message d'erreur de Fedow (400 = doublon ou donnee invalide).
         """
         # _post signe avec la cle de la place (apikey du lieu du tenant).
         # / _post signs with the place key (tenant place api key).
         response_creation = _post(self.fedow_config, path='card', data=cards_data)
 
-        # 201 = creees ; 409 = numero deja present chez Fedow (idempotent : on
-        # considere OK car la carte voulue existe bien).
-        # / 201 = created; 409 = number already exists (idempotent: the wanted
-        # card does exist, treated as success).
+        # 201 = creees. On garde 409 par prudence si Fedow corrige un jour sa vue.
+        # / 201 = created. 409 kept in case Fedow ever fixes its view.
         if response_creation.status_code in (201, 409):
             return True
 
+        # Le corps du 400 porte le detail utile. Fedow renvoie une liste (une
+        # entree par carte envoyee) de dicts {nom_du_champ: [messages]}. On en
+        # extrait les phrases pour que l'admin affiche un texte lisible plutot
+        # qu'un objet bytes.
+        # / The 400 body carries the useful detail: a list (one entry per card
+        # sent) of {field_name: [messages]} dicts. Extract the sentences so the
+        # admin shows readable text instead of a raw bytes object.
         logger.error(
             f"create_cards : {response_creation.status_code} {response_creation.content}"
         )
-        raise Exception(
-            f"create_cards : {response_creation.status_code} {response_creation.content}"
-        )
+
+        messages_d_erreur = []
+        try:
+            erreurs_par_carte = response_creation.json()
+            for erreurs_d_une_carte in erreurs_par_carte:
+                for messages_du_champ in erreurs_d_une_carte.values():
+                    messages_d_erreur.extend(messages_du_champ)
+        except Exception:
+            # Reponse non-JSON (500, page d'erreur nginx...) : on garde le texte.
+            # / Non-JSON response: keep the raw text.
+            messages_d_erreur = [response_creation.text[:200]]
+
+        raise Exception(" ".join(messages_d_erreur))
 
     def qr_retrieve(self, qrcode_uuid: uuid4):
         # On vérifie que l'uuid soit bien un uuid :
