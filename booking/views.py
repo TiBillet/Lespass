@@ -196,6 +196,7 @@ class BookingViewSet(viewsets.ViewSet):
 
     # ── Détail d'une ressource ───────────────────────────────────────────────
 
+    @action(detail=True, methods=['get'], url_path="resource", url_name="resource")
     def resource_page(self, request, pk=None):
         """
         Affiche le détail d'une ressource et la liste complète de ses créneaux.
@@ -220,6 +221,7 @@ class BookingViewSet(viewsets.ViewSet):
 
     # ── Formulaire et création de réservation ────────────────────────────────
 
+    @action(detail=True, methods=['get','post'], url_path="book", url_name="book")
     def book(self, request, pk=None):
         """
         GET  : affiche le formulaire de confirmation de réservation.
@@ -495,6 +497,7 @@ class BookingViewSet(viewsets.ViewSet):
 
     # ── Créneau indisponible ─────────────────────────────────────────────────
 
+    @action(detail=True, methods=['get'], url_path="slot-unavailable", url_name="slot-unavailable")
     def slot_unavailable(self, request, pk=None):
         """
         Affiche la page "créneau pris" après une modification concurrente.
@@ -524,6 +527,7 @@ class BookingViewSet(viewsets.ViewSet):
 
     # ── Confirmation d'annulation ────────────────────────────────────────────
 
+    @action(detail=True, methods=['get'], url_path="cancel", url_name="cancel")
     def cancel_confirm(self, request, booking_pk=None):
         """
         GET  : affiche la page de confirmation d'annulation.

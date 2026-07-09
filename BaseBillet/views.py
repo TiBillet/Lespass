@@ -2505,6 +2505,11 @@ class EventMVT(viewsets.ViewSet):
         # Le template choisit son message selon user.is_active : il doit refleter
         # l'etat reel utilise par TicketCreator.method_F pour decider d'envoyer
         # les billets immediatement (user actif) ou un mail de validation (user inactif).
+
+        if validator.reservation.user_commande.is_active:
+            messages.success(request, _("Réservation validée ! Vous pouvez accéder à vos billets depuis cette page."))
+            return HttpResponseClientRedirect(reverse("my_account-my-reservations"))
+
         return render(request, "reunion/views/event/reservation_ok.html", context={
             "user": validator.reservation.user_commande,
         })

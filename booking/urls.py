@@ -8,19 +8,15 @@ L'URL de base est 'booking/' (définie dans TiBillet/urls_tenants.py).
 / Base URL is 'booking/' (defined in TiBillet/urls_tenants.py).
 """
 from django.urls import path
-
+from django.urls import path
+from rest_framework.routers import DefaultRouter
 from .views import BookingViewSet
 
-list_view            = BookingViewSet.as_view({'get': 'list'})
-resource_view        = BookingViewSet.as_view({'get': 'resource_page'})
-book_view            = BookingViewSet.as_view({'get': 'book', 'post': 'book'})
+router = DefaultRouter()
+router.register(r"", BookingViewSet, basename="booking") # Booking add from
+
+
 slot_unavailable_view = BookingViewSet.as_view({'get': 'slot_unavailable'})
 cancel_view          = BookingViewSet.as_view({'get': 'cancel_confirm', 'post': 'cancel_confirm'})
 
-urlpatterns = [
-    path('',                           list_view,             name='booking-list'),
-    path('resource/<int:pk>/',         resource_view,         name='booking-resource'),
-    path('<int:pk>/book/',             book_view,             name='booking-book'),
-    path('<int:pk>/slot-unavailable/', slot_unavailable_view, name='booking-slot-unavailable'),
-    path('cancel/<int:booking_pk>/',   cancel_view,           name='booking-cancel'),
-]
+urlpatterns = [] + router.urls
