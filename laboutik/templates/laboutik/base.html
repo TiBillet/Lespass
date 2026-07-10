@@ -40,10 +40,10 @@
     <!-- https://github.com/MikeMcl/big.js/tree/main -->
     <script src="{% static 'js/big.js' %}"></script>
     <script src="{% static 'js/socket.io.min.js' %}"></script>
+		<!-- common functions -->
+    <script src="{% static 'js/tibilletUtils.js' %}"></script>
     <!-- passing django values to javascript - ex : state.demo.active -->
     <script src="{% static 'js/nfc.js' %}"></script>
-    <!-- common functions -->
-    <script src="{% static 'js/tibilletUtils.js' %}"></script>
   </head>
   <!-- <body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-on::before-request="spinnerRequestOn()" hx-on::after-request="spinnerRequestOff()" style="background-color:#000000;"> -->
   <body id="contenu"
