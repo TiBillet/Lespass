@@ -131,7 +131,9 @@ FLUX :
       {% endif %}
       {# Retour empile sous les boutons paiement (meme largeur, suite logique) #}
       {# / Return stacked under payment buttons (same width, logical sequence) #}
-      <c-bt.return />
+      <!-- <c-bt.return /> -->
+      <!-- action = change post url to laboutik/paiement/moyens_paiement -->
+      <c-bt.return {% if action %} action="{{ action }}" {% endif %}/>
     </div>
     <script>
     /**

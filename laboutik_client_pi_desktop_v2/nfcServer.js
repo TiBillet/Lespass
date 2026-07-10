@@ -258,7 +258,7 @@ try {
   })
 
   // on prod
-  //startBrowser(`http://${env.HOST}:${env.PORT}/`)
+  startBrowser(`http://${env.HOST}:${env.PORT}/`)
 
 } catch (error) {
   console.log('error', error)

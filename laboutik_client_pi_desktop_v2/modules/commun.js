@@ -60,13 +60,15 @@ export function writeJson(path, data) {
 
 export function startBrowser(url) {
   // desktop
-  const start = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'
-  exec(start + ' ' + url, (error, stdout, stderr) => {
-    console.log(stdout)
-    if (error) {
-      throw error;
-    }
-  })
+  if (env.type_app === 'desktop') {
+    const start = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'
+    exec(start + ' ' + url, (error, stdout, stderr) => {
+      console.log(stdout)
+      if (error) {
+        throw error;
+      }
+    })
+  }
 }
 
 /**

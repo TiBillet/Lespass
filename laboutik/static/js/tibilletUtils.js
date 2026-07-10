@@ -153,6 +153,19 @@ function hideAndEmptyElement(selector) {
 }
 
 /**
+ * Change bill url to laboutik/paiement/moyens_paiement
+ * for init POST url from form wiht id="addition-form".
+ */
+function initUrlAddition() {
+	sendEventOrganizer({
+		src: { file: 'hx_messages.html', method: 'changeUrlAddition' },
+		msg: 'additionManageForm',
+		data: { actionType: 'postUrl', selector: null, value: '/laboutik/paiement/moyens_paiement/' }
+	})
+}
+
+
+/**
  * Envoyer des datas à un élément html par 'event'
  * @param {object} data  - Données(disponibles dans event.detail) à passer au routeur d 'évènements
  */

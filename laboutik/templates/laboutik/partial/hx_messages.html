@@ -27,6 +27,7 @@ Styles : .alerte-messages dans laboutik/static/css/overlay.css
          aria-hidden="true"></i>
     {% endif %}
     <p class="alerte-messages-texte" data-testid="alerte-messages-texte">{{ msg_content }}</p>
-    <c-bt.return />
+    <!-- action = change post url to laboutik/paiement/moyens_paiement -->
+    <c-bt.return {% if action %} action="{{ action }}" {% endif %}/>
   </div>
 </div>
