@@ -100,6 +100,33 @@ def test_admin_humain_peut_ouvrir_le_kiosk(tenant):
 
 
 @pytest.mark.django_db
+def test_admin_refuse_sur_le_kiosk_hors_demo_debug(tenant, settings):
+    """Hors demo/debug, un admin ne peut PLUS ouvrir /kiosk/ par navigateur.
+    En production, une borne kiosk est un appareil physique : seule une vraie
+    borne appairee y accede.
+    / Outside demo/debug, an admin can no longer open /kiosk/ by browser."""
+    settings.DEBUG = False
+    settings.DEMO = False
+    with tenant_context(tenant):
+        admin = HumanUser.objects.create(
+            email=f"admin_{uuid.uuid4().hex[:8]}@example.com",
+            username=f"admin_{uuid.uuid4().hex[:8]}@example.com",
+        )
+        admin.client_admin.add(tenant)
+    try:
+        client = _client()
+        client.force_login(admin)
+        response = client.get("/kiosk/")
+        # 403 (permission refusee) et non 200. Le garde terminal peut aussi
+        # rediriger : on verifie surtout que ce n'est PAS un acces 200.
+        # / 403, not 200. What matters is it is NOT a 200 access.
+        assert response.status_code != 200
+    finally:
+        with tenant_context(tenant):
+            admin.delete()
+
+
+@pytest.mark.django_db
 def test_humain_non_bloque_par_le_garde_terminal(tenant):
     """Un humain n'est PAS renvoye vers /kiosk/ par le garde terminal sur /my_account/.
     / A human is NOT bounced to /kiosk/ by the terminal guard on /my_account/.
