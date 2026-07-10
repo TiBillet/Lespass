@@ -1,97 +1,108 @@
 {% load i18n %}
-{# Contenu de la page de selection du montant. Partial : rendu soit dans #}
-{# select_amount.html (page complete), soit directement par les vues en cas #}
-{# d'erreur (swap HTMX innerHTML de #tb-kiosque, cf. sweet_scan_button.html). #}
-{# / Amount selection page content. Partial: rendered either inside #}
-{# select_amount.html (full page) or directly by the views on error #}
-{# (HTMX innerHTML swap of #tb-kiosque, see sweet_scan_button.html). #}
+{% comment %}
+ECRAN 1 — CHOIX DU MONTANT DE LA RECHARGE
+/ Screen 1 — Refill amount selection
 
-<script>
-    // Remise a zero du montant quand ce partial est re-rendu par HTMX (le span
-    // repart a 0 mais la variable JS de main.js garderait l'ancienne valeur).
-    // Sur le premier chargement de page, main.js n'a pas encore tourne : on ne fait rien.
-    // / Reset the amount when this partial is re-rendered by HTMX (the span
-    // restarts at 0 but the JS variable from main.js would keep the old value).
-    // On first page load main.js has not run yet: do nothing.
-    if (typeof totalAmount !== "undefined") {
-        totalAmount = 0;
-    }
-</script>
+LOCALISATION : kiosk/templates/kiosk/select_amount_content.html
 
-<div class="container">
-    <header class="header-space position-relative">
-        <button id="toggleDarkModeBtn" class="btn btn-toggle-dark-mode" data-testid="kiosk-dark-mode-toggle"
-                onclick="toggleDarkMode()" aria-label="{% translate 'Activer le mode nuit' %}">{% translate "Mode Nuit" %}
-        </button>
-    </header>
-    <main class="main-center">
-        <div class="row justify-content-center">
-            <div class="col-12 col-md-10 col-lg-8">
-                <section class="card mb-4">
-                    <div class="card-body">
-                        <h1 class="instruction-text text-center">
-                            {% translate "Sélectionnez le montant de la recharge souhaitée." %}<br/>
-                            {% translate "Vous pouvez cliquer plusieurs fois sur les boutons pour additionner le montant. :)" %}
-                        </h1>
-                    </div>
-                </section>
+Partial : rendu soit dans select_amount.html (page complete), soit seul par les
+vues en cas d'erreur (swap HTMX innerHTML de #tb-kiosque, cf. views.py). Il ne
+declare donc JAMAIS l'id #tb-kiosque lui-meme.
+/ Partial: rendered either inside select_amount.html (full page) or alone by the
+views on error (HTMX innerHTML swap of #tb-kiosque). It therefore NEVER declares
+the #tb-kiosque id itself.
 
-                <section class="amount-selection" itemscope itemtype="https://schema.org/PayAction">
-                    <div class="row g-3 mb-4">
-                        <div class="col-6 col-md-4">
-                            <button class="btn btn-amount" id="amount1" data-testid="kiosk-amount-1"
-                                    onclick="selectAmount(1)"
-                                    aria-label="{% translate 'Ajouter 1 euro' %}" itemprop="price">
-                                + 1€
-                            </button>
-                        </div>
-                        <div class="col-6 col-md-4">
-                            <button class="btn btn-amount" id="amount5" data-testid="kiosk-amount-5"
-                                    onclick="selectAmount(5)"
-                                    aria-label="{% translate 'Ajouter 5 euros' %}" itemprop="price">
-                                + 5€
-                            </button>
-                        </div>
-                        <div class="col-6 col-md-4">
-                            <button class="btn btn-amount" id="amount10" data-testid="kiosk-amount-10"
-                                    onclick="selectAmount(10)"
-                                    aria-label="{% translate 'Ajouter 10 euros' %}" itemprop="price">
-                                + 10€
-                            </button>
-                        </div>
-                        <div class="col-6 col-md-4">
-                            <button class="btn btn-amount" id="amount20" data-testid="kiosk-amount-20"
-                                    onclick="selectAmount(20)"
-                                    aria-label="{% translate 'Ajouter 20 euros' %}" itemprop="price">
-                                + 20€
-                            </button>
-                        </div>
-                        <div class="col-6 col-md-4">
-                            <button class="btn btn-amount" id="amount50" data-testid="kiosk-amount-50"
-                                    onclick="selectAmount(50)"
-                                    aria-label="{% translate 'Ajouter 50 euros' %}" itemprop="price">
-                                + 50€
-                            </button>
-                        </div>
-                    </div>
+MISE EN PAGE :
+Deux zones. A gauche l'afficheur du montant, a droite le pave de touches et la
+validation. En portrait telephone les deux zones s'empilent et la barre d'action
+se colle au bas de l'ecran (zone du pouce). La bascule tient a une seule media
+query sur le ratio de l'ecran (cf. kiosk.css section 2).
+/ Two zones. Amount readout left, keypad + validation right. In phone portrait
+they stack and the action bar sticks to the bottom (thumb zone).
 
-                    {% if error_message %}
-                        <div class="alert alert-danger erreur-input" role="alert" aria-live="assertive"
-                             data-testid="kiosk-error-message">{{ error_message }}</div>
-                    {% endif %}
+FLUX :
+1. Appui sur une touche -> selectAmount(n) (main.js) -> met a jour totalAmount
+   et TOUS les [data-total-display] (l'afficheur ET le bouton Valider).
+2. Appui sur Valider -> readNfc() (sweet_scan_button.html) -> modal de scan.
+3. Scan -> evenement 'nfcResult' -> htmx.trigger('confirmed') -> POST refill.
+{% endcomment %}
 
-                    <div class="d-flex justify-content-center mb-3">
-                        {% include "kiosk/sweet_scan_button.html" %}
-                    </div>
+<div class="kiosk-screen" data-testid="kiosk-amount-screen">
 
-                    <div class="d-flex justify-content-center">
-                        <button class="btn btn-clear" data-testid="kiosk-clear-button" onclick="clearAmount()"
-                                aria-label="{% translate 'Effacer le montant' %}">
-                            {% translate "Effacer" %}
-                        </button>
-                    </div>
-                </section>
-            </div>
+{% include "kiosk/partial/topbar.html" with titre_ecran=_("Recharge") %}
+
+<div class="kiosk-split">
+
+    {# ------------------------------------------------------------------- #}
+    {# Zone gauche : l'afficheur. C'est le seul element lisible a un metre. #}
+    {# / Left zone: the readout. The only element legible from a metre away. #}
+    {# ------------------------------------------------------------------- #}
+    <section class="kiosk-readout" data-total-empty="true" data-testid="kiosk-readout">
+        <h1 class="readout-label">{% translate "Montant à recharger" %}</h1>
+
+        {# aria-live : le lecteur d'ecran annonce le nouveau total a chaque appui. #}
+        {# / aria-live: the screen reader announces the new total on each press. #}
+        <p class="readout-value" aria-live="polite" data-testid="kiosk-total">
+            <span data-total-display id="totalAmount">0</span><span class="readout-unit" aria-hidden="true">€</span>
+            <span class="visually-hidden">{% translate "euros" %}</span>
+        </p>
+
+        <hr class="kiosk-rule" aria-hidden="true"/>
+
+        <p class="readout-hint">
+            {% translate "Sélectionnez le montant de la recharge souhaitée." %}
+            {% translate "Vous pouvez appuyer plusieurs fois sur une touche pour additionner." %}
+        </p>
+
+        {# Zone d'erreur toujours presente dans le DOM, pour qu'un lecteur d'ecran #}
+        {# annonce l'erreur au swap HTMX plutot que de decouvrir un noeud surgi. #}
+        {# / Error region always present in the DOM, so a screen reader announces #}
+        {# the error on HTMX swap rather than discovering a node out of nowhere. #}
+        <div role="alert" aria-live="assertive">
+            {% if error_message %}
+                <p class="kiosk-alert" data-testid="kiosk-error-message">{{ error_message }}</p>
+            {% endif %}
         </div>
-    </main>
+    </section>
+
+    {# ------------------------------------------------------------------- #}
+    {# Zone droite : le pave et la validation.                              #}
+    {# / Right zone: the keypad and the validation.                         #}
+    {# ------------------------------------------------------------------- #}
+    <section class="kiosk-console">
+
+        {# Six touches : cinq montants + Effacer. Le pave est plein — plus de #}
+        {# cinquieme bouton orphelin sur une ligne de trois, et « Effacer » #}
+        {# cesse d'etre un bouton rouge flottant : c'est une touche de fonction. #}
+        {# / Six keys: five denominations + Clear. The keypad is full — no orphan #}
+        {# fifth button on a row of three, and Clear stops being a floating red #}
+        {# button: it is a function key. #}
+        <div class="keypad" role="group" aria-label="{% translate 'Choisir un montant' %}">
+            <button type="button" class="key" id="amount1" data-testid="kiosk-amount-1"
+                    onclick="selectAmount(1)" aria-label="{% translate 'Ajouter 1 euro' %}">+ 1 €
+            </button>
+            <button type="button" class="key" id="amount5" data-testid="kiosk-amount-5"
+                    onclick="selectAmount(5)" aria-label="{% translate 'Ajouter 5 euros' %}">+ 5 €
+            </button>
+            <button type="button" class="key" id="amount10" data-testid="kiosk-amount-10"
+                    onclick="selectAmount(10)" aria-label="{% translate 'Ajouter 10 euros' %}">+ 10 €
+            </button>
+            <button type="button" class="key" id="amount20" data-testid="kiosk-amount-20"
+                    onclick="selectAmount(20)" aria-label="{% translate 'Ajouter 20 euros' %}">+ 20 €
+            </button>
+            <button type="button" class="key" id="amount50" data-testid="kiosk-amount-50"
+                    onclick="selectAmount(50)" aria-label="{% translate 'Ajouter 50 euros' %}">+ 50 €
+            </button>
+            <button type="button" class="key key--clear" data-testid="kiosk-clear-button"
+                    onclick="clearAmount()" aria-label="{% translate 'Effacer le montant' %}">
+                {% translate "Effacer" %}
+            </button>
+        </div>
+
+        <div class="actionbar">
+            {% include "kiosk/sweet_scan_button.html" %}
+        </div>
+    </section>
 </div>
+
+</div>{# /.kiosk-screen #}

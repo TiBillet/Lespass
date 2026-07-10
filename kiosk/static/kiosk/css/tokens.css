@@ -1,0 +1,222 @@
+/* Hallmark · app-scope: kiosk-terminal · genre: utilitaire (base editorial)
+ * theme: custom « Signalétique » · paper-band: light + dark · display-style: humanist-sans (Luciole)
+ * accent-hue: warm (ambre ~68°) · enrichment: Tier B (SVG dessinés à la main)
+ * pre-emit critique: P5 H5 E4 S5 R5 V4
+ *
+ * LOCALISATION : kiosk/static/kiosk/css/tokens.css
+ *
+ * Jetons de design de la borne. Ce fichier ne contient QUE des variables et les
+ * declarations @font-face. Toute la mise en page vit dans kiosk.css, qui ne doit
+ * jamais ecrire une couleur ou une police en dur : toujours var(--...).
+ * / Kiosk design tokens. This file holds ONLY variables and @font-face rules.
+ * All layout lives in kiosk.css, which must never hard-code a colour or a font.
+ *
+ * ORDRE DE CHARGEMENT : tokens.css AVANT kiosk.css (cf. GUIDELINES.md, cascade).
+ * / LOAD ORDER: tokens.css BEFORE kiosk.css (see GUIDELINES.md, cascade).
+ */
+
+/* ------------------------------------------------------------------------- */
+/* Polices — deja presentes dans le depot (BaseBillet/static/commun/font/).   */
+/* On les redeclare ici plutot que de charger tibillet.css entier : la borne  */
+/* n'a besoin ni de la navbar ni de la police manuscrite du site public.      */
+/* / Fonts already shipped in the repo. Redeclared here instead of loading    */
+/* the whole tibillet.css: the kiosk needs neither the navbar nor the site's  */
+/* handwriting face.                                                          */
+/*                                                                            */
+/* Luciole est dessinee pour la basse vision (zero barre, un a empattement,   */
+/* six et neuf dissymetriques). Pour une borne publique lue de loin, de nuit, */
+/* c'est le bon choix — et il est deja paye.                                  */
+/* / Luciole is designed for low vision. The right face for a public kiosk.   */
+/* ------------------------------------------------------------------------- */
+
+@font-face {
+    font-family: 'Luciole';
+    src: url('../../commun/font/luciole/luciole.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Luciole';
+    src: url('../../commun/font/luciole/luciole-bold.woff2') format('woff2');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Staatliches';
+    src: url('../../commun/font/staatliches/staatliches.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+:root {
+    color-scheme: light;
+
+    /* --------------------------------------------------------------------- */
+    /* Palette brute — OKLCH. Ne jamais utiliser ces jetons directement dans  */
+    /* kiosk.css : passer par les jetons semantiques plus bas.                */
+    /* / Raw palette. Never use these directly; go through the semantic ones. */
+    /* --------------------------------------------------------------------- */
+
+    /* Encre : un noir froid, legerement bleu. / Ink: a cool, slightly blue black. */
+    --ink-900: oklch(17% 0.014 258);
+    --ink-800: oklch(23% 0.015 258);
+    --ink-700: oklch(31% 0.013 258);
+    --ink-500: oklch(52% 0.010 258);
+
+    /* Papier : un blanc casse chaud, pas le gris bleute de Bootstrap.        */
+    /* / Paper: a warm off-white, not Bootstrap's bluish grey.                */
+    --paper-000: oklch(99.2% 0.003 85);
+    --paper-100: oklch(96.6% 0.006 85);
+    --paper-300: oklch(90.0% 0.008 85);
+    --paper-500: oklch(78.0% 0.009 85);
+
+    /* Ambre : la couleur des afficheurs d'automates. Lisible sur clair ET    */
+    /* sur sombre, ce qu'aucun bleu ne fait bien.                             */
+    /* / Amber: the colour of vending-machine displays. Legible on both.      */
+    --amber-400: oklch(80.0% 0.130 74);
+    --amber-500: oklch(74.0% 0.155 68);
+    --amber-600: oklch(66.0% 0.150 62);
+    --amber-ink: oklch(24.0% 0.055 60);
+
+    /* Etats pleine page. Pin et brique, pas le vert/rouge de Bootstrap.      */
+    /* / Full-page states. Pine and brick, not Bootstrap's green/red.         */
+    --pine-500: oklch(53% 0.115 156);
+    --pine-700: oklch(36% 0.090 156);
+    --brick-500: oklch(52% 0.160 30);
+    --brick-700: oklch(35% 0.125 30);
+
+    /* Bleu de focus : volontairement distinct de l'accent ambre, pour que    */
+    /* l'anneau de focus ne se confonde jamais avec un bouton actif.          */
+    /* / Focus blue: deliberately distinct from the amber accent.             */
+    --focus-500: oklch(58% 0.190 250);
+
+    /* --------------------------------------------------------------------- */
+    /* Jetons semantiques — c'est ce que kiosk.css consomme.                  */
+    /* / Semantic tokens — this is what kiosk.css consumes.                   */
+    /* --------------------------------------------------------------------- */
+    --color-bg: var(--paper-100);
+    --color-surface: var(--paper-000);
+    --color-rule: var(--paper-300);
+    --color-text: var(--ink-900);
+    --color-text-soft: var(--ink-500);
+
+    --color-key-face: var(--paper-000);
+    --color-key-press: var(--paper-300);
+
+    --color-accent: var(--amber-500);
+    --color-accent-press: var(--amber-600);
+    --color-on-accent: var(--amber-ink);
+
+    --color-go: var(--pine-500);
+    --color-on-go: var(--paper-000);
+    --color-stop: var(--brick-500);
+    --color-on-stop: var(--paper-000);
+
+    --color-focus: var(--focus-500);
+    --color-veil: oklch(17% 0.014 258 / 0.78);
+
+    /* Piste du spinner. Le voile est sombre dans les deux themes : ce jeton   */
+    /* ne bascule donc pas. / Spinner track. The veil is dark in both themes,  */
+    /* so this token does not flip.                                            */
+    --color-ring-track: oklch(100% 0 0 / 0.18);
+
+    /* --------------------------------------------------------------------- */
+    /* Typographie                                                           */
+    /* --------------------------------------------------------------------- */
+    --font-ui: 'Luciole', system-ui, -apple-system, sans-serif;
+    --font-display: 'Staatliches', 'Luciole', system-ui, sans-serif;
+
+    /* Les tailles sont calees sur vmin, pas sur vw : vmin suit la dimension  */
+    /* CONTRAINTE de l'ecran. En portrait telephone c'est la largeur ; en     */
+    /* paysage kiosque c'est la hauteur. Un seul clamp() couvre donc          */
+    /* 375x667, 1280x720, 1024x600 et 1920x1080 sans media query de taille.   */
+    /* / Sizes keyed on vmin, not vw: vmin follows the CONSTRAINED dimension  */
+    /* (width in phone portrait, height in kiosk landscape). One clamp()      */
+    /* covers every target resolution without a size media query.            */
+    --text-readout: clamp(3.5rem, 14vmin, 9rem);
+    --text-state: clamp(2.75rem, 11vmin, 6.5rem);
+    /* Le plancher tient compte de la touche la plus large (« + 50 € ») dans   */
+    /* une colonne de pave a 320 px de large. / The floor accounts for the      */
+    /* widest key (« + 50 € ») in a keypad column on a 320px-wide screen.       */
+    --text-key: clamp(1.25rem, 4.2vmin, 2.75rem);
+    --text-action: clamp(1.25rem, 3.4vmin, 2.25rem);
+    --text-body: clamp(1rem, 2.2vmin, 1.5rem);
+    --text-label: clamp(0.8125rem, 1.6vmin, 1.125rem);
+
+    /* --------------------------------------------------------------------- */
+    /* Espacement — echelle 4 pt                                              */
+    /* --------------------------------------------------------------------- */
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.5rem;
+    --space-6: 2rem;
+    --space-7: 2.5rem;
+    --space-8: 3rem;
+    --space-10: 4rem;
+
+    /* --------------------------------------------------------------------- */
+    /* Traits et rayons — volontairement minces. Aucune ombre nulle part :    */
+    /* la profondeur vient des aplats de couleur, pas du flou.                */
+    /* / Rules and radii, deliberately restrained. No shadow anywhere: depth  */
+    /* comes from colour fields, not from blur.                               */
+    /* --------------------------------------------------------------------- */
+    --rule-hair: 1px;
+    --rule-thick: 3px;
+    --radius-key: 6px;
+    --radius-field: 3px;
+
+    /* Surface tactile minimale. 44 px est le plancher du web ; une borne de  */
+    /* festival se manipule debout, parfois avec des gants. On vise 64 px.    */
+    /* / Minimum touch target. 44px is the web floor; a festival kiosk is     */
+    /* used standing, sometimes with gloves. We aim for 64px.                 */
+    --touch-min: 64px;
+
+    /* --------------------------------------------------------------------- */
+    /* Mouvement — trois primitives, pas une de plus.                         */
+    /* --------------------------------------------------------------------- */
+    --dur-press: 90ms;
+    --dur-fade: 160ms;
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* ------------------------------------------------------------------------- */
+/* Theme sombre. Pilote par data-theme sur <html>, pose par main.js et par le */
+/* script d'amorcage de base.html (avant le premier rendu, pour eviter le     */
+/* flash blanc). Aucun style inline en JS : le CSS fait tout.                 */
+/* / Dark theme driven by data-theme on <html>, set by main.js and the boot   */
+/* script in base.html (before first paint, to avoid the white flash).        */
+/* No inline JS styles: the CSS does everything.                              */
+/* ------------------------------------------------------------------------- */
+:root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --color-bg: var(--ink-900);
+    --color-surface: var(--ink-800);
+    --color-rule: var(--ink-700);
+    --color-text: var(--paper-100);
+    --color-text-soft: var(--paper-500);
+
+    --color-key-face: var(--ink-800);
+    --color-key-press: var(--ink-700);
+
+    /* Sur fond sombre, l'ambre doit monter en clarte pour garder son         */
+    /* contraste. / On a dark field, amber must gain lightness.               */
+    --color-accent: var(--amber-400);
+    --color-accent-press: var(--amber-500);
+
+    /* Les aplats d'etat s'assombrissent : un vert vif plein ecran, de nuit,  */
+    /* eblouit. / State fields darken: a vivid full-screen green blinds at    */
+    /* night.                                                                 */
+    --color-go: var(--pine-700);
+    --color-stop: var(--brick-700);
+
+    --color-veil: oklch(8% 0.010 258 / 0.85);
+}

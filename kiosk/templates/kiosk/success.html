@@ -1,40 +1,4 @@
-{% load i18n %}
-<div id="tb-kiosque" class="success-page" hx-swap-oob="true" data-testid="kiosk-success-page">
-    <div class="container-fluid success-container">
-        <div class="row justify-content-center align-items-center h-100">
-            <div class="col-12 col-md-8 col-lg-6 text-center">
-                <h1 class="success-title">{% translate "Réussite" %}</h1>
-                <div class="timer-container" aria-live="polite">
-                    <p>{% translate "Redirection dans" %} <span id="countdown">15</span> {% translate "secondes" %}</p>
-                </div>
-                <div class="button-container">
-                    <a href="/kiosk/" class="btn btn-return success-return" data-testid="kiosk-return-home">
-                        {% translate "Retour à l'accueil" %}
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-    <script>
-        // IIFE : ce template peut etre swappe plusieurs fois par le websocket
-        // (rejeu d'etat a la reconnexion) ; des `let` globaux redeclares feraient
-        // un SyntaxError. / IIFE: this template can be swapped several times by
-        // the websocket (state replay on reconnect); re-declared global `let`
-        // would raise a SyntaxError.
-        (function () {
-            let seconds = 15;
-            const countdownElement = document.getElementById('countdown');
-
-            // Decompte d'une seconde / Update countdown every second
-            const timer = setInterval(function () {
-                seconds--;
-                countdownElement.textContent = seconds;
-
-                if (seconds <= 0) {
-                    clearInterval(timer);
-                    window.location.href = "/kiosk/";
-                }
-            }, 1000);
-        })();
-    </script>
-</div>
+{# Ecran de reussite. Pousse par le websocket (wsocket/consumers.py) avec un #}
+{# contexte VIDE : tout est dans le partial, qui ne depend d'aucune requete. #}
+{# / Success screen. Pushed by the websocket with an EMPTY context. #}
+{% include "kiosk/partial/state_screen.html" with est_succes=True %}
