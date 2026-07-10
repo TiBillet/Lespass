@@ -1,24 +1,96 @@
 {% load i18n %}
-<button class="btn btn-validate" id="scan_button" data-testid="kiosk-validate-button"
+{% comment %}
+BOUTON VALIDER — DECLENCHE LE SCAN NFC PUIS LA RECHARGE
+/ Validate button — triggers the NFC scan then the refill
+
+LOCALISATION : kiosk/templates/kiosk/sweet_scan_button.html
+
+Inclus par select_amount_content.html, dans .actionbar.
+
+FLUX DU CLIC SUR VALIDER :
+1. onClick -> readNfc() ouvre le modal SweetAlert2 et lance rfid.startLecture().
+2. La carte est posee -> nfc.js emet l'evenement 'nfcResult' sur document.body.
+3. listenTagId ecrit le tag dans data-tag-id, ferme le modal, puis
+   htmx.trigger(bouton, 'confirmed').
+4. hx-trigger="confirmed" declenche le POST /kiosk/refill_with_wisepos/.
+5. La reponse (waiting_credit_card_terminal.html) est swappee dans #tb-kiosque.
+
+COMMUNICATION :
+Recoit : 'nfcResult' depuis kiosk/static/kiosk/js/nfc.js
+Appelle : clearAmount() depuis kiosk/static/kiosk/js/main.js
+Lit     : la globale totalAmount (main.js), via hx-vals
+
+/ Click flow: readNfc() opens the SweetAlert2 modal and starts the reader; the
+'nfcResult' event carries the tag id, closes the modal and fires the 'confirmed'
+HTMX trigger, which POSTs the refill.
+{% endcomment %}
+<button type="button"
+        class="btn-validate"
+        id="scan_button"
+        data-testid="kiosk-validate-button"
         hx-post="/kiosk/refill_with_wisepos/"
-        hx-vals='js:{"totalAmount": totalAmount, "tag_id": document.querySelector("#scan_button").getAttribute("tag-id")}'
-        hx-target="#tb-kiosque" hx-swap="innerHTML" hx-trigger="confirmed" onClick="readNfc()"
-        aria-label="{% translate 'Valider et scanner votre carte' %}" itemprop="potentialAction" itemscope itemtype="https://schema.org/PayAction">
-        {% translate "Valider" %} <span id="totalAmount" itemprop="price">0</span><span itemprop="priceCurrency" content="EUR">€</span>
+        hx-vals='js:{"totalAmount": totalAmount, "tag_id": document.querySelector("#scan_button").dataset.tagId}'
+        hx-target="#tb-kiosque"
+        hx-swap="innerHTML"
+        hx-trigger="confirmed"
+        onClick="readNfc()"
+        aria-disabled="true"
+        aria-label="{% translate 'Valider et scanner votre carte' %}">
+
+    <span class="btn-validate__label">{% translate "Valider" %}</span>
+
+    <span class="btn-validate__amount">
+        <span data-total-display>0</span>&nbsp;€
+    </span>
+
+    {# Fleche dessinee, pas un emoji : un emoji change de dessin sur chaque #}
+    {# appareil et ne suit pas la couleur du texte. #}
+    {# / Drawn arrow, not an emoji: emoji render differently per device and do #}
+    {# not follow the text colour. #}
+    <svg class="btn-validate__arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 12h15M13 6l6 6-6 6"/>
+    </svg>
 </button>
 
 
 <script>
-    function readNfc(event) {
-        // Store a reference to the button for later use
-        const validateButton = document.querySelector('#scan_button');
+    // Trois chevrons montants, dessines a la main. Ils remplacent la file
+    // d'emoji fleche-haut : le lecteur NFC est physiquement au-dessus de
+    // l'ecran, et un emoji ne s'echelonne pas avec la taille du modal.
+    // L'ordre du DOM va du BAS vers le HAUT : le delai d'animation croissant
+    // (cf. kiosk.css section 10) donne ainsi une impression de montee.
+    // / Three hand-drawn rising chevrons replacing the up-arrow emoji queue.
+    // DOM order runs bottom-to-top so the increasing animation delay reads as a rise.
+    const chevronsDeScan =
+        '<svg class="scan-arrows" viewBox="0 0 32 44" fill="none" stroke="currentColor"' +
+        ' stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<path class="scan-arrows__chevron" d="M6 40 L16 28 L26 40"/>' +
+        '<path class="scan-arrows__chevron" d="M6 30 L16 18 L26 30"/>' +
+        '<path class="scan-arrows__chevron" d="M6 20 L16 8 L26 20"/>' +
+        '</svg>';
 
-        function listenTagId(event) {
-            console.log('-> event.detail =', event.detail)
-            validateButton.setAttribute('tag-id', event.detail)
+    /**
+     * Ouvre le modal de scan et lance la lecture de la carte NFC.
+     * / Opens the scan modal and starts reading the NFC card.
+     *
+     * LOCALISATION : kiosk/templates/kiosk/sweet_scan_button.html
+     */
+    function readNfc() {
+        const boutonValider = document.querySelector('#scan_button');
 
-            Swal.clickConfirm()
-            htmx.trigger(validateButton, 'confirmed');
+        // Garde : sans montant, il n'y a rien a payer. On ne montre pas un modal
+        // vide, on ne fait rien — le bouton est deja marque aria-disabled.
+        // / Guard: with no amount there is nothing to pay. Do nothing.
+        if (totalAmount <= 0) {
+            return;
+        }
+
+        function listenTagId(evenementNfc) {
+            boutonValider.dataset.tagId = evenementNfc.detail;
+
+            Swal.clickConfirm();
+            htmx.trigger(boutonValider, 'confirmed');
         }
 
         // { once: true } : le listener s'auto-supprime apres le premier scan.
@@ -27,54 +99,47 @@
         // / { once: true }: the listener removes itself after the first scan.
         // Without it, every readNfc call (cancelled then retried scan) stacked one
         // more listener -> N 'confirmed' triggers -> N refill POSTs (double TPE payment).
-        document.body.addEventListener('nfcResult', listenTagId, { once: true })
+        document.body.addEventListener('nfcResult', listenTagId, {once: true});
 
-        console.log('-> readNfc totalAmount =', totalAmount, '  --  DEMO =', window.DEMO)
-        if (totalAmount > 0) {
-            Swal.fire({
-                title: "{% translate 'Vous avez sélectionné' %} " + totalAmount + "€",
-                html: "<p>{% translate 'Merci de scanner votre carte TiBillet sur le lecteur Sunmi.' %}</p><p aria-hidden='true'>⬆️⬆️⬆️⬆️⬆️⬆️⬆️</p><p>{% translate 'Le lecteur de carte est juste au dessus de cet écran' %}</p>",
-                showCancelButton: true,
-                cancelButtonText: "{% translate 'Annuler' %}",
+        Swal.fire({
+            title: "{% translate 'Vous avez sélectionné' %} " + totalAmount + " €",
+            html: "<p>{% translate 'Merci de scanner votre carte TiBillet sur le lecteur Sunmi.' %}</p>"
+                + chevronsDeScan
+                + "<p>{% translate 'Le lecteur de carte est juste au dessus de cet écran' %}</p>",
+            showCancelButton: true,
+            cancelButtonText: "{% translate 'Annuler' %}",
 
-                timer: 30000,
-                timerProgressBar: true,
-                // after the popup has been shown on screen
-                didOpen: () => {
-                    Swal.showLoading();
-                    // La fenêtre vient de s'ouvrir, on lance la lecture RFID
-                    rfid.startLecture();
-                },
-                // when the popup closes by user
-                willClose: () => {
-                    // La fenêtre se ferme (multiples raisons) : stop lecteur NFC + retrait
-                    // du listener s'il n'a pas ete consomme (annulation/timeout), pour ne pas
-                    // declencher un paiement sur un scan ulterieur.
-                    // / The popup closes (many reasons): stop the NFC reader + remove the
-                    // listener if unconsumed (cancel/timeout), so a later scan does not
-                    // trigger a payment.
-                    rfid.stopLecture();
-                    document.body.removeEventListener('nfcResult', listenTagId);
-                }
-            }).then((result) => {
-                // Read more about handling dismissals below
-                console.log('-> result.dismiss =', result.dismiss)
-                if (result.dismiss === Swal.DismissReason.timer) {
-                    clearAmount();
-                    console.log("I was closed by the timer");
-                } else if (result.dismiss === Swal.DismissReason.cancel) {
-                    clearAmount();
-                    console.log("I was closed by the cancel button");
-                } else if (result.dismiss === Swal.DismissReason.backdrop) {
-                    // Le simulateur DEMO (overlay cliquable, cf. rfid.simule()) couvre
-                    // maintenant tout l'ecran et gere lui-meme le tagId choisi via
-                    // l'evenement nfcResult : plus besoin de ce fallback backdrop.
-                    // / The DEMO simulator (clickable overlay, see rfid.simule()) now
-                    // covers the whole screen and handles the chosen tagId itself via
-                    // the nfcResult event: this backdrop fallback is no longer needed.
-                    console.log("I was closed on external click");
-                }
-            })
-        }
+            timer: 30000,
+            timerProgressBar: true,
+            // La fenetre vient de s'ouvrir : on lance la lecture RFID.
+            // showLoading() masque le bouton Confirmer et affiche le loader ;
+            // Swal.clickConfirm() reste le moyen de refermer le modal depuis
+            // listenTagId. / The popup has just opened: start the RFID reader.
+            didOpen: () => {
+                Swal.showLoading();
+                rfid.startLecture();
+            },
+            // La fenetre se ferme (multiples raisons) : stop lecteur NFC + retrait
+            // du listener s'il n'a pas ete consomme (annulation/timeout), pour ne pas
+            // declencher un paiement sur un scan ulterieur.
+            // / The popup closes (many reasons): stop the NFC reader + remove the
+            // listener if unconsumed (cancel/timeout), so a later scan does not
+            // trigger a payment.
+            willClose: () => {
+                rfid.stopLecture();
+                document.body.removeEventListener('nfcResult', listenTagId);
+            }
+        }).then((resultat) => {
+            // Fermeture par le minuteur ou par le bouton Annuler : on remet le
+            // montant a zero, la borne redevient disponible pour le suivant.
+            // / Closed by the timer or the cancel button: reset the amount so the
+            // kiosk is ready for the next person.
+            const fermeParMinuteur = resultat.dismiss === Swal.DismissReason.timer;
+            const fermeParAnnuler = resultat.dismiss === Swal.DismissReason.cancel;
+
+            if (fermeParMinuteur || fermeParAnnuler) {
+                clearAmount();
+            }
+        });
     }
 </script>

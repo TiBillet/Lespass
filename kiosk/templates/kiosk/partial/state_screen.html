@@ -1,0 +1,93 @@
+{% load i18n %}
+{% comment %}
+ECRAN 3 — ETAT FINAL (REUSSITE OU ANNULATION)
+/ Screen 3 — Final state (success or cancellation)
+
+LOCALISATION : kiosk/templates/kiosk/partial/state_screen.html
+
+Inclus par success.html et cancel.html, qui ne font que passer `est_succes`.
+Les deux ecrans partagent leur structure ET leur compte a rebours : les garder
+dans un seul fichier evite qu'ils divergent en silence.
+/ Included by success.html and cancel.html, which only pass `est_succes`.
+Both screens share their structure AND their countdown: one file keeps them
+from silently drifting apart.
+
+CONTEXTE VIDE — ATTENTION :
+wsocket/consumers.py rend ce template via get_template(...).render(context={}),
+donc HORS REQUETE. Pas de `request`, pas de `csrf_token`, aucun processeur de
+contexte. N'introduire ici aucune variable qui en dependrait.
+/ EMPTY CONTEXT — CAREFUL: rendered via get_template(...).render(context={}),
+i.e. OUTSIDE a request. No `request`, no `csrf_token`, no context processors.
+Never introduce a variable that would depend on them.
+
+SWAP :
+hx-swap-oob="true" sur #tb-kiosque : le websocket remplace l'ecran entier,
+quel que soit l'ecran affiche a ce moment-la.
+{% endcomment %}
+<div id="tb-kiosque"
+     class="state-screen {% if est_succes %}state-screen--go{% else %}state-screen--stop{% endif %}"
+     hx-swap-oob="true"
+     data-testid="{% if est_succes %}kiosk-success-page{% else %}kiosk-cancel-page{% endif %}">
+    <div>
+        {% if est_succes %}
+            <svg class="state-mark" viewBox="0 0 48 48" fill="none" stroke="currentColor"
+                 stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="24" cy="24" r="20"/>
+                <path d="M15 24.5l6.5 6.5L33 18"/>
+            </svg>
+        {% else %}
+            <svg class="state-mark" viewBox="0 0 48 48" fill="none" stroke="currentColor"
+                 stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="24" cy="24" r="20"/>
+                <path d="M17 17l14 14M31 17L17 31"/>
+            </svg>
+        {% endif %}
+
+        <h1 class="state-title">
+            {% if est_succes %}{% translate "Réussite" %}{% else %}{% translate "Annulé" %}{% endif %}
+        </h1>
+
+        <p class="state-timer" aria-live="polite">
+            {% translate "Redirection dans" %} <span id="countdown">15</span> {% translate "secondes" %}
+        </p>
+
+        <a href="/kiosk/" class="btn-return" data-testid="kiosk-return-home">
+            {% translate "Retour à l'accueil" %}
+        </a>
+    </div>
+
+    <script>
+        // IIFE : ce template peut etre swappe plusieurs fois par le websocket
+        // (rejeu d'etat a la reconnexion) ; des `let` globaux redeclares feraient
+        // un SyntaxError.
+        // / IIFE: this template can be swapped several times by the websocket
+        // (state replay on reconnect); re-declared global `let` would raise.
+        (function () {
+            // Un seul minuteur a la fois. Sans ce garde-fou, un second swap (rejeu
+            // d'etat) laissait tourner le premier setInterval sur un noeud detache :
+            // le decompte tombait deux fois par seconde.
+            // / One timer at a time. Without this guard a second swap left the first
+            // setInterval running on a detached node: the countdown fell twice a second.
+            if (window.minuteurRetourAccueil) {
+                clearInterval(window.minuteurRetourAccueil);
+            }
+
+            const afficheurSecondes = document.getElementById('countdown');
+            if (!afficheurSecondes) {
+                return;
+            }
+
+            let secondesRestantes = 15;
+
+            window.minuteurRetourAccueil = setInterval(function () {
+                secondesRestantes--;
+                afficheurSecondes.textContent = secondesRestantes;
+
+                if (secondesRestantes <= 0) {
+                    clearInterval(window.minuteurRetourAccueil);
+                    window.location.href = "/kiosk/";
+                }
+            }, 1000);
+        })();
+    </script>
+</div>

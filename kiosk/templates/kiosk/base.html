@@ -1,30 +1,68 @@
-<!DOCTYPE html>
-<html lang="fr" itemscope itemtype="https://schema.org/WebSite">
+{% load static i18n %}{% get_current_language as LANGUE_ACTIVE %}<!DOCTYPE html>
+<html lang="{{ LANGUE_ACTIVE|default:'fr' }}" itemscope itemtype="https://schema.org/WebSite">
 
 <head>
     <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <meta name="description" content="Kiosque TiBillet pour recharger votre carte ou enregistrer vos informations"/>
-    <title>Kiosque TiBillet</title>
-    <meta itemprop="name" content="Kiosque TiBillet">
-    <meta itemprop="description" content="Kiosque TiBillet pour recharger votre carte ou enregistrer vos informations">
-    {% load static %}
+    {# viewport-fit=cover : les bornes Sunmi et les telephones a encoche ont des #}
+    {# marges systeme. Le CSS les recupere via env(safe-area-inset-*). On ne #}
+    {# bloque PAS le zoom : ce serait une regression d'accessibilite. #}
+    {# / viewport-fit=cover: Sunmi kiosks and notched phones have system insets. #}
+    {# The CSS reads them via env(safe-area-inset-*). We do NOT disable zoom: #}
+    {# that would be an accessibility regression. #}
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+    <meta name="description" content="{% translate 'Kiosque TiBillet pour recharger votre carte ou enregistrer vos informations' %}"/>
+    <title>{% translate "Kiosque TiBillet" %}</title>
+    <meta itemprop="name" content="{% translate 'Kiosque TiBillet' %}">
+    <meta itemprop="description" content="{% translate 'Kiosque TiBillet pour recharger votre carte ou enregistrer vos informations' %}">
 
-    {#statics pour la page montant :#}
-    {# Chemins rebranches sur les assets reellement servis par Lespass (les namespaces #}
-    {# LaBoutik bootstrap/ et webview/ n'existent pas ici). htmx + extension ws : memes #}
-    {# fichiers que laboutik/base.html. / Paths rebranched onto the assets actually #}
-    {# served by Lespass (LaBoutik's bootstrap/ and webview/ namespaces do not exist #}
-    {# here). htmx + ws extension: same files as laboutik/base.html. #}
-    <link rel="stylesheet" href="{% static 'commun/css/bootstrap.min.5.3.3.css' %}"/>
+    {# La couleur de la barre systeme suit le theme. Valeurs figees : une meta #}
+    {# ne lit pas les variables CSS. Elles doublent --paper-100 et --ink-900. #}
+    {# / System bar colour follows the theme. Hard values: a meta cannot read #}
+    {# CSS variables. They mirror --paper-100 and --ink-900. #}
+    <meta name="theme-color" content="#f7f5f1" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#14171f" media="(prefers-color-scheme: dark)">
+
+    {# ORDRE DE CHARGEMENT : tokens.css (variables) AVANT kiosk.css (mise en page). #}
+    {# Cf. GUIDELINES.md, section « CSS Extraction — Ordre de cascade ». #}
+    {# / LOAD ORDER: tokens.css (variables) BEFORE kiosk.css (layout). #}
+    {# #}
+    {# Bootstrap a ete retire de la borne : elle n'utilisait aucun composant JS #}
+    {# Bootstrap, et SweetAlert2 injecte sa propre feuille de style. Cela epargne #}
+    {# ~250 Ko a un Android de festival. / Bootstrap was removed from the kiosk: #}
+    {# it used none of Bootstrap's JS components, and SweetAlert2 injects its own #}
+    {# stylesheet. That saves ~250 KB on a festival Android device. #}
+    <link rel="stylesheet" href="{% static 'kiosk/css/tokens.css' %}"/>
     <link rel="stylesheet" href="{% static 'kiosk/css/kiosk.css' %}"/>
+
+    {# Amorcage du theme AVANT le premier rendu. Sans ce script, la borne affiche #}
+    {# un flash blanc a chaque chargement quand le mode nuit est actif. C'est la #}
+    {# seule raison pour laquelle ce script est en ligne et bloquant. #}
+    {# / Theme boot BEFORE first paint. Without it, the kiosk flashes white on #}
+    {# every load when night mode is on. That is the only reason this script is #}
+    {# inline and blocking. #}
+    <script>
+        (function () {
+            var themeMemorise = null;
+            try {
+                themeMemorise = localStorage.getItem("kiosk-theme");
+            } catch (erreurStockage) {
+                // Navigation privee ou WebView verrouillee : on retombe sur le jour.
+                // / Private browsing or locked-down WebView: fall back to light.
+                themeMemorise = null;
+            }
+            document.documentElement.dataset.theme = (themeMemorise === "dark") ? "dark" : "light";
+        })();
+    </script>
+
+    {# htmx doit etre charge par un <script> bloquant classique : ni defer, ni #}
+    {# async, ni type=module, sinon les attributs hx-* du HTML initial ne sont #}
+    {# pas traites. / htmx must be loaded by a plain blocking <script>. #}
     <script src="{% static 'js/htmx@2.0.6.min.js' %}"></script>
     <script src="{% static 'js/ext/ws.js' %}"></script>
-    <script src="{% static 'commun/js/bootstrap.bundle.min.5.3.3.js' %}"></script>
     <script src="{% static 'mvt_htmx/js/sweetalert2@11.js' %}"></script>
 </head>
 
-<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-indicator="#spinner" class="h-100">
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-indicator="#spinner">
 
 {% block main %}
 

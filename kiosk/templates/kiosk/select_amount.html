@@ -4,6 +4,13 @@
     {# Le contenu est dans un partial : les vues le re-rendent seul en cas #}
     {# d'erreur (swap HTMX innerHTML de #tb-kiosque). / Content lives in a #}
     {# partial: views re-render it alone on error (HTMX innerHTML swap of #tb-kiosque). #}
+    {# #}
+    {# #tb-kiosque est LA cible de swap unique de la borne. Aucun partial rendu #}
+    {# dedans ne doit re-declarer cet id : cela creerait un doublon dans le DOM #}
+    {# et rendrait ambigu le swap OOB du websocket (success.html / cancel.html). #}
+    {# / #tb-kiosque is THE single swap target of the kiosk. No partial rendered #}
+    {# inside it may re-declare that id: it would duplicate the id in the DOM and #}
+    {# make the websocket's OOB swap ambiguous (success.html / cancel.html). #}
     <div id="tb-kiosque" itemscope itemtype="https://schema.org/WebPage">
         {% include "kiosk/select_amount_content.html" %}
     </div>

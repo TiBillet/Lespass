@@ -1,0 +1,56 @@
+{% load i18n %}
+{% comment %}
+BANDEAU HAUT DE LA BORNE
+/ Kiosk top bar
+
+LOCALISATION : kiosk/templates/kiosk/partial/topbar.html
+
+Inclus par select_amount_content.html et waiting_credit_card_terminal.html.
+Attend une variable `titre_ecran` (chaine deja traduite par l'appelant).
+/ Included by select_amount_content.html and waiting_credit_card_terminal.html.
+Expects a `titre_ecran` variable (string already translated by the caller).
+
+BASCULE JOUR / NUIT :
+Les DEUX libelles sont ecrits ici, traduits. Le CSS n'en montre qu'un selon
+`data-theme` sur <html> (cf. kiosk.css section 6). Le JS ne touche jamais au
+texte du bouton — l'ancien `button.innerHTML = 'Mode Jour'` de main.js
+court-circuitait {% translate %} et cassait l'anglais.
+/ BOTH labels are written here, translated. The CSS shows only one depending on
+`data-theme` on <html>. The JS never touches the button's text — the old
+`button.innerHTML = 'Mode Jour'` in main.js bypassed the translation tag.
+
+COMMUNICATION :
+Le clic appelle toggleDarkMode() (kiosk/static/kiosk/js/main.js), qui bascule
+`data-theme` et met a jour aria-pressed.
+{% endcomment %}
+<header class="kiosk-topbar">
+    <p class="kiosk-eyebrow">{{ titre_ecran }}</p>
+
+    <button type="button"
+            id="toggleDarkModeBtn"
+            class="btn-theme"
+            data-testid="kiosk-dark-mode-toggle"
+            onclick="toggleDarkMode()"
+            aria-pressed="false">
+
+        {# Lune : visible en mode jour, elle annonce le passage a la nuit. #}
+        {# / Moon: visible in light mode, it announces the switch to night. #}
+        <svg class="btn-theme__icon btn-theme__to-dark" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+             stroke-linejoin="round" aria-hidden="true">
+            <path d="M20.4 14.6A8.6 8.6 0 0 1 9.4 3.6a8.6 8.6 0 1 0 11 11Z"/>
+        </svg>
+
+        {# Soleil : visible en mode nuit, il annonce le retour au jour. #}
+        {# / Sun: visible in night mode, it announces the return to day. #}
+        <svg class="btn-theme__icon btn-theme__to-light" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+             stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4.2"/>
+            <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/>
+        </svg>
+
+        <span class="btn-theme__to-dark">{% translate "Mode nuit" %}</span>
+        <span class="btn-theme__to-light">{% translate "Mode jour" %}</span>
+    </button>
+</header>

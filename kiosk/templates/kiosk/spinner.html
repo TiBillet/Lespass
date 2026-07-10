@@ -1,58 +1,22 @@
 {% load i18n %}
-<div id="spinner" class="align-center htmx-indicator" role="status">
-    <div class="spinner_rond"></div>
+{% comment %}
+VOILE DE CHARGEMENT GLOBAL
+/ Global loading veil
+
+LOCALISATION : kiosk/templates/kiosk/spinner.html
+
+Inclus une seule fois, en fin de <body> de base.html, DONC hors de #tb-kiosque :
+il survit a tous les swaps HTMX. Le declencheur est hx-indicator="#spinner"
+pose sur <body> (cf. base.html).
+
+Le style vit dans kiosk.css (section 9). Il n'y a plus de <style> ici : ce
+partial etait inclus dans chaque page et dupliquait sa feuille a chaque fois.
+
+/ Included once at the end of base.html's <body>, hence OUTSIDE #tb-kiosque:
+it survives every HTMX swap. Triggered by hx-indicator="#spinner" on <body>.
+Styling lives in kiosk.css (section 9): no more inline <style> here.
+{% endcomment %}
+<div id="spinner" class="htmx-indicator" role="status" aria-live="polite" data-testid="kiosk-spinner">
+    <div class="spinner-ring" aria-hidden="true"></div>
     <span class="visually-hidden">{% translate "Chargement..." %}</span>
 </div>
-
-
-<style>
-    .spinner_rond {
-        width: 150px;
-        height: 150px;
-        border: 5px solid rgba(0, 0, 0, 0.1);
-        border-radius: 50%;
-        border-top-color: var(--primary-color);
-        animation: spin 1s ease-in-out infinite;
-    }
-
-    .htmx-indicator {
-        display: none;
-        opacity: 0;
-        transition: opacity 500ms ease-in;
-    }
-
-    .htmx-request .htmx-indicator {
-        display: flex;
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.7); /* Opacité du fond */
-        justify-content: center;
-        align-items: center;
-        z-index: 9999; /* Assure que le spinner est au-dessus du reste du contenu */
-    }
-
-    .htmx-request.htmx-indicator {
-        display: flex;
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.7); /* Opacité du fond */
-        justify-content: center;
-        align-items: center;
-        z-index: 9999; /* Assure que le spinner est au-dessus du reste du contenu */
-    }
-
-    @keyframes spin {
-        0% {
-            transform: rotate(0deg);
-        }
-        100% {
-            transform: rotate(360deg);
-        }
-    }
-</style>

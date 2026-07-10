@@ -161,9 +161,15 @@ def _create_laboutik_terminal(pairing_device):
     # passe ni workflow d'activation.
     # / NOTE: username is unique — synced with the synthetic email. We don't use
     # create_user since a TermUser has no password nor activation flow.
+    # first_name porte le nom lisible de l'appareil (ex: "Borne entrée").
+    # L'email etant synthetique, c'est le seul endroit ou l'admin peut lire un
+    # nom humain pour cette borne.
+    # / first_name carries the human-readable device name. The email is synthetic,
+    # so this is the only place where the admin can display a readable name.
     term_user = TermUser.objects.create(
         email=email_synthetique,
         username=email_synthetique,
+        first_name=pairing_device.name,
         terminal_role=pairing_device.terminal_role,
         accept_newsletter=False,
     )

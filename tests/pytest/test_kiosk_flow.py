@@ -93,12 +93,11 @@ def test_kiosk_list_renders_select_amount_template(tenant, kiosk_user_and_termin
 
 
 @pytest.mark.django_db
-@override_settings(DEMO=True)
-def test_kiosk_refill_with_wisepos_demo_creates_payment_intent(tenant, kiosk_user_and_terminal):
-    """POST /kiosk/refill_with_wisepos/ en DEMO cree un PaymentsIntent et renvoie 200
-    (Fedow + tache Celery mockees ; template pas encore cree en Task 02B).
-    / POST /kiosk/refill_with_wisepos/ in DEMO creates a PaymentsIntent and returns 200
-    (Fedow + Celery task mocked; template not created yet in Task 02B)."""
+def test_kiosk_refill_with_wisepos_creates_payment_intent(tenant, kiosk_user_and_terminal):
+    """POST /kiosk/refill_with_wisepos/ cree un PaymentsIntent et renvoie 200
+    (Fedow, tache Celery et envoi au TPE Stripe mockes).
+    / POST /kiosk/refill_with_wisepos/ creates a PaymentsIntent and returns 200
+    (Fedow, Celery task and Stripe reader push are mocked)."""
     user, terminal = kiosk_user_and_terminal
     with tenant_context(tenant):
         CarteCashless.objects.create(tag_id=TEST_TAG_ID, number=TEST_TAG_ID)
@@ -107,9 +106,15 @@ def test_kiosk_refill_with_wisepos_demo_creates_payment_intent(tenant, kiosk_use
 
         with patch("kiosk.validators.FedowAPI") as mock_fedow_api, \
              patch("kiosk.views.poll_payment_intent_status.delay") as mock_delay, \
+             patch("kiosk.models.PaymentsIntent.send_to_terminal") as mock_send, \
              patch("kiosk.views.render") as mock_render:
             mock_fedow_api.return_value.NFCcard.retrieve.return_value = {"uuid": "fake"}
             mock_delay.return_value = MagicMock(status="STARTED", result=None)
+            # send_to_terminal renvoie l'intention de paiement : on la relit en base
+            # / send_to_terminal returns the payment intent: read it back from the DB
+            mock_send.side_effect = lambda terminal_cible: PaymentsIntent.objects.get(
+                terminal=terminal, amount=1000,
+            )
             mock_render.return_value = HttpResponse(status=200)
 
             response = client.post("/kiosk/refill_with_wisepos/", data={

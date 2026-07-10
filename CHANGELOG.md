@@ -1,5 +1,141 @@
 # Changelog / Journal des modifications
 
+## Kiosk : refonte du front (design « Signalétique ») + 5 correctifs / Kiosk: front redesign + 5 bug fixes
+
+**Date :** 2026-07-10
+**Migration :** Non / No
+
+**Quoi / What :** refonte complète des templates et du CSS de l'app `kiosk`, plus la correction de
+cinq bugs découverts en relisant le HTML. Le front est désormais pensé comme un **distributeur**
+(automate de titres de transport) et non comme une page web : plus d'ombre portée, plus de carte
+flottante, plus d'effet de survol sur un écran tactile. Le montant devient un **afficheur** géant
+toujours visible, et les 5 montants + « Effacer » forment un **pavé de 6 touches**.
+
+**Pourquoi / Why :** le CSS reprenait la palette Bootstrap par défaut (`#0d6efd`, `#198754`,
+`#dc3545`), `border-radius: 10px` et `box-shadow: 0 4px 8px` sur tout, `translateY(-3px)` au survol
+d'une borne tactile, et des emoji (`💳 ➡️`, `⬆️⬆️⬆️`) en guise d'illustration. Le mode nuit était
+piloté par des styles inline injectés en JS, qui écrasaient la feuille de style et cassaient l'i18n.
+
+### Bugs corrigés / Fixed bugs
+
+| # | Bug | Correctif |
+|---|---|---|
+| 1 | **Double compte à rebours** sur les écrans finaux : l'IIFE du template ET `main.js:initializePage()` (rappelé par `htmx:afterSwap`) lançaient chacun un `setInterval` sur `#countdown`. Redirection à ~7,5 s au lieu de 15 s. | Un seul minuteur, dans `partial/state_screen.html`, avec garde `clearInterval` avant démarrage. Retiré de `main.js`. |
+| 2 | **`id="tb-kiosque"` en double dans le DOM** : `waiting_credit_card_terminal.html` déclarait cet id alors qu'il est swappé en `innerHTML` **dans** `#tb-kiosque`. Le swap OOB du websocket ne tombait sur le bon élément que par chance. | Le partial ne déclare plus l'id. |
+| 3 | **Spinner « paiement en cours » invisible en mode jour** : seul `.dark-mode .spinner_bootstrap` existait, sans règle de base. `.spinner-box` n'était pas défini non plus. | `.spinner-inline`, stylé dans les deux thèmes. |
+| 4 | **Overlay de chargement mal positionné** : `position: absolute` cale le voile en haut du *document*, pas du viewport. | `position: fixed`. |
+| 5 | **Mode nuit cassait l'i18n** : `main.js` faisait `button.innerHTML = 'Mode Jour'` en français codé en dur. | Les deux libellés sont dans le HTML, traduits ; le CSS montre le bon selon `data-theme`. |
+
+### Design
+
+- **Thème custom « Signalétique »** : papier chaud `oklch(96.6% .006 85)`, encre froide
+  `oklch(17% .014 258)`, accent ambre `oklch(74% .155 68)` (couleur des afficheurs d'automates,
+  lisible sur clair **et** sur sombre). États pleine page : pin et brique, plus le vert/rouge Bootstrap.
+- **Polices déjà présentes dans le dépôt** : **Luciole** (dessinée pour la basse vision — le bon choix
+  pour une borne publique lue de loin) en UI, chiffres tabulaires ; **Staatliches** pour les mots d'état.
+  Zéro nouvel asset, zéro CDN.
+- **Bootstrap retiré de la borne** : aucun composant JS Bootstrap n'était utilisé et SweetAlert2 injecte
+  sa propre feuille de style. ~250 Ko économisés sur un Android de festival.
+- **Emoji remplacés par du SVG dessiné à la main** : carte → TPE, et chevrons montants vers le lecteur NFC.
+- **Motion tactile** : plus de `:hover` (guardé par `@media (hover:hover)`), enfoncement `scale(.97)` à
+  90 ms. `prefers-reduced-motion` respecté.
+- **Espacements fluides** (`--gap-touches`, `--gap-blocs`, `--pad-ecran`, `--gap-colonnes`) : les écarts
+  entre blocs suivent `vmin` comme la typographie, au lieu de rester en `rem` fixes. Sans ça, des touches
+  de 200 px de large restaient séparées de 12 px en 1920×1080 et paraissaient collées.
+  Mesuré : écart entre touches 12 px (375) → 14 px (1280) → 22 px (1920).
+- **Durcissement borne** : `touch-action: manipulation`, `overscroll-behavior: none`,
+  `-webkit-tap-highlight-color: transparent`, `user-select: none`, `env(safe-area-inset-*)`, `100svh`.
+
+### Responsive
+
+Une **seule** media query, sur le **ratio** de l'écran (`min-aspect-ratio: 5/4`), bascule entre une
+colonne (téléphone portrait, action collée au pouce) et deux colonnes (kiosque paysage). Les tailles
+suivent `vmin` — la dimension *contrainte* de l'écran — donc aucune media query de taille.
+Vérifié sans débordement ni libellé replié en **1920×1080, 1280×720, 1024×600, 375×667 et 320×568**,
+en mode jour et en mode nuit.
+
+### Fichiers modifiés / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `kiosk/static/kiosk/css/tokens.css` | **Neuf** — jetons OKLCH, `@font-face` Luciole/Staatliches, échelle 4 pt, thème sombre |
+| `kiosk/static/kiosk/css/kiosk.css` | Réécrit — mise en page, 12 sections, aucune valeur brute |
+| `kiosk/static/kiosk/js/main.js` | Réécrit — thème via `data-theme`, ~160 lignes de JS mort supprimées |
+| `kiosk/templates/kiosk/base.html` | Bootstrap retiré, amorçage du thème avant premier rendu, `lang` via i18n, `viewport-fit=cover` |
+| `kiosk/templates/kiosk/partial/topbar.html` | **Neuf** — bandeau + bascule jour/nuit (libellés traduits dans le HTML) |
+| `kiosk/templates/kiosk/partial/state_screen.html` | **Neuf** — écran d'état partagé + compte à rebours unique |
+| `kiosk/templates/kiosk/select_amount_content.html` | Afficheur + pavé de 6 touches, microdata invalide retirée |
+| `kiosk/templates/kiosk/sweet_scan_button.html` | Bouton restructuré, `tag-id` → `data-tag-id`, chevrons SVG |
+| `kiosk/templates/kiosk/waiting_credit_card_terminal.html` | `#tb-kiosque` retiré, styles inline retirés, illustration SVG |
+| `kiosk/templates/kiosk/success.html` / `cancel.html` | Réduits à un `{% include %}` du partial commun |
+| `kiosk/templates/kiosk/spinner.html` | `<style>` déplacé dans `kiosk.css`, `position: fixed` |
+| `kiosk/templates/kiosk/select_amount.html` | Commentaire sur l'unicité de `#tb-kiosque` |
+
+### i18n
+
+Nouvelles chaînes à traduire (`makemessages` + `compilemessages` à lancer par le mainteneur) :
+`Recharge`, `Paiement`, `Montant à recharger`, `euros`, `Choisir un montant`, `Mode nuit`,
+`Mode jour`, `Kiosque TiBillet`, `Kiosque TiBillet pour recharger votre carte ou enregistrer vos
+informations`, `Vous pouvez appuyer plusieurs fois sur une touche pour additionner.`
+
+`Mode Nuit` (ancienne casse) et `Vous pouvez cliquer plusieurs fois sur les boutons pour additionner
+le montant. :)` deviennent obsolètes.
+
+---
+
+## Kiosk : installation Pi via la stack LaBoutik + admin TPE / Kiosk: Pi install via the LaBoutik stack + terminal admin
+
+**Date :** 2026-07-09
+**Migration :** Oui / Yes — `kiosk` 0004 (renommage d'affichage uniquement, `AlterModelOptions`)
+
+**Quoi / What :** la borne kiosk sur Raspberry Pi s'installe avec **la stack LaBoutik existante**
+(`laboutik_client_pi_desktop_v2/`), sans script ni configuration propres au kiosk. Même matériel, même
+lecteur NFC, même client Node. Le seul aiguillage est le **rôle du `PairingDevice`** : un rôle `KI` est
+redirigé vers `/kiosk/` par le bridge d'auth, un rôle `LB` vers `/laboutik/caisse/`. §5 du
+`kiosk/README.md` réécrite : image Bullseye **arm64**, contournements `sudo env` / `fbturbo` / `env.js`,
+service systemd pour `nfcServer.js`, écran en paysage (`setup-laboutik-pi gpio 0`).
+
+**`kiosk/Pi/Makefile`** : `sudo apt install make curl`, `curl -O …/Makefile`, `make conf`, `make install`,
+`sudo reboot`. Le Makefile n'installe rien lui-même — il appelle `setup-laboutik-pi` puis applique les
+correctifs (fbturbo purgé, cache npm, `env.js`, définition d'écran, service systemd). Il neutralise le
+`reboot` en dur du script (faux `reboot` en tête de `PATH`) pour n'avoir qu'un seul redémarrage, à la fin.
+`tibillet.conf` (auto-généré, commenté) porte `SERVER`, `SCREEN_WIDTH/HEIGHT`, `ROTATE`, `NFC`, `GIT_BRANCH` —
+**pas le code PIN**, qui se saisit sur l'écran tactile.
+
+**Correctif du driver RC522** (`vma405-rfid-rc522.js`) : depuis `b294e695` (6 mai 2026), `nfcServer.js`
+attend `{ startListening, stopListening, getStatus }` — le driver Pi n'exposait que `initNfcReader`, donc
+`type_app: 'pi'` mourait au démarrage. Le driver expose désormais le contrat, mémorise l'ID du polling
+(`stopListening` ne pouvait rien arrêter), renvoie `{ tagId, data }` (le front rejette les lectures dont
+`data.uuidConnexion` ne correspond pas) et s'arrête après un tag. **Validé sur matériel** (lecture d'une
+carte réelle sur RC522). À relire par `filaos974`.
+
+**Simulateur et lecteur en parallèle** (`kiosk/static/kiosk/js/nfc.js`) : en `DEMO`, `startLecture()`
+faisait `simule(); return` et le lecteur physique n'était jamais interrogé. Il affiche désormais le
+simulateur **et** démarre le lecteur, comme l'app Android : le premier des deux qui répond gagne, et
+`stopLecture()` (appelé par le `willClose` du modal) nettoie les deux.
+
+Côté admin : `Terminal` s'affiche désormais « TPE Bancaire », `StripeLocation` sort de l'admin (créée
+automatiquement à l'appairage, comme dans LaBoutik), et le champ « Borne » affiche le nom de la borne au
+lieu de son email synthétique, filtré sur le rôle `KI`.
+
+**Pourquoi / Why :** ne pas maintenir deux procédures d'installation pour un matériel identique, et
+lever la confusion entre le TPE bancaire Stripe et les terminaux Pi/Sunmi de LaBoutik.
+
+**Non vérifié / Not verified :** lecture NFC réelle sur RC522, appairage complet jusqu'à `/kiosk/`,
+paiement TPE. Installation, session X, serveur Node et proxy de claim validés sur Pi 3B+.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `kiosk/README.md` | §5 réécrite : image arm64, contournements, service systemd, statut de validation |
+| `laboutik_client_pi_desktop_v2/modules/devices/vma405-rfid-rc522.js` | Aligné sur le contrat de `nfcServer.js` (cf. ci-dessus) |
+| `kiosk/models.py` | `Terminal.Meta` : `verbose_name = "TPE Bancaire"` |
+| `kiosk/admin.py` | `StripeLocationAdmin` supprimé ; `term_user` filtré sur `KI` et affiché par son nom |
+| `discovery/views.py` | `TermUser.first_name = pairing_device.name` à l'appairage |
+| `Administration/admin/dashboard.py` | Sidebar : « TPE Bancaires », entrée « Emplacements Stripe » retirée |
+
+---
+
 ## Kiosk : borne de recharge cashless TPE Stripe / Kiosk: self-service cashless top-up terminal (Stripe TPE)
 
 **Date :** 2026-07-07

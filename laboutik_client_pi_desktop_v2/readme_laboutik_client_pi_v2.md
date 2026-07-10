@@ -24,8 +24,12 @@ install_pi/
 ```
 
 ---
+## Etape 0 : Flash du système. Attention, ne fonctionne que sous Bulleyes 
+
+Image a télécharger ici : https://downloads.raspberrypi.org/raspios_lite_arm64/images/raspios_lite_arm64-2023-05-03/
 
 ## Étape 1 : Installation du système et des dépendances système
+
 
 Cette étape installe Node.js, configure le système et prépare le hardware.
 

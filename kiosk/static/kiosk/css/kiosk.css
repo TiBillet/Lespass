@@ -1,312 +1,874 @@
-:root {
-    --primary-color: #0d6efd;
-    --secondary-color: #6c757d;
-    --success-color: #198754;
-    --danger-color: #dc3545;
-    --light-color: #f8f9fa;
-    --dark-color: #212529;
+/* Hallmark · app-scope: kiosk-terminal · theme: custom « Signalétique »
+ * accent-hue: warm (ambre) · enrichment: Tier B (SVG dessinés à la main)
+ * états: repos · pressé · focus · désactivé · chargement · erreur · succès
+ * contraste: AA vérifié sur les deux thèmes
+ *
+ * LOCALISATION : kiosk/static/kiosk/css/kiosk.css
+ *
+ * Mise en page de la borne. Toutes les couleurs, polices, tailles et durees
+ * viennent de tokens.css : aucune valeur brute ici.
+ * / Kiosk layout. Every colour, font, size and duration comes from tokens.css.
+ *
+ * PARTI PRIS : une borne de recharge n'est pas une page web, c'est un
+ * distributeur. Pas d'ombre portee, pas de carte flottante, pas d'effet de
+ * survol (l'ecran est tactile : le survol n'existe pas). La profondeur vient
+ * des aplats de couleur et des filets, l'interaction vient de l'enfoncement.
+ * / STANCE: a refill kiosk is a vending machine, not a web page. No drop
+ * shadows, no floating cards, no hover effects (touch screen: hover does not
+ * exist). Depth comes from colour fields and hairlines; feedback comes from
+ * the key press.
+ *
+ * ORIENTATIONS SUPPORTEES / SUPPORTED ORIENTATIONS :
+ *   - telephone portrait  (375x667 et plus)  -> colonne unique, action collee au pouce
+ *   - kiosque paysage     (1024x600, 1280x720, 1920x1080) -> deux colonnes
+ * Les tailles suivent vmin (cf. tokens.css) : aucune media query de taille.
+ * Une seule media query, sur le RATIO, decide de la bascule une/deux colonnes.
+ */
+
+/* ========================================================================= */
+/* 1. Socle                                                                  */
+/* ========================================================================= */
+
+/* La borne ne charge plus Bootstrap : ce reset n'est donc plus fourni par lui. */
+/* Sans lui, un `width: 100%` + `padding` deborde de son parent — et comme     */
+/* html/body sont en overflow-x: clip, le debordement est invisible a la        */
+/* mesure (scrollWidth == clientWidth) tout en coupant le contenu a l'ecran.    */
+/* / The kiosk no longer loads Bootstrap, which used to provide this reset.     */
+/* Without it, `width: 100%` + `padding` overflows its parent — and since       */
+/* html/body are overflow-x: clip, the overflow is invisible to measurement     */
+/* while still cutting content off screen.                                      */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
 }
 
-/* Base styles */
+html,
 body {
-    background-color: var(--light-color);
-    color: var(--dark-color);
-    transition: all 0.3s ease;
-    font-size: 1.2rem;
+    height: 100%;
+    /* clip et non hidden : hidden sur <html> casse position:sticky.          */
+    /* / clip, not hidden: hidden on <html> breaks position:sticky.           */
+    overflow-x: clip;
 }
 
-body.dark-mode {
-    background-color: #121212;
-    color: #ffffff;
+body {
+    margin: 0;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-ui);
+    font-size: var(--text-body);
+    line-height: 1.45;
+
+    /* Durcissement borne : pas de surlignage bleu au tap, pas de delai de    */
+    /* 300 ms, pas de zoom au double-tap, pas de rebond elastique au scroll,  */
+    /* pas de selection de texte accidentelle par un doigt qui traine.        */
+    /* / Kiosk hardening: no blue tap highlight, no 300ms delay, no           */
+    /* double-tap zoom, no rubber-band overscroll, no accidental text         */
+    /* selection from a resting finger.                                       */
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
-/* Layout */
-.header-space {
-    height: 80px;
+/* Le montant reste selectionnable : un agent d'accueil peut vouloir le lire   */
+/* ou le copier. / The amount stays selectable for a staff member.             */
+.readout-value {
+    -webkit-user-select: text;
+    user-select: text;
 }
 
-.main-center {
-    padding: 30px 0;
+/* Remplace la classe Bootstrap du meme nom : la borne ne charge plus         */
+/* Bootstrap (elle n'utilisait aucun de ses composants JS).                   */
+/* / Replaces the Bootstrap class of the same name: the kiosk no longer       */
+/* loads Bootstrap (it used none of its JS components).                       */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
 }
 
-.main-center.dark-mode {
-    background-color: #121212;
+/* Un seul anneau de focus pour toute la borne. Il ne s'anime jamais : il doit */
+/* apparaitre instantanement. / One focus ring for the whole kiosk. It never   */
+/* animates: it must appear instantly.                                        */
+:where(button, a):focus-visible {
+    outline: var(--rule-thick) solid var(--color-focus);
+    outline-offset: 2px;
 }
 
-/* Card styles */
-.card {
-    border: none;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    transition: all 0.3s ease;
-    margin-bottom: 2rem;
+/* ========================================================================= */
+/* 2. Ossature d'un ecran                                                    */
+/* ========================================================================= */
+
+.kiosk-screen {
+    min-height: 100vh;
+    /* svh : sur WebView Android (Cordova) 100vh deborde sous la barre        */
+    /* systeme. / svh: on Android WebView 100vh overflows under the system bar. */
+    min-height: 100svh;
+    display: grid;
+    grid-template-rows: auto 1fr;
 }
 
-.card.dark-mode {
-    background-color: #2d2d2d;
-    color: #ffffff;
-    box-shadow: 0 4px 8px rgba(255, 255, 255, 0.1);
+.kiosk-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--pad-ecran);
+    padding-top: calc(var(--space-4) + env(safe-area-inset-top));
+    border-bottom: var(--rule-hair) solid var(--color-rule);
 }
 
-/* Button styles */
-.btn-amount {
-    font-size: 1.8rem;
-    font-weight: bold;
-    padding: 20px 30px;
-    margin: 10px 0;
+/* Le seul intitule en majuscules de la borne. Il nomme l'ecran, il ne le     */
+/* numerote pas. / The only uppercase label on the kiosk. It names the        */
+/* screen, it does not number it.                                             */
+.kiosk-eyebrow {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: var(--text-label);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-text-soft);
+}
+
+/* La bascule une colonne / deux colonnes tient a une seule media query, sur   */
+/* le RATIO de l'ecran et pas sur sa largeur. Un kiosque 1024x600 et un        */
+/* 1920x1080 ont le meme ratio : ils recoivent la meme mise en page, a des     */
+/* tailles differentes (vmin s'en charge).                                     */
+/* / The one-column / two-column switch hangs on a single media query, keyed   */
+/* on the screen RATIO rather than its width. A 1024x600 and a 1920x1080 have  */
+/* the same ratio: same layout, different sizes (vmin handles that).           */
+.kiosk-split {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-blocs);
     width: 100%;
-    border-radius: 10px;
-    background-color: var(--primary-color);
-    color: white;
-    border: none;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    transition: all 0.3s ease;
+    max-width: 1600px;
+    margin-inline: auto;
+    /* Pas de marge basse en colonne : la barre d'action est collante et porte */
+    /* sa propre marge (plus la safe-area). / No bottom padding in one column: */
+    /* the action bar is sticky and carries its own padding (plus safe-area).  */
+    padding: var(--gap-blocs) var(--pad-ecran) 0;
 }
 
-.btn-amount:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+@media (min-aspect-ratio: 5 / 4) and (min-width: 700px) {
+    .kiosk-split {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        align-items: center;
+        gap: var(--gap-colonnes);
+        padding-bottom: var(--gap-blocs);
+    }
 }
 
-.btn-amount.dark-mode {
-    background-color: #3a86ff;
-    color: white;
-    box-shadow: 0 4px 8px rgba(58, 134, 255, 0.3);
+/* ========================================================================= */
+/* 3. Afficheur du montant                                                   */
+/* ========================================================================= */
+
+.kiosk-readout {
+    min-width: 0;
+}
+
+.readout-label {
+    margin: 0 0 var(--space-2);
+    font-size: var(--text-label);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-soft);
+}
+
+.readout-value {
+    margin: 0;
+    font-family: var(--font-ui);
+    font-weight: 700;
+    font-size: var(--text-readout);
+    line-height: 0.95;
+    letter-spacing: -0.02em;
+
+    /* Chiffres tabulaires : le total ne tressaute pas quand on passe de 48 a  */
+    /* 53. C'est la raison d'etre de Luciole.                                  */
+    /* / Tabular figures: the total does not jitter from 48 to 53.             */
+    font-variant-numeric: tabular-nums;
+
+    /* Un total a quatre chiffres ne doit jamais pousser la mise en page.      */
+    /* / A four-digit total must never push the layout.                        */
+    overflow-wrap: anywhere;
+    min-width: 0;
+}
+
+/* La marge doit compenser le letter-spacing negatif de l'afficheur, sinon le  */
+/* € vient toucher le dernier chiffre aux grandes tailles.                     */
+/* / The margin must offset the readout's negative letter-spacing, otherwise   */
+/* the € touches the last digit at large sizes.                                */
+.readout-unit {
+    font-size: 0.45em;
+    font-weight: 400;
+    margin-left: 0.22em;
+    letter-spacing: 0;
+    color: var(--color-text-soft);
+}
+
+/* Etat « rien de selectionne » : le zero s'efface au lieu de crier.          */
+/* / Empty state: the zero recedes instead of shouting.                       */
+.kiosk-readout[data-total-empty="true"] .readout-value {
+    color: var(--color-text-soft);
+}
+
+.kiosk-rule {
+    height: var(--rule-thick);
+    width: clamp(64px, 12vmin, 140px);
+    margin: var(--gap-blocs) 0;
+    background-color: var(--color-accent);
+    border: 0;
+}
+
+.readout-hint {
+    margin: 0;
+    max-width: 34ch;
+    color: var(--color-text-soft);
+}
+
+.kiosk-alert {
+    margin-top: var(--space-5);
+    padding: var(--space-4);
+    border-left: var(--rule-thick) solid var(--color-stop);
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    border-radius: var(--radius-field);
+    font-weight: 700;
+}
+
+/* ========================================================================= */
+/* 4. Pave de touches                                                        */
+/* ========================================================================= */
+
+.kiosk-console {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-blocs);
+    min-width: 0;
+}
+
+/* Six cellules : cinq montants + la touche Effacer. Le pave est complet, il   */
+/* n'y a plus de sixieme bouton orphelin flottant en dessous.                  */
+/* / Six cells: five denominations + the clear key. The keypad is complete;    */
+/* no orphan sixth button floating underneath.                                 */
+.keypad {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--gap-touches);
+}
+
+.key {
+    min-height: max(var(--touch-min), clamp(64px, 13vmin, 132px));
+    display: grid;
+    place-items: center;
+    padding: var(--space-2);
+
+    background-color: var(--color-key-face);
+    color: var(--color-text);
+    border: var(--rule-hair) solid var(--color-rule);
+    border-radius: var(--radius-key);
+
+    font-family: var(--font-ui);
+    font-weight: 700;
+    font-size: var(--text-key);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+
+    /* Un libelle de touche ne se coupe jamais sur deux lignes : « + 20 € » sur */
+    /* deux lignes se lit « + 20 » puis « € », et la touche perd sa hauteur.    */
+    /* / A key label never wraps onto two lines.                                */
+    white-space: nowrap;
+
+    transition:
+        background-color var(--dur-press) var(--ease-out),
+        border-color var(--dur-press) var(--ease-out),
+        transform var(--dur-press) var(--ease-out);
+}
+
+/* L'enfoncement est le seul retour visuel. C'est le geste reel sur un ecran   */
+/* tactile — contrairement au survol, qui n'arrive jamais.                     */
+/* / The press is the only visual feedback. It is the real gesture on a touch  */
+/* screen — unlike hover, which never happens.                                 */
+.key:active {
+    background-color: var(--color-key-press);
+    transform: scale(0.97);
+}
+
+/* Le survol n'existe que pour le mainteneur qui teste au navigateur.          */
+/* / Hover only exists for the maintainer testing in a browser.                */
+@media (hover: hover) {
+    .key:hover {
+        border-color: var(--color-accent);
+    }
+}
+
+/* La touche Effacer est une touche de fonction, pas un bouton dangereux.      */
+/* Elle ne merite pas le rouge : elle n'efface qu'une saisie en cours.         */
+/* / Clear is a function key, not a danger button. It does not deserve red:    */
+/* it only clears an in-progress entry.                                        */
+.key--clear {
+    font-size: var(--text-label);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-soft);
+    background-color: transparent;
+    border-style: dashed;
+}
+
+.key--clear:active {
+    background-color: var(--color-key-press);
+    color: var(--color-text);
+}
+
+/* ========================================================================= */
+/* 5. Barre d'action                                                         */
+/* ========================================================================= */
+
+/* En colonne unique (telephone portrait), la barre colle au bas de l'ecran :  */
+/* c'est la zone du pouce. En deux colonnes (kiosque), elle suit simplement le */
+/* pave. / In one column (phone portrait) the bar sticks to the bottom: the    */
+/* thumb zone. In two columns (kiosk) it simply follows the keypad.            */
+.actionbar {
+    position: sticky;
+    bottom: 0;
+    padding: var(--space-4) 0;
+    padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+    background-color: var(--color-bg);
+    border-top: var(--rule-hair) solid var(--color-rule);
+}
+
+@media (min-aspect-ratio: 5 / 4) and (min-width: 700px) {
+    /* En deux colonnes, c'est le `gap` de .kiosk-console qui separe le pave de */
+    /* la barre. Garder en plus le padding de la barre doublerait l'ecart.      */
+    /* / In two columns, .kiosk-console's `gap` separates the keypad from the   */
+    /* bar. Keeping the bar's padding too would double the gap.                 */
+    .actionbar {
+        position: static;
+        border-top: 0;
+        padding: 0;
+    }
 }
 
 .btn-validate {
-    font-size: 1.8rem;
-    font-weight: bold;
-    padding: 15px 30px;
-    margin: 20px 0;
-    border-radius: 10px;
-    background-color: var(--success-color);
-    color: white;
-    border: none;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    transition: all 0.3s ease;
+    width: 100%;
+    min-height: max(var(--touch-min), clamp(72px, 12vmin, 120px));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding-inline: var(--space-5);
+
+    background-color: var(--color-accent);
+    color: var(--color-on-accent);
+    border: var(--rule-hair) solid transparent;
+    border-radius: var(--radius-key);
+
+    font-family: var(--font-ui);
+    font-weight: 700;
+    font-size: var(--text-action);
+    line-height: 1;
+    cursor: pointer;
+
+    transition:
+        background-color var(--dur-press) var(--ease-out),
+        transform var(--dur-press) var(--ease-out);
 }
 
-.btn-validate:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+.btn-validate:active {
+    background-color: var(--color-accent-press);
+    transform: scale(0.99);
 }
 
-.btn-validate.dark-mode {
-    background-color: #00b4d8;
-    color: white;
-    box-shadow: 0 4px 8px rgba(0, 180, 216, 0.3);
+.btn-validate__label {
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    /* Un libelle de bouton ne passe jamais sur deux lignes.                   */
+    /* / A button label never wraps onto two lines.                            */
+    white-space: nowrap;
 }
 
-.btn-clear {
-    font-size: 1.2rem;
-    font-weight: bold;
-    padding: 10px 20px;
-    margin: 10px 0;
-    border-radius: 10px;
-    background-color: var(--danger-color);
-    color: white;
-    border: none;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    transition: all 0.3s ease;
+.btn-validate__amount {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
 
-.btn-clear:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+.btn-validate__arrow {
+    flex: none;
+    width: 1.1em;
+    height: 1.1em;
+    transition: transform var(--dur-fade) var(--ease-out);
 }
 
-.btn-clear.dark-mode {
-    background-color: #e63946;
-    color: white;
-    box-shadow: 0 4px 8px rgba(230, 57, 70, 0.3);
+.btn-validate:active .btn-validate__arrow {
+    transform: translateX(3px);
 }
 
-.btn-toggle-dark-mode {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    font-size: 1.2rem;
-    padding: 10px 15px;
-    border-radius: 50px;
-    background-color: var(--secondary-color);
-    color: white;
-    border: none;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    transition: all 0.3s ease;
+/* Etat desactive : le bouton reste cliquable pour HTMX (hx-trigger vit        */
+/* dessus), mais il s'annonce inerte. La garde reelle est dans readNfc().      */
+/* / Disabled state: the button stays clickable for HTMX (hx-trigger lives on  */
+/* it) but announces itself inert. The real guard is in readNfc().             */
+.btn-validate[aria-disabled="true"] {
+    background-color: var(--color-key-face);
+    color: var(--color-text-soft);
+    border-color: var(--color-rule);
+    cursor: not-allowed;
 }
 
-.btn-toggle-dark-mode:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+.btn-validate[aria-disabled="true"]:active {
+    background-color: var(--color-key-face);
+    transform: none;
 }
 
-.btn-toggle-dark-mode.dark-mode {
-    background-color: #f8f9fa;
-    color: #212529;
+.btn-validate[aria-disabled="true"] .btn-validate__arrow {
+    opacity: 0.35;
 }
 
-/* Text styles */
-.instruction-text {
-    font-size: 1.5rem;
-    font-weight: bold;
-    margin-bottom: 20px;
+/* ========================================================================= */
+/* 6. Bascule jour / nuit                                                    */
+/* ========================================================================= */
+
+/* Le libelle n'est PAS ecrit par le JS (cela contournait la traduction).      */
+/* Les deux libelles sont dans le HTML, traduits ; le CSS montre le bon selon  */
+/* le theme actif. / The label is NOT written by JS (that bypassed the         */
+/* translation tag). Both labels sit in the HTML, translated; the CSS shows    */
+/* the right one for the active theme.                                         */
+.btn-theme {
+    min-height: var(--touch-min);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+
+    background-color: transparent;
+    color: var(--color-text-soft);
+    border: var(--rule-hair) solid var(--color-rule);
+    border-radius: var(--radius-key);
+
+    font-family: var(--font-ui);
+    font-size: var(--text-label);
+    cursor: pointer;
+    white-space: nowrap;
+
+    transition:
+        background-color var(--dur-press) var(--ease-out),
+        color var(--dur-press) var(--ease-out);
 }
 
-.erreur-input {
-    color: var(--danger-color);
-    font-weight: bold;
-    margin: 10px 0;
+.btn-theme:active {
+    background-color: var(--color-key-press);
+    color: var(--color-text);
 }
 
-#totalAmount {
-    font-weight: bold;
+.btn-theme__icon {
+    flex: none;
+    width: 1.2em;
+    height: 1.2em;
 }
 
-/* ConfirmationCB page styles */
-.payment-info {
-    font-size: 1.5rem;
-    font-weight: bold;
-    margin-bottom: 1.5rem;
+.btn-theme__to-light,
+:root[data-theme="dark"] .btn-theme__to-dark {
+    display: none;
 }
 
-.payment-icons {
-    font-size: 2rem;
-    margin: 1.5rem 0;
+:root[data-theme="dark"] .btn-theme__to-light {
+    display: inline;
 }
 
-.dark-mode .spinner_bootstrap {
-    border-color: rgba(255, 255, 255, 0.2);
-    border-top-color: var(--primary-color);
+/* ========================================================================= */
+/* 7. Ecran « paiement sur le terminal »                                     */
+/* ========================================================================= */
+
+/* Cet ecran n'a qu'un seul message : il reste centre dans les deux            */
+/* orientations, il ne se scinde pas en colonnes.                              */
+/* / This screen carries a single message: it stays centred in both            */
+/* orientations, it does not split into columns.                               */
+.payment {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--gap-blocs);
+    text-align: center;
+    padding: var(--gap-blocs) var(--pad-ecran);
+    padding-bottom: calc(var(--gap-blocs) + env(safe-area-inset-bottom));
+
+    /* Cet ecran empile six blocs. Sur un kiosque bas de plafond (1024x600), la  */
+    /* somme peut depasser la rangee : sans ces deux lignes le bouton ANNULER    */
+    /* sort de l'ecran et devient inatteignable. min-height:0 est indispensable  */
+    /* pour qu'un enfant de grille accepte de retrecir.                          */
+    /* / This screen stacks six blocks. On a short kiosk (1024x600) the sum can  */
+    /* exceed the row: without these two lines the CANCEL button leaves the      */
+    /* screen and becomes unreachable. min-height:0 is required for a grid child */
+    /* to agree to shrink.                                                       */
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* Volontairement plus petit que l'afficheur de l'ecran 1 : ici le montant est  */
+/* un rappel, pas la commande. Il doit laisser la place au bouton ANNULER.      */
+/* / Deliberately smaller than screen 1's readout: here the amount is a         */
+/* reminder, not the control. It must leave room for the CANCEL button.         */
+.payment-amount {
+    font-weight: 700;
+    font-size: clamp(2.25rem, 8vmin, 4.5rem);
+    line-height: 0.95;
+    font-variant-numeric: tabular-nums;
+    margin: 0;
+    overflow-wrap: anywhere;
+    min-width: 0;
+}
+
+.payment-text {
+    margin: 0;
+    max-width: 40ch;
+    color: var(--color-text-soft);
+}
+
+/* Illustration dessinee a la main, en remplacement des emoji carte-fleche :   */
+/* un emoji change de dessin sur chaque appareil et ne s'echelonne pas.        */
+/* / Hand-drawn illustration replacing the card/arrow emoji: an emoji renders  */
+/* differently on every device and does not scale.                             */
+.payment-figure {
+    width: clamp(150px, 22vmin, 300px);
+    height: auto;
+    flex: none;
+    color: var(--color-accent);
+}
+
+.payment-figure__travel {
+    animation: card-travel 2.4s var(--ease-in-out) infinite;
+}
+
+@keyframes card-travel {
+    0%,
+    100% {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    45% {
+        transform: translateX(26px);
+        opacity: 1;
+    }
+    60% {
+        transform: translateX(30px);
+        opacity: 0;
+    }
+    61% {
+        transform: translateX(0);
+        opacity: 0;
+    }
+    75% {
+        transform: translateX(0);
+        opacity: 1;
+    }
 }
 
 .btn-cancel {
-    font-size: 2.2rem;
-    font-weight: bold;
-    padding: 25px 40px;
-    margin: 30px 0;
-    border-radius: 10px;
-    background-color: var(--danger-color);
-    color: white;
-    border: 3px solid #fff;
-    box-shadow: 0 6px 12px rgba(220, 53, 69, 0.4);
-    transition: all 0.3s ease;
-}
+    min-height: max(var(--touch-min), clamp(64px, 10vmin, 96px));
+    padding: var(--space-4) var(--space-7);
 
-.btn-cancel:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
-}
+    background-color: transparent;
+    color: var(--color-stop);
+    border: var(--rule-thick) solid var(--color-stop);
+    border-radius: var(--radius-key);
 
-.btn-cancel.dark-mode {
-    background-color: #d00000;
-    color: white;
-    border: 4px solid #ffcc00;
-    box-shadow: 0 6px 15px rgba(255, 204, 0, 0.4), 0 0 5px rgba(255, 255, 255, 0.3);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-    font-weight: 900;
-}
-
-/* Cancel page styles */
-.cancel-page {
-    background-color: #dc3545;
-    color: white;
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.3s ease;
-}
-
-.cancel-page.dark-mode {
-    background-color: #8b0000;
-    color: white;
-}
-
-.cancel-container {
-    padding: 2rem;
-    height: 100vh;
-}
-
-.cancel-title {
-    font-size: 5rem;
-    font-weight: bold;
-    margin-bottom: 2rem;
+    font-family: var(--font-ui);
+    font-weight: 700;
+    font-size: var(--text-action);
+    line-height: 1;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
-    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    white-space: nowrap;
+    cursor: pointer;
+
+    transition:
+        background-color var(--dur-press) var(--ease-out),
+        color var(--dur-press) var(--ease-out),
+        transform var(--dur-press) var(--ease-out);
 }
 
-/* Success page styles */
-.success-page {
-    background-color: #198754;
-    color: white;
+.btn-cancel:active {
+    background-color: var(--color-stop);
+    color: var(--color-on-stop);
+    transform: scale(0.98);
+}
+
+/* En mode sombre, l'aplat brique est trop sombre pour servir de texte : on    */
+/* remonte le bouton d'annulation sur la teinte claire.                        */
+/* / In dark mode the brick field is too dark for text: lift the cancel button */
+/* onto the lighter tint.                                                      */
+:root[data-theme="dark"] .btn-cancel {
+    color: var(--brick-500);
+    border-color: var(--brick-500);
+}
+
+:root[data-theme="dark"] .btn-cancel:active {
+    background-color: var(--brick-500);
+    color: var(--color-on-stop);
+}
+
+/* ========================================================================= */
+/* 8. Ecrans d'etat pleine page (succes / annulation)                        */
+/* ========================================================================= */
+
+/* Un aplat de couleur plein ecran se lit a cinq metres. C'est le seul endroit */
+/* de la borne ou la couleur porte le message toute seule — d'ou le titre en   */
+/* Staatliches, la seule police d'affichage du projet.                          */
+/* / A full-bleed colour field reads from five metres. The only place on the    */
+/* kiosk where colour carries the message alone.                                */
+.state-screen {
     min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.3s ease;
+    min-height: 100svh;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    padding: var(--pad-ecran);
+    padding-bottom: calc(var(--pad-ecran) + env(safe-area-inset-bottom));
 }
 
-.success-page.dark-mode {
-    background-color: #0a5d36;
-    color: white;
+.state-screen--go {
+    background-color: var(--color-go);
+    color: var(--color-on-go);
 }
 
-.success-container {
-    padding: 2rem;
-    height: 100vh;
+.state-screen--stop {
+    background-color: var(--color-stop);
+    color: var(--color-on-stop);
 }
 
-.success-title {
-    font-size: 5rem;
-    font-weight: bold;
-    margin-bottom: 2rem;
-    text-transform: uppercase;
-    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+.state-title {
+    margin: 0 0 var(--space-5);
+    font-family: var(--font-display);
+    /* Toujours romain : un titre en italique est le tell le plus fiable.       */
+    /* / Always roman: an italic heading is the most reliable tell.             */
+    font-style: normal;
+    font-weight: 400;
+    font-size: var(--text-state);
+    line-height: 0.92;
+    letter-spacing: 0.02em;
+    overflow-wrap: anywhere;
+    min-width: 0;
 }
 
-.timer-container {
-    font-size: 1.8rem;
-    margin-bottom: 2rem;
+.state-mark {
+    width: clamp(64px, 14vmin, 128px);
+    height: auto;
+    margin-bottom: var(--space-5);
 }
 
-.button-container {
-    margin-top: 2rem;
+.state-timer {
+    margin: 0 0 var(--space-7);
+    font-size: var(--text-body);
+    font-variant-numeric: tabular-nums;
+    opacity: 0.85;
 }
 
 .btn-return {
-    font-size: 1.8rem;
-    font-weight: bold;
-    padding: 20px 30px;
-    border-radius: 10px;
-    background-color: white;
-    color: #dc3545;
-    border: none;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    min-height: max(var(--touch-min), clamp(64px, 10vmin, 96px));
+    padding: var(--space-4) var(--space-7);
+
+    background-color: var(--color-on-go);
+    color: var(--ink-900);
+    border: 0;
+    border-radius: var(--radius-key);
+
+    font-family: var(--font-ui);
+    font-weight: 700;
+    font-size: var(--text-action);
+    line-height: 1;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+
+    transition: transform var(--dur-press) var(--ease-out);
 }
 
-.btn-return:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
-    background-color: #f8f9fa;
+.btn-return:active {
+    transform: scale(0.98);
 }
 
-.btn-return.dark-mode {
-    background-color: #2d2d2d;
-    color: white;
-    box-shadow: 0 4px 8px rgba(255, 255, 255, 0.1);
+/* ========================================================================= */
+/* 9. Chargement                                                             */
+/* ========================================================================= */
+
+#spinner {
+    display: none;
 }
 
-/* Success return button */
-.success-return {
-    color: #198754;
+/* fixed et non absolute : sur une page scrollee, absolute cale le voile en    */
+/* haut du DOCUMENT et non du viewport — le voile rate l'ecran.                */
+/* / fixed, not absolute: on a scrolled page, absolute pins the veil to the    */
+/* top of the DOCUMENT, not the viewport — the veil misses the screen.         */
+.htmx-request #spinner,
+#spinner.htmx-request {
+    display: grid;
+    place-items: center;
+    position: fixed;
+    inset: 0;
+    background-color: var(--color-veil);
+    /* Au-dessus du modal SweetAlert2 (1060) et de l'overlay du simulateur     */
+    /* NFC (2000, cf. nfc.js). / Above the SweetAlert2 modal (1060) and the    */
+    /* NFC simulator overlay (2000, see nfc.js).                               */
+    z-index: 9999;
 }
 
-.success-return:hover {
-    color: #0a5d36;
+.spinner-ring {
+    width: clamp(72px, 16vmin, 160px);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    border: var(--rule-thick) solid var(--color-ring-track);
+    border-top-color: var(--color-accent);
+    animation: spin 900ms linear infinite;
 }
 
-.success-return.dark-mode {
-    color: white;
+/* Spinner en ligne de l'ecran « paiement sur le terminal » : il vit sur le    */
+/* fond de la page, pas sur le voile — sa piste est donc le filet courant.     */
+/* Sans cette regle, il n'avait AUCUN style de base : il etait invisible en    */
+/* mode jour. / Inline spinner of the terminal-payment screen: it sits on the  */
+/* page background, so its track is the regular hairline. Without this rule it */
+/* had NO base style at all: invisible in light mode.                          */
+.spinner-inline {
+    width: clamp(40px, 8vmin, 72px);
+    flex: none;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    border: var(--rule-thick) solid var(--color-rule);
+    border-top-color: var(--color-accent);
+    animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ========================================================================= */
+/* 10. Chevrons « posez la carte au-dessus » (modal SweetAlert2)             */
+/* ========================================================================= */
+
+/* Remplace les emoji fleche-haut. Trois chevrons qui montent tour a tour,     */
+/* vers le lecteur NFC, physiquement situe au-dessus de l'ecran.               */
+/* / Replaces the up-arrow emoji. Three chevrons rising in turn, toward the    */
+/* NFC reader physically located above the screen.                             */
+.scan-arrows {
+    width: clamp(48px, 10vmin, 88px);
+    height: auto;
+    margin: var(--space-4) auto;
+    display: block;
+    color: var(--color-accent);
+}
+
+.scan-arrows__chevron {
+    animation: scan-rise 1.5s var(--ease-in-out) infinite;
+}
+
+.scan-arrows__chevron:nth-of-type(2) {
+    animation-delay: 0.18s;
+}
+
+.scan-arrows__chevron:nth-of-type(3) {
+    animation-delay: 0.36s;
+}
+
+@keyframes scan-rise {
+    0%,
+    70%,
+    100% {
+        opacity: 0.25;
+    }
+    35% {
+        opacity: 1;
+    }
+}
+
+/* ========================================================================= */
+/* 11. SweetAlert2 — habillage aux jetons de la borne                        */
+/* ========================================================================= */
+
+/* SweetAlert2 injecte sa feuille de style a l'execution, donc APRES nos       */
+/* <link>. On remonte la specificite avec `body` pour reprendre la main.       */
+/* / SweetAlert2 injects its stylesheet at runtime, so AFTER our <link>.       */
+/* We raise specificity with `body` to win the cascade back.                   */
+body .swal2-popup {
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    border-radius: var(--radius-key);
+    font-family: var(--font-ui);
+}
+
+body .swal2-title {
+    color: var(--color-text);
+    font-weight: 700;
+    font-size: var(--text-action);
+}
+
+body .swal2-html-container {
+    color: var(--color-text-soft);
+    font-size: var(--text-body);
+}
+
+body .swal2-cancel.swal2-styled {
+    min-height: var(--touch-min);
+    background-color: transparent;
+    color: var(--color-stop);
+    border: var(--rule-thick) solid var(--color-stop);
+    border-radius: var(--radius-key);
+    font-weight: 700;
+    font-size: var(--text-action);
+}
+
+body .swal2-timer-progress-bar {
+    background-color: var(--color-accent);
+}
+
+body .swal2-loader {
+    border-color: var(--color-accent) transparent var(--color-accent) transparent;
+}
+
+/* ========================================================================= */
+/* 12. Mouvement reduit                                                      */
+/* ========================================================================= */
+
+/* Les animations spatiales tombent. Les spinners gardent leur rotation :      */
+/* sans elle, plus aucun signal ne dit que la borne travaille — on ralentit    */
+/* simplement la vitesse. / Spatial motion is cut. Spinners keep spinning:     */
+/* without it nothing tells the user the kiosk is working — we just slow them. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: var(--dur-fade) !important;
+        transition-property: opacity, background-color, color !important;
+    }
+
+    .spinner-ring,
+    .spinner-inline {
+        animation-name: spin !important;
+        animation-duration: 1.4s !important;
+        animation-timing-function: linear !important;
+        animation-iteration-count: infinite !important;
+    }
+
+    .payment-figure__travel,
+    .scan-arrows__chevron {
+        animation: none !important;
+        opacity: 1;
+    }
 }

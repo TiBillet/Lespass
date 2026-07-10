@@ -109,8 +109,14 @@ vues accessibles. Seul effet visible : le bouton « + » à côté du select
 (`RelatedFieldWidgetWrapper`) dès qu'une FK pointe vers un modèle enregistré sur
 le même admin site.
 
-- Formulaire de la popup : `generation`, `base_url`, `img`.
+- Formulaire de la popup : **`generation` et `img` uniquement**.
 - `origine` exclu du formulaire, forcé à `connection.tenant` dans `save_model()`.
+  Une génération de cartes appartient toujours au lieu qui la crée : ce n'est
+  pas un choix.
+- `base_url` exclu du formulaire, déduit dans `save_model()` :
+  `https://{tenant.get_primary_domain().domain}/qr/` — le format du CSV
+  historique de Fedow. Le champ étant limité à 60 caractères, on ne le remplit
+  que si l'adresse tient, et on ne l'écrase jamais si elle est déjà renseignée.
 - `get_queryset()` filtre sur `origine=connection.tenant`. **Obligatoire** :
   `Detail` est en `SHARED_APPS`, il n'y a pas d'isolation automatique.
 
@@ -342,8 +348,37 @@ n'existe pas dans le schéma de test d'un `FastTenantTestCase`. Passer par
 | Fichier | Changement |
 |---|---|
 | `QrcodeCashless/admin.py` | `DetailAdmin`, `CarteCashlessAddForm`, `CarteCashlessAdmin` modifié, fonctions module-level (~150 lignes) |
-| `fedow_connect/fedow_api.py` | `CarteInconnueDeFedow`, `retrieve()` 404, suppression de `create()`, `create_cards()` gère le `400` |
+| `QrcodeCashless/templates/admin/cartecashless/aide_ajout.html` | Bloc d'aide (2 encarts, styles inline, `color-mix` sur les variables Unfold) |
+| `QrcodeCashless/models.py` | `Detail.__str__` (plus de `None`) |
+| `fedow_connect/fedow_api.py` | `CarteInconnueDeFedow`, `retrieve()` 404, `create()` devient une façade, `create_cards()` gère le `400` |
+| `Administration/admin/laboutik.py` | `CartePrimaireAdmin` : `autocomplete_fields` + `formfield_for_foreignkey` |
 | `tests/pytest/test_carte_cashless_admin.py` | Nouveaux tests |
+
+## 8. `CartePrimaireAdmin` — recherche sur le numéro imprimé
+
+Le champ `carte` (`OneToOneField` → `CarteCashless`) était un `<select>` brut.
+Deux défauts :
+
+1. Aucune recherche : toutes les cartes en liste déroulante.
+2. **Fuite cross-tenant** : `CarteCashless` est en `SHARED_APPS` et l'admin
+   n'avait pas de `formfield_for_foreignkey`. Le select listait les cartes de
+   **tous les lieux** de l'instance.
+
+**Correctif : les deux ensemble.**
+
+- `autocomplete_fields = ('carte',)` → widget select2. La recherche s'appuie sur
+  `CarteCashlessAdmin.search_fields` (`tag_id`, `number`, `user__email`), et
+  l'`AutocompleteJsonView` de Django passe par `CarteCashlessAdmin.get_queryset()`,
+  déjà filtré sur le tenant. Le libellé affiché est `CarteCashless.__str__`, soit
+  le numéro imprimé.
+- `formfield_for_foreignkey()` → **indispensable en plus**. L'autocomplétion ne
+  pilote que l'affichage et la recherche ; c'est le `queryset` du champ qui
+  **valide** la valeur postée. Sans lui, un `pk` forgé pointant vers la carte
+  d'un autre lieu serait accepté.
+
+Vérifié en dev : une carte sans `detail` (donc hors tenant) n'apparaît pas dans
+l'autocomplétion, et son `pk` posté directement est rejeté par
+`ValidationError: Sélectionnez un choix valide`.
 
 **Migration : non.** `tag_id`, `number` et `uuid` restent `editable=False` sur
 le modèle ; ils ne sont manipulés que comme champs de formulaire.

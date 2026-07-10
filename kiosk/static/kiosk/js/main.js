@@ -1,221 +1,186 @@
-const rfid = new NfcReader() //TODO: import dynamic cordova 
+/**
+ * Pilotage de l'ecran de la borne : montant selectionne et theme jour/nuit.
+ * / Kiosk screen driver: selected amount and light/dark theme.
+ *
+ * LOCALISATION : kiosk/static/kiosk/js/main.js
+ *
+ * Charge par kiosk/templates/kiosk/base.html, APRES nfc.js (qui definit
+ * NfcReader) et APRES htmx.
+ *
+ * CE QUE CE FICHIER NE FAIT PAS / What this file does NOT do :
+ * - Il n'ecrit aucun style en ligne. Le theme est une valeur de `data-theme`
+ *   sur <html> ; tout le reste est du CSS (kiosk.css). L'ancienne version
+ *   posait des `element.style.backgroundColor = "#3a3a3a"` qui gagnaient
+ *   toujours la cascade et ne se nettoyaient jamais completement.
+ * - Il n'ecrit aucun texte visible. Les libelles du bouton de theme sont dans
+ *   partial/topbar.html, traduits. L'ancienne version faisait
+ *   `button.innerHTML = 'Mode Jour'` : l'anglais etait perdu.
+ * - Il ne gere plus le compte a rebours des ecrans finaux : il vit dans
+ *   partial/state_screen.html. Les deux exemplaires tournaient en meme temps
+ *   sur le meme #countdown, et le decompte tombait deux fois par seconde.
+ *
+ * / It writes no inline styles, no visible text, and no countdown: those three
+ * responsibilities moved to CSS, to the templates, and to state_screen.html.
+ */
+
+// Lecteur NFC, partage avec sweet_scan_button.html (rfid.startLecture / stopLecture).
+// / NFC reader, shared with sweet_scan_button.html.
+const rfid = new NfcReader();
+
+// Montant courant, en euros. Globale volontaire : hx-vals la lit directement
+// dans sweet_scan_button.html (`js:{"totalAmount": totalAmount}`).
+// / Current amount in euros. Deliberately global: hx-vals reads it directly.
 let totalAmount = 0;
 
-function goBack() {
-  window.history.back();
+const CLE_STOCKAGE_THEME = "kiosk-theme";
+
+
+/* ------------------------------------------------------------------------- */
+/* Montant                                                                    */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Reporte le montant courant sur tous les afficheurs de la page.
+ * / Mirrors the current amount onto every display on the page.
+ *
+ * Il y en a deux : le grand afficheur a gauche et le rappel dans le bouton
+ * Valider. Ils portent tous les deux l'attribut [data-total-display], ce qui
+ * evite deux ids identiques dans le DOM.
+ * / There are two: the big readout on the left and the reminder inside the
+ * Validate button. Both carry [data-total-display], which avoids a duplicate id.
+ */
+function rafraichirLesAffichagesDuMontant() {
+    const afficheurs = document.querySelectorAll("[data-total-display]");
+    afficheurs.forEach(function (afficheur) {
+        afficheur.textContent = `${totalAmount}`;
+    });
+
+    // L'afficheur passe en gris quand rien n'est selectionne : le zero recule
+    // au lieu de crier. / The readout greys out when nothing is selected.
+    const zoneAfficheur = document.querySelector("[data-total-empty]");
+    if (zoneAfficheur) {
+        zoneAfficheur.dataset.totalEmpty = (totalAmount === 0) ? "true" : "false";
+    }
+
+    // Le bouton reste cliquable (hx-trigger vit dessus) mais s'annonce inerte
+    // tant qu'aucun montant n'est choisi. La garde reelle est dans readNfc().
+    // / The button stays clickable (hx-trigger lives on it) but announces itself
+    // inert while no amount is chosen. The real guard is in readNfc().
+    const boutonValider = document.getElementById("scan_button");
+    if (boutonValider) {
+        boutonValider.setAttribute("aria-disabled", (totalAmount === 0) ? "true" : "false");
+    }
 }
 
-function selectAmount(amount) {
-  totalAmount += amount;
-  document.getElementById("totalAmount").textContent = `${totalAmount}`;
+/**
+ * Ajoute un montant au total. Appele par les touches du pave.
+ * / Adds an amount to the total. Called by the keypad keys.
+ *
+ * @param {number} montantEnEuros - 1, 5, 10, 20 ou 50
+ */
+function selectAmount(montantEnEuros) {
+    totalAmount += montantEnEuros;
+    rafraichirLesAffichagesDuMontant();
 }
 
-function validateAmount() {
-  if (totalAmount > 0) {
-    localStorage.setItem("selectedAmount", totalAmount);
-    return true;
-  } else {
-    alert("Veuillez sélectionner un montant.");
-    return false;
-  }
-}
-
-function selectPaymentMethod(method) {
-  localStorage.setItem("paymentMethod", method);
-
-  if (method === "Carte bancaire") {
-    window.location.href = "confirmationCB.html";
-  } else if (method === "Espèces") {
-    window.location.href = "confirmationCash.html";
-  }
-}
-
+/**
+ * Remet le total a zero. Appele par la touche Effacer et par
+ * sweet_scan_button.html quand le modal de scan est annule ou expire.
+ * / Resets the total. Called by the Clear key and by sweet_scan_button.html.
+ */
 function clearAmount() {
-  totalAmount = 0;
-  document.getElementById("totalAmount").textContent = `${totalAmount}`;
-  localStorage.removeItem("selectedAmount");
+    totalAmount = 0;
+    rafraichirLesAffichagesDuMontant();
 }
 
-document.addEventListener("DOMContentLoaded", function () {
-  const selectedAmount = localStorage.getItem("selectedAmount");
-  const paymentMethod = localStorage.getItem("paymentMethod");
 
-  if (selectedAmount && paymentMethod) {
-    document.getElementById("selectedAmount").textContent = selectedAmount;
-    document.getElementById("paymentMethod").textContent = paymentMethod;
-  }
-});
+/* ------------------------------------------------------------------------- */
+/* Theme jour / nuit                                                          */
+/* ------------------------------------------------------------------------- */
 
-function updateDarkModeButton() {
-  const button = document.getElementById("toggleDarkModeBtn");
-  if (button) {
-    if (document.body.classList.contains("dark-mode")) {
-      button.innerHTML = 'Mode Jour';
-      button.setAttribute('aria-label', 'Activer le mode jour');
-    } else {
-      button.innerHTML = 'Mode Nuit';
-      button.setAttribute('aria-label', 'Activer le mode nuit');
+/**
+ * Applique un theme et met a jour l'etat annonce du bouton.
+ * / Applies a theme and updates the button's announced state.
+ *
+ * Le CSS fait tout le reste (kiosk.css section 6 : il montre le bon libelle et
+ * la bonne icone selon :root[data-theme]).
+ * / The CSS does everything else.
+ *
+ * @param {string} nomDuTheme - "light" ou "dark"
+ */
+function appliquerLeTheme(nomDuTheme) {
+    document.documentElement.dataset.theme = nomDuTheme;
+
+    const boutonTheme = document.getElementById("toggleDarkModeBtn");
+    if (boutonTheme) {
+        boutonTheme.setAttribute("aria-pressed", (nomDuTheme === "dark") ? "true" : "false");
     }
-  }
 }
 
+/**
+ * Bascule entre le jour et la nuit, et memorise le choix.
+ * / Toggles between day and night, and remembers the choice.
+ *
+ * Appele par le onclick du bouton dans partial/topbar.html.
+ */
 function toggleDarkMode() {
-  document.body.classList.toggle("dark-mode");
-  const elements = document.querySelectorAll(
-    ".main-center, .card, .btn-amount, .btn-validate, .btn-clear, .btn-cancel, .btn-toggle-dark-mode, .cancel-page, .success-page, .btn-return"
-  );
-  elements.forEach((el) => el.classList.toggle("dark-mode"));
+    const themeActuel = document.documentElement.dataset.theme;
+    const themeSuivant = (themeActuel === "dark") ? "light" : "dark";
 
-  if (document.body.classList.contains("dark-mode")) {
-    localStorage.setItem("theme", "dark");
-    applyDarkModeStyles();
-  } else {
-    localStorage.setItem("theme", "light");
-    removeDarkModeStyles();
-  }
-  updateDarkModeButton();
+    appliquerLeTheme(themeSuivant);
+
+    try {
+        localStorage.setItem(CLE_STOCKAGE_THEME, themeSuivant);
+    } catch (erreurStockage) {
+        // Navigation privee ou WebView verrouillee : le theme s'applique quand
+        // meme, il ne survivra simplement pas au rechargement.
+        // / Private browsing or locked-down WebView: the theme still applies, it
+        // just will not survive a reload.
+        console.warn("Theme non memorise :", erreurStockage);
+    }
 }
 
-function applyDarkModeStyles() {
-  // Apply dark mode styles for confirmationCB.html
-  const card = document.querySelector(".card");
-  if (card) {
-    card.style.backgroundColor = "#3a3a3a"; // Slightly lighter than default #2d2d2d
-    card.style.boxShadow = "0 4px 12px rgba(255, 255, 255, 0.15)";
-    card.style.border = "1px solid rgba(255, 255, 255, 0.1)";
-  }
 
-  // Update cancel button styling for dark mode
-  const cancelButton = document.querySelector(".btn-cancel");
-  if (cancelButton) {
-    cancelButton.style.border = "4px solid #ffcc00"; // Brighter, thicker border for better visibility
-    cancelButton.style.backgroundColor = "#d00000"; // Darker red for better contrast
-    cancelButton.style.boxShadow = "0 6px 15px rgba(255, 204, 0, 0.4), 0 0 5px rgba(255, 255, 255, 0.3)"; // Enhanced shadow with yellow glow
-    cancelButton.style.color = "#ffffff"; // Ensure text is white for contrast
-    cancelButton.style.textShadow = "0 1px 2px rgba(0, 0, 0, 0.5)"; // Add text shadow for better readability
-    cancelButton.style.fontWeight = "900"; // Extra bold text
-  }
+/* ------------------------------------------------------------------------- */
+/* Amorcage                                                                   */
+/* ------------------------------------------------------------------------- */
 
-  // Ensure spinner is visible in dark mode
-  const spinner = document.querySelector(".spinner_bootstrap");
-  if (spinner) {
-    spinner.style.borderColor = "rgba(255, 255, 255, 0.2)";
-    spinner.style.borderTopColor = "#3a86ff"; // Bright blue for visibility
-  }
-
-  // Enhance text contrast
-  const paymentInfo = document.querySelector(".payment-info");
-  if (paymentInfo) {
-    paymentInfo.style.color = "#ffffff";
-    paymentInfo.style.textShadow = "0 1px 2px rgba(0, 0, 0, 0.3)";
-  }
-
-  // Make payment icons more visible
-  const paymentIcons = document.querySelector(".payment-icons");
-  if (paymentIcons) {
-    paymentIcons.style.color = "#ffffff";
-    paymentIcons.style.fontSize = "2.2rem"; // Slightly larger
-    paymentIcons.style.textShadow = "0 1px 3px rgba(0, 0, 0, 0.4)";
-  }
-}
-
-function removeDarkModeStyles() {
-  // Remove dark mode styles for confirmationCB.html
-  const card = document.querySelector(".card");
-  if (card) {
-    card.style.backgroundColor = "";
-    card.style.boxShadow = "";
-    card.style.border = "";
-  }
-
-  // Reset cancel button styling
-  const cancelButton = document.querySelector(".btn-cancel");
-  if (cancelButton) {
-    cancelButton.style.border = "3px solid #fff";
-    cancelButton.style.backgroundColor = "";
-    cancelButton.style.boxShadow = "0 6px 12px rgba(220, 53, 69, 0.4)";
-    cancelButton.style.color = "";
-    cancelButton.style.textShadow = "";
-    cancelButton.style.fontWeight = "";
-  }
-
-  // Reset spinner
-  const spinner = document.querySelector(".spinner_bootstrap");
-  if (spinner) {
-    spinner.style.borderColor = "";
-    spinner.style.borderTopColor = "";
-  }
-
-  // Reset text contrast
-  const paymentInfo = document.querySelector(".payment-info");
-  if (paymentInfo) {
-    paymentInfo.style.color = "";
-    paymentInfo.style.textShadow = "";
-  }
-
-  // Reset payment icons
-  const paymentIcons = document.querySelector(".payment-icons");
-  if (paymentIcons) {
-    paymentIcons.style.color = "";
-    paymentIcons.style.fontSize = "";
-    paymentIcons.style.textShadow = "";
-  }
-}
-
-// Function to initialize the page
+/**
+ * Remet l'ecran dans un etat coherent.
+ * / Brings the screen back to a coherent state.
+ *
+ * Appele au chargement, et apres chaque swap HTMX qui remplace #tb-kiosque.
+ * Le theme est deja pose sur <html> par le script d'amorcage de base.html ; ici
+ * on ne fait que resynchroniser aria-pressed sur le bouton fraichement swappe.
+ * / Called on load and after every HTMX swap replacing #tb-kiosque. The theme is
+ * already set on <html> by base.html's boot script; here we only resync
+ * aria-pressed on the freshly swapped button.
+ */
 function initializePage() {
-  const theme = localStorage.getItem("theme");
-  if (theme === "dark") {
-    document.body.classList.add("dark-mode");
-    const elements = document.querySelectorAll(
-      ".main-center, .card, .btn-amount, .btn-validate, .btn-clear, .btn-cancel, .btn-toggle-dark-mode, .cancel-page, .success-page, .btn-return"
-    );
-    elements.forEach((el) => el.classList.add("dark-mode"));
-    applyDarkModeStyles();
-  }
-  updateDarkModeButton();
+    const themeCourant = document.documentElement.dataset.theme || "light";
+    appliquerLeTheme(themeCourant);
 
-  // Initialize countdown timer for cancel page
-  const countdownElement = document.getElementById('countdown');
-  if (countdownElement) {
-    let seconds = 15;
-    const timer = setInterval(function () {
-      seconds--;
-      countdownElement.textContent = seconds;
-
-      if (seconds <= 0) {
-        clearInterval(timer);
-        window.location.href = "/kiosk/";
-      }
-    }, 1000);
-  }
-
-  // Initialize amount display if available
-  const selectedAmount = localStorage.getItem("selectedAmount");
-  const paymentMethod = localStorage.getItem("paymentMethod");
-
-  if (selectedAmount && paymentMethod) {
-    const selectedAmountElement = document.getElementById("selectedAmount");
-    const paymentMethodElement = document.getElementById("paymentMethod");
-
-    if (selectedAmountElement) {
-      selectedAmountElement.textContent = selectedAmount;
+    // L'ecran de choix du montant vient d'etre (re)rendu : le serveur y affiche
+    // 0, la variable JS doit repartir de 0 elle aussi. Les autres ecrans (attente,
+    // reussite, annulation) n'ont pas d'afficheur : on ne touche a rien.
+    // / The amount screen has just been (re)rendered: the server prints 0, so the
+    // JS variable must restart at 0 too. Other screens have no display: no-op.
+    const ecranDuMontantEstAffiche = document.querySelector("[data-total-display]") !== null;
+    if (ecranDuMontantEstAffiche) {
+        totalAmount = 0;
+        rafraichirLesAffichagesDuMontant();
     }
-
-    if (paymentMethodElement) {
-      paymentMethodElement.textContent = paymentMethod;
-    }
-  }
 }
 
-
-// Initialize on page load
 document.addEventListener("DOMContentLoaded", initializePage);
 
-// Initialize when HTMX swaps content
-document.addEventListener('htmx:afterSwap', function (event) {
-  // Only run if the swap target is the tb-kiosque element or its children
-  if (event.detail.target.id === 'tb-kiosque' || event.detail.target.closest('#tb-kiosque')) {
-    initializePage();
-  }
+// HTMX remplace #tb-kiosque : on reinitialise l'ecran fraichement injecte.
+// / HTMX replaces #tb-kiosque: re-initialise the freshly injected screen.
+document.addEventListener("htmx:afterSwap", function (evenementSwap) {
+    const cible = evenementSwap.detail.target;
+    const swapDansLaBorne = cible.id === "tb-kiosque" || cible.closest("#tb-kiosque") !== null;
+
+    if (swapDansLaBorne) {
+        initializePage();
+    }
 });

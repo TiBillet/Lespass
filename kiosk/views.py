@@ -26,13 +26,15 @@ Rebranchings:
 """
 
 import logging
-import time
 
 import stripe
 from django.conf import settings
 from django.db import connection
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, render
+# Levee par Celery quand le broker (Redis) est injoignable.
+# / Raised by Celery when the broker (Redis) is unreachable.
+from kombu.exceptions import OperationalError
 from django.utils.translation import gettext_lazy as _
 from django_htmx.http import HttpResponseClientRedirect
 from rest_framework import permissions, viewsets
@@ -241,23 +243,29 @@ class KioskViewSet(viewsets.ViewSet):
             }
             return render(request, "kiosk/select_amount_content.html", context)
 
-        # Lancement de la tache Celery de suivi du statut
-        # / Start the status-polling Celery task
+        # Lancement de la tache Celery de suivi du statut.
+        #
+        # On n'attend PAS que la tache passe en STARTED : si tous les workers sont
+        # occupes, elle reste PENDING quelques secondes, alors que le TPE demande
+        # deja la carte. Attendre reviendrait a afficher « le suivi n'a pas pu
+        # demarrer » pendant que le client paie.
+        #
+        # Le seul echec detectable ici est un broker injoignable : `.delay()` leve
+        # alors immediatement. Tout le reste (worker mort, message perdu) est
+        # rattrape par deux filets : le rejeu d'etat a la connexion du websocket
+        # (TerminalConsumer.replay_payment_state_if_finished) et le sondage lent
+        # `payment_status` du template d'attente.
+        #
+        # / We do NOT wait for the task to reach STARTED: with all workers busy it
+        # stays PENDING while the reader already asks for the card. The only failure
+        # detectable here is an unreachable broker: `.delay()` raises at once.
+        # Everything else is caught by the websocket state replay and the slow
+        # `payment_status` poll of the waiting template.
         logger.info(f"Started Celery task to poll payment intent status for ID: {payment_intent.pk}")
-        poll_payment = poll_payment_intent_status.delay(payment_intent.pk)
-
-        # Verification que la tache Celery a bien demarre
-        # / Check the Celery task actually started
-        retry_count = 0
-        while poll_payment.status != "STARTED":
-            logger.info(f"WAIT POLLING PAYMENT INTENT STATUS {poll_payment.status} RESULT : {poll_payment.result}")
-            time.sleep(1)
-            retry_count += 1
-            if retry_count > 5:
-                break
-
-        if poll_payment.status != 'STARTED':
-            logger.error(f"WAIT POLLING PAYMENT INTENT STATUS {poll_payment.status} RESULT : {poll_payment.result}")
+        try:
+            poll_payment_intent_status.delay(payment_intent.pk)
+        except OperationalError as erreur_broker:
+            logger.error(f"refill_with_wisepos : broker Celery injoignable : {erreur_broker}")
             # HTMX ne swap pas les 5xx : on affiche un message d'erreur (200) plutot
             # qu'un ecran silencieux. / HTMX does not swap 5xx: show an error
             # message (200) instead of a silent screen.
@@ -268,8 +276,6 @@ class KioskViewSet(viewsets.ViewSet):
             }
             return render(request, "kiosk/select_amount_content.html", context)
 
-        logger.info(f"END WAIT POLLING PAYMENT INTENT STATUS {poll_payment.status} RESULT : {poll_payment.result}")
-
         # Renvoie la partie websocket pour le suivi de l'intention de paiement
         # / Return the websocket part to track the payment intent
         return render(request, 'kiosk/waiting_credit_card_terminal.html', context={
@@ -278,6 +284,51 @@ class KioskViewSet(viewsets.ViewSet):
             'terminal': terminal,
             'payment_intent': payment_intent,
         })
+
+    @action(detail=True, methods=['GET'], url_path='status')
+    def payment_status(self, request, pk):
+        """
+        GET /kiosk/{pk}/status/ — filet de secours du websocket.
+        / GET /kiosk/{pk}/status/ — websocket safety net.
+
+        Le template d'attente sonde cette route toutes les 10 secondes. Elle ne
+        renvoie quelque chose QUE si le paiement est termine : l'ecran final
+        (success/cancel) porte un hx-swap-oob qui remplace #tb-kiosque, ce qui
+        emporte au passage le declencheur du sondage.
+
+        Tant que le paiement est en cours : 204, et HTMX ne swappe rien.
+
+        Pourquoi ce filet : le websocket ne couvre pas la mort du worker Celery
+        apres son demarrage. Le rejeu d'etat du consumer ne joue qu'a la
+        (re)connexion ; si la borne reste connectee et que plus personne ne pousse,
+        l'ecran resterait sur le spinner.
+
+        / The waiting template polls this route every 10s. It answers only when the
+        payment is finished: the final screen carries an hx-swap-oob replacing
+        #tb-kiosque, which removes the poll trigger. While in progress: 204.
+        """
+        payment_intent_db = get_object_or_404(PaymentsIntent, pk=pk)
+
+        # Meme garde que le websocket : ce paiement appartient-il a cette borne ?
+        # L'admin du tenant est tolere (acces navigateur pour demo/debug, cf.
+        # IsKioskTerminal).
+        # / Same guard as the websocket: does this payment belong to this device?
+        # The tenant admin is tolerated (browser access for demo/debug).
+        user = request.user
+        est_la_borne_proprietaire = (payment_intent_db.terminal.term_user_id == user.id)
+        est_admin_du_tenant = user.is_tenant_admin(connection.tenant)
+        if not est_la_borne_proprietaire and not est_admin_du_tenant:
+            logger.error(f"payment_status : {user} n'est pas proprietaire du paiement {pk}")
+            raise Http404
+
+        if payment_intent_db.status == PaymentsIntent.SUCCEEDED:
+            return render(request, "kiosk/success.html")
+        if payment_intent_db.status == PaymentsIntent.CANCELED:
+            return render(request, "kiosk/cancel.html")
+
+        # Paiement toujours en cours : 204, HTMX ne swappe rien.
+        # / Still in progress: 204, HTMX swaps nothing.
+        return HttpResponse(status=204)
 
     @action(detail=True, methods=['GET'])
     def cancel(self, request, pk):

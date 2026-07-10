@@ -1,51 +1,111 @@
 {% load i18n %}
+{% comment %}
+ECRAN 2 — PAIEMENT EN COURS SUR LE TERMINAL STRIPE
+/ Screen 2 — Payment in progress on the Stripe terminal
 
-<div id="tb-kiosque" data-testid="kiosk-waiting-page">
-    <div class="container">
-        <div class="header-space position-relative">
-            <button id="toggleDarkModeBtn" class="btn btn-toggle-dark-mode" data-testid="kiosk-dark-mode-toggle"
-                    onclick="toggleDarkMode()" aria-label="{% translate 'Activer le mode nuit' %}">{% translate "Mode Nuit" %}
+LOCALISATION : kiosk/templates/kiosk/waiting_credit_card_terminal.html
+
+Rendu par KioskViewSet.refill_with_wisepos et swappe par HTMX en innerHTML
+DANS #tb-kiosque. Ce partial ne doit donc PAS declarer d'id #tb-kiosque : il en
+declarait un, ce qui creait deux elements de meme id dans le DOM et rendait
+ambigu le swap OOB envoye ensuite par le websocket (success.html / cancel.html).
+/ Rendered by KioskViewSet.refill_with_wisepos and swapped by HTMX as innerHTML
+INSIDE #tb-kiosque. This partial must therefore NOT declare a #tb-kiosque id: it
+used to, which put two same-id elements in the DOM and made the websocket's
+later OOB swap ambiguous.
+
+FLUX :
+1. La section ws-connect ouvre le websocket sur l'id du PaymentIntent Stripe.
+2. kiosk/tasks.py:poll_payment_intent_status sonde Stripe puis pousse
+   success.html ou cancel.html (swap OOB de #tb-kiosque).
+3. Le bouton Annuler appelle /kiosk/{pk}/cancel/ et se remplace lui-meme.
+{% endcomment %}
+
+<div class="kiosk-screen" data-testid="kiosk-waiting-page">
+
+    {% include "kiosk/partial/topbar.html" with titre_ecran=_("Paiement") %}
+
+    <section class="payment"
+             hx-ext="ws"
+             ws-connect="/ws/terminal/{{ payment_intent.payment_intent_stripe_id }}/">
+
+        <div aria-live="polite">
+            <p class="readout-label">{% translate "Montant à recharger" %}</p>
+            <p class="payment-amount" data-testid="kiosk-waiting-amount">
+                {{ amount|floatformat:2 }}<span class="readout-unit" aria-hidden="true">€</span>
+                <span class="visually-hidden">{% translate "euros" %}</span>
+            </p>
+        </div>
+
+        {# Illustration dessinee a la main : la carte glisse vers le terminal. #}
+        {# Elle remplace la file d'emoji 💳 ➡️ 💳 ➡️, qui changeait de dessin sur #}
+        {# chaque appareil et ne suivait pas la couleur du theme. #}
+        {# / Hand-drawn illustration: the card glides toward the terminal. It #}
+        {# replaces the card/arrow emoji queue, which rendered differently on #}
+        {# every device and ignored the theme colour. #}
+        <svg class="payment-figure" viewBox="0 0 200 96" fill="none" stroke="currentColor"
+             stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <g class="payment-figure__travel">
+                <rect x="6" y="30" width="64" height="44" rx="5"/>
+                <path d="M6 44h64"/>
+                <rect x="14" y="55" width="17" height="11" rx="2"/>
+            </g>
+            <path d="M100 40l10 8-10 8" opacity="0.45"/>
+            <path d="M112 40l10 8-10 8" opacity="0.85"/>
+            <rect x="128" y="6" width="62" height="84" rx="7"/>
+            <rect x="138" y="17" width="42" height="25" rx="2"/>
+            <circle cx="145" cy="56" r="3.2" fill="currentColor" stroke="none"/>
+            <circle cx="159" cy="56" r="3.2" fill="currentColor" stroke="none"/>
+            <circle cx="173" cy="56" r="3.2" fill="currentColor" stroke="none"/>
+            <circle cx="145" cy="70" r="3.2" fill="currentColor" stroke="none"/>
+            <circle cx="159" cy="70" r="3.2" fill="currentColor" stroke="none"/>
+            <circle cx="173" cy="70" r="3.2" fill="currentColor" stroke="none"/>
+        </svg>
+
+        <p class="payment-text">
+            {% translate "Veuillez suivre les indications du terminal de paiement à droite de cet écran." %}
+        </p>
+
+        <div class="spinner-inline" role="status">
+            <span class="visually-hidden">{% translate "Paiement en cours..." %}</span>
+        </div>
+
+        {# Zone ecrasee par les messages OOB du websocket. Elle reste masquee : #}
+        {# le consumer n'y ecrit rien d'utile a l'usager (cf. wsocket/consumers.py). #}
+        {# / Region overwritten by the websocket's OOB messages. Kept hidden: the #}
+        {# consumer writes nothing user-facing into it. #}
+        <div hidden>
+            <div id="message"></div>
+        </div>
+
+        {#
+        Filet de secours du websocket : sonde le statut toutes les 10 secondes.
+        Tant que le paiement est en cours, la vue repond 204 et HTMX ne swappe rien.
+        Des qu'il est termine, elle renvoie success/cancel, dont le hx-swap-oob
+        remplace #tb-kiosque : ce declencheur quitte alors le DOM et le sondage
+        s'arrete de lui-meme.
+        Couvre la mort du worker Celery apres son demarrage, que ni le websocket ni
+        le rejeu d'etat a la connexion ne detectent.
+
+        / Websocket safety net: polls the status every 10s. While the payment is in
+        progress the view answers 204 and HTMX swaps nothing. Once finished it
+        returns success/cancel, whose hx-swap-oob replaces #tb-kiosque, removing
+        this trigger: the poll stops by itself. Covers a Celery worker dying after
+        it started, which neither the websocket nor the connect-time replay sees.
+        #}
+        <div hx-get="{% url 'kiosk-payment-status' pk=payment_intent.pk %}"
+             hx-trigger="every 10s"
+             hx-swap="none"
+             data-testid="kiosk-status-fallback"></div>
+
+        <div id="cancelButton">
+            <button type="button" class="btn-cancel" data-testid="kiosk-cancel-button"
+                    hx-get="/kiosk/{{ payment_intent.pk }}/cancel/"
+                    hx-trigger="click"
+                    hx-target="#cancelButton"
+                    hx-swap="outerHTML">
+                {% translate "Annuler" %}
             </button>
         </div>
-        <div class="main-center">
-            <div class="row justify-content-center">
-                <div class="col-12 col-md-10 col-lg-8">
-                    <section hx-ext="ws" ws-connect="/ws/terminal/{{ payment_intent.payment_intent_stripe_id }}/">
-                        <div class="card">
-                            <div class="card-body">
-                                <div class="payment-info text-center" aria-live="polite">
-                                    {% blocktranslate with montant=amount|floatformat:2 %}Vous souhaitez recharger <strong>{{ montant }}€</strong>.{% endblocktranslate %}
-                                    <br>
-                                    {% translate "Veuillez suivre les indications du terminal de paiement à droite de cet écran." %}
-                                </div>
-                                <div class="payment-icons text-center" aria-hidden="true">
-                                    💳 ➡️ 💳 ➡️ 💳 ➡️ 💳 ➡️
-                                </div>
-                                <div class="spinner-box">
-                                    <div class="spinner_bootstrap" id="spinnerCB" role="status">
-                                        <span class="visually-hidden">{% translate "Paiement en cours..." %}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {# La partie retournée par le websocket, écrasée par le message OOB #}
-                        {# / The part returned by the websocket, overwritten by the OOB message #}
-                        <div style="display: none">
-                            <div id="message"></div>
-                        </div>
-
-                        <div class="d-flex justify-content-center" id="cancelButton">
-                            <button class="btn btn-cancel" data-testid="kiosk-cancel-button"
-                                    style="font-size: 2.2rem; padding: 25px 40px; margin: 30px 0; box-shadow: 0 6px 12px rgba(220, 53, 69, 0.4); border: 3px solid #fff;"
-                                    hx-get="/kiosk/{{ payment_intent.pk }}/cancel/"
-                                    hx-trigger="click" hx-target="#cancelButton" hx-swap="outerHTML">
-                                <span aria-hidden="true">❌</span> {% translate "ANNULER" %}
-                            </button>
-                        </div>
-                    </section>
-                </div>
-            </div>
-        </div>
-    </div>
+    </section>
 </div>

@@ -64,83 +64,117 @@ let NfcReader = class {
   }
 
   simule() {
-    // compose le message à afficher
-    let uiSimu = `<div id="nfc-reader-simu-overlay">
-      <fieldset id="nfc-reader-simu-container">
-        <legend data-i8n="nfcCardSimulation,capitalize">Nfc - Simulation</legend>`
+    // Simulateur de cartes : un panneau discret, replie en bas de l'ecran.
+    // On clique sur son en-tete pour deplier la liste des cartes.
+    //
+    // Il ne masque PAS le modal SweetAlert : le lecteur physique tourne en
+    // parallele (cf. startLecture), et le message « scannez votre carte » doit
+    // rester lisible. C'est le meme principe que le bouton .nfc-toggle-simu de
+    // la caisse LaBoutik (laboutik/static/js/nfc.js).
+    //
+    // / Card simulator: a discreet panel, collapsed at the bottom of the screen.
+    // It does NOT cover the SweetAlert modal: the physical reader runs in
+    // parallel and the "tap your card" message must stay readable.
 
-    this.simuData.forEach((item, i) => {
-      uiSimu += `
-        <div class="nfc-reader-simu-bt" tag-id="${item.tagId}">${item.name}</div>
-      `
+    // Un seul panneau a la fois (startLecture peut etre rappele).
+    // / Only one panel at a time (startLecture may be called again).
+    const panneauExistant = document.querySelector('#nfc-reader-simu-panel')
+    if (panneauExistant) {
+      panneauExistant.remove()
+    }
+
+    let cartesHtml = ''
+    this.simuData.forEach((item) => {
+      cartesHtml += `
+        <div class="nfc-reader-simu-bt" tag-id="${item.tagId}" data-testid="kiosk-nfc-simu-carte">${item.name}</div>`
     })
 
-    uiSimu += `
-      </fieldset>
+    const uiSimu = `<div id="nfc-reader-simu-panel" data-testid="kiosk-nfc-simulator">
+      <button type="button"
+              id="nfc-reader-simu-toggle"
+              data-testid="kiosk-nfc-simu-toggle"
+              aria-expanded="false"
+              aria-controls="nfc-reader-simu-cartes">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
+          <path d="M9 9l-2 3 2 3" stroke="currentColor" stroke-width="2"/>
+          <path d="M15 9l2 3-2 3" stroke="currentColor" stroke-width="2"/>
+        </svg>
+        <span data-i8n="nfcCardSimulation,capitalize">Simulateur de cartes</span>
+      </button>
+      <div id="nfc-reader-simu-cartes" hidden>${cartesHtml}</div>
     </div>
     <style>
-      #nfc-reader-simu-overlay {
-        width: 100vw;
-        height: 100vh;
-        position: absolute;
-        left: 0;
-        top: 0;
+      #nfc-reader-simu-panel {
+        position: fixed;
+        left: 50%;
+        bottom: 0;
+        transform: translateX(-50%);
         /* au-dessus du modal SweetAlert2 (.swal2-container : z-index 1060),
-           sinon les clics sont captés par le backdrop et les cartes sont
-           inatteignables / above the SweetAlert2 modal (.swal2-container:
-           z-index 1060), otherwise clicks are caught by the backdrop and
-           the cards are unreachable */
+           sinon les clics sont captes par le backdrop
+           / above the SweetAlert2 modal, otherwise clicks are swallowed */
         z-index: 2000;
-        opacity: 0.9;
-        display: flex;
-		    flex-direction: column;
-		    justify-content: center;
-		    align-items: center;
-        background-color:#000000;
+        background: #ffffff;
+        color: #111111;
+        border-radius: 12px 12px 0 0;
+        box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.35);
+        max-width: 96vw;
       }
 
-      #nfc-reader-simu-container {
-        min-height: 200px;
-        padding: 20px;
-        background-color:rgba(255, 255, 255,1);
-        color: #000000;
-        opacity: 1;
+      #nfc-reader-simu-toggle {
         display: flex;
-		    flex-direction: column;
-		    justify-content: center;
-		    align-items: center;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: 10px 18px;
+        background: transparent;
+        border: none;
+        color: inherit;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      #nfc-reader-simu-cartes {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 12px;
+        padding: 0 18px 18px 18px;
+      }
+
+      #nfc-reader-simu-cartes[hidden] {
+        display: none;
       }
 
       .nfc-reader-simu-bt {
-        width: 150px;
-        height: 80px;
+        min-width: 120px;
+        padding: 18px 12px;
         background-color: #0000ff;
         color: #ffffff;
-		    display: flex;
-		    flex-direction: row;
-		    justify-content: center;
-		    align-items: center;
-        font-size: 1.5rem;
-        margin-bottom: 2rem;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 1.25rem;
         border-radius: 8px;
         font-weight: bold;
-	    }
-
-      .nfc-reader-simu-ligne label {
-        margin-left: 10px;
+        cursor: pointer;
       }
     </style>`
     document.body.insertAdjacentHTML('beforeend', uiSimu)
 
-    // clic sur le fond noir (hors cartes) : fermer l'overlay pour rendre la
-    // main au modal SweetAlert (bouton Annuler), sans envoyer de tagId
-    // / click on the black background (outside the cards): close the overlay
-    // to give back control to the SweetAlert modal (Cancel button), no tagId sent
-    const overlaySimu = document.querySelector('#nfc-reader-simu-overlay')
-    overlaySimu.addEventListener('click', (clickEvent) => {
-      if (clickEvent.target === overlaySimu) {
-        overlaySimu.remove()
+    // Deplie / replie la liste des cartes.
+    // / Expand / collapse the card list.
+    const boutonToggle = document.querySelector('#nfc-reader-simu-toggle')
+    const listeCartes = document.querySelector('#nfc-reader-simu-cartes')
+    boutonToggle.addEventListener('click', () => {
+      const etaitReplie = listeCartes.hasAttribute('hidden')
+      if (etaitReplie) {
+        listeCartes.removeAttribute('hidden')
+      } else {
+        listeCartes.setAttribute('hidden', '')
       }
+      boutonToggle.setAttribute('aria-expanded', etaitReplie ? 'true' : 'false')
     })
 
     document.querySelectorAll('.nfc-reader-simu-bt').forEach((bt) => {
@@ -148,10 +182,10 @@ let NfcReader = class {
         const tagId = bt.getAttribute('tag-id')
         console.log('tagId =', tagId);
 
-        // hide ui simu
-        document.querySelector('#nfc-reader-simu-overlay').remove()
+        // Retire le panneau, puis envoie le resultat comme le ferait le lecteur.
+        // / Remove the panel, then emit the result as the reader would.
+        document.querySelector('#nfc-reader-simu-panel').remove()
 
-        // envoyer le résultat du lecteur
         const event = new CustomEvent("nfcResult", { detail: tagId })
         document.body.dispatchEvent(event)
       })
@@ -217,10 +251,26 @@ let NfcReader = class {
 
   startLecture(options) {
     console.log('0 -> startLecture  --  DEMO =', window?.DEMO)
-    // simule (mode DEMO du kiosque ou demande explicite) / simulate (kiosk
-    // DEMO mode or explicit request)
-    if (window.DEMO !== undefined || options?.simulation === true) {
+
+    // En mode DEMO, le simulateur s'affiche EN PLUS du lecteur physique, comme
+    // sur l'app Android : on peut cliquer une carte simulee OU poser une vraie
+    // carte sur le lecteur. Le premier des deux qui repond gagne.
+    // C'est 'nfcResult' qui tranche : il ferme le modal SweetAlert, dont le
+    // willClose appelle stopLecture() -> l'overlay est retire et le lecteur
+    // arrete. Le nettoyage est donc commun aux deux chemins.
+    // / In DEMO mode the simulator is shown ALONGSIDE the physical reader, like
+    // the Android app: click a simulated card OR tap a real one. First one wins;
+    // 'nfcResult' closes the modal, whose willClose calls stopLecture().
+    const modeDemoActif = (window.DEMO !== undefined)
+    const simulationSeuleDemandee = (options?.simulation === true)
+
+    if (modeDemoActif || simulationSeuleDemandee) {
       this.simule()
+    }
+
+    // Demande explicite de simulation : on n'allume pas le lecteur.
+    // / Explicit simulation request: do not start the reader.
+    if (simulationSeuleDemandee) {
       return
     }
 
@@ -238,13 +288,13 @@ let NfcReader = class {
     console.log('1 -> stopLecture')
     let modeNfc = this.modeNfc
 
-    // simulateur DEMO : retirer l'overlay s'il est encore affiché (fermeture
-    // de la popup par timer/annulation sans clic sur une carte)
-    // / DEMO simulator: remove the overlay if still shown (popup closed by
-    // timer/cancel without a card click)
-    const overlaySimu = document.querySelector('#nfc-reader-simu-overlay')
-    if (overlaySimu) {
-      overlaySimu.remove()
+    // simulateur DEMO : retirer le panneau s'il est encore affiché (fermeture
+    // de la popup par timer/annulation, ou scan d'une vraie carte)
+    // / DEMO simulator: remove the panel if still shown (popup closed by
+    // timer/cancel, or a real card was tapped)
+    const panneauSimu = document.querySelector('#nfc-reader-simu-panel')
+    if (panneauSimu) {
+      panneauSimu.remove()
     }
 
     // tagId pour "un serveur nfc + front" en local
