@@ -2,10 +2,8 @@
 # / Kiosk Stripe terminal models (CHANTIER-01).
 
 import json
-import uuid
 from uuid import uuid4
 
-from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -126,6 +124,13 @@ class Terminal(models.Model):
     def __str__(self):
         return f"{self.get_type_display()} {self.name}"
 
+    class Meta:
+        # Nom affiché dans l'admin : « TPE Bancaire », pour ne pas confondre
+        # avec les terminaux Pi/Sunmi de LaBoutik.
+        # / Admin display name: bank card terminal, not the LaBoutik Pi/Sunmi devices.
+        verbose_name = _("TPE Bancaire")
+        verbose_name_plural = _("TPE Bancaires")
+
 
 class PaymentsIntent(models.Model):
     """
@@ -161,20 +166,8 @@ class PaymentsIntent(models.Model):
                               default=REQUIRES_PAYMENT_METHOD, verbose_name=_("Status"))
 
     def get_from_stripe(self):
-        """Rafraîchit le statut depuis Stripe. En DEMO, tire un statut au sort.
-        / Refresh status from Stripe. In DEMO, draw a random status."""
-        if settings.DEMO:
-            import random
-            random_value = random.random()
-            if random_value < 0.8:
-                self.status = PaymentsIntent.REQUIRES_PAYMENT_METHOD
-            elif random_value < 0.9:
-                self.status = PaymentsIntent.CANCELED
-            else:
-                self.status = PaymentsIntent.SUCCEEDED
-            self.save()
-            return self.status
-
+        """Rafraîchit le statut depuis Stripe.
+        / Refresh status from Stripe."""
         if self.status in [PaymentsIntent.CANCELED, PaymentsIntent.SUCCEEDED]:
             return self.status
 
@@ -200,13 +193,6 @@ class PaymentsIntent(models.Model):
         Metadata {fedow_place_uuid, tag_id} NON signées (place Lespass de confiance, SPEC §8bis).
         / Create the Stripe PaymentIntent (card_present) and push it to the reader.
         Unsigned {fedow_place_uuid, tag_id} metadata (trusted Lespass place, SPEC §8bis)."""
-        if settings.DEMO:
-            # Simulation d'un TPE Stripe / Fake a Stripe terminal
-            self.payment_intent_stripe_id = uuid.uuid4().hex[:30]
-            self.status = self.IN_PROGRESS
-            self.save()
-            return self
-
         import stripe
         from root_billet.models import RootConfiguration
         from fedow_connect.models import FedowConfig

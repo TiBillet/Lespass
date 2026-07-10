@@ -8,7 +8,6 @@ Lancement / Run:
 
 import pytest
 from django_tenants.utils import tenant_context
-from django.test import override_settings
 from unittest.mock import patch
 
 from Customers.models import Client
@@ -59,18 +58,32 @@ def test_terminal_creation_wisepos(tenant, clean_kiosk):
 
 
 @pytest.mark.django_db
-@override_settings(DEMO=True)
-def test_payments_intent_send_to_terminal_demo(tenant, clean_kiosk):
-    """En DEMO, send_to_terminal simule un PI Stripe et passe IN_PROGRESS.
-    In DEMO mode, send_to_terminal fakes a Stripe PI and moves to IN_PROGRESS."""
+def test_payments_intent_send_to_terminal(tenant, clean_kiosk):
+    """send_to_terminal cree le PaymentIntent chez Stripe, l'envoie au reader et
+    passe IN_PROGRESS. Stripe est mocke (aucun appel reseau dans les tests).
+    / send_to_terminal creates the Stripe PaymentIntent, pushes it to the reader
+    and moves to IN_PROGRESS. Stripe is mocked (no network call in tests)."""
     with tenant_context(tenant):
-        terminal = Terminal.objects.create(name="TEST_BorneDEMO")
+        terminal = Terminal.objects.create(name="TEST_BorneTPE", stripe_id="tmr_fake123")
         pi = PaymentsIntent.objects.create(amount=500, terminal=terminal)
         assert pi.status == PaymentsIntent.REQUIRES_PAYMENT_METHOD
-        pi.send_to_terminal(terminal)
+
+        with patch("root_billet.models.RootConfiguration.get_solo") as mock_root, \
+             patch("stripe.terminal.Reader.retrieve") as mock_retrieve, \
+             patch("stripe.PaymentIntent.create") as mock_pi_create, \
+             patch("stripe.terminal.Reader.process_payment_intent") as mock_process:
+            mock_root.return_value.get_stripe_api.return_value = "sk_test_x"
+            mock_retrieve.return_value = type("R", (), {"status": "online"})()
+            mock_pi_create.return_value = type("PI", (), {"id": "pi_fake123"})()
+
+            pi.send_to_terminal(terminal)
+
         pi.refresh_from_db()
         assert pi.status == PaymentsIntent.IN_PROGRESS
-        assert pi.payment_intent_stripe_id  # renseigné par la simulation
+        assert pi.payment_intent_stripe_id == "pi_fake123"
+        # Le PaymentIntent est bien pousse vers le reader appaire.
+        # / The PaymentIntent is actually pushed to the paired reader.
+        mock_process.assert_called_once()
 
 
 @pytest.mark.django_db
@@ -88,3 +101,57 @@ def test_terminal_pairing_sets_stripe_id(tenant, clean_kiosk):
             stripe_id = terminal.get_stripe_id()
         assert stripe_id == "tmr_fake123"
         assert terminal.stripe_id == "tmr_fake123"
+
+
+@pytest.mark.django_db
+def test_terminal_form_invalide_si_stripe_refuse_le_code(tenant, clean_kiosk):
+    """Un code d'enregistrement refuse par Stripe invalide le formulaire d'admin :
+    l'erreur est portee par le champ registration_code et aucun TPE n'est cree.
+    / A registration code rejected by Stripe invalidates the admin form: the error is
+    attached to registration_code and no terminal is created."""
+    from kiosk.admin import TerminalForm
+
+    with tenant_context(tenant):
+        with patch("kiosk.models.StripeLocation.get_primary_location") as mock_loc, \
+             patch("root_billet.models.RootConfiguration.get_solo") as mock_root, \
+             patch("stripe.terminal.Reader.create") as mock_create:
+            mock_loc.return_value = type("L", (), {"stripe_id": "tml_fake"})()
+            mock_root.return_value.get_stripe_api.return_value = "sk_test_x"
+            mock_create.side_effect = Exception("No such registration code")
+
+            form = TerminalForm(data={
+                "name": "TEST_BorneRefusee",
+                "type": Terminal.STRIPE_WISEPOS,
+                "registration_code": "code-bidon",
+            })
+            assert form.is_valid() is False
+
+        assert "registration_code" in form.errors
+        assert Terminal.objects.filter(name="TEST_BorneRefusee").exists() is False
+
+
+@pytest.mark.django_db
+def test_terminal_form_valide_appaire_et_enregistre_le_stripe_id(tenant, clean_kiosk):
+    """Un code accepte par Stripe rend le formulaire valide et le stripe_id est
+    enregistre a la sauvegarde. / A code accepted by Stripe makes the form valid and
+    the stripe_id is persisted on save."""
+    from kiosk.admin import TerminalForm
+
+    with tenant_context(tenant):
+        with patch("kiosk.models.StripeLocation.get_primary_location") as mock_loc, \
+             patch("root_billet.models.RootConfiguration.get_solo") as mock_root, \
+             patch("stripe.terminal.Reader.create") as mock_create:
+            mock_loc.return_value = type("L", (), {"stripe_id": "tml_fake"})()
+            mock_root.return_value.get_stripe_api.return_value = "sk_test_x"
+            mock_create.return_value = type("R", (), {"id": "tmr_ok456"})()
+
+            form = TerminalForm(data={
+                "name": "TEST_BorneAcceptee",
+                "type": Terminal.STRIPE_WISEPOS,
+                "registration_code": "simulated-wpe",
+            })
+            assert form.is_valid() is True, form.errors
+            terminal = form.save()
+
+        assert terminal.stripe_id == "tmr_ok456"
+        assert Terminal.objects.get(name="TEST_BorneAcceptee").stripe_id == "tmr_ok456"

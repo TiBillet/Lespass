@@ -594,17 +594,9 @@ def get_sidebar_navigation(request):
                 "collapsible": True,
                 "items": [
                     {
-                        "title": _("Terminaux"),
+                        "title": _("TPE Bancaires"),
                         "icon": "tablet_mac",
                         "link": _safe_rev("staff_admin:kiosk_terminal_changelist"),
-                        "permission": admin_permission,
-                    },
-                    {
-                        "title": _("Emplacements Stripe"),
-                        "icon": "location_on",
-                        "link": _safe_rev(
-                            "staff_admin:kiosk_stripelocation_changelist"
-                        ),
                         "permission": admin_permission,
                     },
                     {

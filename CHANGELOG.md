@@ -1,5 +1,34 @@
 # Changelog / Journal des modifications
 
+## Kiosk : installation Pi via la stack LaBoutik + admin TPE / Kiosk: Pi install via the LaBoutik stack + terminal admin
+
+**Date :** 2026-07-09
+**Migration :** Oui / Yes — `kiosk` 0004 (renommage d'affichage uniquement, `AlterModelOptions`)
+
+**Quoi / What :** la borne kiosk sur Raspberry Pi s'installe avec **la stack LaBoutik existante**
+(`laboutik_client_pi_desktop_v2/`), sans script ni configuration propres au kiosk. Même matériel, même
+lecteur NFC, même client Node. Le seul aiguillage est le **rôle du `PairingDevice`** : un rôle `KI` est
+redirigé vers `/kiosk/` par le bridge d'auth, un rôle `LB` vers `/laboutik/caisse/`. §5 du
+`kiosk/README.md` réécrite en ce sens (écran en paysage : `setup-laboutik-pi gpio 0`).
+
+Côté admin : `Terminal` s'affiche désormais « TPE Bancaire », `StripeLocation` sort de l'admin (créée
+automatiquement à l'appairage, comme dans LaBoutik), et le champ « Borne » affiche le nom de la borne au
+lieu de son email synthétique, filtré sur le rôle `KI`.
+
+**Pourquoi / Why :** ne pas maintenir deux procédures d'installation pour un matériel identique, et
+lever la confusion entre le TPE bancaire Stripe et les terminaux Pi/Sunmi de LaBoutik.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `kiosk/README.md` | §5 réécrite : installation via la stack LaBoutik, rôle `KI`, NFC déjà fourni |
+| `kiosk/models.py` | `Terminal.Meta` : `verbose_name = "TPE Bancaire"` |
+| `kiosk/admin.py` | `StripeLocationAdmin` supprimé ; `term_user` filtré sur `KI` et affiché par son nom |
+| `discovery/views.py` | `TermUser.first_name = pairing_device.name` à l'appairage |
+| `Administration/admin/dashboard.py` | Sidebar : « TPE Bancaires », entrée « Emplacements Stripe » retirée |
+
+---
+
 ## Kiosk : borne de recharge cashless TPE Stripe / Kiosk: self-service cashless top-up terminal (Stripe TPE)
 
 **Date :** 2026-07-07

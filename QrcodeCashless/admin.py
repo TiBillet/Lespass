@@ -312,9 +312,11 @@ class DetailAdmin(ModelAdmin):
     to the card form's "detail" select, added by Django automatically.
     """
 
-    # origine est absent : il est force au tenant courant dans save_model().
-    # / origine is absent: forced to the current tenant in save_model().
-    fields = ["generation", "base_url", "img"]
+    # L'utilisateur ne choisit QUE le numero de generation, et une image en option.
+    # origine et base_url sont deduits du lieu courant dans save_model().
+    # / The user only picks the generation number, and optionally an image.
+    # origine and base_url are derived from the current venue in save_model().
+    fields = ["generation", "img"]
     list_display = ["__str__", "generation"]
 
     def get_queryset(self, request):
@@ -324,9 +326,40 @@ class DetailAdmin(ModelAdmin):
         return queryset.filter(origine=connection.tenant)
 
     def save_model(self, request, obj, form, change):
-        """L'origine d'une generation est toujours le lieu qui la cree.
-        / A generation's origin is always the venue that creates it."""
+        """
+        Force l'origine au lieu courant, et deduit l'adresse des QR codes.
+        / Forces the origin to the current venue, and derives the QR code address.
+
+        L'origine n'est jamais choisie : une generation de cartes appartient
+        toujours au lieu qui la cree. Le champ n'est meme pas affiche.
+        / The origin is never chosen: a card generation always belongs to the
+        venue that creates it. The field is not even displayed.
+
+        base_url est l'adresse qui prefixe l'UUID dans le QR code imprime, au
+        format « https://mon-lieu.tld/qr/ » (convention du CSV historique de
+        Fedow). On la deduit du domaine du lieu plutot que de la faire saisir.
+        On ne l'ecrase pas si elle est deja renseignee.
+        / base_url prefixes the UUID in the printed QR code. Derived from the
+        venue's domain rather than typed in. Never overwritten if already set.
+        """
         obj.origine = connection.tenant
+
+        if not obj.base_url:
+            domaine_du_lieu = connection.tenant.get_primary_domain()
+            if domaine_du_lieu:
+                adresse_des_qrcodes = f"https://{domaine_du_lieu.domain}/qr/"
+                # Le champ est limite a 60 caracteres : on ne remplit que si ca
+                # tient, plutot que de lever une DataError PostgreSQL.
+                # / The field caps at 60 chars: only fill it if it fits.
+                longueur_maximale = Detail._meta.get_field("base_url").max_length
+                if len(adresse_des_qrcodes) <= longueur_maximale:
+                    obj.base_url = adresse_des_qrcodes
+                else:
+                    logger.warning(
+                        f"base_url non renseignee : « {adresse_des_qrcodes} » "
+                        f"depasse {longueur_maximale} caracteres."
+                    )
+
         super().save_model(request, obj, form, change)
 
     # --- Permissions ---
