@@ -42,7 +42,7 @@ FLUX :
     <c-bt.return selector="#confirm" layer="2" />
     <div id="bt-valider-layer2"
          class="bt-basic-container bt-basic-bg-success"
-         onclick="askManageAddition('{{ method }}' {% if method == 'espece' %}, {{ total|force_dot }}{% endif %});openCashDrawer()"
+         onclick="askManageAddition('{{ method }}' {% if method == 'espece' %}, {{ total|force_dot }}{% endif %});openCashDrawer('{{ method }}')"
          data-testid="paiement-btn-valider">
       <div class="bt-basic-icon">
         <i class="fas fa-check-circle" aria-hidden="true"></i>
@@ -57,10 +57,10 @@ FLUX :
      * open cash drawer
      * for sunmi pos
      */
-    async function openCashDrawer() {
-      console.log('-> openCashDrawer !')
+    async function openCashDrawer(method) {
+      // console.log('-> openCashDrawer - method =', method)
       try {
-        if(SunmiPrinterPlugin) {
+        if(SunmiPrinterPlugin && method === 'espece') {
           await SunmiPrinterPlugin.initSunmiPrinterService()
           SunmiPrinterPlugin.openDrawer()
         }
