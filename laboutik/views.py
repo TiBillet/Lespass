@@ -6650,6 +6650,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 user = carte.user
             except CarteCashless.DoesNotExist:
                 context_erreur = {
+                    "action": "initUrlAddition();",
                     "msg_type": "warning",
                     "msg_content": _("Carte inconnue"),
                     "selector_bt_retour": "#messages",
@@ -6801,6 +6802,7 @@ class PaiementViewSet(viewsets.ViewSet):
             )
 
             context = {
+                "action": "initUrlAddition();",
                 "user_email": user.email,
                 "user_prenom": user_prenom,
                 "user_nom": user_nom,

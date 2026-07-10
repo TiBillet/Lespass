@@ -327,14 +327,14 @@ export async function goServer(event) {
   // console.log('-> goServer')
   showSpinner()
 
-  const url = event.target.getAttribute('data-server')
-  const data = state.servers.find(item => item.server_url === url)
+  const terminalName = event.target.getAttribute('data-name')
+  const data = state.servers.find(item => item.device_name === terminalName)
 
   // Soumission POST via formulaire natif pour éviter les restrictions CORS/fetch
   // et garantir la transmission du cookie session sur la redirection Django
   const form = document.createElement('form')
   form.method = 'POST'
-  form.action = url + '/laboutik/auth/bridge/'
+  form.action = data.server_url + '/laboutik/auth/bridge/'
 
   const input = document.createElement('input')
   input.type = 'hidden'
@@ -359,12 +359,16 @@ export async function goServer(event) {
  * @param {object} event 
  */
 export async function confirmDeleteServer(event) {
-  console.log('-> confirmDeleteServer')
+  // console.log('-> confirmDeleteServer')
+  const terminalName = event.target.getAttribute('data-name')
+  const host = event.target.getAttribute('data-hostname')
+
+  // ajoute in fos serveur et nom du terminal
+  document.querySelector('#confirm-infos').innerText = host + ' - ' + terminalName
   // show window confirmation
   document.querySelector('.confirm-container').style.display = "flex"
-  // ajoute l'url du serveur cliqué dans le bouton valider
-  const url = event.target.getAttribute('data-server')
-  document.querySelector('.bt-delete-validate').setAttribute('data-server', url)
+  // ajoute le non du terminal dans l'attribut data-name dans le bouton valider
+  document.querySelector('.bt-delete-validate').setAttribute('data-name', terminalName)
 }
 
 
@@ -378,14 +382,14 @@ export async function deleteServer(event) {
   // hide window confirmation
   document.querySelector('.confirm-container').style.display = "none"
 
-  const url = event.target.getAttribute('data-server')
+  const terminalName = event.target.getAttribute('data-name')
   let typeMsg = "success"
 
   // copie l'ancien state
   const oldState = cloneObj(state)
 
-  // trouver tous les servers sauf url
-  const filterServers = state.servers.filter(item => item.server_url !== url)
+  // trouver tous les servers sauf celui à effacer
+  const filterServers = state.servers.filter(item => item.device_name !== terminalName)
   state.servers = filterServers
 
   // update conFile

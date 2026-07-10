@@ -61,10 +61,11 @@ export function renderHtml(state) {
     if (state.servers) {
       // show servers list
       for (const item of state.servers) {
+        const name = item.device_name
         const hostname = (new URL(item.server_url)).hostname
         content += `<div class="servers-list-item">
-      <div class="bt bt-go-server" data-server="${item.server_url}">${hostname}</div>
-      <div class="bt bt-delete-server" data-server="${item.server_url}">Delete</div> 
+      <div class="bt bt-go-server" data-name="${name}">${hostname} - ${name}</div>
+      <div class="bt bt-delete-server" data-name="${name}" data-hostname="${hostname}">Delete</div> 
     </div>`
       }
     }
