@@ -242,6 +242,11 @@ class Command(BaseCommand):
         # CLIENT1/CLIENT2 (UNCHANGED: pytest mocks Fedow and relies on this local wallet).
         self._seed_pos_test_data(options)
 
+        # 2bis. Borne kiosk de demonstration : un TPE Stripe SIMULE + une borne KI,
+        # pour presenter le parcours de recharge cashless sans materiel physique.
+        # / 2bis. Demo kiosk: a SIMULATED Stripe reader + a KI device.
+        self._seed_kiosk_demo(options)
+
         # 3. Alignement des wallets clients sur Fedow : fusionne le wallet LOCAL de chaque
         # carte cliente dans son wallet Fedow (meme uuid), supprimant le doublon « wallet
         # interne fantome ». Demo REEL uniquement (Fedow joignable) ; no-op sinon.
@@ -412,6 +417,75 @@ class Command(BaseCommand):
         except Exception as e:
             self.stdout.write(self.style.WARNING(
                 f"Donnees de test POS non creees : {e}"
+            ))
+
+    def _seed_kiosk_demo(self, options):
+        """
+        Seede la borne kiosk de demonstration sur le tenant 'lespass' :
+          - un TPE Stripe SIMULE (registration_code 'simulated-wpe') appaire, pour
+            presenter le parcours de recharge sans materiel physique ;
+          - une borne KI (TermUser role Kiosque) liee a ce TPE.
+        Le module_kiosk est deja active dans la Configuration du tenant (bloc fixture).
+
+        Idempotent (get_or_create) et NON bloquant : l'appairage Stripe (creation du
+        reader simule sur le compte de test) est enveloppe. Si Stripe est injoignable,
+        le flush continue — le TPE reste appairable plus tard depuis l'admin.
+        / Seeds the demo kiosk on 'lespass': a SIMULATED Stripe reader (simulated-wpe)
+        and a KI device linked to it. Idempotent and non-blocking: the Stripe pairing
+        is wrapped; if unreachable, the flush continues.
+        """
+        from Customers.models import Client as TenantClient
+        from django_tenants.utils import tenant_context
+
+        tenant = TenantClient.objects.filter(schema_name='lespass').first()
+        if tenant is None:
+            return
+
+        try:
+            with tenant_context(tenant):
+                from AuthBillet.models import TermUser, TibilletUser
+                from kiosk.models import Terminal
+
+                # 1. Borne KI de demonstration (idempotente sur l'email conventionnel).
+                # / Demo KI device (idempotent on the conventional email).
+                borne, _borne_creee = TermUser.objects.get_or_create(
+                    email='kiosk-demo@terminals.local',
+                    defaults={
+                        'username': 'kiosk-demo@terminals.local',
+                        'terminal_role': TibilletUser.ROLE_KIOSQUE,
+                        'first_name': 'Borne de démonstration',
+                        'accept_newsletter': False,
+                    },
+                )
+
+                # 2. TPE Stripe SIMULE, lie a la borne.
+                # / Simulated Stripe reader, linked to the device.
+                terminal, _terminal_cree = Terminal.objects.get_or_create(
+                    name='TPE Démo (simulé)',
+                    defaults={
+                        'type': Terminal.STRIPE_WISEPOS,
+                        'registration_code': 'simulated-wpe',
+                        'term_user': borne,
+                    },
+                )
+                if terminal.term_user_id is None:
+                    terminal.term_user = borne
+                    terminal.save(update_fields=['term_user'])
+
+                # 3. Appairage Stripe : cree le reader simule sur le compte de test.
+                # get_stripe_id() renseigne self.stripe_id sans sauvegarder.
+                # / Stripe pairing: creates the simulated reader. get_stripe_id sets
+                # self.stripe_id without saving.
+                if not terminal.stripe_id:
+                    terminal.get_stripe_id()
+                    terminal.save(update_fields=['stripe_id'])
+
+            self.stdout.write(self.style.SUCCESS(
+                "Borne kiosk de démonstration créée (TPE Stripe simulé) sur lespass."
+            ))
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(
+                f"Borne kiosk démo non créée (Stripe injoignable ?) : {e}"
             ))
 
     def _seed_cartes_nfc_fedow(self, options):
@@ -1953,6 +2027,7 @@ class Command(BaseCommand):
                     config.module_monnaie_locale = True
                     config.module_caisse = True
                     config.module_inventaire = True
+                    config.module_kiosk = True
 
                     config.save()
 

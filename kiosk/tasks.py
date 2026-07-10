@@ -98,20 +98,29 @@ def poll_payment_intent_status(payment_intent_pk, max_duration_seconds=120):
             )
             return True
 
-        # CAS 2 : on est sorti par TIMEOUT, sans succes ni annulation.
-        # On ne laisse JAMAIS l'ecran bloque sur le spinner : on affiche l'ecran
-        # d'annulation et on log le timeout. Le credit reel de la carte reste gere
-        # cote Fedow via le webhook Stripe, independamment de cet affichage.
-        # / Timeout without success/cancel: never leave the screen stuck on the
-        # spinner, show the cancel screen and log the timeout.
+        # CAS 2 : on est sorti par TIMEOUT, sans succes ni annulation dans le delai.
+        # On ne laisse JAMAIS l'ecran sur le spinner, MAIS on n'affiche pas un
+        # « Annule » mensonger : on annule REELLEMENT cote Stripe (on lache le
+        # lecteur), puis on affiche l'ecran du statut REEL. Si la carte a ete
+        # capturee juste avant, l'annulation echoue, get_from_stripe (dans
+        # annuler_sur_le_terminal) renvoie SUCCEEDED, et on affiche le succes.
+        # Sinon le paiement passe CANCELED et l'ecran, la base et Stripe sont
+        # coherents (plus de webhook Fedow qui crediterait apres un « annule »).
+        # / Timeout: never leave the spinner, but do not show a lying "cancelled".
+        # We really cancel on Stripe (release the reader), then show the screen for
+        # the REAL status. If the card was captured just before, the cancel fails,
+        # get_from_stripe returns SUCCEEDED, and we show success. Otherwise CANCELED,
+        # and screen/DB/Stripe stay consistent.
         logger.warning(
             f"Polling timeout for payment intent {payment_intent_pk} "
             f"(status={payment_intent.status}) after {max_duration_seconds}s"
         )
+        statut_final = payment_intent.annuler_sur_le_terminal()
+        template_final = 'success.html' if statut_final == PaymentsIntent.SUCCEEDED else 'cancel.html'
         event = {
             'type': 'template',
-            'template': 'cancel.html',
-            'status': payment_intent.status,
+            'template': template_final,
+            'status': statut_final,
             'status_display': payment_intent.get_status_display(),
             'timestamp': timezone.now().isoformat(),
             'retry_count': retry_count,

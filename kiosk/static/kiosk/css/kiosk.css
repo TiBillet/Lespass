@@ -757,6 +757,24 @@ body {
     }
 }
 
+/* Pendant le sondage du filet (hx-indicator), le spinner PULSE une fois : */
+/* feedback discret « je verifie l'etat du paiement », sans overlay opaque. */
+/* Il continue de tourner (spin) ; la pulse d'opacite s'ajoute le temps de   */
+/* la requete. / While the safety-net poll runs, the spinner pulses once:    */
+/* a discreet "checking" feedback, no opaque overlay. It keeps spinning.      */
+#kiosk-waiting-spinner.htmx-request {
+    animation: spin 900ms linear infinite, pulse-sondage 700ms ease-in-out;
+}
+
+@keyframes pulse-sondage {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.3;
+    }
+}
+
 /* ========================================================================= */
 /* 10. Chevrons « posez la carte au-dessus » (modal SweetAlert2)             */
 /* ========================================================================= */

@@ -277,27 +277,20 @@ class TerminalConsumer(AsyncWebsocketConsumer):
         self.room_name = self.scope["url_route"]["kwargs"]["room_name"]
         self.user = self.scope["user"]
 
-        # Deux gardes, dans cet ordre :
-        #   1. le user est bien une borne Kiosque (role KI) ;
-        #   2. le paiement ecoute appartient bien a CETTE borne.
-        # Sans la seconde, une borne KI pourrait suivre le paiement d'une autre
-        # borne, y compris d'un autre tenant : le nom du group Redis est
-        # l'identifiant Stripe du paiement, partage par tous les schemas.
-        # / Two guards: the user is a Kiosk terminal (KI), and the payment being
-        # watched belongs to THIS device. Without the second one, a KI device
-        # could follow another device's payment, even across tenants: the Redis
-        # group name is the Stripe payment id, shared by all schemas.
-        if not settings.DEBUG:
-            if not self.user.is_authenticated or getattr(self.user, "terminal_role", None) != TibilletUser.ROLE_KIOSQUE:
-                logger.error(f"{self.room_name} {self.user} ERROR NOT AUTHENTICATED OR NOT KIOSK TERMINAL")
-                await self.close()
-                return
-
-            paiement_appartient_a_la_borne = await self.payment_intent_belongs_to_user()
-            if not paiement_appartient_a_la_borne:
-                logger.error(f"{self.room_name} {self.user} ERROR PAYMENT INTENT DOES NOT BELONG TO THIS TERMINAL")
-                await self.close()
-                return
+        # Garde d'acces. On ne court-circuite PLUS en DEBUG : un serveur prod lance
+        # par erreur en DEBUG=True exposerait sinon ce websocket a n'importe qui
+        # (le nom du group Redis est l'id Stripe, partage par tous les schemas).
+        # La regle est calquee sur IsKioskTerminal (cote HTTP) : borne Kiosque
+        # proprietaire du paiement, OU admin du tenant (supervision demo/debug).
+        # L'admin passe en dev comme en prod, donc la garde reste active sans
+        # bloquer les tests navigateur.
+        # / Access guard. We no longer bypass in DEBUG: a prod server mistakenly in
+        # DEBUG=True would expose this socket to anyone. Rule mirrors IsKioskTerminal:
+        # Kiosk device owning the payment, OR tenant admin (demo/debug supervision).
+        if not await self.connexion_autorisee():
+            logger.error(f"{self.room_name} {self.user} ERROR WEBSOCKET ACCESS REFUSED")
+            await self.close()
+            return
 
         logger.info(f"{self.room_name} {self.user} connected")
 
@@ -326,19 +319,58 @@ class TerminalConsumer(AsyncWebsocketConsumer):
         await self.replay_payment_state_if_finished()
 
     @database_sync_to_async
-    def payment_intent_belongs_to_user(self):
+    def connexion_autorisee(self):
         """
-        Le paiement ecoute appartient-il bien a la borne connectee ?
-        / Does the watched payment belong to the connected device?
+        La connexion au suivi du paiement est-elle autorisee ?
+        / Is the connection to this payment's tracking allowed?
 
-        Le lien est : PaymentsIntent -> Terminal (TPE) -> term_user (la borne).
-        Un paiement inconnu est refuse : la vue cree toujours le PaymentsIntent
-        AVANT de rendre le template qui ouvre le websocket.
-        / The chain is PaymentsIntent -> Terminal -> term_user. An unknown payment
-        is refused: the view always creates the PaymentsIntent before rendering
-        the template that opens the websocket.
+        - Borne Kiosque (role KI) : doit posseder le paiement suivi.
+        - Admin du tenant : acces de supervision (demo/debug), comme IsKioskTerminal.
+        - Tout le reste : refuse.
+        / Kiosk device must own the payment; tenant admin allowed for supervision.
 
-        room_name == payment_intent_stripe_id
+        Le tenant vient du scope (pose par WebSocketTenantMiddleware).
+        """
+        user = self.user
+        if not user.is_authenticated:
+            return False
+
+        # Borne Kiosque : elle ne suit que SON paiement.
+        # / Kiosk device: it only tracks ITS payment.
+        est_borne_kiosk = getattr(user, "terminal_role", None) == TibilletUser.ROLE_KIOSQUE
+        if est_borne_kiosk:
+            return self._paiement_appartient_a(user)
+
+        # Admin du tenant : supervision UNIQUEMENT en demo/debug (meme regle que
+        # IsKioskTerminal cote HTTP). En production, seule la borne proprietaire
+        # suit son paiement.
+        # / Tenant admin: supervision ONLY in demo/debug (same rule as
+        # IsKioskTerminal). In production only the owning device follows its payment.
+        if not (settings.DEMO or settings.DEBUG):
+            return False
+        tenant = self.scope.get("tenant")
+        if tenant is not None and user.is_tenant_admin(tenant):
+            return True
+
+        return False
+
+    def _paiement_appartient_a(self, user):
+        """
+        Le paiement (room_name == payment_intent_stripe_id) appartient-il a la borne ?
+        Chaine : PaymentsIntent -> Terminal (TPE) -> term_user (la borne).
+        / Does the payment belong to the device? Chain: PaymentsIntent -> Terminal -> term_user.
+
+        Methode SYNCHRONE : appelee depuis connexion_autorisee (deja en contexte
+        sync via database_sync_to_async). Ne PAS decorer.
+        / SYNC method: called from connexion_autorisee (already sync). Do NOT decorate.
+
+        Catch large : un paiement inconnu, ou une requete lancee au mauvais moment
+        sur le schema public (ProgrammingError « relation does not exist »), doit
+        REFUSER proprement plutot que laisser remonter une exception qui planterait
+        connect(). La vue cree toujours le PaymentsIntent avant d'ouvrir le websocket,
+        donc un paiement legitime existe forcement dans le bon schema.
+        / Broad catch: an unknown payment, or a query hitting the public schema at the
+        wrong moment (ProgrammingError), must REFUSE cleanly instead of raising.
         """
         from kiosk.models import PaymentsIntent
 
@@ -346,12 +378,13 @@ class TerminalConsumer(AsyncWebsocketConsumer):
             payment_intent = PaymentsIntent.objects.select_related("terminal").get(
                 payment_intent_stripe_id=self.room_name,
             )
-        except PaymentsIntent.DoesNotExist:
+        except Exception as erreur:
+            logger.error(f"_paiement_appartient_a : {self.room_name} introuvable ou schema invalide : {erreur}")
             return False
 
         # Un TPE non appaire (term_user=None) n'appartient a aucune borne.
         # / An unpaired terminal (term_user=None) belongs to no device.
-        return payment_intent.terminal.term_user_id == self.user.id
+        return payment_intent.terminal.term_user_id == user.id
 
     @database_sync_to_async
     def get_finished_template_name(self):
@@ -365,9 +398,13 @@ class TerminalConsumer(AsyncWebsocketConsumer):
         (voir kiosk/routing.py et kiosk/templates/kiosk/waiting_credit_card_terminal.html)
         """
         from kiosk.models import PaymentsIntent
+        # Catch large (comme _paiement_appartient_a) : un rejeu sur schema public
+        # ou un paiement inconnu ne doit pas planter le consumer.
+        # / Broad catch: a replay on the public schema or an unknown payment must
+        # not crash the consumer.
         try:
             payment_intent = PaymentsIntent.objects.get(payment_intent_stripe_id=self.room_name)
-        except PaymentsIntent.DoesNotExist:
+        except Exception:
             return None
 
         if payment_intent.status == PaymentsIntent.SUCCEEDED:

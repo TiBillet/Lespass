@@ -55,26 +55,20 @@ HTMX trigger, which POSTs the refill.
 
 
 <script>
-    // Trois chevrons montants, dessines a la main. Ils remplacent la file
-    // d'emoji fleche-haut : le lecteur NFC est physiquement au-dessus de
-    // l'ecran, et un emoji ne s'echelonne pas avec la taille du modal.
-    // L'ordre du DOM va du BAS vers le HAUT : le delai d'animation croissant
-    // (cf. kiosk.css section 10) donne ainsi une impression de montee.
-    // / Three hand-drawn rising chevrons replacing the up-arrow emoji queue.
-    // DOM order runs bottom-to-top so the increasing animation delay reads as a rise.
-    const chevronsDeScan =
-        '<svg class="scan-arrows" viewBox="0 0 32 44" fill="none" stroke="currentColor"' +
-        ' stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-        '<path class="scan-arrows__chevron" d="M6 40 L16 28 L26 40"/>' +
-        '<path class="scan-arrows__chevron" d="M6 30 L16 18 L26 30"/>' +
-        '<path class="scan-arrows__chevron" d="M6 20 L16 8 L26 20"/>' +
-        '</svg>';
-
     /**
      * Ouvre le modal de scan et lance la lecture de la carte NFC.
      * / Opens the scan modal and starts reading the NFC card.
      *
      * LOCALISATION : kiosk/templates/kiosk/sweet_scan_button.html
+     *
+     * ATTENTION : ce partial est reinsere par HTMX (retour d'erreur, annulation).
+     * A chaque swap, ce <script> est reevalue. On n'y declare donc AUCUNE
+     * variable en portee globale avec const/let : au 2e swap, la redeclaration
+     * leverait « Identifier already declared » et casserait l'insertion HTMX.
+     * Les function declarations, elles, peuvent etre redeclarees sans erreur.
+     * / This partial is re-inserted by HTMX; the script is re-evaluated on every
+     * swap. Declare NO global const/let here: a redeclaration on the 2nd swap
+     * throws and breaks the HTMX insertion. Function declarations are safe.
      */
     function readNfc() {
         const boutonValider = document.querySelector('#scan_button');
@@ -85,6 +79,19 @@ HTMX trigger, which POSTs the refill.
         if (totalAmount <= 0) {
             return;
         }
+
+        // Trois chevrons montants, dessines a la main. Ils remplacent la file
+        // d'emoji fleche-haut : le lecteur NFC est physiquement au-dessus de
+        // l'ecran, et un emoji ne s'echelonne pas avec la taille du modal.
+        // Declares ICI (pas en portee globale) : voir l'avertissement ci-dessus.
+        // / Hand-drawn rising chevrons. Declared HERE (not global): see warning above.
+        const chevronsDeScan =
+            '<svg class="scan-arrows" viewBox="0 0 32 44" fill="none" stroke="currentColor"' +
+            ' stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path class="scan-arrows__chevron" d="M6 40 L16 28 L26 40"/>' +
+            '<path class="scan-arrows__chevron" d="M6 30 L16 18 L26 30"/>' +
+            '<path class="scan-arrows__chevron" d="M6 20 L16 8 L26 20"/>' +
+            '</svg>';
 
         function listenTagId(evenementNfc) {
             boutonValider.dataset.tagId = evenementNfc.detail;
@@ -109,7 +116,7 @@ HTMX trigger, which POSTs the refill.
             showCancelButton: true,
             cancelButtonText: "{% translate 'Annuler' %}",
 
-            timer: 30000,
+            timer: 60000,
             timerProgressBar: true,
             // La fenetre vient de s'ouvrir : on lance la lecture RFID.
             // showLoading() masque le bouton Confirmer et affiche le loader ;

@@ -1148,7 +1148,7 @@ class Product(models.Model):
         (ADHESION, _('Subscription or membership')),
         (BADGE, _('Punchclock')),
         (QRCODE_MA, _('QrCode paiement on my account')),
-        # (FUT, _("Keg (connected tap)")), # FROM V2 : TO IMPLEMENT WITH TIHEUREUSE
+        (FUT, _("Keg (connected tap)")),
         # (DON, _('Don')),
         # (NEED_VALIDATION, _('Nécessite une validation manuelle'))
     ]

@@ -120,3 +120,84 @@ def test_humain_non_bloque_par_le_garde_terminal(tenant):
     finally:
         with tenant_context(tenant):
             human.delete()
+
+
+@pytest.fixture
+def deux_bornes_et_un_paiement(tenant):
+    """Deux bornes Kiosque appairees (A et B) + un PaymentsIntent appartenant a B.
+
+    Sert a verifier qu'une borne ne peut pas agir sur le paiement d'une autre
+    (IDOR intra-tenant). Le paiement est SUCCEEDED pour que payment_status
+    reponde sans appeler Stripe (statut deja terminal).
+    / Two paired Kiosk devices + a PaymentsIntent owned by B, to check a device
+    cannot act on another's payment. SUCCEEDED so payment_status skips Stripe.
+    """
+    from kiosk.models import Terminal, PaymentsIntent
+
+    with tenant_context(tenant):
+        borne_a = TermUser.objects.create(
+            email=f"{uuid.uuid4()}@terminals.local",
+            username=f"{uuid.uuid4()}@terminals.local",
+            terminal_role=TibilletUser.ROLE_KIOSQUE,
+            accept_newsletter=False,
+        )
+        borne_b = TermUser.objects.create(
+            email=f"{uuid.uuid4()}@terminals.local",
+            username=f"{uuid.uuid4()}@terminals.local",
+            terminal_role=TibilletUser.ROLE_KIOSQUE,
+            accept_newsletter=False,
+        )
+        terminal_a = Terminal.objects.create(name="TPE A", term_user=borne_a, stripe_id="tmr_a")
+        terminal_b = Terminal.objects.create(name="TPE B", term_user=borne_b, stripe_id="tmr_b")
+        paiement_de_b = PaymentsIntent.objects.create(
+            terminal=terminal_b,
+            amount=500,
+            payment_intent_stripe_id=f"pi_test_{uuid.uuid4().hex[:12]}",
+            status=PaymentsIntent.SUCCEEDED,
+        )
+    yield {"borne_a": borne_a, "borne_b": borne_b, "paiement_de_b": paiement_de_b}
+    with tenant_context(tenant):
+        paiement_de_b.delete()
+        terminal_a.delete()
+        terminal_b.delete()
+        borne_a.delete()
+        borne_b.delete()
+
+
+@pytest.mark.django_db
+def test_payment_status_refuse_une_autre_borne(deux_bornes_et_un_paiement):
+    """Une borne ne peut pas lire le statut du paiement d'une AUTRE borne (IDOR).
+    / A device cannot read another device's payment status (IDOR)."""
+    client = _client()
+    client.force_login(deux_bornes_et_un_paiement["borne_a"])
+
+    pk_du_paiement_de_b = deux_bornes_et_un_paiement["paiement_de_b"].pk
+    response = client.get(f"/kiosk/{pk_du_paiement_de_b}/status/")
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_cancel_refuse_une_autre_borne(deux_bornes_et_un_paiement):
+    """Une borne ne peut pas annuler le paiement en cours d'une AUTRE borne (IDOR).
+    Le refus (404) survient AVANT tout appel Stripe, donc pas besoin de mock.
+    / A device cannot cancel another device's payment. The 404 happens before any
+    Stripe call, so no mock is needed."""
+    client = _client()
+    client.force_login(deux_bornes_et_un_paiement["borne_a"])
+
+    pk_du_paiement_de_b = deux_bornes_et_un_paiement["paiement_de_b"].pk
+    response = client.get(f"/kiosk/{pk_du_paiement_de_b}/cancel/")
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_payment_status_borne_proprietaire_ok(deux_bornes_et_un_paiement):
+    """La borne proprietaire lit bien le statut de SON paiement (ecran de succes).
+    / The owning device does read ITS payment status (success screen)."""
+    client = _client()
+    client.force_login(deux_bornes_et_un_paiement["borne_b"])
+
+    pk_du_paiement_de_b = deux_bornes_et_un_paiement["paiement_de_b"].pk
+    response = client.get(f"/kiosk/{pk_du_paiement_de_b}/status/")
+    assert response.status_code == 200
+    assert b"tb-kiosque" in response.content

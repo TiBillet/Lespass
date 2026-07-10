@@ -27,7 +27,6 @@ Rebranchings:
 
 import logging
 
-import stripe
 from django.conf import settings
 from django.db import connection
 from django.http import Http404, HttpResponse
@@ -43,7 +42,7 @@ from rest_framework.decorators import action
 
 from AuthBillet.models import TibilletUser
 from fedow_connect.fedow_api import FedowAPI
-from kiosk.models import PaymentsIntent
+from kiosk.models import PaymentsIntent, Terminal
 from kiosk.tasks import poll_payment_intent_status
 from kiosk.validators import RefillWisePoseValidator
 from QrcodeCashless.models import CarteCashless
@@ -74,9 +73,44 @@ class IsKioskTerminal(permissions.BasePermission):
         # like HasLaBoutikTerminalAccess), to prevent cross-tenant cookie replay.
         if getattr(user, "terminal_role", None) == TibilletUser.ROLE_KIOSQUE:
             return user.client_source_id == connection.tenant.pk
-        # Admin du tenant courant (acces navigateur pour demo / debug).
-        # / Current tenant admin (browser access for demo / debug).
+        # Admin du tenant : acces navigateur UNIQUEMENT en demo/debug (presentation,
+        # tests). En production, une borne kiosk est un appareil physique : aucun
+        # admin n'a de raison legitime d'y acceder par navigateur.
+        # / Tenant admin: browser access ONLY in demo/debug. In production a kiosk is
+        # a physical device; no admin has a legitimate reason to reach it by browser.
+        if not (settings.DEMO or settings.DEBUG):
+            return False
         return user.is_tenant_admin(connection.tenant)
+
+
+def utilisateur_peut_acceder_au_paiement(payment_intent_db, user):
+    """
+    Le paiement appartient-il a la borne appelante, ou l'appelant est-il admin ?
+    / Does the payment belong to the calling device, or is the caller an admin?
+
+    Garde partagee par les operations sur un paiement precis (cancel, status).
+    Sans elle, une borne Kiosque pourrait agir sur le paiement d'une AUTRE borne
+    du meme tenant en devinant son pk (IDOR intra-tenant).
+    / Shared guard for per-payment operations (cancel, status). Without it, a
+    Kiosk device could act on ANOTHER device's payment in the same tenant.
+
+    Lien : PaymentsIntent -> Terminal -> term_user (la borne). L'admin du tenant
+    est tolere (acces navigateur pour demo/debug), comme dans IsKioskTerminal.
+    / Chain: PaymentsIntent -> Terminal -> term_user. Tenant admin is tolerated.
+
+    Ordre paresseux : on ne fait la requete admin (is_tenant_admin touche la base)
+    que si la borne n'est pas deja proprietaire — le cas courant ne paie pas la
+    requete supplementaire. / Lazy order: the admin DB lookup runs only when the
+    device is not already the owner.
+    """
+    est_la_borne_proprietaire = (payment_intent_db.terminal.term_user_id == user.id)
+    if est_la_borne_proprietaire:
+        return True
+    # Admin tolere UNIQUEMENT en demo/debug (meme regle que IsKioskTerminal).
+    # / Admin tolerated ONLY in demo/debug (same rule as IsKioskTerminal).
+    if not (settings.DEMO or settings.DEBUG):
+        return False
+    return user.is_tenant_admin(connection.tenant)
 
 
 class KioskViewSet(viewsets.ViewSet):
@@ -192,6 +226,16 @@ class KioskViewSet(viewsets.ViewSet):
         # The reverse OneToOne accessor raises RelatedObjectDoesNotExist
         # (an AttributeError subclass): getattr -> None.
         terminal = getattr(user, "terminal", None)
+
+        # En DEMO, l'admin (ou une borne sans TPE propre) utilise le TPE de
+        # demonstration : le reader Stripe simule cree par la fixture demo_data_v2.
+        # Hors DEMO, ce repli n'existe pas — seule la borne appairee a son TPE.
+        # / In DEMO, the admin (or a device without its own reader) uses the demo
+        # terminal (the simulated Stripe reader seeded by demo_data_v2). Outside
+        # DEMO there is no fallback; only the paired device has its terminal.
+        if terminal is None and settings.DEMO:
+            terminal = Terminal.objects.filter(archived=False).order_by("name").first()
+
         if terminal is None:
             logger.error(f"refill_with_wisepos : aucun Terminal appaire au user {user}")
             context = {
@@ -266,6 +310,13 @@ class KioskViewSet(viewsets.ViewSet):
             poll_payment_intent_status.delay(payment_intent.pk)
         except OperationalError as erreur_broker:
             logger.error(f"refill_with_wisepos : broker Celery injoignable : {erreur_broker}")
+            # CRITIQUE : send_to_terminal a DEJA arme le lecteur (l'invite de carte
+            # est affichee). Sans suivi, on doit lacher le lecteur, sinon un client
+            # qui tape sa carte serait debite en silence, ecran sur l'accueil.
+            # / CRITICAL: send_to_terminal ALREADY armed the reader (card prompt is
+            # up). With no tracking we must release it, else a customer tapping
+            # their card would be charged silently while the screen shows home.
+            payment_intent.annuler_sur_le_terminal()
             # HTMX ne swap pas les 5xx : on affiche un message d'erreur (200) plutot
             # qu'un ecran silencieux. / HTMX does not swap 5xx: show an error
             # message (200) instead of a silent screen.
@@ -298,28 +349,42 @@ class KioskViewSet(viewsets.ViewSet):
 
         Tant que le paiement est en cours : 204, et HTMX ne swappe rien.
 
-        Pourquoi ce filet : le websocket ne couvre pas la mort du worker Celery
-        apres son demarrage. Le rejeu d'etat du consumer ne joue qu'a la
-        (re)connexion ; si la borne reste connectee et que plus personne ne pousse,
-        l'ecran resterait sur le spinner.
-
-        / The waiting template polls this route every 10s. It answers only when the
-        payment is finished: the final screen carries an hx-swap-oob replacing
-        #tb-kiosque, which removes the poll trigger. While in progress: 204.
+        Pourquoi ce filet : c'est le SEUL recours si le worker Celery meurt apres
+        son demarrage. La tache Celery est le seul code qui avance le statut en
+        base ; si elle ne tourne plus, personne ne l'avance. Ce filet interroge
+        donc Stripe LUI-MEME (get_from_stripe) tant que le statut local n'est pas
+        termine — sinon il ne ferait que relire un statut fige et l'ecran
+        resterait bloque sur le spinner, carte deja debitee.
+        / This is the ONLY recourse if the Celery worker dies after starting. The
+        task is the only code that advances the DB status; if it stops, nobody
+        does. So this net queries Stripe ITSELF (get_from_stripe) while the local
+        status is not final — otherwise it would just re-read a frozen status and
+        the screen would stay stuck on the spinner with the card already charged.
         """
         payment_intent_db = get_object_or_404(PaymentsIntent, pk=pk)
 
-        # Meme garde que le websocket : ce paiement appartient-il a cette borne ?
-        # L'admin du tenant est tolere (acces navigateur pour demo/debug, cf.
-        # IsKioskTerminal).
-        # / Same guard as the websocket: does this payment belong to this device?
-        # The tenant admin is tolerated (browser access for demo/debug).
-        user = request.user
-        est_la_borne_proprietaire = (payment_intent_db.terminal.term_user_id == user.id)
-        est_admin_du_tenant = user.is_tenant_admin(connection.tenant)
-        if not est_la_borne_proprietaire and not est_admin_du_tenant:
-            logger.error(f"payment_status : {user} n'est pas proprietaire du paiement {pk}")
+        # Garde d'appartenance (voir utilisateur_peut_acceder_au_paiement).
+        # / Ownership guard.
+        if not utilisateur_peut_acceder_au_paiement(payment_intent_db, request.user):
+            logger.error(f"payment_status : {request.user} n'est pas proprietaire du paiement {pk}")
             raise Http404
+
+        # Statut local pas encore termine : on interroge Stripe directement.
+        # C'est ce qui rend le filet independant du worker Celery. get_from_stripe
+        # met a jour et sauve le statut en base.
+        # / Local status not final yet: query Stripe directly. This makes the net
+        # independent of the Celery worker. get_from_stripe updates and saves.
+        statut_local_termine = payment_intent_db.status in (
+            PaymentsIntent.SUCCEEDED,
+            PaymentsIntent.CANCELED,
+        )
+        if not statut_local_termine:
+            try:
+                payment_intent_db.get_from_stripe()
+            except Exception as erreur_stripe:
+                # Stripe injoignable : on ne bloque pas, le prochain sondage reessaiera.
+                # / Stripe unreachable: don't block, the next poll retries.
+                logger.error(f"payment_status : get_from_stripe a echoue pour {pk} : {erreur_stripe}")
 
         if payment_intent_db.status == PaymentsIntent.SUCCEEDED:
             return render(request, "kiosk/success.html")
@@ -338,25 +403,27 @@ class KioskViewSet(viewsets.ViewSet):
         / GET /kiosk/{pk}/cancel/ — cancels the ongoing reader action and the
         matching Stripe payment.
         """
+        payment_intent_db = get_object_or_404(PaymentsIntent, pk=pk)
+
+        # Garde d'appartenance : cancel est destructif (il annule le paiement cote
+        # Stripe). Sans cette garde, une borne pourrait annuler le paiement en cours
+        # d'une AUTRE borne du meme tenant en devinant son pk (IDOR intra-tenant).
+        # / Ownership guard: cancel is destructive. Without it a device could cancel
+        # another device's in-flight payment in the same tenant (intra-tenant IDOR).
+        if not utilisateur_peut_acceder_au_paiement(payment_intent_db, request.user):
+            logger.error(f"cancel : {request.user} n'est pas proprietaire du paiement {pk}")
+            raise Http404
+
         try:
-            payment_intent_db = get_object_or_404(PaymentsIntent, pk=pk)
+            # Lache le lecteur et annule le PaymentIntent (best-effort, cf. modele).
+            # / Release the reader and cancel the PaymentIntent (best-effort).
+            statut_final = payment_intent_db.annuler_sur_le_terminal()
+            logger.info(f"Cancel payment intent {payment_intent_db.pk} -> status : {statut_final}")
 
-            from root_billet.models import RootConfiguration
-            stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-
-            terminal = payment_intent_db.terminal
-            stripe.terminal.Reader.cancel_action(terminal.stripe_id)
-            logger.info(f"Cancel action on terminal {terminal.stripe_id}")
-
-            stripe.PaymentIntent.cancel(payment_intent_db.payment_intent_stripe_id)
-            payment_intent_db.refresh_from_db()
-            logger.info(f"Cancel payment intent {payment_intent_db.pk} -> status : {payment_intent_db.status}")
-
-            # Le cancel a ete fait cote stripe, le OOB du websocket va afficher la page cancel
-            # / Cancel done on Stripe's side, the websocket OOB will show the cancel page
+            # Le cancel est fait cote Stripe ; le OOB du websocket affichera la page
+            # cancel. Le sondage payment_status prendra le relais si le WS est coupe.
+            # / Cancel done on Stripe's side; the websocket OOB shows the cancel page.
             return HttpResponse(status=205)
-        except stripe._error.InvalidRequestError:
-            return HttpResponseClientRedirect('/kiosk/')
         except Exception as e:
-            logger.error(e)
+            logger.error(f"cancel : echec inattendu pour {pk} : {e}")
             return HttpResponseClientRedirect('/kiosk/')

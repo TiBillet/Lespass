@@ -1,5 +1,72 @@
 # Changelog / Journal des modifications
 
+## Tireuses : correction création d'un fût impossible / Taps: fix keg creation impossible (issue #445)
+
+**Date :** 2026-07-10
+**Migration :** Oui / Yes — `AlterField` sur `Product.categorie_article` et `ProductSold.categorie_article` (changement de `choices` uniquement, aucun SQL sur la colonne). À générer par le mainteneur.
+
+**Quoi / What :** la création d'un fût (`/admin/BaseBillet/futproduct/add/`) échouait systématiquement
+avec le message générique « Corrigez l'erreur ci-dessous », sans détail, quels que soient les champs saisis.
+
+**Pourquoi / Why :** `FutProductForm` force `categorie_article = Product.FUT` (`"U"`) via un `HiddenInput`,
+mais la valeur `FUT` était **commentée** dans `CATEGORIE_ARTICLE_CHOICES` (`BaseBillet/models.py`). À la
+validation, `ModelForm._post_clean()` → `full_clean()` rejetait `"U"` comme choix invalide. L'erreur était
+attachée au champ `categorie_article`, rendu en `HiddenInput` → invisible → seul le message générique
+s'affichait.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | Réactivation du choix `(FUT, _("Keg (connected tap)"))` dans `CATEGORIE_ARTICLE_CHOICES` |
+
+## Kiosk : revue sécurité + robustesse du suivi de paiement / Kiosk: security review + payment-tracking hardening
+
+**Date :** 2026-07-10
+**Migration :** Non / No
+
+**Quoi / What :** corrections issues d'une double revue (workflow adversarial + agent sécurité) du flux
+de paiement TPE et du suivi WebSocket.
+
+- **IDOR intra-tenant sur `cancel`** (`kiosk/views.py`) : `cancel` annulait le paiement Stripe sans
+  vérifier l'appartenance — une borne pouvait annuler le paiement en cours d'une autre borne du même
+  tenant en devinant son `pk`. Garde d'appartenance ajoutée (helper `utilisateur_peut_acceder_au_paiement`),
+  partagée avec `payment_status`. **3 tests** (`test_kiosk_security.py`).
+- **Broker Redis down → carte débitée en silence** (`kiosk/views.py`) : quand `.delay()` lève
+  `OperationalError`, le lecteur était déjà armé et n'était jamais annulé. On appelle désormais
+  `PaymentsIntent.annuler_sur_le_terminal()` avant d'afficher l'erreur.
+- **Filet `payment_status` inopérant si le worker meurt** (`kiosk/views.py`) : il lisait le statut en
+  base, que seule la tâche Celery avance. Il interroge maintenant Stripe lui-même (`get_from_stripe`)
+  tant que le statut local n'est pas terminal — vrai filet indépendant du worker.
+- **Garde WebSocket désactivée sous `DEBUG`** (`wsocket/consumers.py`) : `if not settings.DEBUG:`
+  court-circuitait toute la garde. Remplacé par `connexion_autorisee()` calqué sur `IsKioskTerminal`
+  (borne KI propriétaire OU admin tenant), actif en dev comme en prod. Catch élargi (`ProgrammingError`
+  sur schéma public → refus propre au lieu d'un crash du consumer).
+- **Timeout Celery affichait un « Annulé » mensonger** (`kiosk/tasks.py`) : sur timeout, annulation
+  réelle côté Stripe puis affichage du statut réel (succès si capturé entre-temps, sinon annulé) —
+  écran, base et Stripe cohérents.
+- **Bug front** (`sweet_scan_button.html`) : `const chevronsDeScan` en portée globale d'un `<script>`
+  de partial re-swappé par HTMX → `SyntaxError` au 2ᵉ swap, bouton scan cassé. Déplacé dans `readNfc()`.
+
+**Nouveau modèle** : `PaymentsIntent.annuler_sur_le_terminal()` (best-effort : lâche le lecteur, annule
+le PaymentIntent, reflète le statut Stripe réel). Utilisé par `cancel`, le broker down et le timeout.
+
+**Vérifié** : Chrome (flux complet, mode nuit, panneau simulateur, non-régression), 20 tests kiosk verts.
+**Audit externe consigné** : le webhook Fedow ne signe pas les places Lespass (SPEC §8bis) — sûr tant que
+la clé Stripe Root reste exclusive au serveur ; `fedow_place_uuid` posé par le serveur, non falsifiable
+par un tenant. Rien à corriger côté Lespass.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `kiosk/views.py` | Helper appartenance, garde `cancel`, filet Stripe, annulation broker-down |
+| `kiosk/models.py` | `PaymentsIntent.annuler_sur_le_terminal()` + logger |
+| `wsocket/consumers.py` | `connexion_autorisee` (fin du bypass DEBUG), catch élargi |
+| `kiosk/tasks.py` | Timeout : annulation réelle + statut cohérent |
+| `kiosk/templates/kiosk/sweet_scan_button.html` | `chevronsDeScan` déplacé (fin du re-swap cassé) |
+| `tests/pytest/test_kiosk_security.py` | 3 tests IDOR (cancel/status refusés à une autre borne) |
+
+---
+
 ## Kiosk : refonte du front (design « Signalétique ») + 5 correctifs / Kiosk: front redesign + 5 bug fixes
 
 **Date :** 2026-07-10

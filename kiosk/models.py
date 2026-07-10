@@ -2,10 +2,13 @@
 # / Kiosk Stripe terminal models (CHANTIER-01).
 
 import json
+import logging
 from uuid import uuid4
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+
+logger = logging.getLogger(__name__)
 
 
 class StripeLocation(models.Model):
@@ -232,3 +235,47 @@ class PaymentsIntent(models.Model):
         self.status = self.IN_PROGRESS
         self.save()
         return self
+
+    def annuler_sur_le_terminal(self):
+        """Annule l'action en cours sur le lecteur ET le PaymentIntent Stripe.
+        / Cancel the ongoing reader action AND the Stripe PaymentIntent.
+
+        Best-effort : chaque appel Stripe est isole. Si l'action a deja ete
+        capturee (carte tapee juste avant), Stripe refuse l'annulation ; on
+        rafraichit alors le statut reel plutot que d'ecraser aveuglement.
+        Appele quand on doit lacher le lecteur : annulation manuelle (vue cancel),
+        broker injoignable, ou timeout de suivi.
+        / Best-effort; each Stripe call is isolated. If already captured, Stripe
+        refuses the cancel and we refresh the real status instead of overwriting.
+        Called whenever we must release the reader: manual cancel, broker down,
+        or tracking timeout.
+
+        Retourne le statut final (apres tentative). / Returns the final status.
+        """
+        import stripe
+        from root_billet.models import RootConfiguration
+        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+
+        # 1. Arreter l'invite de carte sur le lecteur physique.
+        # / Stop the card prompt on the physical reader.
+        if self.terminal and self.terminal.stripe_id:
+            try:
+                stripe.terminal.Reader.cancel_action(self.terminal.stripe_id)
+            except Exception as erreur_reader:
+                logger.error(f"annuler_sur_le_terminal : cancel_action a echoue : {erreur_reader}")
+
+        # 2. Annuler le PaymentIntent. Peut echouer s'il est deja capture/annule.
+        # / Cancel the PaymentIntent. May fail if already captured/canceled.
+        if self.payment_intent_stripe_id:
+            try:
+                stripe.PaymentIntent.cancel(self.payment_intent_stripe_id)
+            except Exception as erreur_pi:
+                logger.error(f"annuler_sur_le_terminal : PaymentIntent.cancel a echoue : {erreur_pi}")
+
+        # 3. Refleter le statut reel de Stripe en base (annule, ou capture entre-temps).
+        # / Reflect the real Stripe status in DB (canceled, or captured in the meantime).
+        try:
+            return self.get_from_stripe()
+        except Exception as erreur_refresh:
+            logger.error(f"annuler_sur_le_terminal : get_from_stripe a echoue : {erreur_refresh}")
+            return self.status
