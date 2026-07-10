@@ -39,6 +39,10 @@ piloté par des styles inline injectés en JS, qui écrasaient la feuille de sty
 - **Emoji remplacés par du SVG dessiné à la main** : carte → TPE, et chevrons montants vers le lecteur NFC.
 - **Motion tactile** : plus de `:hover` (guardé par `@media (hover:hover)`), enfoncement `scale(.97)` à
   90 ms. `prefers-reduced-motion` respecté.
+- **Espacements fluides** (`--gap-touches`, `--gap-blocs`, `--pad-ecran`, `--gap-colonnes`) : les écarts
+  entre blocs suivent `vmin` comme la typographie, au lieu de rester en `rem` fixes. Sans ça, des touches
+  de 200 px de large restaient séparées de 12 px en 1920×1080 et paraissaient collées.
+  Mesuré : écart entre touches 12 px (375) → 14 px (1280) → 22 px (1920).
 - **Durcissement borne** : `touch-action: manipulation`, `overscroll-behavior: none`,
   `-webkit-tap-highlight-color: transparent`, `user-select: none`, `env(safe-area-inset-*)`, `100svh`.
 

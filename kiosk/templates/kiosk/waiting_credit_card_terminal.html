@@ -78,6 +78,26 @@ FLUX :
             <div id="message"></div>
         </div>
 
+        {#
+        Filet de secours du websocket : sonde le statut toutes les 10 secondes.
+        Tant que le paiement est en cours, la vue repond 204 et HTMX ne swappe rien.
+        Des qu'il est termine, elle renvoie success/cancel, dont le hx-swap-oob
+        remplace #tb-kiosque : ce declencheur quitte alors le DOM et le sondage
+        s'arrete de lui-meme.
+        Couvre la mort du worker Celery apres son demarrage, que ni le websocket ni
+        le rejeu d'etat a la connexion ne detectent.
+
+        / Websocket safety net: polls the status every 10s. While the payment is in
+        progress the view answers 204 and HTMX swaps nothing. Once finished it
+        returns success/cancel, whose hx-swap-oob replaces #tb-kiosque, removing
+        this trigger: the poll stops by itself. Covers a Celery worker dying after
+        it started, which neither the websocket nor the connect-time replay sees.
+        #}
+        <div hx-get="{% url 'kiosk-payment-status' pk=payment_intent.pk %}"
+             hx-trigger="every 10s"
+             hx-swap="none"
+             data-testid="kiosk-status-fallback"></div>
+
         <div id="cancelButton">
             <button type="button" class="btn-cancel" data-testid="kiosk-cancel-button"
                     hx-get="/kiosk/{{ payment_intent.pk }}/cancel/"

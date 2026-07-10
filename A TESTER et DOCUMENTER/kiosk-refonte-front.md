@@ -107,11 +107,17 @@ Passer une carte inconnue au scan.
 1. **`test_module_kiosk_existe_et_defaut_false` échoue** — sans lien avec cette session.
    Le test lit `Configuration.get_solo().module_kiosk` sur la **base de dev**, où le module a été
    activé, au lieu de tester le défaut du champ. À corriger côté test.
-2. **`kiosk/static/kiosk/js/index.js` est du code mort** : jamais chargé, et il planterait
-   (`messageElement.textContent` sur un `null`). Idem pour `cash.js`, `CB.js` et `recapsolde.js`,
-   qui ne sont référencés que par les clients Cordova/Pi. **Je ne les ai pas supprimés.**
-3. **`makemessages` + `compilemessages`** à lancer (liste des nouvelles chaînes dans le `CHANGELOG.md`).
-4. **`collectstatic`** nécessaire en prod : `tokens.css` est un fichier neuf.
+2. **`makemessages` + `compilemessages`** à lancer (liste des nouvelles chaînes dans le `CHANGELOG.md`).
+3. **`collectstatic`** nécessaire en prod : `tokens.css` est un fichier neuf.
+
+## Code mort supprimé
+
+`index.js`, `cash.js`, `CB.js` et `recapsolde.js` ont été supprimés de
+`kiosk/static/kiosk/js/` **et** de leurs copies `collectstatic` dans `www/static/kiosk/js/`.
+
+Aucun n'était chargé : `base.html` ne charge que `nfc.js` et `main.js`. Les clients Cordova et
+Pi référencent leur **propre** `assets/js/index.js`, pas celui du kiosque. `index.js` aurait de
+toute façon planté s'il avait été chargé (`messageElement.textContent` sur un `null`).
 
 ## Compatibilité
 

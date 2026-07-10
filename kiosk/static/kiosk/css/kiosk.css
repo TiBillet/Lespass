@@ -121,7 +121,7 @@ body {
     align-items: center;
     justify-content: space-between;
     gap: var(--space-4);
-    padding: var(--space-4) var(--space-5);
+    padding: var(--space-4) var(--pad-ecran);
     padding-top: calc(var(--space-4) + env(safe-area-inset-top));
     border-bottom: var(--rule-hair) solid var(--color-rule);
 }
@@ -148,11 +148,14 @@ body {
 .kiosk-split {
     display: flex;
     flex-direction: column;
-    gap: var(--space-6);
+    gap: var(--gap-blocs);
     width: 100%;
     max-width: 1600px;
     margin-inline: auto;
-    padding: var(--space-6) var(--space-5) 0;
+    /* Pas de marge basse en colonne : la barre d'action est collante et porte */
+    /* sa propre marge (plus la safe-area). / No bottom padding in one column: */
+    /* the action bar is sticky and carries its own padding (plus safe-area).  */
+    padding: var(--gap-blocs) var(--pad-ecran) 0;
 }
 
 @media (min-aspect-ratio: 5 / 4) and (min-width: 700px) {
@@ -160,8 +163,8 @@ body {
         display: grid;
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         align-items: center;
-        gap: var(--space-10);
-        padding-bottom: var(--space-6);
+        gap: var(--gap-colonnes);
+        padding-bottom: var(--gap-blocs);
     }
 }
 
@@ -200,10 +203,15 @@ body {
     min-width: 0;
 }
 
+/* La marge doit compenser le letter-spacing negatif de l'afficheur, sinon le  */
+/* € vient toucher le dernier chiffre aux grandes tailles.                     */
+/* / The margin must offset the readout's negative letter-spacing, otherwise   */
+/* the € touches the last digit at large sizes.                                */
 .readout-unit {
     font-size: 0.45em;
     font-weight: 400;
-    margin-left: 0.1em;
+    margin-left: 0.22em;
+    letter-spacing: 0;
     color: var(--color-text-soft);
 }
 
@@ -216,7 +224,7 @@ body {
 .kiosk-rule {
     height: var(--rule-thick);
     width: clamp(64px, 12vmin, 140px);
-    margin: var(--space-5) 0;
+    margin: var(--gap-blocs) 0;
     background-color: var(--color-accent);
     border: 0;
 }
@@ -244,7 +252,7 @@ body {
 .kiosk-console {
     display: flex;
     flex-direction: column;
-    gap: var(--space-5);
+    gap: var(--gap-blocs);
     min-width: 0;
 }
 
@@ -255,7 +263,7 @@ body {
 .keypad {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--space-3);
+    gap: var(--gap-touches);
 }
 
 .key {
@@ -341,10 +349,14 @@ body {
 }
 
 @media (min-aspect-ratio: 5 / 4) and (min-width: 700px) {
+    /* En deux colonnes, c'est le `gap` de .kiosk-console qui separe le pave de */
+    /* la barre. Garder en plus le padding de la barre doublerait l'ecart.      */
+    /* / In two columns, .kiosk-console's `gap` separates the keypad from the   */
+    /* bar. Keeping the bar's padding too would double the gap.                 */
     .actionbar {
         position: static;
         border-top: 0;
-        padding-bottom: 0;
+        padding: 0;
     }
 }
 
@@ -487,10 +499,10 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: var(--space-5);
+    gap: var(--gap-blocs);
     text-align: center;
-    padding: var(--space-5);
-    padding-bottom: calc(var(--space-5) + env(safe-area-inset-bottom));
+    padding: var(--gap-blocs) var(--pad-ecran);
+    padding-bottom: calc(var(--gap-blocs) + env(safe-area-inset-bottom));
 
     /* Cet ecran empile six blocs. Sur un kiosque bas de plafond (1024x600), la  */
     /* somme peut depasser la rangee : sans ces deux lignes le bouton ANNULER    */
@@ -622,8 +634,8 @@ body {
     display: grid;
     place-items: center;
     text-align: center;
-    padding: var(--space-6);
-    padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom));
+    padding: var(--pad-ecran);
+    padding-bottom: calc(var(--pad-ecran) + env(safe-area-inset-bottom));
 }
 
 .state-screen--go {

@@ -162,6 +162,40 @@
     --space-10: 4rem;
 
     /* --------------------------------------------------------------------- */
+    /* Espacements FLUIDES.                                                   */
+    /*                                                                        */
+    /* L'echelle 4 pt ci-dessus est fixe : elle convient aux petits ecarts    */
+    /* internes. Mais les ecarts qui separent des BLOCS doivent grandir avec  */
+    /* l'ecran, exactement comme la typographie (qui suit vmin). Sinon des    */
+    /* touches de 200 px de large restent separees par 12 px en 1920 : elles  */
+    /* paraissent collees, alors que les memes 12 px vont tres bien en 375.   */
+    /*                                                                        */
+    /* / FLUID spacing. The 4pt scale above is fixed and fine for small inner */
+    /* gaps. But gaps that separate BLOCKS must grow with the screen, exactly */
+    /* as the type does (which follows vmin). Otherwise 200px-wide keys stay  */
+    /* 12px apart at 1920 and read as glued together, while the same 12px is  */
+    /* perfectly fine at 375.                                                 */
+    /* --------------------------------------------------------------------- */
+
+    /* Entre deux touches du pave. / Between two keypad keys. */
+    --gap-touches: clamp(12px, 2vmin, 24px);
+
+    /* Entre deux blocs empiles (pave / barre d'action, afficheur / consigne). */
+    /* / Between two stacked blocks. */
+    --gap-blocs: clamp(20px, 3.4vmin, 44px);
+
+    /* Marge interieure d'un ecran. Plancher a 24 px : en dessous, le contenu   */
+    /* touche le bord de la dalle. / A screen's inner padding. 24px floor:      */
+    /* below that, content touches the panel edge.                              */
+    --pad-ecran: clamp(24px, 3.6vmin, 56px);
+
+    /* Entre les deux colonnes en paysage. Cale sur vw et non vmin : c'est la  */
+    /* LARGEUR disponible qui decide de la respiration horizontale.           */
+    /* / Between the two landscape columns. Keyed on vw, not vmin: horizontal */
+    /* breathing room is decided by the available WIDTH.                      */
+    --gap-colonnes: clamp(32px, 5vw, 120px);
+
+    /* --------------------------------------------------------------------- */
     /* Traits et rayons — volontairement minces. Aucune ombre nulle part :    */
     /* la profondeur vient des aplats de couleur, pas du flou.                */
     /* / Rules and radii, deliberately restrained. No shadow anywhere: depth  */
