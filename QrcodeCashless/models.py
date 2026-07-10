@@ -36,8 +36,13 @@ class Detail(models.Model):
     slug = models.SlugField(max_length=50, unique=True, blank=True, null=True)
 
     def __str__(self):
-        return self.base_url
-
+        # base_url est nullable : str(detail) leverait un TypeError dans un
+        # select d'admin si on le renvoyait tel quel.
+        # / base_url is nullable: returning it raw would raise TypeError in an
+        # admin select.
+        if self.base_url:
+            return f"Génération {self.generation} — {self.base_url}"
+        return f"Génération {self.generation}"
 
 
 class CarteCashless(models.Model):

@@ -311,7 +311,7 @@ class ScanAppAdmin(ModelAdmin):
             return format_html(f'{mark_safe(svg_string)}')
         elif obj.pk and obj.name and obj.claimed:
             return "Claimed"
-        return "Sauvegarder pour afficher le qr code de pairing. ( bouton Enregistrer et continuer les modifications )"
+        return "Sauvegarder pour afficher le qr code de pairing. ( bouton Enregistrer et afficher )"
 
     pairing_code.short_description = _("Pairing Code")
 

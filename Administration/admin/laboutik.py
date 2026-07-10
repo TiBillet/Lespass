@@ -8,6 +8,7 @@ import logging
 
 from django import forms
 from django.contrib import admin
+from django.db import connection
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -17,6 +18,7 @@ from unfold.admin import ModelAdmin, TabularInline
 from Administration.admin.products import ICON_POS, IconPickerWidget
 from Administration.admin.site import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
+from QrcodeCashless.models import CarteCashless
 from laboutik.models import (
     LaboutikConfiguration,
     Printer,
@@ -239,6 +241,20 @@ class CartePrimaireAdmin(ModelAdmin):
     search_fields = ['carte__tag_id', 'carte__number']
     filter_horizontal = ('points_de_vente',)
 
+    # Champ de recherche (select2) au lieu d'une liste deroulante de toutes les
+    # cartes. On tape le numero imprime (ou le tag NFC) et les resultats
+    # arrivent en direct. La recherche s'appuie sur les search_fields de
+    # QrcodeCashless.admin.CarteCashlessAdmin (tag_id, number, user__email).
+    # / Search field (select2) instead of a dropdown listing every card. Type the
+    # printed number (or the NFC tag) and results stream in. The search relies on
+    # CarteCashlessAdmin.search_fields.
+    #
+    # Bonus securite : la vue d'autocompletion de Django passe par
+    # CarteCashlessAdmin.get_queryset(), qui filtre deja sur le tenant courant.
+    # / Security bonus: Django's autocomplete view goes through
+    # CarteCashlessAdmin.get_queryset(), already filtered on the current tenant.
+    autocomplete_fields = ('carte',)
+
     fieldsets = (
         (None, {
             'fields': (
@@ -248,6 +264,27 @@ class CartePrimaireAdmin(ModelAdmin):
             ),
         }),
     )
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """
+        Restreint les cartes selectionnables a celles du lieu courant.
+        / Restricts selectable cards to the current venue's.
+
+        INDISPENSABLE meme avec autocomplete_fields : l'autocompletion ne pilote
+        que l'affichage et la recherche. C'est le queryset du champ qui VALIDE la
+        valeur postee. Sans ce filtre, un pk forge pointant vers la carte d'un
+        autre lieu serait accepte — CarteCashless est en SHARED_APPS (schema
+        public), il n'y a aucune isolation automatique.
+        / REQUIRED even with autocomplete_fields: autocompletion only drives
+        display and search. The field's queryset is what VALIDATES the posted
+        value. Without this filter, a forged pk pointing at another venue's card
+        would be accepted — CarteCashless lives in SHARED_APPS (public schema).
+        """
+        if db_field.name == 'carte':
+            kwargs['queryset'] = CarteCashless.objects.filter(
+                detail__origine=connection.tenant,
+            ).select_related('detail')
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     def has_add_permission(self, request):
         return TenantAdminPermissionWithRequest(request)
