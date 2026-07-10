@@ -303,18 +303,25 @@ Validé sur matériel : une carte réelle ressort en `{"tagId":"0BE31636","data"
 #### Mode DEMO — simulateur **et** lecteur, en parallèle
 
 Si `window.DEMO` est défini (page rendue avec `settings.DEMO=True`), `startLecture()` affiche le
-**simulateur de cartes** (overlay plein écran, boutons `primary`/`client1`/`client2`/`client3`/`unknown`)
-**et démarre le lecteur physique**, comme le fait l'app Android. On peut donc cliquer une carte simulée
-*ou* poser une vraie carte sur le RC522 : le premier des deux qui répond gagne.
+**simulateur de cartes** *et* démarre le lecteur physique, comme le fait l'app Android. On peut donc
+cliquer une carte simulée *ou* poser une vraie carte sur le RC522 : le premier des deux qui répond gagne.
 
-C'est l'événement `nfcResult` qui tranche. Il ferme le modal SweetAlert, dont le `willClose` appelle
-`rfid.stopLecture()` : l'overlay est retiré et le lecteur arrêté (`nfcStopListening` + `disconnect`). Le
+Le simulateur est un **panneau discret, replié en bas de l'écran** (`#nfc-reader-simu-panel`) : on clique
+son en-tête pour déplier les cartes `primary`/`client1`/`client2`/`client3`/`unknown`. Même principe que
+le bouton `.nfc-toggle-simu` de la caisse (`laboutik/static/js/nfc.js`). Il ne masque pas le modal
+SweetAlert : le message « scannez votre carte » reste lisible, et le lecteur reste l'action évidente.
+
+C'est l'événement `nfcResult` qui tranche. Il ferme le modal, dont le `willClose` appelle
+`rfid.stopLecture()` : le panneau est retiré et le lecteur arrêté (`nfcStopListening` + `disconnect`). Le
 nettoyage est commun aux deux chemins, il n'y a donc pas de scan fantôme après coup.
 
 Un `startLecture({simulation: true})` explicite n'allume pas le lecteur (simulateur seul).
 
 Il n'est donc **plus nécessaire de basculer `DEMO=False`** pour tester le RC522. Scénario de recette :
 `A TESTER et DOCUMENTER/kiosk-tpe-borne.md`.
+
+⚠️ `nfc.js` est servi par **Django**, depuis `STATIC_ROOT` (`www/static/`, ignoré par git). Après un
+déploiement, **`collectstatic` est obligatoire** : sans lui la borne continue de recevoir l'ancien script.
 
 ### 5.6 Le TPE Stripe n'est pas sur le Pi
 
