@@ -119,8 +119,18 @@ de configuration à poser sur la carte SD.
 |---|---|
 | Carte | Raspberry Pi 3B+ (testé), Pi 4 |
 | Image | **`2023-05-03-raspios-bullseye-arm64-lite.img.xz`** |
-| Écran | HDMI 1024x600, tactile, **en paysage** |
+| Écran | Waveshare HDMI LCD, tactile, **en paysage** (7" `1024x600` ou 13,3" `1920x1080`) |
 | NFC | RC522 (VMA405) sur GPIO, SPI logiciel |
+
+⚠️ **Le tactile est un périphérique USB, distinct du HDMI.** Sur les Waveshare HDMI LCD, il faut relier
+le port `Touch` de l'écran à un port USB du Pi, en plus du câble HDMI. Aucun pilote à installer : la
+dalle se présente comme un HID (`lsusb` → `222a:0001 ILI Technology Multi-Touch Screen`), pris en charge
+par `xserver-xorg-input-libinput` que le script installe.
+
+💡 Si ni le tactile ni un clavier n'apparaissent (`lsusb` ne montre que le root hub) et qu'`eth0` est
+absent : sur un Pi 3B+, les quatre ports USB **et** l'Ethernet sont portés par la même puce (LAN7515).
+Si elle n'énumère pas, la carte est défectueuse — pas le HAT, pas l'alimentation. Vérifier avec
+`dmesg | grep -c 'new .* USB device'` (doit être > 0) et `lsusb | grep 0424:`.
 
 L'image se télécharge sur
 [downloads.raspberrypi.org](https://downloads.raspberrypi.org/raspios_lite_arm64/images/raspios_lite_arm64-2023-05-03/) :
@@ -137,96 +147,83 @@ n'existerait pas et le NFC serait mort.
 
 Dans `rpi-imager` : utilisateur `sysop`, SSH activé, Wi-Fi si besoin.
 
-### 5.2 Installer la stack LaBoutik
+### 5.2 Installer — `make conf` puis `make install`
 
-Procédure de référence : [`laboutik_client_pi_desktop_v2/readme_laboutik_client_pi_v2.md`](../laboutik_client_pi_desktop_v2/readme_laboutik_client_pi_v2.md).
-Les quatre écarts ci-dessous ont été constatés sur un Pi 3B+ neuf ; ils sont documentés ici plutôt que
-corrigés dans le dépôt du client, qui n'est pas maintenu par l'équipe Lespass.
-
-```bash
-# 0. git n'est pas dans l'image Lite
-sudo apt-get update && sudo apt-get install -y git
-git clone --depth=1 -b main-fedow-import https://github.com/TiBillet/Lespass.git
-
-# 1. Système, Node.js, NFC, écran, Chromium.
-#    « 0 » = écran en PAYSAGE (le défaut « 3 » est le portrait 270° des caisses).
-#    « sudo env USER/HOME » : voir l'encadré ci-dessous. Le script reboote seul.
-cd ~/Lespass/laboutik_client_pi_desktop_v2/install_pi
-chmod +x setup-laboutik-pi
-sudo env USER="$USER" HOME="$HOME" ./setup-laboutik-pi gpio 0
-```
-
-> **Pourquoi `sudo env USER=… HOME=…` ?** Le script doit tourner en root, or `sudo` (avec `env_reset`,
-> le défaut Debian) impose `USER=root` et `HOME=/root`. Le script exécute `usermod -a -G gpio $USER` et
-> écrit la ligne `startx` dans `$HOME/.bashrc` : sans ce contournement, les droits GPIO vont à *root* et
-> le `startx` atterrit dans `/root/.bashrc`, alors que l'autologin vise `sysop`. **X ne démarre jamais.**
-
-**Au retour du reboot, X ne démarrera pas** — il faut neutraliser `fbturbo` :
+Tout passe par [`kiosk/Pi/Makefile`](./Pi/Makefile). Il **n'installe rien lui-même** : il appelle le
+script officiel du client LaBoutik
+([`readme_laboutik_client_pi_v2.md`](../laboutik_client_pi_desktop_v2/readme_laboutik_client_pi_v2.md)),
+puis applique les correctifs nécessaires. Le code du client n'est pas modifié.
 
 ```bash
-sudo mv /usr/share/X11/xorg.conf.d/99-fbturbo.conf /root/99-fbturbo.conf.disabled
-sudo reboot
+# make et curl ne sont pas dans l'image Lite
+sudo apt-get update && sudo apt-get install -y make curl
+
+curl -O https://raw.githubusercontent.com/TiBillet/Lespass/main-fedow-import/kiosk/Pi/Makefile
+
+make conf     # écrit tibillet.conf avec les valeurs par défaut, puis l'affiche
+make install  # clone + système + correctifs + écran + node + service
+sudo reboot   # la borne démarre sur la page d'appairage
 ```
 
-> **Pourquoi ?** `setup-laboutik-pi` commence par un `apt upgrade`, qui monte `xorg-server` en
-> `2:1.20.11-1+rpt3+deb11u16`. Cette version ne fournit plus le symbole `shadowUpdatePackedWeak` que
-> réclame `fbturbo_drv.so`. X meurt à l'ouverture du driver
-> (`symbol lookup error: … undefined symbol: shadowUpdatePackedWeak`), `xinit` abandonne, donc **ni
-> Openbox ni Chromium**. Le script installe fbturbo dès qu'on n'est pas sur un Pi 4. Sans ce fichier de
-> configuration, X retombe sur `fbdev` et tout démarre. Diagnostic : la sortie de `startx` part sur
-> `tty1` et n'est visible ni en SSH ni dans `/var/log/Xorg.0.log`.
+`make conf` crée le fichier s'il n'existe pas ; sinon il ne touche à rien. À éditer avant `make install`,
+ou à surcharger en ligne de commande (`make install SCREEN_WIDTH=1024 SCREEN_HEIGHT=600`) :
 
-Puis les modules Node :
-
-```bash
-# Le sudo de l'étape 1 a lancé « npm install -g » avec HOME=/home/sysop :
-# le cache npm appartient à root.
-sudo chown -R 1000:1000 ~/.npm
-
-cd ~/Lespass/laboutik_client_pi_desktop_v2
-cp env-example.js env.js          # absent du dépôt : install-modules-nodejs fait « sed -i … env.js »
-chmod +x install-modules-nodejs
-./install-modules-nodejs pi       # écrit type_app: 'pi' dans env.js, puis npm install
-
-# Adresse RACINE du serveur (le claim vit dans TiBillet/urls_public.py),
-# pas le sous-domaine du lieu. Modifiable aussi depuis l'écran tactile.
-sed -i 's|https://tibillet.localhost|https://tibillet.mondomaine.tld|' env.js
+```ini
+SERVER=https://tibillet.coop   # adresse RACINE du serveur (pas le sous-domaine du lieu)
+SCREEN_WIDTH=1920              # Waveshare 7" : 1024x600 — 13" : 1920x1080
+SCREEN_HEIGHT=1080
+ROTATE=0                       # 0 = paysage. Pilote aussi la calibration du tactile
+NFC=gpio                       # gpio (RC522 sur les broches) ou usb (ACR122U)
+GIT_BRANCH=main-fedow-import
 ```
+
+**Le code PIN n'est pas dans ce fichier** : il se saisit sur l'écran tactile de la borne (§5.4).
+
+Autres cibles : `make status` (état de la borne), `make logs` (journal du serveur NFC), et chaque étape
+isolément (`clone`, `system`, `fix`, `screen`, `node`, `service`) — toutes rejouables.
+
+#### Ce que `make install` corrige, et pourquoi
+
+Quatre écarts constatés sur un Pi 3B+ neuf. Ils sont traités ici plutôt que dans le dépôt du client, qui
+n'est pas maintenu par l'équipe Lespass.
+
+**`sudo env USER=… HOME=…`** (cible `system`) — `sudo`, avec `env_reset` (défaut Debian), impose
+`USER=root` et `HOME=/root`. Or le script fait `usermod -a -G gpio $USER` et écrit la ligne `startx` dans
+`$HOME/.bashrc`. Sans ce contournement, les droits GPIO vont à *root* et le `startx` atterrit dans
+`/root/.bashrc`, alors que l'autologin vise l'utilisateur : **X ne démarre jamais**.
+
+**`reboot` neutralisé** (cible `system`) — le script se termine par un `reboot` en dur, ce qui couperait
+l'installation en deux. Le Makefile place un faux `reboot` (`exit 0`) en tête de `PATH` le temps de
+l'appel. Un seul redémarrage, à la fin, suffit : `dtparam=spi=on`, le bloc `hdmi_*` et l'autologin ne
+prennent effet qu'au boot.
+
+**`fbturbo` purgé** (cible `fix`) — l'`apt upgrade` du script monte `xorg-server` en
+`2:1.20.11-1+rpt3+deb11u16`, qui ne fournit plus le symbole `shadowUpdatePackedWeak` réclamé par
+`fbturbo_drv.so`. X meurt à l'ouverture du driver (`symbol lookup error: …`), `xinit` abandonne, donc **ni
+Openbox ni Chromium**. Ce driver ne sert à rien : X fonctionne sur `fbdev`. Diagnostic difficile, car la
+sortie de `startx` part sur `tty1`, invisible en SSH comme dans `/var/log/Xorg.0.log`.
+
+**Cache npm et `env.js`** (cibles `fix` et `node`) — le `npm install -g` du script tourne en root avec
+`HOME=/home/<user>` et laisse un `~/.npm` appartenant à root. Et `env.js` est absent du dépôt (seul
+`env-example.js` y est), alors qu'`install-modules-nodejs` fait un `sed -i … env.js` : sans la copie, il
+s'arrête net (`set -e`).
 
 N'installez **pas** `pcscd` : il n'est utile qu'au driver ACR122U USB (`type_app: 'desktop'`), dont le
 binding natif `nfc-pcsc` meurt sans le démon — sans même lever d'exception JavaScript.
 
-### 5.3 Démarrer le serveur NFC au boot
+### 5.3 Le serveur NFC au démarrage
 
 **Rien ne lance `nfcServer.js`.** Le script `laboutik_launcher` (`clear && node nfcServer.js`) n'est
 appelé par personne, et l'`autostart` d'Openbox ne lance que Chromium sur `http://localhost:3000/` —
-c'est-à-dire sur un port que rien ne sert. Il faut donc une unité systemd.
+c'est-à-dire sur un port que rien ne sert. La cible `make service` pose donc une unité systemd
+(`tibillet-nfc.service`) qui démarre avant l'autologin, donc avant Chromium.
 
-En `type_app: 'pi'`, `startBrowser()` est inerte (il est encadré par `if (env.type_app === 'desktop')`),
-donc le serveur n'a besoin d'aucun `DISPLAY` et démarre avant l'autologin, donc avant Chromium.
-
-```ini
-# /etc/systemd/system/tibillet-nfc.service
-[Unit]
-Description=TiBillet NFC server (client LaBoutik)
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-User=sysop
-WorkingDirectory=/home/sysop/Lespass/laboutik_client_pi_desktop_v2
-ExecStart=/usr/bin/node nfcServer.js
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-```
+En `type_app: 'pi'`, `startBrowser()` est inerte (encadré par `if (env.type_app === 'desktop')`), donc le
+serveur n'a besoin d'aucun `DISPLAY`.
 
 ```bash
-sudo systemctl enable --now tibillet-nfc
-ss -lnt | grep 3000              # doit écouter sur [::1]:3000
-journalctl -u tibillet-nfc -f    # « Client connecté ! » quand Chromium se connecte
+make status                      # nfc: active, port 3000: en écoute
+make logs                        # « Client connecté ! » quand Chromium se connecte
 ```
 
 ### 5.4 Appairer la borne
@@ -300,6 +297,7 @@ driver **Pi**. Depuis, `type_app: 'pi'` meurt au démarrage sur
   et **rejette toute lecture** dont l'`uuidConnexion` ne correspond pas ;
 - lecture unique (arrêt du polling après un tag), comme `acr122u-u9.js`.
 
+Validé sur matériel : une carte réelle ressort en `{"tagId":"0BE31636","data":{"uuidConnexion":"…"}}`.
 À faire relire par l'auteur du client (`filaos974`).
 
 #### Mode DEMO — simulateur **et** lecteur, en parallèle
@@ -326,31 +324,34 @@ le reader). Il est posé à côté de la borne, appairé dans l'admin (§4, éta
 ### 5.7 Vérifications
 
 ```bash
-uname -m                     # aarch64
-grep PRETTY /etc/os-release  # bullseye
-head -1 /boot/config.txt     # une vraie conf, PAS « The file … has moved to »
-id -Gn                       # doit contenir gpio spi netdev video input
-grep -c startx ~/.bashrc     # 1  (0 => le sudo env a été oublié)
-ls /dev/spi*                 # /dev/spidev0.0 et 0.1
-node --version               # v24.x (arm64)
-pgrep -c openbox; pgrep -c chromium   # > 0  (0 => fbturbo, cf. §5.2)
-ss -lnt | grep 3000          # [::1]:3000
+make status
 ```
 
-En cas d'écran noir, la cause est presque toujours X. Sa sortie n'est visible ni en SSH ni dans
+Il affiche l'architecture, le système, la présence du dépôt et d'`env.js`, l'état de fbturbo, les groupes
+`gpio`/`spi`, `/dev/spidev0.0`, le service `tibillet-nfc`, le port 3000 et les processus X/Openbox/Chromium.
+
+En cas d'**écran noir**, la cause est presque toujours X, et sa sortie n'est visible ni en SSH ni dans
 `/var/log/Xorg.0.log` : la rediriger depuis `~/.bashrc`
-(`… && startx -- -nocursor > ~/startx.log 2>&1`), relancer `sudo systemctl restart getty@tty1`, puis lire
-`~/startx.log`. Éviter d'enchaîner les `restart getty` : chaque cycle laisse un `/tmp/.X<n>-lock`, et
-`startx` incrémente le numéro d'écran (`:0`, `:1`, `:2`…). Préférer `sudo reboot`.
+(`… && startx -- -nocursor > ~/startx.log 2>&1`), puis `sudo reboot` et lire `~/startx.log`. Éviter
+d'enchaîner les `systemctl restart getty@tty1` : chaque cycle laisse un `/tmp/.X<n>-lock` et `startx`
+incrémente le numéro d'écran (`:0`, `:1`, `:2`…), ce qui brouille le diagnostic.
+
+Pour tester le **lecteur RC522 seul**, sans serveur ni navigateur, un script de quelques lignes suffit :
+importer le driver, appeler `startListening(fauxSocket, {uuidConnexion: 'test'})` et afficher les
+`nfcMessage`. Un tag valide ressort sous la forme
+`{"tagId":"0BE31636","data":{"uuidConnexion":"test"}}`.
 
 ### 5.8 Statut de validation
 
-Vérifié sur un Pi 3B+ (Bullseye arm64, 2026-07-10) : installation système, Node 24, session X, Openbox,
-Chromium en kiosk, serveur Node en écoute, page d'appairage servie, socket.io connecté, et proxy de claim
-atteignant la préprod (`400` sur un PIN invalide).
+Vérifié sur Pi 3B+ (Bullseye arm64, 2026-07-10), à la main, étape par étape : installation système,
+Node 24, session X, Openbox, Chromium en kiosk, serveur Node en écoute, page d'appairage servie,
+socket.io connecté, proxy de claim atteignant la préprod, **et lecture d'une vraie carte sur le RC522**
+(`tagId` + `data.uuidConnexion` correctement réémis par le driver patché).
 
-**Non vérifié à ce jour** : la lecture NFC réelle sur RC522 (patch driver §5.5 relu mais jamais exécuté
-sur matériel), l'appairage complet jusqu'à `/kiosk/`, et le paiement TPE.
+**Non vérifié à ce jour** : le `Makefile` de bout en bout (ses cibles reprennent une à une des commandes
+validées à la main, mais l'enchaînement complet — notamment le shim `reboot` — n'a pas encore tourné),
+l'appairage jusqu'à `/kiosk/`, le simulateur et le lecteur en parallèle (§5.5, nécessite le déploiement
+de la préprod et un `collectstatic`), et le paiement TPE.
 
 ---
 
