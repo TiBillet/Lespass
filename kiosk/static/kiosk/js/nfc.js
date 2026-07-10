@@ -217,10 +217,26 @@ let NfcReader = class {
 
   startLecture(options) {
     console.log('0 -> startLecture  --  DEMO =', window?.DEMO)
-    // simule (mode DEMO du kiosque ou demande explicite) / simulate (kiosk
-    // DEMO mode or explicit request)
-    if (window.DEMO !== undefined || options?.simulation === true) {
+
+    // En mode DEMO, le simulateur s'affiche EN PLUS du lecteur physique, comme
+    // sur l'app Android : on peut cliquer une carte simulee OU poser une vraie
+    // carte sur le lecteur. Le premier des deux qui repond gagne.
+    // C'est 'nfcResult' qui tranche : il ferme le modal SweetAlert, dont le
+    // willClose appelle stopLecture() -> l'overlay est retire et le lecteur
+    // arrete. Le nettoyage est donc commun aux deux chemins.
+    // / In DEMO mode the simulator is shown ALONGSIDE the physical reader, like
+    // the Android app: click a simulated card OR tap a real one. First one wins;
+    // 'nfcResult' closes the modal, whose willClose calls stopLecture().
+    const modeDemoActif = (window.DEMO !== undefined)
+    const simulationSeuleDemandee = (options?.simulation === true)
+
+    if (modeDemoActif || simulationSeuleDemandee) {
       this.simule()
+    }
+
+    // Demande explicite de simulation : on n'allume pas le lecteur.
+    // / Explicit simulation request: do not start the reader.
+    if (simulationSeuleDemandee) {
       return
     }
 
