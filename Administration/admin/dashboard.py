@@ -804,6 +804,17 @@ def get_sidebar_navigation(request):
                     "link": _safe_rev("staff_admin:Customers_client_changelist"),
                     "permission": root_permission,
                 },
+                {
+                    # Whitelist des domaines d'integration iframe (RootConfiguration).
+                    # Visible UNIQUEMENT par le superadmin ROOT. / iframe-embed
+                    # domains whitelist — ROOT superadmin only.
+                    "title": _("Domaines iframe autorises"),
+                    "icon": "shield",
+                    "link": _safe_rev(
+                        "staff_admin:root_billet_rootconfiguration_changelist"
+                    ),
+                    "permission": root_permission,
+                },
                 # {
                 #     "title": _("Virements pot central"),
                 #     "icon": "account_balance",

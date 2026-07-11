@@ -23,6 +23,7 @@ each tenant schema, each schema keeping its own pages (no cross-tenant leak).
 import uuid
 
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from solo.models import SingletonModel
@@ -86,6 +87,28 @@ def valider_taille_image(fichier):
             _("Image trop volumineuse (max %(mo)s Mo)."),
             params={"mo": LIMITE_TAILLE_IMAGE // (1024 * 1024)},
             code="image_trop_grande",
+        )
+
+
+def valider_url_sans_schema_dangereux(valeur):
+    """
+    Rejette une URL a schema dangereux (javascript:, data:, vbscript:).
+    / Rejects a dangerous-scheme URL (javascript:, data:, vbscript:).
+
+    Utilise pour les champs lien saisis hors save_model de BlocAdmin (ex.
+    ImageGalerie.lien_url, edite par le formset inline qui ne passe PAS par
+    la neutralisation de BlocAdmin.save_model).
+    / Used for link fields saved outside BlocAdmin.save_model (e.g.
+    ImageGalerie.lien_url, saved by the inline formset).
+    """
+    # Import local : evite tout cycle d'import au chargement du module.
+    # / Local import: avoids any import cycle at module load time.
+    from Administration.utils import url_a_schema_dangereux
+
+    if url_a_schema_dangereux(valeur):
+        raise ValidationError(
+            _("Lien non autorise (schema dangereux)."),
+            code="url_dangereuse",
         )
 
 
@@ -376,6 +399,9 @@ class Bloc(models.Model):
     EMBED = "EMBED"
     MARKDOWN = "MARKDOWN"
     LISTE_SOUS_PAGES = "LISTE_SOUS_PAGES"
+    IFRAME = "IFRAME"
+    PARTENAIRES = "PARTENAIRES"
+    NEWSLETTER = "NEWSLETTER"
 
     TYPE_BLOC_CHOICES = [
         (HERO, _("Hero (banniere d'ouverture)")),
@@ -394,6 +420,9 @@ class Bloc(models.Model):
         (EMBED, _("Contenu integre (video YouTube/Vimeo/PeerTube, carte OSM)")),
         (MARKDOWN, _("Markdown (texte long : article, page de blog)")),
         (LISTE_SOUS_PAGES, _("Liste des sous-pages (cartes - index de blog)")),
+        (IFRAME, _("Contenu integre libre (formulaire, widget — domaines autorises par le ROOT)")),
+        (PARTENAIRES, _("Partenaires (bande de logos cliquables)")),
+        (NEWSLETTER, _("Inscription newsletter (formulaire Ghost)")),
     ]
 
     # --- Position de l'image pour le bloc Image+texte / Image side for Image+text ---
@@ -594,19 +623,32 @@ class Bloc(models.Model):
         help_text=_("Si coché, les réponses de la FAQ sont repliées et s'ouvrent au clic."),
     )
 
-    # Bloc EMBED : URL du contenu à intégrer (YouTube ou Vimeo). Seuls les hôtes
-    # d'une liste blanche sont rendus (cf. tag embed_iframe) : on n'injecte JAMAIS
-    # un iframe vers un hôte arbitraire (sécurité). Pour une carte, utiliser plutôt
-    # le bloc CARTE_LEAFLET.
-    # / EMBED block: URL of the content to embed (YouTube or Vimeo). Only whitelisted
-    # hosts are rendered (see embed_iframe tag): we NEVER inject an iframe to an
-    # arbitrary host (security). For a map, use the CARTE_LEAFLET block instead.
+    # URL du contenu à intégrer, PARTAGÉE par deux blocs :
+    # - EMBED : vidéo YouTube/Vimeo/PeerTube (whitelist codée, cf. tag embed_iframe).
+    # - IFRAME : contenu libre newsletter/formulaire (whitelist ROOT, cf. tag
+    #   iframe_libre). Dans les deux cas, on n'injecte JAMAIS un iframe vers un hôte
+    #   arbitraire (sécurité). Pour une carte, utiliser plutôt le bloc CARTE_LEAFLET.
+    # / URL of the content to embed, SHARED by two blocks: EMBED (YouTube/Vimeo/
+    # PeerTube video, coded whitelist) and IFRAME (free newsletter/form content, ROOT
+    # whitelist). We NEVER inject an iframe to an arbitrary host (security).
     embed_url = models.URLField(
         max_length=500,
         blank=True,
         verbose_name=_("URL à intégrer (embed)"),
-        help_text=_("Lien YouTube, Vimeo ou PeerTube (instance autorisée). "
-                    "Les autres hôtes sont ignorés (sécurité)."),
+        help_text=_("Lien du contenu a integrer. EMBED : video YouTube/Vimeo/PeerTube. "
+                    "IFRAME : formulaire/widget (hote autorise par le ROOT). "
+                    "NEWSLETTER : adresse de l'instance Ghost (ex. https://ghost.exemple.coop/)."),
+    )
+
+    # Hauteur en pixels de l'iframe du bloc IFRAME. Un formulaire newsletter n'a
+    # pas de ratio fixe (contrairement a une video 16:9) : on fixe une hauteur.
+    # / Iframe height in pixels for the IFRAME block. A newsletter form has no
+    # fixed ratio (unlike a 16:9 video): we set an explicit height.
+    hauteur_px = models.PositiveIntegerField(
+        default=600,
+        validators=[MinValueValidator(100), MaxValueValidator(4000)],
+        verbose_name=_("Hauteur de l'iframe (pixels)"),
+        help_text=_("Hauteur du cadre integre, en pixels (bloc Contenu integre libre)."),
     )
 
     # Cote ou s'affiche l'image dans le bloc Image+texte.
@@ -742,6 +784,21 @@ class ImageGalerie(models.Model):
         blank=True,
         verbose_name=_("Légende"),
         help_text=_("Texte alternatif et légende de l'image (optionnel)."),
+    )
+
+    # Lien optionnel de l'image : si renseigne, l'image devient cliquable (nouvel
+    # onglet). Utilise par le bloc PARTENAIRES (logo -> site du partenaire) mais
+    # valable pour TOUT bloc a ImageGalerie (ex. GALERIE). Le HTML du lien est dans
+    # le template. Validator anti-XSS : l'inline ne passe pas par BlocAdmin.save_model.
+    # / Optional image link: if set, the image becomes clickable (new tab). Used by
+    # PARTENAIRES (logo -> partner site), valid for ANY ImageGalerie block. Anti-XSS
+    # validator: the inline does not go through BlocAdmin.save_model.
+    lien_url = models.CharField(
+        max_length=500,
+        blank=True,
+        validators=[valider_url_sans_schema_dangereux],
+        verbose_name=_("Lien de l'image"),
+        help_text=_("Lien optionnel : rend l'image cliquable (nouvel onglet). Ex. site d'un partenaire."),
     )
 
     # Ordre de l'image dans la galerie (croissant).

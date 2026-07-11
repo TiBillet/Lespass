@@ -831,3 +831,66 @@ h2.tb-bloc__titre::before {
     margin-inline: auto;
     display: block;
 }
+
+/* ---------------------------------------------------------------------------
+ * IFRAME — contenu intégré libre (newsletter, formulaire). Hauteur fixée par le
+ * bloc (attribut height sur l'iframe), largeur 100 %.
+ * / IFRAME — free embedded content. Height set by the block, full width.
+ * ------------------------------------------------------------------------- */
+.tb-iframe { width: 100%; margin-top: 1.5rem; }
+.tb-iframe iframe {
+    width: 100%;
+    border: 0;
+    border-radius: var(--tb-rayon-sm);
+    box-shadow: var(--tb-ombre);
+    display: block;
+    max-width: 100%;
+}
+
+/* ---------------------------------------------------------------------------
+ * PARTENAIRES — bande de logos. Grille responsive ; logos en niveaux de gris au
+ * repos, couleur au survol/focus (transition sur filter/opacity uniquement).
+ * / PARTENAIRES — logo strip. Grayscale at rest, color on hover/focus.
+ * ------------------------------------------------------------------------- */
+.tb-partenaires {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+    gap: clamp(1rem, 3vw, 2rem);
+    align-items: center;
+    margin-top: 1.75rem;
+}
+.tb-partenaires__logo {
+    width: 100%;
+    max-height: 4.5rem;
+    object-fit: contain;
+    filter: grayscale(1);
+    opacity: 0.75;
+    transition: filter 0.2s ease, opacity 0.2s ease;
+}
+.tb-partenaires__lien:hover .tb-partenaires__logo,
+.tb-partenaires__lien:focus-visible .tb-partenaires__logo,
+.tb-partenaires__logo:hover {
+    filter: grayscale(0);
+    opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+    .tb-partenaires__logo { transition: none; }
+}
+
+/* ---------------------------------------------------------------------------
+ * NEWSLETTER — formulaire d'inscription Ghost (script vendorisé injectant un
+ * iframe). Le conteneur réserve une hauteur pour éviter le saut de mise en page
+ * avant le rendu du formulaire.
+ * / NEWSLETTER — Ghost signup form (vendored script injecting an iframe). The
+ * container reserves a height to avoid layout shift before the form renders.
+ * ------------------------------------------------------------------------- */
+.tb-newsletter {
+    min-height: 360px;
+    margin-top: 1.5rem;
+}
+.tb-newsletter iframe {
+    width: 100%;
+    max-width: 100%;
+    border: 0;
+    display: block;
+}

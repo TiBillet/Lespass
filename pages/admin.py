@@ -208,7 +208,7 @@ class ImageGalerieInline(TabularInline):
 
     model = ImageGalerie
     extra = 1
-    fields = ("image", "legende", "position")
+    fields = ("image", "legende", "lien_url", "position")
     ordering = ("position",)
     # Tri par glisser-déposer (sortable Unfold) : la poignée remplace la
     # saisie manuelle du nombre, le champ position est masqué.
@@ -343,7 +343,7 @@ class BlocAdmin(ModelAdmin):
         CREATION (obj=None) the type is not yet known server-side: the inline
         is hidden and appears after the GALERIE block's first save.
         """
-        if obj is not None and obj.type_bloc in (Bloc.GALERIE, Bloc.MARKDOWN):
+        if obj is not None and obj.type_bloc in (Bloc.GALERIE, Bloc.MARKDOWN, Bloc.PARTENAIRES):
             # GALERIE : les images SONT le contenu du bloc. MARKDOWN : les
             # images illustrent l'article et se referencent dans le texte via
             # ![legende](galerie:N) (N = position dans l'inline).
@@ -370,12 +370,12 @@ class BlocAdmin(ModelAdmin):
     #   chaque article étant une page) ;
     # - page__parent : tous les blocs des sous-pages d'une page (ex. tous les
     #   blocs des articles du Journal) ;
-    # - type_bloc : menu déroulant compact (16 types).
+    # - type_bloc : menu déroulant compact (19 types).
     # list_filter_submit : bouton « Filtrer » (une requête, pas une par clic).
     # / Unfold advanced filters (demo's "driverwithfilters" pattern):
     # autocomplete on page (the raw link list exploded with the blog), parent
     # page filter (all blocks of a page's sub-pages), compact dropdown for
-    # the 16 types, and a submit button (one query, not one per click).
+    # the 19 types, and a submit button (one query, not one per click).
     list_filter = [
         "page",  # liens cliquables (préférence mainteneur) / clickable links
         ("page__parent", AutocompleteSelectFilter),
@@ -415,6 +415,7 @@ class BlocAdmin(ModelAdmin):
         "nombre_max",
         "repliable",
         "embed_url",
+        "hauteur_px",
         "image_position",
         "affichage_image",
         "badge",
@@ -433,11 +434,12 @@ class BlocAdmin(ModelAdmin):
     # Alpine.js expressions: == for a single type, .includes() for several.
     conditional_fields = {
         "surtitre": "type_bloc == 'CARTE'",
-        "titre": "['HERO','PARAGRAPHE','IMAGE_TEXTE','CTA','VIDEO_TEXTE','CARTE','IMAGE','CARTE_LEAFLET','FAQ','EVENEMENTS','GALERIE','EMBED','MARKDOWN','LISTE_SOUS_PAGES'].includes(type_bloc)",
+        "titre": "['HERO','PARAGRAPHE','IMAGE_TEXTE','CTA','VIDEO_TEXTE','CARTE','IMAGE','CARTE_LEAFLET','FAQ','EVENEMENTS','GALERIE','EMBED','MARKDOWN','LISTE_SOUS_PAGES','IFRAME','PARTENAIRES','NEWSLETTER'].includes(type_bloc)",
         "nombre_max": "['EVENEMENTS','LISTE_SOUS_PAGES'].includes(type_bloc)",
         "repliable": "type_bloc == 'FAQ'",
-        "embed_url": "type_bloc == 'EMBED'",
-        "sous_titre": "['HERO','CTA'].includes(type_bloc)",
+        "embed_url": "['EMBED','IFRAME','NEWSLETTER'].includes(type_bloc)",
+        "hauteur_px": "type_bloc == 'IFRAME'",
+        "sous_titre": "['HERO','CTA','NEWSLETTER'].includes(type_bloc)",
         "texte": "['PARAGRAPHE','IMAGE_TEXTE','CTA','TEMOIGNAGE','VIDEO_TEXTE','CARTE','FAQ'].includes(type_bloc)",
         "texte_markdown": "type_bloc == 'MARKDOWN'",
         # HERO n'a plus de champ image : son fond est l'image generique du lieu

@@ -14,9 +14,17 @@
                     {% for img in images %}
                         {% if img.image %}
                             <figure class="tb-galerie__item">
-                                <img class="tb-galerie__image"
-                                     src="{{ img.image.med.url }}"
-                                     alt="{{ img.legende }}" loading="lazy">
+                                {% if img.lien_url %}
+                                    <a href="{{ img.lien_url }}" target="_blank" rel="noopener">
+                                        <img class="tb-galerie__image"
+                                             src="{{ img.image.med.url }}"
+                                             alt="{{ img.legende }}" loading="lazy">
+                                    </a>
+                                {% else %}
+                                    <img class="tb-galerie__image"
+                                         src="{{ img.image.med.url }}"
+                                         alt="{{ img.legende }}" loading="lazy">
+                                {% endif %}
                                 {% if img.legende %}
                                     <figcaption class="tb-galerie__legende">{{ img.legende }}</figcaption>
                                 {% endif %}

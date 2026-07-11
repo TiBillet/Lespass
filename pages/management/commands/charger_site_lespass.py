@@ -56,6 +56,14 @@ class Command(BaseCommand):
         except Client.DoesNotExist:
             self.stderr.write(f"Tenant introuvable : {schema}")
             return
+        # Le bloc IFRAME de démo intègre une carte OpenStreetMap : on autorise son
+        # hôte dans la whitelist ROOT (sinon le tag iframe_libre n'affiche rien).
+        # RootConfiguration est SHARED (schéma public) : on l'écrit hors tenant_context.
+        # / The demo IFRAME block embeds an OpenStreetMap map: whitelist its host in the
+        # ROOT config (otherwise iframe_libre renders nothing). RootConfiguration is
+        # SHARED (public schema): written outside tenant_context.
+        self._whitelister_domaine_embed("www.openstreetmap.org")
+
         with tenant_context(tenant):
             from pages.models import Page
             # Nettoyage : on retire les anciennes pages secondaires (multi-pages).
@@ -80,6 +88,32 @@ class Command(BaseCommand):
         config.skin = "reunion"  # = gabarits classic
         config.save()
         self.stdout.write("  → skin forcé à 'reunion' (classic).")
+
+    def _whitelister_domaine_embed(self, domaine):
+        """
+        Ajoute un domaine à la whitelist ROOT des blocs IFRAME (idempotent).
+        / Adds a host to the ROOT whitelist for IFRAME blocks (idempotent).
+
+        RootConfiguration est un singleton SHARED (schéma public). On vide le cache
+        django-solo pour que la whitelist soit immédiatement effective.
+        / RootConfiguration is a SHARED singleton (public schema). We clear the
+        django-solo cache so the whitelist takes effect immediately.
+        """
+        from django.core.cache import cache
+        from root_billet.models import RootConfiguration
+
+        config = RootConfiguration.get_solo()
+        lignes = [
+            ligne.strip()
+            for ligne in (config.domaines_embed_autorises or "").splitlines()
+            if ligne.strip()
+        ]
+        if domaine not in lignes:
+            lignes.append(domaine)
+            config.domaines_embed_autorises = "\n".join(lignes)
+            config.save()
+            cache.clear()
+            self.stdout.write(f"  → domaine iframe autorisé (ROOT) : {domaine}")
 
     def _poser_fichier(self, obj, champ, chemin_static):
         chemin = finders.find(chemin_static)
@@ -526,6 +560,25 @@ class Command(BaseCommand):
             points_gps=[{"lat": 45.7719, "lng": 4.8902, "label": "Lespass"}],
         )
 
+        # === 19bis. IFRAME — contenu intégré libre (plan OpenStreetMap) ===
+        # Le bloc IFRAME sert à intégrer un contenu externe à hauteur libre. En démo
+        # on montre un plan OpenStreetMap (son hôte est autorisé côté ROOT via
+        # _whitelister_domaine_embed). Même bloc pour une NEWSLETTER (ex. Ghost) :
+        # remplacer embed_url par l'URL du formulaire et autoriser son domaine dans
+        # « Configuration racine → Domaines iframe autorisés ».
+        # / The IFRAME block embeds free-height external content. Demo shows an
+        # OpenStreetMap plan (host whitelisted at ROOT level). Same block for a
+        # NEWSLETTER (e.g. Ghost): swap embed_url and whitelist its domain.
+        bloc(
+            type_bloc=Bloc.IFRAME,
+            titre="Le plan d'accès",
+            embed_url=(
+                "https://www.openstreetmap.org/export/embed.html"
+                "?bbox=4.8700,45.7650,4.9100,45.7800&layer=mapnik&marker=45.7719,4.8902"
+            ),
+            hauteur_px=420,
+        )
+
         # === 20. FAQ x3 (non repliable) ===
         for question, reponse in [
             ("Y a-t-il un bar / une restauration ?",
@@ -539,6 +592,37 @@ class Command(BaseCommand):
              "contribuer, selon vos envies et votre temps.</p>"),
         ]:
             bloc(type_bloc=Bloc.FAQ, titre=question, texte=reponse)
+
+        # === 20bis. PARTENAIRES — bande de logos cliquables (nouveau bloc) ===
+        # Logos « contributeurs » réutilisés de la landing ROOT (static/contributeurs/).
+        # PNG/JPG uniquement : StdImageField génère des variations via Pillow, qui ne
+        # sait pas redimensionner un SVG. lien_url renseigné = logo cliquable.
+        # / Partner logos reused from the ROOT landing. PNG/JPG only (Pillow can't
+        # resize SVG). A set lien_url makes the logo clickable.
+        partenaires = bloc(type_bloc=Bloc.PARTENAIRES, titre="Ils nous soutiennent")
+        for index, (fichier, legende, lien) in enumerate([
+            ("ftl.png", "France Tiers-Lieux", "https://francetierslieux.fr"),
+            ("coopcircuit-noir.png", "CoopCircuits", "https://coopcircuits.fr"),
+            ("jet_brain_beam.png", "JetBrains", "https://www.jetbrains.com"),
+            ("france_2030.png", "France 2030", "https://www.info.gouv.fr/france-2030"),
+            ("circa.png", "Circa", ""),
+            ("Demeter.png", "Demeter", ""),
+        ], start=1):
+            logo = ImageGalerie.objects.create(
+                bloc=partenaires, position=index, legende=legende, lien_url=lien,
+            )
+            self._poser_fichier(logo, "image", "contributeurs/" + fichier)
+
+        # === 20ter. NEWSLETTER — inscription Ghost (nouveau bloc) ===
+        # Formulaire d'inscription à la newsletter TiBillet. Le script Ghost est
+        # vendorisé (zéro CDN) ; embed_url = l'instance Ghost (data-site).
+        # / Ghost newsletter signup. Vendored script; embed_url = the Ghost instance.
+        bloc(
+            type_bloc=Bloc.NEWSLETTER,
+            embed_url="https://ghost.tibillet.coop/",
+            titre="Les news de TiBillet",
+            sous_titre="La boîte à outils d'organisation collective",
+        )
 
         # === 21. CTA final ===
         bloc(

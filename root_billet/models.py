@@ -30,6 +30,19 @@ class RootConfiguration(SingletonModel):
     stripe_test_api_key = models.CharField(max_length=250, blank=True, null=True)
     stripe_mode_test = models.BooleanField(default=True)
 
+    # Liste blanche GLOBALE des hotes autorises a etre integres dans un bloc IFRAME
+    # (app pages), un domaine par ligne. Editable UNIQUEMENT par le superadmin ROOT.
+    # Partagee par tous les tenants (RootConfiguration est SHARED_APPS, schema public).
+    # / GLOBAL whitelist of hosts allowed in an IFRAME block (pages app), one domain
+    # per line. ROOT-superadmin only. Shared across tenants (SHARED_APPS, public).
+    domaines_embed_autorises = models.TextField(
+        blank=True,
+        default="",
+        verbose_name=_("Domaines d'integration autorises (iframe)"),
+        help_text=_("Un domaine par ligne (ex. newsletter.ghost.io). Ces hotes seuls "
+                    "peuvent etre integres dans un bloc « Contenu integre libre »."),
+    )
+
 
     """
     FEDOW

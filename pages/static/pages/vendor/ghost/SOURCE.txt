@@ -1,0 +1,11 @@
+signup-form.min.js — Ghost signup form embed (vendorisé, zéro CDN).
+
+Source   : https://cdn.jsdelivr.net/ghost/signup-form@~0.3/umd/signup-form.min.js
+Version  : signup-form@~0.3 (branche 0.3.x)
+Récupéré : 2026-07-11
+Usage    : bloc NEWSLETTER de l'app pages (pages/templates/pages/classic/partials/bloc_newsletter.html).
+           Le script lit ses data-* attributes et injecte un <iframe> vers l'instance
+           Ghost (data-site). Servi en local (comme Leaflet) pour respecter la politique
+           « zéro CDN » du projet.
+
+Mise à jour : re-télécharger le fichier depuis l'URL ci-dessus et vérifier le rendu du bloc.

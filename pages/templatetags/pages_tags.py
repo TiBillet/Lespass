@@ -231,6 +231,88 @@ def embed_iframe(url):
     return mark_safe(iframe)
 
 
+def _domaines_embed_autorises():
+    """
+    Ensemble des hotes autorises pour un bloc IFRAME (whitelist GLOBALE ROOT).
+    Lit RootConfiguration.domaines_embed_autorises (SHARED_APPS, schema public ;
+    lisible depuis un tenant via le search_path). Normalise chaque ligne : on
+    retire espaces, casse, et un eventuel schema/slash (un ROOT collera souvent
+    "https://newsletter.ghost.io/").
+    / Set of allowed hosts for an IFRAME block (GLOBAL ROOT whitelist). Reads
+    RootConfiguration.domaines_embed_autorises (SHARED, public schema; readable
+    from a tenant). Normalizes each line: strip spaces/case and an optional
+    scheme/slash.
+    """
+    from urllib.parse import urlparse
+
+    from root_billet.models import RootConfiguration
+
+    brut = RootConfiguration.get_solo().domaines_embed_autorises or ""
+    hotes = set()
+    for ligne in brut.splitlines():
+        valeur = ligne.strip().lower()
+        if not valeur:
+            continue
+        # Si le ROOT a colle un schema/slash, on extrait juste l'hote.
+        # / If the ROOT pasted a scheme/slash, extract just the host.
+        if "://" in valeur:
+            valeur = urlparse(valeur).hostname or ""
+        else:
+            valeur = valeur.split("/")[0]
+        if valeur:
+            hotes.add(valeur)
+    return hotes
+
+
+@register.simple_tag
+def iframe_libre(url, hauteur=600):
+    """
+    Rend un <iframe> pour une URL HTTPS dont l'hote est dans la whitelist GLOBALE
+    ROOT (RootConfiguration.domaines_embed_autorises). Tout autre cas -> chaine
+    vide : on n'injecte JAMAIS un iframe vers un hote arbitraire (securite). Le
+    src est ECHAPPE, la hauteur CASTEE en int. Contrairement a embed_iframe, on
+    garde l'URL telle quelle (principe d'un iframe libre : formulaire/newsletter).
+    / Renders an <iframe> for an HTTPS URL whose host is in the GLOBAL ROOT
+    whitelist. Any other case -> empty string. src ESCAPED, height cast to int.
+    Unlike embed_iframe, we keep the URL as-is (free iframe: form/newsletter).
+
+    Utilisation : {% iframe_libre bloc.embed_url bloc.hauteur_px %}
+    """
+    from urllib.parse import urlparse
+
+    from django.utils.html import escape
+
+    if not url or not isinstance(url, str):
+        return ""
+    try:
+        decoupage = urlparse(url)
+    except (ValueError, TypeError):
+        return ""
+    # HTTPS obligatoire (un iframe http: serait bloque en mixed content de toute
+    # facon) + hote non vide. / HTTPS required + non-empty host.
+    if decoupage.scheme != "https":
+        return ""
+    hote = (decoupage.hostname or "").lower()
+    if not hote or hote not in _domaines_embed_autorises():
+        return ""
+
+    # Hauteur bornee/castee (defense en profondeur, meme si le modele valide deja).
+    # / Height bounded/cast (defense in depth, even though the model validates).
+    try:
+        hauteur_int = max(100, min(4000, int(hauteur)))
+    except (ValueError, TypeError):
+        hauteur_int = 600
+
+    iframe = (
+        f'<div class="tb-iframe">'
+        f'<iframe src="{escape(url)}" title="Contenu integre" height="{hauteur_int}" '
+        f'loading="lazy" referrerpolicy="no-referrer" '
+        f'sandbox="allow-scripts allow-same-origin allow-forms allow-popups">'
+        f"</iframe></div>"
+    )
+    return mark_safe(iframe)
+
+
 @register.simple_tag(takes_context=True)
 def jsonld_event(context, event):
     """

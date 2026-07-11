@@ -612,3 +612,259 @@ def test_construire_page_accueil_sans_desc_longue_paragraphe_vide(tenant, nettoy
         finally:
             if page is not None:
                 page.delete()
+
+
+# ---------------------------------------------------------------------------
+# CHANTIER 06 — Blocs IFRAME + PARTENAIRES
+# ---------------------------------------------------------------------------
+def test_creation_bloc_iframe(tenant, nettoyer_pages):
+    """Un bloc IFRAME se cree avec embed_url + hauteur_px."""
+    from pages.models import Bloc, Page
+
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Pytest Iframe", slug="pytest-iframe")
+        bloc = Bloc.objects.create(
+            page=page,
+            type_bloc=Bloc.IFRAME,
+            embed_url="https://newsletter.ghost.io/abonnement",
+            hauteur_px=500,
+        )
+        assert bloc.type_bloc == "IFRAME"
+        assert bloc.hauteur_px == 500
+
+
+def test_hauteur_px_bornee(tenant, nettoyer_pages):
+    """hauteur_px hors bornes (100..4000) est rejetee au full_clean()."""
+    from pages.models import Bloc, Page
+
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Pytest Iframe H", slug="pytest-iframe-h")
+        bloc = Bloc(page=page, type_bloc=Bloc.IFRAME, hauteur_px=50)
+        with pytest.raises(ValidationError) as exc:
+            bloc.full_clean()
+        assert "hauteur_px" in exc.value.error_dict
+
+
+def test_image_galerie_lien_url_ok(tenant, nettoyer_pages):
+    """Une ImageGalerie accepte un lien_url http(s) normal."""
+    from pages.models import Bloc, ImageGalerie, Page
+
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Pytest Part", slug="pytest-part")
+        bloc = Bloc.objects.create(page=page, type_bloc=Bloc.PARTENAIRES)
+        img = ImageGalerie(bloc=bloc, lien_url="https://partenaire.example/", position=1)
+        img.full_clean()  # ne leve pas
+        img.save()
+        assert img.lien_url == "https://partenaire.example/"
+
+
+def test_image_galerie_lien_url_dangereux_rejete(tenant, nettoyer_pages):
+    """lien_url = javascript:... est rejete au full_clean() (anti-XSS)."""
+    from pages.models import Bloc, ImageGalerie, Page
+
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Pytest Part X", slug="pytest-part-x")
+        bloc = Bloc.objects.create(page=page, type_bloc=Bloc.PARTENAIRES)
+        img = ImageGalerie(bloc=bloc, lien_url="javascript:alert(1)", position=1)
+        with pytest.raises(ValidationError):
+            img.full_clean()
+
+
+def test_rootconfig_champ_whitelist(tenant):
+    """RootConfiguration porte domaines_embed_autorises (lisible depuis un tenant)."""
+    from root_billet.models import RootConfiguration
+
+    with tenant_context(tenant):
+        config = RootConfiguration.get_solo()
+        assert hasattr(config, "domaines_embed_autorises")
+
+
+def _set_whitelist_embed(valeur):
+    """Pose la whitelist ROOT + vide le cache django-solo (scope par schema)."""
+    from django.core.cache import cache
+    from root_billet.models import RootConfiguration
+
+    config = RootConfiguration.get_solo()
+    config.domaines_embed_autorises = valeur
+    config.save()
+    cache.clear()
+
+
+@pytest.fixture
+def whitelist_embed(tenant):
+    """Sauvegarde/restaure domaines_embed_autorises autour d'un test."""
+    from root_billet.models import RootConfiguration
+
+    with tenant_context(tenant):
+        avant = RootConfiguration.get_solo().domaines_embed_autorises
+    yield
+    with tenant_context(tenant):
+        _set_whitelist_embed(avant)
+
+
+def test_iframe_libre_hote_autorise(tenant, whitelist_embed):
+    """Hote whiteliste + https -> <iframe> avec le src fourni et la hauteur."""
+    from pages.templatetags.pages_tags import iframe_libre
+
+    with tenant_context(tenant):
+        _set_whitelist_embed("newsletter.ghost.io")
+        html = iframe_libre("https://newsletter.ghost.io/abo", 480)
+        assert "<iframe" in html
+        assert "https://newsletter.ghost.io/abo" in html
+        assert 'height="480"' in html
+        assert "sandbox=" in html
+
+
+def test_iframe_libre_hote_refuse(tenant, whitelist_embed):
+    """Hote absent de la whitelist -> chaine vide (jamais d'iframe arbitraire)."""
+    from pages.templatetags.pages_tags import iframe_libre
+
+    with tenant_context(tenant):
+        _set_whitelist_embed("newsletter.ghost.io")
+        assert iframe_libre("https://evil.example/x", 480) == ""
+
+
+def test_iframe_libre_refuse_http(tenant, whitelist_embed):
+    """Schema http (hote pourtant whiteliste) -> chaine vide."""
+    from pages.templatetags.pages_tags import iframe_libre
+
+    with tenant_context(tenant):
+        _set_whitelist_embed("newsletter.ghost.io")
+        assert iframe_libre("http://newsletter.ghost.io/abo", 480) == ""
+
+
+def test_iframe_libre_url_vide(tenant, whitelist_embed):
+    """URL vide/invalide -> chaine vide (pas de crash)."""
+    from pages.templatetags.pages_tags import iframe_libre
+
+    with tenant_context(tenant):
+        _set_whitelist_embed("newsletter.ghost.io")
+        assert iframe_libre("", 480) == ""
+        assert iframe_libre(None, 480) == ""
+
+
+def test_iframe_libre_whitelist_normalisee(tenant, whitelist_embed):
+    """La whitelist tolere schema/slash/casse/lignes vides."""
+    from pages.templatetags.pages_tags import iframe_libre
+
+    with tenant_context(tenant):
+        _set_whitelist_embed("  https://Newsletter.Ghost.IO/  \n\n autre.example \n")
+        assert "<iframe" in iframe_libre("https://newsletter.ghost.io/abo", 480)
+        assert "<iframe" in iframe_libre("https://autre.example/form", 480)
+
+
+def test_get_inlines_partenaires(tenant, nettoyer_pages):
+    """L'inline ImageGalerie apparait pour un bloc PARTENAIRES."""
+    from django.test import RequestFactory
+
+    from Administration.admin.site import staff_admin_site
+    from pages.admin import BlocAdmin, ImageGalerieInline
+    from pages.models import Bloc, Page
+
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Pytest Adm", slug="pytest-adm")
+        bloc = Bloc.objects.create(page=page, type_bloc=Bloc.PARTENAIRES)
+        admin = BlocAdmin(Bloc, staff_admin_site)
+        request = RequestFactory().get("/")
+        inlines = admin.get_inlines(request, bloc)
+        assert ImageGalerieInline in inlines
+
+
+def test_conditional_fields_nouveaux_types():
+    """titre visible pour IFRAME/PARTENAIRES ; hauteur_px pour IFRAME."""
+    from Administration.admin.site import staff_admin_site
+    from pages.admin import BlocAdmin
+    from pages.models import Bloc
+
+    admin = BlocAdmin(Bloc, staff_admin_site)
+    assert "IFRAME" in admin.conditional_fields["titre"]
+    assert "PARTENAIRES" in admin.conditional_fields["titre"]
+    assert admin.conditional_fields["hauteur_px"] == "type_bloc == 'IFRAME'"
+    assert "IFRAME" in admin.conditional_fields["embed_url"]
+    assert "hauteur_px" in admin.fields
+
+
+def test_rootconfig_admin_superadmin_strict(tenant):
+    """RootConfigurationAdmin : perms reservees au superadmin (is_superuser)."""
+    from django.test import RequestFactory
+
+    from Administration.admin.site import staff_admin_site
+    from Administration.admin_tenant import RootConfigurationAdmin
+    from root_billet.models import RootConfiguration
+
+    admin = RootConfigurationAdmin(RootConfiguration, staff_admin_site)
+    request = RequestFactory().get("/")
+
+    class _User:
+        is_superuser = False
+    request.user = _User()
+    assert admin.has_view_permission(request) is False
+    request.user.is_superuser = True
+    assert admin.has_view_permission(request) is True
+    assert list(admin.get_fields(request)) == ["domaines_embed_autorises"]
+
+
+def test_rendu_bloc_iframe(tenant, whitelist_embed, nettoyer_pages):
+    """bloc_iframe : hote autorise -> <iframe> ; hote refuse -> message honnete."""
+    from django.template.loader import render_to_string
+
+    from pages.models import Bloc, Page
+
+    with tenant_context(tenant):
+        _set_whitelist_embed("newsletter.ghost.io")
+        page = Page.objects.create(titre="Pytest Rif", slug="pytest-rif")
+        bloc_ok = Bloc.objects.create(
+            page=page, type_bloc=Bloc.IFRAME,
+            embed_url="https://newsletter.ghost.io/abo", hauteur_px=400,
+        )
+        html_ok = render_to_string("pages/classic/partials/bloc_iframe.html", {"bloc": bloc_ok})
+        assert "<iframe" in html_ok
+        assert 'data-testid="bloc-iframe"' in html_ok
+
+        bloc_ko = Bloc.objects.create(
+            page=page, type_bloc=Bloc.IFRAME,
+            embed_url="https://evil.example/x", hauteur_px=400,
+        )
+        html_ko = render_to_string("pages/classic/partials/bloc_iframe.html", {"bloc": bloc_ko})
+        assert "<iframe" not in html_ko
+        assert ("hote non autoris" in html_ko.lower()) or ("host" in html_ko.lower())
+
+
+def test_rendu_bloc_partenaires_lien(tenant, nettoyer_pages):
+    """bloc_partenaires : conteneur + testid rendus (logo cliquable teste en Chrome)."""
+    from django.template.loader import render_to_string
+
+    from pages.models import Bloc, Page
+
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Pytest Rpart", slug="pytest-rpart")
+        bloc = Bloc.objects.create(page=page, type_bloc=Bloc.PARTENAIRES)
+        html = render_to_string("pages/classic/partials/bloc_partenaires.html", {"bloc": bloc})
+        assert 'data-testid="bloc-partenaires"' in html
+
+
+def test_rendu_bloc_newsletter(tenant, nettoyer_pages):
+    """bloc_newsletter : script Ghost VENDORISÉ + data-site = embed_url ; vide si pas d'URL."""
+    from django.template.loader import render_to_string
+
+    from pages.models import Bloc, Page
+
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Pytest News", slug="pytest-news")
+        bloc = Bloc.objects.create(
+            page=page, type_bloc=Bloc.NEWSLETTER,
+            embed_url="https://ghost.tibillet.coop/",
+            titre="Les news de TiBillet",
+            sous_titre="La boite a outils d'organisation collective",
+        )
+        html = render_to_string("pages/classic/partials/bloc_newsletter.html", {"bloc": bloc})
+        # Script servi en LOCAL (vendorisé), pas depuis un CDN.
+        assert "pages/vendor/ghost/signup-form.min.js" in html
+        assert "cdn.jsdelivr.net" not in html
+        assert 'data-site="https://ghost.tibillet.coop/"' in html
+        assert 'data-testid="bloc-newsletter"' in html
+
+        # Sans URL d'instance -> aucune section rendue.
+        bloc_vide = Bloc.objects.create(page=page, type_bloc=Bloc.NEWSLETTER, embed_url="")
+        html_vide = render_to_string("pages/classic/partials/bloc_newsletter.html", {"bloc": bloc_vide})
+        assert "bloc-newsletter" not in html_vide

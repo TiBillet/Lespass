@@ -80,6 +80,8 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework_api_key.models import APIKey
 from solo.admin import SingletonModelAdmin
+from django.core.cache import cache
+from root_billet.models import RootConfiguration
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.components import register_component, BaseComponent
 from unfold.contrib.filters.admin import (
@@ -3622,6 +3624,43 @@ class TenantAdmin(ModelAdmin):
         return False
 
     def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(RootConfiguration, site=staff_admin_site)
+class RootConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
+    """
+    Config ROOT — ici on n'expose QUE la whitelist des domaines d'integration
+    iframe (bloc IFRAME de l'app pages). JAMAIS les cles Stripe/Fedow. Reserve au
+    SUPERADMIN strict (is_superuser) : le modele n'apparait dans la sidebar que
+    pour lui. RootConfiguration est un singleton SHARED (schema public) : editer
+    depuis n'importe quel tenant modifie la meme ligne globale (voulu).
+    / ROOT config — expose ONLY the iframe-embed domains whitelist here, NEVER the
+    Stripe/Fedow keys. STRICT superadmin only.
+    """
+
+    fields = ("domaines_embed_autorises",)
+
+    def save_model(self, request, obj, form, change):
+        # Vide le cache django-solo (scope par schema) pour que TOUS les tenants
+        # voient la nouvelle whitelist sans attendre l'expiration (~5 min).
+        # / Clear the per-schema django-solo cache so ALL tenants see the new
+        # whitelist immediately (meme pattern que RootConfiguration.set_stripe_api).
+        super().save_model(request, obj, form, change)
+        cache.clear()
+
+    def has_view_permission(self, request, obj=None):
+        return bool(request.user and request.user.is_superuser)
+
+    def has_add_permission(self, request):
+        # Singleton : jamais d'ajout. / Singleton: no add.
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return bool(request.user and request.user.is_superuser)
+
+    def has_delete_permission(self, request, obj=None):
+        # Singleton : pas de suppression. / Singleton: no deletion.
         return False
 
 

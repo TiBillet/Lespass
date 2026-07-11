@@ -364,27 +364,38 @@ class TerminalConsumer(AsyncWebsocketConsumer):
         sync via database_sync_to_async). Ne PAS decorer.
         / SYNC method: called from connexion_autorisee (already sync). Do NOT decorate.
 
-        Catch large : un paiement inconnu, ou une requete lancee au mauvais moment
-        sur le schema public (ProgrammingError « relation does not exist »), doit
-        REFUSER proprement plutot que laisser remonter une exception qui planterait
-        connect(). La vue cree toujours le PaymentsIntent avant d'ouvrir le websocket,
-        donc un paiement legitime existe forcement dans le bon schema.
-        / Broad catch: an unknown payment, or a query hitting the public schema at the
-        wrong moment (ProgrammingError), must REFUSE cleanly instead of raising.
+        IMPORTANT — schema tenant : PaymentsIntent est une TENANT_APP. Le
+        `database_sync_to_async` s'execute sur un thread du pool ou `connection`
+        est sur le schema PUBLIC (la table kiosk_paymentsintent n'y existe pas).
+        On force donc le schema du tenant via tenant_context(scope["tenant"]),
+        sinon la requete leve « relation does not exist » et TOUTE borne KI est
+        refusee. / PaymentsIntent is a TENANT_APP; the sync thread runs on the
+        PUBLIC schema. We must wrap in tenant_context(scope["tenant"]), otherwise
+        the query raises and EVERY KI device is rejected.
+
+        Catch large : un paiement inconnu doit REFUSER proprement plutot que
+        laisser remonter une exception qui planterait connect().
+        / Broad catch: an unknown payment must REFUSE cleanly instead of raising.
         """
+        from django_tenants.utils import tenant_context
         from kiosk.models import PaymentsIntent
 
-        try:
-            payment_intent = PaymentsIntent.objects.select_related("terminal").get(
-                payment_intent_stripe_id=self.room_name,
-            )
-        except Exception as erreur:
-            logger.error(f"_paiement_appartient_a : {self.room_name} introuvable ou schema invalide : {erreur}")
+        tenant = self.scope.get("tenant")
+        if tenant is None:
+            logger.error(f"_paiement_appartient_a : aucun tenant dans le scope pour {self.room_name}")
             return False
 
-        # Un TPE non appaire (term_user=None) n'appartient a aucune borne.
-        # / An unpaired terminal (term_user=None) belongs to no device.
-        return payment_intent.terminal.term_user_id == user.id
+        try:
+            with tenant_context(tenant):
+                payment_intent = PaymentsIntent.objects.select_related("terminal").get(
+                    payment_intent_stripe_id=self.room_name,
+                )
+                # Un TPE non appaire (term_user=None) n'appartient a aucune borne.
+                # / An unpaired terminal (term_user=None) belongs to no device.
+                return payment_intent.terminal.term_user_id == user.id
+        except Exception as erreur:
+            logger.error(f"_paiement_appartient_a : {self.room_name} introuvable : {erreur}")
+            return False
 
     @database_sync_to_async
     def get_finished_template_name(self):
@@ -397,19 +408,25 @@ class TerminalConsumer(AsyncWebsocketConsumer):
         room_name == payment_intent_stripe_id
         (voir kiosk/routing.py et kiosk/templates/kiosk/waiting_credit_card_terminal.html)
         """
+        from django_tenants.utils import tenant_context
         from kiosk.models import PaymentsIntent
-        # Catch large (comme _paiement_appartient_a) : un rejeu sur schema public
-        # ou un paiement inconnu ne doit pas planter le consumer.
-        # / Broad catch: a replay on the public schema or an unknown payment must
-        # not crash the consumer.
+
+        # Meme contrainte que _paiement_appartient_a : PaymentsIntent est TENANT_APP,
+        # le thread sync est sur le schema public -> tenant_context obligatoire.
+        # / Same as _paiement_appartient_a: TENANT_APP on the public sync thread.
+        tenant = self.scope.get("tenant")
+        if tenant is None:
+            return None
         try:
-            payment_intent = PaymentsIntent.objects.get(payment_intent_stripe_id=self.room_name)
+            with tenant_context(tenant):
+                payment_intent = PaymentsIntent.objects.get(payment_intent_stripe_id=self.room_name)
+                statut = payment_intent.status
         except Exception:
             return None
 
-        if payment_intent.status == PaymentsIntent.SUCCEEDED:
+        if statut == PaymentsIntent.SUCCEEDED:
             return "success.html"
-        if payment_intent.status == PaymentsIntent.CANCELED:
+        if statut == PaymentsIntent.CANCELED:
             return "cancel.html"
         # Paiement encore en cours : le polling enverra la suite.
         # / Still in progress: polling will send the rest.

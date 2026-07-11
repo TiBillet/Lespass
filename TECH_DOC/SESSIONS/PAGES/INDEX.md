@@ -27,6 +27,7 @@ une séquence ordonnée de blocs typés.
 | 03 | Blocs riches : galerie (M2M), carte+puces (JSON), FAQ, horaires | À faire | 2 | _à créer_ |
 | 04 | Pont métier : programme événements + bouton billetterie | À faire | 3 | _à créer_ |
 | 05 | API v2 pages : fabriquer un site via API (perm. clé + CRUD + catalogue) | Spec validée | 4 | [CHANTIER-05-api-v2-pages.md](./CHANTIER-05-api-v2-pages.md) |
+| 06 | Blocs `IFRAME` (intégration libre + whitelist ROOT) + `PARTENAIRES` (logos cliquables) | Spec validée (review fable) | 2 | [CHANTIER-06-blocs-iframe-partenaires.md](./CHANTIER-06-blocs-iframe-partenaires.md) |
 
 ## Décisions verrouillées (résumé — détail dans SPEC.md)
 

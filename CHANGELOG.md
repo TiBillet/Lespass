@@ -1,5 +1,53 @@
 # Changelog / Journal des modifications
 
+## Pages : blocs Contenu intégré libre (iframe) + Partenaires / Pages: free iframe embed + Partners blocks
+
+**Date :** 2026-07-11
+**Migration :** Oui / Yes — `pages` (`AlterField` type_bloc + `AddField` hauteur_px, lien_url) et
+`root_billet` (`AddField` domaines_embed_autorises). `migrate_schemas --executor=multiprocessing`.
+
+**Quoi / What :** deux nouveaux blocs pour l'app `pages`.
+- **`IFRAME` (Contenu intégré libre)** : intègre un formulaire externe (newsletter Ghost, etc.) via un
+  `<iframe>` à hauteur libre. Réutilise le champ `embed_url` + nouveau `hauteur_px`. Rendu par le tag
+  `iframe_libre`, qui n'affiche l'iframe que si l'URL est en **https** ET si son hôte figure dans une
+  **whitelist globale** (`RootConfiguration.domaines_embed_autorises`) — éditable par le **superadmin ROOT
+  seul** (section « Configuration racine » de la sidebar). Hôte non autorisé → message honnête, jamais
+  d'iframe arbitraire. `sandbox` + `src` échappé.
+- **`PARTENAIRES`** : bande de logos cliquables. Réutilise l'inline `ImageGalerie` + nouveau champ
+  `lien_url` (validé anti-schéma-dangereux) → mécanisme « image cliquable » (`<a target="_blank"
+  rel="noopener">`) valable aussi pour le bloc `GALERIE`. Logos monochromes au repos, couleur au survol.
+- **`NEWSLETTER`** : formulaire d'inscription Ghost. Le script `signup-form` est **vendorisé**
+  (`pages/static/pages/vendor/ghost/`, zéro CDN, comme Leaflet) ; il injecte un `<iframe>` vers
+  l'instance Ghost (`data-site` = `embed_url`). Champs `titre`/`sous_titre` = data-title/description ;
+  couleurs par défaut = identité TiBillet. Pas de whitelist (script local, poste vers l'instance
+  configurée = périmètre du gestionnaire).
+
+**Pourquoi / Why :** permettre aux gestionnaires d'intégrer newsletters/formulaires et encarts partenaires
+sans développeur, tout en gardant la sécurité (pas d'iframe vers un hôte arbitraire).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `pages/models.py` | +types IFRAME/PARTENAIRES, +`hauteur_px`, +`lien_url`, validator `valider_url_sans_schema_dangereux` |
+| `root_billet/models.py` | +`domaines_embed_autorises` (whitelist ROOT) |
+| `pages/templatetags/pages_tags.py` | tag `iframe_libre` + helper `_domaines_embed_autorises` |
+| `pages/admin.py` | conditional_fields (embed_url+hauteur_px), inline PARTENAIRES, `lien_url` |
+| `Administration/admin_tenant.py` | `RootConfigurationAdmin` (superadmin strict, 1 champ, `cache.clear()`) |
+| `Administration/admin/dashboard.py` | item « Domaines iframe autorisés » dans « Configuration racine » |
+| `pages/templates/.../bloc_iframe.html`, `bloc_partenaires.html` | nouveaux rendus |
+| `pages/templates/.../bloc_galerie.html` | image cliquable si `lien_url` |
+| `pages/static/pages/css/tb-blocs.css` | styles `.tb-iframe`, `.tb-partenaires`, `.tb-newsletter` |
+| `pages/static/pages/vendor/ghost/signup-form.min.js` | script Ghost signup vendorisé (+ SOURCE.txt) |
+| `pages/templates/.../bloc_newsletter.html` | rendu bloc NEWSLETTER |
+| `tests/pytest/test_pages.py` | +17 tests (modèles, tag, admin, rendu, newsletter) |
+| `pages/management/commands/charger_site_lespass.py` | fixture démo : whitelist ROOT (OSM) + bloc IFRAME (« Le plan d'accès ») + bloc PARTENAIRES (6 logos `static/contributeurs/`) |
+
+**Fixture de démo :** `charger_site_lespass` intègre désormais les deux blocs sur la landing `lespass` —
+un bloc IFRAME (carte OpenStreetMap ; commentaire indiquant comment le passer à une newsletter Ghost) et
+un bloc PARTENAIRES avec les logos `static/contributeurs/` (réutilisés de la landing ROOT `seo/landing.html`).
+La commande autorise l'hôte OSM dans la whitelist ROOT (idempotent). **SVG exclus** (StdImageField/Pillow
+ne redimensionne pas le SVG) → seuls les logos PNG/JPG sont utilisés.
+
 ## Tireuses : correction création d'un fût impossible / Taps: fix keg creation impossible (issue #445)
 
 **Date :** 2026-07-10
