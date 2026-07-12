@@ -200,3 +200,8 @@ env.js
 laboutik_client_pi_desktop_v2/configLaboutik.json
 laboutik_client_pi_desktop_v2/package-lock.json
 laboutik_client_android_v2/mobile-app/package-lock.json
+
+# Outillage agent IA local : jamais committe (secrets, etat local, workspaces jetables).
+# Les skills partages vivent dans api_v2/skills/ et sont lies ici par un symlink.
+# / Local AI tooling: never committed. Shared skills live in api_v2/skills/, symlinked here.
+/.claude/

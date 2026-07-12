@@ -1,0 +1,12 @@
+{
+  "skill_name": "tibillet-api",
+  "evals": [
+    {
+      "id": 0,
+      "name": "doc-docs-vers-page-upop-bar",
+      "prompt": "Transformer le document Docs « Upop' Bar » (contenu figé fourni) en une page d'accueil complète du tenant la-maison-des-communs, via l'API v2 : HERO (H1) + 3 images téléchargées par URL + paragraphes de section (H2/H3), avec meta_description et image de partage depuis le frontmatter.",
+      "expected_output": "Page 'accueil' créée (est_accueil, publiée), titre 'Upop' Bar', ~8 blocs dans l'ordre (HERO, IMAGE, PARAGRAPHE x2, IMAGE, PARAGRAPHE, IMAGE, PARAGRAPHE), 3 images effectivement téléchargées, contenu des sections présent.",
+      "files": ["../tibillet-api-workspace/doc-upop-bar.md"]
+    }
+  ]
+}
