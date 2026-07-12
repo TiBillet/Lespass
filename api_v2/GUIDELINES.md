@@ -175,7 +175,7 @@ This single permission covers both `/api/v2/pages/` and `/api/v2/blocs/` routes.
 |---|---|---|---|
 | GET | `/api/v2/pages/` | Liste des pages du tenant | 200 `{"results":[WebPage,...]}` |
 | POST | `/api/v2/pages/` | Crée une page + ses blocs (nested `hasPart`), **atomique** | 201 WebPage |
-| GET | `/api/v2/pages/block-types/` | **Catalogue** des 14 types de blocs et champs autorisés | 200 `{"blockTypes":[...]}` |
+| GET | `/api/v2/pages/block-types/` | **Catalogue** des types de blocs et champs autorisés | 200 `{"blockTypes":[...]}` |
 | GET | `/api/v2/pages/{uuid}/` | Détail (lookup par **uuid OU slug**) | 200 WebPage / 404 |
 | PATCH | `/api/v2/pages/{uuid}/` | Édite les **méta** de la page (titre, slug, publie, SEO…) | 200 WebPage |
 | DELETE | `/api/v2/pages/{uuid}/` | Supprime la page (cascade blocs) | 204 |
@@ -247,34 +247,47 @@ additionalType     = type_bloc   ← champ pivot (ex: "HERO", "GALERIE"…)
 headline           = titre
 alternativeHeadline = sous_titre
 text               = texte HTML nettoyé par nh3
-image              = URL (string) ou ImageObject[] pour GALERIE
+image              = URL (string) ou ImageObject[] pour GALERIE / PARTENAIRES
 position           = ordre dans la page
 additionalProperty = PropertyValue[] pour tout le reste (voir ci-dessous)
 ```
 
 Champs portés par `additionalProperty` (PropertyValue[]) :
-`surtitre`, `badge`, `image_secondaire`, `video`, `image_position`,
+`surtitre`, `badge`, `image_secondaire`, `image_position`,
 `bouton_label`, `bouton_url`, `bouton2_label`, `bouton2_url`,
 `auteur_nom`, `auteur_role`, `auteur_photo`,
-`points_gps`, `contenu`, `nombre_max`, `repliable`, `embed_url`.
+`points_gps`, `contenu`, `nombre_max`, `repliable`, `embed_url`, `hauteur_px`.
+(`video` n'est PAS settable via l'API — cf. § Vidéo. Un `video` en additionalProperty
+est silencieusement ignoré.)
 
 Format PropertyValue : `{"@type":"PropertyValue","name":"<clé>","value":<valeur>}`.
 `value` accepte string, nombre, booléen, liste ou objet JSON.
 
-### Les 14 types de blocs (additionalType)
+### Les types de blocs (additionalType)
 
 `HERO`, `PARAGRAPHE`, `IMAGE_TEXTE`, `CTA`, `TEMOIGNAGE`, `VIDEO_TEXTE`,
-`CARTE`, `IMAGE`, `CARTE_LEAFLET`, `INFOS`, `FAQ`, `EVENEMENTS`, `GALERIE`, `EMBED`.
+`CARTE`, `IMAGE`, `CARTE_LEAFLET`, `INFOS`, `FAQ`, `EVENEMENTS`, `GALERIE`, `EMBED`,
+`MARKDOWN`, `LISTE_SOUS_PAGES`, `IFRAME`, `PARTENAIRES`, `NEWSLETTER`.
+
+- **`IFRAME`** : contenu intégré libre. `embed_url` (rendu seulement si l'hôte est
+  autorisé par le superadmin ROOT) + `hauteur_px`.
+- **`NEWSLETTER`** : formulaire d'inscription Ghost. `embed_url` = instance Ghost
+  (data-site), `headline`/`alternativeHeadline` = titre/description du formulaire.
+- **`PARTENAIRES`** : bande de logos (images via ImageObject[], cf. § Images).
 
 Les champs autorisés par type sont donnés par `GET /api/v2/pages/block-types/`
-(source unique : `pages/blocs_catalogue.py`).
+(source unique : `pages/blocs_catalogue.py`) — **toujours** interroger cet endpoint
+plutôt que coder la liste en dur.
 
 ### Images
 
 **Par URL (JSON)** — champ `image` = URL `http`/`https` → téléchargée par le serveur
 (validation Pillow, ≤ 10 Mo).
-Pour **GALERIE** : `image` = liste d'ImageObject
+Pour **GALERIE** et **PARTENAIRES** : `image` = liste d'ImageObject
 `[{"@type":"ImageObject","contentUrl":"https://...","caption":"..."}]`.
+Pour **PARTENAIRES**, la clé optionnelle `"url"` rend le logo cliquable (nouvel onglet) :
+`{"@type":"ImageObject","contentUrl":"https://…/logo.png","caption":"Partenaire","url":"https://partenaire.exemple/"}`
+(les schémas dangereux sont neutralisés côté serveur).
 
 **Upload multipart** (`POST /api/v2/pages/{uuid}/blocs/` ou `PATCH /api/v2/blocs/{uuid}/`) :
 champs fichier `image`, `image_secondaire`, `auteur_photo` en `multipart/form-data`.
@@ -331,9 +344,10 @@ POST /api/v2/pages/
 ### Tests automatisés
 
 ```bash
-docker exec -e API_KEY=dummy lespass_django poetry run pytest tests/pytest/test_api_v2_pages.py -v
+docker exec -e API_KEY=dummy lespass_django poetry run pytest tests/pytest/test_pages_api.py -v
 ```
 
-21 tests : CRUD page, catalogue block-types, ajout/édition/suppression bloc,
-images par URL, upload multipart, anti-SSRF, neutralisation XSS dans les champs lien,
-isolation tenant, slug réservé, atomicité.
+Tests (`tests/pytest/test_pages_api.py`) : CRUD page, catalogue block-types, ajout/édition/
+suppression bloc, images par URL, upload multipart, anti-SSRF, neutralisation XSS dans les
+champs lien, isolation tenant, slug réservé, atomicité, et création des blocs IFRAME
+(hauteur_px), NEWSLETTER (embed_url) et PARTENAIRES (logos cliquables `url`).

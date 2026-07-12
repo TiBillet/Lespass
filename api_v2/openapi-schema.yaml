@@ -1146,13 +1146,17 @@ paths:
   /api/v2/pages/block-types/:
     get:
       operationId: listBlockTypes
-      summary: "Catalogue des 14 types de blocs et leurs champs autorisés"
+      summary: "Catalogue des types de blocs et leurs champs autorisés"
       description: |
-        FR: Catalogue de référence des 14 types de blocs disponibles et de leurs
-        champs autorisés. Source unique : `pages/blocs_catalogue.py`.
+        FR: Catalogue de référence des types de blocs disponibles et de leurs
+        champs autorisés (dont IFRAME, PARTENAIRES, NEWSLETTER). Source unique :
+        `pages/blocs_catalogue.py`. Toujours interroger cet endpoint pour connaître
+        les types et champs à jour plutôt que de les coder en dur.
 
-        EN: Reference catalogue of the 14 available bloc types and their allowed
-        fields. Single source of truth: `pages/blocs_catalogue.py`.
+        EN: Reference catalogue of the available bloc types and their allowed
+        fields (including IFRAME, PARTENAIRES, NEWSLETTER). Single source of truth:
+        `pages/blocs_catalogue.py`. Always query this endpoint for the up-to-date
+        types and fields instead of hardcoding them.
       tags: [Page]
       security:
         - ApiKeyAuth: []
@@ -1332,6 +1336,51 @@ paths:
                     - "@type": "ImageObject"
                       contentUrl: "https://exemple.fr/img2.jpg"
                       caption: "Terrasse"
+              iframeBloc:
+                summary: "Bloc IFRAME (contenu intégré libre, hauteur fixe)"
+                description: >-
+                  L'iframe n'est rendu que si l'hôte de embed_url est autorisé par le
+                  superadmin ROOT (whitelist globale). hauteur_px : hauteur du cadre.
+                value:
+                  additionalType: "IFRAME"
+                  headline: "Le plan d'accès"
+                  additionalProperty:
+                    - "@type": "PropertyValue"
+                      name: "embed_url"
+                      value: "https://www.openstreetmap.org/export/embed.html?bbox=..."
+                    - "@type": "PropertyValue"
+                      name: "hauteur_px"
+                      value: 420
+              newsletterBloc:
+                summary: "Bloc NEWSLETTER (formulaire d'inscription Ghost)"
+                description: >-
+                  embed_url = l'instance Ghost (data-site). headline/alternativeHeadline
+                  = titre/description du formulaire. Le script Ghost est servi en local.
+                value:
+                  additionalType: "NEWSLETTER"
+                  headline: "Les news de TiBillet"
+                  alternativeHeadline: "La boîte à outils d'organisation collective"
+                  additionalProperty:
+                    - "@type": "PropertyValue"
+                      name: "embed_url"
+                      value: "https://ghost.exemple.coop/"
+              partenairesBloc:
+                summary: "Bloc PARTENAIRES (bande de logos cliquables)"
+                description: >-
+                  Comme GALERIE, image = liste d'ImageObject. La clé `url` (optionnelle)
+                  rend le logo cliquable (nouvel onglet) ; les schémas dangereux sont
+                  neutralisés côté serveur.
+                value:
+                  additionalType: "PARTENAIRES"
+                  headline: "Ils nous soutiennent"
+                  image:
+                    - "@type": "ImageObject"
+                      contentUrl: "https://exemple.fr/logo-alpha.png"
+                      caption: "Coop Alpha"
+                      url: "https://alpha.exemple/"
+                    - "@type": "ImageObject"
+                      contentUrl: "https://exemple.fr/logo-beta.png"
+                      caption: "Asso Beta"
           multipart/form-data:
             schema:
               type: object
@@ -2358,7 +2407,8 @@ components:
             Type de bloc (champ pivot du mapping). Valeurs possibles :
             HERO, PARAGRAPHE, IMAGE_TEXTE, CTA, TEMOIGNAGE, VIDEO_TEXTE,
             CARTE, IMAGE, CARTE_LEAFLET, INFOS, FAQ, EVENEMENTS, GALERIE, EMBED,
-            MARKDOWN, LISTE_SOUS_PAGES.
+            MARKDOWN, LISTE_SOUS_PAGES, IFRAME, PARTENAIRES, NEWSLETTER.
+            Liste à jour : GET /api/v2/pages/block-types/.
           example: HERO
         headline:
           type: string
@@ -2372,7 +2422,7 @@ components:
         image:
           description: >
             URL de l'image principale (string), ou liste ImageObject[]
-            pour les blocs GALERIE.
+            pour les blocs GALERIE et PARTENAIRES.
           oneOf:
             - type: string
               format: uri
@@ -2391,7 +2441,7 @@ components:
             bouton_label, bouton_url,
             bouton2_label, bouton2_url, auteur_nom, auteur_role,
             auteur_photo (URL), points_gps (JSON), contenu (JSON),
-            nombre_max (int), repliable (bool), embed_url.
+            nombre_max (int), repliable (bool), embed_url, hauteur_px (int).
             Le champ video n'est pas settable via l'API (admin uniquement) ;
             pour une vidéo, utiliser le bloc EMBED (embed_url).
             Format value : string | nombre | booléen | liste | objet JSON.
@@ -2415,7 +2465,8 @@ components:
         image:
           description: >
             URL http/https (téléchargée par le serveur, ≤ 10 Mo) ou liste
-            ImageObject[] pour GALERIE. URLs internes/privées/loopback refusées
+            ImageObject[] pour GALERIE et PARTENAIRES (avec clé `url` optionnelle
+            = lien cliquable du logo). URLs internes/privées/loopback refusées
             (protection SSRF). Vidéos : multipart uniquement, pas par URL.
           oneOf:
             - type: string
@@ -2453,7 +2504,7 @@ components:
             type: string
     ImageObject:
       type: object
-      description: "schema.org/ImageObject — image dans un bloc GALERIE"
+      description: "schema.org/ImageObject — image d'un bloc GALERIE ou PARTENAIRES"
       properties:
         '@type':
           type: string
@@ -2465,3 +2516,10 @@ components:
         caption:
           type: string
           description: "Légende de l'image"
+        url:
+          type: string
+          format: uri
+          description: >
+            Lien cible du logo (bloc PARTENAIRES uniquement, optionnel) : rend le
+            logo cliquable dans un nouvel onglet. Les schémas dangereux
+            (javascript:, data:, vbscript:) sont neutralisés côté serveur.

@@ -50,10 +50,27 @@ CHAMPS_PAR_TYPE = {
     # / LISTE_SOUS_PAGES: cards index of the current page's published
     # sub-pages (parent = blog index, children = articles).
     "LISTE_SOUS_PAGES": ["titre", "nombre_max"],
+    # IFRAME : contenu integre libre (formulaire, widget) a hauteur fixe. `embed_url`
+    # = URL a integrer (rendue seulement si l'hote est autorise cote ROOT), `hauteur_px`
+    # = hauteur du cadre. / IFRAME: free embedded content at a fixed height.
+    "IFRAME": ["titre", "embed_url", "hauteur_px"],
+    # PARTENAIRES : bande de logos. Comme GALERIE, les images sont portees par
+    # ImageGalerie (chaque logo a une image + une legende + un lien_url optionnel).
+    # / PARTENAIRES: logo strip. Like GALLERY, images are carried by ImageGalerie
+    # (each logo has an image + caption + optional lien_url).
+    "PARTENAIRES": ["titre"],
+    # NEWSLETTER : formulaire d'inscription Ghost. `embed_url` = instance Ghost
+    # (data-site), `titre`/`sous_titre` = data-title/description du formulaire.
+    # / NEWSLETTER: Ghost signup form. embed_url = Ghost instance (data-site).
+    "NEWSLETTER": ["titre", "sous_titre", "embed_url"],
 }
 
-# Les 16 codes de type, dans l'ordre du catalogue.
-# / The 16 type codes, in catalogue order.
+# Types dont les images sont portees par ImageGalerie (relation multi-images).
+# / Types whose images are carried by ImageGalerie (multi-image relation).
+TYPES_AVEC_GALERIE = frozenset({"GALERIE", "PARTENAIRES"})
+
+# Les codes de type, dans l'ordre du catalogue.
+# / The type codes, in catalogue order.
 TYPES_BLOC = list(CHAMPS_PAR_TYPE.keys())
 
 # Union de tous les champs : whitelist pour additionalProperty (securite : on ne

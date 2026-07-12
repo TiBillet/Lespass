@@ -22,21 +22,24 @@ def test_apikey_page_permission_maps_page_and_bloc():
 
 
 @pytest.mark.django_db
-def test_catalogue_blocs_couvre_les_16_types():
+def test_catalogue_blocs_couvre_tous_les_types():
     from pages.blocs_catalogue import CHAMPS_PAR_TYPE, CHAMPS_BLOC_AUTORISES, TYPES_BLOC
     from pages.models import Bloc
-    # Les 16 types du modele sont presents dans le catalogue
-    # (14 d'origine + MARKDOWN + LISTE_SOUS_PAGES, CHANTIER-09).
-    # / The model's 16 types are in the catalogue (14 original +
-    # MARKDOWN + LISTE_SOUS_PAGES, CHANTIER-09).
+    # Le catalogue couvre EXACTEMENT les types du modele (aucun oubli).
+    # / The catalogue covers EXACTLY the model's types (no omission).
     types_modele = {code for code, _label in Bloc.TYPE_BLOC_CHOICES}
     assert set(CHAMPS_PAR_TYPE.keys()) == types_modele
-    assert len(TYPES_BLOC) == 16
+    assert len(TYPES_BLOC) == len(types_modele)
     # La whitelist est l'union, et ne contient que de vrais champs du modele.
     noms_champs_modele = {f.name for f in Bloc._meta.get_fields()}
     assert CHAMPS_BLOC_AUTORISES <= noms_champs_modele
     # Exemple cible : FAQ porte titre + texte + repliable.
     assert set(CHAMPS_PAR_TYPE["FAQ"]) == {"titre", "texte", "repliable"}
+    # Nouveaux blocs (CHANTIER-06) : champs attendus.
+    # / New blocks (CHANTIER-06): expected fields.
+    assert set(CHAMPS_PAR_TYPE["IFRAME"]) == {"titre", "embed_url", "hauteur_px"}
+    assert set(CHAMPS_PAR_TYPE["NEWSLETTER"]) == {"titre", "sous_titre", "embed_url"}
+    assert CHAMPS_PAR_TYPE["PARTENAIRES"] == ["titre"]
 
 
 @pytest.mark.django_db
@@ -469,10 +472,14 @@ def test_http_block_types_catalogue(cle_pages):
     r = client.get("/api/v2/pages/block-types/", **auth)
     assert r.status_code == 200, r.content
     types = {b["type"] for b in r.json()["blockTypes"]}
-    # 16 types : 14 d'origine + MARKDOWN + LISTE_SOUS_PAGES (CHANTIER-09).
-    # / 16 types: 14 original + MARKDOWN + LISTE_SOUS_PAGES (CHANTIER-09).
-    assert len(types) == 16
-    assert {"MARKDOWN", "LISTE_SOUS_PAGES"} <= types
+    # Le catalogue expose tous les types du modele (dont les nouveaux CHANTIER-06).
+    # / The catalogue exposes all model types (including the new CHANTIER-06 ones).
+    from pages.models import Bloc
+    assert types == {code for code, _ in Bloc.TYPE_BLOC_CHOICES}
+    assert {"MARKDOWN", "LISTE_SOUS_PAGES", "IFRAME", "PARTENAIRES", "NEWSLETTER"} <= types
+    # IFRAME expose bien hauteur_px ; NEWSLETTER expose embed_url.
+    iframe = next(b for b in r.json()["blockTypes"] if b["type"] == "IFRAME")
+    assert "hauteur_px" in iframe["fields"]
     faq = next(b for b in r.json()["blockTypes"] if b["type"] == "FAQ")
     assert set(faq["fields"]) == {"titre", "texte", "repliable"}
     # Chaque entree a un label non vide (i18n display).
@@ -780,3 +787,232 @@ def test_page_nested_galerie_url_dangereuse_ne_cree_rien(monkeypatch):
         # Rien n'a ete cree (ni la page au slug galerie-ko).
         assert Page.objects.count() == nb_pages_avant
         assert not Page.objects.filter(slug="galerie-ko").exists()
+
+
+# ---------------------------------------------------------------------------
+# CHANTIER 06 — Création via API v2 des blocs IFRAME / NEWSLETTER / PARTENAIRES
+# ---------------------------------------------------------------------------
+@pytest.mark.django_db
+def test_bloc_iframe_cree_avec_hauteur_px():
+    """IFRAME : embed_url + hauteur_px (additionalProperty) -> settés ; roundtrip lecture."""
+    from pages.models import Page
+    from api_v2.serializers import BlocCreateSerializer, BlocSchemaSerializer
+
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="i", slug="iframe-api")
+        ser = BlocCreateSerializer(data={
+            "additionalType": "IFRAME",
+            "headline": "Le plan",
+            "additionalProperty": [
+                {"@type": "PropertyValue", "name": "embed_url",
+                 "value": "https://www.openstreetmap.org/export/embed.html"},
+                {"@type": "PropertyValue", "name": "hauteur_px", "value": 420},
+            ],
+        }, context={"page": page})
+        assert ser.is_valid(), ser.errors
+        bloc = ser.save()
+        assert bloc.type_bloc == "IFRAME"
+        assert bloc.embed_url == "https://www.openstreetmap.org/export/embed.html"
+        assert bloc.hauteur_px == 420
+        out = BlocSchemaSerializer(bloc).data
+        props = {p["name"]: p["value"] for p in out.get("additionalProperty", [])}
+        assert props.get("hauteur_px") == 420
+
+
+@pytest.mark.django_db
+def test_bloc_newsletter_cree_avec_embed_url():
+    """NEWSLETTER : headline/alternativeHeadline + embed_url (data-site Ghost)."""
+    from pages.models import Page
+    from api_v2.serializers import BlocCreateSerializer
+
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="n", slug="newsletter-api")
+        ser = BlocCreateSerializer(data={
+            "additionalType": "NEWSLETTER",
+            "headline": "Les news de TiBillet",
+            "alternativeHeadline": "La boite a outils d'organisation collective",
+            "additionalProperty": [
+                {"@type": "PropertyValue", "name": "embed_url",
+                 "value": "https://ghost.tibillet.coop/"},
+            ],
+        }, context={"page": page})
+        assert ser.is_valid(), ser.errors
+        bloc = ser.save()
+        assert bloc.type_bloc == "NEWSLETTER"
+        assert bloc.titre == "Les news de TiBillet"
+        assert bloc.sous_titre == "La boite a outils d'organisation collective"
+        assert bloc.embed_url == "https://ghost.tibillet.coop/"
+
+
+@pytest.mark.django_db
+def test_bloc_partenaires_cree_logos_cliquables(monkeypatch):
+    """PARTENAIRES : liste d'ImageObject (contentUrl + caption + url) -> logos avec lien_url ;
+    url dangereuse neutralisee ; sortie expose `url` seulement si lien present."""
+    import io
+    from PIL import Image as PILImage
+    from pages.models import Page
+    from api_v2.serializers import BlocCreateSerializer, BlocSchemaSerializer
+
+    buf = io.BytesIO()
+    PILImage.new("RGB", (8, 8), "blue").save(buf, format="PNG")
+    png = buf.getvalue()
+
+    class FakeResp:
+        status_code = 200
+        headers = {"Content-Type": "image/png"}
+        content = png
+        def raise_for_status(self): pass
+        def iter_content(self, chunk_size=65536): yield self.content
+        def close(self): pass
+
+    monkeypatch.setattr("api_v2.serializers._hote_est_interne", lambda h: False)
+    monkeypatch.setattr("api_v2.serializers.requests.get", lambda *a, **k: FakeResp())
+
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="p", slug="partenaires-api")
+        ser = BlocCreateSerializer(data={
+            "additionalType": "PARTENAIRES",
+            "headline": "Ils nous soutiennent",
+            "image": [
+                {"@type": "ImageObject", "contentUrl": "https://ex.fr/a.png",
+                 "caption": "Alpha", "url": "https://alpha.example/"},
+                {"@type": "ImageObject", "contentUrl": "https://ex.fr/b.png",
+                 "caption": "Beta"},
+                {"@type": "ImageObject", "contentUrl": "https://ex.fr/c.png",
+                 "caption": "Mechant", "url": "javascript:alert(1)"},
+            ],
+        }, context={"page": page})
+        assert ser.is_valid(), ser.errors
+        bloc = ser.save()
+        assert bloc.type_bloc == "PARTENAIRES"
+        assert bloc.images_galerie.count() == 3
+        logos = list(bloc.images_galerie.order_by("position"))
+        assert logos[0].lien_url == "https://alpha.example/"
+        assert logos[1].lien_url == ""              # pas de lien fourni
+        assert logos[2].lien_url == ""              # javascript: neutralise
+        out = BlocSchemaSerializer(bloc).data
+        assert out["image"][0]["url"] == "https://alpha.example/"
+        assert "url" not in out["image"][1]
+
+
+# ---------------------------------------------------------------------------
+# Extensions CHANTIER site : est_blog + MARKDOWN (source preservee, images importees)
+# ---------------------------------------------------------------------------
+@pytest.mark.django_db
+def test_page_create_est_blog():
+    """est_blog est settable via l'API (additionalProperty)."""
+    from pages.models import Page
+    from api_v2.serializers import PageCreateSerializer
+
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        ser = PageCreateSerializer(data={
+            "@context": "https://schema.org", "@type": "WebPage", "name": "Blog test",
+            "additionalProperty": [
+                {"name": "slug", "value": "pytest-blog-estblog"},
+                {"name": "publie", "value": True},
+                {"name": "est_blog", "value": True},
+            ],
+        })
+        assert ser.is_valid(), ser.errors
+        page = ser.save()
+        try:
+            assert page.est_blog is True
+        finally:
+            page.delete()
+
+
+def _monkey_download_ok(monkeypatch):
+    import io
+    from PIL import Image as PILImage
+    buf = io.BytesIO()
+    PILImage.new("RGB", (8, 8), "red").save(buf, format="PNG")
+    png = buf.getvalue()
+
+    class FakeResp:
+        status_code = 200
+        headers = {"Content-Type": "image/png"}
+        content = png
+        def raise_for_status(self): pass
+        def iter_content(self, chunk_size=65536): yield self.content
+        def close(self): pass
+
+    monkeypatch.setattr("api_v2.serializers._hote_est_interne", lambda h: False)
+    monkeypatch.setattr("api_v2.serializers.requests.get", lambda *a, **k: FakeResp())
+
+
+@pytest.mark.django_db
+def test_bloc_markdown_importe_images_et_preserve_source(monkeypatch):
+    """MARKDOWN : ![](http-url) -> importee en galerie:N (ImageGalerie) ; la source
+    markdown n'est PAS mutilee par clean_html (les autoliens/gras restent)."""
+    from pages.models import Page
+    from api_v2.serializers import BlocCreateSerializer
+
+    _monkey_download_ok(monkeypatch)
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="md", slug="pytest-md-img")
+        md = ("## Titre\n\nDu **gras** et un autolien <https://exemple.fr>.\n\n"
+              "![une image](https://ex.fr/a.png)\n\nFin.")
+        ser = BlocCreateSerializer(data={"additionalType": "MARKDOWN", "text": md},
+                                   context={"page": page})
+        assert ser.is_valid(), ser.errors
+        bloc = ser.save()
+        # Image importee et texte reecrit.
+        assert bloc.images_galerie.count() == 1
+        assert "![une image](galerie:1)" in bloc.texte
+        # Source markdown preservee (clean_html l'aurait mutilee).
+        assert "**gras**" in bloc.texte
+        assert "<https://exemple.fr>" in bloc.texte
+
+
+@pytest.mark.django_db
+def test_bloc_markdown_image_morte_garde_url(monkeypatch):
+    """Une image markdown inaccessible ne casse PAS le POST : on garde l'URL externe."""
+    from rest_framework import serializers as drf
+    from pages.models import Page
+    from api_v2.serializers import BlocCreateSerializer
+
+    def _leve(*a, **k):
+        raise drf.ValidationError("image morte")
+    monkeypatch.setattr("api_v2.serializers.telecharger_et_valider_image", _leve)
+
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="md2", slug="pytest-md-dead")
+        md = "Texte.\n\n![morte](https://ex.fr/introuvable.png)\n\nFin."
+        ser = BlocCreateSerializer(data={"additionalType": "MARKDOWN", "text": md},
+                                   context={"page": page})
+        assert ser.is_valid(), ser.errors
+        bloc = ser.save()  # ne leve pas
+        assert bloc.images_galerie.count() == 0
+        assert "https://ex.fr/introuvable.png" in bloc.texte  # URL gardee
+
+
+@pytest.mark.django_db
+def test_http_patch_bloc_markdown_ne_mutile_pas(cle_pages, monkeypatch):
+    """PATCH d'un bloc MARKDOWN ne passe pas par clean_html (source preservee)."""
+    from rest_framework.test import APIClient
+    from pages.models import Page, Bloc
+
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="mdp", slug="pytest-md-patch")
+        bloc = Bloc.objects.create(page=page, type_bloc=Bloc.MARKDOWN, texte="ancien")
+        uuid = str(bloc.uuid)
+
+    client = APIClient()
+    auth = {"HTTP_AUTHORIZATION": f"Api-Key {cle_pages}",
+            "HTTP_HOST": "lespass.tibillet.localhost"}
+    r = client.patch(f"/api/v2/blocs/{uuid}/",
+                     {"text": "## H\n\n<https://exemple.fr> et **gras**."},
+                     format="json", **auth)
+    assert r.status_code == 200, r.content
+    with tenant_context(tenant):
+        bloc.refresh_from_db()
+        assert "<https://exemple.fr>" in bloc.texte
+        assert "**gras**" in bloc.texte
+        Page.objects.filter(slug="pytest-md-patch").delete()

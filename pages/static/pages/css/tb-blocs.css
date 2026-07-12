@@ -296,7 +296,19 @@ h2.tb-bloc__titre::before {
  * / PARAGRAPH — editorial reading column.
  * ------------------------------------------------------------------------- */
 .tb-bloc--paragraphe .tb-bloc__titre { font-size: clamp(1.7rem, 4vw, 2.4rem); }
-.tb-bloc--paragraphe .tb-bloc__texte { max-width: var(--tb-largeur-lecture); }
+/* Bloc « texte seul » (PARAGRAPHE) : bloc centré dans la page, titre centré,
+   texte justifié (avec césure pour éviter les rivières de blanc). Demande
+   mainteneur — scopé au seul type PARAGRAPHE. / "Text-only" block: centered
+   block, centered title, justified text (with hyphenation). */
+.tb-bloc--paragraphe .tb-bloc__titre { text-align: center; }
+.tb-bloc--paragraphe .tb-bloc__titre::before { margin-inline: auto; }
+.tb-bloc--paragraphe .tb-bloc__texte {
+    max-width: var(--tb-largeur-lecture);
+    margin-inline: auto;
+    text-align: justify;
+    text-wrap: pretty;
+    hyphens: auto;
+}
 
 /* ---------------------------------------------------------------------------
  * IMAGE + TEXTE — grille deux colonnes, alternance gauche/droite.

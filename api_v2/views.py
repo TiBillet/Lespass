@@ -1220,7 +1220,14 @@ class BlocViewSet(viewsets.ViewSet):
         if "alternativeHeadline" in request.data:
             bloc.sous_titre = request.data["alternativeHeadline"] or ""
         if "text" in request.data:
-            bloc.texte = clean_html(request.data["text"] or "")
+            # MARKDOWN : `texte` est de la SOURCE markdown, pas du HTML — pas de
+            # clean_html (mutilerait autoliens/tableaux). Securite au rendu via nh3
+            # (rendre_markdown). Meme exception qu'a la creation et dans l'admin.
+            # / MARKDOWN: `texte` is markdown source, not HTML — no clean_html.
+            if bloc.type_bloc == "MARKDOWN":
+                bloc.texte = request.data["text"] or ""
+            else:
+                bloc.texte = clean_html(request.data["text"] or "")
         # En multipart, additionalProperty est absent ou une string brute (pas une liste).
         # On protege la boucle pour n'iterer que sur de vraies listes.
         # / In multipart, additionalProperty is absent or a raw string (not a list).

@@ -1738,7 +1738,12 @@ class MembershipStatusSerializer(serializers.Serializer):
 # / pages app: Bloc <-> schema.org/WebPageElement
 # ---------------------------------------------------------------------------
 from pages.models import Bloc, Page, valider_slug_non_reserve
-from pages.blocs_catalogue import CHAMPS_BLOC_AUTORISES, CHAMPS_FICHIER, CHAMPS_IMAGE_URL
+from pages.blocs_catalogue import (
+    CHAMPS_BLOC_AUTORISES,
+    CHAMPS_FICHIER,
+    CHAMPS_IMAGE_URL,
+    TYPES_AVEC_GALERIE,
+)
 
 # Champs « standard » schema.org mappes a un champ modele (les autres passent
 # par additionalProperty). / schema.org standard fields mapped to a model field.
@@ -1769,15 +1774,20 @@ class BlocSchemaSerializer(serializers.Serializer):
         except Exception:
             image_url = None
 
-        # GALERIE : on expose la liste d'images comme ImageObject[].
-        # / GALLERY: expose the image list as ImageObject[].
-        if instance.type_bloc == "GALERIE":
-            image_sortie = [
-                {"@type": "ImageObject", "contentUrl": ig.image.url,
-                 "caption": ig.legende or None}
-                for ig in instance.images_galerie.all().order_by("position")
-                if ig.image
-            ]
+        # GALERIE / PARTENAIRES : on expose la liste d'images comme ImageObject[].
+        # `url` = lien cible du logo (PARTENAIRES), absent si vide.
+        # / GALLERY / PARTNERS: expose the image list as ImageObject[]. `url` = the
+        # logo's target link (PARTNERS), omitted when empty.
+        if instance.type_bloc in TYPES_AVEC_GALERIE:
+            image_sortie = []
+            for ig in instance.images_galerie.all().order_by("position"):
+                if not ig.image:
+                    continue
+                image_object = {"@type": "ImageObject", "contentUrl": ig.image.url,
+                                "caption": ig.legende or None}
+                if ig.lien_url:
+                    image_object["url"] = ig.lien_url
+                image_sortie.append(image_object)
         else:
             image_sortie = image_url
 
@@ -1870,21 +1880,67 @@ class BlocCreateSerializer(serializers.Serializer):
         valeur_image = validated_data.get("image")
         if isinstance(valeur_image, str) and valeur_image:
             fichier_image = telecharger_et_valider_image(valeur_image)
-        elif isinstance(valeur_image, list) and type_bloc == "GALERIE":
+        elif isinstance(valeur_image, list) and type_bloc in TYPES_AVEC_GALERIE:
             for index, img in enumerate(valeur_image):
                 url = img.get("contentUrl") if isinstance(img, dict) else img
                 fichier = telecharger_et_valider_image(url)
                 if fichier:
                     legende = (img.get("caption") if isinstance(img, dict) else "") or ""
-                    fichiers_galerie.append((fichier, legende, index))
+                    # Lien cible du logo (PARTENAIRES) : cle "url" de l'ImageObject.
+                    # Neutralise les schemas dangereux (l'ImageGalerie n'est pas
+                    # validee par full_clean cote API). / Logo target link (PARTNERS):
+                    # ImageObject "url" key, dangerous-scheme neutralized.
+                    lien = (img.get("url") if isinstance(img, dict) else "") or ""
+                    if url_a_schema_dangereux(lien):
+                        lien = ""
+                    fichiers_galerie.append((fichier, legende, index, lien))
         elif isinstance(valeur_image, list):
-            # Une liste d'images n'est acceptee que pour le type GALERIE.
-            # / A list of images is only accepted for the GALLERY type.
+            # Une liste d'images n'est acceptee que pour GALERIE et PARTENAIRES.
+            # / A list of images is only accepted for the GALLERY and PARTNERS types.
             raise serializers.ValidationError(
-                {"image": _("Une liste d'images n'est acceptee que pour le bloc GALERIE.")})
+                {"image": _("Une liste d'images n'est acceptee que pour les blocs GALERIE et PARTENAIRES.")})
+
+        # Bloc MARKDOWN : on importe les images referencees dans le markdown
+        # (![alt](http...)) et on reecrit le texte en ![alt](galerie:N), le mecanisme
+        # que rendre_bloc_markdown resout au rendu (via les ImageGalerie du bloc). Ainsi
+        # un article de blog est autonome : ses images sont posees sur le tenant, pas
+        # servies depuis une source distante. Echec de telechargement -> on garde l'URL.
+        # / MARKDOWN block: download images referenced in the markdown and rewrite them
+        # to ![alt](galerie:N) (resolved at render time via the block's ImageGalerie),
+        # so the article is self-hosted. Download failure -> keep the external URL.
+        texte_markdown_reecrit = None
+        if type_bloc == "MARKDOWN":
+            import re as _re_md
+
+            texte_md = validated_data.get("text") or ""
+            compteur = {"n": len(fichiers_galerie)}
+
+            def _remplacer_image_md(correspondance):
+                alt, url = correspondance.group(1), correspondance.group(2)
+                # Une image inaccessible/invalide/SSRF fait LEVER telecharger_et_valider_image.
+                # Dans un article, on ne veut pas casser tout le POST pour une image morte :
+                # on garde alors l'URL externe telle quelle (l'article reste creable).
+                # / A dead/invalid/SSRF image makes telecharger_et_valider_image RAISE. In an
+                # article we don't fail the whole POST for one dead image: keep the URL as-is.
+                try:
+                    fichier = telecharger_et_valider_image(url)
+                except serializers.ValidationError:
+                    return correspondance.group(0)
+                if not fichier:
+                    return correspondance.group(0)
+                compteur["n"] += 1
+                fichiers_galerie.append((fichier, alt, compteur["n"], ""))
+                return f"![{alt}](galerie:{compteur['n']})"
+
+            texte_markdown_reecrit = _re_md.sub(
+                r"!\[([^\]]*)\]\((https?://[^)\s]+)\)",
+                _remplacer_image_md,
+                texte_md,
+            )
 
         return {"image": fichier_image, "galerie": fichiers_galerie,
-                "additional": fichiers_additional}
+                "additional": fichiers_additional,
+                "markdown_texte": texte_markdown_reecrit}
 
     def _persister(self, validated_data: Dict[str, Any], fichiers: Dict[str, Any],
                    page) -> "Bloc":
@@ -1897,10 +1953,20 @@ class BlocCreateSerializer(serializers.Serializer):
             bloc.position = validated_data["position"]
 
         # Champs standard -> champs modele. / Standard fields -> model fields.
+        est_markdown = validated_data["additionalType"] == "MARKDOWN"
         for cle_std, nom_champ in MAPPING_STANDARD_VERS_CHAMP.items():
             if cle_std in validated_data:
                 valeur = validated_data[cle_std]
-                if nom_champ in CHAMPS_TEXTE_RICHE:
+                if nom_champ == "texte" and est_markdown:
+                    # MARKDOWN : `texte` est de la SOURCE markdown, pas du HTML. On NE
+                    # clean_html PAS (mutilerait autoliens/tableaux/code) et on prend le
+                    # texte reecrit (images importees en galerie:N). La securite est au
+                    # rendu (rendre_markdown + nh3). Meme exception que BlocAdmin.save_model.
+                    # / MARKDOWN: `texte` is markdown SOURCE, not HTML. Don't clean_html
+                    # (would mangle it); use the rewritten text (galerie:N imported images).
+                    reecrit = fichiers.get("markdown_texte")
+                    valeur = reecrit if reecrit is not None else (valeur or "")
+                elif nom_champ in CHAMPS_TEXTE_RICHE:
                     valeur = clean_html(valeur or "")
                 setattr(bloc, nom_champ, valeur or "")
 
@@ -1940,9 +2006,10 @@ class BlocCreateSerializer(serializers.Serializer):
         # Galerie pre-telechargee (FK : bloc deja persiste). / Pre-downloaded gallery.
         if fichiers["galerie"]:
             from pages.models import ImageGalerie
-            for fichier, legende, position in fichiers["galerie"]:
+            for fichier, legende, position, lien in fichiers["galerie"]:
                 ImageGalerie.objects.create(
-                    bloc=bloc, image=fichier, legende=legende, position=position)
+                    bloc=bloc, image=fichier, legende=legende, position=position,
+                    lien_url=lien)
         return bloc
 
     def create(self, validated_data: Dict[str, Any]) -> "Bloc":
@@ -1965,7 +2032,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 # Champs meta de Page acceptes via additionalProperty (whitelist).
 # / Page meta fields accepted via additionalProperty (whitelist).
 CHAMPS_PAGE_AUTORISES = frozenset({
-    "slug", "position", "publie", "est_accueil", "noindex",
+    "slug", "position", "publie", "est_accueil", "est_blog", "noindex",
     "meta_title", "meta_description",
 })
 
