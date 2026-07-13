@@ -1,0 +1,264 @@
+<!--
+Formulaire de confirmation de reservation — version partial pour SweetAlert2.
+/ Booking confirmation form — partial version for SweetAlert2.
+
+LOCALISATION : booking/templates/booking/partials/book_form.html
+
+Ce partial est charge via HTMX dans une popup SweetAlert2 depuis resource.html.
+Il est aussi utilise en fallback si JavaScript est desactive (redirection vers
+la page complete booking/views/book.html).
+/ This partial is loaded via HTMX into a SweetAlert2 popup from resource.html.
+It is also used as a fallback if JavaScript is disabled (redirects to the full
+booking/views/book.html page).
+
+Flux / Flow:
+  GET  /booking/<pk>/book/?start_datetime=...&group_end=... (htmx)
+       -> BookingViewSet._book_get() -> ce partial
+  POST /booking/<pk>/book/
+       -> BookingViewSet._book_post() -> redirection ou re-render 422 de ce partial
+
+DEPENDENCIES :
+  - booking/views.py:_book_get()  -> contexte
+  - booking/views.py:_book_post() -> redirection ou re-render avec erreurs
+-->
+{% load i18n l10n static tibitags %}
+
+<div class="booking-confirm-partial" data-testid="booking-confirm-partial">
+
+    <!--
+    Message de modification concurrente — un creneau a ete pris pendant la saisie.
+    / Race condition message — a slot was taken while the user was filling the form.
+    -->
+    {% if race_condition %}
+        <div class="alert alert-warning" role="alert" data-testid="booking-race-condition-msg">
+            {% translate "Un créneau a été réservé entre temps. Vérifiez les disponibilités ci-dessous." %}
+        </div>
+    {% endif %}
+
+    <!--
+    Message d'erreur generique (validation POST).
+    / Generic error message (POST validation).
+    -->
+    {% if error and not race_condition %}
+        <div class="alert alert-danger" role="alert" data-testid="booking-error-msg">
+            {% if error.non_field_errors %}
+                {% for msg in error.non_field_errors %}{{ msg }} {% endfor %}
+            {% else %}
+                {{ error }}
+            {% endif %}
+        </div>
+    {% endif %}
+
+    <!--
+    Informations sur le creneau de depart.
+    / Information about the starting slot.
+    -->
+    {% if slot %}
+        <div class="card mb-3" data-testid="booking-slot-summary">
+            <div class="card-body">
+                <h2 class="card-title h5">{% translate "Créneau sélectionné" %}</h2>
+                <p class="mb-1">
+                    <strong>{{ slot.start|date:"l d F Y" }}</strong>
+                    {% translate "à" %} {{ slot.start|date:"H\hi" }}
+                </p>
+                <p class="mb-0 text-muted">
+                    {% translate "Durée par créneau :" %} {{ slot.slot_duration_minutes }}{% translate "min" %}
+                </p>
+                {% if resource.capacity > 1 %}
+                    <p class="mb-0 text-muted">
+                        {% blocktrans count n=slot.remaining_capacity %}{{ n }} place disponible{% plural %}{{ n }} places disponibles{% endblocktrans %}
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+
+    <!--
+    Formulaire de confirmation.
+    / Confirmation form.
+    -->
+    <form method="post"
+          action="{% url 'booking-book' pk=resource.pk %}"
+          data-testid="booking-confirm-form"
+          hx-post="{% url 'booking-book' pk=resource.pk %}"
+          hx-target="closest .booking-confirm-partial"
+          hx-swap="innerHTML">
+        {% csrf_token %}
+
+        <!--
+        Choix du tarif.
+        / Price selection.
+        -->
+        <div class="mb-3">
+            <h4 class="h6">{% translate "Tarif" %}</h4>
+            {% for price in resource.product.prices.all %}
+                <div class="form-check mb-2">
+                    <input id="price-{{ price.uuid }}"
+                           class="form-check-input"
+                           type="radio"
+                           name="price"
+                           value="{{ price.uuid }}"
+                           required
+                           {% if forloop.first %}checked{% endif %}
+                           data-testid="booking-price-{{ price.uuid }}">
+                    <label class="form-check-label" for="price-{{ price.uuid }}">
+                        {{ price.name }} - {{ price.prix }}€
+                    </label>
+                </div>
+            {% empty %}
+                <div class="alert alert-warning" role="alert" data-testid="booking-no-price-msg">
+                    {% translate "Aucun tarif disponible pour cette ressource." %}
+                </div>
+            {% endfor %}
+        </div>
+
+        <!--
+        Nombre de creneaux — input si plusieurs disponibles, champ cache si un seul.
+        / Slot count — input if several available, hidden field if only one.
+        -->
+{#        {% if max_slot_count > 1 %}#}
+{#            <div class="mb-3">#}
+{##}
+{##}
+{#                <label for="id_slot_count" class="form-label fw-semibold">#}
+{#                    {% translate "Nombre de créneaux" %}#}
+{#                </label>#}
+{#                <input type="number"#}
+{#                       id="id_slot_count"#}
+{#                       name="slot_count"#}
+{#                       value="1"#}
+{#                       min="1"#}
+{#                       max="{{ max_slot_count }}"#}
+{#                       class="form-control"#}
+{#                       style="max-width: 120px;"#}
+{#                       data-testid="booking-slot-count-input">#}
+{#                <div class="form-text">#}
+{#                    {% blocktrans with max=max_slot_count %}Maximum : {{ max }} créneaux consécutifs.{% endblocktrans %}#}
+{#                </div>#}
+{#            </div>#}
+{#        {% else %}#}
+{#            <input type="hidden" name="slot_count" value="1">#}
+{#        {% endif %}#}
+
+        <div class="mb-3">
+            <label for="id_end_time">
+                {% translate "Heure de fin" %}
+            </label>
+            <select id="id_end_time" name="end_time">
+                {# Iterate over possible end hours #}
+                {% for slot in consecutive_slots %}
+                    <option value="{{ slot.end|date:'Y-m-d\TH:i:s' }}">{{ slot.end|date:'H:i' }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!--
+        Champs caches : start_datetime, group_end et resource.
+        / Hidden fields: start_datetime, group_end and resource.
+        -->
+        <input type="hidden" name="start_datetime" value="{{ start_datetime|date:'Y-m-d\TH:i:s' }}">
+        <input type="hidden" name="group_end" value="{{ group_end|date:'Y-m-d\TH:i:s' }}">
+        <input type="hidden" name="resource" value="{{ resource.pk }}">
+
+        <!--
+        Message d'annulation : date limite si possible, sinon annulation impossible.
+        / Cancellation message: deadline if possible, otherwise cancellation not possible.
+        -->
+        {% if cancellation_possible %}
+            <div class="alert alert-info mb-3" role="note" data-testid="booking-cancellation-notice">
+                <i class="bi bi-info-circle" aria-hidden="true"></i>
+                {% blocktrans with deadline=cancellation_deadline|date:"d F Y à H\hi" %}
+                    Vous pouvez annuler jusqu'au {{ deadline }}.
+                {% endblocktrans %}
+            </div>
+        {% else %}
+            <div class="alert alert-warning mb-3" role="note" data-testid="booking-cancellation-notice">
+                <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                {% translate "L'annulation ne sera pas possible pour ce créneau." %}
+            </div>
+        {% endif %}
+
+        <!--
+        Boutons d'action.
+        / Action buttons.
+        -->
+        <div class="">
+            {% if user.is_authenticated %}
+                {% if panier.count > 0 %}
+                    {# Panier non vide : 2 boutons qui finissent tous les deux au panier. #}
+                    {# 1) Ajouter au panier (cumul). 2) Ajouter + payer : enchaine le checkout. #}
+                    {# / Cart non-empty: both buttons end at cart. #}
+                    {# 1) Add to cart. 2) Add + pay: chain to checkout. #}
+                    <button type="button"
+                            class="btn btn-primary w-100 mb-2"
+                            hx-post="/panier/add/resource/"
+                            hx-include="closest form"
+                            hx-swap="none"
+                            data-loading-disable
+                            data-testid="resource-add-to-cart"
+                            aria-label="{% translate 'Add this resource to your cart' %}">
+                        <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
+                        {% blocktrans with n=panier.count %}Add to cart ({{ n }} already in){% endblocktrans %}
+                    </button>
+                    <button type="button"
+                            class="btn btn-outline-primary w-100 mb-2"
+                            hx-post="/panier/add/resource/"
+                            hx-include="closest form"
+                            hx-vals='{"then": "checkout"}'
+                            hx-swap="none"
+                            data-loading-disable
+                            data-testid="resource-add-and-pay"
+                            aria-label="{% translate 'Add to cart and pay all items' %}">
+                        <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
+                        {% translate "Add to cart and pay" %}
+                    </button>
+                {% else %}
+                    <button type="button"
+                            class="btn btn-primary w-100 mb-2"
+                            hx-post="/panier/add/resource/"
+                            hx-include="closest form"
+                            hx-swap="none"
+                            data-loading-disable
+                            data-testid="resource-add-to-cart"
+                            aria-label="{% translate 'Add this resource to your cart' %}">
+                        <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
+                        {% translate "Add to cart" %}
+                    </button>
+                    <button id="resource-submit" type="submit"
+                            class="btn btn-outline-primary w-100 mb-2"
+                            data-loading-disable
+                            data-testid="resource-submit"
+                            aria-label="{% translate 'Pay this resource now' %}">
+                        <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
+                        {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}
+                            {% translate 'Pay now' %}{% endif %}
+                    </button>
+                {% endif %}
+            {% else %}
+                <button id="resource-submit" type="submit"
+                        class="btn btn-primary w-100 mb-2"
+                        data-loading-disable
+                        data-testid="resource-submit">
+                    <i class="bi bi-send-fill me-2" aria-hidden="true"></i>
+                    {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}
+                        {% translate 'Send my subscription request' %}{% endif %}
+                </button>
+                <button type="button"
+                        class="btn btn-outline-primary w-100 mb-2"
+                        data-bs-toggle="offcanvas"
+                        data-bs-target="#loginPanel"
+                        data-testid="resource-add-to-cart-login"
+                        aria-label="{% translate 'Log in to add this resource to your cart' %}">
+                    <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
+                    {% translate "Log in to add to cart" %}
+                </button>
+            {% endif %}
+            <button type="button"
+                    class="btn btn-link text-muted w-100 d-block test-resource-bt-cancel"
+                    onclick="Swal.close()"
+                    data-testid="booking-cancel-btn">
+                {% translate "Annuler" %}
+            </button>
+        </div>
+    </form>
+</div>

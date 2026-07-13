@@ -5145,20 +5145,92 @@ class PanierMVT(viewsets.ViewSet):
                 tz,
             )
         window_derive = Interval(start=start_datetime, end=window_end_derive)
-        slot_groups_derive   = annotate_slots_for_display(compute_slots(resource, window_derive))
+        slot_groups_derive = annotate_slots_for_display(compute_slots(resource, window_derive))
+
+        requested_slot = None
+        max_slot_count = 0
+        consecutive_slots = []
         slot_duration_minutes = None
         for group in slot_groups_derive:
-            for slot in group.slots:
+            for i, slot in enumerate(group.slots):
                 if slot.start == start_datetime:
+                    requested_slot = slot
                     slot_duration_minutes = slot.slot_duration_minutes
+                    for s in group.slots[i:]:
+                        if s.remaining_capacity <= 0:
+                            break
+                        max_slot_count += 1
+                    consecutive_slots = group.slots[i:i + max_slot_count]
                     break
             if slot_duration_minutes:
                 break
 
-        if slot_duration_minutes is None:
-            return HttpResponse()
+        if slot_duration_minutes is None or requested_slot is None:
+            return HttpResponseBadRequest()
 
-        serializer_body = BookingCreateSerializer(data=request.POST)
+
+        def _build_form_context(error=None, race_condition=False):
+            cancellation_deadline = start_datetime - datetime.timedelta(
+                hours=resource.cancellation_deadline_hours,
+            )
+            cancellation_possible = timezone.now() <= cancellation_deadline
+            context = get_context(request)
+            context.update({
+                'resource': resource,
+                'slot': requested_slot,
+                'consecutive_slots': consecutive_slots,
+                'max_slot_count': max_slot_count,
+                'slot_duration_minutes': slot_duration_minutes,
+                'start_datetime': start_datetime,
+                'group_end': consecutive_slots[-1].end if consecutive_slots else window_end_derive,
+                'cancellation_deadline': cancellation_deadline,
+                'cancellation_possible': cancellation_possible,
+                'error': error,
+            })
+            if race_condition:
+                context['race_condition'] = True
+            return context
+
+
+        # Parse et valide l'heure de fin depuis le champ du formulaire.
+        # / Parse and validate the end time from the form field.
+        end_time_raw = request.POST.get('end_time', '')
+        end_time_naive = parse_datetime(end_time_raw)
+        if end_time_naive is None:
+            context = _build_form_context(error=_("Invalid end time format."))
+            if request.htmx:
+                return render(request, 'booking/partials/book_form.html', context, status=422)
+            return render(request, 'booking/views/book.html', context)
+
+        end_datetime = timezone.make_aware(end_time_naive, tz)
+
+        if end_datetime <= start_datetime:
+            context = _build_form_context(error=_("End time must be after start time."))
+            if request.htmx:
+                return render(request, 'booking/partials/book_form.html', context, status=422)
+            return render(request, 'booking/views/book.html', context)
+
+        if end_datetime not in [slot.end for slot in consecutive_slots]:
+            context = _build_form_context(error=_("End time must match an available slot end."))
+            if request.htmx:
+                return render(request, 'booking/partials/book_form.html', context, status=422)
+            return render(request, 'booking/views/book.html', context)
+
+        duration_minutes = int((end_datetime - start_datetime).total_seconds() // 60)
+        if duration_minutes % slot_duration_minutes != 0:
+            context = _build_form_context(error=_("Selected duration is not a multiple of the slot duration."))
+            if request.htmx:
+                return render(request, 'booking/partials/book_form.html', context, status=422)
+            return render(request, 'booking/views/book.html', context)
+
+        slot_count = duration_minutes // slot_duration_minutes
+
+        # Valide le slot_count calculé via le serializer.
+        # / Validate the computed slot_count through the serializer.
+        data = request.POST.copy()
+        data['slot_count'] = slot_count
+        serializer_body = BookingCreateSerializer(data=data)
+
         if not serializer_body.is_valid():
             context = get_context(request)
             context.update({

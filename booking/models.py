@@ -351,6 +351,12 @@ class OpeningEntry(models.Model):
         if not self.weekly_opening_id:
             return
 
+        # Durée minimale d'un slot est 30 minutes pour l'instant
+        if self.slot_duration_minutes < 30:
+            raise ValidationError(
+                _("Le temps minimal d'un slot est de 30 minutes.")
+            )
+
         # La durée totale ne doit pas dépasser une semaine (decisions §9).
         # / Total duration must not exceed one week (decisions §9).
         if self.slot_duration_minutes * self.slot_count > WEEK_MINUTES:
@@ -366,6 +372,20 @@ class OpeningEntry(models.Model):
 
         new_start = self._position_minutes()
         new_end = new_start + self.slot_duration_minutes * self.slot_count
+
+        # L'heure de fin doit être située le même jour que l'heure de début.
+        # Un créneau se terminant exactement à minuit est considéré comme valide.
+        # / End time must be on the same day as the start time.
+        # / A slot ending exactly at midnight is considered valid.
+        end_minutes_today = (
+            self.start_time.hour * 60
+            + self.start_time.minute
+            + self.slot_duration_minutes * self.slot_count
+        )
+        if end_minutes_today > 24 * 60:
+            raise ValidationError(
+                _('The end time must be on the same day as the start time.')
+            )
 
         siblings = OpeningEntry.objects.filter(
             weekly_opening=self.weekly_opening,

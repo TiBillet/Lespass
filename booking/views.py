@@ -152,7 +152,7 @@ class BookingViewSet(viewsets.ViewSet):
 
         """
         all_resources = list(
-            Resource.objects.select_related('group').order_by('product__name')
+            Resource.objects.select_related('group', 'product').order_by('product__name')
         )
 
         items_by_group  = defaultdict(list)
@@ -173,6 +173,240 @@ class BookingViewSet(viewsets.ViewSet):
         )
 
         return resources_groups, ungrouped_resources
+
+    def _build_calendar_weeks(self, slot_groups):
+        """
+        Reorganise les groupes de creneaux par semaine et par jour.
+        / Reorganizes slot groups by week and by day.
+
+        LOCALISATION : booking/views.py
+
+        Retourne (weeks, min_hour, max_hour) :
+        - weeks : list[dict] avec year, week, days, groups
+        - days : list[dict] avec date et groups
+        - groups : list[dict] avec start, end, slots
+        - slots : dict avec start, end, duration, capacity, row_start, row_end, column_index
+        - min_hour / max_hour : bornes des heures affichees
+        / Returns (weeks, min_hour, max_hour):
+        - weeks: list[dict] with year, week, days, groups
+        - days: list[dict] with date and groups
+        - groups: list[dict] with start, end, slots
+        - slots: dict with start, end, duration, capacity, row_start, row_end, column_index
+        - min_hour / max_hour: hour boundaries for display
+        """
+        # Passe 1 : calcule les bornes horaires globales.
+        # / Pass 1: compute global hour boundaries.
+        global_min_hour = None
+        global_max_hour = None
+        for group in slot_groups:
+            for slot in group.slots:
+                if global_min_hour is None or slot.start.hour < global_min_hour:
+                    global_min_hour = slot.start.hour
+                end_hour = slot.end.hour
+                if slot.end.minute > 0:
+                    end_hour += 1
+                if global_max_hour is None or end_hour > global_max_hour:
+                    global_max_hour = end_hour
+
+        global_min_hour = global_min_hour or 0
+        global_max_hour = global_max_hour or 24
+
+        # Passe 2 : construit la structure par semaine et par jour.
+        # / Pass 2: build the structure by week and by day.
+        weeks_map = {}
+        for group in slot_groups:
+            week_year, week_number = group.start.isocalendar()[:2]
+            week_key = (week_year, week_number)
+            if week_key not in weeks_map:
+                weeks_map[week_key] = {
+                    'year': week_year,
+                    'week': week_number,
+                    'days': {},
+                }
+            day = group.start.date()
+            if day not in weeks_map[week_key]['days']:
+                weeks_map[week_key]['days'][day] = {
+                    'date': day,
+                    'groups': [],
+                }
+
+            enriched_slots = []
+            for slot in group.slots:
+                row_start = ((slot.start.hour - global_min_hour) * 2
+                             + (slot.start.minute // 30)) + 2
+                row_span = max(1, slot.slot_duration_minutes // 30)
+                row_end = row_start + row_span
+                enriched_slots.append({
+                    'start': slot.start,
+                    'end': slot.end,
+                    'slot_duration_minutes': slot.slot_duration_minutes,
+                    'remaining_capacity': slot.remaining_capacity,
+                    'row_start': row_start,
+                    'row_end': row_end,
+                })
+
+            weeks_map[week_key]['days'][day]['groups'].append({
+                'start': group.start,
+                'end': group.end,
+                'slots': enriched_slots,
+            })
+
+        weeks = []
+        for week_key in sorted(weeks_map.keys()):
+            week_data = weeks_map[week_key]
+            days = []
+            for day_index, day in enumerate(sorted(week_data['days'].keys())):
+                day_data = week_data['days'][day]
+                # Ajoute column_index a chaque slot (2 = premiere colonne jour).
+                # / Add column_index to each slot (2 = first day column).
+                column_index = day_index + 2
+                for group in day_data['groups']:
+                    for slot in group['slots']:
+                        slot['column_index'] = column_index
+                days.append(day_data)
+            weeks.append({
+                'year': week_data['year'],
+                'week': week_data['week'],
+                'days': days,
+            })
+
+        return weeks, global_min_hour, global_max_hour
+
+    def _build_mobile_days(self, slot_groups):
+        """
+        Regroupe les creneaux par jour pour l'affichage mobile.
+        / Groups slots by day for mobile display.
+
+        LOCALISATION : booking/views.py
+
+        Retourne (mobile_days, time_rows, min_hour, max_hour) :
+        - mobile_days : list[dict] avec index, day (un seul jour par page)
+        - time_rows : lignes horaires pour la grille mobile
+        - min_hour / max_hour : bornes des heures affichees
+        / Returns (mobile_days, time_rows, min_hour, max_hour):
+        - mobile_days: list[dict] with index, day (one day per page)
+        - time_rows: time rows for the mobile grid
+        - min_hour / max_hour: hour boundaries for display
+        """
+        # Passe 1 : collecte tous les jours avec leurs groupes de creneaux.
+        # / Pass 1: collect all days with their slot groups.
+        days_map = {}
+        global_min_hour = None
+        global_max_hour = None
+
+        for group in slot_groups:
+            day = group.start.date()
+            if day not in days_map:
+                days_map[day] = {
+                    'date': day,
+                    'weekday': group.start.weekday(),
+                    'day_number': group.start.day,
+                    'groups': [],
+                }
+
+            for slot in group.slots:
+                # Met a jour les bornes horaires globales.
+                # / Updates global hour boundaries.
+                if global_min_hour is None or slot.start.hour < global_min_hour:
+                    global_min_hour = slot.start.hour
+                end_hour = slot.end.hour
+                if slot.end.minute > 0:
+                    end_hour += 1
+                if global_max_hour is None or end_hour > global_max_hour:
+                    global_max_hour = end_hour
+
+            days_map[day]['groups'].append({
+                'start': group.start,
+                'end': group.end,
+                'slots': list(group.slots),
+            })
+
+        global_min_hour = global_min_hour or 0
+        global_max_hour = global_max_hour or 24
+
+        # Passe 2 : ajoute les indices de ligne pour la grille mobile.
+        # / Pass 2: add row indices for the mobile grid.
+        all_days = []
+        for day in sorted(days_map.keys()):
+            day_data = days_map[day]
+            for group in day_data['groups']:
+                for slot in group['slots']:
+                    slot.row_start = ((slot.start.hour - global_min_hour) * 2
+                                      + (slot.start.minute // 30)) + 2
+                    row_span = max(1, slot.slot_duration_minutes // 30)
+                    slot.row_end = slot.row_start + row_span
+            all_days.append(day_data)
+
+        # Passe 3 : chaque jour devient une page mobile individuelle.
+        # / Pass 3: each day becomes an individual mobile page.
+        mobile_days = []
+        for i, day_data in enumerate(all_days):
+            mobile_days.append({
+                'index': i,
+                'day': day_data,
+            })
+
+        # Lignes horaires pour la grille mobile.
+        # / Time rows for the mobile grid.
+        time_rows = []
+        for hour in range(global_min_hour, global_max_hour + 1):
+            for minute in (0, 30):
+                if hour == global_max_hour and minute > 0:
+                    break
+                time_rows.append({
+                    'hour': hour,
+                    'minute': minute,
+                    'label': f"{hour:02d}:{minute:02d}",
+                    'row_index': ((hour - global_min_hour) * 2 + (minute // 30)) + 2,
+                })
+
+        return mobile_days, time_rows, global_min_hour, global_max_hour
+
+    def _get_resource_choices(self, current_resource):
+        """
+        Retourne les ressources pour le selecteur de la version mobile,
+        groupées par ResourceGroup.
+        / Returns resources for the mobile selector, grouped by ResourceGroup.
+
+        LOCALISATION : booking/views.py
+
+        :param current_resource: Resource selectionnee
+        :return: list[dict] avec group_name (None pour les ressources sans groupe)
+                 et resources (liste de ressources avec pk, name, selected)
+        / list[dict] with group_name (None for ungrouped resources)
+        / and resources (list of resources with pk, name, selected)
+        """
+        resources_groups, ungrouped_resources = self._group_resources()
+        resource_choices = []
+
+        if ungrouped_resources:
+            resource_choices.append({
+                'group_name': None,
+                'resources': [
+                    {
+                        'pk': resource.pk,
+                        'name': resource.product.name,
+                        'selected': resource.pk == current_resource.pk,
+                    }
+                    for resource in ungrouped_resources
+                ],
+            })
+
+        for group_entry in resources_groups:
+            group = group_entry['group']
+            resource_choices.append({
+                'group_name': group.name,
+                'resources': [
+                    {
+                        'pk': resource.pk,
+                        'name': resource.product.name,
+                        'selected': resource.pk == current_resource.pk,
+                    }
+                    for resource in group_entry['resources']
+                ],
+            })
+
+        return resource_choices
 
     # ── Liste des ressources ─────────────────────────────────────────────────
 
@@ -199,12 +433,12 @@ class BookingViewSet(viewsets.ViewSet):
     @action(detail=True, methods=['get'], url_path="resource", url_name="resource")
     def resource_page(self, request, pk=None):
         """
-        Affiche le détail d'une ressource et la liste complète de ses créneaux.
+        Affiche le detail d'une ressource et la liste complete de ses creneaux.
         / Displays a resource's detail and the full list of its slots.
 
         LOCALISATION : booking/views.py
 
-        Accès : public.
+        Acces : public.
         / Access: public.
         """
         resource = get_object_or_404(
@@ -212,10 +446,52 @@ class BookingViewSet(viewsets.ViewSet):
             pk=pk,
         )
         slot_groups = annotate_slots_for_display(compute_slots(resource))
+        calendar_weeks, min_hour, max_hour = self._build_calendar_weeks(slot_groups)
+        mobile_days, mobile_time_rows, mobile_min_hour, mobile_max_hour = self._build_mobile_days(slot_groups)
+        resource_choices = self._get_resource_choices(resource)
+
+        # Barre de jours pour la navigation mobile (chaque jour pointe vers sa page).
+        # / Day bar for mobile navigation (each day points to its own page).
+        weekday_letters = 'LMMJVSD'
+        mobile_day_bar = []
+        for mobile_day in mobile_days:
+            day = mobile_day['day']
+            mobile_day_bar.append({
+                'date': day['date'],
+                'weekday': day['weekday'],
+                'weekday_letter': weekday_letters[day['weekday']],
+                'day_number': day['day_number'],
+                'day_index': mobile_day['index'],
+            })
+
+        # Construit les lignes horaires pour la grille du calendrier desktop.
+        # / Builds the time rows for the desktop calendar grid.
+        time_rows = []
+        for hour in range(min_hour, max_hour + 1):
+            for minute in (0, 30):
+                if hour == max_hour and minute > 0:
+                    break
+                time_rows.append({
+                    'hour': hour,
+                    'minute': minute,
+                    'label': f"{hour:02d}:{minute:02d}",
+                    'row_index': ((hour - min_hour) * 2 + (minute // 30)) + 2,
+                })
+
         context = get_context(request)
         context.update({
-            'resource':   resource,
-            'slot_groups': slot_groups,
+            'resource':          resource,
+            'slot_groups':       slot_groups,
+            'calendar_weeks':    calendar_weeks,
+            'min_hour':          min_hour,
+            'max_hour':          max_hour,
+            'time_rows':         time_rows,
+            'mobile_days':       mobile_days,
+            'mobile_time_rows':  mobile_time_rows,
+            'mobile_min_hour':   mobile_min_hour,
+            'mobile_max_hour':   mobile_max_hour,
+            'mobile_day_bar':    mobile_day_bar,
+            'resource_choices':  resource_choices,
         })
         return render(request, 'booking/views/resource.html', context)
 
@@ -348,6 +624,10 @@ class BookingViewSet(viewsets.ViewSet):
             'cancellation_deadline': cancellation_deadline,
             'cancellation_possible': cancellation_possible,
         })
+        # En requete HTMX (popup SweetAlert2), on retourne le partial.
+        # / For HTMX requests (SweetAlert2 popup), return the partial.
+        if request.htmx:
+            return render(request, 'booking/partials/book_form.html', context)
         return render(request, 'booking/views/book.html', context)
 
     def _book_post(self, request, resource):
@@ -399,27 +679,93 @@ class BookingViewSet(viewsets.ViewSet):
                 tz,
             )
         window_derive = Interval(start=start_datetime, end=window_end_derive)
-        slot_groups_derive   = annotate_slots_for_display(compute_slots(resource, window_derive))
+        slot_groups_derive = annotate_slots_for_display(compute_slots(resource, window_derive))
+
+        requested_slot = None
+        max_slot_count = 0
+        consecutive_slots = []
         slot_duration_minutes = None
         for group in slot_groups_derive:
-            for slot in group.slots:
+            for i, slot in enumerate(group.slots):
                 if slot.start == start_datetime:
+                    requested_slot = slot
                     slot_duration_minutes = slot.slot_duration_minutes
+                    for s in group.slots[i:]:
+                        if s.remaining_capacity <= 0:
+                            break
+                        max_slot_count += 1
+                    consecutive_slots = group.slots[i:i + max_slot_count]
                     break
             if slot_duration_minutes:
                 break
 
-        if slot_duration_minutes is None:
+        if slot_duration_minutes is None or requested_slot is None:
             return HttpResponseBadRequest()
 
-        serializer_body = BookingCreateSerializer(data=request.POST)
-        if not serializer_body.is_valid():
+        def _build_form_context(error=None, race_condition=False):
+            cancellation_deadline = start_datetime - datetime.timedelta(
+                hours=resource.cancellation_deadline_hours,
+            )
+            cancellation_possible = timezone.now() <= cancellation_deadline
             context = get_context(request)
             context.update({
-                'resource':       resource,
+                'resource': resource,
+                'slot': requested_slot,
+                'consecutive_slots': consecutive_slots,
+                'max_slot_count': max_slot_count,
+                'slot_duration_minutes': slot_duration_minutes,
                 'start_datetime': start_datetime,
-                'error':          serializer_body.errors,
+                'group_end': consecutive_slots[-1].end if consecutive_slots else window_end_derive,
+                'cancellation_deadline': cancellation_deadline,
+                'cancellation_possible': cancellation_possible,
+                'error': error,
             })
+            if race_condition:
+                context['race_condition'] = True
+            return context
+
+        # Parse et valide l'heure de fin depuis le champ du formulaire.
+        # / Parse and validate the end time from the form field.
+        end_time_raw = request.POST.get('end_time', '')
+        end_time_naive = parse_datetime(end_time_raw)
+        if end_time_naive is None:
+            context = _build_form_context(error=_("Invalid end time format."))
+            if request.htmx:
+                return render(request, 'booking/partials/book_form.html', context, status=422)
+            return render(request, 'booking/views/book.html', context)
+
+        end_datetime = timezone.make_aware(end_time_naive, tz)
+
+        if end_datetime <= start_datetime:
+            context = _build_form_context(error=_("End time must be after start time."))
+            if request.htmx:
+                return render(request, 'booking/partials/book_form.html', context, status=422)
+            return render(request, 'booking/views/book.html', context)
+
+        if end_datetime not in [slot.end for slot in consecutive_slots]:
+            context = _build_form_context(error=_("End time must match an available slot end."))
+            if request.htmx:
+                return render(request, 'booking/partials/book_form.html', context, status=422)
+            return render(request, 'booking/views/book.html', context)
+
+        duration_minutes = int((end_datetime - start_datetime).total_seconds() // 60)
+        if duration_minutes % slot_duration_minutes != 0:
+            context = _build_form_context(error=_("Selected duration is not a multiple of the slot duration."))
+            if request.htmx:
+                return render(request, 'booking/partials/book_form.html', context, status=422)
+            return render(request, 'booking/views/book.html', context)
+
+        slot_count = duration_minutes // slot_duration_minutes
+
+        # Valide le slot_count calculé via le serializer.
+        # / Validate the computed slot_count through the serializer.
+        data = request.POST.copy()
+        data['slot_count'] = slot_count
+        serializer_body = BookingCreateSerializer(data=data)
+        if not serializer_body.is_valid():
+            context = _build_form_context(error=serializer_body.errors)
+            if request.htmx:
+                return render(request, 'booking/partials/book_form.html', context, status=422)
             return render(request, 'booking/views/book.html', context)
 
         slot_count = serializer_body.validated_data['slot_count']
@@ -434,13 +780,22 @@ class BookingViewSet(viewsets.ViewSet):
         )
 
         if is_valid:
-            # Réservation créée — redirige vers mes réservations avec mise en évidence.
+            # Reservation creee — redirige vers mes reservations avec mise en evidence.
             # / Booking created — redirect to my bookings with highlight.
             my_bookings_url = (
                 reverse('my_account-my-bookings')
                 + '?' + urlencode({'new': result.pk})
             )
-            return redirect(checkout_url or my_bookings_url)
+            target_url = checkout_url or my_bookings_url
+            # En requete HTMX, on utilise une redirection client pour eviter le swap.
+            # / For HTMX requests, use client redirect to avoid swap.
+
+            if checkout_url is None:
+                messages.success(request, _("Réservation créée avec succès."))
+
+            if request.htmx:
+                return HttpResponseClientRedirect(target_url)
+            return redirect(target_url)
 
         # Échec (modification concurrente, créneau commencé, etc.) — re-render avec
         # les créneaux recalculés et le message d'erreur.
@@ -474,25 +829,11 @@ class BookingViewSet(viewsets.ViewSet):
             if requested_slot:
                 break
 
-        cancellation_deadline  = start_datetime - datetime.timedelta(
-            hours=resource.cancellation_deadline_hours,
-        )
-        cancellation_possible  = timezone.now() <= cancellation_deadline
-
-        context = get_context(request)
-        context.update({
-            'resource':              resource,
-            'slot':                  requested_slot,
-            'consecutive_slots':     consecutive_slots,
-            'max_slot_count':        max_slot_count,
-            'slot_duration_minutes': slot_duration_minutes,
-            'start_datetime':        start_datetime,
-            'group_end':             consecutive_slots[-1].end if consecutive_slots else window_end_derive,
-            'cancellation_deadline': cancellation_deadline,
-            'cancellation_possible': cancellation_possible,
-            'error':                 result,
-            'race_condition':        True,
-        })
+        context = _build_form_context(error=result, race_condition=True)
+        # En requete HTMX, on retourne le partial avec les erreurs en 422.
+        # / For HTMX requests, return the partial with errors and 422 status.
+        if request.htmx:
+            return render(request, 'booking/partials/book_form.html', context, status=422)
         return render(request, 'booking/views/book.html', context)
 
     # ── Créneau indisponible ─────────────────────────────────────────────────

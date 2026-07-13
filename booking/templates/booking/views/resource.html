@@ -1,162 +1,951 @@
 {% extends "booking/booking_base.html" %}
-{% load i18n static %}
+{% load i18n static l10n tibitags %}
 
 <!--
 LOCALISATION : booking/templates/booking/views/resource.html
 
-Détail d'une ressource avec la liste complète de ses créneaux disponibles.
-/ Resource detail with the full list of available slots.
+Detail d'une ressource avec calendrier de reservation.
+/ Resource detail with booking calendar.
 
 Flux / Flow:
-  GET /booking/resource/<pk>/
-  Contexte / Context: resource, slot_groups
+  GET /booking/<pk>/resource/
+  Contexte / Context: resource, calendar_weeks, mobile_days, mobile_day_bar,
+                      mobile_time_rows, resource_choices
+
+Comportement / Behavior:
+  - Desktop (>= 768px) : grille heures/jours avec navigation par semaine.
+  - Mobile (< 768px) : mise en page calendrier-panier-mobile.html avec
+    selecteur de ressource, barre de jours, navigation par jour (1 jour a la fois).
+  - Les creneaux libres sont cliquables sur les deux vues.
+  - Le clic ouvre SweetAlert2 avec le formulaire de confirmation charge en HTMX.
+  - Pas de panier integre dans cette page.
+
+DEPENDENCIES :
+  - booking/views.py:_build_calendar_weeks()  -> structure desktop
+  - booking/views.py:_build_mobile_days()     -> structure mobile
+  - booking/views.py:book()                   -> partial HTMX booking/partials/book_form.html
+  - BaseBillet/static/reunion/js/sweetalert2@11.js (charge par le skin base.html)
+  - htmx (charge par le skin base.html)
 -->
 {% block title %}{{ resource.product.name }}{% endblock %}
 {% block meta_description %}{{ resource.product.long_description|truncatewords:20 }}{% endblock %}
 
 {% block booking_content %}
 
-<!--
-Lien retour vers la liste des ressources.
-/ Back link to the resource list.
--->
-<a href="{% url 'booking-list' %}" class="btn btn-outline-secondary btn-sm mb-4">
-  <i class="bi bi-arrow-left" aria-hidden="true"></i>
-  {% translate "Retour" %}
-</a>
-
-<!--
-En-tête : nom, image, description de la ressource.
-/ Header: resource name, image, description.
--->
-<div class="mb-4" data-testid="booking-resource-header">
-  {% if resource.product.img %}
-  <img src="{{ resource.product.img.hdr.url }}"
-       alt="{{ resource.product.name }}"
-       class="img-fluid rounded mb-3"
-       style="max-height: 300px; object-fit: cover; width: 100%;">
-  {% endif %}
-
-  <h1>{{ resource.product.name }}</h1>
-  {% if resource.product.long_description %}
-  <p class="text-muted">{{ resource.product.long_description }}</p>
-  {% endif %}
-</div>
-
-<!--
-Liste des créneaux disponibles, groupés par semaine.
-/ List of available slots, grouped by week.
--->
-<h2 class="h4 mb-3">{% translate "Créneaux disponibles" %}</h2>
-
-{% if slot_groups %}
-<!--
-La grille est sur le <ul> pour que toutes les lignes partagent les mêmes
-pistes de colonnes — badge et bouton s'alignent verticalement sur tous les
-créneaux. display:contents sur chaque <li> supprime sa boîte de rendu et
-laisse ses enfants devenir des cellules directes de la grille du <ul>.
-/ The grid sits on the <ul> so every row shares the same column tracks —
-badge and button align vertically across all slots. display:contents on each
-<li> removes its layout box and lets its children become direct grid cells.
--->
-<ul data-testid="booking-slot-list" aria-live="polite"
-    style="display: inline-grid;
-           grid-template-columns: max-content auto auto;
-           list-style: none;
-           padding: 0;
-           margin: 0;
-           border: 1px solid var(--bs-border-color);
-           border-radius: var(--bs-border-radius);">
-  {% for group in slot_groups %}
-
-    {% if group.slots.0.is_new_week %}
     <!--
-    Séparateur de semaine — s'étend sur les 3 colonnes.
-    / Week separator — spans all 3 columns.
+    Lien retour vers la liste des ressources.
+    / Back link to the resource list.
     -->
-    <li style="grid-column: 1 / -1;
-               background-color: var(--bs-primary);
-               color: var(--bs-white);
-               padding: 0.4rem 1rem;
-               font-size: 1.05rem;
-               font-weight: 700;
-               border-bottom: 1px solid var(--bs-border-color);"
-        aria-label="{% translate 'Nouvelle semaine' %}">
-      {% blocktrans with n=group.start|date:"W" %}Semaine {{ n }}{% endblocktrans %}
-    </li>
-    {% endif %}
+    <a href="{% url 'booking-list' %}" class="btn btn-outline-secondary btn-sm mb-4" data-testid="booking-back-btn">
+        <i class="bi bi-arrow-left" aria-hidden="true"></i>
+        {% translate "Retour" %}
+    </a>
 
     <!--
-    En-tête de date — affiché une fois par groupe, s'étend sur les 3 colonnes.
-    / Date header — shown once per group, spans all 3 columns.
+    En-tete : nom, image, description de la ressource.
+    / Header: resource name, image, description.
     -->
-    <li style="grid-column: 1 / -1;
-               padding: 0.4rem 1rem;
-               font-weight: 600;
-               border-bottom: 1px solid var(--bs-border-color);">
-      {{ group.start|date:"l d F" }}
-    </li>
-
-    {% for slot in group.slots %}
-
-    {% if slot.remaining_capacity > 0 %}
-    <li style="display: contents;" data-testid="booking-slot-available">
-      <span style="padding: 0.5rem 1rem; border-bottom: 1px solid var(--bs-border-color); display: flex; align-items: center;">
-        {{ slot.start|date:"H\hi" }} – {{ slot.end|date:"H\hi" }}
-        <span class="text-muted small ms-1">({{ slot.slot_duration_minutes }}{% translate "min" %})</span>
-      </span>
-      <span style="padding: 0.5rem 1rem; border-bottom: 1px solid var(--bs-border-color); display: flex; align-items: center; justify-content: center;">
-        {% if resource.capacity > 1 %}
-        <span class="badge bg-success" data-testid="booking-slot-capacity">
-          {% blocktrans count n=slot.remaining_capacity %}{{ n }} place{% plural %}{{ n }} places{% endblocktrans %}
-        </span>
+    <div class="mb-4" data-testid="booking-resource-header">
+        {% if resource.product.img %}
+            <img src="{{ resource.product.img.hdr.url }}"
+                 alt="{{ resource.product.name }}"
+                 class="img-fluid rounded mb-3"
+                 style="max-height: 300px; object-fit: cover; width: 100%;"
+                 data-testid="booking-resource-image">
         {% endif %}
-      </span>
-      <span style="padding: 0.5rem 1rem; border-bottom: 1px solid var(--bs-border-color); display: flex; align-items: center;">
-        {% if request.user.is_authenticated %}
-        <a href="{% url 'booking-book' pk=resource.pk %}?start_datetime={{ slot.start|date:'Y-m-d\TH:i:s' }}&group_end={{ group.end|date:'Y-m-d\TH:i:s' }}"
-           class="btn btn-primary btn-sm"
-           data-testid="booking-slot-book-btn">
-          {% translate "Réserver" %}
-        </a>
-        {% else %}
-        <a href="{% url 'connexion' %}?next={% url 'booking-book' pk=resource.pk %}%3Fstart_datetime%3D{{ slot.start|date:'Y-m-d\TH:i:s' }}%26group_end%3D{{ group.end|date:'Y-m-d\TH:i:s' }}"
-           class="btn btn-outline-primary btn-sm"
-           data-testid="booking-slot-login-btn">
-          {% translate "Connexion pour réserver" %}
-        </a>
+
+        <h1 data-testid="booking-resource-name">{{ resource.product.name }}</h1>
+        {% if resource.product.long_description %}
+            <p class="text-muted" data-testid="booking-resource-description">{{ resource.product.long_description }}</p>
         {% endif %}
-      </span>
-    </li>
+    </div>
+
+    {% if calendar_weeks or mobile_days %}
+        <style>
+            /*
+             * Styles du calendrier de reservation.
+             * / Booking calendar styles.
+             *
+             * LOCALISATION : booking/templates/booking/views/resource.html
+             */
+
+            /* === DESKTOP === */
+            .booking-calendar-desktop {
+                background: var(--bs-body-bg);
+                border: 1px solid var(--bs-border-color);
+                border-radius: var(--bs-border-radius-lg);
+                padding: 1rem;
+            }
+
+            .calendar-nav {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 1rem;
+                gap: 0.5rem;
+            }
+
+            .calendar-week-label {
+                font-weight: 500;
+                font-size: 1rem;
+            }
+
+            .calendar-weeks {
+                overflow-x: auto;
+            }
+
+            .calendar-grid {
+                display: grid;
+                gap: 1px;
+                min-width: 600px;
+                background-color: var(--bs-border-color);
+                border: 1px solid var(--bs-border-color);
+                border-radius: var(--bs-border-radius);
+                overflow: hidden;
+            }
+
+            .calendar-header-cell {
+                background: var(--bs-body-bg);
+                padding: 0.5rem;
+                text-align: center;
+                font-weight: 600;
+                font-size: 0.85rem;
+            }
+
+            .calendar-hour-label {
+                background: var(--bs-body-bg);
+                padding: 0.25rem 0.5rem;
+                text-align: right;
+                font-size: 0.75rem;
+                color: var(--bs-secondary-color);
+                border-right: 1px solid var(--bs-border-color);
+            }
+
+            .calendar-cell {
+                background: var(--bs-body-bg);
+                min-height: 24px;
+            }
+
+            .calendar-cell-hour {
+                border-top: 1px dashed var(--bs-border-color);
+            }
+
+            .calendar-slot {
+                padding: 0.25rem;
+                margin: 1px;
+                border-radius: var(--bs-border-radius-sm);
+                font-size: 0.75rem;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                overflow: hidden;
+                cursor: pointer;
+                transition: transform 0.1s ease;
+            }
+
+            .calendar-slot-free {
+                background-color: var(--bs-success-bg-subtle);
+                border: 1px solid var(--bs-success-border-subtle);
+                color: var(--bs-success-text-emphasis);
+            }
+
+            .calendar-slot-free:hover,
+            .calendar-slot-free:focus {
+                transform: scale(1.02);
+                box-shadow: 0 0 0 2px var(--bs-success);
+                outline: none;
+            }
+
+            .calendar-slot-busy {
+                background-color: var(--bs-secondary-bg);
+                border: 1px solid var(--bs-border-color);
+                color: var(--bs-secondary-color);
+                cursor: not-allowed;
+            }
+
+            .calendar-slot-time {
+                font-weight: 600;
+            }
+
+            .calendar-slot-capacity {
+                font-size: 0.7rem;
+                opacity: 0.9;
+            }
+
+            /* === MOBILE === */
+            .booking-calendar-mobile {
+                background: var(--bs-body-bg);
+                border: 1px solid var(--bs-border-color);
+                border-radius: var(--bs-border-radius-lg);
+                padding: 1rem;
+            }
+
+            .mobile-resource-selector {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin-bottom: 12px;
+            }
+
+            .mobile-resource-selector label {
+                font-size: 0.9rem;
+                font-weight: 500;
+                margin-bottom: 0;
+                color: var(--bs-body-color);
+            }
+
+            .mobile-resource-selector select {
+                flex: 1;
+                font-size: 14px;
+                padding: 8px 10px;
+                border-radius: var(--bs-border-radius);
+                border: 1px solid var(--bs-border-color);
+                background: var(--bs-body-bg);
+                color: var(--bs-body-color);
+            }
+
+            .mobile-day-nav {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                margin-bottom: 10px;
+            }
+
+            .mobile-day-arrow {
+                padding: 4px 10px;
+                border-radius: var(--bs-border-radius);
+                border: 1px solid var(--bs-border-color);
+                background: var(--bs-body-bg);
+                color: var(--bs-secondary-color);
+                cursor: pointer;
+                font-size: 16px;
+                line-height: 1;
+            }
+
+            .mobile-day-bar {
+                flex: 1;
+                display: flex;
+                gap: 3px;
+                overflow-x: auto;
+                padding: 2px 0;
+            }
+
+            .mobile-day-bar-item {
+                flex: 1;
+                min-width: 36px;
+                text-align: center;
+                font-size: 11px;
+                line-height: 1.25;
+                padding: 6px 2px;
+                border-radius: 8px;
+                color: var(--bs-secondary-color);
+                cursor: pointer;
+                user-select: none;
+                border: 1px solid transparent;
+                background: var(--bs-body-bg);
+            }
+
+            .mobile-day-bar-item b {
+                display: block;
+                font-size: 13px;
+                color: var(--bs-body-color);
+                font-weight: 600;
+                margin-top: 1px;
+            }
+
+            .mobile-day-bar-item.active {
+                background: var(--bs-primary);
+                color: #fff;
+                border-color: var(--bs-primary);
+            }
+
+            .mobile-day-bar-item.active b {
+                color: #fff;
+            }
+
+            .mobile-days {
+                overflow-x: auto;
+            }
+
+            .mobile-day {
+                min-width: 300px;
+            }
+
+            .mobile-grid-wrap {
+                background: var(--bs-body-bg);
+                border: 1px solid var(--bs-border-color);
+                border-radius: var(--bs-border-radius);
+                overflow: hidden;
+            }
+
+            .mobile-grid-head {
+                display: grid;
+                grid-template-columns: 44px 1fr;
+                border-bottom: 1px solid var(--bs-border-color);
+            }
+
+            .mobile-grid-head .mobile-day-header {
+                text-align: center;
+                font-size: 12px;
+                font-weight: 600;
+                padding: 8px 0;
+            }
+
+            .mobile-grid-scroll {
+                max-height: 320px;
+                overflow-y: auto;
+            }
+
+            .mobile-grid {
+                display: grid;
+                gap: 1px;
+                background-color: var(--bs-border-color);
+            }
+
+            .mobile-hour-label {
+                background: var(--bs-body-bg);
+                font-size: 10px;
+                color: var(--bs-secondary-color);
+                text-align: right;
+                padding: 0 6px;
+                height: 32px;
+                line-height: 32px;
+                border-right: 1px solid var(--bs-border-color);
+            }
+
+            .mobile-cell {
+                background: var(--bs-body-bg);
+                min-height: 32px;
+            }
+
+            .mobile-cell-hour {
+                border-top: 1px dashed var(--bs-border-color);
+            }
+
+            .mobile-slot {
+                padding: 2px 4px;
+                margin: 1px;
+                border-radius: var(--bs-border-radius-sm);
+                font-size: 0.7rem;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                overflow: hidden;
+                cursor: pointer;
+                text-align: center;
+            }
+
+            .mobile-slot-free {
+                background-color: var(--bs-success-bg-subtle);
+                border: 1px solid var(--bs-success-border-subtle);
+                color: var(--bs-success-text-emphasis);
+            }
+
+            .mobile-slot-busy {
+                background-color: var(--bs-secondary-bg);
+                border: 1px solid var(--bs-border-color);
+                color: var(--bs-secondary-color);
+                cursor: not-allowed;
+            }
+
+            .mobile-slot-time {
+                font-weight: 600;
+            }
+
+            .mobile-legend {
+                display: flex;
+                gap: 1rem;
+                margin-top: 1rem;
+                flex-wrap: wrap;
+                font-size: 0.85rem;
+            }
+
+            .mobile-legend-item {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.35rem;
+            }
+
+            .mobile-legend-color {
+                display: inline-block;
+                width: 14px;
+                height: 14px;
+                border-radius: 3px;
+                border: 1px solid var(--bs-border-color);
+            }
+
+            .mobile-legend-free {
+                background-color: var(--bs-success-bg-subtle);
+                border-color: var(--bs-success-border-subtle);
+            }
+
+            .mobile-legend-busy {
+                background-color: var(--bs-secondary-bg);
+            }
+
+            .mobile-legend-past {
+                background: repeating-linear-gradient(
+                    45deg,
+                    var(--bs-secondary-bg),
+                    var(--bs-secondary-bg) 4px,
+                    var(--bs-body-bg) 4px,
+                    var(--bs-body-bg) 8px
+                );
+            }
+
+            /* === LEGENDE COMMUNE === */
+            .calendar-legend {
+                display: flex;
+                gap: 1rem;
+                margin-top: 1rem;
+                flex-wrap: wrap;
+                font-size: 0.85rem;
+            }
+
+            .calendar-legend-item {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.35rem;
+            }
+
+            .calendar-legend-color {
+                display: inline-block;
+                width: 14px;
+                height: 14px;
+                border-radius: 3px;
+                border: 1px solid var(--bs-border-color);
+            }
+
+            .calendar-legend-free {
+                background-color: var(--bs-success-bg-subtle);
+                border-color: var(--bs-success-border-subtle);
+            }
+
+            .calendar-legend-busy {
+                background-color: var(--bs-secondary-bg);
+            }
+
+            .calendar-legend-past {
+                background: repeating-linear-gradient(
+                    45deg,
+                    var(--bs-secondary-bg),
+                    var(--bs-secondary-bg) 4px,
+                    var(--bs-body-bg) 4px,
+                    var(--bs-body-bg) 8px
+                );
+            }
+        </style>
+
+        <!--
+        Calendrier de reservation.
+        / Booking calendar.
+        -->
+        <div id="booking-calendar" class="booking-calendar" data-testid="booking-calendar"
+             data-resource-pk="{{ resource.pk }}"
+             data-book-url="{% url 'booking-book' pk=resource.pk %}">
+
+            <!--
+            ===========================
+            VERSION DESKTOP
+            ===========================
+            -->
+            <div class="booking-calendar-desktop d-none d-md-block" data-testid="booking-calendar-desktop">
+
+                <!--
+                Navigation par semaine.
+                / Week navigation.
+                -->
+                <div class="calendar-nav" role="group" aria-label="{% translate 'Navigation par semaine' %}"
+                     data-testid="booking-calendar-nav">
+                    <button type="button" id="calendar-prev-week"
+                            class="btn btn-outline-secondary btn-sm"
+                            aria-label="{% translate 'Semaine précédente' %}"
+                            data-testid="booking-calendar-prev-week">
+                        <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                    </button>
+
+                    <span id="calendar-week-label" class="calendar-week-label" data-testid="booking-calendar-week-label">
+                        {% translate "Chargement..." %}
+                    </span>
+
+                    <button type="button" id="calendar-next-week"
+                            class="btn btn-outline-secondary btn-sm"
+                            aria-label="{% translate 'Semaine suivante' %}"
+                            data-testid="booking-calendar-next-week">
+                        <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                    </button>
+                </div>
+
+                <!--
+                Conteneur des semaines desktop.
+                / Desktop weeks container.
+                -->
+                <div class="calendar-weeks" aria-live="polite" data-testid="booking-calendar-weeks">
+                    {% for week in calendar_weeks %}
+                        <div class="calendar-week"
+                             data-week="{{ week.week }}"
+                             data-year="{{ week.year }}"
+                             data-testid="booking-calendar-week"
+                             {% if not forloop.first %}style="display: none;"{% endif %}>
+
+                            <div class="calendar-grid"
+                                 style="grid-template-columns: 60px repeat({{ week.days|length }}, 1fr);
+                                        grid-template-rows: auto repeat({{ time_rows|length }}, 1fr);"
+                                 data-testid="booking-calendar-grid">
+
+                                <div class="calendar-header-cell calendar-corner"></div>
+
+                                {% for day in week.days %}
+                                    <div class="calendar-header-cell calendar-day-header"
+                                         data-testid="booking-calendar-day-header">
+                                        {{ day.date|date:"l d F" }}
+                                    </div>
+                                {% endfor %}
+
+                                {% for row in time_rows %}
+                                    <div class="calendar-hour-label"
+                                         style="grid-row: {{ row.row_index }};"
+                                         data-testid="booking-calendar-hour-label">
+                                        {{ row.label }}
+                                    </div>
+                                    {% for day in week.days %}
+                                        <div class="calendar-cell {% if row.minute == 0 %}calendar-cell-hour{% endif %}"
+                                             style="grid-row: {{ row.row_index }}; grid-column: {{ forloop.counter|add:1 }};"
+                                             data-testid="booking-calendar-cell"
+                                        ></div>
+                                    {% endfor %}
+                                {% endfor %}
+
+                                {% for day in week.days %}
+                                    {% for group in day.groups %}
+                                        {% for slot in group.slots %}
+                                            <div class="calendar-slot {% if slot.remaining_capacity > 0 %}calendar-slot-free{% else %}calendar-slot-busy{% endif %}"
+                                                 style="grid-row: {{ slot.row_start }} / {{ slot.row_end }}; grid-column: {{ slot.column_index }};"
+                                                 data-start-datetime="{{ slot.start|date:'Y-m-d\TH:i:s' }}"
+                                                 data-group-end="{{ group.end|date:'Y-m-d\TH:i:s' }}"
+                                                 data-remaining-capacity="{{ slot.remaining_capacity }}"
+                                                 data-testid="{% if slot.remaining_capacity > 0 %}booking-calendar-slot-free{% else %}booking-calendar-slot-busy{% endif %}"
+                                                 role="{% if slot.remaining_capacity > 0 %}button{% else %}none{% endif %}"
+                                                 tabindex="{% if slot.remaining_capacity > 0 %}0{% else %}-1{% endif %}"
+                                                 aria-label="{% if slot.remaining_capacity > 0 %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, libre{% endblocktrans %}{% else %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, complet{% endblocktrans %}{% endif %}"
+                                            >
+                                                <span class="calendar-slot-time">{{ slot.start|date:"H\hi" }} - {{ slot.end|date:"H\hi" }}</span>
+                                                {% if resource.capacity > 1 %}
+                                                    <span class="calendar-slot-capacity">
+                                                        {% blocktrans count n=slot.remaining_capacity %}{{ n }} place{% plural %}{{ n }} places{% endblocktrans %}
+                                                    </span>
+                                                {% endif %}
+                                            </div>
+                                        {% endfor %}
+                                    {% endfor %}
+                                {% endfor %}
+
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+
+            </div>
+
+            <!--
+            ===========================
+            VERSION MOBILE
+            ===========================
+            -->
+            <div class="booking-calendar-mobile d-md-none" data-testid="booking-calendar-mobile">
+
+                <!--
+                Selecteur de ressource.
+                / Resource selector.
+                -->
+                <div class="mobile-resource-selector" data-testid="booking-mobile-resource-selector">
+                    <label for="mobile-resource-select">{% translate "Ressource" %}</label>
+                    <select id="mobile-resource-select" data-testid="booking-mobile-resource-select">
+                        {% for group in resource_choices %}
+                            {% if group.group_name %}
+                                <optgroup label="{{ group.group_name }}">
+                                    {% for resource in group.resources %}
+                                        <option value="{{ resource.pk }}"
+                                                {% if resource.selected %}selected{% endif %}
+                                                data-testid="booking-mobile-resource-option-{{ resource.pk }}">
+                                            {{ resource.name }}
+                                        </option>
+                                    {% endfor %}
+                                </optgroup>
+                            {% else %}
+                                {% for resource in group.resources %}
+                                    <option value="{{ resource.pk }}"
+                                            {% if resource.selected %}selected{% endif %}
+                                            data-testid="booking-mobile-resource-option-{{ resource.pk }}">
+                                        {{ resource.name }}
+                                    </option>
+                                {% endfor %}
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!--
+                Barre de jours et navigation par jour.
+                / Day bar and day navigation.
+                -->
+                <div class="mobile-day-nav" role="group" aria-label="{% translate 'Navigation par jour' %}"
+                     data-testid="booking-mobile-day-nav">
+                    <button type="button" id="mobile-prev-day"
+                            class="mobile-day-arrow"
+                            aria-label="{% translate 'Jour précédent' %}"
+                            data-testid="booking-mobile-prev-day">
+                        <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                    </button>
+
+                            <div class="mobile-day-bar" id="mobile-day-bar" data-testid="booking-mobile-day-bar">
+                        {% for day_bar in mobile_day_bar %}
+                            <div class="mobile-day-bar-item"
+                                 data-day-index="{{ day_bar.day_index }}"
+                                 data-testid="booking-mobile-day-bar-item"
+                                 role="button"
+                                 tabindex="0"
+                                 aria-label="{% blocktrans with weekday=day_bar.day_number %}Jour {{ weekday }}{% endblocktrans %}">
+                                {{ day_bar.weekday_letter }}
+                                <b>{{ day_bar.day_number }}</b>
+                            </div>
+                        {% endfor %}
+                    </div>
+
+                    <button type="button" id="mobile-next-day"
+                            class="mobile-day-arrow"
+                            aria-label="{% translate 'Jour suivant' %}"
+                            data-testid="booking-mobile-next-day">
+                        <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                    </button>
+                </div>
+
+                <!--
+                Conteneur des pages de jours.
+                / Day pages container.
+                -->
+                <div class="mobile-days" aria-live="polite" data-testid="booking-mobile-days">
+                    {% for mobile_day in mobile_days %}
+                        {% with day=mobile_day.day %}
+                        <div class="mobile-day"
+                             data-day-index="{{ mobile_day.index }}"
+                             data-testid="booking-mobile-day"
+                             {% if not forloop.first %}style="display: none;"{% endif %}>
+
+                            <div class="mobile-grid-wrap"
+                                 data-testid="booking-mobile-grid-wrap">
+                                <div class="mobile-grid-head"
+                                     style="grid-template-columns: 44px 1fr;"
+                                     data-testid="booking-mobile-grid-head">
+                                    <div></div>
+                                    <div class="mobile-day-header"
+                                         data-testid="booking-mobile-day-header">
+                                        {{ day.date|date:"D d" }}
+                                    </div>
+                                </div>
+
+                                <div class="mobile-grid-scroll">
+                                    <div class="mobile-grid"
+                                         style="grid-template-columns: 44px 1fr;
+                                                grid-template-rows: auto repeat({{ mobile_time_rows|length }}, 1fr);"
+                                         data-testid="booking-mobile-grid">
+
+                                        {% for row in mobile_time_rows %}
+                                            <div class="mobile-hour-label {% if row.minute == 0 %}mobile-cell-hour{% endif %}"
+                                                 style="grid-row: {{ row.row_index }};"
+                                                 data-testid="booking-mobile-hour-label">
+                                                {{ row.label }}
+                                            </div>
+                                            <div class="mobile-cell"
+                                                 style="grid-row: {{ row.row_index }}; grid-column: 2;"
+                                                 data-testid="booking-mobile-cell"
+                                            ></div>
+                                        {% endfor %}
+
+                                        {% for group in day.groups %}
+                                            {% for slot in group.slots %}
+                                                <div class="mobile-slot {% if slot.remaining_capacity > 0 %}mobile-slot-free{% else %}mobile-slot-busy{% endif %}"
+                                                     style="grid-row: {{ slot.row_start }} / {{ slot.row_end }}; grid-column: 2;"
+                                                     data-start-datetime="{{ slot.start|date:'Y-m-d\TH:i:s' }}"
+                                                     data-group-end="{{ group.end|date:'Y-m-d\TH:i:s' }}"
+                                                     data-remaining-capacity="{{ slot.remaining_capacity }}"
+                                                     data-testid="{% if slot.remaining_capacity > 0 %}booking-mobile-slot-free{% else %}booking-mobile-slot-busy{% endif %}"
+                                                     role="{% if slot.remaining_capacity > 0 %}button{% else %}none{% endif %}"
+                                                     tabindex="{% if slot.remaining_capacity > 0 %}0{% else %}-1{% endif %}"
+                                                     aria-label="{% if slot.remaining_capacity > 0 %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, libre{% endblocktrans %}{% else %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, complet{% endblocktrans %}{% endif %}"
+                                                >
+                                                    <span class="mobile-slot-time">{{ slot.start|date:"H\hi" }}</span>
+                                                </div>
+                                            {% endfor %}
+                                        {% endfor %}
+
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endwith %}
+                    {% endfor %}
+                </div>
+
+            </div>
+
+            <!--
+            Legende commune.
+            / Common legend.
+            -->
+            <div class="calendar-legend" role="group" aria-label="{% translate 'Légende du calendrier' %}"
+                 data-testid="booking-calendar-legend">
+                <span class="calendar-legend-item"
+                      data-testid="booking-legend-free">
+                    <span class="calendar-legend-color calendar-legend-free"></span>
+                    {% translate "Libre" %}
+                </span>
+                <span class="calendar-legend-item"
+                      data-testid="booking-legend-busy">
+                    <span class="calendar-legend-color calendar-legend-busy"></span>
+                    {% translate "Complet" %}
+                </span>
+                <span class="calendar-legend-item"
+                      data-testid="booking-legend-past">
+                    <span class="calendar-legend-color calendar-legend-past"></span>
+                    {% translate "Passé" %}
+                </span>
+            </div>
+
+        </div>
 
     {% else %}
-    <li style="display: contents;" data-testid="booking-slot-full">
-      <span style="padding: 0.5rem 1rem; border-bottom: 1px solid var(--bs-border-color); display: flex; align-items: center;" class="text-muted">
-        {{ slot.start|date:"H\hi" }} – {{ slot.end|date:"H\hi" }}
-        <span class="small ms-1">({{ slot.slot_duration_minutes }}{% translate "min" %})</span>
-      </span>
-      <span style="padding: 0.5rem 1rem; border-bottom: 1px solid var(--bs-border-color); display: flex; align-items: center; justify-content: center;" class="text-muted">
-        <span class="badge bg-secondary" data-testid="badge-slot-full">
-          <i class="bi bi-lock" aria-hidden="true"></i>
-          {% translate "Complet" %}
-        </span>
-      </span>
-      <span style="padding: 0.5rem 1rem; border-bottom: 1px solid var(--bs-border-color);"></span>
-    </li>
+        <!--
+        Etat vide : aucun creneau disponible dans l'horizon.
+        / Empty state: no slot available within the booking horizon.
+        -->
+        <p class="text-muted" data-testid="booking-calendar-empty">
+            {% translate "Aucun créneau disponible prochainement." %}
+        </p>
     {% endif %}
 
-    {% endfor %}
-  {% endfor %}
-</ul>
-
-{% else %}
-<!--
-État vide — aucun créneau dans l'horizon de réservation.
-/ Empty state — no slot within the booking horizon.
--->
-<p class="text-muted" data-testid="booking-slot-list-empty">
-  {% translate "Aucun créneau disponible prochainement." %}
-</p>
-{% endif %}
-
 {% endblock booking_content %}
+
+{% block scripts %}
+    <!--
+    Configuration HTMX pour swapper les erreurs 422 et 500.
+    / HTMX configuration to swap content on 422 and 500 errors.
+    -->
+    <script>
+        document.addEventListener("htmx:beforeOnLoad", function (event) {
+            const status_code_de_la_reponse = event.detail.xhr.status;
+            if (status_code_de_la_reponse === 422 || status_code_de_la_reponse === 500) {
+                event.detail.shouldSwap = true;
+                event.detail.isError = false;
+            }
+        });
+    </script>
+
+    <!--
+    Navigation du calendrier et ouverture du formulaire de reservation dans SweetAlert2.
+    / Calendar navigation and booking form popup with SweetAlert2.
+    -->
+    <script>
+        (function () {
+            // Selection des elements du calendrier.
+            // / Select calendar elements.
+            const calendar = document.getElementById('booking-calendar');
+            if (!calendar) {
+                return;
+            }
+
+            const baseUrl = calendar.getAttribute('data-book-url');
+
+            // ============================================================
+            // DESKTOP : navigation par semaine
+            // / DESKTOP: week navigation
+            // ============================================================
+            const desktopWeekElements = Array.from(calendar.querySelectorAll('.calendar-week'));
+            const desktopPrevButton = document.getElementById('calendar-prev-week');
+            const desktopNextButton = document.getElementById('calendar-next-week');
+            const desktopWeekLabel = document.getElementById('calendar-week-label');
+            let desktopCurrentIndex = 0;
+
+            function showDesktopWeek(index) {
+                if (index < 0 || index >= desktopWeekElements.length) {
+                    return;
+                }
+                desktopCurrentIndex = index;
+                desktopWeekElements.forEach(function (weekElement, weekIndex) {
+                    weekElement.style.display = (weekIndex === desktopCurrentIndex) ? 'block' : 'none';
+                });
+
+                const currentWeek = desktopWeekElements[desktopCurrentIndex];
+                const dayHeaders = currentWeek.querySelectorAll('.calendar-day-header');
+                let firstDay = '';
+                let lastDay = '';
+                if (dayHeaders.length > 0) {
+                    firstDay = dayHeaders[0].textContent.trim();
+                    lastDay = dayHeaders[dayHeaders.length - 1].textContent.trim();
+                }
+                desktopWeekLabel.textContent = firstDay + ' – ' + lastDay;
+
+                desktopPrevButton.disabled = (desktopCurrentIndex === 0);
+                desktopNextButton.disabled = (desktopCurrentIndex === desktopWeekElements.length - 1);
+            }
+
+            if (desktopWeekElements.length > 0) {
+                showDesktopWeek(0);
+            }
+
+            if (desktopPrevButton) {
+                desktopPrevButton.addEventListener('click', function () {
+                    showDesktopWeek(desktopCurrentIndex - 1);
+                });
+            }
+            if (desktopNextButton) {
+                desktopNextButton.addEventListener('click', function () {
+                    showDesktopWeek(desktopCurrentIndex + 1);
+                });
+            }
+
+            // ============================================================
+            // MOBILE : navigation par jour + selecteur de ressource
+            // / MOBILE: day navigation + resource selector
+            // ============================================================
+            const mobileDayElements = Array.from(calendar.querySelectorAll('.mobile-day'));
+            const mobileDayBarItems = Array.from(calendar.querySelectorAll('.mobile-day-bar-item'));
+            const mobilePrevButton = document.getElementById('mobile-prev-day');
+            const mobileNextButton = document.getElementById('mobile-next-day');
+            const mobileResourceSelect = document.getElementById('mobile-resource-select');
+            let mobileCurrentDayIndex = 0;
+
+            function updateMobileDayBarActive() {
+                mobileDayBarItems.forEach(function (item) {
+                    const itemDayIndex = parseInt(item.getAttribute('data-day-index'), 10);
+                    if (itemDayIndex === mobileCurrentDayIndex) {
+                        item.classList.add('active');
+                    } else {
+                        item.classList.remove('active');
+                    }
+                });
+            }
+
+            function showMobileDay(index) {
+                if (index < 0 || index >= mobileDayElements.length) {
+                    return;
+                }
+                mobileCurrentDayIndex = index;
+                mobileDayElements.forEach(function (dayElement) {
+                    const dayIndex = parseInt(dayElement.getAttribute('data-day-index'), 10);
+                    dayElement.style.display = (dayIndex === mobileCurrentDayIndex) ? 'block' : 'none';
+                });
+                updateMobileDayBarActive();
+
+                if (mobilePrevButton) {
+                    mobilePrevButton.disabled = (mobileCurrentDayIndex === 0);
+                }
+                if (mobileNextButton) {
+                    mobileNextButton.disabled = (mobileCurrentDayIndex === mobileDayElements.length - 1);
+                }
+
+                // Fait defiler la barre de jours pour que le jour actif soit visible.
+                // / Scroll the day bar so the active day is visible.
+                const activeItem = mobileDayBarItems.find(function (item) {
+                    return parseInt(item.getAttribute('data-day-index'), 10) === mobileCurrentDayIndex;
+                });
+                if (activeItem) {
+                    activeItem.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
+                }
+            }
+
+            if (mobileDayElements.length > 0) {
+                showMobileDay(0);
+            }
+
+            if (mobilePrevButton) {
+                mobilePrevButton.addEventListener('click', function () {
+                    showMobileDay(mobileCurrentDayIndex - 1);
+                });
+            }
+            if (mobileNextButton) {
+                mobileNextButton.addEventListener('click', function () {
+                    showMobileDay(mobileCurrentDayIndex + 1);
+                });
+            }
+
+            // Clic sur un jour de la barre : affiche le jour correspondant.
+            // / Click on a day bar item: show the corresponding day.
+            mobileDayBarItems.forEach(function (item) {
+                item.addEventListener('click', function () {
+                    const dayIndex = parseInt(item.getAttribute('data-day-index'), 10);
+                    showMobileDay(dayIndex);
+                });
+                item.addEventListener('keydown', function (event) {
+                    if (event.key !== 'Enter' && event.key !== ' ') {
+                        return;
+                    }
+                    event.preventDefault();
+                    const dayIndex = parseInt(item.getAttribute('data-day-index'), 10);
+                    showMobileDay(dayIndex);
+                });
+            });
+
+            // Selecteur de ressource : redirige vers la ressource choisie.
+            // / Resource selector: redirect to the chosen resource.
+            if (mobileResourceSelect) {
+                mobileResourceSelect.addEventListener('change', function () {
+                    const selectedPk = mobileResourceSelect.value;
+                    if (selectedPk) {
+                        window.location.href = '/booking/' + selectedPk + '/resource/';
+                    }
+                });
+            }
+
+            // ============================================================
+            // Ouvre SweetAlert2 avec le formulaire de reservation HTMX.
+            // / Open SweetAlert2 with the HTMX booking form.
+            // ============================================================
+            function openBookingPopup(slotElement) {
+                const startDatetime = slotElement.getAttribute('data-start-datetime');
+                const groupEnd = slotElement.getAttribute('data-group-end');
+                const url = baseUrl + '?start_datetime=' + encodeURIComponent(startDatetime)
+                    + '&group_end=' + encodeURIComponent(groupEnd);
+
+                Swal.fire({
+                    title: '{% translate "Confirmer la réservation" %}',
+                    html: '<div id="booking-popup-content" aria-live="polite"></div>',
+                    showConfirmButton: false,
+                    showCloseButton: true,
+                    width: '32rem',
+                    didOpen: function () {
+                        htmx.ajax('GET', url, {
+                            target: '#booking-popup-content',
+                            swap: 'innerHTML'
+                        });
+                    }
+                });
+            }
+
+            // Ecoute les clics sur les creneaux libres (desktop et mobile).
+            // / Listen for clicks on free slots (desktop and mobile).
+            calendar.addEventListener('click', function (event) {
+                const slotElement = event.target.closest('.calendar-slot-free, .mobile-slot-free');
+                if (!slotElement) {
+                    return;
+                }
+                event.preventDefault();
+                openBookingPopup(slotElement);
+            });
+
+            // Support clavier : Enter ou Espace sur un creneau libre.
+            // / Keyboard support: Enter or Space on a free slot.
+            calendar.addEventListener('keydown', function (event) {
+                if (event.key !== 'Enter' && event.key !== ' ') {
+                    return;
+                }
+                const slotElement = event.target.closest('.calendar-slot-free, .mobile-slot-free');
+                if (!slotElement) {
+                    return;
+                }
+                event.preventDefault();
+                openBookingPopup(slotElement);
+            });
+        })();
+    </script>
+{% endblock scripts %}

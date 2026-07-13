@@ -1,0 +1,127 @@
+<h2 class="sr-only">Maquette du calendrier de réservation tibillet avec journée 9h-18h, pop-up de fin de créneau et panier dégradé</h2>
+<div style="background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 1rem; display: grid; grid-template-columns: 1fr 240px; gap: 12px; position: relative;">
+
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <i class="ti ti-tool" style="font-size: 18px; color: var(--color-text-secondary);" aria-hidden="true"></i>
+      <select style="flex: 1;">
+        <option>Découpe laser — Trotec Speedy 100</option>
+        <option>Imprimante 3D — Prusa MK4</option>
+        <option>Salle de réunion — Le Forum</option>
+      </select>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 2px;">
+      <button style="padding: 4px 10px;"><i class="ti ti-chevron-left" aria-hidden="true"></i></button>
+      <span style="font-size: 14px; font-weight: 500;">Semaine du 16 au 22 juin</span>
+      <button style="padding: 4px 10px;"><i class="ti ti-chevron-right" aria-hidden="true"></i></button>
+    </div>
+
+    <div id="grid" style="display: grid; grid-template-columns: 40px repeat(5, 1fr); gap: 2px; font-size: 11px;">
+      <div></div>
+      <div style="text-align:center;color:var(--color-text-secondary);">Lun</div>
+      <div style="text-align:center;color:var(--color-text-secondary);">Mar</div>
+      <div style="text-align:center;color:var(--color-text-secondary);">Mer</div>
+      <div style="text-align:center;color:var(--color-text-secondary);">Jeu</div>
+      <div style="text-align:center;color:var(--color-text-secondary);">Ven</div>
+    </div>
+
+    <div style="display: flex; gap: 14px; font-size: 11px; color: var(--color-text-secondary); padding: 2px;">
+      <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);"></span>Libre</span>
+      <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:var(--color-background-tertiary);"></span>Occupé</span>
+      <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:linear-gradient(135deg,#E0529F,#EF7B35,#E3C53F,#4FB477,#37A6C4);"></span>Dans mon panier</span>
+    </div>
+  </div>
+
+  <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 12px; display: flex; flex-direction: column;">
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 10px;">
+      <i class="ti ti-shopping-cart" style="font-size: 16px;" aria-hidden="true"></i>
+      <span style="font-size: 14px; font-weight: 500;">Mon panier</span>
+      <span style="margin-left: auto; background: #26215C; color: #fff; font-size: 11px; padding: 1px 7px; border-radius: 10px;">2</span>
+    </div>
+
+    <div style="border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:8px;margin-bottom:8px;border-left:3px solid #E0529F;">
+      <div style="font-size: 12px; font-weight: 500;">Découpe laser</div>
+      <div style="font-size: 11px; color: var(--color-text-secondary); margin: 2px 0;">Mar 17 · 9:30–10:30</div>
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <span style="font-size: 12px;">12,00 €</span>
+        <span style="display:flex;gap:6px;">
+          <i class="ti ti-edit" style="font-size:14px;color:var(--color-text-secondary);" aria-hidden="true"></i>
+          <i class="ti ti-trash" style="font-size:14px;color:var(--color-text-danger);" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+    <div style="border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:8px;margin-bottom:10px;border-left:3px solid #37A6C4;">
+      <div style="font-size: 12px; font-weight: 500;">Salle Le Forum</div>
+      <div style="font-size: 11px; color: var(--color-text-secondary); margin: 2px 0;">Jeu 19 · 14:00–16:00</div>
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <span style="font-size: 12px;">30,00 €</span>
+        <span style="display:flex;gap:6px;">
+          <i class="ti ti-edit" style="font-size:14px;color:var(--color-text-secondary);" aria-hidden="true"></i>
+          <i class="ti ti-trash" style="font-size:14px;color:var(--color-text-danger);" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+    <div style="margin-top: auto; border-top: 0.5px solid var(--color-border-tertiary); padding-top: 8px;">
+      <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px;">
+        <span style="color: var(--color-text-secondary);">Total</span>
+        <span style="font-weight: 500;">42,00 €</span>
+      </div>
+      <button id="validate" style="width:100%;border:none;color:#fff;background:linear-gradient(135deg,#E0529F,#EF7B35,#E3C53F,#4FB477,#37A6C4);font-weight:500;">Valider le panier</button>
+    </div>
+  </div>
+
+  <div id="popup" style="display:none; position:absolute; inset:0; background:rgba(0,0,0,0.45); border-radius:var(--border-radius-lg); align-items:center; justify-content:center;">
+    <div style="background:var(--color-background-primary); border-radius:var(--border-radius-lg); padding:16px; width:260px; border:0.5px solid var(--color-border-tertiary);">
+      <div style="font-size:14px;font-weight:500;margin-bottom:2px;">Nouveau créneau</div>
+      <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:12px;">Découpe laser · Mar 17</div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:6px;">
+        <span style="color:var(--color-text-secondary);width:40px;">Début</span>
+        <span style="font-weight:500;">11:00</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:14px;">
+        <span style="color:var(--color-text-secondary);width:40px;">Fin</span>
+        <select style="flex:1;"><option>11:30</option><option selected>12:00</option><option>12:30</option><option>13:00</option></select>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button id="cancel" style="flex:1;">Annuler</button>
+        <button id="add" style="flex:1;border:none;color:#fff;background:linear-gradient(135deg,#E0529F,#EF7B35,#4FB477);font-weight:500;">Ajouter</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+<style>
+.cell { height: 20px; border-radius: 3px; cursor: pointer; }
+.cell.free { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); }
+.cell.busy { background: var(--color-background-tertiary); cursor: not-allowed; }
+.cell.cart { background: linear-gradient(135deg,#E0529F,#EF7B35,#E3C53F,#4FB477,#37A6C4); }
+.tlabel { color: var(--color-text-tertiary); font-size: 10px; text-align: right; padding-right: 4px; line-height: 20px; }
+</style>
+<script>
+(function(){
+  const grid = document.getElementById('grid');
+  const times = [];
+  for(let h=9; h<18; h++){ times.push(h+':00'); times.push(h+':30'); }
+  const busy = new Set(['0-2','1-2','3-9','4-5','4-6','0-13','2-14','3-14']);
+  const cart = new Set(['1-1','1-2']);
+  times.forEach((t, r)=>{
+    const lab = document.createElement('div');
+    lab.className = 'tlabel'; lab.textContent = t;
+    grid.appendChild(lab);
+    for(let c=0;c<5;c++){
+      const cell = document.createElement('div');
+      const key = c+'-'+r;
+      if(busy.has(key)) cell.className='cell busy';
+      else if(cart.has(key)) cell.className='cell cart';
+      else { cell.className='cell free'; cell.onclick=()=>{ document.getElementById('popup').style.display='flex'; }; }
+      grid.appendChild(cell);
+    }
+  });
+  document.getElementById('cancel').onclick=()=>{ document.getElementById('popup').style.display='none'; };
+  document.getElementById('add').onclick=()=>{ document.getElementById('popup').style.display='none'; };
+})();
+</script>
