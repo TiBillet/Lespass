@@ -4900,7 +4900,7 @@ class PanierMVT(viewsets.ViewSet):
                 backup_last_name = membership_temp.get("lastname")
 
         try:
-            commande = CommandeService.materialiser(
+            commande, success = CommandeService.materialiser(
                 panier, user,
                 first_name=user.first_name or backup_first_name,
                 last_name=user.last_name or backup_last_name,
@@ -4916,9 +4916,19 @@ class PanierMVT(viewsets.ViewSet):
                 request, message=_("Checkout failed. Please try again."), level='error'
             )
 
+        # Check si l'état du flag success, puis affiche les erreurs retourné par "materialiser"
+        if not success:
+            messages.error(request,_("Checkout failed. Please try again. See errors below."))
+
+            for error in commande:
+                messages.error(request, error)
+
+            return HttpResponseClientRedirect(reverse("panier-list"))
+
+
         # Le panier est vide apres materialisation reussie.
         # / Cart is empty after successful materialization.
-        panier.clear()
+        # panier.clear()
 
         # Redirection selon le cas (payant/gratuit).
         # / Redirect based on case (paid/free).

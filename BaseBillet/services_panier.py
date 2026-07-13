@@ -817,9 +817,42 @@ class PanierSession:
             if amount_dec > Decimal("999999.99"):
                 raise InvalidItemError(_("The amount is too high."))
 
-        # Validation 7 : code promo (si fourni) — doit etre actif, utilisable,
+        # Validation 7 : disponibilité du créneau
+        # / Validation 7: slot availability
+        from booking.booking_engine import Interval, compute_slots
+        from django.utils.dateparse import parse_datetime
+
+        start = start_datetime
+        if isinstance(start, str):
+            start = parse_datetime(start)
+        if start is None:
+            raise InvalidItemError(_("Invalid start datetime."))
+
+        slot_duration = int(slot_duration_minutes)
+        slot_count_int = int(slot_count)
+        end = start + timedelta(minutes=slot_duration * slot_count_int)
+        available = compute_slots(resource, Interval(start=start, end=end))
+        slot_by_key = {
+            (slot.start, slot.duration_minutes()): slot
+            for slot in available
+        }
+
+        for i in range(slot_count_int):
+            slot_start = start + timedelta(minutes=i * slot_duration)
+            key = (slot_start, slot_duration)
+            if key not in slot_by_key or slot_by_key[key].remaining_capacity <= 0:
+                raise InvalidItemError(
+                    _("Resource \"%(resource)s\" from %(start)s to %(end)s is no longer available.")
+                    % {
+                        'resource': resource.product.name,
+                        'start': start.strftime('%d/%m/%Y %H:%M'),
+                        'end': end.strftime('%d/%m/%Y %H:%M'),
+                    }
+                )
+
+        # Validation 8 : code promo (si fourni) — doit etre actif, utilisable,
         # et lie au product de l'adhesion. Meme regle que add_ticket.
-        # / Validation 7: promo code (if provided) — active, usable, linked to product.
+        # / Validation 8: promo code (if provided) — active, usable, linked to product.
         validated_promo_name = None
 
         if promotional_code_name:
@@ -1029,39 +1062,46 @@ class PanierSession:
         items_snapshot = list(self._data.get('items', []))
         self._data['items'] = []
         self._save()
-        for item in items_snapshot:
-            if item['type'] == 'ticket':
-                self.add_ticket(
-                    event_uuid=item['event_uuid'],
-                    price_uuid=item['price_uuid'],
-                    qty=item['qty'],
-                    custom_amount=item.get('custom_amount'),
-                    options=item.get('options', []),
-                    custom_form=item.get('custom_form', {}),
-                    promotional_code_name=item.get('promotional_code_name'),
-                )
-            elif item['type'] == 'membership':
-                self.add_membership(
-                    price_uuid=item['price_uuid'],
-                    custom_amount=item.get('custom_amount'),
-                    options=item.get('options', []),
-                    custom_form=item.get('custom_form', {}),
-                    firstname=item.get('firstname'),
-                    lastname=item.get('lastname'),
-                    promotional_code_name=item.get('promotional_code_name'),
-                )
-            elif item['type'] == 'resource':
-                self.add_resource(
-                    price_uuid=item['price_uuid'],
-                    resource_uuid=item['resource_uuid'],
-                    start_datetime = item.get('start_datetime'),
-                    slot_duration_minutes = item.get('slot_duration_minutes'),
-                    slot_count = item.get('slot_count'),
-                    custom_amount=item.get('custom_amount'),
-                    options=item.get('options', []),
-                    custom_form=item.get('custom_form', {}),
-                    firstname=item.get('firstname'),
-                    lastname=item.get('lastname'),
-                    promotional_code_name=item.get('promotional_code_name'),
-                )
 
+        validation_errors = []
+
+        for item in items_snapshot:
+            try:
+                if item['type'] == 'ticket':
+                    self.add_ticket(
+                        event_uuid=item['event_uuid'],
+                        price_uuid=item['price_uuid'],
+                        qty=item['qty'],
+                        custom_amount=item.get('custom_amount'),
+                        options=item.get('options', []),
+                        custom_form=item.get('custom_form', {}),
+                        promotional_code_name=item.get('promotional_code_name'),
+                    )
+                elif item['type'] == 'membership':
+                    self.add_membership(
+                        price_uuid=item['price_uuid'],
+                        custom_amount=item.get('custom_amount'),
+                        options=item.get('options', []),
+                        custom_form=item.get('custom_form', {}),
+                        firstname=item.get('firstname'),
+                        lastname=item.get('lastname'),
+                        promotional_code_name=item.get('promotional_code_name'),
+                    )
+                elif item['type'] == 'resource':
+                    self.add_resource(
+                        price_uuid=item['price_uuid'],
+                        resource_uuid=item['resource_uuid'],
+                        start_datetime = item.get('start_datetime'),
+                        slot_duration_minutes = item.get('slot_duration_minutes'),
+                        slot_count = item.get('slot_count'),
+                        custom_amount=item.get('custom_amount'),
+                        options=item.get('options', []),
+                        custom_form=item.get('custom_form', {}),
+                        firstname=item.get('firstname'),
+                        lastname=item.get('lastname'),
+                        promotional_code_name=item.get('promotional_code_name'),
+                    )
+            except Exception as exc:
+                validation_errors.append(exc)
+
+        return validation_errors

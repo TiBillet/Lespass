@@ -33,7 +33,6 @@ class CommandeService:
     """
 
     @staticmethod
-    @transaction.atomic
     def materialiser(panier, user, first_name, last_name, email):
         """
         Transforme le panier en objets DB et retourne la Commande créée.
@@ -46,6 +45,10 @@ class CommandeService:
         Returns:
             Commande: la commande créée avec son status (PENDING si Stripe
                 nécessaire, PAID si commande gratuite).
+            OU
+            Errors : si le panier.revalidate_all() a échoué, retourne la liste des erreurs
+
+            Et retourne un flag (bool) indiquant si la materialisation à réussi ou non
 
         Raises:
             CommandeServiceError: si le panier est invalide ou vide.
@@ -54,299 +57,319 @@ class CommandeService:
 
         / Transforms the cart into DB objects and returns the created Commande.
         """
-        from BaseBillet.models import (
-            Commande, LigneArticle, Membership, PaymentMethod, Price,
-            Reservation, SaleOrigin,
-        )
-        from ApiBillet.serializers import dec_to_int, get_or_create_price_sold
 
-        if panier.is_empty():
-            raise CommandeServiceError(_("Cart is empty."))
+        # On utilise explicitement un context manager transaction.atomic() plutôt
+        # que le décorateur, afin de pouvoir activer l'isolation SERIALIZABLE sur
+        # la transaction extérieure. `validate_new_booking` est ensuite appelé
+        # à l'intérieur de cette transaction et hérite de l'isolation SERIALIZABLE
+        # de PostgreSQL, ce qui protège les créneaux de ressources contre les
+        # sur-réservations concurrentes (lecture de la capacité + insertion de
+        # Booking atomisées par SSI).
+        # / We use an explicit transaction.atomic() context manager rather than the
+        # decorator so we can enable SERIALIZABLE isolation on the outer transaction.
+        # validate_new_booking is then called inside this transaction and inherits
+        # the SERIALIZABLE isolation, protecting resource slots from concurrent
+        # overbooking (capacity reads + Booking inserts are atomic under SSI).
+        already_in_transaction = connection.in_atomic_block
 
-        # Phase 0 : re-validation complète des items contre la DB.
-        # Si stock épuisé, price dépublié, adhésion supprimée, etc. → InvalidItemError
-        # qui remonte naturellement (atomic rollback → aucune écriture DB).
-        # / Phase 0: full re-validation of items against DB.
-        panier.revalidate_all()
-
-        # Resolution des prenom/nom finaux pour la Commande pivot :
-        # - priorite aux valeurs stockees sur le premier item membership qui en a
-        #   (collectees par membership/form.html),
-        # - sinon fallback sur les args de la fonction (user.first_name).
-        # Ainsi un utilisateur sans profil renseigne obtient une Commande
-        # avec de vrais prenom/nom des que le panier contient une adhesion.
-        # / Resolve final first/last name for the Commande pivot:
-        # - prioritize the first membership item with names (from the form),
-        # - fallback to function args (user.first_name) otherwise.
-        # Ensures users without a filled profile still get proper names.
-        buyer_firstname = first_name
-        buyer_lastname = last_name
-        for item in panier.items():
-            if item.get('type') != 'membership':
-                continue
-            item_fn = (item.get('firstname') or '').strip()
-            item_ln = (item.get('lastname') or '').strip()
-            if item_fn and item_ln:
-                buyer_firstname = item_fn
-                buyer_lastname = item_ln
-                break
-
-        # Resolution des promo codes : chaque item porte son propre
-        # `promotional_code_name` (stocke par PanierSession.add_* apres
-        # validation stricte : actif, is_usable, lie au product du price).
-        # Helper qui transforme le nom en instance PromotionalCode, ou None.
-        # On charge en batch les codes necessaires pour limiter les queries.
-        # / Per-item promo codes: each item carries `promotional_code_name`
-        # (server-validated at add time). Helper maps name→instance. Batch load.
-        from BaseBillet.models import PromotionalCode
-        needed_names = {
-            item.get('promotional_code_name')
-            for item in panier.items()
-            if item.get('promotional_code_name')
-        }
-        promo_by_name = {
-            p.name: p
-            for p in PromotionalCode.objects.filter(name__in=needed_names)
-        } if needed_names else {}
-
-        def _resolve_promo(item):
-            name = item.get('promotional_code_name')
-            return promo_by_name.get(name) if name else None
-
-        # -- Création de la Commande pivot (status=PENDING) --
-        # Le Commande.promo_code pivot prend le premier code rencontre (il
-        # est purement informatif — l'application se fait ligne par ligne).
-        # / The Commande.promo_code pivot takes the first code found (purely
-        # informative — actual application is done line-by-line).
-        pivot_promo_code = None
-        for item in panier.items():
-            pivot_promo_code = _resolve_promo(item)
-            if pivot_promo_code:
-                break
-
-        commande = Commande.objects.create(
-            user=user,
-            email_acheteur=email,
-            first_name=buyer_firstname,
-            last_name=buyer_lastname,
-            status=Commande.PENDING,
-            promo_code=pivot_promo_code,
-        )
-
-        all_lines = []
-        total_centimes = 0
-
-        # -- Phase 1 : Memberships en premier --
-        # -- Phase 1: Memberships first --
-        for item in panier.items():
-            if item['type'] != 'membership':
-                continue
-            price = Price.objects.get(uuid=item['price_uuid'])
-            amount_dec = CommandeService._resolve_amount(price, item)
-
-            # Code promo de cet item specifiquement (pas du panier global).
-            # / Promo code for this specific item (not cart-global).
-            item_promo_code = _resolve_promo(item)
-
-            # Prenom/nom : priorite aux valeurs de l'item (collectees par
-            # membership/form.html), puis fallback sur les args de la fonction
-            # (issus de user.first_name / user.last_name).
-            # / First/last name: prioritize item values (collected by the
-            # membership form), fallback to function args (user.first_name).
-            item_firstname = (item.get('firstname') or '').strip()
-            item_lastname = (item.get('lastname') or '').strip()
-            resolved_firstname = item_firstname or first_name
-            resolved_lastname = item_lastname or last_name
-
-            membership = Membership.objects.create(
-                user=user,
-                price=price,
-                commande=commande,
-                contribution_value=amount_dec,
-                status=Membership.WAITING_PAYMENT,
-                first_name=resolved_firstname,
-                last_name=resolved_lastname,
-                newsletter=False,
-                custom_form=item.get('custom_form') or None,
-            )
-
-            if item.get('options'):
-                from BaseBillet.models import OptionGenerale
-                opts = OptionGenerale.objects.filter(
-                    uuid__in=item['options']
+        with transaction.atomic():
+            if not already_in_transaction:
+                connection.cursor().execute(
+                    'SET TRANSACTION ISOLATION LEVEL SERIALIZABLE'
                 )
-                if opts.exists():
-                    membership.option_generale.set(opts)
 
-            price_sold = get_or_create_price_sold(price, custom_amount=amount_dec)
-            amount_cts = dec_to_int(amount_dec)
-            # Le code n'est applique que si lie au product (double-check
-            # redondant avec la validation a l'ajout, mais safe).
-            # / Code applied only if linked to the product (redundant safety check).
-            applicable_promo = item_promo_code if (
-                item_promo_code and item_promo_code.product_id == price.product_id
-            ) else None
-            line = LigneArticle.objects.create(
-                pricesold=price_sold,
-                membership=membership,
-                payment_method=PaymentMethod.STRIPE_NOFED,
-                amount=amount_cts,
-                qty=1,
-                sale_origin=SaleOrigin.LESPASS,
-                promotional_code=applicable_promo,
+            from BaseBillet.models import (
+                Commande, LigneArticle, Membership, PaymentMethod, Price,
+                Reservation, SaleOrigin,
             )
+            from ApiBillet.serializers import dec_to_int, get_or_create_price_sold
 
-            all_lines.append(line)
-            total_centimes += amount_cts
+            if panier.is_empty():
+                raise CommandeServiceError(_("Cart is empty."))
 
-        # -- Phase 2 : Reservations groupées par event_uuid --
-        # -- Phase 2: Reservations grouped by event_uuid --
-        from BaseBillet.models import Event
-        tickets_par_event = {}
-        for item in panier.items():
-            if item['type'] != 'ticket':
-                continue
-            tickets_par_event.setdefault(item['event_uuid'], []).append(item)
+            # Phase 0 : re-validation complète des items contre la DB.
+            # Si stock épuisé, price dépublié, adhésion supprimée, etc. → InvalidItemError
+            # qui remonte naturellement (atomic rollback → aucune écriture DB).
+            # / Phase 0: full re-validation of items against DB.
+            errors = panier.revalidate_all()
+            if len(errors) > 0:
+                return errors, False
 
-        for event_uuid, items_event in tickets_par_event.items():
-            event = Event.objects.get(uuid=event_uuid)
-            # Construction d'un products_dict conforme au format attendu par TicketCreator
-            # / Build a products_dict compatible with TicketCreator's expected format
-            products_dict = {}
-            custom_amounts = {}
-            for it in items_event:
-                price = Price.objects.get(uuid=it['price_uuid'])
-                qty = int(it['qty'])
-                products_dict.setdefault(price.product, {})
-                products_dict[price.product][price] = products_dict[price.product].get(price, 0) + qty
-                if it.get('custom_amount'):
-                    custom_amounts[price.uuid] = Decimal(str(it['custom_amount']))
-
-            # Tous les items de cet event partagent options + custom_form
-            # (une seule soumission de booking_form.html par event).
-            # / All items from this event share options + custom_form
-            # (single submission of booking_form.html per event).
-            first_item = items_event[0]
-            custom_form = first_item.get('custom_form') or None
-            options_uuids = first_item.get('options') or []
-
-            # Code promo pour ce batch d'event : premier code trouve parmi les
-            # items. En pratique tous les items d'un meme event ont le meme
-            # code (un seul champ `promotional_code` par submission) mais ce
-            # resolveur est defensif au cas ou. TicketCreator applique ensuite
-            # le code au product matching via get_or_create_price_sold.
-            # / Promo code for this event batch: first found among items.
-            # TicketCreator applies it to matching product via get_or_create_price_sold.
-            event_promo_code = None
-            for it in items_event:
-                event_promo_code = _resolve_promo(it)
-                if event_promo_code:
+            # Resolution des prenom/nom finaux pour la Commande pivot :
+            # - priorite aux valeurs stockees sur le premier item membership qui en a
+            #   (collectees par membership/form.html),
+            # - sinon fallback sur les args de la fonction (user.first_name).
+            # Ainsi un utilisateur sans profil renseigne obtient une Commande
+            # avec de vrais prenom/nom des que le panier contient une adhesion.
+            # / Resolve final first/last name for the Commande pivot:
+            # - prioritize the first membership item with names (from the form),
+            # - fallback to function args (user.first_name) otherwise.
+            # Ensures users without a filled profile still get proper names.
+            buyer_firstname = first_name
+            buyer_lastname = last_name
+            for item in panier.items():
+                if item.get('type') != 'membership':
+                    continue
+                item_fn = (item.get('firstname') or '').strip()
+                item_ln = (item.get('lastname') or '').strip()
+                if item_fn and item_ln:
+                    buyer_firstname = item_fn
+                    buyer_lastname = item_ln
                     break
 
-            reservation = Reservation.objects.create(
-                user_commande=user,
-                event=event,
-                commande=commande,
-                custom_form=custom_form,
-                status=Reservation.CREATED,
+            # Resolution des promo codes : chaque item porte son propre
+            # `promotional_code_name` (stocke par PanierSession.add_* apres
+            # validation stricte : actif, is_usable, lie au product du price).
+            # Helper qui transforme le nom en instance PromotionalCode, ou None.
+            # On charge en batch les codes necessaires pour limiter les queries.
+            # / Per-item promo codes: each item carries `promotional_code_name`
+            # (server-validated at add time). Helper maps name→instance. Batch load.
+            from BaseBillet.models import PromotionalCode
+            needed_names = {
+                item.get('promotional_code_name')
+                for item in panier.items()
+                if item.get('promotional_code_name')
+            }
+            promo_by_name = {
+                p.name: p
+                for p in PromotionalCode.objects.filter(name__in=needed_names)
+            } if needed_names else {}
+
+            def _resolve_promo(item):
+                name = item.get('promotional_code_name')
+                return promo_by_name.get(name) if name else None
+
+            # -- Création de la Commande pivot (status=PENDING) --
+            # Le Commande.promo_code pivot prend le premier code rencontre (il
+            # est purement informatif — l'application se fait ligne par ligne).
+            # / The Commande.promo_code pivot takes the first code found (purely
+            # informative — actual application is done line-by-line).
+            pivot_promo_code = None
+            for item in panier.items():
+                pivot_promo_code = _resolve_promo(item)
+                if pivot_promo_code:
+                    break
+
+            commande = Commande.objects.create(
+                user=user,
+                email_acheteur=email,
+                first_name=buyer_firstname,
+                last_name=buyer_lastname,
+                status=Commande.PENDING,
+                promo_code=pivot_promo_code,
             )
-            if options_uuids:
-                from BaseBillet.models import OptionGenerale
-                opts = OptionGenerale.objects.filter(uuid__in=options_uuids)
-                if opts.exists():
-                    reservation.options.set(opts)
 
-            # TicketCreator gère Tickets + LigneArticle. On bloque son Stripe.
-            # / TicketCreator handles Tickets + LigneArticle. We disable its Stripe.
-            from BaseBillet.validators import TicketCreator
-            creator = TicketCreator(
-                reservation=reservation,
-                products_dict=products_dict,
-                promo_code=event_promo_code,
-                custom_amounts=custom_amounts,
-                sale_origin=SaleOrigin.LESPASS,
-                create_checkout=False,  # <-- clé : pas de Stripe ici
-            )
-            for line in creator.list_line_article_sold:
-                all_lines.append(line)
-                total_centimes += int(line.amount * line.qty)
+            all_lines = []
+            total_centimes = 0
 
-        # -- Phase 3 : Reservation de resource -- #
-        # -- Phase 3 : Reservation de resource -- #
-        from booking.models import Resource
-        from booking.booking_engine import validate_new_booking
-        tickets_par_event = {}
-        for item in panier.items():
-            if item['type'] != 'resource':
-                continue
+            # -- Phase 1 : Memberships en premier --
+            # -- Phase 1: Memberships first --
+            for item in panier.items():
+                if item['type'] != 'membership':
+                    continue
+                price = Price.objects.get(uuid=item['price_uuid'])
+                amount_dec = CommandeService._resolve_amount(price, item)
 
-            price = Price.objects.get(uuid=item['price_uuid'])
-            amount_dec = CommandeService._resolve_amount(price, item)
+                # Code promo de cet item specifiquement (pas du panier global).
+                # / Promo code for this specific item (not cart-global).
+                item_promo_code = _resolve_promo(item)
 
-            # Code promo de cet item specifiquement (pas du panier global).
-            # / Promo code for this specific item (not cart-global).
-            item_promo_code = _resolve_promo(item)
+                # Prenom/nom : priorite aux valeurs de l'item (collectees par
+                # membership/form.html), puis fallback sur les args de la fonction
+                # (issus de user.first_name / user.last_name).
+                # / First/last name: prioritize item values (collected by the
+                # membership form), fallback to function args (user.first_name).
+                item_firstname = (item.get('firstname') or '').strip()
+                item_lastname = (item.get('lastname') or '').strip()
+                resolved_firstname = item_firstname or first_name
+                resolved_lastname = item_lastname or last_name
 
-            # Prenom/nom : priorite aux valeurs de l'item (collectees par
-            # membership/form.html), puis fallback sur les args de la fonction
-            # (issus de user.first_name / user.last_name).
-            # / First/last name: prioritize item values (collected by the
-            # membership form), fallback to function args (user.first_name).
-            item_firstname = (item.get('firstname') or '').strip()
-            item_lastname = (item.get('lastname') or '').strip()
+                membership = Membership.objects.create(
+                    user=user,
+                    price=price,
+                    commande=commande,
+                    contribution_value=amount_dec,
+                    status=Membership.WAITING_PAYMENT,
+                    first_name=resolved_firstname,
+                    last_name=resolved_lastname,
+                    newsletter=False,
+                    custom_form=item.get('custom_form') or None,
+                )
 
-            # TODO-ANTO : USE this
-            resolved_firstname = item_firstname or first_name
-            resolved_lastname = item_lastname or last_name
+                if item.get('options'):
+                    from BaseBillet.models import OptionGenerale
+                    opts = OptionGenerale.objects.filter(
+                        uuid__in=item['options']
+                    )
+                    if opts.exists():
+                        membership.option_generale.set(opts)
 
-            resource = Resource.objects.get(pk=item.get('resource_uuid'))
-
-            is_valid, result, checkout_url = validate_new_booking(
-                resource              = resource,
-                start_datetime        = datetime.fromisoformat(item.get('start_datetime')),
-                slot_duration_minutes = int(item.get('slot_duration_minutes')),
-                slot_count            = int(item.get('slot_count')),
-                # TODO-ANTO add firstname ?
-                member                = user,
-                commande = commande,
-                price = price,
-                external_payment_method=PaymentMethod.STRIPE_NOFED,
-                create_checkout = False,
-            )
-            if not is_valid:
-                raise CommandeServiceError(_("Booking not valide : ") + result)
-
-            price_sold = get_or_create_price_sold(price, custom_amount=amount_dec)
-            amount_cts = dec_to_int(price_sold.prix)
-
-            # Le code n'est applique que si lie au product (double-check
-            # redondant avec la validation a l'ajout, mais safe).
-            # / Code applied only if linked to the product (redundant safety check).
-            applicable_promo = item_promo_code if (
+                price_sold = get_or_create_price_sold(price, custom_amount=amount_dec)
+                amount_cts = dec_to_int(amount_dec)
+                # Le code n'est applique que si lie au product (double-check
+                # redondant avec la validation a l'ajout, mais safe).
+                # / Code applied only if linked to the product (redundant safety check).
+                applicable_promo = item_promo_code if (
                     item_promo_code and item_promo_code.product_id == price.product_id
-            ) else None
+                ) else None
+                line = LigneArticle.objects.create(
+                    pricesold=price_sold,
+                    membership=membership,
+                    payment_method=PaymentMethod.STRIPE_NOFED,
+                    amount=amount_cts,
+                    qty=1,
+                    sale_origin=SaleOrigin.LESPASS,
+                    promotional_code=applicable_promo,
+                )
 
-            for ligne in result.lignearticles.all():
-                ligne.promotional_code = applicable_promo
-                ligne.save()
+                all_lines.append(line)
+                total_centimes += amount_cts
 
-                all_lines.append(ligne)
-            total_centimes += amount_cts
+            # -- Phase 2 : Reservations groupées par event_uuid --
+            # -- Phase 2: Reservations grouped by event_uuid --
+            from BaseBillet.models import Event
+            tickets_par_event = {}
+            for item in panier.items():
+                if item['type'] != 'ticket':
+                    continue
+                tickets_par_event.setdefault(item['event_uuid'], []).append(item)
+
+            for event_uuid, items_event in tickets_par_event.items():
+                event = Event.objects.get(uuid=event_uuid)
+                # Construction d'un products_dict conforme au format attendu par TicketCreator
+                # / Build a products_dict compatible with TicketCreator's expected format
+                products_dict = {}
+                custom_amounts = {}
+                for it in items_event:
+                    price = Price.objects.get(uuid=it['price_uuid'])
+                    qty = int(it['qty'])
+                    products_dict.setdefault(price.product, {})
+                    products_dict[price.product][price] = products_dict[price.product].get(price, 0) + qty
+                    if it.get('custom_amount'):
+                        custom_amounts[price.uuid] = Decimal(str(it['custom_amount']))
+
+                # Tous les items de cet event partagent options + custom_form
+                # (une seule soumission de booking_form.html par event).
+                # / All items from this event share options + custom_form
+                # (single submission of booking_form.html per event).
+                first_item = items_event[0]
+                custom_form = first_item.get('custom_form') or None
+                options_uuids = first_item.get('options') or []
+
+                # Code promo pour ce batch d'event : premier code trouve parmi les
+                # items. En pratique tous les items d'un meme event ont le meme
+                # code (un seul champ `promotional_code` par submission) mais ce
+                # resolveur est defensif au cas ou. TicketCreator applique ensuite
+                # le code au product matching via get_or_create_price_sold.
+                # / Promo code for this event batch: first found among items.
+                # TicketCreator applies it to matching product via get_or_create_price_sold.
+                event_promo_code = None
+                for it in items_event:
+                    event_promo_code = _resolve_promo(it)
+                    if event_promo_code:
+                        break
+
+                reservation = Reservation.objects.create(
+                    user_commande=user,
+                    event=event,
+                    commande=commande,
+                    custom_form=custom_form,
+                    status=Reservation.CREATED,
+                )
+                if options_uuids:
+                    from BaseBillet.models import OptionGenerale
+                    opts = OptionGenerale.objects.filter(uuid__in=options_uuids)
+                    if opts.exists():
+                        reservation.options.set(opts)
+
+                # TicketCreator gère Tickets + LigneArticle. On bloque son Stripe.
+                # / TicketCreator handles Tickets + LigneArticle. We disable its Stripe.
+                from BaseBillet.validators import TicketCreator
+                creator = TicketCreator(
+                    reservation=reservation,
+                    products_dict=products_dict,
+                    promo_code=event_promo_code,
+                    custom_amounts=custom_amounts,
+                    sale_origin=SaleOrigin.LESPASS,
+                    create_checkout=False,  # <-- clé : pas de Stripe ici
+                )
+                for line in creator.list_line_article_sold:
+                    all_lines.append(line)
+                    total_centimes += int(line.amount * line.qty)
+
+            # -- Phase 3 : Reservation de resource -- #
+            # -- Phase 3 : Reservation de resource -- #
+            from booking.models import Resource
+            from booking.booking_engine import validate_new_booking
+            tickets_par_event = {}
+            for item in panier.items():
+                if item['type'] != 'resource':
+                    continue
+
+                price = Price.objects.get(uuid=item['price_uuid'])
+                amount_dec = CommandeService._resolve_amount(price, item)
+
+                # Code promo de cet item specifiquement (pas du panier global).
+                # / Promo code for this specific item (not cart-global).
+                item_promo_code = _resolve_promo(item)
+
+                # Prenom/nom : priorite aux valeurs de l'item (collectees par
+                # membership/form.html), puis fallback sur les args de la fonction
+                # (issus de user.first_name / user.last_name).
+                # / First/last name: prioritize item values (collected by the
+                # membership form), fallback to function args (user.first_name).
+                item_firstname = (item.get('firstname') or '').strip()
+                item_lastname = (item.get('lastname') or '').strip()
+
+                # TODO-ANTO : USE this
+                resolved_firstname = item_firstname or first_name
+                resolved_lastname = item_lastname or last_name
+
+                resource = Resource.objects.get(pk=item.get('resource_uuid'))
+
+                is_valid, result, checkout_url = validate_new_booking(
+                    resource              = resource,
+                    start_datetime        = datetime.fromisoformat(item.get('start_datetime')),
+                    slot_duration_minutes = int(item.get('slot_duration_minutes')),
+                    slot_count            = int(item.get('slot_count')),
+                    # TODO-ANTO add firstname ?
+                    member                = user,
+                    commande = commande,
+                    price = price,
+                    external_payment_method=PaymentMethod.STRIPE_NOFED,
+                    create_checkout = False,
+                )
+                if not is_valid:
+                    raise CommandeServiceError(_("Booking not valide : ") + result)
+
+                # Le code n'est applique que si lie au product (double-check
+                # redondant avec la validation a l'ajout, mais safe).
+                # / Code applied only if linked to the product (redundant safety check).
+                applicable_promo = item_promo_code if (
+                        item_promo_code and item_promo_code.product_id == price.product_id
+                ) else None
+
+                for ligne in result.lignearticles.all():
+                    ligne.promotional_code = applicable_promo
+                    ligne.save()
+
+                    all_lines.append(ligne)
+                    total_centimes += ligne.amount
 
 
-        # -- Phase 3/4 : Stripe ou gratuit --
-        # -- Phase 3/4: Stripe or free --
-        if total_centimes > 0:
-            CommandeService._creer_paiement_stripe(commande, user, all_lines)
-            # Status reste PENDING — Stripe webhook basculera en PAID via signaux
-        else:
-            CommandeService._finaliser_gratuit(commande, all_lines)
+            # -- Phase 3/4 : Stripe ou gratuit --
+            # -- Phase 3/4: Stripe or free --
+            if total_centimes > 0:
+                CommandeService._creer_paiement_stripe(commande, user, all_lines)
+                # Status reste PENDING — Stripe webhook basculera en PAID via signaux
+            else:
+                CommandeService._finaliser_gratuit(commande, all_lines)
 
-        logger.info(
-            f"CommandeService.materialiser OK : commande={commande.uuid_8()}, "
-            f"lignes={len(all_lines)}, total_cts={total_centimes}, status={commande.status}"
-        )
-        return commande
+            logger.info(
+                f"CommandeService.materialiser OK : commande={commande.uuid_8()}, "
+                f"lignes={len(all_lines)}, total_cts={total_centimes}, status={commande.status}"
+            )
+            return commande, True
 
     @staticmethod
     def _resolve_amount(price, item):
