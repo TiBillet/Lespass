@@ -1,5 +1,5 @@
 {% extends "booking/booking_base.html" %}
-{% load i18n %}
+{% load i18n static %}
 
 <!--
 LOCALISATION : booking/templates/booking/views/home.html
@@ -11,10 +11,8 @@ Flux / Flow:
   GET /booking/
   Contexte / Context: resources_groups, ungrouped_resources
 
-Affiche les noms des ressources avec un lien vers leur page de détail.
-Affiche aussi la description si la ressource en a une.
-/ Shows resource names with a link to their detail page.
-/ Also shows the description when the resource has one.
+Affiche les ressources sous forme de cartes, groupées par ResourceGroup.
+/ Shows resources as cards, grouped by ResourceGroup.
 -->
 
 {% block title %}{% translate "Réservations" %}{% endblock %}
@@ -25,20 +23,51 @@ Affiche aussi la description si la ressource en a une.
 <h1 class="mb-4">{% translate "Réservations" %}</h1>
 
 <!--
-Ressources sans groupe affichées en premier, par ordre alphabétique.
-/ Ungrouped resources shown first, alphabetically.
+Ressources sans groupe affichées en premier, sous forme de cartes.
+/ Ungrouped resources shown first, as cards.
 -->
-{% for resource in ungrouped_resources %}
-<div class="mb-3" data-testid="booking-resource-item-{{ resource.pk }}">
-  <a href="{% url 'booking-resource' pk=resource.pk %}"
-     class="fs-5">
-    {{ resource.product.name }}
-  </a>
-  {% if resource.description %}
-  <p class="text-muted small mb-0">{{ resource.description }}</p>
-  {% endif %}
+{% if ungrouped_resources %}
+<div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mb-5">
+  {% for resource in ungrouped_resources %}
+  <div class="col" data-testid="booking-resource-item-{{ resource.pk }}">
+    <div class="card h-100" data-testid="booking-resource-card-{{ resource.pk }}">
+      {% if resource.product.img %}
+        <img src="{{ resource.product.img.hdr.url }}"
+             alt="{{ resource.product.name }}"
+             class="card-img-top"
+             style="height: 180px; object-fit: cover;"
+             data-testid="booking-resource-image-{{ resource.pk }}">
+      {% else %}
+        <div class="card-img-top bg-secondary-subtle d-flex align-items-center justify-content-center"
+             style="height: 180px;"
+             data-testid="booking-resource-image-placeholder-{{ resource.pk }}">
+          <i class="bi bi-image text-secondary" style="font-size: 3rem;" aria-hidden="true"></i>
+        </div>
+      {% endif %}
+      <div class="card-body d-flex flex-column">
+        <h5 class="card-title">
+          <a href="{% url 'booking-resource' pk=resource.pk %}"
+             class="text-decoration-none"
+             data-testid="booking-resource-link-{{ resource.pk }}">
+            {{ resource.product.name }}
+          </a>
+        </h5>
+        {% if resource.product.short_description %}
+          <p class="card-text text-muted small mb-0">{{ resource.product.short_description }}</p>
+        {% endif %}
+        <div class="d-flex justify-content-end mt-auto pt-3">
+          <a href="{% url 'booking-resource' pk=resource.pk %}"
+             class="btn btn-primary btn-sm"
+             data-testid="booking-resource-availability-btn-{{ resource.pk }}">
+            {% translate "Voir les disponibilités" %}
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
 </div>
-{% endfor %}
+{% endif %}
 
 <!--
 Groupes de ressources, triés par nom alphabétique.
@@ -52,17 +81,46 @@ Groupes de ressources, triés par nom alphabétique.
   <p class="text-muted mb-3">{{ group_entry.group.description }}</p>
 {% endif %}
 
-{% for resource in group_entry.resources %}
-<div class="mb-3" data-testid="booking-resource-item-{{ resource.pk }}">
-  <a href="{% url 'booking-resource' pk=resource.pk %}"
-     class="fs-5">
-    {{ resource.product.name }}
-  </a>
-  {% if resource.description %}
-    <p class="text-muted small mb-0">{{ resource.product.short_description }}</p>
-  {% endif %}
+<div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mb-5">
+  {% for resource in group_entry.resources %}
+  <div class="col" data-testid="booking-resource-item-{{ resource.pk }}">
+    <div class="card h-100" data-testid="booking-resource-card-{{ resource.pk }}">
+      {% if resource.product.img %}
+        <img src="{{ resource.product.img.hdr.url }}"
+             alt="{{ resource.product.name }}"
+             class="card-img-top"
+             style="height: 180px; object-fit: cover;"
+             data-testid="booking-resource-image-{{ resource.pk }}">
+      {% else %}
+        <div class="card-img-top bg-secondary-subtle d-flex align-items-center justify-content-center"
+             style="height: 180px;"
+             data-testid="booking-resource-image-placeholder-{{ resource.pk }}">
+          <i class="bi bi-image text-secondary" style="font-size: 3rem;" aria-hidden="true"></i>
+        </div>
+      {% endif %}
+      <div class="card-body d-flex flex-column">
+        <h5 class="card-title">
+          <a href="{% url 'booking-resource' pk=resource.pk %}"
+             class="text-decoration-none"
+             data-testid="booking-resource-link-{{ resource.pk }}">
+            {{ resource.product.name }}
+          </a>
+        </h5>
+        {% if resource.product.short_description %}
+          <p class="card-text text-muted small mb-0">{{ resource.product.short_description }}</p>
+        {% endif %}
+        <div class="d-flex justify-content-end mt-auto pt-3">
+          <a href="{% url 'booking-resource' pk=resource.pk %}"
+             class="btn btn-primary btn-sm"
+             data-testid="booking-resource-availability-btn-{{ resource.pk }}">
+            {% translate "Voir les disponibilités" %}
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
 </div>
-{% endfor %}
 {% endfor %}
 
 <!--
