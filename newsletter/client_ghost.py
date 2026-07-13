@@ -105,6 +105,47 @@ def forger_token_ghost(cle_admin_ghost):
     )
 
 
+def tester_la_connexion(url_instance_ghost, cle_admin_ghost):
+    """
+    Verifie que l'URL et la cle Admin API repondent. NE MODIFIE RIEN dans Ghost.
+    / Check that the URL and Admin key work. CHANGES NOTHING in Ghost.
+
+    LOCALISATION : newsletter/client_ghost.py
+
+    On interroge l'endpoint des membres avec `limit=1` : c'est le plus leger, et il exige
+    une authentification valide. Si Ghost repond 200, l'URL et la cle sont bonnes.
+    / We query the members endpoint with limit=1: the lightest call that still requires
+    valid authentication.
+
+    :param url_instance_ghost: l'URL de l'instance
+    :param cle_admin_ghost: la cle Admin API en clair
+    :return: None si tout va bien
+    :raises GhostInjoignable, GhostCleRefusee, GhostReponseInattendue
+    """
+    url_nettoyee = url_instance_ghost.rstrip("/")
+    entetes = {"Authorization": f"Ghost {forger_token_ghost(cle_admin_ghost)}"}
+
+    try:
+        reponse = requests.get(
+            f"{url_nettoyee}/ghost/api/admin/members/",
+            params={"limit": 1},
+            headers=entetes,
+            timeout=DELAI_MAX_DE_REPONSE_EN_SECONDES,
+        )
+    except requests.exceptions.RequestException as erreur_reseau:
+        raise GhostInjoignable(f"Instance Ghost injoignable : {erreur_reseau}")
+
+    if reponse.status_code in (401, 403):
+        raise GhostCleRefusee(
+            f"Ghost a refuse la cle Admin API (HTTP {reponse.status_code})."
+        )
+
+    if not reponse.ok:
+        raise GhostReponseInattendue(
+            f"Ghost a repondu HTTP {reponse.status_code} : {reponse.text[:300]}"
+        )
+
+
 def creer_brouillon(url_instance_ghost, cle_admin_ghost, titre, contenu_html):
     """
     Depose un BROUILLON de post dans Ghost et renvoie son URL d'edition.

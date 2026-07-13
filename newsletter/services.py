@@ -47,6 +47,63 @@ def _journaliser(ghost_config, message):
     ghost_config.save()
 
 
+def lire_la_configuration_ghost():
+    """
+    Lit l'URL et la cle Admin API de l'instance Ghost du tenant courant.
+    / Read the current tenant's Ghost URL and Admin API key.
+
+    LOCALISATION : newsletter/services.py
+
+    Partage par les deux actions du panneau (tester la connexion, generer un brouillon) :
+    elles ont toutes les deux besoin de la config, et toutes les deux du meme garde-fou.
+
+    LE GARDE-FOU : la cle en base peut etre stockee EN CLAIR. GhostConfigAdmin.save_model
+    n'appelle set_api_key() (qui chiffre) QUE si le test de connexion a Ghost a reussi. Si
+    le gestionnaire a saisi sa cle alors que Ghost etait injoignable, elle est en base non
+    chiffree, et fernet_decrypt leve InvalidToken. Sans ce try/except, l'admin ferait un
+    500 au lieu d'afficher un message.
+    / THE GUARD: the stored key may be UNENCRYPTED — the admin only encrypts it when the
+    Ghost connection test succeeds. fernet_decrypt then raises InvalidToken -> 500.
+
+    :return: (url_instance_ghost, cle_admin_ghost)
+    :raises GhostNonConfigure: rien de renseigne, ou cle illisible
+    """
+    ghost_config = GhostConfig.get_solo()
+    url_instance_ghost = ghost_config.ghost_url
+
+    try:
+        cle_admin_ghost = ghost_config.get_api_key()
+    except InvalidToken:
+        raise GhostNonConfigure(
+            _(
+                "La clé Admin API enregistrée est illisible. Ressaisissez-la et "
+                "enregistrez à nouveau, Ghost étant joignable."
+            )
+        )
+
+    if not url_instance_ghost or not cle_admin_ghost:
+        raise GhostNonConfigure(
+            _("L'instance Ghost n'est pas configurée (URL ou clé Admin API manquante).")
+        )
+
+    return url_instance_ghost, cle_admin_ghost
+
+
+def journaliser(message):
+    """
+    Ecrit une ligne horodatee dans GhostConfig.ghost_last_log.
+    / Write a timestamped line into GhostConfig.ghost_last_log.
+
+    LOCALISATION : newsletter/services.py
+
+    Le champ est ECRASE, pas complete : c'est ce que fait deja le code Ghost existant, on
+    reste coherent. C'est le seul indice que le gestionnaire aura apres coup.
+    / The field is OVERWRITTEN, not appended: consistent with the existing Ghost code.
+    """
+    ghost_config = GhostConfig.get_solo()
+    _journaliser(ghost_config, message)
+
+
 def creer_brouillon_newsletter(nombre_de_jours):
     """
     Fabrique un brouillon de newsletter dans l'instance Ghost du tenant courant.
@@ -72,30 +129,8 @@ def creer_brouillon_newsletter(nombre_de_jours):
     :raises AucunEvenement: aucun evenement sur la periode
     :raises ErreurGhost: Ghost injoignable, cle refusee, reponse inattendue
     """
+    url_instance_ghost, cle_admin_ghost = lire_la_configuration_ghost()
     ghost_config = GhostConfig.get_solo()
-    url_instance_ghost = ghost_config.ghost_url
-
-    # La cle en base peut etre stockee EN CLAIR : GhostConfigAdmin.save_model n'appelle
-    # set_api_key() (qui chiffre) QUE si le test de connexion a Ghost a reussi. Si le
-    # gestionnaire a saisi sa cle alors que Ghost etait injoignable, elle est en base non
-    # chiffree, et fernet_decrypt leve InvalidToken. Sans ce garde-fou, l'admin ferait un
-    # 500 au lieu d'afficher un message.
-    # / The stored key may be UNENCRYPTED: the admin only encrypts it when the Ghost
-    # connection test succeeds. fernet_decrypt then raises InvalidToken -> 500 in the admin.
-    try:
-        cle_admin_ghost = ghost_config.get_api_key()
-    except InvalidToken:
-        raise GhostNonConfigure(
-            _(
-                "La clé Admin API enregistrée est illisible. Ressaisissez-la et "
-                "enregistrez à nouveau, Ghost étant joignable."
-            )
-        )
-
-    if not url_instance_ghost or not cle_admin_ghost:
-        raise GhostNonConfigure(
-            _("L'instance Ghost n'est pas configurée (URL ou clé Admin API manquante).")
-        )
 
     date_debut = timezone.now()
     date_fin = timezone.now() + timedelta(days=nombre_de_jours)

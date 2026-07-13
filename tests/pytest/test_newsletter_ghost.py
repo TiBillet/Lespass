@@ -419,6 +419,124 @@ def _evenements_eligibles_chez(tenant, est_un_voisin, slugs_filter, slugs_exclud
     return eligibles
 
 
+def _premier_voisin_federe(tenant_courant):
+    """Le premier lieu federe qui n'est pas le tenant lui-meme."""
+    with tenant_context(tenant_courant):
+        for place in FederatedPlace.objects.select_related("tenant"):
+            if place.tenant.schema_name != tenant_courant.schema_name:
+                return place.tenant
+    return None
+
+
+def _creer_event_chez_le_voisin(voisin, nom, **drapeaux):
+    """
+    Cree un evenement PUBLIE et FUTUR dans le schema d'un voisin, avec les drapeaux
+    demandes (private=True, archived=True...). A supprimer par l'appelant.
+    / Create a PUBLISHED, FUTURE event inside a neighbour's schema. Caller must delete it.
+
+    Ces tests tournent sur la base de DEV : la suppression est OBLIGATOIRE.
+    / These tests run on the DEV database: deletion is MANDATORY.
+
+    PIEGE : `img=""` et `sticker_img=""` sont INDISPENSABLES. Laisses a NULL (leur defaut),
+    la SUPPRESSION de l'event plante : django-stdimage a `delete_orphans=True` sur ces deux
+    champs, et son signal post_delete fait un os.path.splitext(None) -> TypeError. La
+    fixture ne pourrait alors pas nettoyer derriere elle, et polluerait la base de dev.
+    (C'est un bug du projet, hors perimetre : un Event sans image ne peut pas etre supprime.)
+    / TRAP: img="" and sticker_img="" are REQUIRED. Left at NULL, DELETING the event crashes
+    (django-stdimage's delete_orphans does splitext(None)), so the fixture could not clean up.
+    """
+    with tenant_context(voisin):
+        return Event.objects.create(
+            name=nom,
+            datetime=timezone.now() + timedelta(days=10),
+            published=True,
+            img="",
+            sticker_img="",
+            **drapeaux,
+        )
+
+
+@pytest.fixture
+def event_prive_chez_un_voisin(tenant_lespass):
+    """
+    Un event `private=True` (non federable), PUBLIE et FUTUR, chez un voisin federe.
+
+    POURQUOI CETTE FIXTURE EXISTE : sans elle, le test de fuite passait A VIDE. Aucun
+    voisin du seed n'a d'event prive, donc la boucle du test ne s'executait jamais, et
+    retirer le veto `private=False` de la collecte ne faisait tomber AUCUN test.
+    Verifie par sabotage.
+    / WHY THIS FIXTURE EXISTS: without it, the leak test passed VACUOUSLY.
+
+    L'event est SUPPRIME a la fin du test (base de DEV).
+    """
+    voisin = _premier_voisin_federe(tenant_lespass)
+    if not voisin:
+        pytest.skip("Seed : le tenant courant ne federe aucun voisin.")
+
+    event = _creer_event_chez_le_voisin(
+        voisin, "TEST newsletter — event PRIVE (ne doit pas fuiter)", private=True
+    )
+    yield voisin, event
+
+    with tenant_context(voisin):
+        event.delete()
+
+
+@pytest.fixture
+def event_malveillant_chez_un_voisin(tenant_lespass):
+    """
+    Un event d'un voisin dont la `long_description` porte une charge XSS.
+
+    Il est cree DIRECTEMENT en base — c'est ce que fait l'API v2, qui ne passe PAS par
+    `sanitize_textfields` (contrairement a l'admin). Un voisin federe, ou quelqu'un
+    disposant d'une cle API compromise, peut donc reellement poser ce HTML en base.
+    / Created STRAIGHT in the database, exactly as the v2 API does (it does NOT sanitize).
+
+    L'event est SUPPRIME a la fin du test (base de DEV).
+    """
+    voisin = _premier_voisin_federe(tenant_lespass)
+    if not voisin:
+        pytest.skip("Seed : le tenant courant ne federe aucun voisin.")
+
+    charge_malveillante = (
+        "<p>Venez <strong>nombreux</strong> !</p>"
+        "<script>alert('xss')</script>"
+        "<img src=x onerror=alert('xss')>"
+        "<p onclick=\"alert('xss')\">clic</p>"
+    )
+    event = _creer_event_chez_le_voisin(
+        voisin,
+        "TEST newsletter — event MALVEILLANT",
+        long_description=charge_malveillante,
+    )
+    yield voisin, event
+
+    with tenant_context(voisin):
+        event.delete()
+
+
+@pytest.fixture
+def event_archive_chez_un_voisin(tenant_lespass):
+    """
+    Un event `archived=True`, PUBLIE et FUTUR, chez un voisin federe.
+
+    Meme raison que ci-dessus : aucun voisin du seed n'a d'event archive, donc le filtre
+    `archived=False` de la collecte n'etait protege par AUCUN test.
+    / Same reason: no seed neighbour has an archived event, so the filter was untested.
+    """
+    voisin = _premier_voisin_federe(tenant_lespass)
+    if not voisin:
+        pytest.skip("Seed : le tenant courant ne federe aucun voisin.")
+
+    event = _creer_event_chez_le_voisin(
+        voisin, "TEST newsletter — event ARCHIVE (ne doit pas remonter)", archived=True
+    )
+    yield voisin, event
+
+    with tenant_context(voisin):
+        event.delete()
+
+
 def _lieux_federes_du_tenant(tenant_courant):
     """Lit les FederatedPlace du tenant courant, avec leurs slugs de tags."""
     with tenant_context(tenant_courant):
@@ -525,29 +643,97 @@ class TestCollecte:
                 f"{lieu['slugs_exclude']} et pourtant collectes : {fuites}"
             )
 
-    def test_aucun_event_prive_dun_voisin_ne_remonte(self, tenant_lespass):
+    def test_aucun_event_prive_dun_voisin_ne_remonte(
+        self, tenant_lespass, event_prive_chez_un_voisin
+    ):
         """
-        Un event `private` ("non federable") d'un VOISIN ne doit jamais fuiter.
-        Sur le tenant courant, en revanche, il reste dans SA propre newsletter :
-        `private` veut dire "non federable", pas "secret". C'est ce que fait l'agenda.
+        FUITE DE DONNEES ENTRE TENANTS — le test le plus important du fichier.
 
-        On compare par `full_url` et non par nom : deux tenants peuvent avoir des events
-        homonymes, ce qui produirait un faux echec.
+        Un event `private` ("non federable") d'un VOISIN ne doit JAMAIS remonter dans la
+        newsletter d'un autre lieu. Sur le tenant courant, en revanche, il reste dans SA
+        propre newsletter : `private` veut dire "non federable", pas "secret". C'est
+        exactement ce que fait l'agenda.
+
+        LE TEST FABRIQUE SA PROPRE DONNEE (fixture `event_prive_chez_un_voisin`). Sans
+        elle il passait A VIDE : aucun voisin du seed n'a d'event prive, la boucle ne
+        s'executait jamais, et retirer le veto `private=False` de la collecte ne faisait
+        tomber AUCUN test. Un test qui passe a vide est pire que pas de test — il donne
+        une fausse confiance sur une fuite de donnees.
+        / THE TEST BUILDS ITS OWN DATA. Without it, it passed VACUOUSLY: no seed neighbour
+        has a private event, so removing the `private=False` veto broke NO test.
         """
+        voisin, event_prive = event_prive_chez_un_voisin
+
         with tenant_context(tenant_lespass):
             fiches = collecter_evenements_du_reseau(FENETRE_LARGE_EN_JOURS)
         urls_collectees = {fiche["url_event"] for fiche in fiches}
 
-        for lieu in _lieux_federes_du_tenant(tenant_lespass):
-            voisin = lieu["tenant"]
-            if voisin.schema_name == tenant_lespass.schema_name:
-                continue
-            with tenant_context(voisin):
-                urls_privees = set(
-                    Event.objects.filter(private=True).values_list("full_url", flat=True)
-                )
-            fuites = urls_privees & urls_collectees
-            assert not fuites, f"Events prives de '{voisin.schema_name}' ayant fuite : {fuites}"
+        assert event_prive.full_url not in urls_collectees, (
+            f"FUITE : l'event PRIVE '{event_prive.name}' du voisin "
+            f"'{voisin.schema_name}' est remonte dans la newsletter de "
+            f"'{tenant_lespass.schema_name}'. Le veto `private=False` sur les voisins ne "
+            f"s'applique plus."
+        )
+
+    def test_le_html_dun_voisin_est_desinfecte(
+        self, tenant_lespass, event_malveillant_chez_un_voisin
+    ):
+        """
+        XSS. La description longue est emise en `|safe` dans le template (c'est du HTML de
+        widget Wysiwyg : l'echapper afficherait "&lt;strong&gt;" aux abonnes).
+
+        L'admin desinfecte chaque TextField au save (`sanitize_textfields`), mais PAS l'API.
+        Un event cree via /api/v2/events/ — donc par un VOISIN FEDERE, ou avec une cle API
+        compromise — arrive en base avec son HTML BRUT. Sans le clean_html de la collecte,
+        ce voisin injecterait un <script> dans NOTRE brouillon Ghost.
+
+        On cree ici l'event DIRECTEMENT en base (comme le ferait l'API, sans passer par
+        l'admin), avec une charge malveillante. Le HTML rendu ne doit rien en garder.
+        / The admin sanitizes on save; the API does NOT. We create the event straight in the
+        database (as the API does) with a malicious payload.
+        """
+        _voisin, event = event_malveillant_chez_un_voisin
+
+        with tenant_context(tenant_lespass):
+            fiches = collecter_evenements_du_reseau(FENETRE_LARGE_EN_JOURS)
+
+        fiches_de_levent = [f for f in fiches if f["url_event"] == event.full_url]
+        assert fiches_de_levent, "L'event de test n'a pas ete collecte."
+        fiche = fiches_de_levent[0]
+
+        html = rendre_newsletter_html([fiche], timezone.now(), timezone.now())
+
+        # La charge malveillante a disparu...
+        assert "<script>" not in html
+        assert "alert(" not in html
+        assert "onerror" not in html
+        assert "onclick" not in html
+
+        # ...mais le HTML LEGITIME du Wysiwyg est preserve : on ne veut pas d'un nettoyage
+        # qui detruirait la mise en forme des gestionnaires.
+        # / ...but the legitimate Wysiwyg HTML survives.
+        assert "<p>Venez <strong>nombreux</strong> !</p>" in html
+
+    def test_un_event_archive_dun_voisin_ne_remonte_pas(
+        self, tenant_lespass, event_archive_chez_un_voisin
+    ):
+        """
+        Un event ARCHIVE est un event retire de l'agenda. On ne l'envoie pas par email.
+
+        Comme ci-dessus, LE TEST FABRIQUE SA DONNEE : aucun voisin du seed n'a d'event
+        archive, donc retirer `archived=False` de la collecte ne faisait tomber aucun test.
+        / Same: the seed has no archived event, so the filter was protected by nothing.
+        """
+        voisin, event_archive = event_archive_chez_un_voisin
+
+        with tenant_context(tenant_lespass):
+            fiches = collecter_evenements_du_reseau(FENETRE_LARGE_EN_JOURS)
+        urls_collectees = {fiche["url_event"] for fiche in fiches}
+
+        assert event_archive.full_url not in urls_collectees, (
+            f"L'event ARCHIVE '{event_archive.name}' du voisin '{voisin.schema_name}' est "
+            f"remonte dans la newsletter. Le filtre `archived=False` ne s'applique plus."
+        )
 
     def test_aucun_intrus_ne_se_glisse_dans_les_fiches(self, tenant_lespass):
         """

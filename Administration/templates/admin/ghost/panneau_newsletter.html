@@ -1,0 +1,162 @@
+{% load i18n unfold %}
+{% comment %}
+PANNEAU NEWSLETTER — page de configuration Ghost
+/ Newsletter panel — Ghost configuration page
+
+⚠️ NE PAS CHARGER HTMX ICI. UNFOLD L'EMBARQUE DEJA (/static/unfold/js/htmx/htmx.js).
+Ajouter un second <script src="...htmx..."> le charge DEUX FOIS, et ca casse tout de facon
+SILENCIEUSE : une instance traite le hx-get et ENVOIE bien la requete (elle repond 200),
+mais le swap se fait sur l'autre registre interne et ne trouve plus sa cible. Rien ne
+s'affiche, et il n'y a NI erreur console NI message. On cherche pendant une heure.
+(Le panneau des adhesions, lui, charge encore htmx explicitement — Unfold ne l'embarquait
+sans doute pas a l'epoque. A verifier : il porte peut-etre la meme bombe.)
+/ DO NOT LOAD HTMX HERE. Unfold already ships it. Loading it twice breaks htmx SILENTLY:
+one instance fires the request (200 OK) but the swap targets the other instance's registry
+and finds nothing. No console error, no message.
+
+LOCALISATION : Administration/templates/admin/ghost/panneau_newsletter.html
+
+Affiche AVANT le formulaire (GhostConfigAdmin.change_form_before_template).
+
+Il remplace les anciens boutons du bandeau (`actions_detail`) : trois libelles nus, sans
+un mot d'explication, dans un coin de l'ecran. Ici, chaque bouton dit ce qu'il fait — et
+surtout ce qu'il NE fait PAS : un brouillon n'est JAMAIS publie ni envoye.
+/ Replaces the old bare `actions_detail` buttons. Each button says what it does — and
+above all what it does NOT do: a draft is NEVER published nor sent.
+
+FLUX — les deux actions sont servies par le CONTROLEUR de l'app newsletter, pas par
+l'admin (newsletter/views.py, ViewSet protege par TenantAdminPermission) :
+- « Tester la connexion »  -> hx-get  newsletter-admin-tester-connexion (lecture seule)
+- « Brouillon 7/30 jours » -> hx-post newsletter-admin-brouillon        (CREE dans Ghost)
+Les deux renvoient un PARTIAL HTML, injecte dans #ghost-panneau-reponse (en bas du panneau).
+
+ON N'UTILISE PAS django.messages : ils ne sont PAS rendus sur la page de modification de
+l'admin (piege documente dans tests/PIEGES.md, et VERIFIE en vrai ici : le message partait
+bien en session, mais rien ne s'affichait — on cliquait, et il ne se passait RIEN).
+/ We do NOT use django.messages: they are NOT rendered on the admin change page (documented
+in tests/PIEGES.md, and verified here: the message landed in the session but nothing showed).
+
+POURQUOI DU HTMX ET SURTOUT PAS UN <form> :
+Ce gabarit est rendu A L'INTERIEUR du <form> de l'admin Django. Un <form> imbrique est du
+HTML INVALIDE : le navigateur ignore l'interne et soumet l'EXTERNE. Cliquer « Brouillon »
+declencherait donc l'ENREGISTREMENT de la config, pas la generation du brouillon. (Verifie
+en vrai : le premier essai a sauvegarde le formulaire et affiche « was changed
+successfully ».) On poste donc en hx-post, comme le panneau des adhesions.
+/ WHY HTMX AND NEVER A <form>: this template renders INSIDE the admin's own <form>. A
+nested <form> is INVALID HTML — the browser ignores the inner one and submits the OUTER
+one, so the button would SAVE the config instead of generating the draft.
+
+STYLES INLINE OBLIGATOIRES : Unfold embarque son propre sous-ensemble de Tailwind. Les
+classes custom (bg-emerald-600...) ne sont PAS dans son bundle et rendraient du blanc sur
+blanc. On utilise les variables CSS d'Unfold, qui suivent le theme clair/sombre.
+/ INLINE STYLES REQUIRED: Unfold ships its own Tailwind subset; custom classes are absent
+from the bundle and would render invisible. Unfold's CSS variables follow the light/dark theme.
+{% endcomment %}
+
+<div class="p-4" data-testid="ghost-panneau-newsletter">
+  {% component "unfold/components/card.html" with title=_("Newsletter") %}
+
+    {# ── Ce que fait ce module, en une phrase ─────────────────────────── #}
+    <p style="font-size:.875rem;line-height:1.6;color:var(--color-base-500,#6b7280);margin-bottom:1.5rem">
+      {% blocktranslate %}TiBillet peut préparer vos newsletters à votre place, dans votre instance Ghost : il rassemble les évènements à venir de votre lieu <strong>et de votre réseau fédéré</strong>, et en fait un brouillon prêt à relire.{% endblocktranslate %}
+    </p>
+
+    {# ── 1. La connexion ──────────────────────────────────────────────── #}
+    <div style="padding-bottom:1.25rem;margin-bottom:1.25rem;border-bottom:1px solid var(--color-base-200,#e5e7eb)">
+
+      <h3 style="font-size:.9375rem;font-weight:600;margin-bottom:.375rem;color:var(--color-base-800,#1f2937)">
+        {% translate "1. La connexion à votre serveur Ghost" %}
+      </h3>
+
+      <p style="font-size:.8125rem;line-height:1.6;color:var(--color-base-500,#6b7280);margin-bottom:.875rem">
+        {% blocktranslate %}Renseignez ci-dessous l'adresse de votre instance et sa <strong>clé Admin API</strong> (Ghost&nbsp;: Settings → Integrations → Add custom integration), puis enregistrez.{% endblocktranslate %}
+      </p>
+
+      {# La cle n'est chiffree qu'a un enregistrement REUSSI : c'est un vrai piege, on previent. #}
+      {# / The key is only encrypted on a SUCCESSFUL save: a real trap, so we warn about it. #}
+      <p style="font-size:.8125rem;line-height:1.6;color:var(--color-base-500,#6b7280);margin-bottom:.875rem">
+        <strong>{% translate "Enregistrez pendant que Ghost est joignable." %}</strong>
+        {% blocktranslate %}La clé n'est chiffrée que si la connexion réussit. Si Ghost est injoignable au moment où vous enregistrez, il faudra la ressaisir.{% endblocktranslate %}
+      </p>
+
+      {# hx-get, et NON un <a href> : la reponse est un PARTIAL, pas une page — un lien #}
+      {# classique afficherait la boite de reponse toute seule, sur une page blanche. #}
+      {# `type="button"` est INDISPENSABLE : on est dans le <form> de l'admin, et un #}
+      {# <button> sans type vaut type="submit" — il ENREGISTRERAIT la config. #}
+      {# / hx-get, NOT an <a href>: the response is a PARTIAL, not a page. type="button" is #}
+      {# REQUIRED: inside the admin's <form>, a bare <button> defaults to submit. #}
+      <button type="button"
+              hx-get="{% url 'newsletter-admin-tester-connexion' %}"
+              hx-target="#ghost-panneau-reponse"
+              hx-swap="innerHTML"
+              hx-disabled-elt="this"
+              data-testid="ghost-btn-tester"
+              style="display:inline-flex;align-items:center;gap:.5rem;padding:.5rem 1rem;font-size:.875rem;font-weight:500;border-radius:.375rem;border:1px solid var(--color-base-300,#d1d5db);color:var(--color-base-700,#374151);background:transparent;cursor:pointer">
+        <span aria-hidden="true">🔌</span> {% translate "Tester la connexion" %}
+      </button>
+
+      <span style="font-size:.75rem;color:var(--color-base-400,#9ca3af);margin-left:.75rem">
+        {% translate "Ne modifie rien : interroge simplement Ghost." %}
+      </span>
+
+    </div>
+
+    {# ── 2. Les brouillons ────────────────────────────────────────────── #}
+    <div>
+
+      <h3 style="font-size:.9375rem;font-weight:600;margin-bottom:.375rem;color:var(--color-base-800,#1f2937)">
+        {% translate "2. Générer un brouillon de newsletter" %}
+      </h3>
+
+      <p style="font-size:.8125rem;line-height:1.6;color:var(--color-base-500,#6b7280);margin-bottom:.5rem">
+        {% blocktranslate %}Chaque évènement devient une <strong>carte</strong> dans Ghost&nbsp;: son image, son titre, le lieu, la date, le tarif, et un bouton « Réserver ». Les couleurs et les polices viennent des réglages de votre instance Ghost — pas de TiBillet.{% endblocktranslate %}
+      </p>
+
+      {# LE point a marteler : rien ne part. C'est ce qui rend le bouton sans danger. #}
+      {# / THE point to hammer home: nothing is sent. That is what makes the button safe. #}
+      <p style="font-size:.8125rem;line-height:1.6;padding:.625rem .75rem;border-radius:.375rem;margin-bottom:1rem;background:var(--color-base-100,#f3f4f6);color:var(--color-base-700,#374151)">
+        <strong>{% translate "Rien n'est publié, rien n'est envoyé." %}</strong>
+        {% blocktranslate %}Le résultat est un <strong>brouillon</strong> dans Ghost. Vous le relisez, vous coupez ce qui est de trop, et c'est <strong>vous</strong> qui l'envoyez, depuis Ghost. Vous pouvez donc cliquer sans crainte, autant de fois que vous voulez.{% endblocktranslate %}
+      </p>
+
+      {# hx-post, JAMAIS un <form> : on est deja dans le <form> de l'admin (cf. en-tete). #}
+      {# type="button" est INDISPENSABLE : sans lui, un <button> dans un <form> vaut #}
+      {# type="submit" et enregistrerait la config au lieu de generer le brouillon. #}
+      {# / hx-post, NEVER a <form>. type="button" is REQUIRED: a bare <button> inside a #}
+      {# <form> defaults to type="submit" and would SAVE the config. #}
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:.75rem"
+           hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+
+        {% for nombre_de_jours in fenetres_de_brouillon %}
+          <button type="button"
+                  hx-post="{% url 'newsletter-admin-brouillon' nombre_de_jours=nombre_de_jours %}"
+                  hx-target="#ghost-panneau-reponse"
+                  hx-swap="innerHTML"
+                  hx-disabled-elt="this"
+                  data-testid="ghost-btn-brouillon-{{ nombre_de_jours }}"
+                  style="display:inline-flex;align-items:center;gap:.5rem;padding:.5rem 1rem;font-size:.875rem;font-weight:500;border-radius:.375rem;background:var(--color-primary-600,#7c3aed);color:#fff;border:none;cursor:pointer">
+            <span aria-hidden="true">✉</span>
+            {% blocktranslate %}Brouillon des {{ nombre_de_jours }} prochains jours{% endblocktranslate %}
+          </button>
+        {% endfor %}
+
+      </div>
+
+      <p style="font-size:.75rem;color:var(--color-base-400,#9ca3af);margin-top:.75rem">
+        {% translate "S'il n'y a aucun évènement sur la période, aucun brouillon n'est créé." %}
+      </p>
+
+    </div>
+
+    {# ── La zone de reponse, commune aux trois boutons ─────────────────── #}
+    {# Vide au chargement. HTMX y injecte le resultat de l'action. #}
+    {# On N'UTILISE PAS django.messages : ils ne sont PAS rendus sur la page de #}
+    {# modification de l'admin (cf. tests/PIEGES.md, verifie en vrai). Le gestionnaire #}
+    {# cliquait, et il ne se passait RIEN a l'ecran. #}
+    {# / The response zone, shared by the three buttons. We do NOT use django.messages: #}
+    {# they are NOT rendered on the admin change page (see tests/PIEGES.md). #}
+    {# aria-live : un lecteur d'ecran annonce le resultat quand il apparait. #}
+    <div id="ghost-panneau-reponse" aria-live="polite" data-testid="ghost-panneau-reponse"></div>
+
+  {% endcomponent %}
+</div>

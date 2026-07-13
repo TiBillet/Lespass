@@ -3778,13 +3778,40 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
     add_form = GhostConfigAddform
 
     readonly_fields = ["has_key", "ghost_last_log"]
-    actions_detail = [
-        "test_api_ghost_admin_button",
-        "brouillon_newsletter_7_jours",
-        "brouillon_newsletter_30_jours",
-    ]
 
-    @display(description=_("Has key"), boolean=True)
+    # Le panneau s'affiche AVANT le formulaire. Il remplace les anciens boutons du bandeau
+    # (`actions_detail`) : trois libelles nus, sans un mot d'explication, dans un coin de
+    # l'ecran. Le panneau, lui, dit ce que fait chaque bouton — et surtout ce qu'il NE fait
+    # PAS : un brouillon n'est jamais publie ni envoye.
+    # / The panel replaces the old bare `actions_detail` buttons. It says what each button
+    # does — and above all what it does NOT do: a draft is never published nor sent.
+    change_form_before_template = "admin/ghost/panneau_newsletter.html"
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        """
+        Injecte le contexte du panneau affiche AVANT le formulaire.
+        / Inject the context of the panel shown BEFORE the form.
+
+        LOCALISATION : Administration/admin_tenant.py (GhostConfigAdmin)
+
+        C'est TOUT ce que l'admin fait pour ce panneau : lui donner ses boutons. La logique
+        (tester la connexion, generer le brouillon) vit dans `newsletter/views.py`, avec ses
+        permissions DRF — pas ici, dans un module d'admin de 4000 lignes.
+        / This is ALL the admin does for the panel: hand it its buttons. The logic lives in
+        `newsletter/views.py`, with its own DRF permissions.
+
+        La liste des fenetres appartient a l'app newsletter : c'est elle qui fabrique les
+        brouillons, et c'est elle qui VALIDE la valeur recue (liste blanche). Le gabarit
+        boucle dessus. Ajouter « 90 jours » ne demande donc qu'une valeur, a un seul endroit.
+        / The window list belongs to the newsletter app: it builds the drafts and VALIDATES
+        the received value. One value, one place.
+        """
+        from newsletter.views import FENETRES_DE_BROUILLON_EN_JOURS
+
+        extra_context = extra_context or {}
+        extra_context["fenetres_de_brouillon"] = FENETRES_DE_BROUILLON_EN_JOURS
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
     def has_key(self, instance: GhostConfig):
         return True if instance.ghost_key else False
 
@@ -3838,164 +3865,6 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
 
             # Always save the model, even in error cases
             super().save_model(request, obj, form, change)
-
-    @action(description=_("Test Api"),
-            url_path="test_api_ghost_admin_button",
-            permissions=["custom_actions_detail"])
-    def test_api_ghost_admin_button(self, request, object_id):
-
-        from sib_api_v3_sdk.rest import ApiException
-        try:
-            ghost_config = GhostConfig.get_solo()
-            ghost_url = ghost_config.ghost_url
-            ghost_key = ghost_config.get_api_key()
-        except ApiException as e:
-            ghost_config.last_log = f"{e}"
-            logger.warning("ApiException when calling AccountApi->get_account: %s\n" % e)
-            messages.error(request, _(f"Api not OK : {e}"))
-            return redirect(request.META["HTTP_REFERER"])
-        except Exception:
-            messages.error(request, _("La connexion à l'API Ghost a échoué. L'API a potentiellement mal été configuré "))
-            return redirect(request.META["HTTP_REFERER"])
-
-
-        if not ghost_url or not ghost_key:
-            messages.error(request, _("Ghost URL or API key is missing"))
-            return redirect(request.META["HTTP_REFERER"])
-
-        try:
-            response = self.test_api_ghost(ghost_url, ghost_key)
-            # Update the last_log field with the response
-            ghost_config.ghost_last_log = f"{timezone.now()} - Status: {response.status_code} - Response: {response.text}"
-            ghost_config.save()
-
-            if response.ok:
-                messages.success(request, _("Ghost API connection successful"))
-            else:
-                messages.error(request, _(f"Ghost API connection failed: {response.status_code} - {response.reason}"))
-
-        except Exception as e:
-            ghost_config.ghost_last_log = f"{timezone.now()} - Error: {type(e).__name__} - {str(e)}"
-            ghost_config.save()
-            messages.error(request, _(f"Error testing Ghost API: {type(e).__name__} - {str(e)}"))
-
-        return redirect(request.META["HTTP_REFERER"])
-
-    def _generer_le_brouillon_de_newsletter(self, request, nombre_de_jours):
-        """
-        Fabrique un brouillon de newsletter et rend le resultat en toast.
-        / Build a newsletter draft and report the outcome as a toast.
-
-        LOCALISATION : Administration/admin_tenant.py (GhostConfigAdmin)
-
-        Partage par les deux boutons (7 jours / 30 jours) : seule la fenetre change.
-        Execution SYNCHRONE : quelques requetes + un POST (< 2 s). Le gestionnaire a un
-        retour immediat et un lien cliquable vers son brouillon.
-        / Shared by both buttons. SYNCHRONOUS: the manager gets an immediate clickable link.
-
-        Le post est cree en BROUILLON. Il n'est JAMAIS publie ni envoye par email :
-        l'envoi reste un geste humain, dans l'interface de Ghost.
-        / The post is a DRAFT. Never published, never emailed.
-        """
-        # Imports LOCAUX a la methode : ils evitent d'alourdir le module d'admin et tout
-        # risque d'import circulaire.
-        # / Method-LOCAL imports: keep the admin module light, avoid circular imports.
-        from newsletter.client_ghost import (
-            ErreurGhost,
-            GhostCleRefusee,
-            GhostInjoignable,
-            GhostReponseInattendue,
-        )
-        from newsletter.services import (
-            AucunEvenement,
-            GhostNonConfigure,
-            creer_brouillon_newsletter,
-        )
-
-        try:
-            resultat = creer_brouillon_newsletter(nombre_de_jours=nombre_de_jours)
-
-        except GhostNonConfigure:
-            messages.warning(
-                request,
-                _("Ghost n'est pas configuré : renseignez l'URL et la clé Admin API."),
-            )
-
-        except AucunEvenement:
-            messages.info(
-                request,
-                _("Aucun événement sur les %(jours)s prochains jours : aucun brouillon créé.")
-                % {"jours": nombre_de_jours},
-            )
-
-        except GhostInjoignable:
-            messages.error(request, _("Instance Ghost injoignable."))
-
-        except GhostCleRefusee:
-            messages.error(request, _("La clé Admin API est refusée par Ghost."))
-
-        except GhostReponseInattendue as erreur:
-            messages.error(
-                request,
-                _("Réponse inattendue de Ghost : %(erreur)s") % {"erreur": erreur},
-            )
-
-        # Filet de securite. Les trois `except` ci-dessus couvrent les erreurs Ghost
-        # d'aujourd'hui, mais `creer_brouillon_newsletter` documente `:raises ErreurGhost` :
-        # une future sous-classe passerait au travers et ferait un 500 dans l'admin.
-        # / Safety net: a future ErreurGhost subclass would otherwise 500 in the admin.
-        except ErreurGhost as erreur:
-            messages.error(
-                request,
-                _("Erreur Ghost : %(erreur)s") % {"erreur": erreur},
-            )
-
-        # Dernier filet. La collecte traverse les SCHEMAS des tenants voisins : un voisin
-        # aux migrations en retard leve une erreur de base de donnees. Le gestionnaire doit
-        # voir un message, pas une page 500 — et il doit pouvoir en parler a l'admin systeme.
-        # / Last net: the collect walks NEIGHBOUR SCHEMAS. A tenant with stale migrations
-        # raises a database error. Show a message, never a 500 page.
-        except Exception as erreur:
-            logger.error(f"brouillon_newsletter ({nombre_de_jours} j) : {erreur}")
-            messages.error(
-                request,
-                _("La génération du brouillon a échoué : %(erreur)s")
-                % {"erreur": f"{type(erreur).__name__} — {erreur}"},
-            )
-
-        else:
-            # format_html est INDISPENSABLE : sans lui, django.messages echappe le HTML
-            # et le lien s'afficherait en texte brut, non cliquable.
-            # / format_html is REQUIRED: django.messages escapes HTML, so without it the
-            # link would render as plain, unclickable text.
-            messages.success(
-                request,
-                format_html(
-                    '{} <a href="{}" target="_blank" rel="noopener">{}</a>',
-                    _("Brouillon créé avec %(nombre)s événement(s).")
-                    % {"nombre": resultat["nombre_evenements"]},
-                    resultat["url_edition"],
-                    _("Ouvrir dans Ghost"),
-                ),
-            )
-
-        return redirect(request.META["HTTP_REFERER"])
-
-    @action(
-        description=_("Brouillon newsletter — 7 jours"),
-        url_path="brouillon_newsletter_7_jours",
-        permissions=["custom_actions_detail"],
-    )
-    def brouillon_newsletter_7_jours(self, request, object_id):
-        return self._generer_le_brouillon_de_newsletter(request, nombre_de_jours=7)
-
-    @action(
-        description=_("Brouillon newsletter — 30 jours"),
-        url_path="brouillon_newsletter_30_jours",
-        permissions=["custom_actions_detail"],
-    )
-    def brouillon_newsletter_30_jours(self, request, object_id):
-        return self._generer_le_brouillon_de_newsletter(request, nombre_de_jours=30)
 
     def has_custom_actions_detail_permission(self, request, object_id):
         return TenantAdminPermissionWithRequest(request)

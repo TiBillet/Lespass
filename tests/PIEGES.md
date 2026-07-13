@@ -2659,5 +2659,97 @@ dans `locale/en/LC_MESSAGES/django.po` (ex. « Mark as completed », pas
 
 ---
 
+### Piege : HTMX charge DEUX FOIS dans l'admin Unfold — panne SILENCIEUSE
+
+**Unfold embarque deja htmx** (`/static/unfold/js/htmx/htmx.js`). Si un panneau d'admin
+(`change_form_before_template`) ajoute son propre `<script src=".../htmx.min.js">`, htmx est
+charge **deux fois**.
+
+**Le symptome est diabolique** : la requete PART et repond **200** (visible dans l'onglet
+Reseau), la reponse contient le bon HTML, la cible existe dans le DOM... **et rien ne
+s'affiche**. Une instance traite le `hx-get`/`hx-post` et envoie la requete ; le swap se fait
+sur le registre interne de l'AUTRE instance et ne trouve plus sa cible.
+
+**Ni erreur console, ni message.** On perd une heure a chercher du cote du serveur, des
+permissions ou du CSRF — alors que le probleme est une balise `<script>` en trop.
+
+```html
+<!-- MAL : Unfold charge deja htmx -->
+{% load i18n unfold static %}
+<script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
+
+<!-- BON : on ne charge rien, celui d'Unfold suffit -->
+{% load i18n unfold %}
+```
+
+**Diagnostic en une commande** — compter les htmx charges par la page :
+
+```python
+import re
+scripts = re.findall(r'<script[^>]*src="([^"]*)"', page_html)
+print([s for s in scripts if 'htmx' in s.lower()])   # doit contenir UNE seule entree
+```
+
+⚠️ **`Administration/templates/admin/membership/actions_panel.html` charge encore htmx
+explicitement.** Unfold ne l'embarquait sans doute pas a l'epoque : ce panneau porte
+peut-etre la meme bombe. A verifier.
+
+Decouvert sur le panneau Newsletter de GhostConfigAdmin (juillet 2026).
+
+---
+
+### Piege : les `django.messages` ne s'affichent PAS sur la page de modification de l'admin
+
+Complement au piege deja documente plus haut. **Verifie en vrai** sur
+`GhostConfigAdmin` : un `messages.warning(request, ...)` depuis une vue custom part bien en
+session (`get_messages(request)` le retrouve), mais la page `/admin/<app>/<model>/` ne
+l'affiche **jamais**. Le gestionnaire clique, et **il ne se passe RIEN a l'ecran**.
+
+Les toasts qu'on croit voir marcher apparaissent en fait sur le **dashboard**, apres une
+redirection — pas sur la page de modification.
+
+**Solution retenue** : ne pas dependre de `django.messages` dans un panneau d'admin. La vue
+renvoie un **partial HTML**, et HTMX l'injecte dans une zone de reponse du panneau. Le retour
+apparait la ou l'utilisateur vient de cliquer — c'est meilleur de toute facon.
+
+```html
+<button type="button"
+        hx-post="{% url '...' %}"
+        hx-target="#ma-zone-de-reponse"
+        hx-swap="innerHTML">Agir</button>
+
+<div id="ma-zone-de-reponse" aria-live="polite"></div>
+```
+
+---
+
+### Piege : un `<form>` dans un `change_form_before_template` soumet le formulaire de l'ADMIN
+
+Un `change_form_before_template` est rendu **A L'INTERIEUR** du `<form>` de l'admin Django.
+Un `<form>` imbrique est du **HTML invalide** : le navigateur ignore l'interne et soumet
+l'**externe**.
+
+Cliquer sur un bouton de votre panneau **ENREGISTRE la configuration** au lieu de lancer
+votre action. (Constate en vrai : « GhostConfig object (1) was changed successfully ».)
+
+Meme piege avec un `<button>` sans `type` : dans un `<form>`, il vaut `type="submit"`.
+
+```html
+<!-- MAL : form imbrique + button sans type -->
+<form method="post" action="{% url '...' %}">
+    <button>Agir</button>          <!-- = submit -> enregistre l'admin -->
+</form>
+
+<!-- BON : pas de form, bouton autonome en hx-post -->
+<div hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+    <button type="button" hx-post="{% url '...' %}" hx-target="#zone">Agir</button>
+</div>
+```
+
+Voir aussi le Piege 58 (double submit HTMX).
+
+---
+
 *Ce document est un commun numerique. Prenez-en soin !*
 *This document is a digital common. Take care of it!*
+

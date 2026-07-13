@@ -16,6 +16,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 from django_tenants.utils import tenant_context
 
+from Administration.utils import clean_html
 from BaseBillet.models import (
     Configuration,
     Event,
@@ -310,10 +311,29 @@ def _construire_fiche(event, domaine_du_proprietaire, nom_de_lorganisateur):
         "date_fin": event.end_datetime,
         "organisateur": nom_de_lorganisateur,
         "description_courte": event.short_description or "",
-        # ATTENTION : long_description est du HTML (widget Wysiwyg dans l'admin).
-        # Le template l'emet BRUT, sous la carte, sans <p> autour. Voir SPEC §7.2.
-        # / long_description is HTML (Wysiwyg widget). Emitted RAW, under the card.
-        "description_longue": event.long_description or "",
+        # long_description est du HTML (widget Wysiwyg). Le template l'emet donc BRUT
+        # (`|safe`), sous la carte — l'echapper afficherait "&lt;strong&gt;" aux abonnes.
+        # Voir SPEC §7.2.
+        #
+        # D'OU LE NETTOYAGE ICI, ET IL EST INDISPENSABLE : `|safe` sur du HTML non
+        # desinfecte, c'est une porte ouverte. L'admin passe deja chaque TextField par
+        # clean_html au save (Administration.admin.site.sanitize_textfields), mais PAS
+        # l'API : un event cree via /api/v2/events/ — donc par un VOISIN FEDERE, ou par une
+        # cle API compromise — arrive en base avec son HTML brut. Sans ce clean_html, ce
+        # voisin pourrait injecter un <script> dans NOTRE brouillon Ghost.
+        #
+        # L'operation est idempotente : pour un event saisi dans l'admin, deja nettoye,
+        # c'est un no-op. Elle preserve le HTML legitime du Wysiwyg (<p>, <strong>, listes,
+        # liens, <br>) et ne retire que le dangereux (<script>, onclick, onerror...).
+        #
+        # / HENCE the sanitization here, and it is REQUIRED: `|safe` on unsanitized HTML is
+        # an open door. The admin sanitizes every TextField on save, but the API does NOT:
+        # an event created through /api/v2/events/ — so by a FEDERATED NEIGHBOUR, or with a
+        # compromised API key — lands in the database with raw HTML. Idempotent: a no-op for
+        # admin-authored events.
+        "description_longue": clean_html(event.long_description)
+        if event.long_description
+        else "",
         "lieu": _formater_lieu(event.postal_address),
         "image_url": image_url,
         "tarif": calculer_tarif(event),

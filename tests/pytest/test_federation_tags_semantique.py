@@ -32,7 +32,10 @@ cross-schema qui ne serait pas annulee corromprait les donnees de demonstration.
 is absent. Nothing is written: the suite runs on the DEV database.
 """
 
+import uuid
+
 import pytest
+from django.core.cache import cache
 from django.test.client import Client as DjangoClient
 from django_tenants.utils import tenant_context
 
@@ -64,6 +67,43 @@ def tenant_lespass():
     if not tenant:
         pytest.skip("Seed demo_data_v2 absent : pas de tenant 'lespass'.")
     return tenant
+
+
+@pytest.fixture(autouse=True)
+def invalider_le_cache_de_lagenda(tenant_lespass):
+    """
+    Invalide le cache de l'agenda AVANT chaque test. SANS CETTE FIXTURE, CES TESTS NE
+    PROUVENT RIEN.
+
+    `EventMVT.federated_events_filter` (BaseBillet/views.py) MET EN CACHE la page 1 de
+    l'agenda. Le cache n'est invalide que par un jeton de version, reecrit a chaque
+    `Event.save()`. Or ces tests chargent `/event/` et lisent le HTML rendu : si quelqu'un
+    a visite l'agenda depuis le dernier `Event.save()` (c'est-a-dire quasiment toujours sur
+    une machine de dev), ils relisent une page MISE EN CACHE et ne testent plus le code du
+    tout.
+
+    Verifie par sabotage : en inversant le sens de `tag_filter` dans le moteur — le bug
+    historique exact que ce fichier est cense couvrir — les 3 tests passaient AU VERT avec
+    un cache chaud, et ne tombaient qu'apres purge.
+
+    On fait tourner le jeton de version plutot qu'un `cache.clear()` : c'est le mecanisme
+    d'invalidation prevu par le code lui-meme, et ca ne vide pas le memcached partage avec
+    le serveur de dev.
+    / Invalidate the agenda cache BEFORE each test. WITHOUT THIS, THESE TESTS PROVE NOTHING:
+    the view caches page 1, so the tests would read a CACHED page instead of exercising the
+    code. Proven by sabotage: with a warm cache, inverting the tag filter passed green.
+    """
+    with tenant_context(tenant_lespass):
+        cle_du_jeton = f"event_list_version_{tenant_lespass.uuid}"
+        jeton_precedent = cache.get(cle_du_jeton, "v0")
+        cache.set(cle_du_jeton, f"test-{uuid.uuid4().hex[:8]}", 3600)
+
+    yield
+
+    # On restaure le jeton : le serveur de dev retrouve son cache d'origine.
+    # / Restore the token so the dev server keeps its own cache.
+    with tenant_context(tenant_lespass):
+        cache.set(cle_du_jeton, jeton_precedent, 3600)
 
 
 @pytest.fixture

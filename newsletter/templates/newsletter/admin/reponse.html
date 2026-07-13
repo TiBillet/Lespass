@@ -1,0 +1,60 @@
+{% comment %}
+ZONE DE REPONSE DU PANNEAU NEWSLETTER
+/ Newsletter panel response box
+
+LOCALISATION : newsletter/templates/newsletter/admin/reponse.html
+
+Rendue par newsletter/views.py et injectee par HTMX dans #ghost-panneau-reponse, juste
+sous les boutons du panneau (Administration/templates/admin/ghost/panneau_newsletter.html).
+
+POURQUOI ON N'UTILISE PAS django.messages ICI :
+Les messages Django ne sont PAS rendus sur la page de modification de l'admin (piege
+documente dans tests/PIEGES.md : « Unfold ne rend pas le bloc messages dans son base
+template »). Verifie en vrai : le message est bien pose en session, mais la page ne
+l'affiche jamais — le gestionnaire cliquait, et il ne se passait RIEN a l'ecran.
+On affiche donc le resultat DANS le panneau, la ou l'utilisateur vient de cliquer.
+C'est le meme parti-pris que le panneau des adhesions.
+/ WHY NOT django.messages: they are NOT rendered on the admin change page (documented in
+tests/PIEGES.md). Verified: the message lands in the session but is never displayed — the
+manager clicked and NOTHING happened on screen. So we show the result INSIDE the panel.
+
+CONTEXTE :
+- niveau  : "succes" | "erreur" | "info"
+- message : le texte a afficher
+- lien    : (facultatif) URL du brouillon dans Ghost
+- lien_libelle : (facultatif) le libelle du lien
+
+STYLES INLINE OBLIGATOIRES : Unfold embarque son propre sous-ensemble de Tailwind ; les
+classes custom rendraient du blanc sur blanc.
+/ INLINE STYLES REQUIRED: Unfold ships its own Tailwind subset.
+{% endcomment %}
+
+{% if niveau == "succes" %}
+  {% comment %}Vert. / Green.{% endcomment %}
+  <div data-testid="ghost-reponse-succes"
+       style="display:flex;align-items:center;gap:.625rem;flex-wrap:wrap;margin-top:1rem;padding:.75rem 1rem;border-radius:.375rem;font-size:.875rem;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46">
+    <span aria-hidden="true">✅</span>
+    <span>{{ message }}</span>
+    {% if lien %}
+      <a href="{{ lien }}" target="_blank" rel="noopener"
+         data-testid="ghost-reponse-lien"
+         style="font-weight:600;color:#065f46;text-decoration:underline">{{ lien_libelle }}</a>
+    {% endif %}
+  </div>
+
+{% elif niveau == "erreur" %}
+  {% comment %}Rouge. / Red.{% endcomment %}
+  <div data-testid="ghost-reponse-erreur"
+       style="display:flex;align-items:center;gap:.625rem;flex-wrap:wrap;margin-top:1rem;padding:.75rem 1rem;border-radius:.375rem;font-size:.875rem;background:#fef2f2;border:1px solid #fecaca;color:#991b1b">
+    <span aria-hidden="true">⛔</span>
+    <span>{{ message }}</span>
+  </div>
+
+{% else %}
+  {% comment %}Neutre : rien de casse, mais rien a faire non plus. / Neutral.{% endcomment %}
+  <div data-testid="ghost-reponse-info"
+       style="display:flex;align-items:center;gap:.625rem;flex-wrap:wrap;margin-top:1rem;padding:.75rem 1rem;border-radius:.375rem;font-size:.875rem;background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af">
+    <span aria-hidden="true">ℹ️</span>
+    <span>{{ message }}</span>
+  </div>
+{% endif %}
