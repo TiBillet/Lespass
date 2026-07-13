@@ -70,8 +70,10 @@ FLUX :
     {# into #addition-form then submits to payer(). #}
     <div class="adhesion-confirm-actions adhesion-stagger" style="--ordre: 3">
       {% if 'nfc' in moyens_paiement %}
-        <div class="bt-basic-container bt-client-cashless"
-             onclick="payerAvecClient('nfc')"
+        <div class="bt-basic-container bt-client-cashless" 
+             hx-get="{% url 'laboutik-paiement-confirmer' %}?method=nfc" 
+             hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
+             hx-on:htmx:before-request="payerAvecClient('nfc')"
              data-testid="client-btn-cashless"
              role="button"
              tabindex="0"
@@ -86,7 +88,9 @@ FLUX :
       {% endif %}
       {% if 'espece' in moyens_paiement %}
         <div class="bt-basic-container bt-client-especes"
-             onclick="payerAvecClient('espece')"
+             hx-get="{% url 'laboutik-paiement-confirmer' %}?method=espece&total={{ total_en_euros }}" 
+             hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
+             hx-on:htmx:before-request="payerAvecClient('espece')"
              data-testid="client-btn-especes"
              role="button"
              tabindex="0"
@@ -101,7 +105,9 @@ FLUX :
       {% endif %}
       {% if 'carte_bancaire' in moyens_paiement %}
         <div class="bt-basic-container bt-client-cb"
-             onclick="payerAvecClient('carte_bancaire')"
+             hx-get="{% url 'laboutik-paiement-confirmer' %}?method=carte_bancaire" 
+             hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
+             hx-on:htmx:before-request="payerAvecClient('carte_bancaire')"
              data-testid="client-btn-cb"
              role="button"
              tabindex="0"
@@ -116,7 +122,9 @@ FLUX :
       {% endif %}
       {% if 'CH' in moyens_paiement %}
         <div class="bt-basic-container bt-client-cheque"
-             onclick="payerAvecClient('CH')"
+             hx-get="{% url 'laboutik-paiement-confirmer' %}?method=CH" 
+             hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
+             hx-on:htmx:before-request="payerAvecClient('CH')"
              data-testid="client-btn-cheque"
              role="button"
              tabindex="0"
@@ -182,6 +190,7 @@ FLUX :
         data: { actionType: 'updateInput', selector: '#addition-moyen-paiement', value: moyenPaiement }
       });
 
+      /*
       // Definir l'URL de soumission vers payer()
       // / Set the submission URL to payer()
       sendEvent('organizerMsg', '#event-organizer', {
@@ -197,6 +206,7 @@ FLUX :
         msg: 'additionManageForm',
         data: { actionType: 'submit' }
       });
+      */
     }
     </script>
   </div>
