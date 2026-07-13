@@ -565,7 +565,7 @@ def test_envoyer_email_cloture_envoie_si_config_ok(tenant_lespass, mocker):
 
 ```bash
 # Tests comptabilite complets
-API_KEY=$(docker exec lespass_django poetry run python /DjangoFiles/manage.py test_api_key 2>/dev/null | tail -1) && docker exec -e "API_KEY=$API_KEY" lespass_django bash -c "cd /DjangoFiles && /home/tibillet/.cache/pypoetry/virtualenvs/lespass-LcPHtxiF-py3.11/bin/pytest tests/pytest/test_comptabilite_*.py -v"
+API_KEY=$(docker exec lespass_django poetry run python /DjangoFiles/manage.py test_api_key 2>/dev/null | tail -1) && docker exec -e "API_KEY=$API_KEY" lespass_django bash -c "cd /DjangoFiles && /DjangoFiles/.venv/bin/pytest tests/pytest/test_comptabilite_*.py -v"
 
 # Check + migrations
 docker exec lespass_django poetry run python /DjangoFiles/manage.py check

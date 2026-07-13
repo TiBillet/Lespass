@@ -21,12 +21,14 @@ import datetime
 
 from django.contrib import admin
 from django.contrib.admin import SimpleListFilter
+from django.db import connection
 from django.http import HttpResponse
 from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin
 
 from Administration.admin.site import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
+from QrcodeCashless.models import CarteCashless
 from .models import (
     CarteMaintenance,
     ConfigurationTireuse,
@@ -137,20 +139,61 @@ class DebitmetreAdmin(ModelAdmin):
 class CarteMaintenanceAdmin(ModelAdmin):
     """
     Admin pour les cartes NFC de maintenance des tireuses.
-    autocomplete_fields sur carte pour choisir une CarteCashless existante.
     / Admin for tap maintenance NFC cards.
-    autocomplete_fields on carte to select an existing CarteCashless.
     """
 
-    list_display = ("carte_tag_id", "produit", "notes")
-    raw_id_fields = ("carte",)
-    search_fields = ("carte__tag_id", "produit", "notes")
+    # La colonne « carte » affiche le NUMERO IMPRIME (CarteCashless.__str__), soit
+    # l'identifiant lisible a l'oeil sur la carte physique — le meme que celui
+    # propose par l'autocompletion du formulaire. On affiche le Tag ID a cote :
+    # c'est un identifiant DIFFERENT (il vient de la puce, pas du QR code), et
+    # l'operateur doit pouvoir rapprocher les deux.
+    # Meme patron que CartePrimaireAdmin (Administration/admin/laboutik.py).
+    # / The "carte" column shows the PRINTED NUMBER (CarteCashless.__str__) — the
+    # identifier readable on the physical card, the same one the form's autocomplete
+    # offers. The Tag ID sits next to it: it is a DIFFERENT identifier (it comes from
+    # the chip, not the QR code). Same pattern as CartePrimaireAdmin.
+    list_display = ("carte", "carte_tag_id", "produit", "notes")
+
+    # On cherche sur les DEUX identifiants : le numero imprime (lu sur la carte) et
+    # le Tag ID (lu sur la puce). / Search on BOTH identifiers.
+    search_fields = ("carte__tag_id", "carte__number", "produit", "notes")
+
+    # Champ de recherche au lieu d'une saisie du pk numerique de la carte. On tape
+    # le Tag ID lu sur la puce (ou le numero imprime) et les resultats arrivent en
+    # direct. La recherche s'appuie sur les search_fields de
+    # QrcodeCashless.admin.CarteCashlessAdmin (tag_id, number, user__email).
+    # Meme patron que CartePrimaireAdmin (Administration/admin/laboutik.py).
+    # / Search field instead of typing the card's numeric pk. Type the NFC Tag ID
+    # (or printed number) and results stream in. Relies on CarteCashlessAdmin's
+    # search_fields. Same pattern as CartePrimaireAdmin.
+    autocomplete_fields = ("carte",)
 
     @admin.display(description=_("Card (tag_id)"))
     def carte_tag_id(self, obj):
         # Afficher le tag_id de la carte associee
         # / Display the tag_id of the linked card
         return obj.carte.tag_id if obj.carte else "—"
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """
+        Restreint les cartes selectionnables a celles du lieu courant.
+        / Restricts selectable cards to the current venue's.
+
+        INDISPENSABLE meme avec autocomplete_fields : l'autocompletion ne pilote
+        que l'affichage et la recherche. C'est le queryset du champ qui VALIDE la
+        valeur postee. Sans ce filtre, un pk forge pointant vers la carte d'un
+        autre lieu serait accepte — CarteCashless est en SHARED_APPS (schema
+        public), il n'y a aucune isolation automatique.
+        / REQUIRED even with autocomplete_fields: autocompletion only drives
+        display and search. The field's queryset is what VALIDATES the posted
+        value. Without this filter, a forged pk pointing at another venue's card
+        would be accepted — CarteCashless lives in SHARED_APPS (public schema).
+        """
+        if db_field.name == "carte":
+            kwargs["queryset"] = CarteCashless.objects.filter(
+                detail__origine=connection.tenant,
+            ).select_related("detail")
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)

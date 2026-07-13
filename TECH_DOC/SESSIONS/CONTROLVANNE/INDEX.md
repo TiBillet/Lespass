@@ -12,6 +12,7 @@ chantiers de review appliqués), câblée dans Lespass le 2026-07-06.
 | [CHANTIER-02-websockets-prod-supervisord.md](./CHANTIER-02-websockets-prod-supervisord.md) | WebSockets en prod : supervisord mono-conteneur (gunicorn+daphne+celery), nginx /ws/, fix AppRegistryNotReady, flush.sh conscient | ✅ FAIT 2026-07-06 (recette pre-prod restante) |
 | [REVIEW-2026-07-06-tour-critique.md](./REVIEW-2026-07-06-tour-critique.md) | Tour critique complet (3 reviewers : monétaire, stock/signaux, vues/JS) : **3 Critical confirmés** (double facturation concurrente, pas de reconnexion WS kiosk, 500 carte sans wallet V2), 4 Important, 8 Minor → CHANTIER-03 | 2026-07-06 |
 | [CHANTIER-03-fixes-review.md](./CHANTIER-03-fixes-review.md) | Fixes TDD des findings : C1+I1 (verrou session + atomic, test de concurrence 2 threads), C2 (reconnexion WS backoff + bandeau), C3 (refus propre), I2/I3/I4. Minor en dette | ✅ FAIT 2026-07-06 |
+| [DEBUG-2026-07-12-issue-446.md](./DEBUG-2026-07-12-issue-446.md) | Issue #446 (régie, Starsky) : carte de maintenance impossible à créer. `raw_id_fields` → `autocomplete_fields` + **fuite cross-tenant** sur le queryset du champ `carte` | ✅ FAIT 2026-07-12 |
 | `controlvanne/Synthese_merge_vs_chantiers.md` | Synthèse du merge de Mike : 6 chantiers de review vs 11 étapes, divergences, PRs déférées | Référence |
 
 ## Écarts au plan (découverts au câblage)

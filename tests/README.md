@@ -10,7 +10,31 @@ Il est écrit pour être facile à comprendre, même si vous débutez.
 
 **À lire avant d'écrire un test : [`tests/PIEGES.md`](PIEGES.md)** (~80 pièges documentés).
 
-Dernière mise à jour : 2026-06-11.
+Dernière mise à jour : 2026-07-12.
+
+---
+
+## 🤖 Skill agent IA — `TECH_DOC/SKILLS/tibillet-test/`
+
+Le skill qui apprend à un agent (Claude Code) à **lancer et diagnostiquer** les tests de
+ce projet vit dans **`TECH_DOC/SKILLS/tibillet-test/`**, avec tous les autres skills du
+projet (voir `TECH_DOC/SKILLS/README.md`). Il porte l'arbre de décision des échecs typiques
+(schémas `test_*` périmés, fuite de schéma multi-tenant, classes fragmentées par le tri de
+collecte, `502` quand le serveur live est down) et la procédure de purge à froid.
+
+**Si tu découvres un nouveau piège d'infra de test, mets `PIEGES.md` ET le skill à jour
+dans le même commit.**
+
+`.claude/` n'est jamais committé (outillage local). Chaque dev crée donc le lien une
+fois, depuis la racine du dépôt :
+
+```bash
+mkdir -p .claude/skills
+ln -sfn "$(pwd)/TECH_DOC/SKILLS/tibillet-test" .claude/skills/tibillet-test
+```
+
+Le lien doit être **absolu** (`$(pwd)/...`) : un lien relatif n'est pas résolu de façon
+fiable par le chargeur de skills. Relancer Claude Code après création du lien.
 
 ---
 

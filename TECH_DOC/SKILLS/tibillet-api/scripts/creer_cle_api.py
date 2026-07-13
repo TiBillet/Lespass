@@ -3,7 +3,7 @@
 Cree une cle API v2 (ExternalApiKey) de test sur un tenant TiBillet/Lespass.
 / Creates a test API v2 key (ExternalApiKey) on a TiBillet/Lespass tenant.
 
-LOCALISATION : api_v2/skills/tibillet-api/scripts/creer_cle_api.py
+LOCALISATION : TECH_DOC/SKILLS/tibillet-api/scripts/creer_cle_api.py
 (lie depuis .claude/skills/tibillet-api par un symlink local, non committe)
 
 Le script tourne depuis le HOTE : il execute du code Django dans le conteneur via

@@ -36,11 +36,20 @@ def tenant():
 @pytest.mark.django_db
 def test_module_kiosk_existe_et_defaut_false(tenant):
     """Configuration.module_kiosk existe et vaut False par defaut.
-    / Configuration.module_kiosk exists and defaults to False."""
+    / Configuration.module_kiosk exists and defaults to False.
+
+    On lit le DEFAUT DU CHAMP, jamais `get_solo().module_kiosk` : la Configuration du
+    tenant porte la valeur reelle, qu'un gestionnaire peut activer depuis l'admin. La
+    lire ici rendrait le test dependant de l'etat de la base.
+    / Read the FIELD'S DEFAULT, never `get_solo().module_kiosk`: the tenant's
+    Configuration holds the live value, which an admin can switch on at any time.
+    """
     with tenant_context(tenant):
         configuration = Configuration.get_solo()
         assert hasattr(configuration, "module_kiosk")
-        assert configuration.module_kiosk is False
+
+    champ_module_kiosk = Configuration._meta.get_field("module_kiosk")
+    assert champ_module_kiosk.default is False
 
 
 @pytest.fixture

@@ -830,7 +830,7 @@ class Command(BaseCommand):
 
 ```bash
 # 1. Tests comptabilite (S1 + S2)
-docker exec lespass_django bash -c "cd /DjangoFiles && /home/tibillet/.cache/pypoetry/virtualenvs/lespass-LcPHtxiF-py3.11/bin/pytest tests/pytest/test_comptabilite_*.py -v"
+docker exec lespass_django bash -c "cd /DjangoFiles && /DjangoFiles/.venv/bin/pytest tests/pytest/test_comptabilite_*.py -v"
 # Attendu : ~22 PASS
 
 # 2. Check Django

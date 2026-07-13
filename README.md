@@ -156,7 +156,7 @@ docker exec \
   lespass_django poetry run pytest tests/e2e/ -v
 ```
 
-Voir `tests/TESTS_README.md` pour la documentation complete (architecture, pieges,
+Voir `tests/README.md` pour la documentation complete (architecture, pieges,
 variables d'environnement).
 
 Carte Stripe de test : `4242 4242 4242 4242`, exp `12/42`, CVC `424`.

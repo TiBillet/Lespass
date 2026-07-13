@@ -158,24 +158,30 @@ Notes:
 
 ---
 
-## Skill agent IA — `api_v2/skills/tibillet-api/`
+## Skill agent IA — `TECH_DOC/SKILLS/tibillet-api/`
 
 Le skill qui apprend a un agent (Claude Code) a piloter cette API vit dans
-**`api_v2/skills/tibillet-api/`** : il est versionne ici, a cote du code qu'il decrit.
-**Si tu modifies le mapping semantique, les permissions ou le catalogue de blocs,
-mets le skill a jour dans le meme commit.**
+**`TECH_DOC/SKILLS/tibillet-api/`**, avec tous les autres skills du projet
+(voir `TECH_DOC/SKILLS/README.md`).
+
+**Le skill est loin du code qu'il decrit : c'est a toi d'y penser. Si tu modifies le
+mapping semantique, les permissions ou le catalogue de blocs, mets le skill a jour dans
+le MEME commit.** Un skill qui ment est pire que pas de skill : l'agent le croit.
 
 `.claude/` n'est jamais committe (outillage local). Chaque dev cree donc le lien une
 fois, depuis la racine du depot :
 
 ```bash
 mkdir -p .claude/skills
-ln -s ../../api_v2/skills/tibillet-api .claude/skills/tibillet-api
+ln -sfn "$(pwd)/TECH_DOC/SKILLS/tibillet-api" .claude/skills/tibillet-api
 ```
+
+Le lien doit etre **absolu** (`$(pwd)/...`) : un lien relatif n'est pas resolu de facon
+fiable par le chargeur de skills. Relancer Claude Code apres creation du lien.
 
 **Jamais de cle API en clair** dans ce dossier : il est versionne. Les scripts lisent
 la cle depuis l'environnement (`$TIBILLET_API_KEY`). Pour obtenir une cle de dev :
-`python api_v2/skills/tibillet-api/scripts/creer_cle_api.py --tenant lespass --perms page`.
+`python TECH_DOC/SKILLS/tibillet-api/scripts/creer_cle_api.py --tenant lespass --perms page`.
 
 ---
 

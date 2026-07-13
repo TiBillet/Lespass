@@ -182,7 +182,7 @@ depuis l'environnement (`os.environ["TIBILLET_API_KEY"]`).
 ## Helper — obtenir une clé API de test
 
 ```bash
-python api_v2/skills/tibillet-api/scripts/creer_cle_api.py \
+python TECH_DOC/SKILLS/tibillet-api/scripts/creer_cle_api.py \
   --tenant lespass --perms page,event,product
 ```
 

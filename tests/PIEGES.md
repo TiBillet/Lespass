@@ -3,7 +3,7 @@
 **A lire AVANT d'ecrire un nouveau test.** Lecons apprises pendant le developpement.
 Chaque piege a ete rencontre en situation reelle et documente pour eviter de le repeter.
 
-Source : extraits de `tests/TESTS_README.md` + ajouts session cascade multi-asset (2026-04-08).
+Source : extraits de `tests/README.md` + ajouts session cascade multi-asset (2026-04-08).
 
 ---
 
@@ -227,7 +227,7 @@ et un dans `[data-testid="paiement-succes"]`. Toujours scoper :
 `playwright install --with-deps chromium` echoue car `su` n'a pas de mot de passe.
 Utiliser `-u root` avec le chemin complet du virtualenv :
 ```bash
-docker exec -u root lespass_django /home/tibillet/.cache/pypoetry/virtualenvs/lespass-LcPHtxiF-py3.11/bin/playwright install-deps chromium
+docker exec -u root lespass_django /DjangoFiles/.venv/bin/playwright install-deps chromium
 docker exec lespass_django poetry run playwright install chromium
 ```
 
@@ -2231,6 +2231,131 @@ DELETE FROM "Customers_client" WHERE schema_name LIKE 'test_X%';
 Apres, FastTenantTestCase recree proprement le schema avec toutes les migrations.
 
 Decouvert Session 37 (bug 8 stock vrac) en debuguant un schema test partiellement migre.
+
+---
+
+**12.5.bis — « Chaque fichier passe seul, la suite complete rend ~90 ERROR. »
+Deux causes distinctes, et un effet de bord qui cache les deux.**
+
+Symptome : `pytest tests/pytest/` rend des dizaines d'`ERROR` sur les
+`FastTenantTestCase`, alors que **chaque fichier passe quand on le lance seul** :
+```
+django.db.utils.ProgrammingError:
+column BaseBillet_configuration.module_billetterie does not exist
+Exception: Can't create tenant outside the public schema. Current schema is lespass.
+```
+
+Contexte indispensable : `tests/pytest/conftest.py` **neutralise `django_db_setup`** —
+il n'y a **pas de base de test**. Les tests tournent sur la base de **dev**, et les
+`FastTenantTestCase` y creent leurs schemas `test_*`.
+
+---
+
+**CAUSE A — la connexion reste « collee » sur un tenant.**
+
+django-tenants pose `connection.set_tenant(...)` sans jamais le decoller. Deux colleurs :
+le middleware (des qu'un test tape le client de test Django sur
+`lespass.tibillet.localhost`) et les `setUp()` des `FastTenantTestCase`.
+
+Le seul decolleur, `FastTenantTestCase.tearDownClass()`, n'agit qu'en **fin de classe** :
+il ne rattrape pas un test-fonction qui vient de coller `lespass` juste avant la classe
+suivante. C'est ce trou qui fait tomber le `setUpClass` suivant.
+
+Or `FastTenantTestCase.setUpClass` doit **creer** son tenant quand le schema n'existe
+pas encore, et `TenantMixin.save()` l'interdit hors du schema public → `Exception:
+Can't create tenant outside the public schema`. Le premier test qui colle `lespass` fait
+donc tomber tous les `FastTenantTestCase` dont le schema manque.
+
+*Fix applique* : fixture autouse **class-scoped** dans le conftest, qui remet `public`
+**en setup**, et **uniquement pour les classes `FastTenantTestCase`**.
+- **Pas en teardown de test** : les finalizers des fixtures de portee superieure
+  (class/module/session) s'executent APRES, et tomberaient sur `public` en nettoyant des
+  objets tenant (`relation "BaseBillet_ticket" does not exist`).
+- **Pas pour les classes ordinaires** : elles ne reposent aucun tenant ; leur imposer
+  `public` casse le nettoyage de leurs fixtures.
+
+---
+
+**CAUSE B — un tri de collecte qui coupe les classes en deux.**
+
+Le `pytest_collection_modifyitems` rangeait **chaque test du projet** selon une
+sous-chaine de son NOM, pour ordonner le flow API v2 Event :
+```python
+if "list" in name: return (1, path)   # <-- le coupable
+```
+Le mot **francais « liste » contient la sous-chaine anglaise « list »**. Le test
+`test_retourne_liste_vide_si_stock_reste_positif` partait donc au rang 1, loin de son
+frere `test_retourne_tuple_...` reste au rang 10 → leur classe commune se retrouvait
+**coupee en deux blocs non contigus**, et `setUpClass`/`tearDownClass` etaient rejoues au
+milieu. (Meme piege potentiel avec `create`, `link`, `retrieve` caches dans des mots FR.)
+
+*Fix applique* : on ne reordonne QUE des **fichiers entiers**, jamais des tests isoles —
+whitelist `ORDRE_DU_FLOW_API_V2_EVENT`, cle `(rang_du_fichier, chemin_du_fichier)`. Tous
+les tests d'un fichier partagent la meme cle et le tri Python est **stable** : l'ordre de
+collecte est preserve, aucune classe ne peut plus etre fragmentee.
+
+**Regle : ne JAMAIS trier des tests par sous-chaine de leur NOM.** Un projet FALC ecrit
+ses tests en francais ; les mots-cles anglais se cachent dans les mots francais.
+
+*Detection* (doit renvoyer « AUCUN ») :
+```bash
+docker exec lespass_django poetry run pytest tests/pytest/ --collect-only -q \
+  | grep "::" | sed 's/::[^:]*$//' | awk '
+  { if ($0 != prev) { blocs[$0]++; prev=$0 } }
+  END { n=0; for (c in blocs) if (blocs[c] > 1) { print blocs[c] " blocs -> " c; n++ }
+        if (n==0) print "AUCUN" }'
+```
+
+---
+
+**CE QUI CACHE LES DEUX (et fait perdre des heures).**
+
+`FastTenantTestCase.tearDownClass()` fait **uniquement** `connection.set_schema_to_public()`
+— **il ne supprime RIEN** (verifie dans la source, django-tenants 3.10.1). C'est
+`TenantTestCase` (la variante non-Fast, **inutilisee** ici) qui droppe le schema.
+Et `setUpClass` **reutilise** un schema existant sans **jamais** rejouer les migrations.
+
+Trois consequences :
+
+1. **Un fichier lance seul cree son schema, qui PERSISTE** en base de dev. Au run
+   suivant, il n'y a plus rien a creer : le fichier passe **meme si le bug est toujours
+   la**. Ne JAMAIS conclure « c'est repare » sur un run qui a beneficie de schemas
+   pre-existants. Reproduire a froid (voir purge ci-dessous).
+2. **Chaque nouvelle migration perime silencieusement tous les schemas `test_*`
+   existants** : ils ne sont jamais re-migres → `column ... does not exist`. Purger les
+   schemas `test_*` apres toute migration qui touche une TENANT_APP.
+3. Un `docker compose down -v` efface ces schemas et fait donc **reapparaitre** des
+   erreurs qu'on croyait corrigees.
+
+**Purge des schemas de test** (etat a froid). Le `DELETE` ORM echoue (cascade tenant, cf.
+12.5) et le `DELETE` SQL bute sur les FK modernes (`seo_seocache`, `fedow_*`,
+`discovery_pairingdevice`...). Il faut vider les tables referencantes AVANT :
+```python
+# docker exec lespass_django poetry run python /DjangoFiles/manage.py shell
+from django.db import connection
+connection.set_schema_to_public()
+FILTRE = r'test\_%'          # filet de securite : uniquement les schemas test_*
+with connection.cursor() as c:
+    c.execute('select uuid, schema_name from "Customers_client" where schema_name like %s', [FILTRE])
+    tenants = c.fetchall()
+    c.execute('''select distinct tc.table_name, kcu.column_name
+        from information_schema.table_constraints tc
+        join information_schema.key_column_usage kcu on tc.constraint_name = kcu.constraint_name
+        join information_schema.constraint_column_usage ccu on tc.constraint_name = ccu.constraint_name
+        where tc.constraint_type='FOREIGN KEY' and ccu.table_name='Customers_client'
+          and tc.table_schema='public' ''')
+    for table, colonne in c.fetchall():
+        c.execute(f'DELETE FROM "{table}" WHERE "{colonne}" IN '
+                  f'(SELECT uuid FROM "Customers_client" WHERE schema_name LIKE %s)', [FILTRE])
+    c.execute('DELETE FROM "Customers_client" WHERE schema_name LIKE %s', [FILTRE])
+    for _uuid, nom in tenants:
+        c.execute(f'DROP SCHEMA IF EXISTS "{nom}" CASCADE')
+```
+
+Decouvert 2026-07-12 en debuguant l'issue #446 (controlvanne) : on cherchait si un fix
+d'admin avait casse la suite. Il ne l'avait pas cassee — les deux pieges preexistaient.
+Relecture par un agent Fable, qui a corrige un diagnostic initial faux (« tearDownClass
+droppe le schema » : non, il ne droppe rien).
 
 ---
 

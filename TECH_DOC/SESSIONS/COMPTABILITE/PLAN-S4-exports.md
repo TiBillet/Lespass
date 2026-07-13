@@ -1064,7 +1064,7 @@ Bouton dans `change_form_before.html` après le bouton Excel :
 
 ```bash
 # Tous les tests comptabilite
-docker exec -e "API_KEY=$(docker exec lespass_django poetry run python /DjangoFiles/manage.py test_api_key 2>/dev/null | tail -1)" lespass_django bash -c "cd /DjangoFiles && /home/tibillet/.cache/pypoetry/virtualenvs/lespass-LcPHtxiF-py3.11/bin/pytest tests/pytest/test_comptabilite_*.py -v"
+docker exec -e "API_KEY=$(docker exec lespass_django poetry run python /DjangoFiles/manage.py test_api_key 2>/dev/null | tail -1)" lespass_django bash -c "cd /DjangoFiles && /DjangoFiles/.venv/bin/pytest tests/pytest/test_comptabilite_*.py -v"
 
 # Check Django
 docker exec lespass_django poetry run python /DjangoFiles/manage.py check

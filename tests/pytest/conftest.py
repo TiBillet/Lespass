@@ -96,34 +96,68 @@ def _inject_cli_env(request):
         os.environ["API_BASE_URL"] = base.rstrip("/")
 
 
+# Les 5 fichiers du flow API v2 Event doivent s'executer dans CET ordre : ils se
+# partagent le meme evenement, cree par le premier et supprime par le dernier.
+# Chacun ne contient qu'un seul test, ecrit sous forme de fonction.
+# / The 5 files of the API v2 Event flow must run in THIS order: they share the same
+# event, created by the first file and deleted by the last one.
+ORDRE_DU_FLOW_API_V2_EVENT = {
+    "test_event_create.py": 0,
+    "test_events_list.py": 1,
+    "test_event_retrieve.py": 2,
+    "test_event_link_address.py": 3,
+    "test_event_delete.py": 4,
+}
+
+# Rang de tous les autres tests : ils passent apres le flow, sans etre reordonnes.
+# / Rank of every other test: they run after the flow, without being reordered.
+RANG_DES_AUTRES_TESTS = 10
+
+
 def pytest_collection_modifyitems(config, items):
     """
-    Reorder tests to ensure the following sequence for API v2 Event flow:
-    1) create
-    2) list
-    3) retrieve
-    4) link (address linking)
-    5) delete
-    Other tests keep their relative order.
+    Ordonne les 5 fichiers du flow API v2 Event. Ne touche a RIEN d'autre.
+    / Orders the 5 files of the API v2 Event flow. Touches NOTHING else.
+
+    LOCALISATION : tests/pytest/conftest.py
+
+    REGLE : ne trier QUE des fichiers entiers. NE JAMAIS trier par nom de test.
+
+    Trier par sous-chaine du nom d'un test (« create », « list »...) casse la suite :
+
+    1. Les tests sont ecrits en francais, et le mot « liste » CONTIENT « list ». Un
+       test nomme `test_retourne_liste_vide_...` part alors dans un autre groupe que
+       ses tests freres.
+
+    2. Sa classe se retrouve donc COUPEE EN DEUX BLOCS non contigus. pytest rejoue
+       `setUpClass` ET `tearDownClass` a chaque bloc — et le `tearDownClass` d'un
+       `FastTenantTestCase` remet la connexion sur `public`, ce qui casse l'etat
+       attendu par le bloc suivant. Des dizaines d'erreurs en suite complete, alors
+       que chaque fichier passe seul.
+
+    La cle `(rang_du_fichier, chemin_du_fichier)` garantit que tous les tests d'un
+    fichier partagent la meme cle : le tri de Python etant stable, aucune classe ne
+    peut etre fragmentee.
+    / RULE: only sort whole files, NEVER by test name. French test names contain the
+    English keywords ("liste" contains "list"), which splits a class into two
+    non-contiguous blocks and re-runs setUpClass/tearDownClass in the middle.
     """
 
     def sort_key(item):
-        name = item.name.lower()
-        path = str(item.fspath)
-        # Priority by function/test name
-        if "create" in name:
-            return (0, path)
-        if "list" in name:
-            return (1, path)
-        if "retrieve" in name:
-            return (2, path)
-        # ensure link-address tests run before delete cleanup
-        if "link" in name:
-            return (3, path)
-        if "delete" in name:
-            return (4, path)
-        # Everything else afterwards
-        return (10, path)
+        chemin_du_fichier = str(item.fspath)
+        nom_du_fichier = os.path.basename(chemin_du_fichier)
+
+        rang_du_fichier = ORDRE_DU_FLOW_API_V2_EVENT.get(
+            nom_du_fichier,
+            RANG_DES_AUTRES_TESTS,
+        )
+
+        # On renvoie le chemin en second : tous les tests d'un meme fichier gardent
+        # la meme cle de tri. Le tri de Python etant stable, leur ordre de collecte
+        # est preserve tel quel, et aucune classe n'est fragmentee.
+        # / The path comes second: all tests of a file share the same sort key. Python's
+        # sort being stable, their collection order is preserved and no class is split.
+        return (rang_du_fichier, chemin_du_fichier)
 
     items.sort(key=sort_key)
 
@@ -242,6 +276,71 @@ def _enable_db_access_for_all(django_db_blocker):
     django_db_blocker.unblock()
     yield
     django_db_blocker.restore()
+
+
+@pytest.fixture(autouse=True, scope="class")
+def _connexion_sur_le_schema_public_avant_chaque_classe(request):
+    """
+    Garantit que la connexion est sur `public` AVANT le `setUpClass` de chaque classe.
+    / Ensures the connection sits on `public` BEFORE each class's `setUpClass`.
+
+    LOCALISATION : tests/pytest/conftest.py
+
+    POURQUOI :
+    Deux choses « collent » la connexion sur un tenant, et personne ne la decolle :
+    - le middleware django-tenants, des qu'un test fait une requete avec le client de
+      test Django sur `lespass.tibillet.localhost` ;
+    - les `setUp()` des `FastTenantTestCase` du projet, qui appellent
+      `connection.set_tenant(...)` a chaque test.
+
+    (`FastTenantTestCase.tearDownClass`, lui, remet bien `public` — mais seulement en fin
+    de CLASSE. Il ne rattrape donc pas un test-fonction qui a colle `lespass` juste avant.)
+
+    Or `FastTenantTestCase.setUpClass` doit CREER son tenant de test quand le schema
+    n'existe pas encore, et django-tenants l'interdit hors du schema public :
+        Exception: Can't create tenant outside the public schema. Current schema is lespass.
+
+    Sans cette remise a zero, le premier test qui laisse la connexion sur `lespass` fait
+    echouer tous les `FastTenantTestCase` dont le schema n'existe pas (~50 erreurs en
+    suite complete, alors que chaque fichier passe seul).
+
+    POURQUOI EN SETUP DE CLASSE, ET SURTOUT PAS EN TEARDOWN DE TEST :
+    une premiere version remettait `public` apres CHAQUE test. Erreur : les finalizers
+    des fixtures de portee superieure (class, module, session) s'executent APRES ceux de
+    portee test. Ces finalizers, qui nettoient des objets du tenant, tombaient alors sur
+    `public` et levaient :
+        ProgrammingError: relation "BaseBillet_ticket" does not exist
+    En agissant en SETUP de classe, on ne touche a aucun teardown.
+    / Do NOT restore in test teardown: higher-scoped finalizers run afterwards and would
+    hit `public` while cleaning up tenant objects.
+
+    POURQUOI SEULEMENT POUR LES `FastTenantTestCase` :
+    ces classes-la reposent le tenant elles-memes (leur `setUpClass` fait `set_tenant`),
+    donc les mettre sur `public` juste avant est sans effet de bord. Les classes de test
+    ORDINAIRES, elles, ne reposent aucun tenant : leur imposer `public` casserait leurs
+    fixtures, dont le nettoyage tomberait sur un schema sans les tables du tenant.
+    On ne change donc l'etat de la connexion QUE la ou c'est necessaire.
+    / Only for FastTenantTestCase: they re-set the tenant themselves in setUpClass, so
+    forcing `public` right before is harmless. Ordinary test classes set no tenant, and
+    forcing `public` on them would break their fixtures' cleanup.
+
+    Voir tests/PIEGES.md 12.5 et 12.5.bis.
+    """
+    from django.db import connection
+    from django_tenants.test.cases import FastTenantTestCase
+
+    classe_de_test = getattr(request, "cls", None)
+
+    est_un_fast_tenant_test_case = (
+        classe_de_test is not None
+        and isinstance(classe_de_test, type)
+        and issubclass(classe_de_test, FastTenantTestCase)
+    )
+
+    if est_un_fast_tenant_test_case:
+        connection.set_schema_to_public()
+
+    yield
 
 
 @pytest.fixture
