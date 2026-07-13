@@ -327,6 +327,9 @@ class CommandeService:
             ) else None
 
             for ligne in result.lignearticles.all():
+                ligne.promotional_code = applicable_promo
+                ligne.save()
+
                 all_lines.append(ligne)
             total_centimes += amount_cts
 

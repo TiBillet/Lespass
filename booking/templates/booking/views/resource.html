@@ -163,6 +163,12 @@ DEPENDENCIES :
                 cursor: not-allowed;
             }
 
+            .calendar-slot-cart {
+                background: linear-gradient(135deg, #E0529F, #EF7B35, #E3C53F, #4FB477, #37A6C4);
+                color: #fff;
+                cursor: default;
+            }
+
             .calendar-slot-time {
                 font-weight: 600;
             }
@@ -348,6 +354,12 @@ DEPENDENCIES :
                 cursor: not-allowed;
             }
 
+            .mobile-slot-cart {
+                background: linear-gradient(135deg, #E0529F, #EF7B35, #E3C53F, #4FB477, #37A6C4);
+                color: #fff;
+                cursor: default;
+            }
+
             .mobile-slot-time {
                 font-weight: 600;
             }
@@ -425,6 +437,10 @@ DEPENDENCIES :
                 background-color: var(--bs-secondary-bg);
             }
 
+            .calendar-legend-cart {
+                background: linear-gradient(135deg, #E0529F, #EF7B35, #E3C53F, #4FB477, #37A6C4);
+            }
+
             .calendar-legend-past {
                 background: repeating-linear-gradient(
                     45deg,
@@ -442,7 +458,11 @@ DEPENDENCIES :
         -->
         <div id="booking-calendar" class="booking-calendar" data-testid="booking-calendar"
              data-resource-pk="{{ resource.pk }}"
-             data-book-url="{% url 'booking-book' pk=resource.pk %}">
+             data-book-url="{% url 'booking-book' pk=resource.pk %}"
+             hx-get="{% url 'booking-resource' pk=resource.pk %}"
+             hx-trigger="panierToast"
+             hx-select="#booking-calendar"
+             hx-swap="outerHTML">
 
             <!--
             ===========================
@@ -458,7 +478,7 @@ DEPENDENCIES :
                 <div class="calendar-nav" role="group" aria-label="{% translate 'Navigation par semaine' %}"
                      data-testid="booking-calendar-nav">
                     <button type="button" id="calendar-prev-week"
-                            class="btn btn-outline-secondary btn-sm"
+                            class="btn btn-primary btn-sm"
                             aria-label="{% translate 'Semaine précédente' %}"
                             data-testid="booking-calendar-prev-week">
                         <i class="bi bi-chevron-left" aria-hidden="true"></i>
@@ -469,7 +489,7 @@ DEPENDENCIES :
                     </span>
 
                     <button type="button" id="calendar-next-week"
-                            class="btn btn-outline-secondary btn-sm"
+                            class="btn btn-primary btn-sm"
                             aria-label="{% translate 'Semaine suivante' %}"
                             data-testid="booking-calendar-next-week">
                         <i class="bi bi-chevron-right" aria-hidden="true"></i>
@@ -519,18 +539,18 @@ DEPENDENCIES :
                                 {% for day in week.days %}
                                     {% for group in day.groups %}
                                         {% for slot in group.slots %}
-                                            <div class="calendar-slot {% if slot.remaining_capacity > 0 %}calendar-slot-free{% else %}calendar-slot-busy{% endif %}"
+                                            <div class="calendar-slot {% if slot.in_cart %}calendar-slot-cart{% elif slot.remaining_capacity > 0 %}calendar-slot-free{% else %}calendar-slot-busy{% endif %}"
                                                  style="grid-row: {{ slot.row_start }} / {{ slot.row_end }}; grid-column: {{ slot.column_index }};"
                                                  data-start-datetime="{{ slot.start|date:'Y-m-d\TH:i:s' }}"
                                                  data-group-end="{{ group.end|date:'Y-m-d\TH:i:s' }}"
                                                  data-remaining-capacity="{{ slot.remaining_capacity }}"
-                                                 data-testid="{% if slot.remaining_capacity > 0 %}booking-calendar-slot-free{% else %}booking-calendar-slot-busy{% endif %}"
-                                                 role="{% if slot.remaining_capacity > 0 %}button{% else %}none{% endif %}"
-                                                 tabindex="{% if slot.remaining_capacity > 0 %}0{% else %}-1{% endif %}"
-                                                 aria-label="{% if slot.remaining_capacity > 0 %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, libre{% endblocktrans %}{% else %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, complet{% endblocktrans %}{% endif %}"
+                                                 data-testid="{% if slot.in_cart %}booking-calendar-slot-cart{% elif slot.remaining_capacity > 0 %}booking-calendar-slot-free{% else %}booking-calendar-slot-busy{% endif %}"
+                                                 role="{% if slot.in_cart or slot.remaining_capacity <= 0 %}none{% else %}button{% endif %}"
+                                                 tabindex="{% if slot.in_cart or slot.remaining_capacity <= 0 %}-1{% else %}0{% endif %}"
+                                                 aria-label="{% if slot.in_cart %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, dans le panier{% endblocktrans %}{% elif slot.remaining_capacity > 0 %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, libre{% endblocktrans %}{% else %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, complet{% endblocktrans %}{% endif %}"
                                             >
                                                 <span class="calendar-slot-time">{{ slot.start|date:"H\hi" }} - {{ slot.end|date:"H\hi" }}</span>
-                                                {% if resource.capacity > 1 %}
+                                                {% if resource.capacity > 1 and not slot.in_cart and slot.remaining_capacity > 0 %}
                                                     <span class="calendar-slot-capacity">
                                                         {% blocktrans count n=slot.remaining_capacity %}{{ n }} place{% plural %}{{ n }} places{% endblocktrans %}
                                                     </span>
@@ -663,20 +683,20 @@ DEPENDENCIES :
                                         {% endfor %}
 
                                         {% for group in day.groups %}
-                                            {% for slot in group.slots %}
-                                                <div class="mobile-slot {% if slot.remaining_capacity > 0 %}mobile-slot-free{% else %}mobile-slot-busy{% endif %}"
-                                                     style="grid-row: {{ slot.row_start }} / {{ slot.row_end }}; grid-column: 2;"
-                                                     data-start-datetime="{{ slot.start|date:'Y-m-d\TH:i:s' }}"
-                                                     data-group-end="{{ group.end|date:'Y-m-d\TH:i:s' }}"
-                                                     data-remaining-capacity="{{ slot.remaining_capacity }}"
-                                                     data-testid="{% if slot.remaining_capacity > 0 %}booking-mobile-slot-free{% else %}booking-mobile-slot-busy{% endif %}"
-                                                     role="{% if slot.remaining_capacity > 0 %}button{% else %}none{% endif %}"
-                                                     tabindex="{% if slot.remaining_capacity > 0 %}0{% else %}-1{% endif %}"
-                                                     aria-label="{% if slot.remaining_capacity > 0 %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, libre{% endblocktrans %}{% else %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, complet{% endblocktrans %}{% endif %}"
-                                                >
-                                                    <span class="mobile-slot-time">{{ slot.start|date:"H\hi" }}</span>
-                                                </div>
-                                            {% endfor %}
+                                        {% for slot in group.slots %}
+                                            <div class="mobile-slot {% if slot.in_cart %}mobile-slot-cart{% elif slot.remaining_capacity > 0 %}mobile-slot-free{% else %}mobile-slot-busy{% endif %}"
+                                                 style="grid-row: {{ slot.row_start }} / {{ slot.row_end }}; grid-column: 2;"
+                                                 data-start-datetime="{{ slot.start|date:'Y-m-d\TH:i:s' }}"
+                                                 data-group-end="{{ group.end|date:'Y-m-d\TH:i:s' }}"
+                                                 data-remaining-capacity="{{ slot.remaining_capacity }}"
+                                                 data-testid="{% if slot.in_cart %}booking-mobile-slot-cart{% elif slot.remaining_capacity > 0 %}booking-mobile-slot-free{% else %}booking-mobile-slot-busy{% endif %}"
+                                                 role="{% if slot.in_cart or slot.remaining_capacity <= 0 %}none{% else %}button{% endif %}"
+                                                 tabindex="{% if slot.in_cart or slot.remaining_capacity <= 0 %}-1{% else %}0{% endif %}"
+                                                 aria-label="{% if slot.in_cart %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, dans le panier{% endblocktrans %}{% elif slot.remaining_capacity > 0 %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, libre{% endblocktrans %}{% else %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, complet{% endblocktrans %}{% endif %}"
+                                            >
+                                                <span class="mobile-slot-time">{{ slot.start|date:"H\hi" }}</span>
+                                            </div>
+                                        {% endfor %}
                                         {% endfor %}
 
                                     </div>
@@ -704,6 +724,11 @@ DEPENDENCIES :
                       data-testid="booking-legend-busy">
                     <span class="calendar-legend-color calendar-legend-busy"></span>
                     {% translate "Complet" %}
+                </span>
+                <span class="calendar-legend-item"
+                      data-testid="booking-legend-cart">
+                    <span class="calendar-legend-color calendar-legend-cart"></span>
+                    {% translate "Panier" %}
                 </span>
                 <span class="calendar-legend-item"
                       data-testid="booking-legend-past">

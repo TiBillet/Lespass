@@ -951,8 +951,7 @@ class PanierSession:
                     break
             except Price.DoesNotExist:
                 continue
-            except Exception:
-                return
+
         if not present:
             raise InvalidItemError(
                 _("This promotional code does not apply to any item in your cart.")

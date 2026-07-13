@@ -50,6 +50,7 @@ class DisplaySlot:
     remaining_capacity:    int
     slot_duration_minutes: int
     is_new_week:           bool = False
+    in_cart:               bool = False
 
 
 
@@ -61,7 +62,7 @@ class DisplaySlotGroup:
     Un créneau isolé a un groupe à un seul élément.
     / A contiguous run of DisplaySlot objects sharing the same duration
     (x.end == next.start and x.slot_duration_minutes == next.slot_duration_minutes).
-    A solo slot has slots=[itself].
+    / A solo slot has slots=[itself].
     """
     slots: list = field(default_factory=list)  # list[DisplaySlot]
 
@@ -241,6 +242,7 @@ class BookingViewSet(viewsets.ViewSet):
                     'end': slot.end,
                     'slot_duration_minutes': slot.slot_duration_minutes,
                     'remaining_capacity': slot.remaining_capacity,
+                    'in_cart': slot.in_cart,
                     'row_start': row_start,
                     'row_end': row_end,
                 })
@@ -446,6 +448,26 @@ class BookingViewSet(viewsets.ViewSet):
             pk=pk,
         )
         slot_groups = annotate_slots_for_display(compute_slots(resource))
+
+        # Marque les créneaux déjà présents dans le panier.
+        # / Mark slots already present in the cart.
+        from BaseBillet.services_panier import PanierSession
+        panier = PanierSession(request)
+        cart_resource_items = [
+            item for item in panier.resources()
+            if item.get('resource_uuid') == str(resource.pk)
+        ]
+        for group in slot_groups:
+            for slot in group.slots:
+                for item in cart_resource_items:
+                    item_start = parse_datetime(item['start_datetime'])
+                    item_end = item_start + datetime.timedelta(
+                        minutes=int(item['slot_duration_minutes']) * int(item['slot_count'])
+                    )
+                    if item_start <= slot.start < item_end:
+                        slot.in_cart = True
+                        break
+
         calendar_weeks, min_hour, max_hour = self._build_calendar_weeks(slot_groups)
         mobile_days, mobile_time_rows, mobile_min_hour, mobile_max_hour = self._build_mobile_days(slot_groups)
         resource_choices = self._get_resource_choices(resource)
@@ -515,7 +537,7 @@ class BookingViewSet(viewsets.ViewSet):
         if not request.user.is_authenticated:
             login_url   = reverse('connexion')
             redirect_url = f'{login_url}?next={request.get_full_path()}'
-            return redirect(redirect_url)
+            return HttpResponseClientRedirect(redirect_url)
 
         resource = get_object_or_404(
             Resource.objects.select_related('calendar', 'weekly_opening'),
@@ -595,11 +617,12 @@ class BookingViewSet(viewsets.ViewSet):
         # Créneau introuvable ou complet → redirige vers slot-unavailable.
         # / Slot not found or full → redirect to slot-unavailable.
         if requested_slot is None or requested_slot.remaining_capacity <= 0:
-            unavailable_url = (
-                reverse('booking-slot-unavailable', kwargs={'pk': resource.pk})
-                + '?' + urlencode({'start_datetime': start_datetime_raw})
-            )
-            return redirect(unavailable_url)
+            context = get_context(request)
+            context.update({
+                'resource': resource,
+                'start_datetime': start_datetime,
+            })
+            return render(request, 'booking/partials/slot_unavailable.html', context)
 
         # Calcule si l'annulation sera possible après réservation.
         # deadline = start - cancellation_deadline_hours.

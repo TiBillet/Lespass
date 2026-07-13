@@ -17,8 +17,11 @@ def partial_refund_payment(paiement, config, ligne_articles, specified_quantity=
     """
     from BaseBillet.models import Paiement_stripe, LigneArticle, SaleOrigin
 
+    if specified_quantity == 0:
+        raise Exception(_("Vous devez rembourser au moins un article"))
+
     for ligne_article in ligne_articles:
-        if not paiement.lignearticles.get(pk=ligne_article.pk):
+        if not paiement.lignearticles.filter(pk=ligne_article.pk).exists():
             raise Exception(_("Une LigneArticle n'est pas lié au bon paiement"))
 
     paiement: Paiement_stripe
