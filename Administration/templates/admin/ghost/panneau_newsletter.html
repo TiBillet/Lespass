@@ -1,56 +1,58 @@
-{% load i18n unfold %}
+{% load i18n unfold static %}
+<script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
 {% comment %}
 PANNEAU NEWSLETTER — page de configuration Ghost
 / Newsletter panel — Ghost configuration page
-
-⚠️ NE PAS CHARGER HTMX ICI. UNFOLD L'EMBARQUE DEJA (/static/unfold/js/htmx/htmx.js).
-Ajouter un second <script src="...htmx..."> le charge DEUX FOIS, et ca casse tout de facon
-SILENCIEUSE : une instance traite le hx-get et ENVOIE bien la requete (elle repond 200),
-mais le swap se fait sur l'autre registre interne et ne trouve plus sa cible. Rien ne
-s'affiche, et il n'y a NI erreur console NI message. On cherche pendant une heure.
-(Le panneau des adhesions, lui, charge encore htmx explicitement — Unfold ne l'embarquait
-sans doute pas a l'epoque. A verifier : il porte peut-etre la meme bombe.)
-/ DO NOT LOAD HTMX HERE. Unfold already ships it. Loading it twice breaks htmx SILENTLY:
-one instance fires the request (200 OK) but the swap targets the other instance's registry
-and finds nothing. No console error, no message.
 
 LOCALISATION : Administration/templates/admin/ghost/panneau_newsletter.html
 
 Affiche AVANT le formulaire (GhostConfigAdmin.change_form_before_template).
 
-Il remplace les anciens boutons du bandeau (`actions_detail`) : trois libelles nus, sans
-un mot d'explication, dans un coin de l'ecran. Ici, chaque bouton dit ce qu'il fait — et
-surtout ce qu'il NE fait PAS : un brouillon n'est JAMAIS publie ni envoye.
-/ Replaces the old bare `actions_detail` buttons. Each button says what it does — and
-above all what it does NOT do: a draft is NEVER published nor sent.
+Il remplace les anciens boutons du bandeau (`actions_detail`) : trois libelles nus, sans un
+mot d'explication. Ici, chaque bouton dit ce qu'il fait — et surtout ce qu'il NE fait PAS :
+un brouillon n'est JAMAIS publie ni envoye.
+/ Replaces the old bare `actions_detail` buttons. Each button says what it does — and above
+all what it does NOT do: a draft is NEVER published nor sent.
 
-FLUX — les deux actions sont servies par le CONTROLEUR de l'app newsletter, pas par
-l'admin (newsletter/views.py, ViewSet protege par TenantAdminPermission) :
+FLUX — les deux actions sont servies par le CONTROLEUR de l'app newsletter, pas par l'admin
+(newsletter/views.py, ViewSet protege par TenantAdminPermission) :
 - « Tester la connexion »  -> hx-get  newsletter-admin-tester-connexion (lecture seule)
 - « Brouillon 7/30 jours » -> hx-post newsletter-admin-brouillon        (CREE dans Ghost)
-Les deux renvoient un PARTIAL HTML, injecte dans #ghost-panneau-reponse (en bas du panneau).
+Les deux renvoient un PARTIAL HTML, injecte dans #ghost-panneau-reponse.
 
-ON N'UTILISE PAS django.messages : ils ne sont PAS rendus sur la page de modification de
-l'admin (piege documente dans tests/PIEGES.md, et VERIFIE en vrai ici : le message partait
-bien en session, mais rien ne s'affichait — on cliquait, et il ne se passait RIEN).
-/ We do NOT use django.messages: they are NOT rendered on the admin change page (documented
-in tests/PIEGES.md, and verified here: the message landed in the session but nothing showed).
+⚠️ ON CHARGE HTMX EXPLICITEMENT (ligne 2), comme le fait admin/membership/actions_panel.html.
+Unfold embarque bien un htmx (/static/unfold/js/htmx/htmx.js) mais il NE TRAITE PAS les hx-*
+de ce gabarit : sans notre <script>, le clic ne declenche AUCUNE requete (verifie dans les
+logs serveur). Ne pas le retirer en croyant supprimer un doublon inutile.
+/ WE LOAD HTMX EXPLICITLY: Unfold ships one, but it does NOT process this template's hx-*
+attributes — without our <script>, clicking fires NO request at all.
+
+⚠️ SI RIEN NE S'AFFICHE QUAND ON CLIQUE : ce n'est PAS htmx, c'est le SERVEUR qui renvoie une
+erreur. **htmx ne swappe PAS sur une reponse 4xx/5xx** — il n'affiche rien, et l'erreur reste
+invisible tant qu'on n'ouvre pas la console du navigateur. Regarder la console AVANT de
+soupçonner htmx. (Vecu : la vue renvoyait 500 a cause d'un `Configuration` perime en cache,
+et j'ai cherche des heures du cote du JS.)
+/ IF NOTHING SHOWS ON CLICK: it is NOT htmx, it is the SERVER returning an error. **htmx does
+NOT swap on 4xx/5xx** — nothing is displayed and the error stays invisible until you open the
+browser console. Check the console BEFORE blaming htmx.
 
 POURQUOI DU HTMX ET SURTOUT PAS UN <form> :
 Ce gabarit est rendu A L'INTERIEUR du <form> de l'admin Django. Un <form> imbrique est du
 HTML INVALIDE : le navigateur ignore l'interne et soumet l'EXTERNE. Cliquer « Brouillon »
-declencherait donc l'ENREGISTREMENT de la config, pas la generation du brouillon. (Verifie
-en vrai : le premier essai a sauvegarde le formulaire et affiche « was changed
-successfully ».) On poste donc en hx-post, comme le panneau des adhesions.
-/ WHY HTMX AND NEVER A <form>: this template renders INSIDE the admin's own <form>. A
-nested <form> is INVALID HTML — the browser ignores the inner one and submits the OUTER
-one, so the button would SAVE the config instead of generating the draft.
+declencherait donc l'ENREGISTREMENT de la config. (Verifie en vrai : le premier essai a
+sauvegarde le formulaire et affiche « was changed successfully ».) Meme piege avec un
+<button> sans `type` : dans un <form>, il vaut type="submit".
+/ WHY HTMX AND NEVER A <form>: this template renders INSIDE the admin's own <form>. A nested
+<form> is INVALID HTML — the browser submits the OUTER one, so the button would SAVE the config.
 
-STYLES INLINE OBLIGATOIRES : Unfold embarque son propre sous-ensemble de Tailwind. Les
-classes custom (bg-emerald-600...) ne sont PAS dans son bundle et rendraient du blanc sur
-blanc. On utilise les variables CSS d'Unfold, qui suivent le theme clair/sombre.
-/ INLINE STYLES REQUIRED: Unfold ships its own Tailwind subset; custom classes are absent
-from the bundle and would render invisible. Unfold's CSS variables follow the light/dark theme.
+ON N'UTILISE PAS django.messages : ils ne sont PAS rendus sur la page de modification de
+l'admin (piege documente dans tests/PIEGES.md, verifie en vrai). Le message part bien en
+session, mais rien ne s'affiche. D'ou la zone de reponse ci-dessous.
+/ We do NOT use django.messages: they are NOT rendered on the admin change page.
+
+STYLES INLINE OBLIGATOIRES : Unfold embarque son propre sous-ensemble de Tailwind ; les
+classes custom rendraient du blanc sur blanc. On utilise ses variables CSS.
+/ INLINE STYLES REQUIRED: Unfold ships its own Tailwind subset.
 {% endcomment %}
 
 <div class="p-4" data-testid="ghost-panneau-newsletter">

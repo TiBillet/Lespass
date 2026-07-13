@@ -2659,42 +2659,28 @@ dans `locale/en/LC_MESSAGES/django.po` (ex. « Mark as completed », pas
 
 ---
 
-### Piege : HTMX charge DEUX FOIS dans l'admin Unfold — panne SILENCIEUSE
+### Piege : rien ne s'affiche au clic dans un panneau d'admin ? Regardez la CONSOLE, pas htmx
 
-**Unfold embarque deja htmx** (`/static/unfold/js/htmx/htmx.js`). Si un panneau d'admin
-(`change_form_before_template`) ajoute son propre `<script src=".../htmx.min.js">`, htmx est
-charge **deux fois**.
+**htmx ne fait AUCUN swap si la reponse est en 4xx ou 5xx.** Il n'affiche rien, ne previent
+pas, et l'erreur n'apparait QUE dans la console du navigateur :
 
-**Le symptome est diabolique** : la requete PART et repond **200** (visible dans l'onglet
-Reseau), la reponse contient le bon HTML, la cible existe dans le DOM... **et rien ne
-s'affiche**. Une instance traite le `hx-get`/`hx-post` et envoie la requete ; le swap se fait
-sur le registre interne de l'AUTRE instance et ne trouve plus sa cible.
-
-**Ni erreur console, ni message.** On perd une heure a chercher du cote du serveur, des
-permissions ou du CSRF — alors que le probleme est une balise `<script>` en trop.
-
-```html
-<!-- MAL : Unfold charge deja htmx -->
-{% load i18n unfold static %}
-<script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
-
-<!-- BON : on ne charge rien, celui d'Unfold suffit -->
-{% load i18n unfold %}
+```
+[ERROR] htmx.js — Response Status Error Code 500 from /mon/endpoint/
 ```
 
-**Diagnostic en une commande** — compter les htmx charges par la page :
+Vecu (juillet 2026, panneau Newsletter) : la vue renvoyait 500 a cause d'un objet
+`Configuration` perime en cache (voir le piege du SingletonModel plus bas). Cote navigateur :
+un clic, et RIEN. J'ai soupconne htmx, le CSRF, les permissions, le double chargement de
+htmx... pendant des heures. **La console le disait des la premiere seconde.**
 
-```python
-import re
-scripts = re.findall(r'<script[^>]*src="([^"]*)"', page_html)
-print([s for s in scripts if 'htmx' in s.lower()])   # doit contenir UNE seule entree
+**Le reflexe :** au moindre « je clique et il ne se passe rien », ouvrir la console AVANT de
+toucher au JS. Et verifier l'endpoint en direct :
+
+```bash
+docker exec lespass_django poetry run python manage.py shell -c "..."  # doit renvoyer 200
 ```
 
-⚠️ **`Administration/templates/admin/membership/actions_panel.html` charge encore htmx
-explicitement.** Unfold ne l'embarquait sans doute pas a l'epoque : ce panneau porte
-peut-etre la meme bombe. A verifier.
-
-Decouvert sur le panneau Newsletter de GhostConfigAdmin (juillet 2026).
+Voir aussi la Quirk htmx n°2 du skill `djc` : les erreurs HTTP ne declenchent pas de swap.
 
 ---
 
@@ -2750,6 +2736,43 @@ Voir aussi le Piege 58 (double submit HTMX).
 
 ---
 
+### Piege CRITIQUE : ajouter un champ a un SingletonModel casse TOUT l'admin apres deploiement
+
+**Symptome :** apres avoir deploye une migration qui ajoute un champ a `Configuration`
+(ou tout `SingletonModel` django-solo), **toutes les pages d'admin repondent 500** :
+
+```
+AttributeError: 'Configuration' object has no attribute 'module_newsletter'
+```
+
+Le champ est pourtant dans le modele, la migration est passee, et **la colonne existe bien
+en base** (verifie). Le code est bon. Alors quoi ?
+
+**La cause : le CACHE de django-solo.** `Configuration.get_solo()` met l'objet en cache
+(`SOLO_CACHE = 'default'`, memcached). L'objet cache a ete **serialise par un processus qui
+tournait sur l'ANCIEN code** — il n'a donc pas le nouvel attribut. Au deserialiser, on
+recupere un objet sans le champ, et le premier code qui le lit explose.
+
+Et ce qui le lit, c'est `get_sidebar_navigation` (`Administration/admin/dashboard.py`) :
+**la sidebar est rendue sur CHAQUE page d'admin**. Un seul champ manquant = admin
+entierement mort, pour toute la duree du cache.
+
+**LA PARADE — a faire A CHAQUE deploiement qui ajoute un champ a un SingletonModel :**
+
+```bash
+docker exec lespass_django poetry run python manage.py shell -c \
+  "from django.core.cache import cache; cache.clear(); print('cache purge')"
+```
+
+**Piege dans le piege :** le shell Django peut repondre « tout va bien » alors que le serveur
+plante. Le processus du shell relit la base et remplit le cache correctement ; le serveur,
+lui, sert encore l'objet perime. **Tester dans le NAVIGATEUR, pas seulement en shell.**
+
+Vu en juillet 2026 sur `Configuration.module_newsletter` (migration 0221).
+
+---
+
 *Ce document est un commun numerique. Prenez-en soin !*
 *This document is a digital common. Take care of it!*
+
 
