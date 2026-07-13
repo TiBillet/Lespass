@@ -184,6 +184,7 @@ letsencrypt/acme.json
 
 
 # laboutik client Cordova/android
+*.apk
 **/mobile-app/node_modules/
 **/mobile-app/plugins/
 **/mobile-app/platforms/
