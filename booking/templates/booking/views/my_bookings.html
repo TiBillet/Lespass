@@ -1,5 +1,5 @@
-{% extends "booking/booking_base.html" %}
-{% load i18n %}
+{% extends 'reunion/account_base.html' %}
+{% load i18n static  %}
 
 <!--
 LOCALISATION : booking/templates/booking/views/my_bookings.html
@@ -16,100 +16,206 @@ Flux / Flow:
 
 {% block title %}{% translate "Mes réservations" %}{% endblock %}
 
-{% block booking_content %}
+{% block account_page %}
 
-<h1 class="mb-4">{% translate "Mes réservations" %}</h1>
+    <section class="card pt-3">
+        <div class="card-body">
+            <h1 class="card-title">{% trans 'Mes réservations de ressources' %}</h1>
+            <p class="lead">
+                {% trans 'Ici je peux voir mes réservations, leurs horaires et les annuler.' %}
+            </p>
+        </div>
+    </section>
 
-<!--
-Section "À venir" — réservations dont la fin est dans le futur.
-/ "Upcoming" section — bookings whose end is in the future.
--->
-<h2 class="h4 mb-3" data-testid="booking-upcoming-heading">
-  {% translate "À venir" %}
-</h2>
+    <!--
+    Section "À venir" — réservations dont la fin est dans le futur.
+    / "Upcoming" section — bookings whose end is in the future.
+    -->
+    <h2 class="h4 mb-3 mt-3" data-testid="booking-upcoming-heading">
+        {% translate "À venir" %}
+    </h2>
 
-{% if upcoming_bookings %}
-<ul class="list-group mb-5" data-testid="booking-upcoming-list" aria-live="polite">
-  {% for booking in upcoming_bookings %}
-  <li class="list-group-item d-flex justify-content-between align-items-start
-             {% if booking.pk == highlighted_booking_pk %}list-group-item-success{% endif %}"
-      data-testid="booking-upcoming-item-{{ booking.pk }}">
-    <div>
-      <strong><a href="{% url 'booking-resource' pk=booking.resource.pk %}">{{ booking.resource.product.name }}</a></strong><br>
-      {{ booking.start_datetime|date:"l d F Y" }}
-      {% translate "à" %} {{ booking.start_datetime|date:"H\hi" }}
-      – {{ booking.end_datetime|date:"H\hi" }}
+    <script src="{% static 'mvt_htmx/js/sweetalert2@11.js' %}"></script>
+    <script>
+        document.addEventListener("htmx:confirm", function(e) {
+            if (!e.detail.question) return;
+            e.preventDefault();
+            Swal.fire({
+                title: "Confirmer ?",
+                text: e.detail.question,
+                icon: "warning",
+                showCancelButton: true,
+                confirmButtonText: "Oui",
+                cancelButtonText: "Non"
+            }).then(function(result) {
+                if (result.isConfirmed) {
+                    e.detail.issueRequest(true);
+                }
+            });
+        });
+    </script>
 
-      {% if booking.slot_count > 1 %}
-      <span class="badge bg-secondary ms-1">
-        {{ booking.slot_count }} {% translate "créneaux" %}
-      </span>
-      {% endif %}
+    {% if upcoming_bookings %}
+        <div class="list-group mb-5" data-testid="booking-upcoming-list" aria-live="polite">
+            {% for booking in upcoming_bookings %}
+                <div class="card booking-card p-0 mb-2
+                {% if booking.pk == highlighted_booking_pk %}list-group-item-success{% endif %}"
+                     data-testid="booking-upcoming-item-{{ booking.pk }}">
+                    <div class="card border-0">
+                        <div class="row g-0">
+                            <div class="col-md-4">
+                                {% if booking.resource.product.img %}
+                                    <img src="{{ booking.resource.product.img.hdr.url }}"
+                                         alt="{{ booking.resource.product.name }}"
+                                         class="img-fluid rounded-start"
+                                         style="height: 100%; min-height: 160px; object-fit: cover; width: 100%;">
+                                {% else %}
+                                    <div class="bg-secondary-subtle d-flex align-items-center justify-content-center rounded-start"
+                                         style="height: 100%; min-height: 160px;">
+                                        <i class="bi bi-image text-secondary" style="font-size: 3rem;"
+                                           aria-hidden="true"></i>
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-8">
+                                <div class="card-body">
+                                    <h3 class="card-title h5">
+                                        <small class="text-muted d-block mb-1">
+                                            {{ booking.start_datetime|date:"l j F Y"|capfirst }}<br>
+                                            {{ booking.start_datetime|time:"H\hi" }}
+                                            – {{ booking.end_datetime|time:"H\hi" }}
+                                        </small>
+                                        <a href="{% url 'booking-resource' pk=booking.resource.pk %}"
+                                           class="text-decoration-none"
+                                           data-testid="booking-resource-link-{{ booking.resource.pk }}">
+                                            {{ booking.resource.product.name }}
+                                        </a>
+                                        - {{ booking.total_paid }} €
+                                    </h3>
+                                    <div class="card-text hstack flex-wrap gap-3 mb-3">
+                                        <div class="py-2">{{ booking.get_status_display }}</div>
+                                        {% if booking.slot_count > 1 %}
+                                            <div class="vr"></div>
+                                            <div class="py-2">
+                                                {{ booking.slot_count }} {% translate "créneaux" %}
+                                            </div>
+                                        {% endif %}
+                                        {% if booking.pk == highlighted_booking_pk %}
+                                            <div class="vr"></div>
+                                            <div class="py-2">
+                                                <span class="badge bg-success" data-testid="badge-new-booking">
+                                                  {% translate "Nouvelle réservation" %}
+                                                </span>
+                                            </div>
+                                        {% endif %}
 
-      {% if booking.pk == highlighted_booking_pk %}
-      <span class="badge bg-success ms-1" data-testid="badge-new-booking">
-        {% translate "Nouvelle réservation" %}
-      </span>
-      {% endif %}
-    </div>
+                                        <div class="vr"></div>
+                                        {% if booking.can_refund %}
+                                        <div class="py-2">
+                                            <button
+                                                    class="btn btn-outline-danger btn-sm"
+                                                    hx-post="{% url 'booking-cancel' pk=booking.pk %}"
+                                                    hx-confirm="{% if booking.total_paid > 0 %}{{ booking.cancel_text }}{% else %}J'annule ma reservation{% endif %}"
+                                                    hx-target="closest .booking-card"
+                                                    hx-swap="delete"
+                                                    data-testid="booking-cancel-{{ booking.pk }}">
+                                                J'annule ma reservation
+                                            </button>
+                                        </div>
+                                        {% else %}
+                                            <div class="py-2">{% translate 'La fenêtre de remboursement est passé.' %}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
 
-    <a href="{% url 'booking-cancel' pk=booking.pk %}"
-       class="btn btn-outline-danger btn-sm"
-       data-testid="booking-cancel-btn-{{ booking.pk }}">
-      {% translate "Annuler" %}
-    </a>
-  </li>
-  {% endfor %}
-</ul>
-
-{% else %}
-<p class="text-muted mb-5" data-testid="booking-upcoming-empty">
-  {% translate "Aucune réservation à venir." %}
-</p>
-{% endif %}
-
-<!--
-Section "Passées" — réservations terminées.
-/ "Past" section — completed bookings.
--->
-<h2 class="h4 mb-3" data-testid="booking-past-heading">
-  {% translate "Passées" %}
-</h2>
-
-{% if past_bookings %}
-<ul class="list-group" data-testid="booking-past-list">
-  {% for booking in past_bookings %}
-  <li class="list-group-item text-muted"
-      data-testid="booking-past-item-{{ booking.pk }}">
-    <strong>{{ booking.resource.product.name }}</strong> —
-    {{ booking.start_datetime|date:"l d F Y" }}
-    {% translate "à" %} {{ booking.start_datetime|date:"H\hi" }}
-
-    {% if booking.slot_count > 1 %}
-    <span class="badge bg-secondary ms-1">
-      {{ booking.slot_count }} {% translate "créneaux" %}
-    </span>
+    {% else %}
+        <p class="text-muted mb-5" data-testid="booking-upcoming-empty">
+            {% translate "Aucune réservation à venir." %}
+        </p>
     {% endif %}
-  </li>
-  {% endfor %}
-</ul>
 
-{% else %}
-  {% if not upcoming_bookings %}
-  <!--
-  Les deux sections sont vides — affiche un message global avec un lien
-  vers la liste des ressources.
-  / Both sections are empty — show a global message with a link to resources.
-  -->
-  <p class="text-muted" data-testid="booking-all-empty">
-    {% translate "Aucune réservation." %}
-    <a href="{% url 'booking-list' %}">{% translate "Voir les ressources disponibles" %}</a>
-  </p>
-  {% else %}
-  <p class="text-muted" data-testid="booking-past-empty">
-    {% translate "Aucune réservation passée." %}
-  </p>
-  {% endif %}
-{% endif %}
+    <!--
+    Section "Passées" — réservations terminées.
+    / "Past" section — completed bookings.
+    -->
+    <h2 class="h4 mb-3" data-testid="booking-past-heading">
+        {% translate "Passées" %}
+    </h2>
 
-{% endblock booking_content %}
+    {% if past_bookings %}
+        <div class="list-group" data-testid="booking-past-list">
+            {% for booking in past_bookings %}
+                <div class="card p-0 mb-2
+                     data-testid="booking-past-item-{{ booking.pk }}">
+                    <div class="card booking-card border-0">
+                        <div class="row g-0">
+                            <div class="col-md-4">
+                                {% if booking.resource.product.img %}
+                                    <img src="{{ booking.resource.product.img.hdr.url }}"
+                                         alt="{{ booking.resource.product.name }}"
+                                         class="img-fluid rounded-start"
+                                         style="height: 100%; min-height: 160px; object-fit: cover; width: 100%;">
+                                {% else %}
+                                    <div class="bg-secondary-subtle d-flex align-items-center justify-content-center rounded-start"
+                                         style="height: 100%; min-height: 160px;">
+                                        <i class="bi bi-image text-secondary" style="font-size: 3rem;"
+                                           aria-hidden="true"></i>
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-8">
+                                <div class="card-body">
+                                    <h3 class="card-title h5">
+                                        <small class="text-muted d-block mb-1">
+                                            {{ booking.start_datetime|date:"l j F Y"|capfirst }}<br>
+                                            {{ booking.start_datetime|time:"H\hi" }}
+                                            – {{ booking.end_datetime|time:"H\hi" }}
+                                        </small>
+                                        <a href="{% url 'booking-resource' pk=booking.resource.pk %}"
+                                           class="text-decoration-none text-muted"
+                                           data-testid="booking-resource-link-{{ booking.resource.pk }}">
+                                            {{ booking.resource.product.name }}
+                                        </a>
+                                    </h3>
+                                    <div class="card-text hstack flex-wrap gap-3">
+                                        <div class="py-2">{{ booking.get_status_display }}</div>
+                                        {% if booking.slot_count > 1 %}
+                                            <div class="vr"></div>
+                                            <div class="py-2">
+                                                {{ booking.slot_count }} {% translate "créneaux" %}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+    {% else %}
+        {% if not upcoming_bookings %}
+            <!--
+            Les deux sections sont vides — affiche un message global avec un lien
+            vers la liste des ressources.
+            / Both sections are empty — show a global message with a link to resources.
+            -->
+            <p class="text-muted" data-testid="booking-all-empty">
+                {% translate "Aucune réservation." %}
+                <a href="{% url 'booking-list' %}">{% translate "Voir les ressources disponibles" %}</a>
+            </p>
+        {% else %}
+            <p class="text-muted" data-testid="booking-past-empty">
+                {% translate "Aucune réservation passée." %}
+            </p>
+        {% endif %}
+    {% endif %}
+
+{% endblock account_page %}

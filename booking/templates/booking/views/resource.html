@@ -458,12 +458,7 @@ DEPENDENCIES :
         -->
         <div id="booking-calendar" class="booking-calendar" data-testid="booking-calendar"
              data-resource-pk="{{ resource.pk }}"
-             data-book-url="{% url 'booking-book' pk=resource.pk %}"
-             hx-get="{% url 'booking-resource' pk=resource.pk %}"
-             hx-trigger="panierToast"
-             hx-select="#booking-calendar"
-             hx-swap="outerHTML">
-
+             data-book-url="{% url 'booking-book' pk=resource.pk %}">
             <!--
             ===========================
             VERSION DESKTOP

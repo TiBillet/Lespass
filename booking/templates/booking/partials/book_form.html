@@ -22,8 +22,19 @@ DEPENDENCIES :
   - booking/views.py:_book_post() -> redirection ou re-render avec erreurs
 -->
 {% load i18n l10n static tibitags %}
-
 <div class="booking-confirm-partial" data-testid="booking-confirm-partial">
+
+    <style>
+        #id_end_time{
+            flex: 1;
+            font-size: 14px;
+            padding: 8px 10px;
+            border-radius: var(--bs-border-radius);
+            border: 2px solid var(--bs-border-color);
+            background: var(--bs-body-bg);
+            color: var(--bs-body-color);
+        }
+    </style>
 
     <!--
     Message de modification concurrente — un creneau a ete pris pendant la saisie.
