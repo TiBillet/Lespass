@@ -4,7 +4,7 @@ import random
 import string
 
 from rest_framework import serializers
-from django.db import transaction
+from django.db import connection, transaction
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 
@@ -15,6 +15,45 @@ from Administration.utils import clean_html
 
 # Image validation utilities
 from PIL import Image, UnidentifiedImageError
+
+
+def _url_absolue_du_media(chemin_du_media):
+    """
+    Transforme un chemin de media en URL ABSOLUE sur le domaine du tenant courant.
+    / Turn a media path into an ABSOLUTE URL on the current tenant's domain.
+
+    LOCALISATION : api_v2/serializers.py
+
+    "/media/images/concert.jpg" -> "https://mon-lieu.tibillet.coop/media/images/concert.jpg"
+
+    POURQUOI : `FieldFile.url` renvoie un chemin RELATIF. Pour un client d'API externe —
+    un site tiers, une newsletter, une appli mobile — c'est inexploitable : il ne peut pas
+    deviner sur quel domaine le resoudre. On prefixe donc par le domaine primaire du tenant.
+    / WHY: FieldFile.url returns a RELATIVE path, unusable by an external API client.
+
+    On passe par connection.tenant (et non par la requete HTTP) pour que ca marche aussi
+    hors contexte web : tache Celery, management command, generation de newsletter.
+    / We use connection.tenant, not the HTTP request, so it also works outside a web
+    context: Celery task, management command, newsletter generation.
+
+    :param chemin_du_media: le chemin renvoye par FieldFile.url, ex "/media/images/x.jpg"
+    :return: l'URL absolue, ou le chemin d'origine si le tenant n'a pas de domaine
+    """
+    if not chemin_du_media:
+        return None
+
+    # Deja absolue (stockage S3, CDN...) : on n'y touche pas.
+    # / Already absolute (S3, CDN...): leave it alone.
+    if chemin_du_media.startswith("http://") or chemin_du_media.startswith("https://"):
+        return chemin_du_media
+
+    domaine_primaire = connection.tenant.get_primary_domain()
+    if not domaine_primaire:
+        # Tenant sans domaine primaire : on degrade proprement plutot que de planter.
+        # / Tenant with no primary domain: degrade gracefully instead of crashing.
+        return chemin_du_media
+
+    return f"https://{domaine_primaire.domain}{chemin_du_media}"
 
 
 def _validate_uploaded_image(file_obj):
@@ -78,18 +117,26 @@ class PostalAddressAsSchemaSerializer(serializers.ModelSerializer):
         )
 
     def _image_urls(self, instance: PostalAddress) -> List[str]:
+        """
+        Les images du lieu, en URL ABSOLUE.
+        / The venue's images, as ABSOLUTE URLs.
+
+        Meme correction que pour Event : `FieldFile.url` renvoie un chemin RELATIF,
+        inexploitable par un client d'API externe. Voir _url_absolue_du_media.
+        / Same fix as for Event: FieldFile.url returns a RELATIVE path.
+        """
         urls: List[str] = []
         try:
             if instance.img:
-                urls.append(instance.img.url)
+                urls.append(_url_absolue_du_media(instance.img.url))
         except Exception:
             pass
         try:
             if instance.sticker_img:
-                urls.append(instance.sticker_img.url)
+                urls.append(_url_absolue_du_media(instance.sticker_img.url))
         except Exception:
             pass
-        return urls
+        return [url for url in urls if url]
 
     def to_representation(self, instance: PostalAddress) -> Dict[str, Any]:
         data = super().to_representation(instance)
@@ -164,18 +211,46 @@ class EventSchemaSerializer(serializers.ModelSerializer):
         )
 
     def _image_urls(self, instance: Event) -> List[str]:
+        """
+        Les images de l'evenement, en URL ABSOLUE, avec le fallback du moteur.
+        / The event's images, as ABSOLUTE URLs, with the engine's fallback.
+
+        LOCALISATION : api_v2/serializers.py
+
+        DEUX CORRECTIONS PAR RAPPORT A L'ANCIEN COMPORTEMENT :
+
+        1. On passe par `instance.get_img()`, et non `instance.img` brut. C'est la methode
+           qu'utilise le moteur d'evenements du site : elle retombe sur l'image du LIEU,
+           puis sur celle de la CONFIGURATION du tenant. Un evenement sans image propre a
+           donc une image sur le site — il en a maintenant une dans l'API aussi.
+
+        2. Les URLs sont ABSOLUES. `instance.img.url` renvoie "/media/images/x.jpg" : un
+           client d'API externe ne peut pas savoir sur quel domaine le resoudre. On prefixe
+           par le domaine primaire du tenant.
+
+        / 1. Use get_img() (venue then tenant-config fallback), like the site's event engine.
+        / 2. Return ABSOLUTE URLs: a relative "/media/..." is unusable for an API client.
+        """
         urls: List[str] = []
+
+        # L'image principale, avec le fallback lieu -> configuration.
+        # / The main image, with the venue -> config fallback.
         try:
-            if instance.img:
-                urls.append(instance.img.url)
+            image_principale = instance.get_img()
+            if image_principale:
+                urls.append(_url_absolue_du_media(image_principale.url))
         except Exception:
             pass
+
+        # La vignette d'agenda : pas de fallback, elle est facultative par nature.
+        # / The agenda thumbnail: no fallback, it is optional by design.
         try:
             if instance.sticker_img:
-                urls.append(instance.sticker_img.url)
+                urls.append(_url_absolue_du_media(instance.sticker_img.url))
         except Exception:
             pass
-        return urls
+
+        return [url for url in urls if url]
 
     def _additional_properties(self, instance: Event) -> List[Dict[str, Any]]:
         props: List[Dict[str, Any]] = []

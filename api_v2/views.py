@@ -1,11 +1,12 @@
-import datetime
 import re
 import uuid as uuid_module
+from datetime import timedelta
 
 from django.db import connection, IntegrityError, transaction
 from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from rest_framework import viewsets, status
 from rest_framework.response import Response
@@ -16,8 +17,7 @@ from django.core.cache import cache
 from ApiBillet.permissions import TenantAdminApiPermission
 from ApiBillet.views import get_permission_Api_ALL_Admin
 from AuthBillet.models import TibilletUser
-from BaseBillet.models import Event, PostalAddress, LigneArticle, Product, Reservation, Membership, logger, \
-    Configuration
+from BaseBillet.models import Event, PostalAddress, LigneArticle, Product, Reservation, Membership, logger
 from crowds.models import Initiative, BudgetItem, Participation, Vote
 from .permissions import SemanticApiKeyPermission
 from .serializers import (
@@ -226,25 +226,81 @@ class EventViewSet(viewsets.ViewSet):
     lookup_field = "uuid"
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
+    # Bornes du parametre `next_days`. Au-dela d'un an, autant tout demander.
+    # / Bounds for the `next_days` parameter.
+    NEXT_DAYS_MINIMUM = 1
+    NEXT_DAYS_MAXIMUM = 366
+
     def list(self, request):
+        """
+        Liste les evenements publies. / List published events.
+
+        Parametres de filtrage du temps (facultatifs) :
+        - `only_futur=1`  : les evenements a venir (depuis hier)
+        - `next_days=30`  : les evenements des N prochains jours (depuis hier)
+        `next_days` l'emporte sur `only_futur` s'ils sont fournis tous les deux.
+
+        On part d'HIER, et non de maintenant : un evenement commence hier soir est
+        encore d'actualite. L'agenda du site part lui aussi d'hier.
+        / We start from YESTERDAY, not now: an event that started last night is still
+        relevant. The site's agenda also starts from yesterday.
+
+        EN REVANCHE, cette API est PLUS LARGE que l'agenda : elle garde aussi les
+        evenements EN COURS — commences il y a longtemps, mais qui ne sont pas encore
+        termines (un festival d'une semaine, par exemple). C'est le role du
+        `end_datetime__gte`, que l'agenda n'a pas.
+        / BUT this API is BROADER than the agenda: it also keeps ONGOING events (started
+        long ago, not finished yet — a week-long festival). That is what `end_datetime__gte`
+        does; the agenda has no such clause.
+        """
         only_futur = request.GET.get("only_futur", None)
+        next_days = request.GET.get("next_days", None)
         filter = request.GET.get("filter", None)
 
         queryset = Event.objects.filter(published=True)
-        if only_futur:
-            timezone = Configuration.get_solo().get_tzinfo()
 
-            # Get the timezone
-            now = datetime.now()
-            # Convert it to the tenant configured timezone
-            now = now.astimezone(timezone)
-            # Remove one day to it to also show recent events
-            now = now.replace(day=now.day-1)
+        # timezone.now() est deja "aware" (UTC) et se compare correctement a un
+        # DateTimeField. Inutile de bricoler la timezone du tenant : le filtrage se fait
+        # sur un instant, pas sur un affichage.
+        # / timezone.now() is already aware (UTC) and compares correctly to a DateTimeField.
+        debut_de_la_fenetre = timezone.now() - timedelta(days=1)
 
-            queryset = queryset.filter(
-                Q(datetime__gte=now) |
-                Q(end_datetime__gte=now)
+        # Un evenement est retenu s'il COMMENCE apres la borne, ou s'il SE TERMINE apres
+        # (donc s'il est en cours). / Keep events starting after the bound, or still running.
+        est_a_venir_ou_en_cours = Q(datetime__gte=debut_de_la_fenetre) | Q(
+            end_datetime__gte=debut_de_la_fenetre
+        )
+
+        if next_days:
+            try:
+                nombre_de_jours = int(next_days)
+            except (TypeError, ValueError):
+                return Response(
+                    {"error": _("next_days doit être un nombre entier de jours.")},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if not (self.NEXT_DAYS_MINIMUM <= nombre_de_jours <= self.NEXT_DAYS_MAXIMUM):
+                return Response(
+                    {
+                        "error": _(
+                            "next_days doit être compris entre %(mini)s et %(maxi)s."
+                        )
+                        % {
+                            "mini": self.NEXT_DAYS_MINIMUM,
+                            "maxi": self.NEXT_DAYS_MAXIMUM,
+                        }
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            fin_de_la_fenetre = timezone.now() + timedelta(days=nombre_de_jours)
+            queryset = queryset.filter(est_a_venir_ou_en_cours).filter(
+                datetime__lt=fin_de_la_fenetre
             )
+
+        elif only_futur:
+            queryset = queryset.filter(est_a_venir_ou_en_cours)
 
         if filter:
             # Filter by name and descriptions

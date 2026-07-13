@@ -561,6 +561,20 @@ class Configuration(SingletonModel):
         verbose_name=_("Federation module"),
     )
 
+    # Newsletter : pilote une instance Ghost auto-hebergee depuis TiBillet.
+    #
+    # DESACTIVE PAR DEFAUT, et ACTIVABLE PAR UN SUPERADMIN SEULEMENT : une instance Ghost
+    # doit d'abord etre installee et dimensionnee (la charge serveur depend du volume de
+    # mails). Un gestionnaire qui tente de l'activer voit une invitation a contacter
+    # l'equipe TiBillet, pas un simple refus.
+    # / Newsletter: drives a self-hosted Ghost instance from TiBillet.
+    # OFF by default, SUPERADMIN-ONLY: a Ghost instance must be installed and sized first
+    # (server load depends on the mail volume).
+    module_newsletter = models.BooleanField(
+        default=False,
+        verbose_name=_("Newsletter module"),
+    )
+
     # NOTE : tout l'agenda participatif (activation + propositions anonymes +
     # tag automatique) vit desormais sur FederationConfiguration. Il s'active
     # dans l'admin "Options de federation", plus dans le dashboard des modules.
@@ -1605,20 +1619,31 @@ class Event(models.Model):
         if cached_result is not None:
             return cached_result
 
-        # Algo pour récupérer l'image à afficher.
+        # Chaine de repli a TROIS niveaux : l'image de l'evenement, sinon celle du LIEU,
+        # sinon celle de la CONFIGURATION du tenant. Un evenement finit donc toujours par
+        # avoir une image, tant que le tenant en a une.
+        #
+        # ATTENTION au piege corrige ici : ecrire `elif self.postal_address:` avec un `if`
+        # imbrique rend le `else` (l'image de configuration) INATTEIGNABLE des que
+        # l'evenement a une adresse SANS image. Or Event.save() assigne d'office l'adresse
+        # de la configuration quand elle est vide — l'evenement en a donc presque toujours
+        # une, et le troisieme niveau ne servait JAMAIS.
+        # Il faut tester `postal_address ET son image` d'un seul tenant pour que le repli
+        # continue jusqu'a la configuration.
+        #
+        # / THREE-level fallback: event image, else VENUE image, else tenant CONFIG image.
+        # Beware: `elif self.postal_address:` with a nested `if` makes the config branch
+        # UNREACHABLE as soon as the event has an address without an image — and save()
+        # always assigns one. Test address AND its image together.
         result = None
         if self.img:
             result = self.img
-        elif self.postal_address:
-            if self.postal_address.img:
-                result = self.postal_address.img
+        elif self.postal_address and self.postal_address.img:
+            result = self.postal_address.img
         else:
             config = Configuration.get_solo()
             if config.img:
-                # logger.info("config img")
                 result = config.img
-            else:
-                result = None
 
         # Cache the result for 1 hour (3600 seconds)
         cache.set(cache_key, result, 3600)

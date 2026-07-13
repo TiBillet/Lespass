@@ -3,15 +3,26 @@ from Administration.admin.dashboard import (  # noqa: F401
     MODULE_FIELDS, _build_modules_context, adhesion_badge_callback,
 )
 
-from Administration.admin import (
-    products,
-    prices
-)
 from Administration.admin.help_messages_dictionnary import HELP_MESSAGES_DICT
 from Administration.admin.mixins import HelpDisplayMixin
 
 from Administration.admin.site import staff_admin_site, sanitize_textfields
 
+# IMPORT A EFFET DE BORD — NE PAS SUPPRIMER, MEME S'IL PARAIT INUTILISE.
+# Importer ces modules EXECUTE leurs decorateurs @admin.register(...), qui enregistrent
+# ProductAdmin et PriceAdmin sur staff_admin_site. Sans cet import, ils ne sont jamais
+# enregistres, et Django refuse de demarrer :
+#   admin.E039 — An admin for model "Product" has to be registered to be referenced by
+#   EventAdmin.autocomplete_fields
+# La directive noqa F401 ci-dessous est INDISPENSABLE : sans elle, `ruff check --fix`
+# supprime l'import (il le voit comme mort) et casse tout l'admin.
+# / SIDE-EFFECT IMPORT — DO NOT REMOVE. It runs the @admin.register decorators that
+# register ProductAdmin and PriceAdmin. Without it Django refuses to boot (admin.E039).
+# The noqa F401 directive below is REQUIRED, otherwise `ruff check --fix` deletes it.
+from Administration.admin import (  # noqa: F401
+    products,
+    prices,
+)
 
 import json
 import logging
@@ -23,38 +34,29 @@ from urllib.parse import urlencode
 from uuid import UUID, uuid4
 from unfold.utils import parse_datetime_str
 from django.core.validators import EMPTY_VALUES
-from collections.abc import Iterator
 from django.urls import path, reverse, NoReverseMatch
 
 from django.contrib import admin
 from django.contrib.admin.options import ModelAdmin
-from django.contrib.admin.views.main import ChangeList
-from django.core.validators import EMPTY_VALUES
-from django.db.models import Model, QuerySet
-from django.db.models.fields import DateField, DateTimeField, Field
+from django.db.models import Model
 from django.forms import ValidationError
 from django.http import HttpRequest
 
-from unfold.contrib.filters.forms import RangeDateForm, RangeDateTimeForm
-from unfold.utils import parse_date_str, parse_datetime_str
 
 import requests
 import segno
 from django import forms
-from django.conf import settings
-from django.contrib import admin
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.signing import TimestampSigner
 from django.db import models, connection, IntegrityError, transaction as db_transaction
-from django.db.models import Model, Count, Q, Prefetch, F
-from django.forms import ModelForm, Form, HiddenInput
-from django.http import HttpResponse, HttpRequest, HttpResponseRedirect
-from django.template.response import TemplateResponse
+from django.db.models import Count, Q, Prefetch, F
+from django.forms import ModelForm, Form
+from django.http import HttpResponse
 from django.shortcuts import redirect, get_object_or_404
 from django.template.defaultfilters import slugify
 from django.template.loader import render_to_string
-from django.urls import reverse, re_path
+from django.urls import re_path
 from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
@@ -87,34 +89,27 @@ from unfold.contrib.forms.widgets import WysiwygWidget
 from unfold.contrib.import_export.forms import ExportForm, ImportForm
 from unfold.decorators import display, action
 from unfold.sections import TableSection, TemplateSection
-from unfold.sites import UnfoldAdminSite
 from unfold.widgets import (
-    UnfoldAdminCheckboxSelectMultiple,
     UnfoldAdminEmailInputWidget,
-    UnfoldAdminRadioSelectWidget,
     UnfoldAdminColorInputWidget,
     UnfoldAdminSelectWidget,
     UnfoldAdminTextInputWidget,
-    UnfoldBooleanSwitchWidget,
     UnfoldAdminSelect2Widget
 )
 
 from Administration.importers.ticket_exporter import TicketExportResource
 from Administration.importers.lignearticle_exporter import LigneArticleExportResource
-from Administration.utils import clean_html
 from ApiBillet.permissions import TenantAdminPermissionWithRequest, RootPermissionWithRequest
-from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
+from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import HumanUser, TibilletUser, Wallet
 from AuthBillet.utils import get_or_create_user
-from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
+from BaseBillet.models import Configuration, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
-    FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp, ProductFormField, \
-    PromotionalCode, Tva, MembershipProduct, FederationConfiguration, ProductSold
+    FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp, MembershipProduct, FederationConfiguration, ProductSold
 from BaseBillet.tasks import webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
     send_reservation_cancellation_user, send_sale_to_laboutik, forge_connexion_url
 from Customers.models import Client
-from MetaBillet.models import WaitingConfiguration
 from crowds.models import Contribution, Vote, Participation, CrowdConfig, Initiative, BudgetItem
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
@@ -122,7 +117,6 @@ from fedow_connect.utils import dround
 from fedow_public.models import AssetFedowPublic as Asset, AssetFedowPublic
 
 # from simple_history.admin import SimpleHistoryAdmin
-from stripe._error import InvalidRequestError
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +177,7 @@ class ExternalApiKeyAdmin(ModelAdmin):
             messages.add_message(
                 request,
                 messages.SUCCESS,
-                _(f"Copy this key and save it somewhere safe! It will not be saved on our servers and can only be displayed this one time.")
+                _("Copy this key and save it somewhere safe! It will not be saved on our servers and can only be displayed this one time.")
             )
             messages.add_message(
                 request,
@@ -488,6 +482,29 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         is_active = getattr(configuration, field_name)
         module_name = str(MODULE_FIELDS[field_name]["name"])
 
+        # Certains modules demandent une INSTALLATION cote serveur avant d'etre utilisables
+        # (la newsletter a besoin d'une instance Ghost, dimensionnee selon le volume de
+        # mails). Ils sont marques `superadmin_seulement` dans MODULE_FIELDS.
+        #
+        # Un gestionnaire ordinaire qui clique ne recoit PAS un refus sec : on lui affiche
+        # une invitation a contacter l'equipe TiBillet, avec les liens utiles. C'est une
+        # porte d'entree, pas un mur.
+        # / Some modules need a SERVER-SIDE install first (the newsletter needs a Ghost
+        # instance, sized for the mail volume). A regular manager gets an invitation to
+        # reach out, not a blunt refusal.
+        module_reserve_au_superadmin = MODULE_FIELDS[field_name].get(
+            "superadmin_seulement", False
+        )
+        utilisateur_est_superadmin = request.user.is_superuser
+
+        if module_reserve_au_superadmin and not utilisateur_est_superadmin:
+            html = render_to_string(
+                'admin/dashboard_module_modal_contact.html',
+                {"module_name": module_name},
+                request=request,
+            )
+            return HttpResponse(html)
+
         toggle_url = reverse(
             'staff_admin:configuration-module-toggle',
             args=[field_name],
@@ -509,6 +526,22 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         """HTMX POST : bascule un module et renvoie les cartes mises a jour."""
         if field_name not in MODULE_FIELDS:
             return HttpResponse("", status=400)
+
+        # SECURITE : le controle est refait ICI, dans le POST, et pas seulement dans la
+        # modale. La modale n'est que de l'affichage — une requete forgee la contournerait.
+        # On ne fait JAMAIS confiance a l'interface pour appliquer une regle d'acces.
+        # / SECURITY: the check is re-done HERE, in the POST, not only in the modal. The
+        # modal is display only; a crafted request would bypass it. Never trust the UI to
+        # enforce an access rule.
+        module_reserve_au_superadmin = MODULE_FIELDS[field_name].get(
+            "superadmin_seulement", False
+        )
+        if module_reserve_au_superadmin and not request.user.is_superuser:
+            logger.warning(
+                f"module_toggle : '{request.user}' a tente d'activer le module "
+                f"'{field_name}', reserve aux superadmins."
+            )
+            return HttpResponse("", status=403)
 
         configuration = Configuration.get_solo()
         current_value = getattr(configuration, field_name)
@@ -552,7 +585,7 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
 
         if obj.server_cashless and obj.key_cashless:
             if obj.check_serveur_cashless():
-                messages.add_message(request, messages.INFO, _(f"Cashless server ONLINE"))
+                messages.add_message(request, messages.INFO, _("Cashless server ONLINE"))
             else:
                 messages.add_message(request, messages.ERROR, _("Cashless server OFFLINE or BAD KEY"))
 
@@ -2556,7 +2589,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         try:
             duplicate = self._duplicate_event(obj, date_adjustment="day")
             messages.success(request, _("Event duplicated successfully"))
-        except IntegrityError as e:
+        except IntegrityError:
             messages.error(request, _("Un evenement avec le même nom et date semble déja dupliqué"))
 
         return redirect(request.META["HTTP_REFERER"])
@@ -2573,7 +2606,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         try:
             duplicate = self._duplicate_event(obj, date_adjustment="week")
             messages.success(request, _("Event duplicated successfully"))
-        except IntegrityError as e:
+        except IntegrityError:
             messages.error(request, _("Un evenement avec le même nom et date semble déja dupliqué"))
 
         return redirect(request.META["HTTP_REFERER"])
@@ -2590,7 +2623,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         try:
             duplicate = self._duplicate_event(obj, date_adjustment="week2")
             messages.success(request, _("Event duplicated successfully"))
-        except IntegrityError as e:
+        except IntegrityError:
             messages.error(request, _("Un evenement avec le même nom et date semble déja dupliqué"))
 
         return redirect(request.META["HTTP_REFERER"])
@@ -2607,7 +2640,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         try:
             duplicate = self._duplicate_event(obj, date_adjustment="month")
             messages.success(request, _("Event duplicated successfully"))
-        except IntegrityError as e:
+        except IntegrityError:
             messages.error(request, _("Un evenement avec le même nom et date semble déja dupliqué"))
         return redirect(request.META["HTTP_REFERER"])
 
@@ -3745,7 +3778,11 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
     add_form = GhostConfigAddform
 
     readonly_fields = ["has_key", "ghost_last_log"]
-    actions_detail = ["test_api_ghost_admin_button"]
+    actions_detail = [
+        "test_api_ghost_admin_button",
+        "brouillon_newsletter_7_jours",
+        "brouillon_newsletter_30_jours",
+    ]
 
     @display(description=_("Has key"), boolean=True)
     def has_key(self, instance: GhostConfig):
@@ -3843,6 +3880,122 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
             messages.error(request, _(f"Error testing Ghost API: {type(e).__name__} - {str(e)}"))
 
         return redirect(request.META["HTTP_REFERER"])
+
+    def _generer_le_brouillon_de_newsletter(self, request, nombre_de_jours):
+        """
+        Fabrique un brouillon de newsletter et rend le resultat en toast.
+        / Build a newsletter draft and report the outcome as a toast.
+
+        LOCALISATION : Administration/admin_tenant.py (GhostConfigAdmin)
+
+        Partage par les deux boutons (7 jours / 30 jours) : seule la fenetre change.
+        Execution SYNCHRONE : quelques requetes + un POST (< 2 s). Le gestionnaire a un
+        retour immediat et un lien cliquable vers son brouillon.
+        / Shared by both buttons. SYNCHRONOUS: the manager gets an immediate clickable link.
+
+        Le post est cree en BROUILLON. Il n'est JAMAIS publie ni envoye par email :
+        l'envoi reste un geste humain, dans l'interface de Ghost.
+        / The post is a DRAFT. Never published, never emailed.
+        """
+        # Imports LOCAUX a la methode : ils evitent d'alourdir le module d'admin et tout
+        # risque d'import circulaire.
+        # / Method-LOCAL imports: keep the admin module light, avoid circular imports.
+        from newsletter.client_ghost import (
+            ErreurGhost,
+            GhostCleRefusee,
+            GhostInjoignable,
+            GhostReponseInattendue,
+        )
+        from newsletter.services import (
+            AucunEvenement,
+            GhostNonConfigure,
+            creer_brouillon_newsletter,
+        )
+
+        try:
+            resultat = creer_brouillon_newsletter(nombre_de_jours=nombre_de_jours)
+
+        except GhostNonConfigure:
+            messages.warning(
+                request,
+                _("Ghost n'est pas configuré : renseignez l'URL et la clé Admin API."),
+            )
+
+        except AucunEvenement:
+            messages.info(
+                request,
+                _("Aucun événement sur les %(jours)s prochains jours : aucun brouillon créé.")
+                % {"jours": nombre_de_jours},
+            )
+
+        except GhostInjoignable:
+            messages.error(request, _("Instance Ghost injoignable."))
+
+        except GhostCleRefusee:
+            messages.error(request, _("La clé Admin API est refusée par Ghost."))
+
+        except GhostReponseInattendue as erreur:
+            messages.error(
+                request,
+                _("Réponse inattendue de Ghost : %(erreur)s") % {"erreur": erreur},
+            )
+
+        # Filet de securite. Les trois `except` ci-dessus couvrent les erreurs Ghost
+        # d'aujourd'hui, mais `creer_brouillon_newsletter` documente `:raises ErreurGhost` :
+        # une future sous-classe passerait au travers et ferait un 500 dans l'admin.
+        # / Safety net: a future ErreurGhost subclass would otherwise 500 in the admin.
+        except ErreurGhost as erreur:
+            messages.error(
+                request,
+                _("Erreur Ghost : %(erreur)s") % {"erreur": erreur},
+            )
+
+        # Dernier filet. La collecte traverse les SCHEMAS des tenants voisins : un voisin
+        # aux migrations en retard leve une erreur de base de donnees. Le gestionnaire doit
+        # voir un message, pas une page 500 — et il doit pouvoir en parler a l'admin systeme.
+        # / Last net: the collect walks NEIGHBOUR SCHEMAS. A tenant with stale migrations
+        # raises a database error. Show a message, never a 500 page.
+        except Exception as erreur:
+            logger.error(f"brouillon_newsletter ({nombre_de_jours} j) : {erreur}")
+            messages.error(
+                request,
+                _("La génération du brouillon a échoué : %(erreur)s")
+                % {"erreur": f"{type(erreur).__name__} — {erreur}"},
+            )
+
+        else:
+            # format_html est INDISPENSABLE : sans lui, django.messages echappe le HTML
+            # et le lien s'afficherait en texte brut, non cliquable.
+            # / format_html is REQUIRED: django.messages escapes HTML, so without it the
+            # link would render as plain, unclickable text.
+            messages.success(
+                request,
+                format_html(
+                    '{} <a href="{}" target="_blank" rel="noopener">{}</a>',
+                    _("Brouillon créé avec %(nombre)s événement(s).")
+                    % {"nombre": resultat["nombre_evenements"]},
+                    resultat["url_edition"],
+                    _("Ouvrir dans Ghost"),
+                ),
+            )
+
+        return redirect(request.META["HTTP_REFERER"])
+
+    @action(
+        description=_("Brouillon newsletter — 7 jours"),
+        url_path="brouillon_newsletter_7_jours",
+        permissions=["custom_actions_detail"],
+    )
+    def brouillon_newsletter_7_jours(self, request, object_id):
+        return self._generer_le_brouillon_de_newsletter(request, nombre_de_jours=7)
+
+    @action(
+        description=_("Brouillon newsletter — 30 jours"),
+        url_path="brouillon_newsletter_30_jours",
+        permissions=["custom_actions_detail"],
+    )
+    def brouillon_newsletter_30_jours(self, request, object_id):
+        return self._generer_le_brouillon_de_newsletter(request, nombre_de_jours=30)
 
     def has_custom_actions_detail_permission(self, request, object_id):
         return TenantAdminPermissionWithRequest(request)
@@ -4043,7 +4196,7 @@ class BrevoConfigAdmin(SingletonModelAdmin, ModelAdmin):
             api_instance = sib_api_v3_sdk.AccountApi(sib_api_v3_sdk.ApiClient(configuration))
             api_response = api_instance.get_account()
             brevo_config.last_log = api_response
-            messages.success(request, _(f"Api OK"))
+            messages.success(request, _("Api OK"))
         except ApiException as e:
             brevo_config.last_log = f"{e}"
             logger.warning("ApiException when calling AccountApi->get_account: %s\n" % e)

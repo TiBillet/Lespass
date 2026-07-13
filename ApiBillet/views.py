@@ -282,18 +282,23 @@ class EventsViewSet(DeprecatedV1Mixin, viewsets.ViewSet):
         ).order_by('datetime')
 
         if only_futur:
-            timezone = Configuration.get_solo().get_tzinfo()
-
-            # Get the timezone
-            now = datetime.now()
-            # Convert it to the tenant configured timezone
-            now = now.astimezone(timezone)
-            # Remove one day to it to also show recent events
-            now = now.replace(day=now.day-1)
+            # On part d'HIER : un evenement commence hier soir est encore d'actualite.
+            #
+            # ATTENTION — NE PAS revenir a `now.replace(day=now.day - 1)` : le 1er du mois,
+            # `day - 1` vaut 0 et Python leve `ValueError: day is out of range for month`.
+            # L'endpoint plantait donc un jour sur trente. C'est `timedelta` qu'il faut,
+            # jamais `replace(day=...)`.
+            #
+            # `django.utils.timezone.now()` est deja "aware" : le comparer a un
+            # DateTimeField suffit. Convertir vers la timezone du tenant ne changeait rien
+            # au filtrage (meme instant, seul l'AFFICHAGE differe).
+            # / Start from YESTERDAY. NEVER go back to `replace(day=now.day - 1)`: on the
+            # 1st of the month day-1 == 0 and Python raises ValueError. Use timedelta.
+            hier = timezone.now() - timedelta(days=1)
 
             events = events.filter(
-                Q(datetime__gte=now) |
-                Q(end_datetime__gte=now)
+                Q(datetime__gte=hier) |
+                Q(end_datetime__gte=hier)
             )
 
         if filter:

@@ -308,6 +308,60 @@ Carte Stripe test : `4242 4242 4242 4242`, nom : Douglas Adams, exp : 12/42, CVC
 4. **FALC** : mots simples.
 5. **Incremental** : d'abord comprendre la structure (curl), ensuite ecrire le test.
 
+## Linter (ruff) — les deux commandes sont dangereuses, pour des raisons differentes
+
+**Toujours dans le conteneur.** Le projet est bind-monte et le `.venv` est PARTAGE entre l'hote
+et le conteneur : lancer `poetry` / `ruff` / `pytest` **depuis l'hote** fait recreer le
+virtualenv par Poetry et **detruit l'environnement du conteneur** (Django disparait, le serveur
+tombe).
+
+```bash
+docker exec lespass_django poetry run ruff check --fix /DjangoFiles/<fichier>.py
+docker exec lespass_django poetry run ruff format /DjangoFiles/<fichier>.py
+```
+
+### `ruff format` : JAMAIS sur un fichier pre-existant
+
+Il reformate le fichier **entier** — indentation, guillemets, sauts de ligne — sur des milliers
+de lignes que personne n'a ecrites dans la session. Reserve aux fichiers **neufs**.
+
+### `ruff check --fix` : il SUPPRIME les imports a effet de bord
+
+> ⚠️ **Cette regle disait longtemps que `--fix` etait « sans danger ». C'etait FAUX**, et ca a
+> casse le projet le 2026-07-13.
+
+Un **import a effet de bord** est un import dont le seul but est d'**executer** le module :
+
+```python
+from Administration.admin import (products, prices)   # lance les @admin.register(...)
+```
+
+Le nom importe n'est jamais reference. Ruff le voit donc comme mort (**F401**) et `--fix` le
+supprime. **L'enregistrement disparait, en silence.**
+
+**Ce qui s'est passe :** `--fix` a supprime cet import de `Administration/admin_tenant.py`.
+`ProductAdmin` n'etait plus enregistre → `admin.E039` → **Django refuse de demarrer**, le serveur
+tombe, et **319 tests partent en erreur** — non pas parce qu'ils testaient l'admin, mais parce
+que la fixture `conftest.py` appelle `manage.py test_api_key`, qui ne bootait plus. Le symptome
+etait a des kilometres de la cause.
+
+**Ne jamais compter sur le `# noqa: F401`** : rien ne garantit que tous les imports a effet de
+bord soient proteges. A l'audit, le projet avait **141 imports F401 « fixables »** et **aucune
+configuration ruff**.
+
+**Les deux parades, en place depuis :**
+
+1. **`pyproject.toml`** — `[tool.ruff.lint.per-file-ignores]` : F401 est ignore sur
+   `admin*.py`, `admin/*.py`, `apps.py`, `signals.py`, `triggers.py`, `settings.py`,
+   `__init__.py`. **Ruff ne peut plus y toucher.**
+2. **`tests/pytest/test_django_system_checks.py`** — la suite echoue **immediatement** si un
+   enregistrement d'admin disparait. C'est le filet : il transforme une panne silencieuse en
+   test rouge.
+
+**La regle qui reste, malgre ces parades :** apres **tout** `ruff --fix`, lancer
+`manage.py check` **et la suite complete** — pas seulement les tests du domaine touche. Et si un
+`--fix` produit un diff qui deborde de la session : **le signaler**, ne jamais rollback avec git.
+
 ## Accessibilite et themes
 
 - `aria-label` pour les groupes d'info, `visually-hidden` pour decrire les valeurs.

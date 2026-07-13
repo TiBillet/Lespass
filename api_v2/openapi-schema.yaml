@@ -16,9 +16,43 @@ paths:
     get:
       operationId: listEvents
       summary: List all published Events
+      description: >
+        Lists published events. The time filters start from YESTERDAY, not from now:
+        an event that began last night is still relevant. They also keep ONGOING events
+        (started before the window but still running), by looking at endDate.
       tags: [Event]
       security:
         - ApiKeyAuth: []
+      parameters:
+        - name: only_futur
+          in: query
+          required: false
+          description: >
+            Any truthy value keeps only upcoming or ongoing events (from yesterday on).
+            Ignored when `next_days` is supplied.
+          schema:
+            type: string
+            example: "1"
+        - name: next_days
+          in: query
+          required: false
+          description: >
+            Keep only the events of the next N days (from yesterday on). Takes precedence
+            over `only_futur`. Must be an integer between 1 and 366; anything else
+            returns 400.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 366
+            example: 30
+        - name: filter
+          in: query
+          required: false
+          description: >
+            Free-text search on the event name, short description and long description.
+          schema:
+            type: string
+            example: concert
       responses:
         "200":
           description: OK
@@ -31,6 +65,17 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Event'
+        "400":
+          description: >
+            `next_days` is not an integer, or is outside the 1..366 range.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: next_days doit être compris entre 1 et 366.
     post:
       operationId: createEvent
       summary: Create an Event (schema.org/Event)
