@@ -850,9 +850,38 @@ class PanierSession:
                     }
                 )
 
-        # Validation 8 : code promo (si fourni) — doit etre actif, utilisable,
+        # Validation 8 : pas de chevauchement avec une même ressource déjà dans le panier
+        # / Validation 8: no overlap with the same resource already in cart
+        for existing in self._data.get('items', []):
+            if existing.get('type') != 'resource':
+                continue
+            if existing.get('resource_uuid') != str(resource_uuid):
+                continue
+
+            existing_start = parse_datetime(existing['start_datetime'])
+            existing_duration = int(existing['slot_duration_minutes'])
+            existing_count = int(existing['slot_count'])
+            existing_end = existing_start + timedelta(
+                minutes=existing_duration * existing_count
+            )
+
+            if start < existing_end and existing_start < end:
+                raise InvalidItemError(
+                    _(
+                        "Resource \"%(resource)s\" is already in your cart "
+                        "from %(existing_start)s to %(existing_end)s. "
+                        "You cannot add an overlapping slot."
+                    )
+                    % {
+                        'resource': resource.product.name,
+                        'existing_start': existing_start.strftime('%d/%m/%Y %H:%M'),
+                        'existing_end': existing_end.strftime('%d/%m/%Y %H:%M'),
+                    }
+                )
+
+        # Validation 9 : code promo (si fourni) — doit etre actif, utilisable,
         # et lie au product de l'adhesion. Meme regle que add_ticket.
-        # / Validation 8: promo code (if provided) — active, usable, linked to product.
+        # / Validation 9: promo code (if provided) — active, usable, linked to product.
         validated_promo_name = None
 
         if promotional_code_name:
