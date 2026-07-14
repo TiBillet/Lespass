@@ -3836,12 +3836,15 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
 
     readonly_fields = ["has_key", "ghost_last_log"]
 
-    # Le panneau s'affiche AVANT le formulaire. Il remplace les anciens boutons du bandeau
-    # (`actions_detail`) : trois libelles nus, sans un mot d'explication, dans un coin de
-    # l'ecran. Le panneau, lui, dit ce que fait chaque bouton — et surtout ce qu'il NE fait
-    # PAS : un brouillon n'est jamais publie ni envoye.
-    # / The panel replaces the old bare `actions_detail` buttons. It says what each button
-    # does — and above all what it does NOT do: a draft is never published nor sent.
+    # Le panneau s'affiche AVANT le formulaire, et porte les actions de newsletter — pas le
+    # bandeau `actions_detail`, qui n'offre que des libelles nus sans explication.
+    # Chaque bouton doit dire ce qu'il fait, et surtout ce qu'il NE fait PAS : un brouillon
+    # n'est jamais publie ni envoye. Un gestionnaire qui croirait envoyer sa newsletter en
+    # cliquant, ou qui n'oserait pas cliquer de peur de l'envoyer, est un echec dans les
+    # deux sens.
+    # / The panel — not the bare `actions_detail` buttons — carries the newsletter actions.
+    # Each button must say what it does, and above all what it does NOT do: a draft is never
+    # published nor sent.
     change_form_before_template = "admin/ghost/panneau_newsletter.html"
 
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):

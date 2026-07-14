@@ -59,14 +59,25 @@ Suite complete : **834 passed, 0 echec**.
   ```bash
   docker exec lespass_django poetry run python manage.py migrate_schemas --executor=multiprocessing
   ```
-- **Et purger le cache, imperativement.** `module_newsletter` et `module_pages` sont deux champs
-  neufs sur un `SingletonModel`. Sans purge, django-solo ressert un objet serialise par l'ancien
-  code, sans ces attributs — et la sidebar les lit **sur chaque page d'admin**, donc l'admin
-  **entier** repond 500 (`AttributeError: 'Configuration' object has no attribute
-  'module_newsletter'`).
-  ```bash
-  docker exec lespass_django poetry run python manage.py shell -c \
-    "from django.core.cache import cache; cache.clear(); print('cache purge')"
+- **Purge du cache : PAS necessaire ici.** `module_pages` et `module_newsletter` sont deux champs
+  neufs sur le `SingletonModel` `Configuration`, qui est mis en cache par django-solo (memcached,
+  TTL 300 s). L'objet cache par l'ancien code n'a pas ces champs dans son `__dict__` — mais la
+  **classe**, elle, porte toujours leur descripteur `DeferredAttribute` (le pickle ne transporte
+  pas la classe). L'acces declenche donc un `refresh_from_db()` : Django relit le champ en base et
+  rend la bonne valeur. Cout reel : **un SELECT de plus par requete pendant 5 minutes**, pas une
+  panne.
+- **En revanche, purger est obligatoire quand une migration MODIFIE une valeur sans passer par
+  `save()`** (`queryset.update()`, UPDATE SQL, data migration) : `set_to_cache()` n'est appele que
+  dans `save()`, donc le cache resterait perime jusqu'a expiration du TTL. Purge **ciblee et par
+  tenant** (la cle de cache est par schema) — surtout pas `cache.clear()`, qui sur memcached fait
+  un `flush_all` et vide **tous** les tenants, cache SEO compris :
+  ```python
+  from django_tenants.utils import tenant_context
+  from Customers.models import Client
+  from BaseBillet.models import Configuration
+  for tenant in Client.objects.all():
+      with tenant_context(tenant):
+          Configuration.clear_cache()
   ```
 
 ---

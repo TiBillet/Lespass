@@ -73,23 +73,54 @@ donc **pas** les chaines de `main-fedow-import`. Le workflow i18n est a relancer
 makemessages puis compilemessages
 ```
 
-### 2. Au deploiement — purger le cache, imperativement
+### 2. Au deploiement — le cache : RIEN a faire (verifie)
 
-`module_newsletter` et `module_pages` sont deux nouveaux champs sur un `SingletonModel`
-(`Configuration`). Sans purge, django-solo ressert un objet **serialise par l'ancien code**,
-sans ces attributs — et comme la sidebar les lit **sur chaque page d'admin**, l'admin
-**entier** repond 500 :
+**Une premiere version de cette note affirmait qu'il fallait purger le cache sous peine de voir
+tout l'admin repondre 500. C'est FAUX, et c'est verifie.** La note est corrigee ici pour ne pas
+envoyer le prochain incident sur une fausse piste.
+
+`module_pages` et `module_newsletter` sont deux champs neufs sur le `SingletonModel`
+`Configuration`, mis en cache par django-solo (memcached, TTL 300 s — cache **externe**, qui
+survit donc a un redemarrage de Django). L'objet cache par l'ancien code n'a pas ces champs dans
+son `__dict__`.
+
+Mais **la classe**, elle, porte toujours leur descripteur `DeferredAttribute` — et le pickle ne
+transporte que le `__dict__`, jamais la classe. L'acces a l'attribut ne trouve rien dans le
+`__dict__`, tombe sur le descripteur, et declenche un `refresh_from_db()` : Django relit le champ
+en base et rend la bonne valeur.
+
+Reproduit dans le conteneur, sur le vrai memcached :
 
 ```
-AttributeError: 'Configuration' object has no attribute 'module_newsletter'
+module_newsletter dans le __dict__ apres unpickle ? False
+ACCES -> valeur = False  (type bool)
+AttributeError ? NON
+Requetes SQL declenchees par l'acces : 1
+   SELECT "BaseBillet_configuration"."id", "BaseBillet_configuration"."module_newsletter" FROM ...
 ```
 
-```bash
-docker exec lespass_django poetry run python manage.py shell -c \
-  "from django.core.cache import cache; cache.clear(); print('cache purge')"
-```
+**Cout reel : un SELECT de plus par requete admin, pendant 5 minutes.** Pas une panne.
 
-(Deja fait en dev pendant le merge. **A refaire a chaque deploiement.**)
+D'ailleurs, `AttributeError: 'Configuration' object has no attribute 'module_newsletter'` ne peut
+se produire **que si la classe Python n'a pas le champ** (donc un `models.py` sans le champ) — un
+etat que le cache est incapable de produire. Si l'admin tombe en 500 apres cette migration, la
+cause sera un **`ProgrammingError` (colonne ou table absente : `migrate_schemas` pas passe sur
+tous les tenants)** — et une purge de cache n'y changerait **rien**.
+
+**Le cas ou purger EST obligatoire :** quand une migration **modifie une valeur** sans passer par
+`save()` (`queryset.update()`, UPDATE SQL, data migration). `set_to_cache()` n'est appele que dans
+`save()` : le cache resterait perime jusqu'a expiration du TTL. Purge **ciblee, par tenant** (la
+cle est par schema) — **surtout pas `cache.clear()`**, qui sur memcached fait un `flush_all` et
+vide **tous** les tenants, cache SEO compris :
+
+```python
+from django_tenants.utils import tenant_context
+from Customers.models import Client
+from BaseBillet.models import Configuration
+for tenant in Client.objects.all():
+    with tenant_context(tenant):
+        Configuration.clear_cache()
+```
 
 ### 3. Migration
 
@@ -104,9 +135,12 @@ tant qu'un superadmin ne l'active pas.
 
 ### Test 1 — L'admin repond (le canari du merge)
 1. Aller sur `https://lespass.tibillet.localhost/admin/`.
-2. **Attendu :** la page s'affiche. Un **500** avec `'Configuration' object has no attribute
-   'module_newsletter'` signifie que le cache n'a pas ete purge (voir ci-dessus).
-3. Verifier que la sidebar affiche bien les groupes des **deux** chantiers (LaBoutik,
+2. **Attendu :** la page s'affiche. La sidebar est rendue sur **chaque** page d'admin et lit
+   `Configuration` : si elle casse, c'est **tout** l'admin qui tombe, pas une seule page.
+3. Un **500** ici signifierait un `ProgrammingError` (« column … does not exist » / « relation …
+   does not exist ») : `migrate_schemas` n'est pas passe sur tous les tenants. **Ce n'est pas un
+   probleme de cache** — voir §2, ou cette confusion est expliquee.
+4. Verifier que la sidebar affiche bien les groupes des **deux** chantiers (LaBoutik,
    Inventaire, Tireuses, Pages… **et** Newsletter si le module est actif).
 
 ### Test 2 — Les deux modules coexistent dans le dashboard

@@ -741,10 +741,11 @@ def get_sidebar_navigation(request):
     # n'existe pas dans la sidebar : inutile de montrer une config Ghost a un lieu qui n'a
     # pas de serveur Ghost.
     #
-    # C'est ici que vit desormais la configuration Ghost — elle etait auparavant perdue au
-    # milieu de « Outils externes », a cote de Webhook et Brevo.
-    # / Newsletter: shown ONLY when the module is active. The Ghost config lives here now;
-    # it used to sit lost in "External tools", next to Webhook and Brevo.
+    # La configuration Ghost vit ICI, et nulle part ailleurs : c'est le serveur d'envoi de
+    # la newsletter. La ranger dans « Outils externes », a cote de Webhook et Brevo, la
+    # rendrait introuvable pour qui cherche a piloter sa newsletter.
+    # / Newsletter: shown ONLY when the module is active. The Ghost config belongs HERE — it
+    # is the newsletter's sending server, not a generic "external tool".
     if configuration.module_newsletter:
         navigation.append(
             {
