@@ -2,11 +2,18 @@
 
 ## Ce qui a été fait
 
-Deux boutons dans l'admin, sur la page **Outils externes → Ghost** :
-**« Brouillon newsletter — 7 jours »** et **« — 30 jours »**.
+Un **panneau Newsletter** en haut de la page **Newsletter → Serveur Ghost** de l'admin, avec
+trois boutons et les textes d'aide qui vont avec :
+
+- **« Tester la connexion »** — interroge Ghost, ne modifie rien.
+- **« Brouillon des 7 prochains jours »** et **« — 30 prochains jours »**.
 
 Ils rassemblent les événements à venir du tenant **et de son réseau fédéré**, en font du HTML
 sémantique, et le déposent en **brouillon** dans l'instance Ghost du tenant.
+
+Le résultat s'affiche **dans le panneau**, sous les boutons — pas en toast. (Les
+`django.messages` ne sont **pas rendus** sur la page de modification de l'admin : piège
+documenté dans `tests/PIEGES.md`.)
 
 > **Rien n'est jamais publié ni envoyé.** Le post est créé en `status: draft`. L'envoi reste
 > un geste humain, dans Ghost.
@@ -26,8 +33,11 @@ Ghost, toutes les newsletters suivent — sans toucher à Lespass.
 |---|---|
 | `newsletter/` | **Nouvelle app**, sans modèle, sans migration |
 | `TiBillet/settings.py` | `'newsletter'` dans `TENANT_APPS` |
-| `Administration/admin_tenant.py` | Deux actions sur `GhostConfigAdmin` (+ restauration d'un import à effet de bord, voir plus bas) |
-| `tests/pytest/test_newsletter_ghost.py` | **Nouveau** — 50 tests |
+| `newsletter/views.py` | **Nouveau** — le contrôleur : `viewsets.ViewSet` + `TenantAdminPermission`. La logique n'est **pas** dans l'admin |
+| `newsletter/urls.py` | **Nouveau** — routes `/newsletter/admin/…` (non publiques) |
+| `Administration/templates/admin/ghost/panneau_newsletter.html` | **Nouveau** — le panneau |
+| `Administration/admin_tenant.py` | `GhostConfigAdmin` : juste le `change_form_before_template` et son contexte (+ restauration d'un import à effet de bord, voir plus bas) |
+| `tests/pytest/test_newsletter_ghost.py` | **Nouveau** — 52 tests |
 
 ---
 
@@ -37,8 +47,11 @@ Ghost, toutes les newsletters suivent — sans toucher à Lespass.
 
 1. Dans **Ghost Admin → Settings → Integrations → Add custom integration**
 2. Copier l'**Admin API key** (de la forme `<id>:<secret hexa>`)
-3. Dans Lespass : **Outils externes → Ghost**, renseigner l'**URL** et la **clé**, puis
+3. Dans Lespass : **Newsletter → Serveur Ghost**, renseigner l'**URL** et la **clé**, puis
    **Enregistrer**
+
+> ⚠️ Le menu **Newsletter** n'apparaît que si le **module Newsletter est activé** (dashboard,
+> superadmin seulement). Voir `module-newsletter-activation.md`.
 
 > ⚠️ **Enregistre pendant que Ghost est joignable.** `save_model` ne chiffre la clé que si le
 > test de connexion réussit — sinon elle est stockée **en clair**. Le code le détecte
@@ -46,9 +59,11 @@ Ghost, toutes les newsletters suivent — sans toucher à Lespass.
 
 ### Test 1 : le cas nominal
 
-1. Cliquer **« Brouillon newsletter — 30 jours »**
-2. **Attendu :** un toast vert *« Brouillon créé avec N événement(s). »* + un lien
-   **« Ouvrir dans Ghost »** — **cliquable**
+1. Cliquer **« Tester la connexion »**. **Attendu :** une boîte **verte** dans le panneau,
+   *« Connexion réussie. »*
+2. Cliquer **« Brouillon des 30 prochains jours »**
+3. **Attendu :** une boîte **verte** dans le panneau, *« Brouillon créé avec N évènement(s). »*
+   + un lien **« Ouvrir dans Ghost → »** — **cliquable**
 3. Ouvrir le lien. **Attendu dans l'éditeur Ghost :**
    - le post est en **« Draft »** (jamais publié)
    - chaque événement est une **carte encadrée** (pas un pavé de texte) : image, titre en gras,
@@ -72,11 +87,14 @@ configuration du tenant).
 
 | Manipulation | Attendu |
 |---|---|
-| Vider l'URL ou la clé, puis cliquer | Toast orange *« Ghost n'est pas configuré… »*, **aucun brouillon créé** |
-| Mettre une URL bidon (`https://nexistepas.invalid`) | Toast rouge *« Instance Ghost injoignable. »* |
-| Mettre une clé fausse mais bien formée | Toast rouge *« La clé Admin API est refusée par Ghost. »* |
-| Cliquer « 7 jours » sur un tenant **sans événement** dans la semaine | Toast bleu *« Aucun événement… »*, **et surtout aucun brouillon vide dans Ghost** |
-| Le bouton **« Tester l'API »** (préexistant) | **doit toujours fonctionner** — il n'a pas été écrasé |
+| Vider l'URL ou la clé, puis cliquer | Boîte **bleue** *« L'instance Ghost n'est pas configurée… »*, **aucun brouillon créé** |
+| Mettre une URL bidon (`https://nexistepas.invalid`) | Boîte **rouge** *« Instance Ghost injoignable. »* |
+| Mettre une clé fausse mais bien formée | Boîte **rouge** *« La clé Admin API est refusée par Ghost. »* |
+| Cliquer « 7 jours » sur un tenant **sans évènement** dans la semaine | Boîte **bleue** *« Aucun évènement… »*, **et surtout aucun brouillon vide dans Ghost** |
+
+> ⚠️ **Si vous cliquez et qu'il ne se passe RIEN :** ce n'est pas le bouton, c'est le serveur
+> qui renvoie une erreur. **htmx ne swappe pas sur une 4xx/5xx.** Ouvrez la console (F12) :
+> elle affiche `Response Status Error Code 500 from /newsletter/admin/…`. Voir `tests/PIEGES.md`.
 
 ### Test 4 : la fédération
 
