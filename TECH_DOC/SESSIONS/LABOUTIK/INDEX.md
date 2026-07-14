@@ -1,0 +1,613 @@
+# LaBoutik — Index des tâches
+
+> **ARCHIVE — provenance : dépôt `lespass-main` (prototype V2), `TECH DOC/SESSIONS/LABOUTIK/`.**
+>
+> Ce chantier a été mené dans `lespass-main`, qui a vocation à être supprimé. Les documents
+> sont importés ici pour garder la trace des décisions de conception. **Ils décrivent l'état
+> de `lespass-main`, pas celui de Lespass** : les chemins de fichiers, les numéros de session
+> et les statuts « FAIT / TODO » sont ceux du prototype. Le code correspondant est arrivé dans
+> Lespass par le commit d'intégration `141824d0` (2026-06-20).
+>
+> Doc constructeur Sunmi associée : [`TECH_DOC/SUNMI/`](../../SUNMI/).
+
+> Suivi simplifié de l'avancement. Le détail complet est dans [`PLAN_LABOUTIK.md`](PLAN_LABOUTIK.md).
+>
+> **Organisation des sessions :**
+> - [`DONE/`](DONE/) — sessions terminées et validées (01 → 06 Cascade, 30 → 34, 37)
+> - [`TODO/`](TODO/) — sessions en attente d'implémentation (06 Rapport temps réel, 35, 36)
+> - `excalidraw/` — schémas et diagrammes
+>
+> Dernière mise à jour : 2026-05-05 (Session 37 implémentée — bug 8 Antoine stock vrac négatif)
+
+---
+
+## Récemment terminé
+
+### Session 37 — Stock vrac négatif et alerte écran validation ✅ (2026-05-05)
+
+Correction du bug 8 du retour Antoine 2026-05-04 (stock vrac hors stock sans
+message d'erreur). Le flag `autoriser_vente_hors_stock` était contourné par un
+`except Exception: pass` trop large créant des "ventes fantômes". Ajout d'une
+validation amont (`_valider_stock_panier`) + alerte sur l'écran de succès quand
+le stock part en négatif. **Effet de bord positif** : la fix `htmx:beforeSwap`
+globale corrige aussi le bug 1 (sortie de caisse 0€ → 400 silencieux).
+
+→ `DONE/Session 37 - Stock vrac negatif et alerte ecran validation.md`
+
+---
+
+## À faire — sessions prioritaires (TODO/)
+
+### Session 35 — Audit front HTMX et fuite NfcReader (audit fait, fix non implémenté)
+
+Diagnostic : 1er paiement cashless OK, 2ème KO. Cause : zombies `NfcReader` jamais
+arrêtés, `eventsOrganizer` qui avale les erreurs en silence.
+**Élargi par retour Antoine 2026-05-04 (§10) :** même classe de bug sur
+`_tarifOverlayOriginalContent`, `additionReset()` incomplet, bouton RETOUR
+identification client.
+
+Fix : ~30 lignes initialement, mais scope élargi à 6 actions chirurgicales
+(singleton NfcReader, console.warn event-bus, fermeture overlay tarif sur
+RESET / changement catégorie, audit champs `additionReset`, comportement
+uniforme `<c-bt.return />`).
+
+→ `TODO/Session 35 - Audit front HTMX et NfcReader.md`
+
+### Session 36 — UI écrans paiement POS (design validé, périmètre élargi)
+
+Refonte CSS/HTML de `hx_complement_paiement.html`, `hx_funds_insufficient.html`,
+`hx_display_type_payment.html` (3 lots, ~2h).
+**Élargi par retour Antoine 2026-05-04 :** ajouter `hx_return_payment_success.html`
+(monnaie restante peu lisible) + `<select>` du récap ventes (flèche manquante).
+3 bugs JS pour Nico documentés (htmx:targetError, viderCarteManageForm,
+_obtenir_ou_creer_wallet).
+
+**Prérequis** : fix Session 35 (sinon le swap `#confirm` reste cassé).
+
+→ `TODO/Session 36 - UI ecrans paiement POS.md`
+
+### Session 06 — Rapport temps réel (plan rédigé, non implémenté)
+
+Bouton « Rapport en cours » sur la changelist des clôtures de caisse. Ouvre
+dans un nouvel onglet un rapport comptable complet calculé en temps réel
+depuis la dernière clôture (13 sections de `RapportComptableService`).
+Tasks 1 à 6 prêtes (vue, template, bouton admin, traductions, tests, CHANGELOG).
+
+→ `TODO/Session 06 - Rapport temps reel.md`
+
+---
+
+## Fait
+
+### Phase -1 — Dashboard Groupware ✅
+
+5 champs `module_*` sur Configuration, dashboard Unfold avec switches HTMX,
+sidebar conditionnelle (menus masqués si module inactif), proxy models Product
+(TicketProduct, MembershipProduct).
+
+### Phase 0 — fedow_core ✅
+
+App `fedow_core` dans SHARED_APPS. Modèles Asset (5 catégories), Token (centimes),
+Transaction (BigAutoField PK), Federation (M2M invitation/acceptation).
+Services : AssetService, WalletService, TransactionService. 8 tests pytest +
+test Playwright cross-tenant fédération.
+
+### Phase 1 — Modèles POS + Admin ✅
+
+Product unifié (8 champs POS, CategorieProduct, POSProduct proxy, Price.asset FK).
+4 modèles laboutik : PointDeVente, CartePrimaire, Table, CategorieTable.
+Admin Unfold complet. Management command `create_test_pos_data`.
+
+### Phase 2 — Caisse depuis DB ✅
+
+Remplacement des mocks par la vraie DB. Carte primaire → sélection PV → interface POS.
+Paiement espèces et CB avec création LigneArticle + PriceSold + ProductSold.
+
+### Phase 2.5 — POS Adhésion ✅
+
+Wizard d'identification (6 chemins : NFC user connu, NFC anonyme, email/nom via formulaire).
+Fusion wallet éphémère → user.wallet. Création/renouvellement Membership.
+Multi-tarif et prix libre.
+Test Playwright : `44-laboutik-adhesion-identification.spec.ts` (8 tests).
+
+### Phase 3.1 — Paiement NFC cashless ✅
+
+`_payer_par_nfc()` atomique via fedow_core. Débit Token + crédit wallet lieu +
+Transaction + LigneArticle dans le même `transaction.atomic()`.
+
+### Phase 3.2 — Recharges + sécurité ✅
+
+Recharges espèces/CB (RE/RC/TM). Wallet éphémère pour cartes anonymes.
+Garde NFC : les recharges ne peuvent pas être payées par NFC (3 couches de protection).
+
+### Phase 4 — Mode restaurant ✅
+
+CommandeSauvegarde + ArticleCommandeSauvegarde. Cycle de vie : OPEN → SERVED → PAID / CANCEL.
+Tables avec statut (Libre/Occupée/Servie). CommandeViewSet (5 actions).
+
+### Phase 5 — Clôture caisse ✅
+
+ClotureCaisse avec totaux par moyen de paiement (centimes). Rapport JSON détaillé.
+Export PDF (WeasyPrint), CSV, envoi email (Celery). Fermeture des tables et commandes.
+
+### UX — 5 sessions de polish ✅
+
+Filtre catégorie, feedback tactile, couleurs boutons paiement, écrans FALC
+(confirmation espèces, succès, retour carte), responsive Sunmi D3mini (1278×800).
+
+### Refonte typage ✅ → Types PV restaurés (session 06)
+
+Session 04 : suppression `KIOSK` de `comportement`, suppression `kiosk.html` et code conditionnel.
+Session 06 : restauration des types PV `ADHESION` ('A'), `CASHLESS` ('C'), ajout `BILLETTERIE` ('T').
+
+Le type du PV détermine le **chargement automatique** des articles :
+- `DIRECT` ('D') : articles du M2M uniquement (bar, restaurant, etc.)
+- `ADHESION` ('A') : charge auto tous les produits adhésion
+- `CASHLESS` ('C') : charge auto toutes les recharges
+- `BILLETTERIE` ('T') : construit les articles depuis les événements futurs
+- `AVANCE` ('V') : mode commande restaurant (réservé, pas codé)
+
+Les articles du M2M `products` sont **toujours chargés en plus** du chargement automatique.
+Pas de double typage : l'article n'a pas besoin de `methode_caisse` pour apparaître — c'est le type du PV qui décide.
+
+### Asset-first recharge products ✅
+
+L'Asset `fedow_core.Asset` (TLF/TNF/TIM) pilote la création des produits de recharge.
+Signal `post_save` sur Asset → Product multi-tarif (1/5/10/Libre) auto-créé + attaché aux PV CASHLESS.
+FK `Product.asset` → `fedow_core.Asset`. Filtre affichage : pas d'Asset = pas de bouton.
+Refactoring `_executer_recharges()` et `_payer_par_nfc()` : lien direct `product.asset` au lieu de `Asset.objects.filter(category=...)`.
+Migration `0208_product_asset_fk.py`. 6 tests signal.
+
+- [x] FK `Product.asset → fedow_core.Asset` (nullable) + migration
+- [x] Signal `post_save` Asset → Product + 4 Prices + PV CASHLESS
+- [x] Filtre affichage `_construire_donnees_articles` (Asset absent/archivé → skip)
+- [x] Refactoring `_executer_recharges` (boucle générique par Asset)
+- [x] Refactoring `_payer_par_nfc` (priorité product.asset, fallback catégorie)
+- [x] `create_test_pos_data` crée 3 Assets au lieu de 5 Products manuels
+- [x] 6 tests pytest signal (création TLF/TNF/TIM/FED, archivage, renommage)
+
+---
+
+## À faire (dans l'ordre)
+
+> **Principe de séquencement** : chaque phase produit des fondations réutilisées par les suivantes.
+> Le refactoring CSS/footer est un prérequis de la billetterie (qui utilise `<c-footer>`).
+> Le flow identification unifié est un prérequis de la billetterie (les billets utilisent le même flow).
+> Le WebSocket est un prérequis de l'impression (Sunmi Inner).
+> Les rapports comptables et le menu ventes partagent le même `RapportComptableService`.
+
+### 0. Cascade multi-asset NFC + paiement complémentaire ✅
+
+Cascade de débit NFC : TNF (cadeau) → TLF (local) → FED (fédéré), ordre fixe.
+N LigneArticle par article (1 par asset débité), qty décimale, amount entier centimes.
+Paiement complémentaire (espèces/CB/2ème carte) si la cascade ne couvre pas tout.
+Tarifs non-fiduciaires (TIM/FID) via `Price.non_fiduciaire` + débit direct.
+Session 2026-04-08. Spec : `DONE/Session 06 - Cascade multi-asset NFC/DESIGN_CASCADE_MULTI_ASSET_NFC.md`.
+
+- [x] `Price.non_fiduciaire` BooleanField + `clean()` validation (migration 0209)
+- [x] `POSPriceInline` : `non_fiduciaire` + `asset` conditionnel (filtré TIM/FID)
+- [x] Constantes `ORDRE_CASCADE_FIDUCIAIRE`, `MAPPING_ASSET_CATEGORY_PAYMENT_METHOD`
+- [x] `_calculer_qty_partielles()` : dernière ligne prend le reste, somme exacte
+- [x] `_creer_lignes_articles_cascade()` : N LigneArticle, stock 1x, HMAC chaîné
+- [x] Refonte `_payer_par_nfc()` (8 phases) : classification, cascade, complémentaire, atomic
+- [x] `payer_complementaire()` action : espèces, CB, 2ème carte NFC (max 2 cartes)
+- [x] Templates : `hx_complement_paiement.html`, `hx_lire_nfc_complement.html`, succès multi-soldes
+- [x] `formatter_ticket_vente()` enrichi avec `cascade_detail`
+- [x] Fixtures : assets FED/FID, produits TIM/FID (Machine 3D, Pin's), wallet garni
+- [x] 17 tests pytest, 3 tests E2E adaptés, 0 régression (497 pytest pass, 87 E2E pass)
+- [ ] **Reste à faire** : ~50 tests avancés de la spec (multi-articles, adhésions cascade, billetterie, stock, HMAC, edge cases), 8 tests E2E nouveaux, i18n makemessages
+
+### 1. Refactoring Frontend
+
+Nettoyage fondation. Pas de changement de logique. Pas de risque pour les tests.
+
+- [ ] **Sécurité** : validation prix libre côté serveur + fix XSS `textContent` dans tarif.js
+- [ ] **Accessibilité** : `aria-live` sur `#messages` et `#addition-list`
+- [ ] **Extraction CSS** : 2171 lignes inline → fichiers `laboutik/static/css/` séparés
+- [x] **Footer Cotton** : extraire `<c-footer>` de common_user_interface (fait — tables et kiosk inchangés)
+- [ ] **Run tests** : Playwright complet + pytest — valider que rien ne casse
+
+JS non touché (à discuter avec Nicolas). Backend non touché.
+
+### 2. Flow identification unifié (1 panier = 1 client) ← EN COURS
+
+Remplace le `elif` mutuellement exclusif (recharge / adhesion / normal) par un flow unifié.
+L'identification se fait AVANT le choix de paiement (plus logique UX).
+Session 05.
+
+- [x] Flag `panier_necessite_client` dans `moyens_paiement()` (recharges + adhésions)
+- [x] Écran identification intégré dans `hx_display_type_payment.html` (NFC + email adaptatif)
+- [x] Template `hx_recapitulatif_client.html` (récap article par article + total + boutons paiement)
+- [x] `elif` supprimé de `hx_display_type_payment.html`
+- [x] `identifier_client()` reconstruit le panier + texte adaptatif par type d'article
+- [x] Formulaire email soumet via `#addition-form` (les `repid-*` sont propagés)
+- [x] Verrouillage JS par groupe supprimé (paniers mixtes VT+RE+AD autorisés)
+- [x] PV "Mix" dans `create_test_pos_data` (Biere + Recharge 10€ + Adhesion Test Mix)
+- [x] 28 tests pytest + 8 tests E2E adhesion + 8 E2E paiement = 0 échec
+- [x] Vérification LigneArticle en DB (email, carte, payment_method, amount, qty)
+- [x] Test E2E panier mixte sur PV "Mix" (VT+RE+AD → NFC → espèces → 3 LigneArticle vérifiées)
+
+### 3. Billetterie
+
+Le PV de type `BILLETTERIE` ('T') construit ses articles depuis les événements futurs.
+Pas de double typage : pas de `methode_caisse='BI'`, c'est le type du PV qui décide.
+1 tuile paysage = 1 Price d'un event. Jauge statique (WebSocket en phase 4).
+Les events apparaissent comme pseudo-catégories dans la sidebar existante `<c-categories>`.
+Sessions 06 + 07.
+
+- [x] Types PV restaurés : `ADHESION`, `CASHLESS`, `BILLETTERIE` (migration 0005)
+- [x] Composant Cotton `billet_tuile.html` (paysage, `grid-column: span 2`, jauge statique)
+- [x] CSS `billet_tuile.css` + responsive mobile (portrait span 1 < 599px)
+- [x] PV "Accueil Festival" (type BILLETTERIE) + articles M2M (Bière, Eau)
+- [x] `_construire_donnees_articles()` : charge depuis events futurs quand PV BILLETTERIE (1 tuile = 1 Price)
+- [x] `_construire_donnees_categories()` : events comme pseudo-catégories (date + mini-jauge)
+- [x] `cotton/categories.html` : rendu event (date + jauge) si `is_event` + sidebar scrollable
+- [x] Filtre sidebar par event (CSS JS existant, pas de modif JS)
+- [x] Clic tuile → panier (classe `article-container` + ID composite `{event_uuid}__{price_uuid}`)
+- [x] Jauge : Price.stock si défini, sinon Event.jauge_max
+- [x] Couleurs par event (palette cyclique 8 couleurs)
+- [x] Events sans produit filtrés de la grille et de la sidebar
+- [x] Spinner loading-states (extension HTMX officielle, délai 400ms)
+- [x] Navigation PV burger menu en hx-get (anti-blink)
+- [x] Audit a11y : aria-hidden sur icônes, visually-hidden, aria-label jauge sidebar
+- [x] `panier_a_billets` dans `panier_necessite_client` → écran identification "Billetterie" (session 07)
+- [x] `_extraire_articles_du_panier()` : parser ID composite `__` pour BILLETTERIE (session 07)
+- [x] `_creer_billets_depuis_panier()` : Reservation(VALID) + Ticket(NOT_SCANNED) + LigneArticle (atomique) (session 07)
+- [x] Vérification atomique jauge (`select_for_update`) au paiement (session 07)
+- [x] `imprimer_billet()` stub console logger (session 07)
+- [x] `_envoyer_billets_par_email()` : webhook + email Celery avec PDF billets (session 07)
+- [x] `LigneArticle.user_email()` : ajout branche `reservation.user_commande.email` (session 07)
+- [x] `identifier_client()` récapitulatif : description "Billet {tarif} — {event}" (session 07)
+- [x] Propagation `panier_a_billets` dans tous les templates HTMX (session 07)
+- [x] 12 tests pytest (8 unitaires + 4 HTTP) + 5 tests E2E Playwright (session 07)
+- [x] 218 tests pytest + 5 E2E billetterie (0 régression)
+
+### 4. WebSocket ✅
+
+Push serveur → navigateur via HTMX 2 extension `ws`. Daphne ASGI.
+Sessions 08-09. Infrastructure complète, broadcast jauge billetterie, 8 tests pytest.
+
+### 5. Impression ✅
+
+Module modulaire Celery (fire-and-forget, retry exponentiel). 4 backends.
+Sessions 10-11-12 (bouton).
+
+- [x] Modèle `Printer` (SC/SI/LN/MK) + FK sur PointDeVente et CategorieProduct
+- [x] `LaboutikConfiguration` : `sunmi_app_id` + `sunmi_app_key` (Fernet)
+- [x] `PrinterBackend` interface (Strategy) dans `laboutik/printing/`
+- [x] `SunmiCloudBackend` (HTTPS HMAC) + `SunmiLanBackend` (HTTP direct) + `SunmiInnerBackend` (WebSocket)
+- [x] `MockBackend` : décode les vrais bytes ESC/POS en ASCII dans la console Celery
+- [x] `PrinterConsumer` WebSocket dédié (`ws/printer/{printer_uuid}/`)
+- [x] Copie nettoyée `sunmi_cloud_printer.py` (ESC/POS, sans numpy/PIL)
+- [x] `escpos_builder.py` : construction ESC/POS factorisée (UTF-8 ON, QR code agrandi)
+- [x] Formatters : vente, billet (QR signé RSA), commande, clôture
+- [x] Celery : `imprimer_async()` + `imprimer_commande()` (split par catégorie)
+- [x] Admin Unfold `PrinterAdmin` + entrée sidebar "Caisse LaBoutik"
+- [x] Remplacer le stub `imprimer_billet()` par le vrai dispatch Celery
+- [x] Bouton "Imprimer" sur l'écran de succès (HTMX POST)
+- [x] Auto-print billets pour PV BILLETTERIE
+- [x] `uuid_transaction` sur LigneArticle (regroupement pour ré-impression)
+- [x] Endpoint `imprimer_ticket` (PaiementViewSet action)
+- [x] Imprimante mock "Console (mock)" dans les données de test
+- [x] 18 tests pytest impression + 5 tests bouton = 0 régression (252 tests total)
+
+### 6. Conformité LNE + Rapports Comptables ← PROCHAIN
+
+Conformité au référentiel LNE v1.7 (21 exigences). Design spec validé le 2026-03-30.
+Sessions 12 à 19. Voir `DONE/Session 02 - Billetterie POS et ventes/specs/2026-03-30-conformite-lne-caisse-design.md`.
+
+**Session 12 — Fondation HMAC + service de calcul** (Ex.3, Ex.8) ✅ FAIT
+- [x] Clé HMAC par tenant (Fernet) dans LaboutikConfiguration
+- [x] `hmac_hash` + `previous_hmac` + `total_ht` sur LigneArticle
+- [x] FK `point_de_vente` sur LigneArticle (ventilation CA par PV)
+- [x] `laboutik/integrity.py` : calculer_hmac(), verifier_chaine(), calculer_total_ht()
+- [x] Chaînage HMAC intégré dans `_creer_lignes_articles()` + PV passé dans tous les appels
+- [x] `RapportComptableService` (13 méthodes dont ventilation par PV) dans `laboutik/reports.py`
+- [x] Management command `verify_integrity`
+- [x] 15 tests pytest (8 intégrité + 7 rapport), 276 total, 0 régression
+
+**Session 13 — Clôtures J/M/A + total perpétuel** (Ex.6, Ex.7) ✅ FAIT
+- [x] Champs `niveau`, `numero_sequentiel`, `total_perpetuel`, `hash_lignes` sur ClotureCaisse
+- [x] `datetime_cloture` : `default=timezone.now` (plus `auto_now_add`)
+- [x] `datetime_ouverture` calculé auto (1ère vente après dernière clôture)
+- [x] `ClotureSerializer` simplifié (plus de `datetime_ouverture`)
+- [x] `cloturer()` connecté au RapportComptableService (rapport 13 clés)
+- [x] **Clôture GLOBALE au tenant** (pas par PV). `point_de_vente` nullable/informatif
+- [x] Numéro séquentiel atomique par niveau (`select_for_update`), global au tenant
+- [x] Total perpétuel incrémenté atomiquement (`F()` expression), jamais remis à 0
+- [x] Clôtures M/A automatiques (Celery Beat : M le 1er à 3h, A le 1er janv. à 4h)
+- [x] Garde anti-doublon Celery (`exists()` avant `create()`)
+- [x] Garde correction post-clôture (`ligne_couverte_par_cloture` filtre `niveau='J'`)
+- [x] Admin Unfold enrichi avec badge intégrité
+- [x] Fix bug affichage espèces (locale virgule → `|unlocalize` + conversion serveur)
+- [x] 7 tests pytest nouveaux + 7 tests existants adaptés, 283 total, 0 régression
+
+**Session 14 — Mentions légales tickets + traçabilité impressions** (Ex.3, Ex.9) ✅ FAIT
+- [x] Modèle `ImpressionLog` (uuid PK, FK ligne_article/cloture/operateur/printer, type, duplicata, format)
+- [x] `compteur_tickets` sur LaboutikConfiguration (incrémenté atomiquement avec `select_for_update`)
+- [x] Ticket de vente enrichi : raison sociale, adresse, SIRET, TVA (ou art. 293 B), n° séquentiel (T-000001)
+- [x] Ventilation TVA par taux (tableau HT/TVA/TTC) + totaux HT/TVA globaux
+- [x] Mention "*** DUPLICATA ***" (gras, double hauteur+largeur) sur réimpressions
+- [x] Traçabilité : `ImpressionLog` créé dans `imprimer_async()` via `impression_meta`
+- [x] Détection duplicata par `uuid_transaction` (garde : pas de faux positif si uuid=None)
+- [x] Builder ESC/POS étendu (sections legal, TVA breakdown, DUPLICATA)
+- [x] `pied_ticket` personnalisé sur les tickets + dans l'admin
+- [x] `ImpressionLogAdmin` lecture seule (audit log immutable)
+- [x] Index `db_index=True` sur `ImpressionLog.uuid_transaction`
+- [x] 8 tests pytest nouveaux, 291 total, 0 régression
+
+**Session 15 — Mode école + exports admin** (Ex.5) ✅ FAIT
+- [x] `sale_origin=LABOUTIK_TEST` dans SaleOrigin + `mode_ecole` BooleanField sur LaboutikConfiguration
+- [x] Bandeau "MODE ECOLE — SIMULATION" conditionnel sur l'interface POS (header.html)
+- [x] Ventes marquées `LABOUTIK_TEST` en mode école (`_creer_lignes_articles()`)
+- [x] Tickets portent "*** SIMULATION ***" en mode école (formatter + escpos_builder)
+- [x] Exclusion automatique du rapport de production (filtre exact `sale_origin=LABOUTIK`)
+- [x] Vue détail HTML du rapport (13 sections structurées, pas JSON brut)
+- [x] Export PDF A4 (WeasyPrint), CSV (délimiteur `;`), Excel (openpyxl, 1 onglet/section)
+- [x] `mode_ecole` dans l'admin LaboutikConfiguration
+- [x] 8 tests pytest nouveaux, 299 total, 0 régression
+
+**Session 15b — Enrichissement rapports comptables** ✅ FAIT
+- [x] Filtre template `|euros` : conversion centimes → affichage "127,50 €" (symbole via `Configuration.currency_code`)
+- [x] `prix_achat` IntegerField sur Product (centimes, articles POS uniquement)
+- [x] `calculer_totaux_par_moyen()` enrichi : `cashless_detail` (noms monnaies via `fedow_core.Asset`) + `currency_code`
+- [x] `calculer_detail_ventes()` enrichi : `qty_vendus`/`qty_offerts`, `prix_achat_unit`, `cout_total`, `benefice`
+- [x] `calculer_habitus()` enrichi : `depense_mediane`, `recharge_mediane`, `reste_moyenne`/`med_on_card` (via `fedow_core.Token`), `nouveaux_membres`
+- [x] Template admin `cloture_detail.html` : 13 sections en tableaux structurés (plus de `pprint`), tout en euros, tout en `{% translate %}`
+- [x] Template PDF aligné sur l'admin
+- [x] i18n fieldsets admin (Période, Totaux, Détails)
+- [x] 3 tests pytest nouveaux + 1 adapté, 302 total, 0 régression
+
+**Session 16 — Menu Ventes : Ticket X + liste** ✅ FAIT
+- [x] Entrée "VENTES" dans le burger menu POS (`hx-target="body"` + `hx-push-url`)
+- [x] Page plein écran `ventes.html` (header + zone ventes, sans catégories/footer/WebSocket)
+- [x] `recap_en_cours` (Ticket X) : 5 onglets (toutes, par PV, par moyen, détail articles, liste ventes)
+- [x] `liste_ventes` : pagination SQL `GROUP BY COALESCE(uuid_transaction, uuid)` + `LIMIT/OFFSET` natif PostgreSQL
+- [x] `detail_vente` : pattern **collapse** (clic ligne → détail s'ouvre en `<tr>` dessous, re-clic → ferme)
+- [x] Fallback `uuid_transaction` → `uuid` (pk) pour les anciennes données sans uuid_transaction
+- [x] `_construire_contexte_ventes()` : contexte header/PV/params pour toutes les vues Ventes
+- [x] `_rendre_vue_ventes()` : détection `htmx.target` pour page complète vs partial interne
+- [x] Colonne Chèque ajoutée dans `calculer_synthese_operations()` (service + template)
+- [x] CSS `ventes.css` : thème sombre Luciole, responsive, `table-layout:fixed`, `font-variant-numeric:tabular-nums`
+- [x] `stateJson` minimal dans le contexte ventes (fix `JSON.parse("")` crash dans base.html)
+- [x] 9 tests pytest + 4 E2E Playwright, 311 pytest total, 0 régression
+
+**Session 17 — Corrections + fond/sortie de caisse** (Ex.4) ✅ FAIT
+- [x] Modèles `CorrectionPaiement` + `SortieCaisse` (migration 0015)
+- [x] Action `corriger_moyen_paiement` (PaiementViewSet) : gardes NFC, post-clôture, même moyen + serializer DRF
+- [x] Formulaire correction redesigné : radio buttons, animation, raison optionnelle, bouton Annuler
+- [x] Confirmation animée "Espèces → Carte bancaire" (`hx_correction_succes.html`)
+- [x] Badge moyen : label humain ("Espèces") au lieu du code DB ("CA") via `LABELS_MOYENS_PAIEMENT_DB`
+- [x] Fond de caisse GET/POST (`fond-de-caisse`) : conversion Decimal, virgule FR acceptée
+- [x] Sortie de caisse GET/POST (`sortie-de-caisse` / `creer-sortie-de-caisse`) : ventilation 12 coupures, total serveur
+- [x] `htmx.process(td)` dans `toggleDetailVente()` : fix boutons morts après fetch()
+- [x] Fix navigation PV : full reload (pas hx-get) pour ré-attacher les listeners JS POS
+- [x] Fix `hideMenuBurger()` : garde null après swap HTMX vers ventes.html
+- [x] 3 serializers DRF : `CorrectionPaiementSerializer`, `FondDeCaisseSerializer`, `SortieDeCaisseSerializer`
+- [x] `transaction.atomic()` sur création CorrectionPaiement + modification LigneArticle
+- [x] 20 tests pytest (dont auth 401/403, 404, UUID invalide), 323 total, 0 régression
+- [x] 12 tests E2E POS existants passent, 0 régression
+- [x] UI sortie de caisse redesignée : grille 2 colonnes, boutons +/- tactiles, total JS, état caisse (fond/espèces/solde), validation JS 3 niveaux
+- [x] `calculer_solde_caisse()` : soustrait `SortieCaisse` de la période (fond + espèces - sorties)
+- [x] Ticket X : ligne "Sorties espèces" en rouge quand il y a des retraits
+- [x] Vue `sortie_de_caisse` refactorisée : utilise `calculer_solde_caisse()` (pas de duplication)
+- [x] 4 tests E2E sortie de caisse (DB + UI), 332 pytest total, 0 régression
+
+**Session 18 — Archivage fiscal + accès administration** (Ex.10-12, Ex.15, Ex.19) ✅ FAIT
+- [x] Modèles `JournalOperation` (traçabilité HMAC chaînée) + `HistoriqueFondDeCaisse` (migration 0017)
+- [x] Module `laboutik/archivage.py` : 15 fonctions (CSV `;` UTF-8 BOM, JSON, hash HMAC-SHA256, ZIP, README)
+- [x] Management command `archiver_donnees` : ZIP avec garde période max 365 jours (Ex.10-12)
+- [x] Management command `verifier_archive` : vérification intégrité indépendante (Ex.12)
+- [x] Management command `acces_fiscal` : export dossier complet + README français (Ex.19)
+- [x] Bouton "Export fiscal" dans ClotureCaisseAdmin (formulaire dates + téléchargement ZIP)
+- [x] Admin read-only `JournalOperationAdmin` + `HistoriqueFondDeCaisseAdmin` + sidebar
+- [x] Branchement `HistoriqueFondDeCaisse` dans `fond_de_caisse()` POST
+- [x] Filtre `sale_origin__in=[LABOUTIK, LABOUTIK_TEST]` sur l'extraction (pas de ventes en ligne)
+- [x] `transaction.atomic()` + `select_for_update()` sur le chaînage HMAC du journal
+- [x] Export fiscal HTMX inline dans l'admin (card Unfold + `hx-get` → formulaire en place)
+- [x] Fix `method="post"` sur formulaire fond de caisse (fallback sans HTMX)
+- [x] Fix `dj_timezone` (alias views.py) dans export_fiscal POST
+- [x] 14 tests pytest (ZIP, hash, CSV, période max, vérification OK/KO, accès fiscal, journal chaîné)
+- [x] 57 tests laboutik total + 44 E2E, 0 régression
+- [x] Documentation conformité LNE complète (`TECH DOC/A DOCUMENTER/conformite-lne-caisse-laboutik.md`)
+
+**Session 19 — Envoi auto rapports + version** (Ex.21) ✅ FAIT
+- [x] `rapport_emails` + `rapport_periodicite` branchés dans `envoyer_rapports_clotures_recentes()` (filtrage daily/weekly/monthly/yearly)
+- [x] Fieldset "Rapports automatiques" dans l'admin LaboutikConfiguration
+- [x] `_lire_version()` lit `VERSION` racine (remplace hardcode `0.9.11`)
+- [x] Version affichée dans le footer POS (Cotton component, discret)
+- [x] 6 tests pytest, 63 tests laboutik total, 0 régression
+- [x] `FISCAL_HASH.txt` + `version.py` reportés (CI/CD, pas bloquant pour le dev)
+
+**Session 20 — Export comptable : mapping + FEC** ✅ FAIT
+- [x] Modèle `CompteComptable` (7 natures PCG : VENTE, TVA, TRESORERIE, TIERS, CHARGE, PRODUIT_EXCEPTIONNEL, SPECIAL)
+- [x] Modèle `MappingMoyenDePaiement` (N→1, null = moyen ignoré à l'export)
+- [x] FK `compte_comptable` sur `CategorieProduct` (BaseBillet)
+- [x] Management command `charger_plan_comptable` : 2 fixtures (bar/resto 15 comptes, association 10 comptes) + mappings moyens
+- [x] Générateur FEC 18 colonnes (`laboutik/fec.py`) : tab, UTF-8, CRLF, virgule décimale, 1 écriture équilibrée par clôture Z
+- [x] Actions ViewSet `export_fec` + `charger_plan_comptable` + templates HTMX inline admin
+- [x] Admin Unfold CRUD CompteComptable + MappingMoyenDePaiement + bandeau chargement plan
+- [x] Bouton "Export FEC" dans bandeau clôtures (à côté de "Export fiscal")
+- [x] Documentation utilisateur complète (`TECH DOC/A DOCUMENTER/export-comptable-guide-utilisateur.md`)
+- [x] 11 tests pytest, 74 tests laboutik total, 0 régression
+
+**Session 21 — Export comptable : profils CSV configurables** ✅ FAIT
+- [x] Refactorisation : logique de ventilation extraite dans `laboutik/ventilation.py` (commune FEC + CSV)
+- [x] `laboutik/fec.py` refactorisé pour utiliser `ventilation.py` (sortie identique, 11 tests inchangés)
+- [x] 5 profils CSV en dur dans `laboutik/profils_csv.py` (Sage 50, EBP, Dolibarr, Paheko, PennyLane)
+- [x] Générateur CSV dans `laboutik/csv_comptable.py` (3 modes : DEBIT_CREDIT, MONTANT_SENS, MONTANT_UNIQUE)
+- [x] Export par période (bandeau clôtures) + par clôture (vue détail) avec dropdown profil
+- [x] 8 tests pytest, 82 tests laboutik total, 0 régression
+
+**Session 22 — Refactoring frontend + corrections cashless** ✅ FAIT
+- [x] **XSS** : `escapeHtml()` centralisé dans `tibilletUtils.js`, utilisé dans `addition.js` (2 endroits) et `nfc.js` (1 endroit)
+- [x] **Accessibilité** : `aria-live="polite"` sur `#messages`, `#confirm`, `#ventes-zone`
+- [x] **CSS extraction** : 423 lignes inline → `sortie_de_caisse.css` (373 lignes) + `ws_indicator.css` (50 lignes)
+- [x] **Recharges gratuites** : RC (cadeau) et TM (temps) auto-crédités sans demande de paiement (`PaymentMethod.FREE`)
+- [x] **Carte anonyme + recharge seule** : skip formulaire email, récapitulatif direct
+- [x] **NFC non bloqué** pour RC/TM (seul RE bloque le NFC)
+- [x] **PV Cashless** : accepte espèces et CB (fixture corrigée pour tests E2E)
+- [x] **Tuiles articles** : pas de symbole € sur les prix RC/TM (monnaie cadeau/temps, pas euros)
+- [x] 4 tests pytest recharge ajoutés (CB, prix libre valide/rejeté, double consécutive)
+- [x] 2 tests identification ajoutés (carte anonyme recharge → récap, carte anonyme adhésion → formulaire)
+- [x] 376 pytest + 55 E2E, 0 régression
+
+### 7. Menu Ventes (intégré dans sessions 16-17)
+
+Voir sessions 16 et 17 ci-dessus.
+
+### Admin PriceInline refactoring ✅
+
+Remplacement du PriceInline unique (TabularInline conditionnel) par 4 StackedInline
+spécifiques par proxy product. Session 26.
+Spec : `DONE/Session 04 - PriceInline refactoring/DESIGN_PRICEINLINE_REFACTORING.md`.
+
+- [x] **Session 26 — 4 StackedInline par proxy + champs conditionnels JS** :
+  - [x] `BasePriceInline` (name, prix, free_price, publish, order)
+  - [x] `TicketPriceInline` (+ stock, max_per_user, adhesions_obligatoires) — labels contextuels billetterie
+  - [x] `MembershipPriceInline` (+ subscription_type, recurring_payment, iteration, commitment, stock, max_per_user) — labels contextuels adhesion
+  - [x] `POSPriceInline` (+ contenance)
+  - [x] Champs conditionnels JS generique (`inline_conditional_fields.js`) : regles definies en Python (`inline_conditional_fields`), injectees en JSON via template, lues par JS (meme syntaxe que Unfold `conditional_fields`). Cascade : source cachee = condition fausse.
+  - [x] Animation apparition/disparition (slide + fade 200ms) + fond colore + bordure gauche sur la rangee parente
+  - [x] Labels et help_text contextuels par proxy (stock = "Event capacity" pour tickets, "Maximum total quantity" pour adhesions)
+  - [x] Dark mode supporte (CSS `[data-conditional-styled]`)
+  - [x] 12 tests pytest (4 smoke change pages + 8 champs presents/absents)
+  - [x] Zero migration, zero changement modele
+
+### Inventaire et stock POS ✅
+
+Gestion de stock optionnelle par produit POS. App `inventaire` (TENANT_APP).
+Spec : `DONE/Session 03 - Inventaire et stock/SPEC_INVENTAIRE.md`.
+
+- [x] **Session 23 — Modèles + services + fondation** : app `inventaire`, mod��les Stock + MouvementStock, `contenance` sur Price, `module_inventaire` sur Configuration, service décrémentation atomique `F()`, branchement dans `_creer_lignes_articles()`
+- [x] **Session 24 — Admin Unfold + API + actions rapides** : StockInline (quantité read-only), MouvementStockAdmin avec ajout (réception/ajustement/perte/offert/DM), sidebar conditionnelle, ajustement admin, StockViewSet, DebitMetreViewSet, résumé stock clôture, templates HTMX, 27 tests pytest, 427 total, 0 régression
+- [x] **Session 25 — Affichage visuel stock dans le POS** : enrichissement données articles (`select_related('stock_inventaire')`, 6 clés stock), templates tuiles 3 états (normal, alerte orange, rupture rouge), grisage bloquant (`opacity: 0.4` + `pointer-events: none` + grayscale), pastille quantité restante, `aria-live="polite"` sur badge, OOB swap WebSocket temps réel (multi-onglet), 13+ tests pytest + test E2E WebSocket
+
+### 8. Multi-Tarif UX + Poids/Mesure ⏳ EN COURS
+
+Refonte overlay tarif + vente au poids/volume.
+Spec : `DONE/Session 05 - Multi-tarif et poids-mesure/DESIGN_MULTI_TARIF_POIDS_MESURE.md`
+
+- [x] **Session 28 — Backend + admin + overlay multi-clic + pavé numérique** :
+  - [x] `Price.poids_mesure` BooleanField + `LigneArticle.weight_quantity` IntegerField (migration 0214)
+  - [x] HMAC inclut `weight_quantity` (conformité LNE exigence 3 + 8)
+  - [x] Admin `POSPriceInline` : champ `poids_mesure`, conditional fields JS (`contenance` caché si `poids_mesure`), validation `clean()` (exclusion prix libre / contenance)
+  - [x] Création auto Stock (save_related) si `poids_mesure=True` sans Stock
+  - [x] Backend : parser `weight-*` dans le panier, `LigneArticle.weight_quantity`, décrémentation stock par quantité variable
+  - [x] Tuile article : icône balance + prix /kg ou /L pour les tarifs poids_mesure
+  - [x] Refonte `tarif.js` : overlay dans `#products` (pas plein écran), multi-clic (pas de fermeture), pavé numérique entier, CSS responsive V2s
+  - [x] Lignes panier à montant variable : suffixe `--N` unique (prix libre 25€ + prix libre 10€ = 2 lignes)
+  - [x] Ticket imprimé : format "350g x 28,00€/kg"
+  - [x] Rapports comptables : `poids_total` dans `calculer_detail_ventes()`
+  - [x] Admin LigneArticle : colonne "Weight/Vol." (remplace "user email")
+  - [x] Fixtures : Blonde Pression (Pinte/Demi, stock CL), Cacahuètes en vrac (12€/kg, stock GR), Affiche A4 (fixe + libre), Vin en vrac (8€/L, stock CL)
+  - [x] Fix bug : backend rejetait `custom_amount` pour `poids_mesure` (vérifiait `free_price` uniquement)
+  - [x] 9 tests E2E Playwright (multi-clic, prix libre montants différents, pavé numérique GR/CL, paiement complet avec vérification DB)
+  - [x] 474 pytest PASS, 9 E2E PASS, 0 régression
+  - [x] 4 pièges documentés dans TESTS_README (64-67)
+- [ ] **Polish UX** : mémorisation dernier montant prix libre, badge quantité sur boutons tarif
+
+### 9. Multi-Asset
+
+Paniers mixtes EUR + tokens. À détailler avec le mainteneur.
+
+- [ ] Regrouper articles par `Price.asset` dans `payer()`
+- [ ] Affichage multi-total (par asset) dans le panier
+- [ ] Session dédiée pour l'UX
+
+### 9.5 Recharge FED V2 (remplacement Fedow legacy) ✅ EN PROD (Phases A-B-C-D)
+
+Migration de la recharge FED (monnaie fédérée) vers `fedow_core` en accès DB direct.
+Plus de passage par le serveur Fedow distant pour la recharge. Les nouveaux tenants
+utilisent la V2 ; les anciens (avec `Configuration.server_cashless` renseigné) restent
+sur le flow legacy.
+Spec : `DONE/Session 31 - Recharge FED V2/SPEC_RECHARGE_FED_V2.md`.
+
+Principe : séparation stricte **moyen** (Paiement_stripe, remplaçable par autre PSP)
+et **résultat** (Transaction REFILL + crédit Token, indépendant du PSP). Contrat PSP
+documenté dans `fedow_core/PSP_INTERFACE.md`.
+
+- [x] **Session 31.A — Modèle + service** : +`Client.FED='E'`, +`Paiement_stripe.CASHLESS_REFILL`,
+  +`Product.RECHARGE_CASHLESS_FED`, management command `bootstrap_fed_asset` idempotente,
+  `RefillAmountSerializer` (1€/500€), `RefillService.process_cashless_refill()` idempotent,
+  `PSP_INTERFACE.md`. 12 tests pytest verts.
+- [x] **Session 31.B — Gateway Stripe + Webhook + admin** : `CreationPaiementStripeFederation`
+  (compte central, pas de Connect, pas de SEPA), handler `_process_stripe_webhook_cashless_refill`
+  avec anti-tampering + idempotence, dispatch dans `ApiBillet/views.py:1042`, verrous admin
+  Asset FED. 8 tests pytest verts.
+- [x] **Session 31.C — Vues utilisateur** : helper `peut_recharger_v2()`, réécriture `refill_wallet()`
+  (4 branches), nouvelle action `refill_wallet_submit()` (POST), `return_refill_wallet()` V1/V2,
+  templates HTMX `refill_form_v2.html` + `refill_migration_inline.html` avec aria-live/data-testid.
+- [x] **Session 31.D — Tests critiques + doc** : 4 tests `peut_recharger_v2` (4 verdicts),
+  CHANGELOG bilingue FR/EN, `A TESTER et DOCUMENTER/recharge-fed-v2.md`, 5 nouveaux pièges
+  documentés dans `tests/PIEGES.md` (section 11).
+  **Total : 24 tests pytest verts + 0 régression sur 36 tests existants.**
+- [x] **Code review externe** : 3 issues critiques corrigées (Stripe Connect leak via `price_data`
+  inline, atomicité `refill_wallet_submit`, validation `schema_name='federation_fed'` dans webhook).
+
+- [ ] **Session 31.D-polish (reportée)** : 5 tests pytest nice-to-have, 4 tests E2E Playwright,
+  masquage bouton refill si `module_monnaie_locale=False`, test "Asset FED absent".
+- [ ] **Session 31.E (reportée, Phase 6-7 plan global)** : suppression complète de `FedowAPI()`
+  (36 usages non gardés → chantier 5-7 jours séparé), migration données legacy → V2.
+
+### 9.6 Scan QR carte V2 (remplacement Fedow legacy sur flow public carte) ✅ (2026-04-21)
+
+Migration du flow public "scan QR cashless" de `fedow_connect` (HTTP Fedow distant)
+vers `fedow_core` (DB direct). Dispatch V1/V2 via `Configuration.server_cashless`.
+Les nouveaux tenants utilisent la V2, les legacy restent sur V1 inchangé.
+Spec : `DONE/Session 34 - Scan QR carte V2/SPEC_SCAN_QR_CARTE_V2.md`.
+
+Principe : **CarteService** dans `fedow_core/services.py` avec 4 méthodes
+(`scanner_carte`, `lier_a_user`, `declarer_perdue`, `lister_cartes_du_user`)
+alignées sur les entrées publiques (`/qr/<uuid>/`, `/qr/link/`, `/my_account/card/`).
+Aucune migration de schema (Option 3 YAGNI).
+
+- [x] **Task 1 — Exceptions métier** : `CarteIntrouvable`, `CarteDejaLiee`, `UserADejaCarte`
+  avec `_()` i18n, bilingual docstrings.
+- [x] **Task 2 — `scanner_carte()`** : 3 branches (carte identifiée / anonyme / vierge),
+  création lazy wallet_ephemere protégée par `transaction.atomic()` + `select_for_update()`
+  + double-check locking (anti-race). 3 tests.
+- [x] **Task 3 — `lier_a_user()`** : atomic transaction, anti-vol (`UserADejaCarte` si
+  `user.cartecashless_set.exclude(pk=carte.pk).exists()`), fusion déléguée à
+  `WalletService.fusionner_wallet_ephemere`, rattrapage des adhésions anonymes
+  (`Membership(user=None, card_number=X)` → `user=alice`). 7 tests.
+- [x] **Task 4 — `declarer_perdue()`** : nullify `carte.user` + `carte.wallet_ephemere`,
+  préserve `user.wallet` et ses tokens. 3 tests.
+- [x] **Task 5-7 — Dispatch V1/V2 dans `BaseBillet/views.py`** : 4 vues refactorées
+  (`ScanQrCode.retrieve`, `ScanQrCode.link`, `MyAccount.lost_my_card`, `admin_lost_my_card`)
+  avec helpers `_xxx_v1_legacy` et `_xxx_v2_fedow_core`. Conditon : `bool(config.server_cashless)`.
+- [x] **`lister_cartes_du_user()`** (bascule `/my_account/card/` + `admin_my_cards`) :
+  retourne des `SimpleNamespace` compatibles avec templates `card_table.html` et
+  `wallet_info.html` sans toucher au template. 3 tests.
+- [x] **Task 9 — Workflow djc** : CHANGELOG bilingue, makemessages + compilemessages
+  FR+EN, `A TESTER et DOCUMENTER/scan-qr-carte-v2.md`, `fedow_core/CARTES.md`.
+- [x] **Seed cartes E2E dans `demo_data_v2.py`** : 5 cartes avec `tag_id` depuis `.env`
+  (DEMO_TAGID_*) et **UUIDs hardcodés** (mapping visuel, URLs `/qr/<uuid>/` stables
+  entre flushes).
+- [x] **Code review externe** : 2 Critical fixés (race `scanner_carte`, doc multi-tenant),
+  6 fast wins appliqués (`user.save` après dispatch, `update_fields=["is_active"]`,
+  imports hoistés, `logger.exception`, suppression teardown manuel).
+  **Total : 16 tests pytest verts + 0 régression.**
+
+- [ ] **Task 8 — Tests E2E Playwright (reportée)** : 19 scénarios documentés dans
+  `DONE/Session 34 - Scan QR carte V2/TESTS_E2E_A_FAIRE.md`. Reportée suite à incident
+  DB (teardown trop agressif a vidé `Configuration` via cascade). Règle stricte
+  "zéro teardown agressif" documentée dans `tests/PIEGES.md` section 12.4.
+
+### 10. Stress test (Phase 3.3)
+
+- [ ] Management command `verify_transactions` (séquence, soldes, tenant)
+- [ ] Stress test : 4 tenants, 2000 tx concurrentes, 80 threads
+
+### 11. Migration données (Phase 6)
+
+- [ ] `import_fedow_data` (dry-run + commit)
+- [ ] `import_laboutik_data`
+- [ ] `verify_import`
+
+### 12. Consolidation (Phase 7)
+
+- [ ] `recalculate_hashes` → hash NOT NULL + UNIQUE
+- [ ] Supprimer `fedow_connect/fedow_api.py`, `fedow_connect.Asset`, `fedow_connect.FedowConfig`
+- [ ] Supprimer `fedow_public.AssetFedowPublic`
+- [ ] Run complet pytest + Playwright
