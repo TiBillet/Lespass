@@ -1,0 +1,38 @@
+{% load i18n %}
+{% comment %}
+LIENS UTILES TiBillet — communs aux pages d'erreur 404 et 500.
+/ Useful TiBillet links — shared by the 404 and 500 error pages.
+
+LOCALISATION : BaseBillet/templates/commun/partials/error_useful_links.html
+
+Inclus par 404.html et 500.html (BaseBillet/templates/). Un seul endroit a
+modifier pour les 4 liens. Les liens externes ouvrent un nouvel onglet
+(target="_blank" rel="noopener") ; « Creer son espace » est interne (/onboard/).
+Onboard est ecrit en dur (/onboard/) plutot que via une balise url, pour rester
+robuste sur la page 500, ou la resolution d'URL peut elle-meme etre en echec.
+/ Included by 404.html and 500.html. Single source of truth for the 4 links.
+Onboard is hardcoded for robustness on the 500 page.
+{% endcomment %}
+<div class="card mb-4" data-testid="error-useful-links">
+    <div class="card-body">
+        <h5 class="card-title mb-3">{% translate "Découvrir TiBillet" %}</h5>
+        <div class="list-group" role="group" aria-label="{% translate 'Liens utiles TiBillet' %}">
+            <a href="https://tibillet.coop" target="_blank" rel="noopener"
+               class="list-group-item list-group-item-action" data-testid="error-link-presentation">
+                <i class="bi bi-info-circle me-2" aria-hidden="true"></i>{% translate "Présentation du projet" %}
+            </a>
+            <a href="https://tibillet.github.io/documentation_v3/" target="_blank" rel="noopener"
+               class="list-group-item list-group-item-action" data-testid="error-link-documentation">
+                <i class="bi bi-book me-2" aria-hidden="true"></i>{% translate "Documentation" %}
+            </a>
+            <a href="/onboard/"
+               class="list-group-item list-group-item-action" data-testid="error-link-onboard">
+                <i class="bi bi-plus-circle me-2" aria-hidden="true"></i>{% translate "Créer son espace" %}
+            </a>
+            <a href="https://codecommun.tibillet.coop/contrib" target="_blank" rel="noopener"
+               class="list-group-item list-group-item-action" data-testid="error-link-contribuer">
+                <i class="bi bi-heart me-2" aria-hidden="true"></i>{% translate "Contribuer à TiBillet" %}
+            </a>
+        </div>
+    </div>
+</div>

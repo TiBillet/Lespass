@@ -211,6 +211,9 @@ TENANT_APPS = (
     # Voir SHARED_APPS : 'pages' est en dual-list (isolation par schema, public inclus).
     # / See SHARED_APPS: 'pages' is dual-listed (per-schema isolation, public included).
     'pages',
+    # Newsletter : pilote une instance Ghost auto-hebergee depuis TiBillet.
+    # / Newsletter: drives a self-hosted Ghost instance from TiBillet.
+    'newsletter',
 )
 
 INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]

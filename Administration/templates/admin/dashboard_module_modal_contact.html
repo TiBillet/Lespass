@@ -1,0 +1,81 @@
+{% load i18n %}
+{% comment %}
+MODALE « CONTACTEZ-NOUS » — modules qui demandent une installation serveur
+/ "Contact us" modal — modules that need a server-side install
+
+LOCALISATION : Administration/templates/admin/dashboard_module_modal_contact.html
+
+Affichee a la place de la modale de confirmation quand un gestionnaire ORDINAIRE clique
+sur un module marque `superadmin_seulement` dans MODULE_FIELDS (aujourd'hui : la
+newsletter, qui a besoin d'une instance Ghost installee et dimensionnee).
+
+Ce n'est PAS un mur : c'est une porte d'entree. On explique pourquoi le module n'est pas
+activable en un clic, et on donne les moyens de nous joindre.
+/ Shown instead of the confirm modal when a REGULAR manager clicks a `superadmin_seulement`
+module. Not a wall — a door: we explain why, and give ways to reach us.
+
+Rendue par : Administration/admin_tenant.py -> ConfigurationAdmin.module_toggle_modal
+
+STYLES INLINE OBLIGATOIRES : Unfold embarque son propre sous-ensemble de Tailwind. Les
+classes custom (bg-yellow-600...) ne sont PAS dans son bundle et rendraient du blanc sur
+blanc. On reprend donc exactement la mise en forme de dashboard_module_modal.html.
+/ INLINE STYLES REQUIRED: Unfold ships its own Tailwind subset; custom classes are absent
+from the bundle and would render invisible.
+{% endcomment %}
+
+<div id="module-modal-backdrop"
+     data-testid="module-modal-contact"
+     style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5)"
+     onclick="if(event.target===this) document.getElementById('module-modal-container').innerHTML=''">
+
+    <div style="background:var(--color-base-0,#fff);border-radius:.5rem;box-shadow:0 20px 25px -5px rgba(0,0,0,.1);padding:1.5rem;max-width:32rem;width:100%;margin:0 1rem;border:1px solid var(--color-base-200,#e5e7eb)">
+
+        <h3 style="font-size:1.125rem;font-weight:600;margin-bottom:1rem">
+            {% blocktranslate with name=module_name %}Activer « {{ name }} »{% endblocktranslate %}
+        </h3>
+
+        <p style="font-size:.875rem;color:var(--color-base-500,#6b7280);margin-bottom:1rem;line-height:1.5">
+            {% blocktranslate %}L'équipe de TiBillet peut vous aider à installer votre serveur de newsletter Ghost.{% endblocktranslate %}
+        </p>
+
+        <p style="font-size:.875rem;color:var(--color-base-500,#6b7280);margin-bottom:1.25rem;line-height:1.5">
+            {% blocktranslate %}Contactez-les pour leur indiquer combien de mails vous comptez envoyer, afin de calculer la charge serveur.{% endblocktranslate %}
+        </p>
+
+        {# Les trois canaux de contact officiels de TiBillet. #}
+        {# / TiBillet's three official contact channels. #}
+        <div style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:1.5rem">
+
+            <a href="mailto:contact@tibillet.re"
+               data-testid="module-contact-email"
+               style="display:flex;align-items:center;gap:.5rem;padding:.625rem .75rem;font-size:.875rem;border-radius:.375rem;border:1px solid var(--color-base-200,#e5e7eb);color:var(--color-base-700,#374151);text-decoration:none">
+                <span aria-hidden="true">✉</span> contact@tibillet.re
+            </a>
+
+            <a href="https://matrix.to/#/#tibillet:tiers-lieux.org"
+               target="_blank" rel="noopener"
+               data-testid="module-contact-matrix"
+               style="display:flex;align-items:center;gap:.5rem;padding:.625rem .75rem;font-size:.875rem;border-radius:.375rem;border:1px solid var(--color-base-200,#e5e7eb);color:var(--color-base-700,#374151);text-decoration:none">
+                <span aria-hidden="true">💬</span> {% translate "Salon Matrix" %}
+            </a>
+
+            <a href="https://discord.gg/ecb5jtP7vY"
+               target="_blank" rel="noopener"
+               data-testid="module-contact-discord"
+               style="display:flex;align-items:center;gap:.5rem;padding:.625rem .75rem;font-size:.875rem;border-radius:.375rem;border:1px solid var(--color-base-200,#e5e7eb);color:var(--color-base-700,#374151);text-decoration:none">
+                <span aria-hidden="true">🎮</span> Discord
+            </a>
+
+        </div>
+
+        <div style="display:flex;justify-content:flex-end">
+            <button type="button"
+                    data-testid="module-contact-fermer"
+                    onclick="document.getElementById('module-modal-container').innerHTML=''"
+                    style="padding:.5rem 1rem;font-size:.875rem;font-weight:500;border-radius:.375rem;background:var(--color-primary-600,#7c3aed);color:#fff;border:none;cursor:pointer">
+                {% translate "J'ai compris" %}
+            </button>
+        </div>
+
+    </div>
+</div>

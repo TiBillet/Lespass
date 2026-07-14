@@ -18,7 +18,6 @@ from django.core import signing
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.core.serializers.json import DjangoJSONEncoder
-from django.core.signing import TimestampSigner
 from django.db import connection, IntegrityError, transaction as db_transaction
 from django.db.models import Count, Q, Sum
 from django.http import HttpResponse, HttpRequest, Http404, HttpResponseRedirect
@@ -27,7 +26,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 from django.utils.encoding import force_str, force_bytes
 from django.utils.html import format_html
-from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.http import urlsafe_base64_encode
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.csrf import requires_csrf_token
 from django.views.decorators.http import require_GET
@@ -38,7 +37,6 @@ from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
 from ApiBillet.permissions import TenantAdminPermission, CanInitiatePaymentPermission, CanCreateEventPermission
@@ -55,21 +53,17 @@ from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invo
     contact_mailer, send_to_ghost_email, send_sale_to_laboutik, \
     send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, \
     send_ticket_cancellation_user, send_email_generique, \
-    send_membership_pending_admin, send_membership_pending_user, send_membership_payment_link_user
-from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
-    ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator, EventQuickCreateSerializer, \
-    PaiementHorsLigneSerializer, WizardPlaceSelectSerializer, WizardPlaceMapSerializer, \
+    send_membership_payment_link_user
+from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator, PaiementHorsLigneSerializer, WizardPlaceSelectSerializer, WizardPlaceMapSerializer, \
     WizardEventSerializer
 from Administration.utils import clean_html as admin_clean_html
 from Customers.models import Client, Domain
-from MetaBillet.models import WaitingConfiguration
 from TiBillet import settings
 from crowds.models import CrowdConfig, Initiative
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
 from fedow_connect.utils import dround
 from fedow_connect.validators import TransactionSimpleValidator
-from fedow_public.models import AssetFedowPublic
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -260,7 +254,7 @@ def get_context(request):
 
     if crowd_config.active and Initiative.objects.exists() and config.module_crowdfunding:
         navbar.append({
-            'name': f'crowd-list',
+            'name': 'crowd-list',
             'url': '/contrib/',
             'label': f'{crowd_config.title}',
             'icon': 'people-fill'
@@ -548,7 +542,7 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
 
             domain = get_object_or_404(Domain, domain=lespass_domain)
             primary_domain = domain.tenant.get_primary_domain()
-            if not primary_domain.domain in request.build_absolute_uri():
+            if primary_domain.domain not in request.build_absolute_uri():
                 return HttpResponseRedirect(f"https://{primary_domain}/qr/{qrcode_uuid}/")
 
             if not serialized_qrcode_card:
@@ -1180,7 +1174,7 @@ class MyAccount(viewsets.ViewSet):
         value = token_fed[0]['value']
         if value < 1:
             messages.add_message(request, messages.ERROR,
-                                 _(f"Your wallet is already empty."))
+                                 _("Your wallet is already empty."))
             return HttpResponseClientRedirect('/my_account/')
 
         status_code, result = fedowAPI.wallet.refund_fed_by_signature(user)
@@ -1196,7 +1190,7 @@ class MyAccount(viewsets.ViewSet):
                 'title': f"Remboursement de {amount_eur} € initié",
                 'sub_title': "TiBillet",
                 'main_text': f"La demande de remboursement de la somme {amount_eur} € a été envoyée à notre prestataire bancaire (Stripe).",
-                'main_text_2': f"Il apparaitra sur votre relevé sous 10 jours. Passé ce délai sans remboursement, veuillez nous contacter sur contact@tibillet.re, nous pourrons vérifier ensemble.",
+                'main_text_2': "Il apparaitra sur votre relevé sous 10 jours. Passé ce délai sans remboursement, veuillez nous contacter sur contact@tibillet.re, nous pourrons vérifier ensemble.",
                 'table_info': {'Montant remboursé': f'{amount_eur} €'},
                 'end_text': "À bientôt !",
                 'signature': "Marvin, le robot TiBillet",
@@ -1205,13 +1199,13 @@ class MyAccount(viewsets.ViewSet):
             return HttpResponseClientRedirect('/my_account/')
         else:
             messages.add_message(request, messages.WARNING,
-                                 _(f"Apologies, it seems you need to manually request a refund. You can go to one of the collective's register, or send ar email to: contact@tibillet.re ."))
+                                 _("Apologies, it seems you need to manually request a refund. You can go to one of the collective's register, or send ar email to: contact@tibillet.re ."))
             return HttpResponseClientRedirect('/my_account/')
 
     @staticmethod
     def get_place_cached_info(place_uuid):
         # Recherche des infos dans le cache :
-        place_info = cache.get(f"place_uuid")
+        place_info = cache.get("place_uuid")
         if place_info:
             logger.info("place info from cache GET")
             return place_info.get(place_uuid)
@@ -1229,7 +1223,7 @@ class MyAccount(viewsets.ViewSet):
                     }
 
             logger.info("place info to cache SET")
-            cache.set(f"place_uuid", place_info, 3600)
+            cache.set("place_uuid", place_info, 3600)
         return place_info.get(place_uuid)
 
     @action(detail=False, methods=['GET'])
@@ -1393,7 +1387,7 @@ class MyAccount(viewsets.ViewSet):
                 messages.add_message(request, messages.SUCCESS, _("Refilled wallet"))
             else:
                 messages.add_message(request, messages.ERROR, _("Payment verification error"))
-        except Exception as e:
+        except Exception:
             messages.add_message(request, messages.ERROR, _("Payment verification error"))
 
         return redirect('/my_account/')
@@ -2189,14 +2183,14 @@ class EventMVT(viewsets.ViewSet):
             uuids_a_ajouter = uuids_thematiques - uuids_deja_presents
             for client_thematique in Client.objects.filter(uuid__in=uuids_a_ajouter):
                 tenants.append({
+                    # tag_filter = n'afficher QUE ces tags. Ce tenant n'est pas un
+                    # voisin choisi a la main : on ne veut de lui que les events qui
+                    # portent un des tags de la federation thematique, rien d'autre.
+                    # / tag_filter = show ONLY these tags. This tenant was not hand-picked:
+                    # we only want its events carrying one of the thematic federation tags.
                     "tenant": client_thematique,
-                    "tag_filter": [],
-                    # tag_exclude = INCLURE uniquement ces tags (sémantique
-                    # historique inversée du moteur) : on ne récupère que les
-                    # events thématiques de ce tenant.
-                    # / tag_exclude = include-only these tags (engine's inverted
-                    # semantics): only this tenant's thematic events are fetched.
-                    "tag_exclude": tags_federation_slugs,
+                    "tag_filter": tags_federation_slugs,
+                    "tag_exclude": [],
                 })
 
         # Récupération de tous les évènements de la fédération
@@ -2209,8 +2203,14 @@ class EventMVT(viewsets.ViewSet):
                 ).filter(
                     published=True,
                     datetime__gte=timezone.localtime() - timedelta(days=1),  # On prend les évènement a partir d'hier
-                ).exclude(
-                    tag__slug__in=tenant['tag_filter']
+                    # Un event ARCHIVE est un event retiré de l'agenda. Il ne doit plus
+                    # y apparaitre, meme s'il reste publié. Le cache SEO (carte,
+                    # explorateur) applique déjà ce filtre partout : sans lui ici,
+                    # l'agenda était le SEUL endroit où un event archivé restait visible.
+                    # / An ARCHIVED event is one removed from the agenda. The SEO cache
+                    # already filters it everywhere; without this, the agenda was the only
+                    # place where an archived event stayed visible.
+                    archived=False,
                 ).exclude(
                     categorie=Event.ACTION
                 )  # Les Actions sont affichés dans la page de l'evenement parent
@@ -2220,8 +2220,21 @@ class EventMVT(viewsets.ViewSet):
                         private=False
                     )
 
-                if len(tenant['tag_exclude']) > 0:
+                # Les deux filtres de tags d'un lieu federe, dans le sens annonce par
+                # les libelles de l'admin (FederatedPlace.tag_filter / tag_exclude).
+                # Le matching se fait par SLUG : les objets Tag appartiennent au schema
+                # de CHAQUE tenant, comparer les pk ne marcherait pas.
+                # Un tag_filter non vide restreint : on ne garde QUE ces tags.
+                # / A tenant's two tag filters, matching the admin labels.
+                # / Slug-based matching: Tag objects live in each tenant's own schema.
+                if len(tenant['tag_filter']) > 0:
                     events = events.filter(
+                        tag__slug__in=tenant['tag_filter'])
+
+                # Un tag_exclude non vide retire : on jette les events portant ces tags.
+                # / A non-empty tag_exclude drops events carrying any of these tags.
+                if len(tenant['tag_exclude']) > 0:
+                    events = events.exclude(
                         tag__slug__in=tenant['tag_exclude'])
                 if tags:
                     # Utiliser une annotation pour compter les tags correspondants
@@ -2716,11 +2729,11 @@ class EventMVT(viewsets.ViewSet):
                                  _('Payment confirmed. Tickets sent to your email. You can also view your tickets through "My account > Bookings".'))
             # Déja traité et validé.
             elif paiement_stripe.status == Paiement_stripe.PENDING:
-                messages.add_message(request, messages.WARNING, _(f"Your payment is awaiting validation."))
+                messages.add_message(request, messages.WARNING, _("Your payment is awaiting validation."))
             else:
                 messages.add_message(request, messages.WARNING,
-                                     _(f"An error has occurred, please contact the administrator."))
-        except MessageFailure as e:
+                                     _("An error has occurred, please contact the administrator."))
+        except MessageFailure:
             # Surement un test unitaire, les messages plantent a travers la Factory Request
             pass
         except Exception as e:
@@ -2750,7 +2763,7 @@ class Badge(viewsets.ViewSet):
         fedowAPI = FedowAPI()
         transaction = fedowAPI.badge.badge_in(user, product)
 
-        messages.add_message(request, messages.SUCCESS, _(f"Check in registered!"))
+        messages.add_message(request, messages.SUCCESS, _("Check in registered!"))
 
         return render(request, "fonctionnel/compte/partials/badge_switch.html", context={})
 
@@ -2758,7 +2771,7 @@ class Badge(viewsets.ViewSet):
     def check_out(self, request: HttpRequest):
         template_context = get_context(request)
         fedowAPI = FedowAPI()
-        messages.add_message(request, messages.SUCCESS, _(f"Check out registered!"))
+        messages.add_message(request, messages.SUCCESS, _("Check out registered!"))
         return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
     def get_permissions(self):
@@ -2967,11 +2980,11 @@ class MembershipMVT(viewsets.ViewSet):
                     # Si le produit n'existe pas dans les tenants fédérés, on affiche la page 404 personnalisée
                     context = get_context(request)
                     return render(request, "commun/adhesion/404.html", context=context, status=404)
-            except Exception as e:
+            except Exception:
                 # En cas d'erreur lors de la recherche dans les tenants fédérés, on affiche la page 404 personnalisée
                 context = get_context(request)
                 return render(request, "commun/adhesion/404.html", context=context, status=404)
-        except Exception as e:
+        except Exception:
             # Pour toute autre erreur, on affiche la page 404 personnalisée
             context = get_context(request)
             return render(request, "commun/adhesion/404.html", context=context, status=404)
@@ -3207,16 +3220,16 @@ class MembershipMVT(viewsets.ViewSet):
         try:
             if paiement_stripe.traitement_en_cours:
                 messages.add_message(request, messages.SUCCESS,
-                                     _(f"Your payment has been validated and is being processed. Thank you very much!"))
+                                     _("Your payment has been validated and is being processed. Thank you very much!"))
             elif paiement_stripe.status == Paiement_stripe.VALID:
                 messages.add_message(request, messages.SUCCESS,
-                                     _(f"Your subscription has been validated. You will receive a confirmation email. Thank you very much!"))
+                                     _("Your subscription has been validated. You will receive a confirmation email. Thank you very much!"))
             elif paiement_stripe.status == Paiement_stripe.PENDING:
-                messages.add_message(request, messages.WARNING, _(f"Your payment is awaiting validation."))
+                messages.add_message(request, messages.WARNING, _("Your payment is awaiting validation."))
             else:
                 messages.add_message(request, messages.WARNING,
-                                     _(f"An error has occurred, please contact the administrator."))
-        except MessageFailure as e:
+                                     _("An error has occurred, please contact the administrator."))
+        except MessageFailure:
             # Surement un test unitaire, les messages plantent a travers la Factory Request
             pass
         except Exception as e:
@@ -3236,7 +3249,7 @@ class MembershipMVT(viewsets.ViewSet):
             return HttpResponse(_('PDF generation error'), status=500)
 
         response = HttpResponse(pdf_binary, content_type='application/pdf')
-        response['Content-Disposition'] = f'inline; filename="facture.pdf"'
+        response['Content-Disposition'] = 'inline; filename="facture.pdf"'
         return response
 
     @action(detail=True, methods=['GET'])

@@ -2784,5 +2784,172 @@ dans `locale/en/LC_MESSAGES/django.po` (ex. « Mark as completed », pas
 
 ---
 
+### Piege : rien ne s'affiche au clic dans un panneau d'admin ? Regardez la CONSOLE, pas htmx
+
+**htmx ne fait AUCUN swap si la reponse est en 4xx ou 5xx.** Il n'affiche rien, ne previent
+pas, et l'erreur n'apparait QUE dans la console du navigateur :
+
+```
+[ERROR] htmx.js — Response Status Error Code 500 from /mon/endpoint/
+```
+
+Vecu (juillet 2026, panneau Newsletter) : la vue renvoyait 500 a cause d'un objet
+`Configuration` perime en cache (voir le piege du SingletonModel plus bas). Cote navigateur :
+un clic, et RIEN. J'ai soupconne htmx, le CSRF, les permissions, le double chargement de
+htmx... pendant des heures. **La console le disait des la premiere seconde.**
+
+**Le reflexe :** au moindre « je clique et il ne se passe rien », ouvrir la console AVANT de
+toucher au JS. Et verifier l'endpoint en direct :
+
+```bash
+docker exec lespass_django poetry run python manage.py shell -c "..."  # doit renvoyer 200
+```
+
+Voir aussi la Quirk htmx n°2 du skill `djc` : les erreurs HTTP ne declenchent pas de swap.
+
+---
+
+### Piege : les `django.messages` ne s'affichent PAS sur la page de modification de l'admin
+
+Complement au piege deja documente plus haut. **Verifie en vrai** sur
+`GhostConfigAdmin` : un `messages.warning(request, ...)` depuis une vue custom part bien en
+session (`get_messages(request)` le retrouve), mais la page `/admin/<app>/<model>/` ne
+l'affiche **jamais**. Le gestionnaire clique, et **il ne se passe RIEN a l'ecran**.
+
+Les toasts qu'on croit voir marcher apparaissent en fait sur le **dashboard**, apres une
+redirection — pas sur la page de modification.
+
+**Solution retenue** : ne pas dependre de `django.messages` dans un panneau d'admin. La vue
+renvoie un **partial HTML**, et HTMX l'injecte dans une zone de reponse du panneau. Le retour
+apparait la ou l'utilisateur vient de cliquer — c'est meilleur de toute facon.
+
+```html
+<button type="button"
+        hx-post="{% url '...' %}"
+        hx-target="#ma-zone-de-reponse"
+        hx-swap="innerHTML">Agir</button>
+
+<div id="ma-zone-de-reponse" aria-live="polite"></div>
+```
+
+---
+
+### Piege : un `<form>` dans un `change_form_before_template` soumet le formulaire de l'ADMIN
+
+Un `change_form_before_template` est rendu **A L'INTERIEUR** du `<form>` de l'admin Django.
+Un `<form>` imbrique est du **HTML invalide** : le navigateur ignore l'interne et soumet
+l'**externe**.
+
+Cliquer sur un bouton de votre panneau **ENREGISTRE la configuration** au lieu de lancer
+votre action. (Constate en vrai : « GhostConfig object (1) was changed successfully ».)
+
+Meme piege avec un `<button>` sans `type` : dans un `<form>`, il vaut `type="submit"`.
+
+```html
+<!-- MAL : form imbrique + button sans type -->
+<form method="post" action="{% url '...' %}">
+    <button>Agir</button>          <!-- = submit -> enregistre l'admin -->
+</form>
+
+<!-- BON : pas de form, bouton autonome en hx-post -->
+<div hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+    <button type="button" hx-post="{% url '...' %}" hx-target="#zone">Agir</button>
+</div>
+```
+
+Voir aussi le Piege 58 (double submit HTMX).
+
+---
+
+### Piege CRITIQUE : ajouter un champ a un SingletonModel casse TOUT l'admin apres deploiement
+
+**Symptome :** apres avoir deploye une migration qui ajoute un champ a `Configuration`
+(ou tout `SingletonModel` django-solo), **toutes les pages d'admin repondent 500** :
+
+```
+AttributeError: 'Configuration' object has no attribute 'module_newsletter'
+```
+
+Le champ est pourtant dans le modele, la migration est passee, et **la colonne existe bien
+en base** (verifie). Le code est bon. Alors quoi ?
+
+**La cause : le CACHE de django-solo.** `Configuration.get_solo()` met l'objet en cache
+(`SOLO_CACHE = 'default'`, memcached). L'objet cache a ete **serialise par un processus qui
+tournait sur l'ANCIEN code** — il n'a donc pas le nouvel attribut. Au deserialiser, on
+recupere un objet sans le champ, et le premier code qui le lit explose.
+
+Et ce qui le lit, c'est `get_sidebar_navigation` (`Administration/admin/dashboard.py`) :
+**la sidebar est rendue sur CHAQUE page d'admin**. Un seul champ manquant = admin
+entierement mort, pour toute la duree du cache.
+
+**LA PARADE — a faire A CHAQUE deploiement qui ajoute un champ a un SingletonModel :**
+
+```bash
+docker exec lespass_django poetry run python manage.py shell -c \
+  "from django.core.cache import cache; cache.clear(); print('cache purge')"
+```
+
+**Piege dans le piege :** le shell Django peut repondre « tout va bien » alors que le serveur
+plante. Le processus du shell relit la base et remplit le cache correctement ; le serveur,
+lui, sert encore l'objet perime. **Tester dans le NAVIGATEUR, pas seulement en shell.**
+
+Vu en juillet 2026 sur `Configuration.module_newsletter` (migration 0221).
+
+---
+
+### Piege : un merge de branches peut REVELER une fuite de schema, sans rien casser lui-meme
+
+Un fichier de test qui **colle** la connexion sur un tenant, et un fichier de test qui
+**exige** le schema `public`, peuvent coexister des mois sans incident : il suffit qu'ils
+soient sur deux branches differentes. Le jour du merge, ils se retrouvent dans la meme
+suite — et l'ordre de collecte (alphabetique) decide qui casse.
+
+**Le cas reel (merge `main` → `main-fedow-import`, 2026-07-14) :**
+
+- `test_federation_tags_semantique.py` (branche `main`) fabrique un `DjangoClient(HTTP_HOST=…)`.
+  Le middleware django-tenants fait `connection.set_tenant(lespass)` et **ne le decolle jamais**.
+- `test_fedow_core.py` (branche `main-fedow-import`) teste des modeles de **SHARED_APPS**
+  (`Asset`, `Wallet`, `Token`) : leurs tables sont dans `public`, et le fichier ne pose
+  **aucun** contexte de schema — il suppose `public`.
+- Les deux fichiers passent **seuls**. Aucune des deux branches n'avait de probleme : sur
+  `main`, le pollueur n'avait **aucune victime** (`test_fedow_core.py` n'y existe pas).
+- Apres le merge, l'ordre alphabetique met `test_federation_tags_semantique.py` **juste avant**
+  `test_fedow_core.py` (« fede… » < « fedo… »). Le signal `post_save` d'`Asset` se croit alors
+  sur un tenant, cherche `BaseBillet_categorieproduct`, et leve :
+  `ProgrammingError: relation "BaseBillet_categorieproduct" does not exist` — **8 tests rouges**.
+
+**La regle de diagnostic :** apres un merge, un test rouge dans un fichier que **personne n'a
+touche** n'est presque jamais une regression du code. C'est une **rencontre** entre un pollueur
+et une victime qui ne s'etaient jamais croises. Le reflexe : relancer le fichier **seul**. S'il
+passe, chercher le fichier collecte **juste avant** (`pytest --collect-only -q`), et le
+confirmer par un run a deux fichiers.
+
+**Le correctif : c'est la VICTIME qui se protege, en SETUP.** Tout fichier qui teste des
+SHARED_APPS doit poser `public` lui-meme, sans dependre de la proprete de ses predecesseurs :
+
+```python
+@pytest.fixture(autouse=True, scope="module")
+def _connexion_sur_le_schema_public():
+    from django.db import connection
+    connection.set_schema_to_public()
+    yield          # <- AUCUN teardown : voir ci-dessous
+```
+
+Le `scope="module"` est **indispensable** : une fixture `function`-scoped s'executerait **apres**
+les fixtures `module`-scoped du fichier (pytest instancie les portees les plus larges d'abord),
+qui auraient deja tourne sur le mauvais schema.
+
+**Et surtout : jamais de restauration en teardown.** Les finalizers des fixtures de portee
+superieure s'executent APRES ceux de portee test : ils tomberaient sur `public` en nettoyant des
+objets de tenant (`relation "BaseBillet_ticket" does not exist`). C'est exactement la regle que
+suit deja la fixture `FastTenantTestCase` du conftest — cf. 12.5.bis.
+
+**Ne PAS « corriger » le pollueur en lui ajoutant un `set_schema_to_public()` en teardown :** ca
+deplace le probleme sur ses propres fixtures, pour la raison ci-dessus.
+
+---
+
 *Ce document est un commun numerique. Prenez-en soin !*
 *This document is a digital common. Take care of it!*
+
+

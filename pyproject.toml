@@ -72,6 +72,39 @@ markers = [
 ]
 filterwarnings = []
 
+# ---------------------------------------------------------------------------
+# ruff
+# ---------------------------------------------------------------------------
+[tool.ruff.lint.per-file-ignores]
+# F401 = "import inutilise". NE JAMAIS l'activer sur les fichiers ci-dessous.
+#
+# Ces fichiers contiennent des IMPORTS A EFFET DE BORD : importer le module EXECUTE
+# ses decorateurs (@admin.register, @receiver, @app.task...). Le nom importe n'est
+# ensuite jamais reference — un linter le voit donc comme mort, et `ruff check --fix`
+# le supprime. L'enregistrement disparait, en silence.
+#
+# INCIDENT DU 2026-07-13 : `ruff check --fix` a supprime, dans admin_tenant.py :
+#     from Administration.admin import (products, prices)
+# ProductAdmin n'etait plus enregistre -> `admin.E039` -> Django refuse de demarrer ->
+# le serveur tombe et 319 tests partent en erreur (la fixture conftest appelle
+# `manage.py test_api_key`, qui ne boote plus).
+#
+# Le filet de securite complementaire est `tests/pytest/test_django_system_checks.py` :
+# il fait echouer la suite des qu'un enregistrement d'admin disparait.
+#
+# / F401 = "unused import". NEVER enable it on the files below: they hold SIDE-EFFECT
+# imports whose whole purpose is to RUN the module's decorators. A linter cannot know
+# that, sees them as dead, and `ruff check --fix` deletes them — silently unregistering
+# admins, signals and tasks.
+"**/admin.py" = ["F401"]
+"**/admin_*.py" = ["F401"]
+"**/admin/*.py" = ["F401"]
+"**/apps.py" = ["F401"]
+"**/signals.py" = ["F401"]
+"**/triggers.py" = ["F401"]
+"**/settings.py" = ["F401"]
+"**/__init__.py" = ["F401"]
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

@@ -44,6 +44,14 @@ urlpatterns = [
     re_path(r'api/v2/', include('api_v2.urls')),
 
     re_path(r'api/', include('ApiBillet.urls')),
+
+    # Le panneau Newsletter de l'admin. Routes NON publiques : le ViewSet est protege par
+    # TenantAdminPermission. Appelees en HTMX depuis
+    # Administration/templates/admin/ghost/panneau_newsletter.html
+    # / The admin's Newsletter panel. NOT public: the ViewSet is guarded by
+    # TenantAdminPermission. Called with HTMX from the admin panel.
+    re_path(r'newsletter/', include('newsletter.urls')),
+
     # re_path(r'qr/', include('QrcodeCashless.urls')),
     re_path(r'rss/', include('tibrss.urls')),
     re_path(r'logout/', include('tibrss.urls')),

@@ -1,0 +1,58 @@
+{% load i18n %}{% comment %}
+CORPS DE LA NEWSLETTER — HTML SEMANTIQUE AUX CONVENTIONS GHOST
+/ Newsletter body — semantic HTML using Ghost's kg-* conventions
+
+LOCALISATION : newsletter/templates/newsletter/email_evenements.html
+
+Ce HTML est poste a Ghost via POST /ghost/api/admin/posts/?source=html. Ghost le
+reconvertit en CARTES NATIVES grace aux conventions kg-*. Verifie en reel sur une
+instance Ghost 6.52 :
+    <div class="kg-card kg-product-card">   -> carte PRODUCT (image + titre + desc + bouton)
+    <hr>                                    -> carte DIVIDER
+Le brouillon s'ouvre donc dans l'editeur Ghost en blocs manipulables, et non en un
+pave HTML opaque.
+
+POURQUOI LA CARTE PRODUCT :
+Elle EST une fiche d'evenement (image, titre, description, bouton d'action). Ghost
+l'habille avec la couleur d'accent du site, et — argument decisif — elle possede un
+RENDERER EMAIL DEDIE (sortie en <table>) : Ghost sait la transformer en HTML d'email
+compatible avec tous les clients. Du HTML brut n'aurait jamais eu ca.
+
+REGLE ABSOLUE : AUCUN attribut style=, AUCUN <table> de mise en page.
+L'apparence (couleurs, polices, forme des boutons) est pilotee par les REGLAGES DE
+DESIGN NEWSLETTER de l'instance Ghost. Styler ici court-circuiterait ce systeme et
+nous rendrait responsables de la compatibilite Outlook / Gmail / mode sombre.
+
+PIEGE VERIFIE EN REEL : dans la description de la carte, les <br> sont AVALES par le
+parseur de Ghost (le lieu se retrouverait colle a la date). Seuls les <p> survivent.
+UNE INFO = UN <p>. Ne jamais mettre de <br> dans .kg-product-card-description.
+
+Voir TECH_DOC/SESSIONS/NEWSLETTER/SPEC.md §4.
+{% endcomment %}<p>{% blocktranslate %}Voici les événements du réseau, du {{ date_debut_affichee }} au {{ date_fin_affichee }}.{% endblocktranslate %}</p>
+{% for fiche in fiches %}
+<hr>
+<div class="kg-card kg-product-card">
+  <div class="kg-product-card-container">
+    {% if fiche.image_url %}<img src="{{ fiche.image_url }}" width="{{ largeur_image }}" height="{{ hauteur_image }}" class="kg-product-card-image" loading="lazy" />{% endif %}
+    <div class="kg-product-card-title-container">
+      <h4 class="kg-product-card-title">{{ fiche.nom }}</h4>
+    </div>
+    <div class="kg-product-card-description">{% comment %}
+      UNE INFO = UN <p>. Les <br> seraient avales par le parseur de Ghost.
+      / ONE FACT = ONE <p>. Ghost's parser swallows <br>.
+    {% endcomment %}<p>{{ fiche.organisateur }}{% if fiche.lieu %} — {{ fiche.lieu }}{% endif %}</p><p>{{ fiche.date_debut|date:"l j F Y, H\hi" }}{% if fiche.date_fin %} → {{ fiche.date_fin|date:"l j F Y, H\hi" }}{% endif %}</p>{% if fiche.tarif %}<p>{{ fiche.tarif }}</p>{% endif %}{% if fiche.description_courte %}<p>{{ fiche.description_courte }}</p>{% endif %}</div>
+    {% if fiche.url_event %}<a href="{{ fiche.url_event }}" class="kg-product-card-button kg-product-card-btn-accent" target="_blank" rel="noopener noreferrer"><span>{{ fiche.libelle_bouton }}</span></a>{% endif %}
+  </div>
+</div>
+{% comment %}
+La description LONGUE reste HORS de la carte, en paragraphes normaux.
+Dans la carte, elle passerait en petit gris clair : sur dix lignes, c'est illisible.
+Ici elle est lisible, et le gestionnaire la supprime d'un geste si elle est de trop.
+
+Elle vient d'un widget Wysiwyg : c'est DEJA du HTML (<p>, <strong>, listes). On l'emet
+BRUT, sans <p> autour — l'envelopper produirait du HTML invalide, et l'echapper
+afficherait "&lt;strong&gt;" aux abonnes. Voir SPEC §7.2.
+/ The LONG description stays OUTSIDE the card, as normal paragraphs. It is ALREADY HTML
+(Wysiwyg widget), so it is emitted RAW.
+{% endcomment %}{% if fiche.description_longue %}{{ fiche.description_longue|safe }}{% endif %}
+{% endfor %}

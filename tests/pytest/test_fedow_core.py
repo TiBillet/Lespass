@@ -40,6 +40,39 @@ TEST_PREFIX = '[test_fedow_core]'
 # Fixtures
 # ---------------------------------------------------------------------------
 
+@pytest.fixture(autouse=True, scope="module")
+def _connexion_sur_le_schema_public():
+    """
+    Pose la connexion sur `public` AVANT toute autre fixture de ce fichier.
+    / Put the connection on `public` BEFORE any other fixture in this file.
+
+    Ce fichier teste des modeles de SHARED_APPS (`Asset`, `Wallet`, `Token`,
+    `Transaction`) : leurs tables vivent dans le schema `public`, et le code
+    n'y pose jamais de contexte de tenant. Il faut donc que la connexion soit
+    deja sur `public`.
+
+    Rien ne le garantit : le middleware django-tenants colle la connexion sur
+    un tenant des qu'un test AILLEURS dans la suite fait une requete avec le
+    client de test Django, et personne ne la decolle. Le fichier passe alors
+    seul, mais echoue en suite complete — le signal post_save d'`Asset` croit
+    etre sur un tenant, cherche `BaseBillet_categorieproduct`, et leve
+    `ProgrammingError: relation ... does not exist`.
+
+    EN SETUP, JAMAIS EN TEARDOWN : les finalizers des fixtures de portee
+    superieure s'executent apres ceux de portee test ; remettre `public` en
+    teardown les ferait tomber sur un schema sans les tables du tenant.
+    C'est la meme regle que la fixture `FastTenantTestCase` du conftest.
+    / SETUP only, never teardown — same rule as the conftest fixture.
+
+    Voir tests/PIEGES.md 9.68 et 12.5.bis.
+    """
+    from django.db import connection
+
+    connection.set_schema_to_public()
+
+    yield
+
+
 @pytest.fixture(scope="module")
 def tenant_a():
     return Client.objects.get(schema_name='lespass')

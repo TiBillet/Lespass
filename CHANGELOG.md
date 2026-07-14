@@ -1,5 +1,258 @@
 # Changelog / Journal des modifications
 
+## Merge `main` → `main-fedow-import` : Newsletter rejoint Fedow V2 / Merge: Newsletter meets Fedow V2
+
+**Date :** 2026-07-14
+**Migration :** **Oui** — `BaseBillet.0229_merge_20260714_1045` (migration de merge, vide)
+
+**Quoi / What :** reunion du chantier **Newsletter / Ghost** (`main`, 8 commits) et du chantier
+**Fedow V2 / LaBoutik / Kiosk / Pages** (`main-fedow-import`, 90 commits). Les deux modules de
+`Configuration` coexistent desormais : `module_pages` **et** `module_newsletter`.
+
+**Pourquoi / Why :** les deux branches divergeaient trop pour continuer separement.
+
+### Ce que le merge a exige, au-dela des marqueurs de conflit
+
+Git signalait 8 conflits. Deux problemes de fond, eux, **ne levaient aucun marqueur** :
+
+1. **Deux feuilles concurrentes dans le graphe de migrations.** `main` apportait
+   `0221_configuration_module_newsletter` (branchee sur `0220`), quand `main-fedow-import` etait
+   rendue a `0228`. Django refusait de demarrer (`Conflicting migrations detected`). Reunies par
+   `makemigrations --merge`.
+
+2. **Un template orphelin dans une arborescence morte.** `main-fedow-import` a reorganise les
+   templates (`reunion/` → `commun/` + `fonctionnel/`) ; `main`, restee sur l'ancienne arbo, y
+   avait **ajoute** `error_useful_links.html`. Git l'a laisse la — seul survivant d'un dossier
+   par ailleurs supprime — et `404.html` / `500.html`, **fusionnes sans conflit donc en
+   silence**, continuaient de l'inclure depuis ce chemin mort. Deplace vers `commun/partials/`.
+
+### Un bug de test revele (et non cause) par le merge
+
+`test_federation_tags_semantique.py` (de `main`) colle la connexion sur `lespass` via un
+`DjangoClient(HTTP_HOST=…)` — le middleware django-tenants ne la decolle jamais. Or
+`test_fedow_core.py` (de `main-fedow-import`) teste des SHARED_APPS et **suppose** le schema
+`public`. L'ordre de collecte alphabetique les met cote a cote (« fede… » < « fedo… ») :
+**8 tests rouges**. Sur `main`, le pollueur n'avait **aucune victime** — le fichier n'y existe
+pas. Le bug etait invisible des deux cotes.
+
+Corrige dans la **victime**, qui pose `public` en **setup** (jamais en teardown : les finalizers
+des fixtures de portee superieure s'executent apres et tomberaient sur `public`).
+
+Suite complete : **834 passed, 0 echec**.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `TiBillet/settings.py` | Union des `INSTALLED_APPS` : apps fedow **et** `newsletter` |
+| `BaseBillet/models.py` | `Configuration` : `module_pages` **et** `module_newsletter` |
+| `Administration/admin_tenant.py` | Import a effet de bord unifie (`# noqa: F401`), etendu a `laboutik` + `inventaire`, plus `pages.admin` |
+| `Administration/admin/dashboard.py` | Les deux cartes de module. Ancienne entree « Ghost » d'« Outils externes » retiree : `main` l'a deplacee dans la section « Newsletter » |
+| `BaseBillet/views.py` | Chemins de templates de l'arbo cible (`commun/adhesion/`) |
+| `BaseBillet/templates/commun/partials/error_useful_links.html` | **Deplace** depuis `reunion/partials/` ; includes de `404.html` / `500.html` repointes |
+| `BaseBillet/migrations/0229_merge_20260714_1045.py` | **Nouveau** — merge technique des feuilles `0221` / `0228` (vide) |
+| `tests/pytest/test_fedow_core.py` | Fixture autouse module-scoped : `public` en setup |
+| `tests/PIEGES.md` | Nouveau piege — un merge peut **reveler** une fuite de schema sans la causer |
+| `locale/{fr,en}/LC_MESSAGES/django.po` | Repris de `main` — **a regenerer** (ils ne portent pas les chaines de `main-fedow-import`) |
+
+### Migration
+- **Migration necessaire / Migration required : OUI**
+  ```bash
+  docker exec lespass_django poetry run python manage.py migrate_schemas --executor=multiprocessing
+  ```
+- **Et purger le cache, imperativement.** `module_newsletter` et `module_pages` sont deux champs
+  neufs sur un `SingletonModel`. Sans purge, django-solo ressert un objet serialise par l'ancien
+  code, sans ces attributs — et la sidebar les lit **sur chaque page d'admin**, donc l'admin
+  **entier** repond 500 (`AttributeError: 'Configuration' object has no attribute
+  'module_newsletter'`).
+  ```bash
+  docker exec lespass_django poetry run python manage.py shell -c \
+    "from django.core.cache import cache; cache.clear(); print('cache purge')"
+  ```
+
+---
+
+## Module Newsletter activable, et `ruff --fix` rendu inoffensif / Newsletter module toggle, and `ruff --fix` made harmless
+
+**Date :** 2026-07-13
+**Migration :** **Oui** — `BaseBillet.0221_configuration_module_newsletter`
+
+### 1. Le module Newsletter s'active depuis le dashboard
+
+Nouvelle carte **« Newsletter »** : *« Evènements, rappels d'adhésions, résumé de vos activités,
+pilotez votre newsletter avec TiBillet ! »*
+
+- **Désactivé par défaut**, et **activable par un superadmin seulement** : une instance Ghost
+  doit d'abord être installée et **dimensionnée** (la charge serveur dépend du volume de mails).
+- Un gestionnaire ordinaire qui clique ne reçoit **pas un refus sec** : une modale l'invite à
+  contacter l'équipe TiBillet (email, Matrix, Discord) pour estimer la charge.
+- **Le POST de bascule est protégé lui aussi** — la modale n'est que de l'affichage, une requête
+  forgée la contournerait. On ne fait jamais confiance à l'interface pour appliquer une règle
+  d'accès.
+- Nouveau groupe **« Newsletter »** dans la sidebar Unfold, **visible seulement si le module est
+  actif**. La config **Ghost y déménage** : elle était perdue dans « Outils externes », entre
+  Webhook et Brevo.
+
+### 2. `ruff check --fix` ne peut plus casser le projet
+
+Le `CLAUDE.md` affirmait que `ruff check --fix` était « sans danger ». **C'est faux** : il a
+supprimé un import à effet de bord **nu** (`from Administration.admin import products, prices`),
+`ProductAdmin` n'était plus enregistré, Django a refusé de démarrer (`admin.E039`), et **319
+tests sont partis en erreur** — la fixture `conftest.py` appelle `manage.py test_api_key`, qui ne
+bootait plus. Le symptôme était à des kilomètres de la cause.
+
+Audit : **141 imports F401 « fixables »** dans le projet, et **aucune configuration ruff**.
+
+- **Ceinture** — `[tool.ruff.lint.per-file-ignores]` dans `pyproject.toml` : F401 est désormais
+  ignoré sur `admin*.py`, `admin/*.py`, `apps.py`, `signals.py`, `triggers.py`, `settings.py`,
+  `__init__.py`. `ruff --fix` **ne peut plus y toucher**.
+- **Bretelles** — `tests/pytest/test_django_system_checks.py` : la suite échoue immédiatement si
+  un enregistrement d'admin disparaît. Vérifié par sabotage.
+
+### 3. Deux bugs corrigés
+
+- **L'agenda affichait les événements archivés.** `federated_events_filter` ne filtrait pas
+  `archived`, alors que `seo/services.py` le filtre à quatre endroits. Un événement archivé
+  disparaissait de la carte mais **restait sur l'agenda**. Corrigé.
+- **`Event.get_img()` : le troisième niveau de repli était inatteignable.** Le code écrivait
+  `elif self.postal_address:` avec un `if` imbriqué — le `else` (image de la configuration) ne
+  s'exécutait donc **que si l'événement n'avait aucune adresse**. Or `Event.save()` en assigne
+  une d'office. Résultat : un événement sans image propre, dans un lieu sans image, n'avait
+  **aucune** image. Sur les données de dev : **124 événements sur 136 étaient sans image ; ils en
+  ont tous une maintenant.**
+- **L'API v2 renvoyait les images en URL relative** (`/media/…`) — inexploitable par un client
+  externe. Elles sont désormais **absolues**, sur le domaine du tenant, et passent par
+  `get_img()` (le même repli que le moteur d'événements du site).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | `Configuration.module_newsletter` (défaut **False**) · `Event.get_img()` : chaîne de repli réparée |
+| `BaseBillet/views.py` | `federated_events_filter` : ajout du filtre `archived=False` |
+| `api_v2/serializers.py` | `_url_absolue_du_media()` · images absolues + repli `get_img()` (Event **et** PostalAddress) |
+| `Administration/admin/dashboard.py` | Carte du module · groupe sidebar « Newsletter » · Ghost déplacé |
+| `Administration/admin_tenant.py` | Blocage superadmin dans la **modale** ET dans le **POST** |
+| `Administration/templates/admin/dashboard_module_modal_contact.html` | **Nouveau** — la modale de contact |
+| `pyproject.toml` | **Nouveau** — `[tool.ruff.lint.per-file-ignores]` |
+| `tests/pytest/test_module_newsletter_activation.py` | **Nouveau** — 7 tests |
+| `tests/pytest/test_django_system_checks.py` | **Nouveau** — 2 tests (le filet) |
+
+### Migration
+- **Migration nécessaire / Migration required : OUI**
+  ```bash
+  docker exec lespass_django poetry run python manage.py migrate_schemas --executor=multiprocessing
+  ```
+- Le module est à **False** partout : aucun tenant n'est impacté tant qu'un superadmin ne
+  l'active pas.
+
+---
+
+## Newsletter : brouillons Ghost depuis les événements fédérés / Newsletter: Ghost drafts from federated events
+
+**Date :** 2026-07-13
+**Migration :** Non / No
+
+**Quoi / What :** Deux boutons dans l'admin (« Brouillon newsletter — 7 jours » / « — 30 jours »)
+génèrent, dans l'instance **Ghost** auto-hébergée du tenant, un **brouillon** de newsletter
+listant les événements à venir du tenant **et de son réseau fédéré**. Le brouillon n'est
+**jamais publié ni envoyé** : le gestionnaire le relit, l'élague et l'envoie à la main depuis
+Ghost.
+
+**Pourquoi / Why :** les gestionnaires recopiaient leur agenda à la main dans l'éditeur Ghost.
+
+### Le point technique central
+Le contenu d'un post Ghost est du **Lexical** (JSON à cartes typées), un format **non
+documenté**. Mais le convertisseur `?source=html` de Ghost **reconstruit ses cartes natives**
+à partir des conventions de balisage `kg-*`. On envoie donc du **HTML sémantique, sans aucun
+style inline** : chaque événement devient une **carte `product`** native (image + titre +
+infos + bouton), séparée par un `<hr>` (carte divider). L'**apparence est le travail de Ghost**,
+via ses réglages de design newsletter — la couleur d'accent du site habille les boutons.
+*Validé bout-en-bout contre une vraie instance Ghost 6.52 et les données de production.*
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `newsletter/` | **Nouvelle app** (sans modèle, sans migration) : `client_ghost.py` (JWT + POST du brouillon), `collecte.py` (events du réseau fédéré, cross-schema), `rendu.py` + template (HTML `kg-*`), `services.py` (orchestration) |
+| `TiBillet/settings.py` | `'newsletter'` ajouté à `TENANT_APPS` |
+| `Administration/admin_tenant.py` | `GhostConfigAdmin` : deux actions détail. **`test_api_ghost_admin_button` conservé.** Restauration de l'import à effet de bord `from Administration.admin import (products, prices)`, **protégé par `# noqa: F401`** — `ruff --fix` l'avait supprimé, cassant l'enregistrement de `ProductAdmin` (`admin.E039`) |
+| `tests/pytest/test_newsletter_ghost.py` | **Nouveau** — 50 tests |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non. `GhostConfig` (URL + clé Fernet) existait déjà.
+
+---
+
+## Correction : `?only_futur=1` renvoyait 500 sur les API events (v1 et v2) / Fix: `?only_futur=1` returned 500
+
+**Date :** 2026-07-13
+**Migration :** Non / No
+
+**Quoi / What :** `GET /api/v2/events/?only_futur=1` renvoyait **500 à tous les coups**.
+`api_v2/views.py` faisait `import datetime` (le **module**) puis appelait `datetime.now()` —
+qui n'existe que sur la **classe** `datetime.datetime`. Chaque appel levait
+`AttributeError: module 'datetime' has no attribute 'now'`.
+
+Un **second bug, latent**, se cachait juste derrière — et il était bien vivant en **v1** :
+`now.replace(day=now.day - 1)` lève `ValueError: day is out of range for month` le **1er de
+chaque mois** (`day - 1 == 0`). L'endpoint v1 plantait donc **un jour sur trente**.
+
+**Nouveau / New :** paramètre **`next_days=N`** sur `/api/v2/events/` — les événements des N
+prochains jours (entier entre 1 et 366, sinon **400**). Il l'emporte sur `only_futur`.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `api_v2/views.py` | `EventViewSet.list` : `timezone.now() - timedelta(days=1)` au lieu de `replace(day=…)`. Ajout de `next_days` avec validation. La conversion vers la timezone du tenant est retirée : elle ne changeait rien au filtrage (même instant, seul l'affichage diffère) |
+| `ApiBillet/views.py` | Même correctif sur la v1 (le crash du 1er du mois) |
+| `api_v2/openapi-schema.yaml` | `listEvents` : les paramètres `only_futur`, `next_days`, `filter` et la réponse `400` sont enfin documentés |
+| `tests/pytest/test_api_v2_events_filtres_temps.py` | **Nouveau** — 11 tests |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+
+---
+
+## Correction : les tags d'un lieu fédéré étaient appliqués à l'envers / Fix: a federated place's tags were applied backwards
+
+**Date :** 2026-07-13
+**Migration :** Non / No
+
+**Quoi / What :** Le moteur de l'agenda fédéré (`EventMVT.federated_events_filter`)
+appliquait `FederatedPlace.tag_filter` et `tag_exclude` dans le sens **inverse** de ce
+qu'annoncent les libellés de l'admin — les seuls que voit le gestionnaire :
+
+| Champ | Libellé de l'admin | Ce que faisait le moteur |
+|---|---|---|
+| `tag_filter` | « N'afficher que ces tags » | **excluait** ces tags |
+| `tag_exclude` | « Exclure ces tags » | n'affichait **que** ces tags |
+
+**Pourquoi c'était grave / Why it mattered :** la panne était **muette**. Quand les deux
+listes étaient remplies, le moteur excluait ce qu'on voulait voir puis ne gardait que ce
+qu'on voulait cacher : l'intersection était vide et **le lieu fédéré disparaissait
+entièrement de l'agenda**, sans erreur ni avertissement. Constaté sur les données de démo :
+`la-maison-des-communs` était invisible depuis `lespass`, et de `chantefrein` seules les
+réunions s'affichaient — alors que la config demandait précisément de les exclure.
+
+`demo_data_v2.py` et les `help_text` du modèle suivaient déjà la sémantique documentée :
+seul le moteur divergeait. Aucun test ne couvrait ces deux champs, ce qui explique la
+longévité du bug.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/views.py` | `federated_events_filter` : `tag_filter` devient un `.filter()` conditionnel, `tag_exclude` un `.exclude()`. La fédération automatique par tags rangeait ses slugs dans `tag_exclude` pour exploiter l'inversion : ils passent dans `tag_filter`. |
+| `tests/pytest/test_federation_tags_semantique.py` | **Nouveau.** Trois tests de non-régression, dont un qui attrape spécifiquement la disparition muette du voisin (les deux autres passent « à vide » dans ce cas). |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+- **Données existantes :** aucune permutation `tag_filter` ↔ `tag_exclude` n'est appliquée.
+  Un gestionnaire ayant configuré ses tags d'après les libellés de l'admin voit simplement sa
+  configuration se mettre à faire ce qu'il demandait. Voir
+  `TECH_DOC/SESSIONS/NEWSLETTER/CHANTIER-01-semantique-tags-federes.md` §6.
+- **Au déploiement :** vider le cache — `federated_events_filter` met en cache la page 1 et
+  les pages par date de l'agenda, qui portent encore l'ancien comportement.
+
+---
+
 ## Tests : suite complète déterministe / Tests: deterministic full suite
 
 **Date :** 2026-07-12
