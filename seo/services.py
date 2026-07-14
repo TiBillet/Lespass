@@ -448,6 +448,16 @@ def build_tenant_config_data(client):
 
             # Adresse postale / Postal address
             if config.postal_address:
+                # L'adresse de la Configuration du tenant EST son adresse principale.
+                # C'est cette cle que build_aggregate_points compare pour poser le flag
+                # is_main_address sur le bon point, et c'est ce point que la carte vise
+                # quand on clique sur un lieu dans la liste (explorer.js, focusOnLieu).
+                # Le champ PostalAddress.is_main n'est PAS la source de verite ici.
+                # / The tenant Configuration address IS its main address. This key drives
+                # the is_main_address flag in build_aggregate_points, which the map uses
+                # to focus the right marker. PostalAddress.is_main is NOT the source of
+                # truth here.
+                data["postal_address_id"] = config.postal_address_id
                 data["locality"] = config.postal_address.address_locality or ""
                 data["country"] = config.postal_address.address_country or ""
                 # Coordonnees GPS / GPS coordinates
@@ -504,9 +514,16 @@ def get_postal_addresses_for_tenants(tenant_schemas):
             continue
         with tenant_context(tenant):
             pa_list = []
+            # order_by("pk") : sans tri explicite, PostgreSQL rend les lignes dans un
+            # ordre arbitraire, qui change au fil des ecritures. Cet ordre se propage
+            # jusqu'aux markers de la carte (explorer.js, markersByTenant) : sans lui,
+            # deux rebuilds du cache peuvent viser une adresse differente au clic.
+            # / order_by("pk"): without explicit ordering PostgreSQL returns rows in an
+            # arbitrary order that drifts as rows are written. That order propagates to
+            # the map markers, so two cache rebuilds could focus a different address.
             queryset = PostalAddress.objects.exclude(
                 latitude__isnull=True
-            ).exclude(longitude__isnull=True)
+            ).exclude(longitude__isnull=True).order_by("pk")
             for pa in queryset:
                 pa_list.append({
                     "pa_id": pa.pk,

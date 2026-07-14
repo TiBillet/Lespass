@@ -1,5 +1,53 @@
 # Changelog / Journal des modifications
 
+## Carte du réseau : les événements d'un lieu redeviennent accessibles / Network map: a venue's events are reachable again
+
+**Date :** 2026-07-14
+**Migration :** **Non** — mais **le cache SEO doit être reconstruit** (`refresh_seo_cache`) :
+les fragments existants portent `is_main_address: false` sur tous les points.
+
+### 1. Le popup d'un lieu ne s'ouvrait jamais quand deux adresses se superposent
+
+**Quoi / What :** sur la carte « Réseau local » (`/federation/`) et sur `/explorer/`, cliquer sur
+un lieu dont l'adresse a exactement les mêmes coordonnées qu'une autre n'ouvrait aucun popup : ses
+événements semblaient avoir disparu, alors qu'ils étaient bien présents dans le cache et dans la
+liste.
+
+**Pourquoi / Why :** `marker.openPopup()` ne fait **rien** sur un marqueur enfermé dans un cluster
+Leaflet — ce marqueur n'est pas sur la carte. Deux adresses aux coordonnées identiques restent
+clusterisées à **tous** les niveaux de zoom (aucun zoom ne peut séparer deux points confondus). Le
+code zoomait puis appelait `openPopup()` dans le vide. On utilise désormais
+`markerCluster.zoomToShowLayer()`, l'API prévue pour ce cas : elle zoome, ou fait le *spiderfy* si
+les coordonnées sont identiques, puis rend la main.
+
+Aucune donnée n'était en cause : `pa_id` est préfixé par l'UUID du tenant, deux lieux à la même
+adresse restent bien deux points distincts avec leurs propres événements.
+
+### 2. Le clic sur un lieu visait une adresse au hasard, pas son adresse principale
+
+**Quoi / What :** un lieu ayant plusieurs adresses voyait la carte se centrer sur l'une d'elles au
+hasard, et l'adresse ciblée pouvait changer d'un rebuild du cache à l'autre.
+
+**Pourquoi / Why :** `build_tenant_config_data()` n'exposait jamais `postal_address_id`, donc le
+flag `is_main_address` valait **toujours** `false` et le tri qui place l'adresse principale en tête
+ne s'appliquait jamais. En outre, les adresses étaient lues sans `order_by()` : PostgreSQL les rend
+alors dans un ordre arbitraire, qui dérive au fil des écritures.
+
+### Fichiers modifiés / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/static/seo/explorer.js` | `focusOnLieu()` / `focusOnPA()` passent par `zoomToShowLayer()` ; le marqueur visé est choisi parmi ceux réellement présents dans le cluster ; le surlignage du pin attend l'ouverture du cluster |
+| `seo/services.py` | `build_tenant_config_data()` expose `postal_address_id` ; `get_postal_addresses_for_tenants()` trie par `pk` |
+| `tests/pytest/test_seo_aggregate_points.py` | 3 tests : tri par `pk`, `postal_address_id` exposé, deux lieux à la même adresse gardent leurs événements |
+| `tests/e2e/test_explorer_adresse_dupliquee.py` | Nouveau — reproduit le bug (deux lieux à l'adresse identique) et vérifie l'ouverture du popup |
+
+### Migration
+
+- **Migration nécessaire / Migration required :** Non
+- **Cache à reconstruire / Cache rebuild required :** Oui —
+  `docker exec lespass_django poetry run python manage.py shell -c "from seo.tasks import refresh_seo_cache; refresh_seo_cache()"`
+
 ## Module Newsletter activable, et `ruff --fix` rendu inoffensif / Newsletter module toggle, and `ruff --fix` made harmless
 
 **Date :** 2026-07-13

@@ -2736,39 +2736,77 @@ Voir aussi le Piege 58 (double submit HTMX).
 
 ---
 
-### Piege CRITIQUE : ajouter un champ a un SingletonModel casse TOUT l'admin apres deploiement
+### Le cache d'un SingletonModel et un champ neuf : ce qui se passe VRAIMENT
 
-**Symptome :** apres avoir deploye une migration qui ajoute un champ a `Configuration`
-(ou tout `SingletonModel` django-solo), **toutes les pages d'admin repondent 500** :
+> **Ce piege disait exactement le contraire jusqu'au 2026-07-14.** Il affirmait qu'ajouter un
+> champ a `Configuration` faisait repondre **500 a tout l'admin** tant qu'on n'avait pas purge le
+> cache, avec pour symptome `AttributeError: 'Configuration' object has no attribute
+> 'module_newsletter'`. **C'est faux** — verifie dans le code de Django et reproduit sur le vrai
+> memcached. La consigne « purge le cache » envoyait le prochain incident sur une fausse piste.
+
+**Les premisses etaient justes :** `SOLO_CACHE = 'default'` → django-solo **pickle l'instance**
+et la met dans memcached (TTL **300 s** par defaut ; cle **par schema** grace a
+`django_tenants.cache.make_key`). Le cache est **externe au process** : il survit a un
+redemarrage de Django. Et `get_sidebar_navigation()` lit bien `Configuration.get_solo()` sur
+**chaque** page d'admin — donc si elle cassait, tout l'admin casserait.
+
+**Mais l'objet perime ne casse pas. Il se repare tout seul.** Django ne pickle que le
+`__dict__` de l'instance (`Model.__getstate__`) — **jamais la classe**. Or c'est la **classe** qui
+porte, pour chaque champ concret, un descripteur `DeferredAttribute` (`Field.contribute_to_class`).
+Quand on lit un attribut absent du `__dict__`, le descripteur prend la main et appelle
+`refresh_from_db(fields=[le_champ])` : Django fait un **SELECT cible** et rend la bonne valeur.
+
+Reproduit sur le vrai memcached, avec un objet fabrique a l'identique du cas reel :
 
 ```
-AttributeError: 'Configuration' object has no attribute 'module_newsletter'
+module_newsletter dans le __dict__ apres unpickle ? False
+ACCES -> valeur = False  (type bool)
+AttributeError ? NON
+Requetes SQL declenchees par l'acces : 1
+   SELECT "BaseBillet_configuration"."id", "BaseBillet_configuration"."module_newsletter" FROM ...
 ```
 
-Le champ est pourtant dans le modele, la migration est passee, et **la colonne existe bien
-en base** (verifie). Le code est bon. Alors quoi ?
+**Cout reel : un SELECT de plus par requete, pendant au plus 5 minutes.** Une degradation, pas une
+panne. (`refresh_from_db` corrige l'instance en memoire mais **ne reecrit pas le cache** :
+`set_to_cache()` n'est appele que dans `save()`.)
 
-**La cause : le CACHE de django-solo.** `Configuration.get_solo()` met l'objet en cache
-(`SOLO_CACHE = 'default'`, memcached). L'objet cache a ete **serialise par un processus qui
-tournait sur l'ANCIEN code** — il n'a donc pas le nouvel attribut. Au deserialiser, on
-recupere un objet sans le champ, et le premier code qui le lit explose.
+**Le symptome cite etait meme incompatible avec la cause invoquee.** `AttributeError: ... has no
+attribute 'module_newsletter'` exige que **la classe Python n'ait pas le champ** (sans descripteur,
+pas de repli). C'est un `models.py` sans le champ — un etat que le cache est **incapable** de
+produire, puisqu'il ne transporte pas la classe.
 
-Et ce qui le lit, c'est `get_sidebar_navigation` (`Administration/admin/dashboard.py`) :
-**la sidebar est rendue sur CHAQUE page d'admin**. Un seul champ manquant = admin
-entierement mort, pour toute la duree du cache.
+**Donc : si l'admin tombe en 500 apres une migration de `SingletonModel`, ce n'est PAS le cache.**
+Cherchez un `ProgrammingError` :
 
-**LA PARADE — a faire A CHAQUE deploiement qui ajoute un champ a un SingletonModel :**
-
-```bash
-docker exec lespass_django poetry run python manage.py shell -c \
-  "from django.core.cache import cache; cache.clear(); print('cache purge')"
+```
+django.db.utils.ProgrammingError: column "module_newsletter" does not exist
+django.db.utils.ProgrammingError: relation "BaseBillet_configuration" does not exist
 ```
 
-**Piege dans le piege :** le shell Django peut repondre « tout va bien » alors que le serveur
-plante. Le processus du shell relit la base et remplit le cache correctement ; le serveur,
-lui, sert encore l'objet perime. **Tester dans le NAVIGATEUR, pas seulement en shell.**
+→ `migrate_schemas` n'est pas passe sur **tous** les tenants. Purger le cache n'y changera **rien**.
 
-Vu en juillet 2026 sur `Configuration.module_newsletter` (migration 0221).
+**Le seul cas ou la purge est OBLIGATOIRE : une valeur modifiee sans passer par `save()`**
+(`queryset.update()`, UPDATE SQL, data migration). Le cache n'est reecrit que dans `save()` : la
+valeur perimee est alors servie jusqu'a expiration du TTL. Et dans ce cas, **purge ciblee, par
+tenant** — la cle de cache est par schema :
+
+```python
+from django_tenants.utils import tenant_context
+from Customers.models import Client
+from BaseBillet.models import Configuration
+
+for tenant in Client.objects.all():
+    with tenant_context(tenant):
+        Configuration.clear_cache()   # cache.delete(cle_du_schema_courant)
+```
+
+**Ne PAS utiliser `cache.clear()`** : sur memcached c'est un `flush_all`. Ca vide **tout**, **tous
+tenants confondus**, y compris le cache SEO et la carte du reseau — dont la reconstruction coute
+cher. Le marteau-pilon pour un probleme qui, la plupart du temps, n'existe pas.
+
+Corrige le 2026-07-14 (merge `main` → `main-fedow-import`), apres verification dans les sources de
+Django 4.2 et de django-solo 2.5.1, et reproduction dans le conteneur. Relecture par un agent
+Fable, qui a **refute** le diagnostic initial.
 
 ---
 
