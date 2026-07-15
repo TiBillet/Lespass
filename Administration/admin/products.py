@@ -849,6 +849,60 @@ class ProductAdminCustomForm(ModelForm):
                     _("Please add at least one rate to this product.")
                 )
 
+class ResourcePriceInlineForm(BasePriceInlineForm):
+    """Formulaire inline specifique aux tarifs ressource.
+    Labels adaptes au contexte de réservation de ressource + retire le bouton "+" sur adhesions_obligatoires.
+    / Inline form specific to resource prices.
+    Labels adapted to booking resource context + removes "add" button on adhesions_obligatoires."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # # Labels et help_text adaptes au contexte billetterie
+        # # / Labels and help_text adapted to ticketing context
+        # if "stock" in self.fields:
+        #     self.fields["stock"].label = _("Event capacity")
+        #     self.fields["stock"].help_text = _(
+        #         "Maximum number of tickets available per event for this price. "
+        #         "Leave blank for unlimited."
+        #     )
+        if "max_per_user" in self.fields:
+            self.fields["max_per_user"].label = _("Nombre de créneau maximal par utilisateur")
+            self.fields["max_per_user"].help_text = _(
+                "Maximum number of slot a single user can book for this price. "
+                "Leave blank for unlimited."
+            )
+        # Pas de bouton "+" pour creer un produit depuis ce champ
+        # / No "add" button to create a product from this field
+        if "adhesions_obligatoires" in self.fields:
+            self.fields["adhesions_obligatoires"].widget.can_add_related = False
+
+
+class ResourcePriceInline(BasePriceInline):
+    """Inline tarifs pour les produits ressources.
+    Ajoute stock (jauge par evenement), max_per_user et adhesions_obligatoires.
+    / Price inline for ticket products.
+    Adds stock (capacity per event), max_per_user and adhesions_obligatoires."""
+
+    form = ResourcePriceInlineForm
+    autocomplete_fields = ["adhesions_obligatoires"]
+    fields = (
+        "name",
+        ("prix", "free_price"),
+        ("stock", "max_per_user"),
+        "adhesions_obligatoires",
+        ("publish", "order"),
+    )
+
+    # # Jeton et montant visibles seulement si la recompense au scan est activee
+    # # / Asset and amount visible only when the scan reward is enabled
+    # inline_conditional_fields = {
+    #     "fedow_reward_asset": "reward_on_ticket_scanned == true",
+    #     "fedow_reward_amount": "reward_on_ticket_scanned == true",
+    # }
+    #
+    # class Media:
+    #     js = ("admin/js/inline_conditional_fields.js",)
+
 
 @register_component
 class CheckStripeComponent(BaseComponent):
@@ -1347,12 +1401,12 @@ class MembershipProductAdmin(HelpDisplayMixin, ProductAdmin):
         return qs.filter(categorie_article=Product.ADHESION)
 
 class ResourceProductForm(ProductAdminCustomForm):
-    """Formulaire produit force en mode Resource.
-    Product form forced to membership mode.
+    """Formulaire produit force en mode Ressource.
+    Product form forced to resource mode.
     Le champ categorie_article est cache et pre-rempli."""
 
     class Meta(ProductAdminCustomForm.Meta):
-        model = MembershipProduct
+        model = ResourceProduct
 
     categorie_article = forms.ChoiceField(
         choices=[
@@ -1370,7 +1424,7 @@ class ResourceProductAdmin(ProductAdmin):
     Filtered admin view: only resources products."""
 
     form = ResourceProductForm
-    # inlines = [MembershipPriceInline, ProductFormFieldInline]
+    inlines = [ResourcePriceInline, ProductFormFieldInline]
     # change_form_after_template + changeform_view : herites de ProductAdmin (base)
     # / change_form_after_template + changeform_view: inherited from ProductAdmin (base)
 
