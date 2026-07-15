@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-14 13:03+0000\n"
+"POT-Creation-Date: 2026-07-15 06:39+0000\n"
 "PO-Revision-Date: 2025-03-12 09:37+0100\n"
 "Last-Translator: Diane Alma Kay <pro@kayathommy.fr>\n"
 "Language-Team: French\n"
@@ -27,7 +27,7 @@ msgstr "Tableau de bord"
 
 #: Administration/admin/dashboard.py:73 BaseBillet/models.py:926
 #: BaseBillet/models.py:927 BaseBillet/models.py:932 MetaBillet/models.py:392
-#: MetaBillet/models.py:393 TiBillet/settings.py:587
+#: MetaBillet/models.py:393 TiBillet/settings.py:605
 msgid "Settings"
 msgstr "Paramètres"
 
@@ -52,11 +52,11 @@ msgstr ""
 msgid "Configuration du site"
 msgstr "Configuration du site"
 
-#: Administration/admin/dashboard.py:139 Administration/admin/laboutik.py:492
+#: Administration/admin/dashboard.py:139 Administration/admin/laboutik.py:1028
 #: Administration/templates/admin/cloture/rapport_before.html:277
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:350
 #: Administration/templates/admin/cloture_detail.html:269
-#: BaseBillet/models.py:3858 laboutik/models.py:406
+#: BaseBillet/models.py:3858 laboutik/models.py:792
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:241
 #: pages/templates/pages/classic/vues/adhesions.html:10
 #: pages/templates/pages/classic/vues/adhesions.html:14
@@ -72,7 +72,7 @@ msgid "Adhésion / Pass"
 msgstr "Adhésion / Pass"
 
 #: Administration/admin/dashboard.py:169 BaseBillet/apps.py:7
-#: laboutik/models.py:408
+#: laboutik/models.py:794
 msgid "Ticketing"
 msgstr "Billetterie"
 
@@ -102,12 +102,12 @@ msgstr "Adresses"
 msgid "Events"
 msgstr "Évènements"
 
-#: Administration/admin/dashboard.py:232 Administration/admin/dashboard.py:648
+#: Administration/admin/dashboard.py:232 Administration/admin/dashboard.py:663
 #: Administration/admin_tenant.py:2434 BaseBillet/models.py:3856
 msgid "Bookings"
 msgstr "Réservations"
 
-#: Administration/admin/dashboard.py:240 Administration/admin/laboutik.py:521
+#: Administration/admin/dashboard.py:240 Administration/admin/laboutik.py:1057
 #: Administration/templates/admin/cloture/rapport_before.html:385
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:458
 #: Administration/templates/admin/cloture_detail.html:377
@@ -124,7 +124,7 @@ msgstr "Application de Scan"
 msgid "Fédération"
 msgstr "Fédération"
 
-#: Administration/admin/dashboard.py:269 Administration/admin/laboutik.py:146
+#: Administration/admin/dashboard.py:269 Administration/admin/laboutik.py:150
 #: BaseBillet/models.py:191 BaseBillet/models.py:4242
 #: BaseBillet/templates/emails/membership_renewal_reminder.html:57
 msgid "Options"
@@ -150,48 +150,53 @@ msgstr "Produits de caisse"
 msgid "POS categories"
 msgstr "Catégories caisse"
 
-#: Administration/admin/dashboard.py:324 laboutik/models.py:498
-#: laboutik/models.py:530
+#: Administration/admin/dashboard.py:324 laboutik/models.py:879
+#: laboutik/models.py:911
 msgid "Points of sale"
 msgstr "Points de vente"
 
-#: Administration/admin/dashboard.py:332 laboutik/models.py:550
+#: Administration/admin/dashboard.py:332 laboutik/models.py:931
 msgid "Primary cards"
 msgstr "Cartes primaires"
 
-#: Administration/admin/dashboard.py:346 laboutik/models.py:351
-msgid "Printers"
-msgstr "Imprimantes"
-
-#: Administration/admin/dashboard.py:358
+#: Administration/admin/dashboard.py:351
 msgid "Closures"
 msgstr "Fermetures de caisse"
 
-#: Administration/admin/dashboard.py:366 laboutik/models.py:1558
+#: Administration/admin/dashboard.py:359 laboutik/models.py:1939
 msgid "Cash float history"
 msgstr "Historique du fond de caisse"
 
-#: Administration/admin/dashboard.py:374
+#: Administration/admin/dashboard.py:367
 msgid "POS settings"
 msgstr "Paramètres de caisse"
 
 #: Administration/admin/dashboard.py:402
-msgid "Hardware terminals"
+msgid "Terminaux matériels"
 msgstr "Terminaux matériels"
 
-#: Administration/admin/dashboard.py:407 AuthBillet/models.py:388
-msgid "Terminals"
+#: Administration/admin/dashboard.py:407 Administration/admin/laboutik.py:197
+#: laboutik/models.py:572
+msgid "Terminaux"
 msgstr "Terminaux"
 
-#: Administration/admin/dashboard.py:423
+#: Administration/admin/dashboard.py:415
+msgid "Imprimantes"
+msgstr "Imprimantes"
+
+#: Administration/admin/dashboard.py:423 laboutik/models.py:737
+msgid "TPE bancaires"
+msgstr "TPE bancaires"
+
+#: Administration/admin/dashboard.py:439
 msgid "Fedow"
 msgstr "Fedow"
 
-#: Administration/admin/dashboard.py:428
+#: Administration/admin/dashboard.py:444
 msgid "Monnaies et tokens"
 msgstr "Monnaies et tokens"
 
-#: Administration/admin/dashboard.py:434
+#: Administration/admin/dashboard.py:450
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:142
 #: comptabilite/templates/comptabilite/admin/change_form_before.html:74
 #: comptabilite/templates/comptabilite/email/cloture_rapport_email.html:16
@@ -201,288 +206,287 @@ msgstr "Monnaies et tokens"
 msgid "Transactions"
 msgstr "Transactions"
 
-#: Administration/admin/dashboard.py:442 fedow_core/models.py:773
+#: Administration/admin/dashboard.py:458 fedow_core/models.py:773
 msgid "Federations"
 msgstr "Fédérations"
 
-#: Administration/admin/dashboard.py:450
+#: Administration/admin/dashboard.py:466
 msgid "Cartes NFC"
 msgstr "Cartes NFC"
 
-#: Administration/admin/dashboard.py:466
+#: Administration/admin/dashboard.py:482
 msgid "Inventaire"
 msgstr "Inventaire"
 
-#: Administration/admin/dashboard.py:471 inventaire/models.py:109
+#: Administration/admin/dashboard.py:487 inventaire/models.py:109
 msgid "Stocks"
 msgstr "Stocks"
 
-#: Administration/admin/dashboard.py:477 inventaire/models.py:223
+#: Administration/admin/dashboard.py:493 inventaire/models.py:223
 msgid "Mouvements de stock"
 msgstr "Mouvements de stock"
 
-#: Administration/admin/dashboard.py:493
+#: Administration/admin/dashboard.py:509
 msgid "Tireuses"
 msgstr "Tireuses"
 
-#: Administration/admin/dashboard.py:498
+#: Administration/admin/dashboard.py:514
 msgid "Kiosk dashboard"
 msgstr "Tableau de bord kiosk"
 
-#: Administration/admin/dashboard.py:504 controlvanne/models.py:292
+#: Administration/admin/dashboard.py:520 controlvanne/models.py:332
 msgid "Taps"
 msgstr "Tireuses"
 
-#: Administration/admin/dashboard.py:512 BaseBillet/models.py:1421
+#: Administration/admin/dashboard.py:528 BaseBillet/models.py:1421
 msgid "Keg products"
 msgstr "Produits fûts"
 
-#: Administration/admin/dashboard.py:520 controlvanne/models.py:109
+#: Administration/admin/dashboard.py:536 controlvanne/models.py:132
 msgid "Flow meters"
 msgstr "Débitmètres"
 
-#: Administration/admin/dashboard.py:528 controlvanne/models.py:154
+#: Administration/admin/dashboard.py:544 controlvanne/models.py:177
 msgid "Maintenance cards"
 msgstr "Cartes de maintenance"
 
-#: Administration/admin/dashboard.py:536 controlvanne/models.py:453
+#: Administration/admin/dashboard.py:552 controlvanne/models.py:493
 msgid "Sessions"
 msgstr "Sessions"
 
-#: Administration/admin/dashboard.py:544 controlvanne/models.py:518
-#: controlvanne/models.py:519
+#: Administration/admin/dashboard.py:560 controlvanne/models.py:558
+#: controlvanne/models.py:559
 msgid "Tap history"
 msgstr "Historique des tireuses"
 
-#: Administration/admin/dashboard.py:552 controlvanne/models.py:528
-#: controlvanne/models.py:529
+#: Administration/admin/dashboard.py:568 controlvanne/models.py:568
+#: controlvanne/models.py:569
 msgid "Card history"
 msgstr "Historique des cartes"
 
-#: Administration/admin/dashboard.py:560 controlvanne/models.py:508
-#: controlvanne/models.py:509
+#: Administration/admin/dashboard.py:576 controlvanne/models.py:548
+#: controlvanne/models.py:549
 msgid "Maintenance history"
 msgstr "Historique de maintenance"
 
-#: Administration/admin/dashboard.py:568
+#: Administration/admin/dashboard.py:584
 msgid "Calibration"
 msgstr "Étalonnage"
 
-#: Administration/admin/dashboard.py:576
+#: Administration/admin/dashboard.py:592
 msgid "Server configuration"
 msgstr "Configuration du serveur"
 
-#: Administration/admin/dashboard.py:592
+#: Administration/admin/dashboard.py:613
 msgid "Kiosk"
 msgstr ""
 
-#: Administration/admin/dashboard.py:597 kiosk/models.py:135
-msgid "TPE Bancaires"
-msgstr ""
-
-#: Administration/admin/dashboard.py:603
+#: Administration/admin/dashboard.py:618
 msgid "Paiements"
 msgstr "Paiements"
 
-#: Administration/admin/dashboard.py:619
+#: Administration/admin/dashboard.py:634
 msgid "Ressources"
 msgstr "Ressources"
 
-#: Administration/admin/dashboard.py:624
+#: Administration/admin/dashboard.py:639
 msgid "Resources"
 msgstr "Ressources"
 
-#: Administration/admin/dashboard.py:630
+#: Administration/admin/dashboard.py:645
 msgid "Resource groups"
 msgstr "Groupes de ressources"
 
-#: Administration/admin/dashboard.py:636
+#: Administration/admin/dashboard.py:651
 msgid "Calendars"
 msgstr "Agenda"
 
-#: Administration/admin/dashboard.py:642
+#: Administration/admin/dashboard.py:657
 msgid "Weekly openings"
 msgstr "Paiement hebdomadaire"
 
-#: Administration/admin/dashboard.py:661
+#: Administration/admin/dashboard.py:676
 msgid "Sales & accounting"
 msgstr "Ventes et comptabilité"
 
-#: Administration/admin/dashboard.py:666
+#: Administration/admin/dashboard.py:681
 msgid "Rapports"
 msgstr ""
 
-#: Administration/admin/dashboard.py:674
+#: Administration/admin/dashboard.py:689
 msgid "Entries"
 msgstr "Lignes comptables"
 
-#: Administration/admin/dashboard.py:713
+#: Administration/admin/dashboard.py:728
 #: crowds/templates/crowds/partial/summary.html:104
 msgid "Contributions"
 msgstr "Contributions"
 
-#: Administration/admin/dashboard.py:718
+#: Administration/admin/dashboard.py:733
 msgid "Configuration"
 msgstr "Configuration"
 
-#: Administration/admin/dashboard.py:726
+#: Administration/admin/dashboard.py:741
 msgid "Initiative"
 msgstr "Initiative"
 
-#: Administration/admin/dashboard.py:752 Administration/admin/dashboard.py:903
+#: Administration/admin/dashboard.py:767 Administration/admin/dashboard.py:918
 #: Administration/templates/admin/ghost/panneau_newsletter.html:59
 #: tests/pytest/test_module_newsletter_activation.py:308
 msgid "Newsletter"
 msgstr ""
 
-#: Administration/admin/dashboard.py:757
+#: Administration/admin/dashboard.py:772
 msgid "Serveur Ghost"
 msgstr "Serveur Ghost"
 
-#: Administration/admin/dashboard.py:771
+#: Administration/admin/dashboard.py:786
 msgid "External tools"
 msgstr "Outils externes"
 
-#: Administration/admin/dashboard.py:776
+#: Administration/admin/dashboard.py:791
 msgid "API Key"
 msgstr "Clé API"
 
-#: Administration/admin/dashboard.py:784
+#: Administration/admin/dashboard.py:799
 msgid "Webhook"
 msgstr "Webhook"
 
-#: Administration/admin/dashboard.py:790
+#: Administration/admin/dashboard.py:805
 msgid "Formbricks"
 msgstr "Formbricks"
 
-#: Administration/admin/dashboard.py:798
+#: Administration/admin/dashboard.py:813
 msgid "Brevo"
 msgstr "Brevo"
 
-#: Administration/admin/dashboard.py:812
+#: Administration/admin/dashboard.py:827
 msgid "Root Configuration"
 msgstr "Configuration racine"
 
-#: Administration/admin/dashboard.py:817
+#: Administration/admin/dashboard.py:832
 msgid "Waiting Configuration"
 msgstr "En attente de configuration"
 
-#: Administration/admin/dashboard.py:825
+#: Administration/admin/dashboard.py:840
 msgid "Tenants"
 msgstr "Tenants"
 
-#: Administration/admin/dashboard.py:834
+#: Administration/admin/dashboard.py:849
 msgid "Domaines iframe autorises"
 msgstr "Domaines iframe autorisés"
 
-#: Administration/admin/dashboard.py:856
+#: Administration/admin/dashboard.py:871
 msgid "Development"
 msgstr "Développement"
 
-#: Administration/admin/dashboard.py:858
+#: Administration/admin/dashboard.py:873
 msgid "Production"
 msgstr "Production"
 
-#: Administration/admin/dashboard.py:863
+#: Administration/admin/dashboard.py:878
 msgid "Event ticketing"
 msgstr "Billetterie"
 
-#: Administration/admin/dashboard.py:864
+#: Administration/admin/dashboard.py:879
 msgid "Events, reservations, and ticket sales"
 msgstr "Événements, reservation et vente de ticket"
 
-#: Administration/admin/dashboard.py:869 BaseBillet/models.py:1255
+#: Administration/admin/dashboard.py:884 BaseBillet/models.py:1255
 msgid "Membership"
 msgstr "Adhésions"
 
-#: Administration/admin/dashboard.py:870
+#: Administration/admin/dashboard.py:885
 msgid "Memberships and subscriptions"
 msgstr "Adhésions et abonnements"
 
-#: Administration/admin/dashboard.py:874
+#: Administration/admin/dashboard.py:889
 msgid "Crowdfunding"
 msgstr "Financement participatif"
 
-#: Administration/admin/dashboard.py:875
+#: Administration/admin/dashboard.py:890
 msgid "Participatory funding and adaptive contributions"
 msgstr "Financement participatif et contributions adaptatives"
 
-#: Administration/admin/dashboard.py:879
+#: Administration/admin/dashboard.py:894
 msgid "Fédération et agenda participatif"
 msgstr "Fédération et agenda participatif"
 
-#: Administration/admin/dashboard.py:881
+#: Administration/admin/dashboard.py:896
 msgid ""
 "Reliez votre lieu au réseau TiBillet pour partager vos évènements. Vous "
 "pouvez aussi laisser le public proposer des évènements : c'est l'agenda "
 "participatif. Tout se règle dans « Options de fédération »."
 msgstr ""
 
-#: Administration/admin/dashboard.py:888
+#: Administration/admin/dashboard.py:903
 msgid "Pages / site web"
 msgstr ""
 
-#: Administration/admin/dashboard.py:890
+#: Administration/admin/dashboard.py:905
 msgid ""
 "Composez des pages publiques en empilant des blocs (hero, texte, image, "
 "appel à l'action, témoignage). Une page peut devenir la page d'accueil du "
 "site."
 msgstr ""
 
-#: Administration/admin/dashboard.py:905
+#: Administration/admin/dashboard.py:920
 msgid ""
 "Evènements, rappels d'adhésions, résumé de vos activités, pilotez votre "
 "newsletter avec TiBillet !"
 msgstr ""
 
-#: Administration/admin/dashboard.py:913
+#: Administration/admin/dashboard.py:928
 msgid "Local currency & cashless"
 msgstr "Monnaie locale et paiement sans contact"
 
-#: Administration/admin/dashboard.py:914
+#: Administration/admin/dashboard.py:929
 msgid "Local currency tokens, federated wallet"
 msgstr ""
 
-#: Administration/admin/dashboard.py:918
+#: Administration/admin/dashboard.py:933
 msgid "POS & restaurant"
 msgstr "Caisse & restaurant"
 
-#: Administration/admin/dashboard.py:919
+#: Administration/admin/dashboard.py:934
 msgid "Point of sale, orders, and cash register"
 msgstr "Point de vente, commandes et caisse"
 
-#: Administration/admin/dashboard.py:922
+#: Administration/admin/dashboard.py:937
 #: Administration/templates/admin/dashboard.html:81
 msgid "Open POS"
 msgstr ""
 
-#: Administration/admin/dashboard.py:926
+#: Administration/admin/dashboard.py:941
 msgid "Inventory"
 msgstr "Inventaire"
 
-#: Administration/admin/dashboard.py:928
+#: Administration/admin/dashboard.py:943
 msgid "Stock management for POS products: tracking, alerts, movements."
-msgstr "Gestion des stocks pour les produits de caisse : suivi, alertes, mouvements."
+msgstr ""
+"Gestion des stocks pour les produits de caisse : suivi, alertes, mouvements."
 
-#: Administration/admin/dashboard.py:935
+#: Administration/admin/dashboard.py:950
 msgid "Connected taps"
-msgstr "Robinets connectés"
+msgstr "Tireuses connectées"
 
-#: Administration/admin/dashboard.py:937
+#: Administration/admin/dashboard.py:952
 msgid ""
 "Connected beer tap management: RFID authorization, flow metering, kiosk "
 "display."
 msgstr ""
+"Gestion des tireuses connectées : autorisation RFID, comptage du débit, "
+"affichage kiosque."
 
-#: Administration/admin/dashboard.py:941
+#: Administration/admin/dashboard.py:956
 msgid "Open kiosk"
 msgstr "Ouvrir le kiosque"
 
-#: Administration/admin/dashboard.py:952
+#: Administration/admin/dashboard.py:967
 msgid "Kiosk / borne libre-service"
 msgstr ""
 
-#: Administration/admin/dashboard.py:954
+#: Administration/admin/dashboard.py:969
 msgid "Bornes de paiement en autonomie : recharge cashless, Stripe Terminal."
 msgstr ""
 
@@ -516,7 +520,9 @@ msgstr ""
 msgid ""
 "Initial stock quantity (in stock unit). After creation, modify via Inventory "
 "> Stock movements."
-msgstr "Quantité de stock initiale (dans l'unité de stock). Après la création, modifiez via Inventaire > Mouvements de stock."
+msgstr ""
+"Quantité de stock initiale (dans l'unité de stock). Après la création, "
+"modifiez via Inventaire > Mouvements de stock."
 
 #: Administration/admin/inventaire.py:125
 #: Administration/admin/inventaire.py:213 laboutik/printing/formatters.py:108
@@ -546,7 +552,7 @@ msgstr ""
 msgid "Stock initial"
 msgstr ""
 
-#: Administration/admin/inventaire.py:338 Administration/admin/laboutik.py:522
+#: Administration/admin/inventaire.py:338 Administration/admin/laboutik.py:1058
 #: Administration/importers/lignearticle_exporter.py:19
 #: Administration/templates/admin/cloture/rapport_before.html:390
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:463
@@ -558,8 +564,8 @@ msgstr ""
 #: BaseBillet/tasks.py:280 BaseBillet/tasks.py:604 BaseBillet/tasks.py:720
 #: BaseBillet/templates/commun/adhesion/free_confirmed.html:20
 #: BaseBillet/templates/fonctionnel/compte/partials/transaction_history.html:10
-#: BaseBillet/templates/invoice/invoice.html:163 controlvanne/admin.py:404
-#: controlvanne/admin.py:443 controlvanne/admin.py:593
+#: BaseBillet/templates/invoice/invoice.html:163 controlvanne/admin.py:442
+#: controlvanne/admin.py:481 controlvanne/admin.py:631
 #: crowds/templates/crowds/partial/budget_items.html:12
 #: crowds/templates/crowds/partial/contributions.html:13
 #: crowds/templates/crowds/partial/participations.html:13
@@ -576,7 +582,6 @@ msgstr "Produit"
 
 #: Administration/admin/inventaire.py:349
 #: comptabilite/templates/comptabilite/admin/_sections_rapport.html:130
-#: kiosk/models.py:92
 #: laboutik/templates/laboutik/partial/hx_recap_en_cours.html:352
 msgid "Type"
 msgstr ""
@@ -613,79 +618,187 @@ msgstr ""
 msgid "Tout afficher"
 msgstr "Tout afficher"
 
-#: Administration/admin/laboutik.py:51
+#: Administration/admin/laboutik.py:55
 msgid "Interface caisse / POS interface"
 msgstr ""
 
-#: Administration/admin/laboutik.py:57 Administration/admin/laboutik.py:200
+#: Administration/admin/laboutik.py:61 Administration/admin/laboutik.py:258
 #: laboutik/models.py:287
 msgid "Sunmi Cloud"
 msgstr ""
 
-#: Administration/admin/laboutik.py:63
+#: Administration/admin/laboutik.py:67
 msgid ""
 "Identifiants Sunmi Cloud (stockes chiffres). / Sunmi Cloud credentials "
 "(stored encrypted)."
 msgstr ""
 
-#: Administration/admin/laboutik.py:67
+#: Administration/admin/laboutik.py:71
 msgid "Ticket de vente / Sale receipt"
 msgstr ""
 
-#: Administration/admin/laboutik.py:73
+#: Administration/admin/laboutik.py:77
 msgid "Personnalisation des tickets de vente. / Sale receipt customization."
 msgstr ""
 
-#: Administration/admin/laboutik.py:77
+#: Administration/admin/laboutik.py:81
 msgid "Rapports automatiques / Automatic reports"
 msgstr ""
 
-#: Administration/admin/laboutik.py:83
+#: Administration/admin/laboutik.py:87
 msgid ""
 "Envoi automatique des rapports de cloture par email (7h locale). / Automatic "
 "closure report email sending (7am local time)."
 msgstr ""
 
-#: Administration/admin/laboutik.py:110 Administration/admin/products.py:1422
+#: Administration/admin/laboutik.py:114 Administration/admin/products.py:1422
 #: Administration/admin/products.py:1709 Administration/admin/products.py:1992
 msgid "— Aucune icône —"
 msgstr ""
 
-#: Administration/admin/laboutik.py:112 Administration/admin/products.py:1994
-#: BaseBillet/models.py:978 laboutik/models.py:378 laboutik/models.py:570
+#: Administration/admin/laboutik.py:116 Administration/admin/products.py:1994
+#: BaseBillet/models.py:978 laboutik/models.py:764 laboutik/models.py:951
 msgid "Icon"
 msgstr ""
 
-#: Administration/admin/laboutik.py:137 Administration/admin/laboutik.py:192
+#: Administration/admin/laboutik.py:141 Administration/admin/laboutik.py:250
 #: Administration/admin/prices.py:236 Administration/admin/products.py:921
 #: Administration/admin/products.py:1568 Administration/admin/products.py:1864
 msgid "General"
 msgstr "General"
 
-#: Administration/admin/laboutik.py:157
+#: Administration/admin/laboutik.py:160
 msgid "Products & categories"
 msgstr "Produits et catégories"
 
-#: Administration/admin/laboutik.py:205
+#: Administration/admin/laboutik.py:219
+msgid "Imprimer un ticket de test"
+msgstr ""
+
+#: Administration/admin/laboutik.py:239
+#, python-format
+msgid "%(nom)s : ticket de test envoyé."
+msgstr ""
+
+#: Administration/admin/laboutik.py:243 Administration/admin/laboutik.py:508
+#, python-format
+msgid "%(nom)s : échec — %(err)s"
+msgstr ""
+
+#: Administration/admin/laboutik.py:263
 msgid "Serial number required for Sunmi Cloud printers only."
 msgstr "Numéro de série requis uniquement pour les imprimantes Sunmi Cloud."
 
-#: Administration/admin/laboutik.py:208 laboutik/models.py:289
+#: Administration/admin/laboutik.py:266 laboutik/models.py:289
 msgid "Sunmi LAN"
 msgstr ""
 
-#: Administration/admin/laboutik.py:213
+#: Administration/admin/laboutik.py:271
 msgid "IP address required for LAN printers only (same subnet)."
-msgstr "Adresse IP requise uniquement pour les imprimantes LAN (même sous-réseau)."
+msgstr ""
+"Adresse IP requise uniquement pour les imprimantes LAN (même sous-réseau)."
 
-#: Administration/admin/laboutik.py:416 laboutik/excel_export.py:108
-#: laboutik/models.py:1112
+#: Administration/admin/laboutik.py:381
+msgid "— Non branché —"
+msgstr ""
+
+#: Administration/admin/laboutik.py:395
+msgid ""
+"Le code d'enregistrement est obligatoire pour enregistrer le lecteur chez "
+"Stripe."
+msgstr ""
+
+#: Administration/admin/laboutik.py:417
+msgid ""
+"Ce code est déjà utilisé par un autre lecteur. Un lecteur physique ne peut "
+"être enregistré qu'une fois."
+msgstr ""
+
+#: Administration/admin/laboutik.py:444
+#, python-format
+msgid "Échec de l'enregistrement du lecteur chez Stripe : %(err)s"
+msgstr "Échec de l'enregistrement du lecteur chez Stripe : %(err)s"
+
+#: Administration/admin/laboutik.py:465
+msgid "Stripe"
+msgstr "Stripe"
+
+#: Administration/admin/laboutik.py:474
+msgid "Enregistré"
+msgstr "Enregistré"
+
+#: Administration/admin/laboutik.py:478
+msgid "Non enregistré"
+msgstr "Non enregistré"
+
+#: Administration/admin/laboutik.py:483
+msgid "Vérifier le statut chez Stripe"
+msgstr ""
+
+#: Administration/admin/laboutik.py:497
+#, python-format
+msgid "%(nom)s : pas encore enregistré chez Stripe."
+msgstr ""
+
+#: Administration/admin/laboutik.py:504
+#, python-format
+msgid "%(nom)s : %(statut)s"
+msgstr ""
+
+#: Administration/admin/laboutik.py:550
+msgid "Compte de l'appareil"
+msgstr "Compte de l'appareil"
+
+#: Administration/admin/laboutik.py:557
+msgid "— en attente d'appairage —"
+msgstr ""
+
+#: Administration/admin/laboutik.py:562 laboutik/models.py:736
+msgid "TPE bancaire"
+msgstr "TPE bancaire"
+
+#: Administration/admin/laboutik.py:576
+msgid "État"
+msgstr ""
+
+#: Administration/admin/laboutik.py:591 controlvanne/admin.py:267
+msgid "Appairé"
+msgstr ""
+
+#: Administration/admin/laboutik.py:595
+msgid "Révoqué"
+msgstr ""
+
+#: Administration/admin/laboutik.py:602
+msgid "Code PIN expiré — à régénérer"
+msgstr ""
+
+#: Administration/admin/laboutik.py:614
+msgid "Générer un nouveau code PIN (appairer un autre appareil)"
+msgstr ""
+
+#: Administration/admin/laboutik.py:678
+#, python-format
+msgid "%(nb)s code(s) PIN généré(s). Tapez-le sur l'appareil pour l'appairer."
+msgstr ""
+
+#: Administration/admin/laboutik.py:681
+msgid "Révoquer le terminal (coupe son accès)"
+msgstr ""
+
+#: Administration/admin/laboutik.py:729
+#, python-format
+msgid "%(nb)s terminal(aux) révoqué(s)."
+msgstr "%(nb)s terminal(aux) révoqué(s)."
+
+#: Administration/admin/laboutik.py:952 laboutik/excel_export.py:108
+#: laboutik/models.py:1493
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:6
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:28
 msgid "Closure report"
 msgstr "Rapport de clôture"
 
-#: Administration/admin/laboutik.py:417
+#: Administration/admin/laboutik.py:953
 #: Administration/templates/admin/cloture/rapport_before.html:16
 #: Administration/templates/admin/cloture_detail.html:15
 #: laboutik/excel_export.py:109
@@ -693,7 +806,7 @@ msgstr "Rapport de clôture"
 msgid "Level"
 msgstr ""
 
-#: Administration/admin/laboutik.py:418
+#: Administration/admin/laboutik.py:954
 #: Administration/templates/admin/cloture/rapport_before.html:17
 #: Administration/templates/admin/cloture_detail.html:16
 #: Administration/templates/admin/membership/wallet_info.html:17
@@ -704,37 +817,37 @@ msgstr ""
 msgid "Number"
 msgstr "Numéro"
 
-#: Administration/admin/laboutik.py:419
+#: Administration/admin/laboutik.py:955
 #: Administration/templates/admin/cloture/rapport_before.html:24
 #: Administration/templates/admin/cloture/rapport_before.html:483
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:556
 #: Administration/templates/admin/cloture_detail.html:23
 #: Administration/templates/admin/cloture_detail.html:477
-#: BaseBillet/models.py:3346 controlvanne/models.py:198
-#: laboutik/excel_export.py:111 laboutik/models.py:497 laboutik/models.py:1296
-#: laboutik/models.py:1493
+#: BaseBillet/models.py:3346 controlvanne/models.py:221
+#: laboutik/excel_export.py:111 laboutik/models.py:878 laboutik/models.py:1677
+#: laboutik/models.py:1874
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:35
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:437
 msgid "Point of sale"
 msgstr "Point de vente"
 
-#: Administration/admin/laboutik.py:420
+#: Administration/admin/laboutik.py:956
 #: Administration/templates/admin/cloture/rapport_before.html:20
 #: Administration/templates/admin/cloture_detail.html:19
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:33
 msgid "Responsible"
 msgstr "Responsable"
 
-#: Administration/admin/laboutik.py:421
+#: Administration/admin/laboutik.py:957
 #: Administration/templates/admin/cloture/rapport_before.html:28
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:138
 #: Administration/templates/admin/cloture_detail.html:27
-#: controlvanne/admin.py:59 laboutik/excel_export.py:112
+#: controlvanne/admin.py:60 laboutik/excel_export.py:112
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:37
 msgid "Period"
 msgstr ""
 
-#: Administration/admin/laboutik.py:427
+#: Administration/admin/laboutik.py:963
 #: Administration/templates/admin/cloture/rapport_before.html:76
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:151
 #: Administration/templates/admin/cloture_detail.html:58
@@ -743,8 +856,8 @@ msgstr ""
 msgid "Totals by payment method"
 msgstr "Totaux par moyen de paiement."
 
-#: Administration/admin/laboutik.py:428 Administration/admin/laboutik.py:483
-#: Administration/admin/laboutik.py:493 Administration/admin/laboutik.py:1124
+#: Administration/admin/laboutik.py:964 Administration/admin/laboutik.py:1019
+#: Administration/admin/laboutik.py:1029 Administration/admin/laboutik.py:1660
 #: Administration/admin_tenant.py:1331 Administration/admin_tenant.py:2947
 #: Administration/importers/lignearticle_exporter.py:25
 #: Administration/templates/admin/cloture/rapport_before.html:80
@@ -764,8 +877,8 @@ msgstr "Totaux par moyen de paiement."
 msgid "Payment method"
 msgstr "Mode de paiement"
 
-#: Administration/admin/laboutik.py:428 Administration/admin/laboutik.py:483
-#: Administration/admin/laboutik.py:493 Administration/admin/laboutik.py:522
+#: Administration/admin/laboutik.py:964 Administration/admin/laboutik.py:1019
+#: Administration/admin/laboutik.py:1029 Administration/admin/laboutik.py:1058
 #: Administration/templates/admin/cloture/rapport_before.html:81
 #: Administration/templates/admin/cloture/rapport_before.html:248
 #: Administration/templates/admin/cloture/rapport_before.html:285
@@ -795,7 +908,7 @@ msgstr "Mode de paiement"
 msgid "Amount"
 msgstr "Montant"
 
-#: Administration/admin/laboutik.py:429 Administration/admin/laboutik.py:535
+#: Administration/admin/laboutik.py:965 Administration/admin/laboutik.py:1071
 #: Administration/templates/admin/cloture/rapport_before.html:86
 #: Administration/templates/admin/cloture/rapport_before.html:426
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:161
@@ -808,7 +921,7 @@ msgstr "Montant"
 msgid "Cash"
 msgstr "Espèces"
 
-#: Administration/admin/laboutik.py:430 Administration/admin/laboutik.py:535
+#: Administration/admin/laboutik.py:966 Administration/admin/laboutik.py:1071
 #: Administration/templates/admin/cloture/rapport_before.html:90
 #: Administration/templates/admin/cloture/rapport_before.html:427
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:165
@@ -821,7 +934,7 @@ msgstr "Espèces"
 msgid "Credit card"
 msgstr "Carte de crédit"
 
-#: Administration/admin/laboutik.py:431 Administration/admin/laboutik.py:535
+#: Administration/admin/laboutik.py:967 Administration/admin/laboutik.py:1071
 #: Administration/templates/admin/cloture/rapport_before.html:94
 #: Administration/templates/admin/cloture/rapport_before.html:428
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:169
@@ -829,7 +942,7 @@ msgstr "Carte de crédit"
 #: Administration/templates/admin/cloture_detail.html:76
 #: Administration/templates/admin/cloture_detail.html:420
 #: BaseBillet/models.py:1014 laboutik/csv_export.py:55
-#: laboutik/excel_export.py:122 laboutik/models.py:407
+#: laboutik/excel_export.py:122 laboutik/models.py:793
 #: laboutik/printing/formatters.py:437 laboutik/printing/formatters.py:534
 #: laboutik/templates/laboutik/partial/hx_cloture_rapport.html:24
 #: laboutik/templates/laboutik/partial/hx_recap_en_cours.html:129
@@ -837,11 +950,11 @@ msgstr "Carte de crédit"
 #: laboutik/templates/laboutik/pdf/cloture_rapport_pdf.html:108
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:62
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:384
-#: laboutik/views.py:135 laboutik/views.py:3264
+#: laboutik/views.py:135 laboutik/views.py:3299
 msgid "Cashless"
 msgstr "Cashless"
 
-#: Administration/admin/laboutik.py:434
+#: Administration/admin/laboutik.py:970
 #: Administration/templates/admin/cloture/rapport_before.html:107
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:182
 #: Administration/templates/admin/cloture_detail.html:89
@@ -852,9 +965,9 @@ msgstr "Cashless"
 msgid "Check"
 msgstr "Chèque bancaire"
 
-#: Administration/admin/laboutik.py:435 Administration/admin/laboutik.py:486
-#: Administration/admin/laboutik.py:496 Administration/admin/laboutik.py:504
-#: Administration/admin/laboutik.py:528 Administration/admin/laboutik.py:535
+#: Administration/admin/laboutik.py:971 Administration/admin/laboutik.py:1022
+#: Administration/admin/laboutik.py:1032 Administration/admin/laboutik.py:1040
+#: Administration/admin/laboutik.py:1064 Administration/admin/laboutik.py:1071
 #: Administration/admin_tenant.py:1593 Administration/admin_tenant.py:2033
 #: Administration/templates/admin/asset/asset_change_form_before.html:50
 #: Administration/templates/admin/asset/asset_change_form_before.html:64
@@ -903,7 +1016,7 @@ msgstr "Chèque bancaire"
 msgid "Total"
 msgstr "Total"
 
-#: Administration/admin/laboutik.py:441
+#: Administration/admin/laboutik.py:977
 #: Administration/templates/admin/cloture/rapport_before.html:131
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:205
 #: Administration/templates/admin/cloture_detail.html:113
@@ -911,13 +1024,13 @@ msgstr "Total"
 msgid "Sales detail"
 msgstr ""
 
-#: Administration/admin/laboutik.py:443 Customers/models.py:30
-#: MetaBillet/models.py:212 laboutik/models.py:602
+#: Administration/admin/laboutik.py:979 Customers/models.py:30
+#: MetaBillet/models.py:212 laboutik/models.py:983
 msgid "Category"
 msgstr "Catégorie"
 
-#: Administration/admin/laboutik.py:443 Administration/admin/laboutik.py:483
-#: Administration/admin/laboutik.py:493 Administration/admin_tenant.py:1618
+#: Administration/admin/laboutik.py:979 Administration/admin/laboutik.py:1019
+#: Administration/admin/laboutik.py:1029 Administration/admin_tenant.py:1618
 #: Administration/admin_tenant.py:1924 Administration/admin_tenant.py:2037
 #: Administration/admin_tenant.py:3468
 #: Administration/templates/admin/cloture/rapport_before.html:137
@@ -932,14 +1045,14 @@ msgstr "Catégorie"
 #: BaseBillet/models.py:1371 BaseBillet/models.py:1436
 #: BaseBillet/models.py:1524 BaseBillet/models.py:2401
 #: BaseBillet/models.py:4222 BaseBillet/tasks.py:263 api_v2/serializers.py:763
-#: laboutik/models.py:771
+#: laboutik/models.py:1152
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:104
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:211
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:245
 msgid "Product"
 msgstr "Produit"
 
-#: Administration/admin/laboutik.py:444
+#: Administration/admin/laboutik.py:980
 #: Administration/templates/admin/cloture/rapport_before.html:138
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:212
 #: Administration/templates/admin/cloture_detail.html:121
@@ -947,17 +1060,17 @@ msgstr "Produit"
 msgid "Sold"
 msgstr ""
 
-#: Administration/admin/laboutik.py:444
+#: Administration/admin/laboutik.py:980
 #: Administration/templates/admin/cloture/rapport_before.html:139
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:213
 #: Administration/templates/admin/cloture_detail.html:122
-#: ApiBillet/templates/ticket/ticket.html:208 laboutik/models.py:616
+#: ApiBillet/templates/ticket/ticket.html:208 laboutik/models.py:997
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:106
 #: pages/templates/pages/faire_festival/vues/adhesions.html:133
 msgid "Free"
 msgstr "Libre"
 
-#: Administration/admin/laboutik.py:444
+#: Administration/admin/laboutik.py:980
 #: Administration/templates/admin/cloture/rapport_before.html:140
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:214
 #: Administration/templates/admin/cloture_detail.html:123
@@ -965,7 +1078,7 @@ msgstr "Libre"
 msgid "Total qty"
 msgstr "Quantité totale"
 
-#: Administration/admin/laboutik.py:445 Administration/admin/laboutik.py:465
+#: Administration/admin/laboutik.py:981 Administration/admin/laboutik.py:1001
 #: Administration/templates/admin/cloture/rapport_before.html:141
 #: Administration/templates/admin/cloture/rapport_before.html:184
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:215
@@ -982,7 +1095,7 @@ msgstr "Quantité totale"
 msgid "HT"
 msgstr ""
 
-#: Administration/admin/laboutik.py:445 Administration/admin/laboutik.py:465
+#: Administration/admin/laboutik.py:981 Administration/admin/laboutik.py:1001
 #: Administration/importers/lignearticle_exporter.py:23
 #: Administration/templates/admin/cloture/rapport_before.html:142
 #: Administration/templates/admin/cloture/rapport_before.html:185
@@ -997,7 +1110,7 @@ msgstr ""
 msgid "VAT"
 msgstr "TVA"
 
-#: Administration/admin/laboutik.py:445 Administration/admin/laboutik.py:465
+#: Administration/admin/laboutik.py:981 Administration/admin/laboutik.py:1001
 #: Administration/templates/admin/cloture/rapport_before.html:143
 #: Administration/templates/admin/cloture/rapport_before.html:186
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:217
@@ -1015,7 +1128,7 @@ msgstr "TVA"
 msgid "TTC"
 msgstr ""
 
-#: Administration/admin/laboutik.py:446
+#: Administration/admin/laboutik.py:982
 #: Administration/templates/admin/cloture/rapport_before.html:144
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:218
 #: Administration/templates/admin/cloture_detail.html:130
@@ -1023,7 +1136,7 @@ msgstr ""
 msgid "Cost"
 msgstr ""
 
-#: Administration/admin/laboutik.py:446
+#: Administration/admin/laboutik.py:982
 #: Administration/templates/admin/cloture/rapport_before.html:145
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:219
 #: Administration/templates/admin/cloture_detail.html:131
@@ -1031,7 +1144,7 @@ msgstr ""
 msgid "Profit"
 msgstr ""
 
-#: Administration/admin/laboutik.py:464
+#: Administration/admin/laboutik.py:1000
 #: Administration/templates/admin/cloture/rapport_before.html:179
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:252
 #: Administration/templates/admin/cloture_detail.html:171
@@ -1040,7 +1153,7 @@ msgstr ""
 msgid "VAT breakdown"
 msgstr ""
 
-#: Administration/admin/laboutik.py:465 Administration/admin_tenant.py:2902
+#: Administration/admin/laboutik.py:1001 Administration/admin_tenant.py:2902
 #: Administration/templates/admin/cloture/rapport_before.html:183
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:256
 #: Administration/templates/admin/cloture_detail.html:175
@@ -1049,7 +1162,7 @@ msgstr ""
 msgid "Rate"
 msgstr "Tarif"
 
-#: Administration/admin/laboutik.py:473
+#: Administration/admin/laboutik.py:1009
 #: Administration/templates/admin/cloture/rapport_before.html:208
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:281
 #: Administration/templates/admin/cloture_detail.html:200
@@ -1058,7 +1171,7 @@ msgstr "Tarif"
 msgid "Cash register balance"
 msgstr "Solde de la caisse"
 
-#: Administration/admin/laboutik.py:474
+#: Administration/admin/laboutik.py:1010
 #: Administration/templates/admin/cloture/rapport_before.html:212
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:285
 #: Administration/templates/admin/cloture_detail.html:204
@@ -1067,7 +1180,7 @@ msgstr "Solde de la caisse"
 msgid "Opening float"
 msgstr ""
 
-#: Administration/admin/laboutik.py:475
+#: Administration/admin/laboutik.py:1011
 #: Administration/templates/admin/cloture/rapport_before.html:216
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:289
 #: Administration/templates/admin/cloture_detail.html:208
@@ -1076,7 +1189,7 @@ msgstr ""
 msgid "Cash income"
 msgstr ""
 
-#: Administration/admin/laboutik.py:476
+#: Administration/admin/laboutik.py:1012
 #: Administration/templates/admin/cloture/rapport_before.html:228
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:301
 #: Administration/templates/admin/cloture_detail.html:220
@@ -1086,7 +1199,7 @@ msgstr ""
 msgid "Balance"
 msgstr "Solde"
 
-#: Administration/admin/laboutik.py:482
+#: Administration/admin/laboutik.py:1018
 #: Administration/templates/admin/cloture/rapport_before.html:241
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:314
 #: Administration/templates/admin/cloture_detail.html:233
@@ -1094,7 +1207,7 @@ msgstr "Solde"
 msgid "Cashless top-ups"
 msgstr ""
 
-#: Administration/admin/laboutik.py:483
+#: Administration/admin/laboutik.py:1019
 #: Administration/templates/admin/cloture/rapport_before.html:246
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:319
 #: Administration/templates/admin/cloture_detail.html:238
@@ -1102,8 +1215,8 @@ msgstr ""
 msgid "Currency"
 msgstr "Devise"
 
-#: Administration/admin/laboutik.py:483 Administration/admin/laboutik.py:493
-#: Administration/admin/laboutik.py:503 Administration/admin/laboutik.py:522
+#: Administration/admin/laboutik.py:1019 Administration/admin/laboutik.py:1029
+#: Administration/admin/laboutik.py:1039 Administration/admin/laboutik.py:1058
 #: Administration/templates/admin/cloture/rapport_before.html:249
 #: Administration/templates/admin/cloture/rapport_before.html:284
 #: Administration/templates/admin/cloture/rapport_before.html:317
@@ -1124,7 +1237,7 @@ msgstr "Devise"
 msgid "Count"
 msgstr "Quantité"
 
-#: Administration/admin/laboutik.py:493
+#: Administration/admin/laboutik.py:1029
 #: Administration/templates/admin/cloture/rapport_before.html:282
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:355
 #: Administration/templates/admin/cloture_detail.html:274
@@ -1132,7 +1245,7 @@ msgstr "Quantité"
 msgid "Price tier"
 msgstr "Palier de prix"
 
-#: Administration/admin/laboutik.py:502
+#: Administration/admin/laboutik.py:1038
 #: Administration/templates/admin/cloture/rapport_before.html:313
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:386
 #: Administration/templates/admin/cloture_detail.html:305
@@ -1140,7 +1253,7 @@ msgstr "Palier de prix"
 msgid "Refunds"
 msgstr "Remboursements"
 
-#: Administration/admin/laboutik.py:510
+#: Administration/admin/laboutik.py:1046
 #: Administration/templates/admin/cloture/rapport_before.html:334
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:407
 #: Administration/templates/admin/cloture_detail.html:326
@@ -1149,7 +1262,7 @@ msgid "Customer statistics"
 msgstr ""
 
 # DEPRECATED 2.0 old ui
-#: Administration/admin/laboutik.py:511
+#: Administration/admin/laboutik.py:1047
 #: Administration/templates/admin/cloture/rapport_before.html:344
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:417
 #: Administration/templates/admin/cloture_detail.html:336
@@ -1157,7 +1270,7 @@ msgstr ""
 msgid "Cards used"
 msgstr "Cartes utilisées"
 
-#: Administration/admin/laboutik.py:512
+#: Administration/admin/laboutik.py:1048
 #: Administration/templates/admin/cloture/rapport_before.html:348
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:421
 #: Administration/templates/admin/cloture_detail.html:340
@@ -1165,7 +1278,7 @@ msgstr "Cartes utilisées"
 msgid "Total spent"
 msgstr "Total dépensé"
 
-#: Administration/admin/laboutik.py:513
+#: Administration/admin/laboutik.py:1049
 #: Administration/templates/admin/cloture/rapport_before.html:352
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:425
 #: Administration/templates/admin/cloture_detail.html:344
@@ -1173,7 +1286,7 @@ msgstr "Total dépensé"
 msgid "Average basket"
 msgstr ""
 
-#: Administration/admin/laboutik.py:514
+#: Administration/admin/laboutik.py:1050
 #: Administration/templates/admin/cloture/rapport_before.html:356
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:429
 #: Administration/templates/admin/cloture_detail.html:348
@@ -1181,7 +1294,7 @@ msgstr ""
 msgid "Median spend"
 msgstr ""
 
-#: Administration/admin/laboutik.py:515
+#: Administration/admin/laboutik.py:1051
 #: Administration/templates/admin/cloture/rapport_before.html:360
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:433
 #: Administration/templates/admin/cloture_detail.html:352
@@ -1189,7 +1302,7 @@ msgstr ""
 msgid "Median top-up"
 msgstr ""
 
-#: Administration/admin/laboutik.py:522
+#: Administration/admin/laboutik.py:1058
 #: Administration/templates/admin/cloture/rapport_before.html:389
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:462
 #: Administration/templates/admin/cloture_detail.html:381
@@ -1199,7 +1312,7 @@ msgstr ""
 msgid "Event"
 msgstr "Évènement"
 
-#: Administration/admin/laboutik.py:522
+#: Administration/admin/laboutik.py:1058
 #: Administration/templates/admin/cloture/rapport_before.html:391
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:464
 #: Administration/templates/admin/cloture_detail.html:383
@@ -1207,7 +1320,7 @@ msgstr "Évènement"
 msgid "Product / Price tier"
 msgstr "Produit / Palier de prix"
 
-#: Administration/admin/laboutik.py:534
+#: Administration/admin/laboutik.py:1070
 #: Administration/templates/admin/cloture/rapport_before.html:421
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:494
 #: Administration/templates/admin/cloture_detail.html:413
@@ -1215,7 +1328,7 @@ msgstr "Produit / Palier de prix"
 msgid "Operations summary"
 msgstr ""
 
-#: Administration/admin/laboutik.py:535
+#: Administration/admin/laboutik.py:1071
 #: Administration/templates/admin/cloture/rapport_before.html:425
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:498
 #: Administration/templates/admin/cloture_detail.html:417
@@ -1223,7 +1336,7 @@ msgstr ""
 msgid "Operation"
 msgstr "Opération"
 
-#: Administration/admin/laboutik.py:584
+#: Administration/admin/laboutik.py:1120
 #: Administration/templates/admin/cloture/rapport_before.html:484
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:557
 #: Administration/templates/admin/cloture_detail.html:478
@@ -1231,18 +1344,18 @@ msgstr "Opération"
 msgid "Revenue incl. tax"
 msgstr ""
 
-#: Administration/admin/laboutik.py:938
+#: Administration/admin/laboutik.py:1474
 #: Administration/templates/admin/cloture/rapport_before.html:547
 #: Administration/templates/admin/cloture_detail.html:541
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:498
 msgid "Integrity"
 msgstr "Intégrité"
 
-#: Administration/admin/laboutik.py:1037
+#: Administration/admin/laboutik.py:1573
 msgid "Previous amount"
 msgstr "Montant précédent"
 
-#: Administration/admin/laboutik.py:1044
+#: Administration/admin/laboutik.py:1580
 msgid "New amount"
 msgstr "Nouveau montant"
 
@@ -1530,7 +1643,7 @@ msgstr "Wallet / solde"
 
 #: Administration/admin/products.py:146 laboutik/printing/formatters.py:419
 #: laboutik/printing/formatters.py:516 laboutik/printing/formatters.py:622
-#: laboutik/serializers.py:358 laboutik/views.py:8469
+#: laboutik/serializers.py:358 laboutik/views.py:8541
 msgid "Especes"
 msgstr "Espèces"
 
@@ -1540,12 +1653,12 @@ msgstr "Espèces"
 #: laboutik/templates/laboutik/partial/hx_cloture_rapport.html:21
 #: laboutik/templates/laboutik/partial/hx_recap_en_cours.html:125
 #: laboutik/templates/laboutik/pdf/cloture_rapport_pdf.html:104
-#: laboutik/views.py:133 laboutik/views.py:3263 laboutik/views.py:8473
+#: laboutik/views.py:133 laboutik/views.py:3298 laboutik/views.py:8545
 msgid "Carte bancaire"
 msgstr "Carte bancaire"
 
 #: Administration/admin/products.py:148 laboutik/printing/formatters.py:446
-#: laboutik/serializers.py:360 laboutik/views.py:8477
+#: laboutik/serializers.py:360 laboutik/views.py:8549
 msgid "Cheque"
 msgstr "Chèque"
 
@@ -1901,6 +2014,7 @@ msgid "Please add at least one rate to this product."
 msgstr "Merci d'ajouter au moins un tarif à ce produit."
 
 #: Administration/admin/products.py:883 crowds/views.py:1343
+#: laboutik/models.py:515
 msgid "Archivé"
 msgstr "Archivé"
 
@@ -2016,13 +2130,18 @@ msgstr ""
 msgid ""
 "Warning: the stock unit is 'Pieces' (UN). Weight/volume sales require grams "
 "(GR) or centiliters (CL). Please change the unit in the stock settings."
-msgstr "Attention : l'unité de stock est « Pièces » (UN). Les ventes au poids/volume nécessitent des grammes (GR) ou des centilitres (CL). Veuillez modifier l'unité dans les paramètres de stock."
+msgstr ""
+"Attention : l'unité de stock est « Pièces » (UN). Les ventes au poids/volume "
+"nécessitent des grammes (GR) ou des centilitres (CL). Veuillez modifier "
+"l'unité dans les paramètres de stock."
 
 #: Administration/admin/products.py:1561
 msgid ""
 "Stock automatically created in grams (quantity=0). Remember to add stock via "
 "a reception."
-msgstr "Stock créé automatiquement en grammes (quantité=0). Pensez à ajouter du stock via une réception."
+msgstr ""
+"Stock créé automatiquement en grammes (quantité=0). Pensez à ajouter du "
+"stock via une réception."
 
 #: Administration/admin/products.py:1581 Administration/admin/products.py:1875
 msgid "POS display"
@@ -2040,7 +2159,9 @@ msgstr "Fût (tireuse connectée)"
 msgid ""
 "Stock automatically created in centiliters (quantity=0). Remember to add "
 "stock via a reception."
-msgstr "Stock créé automatiquement en centilitres (quantité=0). Pensez à ajouter du stock via une réception."
+msgstr ""
+"Stock créé automatiquement en centilitres (quantité=0). Pensez à ajouter du "
+"stock via une réception."
 
 #: Administration/admin/products.py:1958
 msgid ""
@@ -2111,7 +2232,9 @@ msgstr ""
 msgid ""
 "\"Local currency & cashless\" was enabled automatically (required by the "
 "POS)."
-msgstr "\"Devise locale & cashless\" a été activée automatiquement (requis par la caisse)."
+msgstr ""
+"\"Devise locale & cashless\" a été activée automatiquement (requis par la "
+"caisse)."
 
 #: Administration/admin_tenant.py:608
 msgid "Cashless server ONLINE"
@@ -2289,7 +2412,7 @@ msgid "Attente de paiement"
 msgstr "Attente de paiement"
 
 #: Administration/admin_tenant.py:1491 BaseBillet/models.py:2903
-#: kiosk/models.py:166
+#: kiosk/models.py:72
 msgid "Canceled"
 msgstr "Annulé"
 
@@ -2359,7 +2482,7 @@ msgstr "Statut de l'adhésion"
 msgid "Payment"
 msgstr "Paiement"
 
-#: Administration/admin_tenant.py:1884 controlvanne/models.py:380
+#: Administration/admin_tenant.py:1884 controlvanne/models.py:420
 msgid "End"
 msgstr "Fin"
 
@@ -2374,8 +2497,8 @@ msgstr "Récurrence"
 
 #: Administration/admin_tenant.py:2042
 #: BaseBillet/templates/fonctionnel/compte/partials/ticket_accordion.html:72
-#: kiosk/models.py:169 laboutik/models.py:622 laboutik/models.py:726
-#: laboutik/models.py:815
+#: kiosk/models.py:75 laboutik/models.py:1003 laboutik/models.py:1107
+#: laboutik/models.py:1196
 msgid "Status"
 msgstr "Statut"
 
@@ -2416,7 +2539,7 @@ msgid "Action bénévoles"
 msgstr "Action bénévoles"
 
 #: Administration/admin_tenant.py:2288 Administration/admin_tenant.py:2293
-#: crowds/models.py:81 laboutik/models.py:634 laboutik/models.py:739
+#: crowds/models.py:81 laboutik/models.py:1015 laboutik/models.py:1120
 msgid "Archived"
 msgstr "Archivé"
 
@@ -2518,7 +2641,7 @@ msgstr ""
 msgid "Sélectionner un moyen de paiement"
 msgstr "Sélectionner un moyen de paiement"
 
-#: Administration/admin_tenant.py:2956 laboutik/models.py:781
+#: Administration/admin_tenant.py:2956 laboutik/models.py:1162
 msgid "Quantity"
 msgstr "Quantité"
 
@@ -2604,7 +2727,7 @@ msgid "Some items failed to cancel/refund: %(errors)s"
 msgstr "Certains articles n'ont pas pu être annulés/remboursés : %(errors)s"
 
 #: Administration/admin_tenant.py:3462 BaseBillet/models.py:1530
-#: BaseBillet/templates/invoice/invoice.html:174 laboutik/models.py:776
+#: BaseBillet/templates/invoice/invoice.html:174 laboutik/models.py:1157
 msgid "Price"
 msgstr "Prix"
 
@@ -2835,7 +2958,7 @@ msgid "Stripe payment"
 msgstr "Paiement Stripe"
 
 #: Administration/importers/lignearticle_exporter.py:29
-#: fedow_core/models.py:531 kiosk/models.py:153
+#: fedow_core/models.py:531 kiosk/models.py:59
 msgid "Carte cashless"
 msgstr "Carte cashless"
 
@@ -2937,7 +3060,7 @@ msgstr "Aucune invitation en attente."
 
 #: Administration/templates/admin/cloture/changelist_before.html:10
 #: Administration/templates/admin/cloture/export_fiscal_form.html:18
-#: laboutik/models.py:1392
+#: laboutik/models.py:1773
 #: laboutik/templates/laboutik/partial/hx_export_fiscal.html:19
 #: laboutik/templates/laboutik/partial/hx_export_fiscal.html:31
 msgid "Fiscal export"
@@ -2947,7 +3070,9 @@ msgstr ""
 #: laboutik/templates/laboutik/partial/hx_export_fiscal.html:23
 msgid ""
 "Generate a signed archive (ZIP) of all POS data for the tax administration."
-msgstr "Génère une archive signée (ZIP) de toutes les données de caisse pour l'administration fiscale."
+msgstr ""
+"Génère une archive signée (ZIP) de toutes les données de caisse pour "
+"l'administration fiscale."
 
 #: Administration/templates/admin/cloture/changelist_before.html:24
 #: laboutik/templates/laboutik/partial/hx_export_fiscal.html:87
@@ -2984,7 +3109,9 @@ msgstr "Export comptable CSV"
 msgid ""
 "Choose the accounting software format, then download the CSV file for this "
 "closure."
-msgstr "Choisissez le format du logiciel comptable, puis téléchargez le fichier CSV de cette clôture."
+msgstr ""
+"Choisissez le format du logiciel comptable, puis téléchargez le fichier CSV "
+"de cette clôture."
 
 #: Administration/templates/admin/cloture/export_csv_comptable_detail_form.html:20
 #: Administration/templates/admin/cloture/export_csv_comptable_form.html:60
@@ -3041,7 +3168,9 @@ msgstr "Date de fin"
 msgid ""
 "Generates a CSV file formatted for the chosen accounting software (columns, "
 "separator, encoding)."
-msgstr "Génère un fichier CSV formaté pour le logiciel comptable choisi (colonnes, séparateur, encodage)."
+msgstr ""
+"Génère un fichier CSV formaté pour le logiciel comptable choisi (colonnes, "
+"séparateur, encodage)."
 
 #: Administration/templates/admin/cloture/export_fec_form.html:18
 msgid "FEC export"
@@ -3051,7 +3180,9 @@ msgstr ""
 msgid ""
 "FEC format: 18 tab-separated columns, accepted by PennyLane, Odoo, EBP "
 "Hubbix, Paheko, Sage."
-msgstr "Format FEC : 18 colonnes séparées par des tabulations, accepté par PennyLane, Odoo, EBP Hubbix, Paheko, Sage."
+msgstr ""
+"Format FEC : 18 colonnes séparées par des tabulations, accepté par "
+"PennyLane, Odoo, EBP Hubbix, Paheko, Sage."
 
 #: Administration/templates/admin/cloture/export_fec_form.html:71
 msgid "Download FEC"
@@ -3061,7 +3192,9 @@ msgstr ""
 msgid ""
 "Leave empty to export all data. The archive contains CSV, JSON, and HMAC-"
 "SHA256 integrity hashes."
-msgstr "Laissez vide pour exporter toutes les données. L'archive contient des fichiers CSV, JSON, et des hachages d'intégrité HMAC-SHA256."
+msgstr ""
+"Laissez vide pour exporter toutes les données. L'archive contient des "
+"fichiers CSV, JSON, et des hachages d'intégrité HMAC-SHA256."
 
 #: Administration/templates/admin/cloture/export_fiscal_form.html:71
 #: laboutik/templates/laboutik/partial/hx_export_fiscal.html:73
@@ -3082,7 +3215,7 @@ msgstr ""
 #: Administration/templates/admin/cloture/rapport_before.html:221
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:294
 #: Administration/templates/admin/cloture_detail.html:213
-#: laboutik/excel_export.py:135 laboutik/models.py:1365
+#: laboutik/excel_export.py:135 laboutik/models.py:1746
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:191
 msgid "Cash withdrawals"
 msgstr "Retraits d'espèces"
@@ -3125,9 +3258,9 @@ msgstr "Opérateurs"
 #: Administration/templates/admin/cloture/rapport_before.html:456
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:529
 #: Administration/templates/admin/cloture_detail.html:450
-#: laboutik/models.py:693 laboutik/models.py:872 laboutik/models.py:1074
-#: laboutik/models.py:1244 laboutik/models.py:1309 laboutik/models.py:1425
-#: laboutik/models.py:1506
+#: laboutik/models.py:1074 laboutik/models.py:1253 laboutik/models.py:1455
+#: laboutik/models.py:1625 laboutik/models.py:1690 laboutik/models.py:1806
+#: laboutik/models.py:1887
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:412
 msgid "Operator"
 msgstr "Opérateur"
@@ -3232,7 +3365,9 @@ msgstr ""
 msgid ""
 "This report is computed in real time and is not an accounting document. It "
 "does not create a closure."
-msgstr "Ce rapport est calculé en temps réel et n'est pas un document comptable. Il ne crée pas de clôture."
+msgstr ""
+"Ce rapport est calculé en temps réel et n'est pas un document comptable. Il "
+"ne crée pas de clôture."
 
 #: Administration/templates/admin/cloture_detail.html:125
 #: laboutik/templates/laboutik/partial/hx_recap_en_cours.html:392
@@ -3252,7 +3387,9 @@ msgstr "Charger un plan comptable par défaut"
 msgid ""
 "Pre-fill accounting codes for your activity type. Existing accounts will not "
 "be overwritten."
-msgstr "Pré-remplir les codes comptables pour votre type d'activité. Les comptes existants ne seront pas écrasés."
+msgstr ""
+"Pré-remplir les codes comptables pour votre type d'activité. Les comptes "
+"existants ne seront pas écrasés."
 
 #: Administration/templates/admin/comptable/changelist_before.html:30
 msgid "Bar / Restaurant"
@@ -3580,7 +3717,7 @@ msgstr "Aide : comprendre les actions"
 #: inventaire/models.py:24 inventaire/serializers.py:88
 #: laboutik/templates/laboutik/partial/article_panel_stock.html:116
 #: laboutik/templates/laboutik/partial/article_panel_stock.html:165
-#: laboutik/views.py:9511
+#: laboutik/views.py:9583
 msgid "Réception"
 msgstr "Réception"
 
@@ -3594,7 +3731,7 @@ msgstr ""
 #: Administration/templates/admin/inventaire/stock_actions_partial.html:105
 #: inventaire/models.py:25 inventaire/serializers.py:89
 #: laboutik/templates/laboutik/partial/article_panel_stock.html:173
-#: laboutik/views.py:9513
+#: laboutik/views.py:9585
 msgid "Ajustement"
 msgstr ""
 
@@ -3851,7 +3988,7 @@ msgstr ""
 
 #: Administration/templates/admin/membership/partials/ajouter_paiement_form.html:99
 #: Administration/templates/admin/membership/partials/ajouter_paiement_success.html:23
-#: comptabilite/models.py:168 laboutik/views.py:3584
+#: comptabilite/models.py:168 laboutik/views.py:3619
 msgid "Ventes"
 msgstr "Ventes"
 
@@ -4499,7 +4636,7 @@ msgstr "Code postal"
 msgid "Date of birth"
 msgstr "Date de naissance"
 
-#: AuthBillet/models.py:149 AuthBillet/models.py:387
+#: AuthBillet/models.py:149 AuthBillet/models.py:387 laboutik/models.py:571
 msgid "Terminal"
 msgstr "Terminal"
 
@@ -4511,26 +4648,27 @@ msgstr "Android"
 msgid "Human"
 msgstr "Humain·e"
 
-#: AuthBillet/models.py:164 discovery/models.py:58
+#: AuthBillet/models.py:164 discovery/models.py:59
 msgid "LaBoutik POS"
 msgstr "Caisse LaBoutik"
 
-#: AuthBillet/models.py:165 BaseBillet/models.py:78 discovery/models.py:59
-#: laboutik/models.py:410
+#: AuthBillet/models.py:165 BaseBillet/models.py:78 discovery/models.py:60
+#: laboutik/models.py:796
 msgid "Connected tap"
-msgstr "Robinet connecté"
+msgstr "Tireuse connectée"
 
-#: AuthBillet/models.py:166 discovery/models.py:60
+#: AuthBillet/models.py:166 discovery/models.py:61
 msgid "Kiosk / self-service"
 msgstr ""
 
-#: AuthBillet/models.py:173 discovery/models.py:63
+#: AuthBillet/models.py:173 discovery/models.py:64
 msgid "Terminal role"
 msgstr "Rôle du terminal"
 
 #: AuthBillet/models.py:174
 msgid "Only set for espece=TE. Drives permission checks."
-msgstr "Défini uniquement si espece=TE. Pilote les vérifications de permissions."
+msgstr ""
+"Défini uniquement si espece=TE. Pilote les vérifications de permissions."
 
 #: AuthBillet/models.py:179
 msgid "Public"
@@ -4571,6 +4709,10 @@ msgstr "Peut administrer des inititatives dans la section 'Crowds'"
 #: AuthBillet/models.py:253
 msgid "Parent user"
 msgstr "Utilisateur·ice parent·e"
+
+#: AuthBillet/models.py:388
+msgid "Terminals"
+msgstr "Terminaux"
 
 #: AuthBillet/otp_service.py:105
 #, python-format
@@ -4869,7 +5011,7 @@ msgstr "Longitude"
 msgid "GPS coordinate: longitude."
 msgstr "Longitude GPS."
 
-#: BaseBillet/models.py:289 laboutik/models.py:733
+#: BaseBillet/models.py:289 laboutik/models.py:1114
 msgid "Comment"
 msgstr "Commentaire"
 
@@ -5000,15 +5142,15 @@ msgstr "Module newsletter"
 msgid "No email"
 msgstr "Pas d'email"
 
-#: BaseBillet/models.py:603 laboutik/models.py:109 laboutik/models.py:930
+#: BaseBillet/models.py:603 laboutik/models.py:109 laboutik/models.py:1311
 msgid "Daily"
 msgstr ""
 
-#: BaseBillet/models.py:604 laboutik/models.py:110 laboutik/models.py:931
+#: BaseBillet/models.py:604 laboutik/models.py:110 laboutik/models.py:1312
 msgid "Weekly"
 msgstr "Hebdomadaire"
 
-#: BaseBillet/models.py:605 laboutik/models.py:111 laboutik/models.py:932
+#: BaseBillet/models.py:605 laboutik/models.py:111 laboutik/models.py:1313
 msgid "Monthly"
 msgstr "Mensuel"
 
@@ -5048,11 +5190,11 @@ msgstr "Activez la gestion des stocks pour les produits de caisse."
 
 #: BaseBillet/models.py:643
 msgid "Connected tap module"
-msgstr "Module de robinetterie connectée"
+msgstr "Module de tireuse connectée"
 
 #: BaseBillet/models.py:644
 msgid "Enable connected beer tap management (controlvanne)."
-msgstr "Activez la gestion des robinets à bière connectés (controlvanne)."
+msgstr "Activez la gestion des tireuses connectées (controlvanne)."
 
 #: BaseBillet/models.py:648
 msgid "Booking module"
@@ -5229,7 +5371,7 @@ msgstr "Taux TVA"
 
 #: BaseBillet/models.py:971 BaseBillet/models.py:1068 crowds/models.py:59
 #: crowds/models.py:72 crowds/models.py:349 laboutik/models.py:268
-#: laboutik/models.py:373 laboutik/models.py:565 laboutik/models.py:595
+#: laboutik/models.py:759 laboutik/models.py:946 laboutik/models.py:976
 msgid "Name"
 msgstr "Nom"
 
@@ -5237,7 +5379,7 @@ msgstr "Nom"
 msgid "Category name displayed on the POS interface."
 msgstr "Nom de la catégorie affiché sur l'interface du point de vente."
 
-#: BaseBillet/models.py:979 laboutik/models.py:379 laboutik/models.py:571
+#: BaseBillet/models.py:979 laboutik/models.py:765 laboutik/models.py:952
 msgid "Icon name (e.g. Bootstrap Icons class)."
 msgstr ""
 
@@ -5250,11 +5392,11 @@ msgid "Hexadecimal color code for background (e.g. #000000)."
 msgstr "Code couleur hexadécimal pour l'arrière-plan (ex. #000000)."
 
 #: BaseBillet/models.py:997 BaseBillet/models.py:1187 BaseBillet/models.py:1532
-#: BaseBillet/models.py:4238 laboutik/models.py:458 laboutik/models.py:606
+#: BaseBillet/models.py:4238 laboutik/models.py:844 laboutik/models.py:987
 msgid "Display order"
 msgstr "Ordre d'affichage"
 
-#: BaseBillet/models.py:998 laboutik/models.py:459 laboutik/models.py:607
+#: BaseBillet/models.py:998 laboutik/models.py:845 laboutik/models.py:988
 msgid "Lower values are displayed first."
 msgstr "Les valeurs les plus basses sont affichées en premier."
 
@@ -5278,9 +5420,12 @@ msgstr "Imprimante de commande"
 msgid ""
 "Printer for order tickets (kitchen, bar). When an order contains products "
 "from this category, the ticket is sent to this printer."
-msgstr "Imprimante pour les tickets de commande (cuisine, bar). Quand une commande contient des produits de cette catégorie, le ticket est envoyé à cette imprimante."
+msgstr ""
+"Imprimante pour les tickets de commande (cuisine, bar). Quand une commande "
+"contient des produits de cette catégorie, le ticket est envoyé à cette "
+"imprimante."
 
-#: BaseBillet/models.py:1046 laboutik/models.py:1688
+#: BaseBillet/models.py:1046 laboutik/models.py:2069
 msgid "Accounting code"
 msgstr "Code comptable"
 
@@ -5429,7 +5574,9 @@ msgstr "Virement bancaire reçu"
 msgid ""
 "Payment/action method at the cash register. Leave empty if this product is "
 "not sold at the POS."
-msgstr "Mode de paiement/action à la caisse. Laisser vide si ce produit n'est pas vendu en caisse."
+msgstr ""
+"Mode de paiement/action à la caisse. Laisser vide si ce produit n'est pas "
+"vendu en caisse."
 
 #: BaseBillet/models.py:1280
 msgid "POS category"
@@ -5445,7 +5592,8 @@ msgstr "Couleur hexadécimale pour le texte du bouton produit (ex. #FFFFFF)."
 
 #: BaseBillet/models.py:1296
 msgid "Hexadecimal color for the product button background (e.g. #3B82F6)."
-msgstr "Couleur hexadécimale pour l'arrière-plan du bouton produit (ex. #3B82F6)."
+msgstr ""
+"Couleur hexadécimale pour l'arrière-plan du bouton produit (ex. #3B82F6)."
 
 #: BaseBillet/models.py:1303
 msgid "Split payment allowed"
@@ -5462,11 +5610,14 @@ msgstr ""
 #: BaseBillet/models.py:1312
 msgid ""
 "An NFC card must be scanned before this product can be added to the cart."
-msgstr "Une carte NFC doit être scannée avant que ce produit puisse être ajouté au panier."
+msgstr ""
+"Une carte NFC doit être scannée avant que ce produit puisse être ajouté au "
+"panier."
 
 #: BaseBillet/models.py:1320
 msgid "Icon name for the POS button (e.g. Bootstrap Icons class)."
-msgstr "Nom de l'icône pour le bouton de la caisse (ex. classe Bootstrap Icons)."
+msgstr ""
+"Nom de l'icône pour le bouton de la caisse (ex. classe Bootstrap Icons)."
 
 #: BaseBillet/models.py:1329
 msgid "Purchase price (cents)"
@@ -5492,7 +5643,7 @@ msgid ""
 msgstr "Asset Fedow lié à ce produit de recharge."
 
 #: BaseBillet/models.py:1372 BaseBillet/models.py:1813
-#: BaseBillet/models.py:3854 laboutik/models.py:482
+#: BaseBillet/models.py:3854 laboutik/models.py:863
 msgid "Products"
 msgstr "Produits"
 
@@ -5532,7 +5683,7 @@ msgstr "Pourcentage de remise à appliquer (0-100)."
 msgid "Product to which this discount coupon applies."
 msgstr "Produit auquel s'applique ce bon de réduction."
 
-#: BaseBillet/models.py:1439 laboutik/models.py:341 laboutik/models.py:1676
+#: BaseBillet/models.py:1439 laboutik/models.py:341 laboutik/models.py:2057
 msgid "Active"
 msgstr "Actif"
 
@@ -5556,7 +5707,7 @@ msgstr "Nombre d'utilisations"
 msgid "Number of times this code has been used."
 msgstr "Nombre de fois où ce code a été utilisé."
 
-#: BaseBillet/models.py:1454 laboutik/models.py:542 laboutik/models.py:709
+#: BaseBillet/models.py:1454 laboutik/models.py:923 laboutik/models.py:1090
 msgid "Creation date"
 msgstr "Date de création"
 
@@ -5627,7 +5778,10 @@ msgid ""
 "If checked, the cashier enters the weight or volume at each sale. The price "
 "is per kg (grams) or per liter (centiliters). Stock is decremented by the "
 "exact quantity entered."
-msgstr "Si coché, le caissier saisit le poids ou le volume à chaque vente. Le prix est au kg (grammes) ou au litre (centilitres). Le stock est décrémenté de la quantité exacte saisie."
+msgstr ""
+"Si coché, le caissier saisit le poids ou le volume à chaque vente. Le prix "
+"est au kg (grammes) ou au litre (centilitres). Le stock est décrémenté de la "
+"quantité exacte saisie."
 
 #: BaseBillet/models.py:1572
 msgid "Contenance"
@@ -5639,13 +5793,20 @@ msgid ""
 "by unit but decrementing stock by weight/volume. E.g.: pint=50 (cl), half=25 "
 "(cl), portion=150 (g). Empty = 1 unit. Incompatible with 'Sale by weight/"
 "volume' (where the cashier enters the exact quantity)."
-msgstr "Quantité de stock consommée par unité vendue (en unité de stock). À utiliser quand on vend à l'unité mais qu'on décrémente le stock au poids/volume. Ex. : pinte=50 (cl), demi=25 (cl), portion=150 (g). Vide = 1 unité. Incompatible avec 'Vente au poids/volume' (où le caissier saisit la quantité exacte)."
+msgstr ""
+"Quantité de stock consommée par unité vendue (en unité de stock). À utiliser "
+"quand on vend à l'unité mais qu'on décrémente le stock au poids/volume. "
+"Ex. : pinte=50 (cl), demi=25 (cl), portion=150 (g). Vide = 1 unité. "
+"Incompatible avec 'Vente au poids/volume' (où le caissier saisit la quantité "
+"exacte)."
 
 #: BaseBillet/models.py:1591
 msgid ""
 "If set, the price is in asset units (tokens). If empty, the price is in "
 "euros."
-msgstr "Si renseigné, le prix est en unités d'asset (jetons). Si vide, le prix est en euros."
+msgstr ""
+"Si renseigné, le prix est en unités d'asset (jetons). Si vide, le prix est "
+"en euros."
 
 #: BaseBillet/models.py:1604
 msgid "Non-fiduciary price"
@@ -5655,7 +5816,9 @@ msgstr ""
 msgid ""
 "If checked, the price is in tokens (time, loyalty, etc.) instead of euros. "
 "You must select the asset below."
-msgstr "Si coché, le prix est en jetons (temps, fidélité, etc.) au lieu d'euros. Vous devez sélectionner l'asset ci-dessous."
+msgstr ""
+"Si coché, le prix est en jetons (temps, fidélité, etc.) au lieu d'euros. "
+"Vous devez sélectionner l'asset ci-dessous."
 
 #: BaseBillet/models.py:1667
 msgid "Subscriptions required"
@@ -6000,8 +6163,8 @@ msgstr ""
 "L'utilisateur·ice pourra sélectionner une date."
 
 #: BaseBillet/models.py:2499 BaseBillet/models.py:3047
-#: BaseBillet/models.py:3301 BaseBillet/models.py:3584 laboutik/models.py:722
-#: laboutik/models.py:811
+#: BaseBillet/models.py:3301 BaseBillet/models.py:3584 laboutik/models.py:1103
+#: laboutik/models.py:1192
 msgid "Cancelled"
 msgstr "Annulé"
 
@@ -6141,7 +6304,7 @@ msgstr "A expiré"
 msgid "Failed"
 msgstr "Échoué"
 
-#: BaseBillet/models.py:3044 laboutik/models.py:721
+#: BaseBillet/models.py:3044 laboutik/models.py:1102
 msgid "Paid"
 msgstr "Payé"
 
@@ -6251,7 +6414,7 @@ msgstr "Identifiant de transaction"
 msgid "Groups all lines from the same payment for reprinting."
 msgstr "Regroupe toutes les lignes d'un même paiement pour la réimpression."
 
-#: BaseBillet/models.py:3375 laboutik/models.py:1448
+#: BaseBillet/models.py:3375 laboutik/models.py:1829
 msgid "HMAC hash"
 msgstr ""
 
@@ -6288,7 +6451,9 @@ msgstr "Quantité en poids/volume"
 #: BaseBillet/models.py:3417
 msgid ""
 "Amount entered by cashier in stock unit (g or cl). Null for standard sales."
-msgstr "Montant saisi par le caissier dans l'unité de stock (g ou cl). Vide pour les ventes standards."
+msgstr ""
+"Montant saisi par le caissier dans l'unité de stock (g ou cl). Vide pour les "
+"ventes standards."
 
 #: BaseBillet/models.py:3494
 msgid "No Stripe send"
@@ -8271,7 +8436,7 @@ msgid "Last transaction"
 msgstr "Dernière transaction"
 
 #: BaseBillet/templates/fonctionnel/compte/partials/token_table.html:35
-#: controlvanne/admin.py:81
+#: controlvanne/admin.py:82
 msgid "All"
 msgstr "Tous·tes"
 
@@ -8468,7 +8633,8 @@ msgid "Ajouter un évènement"
 msgstr "Ajouter un événement"
 
 #: BaseBillet/templates/fonctionnel/event_wizard/_events_inner.html:114
-#: fedow_core/models.py:718 kiosk/models.py:24 kiosk/models.py:66
+#: fedow_core/models.py:718 laboutik/models.py:368 laboutik/models.py:447
+#: laboutik/models.py:611
 #: laboutik/templates/laboutik/partial/hx_formulaire_identification_client.html:62
 #: laboutik/templates/laboutik/partial/hx_formulaire_identification_client.html:64
 #: onboard/templates/onboard/partials/event_row_form.html:64
@@ -9663,7 +9829,7 @@ msgstr "Indian/Reunion"
 msgid "Europe/Paris"
 msgstr "Europe/Paris"
 
-#: MetaBillet/models.py:224 discovery/models.py:36 fedow_core/models.py:639
+#: MetaBillet/models.py:224 discovery/models.py:37 fedow_core/models.py:639
 #: seo/models.py:55
 msgid "Tenant"
 msgstr "Tenant"
@@ -9888,15 +10054,15 @@ msgid ""
 "ils doivent concorder."
 msgstr ""
 
-#: TiBillet/settings.py:568
+#: TiBillet/settings.py:586
 msgid "TiBillet / Lèspass admin panel"
 msgstr "Panneau d'administration"
 
-#: TiBillet/settings.py:572
+#: TiBillet/settings.py:590
 msgid "TiBillet"
 msgstr "TiBillet"
 
-#: TiBillet/settings.py:582
+#: TiBillet/settings.py:600
 msgid "Forms"
 msgstr "Formulaires"
 
@@ -10153,6 +10319,7 @@ msgstr "Type de compte"
 
 #: comptabilite/models.py:185 fedow_core/models.py:160
 #: fedow_public/templates/fedow_public/retrieve_bank_deposits.html:32
+#: laboutik/models.py:671
 msgid "Actif"
 msgstr "Action"
 
@@ -10182,7 +10349,7 @@ msgstr "Mappings moyens de paiement"
 #: laboutik/templates/laboutik/partial/hx_recap_en_cours.html:353
 #: laboutik/templates/laboutik/partial/hx_sortie_de_caisse.html:100
 #: laboutik/templates/laboutik/pdf/cloture_rapport_pdf.html:100
-#: laboutik/views.py:132 laboutik/views.py:3262
+#: laboutik/views.py:132 laboutik/views.py:3297
 msgid "Espèces"
 msgstr ""
 
@@ -10431,277 +10598,293 @@ msgid ""
 "            "
 msgstr ""
 
-#: controlvanne/admin.py:171
+#: controlvanne/admin.py:172
 msgid "Card (tag_id)"
 msgstr ""
 
-#: controlvanne/admin.py:299 discovery/admin.py:75 discovery/admin.py:84
-#: discovery/models.py:43
-msgid "PIN code"
-msgstr "Code PIN"
+#: controlvanne/admin.py:258
+msgid "Raspberry Pi"
+msgstr ""
 
-#: controlvanne/admin.py:308
-msgid "Paired"
-msgstr "Appairé"
+#: controlvanne/admin.py:268
+msgid "En attente — ouvrir pour le code PIN"
+msgstr ""
 
 #: controlvanne/admin.py:311
+msgid "Code PIN du Raspberry Pi"
+msgstr ""
+
+#: controlvanne/admin.py:332
+msgid "Raspberry Pi appairé"
+msgstr ""
+
+#: controlvanne/admin.py:339
+msgid "Code PIN expiré — le régénérer depuis « Terminaux »"
+msgstr ""
+
+#: controlvanne/admin.py:349
 #: controlvanne/templates/controlvanne/partial/kiosk_card.html:95
 msgid "Price/Liter"
 msgstr "Prix/Litre"
 
-#: controlvanne/admin.py:320
+#: controlvanne/admin.py:358
 msgid "Remaining (cl)"
 msgstr "Restant (cl)"
 
-#: controlvanne/admin.py:381 controlvanne/admin.py:409
-#: controlvanne/admin.py:448 controlvanne/admin.py:522
-#: controlvanne/admin.py:570 controlvanne/admin.py:598
-#: controlvanne/admin.py:664
+#: controlvanne/admin.py:419 controlvanne/admin.py:447
+#: controlvanne/admin.py:486 controlvanne/admin.py:560
+#: controlvanne/admin.py:608 controlvanne/admin.py:636
+#: controlvanne/admin.py:702
 msgid "Volume (cl)"
 msgstr ""
 
-#: controlvanne/admin.py:405 controlvanne/admin.py:446
-#: controlvanne/admin.py:594 controlvanne/models.py:291
-#: controlvanne/models.py:341
+#: controlvanne/admin.py:443 controlvanne/admin.py:484
+#: controlvanne/admin.py:632 controlvanne/models.py:331
+#: controlvanne/models.py:381
 msgid "Tap"
 msgstr "Tireuse"
 
 # DEPRECATED 2.0 old ui
-#: controlvanne/admin.py:406 controlvanne/admin.py:444
-#: controlvanne/admin.py:595 controlvanne/models.py:315
+#: controlvanne/admin.py:444 controlvanne/admin.py:482
+#: controlvanne/admin.py:633 controlvanne/models.py:355
 msgid "Card UID"
 msgstr "UID de la carte"
 
-#: controlvanne/admin.py:407 controlvanne/admin.py:445
-#: controlvanne/models.py:328
+#: controlvanne/admin.py:445 controlvanne/admin.py:483
+#: controlvanne/models.py:368
 msgid "Card name"
 msgstr "Nom de la carte"
 
-#: controlvanne/admin.py:408 controlvanne/admin.py:447
+#: controlvanne/admin.py:446 controlvanne/admin.py:485
 msgid "Beverage"
 msgstr ""
 
-#: controlvanne/admin.py:410 controlvanne/admin.py:449
-#: controlvanne/admin.py:599 controlvanne/admin.py:670
-#: controlvanne/admin.py:752
+#: controlvanne/admin.py:448 controlvanne/admin.py:487
+#: controlvanne/admin.py:637 controlvanne/admin.py:708
+#: controlvanne/admin.py:790
 msgid "Duration (s)"
 msgstr "Durée (s)"
 
-#: controlvanne/admin.py:411 controlvanne/admin.py:450
-#: controlvanne/models.py:365
+#: controlvanne/admin.py:449 controlvanne/admin.py:488
+#: controlvanne/models.py:405
 msgid "Sale line"
 msgstr ""
 
-#: controlvanne/admin.py:430 controlvanne/admin.py:469
-#: controlvanne/admin.py:623
+#: controlvanne/admin.py:468 controlvanne/admin.py:507
+#: controlvanne/admin.py:661
 msgid "Export CSV"
 msgstr ""
 
-#: controlvanne/admin.py:596 controlvanne/models.py:153
-#: controlvanne/models.py:434
+#: controlvanne/admin.py:634 controlvanne/models.py:176
+#: controlvanne/models.py:474
 msgid "Maintenance card"
 msgstr "Carte de maintenance"
 
-#: controlvanne/admin.py:597 controlvanne/models.py:145
+#: controlvanne/admin.py:635 controlvanne/models.py:168
 msgid "Cleaning product"
 msgstr "Produit de nettoyage"
 
-#: controlvanne/admin.py:619 laboutik/templates/cotton/bt/paiement.html:23
+#: controlvanne/admin.py:657 laboutik/templates/cotton/bt/paiement.html:23
 #: laboutik/templates/laboutik/partial/hx_recap_en_cours.html:143
 #: laboutik/templates/laboutik/partial/hx_recapitulatif_client.html:61
 msgid "TOTAL"
 msgstr ""
 
-#: controlvanne/admin.py:725
+#: controlvanne/admin.py:763
 msgid "Django (cl)"
 msgstr ""
 
-#: controlvanne/admin.py:731
+#: controlvanne/admin.py:769
 msgid "Glass (cl)"
 msgstr ""
 
-#: controlvanne/admin.py:739
+#: controlvanne/admin.py:777
 msgid "Deviation"
 msgstr "Déviation"
 
-#: controlvanne/models.py:52 controlvanne/models.py:53
-#: controlvanne/models.py:56
+#: controlvanne/models.py:53 controlvanne/models.py:54
+#: controlvanne/models.py:57
 msgid "Tap module configuration"
 msgstr "Configuration du module tireuse"
 
-#: controlvanne/models.py:78
+#: controlvanne/models.py:96 laboutik/models.py:479
+msgid "Compte du terminal"
+msgstr "Compte du terminal"
+
+#: controlvanne/models.py:101
 msgid "Tap API Key"
 msgstr "Clé API tireuse"
 
-#: controlvanne/models.py:79
+#: controlvanne/models.py:102
 msgid "Tap API Keys"
 msgstr "Clés API tireuse"
 
-#: controlvanne/models.py:98
+#: controlvanne/models.py:121
 msgid "Model"
 msgstr ""
 
-#: controlvanne/models.py:99
+#: controlvanne/models.py:122
 msgid "Flow meter model (e.g. YF-S201, FS300A)"
 msgstr "Modèle de débitmètre (ex : YF-S201, FS300A)"
 
-#: controlvanne/models.py:103
+#: controlvanne/models.py:126
 msgid "Calibration factor"
 msgstr "Facteur d'étalonnage"
 
-#: controlvanne/models.py:104
+#: controlvanne/models.py:127
 msgid "Calibration factor (Hz per L/min) — 1 L = factor × 60 pulses"
 msgstr ""
 
-#: controlvanne/models.py:108 controlvanne/models.py:219
+#: controlvanne/models.py:131 controlvanne/models.py:242
 msgid "Flow meter"
 msgstr "Débitmètre"
 
-#: controlvanne/models.py:133 controlvanne/models.py:323 laboutik/models.py:522
+#: controlvanne/models.py:156 controlvanne/models.py:363 laboutik/models.py:903
 msgid "NFC card"
 msgstr "Carte NFC"
 
-#: controlvanne/models.py:139
+#: controlvanne/models.py:162
 msgid "Authorized taps"
 msgstr "Badgeages autorisés"
 
-#: controlvanne/models.py:140
+#: controlvanne/models.py:163
 msgid "Leave empty for all taps."
 msgstr "Laissez vide pour toutes les tireuses."
 
-#: controlvanne/models.py:149 controlvanne/models.py:187
+#: controlvanne/models.py:172 controlvanne/models.py:210
 msgid "Notes"
 msgstr "Notes"
 
-#: controlvanne/models.py:177
+#: controlvanne/models.py:200
 msgid "Tap name"
 msgstr "Nom de la tireuse"
 
-#: controlvanne/models.py:178
+#: controlvanne/models.py:201
 msgid "Display name: e.g. 'Beer', 'Soft drink'"
 msgstr ""
 
-#: controlvanne/models.py:182
+#: controlvanne/models.py:205
 msgid "In service"
 msgstr "En service"
 
-#: controlvanne/models.py:199
+#: controlvanne/models.py:222
 msgid "POS linked to this tap (auto-created or manually assigned)."
-msgstr "Caisse liée à cette tireuse (créée automatiquement ou assignée manuellement)."
+msgstr ""
+"Caisse liée à cette tireuse (créée automatiquement ou assignée manuellement)."
 
-#: controlvanne/models.py:208
+#: controlvanne/models.py:231
 msgid "Active keg"
 msgstr "Fût actif"
 
-#: controlvanne/models.py:210
+#: controlvanne/models.py:233
 msgid "Product of type FUT currently on this tap."
-msgstr "Produit de type FUT actuellement sur ce robinet."
+msgstr "Produit de type FUT actuellement sur cette tireuse."
 
-#: controlvanne/models.py:220
+#: controlvanne/models.py:243
 msgid "Associated flow meter (determines calibration factor)."
 msgstr ""
 
-#: controlvanne/models.py:229 discovery/models.py:81
-msgid "Pairing device"
-msgstr "Dispositif d'appairage"
+#: controlvanne/models.py:269
+msgid "Terminal (Raspberry Pi)"
+msgstr "Terminal (Raspberry Pi)"
 
-#: controlvanne/models.py:230
-msgid "Raspberry Pi or ESP32 controlling this tap."
-msgstr "Raspberry Pi ou ESP32 contrôlant cette tireuse."
+#: controlvanne/models.py:270
+msgid "Le Raspberry Pi qui pilote cette tireuse."
+msgstr ""
 
-#: controlvanne/models.py:237
+#: controlvanne/models.py:277
 msgid "Unlimited reservoir"
 msgstr "Réservoir illimité"
 
-#: controlvanne/models.py:238
+#: controlvanne/models.py:278
 msgid "If checked, the empty-keg check is bypassed (no volume tracking)."
 msgstr "Si coché, le contrôle de fût vide est ignoré (pas de suivi de volume)."
 
-#: controlvanne/models.py:244
+#: controlvanne/models.py:284
 msgid "Remaining volume"
 msgstr "Volume restant"
 
-#: controlvanne/models.py:245
+#: controlvanne/models.py:285
 msgid "Current volume in ml (decremented in real time). Ignored if unlimited."
 msgstr "Volume actuel en ml (décrémenté en temps réel). Ignoré si illimité."
 
-#: controlvanne/models.py:329
+#: controlvanne/models.py:369
 msgid "Copy of the card label at session start."
 msgstr "Copie du libellé de la carte au début de la session."
 
-#: controlvanne/models.py:333
+#: controlvanne/models.py:373
 msgid "Authorized"
 msgstr "Autorisé"
 
-#: controlvanne/models.py:346
+#: controlvanne/models.py:386
 msgid "Beverage name"
 msgstr "Nom de la boisson"
 
-#: controlvanne/models.py:347
+#: controlvanne/models.py:387
 msgid "Copy of the liquid name at session start."
 msgstr "Copie du nom du liquide au début de la session."
 
-#: controlvanne/models.py:353
+#: controlvanne/models.py:393
 msgid "Allowed ml"
 msgstr ""
 
-#: controlvanne/models.py:354
+#: controlvanne/models.py:394
 msgid "Maximum volume allowed for this session (ml)."
 msgstr "Volume maximum autorisé pour cette session (ml)."
 
-#: controlvanne/models.py:366
+#: controlvanne/models.py:406
 msgid "POS sale line created for this session."
 msgstr "Ligne de vente caisse créée pour cette session."
 
-#: controlvanne/models.py:374
+#: controlvanne/models.py:414
 msgid "Start"
 msgstr ""
 
-#: controlvanne/models.py:389
+#: controlvanne/models.py:429
 msgid "Volume start (ml)"
 msgstr ""
 
-#: controlvanne/models.py:395
+#: controlvanne/models.py:435
 msgid "Volume end (ml)"
 msgstr ""
 
-#: controlvanne/models.py:401
+#: controlvanne/models.py:441
 msgid "Volume served (ml)"
 msgstr ""
 
-#: controlvanne/models.py:407
+#: controlvanne/models.py:447
 msgid "Last volume (ml)"
 msgstr ""
 
-#: controlvanne/models.py:414
+#: controlvanne/models.py:454
 msgid "Maintenance session"
 msgstr "Session de maintenance"
 
-#: controlvanne/models.py:418 controlvanne/models.py:498
+#: controlvanne/models.py:458 controlvanne/models.py:538
 msgid "Calibration session"
 msgstr "Session d'étalonnage"
 
-#: controlvanne/models.py:425
+#: controlvanne/models.py:465
 msgid "Actual volume (ml)"
 msgstr ""
 
-#: controlvanne/models.py:426
+#: controlvanne/models.py:466
 msgid "Volume physically measured in a graduated glass."
 msgstr "Volume mesuré physiquement dans un verre gradué."
 
-#: controlvanne/models.py:439
+#: controlvanne/models.py:479
 msgid "Cleaning product used"
 msgstr "Produit de nettoyage utilisé"
 
-#: controlvanne/models.py:447
+#: controlvanne/models.py:487
 msgid "Last message"
 msgstr "Dernier message"
 
-#: controlvanne/models.py:452
+#: controlvanne/models.py:492
 msgid "Session"
 msgstr "Session"
 
-#: controlvanne/models.py:499
+#: controlvanne/models.py:539
 msgid "Calibration sessions"
 msgstr "Sessions d'étalonnage"
 
@@ -10804,7 +10987,7 @@ msgstr "Autorisé :"
 
 #: controlvanne/templates/controlvanne/kiosk_list.html:8
 msgid "All taps"
-msgstr "Tous les robinets"
+msgstr "Toutes les tireuses"
 
 #: controlvanne/templates/controlvanne/kiosk_list.html:19
 msgid "No tap configured."
@@ -10840,20 +11023,20 @@ msgstr "Solde :"
 msgid "Waiting..."
 msgstr "En attente..."
 
-#: controlvanne/viewsets.py:1022 laboutik/views.py:241
+#: controlvanne/viewsets.py:1022 laboutik/views.py:245
 msgid "Carte client 1"
 msgstr "Carte client 1"
 
-#: controlvanne/viewsets.py:1023 laboutik/views.py:242
+#: controlvanne/viewsets.py:1023 laboutik/views.py:246
 msgid "Carte client 2"
 msgstr "Carte client 2"
 
-#: controlvanne/viewsets.py:1024 laboutik/views.py:243
+#: controlvanne/viewsets.py:1024 laboutik/views.py:247
 msgid "Carte client 3"
 msgstr "Carte client 3"
 
-#: controlvanne/viewsets.py:1025 laboutik/views.py:244 laboutik/views.py:961
-#: laboutik/views.py:5998 laboutik/views.py:6655 laboutik/views.py:7995
+#: controlvanne/viewsets.py:1025 laboutik/views.py:248 laboutik/views.py:991
+#: laboutik/views.py:6069 laboutik/views.py:6726 laboutik/views.py:8066
 msgid "Carte inconnue"
 msgstr "Carte inconnue"
 
@@ -10965,7 +11148,7 @@ msgid "Short description for the cards view and social card."
 msgstr ""
 "Description courte pour la vue des cartes et la carte de partage social."
 
-#: crowds/models.py:78 discovery/models.py:69
+#: crowds/models.py:78 discovery/models.py:95
 msgid "Created at"
 msgstr "Créé le"
 
@@ -11886,45 +12069,49 @@ msgstr "Un petit mot pour décrire votre contribution"
 msgid "Financeur Anonyme"
 msgstr "Financeur Anonyme"
 
-#: discovery/admin.py:64
-msgid "PIN already used"
-msgstr "Code PIN déjà utilisé"
-
-#: discovery/admin.py:73
-msgid "Save to generate a PIN code. (Use 'Save and continue editing')"
-msgstr ""
-"Enregistrez pour générer un code PIN. (Utilisez « Enregistrer et continuer "
-"la modification »)"
-
-#: discovery/admin.py:86
-msgid "Claimed"
-msgstr "Réclamé"
-
-#: discovery/models.py:28
+#: discovery/models.py:29
 msgid "Device name"
 msgstr "Nom du dispositif"
 
-#: discovery/models.py:29
+#: discovery/models.py:30
 msgid "Name of the device to pair, e.g. 'Cash register 1'"
 msgstr "Nom du dispositif à appairer, par exemple « Caisse 1 »"
 
 #: discovery/models.py:44
+msgid "PIN code"
+msgstr "Code PIN"
+
+#: discovery/models.py:45
 msgid "6-digit pairing code, cleared after claim"
 msgstr "Code d'appairage à 6 chiffres, effacé après réclamation"
 
-#: discovery/models.py:64
+#: discovery/models.py:65
 msgid "Type of hardware role being paired"
 msgstr "Type de rôle matériel en cours d'appairage"
 
-#: discovery/models.py:75
+#: discovery/models.py:86
+msgid "Objet à rattacher"
+msgstr "Objet à rattacher"
+
+#: discovery/models.py:88
+msgid ""
+"Identifiant de l'objet que cet appairage doit rattacher (une tireuse). Vide "
+"après l'appairage."
+msgstr ""
+
+#: discovery/models.py:101
 msgid "Claimed at"
 msgstr "Réclamé le"
 
-#: discovery/models.py:76
+#: discovery/models.py:102
 msgid "Set when a device claims this PIN"
 msgstr "Défini quand un dispositif réclame ce code PIN"
 
-#: discovery/models.py:82
+#: discovery/models.py:116
+msgid "Pairing device"
+msgstr "Dispositif d'appairage"
+
+#: discovery/models.py:117
 msgid "Pairing devices"
 msgstr "Dispositifs d'appairage"
 
@@ -11939,6 +12126,10 @@ msgstr "Le code PIN doit contenir uniquement des chiffres."
 #: discovery/serializers.py:39
 msgid "Invalid or already used PIN code."
 msgstr "Code PIN invalide ou déjà utilisé."
+
+#: discovery/serializers.py:46
+msgid "Ce code PIN a expire. Demandez-en un nouveau."
+msgstr ""
 
 #: fedow_connect/models.py:27
 msgid "Dernière modification des informations de l'asset"
@@ -11984,7 +12175,7 @@ msgid "Fiduciaire"
 msgstr "Fiduciaire"
 
 #: fedow_connect/models.py:64 fedow_public/models.py:35 laboutik/views.py:136
-#: laboutik/views.py:3265
+#: laboutik/views.py:3300
 msgid "Cadeau"
 msgstr "Cadeau"
 
@@ -12350,7 +12541,8 @@ msgstr "Transaction"
 #: fedow_core/models.py:736
 msgid ""
 "Le lieu qui a cree cette federation. Lui seul peut envoyer des invitations."
-msgstr "Le lieu qui a cree cette federation. Lui seul peut envoyer des invitations."
+msgstr ""
+"Le lieu qui a cree cette federation. Lui seul peut envoyer des invitations."
 
 #: fedow_core/models.py:747
 msgid "Tenants membres"
@@ -12605,78 +12797,31 @@ msgstr ""
 msgid "Le stock de ce produit n'est pas en centilitres."
 msgstr ""
 
-#: kiosk/admin.py:69
-msgid ""
-"Aucune borne appairée en rôle Kiosque. Créez d'abord un code PIN d'appairage "
-"(rôle « Kiosque ») dans « Appairage de terminal », puis appairez la borne."
-msgstr ""
-
-#: kiosk/admin.py:74
-msgid ""
-"La borne Android qui pilotera ce TPE. Une borne ne peut piloter qu'un seul "
-"TPE."
-msgstr ""
-
-#: kiosk/admin.py:79 kiosk/admin.py:135 kiosk/models.py:79
-msgid "Borne (terminal appairé)"
-msgstr ""
-
-#: kiosk/admin.py:81
-msgid "— Aucune borne —"
-msgstr ""
-
-#: kiosk/admin.py:93
-msgid ""
-"Le code d'enregistrement ne peut pas être vide pour un terminal "
-"STRIPE_WISEPOS non appairé."
-msgstr ""
-
-#: kiosk/admin.py:118
-#, python-format
-msgid "Échec de l'appairage du TPE Stripe : %(err)s"
-msgstr ""
-
-#: kiosk/models.py:25 kiosk/models.py:85
-msgid "Stripe ID"
-msgstr "ID Stripe"
-
-#: kiosk/models.py:26
-msgid "Primary Asset Location"
-msgstr "Emplacement de l'actif principal"
-
-#: kiosk/models.py:84
-msgid "Code d'enregistrement du lecteur"
-msgstr "Code d'enregistrement du lecteur"
-
-#: kiosk/models.py:89
-msgid "bbpos_wisepos_e"
-msgstr ""
-
-#: kiosk/models.py:134
-msgid "TPE Bancaire"
-msgstr "TPE Bancaire"
-
-#: kiosk/models.py:149
+#: kiosk/models.py:30
 msgid "Paiement intent stripe id"
 msgstr "Identifiant Payment Intent Stripe"
 
-#: kiosk/models.py:150
-msgid "TPE"
+#: kiosk/models.py:45
+msgid "Borne"
 msgstr ""
 
-#: kiosk/models.py:162
+#: kiosk/models.py:54
+msgid "Lecteur utilisé (Stripe)"
+msgstr ""
+
+#: kiosk/models.py:68
 msgid "requires_payment_method"
 msgstr "moyen de paiement requis"
 
-#: kiosk/models.py:163
+#: kiosk/models.py:69
 msgid "in_progress"
 msgstr "en cours"
 
-#: kiosk/models.py:164
+#: kiosk/models.py:70
 msgid "Paiement autorisé, mais pas encore capturé"
 msgstr ""
 
-#: kiosk/models.py:165
+#: kiosk/models.py:71
 msgid "Succes"
 msgstr "Succès"
 
@@ -12798,24 +12943,28 @@ msgstr "Carte introuvable avec le tag %(tag_id)s"
 msgid "Amount must be positive"
 msgstr "Le montant doit être positif"
 
-#: kiosk/views.py:63
+#: kiosk/views.py:64
 msgid "Ce terminal n'a pas le role Kiosque."
 msgstr ""
 
-#: kiosk/views.py:182
+#: kiosk/views.py:183
 msgid "Aucune carte reçue. Merci de scanner à nouveau."
 msgstr ""
 
-#: kiosk/views.py:193
+#: kiosk/views.py:194
 #, python-format
 msgid "Carte inconnue : %(tag_id)s"
 msgstr ""
 
-#: kiosk/views.py:243
+#: kiosk/views.py:254
 msgid "Aucun terminal de paiement n'est appairé à cette borne."
 msgstr ""
 
-#: kiosk/views.py:326
+#: kiosk/views.py:267
+msgid "Aucun lecteur de carte bancaire n'est branché sur cette borne."
+msgstr ""
+
+#: kiosk/views.py:351
 msgid ""
 "Le suivi du paiement n'a pas pu démarrer. Merci de contacter le personnel."
 msgstr ""
@@ -13019,7 +13168,7 @@ msgid ""
 "at the bottom of every receipt."
 msgstr ""
 
-#: laboutik/models.py:136 laboutik/models.py:961
+#: laboutik/models.py:136 laboutik/models.py:1342
 msgid "Perpetual total (cents)"
 msgstr ""
 
@@ -13028,7 +13177,9 @@ msgid ""
 "Total cumule de toutes les clotures depuis la mise en service. Ne doit "
 "jamais etre remis a zero. / Cumulative total of all closures since first "
 "use. Must never be reset to zero."
-msgstr "Total cumulé de toutes les clôtures depuis la mise en service. Ne doit jamais être remis à zéro."
+msgstr ""
+"Total cumulé de toutes les clôtures depuis la mise en service. Ne doit "
+"jamais être remis à zéro."
 
 #: laboutik/models.py:150
 msgid "Receipt counter"
@@ -13038,7 +13189,9 @@ msgstr "Compteur de reçus"
 msgid ""
 "Compteur sequentiel de tickets de vente. Incremente automatiquement a chaque "
 "impression. / Sequential receipt counter. Auto-incremented on each print."
-msgstr "Compteur sequentiel de tickets de vente. Incremente automatiquement a chaque impression."
+msgstr ""
+"Compteur sequentiel de tickets de vente. Incremente automatiquement a chaque "
+"impression."
 
 #: laboutik/models.py:169
 msgid "Training mode"
@@ -13076,7 +13229,10 @@ msgid ""
 "Sunmi Cloud: remote printer via HTTPS. Sunmi Inner: built-in printer on "
 "Sunmi tablet via WebSocket. Sunmi LAN: direct printing on local network "
 "(same subnet)."
-msgstr "Sunmi Cloud : imprimante distante via HTTPS. Sunmi Inner : imprimante intégrée à la tablette Sunmi via WebSocket. Sunmi LAN : impression directe sur le réseau local (même sous-réseau)."
+msgstr ""
+"Sunmi Cloud : imprimante distante via HTTPS. Sunmi Inner : imprimante "
+"intégrée à la tablette Sunmi via WebSocket. Sunmi LAN : impression directe "
+"sur le réseau local (même sous-réseau)."
 
 #: laboutik/models.py:309
 msgid "Dots per line"
@@ -13086,7 +13242,9 @@ msgstr "Points par ligne"
 msgid ""
 "Number of dots per line. 576 for 80mm NT31x (kitchen cloud), 384 for 58mm "
 "NT21x, 240 for 57mm."
-msgstr "Nombre de points par ligne. 576 pour le 80mm NT31x (kitchen cloud), 384 pour le 58mm NT21x, 240 pour le 57mm."
+msgstr ""
+"Nombre de points par ligne. 576 pour le 80mm NT31x (kitchen cloud), 384 pour "
+"le 58mm NT21x, 240 pour le 57mm."
 
 #: laboutik/models.py:322
 msgid "Sunmi serial number"
@@ -13095,7 +13253,9 @@ msgstr ""
 #: laboutik/models.py:323
 msgid ""
 "Serial number (SN) of the Sunmi Cloud printer. Not needed for Sunmi Inner."
-msgstr "Numéro de série (SN) de l'imprimante Sunmi Cloud. Non nécessaire pour Sunmi Inner."
+msgstr ""
+"Numéro de série (SN) de l'imprimante Sunmi Cloud. Non nécessaire pour Sunmi "
+"Inner."
 
 #: laboutik/models.py:332
 msgid "IP address"
@@ -13104,790 +13264,862 @@ msgstr "Adresse IP"
 #: laboutik/models.py:334
 msgid ""
 "IP address for LAN printing (same subnet). Not needed for Cloud or Inner."
-msgstr "Adresse IP pour l'impression LAN (même sous-réseau). Non nécessaire pour Cloud ou Inner."
+msgstr ""
+"Adresse IP pour l'impression LAN (même sous-réseau). Non nécessaire pour "
+"Cloud ou Inner."
 
 #: laboutik/models.py:342
 msgid "Uncheck to disable printing on this printer."
 msgstr "Décocher pour désactiver l'impression sur cette imprimante."
 
-#: laboutik/models.py:350 laboutik/models.py:1088
+#: laboutik/models.py:350 laboutik/models.py:1469
 msgid "Printer"
 msgstr "Imprimante"
 
-#: laboutik/models.py:374
+#: laboutik/models.py:351
+msgid "Printers"
+msgstr "Imprimantes"
+
+#: laboutik/models.py:370 laboutik/models.py:666
+msgid "Identifiant Stripe"
+msgstr "Identifiant Stripe"
+
+#: laboutik/models.py:373
+msgid "Location primaire"
+msgstr "Location primaire"
+
+#: laboutik/models.py:448
+msgid "Nom de l'appareil, par exemple « Caisse bar 1 »."
+msgstr ""
+
+#: laboutik/models.py:464
+msgid "Type d'appareil"
+msgstr "Type d'appareil"
+
+#: laboutik/models.py:465
+msgid "Ce que cet appareil sait faire. Ne change plus une fois appairé."
+msgstr ""
+
+#: laboutik/models.py:495
+msgid "Imprimante"
+msgstr "Imprimante"
+
+#: laboutik/models.py:497
+msgid ""
+"Imprimante utilisée par ce terminal. Laisser vide si l'appareil n'imprime "
+"pas."
+msgstr ""
+
+#: laboutik/models.py:612
+msgid "Nom du lecteur, par exemple « TPE du bar »."
+msgstr ""
+
+#: laboutik/models.py:627
+msgid "Stripe — BBPOS WisePOS E"
+msgstr ""
+
+#: laboutik/models.py:633
+msgid "Type de lecteur"
+msgstr "Type de lecteur"
+
+#: laboutik/models.py:643
+msgid "Branché sur le terminal"
+msgstr "Branché sur le terminal"
+
+#: laboutik/models.py:645
+msgid ""
+"L'appareil sur lequel ce lecteur est branché. Laisser vide si le lecteur "
+"n'est branché nulle part."
+msgstr ""
+
+#: laboutik/models.py:656
+msgid "Code d'enregistrement"
+msgstr "Code d'enregistrement"
+
+#: laboutik/models.py:657
+msgid "Code affiché par le lecteur Stripe à son premier démarrage."
+msgstr ""
+
+#: laboutik/models.py:672
+msgid "Décochez pour mettre ce lecteur hors service."
+msgstr ""
+
+#: laboutik/models.py:760
 msgid "Point of sale name. Must be unique."
 msgstr "Nom du point de vente. Doit être unique."
 
-#: laboutik/models.py:405
+#: laboutik/models.py:791
 msgid "Direct"
 msgstr ""
 
-#: laboutik/models.py:409
+#: laboutik/models.py:795
 msgid "Advanced"
 msgstr "Avancé"
 
-#: laboutik/models.py:414
+#: laboutik/models.py:800
 msgid "POS type"
 msgstr "Type de caisse"
 
-#: laboutik/models.py:416
+#: laboutik/models.py:802
 msgid ""
 "Determines how articles are loaded. Direct: M2M only. Memberships: auto-"
 "loads membership products. Cashless: auto-loads top-ups. Ticketing: builds "
 "from future events. Advanced: restaurant order mode."
-msgstr "Détermine comment les articles sont chargés. Direct : M2M uniquement. Adhésions : charge automatiquement les produits d'adhésion. Cashless : charge automatiquement les rechargements. Billetterie : construit à partir des événements à venir. Avancé : mode commande restaurant."
+msgstr ""
+"Détermine comment les articles sont chargés. Direct : M2M uniquement. "
+"Adhésions : charge automatiquement les produits d'adhésion. Cashless : "
+"charge automatiquement les rechargements. Billetterie : construit à partir "
+"des événements à venir. Avancé : mode commande restaurant."
 
-#: laboutik/models.py:427
+#: laboutik/models.py:813
 msgid "Direct service"
 msgstr ""
 
-#: laboutik/models.py:428
+#: laboutik/models.py:814
 msgid "If checked, orders are served immediately (no table service)."
-msgstr "Si coché, les commandes sont servies immédiatement (pas de service à table)."
+msgstr ""
+"Si coché, les commandes sont servies immédiatement (pas de service à table)."
 
-#: laboutik/models.py:432
+#: laboutik/models.py:818
 msgid "Show prices"
 msgstr "Afficher les prix"
 
-#: laboutik/models.py:433
+#: laboutik/models.py:819
 msgid "Display prices on the POS interface."
 msgstr "Afficher les prix sur l'interface caisse."
 
-#: laboutik/models.py:440
+#: laboutik/models.py:826
 msgid "Accepts cash"
 msgstr "Accepte les espèces"
 
-#: laboutik/models.py:444
+#: laboutik/models.py:830
 msgid "Accepts credit card"
 msgstr ""
 
-#: laboutik/models.py:448
+#: laboutik/models.py:834
 msgid "Accepts check"
 msgstr "Accepte les chèques"
 
-#: laboutik/models.py:452
+#: laboutik/models.py:838
 msgid "Accepts orders"
 msgstr "Accepte les commandes"
 
-#: laboutik/models.py:453
+#: laboutik/models.py:839
 msgid "Enable table order management for this point of sale."
 msgstr "Activer la gestion des commandes par table pour ce point de vente."
 
-#: laboutik/models.py:463
+#: laboutik/models.py:849
 msgid "Hidden"
 msgstr ""
 
-#: laboutik/models.py:464
+#: laboutik/models.py:850
 msgid "Hide this point of sale from the selection screen."
 msgstr "Masque ce point de vente de l'écran de sélection."
 
-#: laboutik/models.py:473
-msgid "Ticket printer"
-msgstr "Imprimante de ticket"
-
-#: laboutik/models.py:474
-msgid "Printer used for sale tickets at this point of sale."
-msgstr "Imprimante utilisée pour les tickets de vente sur ce point de vente."
-
-#: laboutik/models.py:483
+#: laboutik/models.py:864
 msgid "Products available at this point of sale."
 msgstr "Produits disponibles sur ce point de vente."
 
-#: laboutik/models.py:488
+#: laboutik/models.py:869
 msgid "Categories"
 msgstr "Catégories"
 
-#: laboutik/models.py:489
+#: laboutik/models.py:870
 msgid "Product categories available at this point of sale."
 msgstr "Catégories de produits disponibles sur ce point de vente."
 
-#: laboutik/models.py:523
+#: laboutik/models.py:904
 msgid "Physical NFC card associated with this primary card."
 msgstr "Carte NFC physique associée à cette carte principale."
 
-#: laboutik/models.py:531
+#: laboutik/models.py:912
 msgid "Points of sale this operator can access."
 msgstr "Points de vente auxquels cet opérateur a accès."
 
-#: laboutik/models.py:537
+#: laboutik/models.py:918
 msgid "Edit mode"
 msgstr "Mode édition"
 
-#: laboutik/models.py:538
+#: laboutik/models.py:919
 msgid ""
 "Allow this operator to modify products and prices from the POS interface."
-msgstr "Autoriser cet opérateur à modifier les produits et les prix depuis l'interface de caisse."
+msgstr ""
+"Autoriser cet opérateur à modifier les produits et les prix depuis "
+"l'interface de caisse."
 
-#: laboutik/models.py:549
+#: laboutik/models.py:930
 msgid "Primary card"
 msgstr "Carte primaire"
 
-#: laboutik/models.py:566
+#: laboutik/models.py:947
 msgid "Category name (e.g. Indoor, Terrace, Bar)."
 msgstr ""
 
-#: laboutik/models.py:579
+#: laboutik/models.py:960
 msgid "Table category"
 msgstr "Catégorie de table"
 
-#: laboutik/models.py:580
+#: laboutik/models.py:961
 msgid "Table categories"
 msgstr "Catégories de table"
 
-#: laboutik/models.py:596
+#: laboutik/models.py:977
 msgid "Table name or number (e.g. Table 1, Bar 3)."
 msgstr ""
 
-#: laboutik/models.py:617
+#: laboutik/models.py:998
 msgid "Occupied"
 msgstr ""
 
-#: laboutik/models.py:618 laboutik/models.py:720 laboutik/models.py:810
+#: laboutik/models.py:999 laboutik/models.py:1101 laboutik/models.py:1191
 msgid "Served"
 msgstr ""
 
-#: laboutik/models.py:629
+#: laboutik/models.py:1010
 msgid "Temporary"
 msgstr ""
 
-#: laboutik/models.py:630
+#: laboutik/models.py:1011
 msgid "Temporary table created for a single service."
 msgstr "Table temporaire créée pour un seul service."
 
-#: laboutik/models.py:641
+#: laboutik/models.py:1022
 msgid "Top position"
 msgstr ""
 
-#: laboutik/models.py:642
+#: laboutik/models.py:1023
 msgid "Vertical position in pixels on the floor plan."
 msgstr "Position verticale en pixels sur le plan de salle."
 
-#: laboutik/models.py:646
+#: laboutik/models.py:1027
 msgid "Left position"
 msgstr "Position à gauche"
 
-#: laboutik/models.py:647
+#: laboutik/models.py:1028
 msgid "Horizontal position in pixels on the floor plan."
 msgstr "Position horizontale en pixels sur le plan de salle."
 
-#: laboutik/models.py:655 laboutik/models.py:703
+#: laboutik/models.py:1036 laboutik/models.py:1084
 msgid "Table"
 msgstr "Table"
 
-#: laboutik/models.py:656
+#: laboutik/models.py:1037
 msgid "Tables"
 msgstr "Tables"
 
-#: laboutik/models.py:683
+#: laboutik/models.py:1064
 msgid "Service"
 msgstr ""
 
-#: laboutik/models.py:684
+#: laboutik/models.py:1065
 msgid "Service session identifier (UUID). Groups orders by work period."
-msgstr "Identifiant de session de service (UUID). Regroupe les commandes par période de travail."
+msgstr ""
+"Identifiant de session de service (UUID). Regroupe les commandes par période "
+"de travail."
 
-#: laboutik/models.py:694
+#: laboutik/models.py:1075
 msgid "Cashier or waiter who created this order."
 msgstr "Caissier·ère ou serveur·se ayant créé cette commande."
 
-#: laboutik/models.py:704
+#: laboutik/models.py:1085
 msgid "Restaurant table for this order. Null for takeaway."
-msgstr "Table du restaurant pour cette commande. Null pour une vente à emporter."
+msgstr ""
+"Table du restaurant pour cette commande. Null pour une vente à emporter."
 
-#: laboutik/models.py:719
+#: laboutik/models.py:1100
 msgid "Open"
 msgstr ""
 
-#: laboutik/models.py:734
+#: laboutik/models.py:1115
 msgid "Kitchen notes or special requests."
 msgstr ""
 
-#: laboutik/models.py:743
+#: laboutik/models.py:1124
 msgid "No table"
 msgstr "Aucune table"
 
-#: laboutik/models.py:748
+#: laboutik/models.py:1129
 msgid "Saved order"
 msgstr ""
 
-#: laboutik/models.py:749
+#: laboutik/models.py:1130
 msgid "Saved orders"
 msgstr ""
 
-#: laboutik/models.py:766
+#: laboutik/models.py:1147
 msgid "Order"
 msgstr ""
 
-#: laboutik/models.py:788
+#: laboutik/models.py:1169
 msgid "Remaining to pay (cents)"
 msgstr "Reste à payer (centimes)"
 
-#: laboutik/models.py:789
+#: laboutik/models.py:1170
 msgid "Remaining amount in cents. 0 = not yet billed."
 msgstr "Montant restant en centimes. 0 = pas encore facturé."
 
-#: laboutik/models.py:796
+#: laboutik/models.py:1177
 msgid "Remaining to serve"
 msgstr "Restant à servir"
 
-#: laboutik/models.py:807
+#: laboutik/models.py:1188
 msgid "Waiting"
 msgstr "En attente"
 
-#: laboutik/models.py:808
+#: laboutik/models.py:1189
 msgid "In progress"
 msgstr "En cours"
 
-#: laboutik/models.py:809
+#: laboutik/models.py:1190
 msgid "Ready"
 msgstr ""
 
-#: laboutik/models.py:823
+#: laboutik/models.py:1204
 msgid "Order article"
 msgstr "Article de commande"
 
-#: laboutik/models.py:824
+#: laboutik/models.py:1205
 msgid "Order articles"
 msgstr "Articles de commande"
 
-#: laboutik/models.py:857
+#: laboutik/models.py:1238
 msgid "Triggered from POS"
 msgstr "Déclenché depuis la caisse"
 
-#: laboutik/models.py:859
+#: laboutik/models.py:1240
 msgid ""
 "Point de vente depuis lequel la cloture a ete declenchee (informatif). La "
 "cloture couvre tout le tenant. / POS from which closure was triggered "
 "(informational). Closure covers the entire tenant."
 msgstr ""
 
-#: laboutik/models.py:873
+#: laboutik/models.py:1254
 msgid "Cashier who performed the closure."
 msgstr "Caissier·ère ayant effectué la clôture."
 
-#: laboutik/models.py:879
+#: laboutik/models.py:1260
 msgid "Service start"
 msgstr "Début de service"
 
-#: laboutik/models.py:880
+#: laboutik/models.py:1261
 msgid "Start of the service period covered by this closure."
 msgstr "Début de la période de service couverte par cette clôture."
 
-#: laboutik/models.py:887
+#: laboutik/models.py:1268
 msgid "Closure datetime"
 msgstr ""
 
-#: laboutik/models.py:888
+#: laboutik/models.py:1269
 msgid "Moment of the closure. Set explicitly, not auto_now_add."
 msgstr "Moment de la clôture. Défini explicitement, pas auto_now_add."
 
-#: laboutik/models.py:895
+#: laboutik/models.py:1276
 msgid "Cash total (cents)"
 msgstr ""
 
-#: laboutik/models.py:896
+#: laboutik/models.py:1277
 msgid "Total cash amount in cents."
 msgstr "Montant total en espèces, en centimes."
 
-#: laboutik/models.py:900
+#: laboutik/models.py:1281
 msgid "Credit card total (cents)"
 msgstr "Total carte de crédit (centimes)"
 
-#: laboutik/models.py:901
+#: laboutik/models.py:1282
 msgid "Total credit card amount in cents."
 msgstr "Montant total en carte bancaire, en centimes."
 
-#: laboutik/models.py:905
+#: laboutik/models.py:1286
 msgid "Cashless total (cents)"
 msgstr "Total cashless (centimes)"
 
-#: laboutik/models.py:906
+#: laboutik/models.py:1287
 msgid "Total cashless/NFC amount in cents."
 msgstr "Montant total cashless/NFC, en centimes."
 
-#: laboutik/models.py:910
+#: laboutik/models.py:1291
 msgid "Grand total (cents)"
 msgstr ""
 
-#: laboutik/models.py:911
+#: laboutik/models.py:1292
 msgid "Grand total in cents (cash + card + cashless)."
 msgstr "Total général en centimes (espèces + carte + cashless)."
 
-#: laboutik/models.py:916
+#: laboutik/models.py:1297
 msgid "Transaction count"
 msgstr "Nombre de transactions"
 
-#: laboutik/models.py:917
+#: laboutik/models.py:1298
 msgid "Number of LigneArticle records in this period."
 msgstr "Nombre d'enregistrements LigneArticle sur cette période."
 
-#: laboutik/models.py:933
+#: laboutik/models.py:1314
 msgid "Annual"
 msgstr "Annuel"
 
-#: laboutik/models.py:937
+#: laboutik/models.py:1318
 msgid "Closure level"
 msgstr "Niveau de clôture"
 
-#: laboutik/models.py:939
+#: laboutik/models.py:1320
 msgid ""
 "J = journaliere (caissier), M = mensuelle (auto), A = annuelle (auto). / J = "
 "daily (cashier), M = monthly (auto), A = annual (auto)."
 msgstr "J = journaliere (caissier), M = mensuelle (auto), A = annuelle (auto)."
 
-#: laboutik/models.py:950
+#: laboutik/models.py:1331
 msgid "Sequential number"
 msgstr ""
 
-#: laboutik/models.py:952
+#: laboutik/models.py:1333
 msgid ""
 "Numero sequentiel par niveau de cloture. Sans trou. Global au tenant. / "
 "Sequential number per closure level. No gap. Global to tenant."
 msgstr ""
 
-#: laboutik/models.py:963
+#: laboutik/models.py:1344
 msgid ""
 "Total cumule depuis la mise en service, snapshot au moment de cette "
 "cloture. / Cumulative total since first use, snapshot at this closure time."
 msgstr ""
 
-#: laboutik/models.py:972
+#: laboutik/models.py:1353
 msgid "Lines integrity hash"
 msgstr ""
 
-#: laboutik/models.py:974
+#: laboutik/models.py:1355
 msgid ""
 "SHA-256 des LigneArticle couvertes. Filet de securite. / SHA-256 of covered "
 "LigneArticle. Safety net."
 msgstr ""
 
-#: laboutik/models.py:983
+#: laboutik/models.py:1364
 msgid "JSON report"
 msgstr ""
 
-#: laboutik/models.py:984
+#: laboutik/models.py:1365
 msgid ""
 "Detailed report: par_categorie, par_produit, par_moyen_paiement, commandes."
 msgstr ""
 
-#: laboutik/models.py:992
+#: laboutik/models.py:1373
 msgid "Cash register closure"
 msgstr "Clôture de caisse"
 
-#: laboutik/models.py:993
+#: laboutik/models.py:1374
 msgid "Cash register closures"
 msgstr "Clôtures de caisse"
 
-#: laboutik/models.py:1021
+#: laboutik/models.py:1402
 msgid "Print datetime"
 msgstr "Date et heure d'impression"
 
-#: laboutik/models.py:1031 laboutik/models.py:1199
+#: laboutik/models.py:1412 laboutik/models.py:1580
 msgid "Article line"
 msgstr "Ligne d'article"
 
-#: laboutik/models.py:1033
+#: laboutik/models.py:1414
 msgid ""
 "Ligne d'article concernee par cette impression. Null pour les clotures et "
 "billets. / Article line for this print. Null for closures and tickets."
 msgstr ""
 
-#: laboutik/models.py:1045
+#: laboutik/models.py:1426
 msgid "Transaction UUID"
 msgstr "UUID de transaction"
 
-#: laboutik/models.py:1047
+#: laboutik/models.py:1428
 msgid ""
 "Identifiant de transaction pour regrouper les lignes d'un meme ticket. / "
 "Transaction identifier to group lines of the same receipt."
 msgstr ""
 
-#: laboutik/models.py:1059
+#: laboutik/models.py:1440
 msgid "Closure"
 msgstr "Clôture"
 
-#: laboutik/models.py:1061
+#: laboutik/models.py:1442
 msgid ""
 "Cloture de caisse concernee par cette impression. Null pour les tickets de "
 "vente et billets. / Cash register closure for this print. Null for sale "
 "tickets and event tickets."
 msgstr ""
 
-#: laboutik/models.py:1076
+#: laboutik/models.py:1457
 msgid ""
 "Caissier connecte au moment de l'impression. / Cashier who triggered this "
 "print."
 msgstr ""
 
-#: laboutik/models.py:1090
+#: laboutik/models.py:1471
 msgid ""
 "Imprimante physique utilisee pour cette impression. Null pour les emissions "
 "electroniques. / Physical printer used for this print. Null for electronic "
 "receipts."
 msgstr ""
 
-#: laboutik/models.py:1111
+#: laboutik/models.py:1492
 msgid "Sale receipt"
 msgstr "Reçu de vente"
 
-#: laboutik/models.py:1113
+#: laboutik/models.py:1494
 msgid "Order ticket"
 msgstr "Ticket de commande"
 
-#: laboutik/models.py:1114
+#: laboutik/models.py:1495
 msgid "Event ticket"
 msgstr "Billet d'événement"
 
-#: laboutik/models.py:1118
+#: laboutik/models.py:1499
 msgid "Receipt type"
 msgstr "Type de reçu"
 
-#: laboutik/models.py:1120
+#: laboutik/models.py:1501
 msgid ""
 "Type de justificatif imprime : VENTE, CLOT, COMM ou BILL. / Type of printed "
 "receipt: VENTE, CLOT, COMM or BILL."
 msgstr ""
 
-#: laboutik/models.py:1131
+#: laboutik/models.py:1512
 msgid "Duplicate"
 msgstr "Dupliquer"
 
-#: laboutik/models.py:1133
+#: laboutik/models.py:1514
 msgid ""
 "Cocher si cette impression est un duplicata (re-impression). / Check if this "
 "print is a duplicate (re-print)."
 msgstr ""
 
-#: laboutik/models.py:1143
+#: laboutik/models.py:1524
 msgid "Paper"
 msgstr ""
 
-#: laboutik/models.py:1144
+#: laboutik/models.py:1525
 msgid "Electronic"
 msgstr ""
 
-#: laboutik/models.py:1148
+#: laboutik/models.py:1529
 msgid "Emission format"
 msgstr "Format d'émission"
 
-#: laboutik/models.py:1150
+#: laboutik/models.py:1531
 msgid ""
 "P = papier (imprimante thermique), E = electronique (email/PDF). / P = paper "
 "(thermal printer), E = electronic (email/PDF)."
 msgstr ""
 
-#: laboutik/models.py:1161
+#: laboutik/models.py:1542
 msgid "Print log"
 msgstr "Journal d'impression"
 
-#: laboutik/models.py:1162
+#: laboutik/models.py:1543
 msgid "Print logs"
 msgstr "Journaux d'impression"
 
-#: laboutik/models.py:1201
+#: laboutik/models.py:1582
 msgid ""
 "Ligne d'article dont le moyen de paiement a ete corrige. / Article line "
 "whose payment method was corrected."
 msgstr ""
 
-#: laboutik/models.py:1210
+#: laboutik/models.py:1591
 msgid "Previous payment method"
 msgstr "Mode de paiement précédent"
 
-#: laboutik/models.py:1212
+#: laboutik/models.py:1593
 msgid ""
 "Code du moyen de paiement avant correction (ex: CA, CC, CH). / Payment "
 "method code before correction."
 msgstr ""
 
-#: laboutik/models.py:1221
+#: laboutik/models.py:1602
 msgid "New payment method"
 msgstr "Nouveau moyen de paiement"
 
-#: laboutik/models.py:1223
+#: laboutik/models.py:1604
 msgid ""
 "Code du moyen de paiement apres correction. / Payment method code after "
 "correction."
 msgstr ""
 
-#: laboutik/models.py:1231 laboutik/models.py:1544
+#: laboutik/models.py:1612 laboutik/models.py:1925
 msgid "Reason"
 msgstr ""
 
-#: laboutik/models.py:1233
+#: laboutik/models.py:1614
 msgid ""
 "Raison de la correction. Obligatoire pour la tracabilite. / Correction "
 "reason. Mandatory for traceability."
 msgstr ""
 
-#: laboutik/models.py:1246
+#: laboutik/models.py:1627
 msgid ""
 "Caissier qui a effectue la correction. / Cashier who performed the "
 "correction."
 msgstr "Caissier qui a effectué la correction."
 
-#: laboutik/models.py:1255
+#: laboutik/models.py:1636
 msgid "Correction date"
 msgstr "Date de correction"
 
-#: laboutik/models.py:1263
+#: laboutik/models.py:1644
 msgid "Payment correction"
 msgstr "Correction de paiement"
 
-#: laboutik/models.py:1264
+#: laboutik/models.py:1645
 msgid "Payment corrections"
 msgstr "Corrections de paiement"
 
-#: laboutik/models.py:1298
+#: laboutik/models.py:1679
 msgid ""
 "Point de vente depuis lequel le retrait d'especes est effectue. / Point of "
 "sale from which cash is withdrawn."
 msgstr ""
 
-#: laboutik/models.py:1311
+#: laboutik/models.py:1692
 msgid ""
 "Caissier qui a effectue le retrait d'especes. / Cashier who performed the "
 "cash withdrawal."
 msgstr "Caissier qui a effectué le retrait d'espèces."
 
-#: laboutik/models.py:1320
+#: laboutik/models.py:1701
 msgid "Withdrawal date"
 msgstr ""
 
-#: laboutik/models.py:1326
+#: laboutik/models.py:1707
 msgid "Total amount (cents)"
 msgstr "Montant total (centimes)"
 
-#: laboutik/models.py:1328
+#: laboutik/models.py:1709
 msgid ""
 "Montant total retire en centimes. Recalcule cote serveur. / Total withdrawn "
 "amount in cents. Recalculated server-side."
 msgstr ""
 
-#: laboutik/models.py:1340
+#: laboutik/models.py:1721
 msgid "Denomination breakdown"
 msgstr ""
 
-#: laboutik/models.py:1342
+#: laboutik/models.py:1723
 msgid ""
 "Ventilation par coupure. Cle = valeur en centimes, valeur = quantite. / "
 "Denomination breakdown. Key = value in cents, value = quantity."
 msgstr ""
 
-#: laboutik/models.py:1351 laboutik/templates/cotton/categories.html:9
+#: laboutik/models.py:1732 laboutik/templates/cotton/categories.html:9
 msgid "Note"
 msgstr ""
 
-#: laboutik/models.py:1353
+#: laboutik/models.py:1734
 msgid ""
 "Note libre sur le retrait d'especes. / Optional note about the cash "
 "withdrawal."
 msgstr ""
 
-#: laboutik/models.py:1364
+#: laboutik/models.py:1745
 msgid "Cash withdrawal"
 msgstr "Retrait d'espèces"
 
-#: laboutik/models.py:1390
+#: laboutik/models.py:1771
 msgid "Archiving"
 msgstr "Archivage"
 
-#: laboutik/models.py:1391
+#: laboutik/models.py:1772
 msgid "Verification"
 msgstr "Vérification"
 
-#: laboutik/models.py:1405
+#: laboutik/models.py:1786
 msgid "Operation type"
 msgstr "Type d'opération"
 
-#: laboutik/models.py:1407
+#: laboutik/models.py:1788
 msgid ""
 "Type d'operation technique (archivage, verification, export fiscal). / Type "
 "of technical operation (archiving, verification, fiscal export)."
 msgstr "Type d'operation technique (archivage, verification, export fiscal)."
 
-#: laboutik/models.py:1416
+#: laboutik/models.py:1797
 msgid "Operation date"
 msgstr "Date de l'opération"
 
-#: laboutik/models.py:1427
+#: laboutik/models.py:1808
 msgid ""
 "Utilisateur qui a declenche l'operation technique. / User who triggered the "
 "technical operation."
 msgstr "Utilisateur ayant déclenché l'opération technique."
 
-#: laboutik/models.py:1436
+#: laboutik/models.py:1817
 msgid "Details"
 msgstr "Détails"
 
-#: laboutik/models.py:1438
+#: laboutik/models.py:1819
 msgid ""
 "Details de l'operation au format JSON. / Operation details in JSON format."
 msgstr ""
 
-#: laboutik/models.py:1450
+#: laboutik/models.py:1831
 msgid ""
 "Hash HMAC-SHA256 pour la verification d'integrite. / HMAC-SHA256 hash for "
 "integrity verification."
 msgstr ""
 
-#: laboutik/models.py:1460
+#: laboutik/models.py:1841
 msgid "Operation log"
 msgstr "Journal des opérations"
 
-#: laboutik/models.py:1461
+#: laboutik/models.py:1842
 msgid "Operation logs"
 msgstr "Journaux des opérations"
 
-#: laboutik/models.py:1495
+#: laboutik/models.py:1876
 msgid ""
 "Point de vente dont le fond de caisse a ete modifie. / Point of sale whose "
 "cash float was modified."
 msgstr ""
 
-#: laboutik/models.py:1508
+#: laboutik/models.py:1889
 msgid ""
 "Utilisateur qui a modifie le fond de caisse. / User who modified the cash "
 "float."
 msgstr ""
 
-#: laboutik/models.py:1517
+#: laboutik/models.py:1898
 msgid "Modification date"
 msgstr "Date de modification"
 
-#: laboutik/models.py:1523
+#: laboutik/models.py:1904
 msgid "Previous amount (cents)"
 msgstr ""
 
-#: laboutik/models.py:1525
+#: laboutik/models.py:1906
 msgid ""
 "Ancien montant du fond de caisse en centimes. / Previous cash float amount "
 "in cents."
 msgstr ""
 
-#: laboutik/models.py:1533
+#: laboutik/models.py:1914
 msgid "New amount (cents)"
 msgstr "Nouveau montant (centimes)"
 
-#: laboutik/models.py:1535
+#: laboutik/models.py:1916
 msgid ""
 "Nouveau montant du fond de caisse en centimes. / New cash float amount in "
 "cents."
 msgstr ""
 
-#: laboutik/models.py:1546
+#: laboutik/models.py:1927
 msgid ""
 "Raison du changement de fond de caisse. / Reason for the cash float change."
 msgstr ""
 
-#: laboutik/models.py:1559
+#: laboutik/models.py:1940
 msgid "Cash float histories"
 msgstr "Historiques du fond de caisse"
 
-#: laboutik/models.py:1608
+#: laboutik/models.py:1989
 msgid "Sales (class 7)"
 msgstr ""
 
-#: laboutik/models.py:1609
+#: laboutik/models.py:1990
 msgid "VAT (class 4457)"
 msgstr ""
 
-#: laboutik/models.py:1610
+#: laboutik/models.py:1991
 msgid "Treasury (class 5)"
 msgstr ""
 
-#: laboutik/models.py:1611
+#: laboutik/models.py:1992
 msgid "Third-party (class 4)"
 msgstr ""
 
-#: laboutik/models.py:1612
+#: laboutik/models.py:1993
 msgid "Expense (class 6)"
 msgstr ""
 
-#: laboutik/models.py:1613
+#: laboutik/models.py:1994
 msgid "Exceptional income (class 77)"
 msgstr ""
 
-#: laboutik/models.py:1614
+#: laboutik/models.py:1995
 msgid "Special"
 msgstr ""
 
-#: laboutik/models.py:1626
+#: laboutik/models.py:2007
 msgid "Account number"
 msgstr "Numéro de compte"
 
-#: laboutik/models.py:1628
+#: laboutik/models.py:2009
 msgid ""
 "Numero du compte PCG (ex: 7072000). / PCG account number (e.g. 7072000)."
 msgstr ""
 
-#: laboutik/models.py:1637
+#: laboutik/models.py:2018
 msgid "Account label"
 msgstr "Libellé du compte"
 
-#: laboutik/models.py:1639
+#: laboutik/models.py:2020
 msgid ""
 "Libelle descriptif du compte (ex: Ventes de marchandises). / Descriptive "
 "account label (e.g. Merchandise sales)."
 msgstr ""
 
-#: laboutik/models.py:1649
+#: laboutik/models.py:2030
 msgid "Account nature"
 msgstr "Nature du compte"
 
-#: laboutik/models.py:1651
+#: laboutik/models.py:2032
 msgid ""
 "Nature du compte : VENTE (classe 7), TVA (4457), TRESORERIE (5), etc. / "
 "Account nature: SALES (class 7), VAT (4457), TREASURY (5), etc."
 msgstr ""
 
-#: laboutik/models.py:1663
+#: laboutik/models.py:2044
 msgid "VAT rate (%)"
 msgstr "Taux de TVA (%)"
 
-#: laboutik/models.py:1665
+#: laboutik/models.py:2046
 msgid ""
 "Taux de TVA en pourcentage (ex: 20.00, 10.00, 5.50). Renseigner uniquement "
 "pour les comptes VENTE et TVA. / VAT rate as percentage (e.g. 20.00, 10.00, "
 "5.50). Only fill for SALES and VAT accounts."
 msgstr ""
 
-#: laboutik/models.py:1678
+#: laboutik/models.py:2059
 msgid ""
 "Decocher pour desactiver le compte sans le supprimer. / Uncheck to "
 "deactivate the account without deleting it."
 msgstr ""
 
-#: laboutik/models.py:1689
+#: laboutik/models.py:2070
 msgid "Accounting codes"
 msgstr "Codes comptables"
 
-#: laboutik/models.py:1736
+#: laboutik/models.py:2117
 msgid "Payment method code"
 msgstr "Code du moyen de paiement"
 
-#: laboutik/models.py:1738
+#: laboutik/models.py:2119
 msgid ""
 "Code du moyen de paiement (ex: CA = especes, CC = carte bancaire, CH = "
 "cheque). Doit correspondre aux codes PaymentMethod. / Payment method code (e."
 "g. CA = cash, CC = credit card, CH = check). Must match PaymentMethod codes."
 msgstr ""
 
-#: laboutik/models.py:1749
+#: laboutik/models.py:2130
 msgid "Payment method label"
 msgstr "Libellé du moyen de paiement"
 
-#: laboutik/models.py:1751
+#: laboutik/models.py:2132
 msgid ""
 "Libelle lisible (ex: Especes, Carte bancaire, Cheque). / Readable label (e."
 "g. Cash, Credit card, Check)."
 msgstr ""
 
-#: laboutik/models.py:1764
+#: laboutik/models.py:2145
 msgid "Treasury account"
 msgstr "Compte de trésorerie"
 
-#: laboutik/models.py:1766
+#: laboutik/models.py:2147
 msgid ""
 "Compte de tresorerie PCG associe (ex: 5311000 pour especes). Laisser vide "
 "pour ignorer ce moyen dans l'export comptable (ex: paiements NFC cashless, "
@@ -13896,11 +14128,11 @@ msgid ""
 "cashless payments, already collected at top-up)."
 msgstr ""
 
-#: laboutik/models.py:1780
+#: laboutik/models.py:2161
 msgid "Payment method mapping"
 msgstr "Mise en correspondance du moyen de paiement"
 
-#: laboutik/models.py:1781
+#: laboutik/models.py:2162
 msgid "Payment method mappings"
 msgstr "Correspondances des moyens de paiement"
 
@@ -14327,7 +14559,7 @@ msgid "Voir dans l'admin"
 msgstr "Voir dans l'admin"
 
 #: laboutik/templates/laboutik/partial/hx_card_feedback.html:29
-#: laboutik/views.py:6901
+#: laboutik/views.py:6972
 msgid "Carte anonyme"
 msgstr "Carte anonyme"
 
@@ -14559,7 +14791,8 @@ msgstr "Aucun moyen de paiement"
 
 #: laboutik/templates/laboutik/partial/hx_export_fiscal.html:26
 msgid "Dates are optional. Without dates, all data will be exported."
-msgstr "Les dates sont facultatives. Sans dates, toutes les données seront exportées."
+msgstr ""
+"Les dates sont facultatives. Sans dates, toutes les données seront exportées."
 
 #: laboutik/templates/laboutik/partial/hx_fond_de_caisse.html:29
 #: laboutik/templates/laboutik/partial/hx_fond_de_caisse.html:50
@@ -14615,7 +14848,7 @@ msgid "Achat possible par :"
 msgstr ""
 
 #: laboutik/templates/laboutik/partial/hx_impression_ok.html:15
-#: laboutik/views.py:8282
+#: laboutik/views.py:8353
 msgid "Reçu imprimé"
 msgstr ""
 
@@ -14716,7 +14949,7 @@ msgid "REMBOURSEMENT"
 msgstr ""
 
 #: laboutik/templates/laboutik/partial/hx_print_confirmation.html:15
-#: laboutik/views.py:8416
+#: laboutik/views.py:8488
 msgid "Impression lancée"
 msgstr ""
 
@@ -14733,7 +14966,7 @@ msgstr ""
 
 #: laboutik/templates/laboutik/partial/hx_recap_en_cours.html:139
 #: laboutik/templates/laboutik/partial/hx_recap_en_cours.html:356
-#: laboutik/views.py:134 laboutik/views.py:3266
+#: laboutik/views.py:134 laboutik/views.py:3301
 msgid "Chèque"
 msgstr ""
 
@@ -14944,7 +15177,7 @@ msgid "Remboursement effectué"
 msgstr "Remboursement effectué"
 
 #: laboutik/templates/laboutik/partial/hx_vider_carte_success.html:18
-#: laboutik/views.py:6432
+#: laboutik/views.py:6503
 msgid "Monnaie locale"
 msgstr "Monnaie locale"
 
@@ -14981,15 +15214,15 @@ msgstr ""
 msgid "cashless"
 msgstr "cashless"
 
-#: laboutik/views.py:122 laboutik/views.py:1829
+#: laboutik/views.py:122 laboutik/views.py:1853
 msgid "espèce"
 msgstr ""
 
-#: laboutik/views.py:123 laboutik/views.py:1834
+#: laboutik/views.py:123 laboutik/views.py:1858
 msgid "carte bancaire"
 msgstr "carte bancaire"
 
-#: laboutik/views.py:124 laboutik/views.py:1839
+#: laboutik/views.py:124 laboutik/views.py:1863
 msgid "chèque"
 msgstr ""
 
@@ -14997,327 +15230,329 @@ msgstr ""
 msgid "inconnu"
 msgstr ""
 
-#: laboutik/views.py:240
+#: laboutik/views.py:244
 msgid "Carte primaire"
 msgstr "Carte primaire"
 
-#: laboutik/views.py:322
+#: laboutik/views.py:352
 msgid "pièces"
 msgstr ""
 
-#: laboutik/views.py:966
+#: laboutik/views.py:996
 msgid "Carte non primaire"
 msgstr "Carte non primaire"
 
-#: laboutik/views.py:1399
+#: laboutik/views.py:1429
 msgid "Accès non autorisé à ce point de vente"
 msgstr ""
 
-#: laboutik/views.py:1587
+#: laboutik/views.py:1617
 msgid "Aucun point de vente configuré"
 msgstr ""
 
-#: laboutik/views.py:1637 laboutik/views.py:1819 laboutik/views.py:1893
-#: laboutik/views.py:2234 laboutik/views.py:2940 laboutik/views.py:5269
-#: laboutik/views.py:5443 laboutik/views.py:7019 laboutik/views.py:8341
-#: laboutik/views.py:8760 laboutik/views.py:9100
+#: laboutik/views.py:1667 laboutik/views.py:1843 laboutik/views.py:1917
+#: laboutik/views.py:2266 laboutik/views.py:2975 laboutik/views.py:5338
+#: laboutik/views.py:5512 laboutik/views.py:7090 laboutik/views.py:8412
+#: laboutik/views.py:8832 laboutik/views.py:9172
 msgid "Point de vente introuvable"
 msgstr "Point de vente introuvable"
 
-#: laboutik/views.py:1680
+#: laboutik/views.py:1710
 msgid "Resto"
 msgstr ""
 
-#: laboutik/views.py:1686
+#: laboutik/views.py:1716
 msgid "Service direct"
 msgstr "Service direct"
 
-#: laboutik/views.py:1697
+#: laboutik/views.py:1727
 msgid "Commande table "
 msgstr "Commande table "
 
-#: laboutik/views.py:1939
+#: laboutik/views.py:1963
 msgid "Aucune vente à clôturer"
 msgstr "Aucune vente à clôturer"
 
-#: laboutik/views.py:2196
+#: laboutik/views.py:2226
 msgid "Rapport envoyé par email"
 msgstr "Rapport envoyé par email"
 
-#: laboutik/views.py:2246 laboutik/views.py:8352
-msgid "Aucune imprimante configuree pour ce point de vente"
-msgstr "Aucune imprimante configuree pour ce point de vente"
+#: laboutik/views.py:2281 laboutik/views.py:8424
+msgid "Aucune imprimante configuree pour ce terminal"
+msgstr "Aucune imprimante configuree pour ce terminal"
 
-#: laboutik/views.py:2260
+#: laboutik/views.py:2295
 msgid "Aucune vente en cours — rien a imprimer"
 msgstr "Aucune vente en cours — rien à imprimer"
 
-#: laboutik/views.py:2291
+#: laboutik/views.py:2326
 msgid "Ticket X envoye a l'imprimante"
 msgstr "Ticket X envoyé à l'imprimante"
 
-#: laboutik/views.py:2370
+#: laboutik/views.py:2405
 msgid "Cle HMAC non configuree. Export impossible."
 msgstr ""
 
-#: laboutik/views.py:2391 laboutik/views.py:2493 laboutik/views.py:2606
+#: laboutik/views.py:2426 laboutik/views.py:2528 laboutik/views.py:2641
 msgid "Format de date invalide."
 msgstr ""
 
-#: laboutik/views.py:2514 laboutik/views.py:2627
+#: laboutik/views.py:2549 laboutik/views.py:2662
 msgid "Aucune cloture journaliere trouvee pour la periode."
 msgstr "Aucune cloture journaliere trouvee pour la periode."
 
-#: laboutik/views.py:2582
+#: laboutik/views.py:2617
 #, python-format
 msgid "Profil inconnu. Choix : %(profils)s"
 msgstr ""
 
-#: laboutik/views.py:2673
+#: laboutik/views.py:2708
 msgid "Jeu de comptes invalide."
 msgstr ""
 
-#: laboutik/views.py:2704
+#: laboutik/views.py:2739
 msgid "Plan comptable charge avec succes."
 msgstr ""
 
-#: laboutik/views.py:2707
+#: laboutik/views.py:2742
 #, python-format
 msgid ""
 "Plan comptable remplace avec succes (%(nb)s comptes precedents supprimes)."
 msgstr ""
 
-#: laboutik/views.py:2975
+#: laboutik/views.py:3010
 msgid "Aucune coupure saisie"
 msgstr "Aucune coupure saisie"
 
-#: laboutik/views.py:3294 laboutik/views.py:3341
+#: laboutik/views.py:3329 laboutik/views.py:3376
 msgid "Transaction introuvable"
 msgstr "Transaction introuvable"
 
-#: laboutik/views.py:3906
+#: laboutik/views.py:3941
 #, python-format
 msgid "Montant libre (%(montant)s€) inférieur au minimum (%(minimum)s€)"
 msgstr ""
 
-#: laboutik/views.py:3988
+#: laboutik/views.py:4023
 #, python-format
 msgid "Recharge %(montant)s€ → carte de %(prenom)s"
 msgstr ""
 
-#: laboutik/views.py:3993
+#: laboutik/views.py:4028
 #, python-format
 msgid "%(nom_prix)s → rattachée à %(prenom)s %(nom)s"
 msgstr ""
 
-#: laboutik/views.py:4000
+#: laboutik/views.py:4035
 #, python-format
 msgid "Billet %(nom)s — %(event)s"
 msgstr ""
 
-#: laboutik/views.py:4791
+#: laboutik/views.py:4826
 msgid "Identification du membre obligatoire pour les adhesions"
 msgstr ""
 
-#: laboutik/views.py:4951
+#: laboutik/views.py:5017
 msgid "Identification du client obligatoire pour les billets"
 msgstr ""
 
-#: laboutik/views.py:5008
+#: laboutik/views.py:5074
 #, python-format
 msgid "Evenement %(event)s complet"
 msgstr ""
 
-#: laboutik/views.py:5023
+#: laboutik/views.py:5089
 #, python-format
 msgid "Plus de places pour le tarif %(tarif)s"
 msgstr ""
 
-#: laboutik/views.py:5549 laboutik/views.py:5928
+#: laboutik/views.py:5618 laboutik/views.py:5999
 msgid "Il y a une erreur !"
 msgstr ""
 
-#: laboutik/views.py:5642 laboutik/views.py:5827
+#: laboutik/views.py:5711 laboutik/views.py:5897
 msgid "Tag NFC client requis pour les recharges"
 msgstr ""
 
-#: laboutik/views.py:5981
+#: laboutik/views.py:6052
 msgid "Les recharges ne peuvent pas être payées en cashless"
 msgstr ""
 
-#: laboutik/views.py:6081
+#: laboutik/views.py:6152
 msgid "Monnaie locale non configurée"
 msgstr "Monnaie locale non configurée"
 
-#: laboutik/views.py:6245
+#: laboutik/views.py:6316
 msgid "Réseau (FED)"
 msgstr "Réseau (FED)"
 
-#: laboutik/views.py:6306 laboutik/views.py:7219 laboutik/views.py:7597
-#: laboutik/views.py:7694
+#: laboutik/views.py:6377 laboutik/views.py:7290 laboutik/views.py:7668
+#: laboutik/views.py:7765
 msgid "Le solde du réseau a changé, rescannez la carte"
 msgstr ""
 
-#: laboutik/views.py:6766
+#: laboutik/views.py:6837
 msgid "crédit offert"
 msgstr ""
 
-#: laboutik/views.py:7057
+#: laboutik/views.py:7128
 msgid "Carte 1 inconnue"
 msgstr "Carte 1 inconnue"
 
-#: laboutik/views.py:7163
+#: laboutik/views.py:7234
 msgid "Le solde a changé, le paiement complet est possible. Réessayez."
 msgstr ""
 
-#: laboutik/views.py:7364 laboutik/views.py:7867
+#: laboutik/views.py:7435 laboutik/views.py:7938
 msgid "Solde insuffisant. Le solde a changé depuis la lecture."
 msgstr ""
 
-#: laboutik/views.py:7416 laboutik/views.py:7925
+#: laboutik/views.py:7487 laboutik/views.py:7996
 msgid "NFC"
 msgstr ""
 
-#: laboutik/views.py:7443
+#: laboutik/views.py:7514
 msgid "Carte non lue"
 msgstr ""
 
-#: laboutik/views.py:7456
+#: laboutik/views.py:7527
 msgid "La 2ème carte est la même que la 1ère. Utilisez une carte différente."
 msgstr ""
 
-#: laboutik/views.py:7470
+#: laboutik/views.py:7541
 msgid "Carte 2 inconnue"
 msgstr "Carte 2 inconnue"
 
-#: laboutik/views.py:7947
+#: laboutik/views.py:8018
 msgid "Moyen de complément non reconnu"
 msgstr ""
 
-#: laboutik/views.py:8095 laboutik/views.py:8172
+#: laboutik/views.py:8166 laboutik/views.py:8243
 msgid "Ne peut pas vider une carte primaire."
 msgstr ""
 
-#: laboutik/views.py:8101 laboutik/views.py:8178
+#: laboutik/views.py:8172 laboutik/views.py:8249
 msgid "Carte client inconnue."
 msgstr ""
 
-#: laboutik/views.py:8121
+#: laboutik/views.py:8192
 msgid "Aucun solde remboursable sur cette carte."
 msgstr "Aucun solde remboursable sur cette carte."
 
-#: laboutik/views.py:8186
+#: laboutik/views.py:8257
 msgid "PV introuvable."
 msgstr "PV introuvable."
 
-#: laboutik/views.py:8193
+#: laboutik/views.py:8264
 msgid "Cette carte caissier n'a pas acces a ce PV."
 msgstr ""
 
-#: laboutik/views.py:8210
+#: laboutik/views.py:8281
 msgid "Aucun solde remboursable (solde a pu changer)."
 msgstr "Aucun solde remboursable (le solde a pu changer)."
 
-#: laboutik/views.py:8249
+#: laboutik/views.py:8320
 msgid "Parametres manquants."
 msgstr ""
 
-#: laboutik/views.py:8260
-msgid "Pas d'imprimante configuree sur ce PV."
-msgstr ""
+#: laboutik/views.py:8331
+msgid "Pas d'imprimante configuree sur ce terminal."
+msgstr "Pas d'imprimante configuree sur ce terminal."
 
-#: laboutik/views.py:8325
+#: laboutik/views.py:8396
 msgid "Donnees manquantes pour l'impression"
 msgstr ""
 
-#: laboutik/views.py:8369
+#: laboutik/views.py:8441
 msgid "Aucune ligne trouvee pour cette transaction"
 msgstr "Aucune ligne trouvee pour cette transaction"
 
-#: laboutik/views.py:8446 laboutik/views.py:8459 laboutik/views.py:8564
+#: laboutik/views.py:8518 laboutik/views.py:8531 laboutik/views.py:8636
 msgid "Ligne d'article introuvable"
 msgstr "Ligne d'article introuvable"
 
-#: laboutik/views.py:8582
+#: laboutik/views.py:8654
 msgid "Les paiements cashless ne peuvent pas etre modifies"
 msgstr ""
 
-#: laboutik/views.py:8599
+#: laboutik/views.py:8671
 msgid "Cette vente est couverte par une cloture. Modification interdite."
 msgstr ""
 
-#: laboutik/views.py:8613
+#: laboutik/views.py:8685
 msgid "Le moyen de paiement est deja identique"
 msgstr "Le moyen de paiement est deja identique"
 
-#: laboutik/views.py:8776
+#: laboutik/views.py:8848
 msgid "Table introuvable"
 msgstr "Table introuvable"
 
-#: laboutik/views.py:8826
+#: laboutik/views.py:8898
 msgid "Aucun article valide dans la commande"
 msgstr ""
 
-#: laboutik/views.py:8867
+#: laboutik/views.py:8939
 msgid "Commande créée"
 msgstr "Commande créée"
 
-#: laboutik/views.py:8896 laboutik/views.py:8993 laboutik/views.py:9075
-#: laboutik/views.py:9320
+#: laboutik/views.py:8968 laboutik/views.py:9065 laboutik/views.py:9147
+#: laboutik/views.py:9392
 msgid "Commande introuvable"
 msgstr "Commande introuvable"
 
-#: laboutik/views.py:8908
+#: laboutik/views.py:8980
 msgid "Cette commande n'est plus ouverte"
 msgstr "Cette commande n'est plus ouverte"
 
-#: laboutik/views.py:8934
+#: laboutik/views.py:9006
 msgid "Aucun article fourni"
 msgstr ""
 
-#: laboutik/views.py:8966
+#: laboutik/views.py:9038
 msgid "Articles ajoutés"
 msgstr ""
 
-#: laboutik/views.py:9004
+#: laboutik/views.py:9076
 msgid "Cette commande ne peut pas être marquée comme servie"
 msgstr ""
 
-#: laboutik/views.py:9037
+#: laboutik/views.py:9109
 msgid "Commande servie"
 msgstr "Commande servie"
 
-#: laboutik/views.py:9085
+#: laboutik/views.py:9157
 msgid "Cette commande ne peut pas être payée"
 msgstr ""
 
-#: laboutik/views.py:9133
+#: laboutik/views.py:9205
 msgid "Aucun article à payer dans cette commande"
 msgstr ""
 
-#: laboutik/views.py:9330
+#: laboutik/views.py:9402
 msgid "Une commande payée ne peut pas être annulée"
 msgstr ""
 
-#: laboutik/views.py:9365
+#: laboutik/views.py:9437
 msgid "Commande annulée"
 msgstr "Commande annulée"
 
-#: laboutik/views.py:9512
+#: laboutik/views.py:9584
 msgid "Perte"
 msgstr ""
 
-#: laboutik/views.py:9553
+#: laboutik/views.py:9625
 msgid "autorisée"
 msgstr ""
 
-#: laboutik/views.py:9553
+#: laboutik/views.py:9625
 msgid "bloquée"
 msgstr ""
 
-#: laboutik/views.py:9656
+#: laboutik/views.py:9728
 msgid "Legacy API key, bridge flow not available. Please re-pair the device."
-msgstr "Clé API historique, le flux bridge n'est pas disponible. Veuillez ré-appairer l'appareil."
+msgstr ""
+"Clé API historique, le flux bridge n'est pas disponible. Veuillez ré-"
+"appairer l'appareil."
 
 #: newsletter/collecte.py:119
 msgid "Gratuit"
@@ -15400,7 +15635,9 @@ msgstr "Période non autorisée."
 msgid ""
 "Aucun évènement sur les %(jours)s prochains jours : aucun brouillon n'a été "
 "créé."
-msgstr "Aucun évènement sur les %(jours)s prochains jours : aucun brouillon n'a été créé."
+msgstr ""
+"Aucun évènement sur les %(jours)s prochains jours : aucun brouillon n'a été "
+"créé."
 
 #: newsletter/views.py:200
 msgid "Instance Ghost injoignable."
@@ -17325,7 +17562,9 @@ msgstr "Adhésions et abonnements en ligne — TiBillet"
 msgid ""
 "Gérez les adhésions de votre association et les abonnements récurrents : "
 "statut à jour, avantages membres, renouvellements et relances."
-msgstr "Gérez les adhésions de votre association et les abonnements récurrents : statut à jour, avantages membres, renouvellements et relances."
+msgstr ""
+"Gérez les adhésions de votre association et les abonnements récurrents : "
+"statut à jour, avantages membres, renouvellements et relances."
 
 #: seo/features.py:70
 msgid "Une adhésion reliée à tout le reste"
@@ -17405,7 +17644,9 @@ msgstr ""
 msgid ""
 "Billetterie en ligne libre et coopérative : événements gratuits et payants, "
 "tarifs adhérents, sans frais cachés ni commission."
-msgstr "Billetterie en ligne libre et coopérative : événements gratuits et payants, tarifs adhérents, sans frais cachés ni commission."
+msgstr ""
+"Billetterie en ligne libre et coopérative : événements gratuits et payants, "
+"tarifs adhérents, sans frais cachés ni commission."
 
 #: seo/features.py:133
 msgid "Des billets sans frais cachés"
@@ -18592,6 +18833,33 @@ msgstr "Rue et numéro"
 #: templates/widgets/widget_carte_adresse.html:108
 msgid "Pays"
 msgstr "Pays"
+
+#~ msgid "Paired"
+#~ msgstr "Appairé"
+
+#~ msgid "Raspberry Pi or ESP32 controlling this tap."
+#~ msgstr "Raspberry Pi ou ESP32 contrôlant cette tireuse."
+
+#~ msgid "PIN already used"
+#~ msgstr "Code PIN déjà utilisé"
+
+#~ msgid "Save to generate a PIN code. (Use 'Save and continue editing')"
+#~ msgstr ""
+#~ "Enregistrez pour générer un code PIN. (Utilisez « Enregistrer et "
+#~ "continuer la modification »)"
+
+#~ msgid "Claimed"
+#~ msgstr "Réclamé"
+
+#~ msgid "Primary Asset Location"
+#~ msgstr "Emplacement de l'actif principal"
+
+#~ msgid "Ticket printer"
+#~ msgstr "Imprimante de ticket"
+
+#~ msgid "Printer used for sale tickets at this point of sale."
+#~ msgstr ""
+#~ "Imprimante utilisée pour les tickets de vente sur ce point de vente."
 
 #~ msgid "Device pairing (PIN)"
 #~ msgstr "Appairage appareil (PIN)"

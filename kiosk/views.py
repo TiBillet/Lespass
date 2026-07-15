@@ -240,7 +240,9 @@ class KioskViewSet(viewsets.ViewSet):
         # / The DEMO fallback only picks a device THAT HAS A READER.
         if terminal is None and settings.DEMO:
             terminal = (
-                Terminal.objects.filter(archived=False, tpe__isnull=False)
+                Terminal.objects.filter(
+                    archived=False, tpe__isnull=False, tpe__active=True,
+                )
                 .order_by("name")
                 .first()
             )

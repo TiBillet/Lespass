@@ -1,15 +1,16 @@
 # CHANTIER 01 — `Terminal` et routage de l'impression
 
-> ⚠️ **RÉVISÉ par le [CHANTIER 05](./CHANTIER-05-le-terminal-preexiste.md).**
+> ⚠️ **RÉVISÉ par les chantiers [05](./CHANTIER-05-le-terminal-preexiste.md) et
+> [06](./CHANTIER-06-extraction-tpe.md).**
 >
-> Ce document dit que **le claim crée le `Terminal`**, et que `has_add_permission` vaut
-> `False`. **Ce n'est plus vrai.** Le terminal est désormais créé dans l'admin — c'est cette
-> création qui fabrique le code PIN — et le claim ne fait que le **remplir** (il lui pose son
-> compte et sa clé).
+> Deux choses que ce document décrit ont changé :
+> - **Le claim ne crée plus le `Terminal`** ; il est créé dans l'admin (ce qui fabrique son
+>   code PIN) et le claim le **remplit**. `has_add_permission` n'est plus `False` (05).
+> - **Le TPE bancaire n'est plus des champs sur `Terminal`** (`registration_code`,
+>   `stripe_id`, `type`) : c'est un modèle à part, `TPEBancaire` (06).
 >
-> Tout le reste de ce document tient : le routage de l'impression par terminal, la
-> suppression de `PointDeVente.printer`, l'abonnement WebSocket, la fonction
-> `imprimante_du_terminal()`.
+> Ce qui tient : le routage de l'impression par terminal, la suppression de
+> `PointDeVente.printer`, l'abonnement WebSocket, la fonction `imprimante_du_terminal()`.
 
 Voir [SPEC.md](./SPEC.md) pour le contexte et les décisions.
 

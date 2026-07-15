@@ -1,5 +1,14 @@
 # SPEC — Routage de l'impression par terminal
 
+> ⚠️ **Deux points de ce document ont été révisés depuis.**
+>
+> - **Le terminal existe avant l'appareil** : le claim ne le crée plus, il le remplit
+>   ([CHANTIER 05](./CHANTIER-05-le-terminal-preexiste.md)).
+> - **Le TPE bancaire est devenu un modèle à part** (`TPEBancaire`), pas trois champs sur
+>   `Terminal` ([CHANTIER 06](./CHANTIER-06-extraction-tpe.md)). Partout où cette spec décrit
+>   `Terminal.registration_code`, `Terminal.stripe_id` ou `Terminal.type`, ces champs vivent
+>   désormais sur `TPEBancaire`, et c'est le TPE qui désigne son terminal (OneToOne).
+
 ## 1. Le problème
 
 `PointDeVente.printer` (`laboutik/models.py:469`) porte l'imprimante du ticket client.

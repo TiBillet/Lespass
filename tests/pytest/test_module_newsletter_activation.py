@@ -1,23 +1,22 @@
 """
-Activation du module Newsletter : reservee aux superadmins.
-/ Newsletter module activation: superadmins only.
+Activation du module Newsletter : ouverte a tous les gestionnaires.
+/ Newsletter module activation: open to every manager.
 
 LOCALISATION : tests/pytest/test_module_newsletter_activation.py
 
 CE QUE CES TESTS PROTEGENT
 --------------------------
-Le module Newsletter pilote une instance **Ghost** auto-hebergee. Celle-ci doit d'abord etre
-installee et DIMENSIONNEE (la charge serveur depend du volume de mails envoyes). On ne peut
-donc pas le laisser s'activer d'un clic.
+Le module Newsletter pilote une instance **Ghost** auto-hebergee. Il s'active comme les
+autres modules : n'importe quel gestionnaire (admin du tenant) peut le faire depuis le
+dashboard. La contrainte « il faut un serveur Ghost » n'est pas un verrou technique : elle
+est simplement rappelee dans la description du module et sur la page de configuration, avec
+une invitation a contacter l'equipe TiBillet (qui peut heberger l'instance).
 
 Regles :
 1. Le module est **desactive par defaut**.
-2. Seul un **superadmin** peut l'activer.
-3. Un gestionnaire ordinaire qui clique ne recoit PAS un refus sec : on lui affiche une
-   invitation a contacter l'equipe TiBillet, avec les liens Matrix / Discord / email.
-4. Le POST de bascule est protege LUI AUSSI — la modale n'est que de l'affichage, une requete
-   forgee la contournerait. **On ne fait jamais confiance a l'interface pour appliquer une
-   regle d'acces.**
+2. Tout gestionnaire du tenant peut l'activer (modale de confirmation normale + POST accepte).
+3. La section « Newsletter » de la sidebar n'apparait que module actif, et la config Ghost y
+   vit (elle a demenage hors de « Outils externes »).
 
 Tests d'integration sur la base de DEV. Ils remettent le module dans son etat initial a la
 fin de chaque test (fixture `remettre_le_module_comme_avant`).
@@ -72,14 +71,6 @@ def remettre_le_module_comme_avant(tenant):
         configuration.save()
 
 
-def _superadmin(tenant):
-    with tenant_context(tenant):
-        utilisateur = TibilletUser.objects.filter(is_superuser=True).first()
-    if not utilisateur:
-        pytest.skip("Aucun superadmin dans la base de dev.")
-    return utilisateur
-
-
 @pytest.fixture
 def gestionnaire_ordinaire(tenant):
     """
@@ -112,6 +103,14 @@ def gestionnaire_ordinaire(tenant):
 
     with tenant_context(tenant):
         utilisateur.delete()
+
+
+def _superadmin(tenant):
+    with tenant_context(tenant):
+        utilisateur = TibilletUser.objects.filter(is_superuser=True).first()
+    if not utilisateur:
+        pytest.skip("Aucun superadmin dans la base de dev.")
+    return utilisateur
 
 
 def _client_http(tenant, utilisateur):
@@ -152,73 +151,27 @@ class TestValeurParDefaut:
     def test_le_module_newsletter_est_desactive_par_defaut(self):
         """
         On lit le DEFAUT DU CHAMP, jamais get_solo() : la Configuration d'un tenant porte
-        la valeur reelle, qu'un superadmin peut activer. La lire ici rendrait le test
+        la valeur reelle, qu'un gestionnaire peut activer. La lire ici rendrait le test
         dependant de l'etat de la base.
         / Read the FIELD DEFAULT, never get_solo(): the tenant's Configuration holds the
-        real value, which a superadmin may have switched on.
+        real value, which a manager may have switched on.
         """
         champ = Configuration._meta.get_field("module_newsletter")
         assert champ.default is False
 
 
 @pytest.mark.django_db
-class TestGestionnaireOrdinaire:
+class TestActivationParTousLesGestionnaires:
 
-    def test_il_voit_la_modale_de_contact_et_pas_le_bouton_dactivation(
+    def test_le_gestionnaire_voit_la_modale_de_confirmation_normale(
         self, tenant, gestionnaire_ordinaire, remettre_le_module_comme_avant
     ):
         """
-        Pas un mur, une porte : on lui explique pourquoi, et on lui donne les liens pour
-        joindre l'equipe TiBillet.
+        Le module s'active comme les autres : un gestionnaire ordinaire recoit la modale de
+        confirmation habituelle, avec son bouton de bascule.
         """
         with tenant_context(tenant):
             client = _client_http(tenant, gestionnaire_ordinaire)
-            reponse = client.get(URL_DE_LA_MODALE)
-
-        assert reponse.status_code == 200
-        page = reponse.content.decode()
-
-        # C'est bien la modale de CONTACT, pas celle de confirmation.
-        assert 'data-testid="module-modal-contact"' in page
-        assert "serveur de newsletter Ghost" in page
-
-        # Les trois canaux de contact sont la.
-        assert "contact@tibillet.re" in page
-        assert "matrix.to" in page
-        assert "discord.gg" in page
-
-        # Et SURTOUT : aucun bouton de bascule.
-        assert "module-toggle/module_newsletter" not in page
-
-    def test_un_post_force_est_refuse_403(
-        self, tenant, gestionnaire_ordinaire, remettre_le_module_comme_avant
-    ):
-        """
-        SECURITE. La modale n'est que de l'affichage : une requete forgee la contourne.
-        Le POST doit refuser tout seul — on ne fait JAMAIS confiance a l'interface pour
-        appliquer une regle d'acces.
-        """
-        with tenant_context(tenant):
-            client = _client_http(tenant, gestionnaire_ordinaire)
-            _poser_letat_du_module(False)
-            reponse = client.post(URL_DE_LA_BASCULE)
-
-        assert reponse.status_code == 403
-
-        with tenant_context(tenant):
-            assert Configuration.get_solo().module_newsletter is False, (
-                "Un gestionnaire ordinaire a reussi a activer le module par un POST force."
-            )
-
-
-@pytest.mark.django_db
-class TestSuperadmin:
-
-    def test_il_voit_la_modale_de_confirmation_normale(
-        self, tenant, remettre_le_module_comme_avant
-    ):
-        with tenant_context(tenant):
-            client = _client_http(tenant, _superadmin(tenant))
             reponse = client.get(URL_DE_LA_MODALE)
 
         assert reponse.status_code == 200
@@ -226,12 +179,15 @@ class TestSuperadmin:
 
         # La modale de confirmation, avec son bouton de bascule.
         assert "module-toggle/module_newsletter" in page
-        # Et PAS la modale de contact.
-        assert 'data-testid="module-modal-contact"' not in page
 
-    def test_il_peut_activer_le_module(self, tenant, remettre_le_module_comme_avant):
+    def test_le_gestionnaire_peut_activer_le_module(
+        self, tenant, gestionnaire_ordinaire, remettre_le_module_comme_avant
+    ):
+        """
+        Le POST de bascule est accepte pour un gestionnaire du tenant : le module s'active.
+        """
         with tenant_context(tenant):
-            client = _client_http(tenant, _superadmin(tenant))
+            client = _client_http(tenant, gestionnaire_ordinaire)
             _poser_letat_du_module(False)
             reponse = client.post(URL_DE_LA_BASCULE)
 

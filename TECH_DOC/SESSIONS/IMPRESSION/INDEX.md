@@ -18,17 +18,18 @@ rôles matériels (LaBoutik, Kiosque, Tireuse).
 | [CHANTIER-01-terminal-et-routage.md](./CHANTIER-01-terminal-et-routage.md) | Modèle `Terminal`, suppression de `PointDeVente.printer`, résolution de l'imprimante, abonnement WebSocket, admin | ✅ **FAIT 2026-07-14** — 846 tests verts, vérifié dans Chrome |
 | [CHANTIER-02-securite-websocket.md](./CHANTIER-02-securite-websocket.md) | Durcissement du `PrinterConsumer` : contrôle d'accès et cloisonnement du groupe Redis par tenant | ✅ **FAIT 2026-07-14** — 854 tests verts |
 | [CHANTIER-03-unification-appairage.md](./CHANTIER-03-unification-appairage.md) | Un seul mécanisme d'appairage pour les trois rôles. Retrait de `TireuseBec.pairing_device`, convergence des clés API, `PairingDevice` réduit à l'appairage | ✅ **FAIT** — ⚠️ **révisé par le 05** |
-| [CHANTIER-05-le-terminal-preexiste.md](./CHANTIER-05-le-terminal-preexiste.md) | **Le terminal existe AVANT l'appareil.** On le crée dans l'admin (ce qui fabrique son code PIN), le claim le **remplit**. `PairingDevice` sort de l'admin. Un seul écran pour tout le matériel | ✅ **FAIT 2026-07-14** — 866 tests verts, vérifié dans Chrome |
+| [CHANTIER-05-le-terminal-preexiste.md](./CHANTIER-05-le-terminal-preexiste.md) | **Le terminal existe AVANT l'appareil.** On le crée dans l'admin (ce qui fabrique son code PIN), le claim le **remplit**. `PairingDevice` sort de l'admin. Un seul écran pour tout le matériel | ✅ **FAIT** — ⚠️ « pas de TPE objet » révisé par le 06 |
+| [CHANTIER-06-extraction-tpe.md](./CHANTIER-06-extraction-tpe.md) | **Le lecteur de carte devient un objet** (`TPEBancaire`), typable (Stripe, demain SumUp) et **déplaçable** d'un appareil à l'autre. Sidebar : Terminaux + Imprimantes + TPE bancaires | ✅ **FAIT 2026-07-15** — vérifié dans Chrome |
 
 > ⚠️ **Le CHANTIER 05 révise les chantiers 01 et 03** : ils décrivent un claim qui *crée* le
 > terminal. Ce n'est plus le cas. Les bandeaux en tête de ces documents le disent.
 
 **Écarts entre la spec et l'implémentation :**
 
-- `StripeLocation` a dû suivre `Terminal` dans `laboutik`. Elle n'est utilisée que par
-  `Terminal.get_stripe_id()` ; la laisser dans `kiosk` aurait créé un couplage circulaire.
-- Pas de proxy « TPE bancaires » : un TPE n'est pas un objet, c'est une **capacité** du
-  terminal. On l'active en éditant le terminal.
+- `StripeLocation` a dû suivre `Terminal` dans `laboutik`. Elle n'est utilisée que par le
+  TPE ; la laisser dans `kiosk` aurait créé un couplage circulaire.
+- Le TPE a finalement été **extrait en modèle** (`TPEBancaire`) au chantier 06 — la décision
+  « pas d'objet TPE » posée ici est révisée.
 
 ## Le pivot : `Terminal` existe déjà
 

@@ -70,6 +70,13 @@ classes custom rendraient du blanc sur blanc. On utilise ses variables CSS.
         {% translate "1. La connexion à votre serveur Ghost" %}
       </h3>
 
+      {# Ce module a besoin d'un serveur Ghost. Pour qui n'en a pas, on indique que #}
+      {# l'equipe TiBillet peut en heberger un. / This module needs a Ghost server; the #}
+      {# TiBillet team can host one for those who don't have one yet. #}
+      <p style="font-size:.8125rem;line-height:1.6;color:var(--color-base-500,#6b7280);margin-bottom:.875rem">
+        {% blocktranslate %}Il vous faut un serveur Ghost pour piloter vos newsletters. L'équipe de TiBillet peut vous en héberger un&nbsp;: contactez-nous à <a href="mailto:contact@tibillet.re" style="color:var(--color-primary-600,#7c3aed)">contact@tibillet.re</a>&nbsp;!{% endblocktranslate %}
+      </p>
+
       <p style="font-size:.8125rem;line-height:1.6;color:var(--color-base-500,#6b7280);margin-bottom:.875rem">
         {% blocktranslate %}Renseignez ci-dessous l'adresse de votre instance et sa <strong>clé Admin API</strong> (Ghost&nbsp;: Settings → Integrations → Add custom integration), puis enregistrez.{% endblocktranslate %}
       </p>

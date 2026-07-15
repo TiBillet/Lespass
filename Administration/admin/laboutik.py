@@ -16,7 +16,6 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from solo.admin import SingletonModelAdmin
 from unfold.admin import ModelAdmin, TabularInline
-from unfold.widgets import UnfoldAdminSelectWidget
 
 from Administration.admin.products import ICON_POS, IconPickerWidget
 from Administration.admin.site import staff_admin_site
@@ -287,23 +286,6 @@ class PrinterAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
 
-class TermUserChoiceField(forms.ModelChoiceField):
-    """
-    Affiche le nom de l'appareil plutot que son email synthetique.
-    / Shows the device name instead of its synthetic email.
-
-    LOCALISATION : Administration/admin/laboutik.py
-
-    Un TermUser a un email fabrique de la forme <uuid>@terminals.local : illisible.
-    Le nom saisi a l'appairage est recopie dans first_name.
-    """
-
-    def label_from_instance(self, term_user):
-        if term_user.first_name:
-            return term_user.first_name
-        return term_user.email
-
-
 class TerminalForm(forms.ModelForm):
     """
     Formulaire d'un terminal : creation et edition.
@@ -328,12 +310,18 @@ class TerminalForm(forms.ModelForm):
 
     class Meta:
         model = Terminal
-        # Le lecteur de carte bancaire n'est PAS ici : c'est un objet a part (TPEBancaire),
-        # et c'est LUI qui designe l'appareil sur lequel il est branche. On le branche donc
-        # depuis « TPE bancaires », pas depuis ici — parce que c'est le lecteur qu'on
-        # deplace, pas l'appareil.
-        # / The card reader is NOT here: it is a separate object that points at the device.
-        fields = ["name", "terminal_role", "printer", "term_user", "archived"]
+        # Ni le compte (term_user), ni le lecteur de carte ne sont dans ce formulaire :
+        #
+        # - term_user est le COMPTE de l'appareil. Il n'existe pas avant l'appairage, et il
+        #   est pose par le claim. Le gestionnaire ne doit jamais le choisir a la main : le
+        #   rattacher a un autre compte casserait le lien avec la cle d'API et la revocation.
+        #   Il apparait en lecture seule dans TerminalAdmin.
+        #
+        # - le lecteur de carte (TPEBancaire) est un objet a part, qui designe LUI l'appareil
+        #   sur lequel il est branche. On le branche depuis « TPE bancaires ».
+        # / Neither the account (posed by the claim) nor the card reader (a separate object)
+        # belongs in this form.
+        fields = ["name", "terminal_role", "printer", "archived"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -361,29 +349,6 @@ class TerminalForm(forms.ModelForm):
                 for valeur, libelle in TibilletUser.TERMINAL_ROLE_CHOICES
                 if valeur != TibilletUser.ROLE_TIREUSE
             ]
-
-        # La cle etrangere vise TibilletUser, qui est une table du schema public.
-        # Le manager du proxy TermUser filtre deja par tenant : on s'appuie dessus.
-        # SANS ce queryset, la liste deroulante afficherait les terminaux de TOUS les
-        # lieux — et un pk force pointant vers le terminal d'un autre lieu serait accepte.
-        #
-        # On ecarte aussi les comptes desactives : ce sont les traces d'appareils revoques
-        # ou remplaces, ils n'ont plus a etre rattachables.
-        # / Without this queryset, the dropdown would leak across tenants. Inactive accounts
-        # are traces of revoked devices: they must not be re-attachable.
-        from AuthBillet.models import TermUser
-        terminaux_appaires = TermUser.objects.filter(
-            is_active=True,
-        ).order_by("first_name", "email")
-
-        self.fields["term_user"] = TermUserChoiceField(
-            queryset=terminaux_appaires,
-            required=False,
-            label=_("Compte du terminal"),
-            help_text=_("L'appareil appairé auquel ce terminal correspond."),
-            empty_label=_("— Aucun —"),
-            widget=UnfoldAdminSelectWidget(),
-        )
 
 
 # --- Lecteur de carte bancaire (TPE) ---
@@ -575,6 +540,24 @@ class TerminalAdmin(ModelAdmin):
     list_select_related = ('term_user', 'printer', 'tpe')
     list_filter = ['terminal_role', 'archived']
     search_fields = ['name']
+
+    # Le compte de l'appareil est en LECTURE SEULE. Il est pose par l'appairage (le claim),
+    # jamais choisi a la main : le rattacher a un autre compte casserait le lien avec sa
+    # cle d'API et la revocation. On le montre, on ne le touche pas.
+    # / The device's account is READ-ONLY: it is set by pairing, never chosen by hand.
+    readonly_fields = ('compte_de_l_appareil',)
+
+    @admin.display(description=_("Compte de l'appareil"))
+    def compte_de_l_appareil(self, terminal):
+        """
+        Le compte pose par l'appairage. Vide tant que l'appareil n'a pas ete appaire.
+        / The account set by pairing. Empty until the device has been paired.
+        """
+        if terminal.term_user is None:
+            return _("— en attente d'appairage —")
+        # first_name porte le nom lisible ; l'email est synthetique.
+        # / first_name carries the readable name; the email is synthetic.
+        return terminal.term_user.first_name or terminal.term_user.email
 
     @admin.display(description=_("TPE bancaire"))
     def lecteur_de_carte(self, terminal):

@@ -5,6 +5,11 @@
 >
 > **Ce chantier RÉVISE les chantiers [01](./CHANTIER-01-terminal-et-routage.md) et
 > [03](./CHANTIER-03-unification-appairage.md)**, où le claim *créait* le terminal.
+>
+> ⚠️ **Lui-même révisé par le [CHANTIER 06](./CHANTIER-06-extraction-tpe.md).** Ce document
+> dit « pas de page TPE bancaires, le TPE est une capacité du terminal » et parle de
+> `Terminal.stripe_id`. **C'est faux depuis le 06** : le TPE est un modèle à part
+> (`TPEBancaire`), avec sa page admin, et c'est lui qui désigne son terminal.
 
 ## Le problème : l'admin mentait
 

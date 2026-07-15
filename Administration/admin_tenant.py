@@ -497,29 +497,6 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         is_active = getattr(configuration, field_name)
         module_name = str(MODULE_FIELDS[field_name]["name"])
 
-        # Certains modules demandent une INSTALLATION cote serveur avant d'etre utilisables
-        # (la newsletter a besoin d'une instance Ghost, dimensionnee selon le volume de
-        # mails). Ils sont marques `superadmin_seulement` dans MODULE_FIELDS.
-        #
-        # Un gestionnaire ordinaire qui clique ne recoit PAS un refus sec : on lui affiche
-        # une invitation a contacter l'equipe TiBillet, avec les liens utiles. C'est une
-        # porte d'entree, pas un mur.
-        # / Some modules need a SERVER-SIDE install first (the newsletter needs a Ghost
-        # instance, sized for the mail volume). A regular manager gets an invitation to
-        # reach out, not a blunt refusal.
-        module_reserve_au_superadmin = MODULE_FIELDS[field_name].get(
-            "superadmin_seulement", False
-        )
-        utilisateur_est_superadmin = request.user.is_superuser
-
-        if module_reserve_au_superadmin and not utilisateur_est_superadmin:
-            html = render_to_string(
-                'admin/dashboard_module_modal_contact.html',
-                {"module_name": module_name},
-                request=request,
-            )
-            return HttpResponse(html)
-
         toggle_url = reverse(
             'staff_admin:configuration-module-toggle',
             args=[field_name],
@@ -541,22 +518,6 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         """HTMX POST : bascule un module et renvoie les cartes mises a jour."""
         if field_name not in MODULE_FIELDS:
             return HttpResponse("", status=400)
-
-        # SECURITE : le controle est refait ICI, dans le POST, et pas seulement dans la
-        # modale. La modale n'est que de l'affichage — une requete forgee la contournerait.
-        # On ne fait JAMAIS confiance a l'interface pour appliquer une regle d'acces.
-        # / SECURITY: the check is re-done HERE, in the POST, not only in the modal. The
-        # modal is display only; a crafted request would bypass it. Never trust the UI to
-        # enforce an access rule.
-        module_reserve_au_superadmin = MODULE_FIELDS[field_name].get(
-            "superadmin_seulement", False
-        )
-        if module_reserve_au_superadmin and not request.user.is_superuser:
-            logger.warning(
-                f"module_toggle : '{request.user}' a tente d'activer le module "
-                f"'{field_name}', reserve aux superadmins."
-            )
-            return HttpResponse("", status=403)
 
         configuration = Configuration.get_solo()
         current_value = getattr(configuration, field_name)

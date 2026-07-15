@@ -751,10 +751,9 @@ def get_sidebar_navigation(request):
 
     # --- Newsletter : visible SEULEMENT si le module est actif ---
     #
-    # Le module est desactive par defaut et ne s'active que par un superadmin (une instance
-    # Ghost doit d'abord etre installee et dimensionnee). Tant qu'il est inactif, la section
-    # n'existe pas dans la sidebar : inutile de montrer une config Ghost a un lieu qui n'a
-    # pas de serveur Ghost.
+    # Le module est desactive par defaut. Tant qu'il est inactif, la section n'existe pas
+    # dans la sidebar : inutile de montrer une config Ghost a un lieu qui n'a pas de serveur
+    # Ghost.
     #
     # La configuration Ghost vit ICI, et nulle part ailleurs : c'est le serveur d'envoi de
     # la newsletter. La ranger dans « Outils externes », a cote de Webhook et Brevo, la
@@ -908,20 +907,21 @@ MODULE_FIELDS = {
         ),
         "testid": "dashboard-card-pages",
     },
-    # Newsletter : desactive par defaut, activable par un SUPERADMIN seulement.
-    # Une instance Ghost doit d'abord etre installee et dimensionnee (la charge serveur
-    # depend du volume de mails). Un gestionnaire qui clique voit une invitation a
-    # contacter l'equipe TiBillet — pas un refus sec. Voir `superadmin_seulement`.
-    # / Newsletter: OFF by default, SUPERADMIN-ONLY. A Ghost instance must be installed
-    # and sized first. A regular manager clicking it gets an invitation to reach out.
+    # Newsletter : desactive par defaut, activable par n'importe quel gestionnaire, comme
+    # les autres modules. Le module pilote une instance Ghost auto-hebergee : il faut donc
+    # un serveur Ghost pour s'en servir. La description le rappelle et invite a contacter
+    # l'equipe TiBillet, qui peut en heberger un.
+    # / Newsletter: OFF by default, enabled by any manager like the other modules. It drives
+    # a self-hosted Ghost instance, so a Ghost server is required; the description says so.
     "module_newsletter": {
         "name": _("Newsletter"),
         "description": _(
             "Evènements, rappels d'adhésions, résumé de vos activités, "
-            "pilotez votre newsletter avec TiBillet !"
+            "pilotez votre newsletter avec TiBillet ! Il vous faut un serveur Ghost "
+            "pour piloter vos newsletters : l'équipe de TiBillet peut vous en héberger "
+            "un, contactez-nous !"
         ),
         "testid": "dashboard-card-newsletter",
-        "superadmin_seulement": True,
     },
     # FROM V2 : TO IMPLEMENT LATER ON
     "module_monnaie_locale": {

@@ -143,6 +143,54 @@ def test_kiosk_refill_with_wisepos_creates_payment_intent(tenant, kiosk_user_and
 
 
 @pytest.mark.django_db
+def test_kiosk_refill_refuse_si_la_borne_n_a_pas_de_lecteur(tenant, clean_kiosk):
+    """
+    Une borne sans lecteur de carte refuse le rechargement, PROPREMENT et SANS appeler
+    Stripe. Sinon l'utilisateur, devant la borne, verrait une erreur incomprehensible.
+    / A kiosk with no card reader refuses the refill cleanly, WITHOUT calling Stripe.
+    """
+    with tenant_context(tenant):
+        user = TermUser.objects.create(
+            email="test-kiosk-sans-lecteur@tibillet.localhost",
+            username="test-kiosk-sans-lecteur@tibillet.localhost",
+            terminal_role=TibilletUser.ROLE_KIOSQUE,
+            is_active=True,
+        )
+        # La borne existe et est appairee, mais AUCUN lecteur n'y est branche.
+        # / The kiosk exists and is paired, but NO reader is plugged in.
+        Terminal.objects.create(name="TEST_KIOSK_SansLecteur", term_user=user)
+
+        CarteCashless.objects.create(tag_id=TEST_TAG_ID, number=TEST_TAG_ID)
+        client = _authenticated_client(user, tenant)
+
+        # send_to_terminal ne doit JAMAIS etre atteint : la vue refuse avant.
+        # / send_to_terminal must NEVER be reached: the view refuses first.
+        with patch("kiosk.validators.FedowAPI") as mock_fedow_api, \
+             patch("kiosk.models.PaymentsIntent.send_to_terminal") as mock_send:
+            mock_fedow_api.return_value.NFCcard.retrieve.return_value = {"uuid": "fake"}
+
+            response = client.post("/kiosk/refill_with_wisepos/", data={
+                "totalAmount": "10.00",
+                "tag_id": TEST_TAG_ID,
+            })
+
+        # La vue rend une erreur en 200 (HTMX ne swappe pas les 4xx), et n'a rien envoye.
+        # / The view renders an error as 200 (HTMX won't swap 4xx) and sent nothing.
+        assert response.status_code == 200
+        mock_send.assert_not_called()
+        assert not PaymentsIntent.objects.filter(
+            terminal__name="TEST_KIOSK_SansLecteur",
+        ).exists()
+
+    with tenant_context(tenant):
+        TermUser.objects.filter(
+            email="test-kiosk-sans-lecteur@tibillet.localhost",
+        ).delete()
+        Terminal.objects.filter(name="TEST_KIOSK_SansLecteur").delete()
+        CarteCashless.objects.filter(tag_id=TEST_TAG_ID).delete()
+
+
+@pytest.mark.django_db
 def test_kiosk_list_renders_select_amount_page_for_real(tenant, kiosk_user_and_terminal):
     """GET /kiosk/ rend reellement kiosk/select_amount.html (Task 02B : templates
     + static kiosk copies depuis LaBoutik). Pas de mock de render : on verifie
