@@ -217,13 +217,17 @@ def _lire_version():
     return "?"
 
 
-def _construire_state(point_de_vente=None, carte_primaire_obj=None):
+def _construire_state(point_de_vente=None, carte_primaire_obj=None, user=None):
     """
     Construit le dictionnaire "state" à chaque requête.
     Builds the "state" dictionary on each request.
 
     Le state est lu côté client (JS) via stateJson pour piloter l'interface.
     State is read client-side (JS) via stateJson to drive the interface.
+
+    :param point_de_vente: le PV affiche, si on est sur l'interface caisse
+    :param carte_primaire_obj: la carte du responsable de caisse, si elle est posee
+    :param user: l'utilisateur de la requete — sert a trouver l'imprimante du terminal
     """
     config = Configuration.get_solo()
     state = {
@@ -265,6 +269,32 @@ def _construire_state(point_de_vente=None, carte_primaire_obj=None):
         state["mode_gerant"] = (
             carte_primaire_obj.edit_mode if carte_primaire_obj else False
         )
+
+    # --- Le canal d'impression de CE terminal ---
+    #
+    # C'est cette valeur qui dit a la tablette a quel canal WebSocket s'abonner pour
+    # recevoir ses tickets : ws/printer/<uuid>/ (laboutik/static/js/manageSunmiPrint.js).
+    #
+    # ELLE DOIT ETRE PRESENTE SUR TOUTES LES PAGES, y compris l'ecran d'attente de la carte
+    # primaire. L'application Android ouvre son WebSocket une seule fois, au demarrage
+    # (evenement `deviceready` de Cordova), et la premiere page qu'elle affiche est cet
+    # ecran d'attente. Si l'imprimante n'y figurait pas, aucun canal ne serait ouvert, et
+    # plus rien ne s'imprimerait de toute la session.
+    # / This tells the tablet which WebSocket channel to subscribe to for its tickets.
+    # IT MUST BE ON EVERY PAGE, including the primary-card waiting screen: the Android app
+    # opens its WebSocket once, at startup (Cordova `deviceready`), and that screen is the
+    # first page it shows. Without it, no channel would ever be opened.
+    #
+    # Vide quand il n'y a rien a imprimer : navigateur d'un gestionnaire (pas un terminal),
+    # terminal sans imprimante, ou imprimante desactivee.
+    # / Empty when there is nothing to print.
+    printer_de_ce_terminal = imprimante_du_terminal(user)
+    state["printer"] = {
+        # Le PK de Printer s'appelle `uuid`, pas `id`.
+        # / Printer's primary key is named `uuid`, not `id`.
+        "uuid": str(printer_de_ce_terminal.uuid),
+        "name": printer_de_ce_terminal.name,
+    } if printer_de_ce_terminal else None
 
     return state
 
@@ -1507,7 +1537,7 @@ class CaisseViewSet(viewsets.ViewSet):
         # pour le chargement des assets de cordova (plugins)
         type_app = request.GET.get("type_app", "unknown")
 
-        state = _construire_state()
+        state = _construire_state(user=request.user)
         context = {
             "state": state,
             "stateJson": dumps(state),
@@ -1670,7 +1700,7 @@ class CaisseViewSet(viewsets.ViewSet):
 
         # --- Construire le state (enrichi avec PV + carte primaire) ---
         # --- Build state (enriched with POS + primary card) ---
-        state = _construire_state(pv, carte_primaire_obj)
+        state = _construire_state(pv, carte_primaire_obj, user=request.user)
 
         # --- Choisir le template selon le mode du point de vente ---
         # --- Choose the template based on the point of sale mode ---
@@ -1761,12 +1791,6 @@ class CaisseViewSet(viewsets.ViewSet):
         # Global POS interface configuration (singleton, get_or_create)
         laboutik_config = LaboutikConfiguration.get_solo()
 
-        # récupération de l'imprimante du pv
-        state["printer"] = {
-            "uuid": str(pv.printer.uuid),
-            "name": pv.printer.name,
-        } if pv.printer else None
-
         context = {
             "hostname_client": "",
             "state": state,
@@ -1814,7 +1838,7 @@ class CaisseViewSet(viewsets.ViewSet):
         # --- Load the point of sale from DB ---
         try:
             pv = PointDeVente.objects.get(uuid=uuid_pv)
-            state = _construire_state(pv)
+            state = _construire_state(pv, user=request.user)
         except (PointDeVente.DoesNotExist, ValueError):
             raise Http404(_("Point de vente introuvable"))
 
@@ -2033,16 +2057,22 @@ class CaisseViewSet(viewsets.ViewSet):
             statut=CommandeSauvegarde.OPEN,
         ).update(statut=CommandeSauvegarde.CANCEL)
 
-        # --- 8. Imprimer le Ticket Z sur l'imprimante du PV ---
-        # / Print the Z-ticket on the POS printer
-        if point_de_vente.printer and point_de_vente.printer.active:
+        # --- 8. Imprimer le Ticket Z sur l'imprimante du terminal qui cloture ---
+        #
+        # La cloture est GLOBALE au lieu (elle couvre tous les points de vente), mais son
+        # ticket sort sur l'imprimante de l'appareil qui la declenche : c'est l'operateur
+        # qui est devant, c'est lui qui doit recuperer le papier.
+        # / The closure is GLOBAL to the venue, but its ticket prints on the printer of the
+        # device that triggered it: the operator is standing right there.
+        printer_de_ce_terminal = imprimante_du_terminal(request.user)
+        if printer_de_ce_terminal:
             from laboutik.printing.formatters import formatter_ticket_cloture
             from laboutik.printing.tasks import imprimer_async
 
             ticket_z_data = formatter_ticket_cloture(cloture)
             schema_name = connection.schema_name
             imprimer_async.delay(
-                str(point_de_vente.printer.pk),
+                str(printer_de_ce_terminal.pk),
                 ticket_z_data,
                 schema_name,
             )
@@ -2220,11 +2250,13 @@ class CaisseViewSet(viewsets.ViewSet):
         """
         uuid_pv = request.POST.get("uuid_pv", "")
 
-        # Recuperer le PV et son imprimante / Get POS and its printer
+        # Le point de vente n'est plus utilise pour trouver l'imprimante (c'est le
+        # terminal qui la porte), mais on continue de valider qu'il existe : un POST
+        # qui reference un point de vente inconnu est une requete malformee.
+        # / The point of sale no longer carries the printer, but we still validate it
+        # exists: a POST referencing an unknown one is a malformed request.
         try:
-            point_de_vente = PointDeVente.objects.select_related("printer").get(
-                uuid=uuid_pv
-            )
+            PointDeVente.objects.get(uuid=uuid_pv)
         except (PointDeVente.DoesNotExist, ValueError):
             return render(
                 request,
@@ -2236,14 +2268,17 @@ class CaisseViewSet(viewsets.ViewSet):
                 status=404,
             )
 
-        if not point_de_vente.printer or not point_de_vente.printer.active:
+        # Le ticket X sort sur l'imprimante du terminal qui le demande.
+        # / The X-ticket prints on the requesting terminal's printer.
+        printer_de_ce_terminal = imprimante_du_terminal(request.user)
+        if not printer_de_ce_terminal:
             return render(
                 request,
                 "laboutik/partial/hx_messages.html",
                 {
                     "msg_type": "warning",
                     "msg_content": _(
-                        "Aucune imprimante configuree pour ce point de vente"
+                        "Aucune imprimante configuree pour ce terminal"
                     ),
                 },
                 status=400,
@@ -2278,7 +2313,7 @@ class CaisseViewSet(viewsets.ViewSet):
 
         schema_name = connection.schema_name
         imprimer_async.delay(
-            str(point_de_vente.printer.pk),
+            str(printer_de_ce_terminal.pk),
             ticket_data,
             schema_name,
         )
@@ -3576,7 +3611,7 @@ def _construire_contexte_ventes(request):
     # Un state minimal suffit pour les vues Ventes (pas de NFC, pas de panier)
     # / state and stateJson: needed for base.html (JS init)
     # A minimal state is enough for Sales views (no NFC, no cart)
-    state = _construire_state()
+    state = _construire_state(user=request.user)
 
     return {
         "pv": pv_dict,
@@ -4843,26 +4878,67 @@ def _creer_adhesions_depuis_panier(request, articles_panier, lignes_articles=Non
     return memberships_creees
 
 
-def imprimer_billet(ticket, reservation, event, pv):
+def imprimante_du_terminal(user):
+    """
+    Renvoie l'imprimante ACTIVE du terminal qui fait la demande, ou None.
+    / Returns the requesting terminal's ACTIVE printer, or None.
+
+    LOCALISATION : laboutik/views.py
+
+    C'est LA regle de resolution de l'impression : tout ce qu'un terminal imprime
+    (ticket de vente, billet, recu de rechargement, ticket X, ticket Z) sort sur SON
+    imprimante — celle qui est branchee sur l'appareil, pas sur celle d'un autre.
+
+    POURQUOI PAS LE POINT DE VENTE : en festival, une vingtaine de tablettes encaissent
+    sur le meme point de vente « Bar ». Faire porter l'imprimante par le point de vente
+    ferait sortir chaque ticket sur les vingt tablettes a la fois.
+    Voir TECH_DOC/SESSIONS/IMPRESSION/SPEC.md.
+
+    Renvoie None dans quatre cas, tous legitimes — aucun n'est une erreur, on n'imprime
+    simplement pas :
+    - l'utilisateur n'est pas authentifie (chemin Api-Key : AnonymousUser) ;
+    - c'est un humain en session admin, donc pas un terminal (il n'a pas de .terminal) ;
+    - le terminal n'a pas d'imprimante configuree ;
+    - son imprimante est desactivee.
+
+    :param user: l'utilisateur de la requete (request.user)
+    :return: laboutik.Printer, ou None
+    """
+    if not user or not user.is_authenticated:
+        return None
+
+    # getattr avec une valeur par defaut FONCTIONNE sur une relation inverse OneToOne
+    # absente : Django leve RelatedObjectDoesNotExist, qui herite d'AttributeError.
+    # / getattr with a default DOES work on a missing reverse OneToOne relation.
+    terminal = getattr(user, 'terminal', None)
+    if terminal is None:
+        return None
+
+    printer = terminal.printer
+    if printer is None or not printer.active:
+        return None
+
+    return printer
+
+
+def imprimer_billet(ticket, reservation, event, printer):
     """
     Lance l'impression asynchrone d'un billet via Celery.
-    Si le point de vente n'a pas d'imprimante configuree, on log sans erreur.
+    Si aucune imprimante n'est fournie, on log sans erreur.
     / Launches asynchronous ticket printing via Celery.
-    If the point of sale has no configured printer, logs without error.
+    If no printer is given, logs without error.
 
     LOCALISATION : laboutik/views.py
 
     :param ticket: BaseBillet.Ticket
     :param reservation: BaseBillet.Reservation
     :param event: BaseBillet.Event
-    :param pv: laboutik.PointDeVente (pour recuperer l'imprimante)
+    :param printer: laboutik.Printer, resolue par imprimante_du_terminal(). Peut etre None.
     """
-    # Verifier que le PV a une imprimante configuree
-    # / Check that the POS has a configured printer
-    if not pv or not pv.printer or not pv.printer.active:
+    if printer is None:
         logger.info(
-            f"[PRINT] Pas d'imprimante active pour le PV "
-            f"'{pv.name if pv else 'None'}' — billet {ticket.uuid} non imprime"
+            f"[PRINT] Pas d'imprimante active sur ce terminal — "
+            f"billet {ticket.uuid} non imprime"
         )
         return
 
@@ -4872,7 +4948,7 @@ def imprimer_billet(ticket, reservation, event, pv):
     ticket_data = formatter_ticket_billet(ticket, reservation, event)
 
     imprimer_async.delay(
-        str(pv.printer.pk),
+        str(printer.pk),
         ticket_data,
         connection.schema_name,
     )
@@ -4920,16 +4996,6 @@ def _creer_billets_depuis_panier(request, articles_panier, lignes_articles=None)
 
     if not articles_billet:
         return []
-
-    # --- Recuperer le point de vente pour l'impression ---
-    # / Get the point of sale for printing
-    pv = None
-    uuid_pv = request.POST.get("uuid_pv", "")
-    if uuid_pv:
-        try:
-            pv = PointDeVente.objects.select_related("printer").get(uuid=uuid_pv)
-        except (PointDeVente.DoesNotExist, ValueError):
-            pass
 
     # --- Identifier le client ---
     # / Identify the client
@@ -5066,7 +5132,10 @@ def _creer_billets_depuis_panier(request, articles_panier, lignes_articles=None)
                     sale_origin=SaleOrigin.LABOUTIK,
                     payment_method=methode_db,
                 )
-                imprimer_billet(ticket, reservation, event_locked, pv)
+                imprimer_billet(
+                    ticket, reservation, event_locked,
+                    imprimante_du_terminal(request.user),
+                )
 
             # Rattacher la LigneArticle a la reservation
             # / Link the LigneArticle to the reservation
@@ -5278,7 +5347,7 @@ class PaiementViewSet(viewsets.ViewSet):
         tag_id_carte_manager = request.POST.get("tag_id_cm", "")
         _valider_carte_primaire_pour_pv(tag_id_carte_manager, uuid_pv)
 
-        state = _construire_state(point_de_vente)
+        state = _construire_state(point_de_vente, user=request.user)
 
         # --- Extraire les articles du panier depuis le POST ---
         # --- Extract cart articles from POST ---
@@ -5452,7 +5521,7 @@ class PaiementViewSet(viewsets.ViewSet):
         tag_id_carte_manager = donnees_paiement.get("tag_id_cm", "")
         _valider_carte_primaire_pour_pv(tag_id_carte_manager, uuid_pv)
 
-        state = _construire_state(point_de_vente)
+        state = _construire_state(point_de_vente, user=request.user)
 
         # --- Normaliser les montants (les champs texte du formulaire → entiers) ---
         # --- Normalize amounts (form text fields → integers) ---
@@ -5588,7 +5657,7 @@ class PaiementViewSet(viewsets.ViewSet):
         # Recuperer le PV depuis les donnees de paiement (pour l'impression)
         # / Get the POS from payment data (for printing)
         uuid_pv = donnees_paiement.get("uuid_pv", "")
-        point_de_vente = PointDeVente.objects.select_related("printer").get(
+        point_de_vente = PointDeVente.objects.get(
             uuid=uuid_pv
         )
 
@@ -5694,11 +5763,11 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # Impression automatique des billets pour le PV BILLETTERIE
         # / Auto-print tickets for ticketing POS
+        printer_de_ce_terminal = imprimante_du_terminal(request.user)
         if (
             reservations_billets
             and point_de_vente.comportement == PointDeVente.BILLETTERIE
-            and point_de_vente.printer
-            and point_de_vente.printer.active
+            and printer_de_ce_terminal
         ):
             from BaseBillet.models import Ticket
 
@@ -5708,7 +5777,8 @@ class PaiementViewSet(viewsets.ViewSet):
                 ).select_related("pricesold", "reservation__event")
                 for ticket_obj in tickets_reservation:
                     imprimer_billet(
-                        ticket_obj, reservation, reservation.event, point_de_vente
+                        ticket_obj, reservation, reservation.event,
+                        printer_de_ce_terminal,
                     )
 
         context = {
@@ -5764,7 +5834,7 @@ class PaiementViewSet(viewsets.ViewSet):
         # Recuperer le PV depuis les donnees de paiement (pour l'impression)
         # / Get the POS from payment data (for printing)
         uuid_pv = donnees_paiement.get("uuid_pv", "")
-        point_de_vente = PointDeVente.objects.select_related("printer").get(
+        point_de_vente = PointDeVente.objects.get(
             uuid=uuid_pv
         )
 
@@ -5879,11 +5949,11 @@ class PaiementViewSet(viewsets.ViewSet):
 
             # Impression automatique des billets pour le PV BILLETTERIE
             # / Auto-print tickets for ticketing POS
+            printer_de_ce_terminal = imprimante_du_terminal(request.user)
             if (
                 reservations_billets
                 and point_de_vente.comportement == PointDeVente.BILLETTERIE
-                and point_de_vente.printer
-                and point_de_vente.printer.active
+                and printer_de_ce_terminal
             ):
                 for reservation in reservations_billets:
                     tickets_reservation = Ticket.objects.filter(
@@ -5891,7 +5961,8 @@ class PaiementViewSet(viewsets.ViewSet):
                     ).select_related("pricesold", "reservation__event")
                     for ticket_obj in tickets_reservation:
                         imprimer_billet(
-                            ticket_obj, reservation, reservation.event, point_de_vente
+                            ticket_obj, reservation, reservation.event,
+                            printer_de_ce_terminal,
                         )
 
             # Calculer la monnaie à rendre (en euros)
@@ -7036,7 +7107,7 @@ class PaiementViewSet(viewsets.ViewSet):
             )
 
         total_centimes = _calculer_total_panier_centimes(articles_panier)
-        state = _construire_state(point_de_vente)
+        state = _construire_state(point_de_vente, user=request.user)
 
         # ---------------------------------------------------------- #
         # 2. Relire les données cascade de la carte1
@@ -7976,7 +8047,7 @@ class PaiementViewSet(viewsets.ViewSet):
         Receives the scanned NFC tag and returns card feedback:
         real balance (fedow_core), type (federated/anonymous), active memberships.
         """
-        state = _construire_state()
+        state = _construire_state(user=request.user)
         tag_id_scanne = request.POST.get("tag_id", "").strip().upper()
 
         # 1. Chercher la carte par tag_id
@@ -8250,14 +8321,14 @@ class PaiementViewSet(viewsets.ViewSet):
                 },
             )
 
-        pv = PointDeVente.objects.select_related("printer").filter(uuid=uuid_pv).first()
-        if pv is None or pv.printer is None or not pv.printer.active:
+        printer_de_ce_terminal = imprimante_du_terminal(request.user)
+        if printer_de_ce_terminal is None:
             return render(
                 request,
                 "laboutik/partial/hx_print_feedback.html",
                 {
                     "msg_type": "warning",
-                    "msg_content": _("Pas d'imprimante configuree sur ce PV."),
+                    "msg_content": _("Pas d'imprimante configuree sur ce terminal."),
                 },
             )
 
@@ -8270,7 +8341,7 @@ class PaiementViewSet(viewsets.ViewSet):
 
         recu_data = formatter_recu_vider_carte(list(transactions))
         imprimer_async.delay(
-            str(pv.printer.pk),
+            str(printer_de_ce_terminal.pk),
             recu_data,
             connection.schema_name,
         )
@@ -8329,7 +8400,7 @@ class PaiementViewSet(viewsets.ViewSet):
         # Recuperer le PV et son imprimante
         # / Get the POS and its printer
         try:
-            point_de_vente = PointDeVente.objects.select_related("printer").get(
+            point_de_vente = PointDeVente.objects.get(
                 uuid=uuid_pv
             )
         except (PointDeVente.DoesNotExist, ValueError):
@@ -8342,14 +8413,15 @@ class PaiementViewSet(viewsets.ViewSet):
                 },
             )
 
-        if not point_de_vente.printer or not point_de_vente.printer.active:
+        printer_de_ce_terminal = imprimante_du_terminal(request.user)
+        if printer_de_ce_terminal is None:
             return render(
                 request,
                 "laboutik/partial/hx_print_feedback.html",
                 {
                     "msg_type": "warning",
                     "msg_content": _(
-                        "Aucune imprimante configuree pour ce point de vente"
+                        "Aucune imprimante configuree pour ce terminal"
                     ),
                 },
             )
@@ -8402,7 +8474,7 @@ class PaiementViewSet(viewsets.ViewSet):
         }
 
         imprimer_async.delay(
-            str(point_de_vente.printer.pk),
+            str(printer_de_ce_terminal.pk),
             ticket_data,
             connection.schema_name,
         )
@@ -9140,7 +9212,7 @@ class CommandeViewSet(viewsets.ViewSet):
         total_centimes = _calculer_total_panier_centimes(articles_panier)
         total_en_euros = total_centimes / 100
 
-        state = _construire_state(point_de_vente)
+        state = _construire_state(point_de_vente, user=request.user)
 
         donnees_paiement = request.POST.dict()
         donnees_paiement["total"] = total_centimes

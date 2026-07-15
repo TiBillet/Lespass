@@ -13,7 +13,20 @@ Gère la lecture NFC, le contrôle de vanne et la communication avec le serveur 
 
 ## Installation sur Pi vierge
 
-Un seul prérequis côté serveur : créer une `TireuseBec` dans **Admin → Tireuses → Taps** — le code PIN à 6 chiffres s'affiche directement dans la colonne **PIN code** de la liste.
+Un seul prérequis côté serveur : créer une tireuse dans **Admin → Tireuses**, puis **l'ouvrir** — son code PIN à 6 chiffres s'affiche dans la fiche.
+
+Le code appartient au **Terminal** de la tireuse (son Raspberry Pi), pas à la tireuse elle-même : la tireuse porte le métier (fût, prix, historique), le terminal porte le matériel — et le matériel est jetable.
+
+> ⏱️ **Le code PIN ne vit qu'une heure.** Créez la tireuse *au moment* où vous installez le Pi.
+> S'il a expiré, régénérez-en un : **Admin → Terminaux matériels → Terminaux** → cocher la ligne
+> → action « **Générer un nouveau code PIN** ».
+>
+> Une fois le Pi appairé, la fiche affiche « **✓ Raspberry Pi appairé** », et la tireuse apparaît
+> dans **Admin → Terminaux** — au même titre qu'une caisse. C'est de là qu'on la **révoque**
+> (action « Révoquer le terminal »), ce qui coupe d'un coup son compte et sa clé d'API.
+>
+> **Le Pi crame ?** Même écran, action « **Générer un nouveau code PIN** » : l'ancien appareil est
+> coupé, le terminal repasse en attente, et **la tireuse garde sa configuration et son historique**.
 
 ```bash
 wget https://raw.githubusercontent.com/TiBillet/Lespass/main-fedow-import/controlvanne/Pi/install_pi.sh && chmod +x install_pi.sh && ./install_pi.sh
@@ -123,9 +136,18 @@ ls /dev/spidev0.0
 ```bash
 journalctl -u tibeer -n 20
 # Si le message est "Pi non appaire", relancer depuis le Pi en SSH :
-# Le PIN est visible dans Admin → Tireuses → Taps, colonne "PIN code"
+# Le code PIN est visible en OUVRANT la tireuse : Admin → Tireuses → cliquer dessus.
+# Il expire au bout d'une heure. Pour en regenerer un :
+#   Admin → Terminaux materiels → Terminaux → cocher → « Generer un nouveau code PIN ».
 make claim PIN=<code> SERVER=https://votre-domaine.tld
 ```
+
+**Le `make claim` échoue :** le script affiche désormais le code HTTP et la réponse du serveur.
+- **HTTP 400** → le code PIN est faux, déjà utilisé, ou **expiré** (1 h). Régénérez-le.
+- **HTTP 429** → trop de tentatives, attendez une minute.
+- **Autre** → vérifiez `SERVER` : c'est l'adresse **racine** de TiBillet (`https://tibillet.org`),
+  **pas** le sous-domaine du lieu. Le Pi ne connaît pas encore son lieu au moment de l'appairage :
+  c'est le serveur qui le lui apprend, dans sa réponse (`server_url`).
 
 **Kiosk non authentifié :**
 ```bash

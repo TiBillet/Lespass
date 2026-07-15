@@ -25,16 +25,52 @@ TARGET_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SERVER="${SERVER%/}"
 
 echo "Appairage en cours avec $SERVER..."
-# -k : ignore SSL auto-signe en dev / ignore self-signed SSL in dev
-RESPONSE=$(curl -skf -X POST "${SERVER}/api/discovery/claim/" \
+
+# On NE met PAS -f (--fail) : il ferait sortir curl sans nous laisser lire la reponse.
+# Or c'est justement le corps de la reponse qui dit POURQUOI l'appairage echoue — et le
+# cas le plus frequent est un code PIN expire (il ne vit qu'une heure).
+# -k : ignore le certificat auto-signe en dev / ignore self-signed SSL in dev
+# / We do NOT use -f (--fail): it would exit before we can read the body, and the body is
+# exactly what tells us WHY it failed — most often an expired PIN (they live one hour).
+HTTP_ET_CORPS=$(curl -sk -w "\n%{http_code}" -X POST "${SERVER}/api/discovery/claim/" \
     -H "Content-Type: application/json" \
     -d "{\"pin_code\": \"${PIN_CODE}\"}")
+
+CODE_HTTP=$(echo "$HTTP_ET_CORPS" | tail -n 1)
+RESPONSE=$(echo "$HTTP_ET_CORPS" | sed '$d')
+
+if [ "$CODE_HTTP" != "200" ]; then
+    echo
+    echo "Appairage echoue (HTTP $CODE_HTTP)."
+    echo "Reponse du serveur : $RESPONSE"
+    echo
+    case "$CODE_HTTP" in
+        400)
+            echo "Causes possibles :"
+            echo "  - le code PIN a EXPIRE (il ne vit qu'une heure) ;"
+            echo "  - le code PIN a deja ete utilise ;"
+            echo "  - le code PIN est faux."
+            echo
+            echo "Regenerez-en un : Admin > Terminaux materiels > Terminaux"
+            echo "                  > cocher la ligne > « Generer un nouveau code PIN »."
+            ;;
+        429)
+            echo "Trop de tentatives. Attendez une minute avant de reessayer."
+            ;;
+        *)
+            echo "Verifiez l'adresse du serveur : $SERVER"
+            echo "(C'est l'adresse RACINE de TiBillet, PAS le sous-domaine du lieu.)"
+            ;;
+    esac
+    exit 1
+fi
 
 SERVER_URL=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['server_url'])")
 API_KEY=$(echo    "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['api_key'])")
 TIREUSE_UUID=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tireuse_uuid', ''))")
 
-[ -n "$SERVER_URL" ] || { echo "Appairage échoué. Vérifiez le PIN et l'URL."; exit 1; }
+[ -n "$SERVER_URL" ] || { echo "Appairage echoue : reponse du serveur illisible."; exit 1; }
+[ -n "$TIREUSE_UUID" ] || { echo "Appairage echoue : le serveur n'a renvoye aucune tireuse. Le code PIN correspond-il bien a une tireuse ?"; exit 1; }
 
 sed \
     -e "s|__SERVER_URL__|${SERVER_URL}|g" \

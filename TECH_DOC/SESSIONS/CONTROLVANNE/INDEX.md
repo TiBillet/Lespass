@@ -14,6 +14,7 @@ chantiers de review appliqués), câblée dans Lespass le 2026-07-06.
 | [CHANTIER-03-fixes-review.md](./CHANTIER-03-fixes-review.md) | Fixes TDD des findings : C1+I1 (verrou session + atomic, test de concurrence 2 threads), C2 (reconnexion WS backoff + bandeau), C3 (refus propre), I2/I3/I4. Minor en dette | ✅ FAIT 2026-07-06 |
 | [DEBUG-2026-07-12-issue-446.md](./DEBUG-2026-07-12-issue-446.md) | Issue #446 (régie, Starsky) : carte de maintenance impossible à créer. `raw_id_fields` → `autocomplete_fields` + **fuite cross-tenant** sur le queryset du champ `carte` | ✅ FAIT 2026-07-12 |
 | `controlvanne/Synthese_merge_vs_chantiers.md` | Synthèse du merge de Mike : 6 chantiers de review vs 11 étapes, divergences, PRs déférées | Référence |
+| [CHANTIER-04-appairage-unifie.md](./CHANTIER-04-appairage-unifie.md) | **Appairage unifié** : `TireuseBec.pairing_device` → `TireuseBec.terminal`, la tireuse gagne un `TermUser` + un `Terminal` → **elle devient révocable**. PIN expirable. `PairingDevice` devient jetable. **Faille de throttle corrigée** (`NUM_PROXIES`). Tutos et script du Pi corrigés | ✅ **FAIT 2026-07-14** — ⚠️ tireuses à ré-appairer |
 
 ## Écarts au plan (découverts au câblage)
 

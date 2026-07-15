@@ -28,7 +28,7 @@ from django_tenants.utils import schema_context
 from AuthBillet.models import Wallet
 from BaseBillet.models import CategorieProduct, Product, Price
 from Customers.models import Client
-from laboutik.models import CartePrimaire, PointDeVente, Printer
+from laboutik.models import CartePrimaire, PointDeVente, Printer, Terminal
 from QrcodeCashless.models import CarteCashless, Detail
 
 
@@ -741,10 +741,7 @@ class Command(BaseCommand):
 
             # --- Imprimante Mock (dev/test) ---
             # Affiche les tickets en ASCII dans la console Celery.
-            # Assignee a tous les PV pour tester l'impression sans materiel.
-            # / Mock printer (dev/test)
-            # Displays tickets as ASCII art in the Celery console.
-            # Assigned to all POS to test printing without hardware.
+            # / Mock printer (dev/test): prints tickets as ASCII art in the Celery console.
             imprimante_mock, created_mock = Printer.objects.update_or_create(
                 name="Console (mock)",
                 defaults={
@@ -758,6 +755,32 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(
                     f"  Imprimante mock existante : {imprimante_mock.name}"
+                )
+
+            # --- Rattacher l'imprimante mock aux terminaux deja appaires ---
+            #
+            # L'imprimante appartient au TERMINAL, pas au point de vente : en festival,
+            # vingt tablettes encaissent sur le meme point de vente et chacune a la sienne.
+            # Un point de vente ne peut donc pas porter d'imprimante.
+            #
+            # Consequence en dev : tant qu'aucun appareil n'est appaire (code PIN), il n'y a
+            # aucun terminal, donc rien n'imprime. On rattache l'imprimante mock aux
+            # terminaux qui existent deja, pour que l'impression soit testable sans materiel.
+            # / The printer belongs to the TERMINAL, not the point of sale. In dev, nothing
+            # prints until a device is paired. Attach the mock printer to existing terminals.
+            terminaux_sans_imprimante = Terminal.objects.filter(printer__isnull=True)
+            nombre_de_terminaux_equipes = terminaux_sans_imprimante.update(
+                printer=imprimante_mock,
+            )
+
+            if nombre_de_terminaux_equipes:
+                self.stdout.write(
+                    f"  Imprimante mock rattachee a {nombre_de_terminaux_equipes} terminal(aux)"
+                )
+            else:
+                self.stdout.write(
+                    "  Aucun terminal appaire : rien n'imprimera tant qu'un appareil "
+                    "n'aura pas ete appaire par code PIN (admin > Appairage de terminal)."
                 )
 
             # --- Points de vente ---
@@ -777,7 +800,6 @@ class Command(BaseCommand):
                     "accepte_cheque": False,
                     "accepte_commandes": False,
                     "poid_liste": 0,
-                    "printer": imprimante_mock,
                 },
             )
             pdv_restaurant, _ = PointDeVente.objects.update_or_create(
@@ -792,7 +814,6 @@ class Command(BaseCommand):
                     "accepte_cheque": False,
                     "accepte_commandes": True,
                     "poid_liste": 1,
-                    "printer": imprimante_mock,
                 },
             )
             pdv_terrasse, _ = PointDeVente.objects.update_or_create(
@@ -807,7 +828,6 @@ class Command(BaseCommand):
                     "accepte_cheque": False,
                     "accepte_commandes": True,
                     "poid_liste": 2,
-                    "printer": imprimante_mock,
                 },
             )
 
@@ -833,7 +853,6 @@ class Command(BaseCommand):
                     "accepte_cheque": False,
                     "accepte_commandes": False,
                     "poid_liste": 3,
-                    "printer": imprimante_mock,
                 },
             )
 
@@ -853,7 +872,6 @@ class Command(BaseCommand):
                     "accepte_cheque": False,
                     "accepte_commandes": False,
                     "poid_liste": 4,
-                    "printer": imprimante_mock,
                 },
             )
             # Ajouter les produits adhesion publies au M2M du PV
@@ -904,7 +922,6 @@ class Command(BaseCommand):
                     "accepte_cheque": False,
                     "accepte_commandes": False,
                     "poid_liste": 5,
-                    "printer": imprimante_mock,
                 },
             )
             # Produits du PV Mix : Biere (VT) + Recharge 10€ (RE) + Adhesion Test Mix (AD)
@@ -971,7 +988,6 @@ class Command(BaseCommand):
                     "accepte_cheque": False,
                     "accepte_commandes": False,
                     "poid_liste": 6,
-                    "printer": imprimante_mock,
                 },
             )
             # Articles M2M : boissons classiques disponibles en plus des billets

@@ -74,3 +74,41 @@ def imprimer(printer, ticket_data):
     # Envoyer le ticket
     # / Send the ticket
     return backend.print_ticket(printer, ticket_data)
+
+
+def imprimer_ticket_de_test(printer):
+    """
+    Envoie un ticket de test a l'imprimante, pour verifier qu'elle repond.
+    Retourne un dict {"ok": bool, "error": str ou None}.
+    / Sends a test ticket to check that the printer answers.
+
+    LOCALISATION : laboutik/printing/__init__.py
+
+    Sert a valider une imprimante qu'on vient de configurer, sans avoir a faire une vraie
+    vente. Appelee depuis l'action « Imprimer un ticket de test » de l'admin des imprimantes.
+
+    L'appel est SYNCHRONE, contrairement aux impressions de vente qui partent dans Celery :
+    ici, on veut justement que le gestionnaire attende la reponse et voie l'erreur si
+    l'imprimante ne repond pas. C'est tout l'interet du test.
+    / The call is SYNCHRONOUS, unlike sale printing (which goes through Celery): here the
+    manager WANTS to wait and see the error if the printer does not answer.
+
+    :param printer: Instance de laboutik.models.Printer
+    :return: dict avec "ok" (bool) et "error" (str ou None)
+    """
+    backend_class = BACKENDS.get(printer.printer_type)
+    if backend_class is None:
+        error_message = f"Aucun backend pour le type '{printer.get_printer_type_display()}'"
+        logger.error(f"[PRINT TEST] {error_message}")
+        return {"ok": False, "error": error_message}
+
+    backend = backend_class()
+
+    can_print_ok, can_print_error = backend.can_print(printer)
+    if not can_print_ok:
+        logger.warning(
+            f"[PRINT TEST] Imprimante {printer.name} non joignable : {can_print_error}"
+        )
+        return {"ok": False, "error": can_print_error}
+
+    return backend.print_test(printer)

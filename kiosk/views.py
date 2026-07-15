@@ -42,7 +42,8 @@ from rest_framework.decorators import action
 
 from AuthBillet.models import TibilletUser
 from fedow_connect.fedow_api import FedowAPI
-from kiosk.models import PaymentsIntent, Terminal
+from kiosk.models import PaymentsIntent
+from laboutik.models import Terminal
 from kiosk.tasks import poll_payment_intent_status
 from kiosk.validators import RefillWisePoseValidator
 from QrcodeCashless.models import CarteCashless
@@ -233,14 +234,36 @@ class KioskViewSet(viewsets.ViewSet):
         # / In DEMO, the admin (or a device without its own reader) uses the demo
         # terminal (the simulated Stripe reader seeded by demo_data_v2). Outside
         # DEMO there is no fallback; only the paired device has its terminal.
+        # Le repli DEMO ne prend qu'une borne QUI A UN LECTEUR : sans ce filtre, on
+        # retomberait sur la premiere borne venue, sans TPE, et l'envoi echouerait plus loin
+        # avec une erreur incomprehensible.
+        # / The DEMO fallback only picks a device THAT HAS A READER.
         if terminal is None and settings.DEMO:
-            terminal = Terminal.objects.filter(archived=False).order_by("name").first()
+            terminal = (
+                Terminal.objects.filter(archived=False, tpe__isnull=False)
+                .order_by("name")
+                .first()
+            )
 
         if terminal is None:
             logger.error(f"refill_with_wisepos : aucun Terminal appaire au user {user}")
             context = {
                 "user": user,
                 "error_message": _("Aucun terminal de paiement n'est appairé à cette borne."),
+            }
+            return render(request, "kiosk/select_amount_content.html", context)
+
+        # La borne existe, mais aucun lecteur n'y est branche : on le dit clairement plutot
+        # que de laisser l'envoi echouer avec une erreur Stripe cryptique.
+        # / The kiosk exists but has no reader plugged in: say so clearly.
+        lecteur_de_carte = getattr(terminal, "tpe", None)
+        if lecteur_de_carte is None or not lecteur_de_carte.active:
+            logger.error(f"refill_with_wisepos : aucun TPE actif sur la borne {terminal}")
+            context = {
+                "user": user,
+                "error_message": _(
+                    "Aucun lecteur de carte bancaire n'est branché sur cette borne."
+                ),
             }
             return render(request, "kiosk/select_amount_content.html", context)
 

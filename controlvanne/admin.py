@@ -23,6 +23,7 @@ from django.contrib import admin
 from django.contrib.admin import SimpleListFilter
 from django.db import connection
 from django.http import HttpResponse
+from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin
 
@@ -232,11 +233,14 @@ class TireuseBecAdmin(ModelAdmin):
     # / Template before the form: link to this tap's kiosk view
     change_form_before_template = "admin/controlvanne/tireusebec_before.html"
 
+    # Le code PIN n'est PAS dans la liste : il n'a d'interet qu'au moment ou l'on installe
+    # le Raspberry Pi de CETTE tireuse. On le lit donc en ouvrant la tireuse.
+    # / The PIN is NOT in the list view: it only matters when installing THIS tap's Pi.
     list_display = (
         "nom_tireuse",
         "fut_actif",
         "debimetre",
-        "pin_code_display",
+        "etat_du_raspberry_pi",
         "prix_effectif_display",
         "volume_restant_cl",
         "enabled",
@@ -251,39 +255,47 @@ class TireuseBecAdmin(ModelAdmin):
         "notes",
     )
 
+    @admin.display(description=_("Raspberry Pi"))
+    def etat_du_raspberry_pi(self, obj):
+        """
+        Ou en est le Pi de cette tireuse. Le code PIN, lui, se lit en ouvrant la tireuse.
+        / Where this tap's Pi stands. The PIN itself is read by opening the tap.
+        """
+        if obj.terminal is None:
+            return "—"
+        if obj.terminal.est_appaire():
+            return _("Appairé")
+        return _("En attente — ouvrir pour le code PIN")
+
     def get_readonly_fields(self, request, obj=None):
         """
-        En edition, affiche point_de_vente et pairing_device en lecture seule
-        (crees automatiquement par le signal post_save).
-        En creation, on ne les affiche pas (ils seront crees apres le save).
-        / On edit, show point_de_vente and pairing_device as read-only (auto-created).
-        On creation, hide them (created by post_save signal).
+        En edition, affiche le point de vente, le terminal et le code PIN en lecture seule :
+        tous trois sont fabriques par le signal a la creation de la tireuse.
+        En creation, on ne les affiche pas — ils n'existent pas encore.
+        / On edit, show point of sale, terminal and PIN read-only. On creation, hide them.
         """
         if obj is not None:
-            return ("uuid", "point_de_vente", "pairing_device")
+            return ("uuid", "point_de_vente", "terminal", "pin_code_display")
         return ("uuid",)
 
     def get_fields(self, request, obj=None):
         """
-        En edition, ajoute point_de_vente et pairing_device en lecture seule apres le nom.
-        En creation, pas de champs auto-generes.
-        / On edit, add read-only point_de_vente and pairing_device after the name.
-        On creation, no auto-generated fields.
+        En edition, ajoute le point de vente, le terminal et le code PIN apres le nom.
+        / On edit, add point of sale, terminal and PIN after the name.
         """
         champs_de_base = list(self.fields)
         if obj is not None:
-            # Insere les champs auto-generes apres nom_tireuse (index 0 → positions 1, 2)
-            # / Insert auto-generated fields after nom_tireuse
             champs_de_base.insert(1, "point_de_vente")
-            champs_de_base.insert(2, "pairing_device")
+            champs_de_base.insert(2, "terminal")
+            champs_de_base.insert(3, "pin_code_display")
         return champs_de_base
 
     search_fields = ("nom_tireuse", "notes")
 
     def get_queryset(self, request):
-        """Prefetch pairing_device pour eviter le N+1 sur pin_code_display dans la liste.
-        / Prefetch pairing_device to avoid N+1 on pin_code_display in list view."""
-        return super().get_queryset(request).select_related("pairing_device")
+        """Select_related terminal pour eviter une requete par ligne dans la liste.
+        / select_related terminal to avoid one query per row in the list view."""
+        return super().get_queryset(request).select_related("terminal")
 
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
         """
@@ -296,17 +308,43 @@ class TireuseBecAdmin(ModelAdmin):
             extra_context["calibration_url"] = f"/controlvanne/calibration/{object_id}/"
         return super().changeform_view(request, object_id, form_url, extra_context)
 
-    @admin.display(description=_("PIN code"))
+    @admin.display(description=_("Code PIN du Raspberry Pi"))
     def pin_code_display(self, obj):
-        """Affiche le PIN du PairingDevice lie a cette tireuse.
-        Si le PIN a ete consomme (appairage fait), affiche "Appaire".
-        / Shows the PIN of the PairingDevice linked to this tap.
-        If PIN was consumed (pairing done), shows "Paired"."""
-        if obj.pairing_device is None:
+        """
+        Le code PIN a taper sur le Raspberry Pi pour l'appairer a cette tireuse.
+        / The PIN to type on the Raspberry Pi to pair it to this tap.
+
+        LOCALISATION : controlvanne/admin.py
+
+        Le code appartient au TERMINAL de la tireuse (son Raspberry Pi), pas a la tireuse
+        elle-meme. La tireuse est l'objet metier ; le terminal est le materiel, et c'est le
+        materiel qu'on appaire.
+
+        Quand le Pi est perdu ou grille : Terminaux > cocher > « Generer un nouveau code
+        PIN ». La tireuse garde sa configuration et tout son historique.
+        """
+        if obj.terminal is None:
             return "—"
-        if obj.pairing_device.is_claimed:
-            return _("Paired")
-        return obj.pairing_device.pin_code
+
+        if obj.terminal.est_appaire():
+            return format_html(
+                '<span style="color: #16a34a; font-weight: 600;">✓ {}</span>',
+                _("Raspberry Pi appairé"),
+            )
+
+        code_pin = obj.terminal.code_pin_en_attente()
+        if code_pin is None:
+            return format_html(
+                '<span style="color: #999;">{}</span>',
+                _("Code PIN expiré — le régénérer depuis « Terminaux »"),
+            )
+
+        code_lisible = f"{str(code_pin)[:3]} {str(code_pin)[3:]}"
+        return format_html(
+            '<span style="font-size: 2em; font-weight: bold; letter-spacing: 0.15em; '
+            'font-family: monospace;">{}</span>',
+            code_lisible,
+        )
 
     @admin.display(description=_("Price/Liter"))
     def prix_effectif_display(self, obj):

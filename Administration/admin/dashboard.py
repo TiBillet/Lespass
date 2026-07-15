@@ -336,18 +336,11 @@ def get_sidebar_navigation(request):
                         ),
                         "permission": admin_permission,
                     },
-                    # « Device pairing (PIN) » retiré d'ici : l'appairage vit
-                    # dans la section « Hardware terminals » plus bas (l'entrée
-                    # pointait déjà sur la même changelist PairingDevice).
-                    # / "Device pairing (PIN)" removed from here: pairing lives
-                    # in the "Hardware terminals" section below (same
-                    # PairingDevice changelist).
-                    {
-                        "title": _("Printers"),
-                        "icon": "print",
-                        "link": _safe_rev("staff_admin:laboutik_printer_changelist"),
-                        "permission": admin_permission,
-                    },
+                    # Les imprimantes ne sont PAS ici : ce sont du materiel, elles vivent
+                    # dans « Terminaux materiels » avec les appareils sur lesquels on les
+                    # branche. Les codes PIN non plus — ils s'affichent sur leur terminal.
+                    # / Printers are NOT here: they are hardware, they live in "Hardware
+                    # terminals" alongside the devices they plug into.
                     # {
                     #     "title": _("Orders"),
                     #     "icon": "receipt",
@@ -383,31 +376,54 @@ def get_sidebar_navigation(request):
         )
 
     # --- Section terminaux hardware : visible si caisse, monnaie locale ou tireuse ---
-    # --- Hardware terminals section: visible if caisse, local currency or taps ---
-    # L'entree pointe vers les PairingDevice (discovery) : c'est la que vit
-    # tout le process d'appairage — creation du PIN (caisse LB, kiosque KI),
-    # suivi des PIN en attente et des appareils reclames. Les comptes
-    # TermUser crees par les claims restent visibles via l'app AuthBillet.
-    # / The entry points to PairingDevices (discovery): the whole pairing
-    # process lives there — PIN creation (LB pos, KI kiosk), pending PINs
-    # and claimed devices. The TermUser accounts created by claims remain
-    # reachable through the AuthBillet app.
+    # --- Terminaux materiels : tout le hardware du lieu, au meme endroit ---
+    #
+    # 1. « Terminaux » (laboutik.Terminal) — LES APPAREILS. Caisses LaBoutik, bornes
+    #    kiosque, Raspberry Pi des tireuses. On les cree ici (ce qui fabrique leur code
+    #    PIN), on leur branche une imprimante ou un lecteur de carte, et on les revoque.
+    #
+    # 2. « Imprimantes » (laboutik.Printer) — le materiel qu'on branche sur un terminal.
+    #
+    # Le code PIN (discovery.PairingDevice) N'A PAS d'entree : ce n'est pas un objet que
+    # l'on manipule, c'est une plomberie. Il s'affiche sur le terminal qu'il appaire.
+    #
+    # module_kiosk EST dans la condition : sans lui, un lieu qui n'a QUE des bornes
+    # n'aurait aucun chemin vers ses propres terminaux.
+    # / All the venue's hardware in one place. The PIN has no entry: it is plumbing, shown
+    # on the terminal it pairs. module_kiosk belongs in the condition.
     if (
         configuration.module_caisse
         or configuration.module_monnaie_locale
         or configuration.module_tireuse
+        or configuration.module_kiosk
     ):
         navigation.append(
             {
-                "title": _("Hardware terminals"),
+                "title": _("Terminaux matériels"),
                 "separator": True,
                 "collapsible": True,
                 "items": [
                     {
-                        "title": _("Terminals"),
+                        "title": _("Terminaux"),
                         "icon": "tablet",
                         "link": _safe_rev(
-                            "staff_admin:discovery_pairingdevice_changelist"
+                            "staff_admin:laboutik_terminal_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("Imprimantes"),
+                        "icon": "print",
+                        "link": _safe_rev(
+                            "staff_admin:laboutik_printer_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("TPE bancaires"),
+                        "icon": "contactless",
+                        "link": _safe_rev(
+                            "staff_admin:laboutik_tpebancaire_changelist"
                         ),
                         "permission": admin_permission,
                     },
@@ -584,8 +600,13 @@ def get_sidebar_navigation(request):
             }
         )
 
-    # --- module_kiosk : Bornes libre-service (Stripe Terminal) ---
-    # / --- module_kiosk: Self-service kiosks (Stripe Terminal) ---
+    # --- module_kiosk : Bornes libre-service ---
+    #
+    # Le lecteur de carte bancaire n'a PAS d'entree ici : ce n'est pas un objet a part,
+    # c'est une capacite d'un terminal appaire (une caisse LaBoutik peut en avoir un).
+    # On l'active en editant le terminal, dans « Terminaux materiels ».
+    # / The card reader has NO entry here: it is not a separate object, it is a capability
+    # of a paired terminal. It is enabled by editing the terminal.
     if configuration.module_kiosk:
         navigation.append(
             {
@@ -593,12 +614,6 @@ def get_sidebar_navigation(request):
                 "separator": True,
                 "collapsible": True,
                 "items": [
-                    {
-                        "title": _("TPE Bancaires"),
-                        "icon": "tablet_mac",
-                        "link": _safe_rev("staff_admin:kiosk_terminal_changelist"),
-                        "permission": admin_permission,
-                    },
                     {
                         "title": _("Paiements"),
                         "icon": "payments",

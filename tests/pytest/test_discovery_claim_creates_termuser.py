@@ -29,44 +29,60 @@ def tenant_lespass():
     return TenantClient.objects.get(schema_name='lespass')
 
 
+def _creer_un_terminal_en_attente(tenant, role, nom):
+    """
+    Cree un terminal et son code PIN, comme le fait l'admin.
+    / Creates a terminal and its PIN, the way the admin does.
+
+    C'est le vrai flux : le gestionnaire declare l'appareil, l'enregistrement fabrique le
+    code, et il ira le taper dessus. Le claim ne cree PAS le terminal — il le remplit.
+    """
+    from discovery.services import fabriquer_le_code_pin_d_appairage
+    from laboutik.models import Terminal
+
+    with tenant_context(tenant):
+        terminal = Terminal.objects.create(name=nom, terminal_role=role)
+        appairage = fabriquer_le_code_pin_d_appairage(terminal)
+
+    return terminal, appairage
+
+
+def _nettoyer_le_terminal(tenant, terminal, appairage):
+    """Supprime le terminal, son compte et son code PIN. / Cleans up after a test."""
+    from laboutik.models import Terminal
+
+    with tenant_context(tenant):
+        terminal_en_base = Terminal.objects.filter(pk=terminal.pk).first()
+        compte = terminal_en_base.term_user if terminal_en_base else None
+
+        if terminal_en_base:
+            terminal_en_base.delete()
+        if compte:
+            TermUser.objects.filter(pk=compte.pk).delete()
+
+    PairingDevice.objects.filter(pk=appairage.pk).delete()
+
+
 @pytest.fixture
 def pairing_device_laboutik(tenant_lespass):
-    """Crée un PairingDevice role LB (Laboutik POS) / Creates a LB-role PairingDevice."""
-    device = PairingDevice.objects.create(
-        name=f'Test POS {uuid.uuid4().hex[:6]}',
-        tenant=tenant_lespass,
-        pin_code=PairingDevice.generate_unique_pin(),
-        terminal_role='LB',
+    """Un terminal de caisse LaBoutik, en attente de son appareil.
+    / A LaBoutik POS terminal, waiting for its device."""
+    terminal, appairage = _creer_un_terminal_en_attente(
+        tenant_lespass, 'LB', f'Test POS {uuid.uuid4().hex[:6]}',
     )
-    yield device
-    # Cleanup : supprimer le TermUser créé s'il existe.
-    # On NE supprime PAS le PairingDevice car son delete cascaderait vers
-    # la table tenant controlvanne_tireusebec (qui n'existe pas en public
-    # schema lors du teardown). Le test_discovery_pin_pairing.py existant
-    # ne nettoie pas non plus ses devices.
-    # / Cleanup: delete the created TermUser if any. We do NOT delete the
-    # PairingDevice because cascade would hit the tenant-only table
-    # controlvanne_tireusebec (not visible from public schema during
-    # teardown). The existing test_discovery_pin_pairing.py does not
-    # cleanup its devices either.
-    with tenant_context(tenant_lespass):
-        TermUser.objects.filter(email__contains=str(device.uuid)).delete()
+    yield appairage
+    _nettoyer_le_terminal(tenant_lespass, terminal, appairage)
 
 
 @pytest.fixture
 def pairing_device_kiosque(tenant_lespass):
-    """Crée un PairingDevice role KI (Kiosque) / Creates a KI-role PairingDevice."""
-    device = PairingDevice.objects.create(
-        name=f'Test Kiosque {uuid.uuid4().hex[:6]}',
-        tenant=tenant_lespass,
-        pin_code=PairingDevice.generate_unique_pin(),
-        terminal_role='KI',
+    """Un terminal de borne kiosque, en attente de son appareil.
+    / A kiosk terminal, waiting for its device."""
+    terminal, appairage = _creer_un_terminal_en_attente(
+        tenant_lespass, 'KI', f'Test Kiosque {uuid.uuid4().hex[:6]}',
     )
-    yield device
-    # Même remarque que plus haut : pas de device.delete() (cascade tenant).
-    # / Same note as above: no device.delete() (tenant cascade).
-    with tenant_context(tenant_lespass):
-        TermUser.objects.filter(email__contains=str(device.uuid)).delete()
+    yield appairage
+    _nettoyer_le_terminal(tenant_lespass, terminal, appairage)
 
 
 def _call_claim(pin):
@@ -156,21 +172,20 @@ class TestClaimCreatesTermUserLaboutik:
 
 @pytest.fixture
 def pairing_device_tireuse(tenant_lespass):
-    """Crée un PairingDevice role TI + une TireuseBec liée dans le tenant.
-    / Creates a TI-role PairingDevice + a linked TireuseBec in the tenant."""
-    device = PairingDevice.objects.create(
-        name=f'Test Tireuse {uuid.uuid4().hex[:6]}',
-        tenant=tenant_lespass,
-        pin_code=PairingDevice.generate_unique_pin(),
-        terminal_role='TI',
-    )
+    """
+    Cree une TireuseBec. Son signal post_save fabrique lui-meme le code PIN.
+    / Creates a TireuseBec. Its post_save signal issues the PIN itself.
+
+    C'est le flux reel : on cree la tireuse dans l'admin, et elle nait avec son code PIN.
+    Le PairingDevice porte cible_uuid = l'identifiant de la tireuse — c'est ainsi que le
+    claim la retrouvera.
+    """
     with tenant_context(tenant_lespass):
         from controlvanne.models import TireuseBec
         from laboutik.models import PointDeVente
 
         tireuse = TireuseBec.objects.create(
             nom_tireuse=f'Test Tap Discovery {uuid.uuid4().hex[:6]}',
-            pairing_device=device,
         )
         # Le signal post_save cree automatiquement un PointDeVente non masque.
         # On le masque pour ne pas polluer premier_pv (test_menu_ventes.py,
@@ -181,6 +196,12 @@ def pairing_device_tireuse(tenant_lespass):
             PointDeVente.objects.filter(pk=tireuse.point_de_vente_id).update(
                 hidden=True
             )
+
+    # Le code PIN appartient au TERMINAL de la tireuse — son Raspberry Pi — pas a la
+    # tireuse elle-meme. C'est le materiel qu'on appaire, pas l'objet metier.
+    # / The PIN belongs to the tap's TERMINAL (its Raspberry Pi), not to the tap itself.
+    device = PairingDevice.objects.get(cible_uuid=tireuse.terminal_id)
+
     yield device, tireuse
     # Cleanup : la cle API creee par le claim + la tireuse de test.
     # Pas de device.delete() (cascade vers une table tenant, cf. note plus haut).
@@ -194,20 +215,101 @@ def pairing_device_tireuse(tenant_lespass):
 
 
 class TestClaimTireuse:
-    """Flow d'appairage TI : le claim cree une TireuseAPIKey (pas de TermUser).
-    / TI pairing flow: the claim creates a TireuseAPIKey (no TermUser)."""
+    """
+    Appairage d'une tireuse : meme pipeline que les autres roles.
+    Un compte (TermUser), un Terminal, et une cle — de classe TireuseAPIKey.
+    / Tap pairing: same pipeline as the other roles. Only the key class differs.
+    """
 
     def test_claim_role_TI_retourne_cle_api_et_tireuse_uuid(self, pairing_device_tireuse, tenant_lespass):
-        """PairingDevice(role=TI) + TireuseBec liée → 200 avec api_key + tireuse_uuid."""
+        """Le claim rend la cle API et l'identifiant de la tireuse au Raspberry Pi."""
         device, tireuse = pairing_device_tireuse
         response = _call_claim(device.pin_code)
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
-        # La reponse contient la cle API et l'UUID de la tireuse liee.
-        # / The response carries the API key and the linked tap UUID.
         assert data['api_key']
         assert data['tireuse_uuid'] == str(tireuse.uuid)
+
+    def test_le_terminal_de_la_tireuse_existe_avant_l_appairage(
+        self, pairing_device_tireuse, tenant_lespass,
+    ):
+        """
+        Le Raspberry Pi de la tireuse existe DES SA CREATION, en attente d'appairage.
+        Le claim ne le cree pas : il le remplit, en lui posant son compte.
+        / The tap's Pi exists FROM CREATION, waiting. The claim fills it in.
+        """
+        _device, tireuse = pairing_device_tireuse
+
+        with tenant_context(tenant_lespass):
+            from controlvanne.models import TireuseBec
+
+            tireuse_avant = TireuseBec.objects.get(pk=tireuse.pk)
+
+            # Le terminal est la, mais aucun appareil ne l'a encore reclame.
+            # / The terminal is there, but no device has claimed it yet.
+            assert tireuse_avant.terminal is not None
+            assert tireuse_avant.terminal.terminal_role == 'TI'
+            assert tireuse_avant.terminal.est_appaire() is False
+            assert tireuse_avant.terminal.code_pin_en_attente() is not None
+
+    def test_claim_role_TI_pose_le_compte_sur_le_terminal(
+        self, pairing_device_tireuse, tenant_lespass,
+    ):
+        """
+        Le claim pose le compte sur le terminal deja la. C'est ce qui rend la tireuse
+        revocable depuis l'admin, comme une caisse.
+        / The claim puts the account on the already-existing terminal.
+        """
+        device, tireuse = pairing_device_tireuse
+        response = _call_claim(device.pin_code)
+        assert response.status_code == status.HTTP_200_OK
+
+        with tenant_context(tenant_lespass):
+            from controlvanne.models import TireuseBec
+
+            tireuse_rechargee = TireuseBec.objects.get(pk=tireuse.pk)
+
+            assert tireuse_rechargee.terminal.est_appaire() is True
+            assert tireuse_rechargee.terminal.term_user.terminal_role == 'TI'
+
+    def test_claim_role_TI_lie_la_cle_au_compte_du_terminal(
+        self, pairing_device_tireuse, tenant_lespass,
+    ):
+        """
+        La cle de la tireuse est liee a son compte. Sans ce lien, revoquer une tireuse
+        etait impossible : on ne savait pas quelle cle appartenait a quel appareil.
+        / The tap's key is linked to its account. Without it, revoking a tap was impossible.
+        """
+        device, tireuse = pairing_device_tireuse
+        response = _call_claim(device.pin_code)
+        assert response.status_code == status.HTTP_200_OK
+
+        with tenant_context(tenant_lespass):
+            from controlvanne.models import TireuseAPIKey, TireuseBec
+
+            tireuse_rechargee = TireuseBec.objects.get(pk=tireuse.pk)
+            compte_du_terminal = tireuse_rechargee.terminal.term_user
+
+            cle = TireuseAPIKey.objects.get(user=compte_du_terminal)
+            assert cle.revoked is False
+
+    def test_le_pin_et_la_cible_sont_vides_apres_l_appairage(
+        self, pairing_device_tireuse, tenant_lespass,
+    ):
+        """
+        Une fois l'appairage fait, le PairingDevice ne sert plus a rien : son code PIN et
+        sa cible sont vides. Le lien durable est la cle etrangere TireuseBec.terminal.
+        / Once paired, the PairingDevice is spent: PIN and target are cleared.
+        """
+        device, _tireuse = pairing_device_tireuse
+        response = _call_claim(device.pin_code)
+        assert response.status_code == status.HTTP_200_OK
+
+        device.refresh_from_db()
+        assert device.pin_code is None
+        assert device.cible_uuid is None
+        assert device.is_claimed is True
 
         with tenant_context(tenant_lespass):
             from controlvanne.models import TireuseAPIKey

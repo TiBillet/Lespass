@@ -38,6 +38,14 @@ class PinClaimSerializer(serializers.Serializer):
         except PairingDevice.DoesNotExist:
             raise serializers.ValidationError(_("Invalid or already used PIN code."))
 
+        # Un PIN a une duree de vie. Passe ce delai, il faut en redemander un dans l'admin.
+        # Un code oublie sur un ecran ne doit pas rester une porte ouverte pour toujours.
+        # / A PIN has a lifetime. A code forgotten on a screen must not stay an open door.
+        if pairing_device.pin_est_expire():
+            raise serializers.ValidationError(
+                _("Ce code PIN a expire. Demandez-en un nouveau.")
+            )
+
         # Stocker le device pour que la vue puisse y accéder
         # Store the device so the view can access it
         self.device = pairing_device

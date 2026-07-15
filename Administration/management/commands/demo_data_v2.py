@@ -444,11 +444,11 @@ class Command(BaseCommand):
         try:
             with tenant_context(tenant):
                 from AuthBillet.models import TermUser, TibilletUser
-                from kiosk.models import Terminal
+                from laboutik.models import Terminal, TPEBancaire
 
-                # 1. Borne KI de demonstration (idempotente sur l'email conventionnel).
-                # / Demo KI device (idempotent on the conventional email).
-                borne, _borne_creee = TermUser.objects.get_or_create(
+                # 1. La borne de demonstration : un compte + son Terminal.
+                # / The demo kiosk: an account + its Terminal.
+                borne_compte, _cree = TermUser.objects.get_or_create(
                     email='kiosk-demo@terminals.local',
                     defaults={
                         'username': 'kiosk-demo@terminals.local',
@@ -457,28 +457,36 @@ class Command(BaseCommand):
                         'accept_newsletter': False,
                     },
                 )
-
-                # 2. TPE Stripe SIMULE, lie a la borne.
-                # / Simulated Stripe reader, linked to the device.
-                terminal, _terminal_cree = Terminal.objects.get_or_create(
-                    name='TPE Démo (simulé)',
+                borne_terminal, _cree = Terminal.objects.get_or_create(
+                    name='Borne Démo',
                     defaults={
-                        'type': Terminal.STRIPE_WISEPOS,
-                        'registration_code': 'simulated-wpe',
-                        'term_user': borne,
+                        'terminal_role': TibilletUser.ROLE_KIOSQUE,
+                        'term_user': borne_compte,
                     },
                 )
-                if terminal.term_user_id is None:
-                    terminal.term_user = borne
-                    terminal.save(update_fields=['term_user'])
+                if borne_terminal.term_user_id is None:
+                    borne_terminal.term_user = borne_compte
+                    borne_terminal.save(update_fields=['term_user'])
 
-                # 3. Appairage Stripe : cree le reader simule sur le compte de test.
-                # get_stripe_id() renseigne self.stripe_id sans sauvegarder.
-                # / Stripe pairing: creates the simulated reader. get_stripe_id sets
-                # self.stripe_id without saving.
-                if not terminal.stripe_id:
-                    terminal.get_stripe_id()
-                    terminal.save(update_fields=['stripe_id'])
+                # 2. Le lecteur de carte SIMULE, branche sur la borne.
+                # / The simulated card reader, plugged into the kiosk.
+                lecteur, _cree = TPEBancaire.objects.get_or_create(
+                    name='TPE Démo (simulé)',
+                    defaults={
+                        'tpe_type': TPEBancaire.STRIPE_WISEPOS,
+                        'registration_code': 'simulated-wpe',
+                        'terminal': borne_terminal,
+                    },
+                )
+                if lecteur.terminal_id is None:
+                    lecteur.terminal = borne_terminal
+                    lecteur.save(update_fields=['terminal'])
+
+                # 3. Enregistrement chez Stripe : cree le reader simule.
+                # / Stripe registration: creates the simulated reader.
+                if not lecteur.stripe_id:
+                    lecteur.appairer_chez_stripe()
+                    lecteur.save(update_fields=['stripe_id'])
 
             self.stdout.write(self.style.SUCCESS(
                 "Borne kiosk de démonstration créée (TPE Stripe simulé) sur lespass."

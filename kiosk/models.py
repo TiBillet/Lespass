@@ -1,5 +1,10 @@
-# Modèles TPE Stripe du kiosk (chantier CHANTIER-01).
-# / Kiosk Stripe terminal models (CHANTIER-01).
+# Pilotage des paiements TPE de la borne libre-service.
+# / Self-service kiosk card-payment driver.
+#
+# NOTE : les modeles Terminal et StripeLocation vivent dans laboutik/models.py.
+# Un TPE n'est pas reserve aux bornes : une caisse LaBoutik peut en avoir un.
+# / Terminal and StripeLocation live in laboutik/models.py: a card terminal is not
+# kiosk-only, a LaBoutik cash register may have one too.
 
 import json
 import logging
@@ -9,130 +14,6 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger(__name__)
-
-
-class StripeLocation(models.Model):
-    """
-    Location Stripe Terminal, requise pour créer un reader (TPE).
-    / Stripe Terminal location, required to create a reader (card terminal).
-
-    Copié de LaBoutik APIcashless.Location, rebranché sur RootConfiguration.
-    Ce n'est PAS un singleton : is_primary_location distingue la location
-    primaire fédérée. get_primary_location() la crée chez Stripe à la volée.
-    """
-    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
-    name = models.CharField(max_length=200, blank=True, null=True, verbose_name=_("Nom"))
-    stripe_id = models.CharField(max_length=21, blank=True, null=True, verbose_name=_("Stripe ID"))
-    is_primary_location = models.BooleanField(default=False, verbose_name=_("Primary Asset Location"))
-
-    def __str__(self):
-        return self.name or "StripeLocation"
-
-    @classmethod
-    def get_primary_location(cls):
-        """La location pour les recharges de monnaie fédérée. La crée chez Stripe si absente.
-        / The location for federated money refills. Creates it at Stripe if missing."""
-        if not cls.objects.filter(is_primary_location=True).exists():
-            import stripe
-            from root_billet.models import RootConfiguration
-
-            stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-            location = stripe.terminal.Location.create(
-                display_name="Primary Asset Location",
-                address={
-                    "line1": "Primary Asset Location",
-                    "country": "FR",
-                    "city": "Villeurbanne",
-                    "postal_code": "69100",
-                },
-            )
-            return cls.objects.create(
-                stripe_id=location.id,
-                name="Primary Asset Location",
-                is_primary_location=True,
-            )
-        return cls.objects.get(is_primary_location=True)
-
-
-class Terminal(models.Model):
-    """
-    TPE Stripe (BBPOS WisePOS E). Copié de LaBoutik APIcashless.Terminal.
-    / Stripe card terminal. Copied from LaBoutik APIcashless.Terminal.
-
-    Lien borne : term_user OneToOne → TermUser (1 borne = 1 TPE). Remplace le
-    Appareil.terminals de LaBoutik (pas de modèle Appareil côté Lespass).
-    """
-    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
-    name = models.CharField(max_length=200, blank=True, null=True, verbose_name=_("Nom"))
-
-    # 1 borne = 1 TPE. FK vers TibilletUser CONCRET, pas le proxy TermUser :
-    # le manager de TermUser filtre par tenant et casserait l'accès hors contexte
-    # tenant (public/shell/Celery). Le form d'admin restreint le choix aux TermUser.
-    # Pattern = BaseBillet.LaBoutikAPIKey.user.
-    # / 1 borne = 1 terminal. FK to the CONCRETE TibilletUser (not the TermUser
-    # proxy, whose manager filters by tenant). Admin form restricts choices to TermUser.
-    term_user = models.OneToOneField(
-        "AuthBillet.TibilletUser",
-        on_delete=models.SET_NULL,
-        blank=True, null=True,
-        related_name="terminal",
-        verbose_name=_("Borne (terminal appairé)"),
-    )
-
-    # Pour les TPE Stripe / For Stripe terminals
-    registration_code = models.CharField(max_length=200, blank=True, null=True,
-                                         verbose_name=_("Code d'enregistrement du lecteur"))
-    stripe_id = models.CharField(max_length=21, blank=True, null=True, verbose_name=_("Stripe ID"))
-
-    STRIPE_WISEPOS = "W"
-    TYPE_CHOICES = [
-        (STRIPE_WISEPOS, _("bbpos_wisepos_e")),
-    ]
-    type = models.CharField(max_length=2, choices=TYPE_CHOICES, default=STRIPE_WISEPOS,
-                            verbose_name=_("Type"))
-    archived = models.BooleanField(default=False)
-
-    def status(self):
-        """Statut du lecteur côté Stripe. / Reader status from Stripe."""
-        if self.stripe_id:
-            import stripe
-            from root_billet.models import RootConfiguration
-            stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-            reader = stripe.terminal.Reader.retrieve(self.stripe_id)
-            return reader.status
-        return "Unknown"
-
-    def get_stripe_id(self):
-        """Appairage : crée le reader Stripe depuis le registration_code + la location primaire.
-        / Pairing: create the Stripe reader from registration_code + primary location."""
-        if not self.stripe_id:
-            if self.type == Terminal.STRIPE_WISEPOS and self.registration_code:
-                try:
-                    import stripe
-                    from root_billet.models import RootConfiguration
-                    stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-                    location = StripeLocation.get_primary_location()
-                    reader = stripe.terminal.Reader.create(
-                        registration_code=self.registration_code,
-                        label=self.name,
-                        location=location.stripe_id,
-                    )
-                    self.stripe_id = reader.id
-                except Exception as e:
-                    raise Exception(f"Error while creating stripe reader : {e}")
-            else:
-                raise Exception("The registration code is not set.")
-        return self.stripe_id
-
-    def __str__(self):
-        return f"{self.get_type_display()} {self.name}"
-
-    class Meta:
-        # Nom affiché dans l'admin : « TPE Bancaire », pour ne pas confondre
-        # avec les terminaux Pi/Sunmi de LaBoutik.
-        # / Admin display name: bank card terminal, not the LaBoutik Pi/Sunmi devices.
-        verbose_name = _("TPE Bancaire")
-        verbose_name_plural = _("TPE Bancaires")
 
 
 class PaymentsIntent(models.Model):
@@ -147,7 +28,32 @@ class PaymentsIntent(models.Model):
     amount = models.PositiveIntegerField()  # centimes / cents
     payment_intent_stripe_id = models.CharField(max_length=30, blank=True, null=True,
                                                 verbose_name=_("Paiement intent stripe id"))
-    terminal = models.ForeignKey(Terminal, on_delete=models.PROTECT, verbose_name=_("TPE"))
+
+    # LA BORNE, PAS LE LECTEUR.
+    #
+    # Un paiement appartient a l'appareil qui l'a lance. C'est cette cle qui repond a
+    # « cette borne a-t-elle le droit de consulter, ou d'annuler, ce paiement ? »
+    # (kiosk/views.py, wsocket/consumers.py).
+    #
+    # Elle ne pointe surtout PAS le lecteur : un lecteur se DEPLACE d'un appareil a
+    # l'autre. Si le paiement pointait le lecteur, debrancher celui-ci en pleine
+    # transaction ferait perdre a la borne la propriete de son propre paiement — elle
+    # prendrait un 404 sur son ecran, carte peut-etre deja debitee.
+    # / The KIOSK, not the reader. Readers move between devices; a payment must not change
+    # owner because someone unplugged a cable.
+    terminal = models.ForeignKey(
+        "laboutik.Terminal", on_delete=models.PROTECT, verbose_name=_("Borne"),
+    )
+
+    # Le lecteur sur lequel ce paiement est REELLEMENT parti, fige au moment de l'envoi.
+    # Sert a annuler sur le bon lecteur, meme s'il a ete debranche depuis. Voir
+    # send_to_terminal() et annuler_sur_le_terminal().
+    # / The reader this payment was actually sent to, frozen at send time.
+    reader_stripe_id = models.CharField(
+        max_length=21, blank=True, null=True,
+        verbose_name=_("Lecteur utilisé (Stripe)"),
+    )
+
     datetime = models.DateTimeField(auto_now_add=True)
     card = models.ForeignKey("QrcodeCashless.CarteCashless", on_delete=models.PROTECT,
                              verbose_name=_("Carte cashless"), related_name="payments_intents",
@@ -191,23 +97,45 @@ class PaymentsIntent(models.Model):
         self.save()
         return self.status
 
-    def send_to_terminal(self, terminal: "Terminal"):
-        """Crée le PaymentIntent Stripe (card_present) et l'envoie au reader.
+    def send_to_terminal(self, terminal):
+        """Crée le PaymentIntent Stripe (card_present) et l'envoie au lecteur de carte.
         Metadata {fedow_place_uuid, tag_id} NON signées (place Lespass de confiance, SPEC §8bis).
-        / Create the Stripe PaymentIntent (card_present) and push it to the reader.
-        Unsigned {fedow_place_uuid, tag_id} metadata (trusted Lespass place, SPEC §8bis)."""
+        / Create the Stripe PaymentIntent (card_present) and push it to the card reader.
+
+        LOCALISATION : kiosk/models.py
+
+        :param terminal: le laboutik.Terminal (la borne). Son lecteur est resolu ICI.
+        :raises ValueError: si aucun lecteur actif n'est branche sur cette borne
+        """
         import stripe
         from root_billet.models import RootConfiguration
         from fedow_connect.models import FedowConfig
         from BaseBillet.models import Configuration
 
+        # LE LECTEUR EST RESOLU AU MOMENT DE L'ENVOI, pas stocke sur le paiement.
+        # Le paiement appartient a la BORNE (self.terminal), pas au lecteur : un lecteur se
+        # deplace d'un appareil a l'autre, et un paiement en cours ne doit pas changer de
+        # proprietaire parce qu'on a debranche un cable. C'est ce qui protege le controle
+        # d'acces (kiosk/views.py : la borne ne voit que SES paiements).
+        # / The reader is resolved AT SEND TIME. The payment belongs to the KIOSK, not to
+        # the reader: readers move between devices, payments must not change owner.
+        lecteur = getattr(terminal, "tpe", None)
+        if lecteur is None or not lecteur.active:
+            raise ValueError(
+                f"Aucun lecteur de carte actif n'est branché sur « {terminal.name} »."
+            )
+        if not lecteur.stripe_id:
+            raise ValueError(
+                f"Le lecteur « {lecteur.name} » n'est pas encore enregistré chez Stripe."
+            )
+
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
         fedow_config = FedowConfig.get_solo()
         currency = Configuration.get_solo().currency_code.lower()
 
-        # Vérification de la disponibilité du terminal / Check terminal availability
+        # Vérification de la disponibilité du lecteur / Check reader availability
         try:
-            stripe.terminal.Reader.retrieve(terminal.stripe_id)
+            stripe.terminal.Reader.retrieve(lecteur.stripe_id)
         except stripe._error.InvalidRequestError as e:
             raise e
 
@@ -226,10 +154,21 @@ class PaymentsIntent(models.Model):
             metadata={"data": json.dumps(data)},
         )
         self.payment_intent_stripe_id = payment_intent_stripe.id
+
+        # ON RETIENT SUR QUEL LECTEUR CE PAIEMENT EST PARTI.
+        #
+        # Sans cette trace, annuler le paiement plus tard (timeout, annulation manuelle)
+        # relirait le lecteur actuellement branche sur la borne. Or un lecteur se deplace :
+        # si on l'a debranche entre-temps pour le mettre ailleurs, on enverrait l'ordre
+        # d'annulation au MAUVAIS lecteur — et on couperait le paiement d'un autre client,
+        # en train de payer sur une autre caisse.
+        # / We remember WHICH reader this payment was sent to. Readers move; cancelling later
+        # by re-reading the terminal's current reader could kill another customer's payment.
+        self.reader_stripe_id = lecteur.stripe_id
         self.save()
 
         stripe.terminal.Reader.process_payment_intent(
-            terminal.stripe_id,
+            lecteur.stripe_id,
             payment_intent=payment_intent_stripe.id,
         )
         self.status = self.IN_PROGRESS
@@ -257,10 +196,16 @@ class PaymentsIntent(models.Model):
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
 
         # 1. Arreter l'invite de carte sur le lecteur physique.
-        # / Stop the card prompt on the physical reader.
-        if self.terminal and self.terminal.stripe_id:
+        #
+        # On utilise le lecteur SUR LEQUEL LE PAIEMENT EST PARTI (reader_stripe_id), pas
+        # celui actuellement branche sur la borne. Un lecteur se deplace : si on l'a
+        # debranche depuis, relire la borne nous ferait couper le paiement d'un AUTRE
+        # client, en train de payer ailleurs sur ce meme lecteur.
+        # / Use the reader the payment was SENT TO, not the one currently plugged into the
+        # kiosk: readers move, and we would otherwise cancel another customer's payment.
+        if self.reader_stripe_id:
             try:
-                stripe.terminal.Reader.cancel_action(self.terminal.stripe_id)
+                stripe.terminal.Reader.cancel_action(self.reader_stripe_id)
             except Exception as erreur_reader:
                 logger.error(f"annuler_sur_le_terminal : cancel_action a echoue : {erreur_reader}")
 

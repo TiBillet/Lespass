@@ -150,19 +150,18 @@ def tireusebec_post_save(sender, instance, created, **kwargs):
     The consumer state_update() does no DB queries — it forwards the JSON.
     """
 
-    # A la creation d'une tireuse, on cree automatiquement :
-    # 1. Un PointDeVente de type TIREUSE avec le meme nom
-    # 2. Un PairingDevice avec un PIN 6 chiffres pour l'appairage du Pi
-    # Ca evite a l'admin de devoir creer ces objets manuellement.
-    # / On tap creation, auto-create:
-    # 1. A TIREUSE-type PointDeVente with the same name
-    # 2. A PairingDevice with a 6-digit PIN for Pi pairing
+    # A la creation d'une tireuse, on lui fabrique automatiquement :
+    # 1. son point de vente (type TIREUSE, meme nom) ;
+    # 2. son Terminal — le Raspberry Pi qui la pilotera — et le code PIN qui permettra
+    #    d'appairer ce Pi.
+    #
+    # Le gestionnaire n'a donc qu'un objet a creer : la tireuse. Le reste suit.
+    # / On tap creation, auto-create its point of sale, its Terminal (the Raspberry Pi that
+    # will drive it) and the PIN to pair that Pi.
     if created:
-        from django.db import connection
-
         champs_a_mettre_a_jour = {}
 
-        # --- Auto-creation du PointDeVente ---
+        # --- Le point de vente ---
         # nom_tireuse est unique (contrainte DB), donc le nom du POS l'est aussi.
         # / nom_tireuse is unique (DB constraint), so the POS name is too.
         if instance.point_de_vente is None:
@@ -175,34 +174,31 @@ def tireusebec_post_save(sender, instance, created, **kwargs):
             champs_a_mettre_a_jour["point_de_vente"] = point_de_vente_cree
             instance.point_de_vente = point_de_vente_cree
 
-        # --- Auto-creation du PairingDevice avec PIN ---
-        # On verifie que connection.tenant est un vrai Client (pas un FakeTenant).
-        # En contexte de test (schema_context), Django met un FakeTenant
-        # qui n'est pas une instance de Client — le PairingDevice FK crasherait.
-        # / Check connection.tenant is a real Client (not FakeTenant from tests).
-        if instance.pairing_device is None:
-            from Customers.models import Client
+        # --- Le Terminal (le Raspberry Pi) et son code PIN ---
+        #
+        # LA TIREUSE ET SON PI SONT DEUX CHOSES DIFFERENTES, et c'est voulu.
+        # La tireuse est l'objet METIER : elle porte le fut, le debitmetre, le prix, et tout
+        # l'historique des services. Le Terminal est le MATERIEL : il est jetable. Quand un
+        # Pi grille, on en appaire un autre sur le meme terminal — la tireuse, elle, garde
+        # sa configuration et son historique.
+        #
+        # Le role TI est INDISPENSABLE : c'est lui qui decide que le claim delivrera une
+        # TireuseAPIKey. Avec une cle de caisse, le Pi ne pourrait pas piloter la vanne.
+        # / The tap is the BUSINESS object (keg, price, history). The Terminal is the
+        # HARDWARE, and it is disposable. Role TI decides which API key class is issued.
+        if instance.terminal is None:
+            from AuthBillet.models import TibilletUser
+            from discovery.services import fabriquer_le_code_pin_d_appairage
+            from laboutik.models import Terminal
 
-            tenant_courant = connection.tenant
-            tenant_est_un_vrai_client = isinstance(tenant_courant, Client)
+            terminal_cree = Terminal.objects.create(
+                name=instance.nom_tireuse,
+                terminal_role=TibilletUser.ROLE_TIREUSE,
+            )
+            fabriquer_le_code_pin_d_appairage(terminal_cree)
 
-            if tenant_est_un_vrai_client:
-                from discovery.models import PairingDevice
-
-                from AuthBillet.models import TibilletUser
-                pin_genere = PairingDevice.generate_unique_pin()
-                pairing_device_cree = PairingDevice.objects.create(
-                    name=instance.nom_tireuse,
-                    tenant=tenant_courant,
-                    pin_code=pin_genere,
-                    # IMPORTANT : role TI (Tireuse) — sans ça le claim retourne
-                    # une clé LaBoutik et tireuse_uuid reste vide.
-                    # / IMPORTANT: role TI (Tireuse) — without this, claim returns
-                    # a LaBoutik key and tireuse_uuid stays empty.
-                    terminal_role=TibilletUser.ROLE_TIREUSE,
-                )
-                champs_a_mettre_a_jour["pairing_device"] = pairing_device_cree
-                instance.pairing_device = pairing_device_cree
+            champs_a_mettre_a_jour["terminal"] = terminal_cree
+            instance.terminal = terminal_cree
 
         # On lie les objets a la tireuse sans re-declencher le signal post_save.
         # update() ne passe pas par save(), donc pas de recursion.

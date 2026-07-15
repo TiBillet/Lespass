@@ -22,9 +22,10 @@ import logging
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.db import connection
 from django.utils import timezone
 
-from laboutik.printing.base import PrinterBackend
+from laboutik.printing.base import PrinterBackend, nom_du_groupe_websocket
 
 logger = logging.getLogger(__name__)
 
@@ -189,9 +190,15 @@ class SunmiInnerBackend(PrinterBackend):
         # / Convert ticket_data to JSON commands
         commands = ticket_data_to_json_commands(ticket_data)
 
-        # Envoyer les commandes au group Redis de l'imprimante
-        # / Send commands to the printer's Redis group
-        group_name = f"printer-{printer.uuid}"
+        # Envoyer les commandes au canal Redis de l'imprimante.
+        #
+        # Le canal porte le nom du lieu (le schema du tenant). Redis est partage par tous
+        # les lieux : sans ce cloisonnement, un abonne d'un autre lieu recevrait ce ticket.
+        # La tache Celery qui nous appelle tourne dans un schema_context, donc
+        # connection.schema_name est bien celui du lieu qui imprime.
+        # / Send commands to the printer's Redis channel. The channel carries the venue name
+        # (tenant schema): Redis is shared across venues.
+        group_name = nom_du_groupe_websocket(connection.schema_name, printer.uuid)
         channel_layer = get_channel_layer()
 
         try:

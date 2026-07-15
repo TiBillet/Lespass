@@ -372,6 +372,24 @@ REST_FRAMEWORK = {
     #     'anon': '1000/day',
     #     'user': '100000/day'
     # },
+    # INDISPENSABLE : sans ce reglage, la limitation de debit est CONTOURNABLE.
+    #
+    # Pour identifier qui appelle, DRF lit l'en-tete X-Forwarded-For. Quand NUM_PROXIES
+    # n'est pas defini, il prend cet en-tete EN ENTIER — or il est fourni par le client,
+    # donc falsifiable. Il suffit d'envoyer une valeur differente a chaque requete pour
+    # obtenir une identite neuve a chaque fois, et la limite ne s'applique plus jamais.
+    #
+    # Notre nginx AJOUTE l'adresse reelle en fin d'en-tete ($proxy_add_x_forwarded_for).
+    # Avec NUM_PROXIES = 1, DRF prend la DERNIERE adresse de la liste : celle que nginx
+    # vient d'ajouter. C'est la seule que le client ne peut pas falsifier.
+    #
+    # Ce que ca protege concretement : l'appairage d'un terminal se reclame avec un code
+    # a 6 chiffres, sur une route publique. Sans limite de debit reelle, les 900 000 codes
+    # possibles se balaient en quelques minutes.
+    # / MANDATORY: without this, rate limiting is BYPASSABLE. DRF would trust the whole
+    # client-supplied X-Forwarded-For header as the caller's identity.
+    'NUM_PROXIES': 1,
+
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
         "rest_framework_api_key.permissions.HasAPIKey",

@@ -25,7 +25,8 @@ from django_tenants.utils import tenant_context
 from AuthBillet.models import TermUser, TibilletUser
 from Customers.models import Client
 from QrcodeCashless.models import CarteCashless
-from kiosk.models import PaymentsIntent, Terminal
+from kiosk.models import PaymentsIntent
+from laboutik.models import Terminal
 
 TEST_TAG_ID = "AAAA1111"
 
@@ -63,6 +64,19 @@ def kiosk_user_and_terminal(tenant, clean_kiosk):
             is_active=True,
         )
         terminal = Terminal.objects.create(name="TEST_KIOSK_Borne1", term_user=user)
+
+        # LA BORNE DOIT AVOIR UN LECTEUR DE CARTE BRANCHE.
+        # Sans lui, la vue refuse le rechargement avant meme d'appeler Stripe (« aucun
+        # lecteur branche sur cette borne ») — et le mock ne serait jamais atteint.
+        # / The kiosk MUST have a card reader plugged in, or the view refuses before Stripe.
+        from laboutik.models import TPEBancaire
+        TPEBancaire.objects.create(
+            name="TEST_KIOSK_Lecteur1",
+            terminal=terminal,
+            stripe_id="tmr_test_kiosk",
+            registration_code="simulated-wpe",
+        )
+
         return user, terminal
 
 

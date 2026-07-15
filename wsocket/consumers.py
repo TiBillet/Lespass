@@ -28,13 +28,16 @@ DEPENDENCIES :
 import json
 import logging
 import time
+from uuid import UUID
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.conf import settings
 from django.template.loader import get_template
+from django_tenants.utils import tenant_context
 
 from AuthBillet.models import TibilletUser
+from laboutik.printing.base import nom_du_groupe_websocket
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +150,65 @@ class LaboutikConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=event["html"])
 
 
+def imprimante_appartient_au_terminal(tenant, user, printer_uuid):
+    """
+    Vrai si l'imprimante demandee est bien celle du terminal qui se connecte.
+    / True if the requested printer is the connecting terminal's own.
+
+    LOCALISATION : wsocket/consumers.py
+
+    C'est LA regle qui garde le canal d'impression. Elle est ecrite ici, en clair et de
+    facon synchrone, pour rester lisible et testable directement — PrinterConsumer.connect()
+    ne fait que l'appeler.
+
+    On se place dans le schema du lieu pour lire le Terminal. C'est ce qui rend une
+    imprimante d'un AUTRE lieu introuvable, et donc la connexion impossible : la table des
+    terminaux n'existe que dans le schema de son lieu.
+
+    Renvoie Faux quand :
+    - l'utilisateur n'est pas un terminal (un humain en session admin, par exemple) ;
+    - son terminal n'a pas d'imprimante ;
+    - l'imprimante demandee n'est pas la sienne ;
+    - l'identifiant demande n'est pas un UUID valide.
+
+    :param tenant: le lieu (Customers.Client), resolu depuis le nom de domaine
+    :param user: l'utilisateur de la connexion WebSocket
+    :param printer_uuid: l'identifiant d'imprimante demande dans l'URL
+    :return: bool
+    """
+    if not user or not user.is_authenticated:
+        return False
+
+    with tenant_context(tenant):
+        # LE getattr DOIT RESTER A L'INTERIEUR DU tenant_context.
+        # `user` a ete charge depuis le schema public, mais sa relation `terminal` n'est
+        # PAS encore chargee : c'est ce getattr qui declenche la requete, et elle part donc
+        # dans le schema du lieu courant. C'est ce qui rend le terminal d'un AUTRE lieu
+        # introuvable — la table des terminaux n'existe que dans le schema de son lieu.
+        # Sortir cette ligne du bloc ouvrirait une fuite entre lieux.
+        # / The getattr MUST stay INSIDE the tenant_context: it is what triggers the query,
+        # which then runs in the current venue's schema. Moving it out would leak across venues.
+        #
+        # getattr avec une valeur par defaut renvoie None quand la relation inverse OneToOne
+        # est absente : Django leve RelatedObjectDoesNotExist, qui herite d'AttributeError.
+        # / getattr with a default returns None when the reverse OneToOne is missing.
+        terminal = getattr(user, "terminal", None)
+        if terminal is None:
+            return False
+
+        if terminal.printer_id is None:
+            return False
+
+        try:
+            identifiant_demande = UUID(str(printer_uuid))
+        except (ValueError, AttributeError, TypeError):
+            # L'identifiant dans l'URL n'est pas un UUID : requete malformee.
+            # / The URL identifier is not a UUID: malformed request.
+            return False
+
+        return terminal.printer_id == identifiant_demande
+
+
 class PrinterConsumer(AsyncWebsocketConsumer):
     """
     Consumer WebSocket dedie aux imprimantes Sunmi Inner.
@@ -175,27 +237,32 @@ class PrinterConsumer(AsyncWebsocketConsumer):
 
     async def connect(self):
         """
-        Connexion : verifie l'authentification puis rejoint le group Redis.
-        Les appareils POS sont loggues via session admin Django.
-        AuthMiddlewareStack (dans asgi.py) resout la session et place
-        l'utilisateur dans scope["user"]. On refuse la connexion si
-        l'utilisateur n'est pas authentifie ou si le tenant n'est pas resolu.
-        / Connection: checks authentication then joins the Redis group.
-        POS devices are logged in via Django admin session.
-        AuthMiddlewareStack resolves the session and places
-        the user in scope["user"]. We reject if user is not authenticated
-        or tenant is not resolved.
+        Connexion : n'accepte QUE le terminal proprietaire de l'imprimante demandee.
+        / Connection: accepts ONLY the terminal that owns the requested printer.
+
+        Ce canal transporte le CONTENU des tickets clients : noms, montants, articles.
+        Un abonne indesirable les lit en clair. Le controle d'acces est donc strict, et
+        il tient en une question : « est-ce que cette imprimante est la tienne ? »
+
+        Trois barrieres, dans cet ordre :
+        1. le lieu doit etre resolu ;
+        2. l'utilisateur doit etre authentifie ;
+        3. l'utilisateur doit etre le TERMINAL dont c'est l'imprimante.
+
+        La barriere 3 ferme aussi le passage entre lieux : l'imprimante est cherchee dans
+        le schema du lieu courant. Une imprimante du lieu B est introuvable depuis le lieu
+        A, donc la connexion est refusee — meme si l'identifiant est correct.
         """
-        # Verifier que le tenant est resolu (WebSocketTenantMiddleware)
-        # / Check that the tenant is resolved
+        # 1. Le lieu (resolu par WebSocketTenantMiddleware depuis le nom de domaine)
+        # / 1. The venue, resolved from the hostname
         tenant = self.scope.get("tenant")
         if not tenant:
             logger.warning("[WS] Printer connexion refusee : pas de tenant")
             await self.close()
             return
 
-        # Verifier que l'utilisateur est authentifie (session admin)
-        # / Check that the user is authenticated (admin session)
+        # 2. L'utilisateur doit etre authentifie
+        # / 2. The user must be authenticated
         user = self.scope.get("user")
         if not user or not user.is_authenticated:
             logger.warning(
@@ -206,7 +273,26 @@ class PrinterConsumer(AsyncWebsocketConsumer):
             return
 
         self.printer_uuid = self.scope["url_route"]["kwargs"]["printer_uuid"]
-        self.group_name = f"printer-{self.printer_uuid}"
+
+        # 3. L'imprimante demandee doit etre CELLE DE CE TERMINAL.
+        # / 3. The requested printer must be THIS TERMINAL'S OWN.
+        c_est_bien_son_imprimante = await self._est_l_imprimante_de_ce_terminal(
+            tenant, user, self.printer_uuid,
+        )
+        if not c_est_bien_son_imprimante:
+            logger.warning(
+                f"[WS] Printer connexion refusee : l'imprimante {self.printer_uuid} "
+                f"n'est pas celle de cet utilisateur "
+                f"(user={user.email}, tenant={tenant.schema_name})"
+            )
+            await self.close()
+            return
+
+        # Le canal porte le nom du lieu : Redis est partage par tous les lieux.
+        # Les deux bouts (ici et laboutik/printing/sunmi_inner.py) appellent la MEME
+        # fonction pour le calculer — sinon l'impression deviendrait muette sans erreur.
+        # / The channel carries the venue name: Redis is shared across venues.
+        self.group_name = nom_du_groupe_websocket(tenant.schema_name, self.printer_uuid)
 
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
@@ -214,6 +300,14 @@ class PrinterConsumer(AsyncWebsocketConsumer):
             f"[WS] Imprimante connectee : {self.printer_uuid} "
             f"(user={user.email}, tenant={tenant.schema_name})"
         )
+
+    @database_sync_to_async
+    def _est_l_imprimante_de_ce_terminal(self, tenant, user, printer_uuid):
+        """
+        Enveloppe asynchrone : la regle elle-meme est dans imprimante_appartient_au_terminal().
+        / Async wrapper: the rule itself lives in imprimante_appartient_au_terminal().
+        """
+        return imprimante_appartient_au_terminal(tenant, user, printer_uuid)
 
     async def disconnect(self, close_code):
         """
@@ -480,26 +574,3 @@ class TerminalConsumer(AsyncWebsocketConsumer):
         every tick.
         """
         logger.info(f"message event: {event}")
-
-
-# --- ChatConsumer (chat wsocket V1, conserve lors du portage laboutik) ---
-class ChatConsumer(AsyncWebsocketConsumer):
-    async def connect(self):
-        self.room_name = self.scope["url_route"]["kwargs"]["room_name"]
-        self.room_group_name = f"chat_{self.room_name}"
-        await self.channel_layer.group_add(self.room_group_name, self.channel_name)
-        await self.accept()
-
-    async def disconnect(self, close_code):
-        await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
-
-    async def receive(self, text_data):
-        text_data_json = json.loads(text_data)
-        message = text_data_json["message"]
-        await self.channel_layer.group_send(
-            self.room_group_name, {"type": "chat.message", "message": message}
-        )
-
-    async def chat_message(self, event):
-        message = event["message"]
-        await self.send(text_data=json.dumps({"message": message}))

@@ -351,6 +351,392 @@ class Printer(models.Model):
         verbose_name_plural = _('Printers')
 
 
+# --- TPE Stripe : la « location » exigee par Stripe pour creer un lecteur ---
+# / Stripe Terminal location, required to create a card reader
+
+class StripeLocation(models.Model):
+    """
+    Location Stripe Terminal, exigee par Stripe pour creer un lecteur (TPE).
+    / Stripe Terminal location, required to create a reader (card terminal).
+
+    LOCALISATION : laboutik/models.py
+
+    Ce n'est PAS un singleton : le drapeau is_primary_location distingue la location
+    primaire federee. get_primary_location() la cree chez Stripe si elle manque.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid_module.uuid4, editable=False)
+    name = models.CharField(max_length=200, blank=True, null=True, verbose_name=_("Nom"))
+    stripe_id = models.CharField(
+        max_length=21, blank=True, null=True, verbose_name=_("Identifiant Stripe"),
+    )
+    is_primary_location = models.BooleanField(
+        default=False, verbose_name=_("Location primaire"),
+    )
+
+    def __str__(self):
+        return self.name or "StripeLocation"
+
+    @classmethod
+    def get_primary_location(cls):
+        """
+        La location utilisee pour les recharges de monnaie federee.
+        La cree chez Stripe si elle n'existe pas encore.
+        / The location for federated money refills. Creates it at Stripe if missing.
+        """
+        if not cls.objects.filter(is_primary_location=True).exists():
+            import stripe
+            from root_billet.models import RootConfiguration
+
+            stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+            location = stripe.terminal.Location.create(
+                display_name="Primary Asset Location",
+                address={
+                    "line1": "Primary Asset Location",
+                    "country": "FR",
+                    "city": "Villeurbanne",
+                    "postal_code": "69100",
+                },
+            )
+            return cls.objects.create(
+                stripe_id=location.id,
+                name="Primary Asset Location",
+                is_primary_location=True,
+            )
+        return cls.objects.get(is_primary_location=True)
+
+
+# --- Terminal ---
+# / Terminal
+
+class Terminal(models.Model):
+    """
+    Un appareil : tablette Sunmi, Raspberry Pi, borne libre-service.
+    / A device: Sunmi tablet, Raspberry Pi, self-service kiosk.
+
+    LOCALISATION : laboutik/models.py
+
+    C'EST L'OBJET PIVOT DU MATERIEL. Tout s'y branche :
+    - une imprimante (champ `printer`) ;
+    - un lecteur de carte bancaire (champs Stripe : registration_code, stripe_id) ;
+    - une tireuse le designe (controlvanne.TireuseBec.terminal).
+    Ces capacites sont toutes optionnelles et independantes : un appareil peut en avoir
+    plusieurs, une seule, ou aucune.
+
+    CYCLE DE VIE — le terminal existe AVANT l'appareil physique.
+    Le gestionnaire cree le terminal dans l'admin, ce qui fabrique un code PIN. Il tape ce
+    code sur l'appareil, qui le reclame. Le claim ne cree donc PAS ce terminal : il le
+    REMPLIT, en lui posant son compte (`term_user`).
+
+        term_user est vide   -> en attente d'appairage (un code PIN circule)
+        term_user est pose   -> appaire, l'appareil travaille
+
+    POURQUOI CE MODELE EXISTE :
+    Le compte d'authentification (TermUser) et le code PIN (PairingDevice) vivent dans le
+    schema `public`. Ils ne peuvent donc PAS porter de cle etrangere vers Printer, qui est
+    une table de schema tenant : PostgreSQL ne saurait pas laquelle des N tables viser.
+    Il fallait un objet « appareil » cote tenant. C'est celui-ci.
+    Voir TECH_DOC/SESSIONS/IMPRESSION/SPEC.md, section 3.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid_module.uuid4, editable=False)
+
+    # Nom lisible de l'appareil, saisi par le gestionnaire a la creation.
+    # Il est recopie sur le PairingDevice quand on fabrique le code PIN.
+    # / Human-readable device name, entered by the manager. Copied onto the PairingDevice.
+    name = models.CharField(
+        max_length=200, blank=True, null=True,
+        verbose_name=_("Nom"),
+        help_text=_("Nom de l'appareil, par exemple « Caisse bar 1 »."),
+    )
+
+    # A quoi sert cet appareil. Le code PIN et le compte en heriteront : c'est ce role qui
+    # decide quelle classe de cle d'API le claim delivrera (une tireuse ne recoit pas la
+    # meme cle qu'une caisse — les permissions de controlvanne s'appuient dessus).
+    #
+    # Les valeurs viennent de TibilletUser, on ne les redeclare pas ici : le meme role
+    # voyage sur trois objets (Terminal -> PairingDevice -> TermUser), chacun en ayant
+    # besoin a un moment ou les deux autres n'existent pas encore.
+    # / What this device is for. The PIN and the account inherit it. Values come from
+    # TibilletUser: the same role travels across three objects.
+    terminal_role = models.CharField(
+        max_length=2,
+        choices=TibilletUser.TERMINAL_ROLE_CHOICES,
+        default=TibilletUser.ROLE_LABOUTIK,
+        verbose_name=_("Type d'appareil"),
+        help_text=_("Ce que cet appareil sait faire. Ne change plus une fois appairé."),
+    )
+
+    # Cle etrangere vers le TibilletUser CONCRET, et non vers le proxy TermUser :
+    # le manager de TermUser filtre par tenant, ce qui casserait l'acces hors contexte
+    # tenant (schema public, shell, tache Celery). Le formulaire d'admin, lui, restreint
+    # bien le choix aux TermUser.
+    # / FK to the CONCRETE TibilletUser, not the TermUser proxy (its manager filters by
+    # tenant, which breaks access outside a tenant context).
+    term_user = models.OneToOneField(
+        TibilletUser,
+        on_delete=models.SET_NULL,
+        blank=True, null=True,
+        related_name="terminal",
+        verbose_name=_("Compte du terminal"),
+    )
+
+    # --- Capacite « imprime » ---
+    # L'imprimante sur laquelle CE terminal sort ses tickets : ticket de vente, billet,
+    # recu de rechargement, ticket X et ticket Z.
+    #
+    # Plusieurs terminaux peuvent pointer la MEME imprimante. C'est voulu : un Raspberry
+    # Pi peut imprimer sur une imprimante cloud, et une tablette Sunmi peut imprimer sur
+    # l'imprimante integree d'une autre tablette Sunmi.
+    # / The printer this terminal prints its tickets on. Several terminals may share one.
+    printer = models.ForeignKey(
+        Printer,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='terminaux',
+        verbose_name=_("Imprimante"),
+        help_text=_(
+            "Imprimante utilisée par ce terminal. "
+            "Laisser vide si l'appareil n'imprime pas."
+        ),
+    )
+
+    # --- Capacite « encaisse par carte bancaire » ---
+    # Le lecteur de carte est un OBJET a part (TPEBancaire), pas un champ. C'est LUI qui
+    # designe le terminal sur lequel il est branche : voir TPEBancaire.terminal, plus bas.
+    # On y accede par la relation inverse : terminal.tpe
+    #
+    # Pourquoi le lien est porte par le TPE et non par le terminal, alors que l'imprimante
+    # fait l'inverse : un lecteur se DEPLACE d'un appareil a l'autre. Le porter cote TPE
+    # rend le deplacement possible en une seule edition — on ouvre le lecteur qu'on a en
+    # main, on lui change d'appareil. Une imprimante cloud, elle, est PARTAGEABLE entre
+    # plusieurs terminaux : d'ou une cle etrangere dans l'autre sens.
+    # / The card reader is a separate OBJECT (TPEBancaire) that points AT the terminal.
+    # Accessed via the reverse relation: terminal.tpe
+
+    archived = models.BooleanField(default=False, verbose_name=_("Archivé"))
+
+    def a_un_tpe(self):
+        """
+        Vrai si un lecteur de carte bancaire est branche sur cet appareil.
+        / True if a card reader is plugged into this device.
+        """
+        # getattr avec une valeur par defaut : la relation inverse OneToOne leve
+        # RelatedObjectDoesNotExist quand aucun lecteur n'est branche, et cette exception
+        # herite d'AttributeError — getattr l'avale donc et renvoie None.
+        # / getattr with a default: the reverse OneToOne raises RelatedObjectDoesNotExist,
+        # which inherits from AttributeError.
+        return getattr(self, "tpe", None) is not None
+
+    def est_appaire(self):
+        """
+        Vrai si un appareil physique a reclame ce terminal.
+        / True if a physical device has claimed this terminal.
+
+        C'est le compte qui fait foi : il n'existe qu'apres l'appairage. Tant qu'il est
+        vide, un code PIN circule et attend qu'on le tape sur l'appareil.
+        / The account is the source of truth: it only exists after pairing.
+        """
+        return self.term_user is not None
+
+    def code_pin_en_attente(self):
+        """
+        Le code PIN a taper sur l'appareil, ou None s'il n'y en a pas.
+        / The PIN to type on the device, or None if there is none.
+
+        LOCALISATION : laboutik/models.py
+
+        Renvoie None dans deux cas : le terminal est deja appaire, ou son code a expire.
+        Le code vit dans le schema public (PairingDevice) : c'est la seule facon pour un
+        appareil de le reclamer sans connaitre encore son lieu.
+        """
+        if self.est_appaire():
+            return None
+
+        from discovery.models import PairingDevice
+
+        appairage = PairingDevice.objects.filter(
+            cible_uuid=self.id,
+            claimed_at__isnull=True,
+        ).first()
+
+        if appairage is None or appairage.pin_est_expire():
+            return None
+
+        return appairage.pin_code
+
+    def __str__(self):
+        return self.name or str(self.id)
+
+    class Meta:
+        ordering = ('name',)
+        verbose_name = _("Terminal")
+        verbose_name_plural = _("Terminaux")
+
+
+# --- Lecteur de carte bancaire (TPE) ---
+# / Card reader (payment terminal)
+
+class TPEBancaire(models.Model):
+    """
+    Un lecteur de carte bancaire. Aujourd'hui un TPE Stripe (BBPOS WisePOS E).
+    / A bank card reader. Today a Stripe terminal (BBPOS WisePOS E).
+
+    LOCALISATION : laboutik/models.py
+
+    C'EST UN OBJET, PAS UN REGLAGE. Deux raisons, et elles decident de tout :
+
+    1. IL SE DEPLACE. On debranche le lecteur d'une caisse et on le rebranche sur une
+       borne. C'est un objet physique, avec sa vie propre — il doit donc pouvoir changer
+       d'appareil sans qu'on touche aux appareils eux-memes.
+
+    2. IL SERA TYPE. Aujourd'hui Stripe ; demain SumUp, Stancer. Le champ `tpe_type` porte
+       cette distinction, exactement comme Printer.printer_type porte la sienne.
+
+    POURQUOI C'EST LUI QUI DESIGNE LE TERMINAL, et pas l'inverse :
+    parce qu'on deplace le LECTEUR. Le lien vit donc du cote de l'objet qu'on prend en
+    main : on ouvre le lecteur, on lui change d'appareil, une seule edition. S'il etait
+    porte par le terminal, il faudrait deux editions — vider l'ancien, remplir le nouveau.
+    (L'imprimante, elle, fait l'inverse : une imprimante cloud est PARTAGEABLE entre
+    plusieurs terminaux, d'ou une cle etrangere depuis Terminal.)
+
+    UN LECTEUR NE SE BRANCHE QUE SUR UN SEUL APPAREIL A LA FOIS : c'est ce que garantit le
+    OneToOneField ci-dessous. Sans lui, deux caisses croiraient piloter le meme TPE — et un
+    client verrait s'afficher, sur le lecteur devant lui, le montant de la vente d'a cote.
+    """
+    uuid = models.UUIDField(
+        primary_key=True, default=uuid_module.uuid4, editable=False,
+    )
+
+    name = models.CharField(
+        max_length=200,
+        verbose_name=_("Nom"),
+        help_text=_("Nom du lecteur, par exemple « TPE du bar »."),
+    )
+
+    # Le fournisseur du lecteur. Un seul aujourd'hui.
+    #
+    # QUAND UN DEUXIEME ARRIVERA (SumUp, Stancer), extraire un patron Strategy sur le
+    # modele de laboutik/printing/ : une interface, un backend par fournisseur, un
+    # dictionnaire de dispatch. On ne le fait pas maintenant : avec un seul fournisseur,
+    # l'interface serait devinee, et fausse.
+    # Les appels Stripe sont volontairement rassembles dans les deux methodes de cette
+    # classe, plus deux methodes de kiosk.PaymentsIntent — l'extraction sera mecanique.
+    # / When a second provider arrives, extract a Strategy pattern like laboutik/printing/.
+    # Not now: with a single provider the interface would be guessed, and wrong.
+    STRIPE_WISEPOS = "SW"
+    TPE_TYPE_CHOICES = [
+        (STRIPE_WISEPOS, _("Stripe — BBPOS WisePOS E")),
+    ]
+    tpe_type = models.CharField(
+        max_length=2,
+        choices=TPE_TYPE_CHOICES,
+        default=STRIPE_WISEPOS,
+        verbose_name=_("Type de lecteur"),
+    )
+
+    # L'appareil sur lequel ce lecteur est branche. Vide = le lecteur est au placard.
+    # / The device this reader is plugged into. Empty = the reader is on the shelf.
+    terminal = models.OneToOneField(
+        Terminal,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="tpe",
+        verbose_name=_("Branché sur le terminal"),
+        help_text=_(
+            "L'appareil sur lequel ce lecteur est branché. "
+            "Laisser vide si le lecteur n'est branché nulle part."
+        ),
+    )
+
+    # --- Champs propres au fournisseur Stripe ---
+    # En dur, comme Printer.sunmi_serial_number et Printer.ip_address le sont pour leurs
+    # types. Quand SumUp arrivera, ses champs viendront a cote.
+    # / Stripe-specific fields, hard-coded like Printer does for its own types.
+    registration_code = models.CharField(
+        max_length=200, blank=True, null=True,
+        verbose_name=_("Code d'enregistrement"),
+        help_text=_("Code affiché par le lecteur Stripe à son premier démarrage."),
+    )
+
+    # L'identifiant du lecteur chez Stripe. Jamais saisi a la main : il est pose par
+    # appairer_chez_stripe(), qui enregistre le lecteur. UNIQUE : le meme lecteur physique
+    # ne peut pas exister deux fois en base.
+    # / The reader's Stripe id. Never typed by hand. UNIQUE.
+    stripe_id = models.CharField(
+        max_length=21, blank=True, null=True, unique=True,
+        verbose_name=_("Identifiant Stripe"),
+    )
+
+    active = models.BooleanField(
+        default=True,
+        verbose_name=_("Actif"),
+        help_text=_("Décochez pour mettre ce lecteur hors service."),
+    )
+
+    def est_appaire_chez_stripe(self):
+        """
+        Vrai si le lecteur est enregistre chez Stripe et pret a encaisser.
+        / True if the reader is registered at Stripe and ready to take payments.
+        """
+        return bool(self.stripe_id)
+
+    def statut_chez_stripe(self):
+        """
+        Demande a Stripe l'etat du lecteur (en ligne, hors ligne...).
+        / Asks Stripe for the reader's state (online, offline...).
+        """
+        if not self.stripe_id:
+            return "Unknown"
+
+        import stripe
+        from root_billet.models import RootConfiguration
+
+        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+        reader = stripe.terminal.Reader.retrieve(self.stripe_id)
+        return reader.status
+
+    def appairer_chez_stripe(self):
+        """
+        Enregistre le lecteur chez Stripe a partir de son code d'enregistrement.
+        / Registers the reader at Stripe using its registration code.
+
+        LOCALISATION : laboutik/models.py
+
+        Ne fait rien si le lecteur est deja enregistre. Leve une exception si Stripe refuse
+        le code — c'est le formulaire d'admin qui l'attrape, invalide la saisie, et evite
+        ainsi de creer un lecteur orphelin, sans identifiant Stripe.
+        """
+        if self.stripe_id:
+            return self.stripe_id
+
+        if not self.registration_code:
+            raise Exception("The registration code is not set.")
+
+        try:
+            import stripe
+            from root_billet.models import RootConfiguration
+
+            stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+            location = StripeLocation.get_primary_location()
+            reader = stripe.terminal.Reader.create(
+                registration_code=self.registration_code,
+                label=self.name,
+                location=location.stripe_id,
+            )
+            self.stripe_id = reader.id
+        except Exception as e:
+            raise Exception(f"Error while creating stripe reader : {e}")
+
+        return self.stripe_id
+
+    def __str__(self):
+        return f"{self.name} ({self.get_tpe_type_display()})"
+
+    class Meta:
+        ordering = ('name',)
+        verbose_name = _("TPE bancaire")
+        verbose_name_plural = _("TPE bancaires")
+
+
 # --- Point de vente ---
 # / Point of sale
 
@@ -464,15 +850,10 @@ class PointDeVente(models.Model):
         help_text=_("Hide this point of sale from the selection screen."),
     )
 
-    # Imprimante pour les tickets de vente de ce point de vente
-    # / Printer for sale tickets at this point of sale
-    printer = models.ForeignKey(
-        Printer, on_delete=models.SET_NULL,
-        blank=True, null=True,
-        related_name='points_de_vente',
-        verbose_name=_("Ticket printer"),
-        help_text=_("Printer used for sale tickets at this point of sale."),
-    )
+    # NOTE : un point de vente ne porte AUCUNE imprimante. En festival, une vingtaine de
+    # tablettes encaissent sur le meme point de vente « Bar », chacune avec sa propre
+    # imprimante. C'est le Terminal qui porte l'imprimante, pas le point de vente.
+    # / A point of sale carries NO printer: many terminals share one point of sale.
 
     # Produits et categories disponibles a ce point de vente
     # / Products and categories available at this point of sale

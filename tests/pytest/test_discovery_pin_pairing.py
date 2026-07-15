@@ -21,10 +21,11 @@ django.setup()
 
 import pytest
 from django.test import Client as DjangoClient
-from django_tenants.utils import schema_context
+from django_tenants.utils import schema_context, tenant_context
 
 from Customers.models import Client as TenantClient
 from discovery.models import PairingDevice
+from laboutik.models import Terminal
 
 TENANT_SCHEMA = 'lespass'
 
@@ -71,7 +72,15 @@ class TestDiscoveryPinPairing:
         tenant = TenantClient.objects.get(schema_name=TENANT_SCHEMA)
         pin = PairingDevice.generate_unique_pin()
 
+        # Le code PIN appartient a un TERMINAL : le gestionnaire declare l'appareil dans
+        # l'admin, et cette creation fabrique le code. Le claim ne cree pas le terminal,
+        # il le REMPLIT.
+        # / The PIN belongs to a TERMINAL. The claim does not create it, it FILLS it in.
+        with tenant_context(tenant):
+            terminal = Terminal.objects.create(name=f'Terminal Claim {uid}')
+
         device = PairingDevice.objects.create(
+            cible_uuid=terminal.id,
             name=f'Terminal Claim {uid}',
             tenant=tenant,
             pin_code=pin,
@@ -106,7 +115,11 @@ class TestDiscoveryPinPairing:
         tenant = TenantClient.objects.get(schema_name=TENANT_SCHEMA)
         pin = PairingDevice.generate_unique_pin()
 
+        with tenant_context(tenant):
+            terminal = Terminal.objects.create(name=f'Terminal Reclaim {uid}')
+
         device = PairingDevice.objects.create(
+            cible_uuid=terminal.id,
             name=f'Terminal Reclaim {uid}',
             tenant=tenant,
             pin_code=pin,

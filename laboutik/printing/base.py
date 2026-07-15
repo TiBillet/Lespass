@@ -13,6 +13,34 @@ More readable and more FALC.
 """
 
 
+def nom_du_groupe_websocket(schema_name, printer_uuid):
+    """
+    Le nom du canal Redis d'une imprimante Sunmi Inner.
+    / The Redis channel name of a Sunmi Inner printer.
+
+    LOCALISATION : laboutik/printing/base.py
+
+    LE NOM DU LIEU EST DANS LE CANAL, ET C'EST INDISPENSABLE.
+    Redis est partage par TOUS les lieux. Un canal qui ne porterait que l'identifiant de
+    l'imprimante mettrait dans le meme canal une imprimante du lieu A et une imprimante du
+    lieu B — il suffirait de connaitre un identifiant pour ecouter les tickets d'un autre
+    lieu. Le nom du schema cloisonne les canaux.
+    / The venue name belongs IN the channel: Redis is shared by ALL venues.
+
+    Les deux bouts de la chaine appellent cette fonction — celui qui ECOUTE
+    (wsocket/consumers.py : PrinterConsumer) et celui qui ENVOIE
+    (laboutik/printing/sunmi_inner.py). S'ils calculaient le nom chacun de leur cote, une
+    divergence rendrait l'impression muette, sans erreur.
+    / BOTH ends call this function. Computing the name separately would silently break
+    printing.
+
+    :param schema_name: le nom du schema du tenant (ex: "lespass")
+    :param printer_uuid: l'identifiant de l'imprimante (str ou UUID)
+    :return: le nom du canal Redis (str)
+    """
+    return f"printer-{schema_name}-{printer_uuid}"
+
+
 class PrinterBackend:
     """
     Interface pour les backends d'impression.

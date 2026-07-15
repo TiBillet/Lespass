@@ -55,7 +55,6 @@ urlpatterns = [
     # re_path(r'qr/', include('QrcodeCashless.urls')),
     re_path(r'rss/', include('tibrss.urls')),
     re_path(r'logout/', include('tibrss.urls')),
-    re_path(r'chat/', include('wsocket.urls')),
 
     # fwh : fedow Webhook
     re_path(r'fwh/', include('fedow_connect.urls')),

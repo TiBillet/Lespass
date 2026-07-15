@@ -7,13 +7,16 @@ LOCALISATION : Administration/admin/laboutik.py
 import logging
 
 from django import forms
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.core.exceptions import ValidationError
 from django.db import connection
 from django.shortcuts import get_object_or_404
+from django.utils.html import format_html
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from solo.admin import SingletonModelAdmin
 from unfold.admin import ModelAdmin, TabularInline
+from unfold.widgets import UnfoldAdminSelectWidget
 
 from Administration.admin.products import ICON_POS, IconPickerWidget
 from Administration.admin.site import staff_admin_site
@@ -22,6 +25,8 @@ from QrcodeCashless.models import CarteCashless
 from laboutik.models import (
     LaboutikConfiguration,
     Printer,
+    Terminal,
+    TPEBancaire,
     PointDeVente, CartePrimaire, CategorieTable, Table,
     CommandeSauvegarde, ArticleCommandeSauvegarde,
     ClotureCaisse,
@@ -151,7 +156,6 @@ class PointDeVenteAdmin(ModelAdmin):
                 'accepte_carte_bancaire',
                 'accepte_cheque',
                 'accepte_commandes',
-                'printer',
             ),
         }),
         (_('Products & categories'), {
@@ -183,10 +187,65 @@ class PrinterAdmin(ModelAdmin):
     compressed_fields = True
     warn_unsaved_form = True
 
-    list_display = ('name', 'printer_type', 'dots_per_line', 'sunmi_serial_number', 'active')
+    list_display = (
+        'name', 'printer_type', 'dots_per_line', 'sunmi_serial_number',
+        'terminaux_qui_impriment', 'active',
+    )
     list_filter = ['printer_type', 'active']
     search_fields = ['name', 'sunmi_serial_number']
     ordering = ('name',)
+
+    @admin.display(description=_("Terminaux"))
+    def terminaux_qui_impriment(self, printer):
+        """
+        Les terminaux qui sortent leurs tickets sur cette imprimante.
+        Plusieurs terminaux peuvent partager la meme imprimante.
+        / The terminals that print their tickets on this printer.
+        """
+        noms_des_terminaux = [
+            terminal.name or str(terminal.id)
+            for terminal in printer.terminaux.all()
+        ]
+        if not noms_des_terminaux:
+            return "—"
+        return ", ".join(noms_des_terminaux)
+
+    def get_queryset(self, request):
+        # Prefetch pour eviter une requete par imprimante dans la colonne ci-dessus.
+        # / Prefetch to avoid one query per printer in the column above.
+        return super().get_queryset(request).prefetch_related('terminaux')
+
+    actions = ['imprimer_un_ticket_de_test']
+
+    @admin.action(description=_("Imprimer un ticket de test"))
+    def imprimer_un_ticket_de_test(self, request, queryset):
+        """
+        Envoie un ticket de test sur les imprimantes selectionnees.
+        / Sends a test ticket to the selected printers.
+
+        LOCALISATION : Administration/admin/laboutik.py
+
+        Sert a valider une imprimante qu'on vient de configurer, sans avoir a faire une
+        vraie vente. L'envoi est SYNCHRONE : le gestionnaire doit voir l'erreur tout de
+        suite si l'imprimante ne repond pas. C'est tout l'interet du test.
+        / Synchronous on purpose: the manager must see the error immediately.
+        """
+        from laboutik.printing import imprimer_ticket_de_test
+
+        for printer in queryset:
+            resultat = imprimer_ticket_de_test(printer)
+
+            if resultat["ok"]:
+                self.message_user(request, _(
+                    "%(nom)s : ticket de test envoyé."
+                ) % {"nom": printer.name}, level=messages.SUCCESS)
+            else:
+                self.message_user(request, _(
+                    "%(nom)s : échec — %(err)s"
+                ) % {
+                    "nom": printer.name,
+                    "err": resultat.get("error", ""),
+                }, level=messages.ERROR)
 
     fieldsets = (
         (_('General'), {
@@ -214,6 +273,500 @@ class PrinterAdmin(ModelAdmin):
             ),
         }),
     )
+
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
+class TermUserChoiceField(forms.ModelChoiceField):
+    """
+    Affiche le nom de l'appareil plutot que son email synthetique.
+    / Shows the device name instead of its synthetic email.
+
+    LOCALISATION : Administration/admin/laboutik.py
+
+    Un TermUser a un email fabrique de la forme <uuid>@terminals.local : illisible.
+    Le nom saisi a l'appairage est recopie dans first_name.
+    """
+
+    def label_from_instance(self, term_user):
+        if term_user.first_name:
+            return term_user.first_name
+        return term_user.email
+
+
+class TerminalForm(forms.ModelForm):
+    """
+    Formulaire d'un terminal : creation et edition.
+    / Terminal form: creation and editing.
+
+    LOCALISATION : Administration/admin/laboutik.py
+
+    A LA CREATION, le gestionnaire declare un appareil : son nom et ce qu'il sait faire.
+    L'enregistrement fabrique un code PIN, qu'il ira taper sur l'appareil.
+
+    A L'EDITION, il lui branche une imprimante. Le lecteur de carte bancaire, lui, se branche
+    depuis SON propre ecran (« TPE bancaires ») : c'est le lecteur qu'on deplace d'un appareil
+    a l'autre, le lien vit donc de son cote.
+
+    LE ROLE « TIREUSE » N'EST PAS PROPOSE. Une tireuse se cree depuis son propre ecran
+    (Tireuses) : elle porte du metier — un fut, un debitmetre, un prix — et c'est elle qui
+    fabrique son terminal. Un terminal de role Tireuse cree ici n'aurait aucune tireuse
+    derriere lui, et l'appairage echouerait.
+    / The TAP role is NOT offered: a tap is created from its own screen and issues its own
+    terminal. A tap-role terminal created here would have no tap behind it.
+    """
+
+    class Meta:
+        model = Terminal
+        # Le lecteur de carte bancaire n'est PAS ici : c'est un objet a part (TPEBancaire),
+        # et c'est LUI qui designe l'appareil sur lequel il est branche. On le branche donc
+        # depuis « TPE bancaires », pas depuis ici — parce que c'est le lecteur qu'on
+        # deplace, pas l'appareil.
+        # / The card reader is NOT here: it is a separate object that points at the device.
+        fields = ["name", "terminal_role", "printer", "term_user", "archived"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Le role ne se choisit qu'A LA CREATION. Une fois l'appareil appaire, en changer
+        # rendrait sa cle d'API incoherente avec ce qu'il est cense faire.
+        #
+        # ON TESTE _state.adding, PAS self.instance.pk.
+        # Terminal.id est un UUIDField(default=uuid4) : son pk est donc DEJA REMPLI sur une
+        # instance neuve, avant meme l'enregistrement. Tester `self.instance.pk` renverrait
+        # toujours vrai, et le formulaire de creation se croirait en edition.
+        # / Test _state.adding, NOT self.instance.pk: the UUID pk is already filled on a
+        # brand-new instance, so testing pk would always be true.
+        # / Same trap as AuthBillet.TermUser.save().
+        terminal_deja_enregistre = (
+            self.instance is not None and not self.instance._state.adding
+        )
+        if terminal_deja_enregistre:
+            self.fields["terminal_role"].disabled = True
+        else:
+            from AuthBillet.models import TibilletUser
+
+            self.fields["terminal_role"].choices = [
+                (valeur, libelle)
+                for valeur, libelle in TibilletUser.TERMINAL_ROLE_CHOICES
+                if valeur != TibilletUser.ROLE_TIREUSE
+            ]
+
+        # La cle etrangere vise TibilletUser, qui est une table du schema public.
+        # Le manager du proxy TermUser filtre deja par tenant : on s'appuie dessus.
+        # SANS ce queryset, la liste deroulante afficherait les terminaux de TOUS les
+        # lieux — et un pk force pointant vers le terminal d'un autre lieu serait accepte.
+        #
+        # On ecarte aussi les comptes desactives : ce sont les traces d'appareils revoques
+        # ou remplaces, ils n'ont plus a etre rattachables.
+        # / Without this queryset, the dropdown would leak across tenants. Inactive accounts
+        # are traces of revoked devices: they must not be re-attachable.
+        from AuthBillet.models import TermUser
+        terminaux_appaires = TermUser.objects.filter(
+            is_active=True,
+        ).order_by("first_name", "email")
+
+        self.fields["term_user"] = TermUserChoiceField(
+            queryset=terminaux_appaires,
+            required=False,
+            label=_("Compte du terminal"),
+            help_text=_("L'appareil appairé auquel ce terminal correspond."),
+            empty_label=_("— Aucun —"),
+            widget=UnfoldAdminSelectWidget(),
+        )
+
+
+# --- Lecteur de carte bancaire (TPE) ---
+# / Card reader
+
+class TPEBancaireForm(forms.ModelForm):
+    """
+    Formulaire d'un lecteur de carte bancaire.
+    / Card reader form.
+
+    LOCALISATION : Administration/admin/laboutik.py
+
+    C'est ICI qu'on branche un lecteur sur un appareil, et qu'on l'en debranche pour le
+    mettre ailleurs : le lien est porte par le lecteur, parce que c'est le lecteur qu'on
+    deplace physiquement. Un seul geste, sur l'objet qu'on a en main.
+    """
+
+    class Meta:
+        model = TPEBancaire
+        fields = ["name", "tpe_type", "terminal", "registration_code", "active"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # On ne propose que les appareils en service.
+        # / Only offer devices that are in service.
+        self.fields["terminal"].queryset = Terminal.objects.filter(
+            archived=False,
+        ).order_by("name")
+        self.fields["terminal"].empty_label = _("— Non branché —")
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        deja_enregistre_chez_stripe = bool(
+            self.instance.stripe_id if self.instance and not self.instance._state.adding
+            else None
+        )
+        code_enregistrement = cleaned_data.get("registration_code")
+
+        if not code_enregistrement and not deja_enregistre_chez_stripe:
+            raise ValidationError({
+                "registration_code": _(
+                    "Le code d'enregistrement est obligatoire pour enregistrer le lecteur "
+                    "chez Stripe."
+                ),
+            })
+
+        # LE MEME LECTEUR PHYSIQUE NE PEUT PAS EXISTER DEUX FOIS.
+        #
+        # Sinon deux fiches piloteraient le meme appareil : un client verrait s'afficher, sur
+        # le lecteur devant lui, le montant de la vente d'a cote — et pourrait la payer.
+        # Stripe refuserait de toute facon un code deja consomme, mais son message est
+        # cryptique : on le dit ici, clairement, avant meme de l'appeler.
+        # / The same physical reader cannot exist twice.
+        if code_enregistrement:
+            un_autre_lecteur_a_deja_ce_code = TPEBancaire.objects.filter(
+                registration_code=code_enregistrement,
+            ).exclude(
+                pk=self.instance.pk if self.instance else None,
+            ).exists()
+
+            if un_autre_lecteur_a_deja_ce_code:
+                raise ValidationError({
+                    "registration_code": _(
+                        "Ce code est déjà utilisé par un autre lecteur. "
+                        "Un lecteur physique ne peut être enregistré qu'une fois."
+                    ),
+                })
+
+        return cleaned_data
+
+    def _post_clean(self):
+        # L'enregistrement chez Stripe se fait ICI, pas dans save_model : un code refuse par
+        # Stripe doit invalider le formulaire — l'admin voit l'erreur sous le champ, et rien
+        # n'est enregistre — au lieu de creer un lecteur orphelin, sans identifiant Stripe.
+        # / Stripe registration happens HERE, not in save_model: a rejected code must
+        # invalidate the form instead of creating an orphan reader with no Stripe id.
+        super()._post_clean()
+
+        if self.errors:
+            return
+
+        # Deja enregistre : rien a faire.
+        # / Already registered: nothing to do.
+        if self.instance.stripe_id:
+            return
+
+        try:
+            self.instance.appairer_chez_stripe()
+        except Exception as erreur_stripe:
+            self.add_error("registration_code", _(
+                "Échec de l'enregistrement du lecteur chez Stripe : %(err)s"
+            ) % {"err": erreur_stripe})
+
+
+@admin.register(TPEBancaire, site=staff_admin_site)
+class TPEBancaireAdmin(ModelAdmin):
+    """
+    Admin des lecteurs de carte bancaire.
+    / Card reader admin.
+
+    LOCALISATION : Administration/admin/laboutik.py
+    """
+    compressed_fields = True
+    warn_unsaved_form = True
+    form = TPEBancaireForm
+
+    list_display = ('name', 'tpe_type', 'terminal', 'etat_chez_stripe', 'active')
+    list_select_related = ('terminal',)
+    list_filter = ['tpe_type', 'active']
+    search_fields = ['name', 'stripe_id']
+
+    @admin.display(description=_("Stripe"))
+    def etat_chez_stripe(self, tpe):
+        """
+        Le lecteur est-il enregistre chez Stripe ? Sans cela, il ne peut rien encaisser.
+        / Is the reader registered at Stripe? Without it, it cannot take payments.
+        """
+        if tpe.est_appaire_chez_stripe():
+            return format_html(
+                '<span style="color: #16a34a; font-weight: 600;">✓ {}</span>',
+                _("Enregistré"),
+            )
+        return format_html(
+            '<span style="color: #dc2626;">✗ {}</span>',
+            _("Non enregistré"),
+        )
+
+    actions = ['verifier_le_statut_chez_stripe']
+
+    @admin.action(description=_("Vérifier le statut chez Stripe"))
+    def verifier_le_statut_chez_stripe(self, request, queryset):
+        """
+        Demande a Stripe l'etat reel des lecteurs selectionnes (en ligne, hors ligne...).
+        / Asks Stripe for the real state of the selected readers.
+
+        LOCALISATION : Administration/admin/laboutik.py
+
+        Utile a l'installation : on sait tout de suite si le lecteur est joignable, sans
+        avoir a lancer une vraie vente.
+        """
+        for tpe in queryset:
+            if not tpe.est_appaire_chez_stripe():
+                self.message_user(request, _(
+                    "%(nom)s : pas encore enregistré chez Stripe."
+                ) % {"nom": tpe.name}, level=messages.WARNING)
+                continue
+
+            try:
+                statut = tpe.statut_chez_stripe()
+                self.message_user(request, _(
+                    "%(nom)s : %(statut)s"
+                ) % {"nom": tpe.name, "statut": statut}, level=messages.SUCCESS)
+            except Exception as erreur_stripe:
+                self.message_user(request, _(
+                    "%(nom)s : échec — %(err)s"
+                ) % {"nom": tpe.name, "err": erreur_stripe}, level=messages.ERROR)
+
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
+@admin.register(Terminal, site=staff_admin_site)
+class TerminalAdmin(ModelAdmin):
+    """
+    Admin des terminaux : tablettes Sunmi, Raspberry Pi, bornes libre-service.
+    / Terminal admin: Sunmi tablets, Raspberry Pi, self-service kiosks.
+
+    LOCALISATION : Administration/admin/laboutik.py
+    """
+    compressed_fields = True
+    warn_unsaved_form = True
+    form = TerminalForm
+
+    list_display = (
+        'name', 'terminal_role', 'etat_de_l_appairage',
+        'printer', 'lecteur_de_carte', 'archived',
+    )
+    list_select_related = ('term_user', 'printer', 'tpe')
+    list_filter = ['terminal_role', 'archived']
+    search_fields = ['name']
+
+    @admin.display(description=_("TPE bancaire"))
+    def lecteur_de_carte(self, terminal):
+        """
+        Le lecteur de carte branche sur cet appareil, s'il y en a un.
+        / The card reader plugged into this device, if any.
+
+        En lecture seule : on le branche et on le debranche depuis « TPE bancaires », parce
+        que c'est le lecteur qu'on deplace, pas l'appareil.
+        """
+        lecteur = getattr(terminal, "tpe", None)
+        if lecteur is None:
+            return "—"
+        return lecteur.name
+
+    @admin.display(description=_("État"))
+    def etat_de_l_appairage(self, terminal):
+        """
+        Ou en est cet appareil : appaire, en attente avec son code PIN, ou a relancer.
+        / Where this device stands: paired, waiting with its PIN, or needing a fresh PIN.
+
+        LOCALISATION : Administration/admin/laboutik.py
+
+        C'est la colonne que le gestionnaire regarde : elle lui donne le code a taper sur
+        l'appareil, sans qu'il ait a aller le chercher ailleurs.
+        """
+        if terminal.est_appaire():
+            if terminal.term_user.is_active:
+                return format_html(
+                    '<span style="color: #16a34a; font-weight: 600;">✓ {}</span>',
+                    _("Appairé"),
+                )
+            return format_html(
+                '<span style="color: #dc2626; font-weight: 600;">✗ {}</span>',
+                _("Révoqué"),
+            )
+
+        code_pin = terminal.code_pin_en_attente()
+        if code_pin is None:
+            return format_html(
+                '<span style="color: #999;">{}</span>',
+                _("Code PIN expiré — à régénérer"),
+            )
+
+        code_lisible = f"{str(code_pin)[:3]} {str(code_pin)[3:]}"
+        return format_html(
+            '<span style="font-family: monospace; font-size: 1.15em; font-weight: 700; '
+            'letter-spacing: 0.1em;">{}</span>',
+            code_lisible,
+        )
+
+    actions = ['revoquer_les_terminaux', 'generer_un_nouveau_code_pin']
+
+    @admin.action(description=_("Générer un nouveau code PIN (appairer un autre appareil)"))
+    def generer_un_nouveau_code_pin(self, request, queryset):
+        """
+        Redonne un code PIN au terminal, pour y appairer un appareil.
+        / Issues a fresh PIN so a device can be paired onto this terminal.
+
+        LOCALISATION : Administration/admin/laboutik.py
+
+        C'est le geste a faire quand l'appareil est perdu, vole, ou grille. Le terminal, lui,
+        SURVIT : il garde son imprimante, son lecteur de carte, et la tireuse qui le designe
+        garde tout son historique. Seul le materiel est remplace.
+
+        Trois situations, traitees dans cet ordre :
+
+        1. Le terminal est appaire. On revoque d'abord l'appareil actuel — son compte ET sa
+           cle — puis on detache le compte. INDISPENSABLE : sans revocation, l'appareil perdu
+           continuerait de fonctionner avec sa cle, qui est stockee dessus.
+        2. Un code PIN circule encore (il a juste expire). On le regenere.
+        3. Le terminal n'a ni compte ni code. On lui en fabrique un.
+        """
+        from discovery.models import PairingDevice
+        from discovery.services import fabriquer_le_code_pin_d_appairage
+
+        RELATIONS_VERS_LES_CLES = ('laboutik_api_key', 'tireuse_api_key')
+        nombre_de_codes_generes = 0
+
+        for terminal in queryset:
+            # 1. Couper l'acces de l'appareil actuel, s'il y en a un.
+            # / 1. Cut off the current device's access, if any.
+            if terminal.est_appaire():
+                compte_de_l_ancien_appareil = terminal.term_user
+
+                compte_de_l_ancien_appareil.is_active = False
+                compte_de_l_ancien_appareil.save(update_fields=['is_active'])
+
+                for nom_de_la_relation in RELATIONS_VERS_LES_CLES:
+                    cle_api = getattr(compte_de_l_ancien_appareil, nom_de_la_relation, None)
+                    if cle_api is not None:
+                        cle_api.revoked = True
+                        cle_api.save(update_fields=['revoked'])
+
+                # On detache le compte sans le supprimer : il reste comme trace de l'appareil
+                # remplace (sa derniere connexion, notamment).
+                # / Detach without deleting: it stays as a trace of the replaced device.
+                terminal.term_user = None
+                terminal.save(update_fields=['term_user'])
+
+            # 2. Un code circule encore ? On le regenere plutot que d'en empiler un second.
+            # / 2. A PIN still circulating? Regenerate it rather than stacking a second one.
+            code_en_circulation = PairingDevice.objects.filter(
+                cible_uuid=terminal.id,
+                claimed_at__isnull=True,
+            ).first()
+
+            if code_en_circulation is not None:
+                code_en_circulation.regenerer_le_pin()
+            else:
+                # 3. Rien en circulation : on en fabrique un.
+                # / 3. Nothing circulating: issue one.
+                fabriquer_le_code_pin_d_appairage(terminal)
+
+            nombre_de_codes_generes += 1
+
+        self.message_user(request, _(
+            "%(nb)s code(s) PIN généré(s). Tapez-le sur l'appareil pour l'appairer."
+        ) % {"nb": nombre_de_codes_generes})
+
+    @admin.action(description=_("Révoquer le terminal (coupe son accès)"))
+    def revoquer_les_terminaux(self, request, queryset):
+        """
+        Coupe l'acces d'un terminal. Il faut agir sur DEUX leviers.
+        / Cuts a terminal's access. TWO levers are needed.
+
+        LOCALISATION : Administration/admin/laboutik.py
+
+        1. term_user.is_active = False
+           Coupe le pont d'authentification et refuse les reconnexions WebSocket.
+
+        2. La cle d'API : revoked = True
+           Coupe l'en-tete Api-Key. INDISPENSABLE en plus du point 1 : la cle est stockee
+           sur l'appareil. Sans la revoquer, il suffirait de reactiver le compte pour que
+           l'appareil se reconnecte tout seul.
+
+        Un terminal porte UNE cle, mais de deux classes possibles : LaBoutikAPIKey pour une
+        caisse ou une borne, TireuseAPIKey pour une tireuse. Les permissions de controlvanne
+        s'appuient sur une classe distincte : on coupe donc les deux, sans se demander de
+        quel role il s'agit.
+        / A terminal holds ONE key, of one of two classes. We revoke both, regardless of role.
+        """
+        nombre_de_terminaux_revoques = 0
+
+        # Le nom de la relation inverse pour chaque classe de cle.
+        # / The reverse relation name for each key class.
+        RELATIONS_VERS_LES_CLES = ('laboutik_api_key', 'tireuse_api_key')
+
+        for terminal in queryset:
+            if not terminal.term_user:
+                continue
+
+            terminal.term_user.is_active = False
+            terminal.term_user.save(update_fields=['is_active'])
+
+            for nom_de_la_relation in RELATIONS_VERS_LES_CLES:
+                # La cle peut ne pas exister : le champ user est nullable des deux cotes
+                # (cles creees avant le pont V2), et un terminal n'a de toute facon qu'une
+                # seule des deux classes.
+                # / The key may not exist: the user field is nullable on both classes.
+                cle_api = getattr(terminal.term_user, nom_de_la_relation, None)
+                if cle_api is not None:
+                    cle_api.revoked = True
+                    cle_api.save(update_fields=['revoked'])
+
+            nombre_de_terminaux_revoques += 1
+
+        self.message_user(request, _(
+            "%(nb)s terminal(aux) révoqué(s)."
+        ) % {"nb": nombre_de_terminaux_revoques})
+
+    def save_model(self, request, obj, form, change):
+        """
+        A la creation d'un terminal, on lui fabrique aussitot son code PIN.
+        / On terminal creation, issue its PIN right away.
+
+        LOCALISATION : Administration/admin/laboutik.py
+
+        C'est ce qui rend l'appareil appairable : le gestionnaire declare l'appareil ici,
+        lit le code dans la colonne « Etat », et va le taper dessus.
+
+        Le code est fabrique par un appel EXPLICITE, pas par un signal : un signal sur
+        Terminal en fabriquerait un a chaque creation, y compris dans les tests qui creent
+        des terminaux directement. Voir discovery/services.py.
+        """
+        super().save_model(request, obj, form, change)
+
+        terminal_vient_d_etre_cree = not change
+        if terminal_vient_d_etre_cree:
+            from discovery.services import fabriquer_le_code_pin_d_appairage
+
+            fabriquer_le_code_pin_d_appairage(obj)
 
     def has_add_permission(self, request):
         return TenantAdminPermissionWithRequest(request)

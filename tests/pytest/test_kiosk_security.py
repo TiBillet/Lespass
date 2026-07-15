@@ -159,7 +159,8 @@ def deux_bornes_et_un_paiement(tenant):
     / Two paired Kiosk devices + a PaymentsIntent owned by B, to check a device
     cannot act on another's payment. SUCCEEDED so payment_status skips Stripe.
     """
-    from kiosk.models import Terminal, PaymentsIntent
+    from kiosk.models import PaymentsIntent
+    from laboutik.models import Terminal
 
     with tenant_context(tenant):
         borne_a = TermUser.objects.create(
@@ -174,8 +175,13 @@ def deux_bornes_et_un_paiement(tenant):
             terminal_role=TibilletUser.ROLE_KIOSQUE,
             accept_newsletter=False,
         )
-        terminal_a = Terminal.objects.create(name="TPE A", term_user=borne_a, stripe_id="tmr_a")
-        terminal_b = Terminal.objects.create(name="TPE B", term_user=borne_b, stripe_id="tmr_b")
+        # Pas de lecteur de carte ici : la propriete d'un paiement se joue sur le COMPTE de
+        # la borne (term_user), jamais sur le lecteur. C'est precisement ce que ce test
+        # protege — un lecteur se deplace, un paiement ne change pas de proprietaire.
+        # / No card reader here: payment ownership is based on the kiosk's ACCOUNT, never on
+        # the reader. Readers move; payments do not change owner.
+        terminal_a = Terminal.objects.create(name="Borne A", term_user=borne_a)
+        terminal_b = Terminal.objects.create(name="Borne B", term_user=borne_b)
         paiement_de_b = PaymentsIntent.objects.create(
             terminal=terminal_b,
             amount=500,

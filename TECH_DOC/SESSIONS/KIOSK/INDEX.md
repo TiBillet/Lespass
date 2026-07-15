@@ -17,6 +17,7 @@ Copier-coller rebranché depuis `../LaBoutik` (branche `main-tpe`) : app `htmxvi
 | [CHANTIER-03-branchements.md](./CHANTIER-03-branchements.md) | module_kiosk + sidebar/dashboard + bridge KI + URLs | ✅ Implémenté + Fable review (i18n FR corrigé) — 16 tests |
 | [CHANTIER-04-fedow-e2e.md](./CHANTIER-04-fedow-e2e.md) | Extension route TPE Fedow (miroir S6) + idempotence unique/IntegrityError | ✅ Implémenté (repo Fedow) + Fable review — 54 tests Fedow verts |
 | [CHANTIER-05-nfc-duo.md](./CHANTIER-05-nfc-duo.md) | NFC duo Android (NFCMC) / Pi socket.io (NFCLO) + DEMO simulateur cartes | ✅ Implémenté + Fable review (2 bugs bloquants corrigés : protocole socket.io Pi, z-index overlay) — 12 tests |
+| [IMPACT-CHANTIER-IMPRESSION.md](./IMPACT-CHANTIER-IMPRESSION.md) | **`kiosk.Terminal` → `laboutik.Terminal`** : le modèle déménage, le TPE Stripe se libère du kiosque. Impact du chantier [IMPRESSION](../IMPRESSION/INDEX.md) | ⏳ À venir |
 
 ## Passe finale (djc + chasse aux bugs Fable 5) — ✅ FAITE
 

@@ -28,6 +28,7 @@ Dependances externes :
 from uuid import uuid4
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -72,6 +73,28 @@ class TireuseAPIKey(AbstractAPIKey):
     Created by discovery when pairing a Pi.
     LOCALISATION : controlvanne/models.py
     """
+
+    # Le compte du terminal auquel cette cle appartient.
+    #
+    # Sans ce lien, revoquer une tireuse etait impossible : on ne savait pas quelle cle
+    # appartenait a quel appareil. Desormais l'action « Revoquer le terminal » de l'admin
+    # coupe les DEUX acces — le compte (is_active) et la cle (revoked) — pour une tireuse
+    # comme pour une caisse.
+    #
+    # Les deux systemes de cles restent SEPARES (TireuseAPIKey / LaBoutikAPIKey) : les
+    # permissions de controlvanne s'appuient dessus, et les fusionner elargirait la surface
+    # d'attaque sans rien apporter.
+    #
+    # Nullable : les cles creees avant cette version n'ont pas de compte.
+    # / The terminal account this key belongs to. Without it, revoking a tap was impossible.
+    # The two key systems stay SEPARATE on purpose. Nullable for keys created before.
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="tireuse_api_key",
+        null=True, blank=True,
+        verbose_name=_("Compte du terminal"),
+    )
 
     class Meta:
         ordering = ("-created",)
@@ -220,14 +243,31 @@ class TireuseBec(models.Model):
         help_text=_("Associated flow meter (determines calibration factor)."),
     )
 
-    pairing_device = models.ForeignKey(
-        "discovery.PairingDevice",
+    # Le Raspberry Pi qui pilote cette tireuse.
+    #
+    # C'est le MEME modele Terminal que les caisses et les bornes : un appareil, avec son
+    # compte, sa cle d'API et ses capacites materielles. Une tireuse se revoque donc comme
+    # n'importe quel autre terminal.
+    #
+    # POSE DES LA CREATION de la tireuse, par le signal post_save — PAS a l'appairage.
+    # Le terminal nait donc « en attente », avec un code PIN. Il devient appaire quand un
+    # Pi reclame ce code (`terminal.est_appaire()`).
+    #
+    # LA TIREUSE ET SON PI SONT DEUX CHOSES DIFFERENTES, et c'est le point important :
+    # la tireuse porte le metier (fut, prix, historique des services), le terminal porte le
+    # materiel. Un Pi qui grille se remplace sans rien emporter — on regenere un code PIN
+    # sur le meme terminal, et la tireuse garde tout.
+    # / The Raspberry Pi driving this tap. Set AT CREATION by the post_save signal, NOT at
+    # pairing time. The tap holds the business (keg, price, history); the terminal holds the
+    # hardware, and hardware is disposable.
+    terminal = models.OneToOneField(
+        "laboutik.Terminal",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name="tireuses",
-        verbose_name=_("Pairing device"),
-        help_text=_("Raspberry Pi or ESP32 controlling this tap."),
+        related_name="tireuse",
+        verbose_name=_("Terminal (Raspberry Pi)"),
+        help_text=_("Le Raspberry Pi qui pilote cette tireuse."),
     )
 
     # --- Volume / jauge ---

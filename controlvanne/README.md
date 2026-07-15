@@ -106,14 +106,46 @@ Tous les endpoints sont proteges par `HasTireuseAccess` : cle API `TireuseAPIKey
 
 ### Appairage du Pi
 
-Le Raspberry Pi s'appaire via le systeme `discovery` existant :
+Le Raspberry Pi s'appaire par le systeme `discovery`, **exactement comme une caisse ou une
+borne**. Les trois roles suivent le meme chemin ; seule la classe de la cle change.
 
-1. L'admin cree une `TireuseBec` dans Unfold
-2. Un `PairingDevice` est cree automatiquement par signal → PIN 6 chiffres genere
-3. Le Pi envoie le PIN via `POST /api/discovery/claim/`
-4. Discovery detecte la tireuse liee → cree une `TireuseAPIKey` (pas `LaBoutikAPIKey`)
-5. Reponse : `{ server_url, api_key, tireuse_uuid, device_name }`
-6. Le Pi stocke le token et l'UUID dans son `.env`
+**LA TIREUSE ET SON PI SONT DEUX CHOSES DIFFERENTES.** La tireuse est l'objet METIER : elle
+porte le fut, le debitmetre, le prix, et tout l'historique des services. Le `Terminal` est le
+MATERIEL : il est jetable. C'est le terminal qu'on appaire, pas la tireuse.
+
+1. L'admin cree une `TireuseBec` dans Unfold.
+2. Son signal `post_save` fabrique aussitot :
+   - son **point de vente** (type TIREUSE) ;
+   - son **`Terminal`** (role TI) — le Raspberry Pi qui la pilotera ;
+   - le **code PIN a 6 chiffres** de ce terminal (un `PairingDevice`, dans le schema public).
+
+   Le `PairingDevice` porte `cible_uuid` = l'identifiant du **Terminal** a remplir. Ce n'est
+   **pas** une cle etrangere — `PairingDevice` vit dans le schema `public`, `Terminal` dans
+   celui du lieu, et PostgreSQL ne saurait pas quelle table viser.
+3. Le code PIN se lit **en ouvrant la tireuse** dans l'admin (pas dans la liste : il ne sert
+   qu'au moment ou l'on installe le Pi).
+4. **Le code PIN expire au bout d'une heure.** Passe ce delai : Admin → **Terminaux** →
+   cocher → action « Generer un nouveau code PIN ».
+5. Le Pi envoie le PIN via `POST /api/discovery/claim/` — **sur le domaine public**
+   (`https://tibillet.org/...`), pas sur celui du lieu : l'appareil ne connait pas encore son
+   lieu, c'est le serveur qui le lui apprend.
+6. **Le claim ne cree pas le terminal — il le REMPLIT.** Dans le schema du lieu, il pose :
+   - un **`TermUser`** — le compte de l'appareil ;
+   - une **`TireuseAPIKey`** liee a ce compte (et non une `LaBoutikAPIKey` : les permissions de
+     controlvanne s'appuient sur une classe de cle distincte) ;
+   - puis `Terminal.term_user`, ce qui fait passer le terminal a l'etat « appaire ».
+7. Le `PairingDevice` est alors **consomme** : son code PIN et sa cible sont vides.
+8. Reponse : `{ server_url, api_key, tireuse_uuid, device_name }`
+9. Le Pi stocke le token et l'UUID dans son `.env`.
+
+**Le Pi crame ?** Admin → **Terminaux** → cocher → « **Generer un nouveau code PIN** ». L'ancien
+appareil est coupe (compte **et** cle), le terminal repasse en attente avec un nouveau code, et
+**la tireuse garde toute sa configuration et son historique**. On tape le code sur le Pi neuf.
+
+**Revoquer une tireuse** : Admin → **Terminaux** → cocher → action « Revoquer le terminal ».
+Elle coupe les **deux** acces — le compte (`is_active`) et la cle (`revoked`). Revoquer le
+compte seul ne suffirait pas : la cle est stockee sur le Pi, il suffirait de reactiver le
+compte pour qu'il se reconnecte.
 
 ---
 
@@ -167,11 +199,15 @@ Puis ajouter un **Price** sur ce produit :
 | En service | cocher |
 | Reservoir illimite (Unlimited reservoir) | cocher (aucun suivi de volume) — ou decocher pour suivre le niveau du fut (`reservoir_ml`, rempli a l'activation) |
 
-A la sauvegarde, un `PairingDevice` et un `PointDeVente` de type TIREUSE sont crees automatiquement par signal.
+A la sauvegarde, un code PIN d'appairage et un `PointDeVente` de type TIREUSE sont crees automatiquement par signal.
 
 ### Etape 4 : installer le Pi
 
-**Admin → Tireuses → Taps** — noter le code PIN dans la colonne **PIN code**.
+**Admin → Tireuses** — **ouvrir** la tireuse et noter son code PIN (il est dans la fiche, pas dans la liste : il ne sert qu'au moment ou l'on installe le Pi).
+
+> ⚠️ **Le code PIN expire au bout d'une heure.** Si la colonne affiche « Code PIN expire »,
+> le regenerer avant de lancer le script (action « Regenerer le code PIN »). Une fois la
+> tireuse appairee, la colonne affiche « Appairee : \<nom du terminal\> ».
 
 Puis sur le Raspberry Pi en SSH, lancer le script d'installation avec ce PIN :
 
