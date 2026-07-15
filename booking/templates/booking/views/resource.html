@@ -17,14 +17,13 @@ Comportement / Behavior:
   - Mobile (< 768px) : mise en page calendrier-panier-mobile.html avec
     selecteur de ressource, barre de jours, navigation par jour (1 jour a la fois).
   - Les creneaux libres sont cliquables sur les deux vues.
-  - Le clic ouvre SweetAlert2 avec le formulaire de confirmation charge en HTMX.
+  - Le clic ouvre un offcanvas avec le formulaire de confirmation charge en HTMX.
   - Pas de panier integre dans cette page.
 
 DEPENDENCIES :
   - booking/views.py:_build_calendar_weeks()  -> structure desktop
   - booking/views.py:_build_mobile_days()     -> structure mobile
   - booking/views.py:book()                   -> partial HTMX booking/partials/book_form.html
-  - BaseBillet/static/reunion/js/sweetalert2@11.js (charge par le skin base.html)
   - htmx (charge par le skin base.html)
 -->
 {% block title %}{{ resource.product.name }}{% endblock %}
@@ -59,6 +58,20 @@ DEPENDENCIES :
             <p class="text-muted" data-testid="booking-resource-description">{{ resource.product.long_description }}</p>
         {% endif %}
     </div>
+
+    <!-- booking panel -->
+    <div class="offcanvas-start offcanvas" tabindex="-1" id="bookingPanel" aria-labelledby="bookingPanelLabel">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title" id="bookingPanelLabel">
+                {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}
+                    {% translate 'Subscribe' %}{% endif %}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas"
+                    aria-label="{% translate 'Close' %}"></button>
+        </div>
+        <div class="offcanvas-body" id="offcanvas-booking">
+        </div>
+    </div>
+
 
     {% if calendar_weeks or mobile_days %}
         <style>
@@ -450,6 +463,12 @@ DEPENDENCIES :
                     var(--bs-body-bg) 8px
                 );
             }
+
+             /* Offcanvas responsive sizing: full width on mobile, double width on desktop */
+            #bookingPanel { --bs-offcanvas-width: 100vw; }
+            @media (min-width: 992px) { /* lg and up */
+                #bookingPanel { --bs-offcanvas-width: 800px; }
+            }
         </style>
 
         <!--
@@ -762,8 +781,8 @@ DEPENDENCIES :
     </script>
 
     <!--
-    Navigation du calendrier et ouverture du formulaire de reservation dans SweetAlert2.
-    / Calendar navigation and booking form popup with SweetAlert2.
+    Navigation du calendrier et ouverture du formulaire de reservation dans un offcanvas.
+    / Calendar navigation and booking form popup with an offcanvas.
     -->
     <script>
         (function () {
@@ -918,8 +937,8 @@ DEPENDENCIES :
             }
 
             // ============================================================
-            // Ouvre SweetAlert2 avec le formulaire de reservation HTMX.
-            // / Open SweetAlert2 with the HTMX booking form.
+            // Ouvre un offcanvas avec le formulaire de reservation HTMX.
+            // / Open un offcanvas with the HTMX booking form.
             // ============================================================
             function openBookingPopup(slotElement) {
                 const startDatetime = slotElement.getAttribute('data-start-datetime');
@@ -927,18 +946,19 @@ DEPENDENCIES :
                 const url = baseUrl + '?start_datetime=' + encodeURIComponent(startDatetime)
                     + '&group_end=' + encodeURIComponent(groupEnd);
 
-                Swal.fire({
-                    title: '{% translate "Confirmer la réservation" %}',
-                    html: '<div id="booking-popup-content" aria-live="polite"></div>',
-                    showConfirmButton: false,
-                    showCloseButton: true,
-                    width: '32rem',
-                    didOpen: function () {
-                        htmx.ajax('GET', url, {
-                            target: '#booking-popup-content',
-                            swap: 'innerHTML'
-                        });
-                    }
+
+                const offcanvasElement = document.querySelector('#bookingPanel');
+                // On attend que HTMX ait fini le swap avant d'ouvrir l'offcanvas
+                // / Wait for HTMX to finish swapping before opening the offcanvas.
+                offcanvasElement.addEventListener('htmx:afterSettle', function handler() {
+                    offcanvasElement.removeEventListener('htmx:afterSettle', handler);
+                    const offcanvas = bootstrap.Offcanvas.getOrCreateInstance(offcanvasElement);
+                    offcanvas.show();
+                });
+
+                htmx.ajax('GET', url, {
+                    target: '#offcanvas-booking',
+                    swap: 'innerHTML'
                 });
             }
 

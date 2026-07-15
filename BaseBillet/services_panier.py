@@ -913,7 +913,7 @@ class PanierSession:
             'start_datetime': str(start_datetime),
             'slot_duration_minutes': str(slot_duration_minutes),
             'slot_count': str(slot_count),
-            'total_estimation' : str(float(slot_duration_minutes) / 60 * float(slot_count) * float(price.prix)),
+            'total_estimation' : str(Decimal(slot_duration_minutes) / Decimal(60) * Decimal(slot_count) * Decimal(price.prix)),
             'resource_uuid': str(resource_uuid),
             'custom_amount': str(custom_amount) if custom_amount is not None else None,
             'options': [str(o) for o in (options or [])],

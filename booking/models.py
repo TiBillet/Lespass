@@ -84,19 +84,6 @@ class Resource(models.Model):
         help_text=_('How far ahead a member can book.'),
     )
 
-    # Replaced by short/long_description
-    # description = models.TextField(
-    #     blank=True,
-    #     default='',
-    #     verbose_name=_('Description'),
-    # )
-    # Replaced by image
-    # image = models.URLField(
-    #     blank=True,
-    #     default='',
-    #     verbose_name=_('Image URL'),
-    # )
-
 
 
     class Meta:
@@ -529,6 +516,19 @@ class Booking(models.Model):
         ),
     )
 
+    first_name = models.CharField(
+        max_length=200,
+        verbose_name=_("First name"),
+        null=True, blank=True
+    )
+
+    last_name = models.CharField(
+        max_length=200,
+        verbose_name=_("Last name"),
+        null=True, blank=True
+    )
+
+
     class Meta:
         verbose_name = _('Booking')
         verbose_name_plural = _('Bookings')
@@ -636,7 +636,7 @@ class Booking(models.Model):
     def cancel_and_refund_booking(self):
 
         if self.status in [Booking.USER_CANCELED, Booking.ADMIN_CANCELED]:
-            return _("This booking is already cancelled.")
+            raise Exception(_("This booking is already cancelled."))
 
         # 1) Remboursement Stripe (flow existant, inchange)
         # / Stripe refund (existing flow, unchanged)
@@ -656,7 +656,7 @@ class Booking(models.Model):
                                                               Paiement_stripe.PAID,
                                                               Paiement_stripe.NOTSYNC,
                                                               ]):
-                    partial_refund_payment(paiement, config, paiement.lignearticles.filter(status=[LigneArticle.VALID, LigneArticle.PAID]))
+                    partial_refund_payment(paiement, config, paiement.lignearticles.filter(status__in=[LigneArticle.VALID, LigneArticle.PAID]))
 
         # 2) Avoir pour les lignes hors-Stripe (reservations admin : cheque, especes, etc.)
         # / Credit note for non-Stripe lines (admin reservations: check, cash, etc.)

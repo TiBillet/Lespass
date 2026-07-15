@@ -431,6 +431,8 @@ def validate_new_booking(resource,
                          reference_now=None,
                          promo_code: PromotionalCode = None,
                          create_checkout: bool = True,
+                         first_name:str = None,
+                         last_name:str = None,
                          ):
     """
     Valide B ⊆ E' et crée la réservation dans une transaction SERIALIZABLE.
@@ -590,6 +592,8 @@ def validate_new_booking(resource,
                 slot_count=slot_count,
                 status=Booking.WAITING_PAYMENT,
                 commande=commande,
+                first_name=first_name,
+                last_name=last_name,
             )
 
 

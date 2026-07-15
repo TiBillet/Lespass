@@ -796,13 +796,18 @@ class BookingViewSet(viewsets.ViewSet):
 
         slot_count = serializer_body.validated_data['slot_count']
 
+        firstname = request.POST.get("firstname", None)
+        lastname = request.POST.get("lastname", None)
+
         is_valid, result, checkout_url = validate_new_booking(
             resource              = resource,
             start_datetime        = start_datetime,
             slot_duration_minutes = slot_duration_minutes,
             slot_count            = slot_count,
             member                = request.user,
-            price=price
+            price=price,
+            first_name=firstname,
+            last_name=lastname,
         )
 
         if is_valid:

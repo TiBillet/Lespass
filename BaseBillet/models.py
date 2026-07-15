@@ -2488,6 +2488,10 @@ class Reservation(models.Model):
 
     @atomic
     def cancel_and_refund_resa(self):
+
+        if self.status == Reservation.CANCELED:
+            raise Exception(_("This reservation has already been canceled."))
+
         if self.tickets.filter(status=Ticket.SCANNED).exists():
             raise Exception(_("You cannot cancel a reservation that has been scanned."))
 
@@ -2502,7 +2506,7 @@ class Reservation(models.Model):
             if self.commande and self.lignearticles:
                 # Récupère le paiement et les lignes articles
                 paiement = self.lignearticles.first().paiement_stripe
-                lignes = self.lignearticles.filter(status=LigneArticle.VALID)
+                lignes = self.lignearticles.filter(status__in=[LigneArticle.VALID, LigneArticle.PAID])
 
                 # Pour chaque ligne récupère le nombre de ticket valid, pour ne pas remboursé des tickets qui l'aurait déjà été
                 for ligne in lignes:
@@ -2519,7 +2523,7 @@ class Reservation(models.Model):
                                                                   Paiement_stripe.NOTSYNC,
                                                                   ]):
 
-                    lignes = paiement.lignearticles.filter(status=LigneArticle.VALID)
+                    lignes = paiement.lignearticles.filter(status__in=[LigneArticle.VALID, LigneArticle.PAID])
                     for ligne in lignes:
                         valid_ticket = self.tickets.filter(status__in=[Ticket.NOT_SCANNED,Ticket.SCANNED],pricesold=ligne.pricesold)
                         ligne.to_refund_qty = valid_ticket.count()
@@ -2549,6 +2553,8 @@ class Reservation(models.Model):
         - Sets the Ticket status to CANCELED
         """
         # Basic guards
+        if ticket.status == Ticket.CANCELED:
+            raise Exception(_("This ticket has already been canceled."))
         if ticket.reservation != self:
             raise Exception(_("Ticket does not belong to this reservation."))
         if ticket.status == Ticket.SCANNED:

@@ -607,9 +607,9 @@
                 {% trans "Log in to add to cart" %}
             </button>
         {% endif %}
-        <a href="." class="btn btn-link text-muted d-block mt-2" data-testid="booking-cancel">
-            {% trans 'Cancel' %}
-        </a>
+        <button type="button" class="btn btn-link text-muted d-block mt-2 w-100" data-bs-dismiss="offcanvas" aria-label="Annuler" data-testid="booking-cancel">
+            {% translate "Cancel" %}
+        </button>
     </div>
 </form>
 

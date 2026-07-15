@@ -163,6 +163,26 @@ DEPENDENCIES :
             </select>
         </div>
 
+        {% translate "First name" as default_first_label %}
+        {% with first_label=config.first_input_label_membership|default:default_first_label %}
+            <div class="form-floating mb-3">
+                <input name="firstname" type="text" class="form-control" placeholder="{{ first_label }}"
+                       role="textbox" value="{{ user.first_name|default:"" }}"
+                       aria-label="{{ first_label }}" required data-testid="membership-firstname">
+                <label for="firstname">{{ first_label }}</label>
+            </div>
+        {% endwith %}
+
+        {% translate "Last name or organization" as default_second_label %}
+        {% with second_label=config.second_input_label_membership|default:default_second_label %}
+            <div class="form-floating mb-3">
+                <input name="lastname" type="text" class="form-control" placeholder="{{ second_label }}"
+                       role="textbox" value="{{ user.last_name|default:"" }}"
+                       aria-label="{{ second_label }}" required data-testid="membership-lastname">
+                <label for="lastname">{{ second_label }}</label>
+            </div>
+        {% endwith %}
+
         <!--
         Champs caches : start_datetime, group_end et resource.
         / Hidden fields: start_datetime, group_end and resource.
@@ -264,10 +284,7 @@ DEPENDENCIES :
                     {% translate "Log in to add to cart" %}
                 </button>
             {% endif %}
-            <button type="button"
-                    class="btn btn-link text-muted w-100 d-block test-resource-bt-cancel"
-                    onclick="Swal.close()"
-                    data-testid="booking-cancel-btn">
+            <button type="button" class="btn btn-link text-muted w-100 d-block test-resource-bt-cancel" data-bs-dismiss="offcanvas" aria-label="Annuler">
                 {% translate "Annuler" %}
             </button>
         </div>

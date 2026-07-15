@@ -131,8 +131,15 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
         ligne_article: LigneArticle = self.ligne_article
         logger.info(f"    START TRIGGER_C BOOKING PAID ligne_article.uuid : {ligne_article.uuid}")
 
-        # On va chercher l'article vendu et l'adhésion associéé
+        # On va chercher l'article vendu et la réservation associée
         booking = ligne_article.booking
+        user = booking.user
+
+        if not user.first_name or not user.last_name:
+            user.first_name = booking.first_name if not user.first_name else user.first_name
+            user.last_name = booking.last_name if not user.last_name else user.last_name
+            user.save()
+
 
         booking.status = Booking.PAID_BY_USER
         booking.save()

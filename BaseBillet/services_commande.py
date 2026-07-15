@@ -321,7 +321,6 @@ class CommandeService:
                 item_firstname = (item.get('firstname') or '').strip()
                 item_lastname = (item.get('lastname') or '').strip()
 
-                # TODO-ANTO : USE this
                 resolved_firstname = item_firstname or first_name
                 resolved_lastname = item_lastname or last_name
 
@@ -332,12 +331,13 @@ class CommandeService:
                     start_datetime        = datetime.fromisoformat(item.get('start_datetime')),
                     slot_duration_minutes = int(item.get('slot_duration_minutes')),
                     slot_count            = int(item.get('slot_count')),
-                    # TODO-ANTO add firstname ?
                     member                = user,
                     commande = commande,
                     price = price,
                     external_payment_method=PaymentMethod.STRIPE_NOFED,
                     create_checkout = False,
+                    last_name=resolved_lastname,
+                    first_name=resolved_firstname,
                 )
                 if not is_valid:
                     raise CommandeServiceError(_("Booking not valide : ") + result)
