@@ -35,7 +35,6 @@ Flux / Flow:
         {% translate "À venir" %}
     </h2>
 
-    <script src="{% static 'mvt_htmx/js/sweetalert2@11.js' %}"></script>
     <script>
         document.addEventListener("htmx:confirm", function(e) {
             if (!e.detail.question) return;
@@ -94,12 +93,10 @@ Flux / Flow:
                                     </h3>
                                     <div class="card-text hstack flex-wrap gap-3 mb-3">
                                         <div class="py-2">{{ booking.get_status_display }}</div>
-                                        {% if booking.slot_count > 1 %}
                                             <div class="vr"></div>
                                             <div class="py-2">
-                                                {{ booking.slot_count }} {% translate "créneaux" %}
+                                                {{ booking.slot_count }} {% translate "créneau(x)" %}
                                             </div>
-                                        {% endif %}
                                         {% if booking.pk == highlighted_booking_pk %}
                                             <div class="vr"></div>
                                             <div class="py-2">
@@ -123,7 +120,7 @@ Flux / Flow:
                                             </button>
                                         </div>
                                         {% else %}
-                                            <div class="py-2">{% translate 'La fenêtre de remboursement est passé.' %}</div>
+                                            <div class="py-2">{% translate "La fenêtre d'annulation est passé." %}</div>
                                         {% endif %}
                                     </div>
                                 </div>
@@ -185,12 +182,10 @@ Flux / Flow:
                                     </h3>
                                     <div class="card-text hstack flex-wrap gap-3">
                                         <div class="py-2">{{ booking.get_status_display }}</div>
-                                        {% if booking.slot_count > 1 %}
                                             <div class="vr"></div>
                                             <div class="py-2">
-                                                {{ booking.slot_count }} {% translate "créneaux" %}
+                                                {{ booking.slot_count }} {% translate "créneau(x)" %}
                                             </div>
-                                        {% endif %}
                                     </div>
                                 </div>
                             </div>

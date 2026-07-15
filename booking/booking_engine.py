@@ -29,19 +29,21 @@ DÉPENDANCE MOTEUR DE BASE DE DONNÉES :
 import dataclasses
 import datetime
 import logging
+from dataclasses import dataclass, field
 from decimal import Decimal
 
 from django.db import connection, transaction
 from django.db.utils import OperationalError
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
 from ApiBillet.serializers import dec_to_int, get_or_create_price_sold
-from BaseBillet.models import Paiement_stripe, LigneArticle, SaleOrigin, PaymentMethod, PromotionalCode, ProductSold, \
-    PriceSold
+from BaseBillet.models import Paiement_stripe, LigneArticle, SaleOrigin, PaymentMethod, PromotionalCode
 from PaiementStripe.views import CreationPaiementStripe
 from booking.models import Booking
+from booking.serializers import BookingCreateSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -597,9 +599,15 @@ def validate_new_booking(resource,
             )
 
 
-            # TODO-ANTO : DETERMINE IF IT IS A PROBLEM THAT PRICE_SOLD AMOUNT IS SET LIKE THAT.
-            amount = Decimal(float(slot_duration_minutes) / 60 * float(slot_count) * float(price.prix))
-            price_sold = get_or_create_price_sold(price=price,promo_code=promo_code, custom_amount=amount)
+            # Verifie que le prix n'est pas vide avant de calculer le montant.
+            # / Verify price is not empty before computing amount.
+            if price.prix is None:
+                raise serializers.ValidationError(
+                    _("Price amount is missing for resource booking.")
+                )
+
+            amount = Decimal(slot_duration_minutes) / Decimal(60) * Decimal(slot_count) * Decimal(price.prix)
+            price_sold = get_or_create_price_sold(price=price, promo_code=promo_code, custom_amount=amount)
 
 
             ligne_article = LigneArticle.objects.create(
@@ -663,13 +671,13 @@ def get_checkout_stripe(booking):
         metadata=metadata,
         booking=booking,
         source=Paiement_stripe.FRONT_BILLETTERIE,
-        success_url=f"stripe_return/",
-        cancel_url=f"stripe_return/",
+        success_url="stripe_return/",
+        cancel_url="stripe_return/",
         absolute_domain=f"https://{tenant.get_primary_domain()}/event/",
     )
 
     if not new_paiement_stripe.is_valid():
-        raise serializers.ValidationError(_(f'checkout strip not valid'))
+        raise serializers.ValidationError(_('checkout stripe not valid'))
 
     paiement_stripe: Paiement_stripe = new_paiement_stripe.paiement_stripe_db
     paiement_stripe.lignearticles.all().update(status=LigneArticle.UNPAID)
@@ -680,3 +688,273 @@ def get_checkout_stripe(booking):
 
     logger.debug(f"get_checkout_stripe OK : {new_paiement_stripe.checkout_session.stripe_id}")
     return new_paiement_stripe.checkout_session.url
+
+
+# ─── Affichage des créneaux / Slot display layer ─────────────────────────────
+
+@dataclass
+class DisplaySlot:
+    """
+    Représentation d'un créneau pour l'affichage.
+    Construite par annotate_slots_for_display() depuis des BookableInterval.
+    / View-layer representation of a bookable slot.
+    Built by annotate_slots_for_display() from BookableInterval objects.
+
+    LOCALISATION : booking/booking_engine.py
+    """
+    start:                 datetime.datetime
+    end:                   datetime.datetime
+    remaining_capacity:    int
+    slot_duration_minutes: int
+    is_new_week:           bool = False
+    in_cart:               bool = False
+
+
+@dataclass
+class DisplaySlotGroup:
+    """
+    Séquence contiguë de DisplaySlot de même durée
+    (x.end == next.start et x.slot_duration_minutes == next.slot_duration_minutes).
+    Un créneau isolé a un groupe à un seul élément.
+    / A contiguous run of DisplaySlot objects sharing the same duration
+    (x.end == next.start and x.slot_duration_minutes == next.slot_duration_minutes).
+    / A solo slot has slots=[itself].
+
+    LOCALISATION : booking/booking_engine.py
+    """
+    slots: list = field(default_factory=list)  # list[DisplaySlot]
+
+    @property
+    def start(self) -> datetime.datetime:
+        return self.slots[0].start
+
+    @property
+    def end(self) -> datetime.datetime:
+        return self.slots[-1].end
+
+
+def annotate_slots_for_display(raw_slots):
+    """
+    Convertit une liste de BookableInterval en objets d'affichage.
+    / Converts a list of BookableInterval objects into display-layer objects.
+
+    LOCALISATION : booking/booking_engine.py
+
+    Retourne list[DisplaySlotGroup]. Chaque groupe contient une séquence
+    contiguë de DisplaySlot de même durée.
+    / Returns list[DisplaySlotGroup]. Each group holds a contiguous run of
+    DisplaySlot objects sharing the same duration.
+
+    Passe 1 : crée un DisplaySlot par créneau avec is_new_week calculé.
+    Passe 2 : groupe les DisplaySlot contigus en DisplaySlotGroup.
+    / Pass 1: create DisplaySlot per slot with is_new_week computed globally.
+    / Pass 2: group consecutive DisplaySlot objects into DisplaySlotGroup runs.
+
+    :param raw_slots: list[BookableInterval]
+    :return: list[DisplaySlotGroup]
+    """
+    # Passe 1 : crée les DisplaySlot avec le marqueur de semaine.
+    # / Pass 1: create DisplaySlot objects with the week marker.
+    display_slots = []
+    for i, slot in enumerate(raw_slots):
+        is_new_week = (
+                i > 0
+                and slot.start.isocalendar()[:2] != raw_slots[i - 1].start.isocalendar()[:2]
+        )
+        display_slots.append(DisplaySlot(
+            start=slot.start,
+            end=slot.end,
+            remaining_capacity=slot.remaining_capacity,
+            slot_duration_minutes=slot.duration_minutes(),
+            is_new_week=is_new_week,
+        ))
+
+    # Passe 2 : regroupe les créneaux contigus en DisplaySlotGroup.
+    # / Pass 2: group contiguous slots into DisplaySlotGroup runs.
+    if not display_slots:
+        return []
+
+    groups = []
+    current_run = [display_slots[0]]
+    for ds in display_slots[1:]:
+        same_duration = ds.slot_duration_minutes == current_run[-1].slot_duration_minutes
+        contiguous    = ds.start == current_run[-1].end
+        if contiguous and same_duration:
+            current_run.append(ds)
+        else:
+            groups.append(DisplaySlotGroup(slots=current_run))
+            current_run = [ds]
+    groups.append(DisplaySlotGroup(slots=current_run))
+    return groups
+
+
+def validate_resource_booking_form(resource, post_data, price=None):
+    """
+    Valide les données d'un formulaire de réservation de ressource.
+    / Validates a resource booking form.
+
+    LOCALISATION : booking/booking_engine.py
+
+    Cette fonction centralise la logique de validation utilisée par :
+    - booking/views.py:BookingViewSet._book_post (réservation directe)
+    - BaseBillet/views.py:PanierMVT.add_resource (ajout au panier)
+
+    Elle calcule les créneaux disponibles, valide l'heure de fin,
+    et retourne le nombre de slots à réserver.
+
+    FLUX :
+    1. Parse start_datetime depuis post_data
+    2. Calcule la fenêtre de recherche (group_end ou horizon)
+    3. Calcule les créneaux avec compute_slots
+    4. Trouve le créneau demandé et les créneaux consécutifs
+    5. Parse et valide end_time
+    6. Calcule slot_count
+    7. Valide slot_count avec BookingCreateSerializer
+
+    :param resource: instance de Resource
+    :param post_data: QueryDict ou dict avec les champs du formulaire
+    :param price: instance de Price (optionnel)
+    :return: tuple (error_message, result_dict) — error_message est None si OK
+    """
+    tz = timezone.get_current_timezone()
+
+    # Parse le datetime de début depuis le formulaire.
+    # / Parse start datetime from the form.
+    start_datetime_raw = post_data.get('start_datetime', '')
+    start_datetime_naive = parse_datetime(start_datetime_raw)
+    if start_datetime_naive is None:
+        return _("Invalid start datetime format."), {'resource': resource}
+
+    start_datetime = timezone.make_aware(start_datetime_naive, tz)
+
+    # Calcule la borne de fin de la fenêtre de recherche.
+    # / Compute the window end boundary.
+    group_end_raw = post_data.get('group_end', '')
+    group_end_naive = parse_datetime(group_end_raw)
+    if group_end_naive is not None:
+        window_end = timezone.make_aware(group_end_naive, tz)
+    else:
+        window_end = timezone.make_aware(
+            datetime.datetime.combine(
+                start_datetime.astimezone(tz).date()
+                + datetime.timedelta(days=resource.booking_horizon_days + 1),
+                datetime.time.min,
+            ),
+            tz,
+        )
+
+    # Calcule les créneaux disponibles.
+    # / Compute available slots.
+    window = Interval(start=start_datetime, end=window_end)
+    slot_groups = annotate_slots_for_display(compute_slots(resource, window))
+
+    # Trouve le créneau demandé et les créneaux consécutifs disponibles.
+    # / Find the requested slot and its consecutive available slots.
+    requested_slot = None
+    max_slot_count = 0
+    consecutive_slots = []
+    slot_duration_minutes = None
+
+    for group in slot_groups:
+        for i, slot in enumerate(group.slots):
+            if slot.start == start_datetime:
+                requested_slot = slot
+                slot_duration_minutes = slot.slot_duration_minutes
+                for s in group.slots[i:]:
+                    if s.remaining_capacity <= 0:
+                        break
+                    max_slot_count += 1
+                consecutive_slots = group.slots[i:i + max_slot_count]
+                break
+        if slot_duration_minutes:
+            break
+
+    if slot_duration_minutes is None or requested_slot is None:
+        return _("Selected slot is not available."), {
+            'resource': resource,
+            'start_datetime': start_datetime,
+        }
+
+    # Parse et valide l'heure de fin depuis le formulaire.
+    # / Parse and validate the end time from the form.
+    end_time_raw = post_data.get('end_time', '')
+    end_time_naive = parse_datetime(end_time_raw)
+    if end_time_naive is None:
+        return _("Invalid end time format."), {
+            'resource': resource,
+            'start_datetime': start_datetime,
+            'requested_slot': requested_slot,
+            'consecutive_slots': consecutive_slots,
+            'max_slot_count': max_slot_count,
+            'slot_duration_minutes': slot_duration_minutes,
+            'window_end': window_end,
+        }
+
+    end_datetime = timezone.make_aware(end_time_naive, tz)
+
+    if end_datetime <= start_datetime:
+        return _("End time must be after start time."), {
+            'resource': resource,
+            'start_datetime': start_datetime,
+            'requested_slot': requested_slot,
+            'consecutive_slots': consecutive_slots,
+            'max_slot_count': max_slot_count,
+            'slot_duration_minutes': slot_duration_minutes,
+            'window_end': window_end,
+        }
+
+    if end_datetime not in [slot.end for slot in consecutive_slots]:
+        return _("End time must match an available slot end."), {
+            'resource': resource,
+            'start_datetime': start_datetime,
+            'requested_slot': requested_slot,
+            'consecutive_slots': consecutive_slots,
+            'max_slot_count': max_slot_count,
+            'slot_duration_minutes': slot_duration_minutes,
+            'window_end': window_end,
+        }
+
+    duration_minutes = int((end_datetime - start_datetime).total_seconds() // 60)
+    if duration_minutes % slot_duration_minutes != 0:
+        return _("Selected duration is not a multiple of the slot duration."), {
+            'resource': resource,
+            'start_datetime': start_datetime,
+            'requested_slot': requested_slot,
+            'consecutive_slots': consecutive_slots,
+            'max_slot_count': max_slot_count,
+            'slot_duration_minutes': slot_duration_minutes,
+            'window_end': window_end,
+        }
+
+    slot_count = duration_minutes // slot_duration_minutes
+
+    # Valide slot_count via le serializer.
+    # / Validate slot_count through the serializer.
+    data = post_data.copy()
+    data['slot_count'] = slot_count
+    serializer_body = BookingCreateSerializer(data=data)
+    if not serializer_body.is_valid():
+        return _("Invalid slot count."), {
+            'resource': resource,
+            'start_datetime': start_datetime,
+            'requested_slot': requested_slot,
+            'consecutive_slots': consecutive_slots,
+            'max_slot_count': max_slot_count,
+            'slot_duration_minutes': slot_duration_minutes,
+            'window_end': window_end,
+            'error': serializer_body.errors,
+        }
+
+    slot_count = serializer_body.validated_data['slot_count']
+
+    return None, {
+        'resource': resource,
+        'start_datetime': start_datetime,
+        'end_datetime': end_datetime,
+        'slot_duration_minutes': slot_duration_minutes,
+        'slot_count': slot_count,
+        'requested_slot': requested_slot,
+        'consecutive_slots': consecutive_slots,
+        'max_slot_count': max_slot_count,
+        'window_end': window_end,
+    }

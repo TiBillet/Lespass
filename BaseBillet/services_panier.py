@@ -179,10 +179,10 @@ def validate_ticket_cart_limits(user, event, product, price, qty_to_add, cart_it
             total_event = db_qty_event + cart_qty_event + qty_to_add
             if total_event > event.max_per_user:
                 raise InvalidItemError(
-                    _("Adding these tickets would exceed the per-user limit "
+                    _("Adding these tickets for %(event) would exceed the per-user limit "
                       "of %(max)s for this event. You already have %(db)s "
                       "confirmed + %(cart)s in cart.")
-                    % {"max": event.max_per_user, "db": db_qty_event, "cart": cart_qty_event}
+                    % {"max": event.max_per_user, "db": db_qty_event, "cart": cart_qty_event, "event": event}
                 )
 
         # 2. product.max_per_user
@@ -736,7 +736,6 @@ class PanierSession:
                        promotional_code_name=None):
 
         """
-        TODO-ANTO - recheck all
         Ajoute un item adhésion au panier après validation.
         / Adds a membership item to the cart after validation.
 
@@ -794,15 +793,8 @@ class PanierSession:
                 _("Resources with manual validation cannot be added to the cart.")
             )
 
-        # TODO-ANTO : Add checks. It is possible to have the same rssource twice, but at different timing
-        # # Validation 5 : pas de doublon (1 ressource du même price max)
-        # # Validation 5: no duplicate (1 resource of the same price max)
-        # for existing in self._data.get('items', []):
-        #     if existing.get('type') == 'resource' and existing.get('price_uuid') == str(price_uuid):
-        #         raise InvalidItemError(_("This resource is already in your cart."))
-
-        # Validation 6 : free_price → custom_amount >= min
-        # Validation 6: free_price → custom_amount >= min
+        # Validation 5 : free_price → custom_amount >= min
+        # Validation 5: free_price → custom_amount >= min
         if price.free_price:
             if custom_amount is None:
                 raise InvalidItemError(_("An amount is required for the free price."))
@@ -817,8 +809,8 @@ class PanierSession:
             if amount_dec > Decimal("999999.99"):
                 raise InvalidItemError(_("The amount is too high."))
 
-        # Validation 7 : disponibilité du créneau
-        # / Validation 7: slot availability
+        # Validation 6 : disponibilité du créneau
+        # / Validation 6: slot availability
         from booking.booking_engine import Interval, compute_slots
         from django.utils.dateparse import parse_datetime
 
@@ -850,8 +842,8 @@ class PanierSession:
                     }
                 )
 
-        # Validation 8 : pas de chevauchement avec une même ressource déjà dans le panier
-        # / Validation 8: no overlap with the same resource already in cart
+        # Validation 7 : pas de chevauchement avec une même ressource déjà dans le panier
+        # / Validation 7: no overlap with the same resource already in cart
         for existing in self._data.get('items', []):
             if existing.get('type') != 'resource':
                 continue
@@ -879,9 +871,9 @@ class PanierSession:
                     }
                 )
 
-        # Validation 9 : code promo (si fourni) — doit etre actif, utilisable,
+        # Validation 8 : code promo (si fourni) — doit etre actif, utilisable,
         # et lie au product de l'adhesion. Meme regle que add_ticket.
-        # / Validation 9: promo code (if provided) — active, usable, linked to product.
+        # / Validation 8: promo code (if provided) — active, usable, linked to product.
         validated_promo_name = None
 
         if promotional_code_name:

@@ -31,11 +31,9 @@ Détails de la réservation à annuler.
       {% translate "à" %} {{ booking.start_datetime|date:"H\hi" }}
       – {{ booking.end_datetime|date:"H\hi" }}
     </p>
-    {% if booking.slot_count > 1 %}
     <p class="mb-0 text-muted">
-      {{ booking.slot_count }} {% translate "créneaux" %}
+      {{ booking.slot_count }} {% translate "créneau(x)" %}
     </p>
-    {% endif %}
   </div>
 </div>
 

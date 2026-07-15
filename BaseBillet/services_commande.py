@@ -10,12 +10,13 @@ Responsabilité unique : transformer un PanierSession en Commande + N Reservatio
 """
 from datetime import datetime
 import logging
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.db import connection, transaction
 from django.utils.translation import gettext_lazy as _
 
 from BaseBillet.models import Membership, Price
+from BaseBillet.services_panier import InvalidItemError
 from booking.models import Resource, Booking
 
 logger = logging.getLogger(__name__)
@@ -380,8 +381,29 @@ class CommandeService:
 
         if item.get('type') == "resource":
 
-            # TODO-ANTO : ADD CHECKS
-            return Decimal(item.get('total_estimation'))
+            total_estimation = item.get('total_estimation')
+            if not total_estimation:
+                raise CommandeServiceError(_("Missing total_estimation for resource item."))
+
+            try:
+                total_estimation_amount = Decimal(total_estimation)
+            except InvalidOperation:
+                raise CommandeServiceError(_("Invalid total_estimation for resource item."))
+
+            # Verification de coherence avec le montant calcule depuis les parametres.
+            # / Consistency check against amount computed from parameters.
+            slot_duration_minutes = Decimal(item.get('slot_duration_minutes', 0))
+            slot_count = Decimal(item.get('slot_count', 0))
+            price_amount = price.prix or Decimal(0)
+            expected_amount = slot_duration_minutes / Decimal(60) * slot_count * price_amount
+
+            if total_estimation_amount != expected_amount:
+                raise CommandeServiceError(
+                    _("total_estimation does not match expected resource amount.")
+                )
+
+            return total_estimation_amount
+
 
         return price.prix or Decimal("0.00")
 

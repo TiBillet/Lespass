@@ -10,125 +10,35 @@ Flux v0.1 : GET/POST simples, réservation directement en statut 'confirmed'.
 import datetime
 import logging
 from collections import defaultdict
-from dataclasses import dataclass, field
 from urllib.parse import urlencode
 from django_htmx.http import HttpResponseClientRedirect
-from django.http import Http404, HttpResponseBadRequest, HttpResponse
+from django.http import HttpResponseBadRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework import permissions, viewsets
 from django.contrib import messages
-from django.utils.translation import gettext_lazy as _, ngettext
+from django.utils.translation import gettext_lazy as _
 from rest_framework.decorators import action
 
-from BaseBillet.models import Price, Paiement_stripe
+from BaseBillet.models import Price, PaymentMethod
 from BaseBillet.views import get_context
 from booking.booking_engine import Interval, compute_slots, validate_new_booking
+from booking.booking_engine import annotate_slots_for_display
+from booking.booking_engine import validate_resource_booking_form
 from booking.models import Booking, Resource
-from booking.serializers import BookingCreateSerializer
 from booking.tasks import send_booking_cancellation_user
 
 
 logger = logging.getLogger(__name__)
 
 
-# ── Display layer ────────────────────────────────────────────────────────────
-
-
-@dataclass
-class DisplaySlot:
-    """
-    Représentation d'un créneau pour l'affichage.
-    Construite par annotate_slots_for_display() depuis des BookableInterval.
-    / View-layer representation of a bookable slot.
-    Built by annotate_slots_for_display() from BookableInterval objects.
-    """
-    start:                 datetime.datetime
-    end:                   datetime.datetime
-    remaining_capacity:    int
-    slot_duration_minutes: int
-    is_new_week:           bool = False
-    in_cart:               bool = False
-
-
-
-@dataclass
-class DisplaySlotGroup:
-    """
-    Séquence contiguë de DisplaySlot de même durée
-    (x.end == next.start et x.slot_duration_minutes == next.slot_duration_minutes).
-    Un créneau isolé a un groupe à un seul élément.
-    / A contiguous run of DisplaySlot objects sharing the same duration
-    (x.end == next.start and x.slot_duration_minutes == next.slot_duration_minutes).
-    / A solo slot has slots=[itself].
-    """
-    slots: list = field(default_factory=list)  # list[DisplaySlot]
-
-    @property
-    def start(self) -> datetime.datetime:
-        return self.slots[0].start
-
-    @property
-    def end(self) -> datetime.datetime:
-        return self.slots[-1].end
-
-
-def annotate_slots_for_display(raw_slots):
-    """
-    Convertit une liste de BookableInterval en objets d'affichage.
-    / Converts a list of BookableInterval objects into display-layer objects.
-
-    LOCALISATION : booking/views.py
-
-    Retourne list[DisplaySlotGroup]. Chaque groupe contient une séquence
-    contiguë de DisplaySlot de même durée.
-    / Returns list[DisplaySlotGroup]. Each group holds a contiguous run of
-    DisplaySlot objects sharing the same duration.
-
-    Passe 1 : crée un DisplaySlot par créneau avec is_new_week calculé.
-    Passe 2 : groupe les DisplaySlot contigus en DisplaySlotGroup.
-    / Pass 1: create DisplaySlot per slot with is_new_week computed globally.
-    / Pass 2: group consecutive DisplaySlot objects into DisplaySlotGroup runs.
-
-    :param raw_slots: list[BookableInterval]
-    :return: list[DisplaySlotGroup]
-    """
-    # Passe 1 : crée les DisplaySlot avec le marqueur de semaine.
-    # / Pass 1: create DisplaySlot objects with the week marker.
-    display_slots = []
-    for i, slot in enumerate(raw_slots):
-        is_new_week = (
-            i > 0
-            and slot.start.isocalendar()[:2] != raw_slots[i - 1].start.isocalendar()[:2]
-        )
-        display_slots.append(DisplaySlot(
-            start=slot.start,
-            end=slot.end,
-            remaining_capacity=slot.remaining_capacity,
-            slot_duration_minutes=slot.duration_minutes(),
-            is_new_week=is_new_week,
-        ))
-
-    # Passe 2 : regroupe les créneaux contigus en DisplaySlotGroup.
-    # / Pass 2: group contiguous slots into DisplaySlotGroup runs.
-    if not display_slots:
-        return []
-
-    groups = []
-    current_run = [display_slots[0]]
-    for ds in display_slots[1:]:
-        same_duration = ds.slot_duration_minutes == current_run[-1].slot_duration_minutes
-        contiguous    = ds.start == current_run[-1].end
-        if contiguous and same_duration:
-            current_run.append(ds)
-        else:
-            groups.append(DisplaySlotGroup(slots=current_run))
-            current_run = [ds]
-    groups.append(DisplaySlotGroup(slots=current_run))
-    return groups
-
+# ── Affichage des créneaux / Slot display ───────────────────────────────────
+# Les classes DisplaySlot, DisplaySlotGroup et la fonction
+# annotate_slots_for_display ont été déplacées dans booking/booking_engine.py
+# car elles sont partagées avec BaseBillet/views.py.
+# / Moved to booking/booking_engine.py because they are shared with BaseBillet/views.py.
 
 # ── ViewSet ──────────────────────────────────────────────────────────────────
 
@@ -653,6 +563,54 @@ class BookingViewSet(viewsets.ViewSet):
             return render(request, 'booking/partials/book_form.html', context)
         return render(request, 'booking/views/book.html', context)
 
+    def _build_resource_form_context(
+        self,
+        request,
+        resource,
+        start_datetime,
+        requested_slot,
+        consecutive_slots,
+        max_slot_count,
+        slot_duration_minutes,
+        window_end,
+        error=None,
+        race_condition=False,
+    ):
+        """
+        Construit le contexte commun pour le formulaire de réservation.
+        / Builds the common context for the booking form.
+
+        LOCALISATION : booking/views.py
+
+        Ce helper est utilisé par _book_post pour éviter la duplication
+        de la construction du contexte de rendu.
+        / Helper used by _book_post to avoid duplicating context building.
+        """
+        cancellation_deadline = None
+        cancellation_possible = False
+        if start_datetime:
+            cancellation_deadline = start_datetime - datetime.timedelta(
+                hours=resource.cancellation_deadline_hours,
+            )
+            cancellation_possible = timezone.now() <= cancellation_deadline
+
+        context = get_context(request)
+        context.update({
+            'resource': resource,
+            'slot': requested_slot,
+            'consecutive_slots': consecutive_slots,
+            'max_slot_count': max_slot_count,
+            'slot_duration_minutes': slot_duration_minutes,
+            'start_datetime': start_datetime,
+            'group_end': consecutive_slots[-1].end if consecutive_slots else window_end,
+            'cancellation_deadline': cancellation_deadline,
+            'cancellation_possible': cancellation_possible,
+            'error': error,
+        })
+        if race_condition:
+            context['race_condition'] = True
+        return context
+
     def _book_post(self, request, resource):
         """
         Crée une réservation confirmée depuis les données POST.
@@ -678,136 +636,47 @@ class BookingViewSet(viewsets.ViewSet):
             response["HX-Refresh"] = "true"
             return response
 
-        # Parse le datetime naïf depuis le champ caché du formulaire.
-        # / Parse the naive datetime from the form hidden field.
-        tz = timezone.get_current_timezone()
-        start_datetime_raw   = request.POST.get('start_datetime', '')
-        start_datetime_naive = parse_datetime(start_datetime_raw)
-        if start_datetime_naive is None:
-            return HttpResponseBadRequest()
-        start_datetime = timezone.make_aware(start_datetime_naive, tz)
+        # Validation centralisée du formulaire ressource.
+        # / Centralized resource form validation.
+        error_message, validation_result = validate_resource_booking_form(
+            resource=resource,
+            post_data=request.POST,
+            price=price,
+        )
 
-        # Dérive slot_duration_minutes en recalculant les créneaux depuis
-        # start_datetime. Utilise group_end comme borne de fenêtre si disponible.
-        # / Derive slot_duration_minutes by recomputing slots from start_datetime.
-        # Uses group_end as the window boundary if available.
-        group_end_raw   = request.POST.get('group_end', '')
-        group_end_naive = parse_datetime(group_end_raw)
-        if group_end_naive is not None:
-            window_end_derive = timezone.make_aware(group_end_naive, tz)
-        else:
-            window_end_derive = timezone.make_aware(
-                datetime.datetime.combine(
-                    start_datetime.astimezone(tz).date()
-                    + datetime.timedelta(days=resource.booking_horizon_days + 1),
-                    datetime.time.min,
-                ),
-                tz,
+        if error_message:
+            context = self._build_resource_form_context(
+                request=request,
+                resource=resource,
+                start_datetime=validation_result.get('start_datetime'),
+                requested_slot=validation_result.get('requested_slot'),
+                consecutive_slots=validation_result.get('consecutive_slots', []),
+                max_slot_count=validation_result.get('max_slot_count', 0),
+                slot_duration_minutes=validation_result.get('slot_duration_minutes'),
+                window_end=validation_result.get('window_end'),
+                error=validation_result.get('error', error_message),
             )
-        window_derive = Interval(start=start_datetime, end=window_end_derive)
-        slot_groups_derive = annotate_slots_for_display(compute_slots(resource, window_derive))
-
-        requested_slot = None
-        max_slot_count = 0
-        consecutive_slots = []
-        slot_duration_minutes = None
-        for group in slot_groups_derive:
-            for i, slot in enumerate(group.slots):
-                if slot.start == start_datetime:
-                    requested_slot = slot
-                    slot_duration_minutes = slot.slot_duration_minutes
-                    for s in group.slots[i:]:
-                        if s.remaining_capacity <= 0:
-                            break
-                        max_slot_count += 1
-                    consecutive_slots = group.slots[i:i + max_slot_count]
-                    break
-            if slot_duration_minutes:
-                break
-
-        if slot_duration_minutes is None or requested_slot is None:
-            return HttpResponseBadRequest()
-
-        def _build_form_context(error=None, race_condition=False):
-            cancellation_deadline = start_datetime - datetime.timedelta(
-                hours=resource.cancellation_deadline_hours,
-            )
-            cancellation_possible = timezone.now() <= cancellation_deadline
-            context = get_context(request)
-            context.update({
-                'resource': resource,
-                'slot': requested_slot,
-                'consecutive_slots': consecutive_slots,
-                'max_slot_count': max_slot_count,
-                'slot_duration_minutes': slot_duration_minutes,
-                'start_datetime': start_datetime,
-                'group_end': consecutive_slots[-1].end if consecutive_slots else window_end_derive,
-                'cancellation_deadline': cancellation_deadline,
-                'cancellation_possible': cancellation_possible,
-                'error': error,
-            })
-            if race_condition:
-                context['race_condition'] = True
-            return context
-
-        # Parse et valide l'heure de fin depuis le champ du formulaire.
-        # / Parse and validate the end time from the form field.
-        end_time_raw = request.POST.get('end_time', '')
-        end_time_naive = parse_datetime(end_time_raw)
-        if end_time_naive is None:
-            context = _build_form_context(error=_("Invalid end time format."))
             if request.htmx:
                 return render(request, 'booking/partials/book_form.html', context, status=422)
             return render(request, 'booking/views/book.html', context)
 
-        end_datetime = timezone.make_aware(end_time_naive, tz)
-
-        if end_datetime <= start_datetime:
-            context = _build_form_context(error=_("End time must be after start time."))
-            if request.htmx:
-                return render(request, 'booking/partials/book_form.html', context, status=422)
-            return render(request, 'booking/views/book.html', context)
-
-        if end_datetime not in [slot.end for slot in consecutive_slots]:
-            context = _build_form_context(error=_("End time must match an available slot end."))
-            if request.htmx:
-                return render(request, 'booking/partials/book_form.html', context, status=422)
-            return render(request, 'booking/views/book.html', context)
-
-        duration_minutes = int((end_datetime - start_datetime).total_seconds() // 60)
-        if duration_minutes % slot_duration_minutes != 0:
-            context = _build_form_context(error=_("Selected duration is not a multiple of the slot duration."))
-            if request.htmx:
-                return render(request, 'booking/partials/book_form.html', context, status=422)
-            return render(request, 'booking/views/book.html', context)
-
-        slot_count = duration_minutes // slot_duration_minutes
-
-        # Valide le slot_count calculé via le serializer.
-        # / Validate the computed slot_count through the serializer.
-        data = request.POST.copy()
-        data['slot_count'] = slot_count
-        serializer_body = BookingCreateSerializer(data=data)
-        if not serializer_body.is_valid():
-            context = _build_form_context(error=serializer_body.errors)
-            if request.htmx:
-                return render(request, 'booking/partials/book_form.html', context, status=422)
-            return render(request, 'booking/views/book.html', context)
-
-        slot_count = serializer_body.validated_data['slot_count']
+        start_datetime = validation_result['start_datetime']
+        slot_duration_minutes = validation_result['slot_duration_minutes']
+        slot_count = validation_result['slot_count']
 
         firstname = request.POST.get("firstname", None)
         lastname = request.POST.get("lastname", None)
 
         is_valid, result, checkout_url = validate_new_booking(
-            resource              = resource,
-            start_datetime        = start_datetime,
-            slot_duration_minutes = slot_duration_minutes,
-            slot_count            = slot_count,
-            member                = request.user,
+            resource=resource,
+            start_datetime=start_datetime,
+            slot_duration_minutes=slot_duration_minutes,
+            slot_count=slot_count,
+            member=request.user,
             price=price,
             first_name=firstname,
             last_name=lastname,
+            external_payment_method=PaymentMethod.STRIPE_NOFED
         )
 
         if is_valid:
@@ -832,7 +701,7 @@ class BookingViewSet(viewsets.ViewSet):
         # les créneaux recalculés et le message d'erreur.
         # / Failure (race condition, slot started, etc.) — re-render with
         # freshly computed slots and the error message.
-        tz         = timezone.get_current_timezone()
+        tz = timezone.get_current_timezone()
         horizon_end = timezone.make_aware(
             datetime.datetime.combine(
                 start_datetime.astimezone(tz).date()
@@ -841,11 +710,11 @@ class BookingViewSet(viewsets.ViewSet):
             ),
             tz,
         )
-        window      = Interval(start=start_datetime, end=horizon_end)
+        window = Interval(start=start_datetime, end=horizon_end)
         slot_groups = annotate_slots_for_display(compute_slots(resource, window))
 
-        requested_slot    = None
-        max_slot_count    = 0
+        requested_slot = None
+        max_slot_count = 0
         consecutive_slots = []
         for group in slot_groups:
             for i, slot in enumerate(group.slots):
@@ -860,7 +729,18 @@ class BookingViewSet(viewsets.ViewSet):
             if requested_slot:
                 break
 
-        context = _build_form_context(error=result, race_condition=True)
+        context = self._build_resource_form_context(
+            request=request,
+            resource=resource,
+            start_datetime=start_datetime,
+            requested_slot=requested_slot,
+            consecutive_slots=consecutive_slots,
+            max_slot_count=max_slot_count,
+            slot_duration_minutes=requested_slot.slot_duration_minutes if requested_slot else None,
+            window_end=horizon_end,
+            error=result,
+            race_condition=True,
+        )
         # En requete HTMX, on retourne le partial avec les erreurs en 422.
         # / For HTMX requests, return the partial with errors and 422 status.
         if request.htmx:
