@@ -865,6 +865,7 @@ class ResourcePriceInlineForm(BasePriceInlineForm):
         #         "Maximum number of tickets available per event for this price. "
         #         "Leave blank for unlimited."
         #     )
+
         if "max_per_user" in self.fields:
             self.fields["max_per_user"].label = _("Nombre de créneau maximal par utilisateur")
             self.fields["max_per_user"].help_text = _(
@@ -875,6 +876,10 @@ class ResourcePriceInlineForm(BasePriceInlineForm):
         # / No "add" button to create a product from this field
         if "adhesions_obligatoires" in self.fields:
             self.fields["adhesions_obligatoires"].widget.can_add_related = False
+            self.fields["adhesions_obligatoires"].queryset = Product.objects.filter(
+                categorie_article=Product.ADHESION,
+                archive=False,
+            )
 
 
 class ResourcePriceInline(BasePriceInline):
@@ -1260,7 +1265,7 @@ class ProductAdmin(ModelAdmin):
                     methode_caisse=Product.VENTE,
                     archive=False,
                 )
-            elif "resource" in referer:
+            elif "resource/" in referer:
                 # Autocomplete depuis ResourceAdmin : uniquement produit ressource
                 queryset = queryset.filter(
                     categorie_article=Product.RESOURCE,
