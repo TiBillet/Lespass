@@ -160,7 +160,7 @@ async function initWebsocket() {
       }
     }
 
-    // TODO: changer la route si besoin
+    // init websocket terminal
     window.wsTerminal = {
       socket: new WebSocket(server),
       on: false
@@ -168,7 +168,7 @@ async function initWebsocket() {
 
     // Connection ws ok
     wsTerminal.socket.addEventListener("open", (event) => {
-      console.log("-> connection ws -", new Date())
+      console.log("-> connection websocket -", new Date())
       wsTerminal.on = true
     })
 
@@ -180,13 +180,20 @@ async function initWebsocket() {
 
     // connection hs
     wsTerminal.socket.addEventListener("close", (event) => {
-      console.log("The connection has been closed successfully.");
-      // supprime le WebSocket
+      console.log("Connexion websocket perdue. Reconnexion dans 3 secondes...")
+      // supprime le websocket terminal en cours
       wsTerminal = null
+      setTimeout(initWebsocket, 3000)
+    })
+
+    // erreurs
+    wsTerminal.socket.addEventListener("error", (event) => {
+      console.error("Erreur websocket.")
+      // Déclenche la reconnexion via onclose
+      wsTerminal.socket.close()
     })
   }
 }
-
 
 document.addEventListener('deviceready', async () => {
   try {
