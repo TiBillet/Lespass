@@ -634,6 +634,10 @@ class Booking(models.Model):
 
     @atomic
     def cancel_and_refund_booking(self):
+
+        if self.status in [Booking.USER_CANCELED, Booking.ADMIN_CANCELED]:
+            return _("This booking is already cancelled.")
+
         # 1) Remboursement Stripe (flow existant, inchange)
         # / Stripe refund (existing flow, unchanged)
         if self.total_paid() > 0:
@@ -645,20 +649,21 @@ class Booking(models.Model):
             if self.commande and self.lignearticles:
 
                 paiement = self.lignearticles.first().paiement_stripe
-                partial_refund_payment(paiement, config, self.lignearticles.filter(status=LigneArticle.VALID))
+                partial_refund_payment(paiement, config, self.lignearticles.filter(status__in=[LigneArticle.VALID, LigneArticle.PAID]))
             # Si la commande est faite SANS le panier, récupère la lignearticle depuis le paiement
             elif self.paiements.count() > 0:
                 for paiement in self.paiements.filter(status__in=[Paiement_stripe.VALID,
                                                               Paiement_stripe.PAID,
                                                               Paiement_stripe.NOTSYNC,
                                                               ]):
-                    partial_refund_payment(paiement, config, paiement.lignearticles.filter(status=LigneArticle.VALID))
+                    partial_refund_payment(paiement, config, paiement.lignearticles.filter(status=[LigneArticle.VALID, LigneArticle.PAID]))
 
         # 2) Avoir pour les lignes hors-Stripe (reservations admin : cheque, especes, etc.)
         # / Credit note for non-Stripe lines (admin reservations: check, cash, etc.)
         for ligne in self._lignes_hors_stripe():
-            self._creer_avoir(ligne)
-            logger.info(f"Credit note created for non-Stripe line {ligne.uuid}")
+            if ligne.amount > 0:
+                self._creer_avoir(ligne)
+                logger.info(f"Credit note created for non-Stripe line {ligne.uuid}")
 
         self.status = Booking.USER_CANCELED
 

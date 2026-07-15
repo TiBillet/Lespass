@@ -660,9 +660,12 @@ class BookingViewSet(viewsets.ViewSet):
 
         LOCALISATION : booking/views.py
 
-        Succès    → redirige vers /my_account/my_bookings//?new=<pk>
+        Succès    → redirige vers /my_account/my_bookings/?new=<pk> si la réservation est gratuite.
+                  → redirige vers stripe si la réservation est payante
         Échec     → re-render du formulaire avec message d'erreur
-        / Success → redirect to /my_account/my_bookings//?new=<pk>
+
+        / Success → redirect to /my_account/my_bookings/?new=<pk> if booking is free
+                  → redirect to stripe if booking need payement
         / Failure → re-render the form with an error message
         """
 
@@ -951,12 +954,12 @@ class BookingViewSet(viewsets.ViewSet):
                 logger.error(f"Failed to queue cancellation email for booking {booking.pk}: {ce}")
 
             messages.add_message(request, messages.SUCCESS, cancel_text)
-            return redirect(reverse('my_account-my-bookings'))
+            return HttpResponseClientRedirect(reverse('my_account-my-bookings'))
 
         except Exception as e:
             logger.error(f"Error canceling booking {booking.pk}: {e}")
             messages.add_message(request, messages.ERROR,
                                  _("An error occurred while cancelling your booking.") + f" : {e}")
-            return redirect(reverse('my_account-my-bookings'))
+            return HttpResponseClientRedirect(reverse('my_account-my-bookings'))
 
 

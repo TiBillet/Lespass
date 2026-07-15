@@ -57,7 +57,7 @@ def partial_refund_payment(paiement, config, ligne_articles, specified_quantity=
 
         for ligne_article in ligne_articles:
             # Update accounting line status to REFUNDED if it was VALID to trigger signals
-            if ligne_article.status == LigneArticle.VALID:
+            if ligne_article.status in [LigneArticle.VALID, LigneArticle.PAID]:
                 metadata = ligne_article.metadata if ligne_article.metadata else {}
                 metadata['original_lignearticle_uuid'] = str(ligne_article.uuid)
 
