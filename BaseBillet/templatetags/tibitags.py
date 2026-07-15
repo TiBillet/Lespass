@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from Administration.management.commands.demo_data import logger
+from BaseBillet.models import Membership
 from fedow_connect.utils import dround as utils_dround
 
 register = template.Library()
@@ -88,6 +89,7 @@ def is_membership(user, membership_product) -> bool:
         return user.memberships.filter(
             price__product__in=membership_product.all(),
             deadline__gte=timezone.now(),
+            state__in=[Membership.PAID_BY_USER, Membership.NO_ADMIN_VALID]
         ).exists()
     return user.memberships.filter(price__product=membership_product, deadline__gte=timezone.now()).exists()
 
