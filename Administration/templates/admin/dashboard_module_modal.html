@@ -21,6 +21,13 @@
             {% endif %}
         </p>
 
+        {# Encart « acces anticipe » (BETA) : affiche seulement a l'ACTIVATION #}
+        {# d'un module beta. A la desactivation, inutile de le montrer.        #}
+        {# / BETA notice: shown only when ENABLING a beta module.             #}
+        {% if is_beta and not is_active %}
+            {% include "admin/partials/dashboard_beta_notice.html" with notice=beta_notice testid="module-modal" %}
+        {% endif %}
+
         <div style="display:flex;justify-content:flex-end;gap:.75rem">
             <button type="button"
                     onclick="document.getElementById('module-modal-container').innerHTML=''"
@@ -34,7 +41,11 @@
                     hx-swap="outerHTML"
                     hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
                     style="padding:.5rem 1rem;font-size:.875rem;font-weight:500;border-radius:.375rem;background:var(--color-primary-600,#7c3aed);color:#fff;border:none;cursor:pointer">
-                {% translate "Confirm" %}
+                {% if is_beta and not is_active %}
+                    {% translate "J'ai compris et je teste !" %}
+                {% else %}
+                    {% translate "Confirm" %}
+                {% endif %}
             </button>
         </div>
     </div>

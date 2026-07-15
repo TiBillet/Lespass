@@ -28,9 +28,39 @@ parseur de Ghost (le lieu se retrouverait colle a la date). Seuls les <p> surviv
 UNE INFO = UN <p>. Ne jamais mettre de <br> dans .kg-product-card-description.
 
 Voir TECH_DOC/SESSIONS/NEWSLETTER/SPEC.md §4.
+
+LE SOMMAIRE ET SES ANCRES — ce qui marche, et OU :
+Le sommaire est une liste a puces ; chaque puce est un lien d'ancre `#evt-N` vers la carte
+de l'evenement plus bas. Les ancres SAUTENT a la bonne section dans la VERSION NAVIGATEUR
+du post (le post web publie, et le lien « Voir dans le navigateur » que Ghost ajoute en tete
+de chaque newsletter). Dans un client mail (Gmail, Outlook, app Apple Mail), les liens
+d'ancre sont INERTES : c'est une limite des clients mail eux-memes, pas de notre HTML. Le
+lecteur passe alors par le « Voir dans le navigateur » de Ghost.
+/ The summary is a bullet list; each bullet is an `#evt-N` anchor to the event's card below.
+Anchors JUMP in the BROWSER version (published web post + Ghost's "View in browser" link).
+In a mail client they are INERT — a mail-client limitation, not ours.
+
+LES CIBLES D'ANCRE PASSENT PAR L'ECHAPPATOIRE HTML, ET C'EST OBLIGE :
+Une carte product native ne porte AUCUN `id` d'ancre — les noeuds Lexical ne conservent pas
+d'`id` arbitraire. La seule facon de poser une cible d'ancre fiable est la carte HTML brute
+`<!--kg-card-begin: html-->…<!--kg-card-end: html-->`, que Ghost preserve VERBATIM. On y met
+un `<div id="evt-N">` vide, juste avant chaque carte. L'`id` est ainsi controle a 100 %
+(`evt-1`, `evt-2`…), sans avoir a reproduire l'algorithme de slug des titres de Ghost.
+/ A native product card carries NO anchor `id`. The only reliable target is a raw HTML card,
+which Ghost preserves verbatim; we drop an empty `<div id="evt-N">` before each card.
 {% endcomment %}<p>{% blocktranslate %}Voici les événements du réseau, du {{ date_debut_affichee }} au {{ date_fin_affichee }}.{% endblocktranslate %}</p>
+{% if fiches %}<h3>{% translate "Au programme" %}</h3>
+<ul>{% for fiche in fiches %}
+  <li><a href="#evt-{{ forloop.counter }}">{{ fiche.nom }}{% if fiche.date_debut %} — {{ fiche.date_debut|date:"j F" }}{% endif %}</a></li>{% endfor %}
+</ul>{% endif %}
 {% for fiche in fiches %}
 <hr>
+{% comment %}
+  La cible d'ancre : un div vide, dans une carte HTML brute pour que son `id` survive a la
+  conversion Lexical de Ghost. Il se place AVANT la carte, pour que le saut atterrisse en
+  haut de l'evenement. / The anchor target: an empty div in a raw HTML card so its `id`
+  survives Ghost's Lexical conversion. Placed BEFORE the card so the jump lands at its top.
+{% endcomment %}<!--kg-card-begin: html--><div id="evt-{{ forloop.counter }}"></div><!--kg-card-end: html-->
 <div class="kg-card kg-product-card">
   <div class="kg-product-card-container">
     {% if fiche.image_url %}<img src="{{ fiche.image_url }}" width="{{ largeur_image }}" height="{{ hauteur_image }}" class="kg-product-card-image" loading="lazy" />{% endif %}

@@ -971,79 +971,53 @@ Use Unfold CSS variables when available: `var(--color-primary-600)`, `var(--colo
 
 ## CHANGELOG Workflow
 
-Every feature, bugfix, or notable change must be documented in `CHANGELOG.md` at the project root.
+Chaque feature, correction ou changement notable produit **un fichier par chantier** dans le dossier `CHANGELOG/` a la racine du projet. Ce fichier fusionne deux besoins autrefois separes (l'entree CHANGELOG **et** la fiche « a tester ») : **une seule ecriture, deux lecteurs**.
+
+### Nommage
+
+`CHANGELOG/YYYY-MM-DD-slug.md` — date du jour + slug court et parlant (`newsletter-sommaire-ancres`, `avoir-credit-note`, `fk-reservation-lignearticle`). Un chantier qui s'etale sur plusieurs jours = on **edite le meme fichier** (on ne le renomme pas, on ne recree pas).
 
 ### Format
 
 ```markdown
-## X. Titre FR / Title EN
+# Titre FR / Title EN
 
-**Quoi / What:** Description courte de ce qui a change.
-**Pourquoi / Why:** Raison du changement.
+**Date :** 2026-07-15
+**Migration :** Non   (si Oui : nom de la migration + commande)
+
+## Resume / Summary
+**Quoi / What :** description courte de ce qui a change (bilingue).
+**Pourquoi / Why :** raison du changement (bilingue).
 
 ### Fichiers modifies / Modified files
 | Fichier / File | Changement / Change |
 |---|---|
-| `module/file.py` | Description du changement |
+| `module/file.py` | Description courte |
 
-### Migration
-- **Migration necessaire / Migration required:** Oui/Non
-- Si oui, nom de la migration et commande
-```
+---
 
-### Regles
-
-1. **Bilingue FR/EN** — chaque section a un titre et des descriptions dans les deux langues
-2. **Numerotation** — les sections sont numerotees (1, 2, 3...) dans l'ordre chronologique inverse (le plus recent en haut)
-3. **Fichiers modifies** — lister tous les fichiers touches avec une description courte du changement
-4. **Flag migration** — toujours indiquer si une migration est necessaire (Oui/Non)
-5. **Mettre a jour a chaque feature** — ne pas attendre la release, documenter au fil de l'eau
-
-## Documentation (A TESTER et DOCUMENTER)
-
-Chaque feature ou correction notable doit avoir un fichier `.md` dans le dossier `A TESTER et DOCUMENTER/` a la racine du projet.
-
-### Objectif
-
-Ce dossier sert de checklist pour le mainteneur :
-- **Ce qui a ete fait** (resume technique)
-- **Comment tester** (scenarios manuels ou commandes)
-- **Scenarios Playwright** si applicable (spec a ecrire ou existant)
-- **Verifications en base** (commandes `manage.py shell` si utile)
-
-### Format type
-
-```markdown
-# Titre de la feature
-
-## Ce qui a ete fait
-Resume technique : quels fichiers, quels changements, pourquoi.
-
-### Modifications
-| Fichier | Changement |
-|---|---|
-| `module/file.py` | Description |
-
-## Tests a realiser
-
-### Test 1 : Scenario nominal
+## Comment tester (a la main) / Manual test
+### Test 1 — scenario nominal
 1. Etape 1
 2. Etape 2
 3. Verification attendue
 
-### Test 2 : Cas limites
+### Test 2 — cas limites
 ...
 
-## Compatibilite
-Notes sur la compatibilite avec l'existant, fallbacks, etc.
+### Verifs DB / Playwright
+- Commandes `docker exec ... manage.py shell` pour verifier en base si pertinent
+- Scenario Playwright a ecrire ou existant
 ```
 
 ### Regles
 
-1. **1 fichier par feature** — nommer clairement (`avoir-credit-note.md`, `fk-reservation-lignearticle.md`)
-2. **Tests reproductibles** — chaque scenario doit pouvoir etre suivi pas a pas
-3. **Commandes DB** — inclure les commandes `docker exec` pour verifier en base si pertinent
-4. **Creer le fichier en meme temps que le code** — pas apres, pas plus tard
+1. **Le `---` separe les deux publics.** Au-dessus : le resume concis, bilingue, chronologique (l'ancienne entree CHANGELOG). En dessous : le detail humain « comment verifier a la main » (l'ancienne fiche « A TESTER »).
+2. **Bilingue FR/EN** pour l'entete (titre + Quoi/Pourquoi). Le detail des tests manuels peut rester en FR.
+3. **Un fichier par chantier**, cree **en meme temps que le code** — pas apres, pas plus tard.
+4. **Flag migration** toujours renseigne (Oui/Non) dans l'entete.
+5. **Vue chronologique** = le prefixe date des noms de fichiers + `git log`. Pas de gros fichier `CHANGELOG.md` unique (supprime), pas de sous-dossier `TEST_OK` (les tests auto sont la garantie ; les scenarios manuels restent une doc de reference).
+6. **Refactoring interne sans impact utilisateur** : creer quand meme le fichier, avec la mention « Refactoring interne / Internal refactoring ».
 
 ## i18n (Traductions FR/EN)
 
@@ -1255,8 +1229,7 @@ Le mainteneur decide. Jamais l'assistant.
 | `get_queryset()` / `get_serializer_class()` | Inline explicit queries and serializer calls | No hidden dispatch |
 | Tailwind classes in Unfold admin | Inline styles or CSS variables | Custom classes not in Unfold bundle |
 | Lancer `makemessages` / `compilemessages` toi-meme | Ecrire les `_()` en FR, puis SIGNALER au mainteneur que le workflow i18n est a lancer | `makemessages` reecrit les deux `.po` en entier et fabrique des fuzzy faux |
-| Skip CHANGELOG entry | Document in CHANGELOG.md | Changes not tracked |
-| Skip "A TESTER" doc | Create .md in A TESTER et DOCUMENTER/ | Features not tested by maintainer |
+| Skip CHANGELOG / oublier la fiche de test | Un fichier `CHANGELOG/YYYY-MM-DD-slug.md` : resume en haut, comment tester en bas (separes par `---`) | Changement non trace + non testable par le mainteneur |
 | `git checkout --`, `git stash`, `git reset --hard` | Alerter le mainteneur, attendre ses instructions | Efface le travail non committe (incident Session 32 : 4h perdues) |
 | `ruff format <fichier-existant>` | `ruff check --fix` (le `--fix` est sans danger ; c'est `format` qui ne l'est pas) | `format` reformate des milliers de lignes pre-existantes non liees a la session |
 

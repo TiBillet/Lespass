@@ -1,0 +1,21 @@
+{% load i18n %}
+{# ---------------------------------------------------------------------- #}
+{# ENCART « ACCES ANTICIPE » (BETA)                                        #}
+{# / Early-access (BETA) notice                                           #}
+{#                                                                        #}
+{# LOCALISATION : Administration/templates/admin/partials/dashboard_beta_notice.html #}
+{#                                                                        #}
+{# Affiche sur les cartes des modules marques BETA (flag "beta": True     #}
+{# dans MODULE_FIELDS). Une petite icone « fiole » + le texte d'appel a   #}
+{# retour d'usage.                                                        #}
+{# Recoit :                                                               #}
+{#   - notice : le texte a afficher (BETA_NOTICE)                         #}
+{#   - testid : prefixe pour le data-testid (optionnel)                   #}
+{# / Shown on BETA modules cards. Receives `notice` and optional `testid`.#}
+{# ---------------------------------------------------------------------- #}
+<div data-testid="{{ testid }}-beta-notice"
+     style="display:flex;gap:.5rem;align-items:flex-start;margin-bottom:.75rem;padding:.5rem .75rem;border-radius:.375rem;background:rgba(124,58,237,.08);border:1px solid rgba(124,58,237,.25)">
+    <span class="material-symbols-outlined" aria-hidden="true"
+          style="font-size:1.1rem;line-height:1.2rem;color:var(--color-primary-600,#7c3aed);flex-shrink:0">science</span>
+    <span style="font-size:.75rem;line-height:1.05rem;color:var(--color-base-600,#4b5563)">{{ notice }}</span>
+</div>

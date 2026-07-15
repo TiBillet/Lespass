@@ -56,10 +56,11 @@ def get_sidebar_navigation(request):
     admin_permission = "ApiBillet.permissions.TenantAdminPermissionWithRequest"
     root_permission = "ApiBillet.permissions.RootPermissionWithRequest"
 
-    # --- Toujours visible : Global information ---
+    # --- Toujours visible : Configuration générale ---
     navigation = [
         {
-            "title": _("Global information"),
+            "title": _("Configuration générale"),
+            "_order": 0.0,  # Famille 0 : pilotage / Family 0: control
             "separator": True,
             "collapsible": True,
             "items": [
@@ -101,7 +102,8 @@ def get_sidebar_navigation(request):
     if configuration.module_pages:
         navigation.append(
             {
-                "title": _("Site web"),
+                "title": _("Site web personnalisé"),
+                "_order": 1.0,  # Famille 1 : vitrine & communication
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -136,7 +138,8 @@ def get_sidebar_navigation(request):
     if configuration.module_adhesion:
         navigation.append(
             {
-                "title": _("Memberships"),
+                "title": _("Adhésion, abonnement et pass"),
+                "_order": 2.1,  # Famille 2 : billetterie & adhesions
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -166,7 +169,8 @@ def get_sidebar_navigation(request):
     if configuration.module_billetterie:
         navigation.append(
             {
-                "title": _("Ticketing"),
+                "title": _("Agenda et Billetterie"),
+                "_order": 2.0,  # Famille 2 : billetterie & adhesions
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -261,7 +265,8 @@ def get_sidebar_navigation(request):
     if configuration.module_federation:
         navigation.append(
             {
-                "title": _("Fédération"),
+                "title": _("Fédération et agenda participatif"),
+                "_order": 1.1,  # Famille 1 : vitrine & communication
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -300,7 +305,8 @@ def get_sidebar_navigation(request):
     if configuration.module_caisse:
         navigation.append(
             {
-                "title": _("Caisse LaBoutik"),
+                "title": _("Caisse & Restaurant"),
+                "_order": 3.0,  # Famille 3 : point de vente
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -400,6 +406,7 @@ def get_sidebar_navigation(request):
         navigation.append(
             {
                 "title": _("Terminaux matériels"),
+                "_order": 3.5,  # Famille 3 : point de vente (materiel)
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -436,7 +443,8 @@ def get_sidebar_navigation(request):
     if configuration.module_monnaie_locale:
         navigation.append(
             {
-                "title": _("Fedow"),
+                "title": _("Monnaies locales, temps et cashless"),
+                "_order": 3.2,  # Famille 3 : point de vente
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -474,12 +482,15 @@ def get_sidebar_navigation(request):
             }
         )
 
-    # --- module_inventaire : Stock et mouvements ---
-    # / --- module_inventaire: Stock and movements ---
-    if configuration.module_inventaire:
+    # --- Inventaire : Stock et mouvements ---
+    # L'inventaire n'est plus un module active a part : il suit la caisse.
+    # Des que « Caisse & Restaurant » est active, la section Inventaire apparait.
+    # / Inventory is no longer a standalone toggle: it follows the POS module.
+    if configuration.module_caisse:
         navigation.append(
             {
                 "title": _("Inventaire"),
+                "_order": 3.1,  # Famille 3 : point de vente
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -506,7 +517,8 @@ def get_sidebar_navigation(request):
     if configuration.module_tireuse:
         navigation.append(
             {
-                "title": _("Tireuses"),
+                "title": _("Tireuses connectées"),
+                "_order": 3.4,  # Famille 3 : point de vente
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -610,7 +622,8 @@ def get_sidebar_navigation(request):
     if configuration.module_kiosk:
         navigation.append(
             {
-                "title": _("Kiosk"),
+                "title": _("Kiosk : borne libre-service"),
+                "_order": 3.3,  # Famille 3 : point de vente
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -632,6 +645,7 @@ def get_sidebar_navigation(request):
         navigation.append(
             {
                 "title": _("Ressources"),
+                "_order": 2.3,  # Famille 2 : billetterie, adhesions & reservations
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -674,6 +688,7 @@ def get_sidebar_navigation(request):
     navigation.append(
         {
             "title": _("Sales & accounting"),
+            "_order": 4.0,  # Famille 4 : comptabilite / Family 4: accounting
             "separator": True,
             "collapsible": True,
             "items": [
@@ -725,7 +740,8 @@ def get_sidebar_navigation(request):
     if configuration.module_crowdfunding:
         navigation.append(
             {
-                "title": _("Contributions"),
+                "title": _("Financement participatif & budgets contributifs"),
+                "_order": 2.2,  # Famille 2 : billetterie & adhesions
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -764,6 +780,7 @@ def get_sidebar_navigation(request):
         navigation.append(
             {
                 "title": _("Newsletter"),
+                "_order": 1.2,  # Famille 1 : vitrine & communication
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -775,55 +792,34 @@ def get_sidebar_navigation(request):
                         ),
                         "permission": admin_permission,
                     },
+                    {
+                        # Brevo : outil d'emailing de la newsletter. Il vit ICI,
+                        # avec le serveur Ghost, et non plus dans « Outils externes ».
+                        # / Brevo: newsletter emailing tool, lives here with Ghost.
+                        "title": _("Brevo"),
+                        "icon": "alternate_email",
+                        "link": _safe_rev(
+                            "staff_admin:BaseBillet_brevoconfig_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
                 ],
             }
         )
 
-    # --- Toujours visible : External tools ---
-    navigation.append(
-        {
-            "title": _("External tools"),
-            "separator": True,
-            "collapsible": True,
-            "items": [
-                {
-                    "title": _("API Key"),
-                    "icon": "api",
-                    "link": _safe_rev(
-                        "staff_admin:BaseBillet_externalapikey_changelist"
-                    ),
-                    "permission": admin_permission,
-                },
-                {
-                    "title": _("Webhook"),
-                    "icon": "webhook",
-                    "link": _safe_rev("staff_admin:BaseBillet_webhook_changelist"),
-                    "permission": admin_permission,
-                },
-                {
-                    "title": _("Formbricks"),
-                    "icon": "list_alt",
-                    "link": _safe_rev(
-                        "staff_admin:BaseBillet_formbricksforms_changelist"
-                    ),
-                    "permission": admin_permission,
-                },
-                {
-                    "title": _("Brevo"),
-                    "icon": "alternate_email",
-                    "link": _safe_rev(
-                        "staff_admin:BaseBillet_brevoconfig_changelist"
-                    ),
-                    "permission": admin_permission,
-                },
-            ],
-        }
-    )
+    # La section « Outils externes » de la sidebar a ete demontee :
+    #   - Cle API + Webhook -> onglets de la page « Paramètres » (UNFOLD["TABS"]).
+    #   - Formbricks -> retire du menu (le ModelAdmin reste enregistre).
+    #   - Brevo -> deplace dans la section « Newsletter » (ci-dessus).
+    # / The sidebar "External tools" section was dismantled: API key + webhook moved
+    # to the Settings page tabs, Formbricks removed from the menu, Brevo moved to
+    # the Newsletter section.
 
     # --- Root seulement : Root Configuration ---
     navigation.append(
         {
             "title": _("Root Configuration"),
+            "_order": 5.0,  # Famille 5 : reseau (root) / Family 5: network (root)
             "separator": True,
             "collapsible": True,
             "items": [
@@ -862,6 +858,30 @@ def get_sidebar_navigation(request):
         }
     )
 
+    # ------------------------------------------------------------------ #
+    # Rangement des sections en FAMILLES (approche « ordre + separateurs ») #
+    # ------------------------------------------------------------------ #
+    # Chaque section porte un champ "_order" = X.Y :
+    #   - X (partie entiere) = la famille (0 = pilotage, 1 = vitrine & com,
+    #     2 = billetterie & adhesions, 3 = point de vente, 4 = comptabilite,
+    #     5 = reseau).
+    #   - Y (partie decimale) = la position DANS la famille.
+    # On trie les sections par "_order", puis on n'affiche le filet separateur
+    # QU'AU DEBUT de chaque famille : les sections d'une meme famille apparaissent
+    # collees (regroupees), et un filet marque le passage a la famille suivante.
+    # Le tri gere aussi les sections absentes (module inactif) sans trou visuel.
+    # Pour changer un regroupement : il suffit d'ajuster les "_order" ci-dessus,
+    # nul besoin de deplacer le code.
+    # / Group sections into families: sort by "_order", show the separator only at
+    # / each family boundary so same-family sections read as one block.
+    navigation.sort(key=lambda section: section.get("_order", 999))
+    famille_precedente = None
+    for section in navigation:
+        famille_courante = int(section.get("_order", 999))
+        section["separator"] = famille_courante != famille_precedente
+        famille_precedente = famille_courante
+        section.pop("_order", None)
+
     return navigation
 
 
@@ -872,22 +892,45 @@ def environment_callback(request):
     return [_("Production"), "primary"]
 
 
+# Texte affiche sur les modules en acces anticipe (BETA).
+# On l'ecrit UNE seule fois ici : il est repris a l'identique sur la carte du
+# dashboard ET dans la fenetre de confirmation d'activation. Un module est
+# marque BETA en posant "beta": True dans son entree ci-dessous.
+# / Notice for early-access (BETA) modules. Written once, reused on the dashboard
+# / card and the activation confirmation modal. Mark a module BETA with "beta": True.
+BETA_NOTICE = _(
+    "BETA ! Attention, en accès anticipé, nous avons besoin de vos retours "
+    "d'usage et vos remontées de bug. Merci de participer à la construction "
+    "de ce commun numérique !"
+)
+
+
+# Ordre des cles = ordre d'affichage des cartes du dashboard.
+# La caisse (module_caisse) est a son rang : elle est rendue par la carte POS
+# unifiee, inseree a cette position par _build_modules_context.
+# La newsletter est en fin de dict : elle n'est PAS dans la grille principale,
+# elle a sa propre carte dans la section « Outils externes ».
+# / Key order = card display order. POS sits at its rank (unified card).
+# / Newsletter is last: it lives in the "External tools" section, not the main grid.
 MODULE_FIELDS = {
+    "module_pages": {
+        "name": _("Site web personnalisé"),
+        "description": _(
+            "Composez des pages publiques en empilant des blocs (hero, texte, "
+            "image, appel à l'action, témoignage). Une page peut devenir la page "
+            "d'accueil du site."
+        ),
+        "testid": "dashboard-card-pages",
+    },
     "module_billetterie": {
-        "name": _("Event ticketing"),
+        "name": _("Agenda et Billetterie"),
         "description": _("Events, reservations, and ticket sales"),
         "testid": "dashboard-card-billetterie",
-        "required": [""]
     },
     "module_adhesion": {
-        "name": _("Membership"),
+        "name": _("Adhésion, abonnement et pass"),
         "description": _("Memberships and subscriptions"),
         "testid": "dashboard-card-adhesion",
-    },
-    "module_crowdfunding": {
-        "name": _("Crowdfunding"),
-        "description": _("Participatory funding and adaptive contributions"),
-        "testid": "dashboard-card-crowdfunding",
     },
     "module_federation": {
         "name": _("Fédération et agenda participatif"),
@@ -898,56 +941,35 @@ MODULE_FIELDS = {
         ),
         "testid": "dashboard-card-federation",
     },
-    "module_pages": {
-        "name": _("Pages / site web"),
-        "description": _(
-            "Composez des pages publiques en empilant des blocs (hero, texte, "
-            "image, appel à l'action, témoignage). Une page peut devenir la page "
-            "d'accueil du site."
-        ),
-        "testid": "dashboard-card-pages",
-    },
-    # Newsletter : desactive par defaut, activable par n'importe quel gestionnaire, comme
-    # les autres modules. Le module pilote une instance Ghost auto-hebergee : il faut donc
-    # un serveur Ghost pour s'en servir. La description le rappelle et invite a contacter
-    # l'equipe TiBillet, qui peut en heberger un.
-    # / Newsletter: OFF by default, enabled by any manager like the other modules. It drives
-    # a self-hosted Ghost instance, so a Ghost server is required; the description says so.
-    "module_newsletter": {
-        "name": _("Newsletter"),
-        "description": _(
-            "Evènements, rappels d'adhésions, résumé de vos activités, "
-            "pilotez votre newsletter avec TiBillet ! Il vous faut un serveur Ghost "
-            "pour piloter vos newsletters : l'équipe de TiBillet peut vous en héberger "
-            "un, contactez-nous !"
-        ),
-        "testid": "dashboard-card-newsletter",
-    },
-    # FROM V2 : TO IMPLEMENT LATER ON
-    "module_monnaie_locale": {
-        "name": _("Local currency & cashless"),
-        "description": _("Local currency tokens, federated wallet"),
-        "testid": "dashboard-card-monnaie-locale",
+    "module_crowdfunding": {
+        "name": _("Financement participatif & budgets contributifs"),
+        "description": _("Participatory funding and adaptive contributions"),
+        "testid": "dashboard-card-crowdfunding",
     },
     "module_caisse": {
-        "name": _("POS & restaurant"),
+        "name": _("Caisse & Restaurant"),
         "description": _("Point of sale, orders, and cash register"),
         "testid": "dashboard-card-caisse",
+        "beta": True,
         "link_url": "/laboutik/caisse/",
         "link_label": _("Open POS"),
         "link_icon": "fa-cash-register",
     },
-    "module_inventaire": {
-        "name": _("Inventory"),
-        "description": _(
-            "Stock management for POS products: tracking, alerts, movements."
-        ),
-        "testid": "dashboard-card-inventaire",
+    "module_monnaie_locale": {
+        "name": _("Monnaies locales, temps et cashless"),
+        "description": _("Local currency tokens, federated wallet"),
+        "testid": "dashboard-card-monnaie-locale",
     },
-    # Tireuses connectees avec paiement NFC (controlvanne)
-    # / Connected beer taps with NFC payment (controlvanne)
+    "module_kiosk": {
+        "name": _("Kiosk : borne libre-service"),
+        "description": _(
+            "Bornes de paiement en autonomie : recharge cashless, Stripe Terminal."
+        ),
+        "testid": "dashboard-card-kiosk",
+        "icon": "storefront",
+    },
     "module_tireuse": {
-        "name": _("Connected taps"),
+        "name": _("Tireuses connectées"),
         "description": _(
             "Connected beer tap management: RFID authorization, flow metering, kiosk display."
         ),
@@ -956,45 +978,64 @@ MODULE_FIELDS = {
         "link_label": _("Open kiosk"),
         "link_icon": "fa-display",
     },
-    # "module_booking": {
-    #     "name": _("Booking"),
-    #     "description": _("Resource booking: rooms, equipment, coworking desks."),
-    #     "testid": "dashboard-card-booking",
-    # },
-    # Kiosk / borne libre-service (Stripe Terminal, paiement autonome)
-    # / Kiosk / self-service (Stripe Terminal, unattended payment)
-    "module_kiosk": {
-        "name": _("Kiosk / borne libre-service"),
+    # Newsletter : hors grille principale, affichee dans la section « Outils externes ».
+    # Pilotee par un serveur Ghost ou Brevo. En acces anticipe (BETA).
+    # / Newsletter: outside the main grid, shown in the "External tools" section.
+    "module_newsletter": {
+        "name": _("Newsletter"),
         "description": _(
-            "Bornes de paiement en autonomie : recharge cashless, Stripe Terminal."
+            "Evènements, rappels d'adhésions, résumé de vos activités : pilotez "
+            "votre newsletter avec TiBillet, à partir des évènements de votre agenda ! "
+            "Propulsée par un serveur Ghost ou par Brevo."
         ),
-        "testid": "dashboard-card-kiosk",
-        "icon": "storefront",
+        "testid": "dashboard-card-newsletter",
+        "beta": True,
     },
 }
 
 
 def _build_modules_context(configuration):
-    """Construit la liste de modules pour le dashboard.
+    """Construit la liste ordonnee des cartes de la grille principale « Modules ».
     Utilise par dashboard_callback et par le toggle HTMX.
 
-    La caisse (module_caisse) est EXCLUE de cette grille : elle est rendue par
-    la carte POS unifiee (_build_pos_card_context), qui fusionne LaBoutik V1,
-    LaBoutik V2 et l'activation du module en une seule carte a 3 etats.
-    / module_caisse is excluded here: it is rendered by the unified POS card."""
+    Chaque carte porte un champ "type" que le gabarit lit pour choisir son rendu :
+      - "pos"     : la carte POS unifiee (LaBoutik V1/V2 + activation), inseree
+                    a la position de module_caisse dans l'ordre de MODULE_FIELDS.
+      - "generic" : une carte a interrupteur simple (les autres modules).
+
+    La newsletter est EXCLUE ici : elle a sa propre carte dans la section
+    « Outils externes » (cf. _build_external_cards_context).
+    / Ordered list of the main "Modules" grid cards. Each card has a "type" the
+    / template reads. The POS card is inserted at module_caisse's rank; the
+    / newsletter is excluded (it belongs to the "External tools" section)."""
     modules = []
     for field_name, info in MODULE_FIELDS.items():
-        # La caisse a sa propre carte (carte POS unifiee). On la saute ici.
-        # / The cash register has its own (unified POS) card; skip it here.
-        if field_name == "module_caisse":
+        # La newsletter est rendue a part, dans « Outils externes ».
+        # / Newsletter is rendered apart, in "External tools".
+        if field_name == "module_newsletter":
             continue
+
+        # La caisse est rendue par la carte POS unifiee, a son rang dans l'ordre.
+        # / The cash register is rendered by the unified POS card, at its rank.
+        if field_name == "module_caisse":
+            pos_card = _build_pos_card_context(configuration)
+            pos_card["type"] = "pos"
+            modules.append(pos_card)
+            continue
+
         modules.append(
             {
+                "type": "generic",
                 "field": field_name,
                 "name": info["name"],
                 "description": info["description"],
                 "testid": info["testid"],
                 "active": getattr(configuration, field_name),
+                # Acces anticipe : la carte affiche l'encart BETA et la modal
+                # d'activation demande une confirmation « J'ai compris et je teste ! ».
+                # / Early access: card shows the BETA notice, modal asks to confirm.
+                "beta": info.get("beta", False),
+                "beta_notice": BETA_NOTICE,
                 "modal_url": reverse(
                     "staff_admin:configuration-module-modal",
                     args=[field_name],
@@ -1005,6 +1046,46 @@ def _build_modules_context(configuration):
             }
         )
     return modules
+
+
+def _build_external_cards_context(configuration):
+    """Cartes de la section « Outils externes » du dashboard.
+    / Cards of the dashboard "External tools" section.
+
+    Deux cartes :
+      - Newsletter : interrupteur du module (Ghost ou Brevo), en acces anticipe (BETA).
+      - Reseaux sociaux : Postiz, pas encore disponible. Carte informative grisee,
+        sans interrupteur (type "coming_soon")."""
+    newsletter_info = MODULE_FIELDS["module_newsletter"]
+    return [
+        {
+            "type": "generic",
+            "field": "module_newsletter",
+            "name": newsletter_info["name"],
+            "description": newsletter_info["description"],
+            "testid": newsletter_info["testid"],
+            "active": configuration.module_newsletter,
+            "beta": newsletter_info.get("beta", False),
+            "beta_notice": BETA_NOTICE,
+            "modal_url": reverse(
+                "staff_admin:configuration-module-modal",
+                args=["module_newsletter"],
+            ),
+            "link_url": None,
+            "link_label": None,
+            "link_icon": None,
+        },
+        {
+            # Postiz : integration reseaux sociaux, pas encore livree.
+            # Carte informative uniquement (grisee, sans interrupteur).
+            # / Postiz: social networks integration, not shipped yet. Info-only card.
+            "type": "coming_soon",
+            "name": _("Réseaux sociaux"),
+            "description": _("Postiz"),
+            "testid": "dashboard-card-postiz",
+            "coming_soon_label": _("En cours de développement"),
+        },
+    ]
 
 
 def _build_pos_card_context(configuration):
@@ -1065,6 +1146,10 @@ def _build_pos_card_context(configuration):
         "testid": "dashboard-card-pos",
         "name": MODULE_FIELDS["module_caisse"]["name"],
         "description": MODULE_FIELDS["module_caisse"]["description"],
+        # Acces anticipe : encart BETA sur la carte + confirmation dans la modal.
+        # / Early access: BETA notice on the card + confirmation in the modal.
+        "beta": MODULE_FIELDS["module_caisse"].get("beta", False),
+        "beta_notice": BETA_NOTICE,
         "state": etat,
         # V1 : lien vers l'interface historique + statut de connexion.
         # / V1: link to the historical interface + connection status.
@@ -1088,10 +1173,13 @@ def dashboard_callback(request, context):
 
     context.update(
         {
+            # Grille principale « Modules » : liste ordonnee, la carte POS unifiee
+            # y est inseree a son rang (type "pos").
+            # / Main "Modules" grid: ordered list, POS card inserted at its rank.
             "modules": _build_modules_context(configuration),
-            # Carte POS unifiee (remplace les anciennes cartes V1/V2 + caisse).
-            # / Unified POS card (replaces the old V1/V2 + cash register cards).
-            "pos_card": _build_pos_card_context(configuration),
+            # Section « Outils externes » : newsletter (Ghost/Brevo) + reseaux sociaux.
+            # / "External tools" section: newsletter (Ghost/Brevo) + social networks.
+            "external_cards": _build_external_cards_context(configuration),
         }
     )
 

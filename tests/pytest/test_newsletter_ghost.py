@@ -940,6 +940,47 @@ class TestRendu:
         assert str(debut.year) in titre
         assert len(titre) > 0
 
+    def test_le_sommaire_liste_chaque_evenement_avec_un_lien_dancre(self):
+        """
+        Le sommaire est une liste a puce ; une puce par evenement, chacune un lien d'ancre
+        `#evt-N` vers la carte plus bas. Les ancres numerotees suivent l'ordre des fiches.
+        """
+        html = rendre_newsletter_html(
+            [_fiche_de_test(nom="Premier"), _fiche_de_test(nom="Second")],
+            timezone.now(),
+            timezone.now(),
+        )
+        # Un sommaire en liste a puce, avant les cartes.
+        debut_sommaire = html.index("<ul>")
+        assert html.index('class="kg-card kg-product-card"') > debut_sommaire
+
+        # Une puce-lien par evenement, dans l'ordre.
+        assert '<a href="#evt-1">Premier' in html
+        assert '<a href="#evt-2">Second' in html
+
+    def test_chaque_carte_a_sa_cible_dancre_en_carte_html_brute(self):
+        """
+        La cible d'ancre passe par l'echappatoire `<!--kg-card-begin: html-->` : une carte
+        product native ne conserve aucun `id`, seule la carte HTML brute survit verbatim.
+        L'`id` de la cible doit correspondre au lien du sommaire (`#evt-N` -> `id="evt-N"`).
+        """
+        html = rendre_newsletter_html(
+            [_fiche_de_test(nom="Premier"), _fiche_de_test(nom="Second")],
+            timezone.now(),
+            timezone.now(),
+        )
+        assert '<!--kg-card-begin: html--><div id="evt-1"></div><!--kg-card-end: html-->' in html
+        assert '<!--kg-card-begin: html--><div id="evt-2"></div><!--kg-card-end: html-->' in html
+
+        # La cible precede la carte qu'elle designe. / The target precedes its card.
+        assert html.index('id="evt-1"') < html.index('class="kg-card kg-product-card"')
+
+    def test_pas_de_sommaire_sans_evenement(self):
+        """Zero fiche : pas de bloc sommaire vide. / No empty summary block."""
+        html = rendre_newsletter_html([], timezone.now(), timezone.now())
+        assert "<ul>" not in html
+        assert "#evt-" not in html
+
 
 # ---------------------------------------------------------------------------
 # L'orchestration : collecte -> rendu -> brouillon Ghost

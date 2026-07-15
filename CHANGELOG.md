@@ -1,5 +1,38 @@
 # Changelog / Journal des modifications
 
+## Newsletter : sommaire à ancres en tête du brouillon / Newsletter: anchored table of contents at the top of the draft
+
+**Date :** 2026-07-15
+**Migration :** **Non**
+
+**Quoi / What :** le brouillon de newsletter commence désormais par un **sommaire « Au programme »** :
+une liste à puce, une puce par évènement, chaque puce étant un **lien d'ancre** (`#evt-N`) vers la
+carte de l'évènement plus bas.
+
+**Pourquoi / Why :** donner au lecteur une vue d'ensemble scannable en tête de newsletter, et un
+accès direct à chaque évènement.
+
+**Où ça marche / Where it works :** les ancres sautent à la bonne section dans la **version
+navigateur** (post web publié + lien « Voir dans le navigateur » que Ghost ajoute automatiquement).
+Dans un client mail (Gmail, Outlook, app Apple Mail), **les liens d'ancre sont inertes** — c'est une
+limite des clients mail eux-mêmes (confirmée par un modérateur Ghost), pas de notre HTML. Baker une
+URL absolue vers le post ne fiabiliserait pas l'email : un **brouillon n'a pas d'URL publique
+stable** (inaccessible tant qu'il n'est pas publié, slug modifiable à la publication).
+
+**Comment / How :** une carte product native ne conserve aucun `id` d'ancre. Les cibles passent donc
+par l'échappatoire `<!--kg-card-begin: html-->` (carte HTML brute préservée verbatim par Ghost) : un
+`<div id="evt-N">` vide avant chaque carte. L'`id` est ainsi contrôlé à 100 %, sans reproduire
+l'algorithme de slug des titres de Ghost.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `newsletter/templates/newsletter/email_evenements.html` | Sommaire à puce + liens `#evt-N` ; cible d'ancre en carte HTML brute avant chaque carte product |
+| `tests/pytest/test_newsletter_ghost.py` | 3 tests : sommaire, cibles d'ancre, pas de sommaire à vide |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+
 ## Newsletter : activation ouverte à tous les gestionnaires / Newsletter: activation opened to every manager
 
 **Date :** 2026-07-15
