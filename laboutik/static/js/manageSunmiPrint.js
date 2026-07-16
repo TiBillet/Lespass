@@ -156,7 +156,7 @@ async function initWebsocket() {
           }
         }
       } catch (error) {
-        console.log("-> wsHandlerMessag, erreur :", error)
+        console.log("-> wsHandlerMessag (sunmi ws), erreur :", error)
       }
     }
 
@@ -168,7 +168,7 @@ async function initWebsocket() {
 
     // Connection ws ok
     wsTerminal.socket.addEventListener("open", (event) => {
-      console.log("-> connection websocket -", new Date())
+      console.log("-> connection sunmi websocket -", new Date())
       wsTerminal.on = true
     })
 
@@ -180,7 +180,7 @@ async function initWebsocket() {
 
     // connection hs
     wsTerminal.socket.addEventListener("close", (event) => {
-      console.log("Connexion websocket perdue. Reconnexion dans 3 secondes...")
+      console.log("Connexion sunmi websocket perdue. Reconnexion dans 3 secondes...")
       // supprime le websocket terminal en cours
       wsTerminal = null
       setTimeout(initWebsocket, 3000)
@@ -188,7 +188,7 @@ async function initWebsocket() {
 
     // erreurs
     wsTerminal.socket.addEventListener("error", (event) => {
-      console.error("Erreur websocket.")
+      console.error("Erreur sunmi websocket.")
       // Déclenche la reconnexion via onclose
       wsTerminal.socket.close()
     })
