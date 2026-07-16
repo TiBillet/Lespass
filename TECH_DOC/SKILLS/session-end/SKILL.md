@@ -213,11 +213,12 @@ le mettre a jour plutot que d'en creer un nouveau.
 
 Mettre a jour ces fichiers dans cet ordre :
 
-### 8a. `CHANGELOG.md`
-- Ajouter une entree en haut du fichier (ordre ante-chronologique)
-- Suivre le format existant : Date, Migration (oui/non), Quoi/What, Pourquoi/Why, tableau des fichiers modifies
-- Bilingue FR/EN
-- Si la session n'a produit que du refactoring interne sans impact utilisateur, noter quand meme avec la mention "Refactoring interne / Internal refactoring"
+### 8a. `CHANGELOG/YYYY-MM-DD-slug.md` (un fichier par chantier)
+- Creer **un fichier par chantier** dans le dossier `CHANGELOG/` (pas de gros `CHANGELOG.md` unique).
+- Format (voir skill `djc`) : entete `Date` + `Migration` (oui/non), section `Resume` bilingue (Quoi/What, Pourquoi/Why, tableau des fichiers modifies), puis **`---`**, puis `## Comment tester (a la main)` avec les scenarios manuels + verifs DB/Playwright.
+- Le `---` separe le resume (chrono, bilingue) du detail humain « comment verifier ».
+- Un chantier deja ouvert dans la session = editer son fichier existant, ne pas en recreer un.
+- Si la session n'a produit que du refactoring interne sans impact utilisateur, creer quand meme le fichier avec la mention "Refactoring interne / Internal refactoring".
 
 ### 8b. `laboutik/doc/PLAN_LABOUTIK.md`
 - Mettre a jour les sections concernees par le travail de la session

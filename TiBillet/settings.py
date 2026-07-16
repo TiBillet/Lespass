@@ -608,6 +608,34 @@ UNFOLD = {
                 },
             ],
         },
+        {
+            # Onglets de la page « Paramètres » : la Configuration du lieu, les clés
+            # API et les webhooks partagent la meme barre d'onglets. Ces trois modeles
+            # n'ont pas de lien de base de donnees entre eux : ce ne sont donc PAS des
+            # inlines, mais des onglets de navigation (fonctionnalite Unfold "TABS").
+            # / "Settings" page tabs: venue Configuration, API keys and webhooks share
+            # one tab bar. No DB relation between them, so these are Unfold navigation
+            # tabs (not inlines).
+            "models": [
+                "BaseBillet.configuration",
+                "BaseBillet.externalapikey",
+                "BaseBillet.webhook",
+            ],
+            "items": [
+                {
+                    "title": _("Paramètres"),
+                    "link": reverse_lazy("staff_admin:BaseBillet_configuration_changelist"),
+                },
+                {
+                    "title": _("Clés API"),
+                    "link": reverse_lazy("staff_admin:BaseBillet_externalapikey_changelist"),
+                },
+                {
+                    "title": _("Webhooks"),
+                    "link": reverse_lazy("staff_admin:BaseBillet_webhook_changelist"),
+                },
+            ],
+        },
     ],
     "SIDEBAR": {
         "show_search": True, #  Search in applications and models names

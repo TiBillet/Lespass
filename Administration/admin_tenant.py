@@ -1,6 +1,6 @@
 from Administration.admin.dashboard import (  # noqa: F401
     dashboard_callback, environment_callback, get_sidebar_navigation,
-    MODULE_FIELDS, _build_modules_context, adhesion_badge_callback,
+    MODULE_FIELDS, BETA_NOTICE, _build_modules_context, adhesion_badge_callback,
 )
 
 from Administration.admin.help_messages_dictionnary import HELP_MESSAGES_DICT
@@ -495,7 +495,12 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
 
         configuration = Configuration.get_solo()
         is_active = getattr(configuration, field_name)
-        module_name = str(MODULE_FIELDS[field_name]["name"])
+        module_info = MODULE_FIELDS[field_name]
+        module_name = str(module_info["name"])
+        # Module en acces anticipe : la modal affiche l'encart BETA et le bouton
+        # de confirmation devient « J'ai compris et je teste ! ».
+        # / Early-access module: modal shows the BETA notice and a dedicated button.
+        is_beta = module_info.get("beta", False)
 
         toggle_url = reverse(
             'staff_admin:configuration-module-toggle',
@@ -507,6 +512,8 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
             {
                 "module_name": module_name,
                 "is_active": is_active,
+                "is_beta": is_beta,
+                "beta_notice": BETA_NOTICE,
                 "toggle_url": toggle_url,
                 "csrf_token": request.META.get("CSRF_COOKIE", ""),
             },
