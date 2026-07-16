@@ -89,11 +89,12 @@
             {% for price in event.published_prices %}
                 <div class="p-3 js-order" data-testid="booking-price-{{ price.uuid }}">
                     <label for="amount-{{ price.uuid }}" class="form-label">
-                        <strong>{{ price.name }}</strong>{% if not price.free_price and price.prix > 0 %}&nbsp;:
+                        <strong>{{ price.name }}</strong>
+                        {% if not price.free_price and price.prix > 0 %}&nbsp;:
                         <span class="js-order-price">{{ price.prix }}</span>&nbsp;€
-                    {% elif price.free_price %}
+                        {% elif price.free_price %}
                         <span class="js-order-price-alt d-none">{% trans 'at an open price' %}</span>
-                    {% endif %}
+                        {% endif %}
                     </label>
                     {% if price.product|in_list:product_max_per_user_reached %}
                         <div class="alert alert-danger" role="alert">

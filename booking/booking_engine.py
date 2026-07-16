@@ -433,8 +433,9 @@ def validate_new_booking(resource,
                          reference_now=None,
                          promo_code: PromotionalCode = None,
                          create_checkout: bool = True,
-                         first_name:str = None,
-                         last_name:str = None,
+                         first_name: str = None,
+                         last_name: str = None,
+                         custom_amount: Decimal = None
                          ):
     """
     Valide B ⊆ E' et crée la réservation dans une transaction SERIALIZABLE.
@@ -606,7 +607,13 @@ def validate_new_booking(resource,
                     _("Price amount is missing for resource booking.")
                 )
 
-            amount = Decimal(slot_duration_minutes) / Decimal(60) * Decimal(slot_count) * Decimal(price.prix)
+            price_to_compute = price.prix
+            if price.free_price:
+                if not custom_amount:
+                    raise serializers.ValidationError(_("Custom amount is required for free price."))
+                price_to_compute = custom_amount
+
+            amount = Decimal(slot_duration_minutes) / Decimal(60) * Decimal(slot_count) * Decimal(price_to_compute)
             price_sold = get_or_create_price_sold(price=price, promo_code=promo_code, custom_amount=amount)
 
 

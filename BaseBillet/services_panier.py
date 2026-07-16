@@ -799,14 +799,14 @@ class PanierSession:
             if custom_amount is None:
                 raise InvalidItemError(_("An amount is required for the free price."))
             try:
-                amount_dec = Decimal(str(custom_amount))
+                custom_amount_dec = Decimal(str(custom_amount))
             except Exception:
                 raise InvalidItemError(_("Invalid amount."))
-            if price.prix and amount_dec < price.prix:
+            if price.prix and custom_amount_dec < price.prix:
                 raise InvalidItemError(
                     _("The amount must be greater than or equal to the minimum.")
                 )
-            if amount_dec > Decimal("999999.99"):
+            if custom_amount_dec > Decimal("999999.99"):
                 raise InvalidItemError(_("The amount is too high."))
 
         # Validation 6 : disponibilité du créneau
@@ -899,15 +899,22 @@ class PanierSession:
         clean_firstname = (firstname or '').strip()
         clean_lastname = (lastname or '').strip()
 
+        price_to_compute = price.prix
+        if price.free_price:
+            price_to_compute = custom_amount_dec
+
+        total_estimation = Decimal(slot_duration_minutes) / Decimal(60) * Decimal(slot_count) * Decimal(price_to_compute)
+
+
         item = {
             'type': 'resource',
             'price_uuid': str(price.uuid),
             'start_datetime': str(start_datetime),
             'slot_duration_minutes': str(slot_duration_minutes),
             'slot_count': str(slot_count),
-            'total_estimation' : str(Decimal(slot_duration_minutes) / Decimal(60) * Decimal(slot_count) * Decimal(price.prix)),
+            'total_estimation' : str(total_estimation),
             'resource_uuid': str(resource_uuid),
-            'custom_amount': str(custom_amount) if custom_amount is not None else None,
+            'custom_amount': str(custom_amount_dec) if custom_amount_dec is not None else None,
             'options': [str(o) for o in (options or [])],
             'custom_form': dict(custom_form or {}),
             'firstname': clean_firstname,
@@ -1060,11 +1067,13 @@ class PanierSession:
 
             if price.free_price and item.get('custom_amount'):
                 amount_eur = Decimal(str(item['custom_amount']))
-            elif item.get('type') == "resource":
-                # Calcul customisé pour les ressources, comme c'est un taux horaires
-                amount_eur = float(item.get("slot_duration_minutes")) / 60 * float(item.get("slot_count")) * float(price.prix)
             else:
                 amount_eur = price.prix or Decimal("0.00")
+
+            if item.get('type') == "resource":
+                # Calcul customisé pour les ressources, comme c'est un taux horaires
+                amount_eur = Decimal(item.get('total_estimation'))
+
             qty = int(item.get('qty', 1))
             total += int(amount_eur * qty * 100)
         return total

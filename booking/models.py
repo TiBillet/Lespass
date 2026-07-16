@@ -90,6 +90,9 @@ class Resource(models.Model):
         verbose_name = _('Resource')
         verbose_name_plural = _('Resources')
 
+    def published_prices(self):
+        return self.product.prices.filter(publish=True)
+
     def __str__(self):
         return self.product.name
 

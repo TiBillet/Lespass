@@ -55,7 +55,7 @@
             <div class="fw-semibold">{{ detail.resource.product.name }} - {{ detail.hours }}h à partir du {{ detail.start_datetime }} </div>
             <small class="text-muted">
                 {% trans "Resource" %} &middot; {{ detail.price.name }}
-                {% if detail.price.prix and detail.price.free_price %}
+                {% if detail.price and detail.price.free_price %}
                     &middot; {{ detail.custom_amount }} €/h
                 {% elif detail.price.prix and not detail.price.free_price %}
                     &middot; {{ detail.price.prix }} €/h
@@ -63,7 +63,11 @@
                 &middot;
                 {{ detail.slot_count }} slot de {{ detail.slot_duration_minutes }}min
                 &middot;
-                {{ detail.hours }}h * {{ detail.price.prix }}€/h = {{ detail.total_estimation }}€
+                {% if detail.price and detail.price.free_price %}
+                    {{ detail.hours }}h * {{ detail.custom_amount }}€/h = {{ detail.total_estimation }}€
+                {% elif True %}
+                    {{ detail.hours }}h * {{ detail.price.prix }}€/h = {{ detail.total_estimation }}€
+                {% endif %}
             </small>
         </div>
 

@@ -89,7 +89,7 @@ def is_membership(user, membership_product) -> bool:
         return user.memberships.filter(
             price__product__in=membership_product.all(),
             deadline__gte=timezone.now(),
-            state__in=[Membership.PAID_BY_USER, Membership.NO_ADMIN_VALID]
+            status__in=[Membership.ONCE, Membership.AUTO, Membership.ADMIN]
         ).exists()
     return user.memberships.filter(price__product=membership_product, deadline__gte=timezone.now()).exists()
 

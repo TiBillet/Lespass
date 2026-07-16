@@ -88,7 +88,8 @@ DEPENDENCIES :
     Formulaire de confirmation.
     / Confirmation form.
     -->
-    <form method="post"
+    <form id="booking-form"
+          method="post"
           action="{% url 'booking-book' pk=resource.pk %}"
           data-testid="booking-confirm-form"
           hx-post="{% url 'booking-book' pk=resource.pk %}"
@@ -101,26 +102,257 @@ DEPENDENCIES :
         / Price selection.
         -->
         <div class="mb-3">
-            <h4 class="h6">{% translate "Tarif" %}</h4>
-            {% for price in resource.product.prices.all %}
-                <div class="form-check mb-2">
-                    <input id="price-{{ price.uuid }}"
-                           class="form-check-input"
-                           type="radio"
-                           name="price"
-                           value="{{ price.uuid }}"
-                           required
-                           {% if forloop.first %}checked{% endif %}
-                           data-testid="booking-price-{{ price.uuid }}">
-                    <label class="form-check-label" for="price-{{ price.uuid }}">
-                        {{ price.name }} - {{ price.prix }}€
-                    </label>
-                </div>
-            {% empty %}
-                <div class="alert alert-warning" role="alert" data-testid="booking-no-price-msg">
-                    {% translate "Aucun tarif disponible pour cette ressource." %}
-                </div>
-            {% endfor %}
+            <h4 class="h6">{% translate "Tarifs" %} : </h4>
+                {% for price in resource.published_prices %}
+                    <div class="p-3 js-order" data-testid="booking-price-{{ price.uuid }}">
+                        <label for="amount-{{ price.uuid }}" class="form-label">
+                            <strong>{{ price.name }}</strong>
+                            {% if not price.free_price and price.prix > 0 %}&nbsp;:
+                                <span class="js-order-price">{{ price.prix }}</span>&nbsp;€ {% if resource.slot_type == resource.HOUR %} /h {% endif %}
+                            {% elif price.free_price %}
+                                <span class="js-order-price-alt d-none">{% trans 'at an open price' %}</span>
+                            {% endif %}
+                        </label>
+                        {% if price.product|in_list:product_max_per_user_reached %}
+                            <div class="alert alert-danger" role="alert">
+                                {% trans "You have reached the maximum number of reservations possible for this event." %}
+                            </div>
+                        {% elif price|in_list:price_max_per_user_reached %}
+                            <div class="alert alert-danger" role="alert">
+                                {% trans "You have reached the maximum number of reservations possible for this price." %}
+                            </div>
+                        {% elif price|price_out_of_stock:event %}
+                            <div class="alert alert-danger" role="alert">
+                                {% trans "This price is no longer available." %}
+                            </div>
+                        {% elif price.adhesions_obligatoires.exists %}
+                            {% with is_in_cart=price.adhesions_obligatoires.all|in_cart:panier.adhesions_product_ids %}
+                                {% if is_in_cart %}
+                                    {# --- Adhesion requise est dans le panier → tarif selectionnable --- #}
+                                    {# --- Required membership in cart → rate selectable --- #}
+                                    <div class="alert alert-info small py-2 mb-2" role="alert">
+                                        <i class="bi bi-bag-check me-1" aria-hidden="true"></i>
+                                        {% trans "Accessible via the membership in your cart." %}
+                                    </div>
+
+                                    <div class="form-check me-3">
+                                        <input id="price-{{ price.uuid }}"
+                                               class="form-check-input {% if price.free_price %}free-price-radio{% endif %}"
+                                               type="radio" name="price"
+                                               value="{{ price.uuid }}"
+                                               required
+                                               {% if price.out_of_stock or price|in_list:price_max_per_user_reached %}disabled{% endif %}
+                                               {% if published_prices_count == 1 %}checked{% endif %}
+                                               {% if price.free_price %}data-target="custom-amount-container-{{ price.uuid }}"{% endif %}
+                                               data-testid="membership-price-{{ price.uuid }}">
+                                        <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}"
+                                               for="price-{{ price.uuid }}">
+                                            {% if price.free_price %}
+                                                {{ price.name }}
+                                            {% else %}
+                                                {{ price.name }} - {{ price.prix }}€ {% if resource.slot_type == resource.HOUR %} /h {% endif %}
+                                            {% endif %}
+                                            {% if price.out_of_stock %}({% trans "Out of stock." %}){% endif %}
+                                            {% if price|in_list:price_max_per_user_reached %}
+                                                <div class="alert alert-danger mt-1" role="alert">
+                                                    {% trans "You have reached the maximum number of subscriptions possible for this rate." %}
+                                                </div>
+                                            {% endif %}
+                                        </label>
+                                    </div>
+                                {% elif not user.is_authenticated %}
+                                    <div class="alert alert-danger" role="alert">
+                                        {% trans "Log in to access this rate." %}
+                                    </div>
+                                {% elif not user|is_membership:price.adhesions_obligatoires %}
+                                    <!-- Adhésion obligatoire pour selectionner ce produit ! -->
+                                    <div class="alert alert-info" role="alert">
+                                        {% trans "You must have" %}
+                                        {% for adhesion in price.adhesions_obligatoires.all %}
+                                            <a href="/memberships/?open={{ adhesion.uuid }}">{{ adhesion.name }}</a>{% if not forloop.last %}
+                                            {% trans "or" %}{% endif %}
+                                        {% endfor %}
+                                        {% trans "to book this rate." %}
+                                    </div>
+                                {% else %}
+                                    <span class="d-flex align-items-baseline gap-3"></span>
+                                    <div class="form-check me-3">
+                                        <input id="price-{{ price.uuid }}"
+                                               class="form-check-input {% if price.free_price %}free-price-radio{% endif %}"
+                                               type="radio" name="price"
+                                               value="{{ price.uuid }}"
+                                               required
+                                               {% if price.out_of_stock or price|in_list:price_max_per_user_reached %}disabled{% endif %}
+                                               {% if published_prices_count == 1 %}checked{% endif %}
+                                               {% if price.free_price %}data-target="custom-amount-container-{{ price.uuid }}"{% endif %}
+                                               data-testid="membership-price-{{ price.uuid }}">
+                                        <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}"
+                                               for="price-{{ price.uuid }}">
+                                            {% if price.free_price %}
+                                                {{ price.name }}
+                                            {% else %}
+                                                {{ price.name }} - {{ price.prix }}€ {% if resource.slot_type == resource.HOUR %} /h {% endif %}
+                                            {% endif %}
+                                            {% if price.out_of_stock %}({% trans "Out of stock." %}){% endif %}
+                                            {% if price|in_list:price_max_per_user_reached %}
+                                                <div class="alert alert-danger mt-1" role="alert">
+                                                    {% trans "You have reached the maximum number of subscriptions possible for this rate." %}
+                                                </div>
+                                            {% endif %}
+                                        </label>
+                                    </div>
+                                {% endif %}
+                            {% endwith %}
+                        {% else %}
+                            <div class="form-check me-3">
+                                <input id="price-{{ price.uuid }}"
+                                       class="form-check-input {% if price.free_price %}free-price-radio{% endif %}"
+                                       type="radio" name="price"
+                                       value="{{ price.uuid }}"
+                                       required
+                                       {% if price.out_of_stock or price|in_list:price_max_per_user_reached %}disabled{% endif %}
+                                       {% if published_prices_count == 1 %}checked{% endif %}
+                                       {% if price.free_price %}data-target="custom-amount-container-{{ price.uuid }}"{% endif %}
+                                       data-testid="membership-price-{{ price.uuid }}">
+                                <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}"
+                                       for="price-{{ price.uuid }}">
+                                    {% if price.free_price %}
+                                        {{ price.name }}
+                                    {% else %}
+                                        {{ price.name }} - {{ price.prix }}€ {% if resource.slot_type == resource.HOUR %} /h {% endif %}
+                                    {% endif %}
+                                    {% if price.out_of_stock %}({% trans "Out of stock." %}){% endif %}
+                                    {% if price|in_list:price_max_per_user_reached %}
+                                        <div class="alert alert-danger mt-1" role="alert">
+                                            {% trans "You have reached the maximum number of subscriptions possible for this rate." %}
+                                        </div>
+                                    {% endif %}
+                                </label>
+                            </div>
+                        {% endif %}
+
+                        {% if price.free_price %}
+                            <div id="custom-amount-container-{{ price.uuid }}"
+                                 class="custom-amount-container mt-3 p-3 border border-primary-subtle rounded bg-body-tertiary"
+                                 style="display: none;"
+                                 data-testid="booking-custom-amount-container-{{ price.uuid }}">
+                                <input id="custom_amount-{{ price.uuid }}"
+                                       class="form-control form-control-lg custom-amount-input js-order-custom-price"
+                                       type="number"
+                                       name="custom_amount_{{ price.uuid }}"
+                                        {# unlocalize : en locale FR, min="5,00" (virgule) est invalide en HTML #}
+                                        {# / unlocalize: in FR locale, min="5,00" (comma) is invalid HTML #}
+                                       min="{{ price.prix|unlocalize }}"
+                                       max="999999.99"
+                                       step="0.10"
+                                       placeholder="{% trans "Enter the amount (minimum" %} {{ price.prix }}€)"
+                                       aria-describedby="custom-amount-help-{{ price.uuid }}"
+                                       data-testid="booking-custom-amount-{{ price.uuid }}">
+                                <div class="invalid-feedback"
+                                     id="custom-amount-error-{{ price.uuid }}"
+                                     data-testid="booking-custom-amount-error-{{ price.uuid }}"></div>
+                                <small id="custom-amount-help-{{ price.uuid }}" class="form-text text-muted">
+                                    {% trans "Enter the desired amount per hour" %}
+                                </small>
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+
+            <script>
+                (function () {
+                    const form = document.getElementById('booking-form');
+                    if (!form) return;
+
+                    // Validate before HTMX sends the request
+                    form.addEventListener('htmx:configRequest', function (event) {
+
+                        // Validation du prix libre
+                        let okFreePrice = true;
+                        const selectedRadio = form.querySelector('input[name="price"]:checked') || form.querySelector('input[name="price"][type="hidden"]');
+                        if (selectedRadio && (selectedRadio.classList.contains('free-price-radio') || selectedRadio.type === 'hidden')) {
+                            // On cherche l'input custom_amount correspondant au prix sélectionné
+                            // Si c'est un input hidden (un seul prix), on prend le premier .custom-amount-input qu'on trouve
+                            const container = selectedRadio.type === 'hidden' ?
+                                form.querySelector('.custom-amount-input')?.closest('.bg-body-tertiary') :
+                                document.getElementById(selectedRadio.getAttribute('data-target'));
+
+                            if (container) {
+                                const input = container.querySelector('.custom-amount-input');
+                                if (input && !input.value) {
+                                    okFreePrice = false;
+                                    input.classList.add('is-invalid');
+                                    input.focus();
+                                } else if (input && parseFloat(input.value) > 999999.99) {
+                                    // Montant trop élevé / Amount too high
+                                    okFreePrice = false;
+                                    input.classList.add('is-invalid');
+                                    input.focus();
+                                } else if (input) {
+                                    input.classList.remove('is-invalid');
+                                }
+                            }
+                        }
+
+                        if (!(okFreePrice)) {
+                            event.preventDefault();
+                        }
+                    });
+
+                    // Gestion de l'affichage des inputs de prix libre
+                    const allRadios = form.querySelectorAll('input[name="price"]');
+                    const customAmountContainers = form.querySelectorAll('.custom-amount-container');
+
+                    function updateCustomAmounts() {
+                        customAmountContainers.forEach(container => {
+                            container.style.display = 'none';
+                            const input = container.querySelector('.custom-amount-input');
+                            if (input) {
+                                input.required = false;
+                                input.value = ''; // Reset value when hidden
+                            }
+                        });
+
+                        const selectedRadio = form.querySelector('input[name="price"]:checked');
+                        if (selectedRadio && selectedRadio.classList.contains('free-price-radio')) {
+                            const targetId = selectedRadio.getAttribute('data-target');
+                            const targetContainer = document.getElementById(targetId);
+                            if (targetContainer) {
+                                targetContainer.style.display = 'block';
+                                const input = targetContainer.querySelector('.custom-amount-input');
+                                if (input) input.required = true;
+                            }
+                        }
+                    }
+
+                    allRadios.forEach(radio => {
+                        radio.addEventListener('change', updateCustomAmounts);
+                    });
+
+                    // Appel initial pour régler l'affichage au chargement
+                    updateCustomAmounts();
+                })();
+            </script>
+
+{#            {% for price in resource.product.prices.all %}#}
+{#                <div class="form-check mb-2">#}
+{#                    <input id="price-{{ price.uuid }}"#}
+{#                           class="form-check-input"#}
+{#                           type="radio"#}
+{#                           name="price"#}
+{#                           value="{{ price.uuid }}"#}
+{#                           required#}
+{#                           {% if forloop.first %}checked{% endif %}#}
+{#                           data-testid="booking-price-{{ price.uuid }}">#}
+{#                    <label class="form-check-label" for="price-{{ price.uuid }}">#}
+{#                        {{ price.name }} - {{ price.prix }}€#}
+{#                    </label>#}
+{#                </div>#}
+{#            {% empty %}#}
+{#                <div class="alert alert-warning" role="alert" data-testid="booking-no-price-msg">#}
+{#                    {% translate "Aucun tarif disponible pour cette ressource." %}#}
+{#                </div>#}
+{#            {% endfor %}#}
         </div>
 
         <!--

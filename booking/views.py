@@ -667,6 +667,9 @@ class BookingViewSet(viewsets.ViewSet):
         firstname = request.POST.get("firstname", None)
         lastname = request.POST.get("lastname", None)
 
+        custom_amount = request.POST.get(f"custom_amount_{price_uuid}", None)
+
+
         is_valid, result, checkout_url = validate_new_booking(
             resource=resource,
             start_datetime=start_datetime,
@@ -676,7 +679,8 @@ class BookingViewSet(viewsets.ViewSet):
             price=price,
             first_name=firstname,
             last_name=lastname,
-            external_payment_method=PaymentMethod.STRIPE_NOFED
+            external_payment_method=PaymentMethod.STRIPE_NOFED,
+            custom_amount=custom_amount
         )
 
         if is_valid:

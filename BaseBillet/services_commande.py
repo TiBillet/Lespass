@@ -339,6 +339,7 @@ class CommandeService:
                     create_checkout = False,
                     last_name=resolved_lastname,
                     first_name=resolved_firstname,
+                    custom_amount=Decimal(item.get('custom_amount')),
                 )
                 if not is_valid:
                     raise CommandeServiceError(_("Booking not valide : ") + result)
