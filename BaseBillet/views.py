@@ -135,6 +135,7 @@ def get_context(request):
     # context_cached = cache.get(f'get_context_{connection.tenant.uuid}')
     # if context_cached:
     #     return context_cached
+    from django.conf import settings
 
     config = Configuration.get_solo()
     crowd_config = CrowdConfig.get_solo()
@@ -169,6 +170,11 @@ def get_context(request):
         "config": config,
         "crowd_config": crowd_config,
         "meta_url": meta_url,
+        # Cle MapTiler pour les fonds de carte (vide -> repli OSM France HOT).
+        # Utilisee par la carte de la page event (geoloc.html), meme fond que la
+        # carto federation. / MapTiler key for basemaps (empty -> OSM France HOT
+        # fallback). Used by the event page map, same basemap as the federation map.
+        "maptiler_key": settings.MAPTILER_KEY,
         "header": True,
         # "tenant": connection.tenant,
         "formbricks_api_host": formbricks_config.api_host,

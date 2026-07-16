@@ -2127,6 +2127,19 @@ class PostalAddressAdmin(ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
+    def save_model(self, request, obj, form, change):
+        # Une seule adresse principale par lieu. Cocher "adresse principale" ici
+        # decoche automatiquement toutes les autres : la derniere cochee gagne.
+        # La requete tourne dans le schema du tenant courant -> portee par tenant.
+        # / Only one main address per venue. Ticking "main address" here silently
+        # unticks all the others: the last one ticked wins. The query runs in the
+        # current tenant schema, so it is naturally tenant-scoped.
+        super().save_model(request, obj, form, change)
+        if obj.is_main:
+            PostalAddress.objects.exclude(pk=obj.pk).filter(is_main=True).update(
+                is_main=False
+            )
+
 
 ##### EVENT ADMIN
 

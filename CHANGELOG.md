@@ -1,5 +1,46 @@
 # Changelog / Journal des modifications
 
+## Carte page event : même fond que le réseau + une seule adresse principale / Event page map: same basemap as the network + a single main address
+
+**Date :** 2026-07-16
+**Migration :** **Non**
+
+### 1. La carte de la page évènement n'affichait plus les tuiles (403)
+
+**Quoi / What :** sur la page d'un évènement, le bouton « Voir la carte » ouvrait
+une carte qui restait parfois grise (tuiles non chargées), surtout sur Firefox.
+
+**Pourquoi / Why :** le partial `geoloc.html` chargeait Leaflet depuis le CDN
+**unpkg** et demandait ses tuiles à `tile.openstreetmap.org` — serveur à politique
+d'usage stricte qui renvoie des **403** selon l'origine/referer du navigateur (d'où
+la différence Firefox / Chrome). On sert désormais **Leaflet vendoré** en local et
+le **même fond de carte que la carto réseau** (`/federation/`) : MapTiler si une clé
+`MAPTILER_KEY` est configurée, sinon les tuiles **OpenStreetMap France (HOT)**, en
+français, sans clé API, qui ne bloquent pas.
+
+### 2. Une seule adresse principale par lieu
+
+**Quoi / What :** dans l'admin des adresses postales, on pouvait cocher « adresse
+principale » (`is_main`) sur plusieurs adresses à la fois.
+
+**Pourquoi / Why :** cocher une adresse comme principale **décoche désormais
+automatiquement** les autres (la dernière cochée gagne). Une seule adresse
+principale reste garantie par lieu, sans message d'erreur bloquant.
+
+### Fichiers modifiés / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/templates/reunion/views/event/partial/geoloc.html` | Leaflet vendoré + fond MapTiler / OSM France HOT au lieu d'unpkg + tile.openstreetmap.org |
+| `BaseBillet/views.py` | `get_context()` expose `maptiler_key` (dispo pour toutes les pages) |
+| `Administration/admin_tenant.py` | `PostalAddressAdmin.save_model()` : cocher `is_main` décoche les autres |
+| `tests/pytest/test_event_map_tiles.py` | Nouveau — le partial carte utilise le bon fond, plus unpkg/tile.openstreetmap.org |
+| `tests/pytest/test_postal_address_is_main.py` | Nouveau — une seule adresse principale après bascule |
+
+### Migration
+
+- **Migration nécessaire / Migration required :** Non
+
 ## Carte du réseau : les événements d'un lieu redeviennent accessibles / Network map: a venue's events are reachable again
 
 **Date :** 2026-07-14
