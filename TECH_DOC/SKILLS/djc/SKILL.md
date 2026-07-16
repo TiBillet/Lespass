@@ -1170,31 +1170,32 @@ in your final report and STOP.
 Ne jamais se contenter d'un bullet "NEVER execute git commands" au
 milieu d'une liste de 10 regles — le subagent peut le rater.
 
-### `ruff format` est destructif sur les fichiers existants
+### `ruff format` ET `ruff check --fix` sont dangereux sur les fichiers existants
 
-`ruff format <fichier>` reformate **tout** le fichier, pas juste les
-lignes que la session a modifiees. Sur un fichier de plusieurs
-milliers de lignes pre-existantes non conformes au style ruff, cela
-produit un diff de plusieurs milliers de lignes non liees a la
-session courante.
+Les deux commandes peuvent casser un fichier pre-existant, **pour des raisons
+differentes**. Ne pas se fier a l'idee (fausse — elle a deja casse Lespass) que
+« seul `format` est dangereux, `--fix` est sans risque ».
 
-**Le danger, c'est `format`. Pas `--fix`.** Ne pas confondre les deux :
+| Commande | Le danger sur un fichier pre-existant |
+|---|---|
+| `ruff format` | **Reformate le fichier ENTIER** : indentation, guillemets, sauts de ligne, sur des milliers de lignes que tu n'as pas ecrites → diff enorme non lie a la session. |
+| `ruff check --fix` | Supprime les **imports a effet de bord nus** (F401) : un import dont le seul but est d'**executer** le module (`@admin.register`, `@receiver`, `@app.task`) est vu comme « mort » et **supprime en silence**. L'enregistrement disparait → `admin.E039`, **Django ne boote plus**. Incident reel : `from Administration.admin import (products, prices)` supprime → **319 tests en erreur**, symptome a des kilometres de la cause. |
 
-| Commande | Ce qu'elle fait | Sur un fichier pre-existant |
-|---|---|---|
-| `ruff check --fix` | Corrige les erreurs **une par une**, uniquement celles marquees « safe » par ruff (f-string sans placeholder, variable inutilisee...). Ne touche PAS a la mise en forme. | **OUI, vas-y.** Rien de grave ne peut en sortir. |
-| `ruff format` | **Reformate le fichier ENTIER** : indentation, guillemets, sauts de ligne, sur des milliers de lignes que tu n'as pas ecrites. | **NON. Jamais.** |
+**Ne jamais se fier au `# noqa: F401`** : rien ne garantit que tous les imports a
+effet de bord soient proteges (audit Lespass : 141 imports F401 « fixables », aucune
+config ruff a l'epoque).
 
 **Regle** :
-- **Fichier NEUF** (cree dans la session) → `ruff check --fix` **et** `ruff format`.
-- **Fichier PRE-EXISTANT** → `ruff check --fix` **oui** ; `ruff format` **jamais**.
+- **Fichier NEUF** (cree dans la session) → `ruff check --fix` **et** `ruff format` : rien a casser, il n'existait pas avant toi.
+- **Fichier PRE-EXISTANT** :
+  - `ruff format` → **jamais**.
+  - `ruff check --fix` → seulement apres avoir **inspecte a la main** les imports « inutilises » (surtout `admin*.py`, `apps.py`, `signals.py`, `triggers.py`, `settings.py`, `__init__.py`), **puis** lance `manage.py check` **et la suite complete** (pas seulement les tests du domaine touche).
 
-Pourquoi `--fix` est sans risque ici : il n'applique que les corrections **safe**, et les
-imports a effet de bord du projet (par ex. `import pages.admin` dans `admin_tenant.py`, qui
-sert a enregistrer les ModelAdmin) sont deja proteges par `# noqa: F401` — ruff les respecte.
+La parade durable est en place : `[tool.ruff.lint.per-file-ignores]` dans `pyproject.toml`
+interdit F401 sur ces fichiers, plus un test qui echoue si un enregistrement d'admin disparait.
 
-Si un `--fix` produit malgre tout un diff qui te surprend : ne rollback pas avec git,
-**previens le mainteneur**.
+Si un `--fix` ou un `format` produit un diff qui te surprend : **ne rollback pas avec git**,
+previens le mainteneur.
 
 ### En cas de reformat indesirable ou de modification accidentelle
 
@@ -1231,7 +1232,8 @@ Le mainteneur decide. Jamais l'assistant.
 | Lancer `makemessages` / `compilemessages` toi-meme | Ecrire les `_()` en FR, puis SIGNALER au mainteneur que le workflow i18n est a lancer | `makemessages` reecrit les deux `.po` en entier et fabrique des fuzzy faux |
 | Skip CHANGELOG / oublier la fiche de test | Un fichier `CHANGELOG/YYYY-MM-DD-slug.md` : resume en haut, comment tester en bas (separes par `---`) | Changement non trace + non testable par le mainteneur |
 | `git checkout --`, `git stash`, `git reset --hard` | Alerter le mainteneur, attendre ses instructions | Efface le travail non committe (incident Session 32 : 4h perdues) |
-| `ruff format <fichier-existant>` | `ruff check --fix` (le `--fix` est sans danger ; c'est `format` qui ne l'est pas) | `format` reformate des milliers de lignes pre-existantes non liees a la session |
+| `ruff format <fichier-existant>` | Ne lancer que sur des fichiers **neufs** ; sinon alerter le mainteneur | Reformate des milliers de lignes pre-existantes non liees a la session |
+| `ruff check --fix` sur `admin*.py`, `apps.py`, `signals.py`, `triggers.py`, `settings.py`, `__init__.py` | Inspecter **a la main** les imports « inutilises » AVANT ; apres tout `--fix` lancer `manage.py check` + la suite complete | `--fix` supprime les imports a effet de bord **nus** (`@admin.register`, `@receiver`) → `admin.E039`, Django ne boote plus (incident : 319 tests en erreur) |
 
 ## Tests
 
@@ -1283,11 +1285,11 @@ Apres chaque modification de fichier Python :
 | Le fichier est… | Commande | Pourquoi |
 |---|---|---|
 | **neuf** (cree dans la session) | `ruff check --fix <fichier>` puis `ruff format <fichier>` | Rien a casser : il n'existait pas avant toi |
-| **pre-existant** | `ruff check --fix <fichier>` — mais **JAMAIS `ruff format`** | `--fix` ne fait que des corrections safe, ligne par ligne : sans danger. `format` reformate le fichier ENTIER (des milliers de lignes que tu n'as pas ecrites). |
+| **pre-existant** | **JAMAIS `ruff format`** ; `ruff check --fix` seulement apres inspection manuelle des imports « inutilises » + `manage.py check` + suite complete | `format` reformate le fichier ENTIER (des milliers de lignes que tu n'as pas ecrites). `--fix` supprime les imports a effet de bord **nus** (`@admin.register`) → `admin.E039`, Django ne boote plus. |
 
-**La ligne rouge est `ruff format` sur un fichier pre-existant**, pas `--fix`.
-Voir « `ruff format` est destructif sur les fichiers existants » plus haut
-(incident Session 32 : 4 h de travail effacees).
+**Les DEUX sont dangereux sur un fichier pre-existant**, pas seulement `format`.
+Voir « `ruff format` ET `ruff check --fix` sont dangereux sur les fichiers existants »
+plus haut (incidents : reformat de milliers de lignes ; suppression d'imports → 319 tests en erreur).
 
 ## References
 

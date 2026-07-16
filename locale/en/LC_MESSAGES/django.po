@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-15 06:39+0000\n"
+"POT-Creation-Date: 2026-07-15 21:24+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,96 +18,88 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 #: Administration/admin/dashboard.py:62
-msgid "Global information"
-msgstr ""
+msgid "Configuration générale"
+msgstr "General configuration"
 
-#: Administration/admin/dashboard.py:67
+#: Administration/admin/dashboard.py:68
 msgid "Dashboard"
 msgstr ""
 
-#: Administration/admin/dashboard.py:73 BaseBillet/models.py:926
+#: Administration/admin/dashboard.py:74 BaseBillet/models.py:926
 #: BaseBillet/models.py:927 BaseBillet/models.py:932 MetaBillet/models.py:392
 #: MetaBillet/models.py:393 TiBillet/settings.py:605
 msgid "Settings"
 msgstr ""
 
-#: Administration/admin/dashboard.py:81
+#: Administration/admin/dashboard.py:82
 msgid "User accounts"
 msgstr ""
 
-#: Administration/admin/dashboard.py:104
-msgid "Site web"
-msgstr ""
+#: Administration/admin/dashboard.py:105 Administration/admin/dashboard.py:917
+msgid "Site web personnalisé"
+msgstr "Custom website"
 
-#: Administration/admin/dashboard.py:111 pages/admin.py:175 pages/models.py:733
+#: Administration/admin/dashboard.py:113 pages/admin.py:175 pages/models.py:733
 msgid "Blocs"
 msgstr ""
 
-#: Administration/admin/dashboard.py:117 pages/models.py:313
+#: Administration/admin/dashboard.py:119 pages/models.py:313
 msgid "Pages"
 msgstr ""
 
-#: Administration/admin/dashboard.py:123 pages/models.py:144
+#: Administration/admin/dashboard.py:125 pages/models.py:144
 #: pages/models.py:145
 msgid "Configuration du site"
 msgstr "Site configuration"
 
-#: Administration/admin/dashboard.py:139 Administration/admin/laboutik.py:1028
-#: Administration/templates/admin/cloture/rapport_before.html:277
-#: Administration/templates/admin/cloture/rapport_temps_reel.html:350
-#: Administration/templates/admin/cloture_detail.html:269
-#: BaseBillet/models.py:3858 laboutik/models.py:792
-#: laboutik/templates/laboutik/pdf/rapport_comptable.html:241
-#: pages/templates/pages/classic/vues/adhesions.html:10
-#: pages/templates/pages/classic/vues/adhesions.html:14
-msgid "Memberships"
-msgstr ""
+#: Administration/admin/dashboard.py:141 Administration/admin/dashboard.py:931
+msgid "Adhésion, abonnement et pass"
+msgstr "Membership, subscription and pass"
 
-#: Administration/admin/dashboard.py:144 BaseBillet/models.py:1395
+#: Administration/admin/dashboard.py:147 BaseBillet/models.py:1395
 msgid "Membership products"
 msgstr ""
 
-#: Administration/admin/dashboard.py:152
+#: Administration/admin/dashboard.py:155
 msgid "Adhésion / Pass"
 msgstr "Membership / Pass"
 
-#: Administration/admin/dashboard.py:169 BaseBillet/apps.py:7
-#: laboutik/models.py:794
-msgid "Ticketing"
-msgstr ""
+#: Administration/admin/dashboard.py:172 Administration/admin/dashboard.py:926
+msgid "Agenda et Billetterie"
+msgstr "Calendar and Ticketing"
 
-#: Administration/admin/dashboard.py:181 BaseBillet/models.py:1384
+#: Administration/admin/dashboard.py:185 BaseBillet/models.py:1384
 msgid "Ticket products"
 msgstr ""
 
-#: Administration/admin/dashboard.py:189
+#: Administration/admin/dashboard.py:193
 msgid "Carousel"
 msgstr ""
 
-#: Administration/admin/dashboard.py:197 BaseBillet/models.py:1475
+#: Administration/admin/dashboard.py:201 BaseBillet/models.py:1475
 msgid "Promotional codes"
 msgstr ""
 
-#: Administration/admin/dashboard.py:205 BaseBillet/models.py:176
+#: Administration/admin/dashboard.py:209 BaseBillet/models.py:176
 #: BaseBillet/models.py:1815 crowds/models.py:116
 msgid "Tags"
 msgstr ""
 
-#: Administration/admin/dashboard.py:211
+#: Administration/admin/dashboard.py:215
 msgid "Addresses"
 msgstr ""
 
-#: Administration/admin/dashboard.py:219 BaseBillet/models.py:2247
+#: Administration/admin/dashboard.py:223 BaseBillet/models.py:2247
 #: BaseBillet/models.py:3853 MetaBillet/models.py:351
 msgid "Events"
 msgstr ""
 
-#: Administration/admin/dashboard.py:232 Administration/admin/dashboard.py:663
-#: Administration/admin_tenant.py:2434 BaseBillet/models.py:3856
+#: Administration/admin/dashboard.py:236 Administration/admin/dashboard.py:677
+#: Administration/admin_tenant.py:2402 BaseBillet/models.py:3856
 msgid "Bookings"
 msgstr ""
 
-#: Administration/admin/dashboard.py:240 Administration/admin/laboutik.py:1057
+#: Administration/admin/dashboard.py:244 Administration/admin/laboutik.py:1057
 #: Administration/templates/admin/cloture/rapport_before.html:385
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:458
 #: Administration/templates/admin/cloture_detail.html:377
@@ -116,87 +108,87 @@ msgstr ""
 msgid "Tickets"
 msgstr ""
 
-#: Administration/admin/dashboard.py:248
+#: Administration/admin/dashboard.py:252
 msgid "Scan App"
 msgstr ""
 
-#: Administration/admin/dashboard.py:264
-msgid "Fédération"
-msgstr "Federation"
+#: Administration/admin/dashboard.py:268 Administration/admin/dashboard.py:936
+msgid "Fédération et agenda participatif"
+msgstr "Federation and participatory agenda"
 
-#: Administration/admin/dashboard.py:269 Administration/admin/laboutik.py:150
+#: Administration/admin/dashboard.py:274 Administration/admin/laboutik.py:150
 #: BaseBillet/models.py:191 BaseBillet/models.py:4242
 #: BaseBillet/templates/emails/membership_renewal_reminder.html:57
 msgid "Options"
 msgstr ""
 
-#: Administration/admin/dashboard.py:277
+#: Administration/admin/dashboard.py:282
 msgid "Espaces"
 msgstr "Spaces"
 
-#: Administration/admin/dashboard.py:285 fedow_core/models.py:216
+#: Administration/admin/dashboard.py:290 fedow_core/models.py:216
 msgid "Assets"
 msgstr ""
 
-#: Administration/admin/dashboard.py:303
-msgid "Caisse LaBoutik"
-msgstr "LaBoutik POS"
+#: Administration/admin/dashboard.py:308 Administration/admin/dashboard.py:950
+msgid "Caisse & Restaurant"
+msgstr "Cash Register & Restaurant"
 
-#: Administration/admin/dashboard.py:308 BaseBillet/models.py:1408
+#: Administration/admin/dashboard.py:314 BaseBillet/models.py:1408
 msgid "POS products"
 msgstr ""
 
-#: Administration/admin/dashboard.py:316
+#: Administration/admin/dashboard.py:322
 msgid "POS categories"
 msgstr ""
 
-#: Administration/admin/dashboard.py:324 laboutik/models.py:879
+#: Administration/admin/dashboard.py:330 laboutik/models.py:879
 #: laboutik/models.py:911
 msgid "Points of sale"
 msgstr ""
 
-#: Administration/admin/dashboard.py:332 laboutik/models.py:931
+#: Administration/admin/dashboard.py:338 laboutik/models.py:931
 msgid "Primary cards"
 msgstr ""
 
-#: Administration/admin/dashboard.py:351
+#: Administration/admin/dashboard.py:357
 msgid "Closures"
 msgstr ""
 
-#: Administration/admin/dashboard.py:359 laboutik/models.py:1939
+#: Administration/admin/dashboard.py:365 laboutik/models.py:1939
 msgid "Cash float history"
 msgstr ""
 
-#: Administration/admin/dashboard.py:367
+#: Administration/admin/dashboard.py:373
 msgid "POS settings"
 msgstr ""
 
-#: Administration/admin/dashboard.py:402
+#: Administration/admin/dashboard.py:408
 msgid "Terminaux matériels"
 msgstr "Hardware terminals"
 
-#: Administration/admin/dashboard.py:407 Administration/admin/laboutik.py:197
+#: Administration/admin/dashboard.py:414 Administration/admin/laboutik.py:197
 #: laboutik/models.py:572
 msgid "Terminaux"
 msgstr ""
 
-#: Administration/admin/dashboard.py:415
+#: Administration/admin/dashboard.py:422
 msgid "Imprimantes"
 msgstr "Printers"
 
-#: Administration/admin/dashboard.py:423 laboutik/models.py:737
+#: Administration/admin/dashboard.py:430 laboutik/models.py:737
 msgid "TPE bancaires"
 msgstr "Bank card terminals"
 
-#: Administration/admin/dashboard.py:439
-msgid "Fedow"
-msgstr ""
+#: Administration/admin/dashboard.py:446 Administration/admin/dashboard.py:959
+msgid "Monnaies locales, temps et cashless"
+msgstr "Local currencies, time and cashless"
 
-#: Administration/admin/dashboard.py:444
+#: Administration/admin/dashboard.py:452
 msgid "Monnaies et tokens"
 msgstr "Currencies and tokens"
 
-#: Administration/admin/dashboard.py:450
+#: Administration/admin/dashboard.py:458
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:142
 #: comptabilite/templates/comptabilite/admin/change_form_before.html:74
 #: comptabilite/templates/comptabilite/email/cloture_rapport_email.html:16
@@ -206,213 +198,192 @@ msgstr "Currencies and tokens"
 msgid "Transactions"
 msgstr ""
 
-#: Administration/admin/dashboard.py:458 fedow_core/models.py:773
+#: Administration/admin/dashboard.py:466 fedow_core/models.py:773
 msgid "Federations"
 msgstr ""
 
-#: Administration/admin/dashboard.py:466
+#: Administration/admin/dashboard.py:474
 msgid "Cartes NFC"
 msgstr "NFC cards"
 
-#: Administration/admin/dashboard.py:482
+#: Administration/admin/dashboard.py:492
 msgid "Inventaire"
 msgstr "Inventory"
 
-#: Administration/admin/dashboard.py:487 inventaire/models.py:109
+#: Administration/admin/dashboard.py:498 inventaire/models.py:109
 msgid "Stocks"
 msgstr ""
 
-#: Administration/admin/dashboard.py:493 inventaire/models.py:223
+#: Administration/admin/dashboard.py:504 inventaire/models.py:223
 msgid "Mouvements de stock"
 msgstr "Stock movements"
 
-#: Administration/admin/dashboard.py:509
-msgid "Tireuses"
-msgstr "Draft taps"
+#: Administration/admin/dashboard.py:520 Administration/admin/dashboard.py:972
+msgid "Tireuses connectées"
+msgstr "Connected taps"
 
-#: Administration/admin/dashboard.py:514
+#: Administration/admin/dashboard.py:526
 msgid "Kiosk dashboard"
 msgstr ""
 
-#: Administration/admin/dashboard.py:520 controlvanne/models.py:332
+#: Administration/admin/dashboard.py:532 controlvanne/models.py:332
 msgid "Taps"
 msgstr ""
 
-#: Administration/admin/dashboard.py:528 BaseBillet/models.py:1421
+#: Administration/admin/dashboard.py:540 BaseBillet/models.py:1421
 msgid "Keg products"
 msgstr ""
 
-#: Administration/admin/dashboard.py:536 controlvanne/models.py:132
+#: Administration/admin/dashboard.py:548 controlvanne/models.py:132
 msgid "Flow meters"
 msgstr ""
 
-#: Administration/admin/dashboard.py:544 controlvanne/models.py:177
+#: Administration/admin/dashboard.py:556 controlvanne/models.py:177
 msgid "Maintenance cards"
 msgstr ""
 
-#: Administration/admin/dashboard.py:552 controlvanne/models.py:493
+#: Administration/admin/dashboard.py:564 controlvanne/models.py:493
 msgid "Sessions"
 msgstr "Sessions"
 
-#: Administration/admin/dashboard.py:560 controlvanne/models.py:558
+#: Administration/admin/dashboard.py:572 controlvanne/models.py:558
 #: controlvanne/models.py:559
 msgid "Tap history"
 msgstr ""
 
-#: Administration/admin/dashboard.py:568 controlvanne/models.py:568
+#: Administration/admin/dashboard.py:580 controlvanne/models.py:568
 #: controlvanne/models.py:569
 msgid "Card history"
 msgstr ""
 
-#: Administration/admin/dashboard.py:576 controlvanne/models.py:548
+#: Administration/admin/dashboard.py:588 controlvanne/models.py:548
 #: controlvanne/models.py:549
 msgid "Maintenance history"
 msgstr ""
 
-#: Administration/admin/dashboard.py:584
+#: Administration/admin/dashboard.py:596
 msgid "Calibration"
 msgstr "Calibration"
 
-#: Administration/admin/dashboard.py:592
+#: Administration/admin/dashboard.py:604
 msgid "Server configuration"
 msgstr ""
 
-#: Administration/admin/dashboard.py:613
-msgid "Kiosk"
+#: Administration/admin/dashboard.py:625 Administration/admin/dashboard.py:964
+msgid "Kiosk : borne libre-service"
 msgstr ""
 
-#: Administration/admin/dashboard.py:618
+#: Administration/admin/dashboard.py:631
 msgid "Paiements"
 msgstr "Payments"
 
-#: Administration/admin/dashboard.py:634
+#: Administration/admin/dashboard.py:647
 msgid "Ressources"
 msgstr "Resources"
 
-#: Administration/admin/dashboard.py:639
+#: Administration/admin/dashboard.py:653
 msgid "Resources"
 msgstr ""
 
-#: Administration/admin/dashboard.py:645
+#: Administration/admin/dashboard.py:659
 msgid "Resource groups"
 msgstr ""
 
-#: Administration/admin/dashboard.py:651
+#: Administration/admin/dashboard.py:665
 msgid "Calendars"
 msgstr ""
 
-#: Administration/admin/dashboard.py:657
+#: Administration/admin/dashboard.py:671
 msgid "Weekly openings"
 msgstr ""
 
-#: Administration/admin/dashboard.py:676
+#: Administration/admin/dashboard.py:690
 msgid "Sales & accounting"
 msgstr ""
 
-#: Administration/admin/dashboard.py:681
+#: Administration/admin/dashboard.py:696
 msgid "Rapports"
 msgstr "Reports"
 
-#: Administration/admin/dashboard.py:689
+#: Administration/admin/dashboard.py:704
 msgid "Entries"
 msgstr ""
 
-#: Administration/admin/dashboard.py:728
-#: crowds/templates/crowds/partial/summary.html:104
-msgid "Contributions"
-msgstr "Contributions"
+#: Administration/admin/dashboard.py:743 Administration/admin/dashboard.py:945
+msgid "Financement participatif & budgets contributifs"
+msgstr ""
 
-#: Administration/admin/dashboard.py:733
+#: Administration/admin/dashboard.py:749
 msgid "Configuration"
 msgstr ""
 
-#: Administration/admin/dashboard.py:741
+#: Administration/admin/dashboard.py:757
 msgid "Initiative"
 msgstr ""
 
-#: Administration/admin/dashboard.py:767 Administration/admin/dashboard.py:918
+#: Administration/admin/dashboard.py:782 Administration/admin/dashboard.py:985
 #: Administration/templates/admin/ghost/panneau_newsletter.html:59
-#: tests/pytest/test_module_newsletter_activation.py:308
+#: tests/pytest/test_module_newsletter_activation.py:264
 msgid "Newsletter"
 msgstr "Newsletter"
 
-#: Administration/admin/dashboard.py:772
+#: Administration/admin/dashboard.py:788
 msgid "Serveur Ghost"
 msgstr ""
 
-#: Administration/admin/dashboard.py:786
-msgid "External tools"
-msgstr ""
-
-#: Administration/admin/dashboard.py:791
-msgid "API Key"
-msgstr ""
-
 #: Administration/admin/dashboard.py:799
-msgid "Webhook"
-msgstr ""
-
-#: Administration/admin/dashboard.py:805
-msgid "Formbricks"
-msgstr ""
-
-#: Administration/admin/dashboard.py:813
 msgid "Brevo"
 msgstr ""
 
-#: Administration/admin/dashboard.py:827
+#: Administration/admin/dashboard.py:821
 msgid "Root Configuration"
 msgstr ""
 
-#: Administration/admin/dashboard.py:832
+#: Administration/admin/dashboard.py:827
 msgid "Waiting Configuration"
 msgstr ""
 
-#: Administration/admin/dashboard.py:840
+#: Administration/admin/dashboard.py:835
 msgid "Tenants"
 msgstr ""
 
-#: Administration/admin/dashboard.py:849
+#: Administration/admin/dashboard.py:844
 msgid "Domaines iframe autorises"
 msgstr ""
 
-#: Administration/admin/dashboard.py:871
+#: Administration/admin/dashboard.py:890
 msgid "Development"
 msgstr ""
 
-#: Administration/admin/dashboard.py:873
+#: Administration/admin/dashboard.py:892
 msgid "Production"
 msgstr ""
 
-#: Administration/admin/dashboard.py:878
-msgid "Event ticketing"
-msgstr ""
+#: Administration/admin/dashboard.py:902
+msgid ""
+"BETA ! Attention, en accès anticipé, nous avons besoin de vos retours "
+"d'usage et vos remontées de bug. Merci de participer à la construction de ce "
+"commun numérique !"
+msgstr "BETA! Please note, this is an early access release — we need your feedback and bug reports. Thank you for helping build this digital commons!"
 
-#: Administration/admin/dashboard.py:879
+#: Administration/admin/dashboard.py:919
+msgid ""
+"Composez des pages publiques en empilant des blocs (hero, texte, image, "
+"appel à l'action, témoignage). Une page peut devenir la page d'accueil du "
+"site."
+msgstr ""
+"Build public pages by stacking blocks (hero, text, image, call to action, "
+"testimonial). A page can become the site's homepage."
+
+#: Administration/admin/dashboard.py:927
 msgid "Events, reservations, and ticket sales"
 msgstr ""
 
-#: Administration/admin/dashboard.py:884 BaseBillet/models.py:1255
-msgid "Membership"
-msgstr ""
-
-#: Administration/admin/dashboard.py:885
+#: Administration/admin/dashboard.py:932
 msgid "Memberships and subscriptions"
 msgstr ""
 
-#: Administration/admin/dashboard.py:889
-msgid "Crowdfunding"
-msgstr ""
-
-#: Administration/admin/dashboard.py:890
-msgid "Participatory funding and adaptive contributions"
-msgstr ""
-
-#: Administration/admin/dashboard.py:894
-msgid "Fédération et agenda participatif"
-msgstr "Federation and participatory agenda"
-
-#: Administration/admin/dashboard.py:896
+#: Administration/admin/dashboard.py:938
 msgid ""
 "Reliez votre lieu au réseau TiBillet pour partager vos évènements. Vous "
 "pouvez aussi laisser le public proposer des évènements : c'est l'agenda "
@@ -422,77 +393,55 @@ msgstr ""
 "also let the public submit events: this is the participatory agenda. "
 "Everything is managed in “Federation options”."
 
-#: Administration/admin/dashboard.py:903
-msgid "Pages / site web"
+#: Administration/admin/dashboard.py:946
+msgid "Participatory funding and adaptive contributions"
 msgstr ""
 
-#: Administration/admin/dashboard.py:905
-msgid ""
-"Composez des pages publiques en empilant des blocs (hero, texte, image, "
-"appel à l'action, témoignage). Une page peut devenir la page d'accueil du "
-"site."
-msgstr ""
-"Build public pages by stacking blocks (hero, text, image, call to action, "
-"testimonial). A page can become the site's homepage."
-
-#: Administration/admin/dashboard.py:920
-msgid ""
-"Evènements, rappels d'adhésions, résumé de vos activités, pilotez votre "
-"newsletter avec TiBillet !"
-msgstr ""
-"Events, membership reminders, activity summaries: manage your newsletter "
-"with TiBillet!"
-
-#: Administration/admin/dashboard.py:928
-msgid "Local currency & cashless"
-msgstr "Local currency & cashless"
-
-#: Administration/admin/dashboard.py:929
-msgid "Local currency tokens, federated wallet"
-msgstr ""
-
-#: Administration/admin/dashboard.py:933
-msgid "POS & restaurant"
-msgstr ""
-
-#: Administration/admin/dashboard.py:934
+#: Administration/admin/dashboard.py:951
 msgid "Point of sale, orders, and cash register"
 msgstr ""
 
-#: Administration/admin/dashboard.py:937
-#: Administration/templates/admin/dashboard.html:81
+#: Administration/admin/dashboard.py:955
+#: Administration/templates/admin/dashboard.html:96
 msgid "Open POS"
 msgstr ""
 
-#: Administration/admin/dashboard.py:941
-msgid "Inventory"
-msgstr "Inventory"
-
-#: Administration/admin/dashboard.py:943
-msgid "Stock management for POS products: tracking, alerts, movements."
+#: Administration/admin/dashboard.py:960
+msgid "Local currency tokens, federated wallet"
 msgstr ""
 
-#: Administration/admin/dashboard.py:950
-msgid "Connected taps"
-msgstr ""
+#: Administration/admin/dashboard.py:966
+msgid "Bornes de paiement en autonomie : recharge cashless, Stripe Terminal."
+msgstr "Self-service payment kiosks: cashless top-up, Stripe Terminal."
 
-#: Administration/admin/dashboard.py:952
+#: Administration/admin/dashboard.py:974
 msgid ""
 "Connected beer tap management: RFID authorization, flow metering, kiosk "
 "display."
 msgstr ""
 
-#: Administration/admin/dashboard.py:956
+#: Administration/admin/dashboard.py:978
 msgid "Open kiosk"
 msgstr ""
 
-#: Administration/admin/dashboard.py:967
-msgid "Kiosk / borne libre-service"
+#: Administration/admin/dashboard.py:987
+msgid ""
+"Evènements, rappels d'adhésions, résumé de vos activités : pilotez votre "
+"newsletter avec TiBillet, à partir des évènements de votre agenda ! "
+"Propulsée par un serveur Ghost ou par Brevo."
+msgstr "Events, membership reminders, activity summaries: run your newsletter with TiBillet, straight from your calendar's events! Powered by a Ghost server or by Brevo."
+
+#: Administration/admin/dashboard.py:1083
+msgid "Réseaux sociaux"
+msgstr "Social networks"
+
+#: Administration/admin/dashboard.py:1084
+msgid "Postiz"
 msgstr ""
 
-#: Administration/admin/dashboard.py:969
-msgid "Bornes de paiement en autonomie : recharge cashless, Stripe Terminal."
-msgstr "Self-service payment kiosks: cashless top-up, Stripe Terminal."
+#: Administration/admin/dashboard.py:1086
+msgid "En cours de développement"
+msgstr "In development"
 
 #: Administration/admin/help_messages_dictionnary.py:8
 msgid "Documentation complète"
@@ -540,8 +489,8 @@ msgstr ""
 msgid "Article"
 msgstr "Item"
 
-#: Administration/admin/inventaire.py:130 Administration/admin_tenant.py:1585
-#: Administration/admin_tenant.py:2029
+#: Administration/admin/inventaire.py:130 Administration/admin_tenant.py:1553
+#: Administration/admin_tenant.py:1997
 #: Administration/importers/lignearticle_exporter.py:21
 #: Administration/templates/admin/inventaire/stock_actions_partial.html:59
 #: inventaire/models.py:75
@@ -719,7 +668,9 @@ msgstr "The registration code is required to register the reader with Stripe."
 msgid ""
 "Ce code est déjà utilisé par un autre lecteur. Un lecteur physique ne peut "
 "être enregistré qu'une fois."
-msgstr "This code is already used by another reader. A physical reader can only be registered once."
+msgstr ""
+"This code is already used by another reader. A physical reader can only be "
+"registered once."
 
 #: Administration/admin/laboutik.py:444
 #, python-format
@@ -865,7 +816,7 @@ msgstr ""
 
 #: Administration/admin/laboutik.py:964 Administration/admin/laboutik.py:1019
 #: Administration/admin/laboutik.py:1029 Administration/admin/laboutik.py:1660
-#: Administration/admin_tenant.py:1331 Administration/admin_tenant.py:2947
+#: Administration/admin_tenant.py:1299 Administration/admin_tenant.py:2915
 #: Administration/importers/lignearticle_exporter.py:25
 #: Administration/templates/admin/cloture/rapport_before.html:80
 #: Administration/templates/admin/cloture/rapport_before.html:247
@@ -975,7 +926,7 @@ msgstr ""
 #: Administration/admin/laboutik.py:971 Administration/admin/laboutik.py:1022
 #: Administration/admin/laboutik.py:1032 Administration/admin/laboutik.py:1040
 #: Administration/admin/laboutik.py:1064 Administration/admin/laboutik.py:1071
-#: Administration/admin_tenant.py:1593 Administration/admin_tenant.py:2033
+#: Administration/admin_tenant.py:1561 Administration/admin_tenant.py:2001
 #: Administration/templates/admin/asset/asset_change_form_before.html:50
 #: Administration/templates/admin/asset/asset_change_form_before.html:64
 #: Administration/templates/admin/cloture/rapport_before.html:118
@@ -1037,9 +988,9 @@ msgid "Category"
 msgstr ""
 
 #: Administration/admin/laboutik.py:979 Administration/admin/laboutik.py:1019
-#: Administration/admin/laboutik.py:1029 Administration/admin_tenant.py:1618
-#: Administration/admin_tenant.py:1924 Administration/admin_tenant.py:2037
-#: Administration/admin_tenant.py:3468
+#: Administration/admin/laboutik.py:1029 Administration/admin_tenant.py:1586
+#: Administration/admin_tenant.py:1892 Administration/admin_tenant.py:2005
+#: Administration/admin_tenant.py:3436
 #: Administration/templates/admin/cloture/rapport_before.html:137
 #: Administration/templates/admin/cloture/rapport_before.html:245
 #: Administration/templates/admin/cloture/rapport_before.html:281
@@ -1160,7 +1111,7 @@ msgstr ""
 msgid "VAT breakdown"
 msgstr ""
 
-#: Administration/admin/laboutik.py:1001 Administration/admin_tenant.py:2902
+#: Administration/admin/laboutik.py:1001 Administration/admin_tenant.py:2870
 #: Administration/templates/admin/cloture/rapport_before.html:183
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:256
 #: Administration/templates/admin/cloture_detail.html:175
@@ -1242,6 +1193,17 @@ msgstr ""
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:279
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:350
 msgid "Count"
+msgstr ""
+
+#: Administration/admin/laboutik.py:1028
+#: Administration/templates/admin/cloture/rapport_before.html:277
+#: Administration/templates/admin/cloture/rapport_temps_reel.html:350
+#: Administration/templates/admin/cloture_detail.html:269
+#: BaseBillet/models.py:3858 laboutik/models.py:792
+#: laboutik/templates/laboutik/pdf/rapport_comptable.html:241
+#: pages/templates/pages/classic/vues/adhesions.html:10
+#: pages/templates/pages/classic/vues/adhesions.html:14
+msgid "Memberships"
 msgstr ""
 
 #: Administration/admin/laboutik.py:1029
@@ -2032,8 +1994,8 @@ msgstr ""
 msgid "Erreur lors de la duplication : %(err)s"
 msgstr "Error during duplication: %(err)s"
 
-#: Administration/admin/products.py:1123 Administration/admin_tenant.py:2592
-#: Administration/admin_tenant.py:4199 BaseBillet/models.py:1183
+#: Administration/admin/products.py:1123 Administration/admin_tenant.py:2560
+#: Administration/admin_tenant.py:4167 BaseBillet/models.py:1183
 #: BaseBillet/models.py:1809 fedow_core/models.py:169
 msgid "Archive"
 msgstr ""
@@ -2204,89 +2166,89 @@ msgstr ""
 msgid "Test"
 msgstr ""
 
-#: Administration/admin_tenant.py:567
+#: Administration/admin_tenant.py:535
 msgid ""
 "The \"POS & restaurant\" module required this module. You must disable it "
 "before disabling "
 msgstr ""
 
-#: Administration/admin_tenant.py:577
+#: Administration/admin_tenant.py:545
 msgid ""
 "\"Local currency & cashless\" was enabled automatically (required by the "
 "POS)."
 msgstr ""
 
-#: Administration/admin_tenant.py:608
+#: Administration/admin_tenant.py:576
 msgid "Cashless server ONLINE"
 msgstr ""
 
-#: Administration/admin_tenant.py:610
+#: Administration/admin_tenant.py:578
 msgid "Cashless server OFFLINE or BAD KEY"
 msgstr ""
 
-#: Administration/admin_tenant.py:653
+#: Administration/admin_tenant.py:621
 msgid "Included in events"
 msgstr ""
 
-#: Administration/admin_tenant.py:696
+#: Administration/admin_tenant.py:664
 msgid "Color"
 msgstr ""
 
-#: Administration/admin_tenant.py:714
+#: Administration/admin_tenant.py:682
 msgid "Synchronize tags"
 msgstr ""
 
-#: Administration/admin_tenant.py:817
+#: Administration/admin_tenant.py:785
 msgid "Synchronization complete: {} tags created, {} tags updated."
 msgstr ""
 
-#: Administration/admin_tenant.py:888
+#: Administration/admin_tenant.py:856
 #: Administration/templates/admin/human_user/right_and_wallet_info.html:191
 #: AuthBillet/models.py:462
 #: BaseBillet/templates/fonctionnel/account_base.html:10
 msgid "Administrator"
 msgstr ""
 
-#: Administration/admin_tenant.py:894 Administration/admin_tenant.py:917
-#: Administration/admin_tenant.py:948
+#: Administration/admin_tenant.py:862 Administration/admin_tenant.py:885
+#: Administration/admin_tenant.py:916
 #: Administration/importers/membership_importers.py:66
 #: Administration/importers/ticket_exporter.py:29 BaseBillet/tasks.py:285
 #: BaseBillet/templatetags/tibitags.py:170
 msgid "Yes"
 msgstr ""
 
-#: Administration/admin_tenant.py:894 Administration/admin_tenant.py:917
-#: Administration/admin_tenant.py:949 Administration/admin_tenant.py:3316
+#: Administration/admin_tenant.py:862 Administration/admin_tenant.py:885
+#: Administration/admin_tenant.py:917 Administration/admin_tenant.py:3284
 #: Administration/importers/membership_importers.py:66
 #: Administration/importers/ticket_exporter.py:29
 #: BaseBillet/templatetags/tibitags.py:170
 msgid "No"
 msgstr ""
 
-#: Administration/admin_tenant.py:911
+#: Administration/admin_tenant.py:879
 #: Administration/templates/admin/human_user/right_and_wallet_info.html:221
 #: AuthBillet/models.py:220
 msgid "Can initiate payments"
 msgstr ""
 
-#: Administration/admin_tenant.py:934
+#: Administration/admin_tenant.py:902
 msgid "Valid subscription"
 msgstr ""
 
-#: Administration/admin_tenant.py:950
+#: Administration/admin_tenant.py:918
 msgid "Expires soon (2 weeks)"
 msgstr ""
 
-#: Administration/admin_tenant.py:1181
+#: Administration/admin_tenant.py:1149
 msgid "(évènement supprimé)"
 msgstr "(deleted event)"
 
-#: Administration/admin_tenant.py:1215
+#: Administration/admin_tenant.py:1183
 #: Administration/templates/admin/human_user/right_and_wallet_info.html:88
 msgid "En cours"
 msgstr "In progress"
 
-#: Administration/admin_tenant.py:1231 Administration/admin_tenant.py:1316
+#: Administration/admin_tenant.py:1199 Administration/admin_tenant.py:1284
 #: BaseBillet/views.py:335 pages/services.py:262
 #: pages/templates/pages/classic/vues/accueil.html:34
 #: pages/templates/pages/classic/vues/adhesions.html:5
@@ -2300,28 +2262,28 @@ msgstr "In progress"
 msgid "Subscriptions"
 msgstr ""
 
-#: Administration/admin_tenant.py:1238
+#: Administration/admin_tenant.py:1206
 #, python-brace-format
 msgid "Valid: {count}"
 msgstr ""
 
-#: Administration/admin_tenant.py:1239
+#: Administration/admin_tenant.py:1207
 msgid "None"
 msgstr ""
 
-#: Administration/admin_tenant.py:1264
+#: Administration/admin_tenant.py:1232
 msgid "Login as this user"
 msgstr ""
 
-#: Administration/admin_tenant.py:1269
+#: Administration/admin_tenant.py:1237
 msgid "You do not have permission to perform this action."
 msgstr ""
 
-#: Administration/admin_tenant.py:1313
+#: Administration/admin_tenant.py:1281
 msgid "Select an subscription"
 msgstr ""
 
-#: Administration/admin_tenant.py:1317
+#: Administration/admin_tenant.py:1285
 msgid ""
 "Si un déclencheur de tokens est configuré sur le tarif, il sera activé à "
 "l'enregistrement du paiement. Une ligne comptable sera aussi créée dans les "
@@ -2330,74 +2292,74 @@ msgstr ""
 "If a token trigger is configured on the price, it will be activated when the "
 "payment is recorded. An accounting entry will also be created in Sales."
 
-#: Administration/admin_tenant.py:1324
+#: Administration/admin_tenant.py:1292
 msgid "Contribution (€)"
 msgstr "Contribution (€)"
 
-#: Administration/admin_tenant.py:1338
+#: Administration/admin_tenant.py:1306
 #: BaseBillet/templates/fonctionnel/compte/partials/card_table.html:8
 msgid "Card number"
 msgstr ""
 
-#: Administration/admin_tenant.py:1380
+#: Administration/admin_tenant.py:1348
 msgid "Please provide a valid email address first."
 msgstr ""
 
-#: Administration/admin_tenant.py:1383
+#: Administration/admin_tenant.py:1351
 msgid "A card is already linked to this email address."
 msgstr ""
 
-#: Administration/admin_tenant.py:1386 fedow_connect/validators.py:22
+#: Administration/admin_tenant.py:1354 fedow_connect/validators.py:22
 msgid "Card number must be exactly 8 hexadecimal characters."
 msgstr ""
 
-#: Administration/admin_tenant.py:1392
+#: Administration/admin_tenant.py:1360
 msgid "Unknown card number"
 msgstr ""
 
-#: Administration/admin_tenant.py:1394
+#: Administration/admin_tenant.py:1362
 msgid "This card is already linked to a user."
 msgstr ""
 
-#: Administration/admin_tenant.py:1405
+#: Administration/admin_tenant.py:1373
 msgid "Please add a payment method for the contribution."
 msgstr ""
 
-#: Administration/admin_tenant.py:1410
+#: Administration/admin_tenant.py:1378
 msgid "Please fill in the value of the contribution."
 msgstr ""
 
-#: Administration/admin_tenant.py:1412
+#: Administration/admin_tenant.py:1380
 msgid "Please fill in a positive value of the contribution."
 msgstr ""
 
-#: Administration/admin_tenant.py:1483
+#: Administration/admin_tenant.py:1451
 msgid "Statut d'adhésion (par défaut filtré)"
 msgstr "Membership status (filtered by default)"
 
-#: Administration/admin_tenant.py:1488
+#: Administration/admin_tenant.py:1456
 msgid "Valids"
 msgstr ""
 
-#: Administration/admin_tenant.py:1489
+#: Administration/admin_tenant.py:1457
 msgid "Attente de validation"
 msgstr "Awaiting validation"
 
-#: Administration/admin_tenant.py:1490
+#: Administration/admin_tenant.py:1458
 msgid "Attente de paiement"
 msgstr "Awaiting payment"
 
-#: Administration/admin_tenant.py:1491 BaseBillet/models.py:2903
+#: Administration/admin_tenant.py:1459 BaseBillet/models.py:2903
 #: kiosk/models.py:72
 msgid "Canceled"
 msgstr ""
 
-#: Administration/admin_tenant.py:1492
+#: Administration/admin_tenant.py:1460
 msgid "Sans distinction"
 msgstr "No distinction"
 
-#: Administration/admin_tenant.py:1557 Administration/admin_tenant.py:3122
-#: Administration/admin_tenant.py:3343
+#: Administration/admin_tenant.py:1525 Administration/admin_tenant.py:3090
+#: Administration/admin_tenant.py:3311
 #: Administration/templates/admin/membership/custom_form.html:6
 #: Administration/templates/admin/membership/custom_form_section.html:5
 #: Administration/templates/admin/reservation/custom_form_section.html:5
@@ -2405,11 +2367,11 @@ msgstr "No distinction"
 msgid "Custom form answers"
 msgstr ""
 
-#: Administration/admin_tenant.py:1566 Administration/admin_tenant.py:1567
+#: Administration/admin_tenant.py:1534 Administration/admin_tenant.py:1535
 msgid "Ventes / Ligne comptables"
 msgstr "Sales / Accounting lines"
 
-#: Administration/admin_tenant.py:1581 Administration/admin_tenant.py:2025
+#: Administration/admin_tenant.py:1549 Administration/admin_tenant.py:1993
 #: Administration/templates/admin/cloture/rapport_before.html:339
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:412
 #: Administration/templates/admin/cloture_detail.html:331
@@ -2421,7 +2383,7 @@ msgstr "Sales / Accounting lines"
 msgid "Value"
 msgstr ""
 
-#: Administration/admin_tenant.py:1589
+#: Administration/admin_tenant.py:1557
 #: comptabilite/templates/comptabilite/admin/_sections_rapport.html:58
 #: comptabilite/templates/comptabilite/admin/_sections_rapport.html:97
 #: laboutik/templates/laboutik/partial/hx_cloture_rapport.html:40
@@ -2431,7 +2393,7 @@ msgstr ""
 msgid "TVA"
 msgstr "VAT"
 
-#: Administration/admin_tenant.py:1597
+#: Administration/admin_tenant.py:1565
 #: Administration/templates/admin/human_user/right_and_wallet_info.html:24
 #: Administration/templates/admin/human_user/right_and_wallet_info.html:56
 #: Administration/templates/admin/human_user/right_and_wallet_info.html:98
@@ -2441,161 +2403,161 @@ msgstr "VAT"
 msgid "Statut"
 msgstr "Status"
 
-#: Administration/admin_tenant.py:1732 AuthBillet/models.py:429
+#: Administration/admin_tenant.py:1700 AuthBillet/models.py:429
 #: BaseBillet/templates/emails/qrcode_scan_pay/payment_success_admin.html:35
 msgid "User"
 msgstr ""
 
-#: Administration/admin_tenant.py:1743
+#: Administration/admin_tenant.py:1711
 msgid "Produit / Tarif"
 msgstr "Product / Rate"
 
-#: Administration/admin_tenant.py:1747
+#: Administration/admin_tenant.py:1715
 msgid "Statut de l'adhésion"
 msgstr "Membership status"
 
-#: Administration/admin_tenant.py:1878
+#: Administration/admin_tenant.py:1846
 msgid "Payment"
 msgstr ""
 
-#: Administration/admin_tenant.py:1884 controlvanne/models.py:420
+#: Administration/admin_tenant.py:1852 controlvanne/models.py:420
 msgid "End"
 msgstr ""
 
-#: Administration/admin_tenant.py:1890 Administration/admin_tenant.py:2803
-#: Administration/admin_tenant.py:3308
+#: Administration/admin_tenant.py:1858 Administration/admin_tenant.py:2771
+#: Administration/admin_tenant.py:3276
 msgid "Valid"
 msgstr ""
 
-#: Administration/admin_tenant.py:1894
+#: Administration/admin_tenant.py:1862
 msgid "Recurence"
 msgstr ""
 
-#: Administration/admin_tenant.py:2042
+#: Administration/admin_tenant.py:2010
 #: BaseBillet/templates/fonctionnel/compte/partials/ticket_accordion.html:72
 #: kiosk/models.py:75 laboutik/models.py:1003 laboutik/models.py:1107
 #: laboutik/models.py:1196
 msgid "Status"
 msgstr ""
 
-#: Administration/admin_tenant.py:2056 BaseBillet/models.py:3303
+#: Administration/admin_tenant.py:2024 BaseBillet/models.py:3303
 msgid "Credit note"
 msgstr ""
 
-#: Administration/admin_tenant.py:2074
+#: Administration/admin_tenant.py:2042
 msgid "A credit note can only be issued for a confirmed or paid entry."
 msgstr ""
 
-#: Administration/admin_tenant.py:2079
+#: Administration/admin_tenant.py:2047
 msgid "A credit note already exists for this entry."
 msgstr ""
 
-#: Administration/admin_tenant.py:2101
+#: Administration/admin_tenant.py:2069
 msgid "Credit note created."
 msgstr ""
 
-#: Administration/admin_tenant.py:2157 BaseBillet/models.py:1982
+#: Administration/admin_tenant.py:2125 BaseBillet/models.py:1982
 msgid "Volunteering"
 msgstr ""
 
-#: Administration/admin_tenant.py:2199
+#: Administration/admin_tenant.py:2167
 msgid "Leave empty to avoid reservations."
 msgstr ""
 
-#: Administration/admin_tenant.py:2200
+#: Administration/admin_tenant.py:2168
 msgid "Used for social network descriptions."
 msgstr ""
 
-#: Administration/admin_tenant.py:2212
+#: Administration/admin_tenant.py:2180
 msgid "Résumé par tarif"
 msgstr "Summary by price"
 
-#: Administration/admin_tenant.py:2251
+#: Administration/admin_tenant.py:2219
 msgid "Action bénévoles"
 msgstr "Volunteer action"
 
-#: Administration/admin_tenant.py:2288 Administration/admin_tenant.py:2293
+#: Administration/admin_tenant.py:2256 Administration/admin_tenant.py:2261
 #: crowds/models.py:81 laboutik/models.py:1015 laboutik/models.py:1120
 msgid "Archived"
 msgstr ""
 
-#: Administration/admin_tenant.py:2364
+#: Administration/admin_tenant.py:2332
 msgid "Proposal status"
 msgstr ""
 
-#: Administration/admin_tenant.py:2369
+#: Administration/admin_tenant.py:2337
 msgid "Proposals pending"
 msgstr ""
 
-#: Administration/admin_tenant.py:2370
+#: Administration/admin_tenant.py:2338
 msgid "Proposals approved"
 msgstr ""
 
-#: Administration/admin_tenant.py:2371
+#: Administration/admin_tenant.py:2339
 msgid "Regular events"
 msgstr ""
 
-#: Administration/admin_tenant.py:2444 BaseBillet/models.py:1093
+#: Administration/admin_tenant.py:2412 BaseBillet/models.py:1093
 #: BaseBillet/models.py:1537 BaseBillet/models.py:1800
 msgid "Publish"
 msgstr ""
 
-#: Administration/admin_tenant.py:2539
+#: Administration/admin_tenant.py:2507
 msgid "Un évènement avec le même nom et la même date existe déjà."
 msgstr "An event with the same name and date already exists."
 
-#: Administration/admin_tenant.py:2573
+#: Administration/admin_tenant.py:2541
 msgid "Valid tickets"
 msgstr ""
 
-#: Administration/admin_tenant.py:2581 inventaire/models.py:211
+#: Administration/admin_tenant.py:2549 inventaire/models.py:211
 msgid "Créé par"
 msgstr "Created by"
 
-#: Administration/admin_tenant.py:2603
+#: Administration/admin_tenant.py:2571
 msgid "Duplicate (day+1)"
 msgstr ""
 
-#: Administration/admin_tenant.py:2611 Administration/admin_tenant.py:2628
-#: Administration/admin_tenant.py:2645 Administration/admin_tenant.py:2662
+#: Administration/admin_tenant.py:2579 Administration/admin_tenant.py:2596
+#: Administration/admin_tenant.py:2613 Administration/admin_tenant.py:2630
 msgid "Event duplicated successfully"
 msgstr ""
 
-#: Administration/admin_tenant.py:2613 Administration/admin_tenant.py:2630
-#: Administration/admin_tenant.py:2647 Administration/admin_tenant.py:2664
+#: Administration/admin_tenant.py:2581 Administration/admin_tenant.py:2598
+#: Administration/admin_tenant.py:2615 Administration/admin_tenant.py:2632
 msgid "Un evenement avec le même nom et date semble déja dupliqué"
 msgstr "An event with the same name and date seems to already be duplicated"
 
-#: Administration/admin_tenant.py:2620
+#: Administration/admin_tenant.py:2588
 msgid "Duplicate (week+1)"
 msgstr ""
 
-#: Administration/admin_tenant.py:2637
+#: Administration/admin_tenant.py:2605
 msgid "Duplicate (week+2)"
 msgstr ""
 
-#: Administration/admin_tenant.py:2654
+#: Administration/admin_tenant.py:2622
 msgid "Duplicate (month+1)"
 msgstr ""
 
-#: Administration/admin_tenant.py:2770
+#: Administration/admin_tenant.py:2738
 msgid "Approve and publish selected proposals"
 msgstr ""
 
-#: Administration/admin_tenant.py:2796
+#: Administration/admin_tenant.py:2764
 #, python-format
 msgid "%(n)s proposal(s) approved."
 msgstr ""
 
-#: Administration/admin_tenant.py:2811
+#: Administration/admin_tenant.py:2779
 msgid "Invalids"
 msgstr ""
 
-#: Administration/admin_tenant.py:2874
+#: Administration/admin_tenant.py:2842
 msgid "Choisir un tarif"
 msgstr "Choose a rate"
 
-#: Administration/admin_tenant.py:2903
+#: Administration/admin_tenant.py:2871
 msgid ""
 "Tarif d'un évènement à venir. Le produit vendu est créé automatiquement si "
 "besoin."
@@ -2603,11 +2565,11 @@ msgstr ""
 "Rate for an upcoming event. The sold product is created automatically if "
 "needed."
 
-#: Administration/admin_tenant.py:2916
+#: Administration/admin_tenant.py:2884
 msgid "Prix par billet"
 msgstr "Price per ticket"
 
-#: Administration/admin_tenant.py:2917
+#: Administration/admin_tenant.py:2885
 msgid ""
 "Montant payé pour UN billet (multiplié par la quantité). Obligatoire pour un "
 "tarif à prix libre."
@@ -2615,254 +2577,254 @@ msgstr ""
 "Amount paid for ONE ticket (multiplied by quantity). Required for a flexible "
 "pricing tier."
 
-#: Administration/admin_tenant.py:2945
+#: Administration/admin_tenant.py:2913
 msgid "Sélectionner un moyen de paiement"
 msgstr "Select a payment method"
 
-#: Administration/admin_tenant.py:2956 laboutik/models.py:1162
+#: Administration/admin_tenant.py:2924 laboutik/models.py:1162
 msgid "Quantity"
 msgstr ""
 
-#: Administration/admin_tenant.py:3012
+#: Administration/admin_tenant.py:2980
 msgid "Une reservation gratuite doit être en paiement OFFERT"
 msgstr "A free booking must use COMPLIMENTARY payment"
 
-#: Administration/admin_tenant.py:3026
+#: Administration/admin_tenant.py:2994
 msgid "Indiquez le prix par billet pour un tarif à prix libre."
 msgstr "Enter the price per ticket for a flexible pricing tier."
 
-#: Administration/admin_tenant.py:3126
+#: Administration/admin_tenant.py:3094
 msgid "Archived Event"
 msgstr ""
 
-#: Administration/admin_tenant.py:3143
+#: Administration/admin_tenant.py:3111
 msgid "-> Future event"
 msgstr ""
 
-#: Administration/admin_tenant.py:3161
+#: Administration/admin_tenant.py:3129
 msgid "<- Past event"
 msgstr ""
 
-#: Administration/admin_tenant.py:3231
+#: Administration/admin_tenant.py:3199
 msgid "Cancel and refund selected reservations"
 msgstr ""
 
-#: Administration/admin_tenant.py:3248 Administration/admin_tenant.py:3451
+#: Administration/admin_tenant.py:3216 Administration/admin_tenant.py:3419
 #, python-format
 msgid "%(count)d reservation(s) cancelled and refunded."
 msgstr ""
 
-#: Administration/admin_tenant.py:3253 Administration/admin_tenant.py:3459
+#: Administration/admin_tenant.py:3221 Administration/admin_tenant.py:3427
 #, python-format
 msgid " ... (%(more)d more)"
 msgstr ""
 
-#: Administration/admin_tenant.py:3254
+#: Administration/admin_tenant.py:3222
 #, python-format
 msgid "Some reservations failed to cancel/refund: %(errors)s"
 msgstr ""
 
-#: Administration/admin_tenant.py:3256
+#: Administration/admin_tenant.py:3224
 msgid "Ticket count"
 msgstr ""
 
-#: Administration/admin_tenant.py:3267
+#: Administration/admin_tenant.py:3235
 msgid "Send tickets through email again"
 msgstr ""
 
-#: Administration/admin_tenant.py:3276
+#: Administration/admin_tenant.py:3244
 #, python-brace-format
 msgid "Tickets sent to {reservation.user_commande.email}"
 msgstr ""
 
-#: Administration/admin_tenant.py:3392
+#: Administration/admin_tenant.py:3360
 msgid "Unscan selected tickets"
 msgstr ""
 
-#: Administration/admin_tenant.py:3404
+#: Administration/admin_tenant.py:3372
 #, python-format
 msgid "%(count)d ticket(s) unscanned successfully."
 msgstr ""
 
-#: Administration/admin_tenant.py:3406
+#: Administration/admin_tenant.py:3374
 #, python-format
 msgid "%(count)d ticket(s) were not scanned and were skipped."
 msgstr ""
 
-#: Administration/admin_tenant.py:3408
+#: Administration/admin_tenant.py:3376
 msgid "Cancel and refund"
 msgstr ""
 
-#: Administration/admin_tenant.py:3453
+#: Administration/admin_tenant.py:3421
 #, python-format
 msgid "%(count)d ticket(s) cancelled and refunded."
 msgstr ""
 
-#: Administration/admin_tenant.py:3460
+#: Administration/admin_tenant.py:3428
 #, python-format
 msgid "Some items failed to cancel/refund: %(errors)s"
 msgstr ""
 
-#: Administration/admin_tenant.py:3462 BaseBillet/models.py:1530
+#: Administration/admin_tenant.py:3430 BaseBillet/models.py:1530
 #: BaseBillet/templates/invoice/invoice.html:174 laboutik/models.py:1157
 msgid "Price"
 msgstr ""
 
-#: Administration/admin_tenant.py:3486
+#: Administration/admin_tenant.py:3454
 msgid "Booked at"
 msgstr ""
 
-#: Administration/admin_tenant.py:3497 BaseBillet/models.py:3591
+#: Administration/admin_tenant.py:3465 BaseBillet/models.py:3591
 #: BaseBillet/models.py:3627
 msgid "State"
 msgstr ""
 
-#: Administration/admin_tenant.py:3507
+#: Administration/admin_tenant.py:3475
 msgid "Scan"
 msgstr ""
 
-#: Administration/admin_tenant.py:3510
+#: Administration/admin_tenant.py:3478
 msgid "SCAN 1"
 msgstr ""
 
-#: Administration/admin_tenant.py:3511
+#: Administration/admin_tenant.py:3479
 msgid "SCAN"
 msgstr ""
 
-#: Administration/admin_tenant.py:3549
+#: Administration/admin_tenant.py:3517
 msgid "Ticket n°"
 msgstr ""
 
-#: Administration/admin_tenant.py:3555
+#: Administration/admin_tenant.py:3523
 #: comptabilite/templates/comptabilite/admin/change_form_before.html:34
 msgid "PDF"
 msgstr ""
 
-#: Administration/admin_tenant.py:3628
+#: Administration/admin_tenant.py:3596
 msgid "Go admin"
 msgstr ""
 
-#: Administration/admin_tenant.py:3642
+#: Administration/admin_tenant.py:3610
 msgid "Domaine principal"
 msgstr "Primary domain"
 
-#: Administration/admin_tenant.py:3710
+#: Administration/admin_tenant.py:3678
 msgid "Affichage des lieux"
 msgstr "Venue display"
 
-#: Administration/admin_tenant.py:3720
+#: Administration/admin_tenant.py:3688
 msgid "Fédération automatique par tags"
 msgstr "Automatic federation by tags"
 
-#: Administration/admin_tenant.py:3721
+#: Administration/admin_tenant.py:3689
 #: onboard/templates/onboard/partials/progress_panel.html:120
 #: onboard/templates/onboard/partials/progress_panel.html:124
 msgid "Présentation"
 msgstr "Presentation"
 
-#: Administration/admin_tenant.py:3726 seo/features.py:557
+#: Administration/admin_tenant.py:3694 seo/features.py:557
 msgid "Agenda participatif"
 msgstr "Participatory agenda"
 
-#: Administration/admin_tenant.py:3778
+#: Administration/admin_tenant.py:3746
 msgid "See this place"
 msgstr ""
 
-#: Administration/admin_tenant.py:3794
+#: Administration/admin_tenant.py:3762
 msgid "Included tags"
 msgstr ""
 
-#: Administration/admin_tenant.py:3798 BaseBillet/models.py:4085
+#: Administration/admin_tenant.py:3766 BaseBillet/models.py:4085
 msgid "Excluded tags"
 msgstr ""
 
-#: Administration/admin_tenant.py:3919
+#: Administration/admin_tenant.py:3887
 msgid "Api Key inserted"
 msgstr ""
 
-#: Administration/admin_tenant.py:3922
+#: Administration/admin_tenant.py:3890
 #, python-brace-format
 msgid "Ghost API connection failed: {response.status_code} - {response.reason}"
 msgstr ""
 
-#: Administration/admin_tenant.py:3924
+#: Administration/admin_tenant.py:3892
 #, python-brace-format
 msgid "Ghost API connection failed: {e}"
 msgstr ""
 
-#: Administration/admin_tenant.py:3970 BaseBillet/models.py:3916
+#: Administration/admin_tenant.py:3938 BaseBillet/models.py:3916
 msgid "Api key"
 msgstr ""
 
-#: Administration/admin_tenant.py:3988 Administration/admin_tenant.py:4008
-#: Administration/admin_tenant.py:4128
+#: Administration/admin_tenant.py:3956 Administration/admin_tenant.py:3976
+#: Administration/admin_tenant.py:4096
 msgid "Api OK"
 msgstr ""
 
-#: Administration/admin_tenant.py:3991 Administration/admin_tenant.py:4010
+#: Administration/admin_tenant.py:3959 Administration/admin_tenant.py:3978
 msgid "Api not OK"
 msgstr ""
 
-#: Administration/admin_tenant.py:3999 Administration/admin_tenant.py:4114
+#: Administration/admin_tenant.py:3967 Administration/admin_tenant.py:4082
 msgid "Test Api"
 msgstr ""
 
-#: Administration/admin_tenant.py:4095
+#: Administration/admin_tenant.py:4063
 msgid "Has key"
 msgstr ""
 
-#: Administration/admin_tenant.py:4110
+#: Administration/admin_tenant.py:4078
 msgid "Clé Api chiffrée"
 msgstr "Encrypted API key"
 
-#: Administration/admin_tenant.py:4132
+#: Administration/admin_tenant.py:4100
 #, python-brace-format
 msgid "Api not OK : {e}"
 msgstr ""
 
-#: Administration/admin_tenant.py:4209
+#: Administration/admin_tenant.py:4177
 #, python-brace-format
 msgid "{asset.name} Archived"
 msgstr ""
 
-#: Administration/admin_tenant.py:4246
+#: Administration/admin_tenant.py:4214
 msgid "Catégorie non autorisée pour une création."
 msgstr "Category not allowed for creation."
 
-#: Administration/admin_tenant.py:4264
+#: Administration/admin_tenant.py:4232
 msgid "Asset already exists"
 msgstr ""
 
-#: Administration/admin_tenant.py:4295
+#: Administration/admin_tenant.py:4263
 msgid "Seul le lieu d'origine peut envoyer des invitations."
 msgstr "Only the origin venue can send invitations."
 
-#: Administration/admin_tenant.py:4385
+#: Administration/admin_tenant.py:4353
 msgid "Permission refusée."
 msgstr "Permission denied."
 
-#: Administration/admin_tenant.py:4411
+#: Administration/admin_tenant.py:4379
 msgid "Invitation acceptée."
 msgstr "Invitation accepted."
 
-#: Administration/admin_tenant.py:4413 fedow_core/admin.py:439
+#: Administration/admin_tenant.py:4381 fedow_core/admin.py:439
 #: fedow_core/admin.py:897
 msgid "Aucune invitation en attente pour ce lieu."
 msgstr "No pending invitation for this venue."
 
-#: Administration/admin_tenant.py:4438
+#: Administration/admin_tenant.py:4406
 msgid "Remise en banque OK."
 msgstr "Bank deposit OK."
 
-#: Administration/admin_tenant.py:4480
+#: Administration/admin_tenant.py:4448
 msgid "Général"
 msgstr "General"
 
-#: Administration/admin_tenant.py:4481
+#: Administration/admin_tenant.py:4449
 msgid "Affichage"
 msgstr "Display"
 
-#: Administration/admin_tenant.py:4576
+#: Administration/admin_tenant.py:4544
 #: Administration/importers/lignearticle_exporter.py:24
 #: Administration/templates/admin/human_user/right_and_wallet_info.html:95
 #: Administration/templates/admin/human_user/right_and_wallet_info.html:125
@@ -2882,7 +2844,7 @@ msgstr "Display"
 msgid "Montant"
 msgstr "Amount"
 
-#: Administration/admin_tenant.py:4843
+#: Administration/admin_tenant.py:4811
 msgid ""
 "Paiement direct désactivé : aucun compte Stripe n'est connecté. Configurez "
 "Stripe dans Paramètres avant d'activer le paiement direct."
@@ -2890,19 +2852,19 @@ msgstr ""
 "Direct payment disabled: no Stripe account is connected. Configure Stripe in "
 "Settings before enabling direct payment."
 
-#: Administration/admin_tenant.py:4854 crowds/models.py:125
+#: Administration/admin_tenant.py:4822 crowds/models.py:125
 #: fedow_public/templates/fedow_public/retrieve_bank_deposits.html:33
 msgid "Devise"
 msgstr "Currency"
 
-#: Administration/admin_tenant.py:4863
+#: Administration/admin_tenant.py:4831
 #: crowds/templates/crowds/partial/summary.html:116
 #: crowds/templates/crowds/partial/summary.html:227
 #: crowds/templates/crowds/views/detail.html:216
 msgid "Financé"
 msgstr "Funded"
 
-#: Administration/admin_tenant.py:4873 crowds/models.py:32 crowds/models.py:98
+#: Administration/admin_tenant.py:4841 crowds/models.py:32 crowds/models.py:98
 msgid "Objectif"
 msgstr "Goal"
 
@@ -3099,7 +3061,7 @@ msgstr ""
 #: Administration/templates/admin/cloture/export_csv_comptable_form.html:100
 #: Administration/templates/admin/cloture/export_fec_form.html:80
 #: Administration/templates/admin/cloture/export_fiscal_form.html:80
-#: Administration/templates/admin/dashboard_module_modal.html:28
+#: Administration/templates/admin/dashboard_module_modal.html:35
 #: BaseBillet/templates/commun/adhesion/form.html:624
 #: BaseBillet/templates/commun/formulaires/contact.html:34
 #: BaseBillet/templates/commun/formulaires/reservation.html:496
@@ -3361,28 +3323,32 @@ msgstr "Bar / Restaurant"
 msgid "Association"
 msgstr "Association"
 
-#: Administration/templates/admin/dashboard.html:6
+#: Administration/templates/admin/dashboard.html:15
 msgid "Modules"
 msgstr ""
 
-#: Administration/templates/admin/dashboard.html:31
+#: Administration/templates/admin/dashboard.html:40
 msgid "V1 active"
 msgstr ""
 
-#: Administration/templates/admin/dashboard.html:58
+#: Administration/templates/admin/dashboard.html:73
 msgid "To migrate to LaBoutik V2, please contact the TiBillet team."
 msgstr ""
 
-#: Administration/templates/admin/dashboard.html:67
+#: Administration/templates/admin/dashboard.html:82
 msgid "Open LaBoutik V1"
 msgstr ""
 
-#: Administration/templates/admin/dashboard.html:86
+#: Administration/templates/admin/dashboard.html:101
 msgid "BETA"
 msgstr ""
 
-#: Administration/templates/admin/dashboard.html:95
+#: Administration/templates/admin/dashboard.html:110
 msgid "Enable LaBoutik V2 — BETA"
+msgstr ""
+
+#: Administration/templates/admin/dashboard.html:131
+msgid "Outils externes"
 msgstr ""
 
 #: Administration/templates/admin/dashboard_module_modal.html:10
@@ -3403,35 +3369,12 @@ msgstr "Are you sure you want to disable \"%(name)s\"?"
 msgid "Are you sure you want to enable \"%(name)s\"?"
 msgstr "Are you sure you want to enable \"%(name)s\"?"
 
-#: Administration/templates/admin/dashboard_module_modal.html:37
+#: Administration/templates/admin/dashboard_module_modal.html:45
+msgid "J'ai compris et je teste !"
+msgstr "Got it, let's test!"
+
+#: Administration/templates/admin/dashboard_module_modal.html:47
 msgid "Confirm"
-msgstr ""
-
-#: Administration/templates/admin/dashboard_module_modal_contact.html:34
-#, python-format
-msgid "Activer « %(name)s »"
-msgstr ""
-
-#: Administration/templates/admin/dashboard_module_modal_contact.html:38
-msgid ""
-"L'équipe de TiBillet peut vous aider à installer votre serveur de newsletter "
-"Ghost."
-msgstr "The TiBillet team can help you set up your Ghost newsletter server."
-
-#: Administration/templates/admin/dashboard_module_modal_contact.html:42
-msgid ""
-"Contactez-les pour leur indiquer combien de mails vous comptez envoyer, afin "
-"de calculer la charge serveur."
-msgstr ""
-"Contact them to let them know how many emails you plan to send, so they can "
-"calculate the server load."
-
-#: Administration/templates/admin/dashboard_module_modal_contact.html:59
-msgid "Salon Matrix"
-msgstr ""
-
-#: Administration/templates/admin/dashboard_module_modal_contact.html:76
-msgid "J'ai compris"
 msgstr ""
 
 #: Administration/templates/admin/event/change_form.html:8
@@ -3484,7 +3427,15 @@ msgstr ""
 msgid "1. La connexion à votre serveur Ghost"
 msgstr "1. Connecting to your Ghost server"
 
-#: Administration/templates/admin/ghost/panneau_newsletter.html:74
+#: Administration/templates/admin/ghost/panneau_newsletter.html:77
+msgid ""
+"Il vous faut un serveur Ghost pour piloter vos newsletters. L'équipe de "
+"TiBillet peut vous en héberger un&nbsp;: contactez-nous à <a href=\"mailto:"
+"contact@tibillet.re\" style=\"color:var(--color-primary-600,"
+"#7c3aed)\">contact@tibillet.re</a>&nbsp;!"
+msgstr "You need a Ghost server to manage your newsletters. The TiBillet team can host one for you&nbsp;: contact us at <a href=\"mailto:contact@tibillet.re\" style=\"color:var(--color-primary-600,#7c3aed)\">contact@tibillet.re</a>&nbsp;!"
+
+#: Administration/templates/admin/ghost/panneau_newsletter.html:81
 msgid ""
 "Renseignez ci-dessous l'adresse de votre instance et sa <strong>clé Admin "
 "API</strong> (Ghost&nbsp;: Settings → Integrations → Add custom "
@@ -3493,11 +3444,11 @@ msgstr ""
 "Enter your instance address and its <strong>Admin API key</strong> below "
 "(Ghost&nbsp;: Settings → Integrations → Add custom integration), then save."
 
-#: Administration/templates/admin/ghost/panneau_newsletter.html:80
+#: Administration/templates/admin/ghost/panneau_newsletter.html:87
 msgid "Enregistrez pendant que Ghost est joignable."
 msgstr "Save while Ghost is reachable."
 
-#: Administration/templates/admin/ghost/panneau_newsletter.html:81
+#: Administration/templates/admin/ghost/panneau_newsletter.html:88
 msgid ""
 "La clé n'est chiffrée que si la connexion réussit. Si Ghost est injoignable "
 "au moment où vous enregistrez, il faudra la ressaisir."
@@ -3505,19 +3456,19 @@ msgstr ""
 "The key is only encrypted if the connection succeeds. If Ghost is "
 "unreachable when you save, you'll need to re-enter it."
 
-#: Administration/templates/admin/ghost/panneau_newsletter.html:97
+#: Administration/templates/admin/ghost/panneau_newsletter.html:104
 msgid "Tester la connexion"
 msgstr "Test the connection"
 
-#: Administration/templates/admin/ghost/panneau_newsletter.html:101
+#: Administration/templates/admin/ghost/panneau_newsletter.html:108
 msgid "Ne modifie rien : interroge simplement Ghost."
 msgstr ""
 
-#: Administration/templates/admin/ghost/panneau_newsletter.html:110
+#: Administration/templates/admin/ghost/panneau_newsletter.html:117
 msgid "2. Générer un brouillon de newsletter"
 msgstr "2. Generate a newsletter draft"
 
-#: Administration/templates/admin/ghost/panneau_newsletter.html:114
+#: Administration/templates/admin/ghost/panneau_newsletter.html:121
 msgid ""
 "Chaque évènement devient une <strong>carte</strong> dans Ghost&nbsp;: son "
 "image, son titre, le lieu, la date, le tarif, et un bouton « Réserver ». Les "
@@ -3528,11 +3479,11 @@ msgstr ""
 "title, the venue, the date, the price, and a “Book” button. The colors and "
 "fonts come from your Ghost instance settings — not from TiBillet."
 
-#: Administration/templates/admin/ghost/panneau_newsletter.html:120
+#: Administration/templates/admin/ghost/panneau_newsletter.html:127
 msgid "Rien n'est publié, rien n'est envoyé."
 msgstr "Nothing is published, nothing is sent."
 
-#: Administration/templates/admin/ghost/panneau_newsletter.html:121
+#: Administration/templates/admin/ghost/panneau_newsletter.html:128
 msgid ""
 "Le résultat est un <strong>brouillon</strong> dans Ghost. Vous le relisez, "
 "vous coupez ce qui est de trop, et c'est <strong>vous</strong> qui "
@@ -3543,12 +3494,12 @@ msgstr ""
 "unnecessary, and it's <strong>you</strong> who sends it, from Ghost. So you "
 "can click without worry, as many times as you like."
 
-#: Administration/templates/admin/ghost/panneau_newsletter.html:141
+#: Administration/templates/admin/ghost/panneau_newsletter.html:148
 #, python-format
 msgid "Brouillon des %(nombre_de_jours)s prochains jours"
 msgstr "Draft of the next %(nombre_de_jours)s days"
 
-#: Administration/templates/admin/ghost/panneau_newsletter.html:148
+#: Administration/templates/admin/ghost/panneau_newsletter.html:155
 msgid "S'il n'y a aucun évènement sur la période, aucun brouillon n'est créé."
 msgstr "If there is no event during the period, no draft is created."
 
@@ -4293,23 +4244,23 @@ msgid "Télécharger l’application de scan de billets"
 msgstr "Download the ticket scanning application"
 
 #: Administration/templates/admin/service.html:6
-msgid "Are you looking for a custom dashboard?"
-msgstr ""
+msgid "Besoin d'un coup de main ?"
+msgstr "Need a hand?"
 
 #: Administration/templates/admin/service.html:10
 msgid ""
-"Did you decide to start using TiBillet but you need help? Feel free to get "
-"in touch for consulting, priority support on specific tickets or development "
-"services."
-msgstr ""
+"Consultez la documentation ou écrivez à l'équipe TiBillet : accompagnement à "
+"la prise en main, support et développement sur mesure."
+msgstr "Check out the documentation or write to the TiBillet team: onboarding support, help, and custom development."
 
 #: Administration/templates/admin/service.html:17
-msgid "Book a call with the Team"
-msgstr ""
+msgid "Contacter l'équipe"
+msgstr "Contact the team"
 
 #: Administration/templates/admin/service.html:21
-msgid "I'm good with the documentation"
-msgstr ""
+#: seo/templates/seo/feature_detail.html:81
+msgid "Lire la documentation"
+msgstr "Read the documentation"
 
 #: Administration/templates/admin/ticket/custom_form_section.html:10
 msgid "No custom form answers for this ticket's reservation."
@@ -4756,6 +4707,10 @@ msgstr ""
 
 #: AuthBillet/views.py:277
 msgid "Not allowed"
+msgstr ""
+
+#: BaseBillet/apps.py:7 laboutik/models.py:794
+msgid "Ticketing"
 msgstr ""
 
 #: BaseBillet/form_fields.py:81
@@ -5489,6 +5444,10 @@ msgstr ""
 
 #: BaseBillet/models.py:1254
 msgid "Time top-up"
+msgstr ""
+
+#: BaseBillet/models.py:1255
+msgid "Membership"
 msgstr ""
 
 #: BaseBillet/models.py:1256
@@ -9893,6 +9852,18 @@ msgstr "TiBillet"
 msgid "Forms"
 msgstr ""
 
+#: TiBillet/settings.py:626
+msgid "Paramètres"
+msgstr "Settings"
+
+#: TiBillet/settings.py:630
+msgid "Clés API"
+msgstr "API Keys"
+
+#: TiBillet/settings.py:634
+msgid "Webhooks"
+msgstr ""
+
 #: api_v2/serializers.py:151
 msgid "Schema d'URL non autorise (http/https seulement)."
 msgstr ""
@@ -11464,6 +11435,10 @@ msgstr "contributors"
 msgid "lieux & orgas"
 msgstr "venues & organisations"
 
+#: crowds/templates/crowds/partial/summary.html:104
+msgid "Contributions"
+msgstr "Contributions"
+
 #: crowds/templates/crowds/partial/summary.html:120
 msgid "à répartir"
 msgstr "to distribute"
@@ -11934,7 +11909,9 @@ msgstr "Object to attach"
 msgid ""
 "Identifiant de l'objet que cet appairage doit rattacher (une tireuse). Vide "
 "après l'appairage."
-msgstr "Identifier of the object this pairing must attach (a tap). Empty after pairing."
+msgstr ""
+"Identifier of the object this pairing must attach (a tap). Empty after "
+"pairing."
 
 #: discovery/models.py:101
 msgid "Claimed at"
@@ -13144,7 +13121,8 @@ msgstr "Printer"
 msgid ""
 "Imprimante utilisée par ce terminal. Laisser vide si l'appareil n'imprime "
 "pas."
-msgstr "Printer used by this terminal. Leave empty if the device does not print."
+msgstr ""
+"Printer used by this terminal. Leave empty if the device does not print."
 
 #: laboutik/models.py:612
 msgid "Nom du lecteur, par exemple « TPE du bar »."
@@ -13166,7 +13144,9 @@ msgstr "Connected to the terminal"
 msgid ""
 "L'appareil sur lequel ce lecteur est branché. Laisser vide si le lecteur "
 "n'est branché nulle part."
-msgstr "The device this reader is connected to. Leave empty if the reader is not connected anywhere."
+msgstr ""
+"The device this reader is connected to. Leave empty if the reader is not "
+"connected anywhere."
 
 #: laboutik/models.py:656
 msgid "Code d'enregistrement"
@@ -15448,7 +15428,7 @@ msgstr "The Ghost instance is not configured (missing URL or Admin API key)."
 msgid "Aucun événement sur les %(jours)s prochains jours."
 msgstr "No events in the next %(jours)s days."
 
-#: newsletter/templates/newsletter/email_evenements.html:31
+#: newsletter/templates/newsletter/email_evenements.html:51
 #, python-format
 msgid ""
 "Voici les événements du réseau, du %(date_debut_affichee)s au "
@@ -15456,6 +15436,10 @@ msgid ""
 msgstr ""
 "Here are the network's events, from %(date_debut_affichee)s to "
 "%(date_fin_affichee)s."
+
+#: newsletter/templates/newsletter/email_evenements.html:52
+msgid "Au programme"
+msgstr "Coming up"
 
 #: newsletter/views.py:120
 msgid "Instance Ghost injoignable. Vérifiez l'adresse."
@@ -18551,10 +18535,6 @@ msgstr ""
 msgid "Capture à venir"
 msgstr "Capture coming soon"
 
-#: seo/templates/seo/feature_detail.html:81
-msgid "Lire la documentation"
-msgstr "Read the documentation"
-
 #: seo/templates/seo/feature_detail.html:84
 msgid "Créer mon espace"
 msgstr "Create my space"
@@ -18925,6 +18905,33 @@ msgstr "Street and number"
 #: templates/widgets/widget_carte_adresse.html:108
 msgid "Pays"
 msgstr "Country"
+
+#~ msgid "Fédération"
+#~ msgstr "Federation"
+
+#~ msgid "Caisse LaBoutik"
+#~ msgstr "LaBoutik POS"
+
+#~ msgid "Tireuses"
+#~ msgstr "Draft taps"
+
+#~ msgid "Local currency & cashless"
+#~ msgstr "Local currency & cashless"
+
+#~ msgid "Inventory"
+#~ msgstr "Inventory"
+
+#~ msgid ""
+#~ "L'équipe de TiBillet peut vous aider à installer votre serveur de "
+#~ "newsletter Ghost."
+#~ msgstr "The TiBillet team can help you set up your Ghost newsletter server."
+
+#~ msgid ""
+#~ "Contactez-les pour leur indiquer combien de mails vous comptez envoyer, "
+#~ "afin de calculer la charge serveur."
+#~ msgstr ""
+#~ "Contact them to let them know how many emails you plan to send, so they "
+#~ "can calculate the server load."
 
 #~ msgid ""
 #~ "Aucune borne appairée en rôle Kiosque. Créez d'abord un code PIN "
