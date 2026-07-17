@@ -7,13 +7,27 @@
 
 /* ============================================================
  * 1. Forcer le theme clair / Force light theme
- * ============================================================ */
-.explorer-toolbar,
-.explorer-container,
-.explorer-fab {
+ * ============================================================
+ * L'explorer est TOUJOURS clair : son CSS pose des fonds blancs en dur (barre
+ * d'outils, cartes de la liste, tuiles Leaflet). En theme sombre, le texte
+ * herite du <body> devenait gris clair SUR ces fonds blancs -> illisible.
+ *
+ * Le gabarit pose data-bs-theme="light" sur #explorer-root : Bootstrap 5.3
+ * recalcule alors TOUTES ses variables pour ce sous-arbre. Les deux lignes
+ * color/background-color sont INDISPENSABLES : Bootstrap ne les applique que
+ * sur <body>, jamais sur un sous-arbre. Sans elles, les variables sont bien
+ * redefinies mais personne ne les consomme, et le texte reste celui du theme
+ * sombre.
+ * / The explorer is ALWAYS light: its CSS hardcodes white backgrounds. In dark
+ * theme the text inherited from <body> turned light grey ON those white
+ * backgrounds -> unreadable. The template sets data-bs-theme="light" on
+ * #explorer-root; the color/background-color lines below are MANDATORY, as
+ * Bootstrap only applies them on <body>, never on a subtree.
+ */
+.explorer-root {
     color-scheme: light;
-    --bs-body-bg: #fff;
-    --bs-body-color: #222;
+    color: var(--bs-body-color);
+    background-color: var(--bs-body-bg);
 }
 
 /* ============================================================

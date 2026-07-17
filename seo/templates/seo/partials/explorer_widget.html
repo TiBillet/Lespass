@@ -18,8 +18,19 @@
 {#     tenants = 1 entry per alive tenant (tenant-level info)                                     #}
 {#   - current_tenant_uuid: str — current tenant UUID, or "" on public                            #}
 
+{# data-bs-theme="light" : l'explorer est TOUJOURS en clair, quel que soit le #}
+{# theme choisi par le visiteur. Son CSS pose des fonds blancs en dur (cartes, #}
+{# pastilles, carte Leaflet) ; en theme sombre le texte devenait gris clair sur #}
+{# ces fonds blancs, donc illisible. Bootstrap 5.3 accepte data-bs-theme sur #}
+{# n'importe quel element : on borne le theme a ce sous-arbre, sans toucher au #}
+{# choix du visiteur (localStorage) ni au bouton de bascule de la navbar. #}
+{# / data-bs-theme="light": the explorer is ALWAYS light. Its CSS hardcodes white #}
+{# backgrounds; in dark theme the inherited text turned light grey on white — #}
+{# unreadable. Bootstrap 5.3 allows data-bs-theme on any element: we scope the #}
+{# theme to this subtree without touching the visitor's choice or the navbar toggle. #}
 <div id="explorer-root"
      class="explorer-root"
+     data-bs-theme="light"
      data-current-tenant-uuid="{{ current_tenant_uuid|default:'' }}"
      data-maptiler-key="{{ maptiler_key|default:'' }}"
       data-i18n-empty="{% translate 'Aucun résultat trouvé.' %}"

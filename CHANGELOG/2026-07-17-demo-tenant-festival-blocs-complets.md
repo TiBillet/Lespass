@@ -25,6 +25,7 @@ Le schéma et le domaine sont dérivés automatiquement (`schema = slugify(name)
 | `pages/templates/pages/faire_festival/page.html` | **Chargement de `tb-blocs.css`** + classe `tb-jetons` — sans eux, les 8 blocs en fallback s'affichaient sans aucun style ni marge |
 | `pages/static/pages/css/tb-blocs.css` | Jetons (`.tb-page, .tb-jetons`) séparés de l'habillage (`.tb-page`) |
 | `static/cartes/tb_fond_de_carte.js` | **Nouveau** — le fond de carte commun aux 5 cartes du projet |
+| `seo/templates/seo/partials/explorer_widget.html` · `seo/static/seo/explorer.css` | Mode clair forcé sur l'explorer (illisible en thème sombre) |
 | `TiBillet/maptiler.py` + `settings.py` | **Nouveau** context processor : expose `maptiler_key` à tous les gabarits |
 | 5 cartes + 3 gabarits porteurs | Passage au fond de carte commun (voir « Harmonisation des cartes ») |
 | `pages/management/commands/charger_demo_blocs.py` | `--schema` par défaut |
@@ -65,6 +66,18 @@ Le projet affichait **cinq fonds de carte différents**, chacun code en dur dans
 **La clé passe par un context processor** (`TiBillet.maptiler.maptiler_context`) plutôt que par chaque vue : les cartes vivent dans des apps différentes (`pages`, `seo`, widget inclus par `onboard` et le wizard évènement), et la première vue qui aurait oublié de passer la clé serait tombée sur le repli sans que personne ne le voie. La clé est publique par nature (elle part dans le HTML, MapTiler la restreint par domaine).
 
 **Le bloc `IFRAME` a quitté la démo** : le modèle le décrit comme « Contenu intégré libre (formulaire, widget) ». L'illustrer par un plan le détournait de son intention et faisait doublon avec le bloc `CARTE_LEAFLET` de la même page.
+
+### Explorer : mode clair forcé / Explorer: forced light theme
+
+L'explorer était **illisible en thème sombre** : son CSS pose des fonds blancs en dur (barre d'outils, cartes de la liste, tuiles Leaflet), tandis que le texte, hérité du `<body>`, virait au gris clair — soit `rgb(222,226,230)` **sur** `rgb(255,255,255)`.
+
+Le CSS contenait déjà une section « Forcer le theme clair » qui **ne pouvait pas fonctionner** : elle redéfinissait `--bs-body-bg` / `--bs-body-color` sans jamais les appliquer. Bootstrap ne pose `color` / `background-color` que sur `<body>`, jamais sur un sous-arbre : les variables étaient bien là, personne ne les consommait.
+
+Correctif : `data-bs-theme="light"` sur `#explorer-root` (Bootstrap 5.3 accepte l'attribut sur n'importe quel élément et recalcule **toutes** ses variables pour le sous-arbre), **plus** `color` / `background-color` sur `.explorer-root` pour que ces variables soient effectivement appliquées.
+
+Le thème est borné à ce sous-arbre : le choix du visiteur (`localStorage.theme`) et le bouton de bascule de la navbar sont intacts — la navbar reste sombre si le visiteur l'a choisi. Le correctif vaut pour les **deux** pages qui affichent le widget (`/explorer/` ROOT et `/federation/` tenant).
+
+Vérifié : en thème sombre, le texte des cartes passe de `rgb(222,226,230)` à `rgb(33,37,41)`. Mode clair inchangé. Les 12 tests E2E de l'explorer passent.
 
 ### Point ouvert — deux grilles cohabitent / Open point: two coexisting grids
 
