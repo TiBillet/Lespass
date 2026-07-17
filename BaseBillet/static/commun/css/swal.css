@@ -52,7 +52,11 @@
 
 .swal2-checkbox input[type="checkbox"],
 .swal2-radio input[type="radio"] {
-  accent-color: #0d6efd; /* Bootstrap primary */
+  /* La couleur du site, pas celle de Bootstrap : var(--bs-primary) est rebranchee
+     sur la marque par commun/css/marque.css. En dur, ces cases resteraient bleues
+     apres un changement d'identite.
+     / The site's colour, not Bootstrap's: --bs-primary is rewired to the brand. */
+  accent-color: var(--bs-primary);
 }
 
 /* Footer text, validation messages */
