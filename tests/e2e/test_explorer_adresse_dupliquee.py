@@ -80,9 +80,9 @@ def _lancer_dans_django(code_python):
 def deux_lieux_a_la_meme_adresse():
     """
     Donne au tenant 'lespass' une adresse aux coordonnees EXACTES de l'adresse
-    principale de 'chantefrein', puis reconstruit le cache SEO.
+    principale de 'festival', puis reconstruit le cache SEO.
     / Give the 'lespass' tenant an address with the EXACT coordinates of
-    'chantefrein' main address, then rebuild the SEO cache.
+    'festival' main address, then rebuild the SEO cache.
 
     Rend le nom du lieu federe et le nom d'un de ses evenements : le test verifie
     que ce nom apparait bien dans le popup, malgre les coordonnees confondues.
@@ -100,7 +100,7 @@ from BaseBillet.models import PostalAddress, Configuration, Event
 from django.utils import timezone
 from seo.tasks import refresh_seo_cache
 
-lieu_federe = Client.objects.get(schema_name="chantefrein")
+lieu_federe = Client.objects.get(schema_name="festival")
 lieu_de_la_carte = Client.objects.get(schema_name="lespass")
 
 with tenant_context(lieu_federe):

@@ -24,7 +24,7 @@ Ces tests echouent si quelqu'un re-inverse le sens des deux filtres.
 DEPENDANCE AU SEED
 ------------------
 Ces tests sont en LECTURE SEULE et s'appuient sur les donnees de `demo_data_v2` :
-le tenant `lespass` federe `chantefrein` et `la-maison-des-communs`. Ils se
+le tenant `lespass` federe `festival` et `la-maison-des-communs`. Ils se
 re-declarent `skip` si le seed n'est pas en place, plutot que d'echouer a tort.
 On ne cree rien en base : la suite tourne sur la base de DEV, une ecriture
 cross-schema qui ne serait pas annulee corromprait les donnees de demonstration.
@@ -163,15 +163,15 @@ def test_tag_exclude_retire_bien_les_events_tagues(http_client, tenant_lespass):
     Un tag dans `tag_exclude` EXCLUT les events qui le portent.
 
     Le bug historique faisait l'inverse : `tag_exclude` n'affichait QUE ces events.
-    Sur le seed, `lespass` exclut le tag 'reunion' de `chantefrein` : les reunions de
-    Chantefrein etaient donc les SEULS events de Chantefrein visibles sur l'agenda.
+    Sur le seed, `lespass` exclut le tag 'reunion' de `festival` : les reunions de
+    Festival etaient donc les SEULS events de Festival visibles sur l'agenda.
     """
-    lieu = _lieu_federe(tenant_lespass, "chantefrein")
+    lieu = _lieu_federe(tenant_lespass, "festival")
 
     with tenant_context(tenant_lespass):
         slugs_exclus = {tag.slug for tag in lieu.tag_exclude.all()}
     if not slugs_exclus:
-        pytest.skip("Seed absent : aucun tag_exclude sur lespass -> chantefrein.")
+        pytest.skip("Seed absent : aucun tag_exclude sur lespass -> festival.")
 
     noms_affiches, events_du_voisin = _noms_des_events_du_voisin_dans_lagenda(
         http_client, lieu.tenant

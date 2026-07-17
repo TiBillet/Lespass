@@ -80,7 +80,7 @@ def tenant_a():
 
 @pytest.fixture(scope="module")
 def tenant_b():
-    return Client.objects.get(schema_name='chantefrein')
+    return Client.objects.get(schema_name='festival')
 
 
 @pytest.fixture(scope="module")

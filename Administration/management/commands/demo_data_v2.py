@@ -271,12 +271,12 @@ class Command(BaseCommand):
         # Configuration is filled and the events created (EVENEMENTS is dynamic).
         self._seed_site_pages_lespass()
 
-        # Site vitrine du tenant chantefrein en skin faire_festival : la démo
+        # Site vitrine du tenant festival en skin faire_festival : la démo
         # couvre ainsi LES DEUX skins après un flush (toujours deux peaux à
         # comparer, sans manipulation manuelle — utile pour la migration skins).
-        # / Showcase website for the chantefrein tenant with the faire_festival
+        # / Showcase website for the festival tenant with the faire_festival
         # skin: after a flush the demo covers BOTH skins.
-        self._seed_site_pages_chantefrein()
+        self._seed_site_pages_festival()
 
     def _seed_site_pages_lespass(self):
         """
@@ -295,24 +295,24 @@ class Command(BaseCommand):
                 f"Site web pages 'lespass' non généré (non bloquant) : {erreur}"
             ))
 
-    def _seed_site_pages_chantefrein(self):
+    def _seed_site_pages_festival(self):
         """
-        Construit le site vitrine du tenant chantefrein via la commande
+        Construit le site vitrine du tenant festival via la commande
         `charger_demo_faire_festival` (qui force le skin faire_festival).
-        Gardé (try/except) : en mode light le tenant chantefrein n'existe pas,
+        Gardé (try/except) : en mode light le tenant festival n'existe pas,
         et un échec côté pages ne doit jamais casser le seed.
-        / Builds the chantefrein showcase website via `charger_demo_faire_festival`
+        / Builds the festival showcase website via `charger_demo_faire_festival`
         (which forces the faire_festival skin). Guarded: in light mode the
-        chantefrein tenant does not exist, and a pages failure must never
+        festival tenant does not exist, and a pages failure must never
         break the seed.
         """
         from django.core.management import call_command
 
         try:
-            call_command("charger_demo_faire_festival", schema="chantefrein")
+            call_command("charger_demo_faire_festival", schema="festival")
         except Exception as erreur:
             self.stderr.write(self.style.WARNING(
-                f"Site vitrine 'chantefrein' (faire_festival) non généré "
+                f"Site vitrine 'festival' (faire_festival) non généré "
                 f"(non bloquant) : {erreur}"
             ))
 
@@ -628,59 +628,6 @@ class Command(BaseCommand):
                     self.stdout.write(
                         f"Wallet de la carte {tag_id} : deja aligne ou carte absente de Fedow."
                     )
-
-        # Site web complet (app pages) du tenant lespass : 5 pages cohérentes
-        # utilisant tous les types de blocs (skin classic). Lancé en dernier, une
-        # fois la Configuration remplie et les évènements créés (le bloc EVENEMENTS
-        # est dynamique). / Complete website (pages app) for the lespass tenant: 5
-        # coherent pages using all block types (classic skin). Run last, once the
-        # Configuration is filled and the events created (EVENEMENTS is dynamic).
-        self._seed_site_pages_lespass()
-
-        # Site vitrine du tenant chantefrein en skin faire_festival : la démo
-        # couvre ainsi LES DEUX skins après un flush (toujours deux peaux à
-        # comparer, sans manipulation manuelle — utile pour la migration skins).
-        # / Showcase website for the chantefrein tenant with the faire_festival
-        # skin: after a flush the demo covers BOTH skins.
-        self._seed_site_pages_chantefrein()
-
-    def _seed_site_pages_lespass(self):
-        """
-        Construit le site web complet du tenant lespass via la commande
-        `charger_site_lespass`. Gardé (try/except) : un échec côté pages ne doit
-        jamais casser le seed des données de démo.
-        / Builds the lespass complete website via `charger_site_lespass`. Guarded:
-        a pages failure must never break the demo data seed.
-        """
-        from django.core.management import call_command
-
-        try:
-            call_command("charger_site_lespass", schema="lespass")
-        except Exception as erreur:
-            self.stderr.write(self.style.WARNING(
-                f"Site web pages 'lespass' non généré (non bloquant) : {erreur}"
-            ))
-
-    def _seed_site_pages_chantefrein(self):
-        """
-        Construit le site vitrine du tenant chantefrein via la commande
-        `charger_demo_faire_festival` (qui force le skin faire_festival).
-        Gardé (try/except) : en mode light le tenant chantefrein n'existe pas,
-        et un échec côté pages ne doit jamais casser le seed.
-        / Builds the chantefrein showcase website via `charger_demo_faire_festival`
-        (which forces the faire_festival skin). Guarded: in light mode the
-        chantefrein tenant does not exist, and a pages failure must never
-        break the seed.
-        """
-        from django.core.management import call_command
-
-        try:
-            call_command("charger_demo_faire_festival", schema="chantefrein")
-        except Exception as erreur:
-            self.stderr.write(self.style.WARNING(
-                f"Site vitrine 'chantefrein' (faire_festival) non généré "
-                f"(non bloquant) : {erreur}"
-            ))
 
     def _handle_seed_ventes(self, options):
         """
@@ -1351,7 +1298,7 @@ class Command(BaseCommand):
                 # Fédérations: ce lieu affiche des contenus d'autres tenants (avec filtres de tags)
                 "federations": [
                     {
-                        "tenant": "Chantefrein",
+                        "tenant": "Festival",
                         "include_tags": [],
                         "exclude_tags": ["Réunion"],
                         "membership_visible": True
@@ -1376,23 +1323,23 @@ class Command(BaseCommand):
                 ],
             },
             {
-                "name": "Chantefrein",
-                "short_description": "Lieu de démo: culture, bricolage et bons moments.",
+                "name": "Festival",
+                "short_description": "Lieu de démo: un festival, ses scènes et ses ateliers.",
                 "long_description": (
-                    "Bienvenue au Chantefrein. Ici on danse, on coud et on apprend. "
+                    "Bienvenue au Festival. Trois jours de concerts, d'ateliers et de rencontres. "
                     "Exemples d'évènements payants, gratuits et à prix libre, ainsi que des adhésions simples ou récurrentes."
                 ),
                 "tva_number": fake.bban()[:20],
                 "siren": fake.siret()[:20],
                 "phone": fake.phone_number()[:20],
-                "email": os.environ.get('ADMIN_EMAIL').replace("@", "+cf@", 1),
+                "email": os.environ.get('ADMIN_EMAIL').replace("@", "+fest@", 1),
                 "stripe_mode_test": True,
                 "stripe_connect_account_test": None,
                 "stripe_payouts_enabled": False,
-                "site_web": "https://tibillet.org/lowcow",
+                "site_web": "https://tibillet.org/festival",
                 "legal_documents": "https://tibillet.org/cgucgv",
                 "adresse": {
-                    "name": "La grange conviviale",
+                    "name": "Le parc du festival",
                     "street_address": "",
                     "address_locality": "Villeurbanne",
                     "postal_code": "69100",
@@ -1401,24 +1348,24 @@ class Command(BaseCommand):
                     "longitude": "4.8730",
                 },
                 "events": [
-                    {"name": "Bal trad du vendredi", "categorie": "CONCERT", "reservation": "payante",
+                    {"name": "Concert d'ouverture", "categorie": "CONCERT", "reservation": "payante",
                      "products": [{"name": "Billet", "categorie_article": "BILLET", "nominative": True,
                                     "prices": [{"name": "Plein tarif", "prix": 12}, {"name": "Réduit", "prix": 8}]}],
                      "tags": ["World"]},
-                    {"name": "Atelier couture — prix libre", "categorie": "ATELIER", "reservation": "payante",
+                    {"name": "Atelier sérigraphie — prix libre", "categorie": "ATELIER", "reservation": "payante",
                      "products": [{"name": "Réservation à prix libre", "categorie_article": "BILLET",
                                     "nominative": False,
                                     "prices": [{"name": "Prix libre", "prix": 1, "free_price": True}]}],
                      "tags": ["Prix libre"]},
                     {  # Evènements de type réunion pour tester les filtres de fédération
-                        "name": "Point Coop' Chantefrein",
+                        "name": "Point Coop' du festival",
                         "categorie": "CONFERENCE",
                         "short_description": "Réunion interne de l'équipe",
                         "long_description": "Point d'équipe mensuel.",
                         "tags": ["Réunion"],
                     },
                     {
-                        "name": "AG Ordinaire Chantefrein ",
+                        "name": "AG Ordinaire du festival",
                         "categorie": "CONFERENCE",
                         "short_description": "AG statutaire",
                         "long_description": "Assemblée générale de l'association.",
@@ -1427,14 +1374,14 @@ class Command(BaseCommand):
 
                 ],
                 "adhesions": [
-                    {"name": "Adhésion Chantefrein", "categorie_article": "ADHESION",
+                    {"name": "Adhésion Festival", "categorie_article": "ADHESION",
                      "prices": [
                          {"name": "Annuelle", "prix": 15, "subscription_type": "YEAR"},
                          {"name": "Mensuelle", "prix": 1.5, "recurring_payment": True, "subscription_type": "MONTH"},
                      ]},
                 ],
                 "initiatives": [
-                    {"name": "Réparer le fournil collectif", "budget_contributif": True, "currency": "€"},
+                    {"name": "Financer la scène solaire", "budget_contributif": True, "currency": "€"},
                 ],
             },
             {

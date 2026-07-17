@@ -8,7 +8,7 @@ de groupe (solo, grille, section_video, faq, section_carte).
 LOCALISATION : pages/management/commands/charger_demo_blocs.py
 
 Usage :
-    python manage.py charger_demo_blocs                 # tenant "chantefrein", skin classic
+    python manage.py charger_demo_blocs                 # tenant "festival", skin classic
     python manage.py charger_demo_blocs --schema=mon_tenant
     python manage.py charger_demo_blocs --no-skin       # ne force pas le skin
 
@@ -36,7 +36,7 @@ class Command(BaseCommand):
     help = "Charge une page d'accueil de demo avec tous les types de blocs (skin classic)."
 
     def add_arguments(self, parser):
-        parser.add_argument("--schema", default="chantefrein")
+        parser.add_argument("--schema", default="festival")
         # Par defaut on force le skin "reunion" (= gabarits classic) pour la revue.
         # --no-skin laisse le skin existant intact.
         # / By default we force the "reunion" skin (= classic templates) for the

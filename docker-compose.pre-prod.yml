@@ -133,7 +133,7 @@ services:
       - fedow.${DOMAIN}:172.17.0.1
       - laboutik.${DOMAIN}:172.17.0.1
       - lespass.${DOMAIN}:172.17.0.1
-      - chantefrein.${DOMAIN}:172.17.0.1
+      - festival.${DOMAIN}:172.17.0.1
     # start.sh lance supervisord qui orchestre gunicorn (HTTP :8002),
     # daphne (WebSockets :7999) et celery (worker + beat) dans CE conteneur.
     # Plus de service lespass_celery séparé : un seul conteneur en prod.
@@ -184,7 +184,7 @@ services:
       - traefik.http.routers.lespass-simple.entrypoints=websecure
       - traefik.http.routers.lespass-simple.tls=true
       - traefik.http.routers.lespass-simple.tls.certresolver=le-alpn
-      - traefik.http.routers.lespass-simple.rule=Host(`${DOMAIN}`) || Host(`lespass.${DOMAIN}`) || Host(`chantefrein.${DOMAIN}`)
+      - traefik.http.routers.lespass-simple.rule=Host(`${DOMAIN}`) || Host(`lespass.${DOMAIN}`) || Host(`festival.${DOMAIN}`)
       - traefik.http.routers.lespass-simple.middlewares=crowdsec@file
 
 

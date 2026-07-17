@@ -38,11 +38,24 @@
  * / Local variables (TiBillet color + spacing cohesion)
  * =========================================================== */
 .onboard-wizard {
-    /* Vert TiBillet — coherent avec le gradient du panneau.
-       / TiBillet green — matches the panel gradient. */
-    --tb-green-500: #16a34a;
-    --tb-green-600: #15803d;
-    --tb-green-700: #166534;
+    /* La teinte du wizard suit LA MARQUE (commun/css/marque.css), elle n'a plus
+       de couleur a elle. Changer la marque changera ce tunnel aussi.
+       Les noms restent --tb-green-* : ils sont consommes 20 fois dans ce fichier,
+       et les renommer serait un diff bruyant sans rien changer au rendu. Ils ne
+       designent plus une couleur mais un ROLE — la teinte, du clair au fonce.
+       / The wizard's hue now follows THE BRAND; it has no colour of its own. The
+       --tb-green-* names stay: they are consumed 20x here and renaming them would
+       be a noisy diff. They no longer name a colour but a ROLE: the hue, light to dark. */
+    /* Les TROIS etapes partent de l'ENCRE, jamais de --tb-marque : ces jetons
+       servent a des aplats de BOUTON, et un bouton porte du texte. --tb-marque est
+       la couleur de charte (#4296cc), qui ne fait que 3.25:1 sous du blanc — elle
+       est un GESTE, pas un fond de bouton. L'encre porte le blanc a 4.94:1.
+       / All THREE stops derive from the INK, never from --tb-marque: these tokens
+       fill BUTTONS, and a button carries text. The charter colour is a GESTURE
+       (3.25:1 under white); the ink carries white at 4.94:1. */
+    --tb-green-500: var(--tb-marque-encre);                            /* 4.94:1 */
+    --tb-green-600: color-mix(in srgb, var(--tb-marque-encre) 86%, black);  /* 6.28:1 */
+    --tb-green-700: color-mix(in srgb, var(--tb-marque-encre) 74%, black);  /* 7.74:1 */
 
     /* Rayons concentriques. /  Concentric radius scale. */
     --tb-radius-panel: 1rem;      /* 16px — conteneur panel/card. */
@@ -61,7 +74,7 @@
         0 10px 15px -3px rgba(15, 23, 42, 0.05);
     --tb-shadow-focus:
         0 0 0 1px var(--tb-green-500),
-        0 0 0 4px rgba(22, 163, 74, 0.15);
+        0 0 0 4px rgba(var(--tb-marque-rgb), 0.15);
 
     /* Antialiased pour rendu net (macOS/iOS).
        / Antialiased rendering for crisp text. */
@@ -77,17 +90,31 @@
 .onboard-panel {
     /* Gradient diagonal + leger halo radial superpose (effet moderne).
        / Diagonal gradient + subtle radial halo overlay (modern feel). */
+    /* Le degrade suit LA MARQUE : ses trois etapes sont derivees de --tb-marque-encre
+       au lieu d'etre trois verts en dur. Le panneau change avec l'identite du site.
+       / The gradient follows THE BRAND: its three stops derive from the brand ink
+       instead of being three hardcoded greens. */
     background:
         radial-gradient(ellipse at top left, rgba(255, 255, 255, 0.12), transparent 60%),
-        linear-gradient(160deg, #1e7c43 0%, #15803d 45%, #166534 100%);
+        linear-gradient(160deg,
+            var(--tb-marque-encre) 0%,
+            color-mix(in srgb, var(--tb-marque-encre) 86%, black) 50%,
+            color-mix(in srgb, var(--tb-marque-encre) 70%, black) 100%);
+    /* Le degrade part de l'encre PURE et ne va que vers le fonce, jamais vers le
+       clair : --tb-marque-encre est calibree au plus juste (4.94:1 sous du blanc),
+       donc l'eclaircir ferait tomber le libelle sous le seuil — a 92 % + blanc il
+       n'est deja plus qu'a 4.24:1. Blanc sur les 3 etapes : 4.94 / 6.28 / 8.24.
+       / The gradient starts at the PURE ink and only goes darker, never lighter:
+       the ink is calibrated to the bone, so lightening it drops the label below
+       the threshold. White on the three stops: 4.94 / 6.28 / 8.24. */
     color: #fff;
     border-radius: var(--tb-radius-panel);
     padding: 1.75rem 1.5rem;
     /* Ombre douce qui sort du gradient (vert teinte).
        / Soft shadow tinted with the panel color. */
     box-shadow:
-        0 1px 2px rgba(20, 83, 45, 0.06),
-        0 10px 30px -10px rgba(20, 83, 45, 0.35);
+        0 1px 2px rgba(var(--tb-marque-rgb), 0.06),
+        0 10px 30px -10px rgba(var(--tb-marque-rgb), 0.35);
     height: 100%;
     position: relative;
     overflow: hidden;
@@ -372,8 +399,8 @@
     font-weight: 600;
     padding: 0.625rem 1.25rem;
     box-shadow:
-        0 1px 2px rgba(22, 101, 52, 0.2),
-        0 4px 8px -2px rgba(22, 101, 52, 0.18);
+        0 1px 2px rgba(var(--tb-marque-rgb), 0.2),
+        0 4px 8px -2px rgba(var(--tb-marque-rgb), 0.18);
     transition: transform 100ms ease, box-shadow 200ms ease, filter 200ms ease;
 }
 .onboard-wizard .btn-primary:hover,
@@ -382,8 +409,8 @@
     border-color: var(--tb-green-700);
     filter: brightness(1.03);
     box-shadow:
-        0 1px 2px rgba(22, 101, 52, 0.25),
-        0 8px 16px -4px rgba(22, 101, 52, 0.28);
+        0 1px 2px rgba(var(--tb-marque-rgb), 0.25),
+        0 8px 16px -4px rgba(var(--tb-marque-rgb), 0.28);
 }
 .onboard-wizard .btn-primary:active {
     /* Subtle scale 0.97 sur press — skill /ui-ux-pro-max scale-feedback.
@@ -662,8 +689,8 @@
     border-color: var(--tb-green-700);
     color: #fff;
     box-shadow:
-        0 1px 2px rgba(22, 101, 52, 0.2),
-        0 4px 8px -2px rgba(22, 101, 52, 0.18);
+        0 1px 2px rgba(var(--tb-marque-rgb), 0.2),
+        0 4px 8px -2px rgba(var(--tb-marque-rgb), 0.18);
 }
 .btn-check:checked + .onboard-dns-radio:hover {
     color: #fff;

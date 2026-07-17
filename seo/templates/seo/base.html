@@ -71,6 +71,13 @@
     <link data-bs-stylesheet="bootstrap-icons" rel="stylesheet"
           href="{% static 'commun/css/bootstrap-icons.min.css' %}">
     <link rel="stylesheet" href="{% static 'commun/css/vars.css' %}">
+    {# LA couleur d'identite du site. Chargee APRES vars.css (qui porte la charte, #}
+    {# les --kouler-*) car elle en derive les jumeaux accessibles, et APRES #}
+    {# bootstrap.min.css car elle rebranche sa couleur primaire — a specificite #}
+    {# egale, le dernier charge gagne. Un seul reglage a changer : cf. le fichier. #}
+    {# / THE site's identity colour. After vars.css (the charter) since it derives #}
+    {# accessible twins from it, and after bootstrap since it rewires its primary. #}
+    <link rel="stylesheet" href="{% static 'commun/css/marque.css' %}">
     <link rel="stylesheet" href="{% static 'commun/css/tibillet.css' %}">
     <link rel="stylesheet" href="{% static 'seo/seo.css' %}">
 

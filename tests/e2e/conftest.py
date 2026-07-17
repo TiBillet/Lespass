@@ -217,7 +217,7 @@ def login_as_admin_on_subdomain(e2e_test_token, admin_email):
     """Factory fixture pour les tests cross-tenant : callable (page, subdomain) → void.
 
     Connecte l'admin sur un tenant precis (identifie par son subdomain, ex:
-    "chantefrein") en appelant l'endpoint force_login avec le bon header Host,
+    "festival") en appelant l'endpoint force_login avec le bon header Host,
     puis en injectant le cookie sur le domaine correspondant.
 
     Contrairement a `login_as_admin` qui cible toujours le tenant `SUB` (lespass),
@@ -229,8 +229,8 @@ def login_as_admin_on_subdomain(e2e_test_token, admin_email):
     on any existing tenant — essential for cross-tenant tests (asset federation).
 
     Usage :
-        login_as_admin_on_subdomain(page, "chantefrein")
-        page.goto(f"https://chantefrein.{DOMAIN}/admin/fedow_core/asset/")
+        login_as_admin_on_subdomain(page, "festival")
+        page.goto(f"https://festival.{DOMAIN}/admin/fedow_core/asset/")
     """
 
     def _login_on_subdomain(page, subdomain):
@@ -451,7 +451,7 @@ def django_shell():
     / Factory: executes Python code in the Django shell for the lespass tenant.
 
     Usage : result = django_shell("from laboutik.models import PointDeVente; print(PointDeVente.objects.count())")
-    Usage : result = django_shell("...", schema="chantefrein")
+    Usage : result = django_shell("...", schema="festival")
     """
 
     def _run(python_code, schema="lespass"):

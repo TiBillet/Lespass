@@ -146,15 +146,68 @@ class Tag(models.Model):
     def color_bg(self):
         return self.color
 
+    @staticmethod
+    def _luminance_relative(couleur_hexadecimale: str) -> float:
+        """
+        Luminance relative WCAG 2.1 d'une couleur hexadecimale.
+        / WCAG 2.1 relative luminance of a hex colour.
+
+        LOCALISATION : BaseBillet/models.py
+
+        C'est la grandeur normalisee par WCAG pour calculer un contraste. Elle
+        n'est PAS la luminosite percue : chaque composante est d'abord linearisee
+        (correction gamma), puis ponderee.
+        / The quantity WCAG standardises to compute contrast. It is NOT perceived
+        brightness: each channel is linearised (gamma) first, then weighted.
+        """
+        composantes_lineaires = []
+        for decalage in (1, 3, 5):
+            composante = int(couleur_hexadecimale[decalage:decalage + 2], 16) / 255
+            if composante <= 0.03928:
+                composantes_lineaires.append(composante / 12.92)
+            else:
+                composantes_lineaires.append(((composante + 0.055) / 1.055) ** 2.4)
+
+        rouge, vert, bleu = composantes_lineaires
+        return 0.2126 * rouge + 0.7152 * vert + 0.0722 * bleu
+
     @property
     def contrast_fg(self) -> str:
-        """Retourne '#000000' ou '#ffffff' selon le contraste avec color_bg (méthode YIQ)."""
-        bg = self._clean_hex(self.color, "#0dcaf0")
-        r = int(bg[1:3], 16)
-        g = int(bg[3:5], 16)
-        b = int(bg[5:7], 16)
-        yiq = (r * 299 + g * 587 + b * 114) / 1000
-        return "#000000" if yiq >= 128 else "#ffffff"
+        """
+        Encre a poser sur color_bg : le noir ou le blanc, celui qui contraste LE PLUS.
+        / Ink to put on color_bg: black or white, whichever contrasts MOST.
+
+        LOCALISATION : BaseBillet/models.py
+
+        Le calcul suit WCAG 2.1, et PAS la formule YIQ (r*299 + g*587 + b*114).
+        YIQ mesure la luminosite percue, pas le contraste : elle choisit du blanc
+        sur des teintes moyennes ou seul le noir passe. Sur douze couleurs
+        courantes, elle produit quatre badges illisibles — rouge 3.82:1, vert
+        2.87:1, bleu 4.30:1, rose 4.10:1 — alors que la couleur du tag est saisie
+        par le gestionnaire dans l'admin, sans qu'aucun avertissement ne l'informe.
+        / The computation follows WCAG 2.1, NOT the YIQ formula. YIQ measures
+        perceived brightness, not contrast: it picks white on mid-tone hues where
+        only black passes, producing unreadable badges on four of twelve common
+        colours — with no warning to the manager who picked the colour.
+
+        Cette methode ne peut pas echouer, et c'est demontrable : le contraste du
+        noir vaut (L+0.05)/0.05 et celui du blanc 1.05/(L+0.05). Le pire cas est
+        leur croisement, a L ~ 0.179, ou les deux valent 4.58:1. Le meilleur des
+        deux est donc TOUJOURS >= 4.58:1, quelle que soit la couleur choisie.
+        / This method cannot fail, provably: black gives (L+0.05)/0.05 and white
+        1.05/(L+0.05); the worst case is where they cross (L ~ 0.179), both at
+        4.58:1. The better of the two is ALWAYS >= 4.58:1, whatever the colour.
+        """
+        couleur_de_fond = self._clean_hex(self.color, "#0dcaf0")
+        luminance_du_fond = self._luminance_relative(couleur_de_fond)
+
+        # Contraste WCAG = (Lclair + 0.05) / (Lsombre + 0.05).
+        # Le noir a une luminance de 0, le blanc de 1.
+        # / WCAG contrast = (Llight + 0.05) / (Ldark + 0.05). Black is 0, white is 1.
+        contraste_du_noir = (luminance_du_fond + 0.05) / 0.05
+        contraste_du_blanc = 1.05 / (luminance_du_fond + 0.05)
+
+        return "#000000" if contraste_du_noir >= contraste_du_blanc else "#ffffff"
 
     @property
     def style_attr(self) -> str:

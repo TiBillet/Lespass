@@ -195,7 +195,7 @@ services:
       - traefik.enable=true
       - traefik.docker.network=frontend
       - traefik.http.routers.lespass_nginx.tls=true
-#      - traefik.http.routers.lespass_nginx.rule=Host(`$DOMAIN`) || Host(`www.$DOMAIN`) || Host(`agenda.$DOMAIN`) || Host(`lespass.$DOMAIN`) || Host(`linterupteur.$DOMAIN`) || Host(`demo.$DOMAIN`) || Host(`bis.domainbis.localhost`) || Host(`domainbis.localhost`) || Host(`chantefrein.$DOMAIN`)  || Host(`la-lowcow-motiv.$DOMAIN`)
+#      - traefik.http.routers.lespass_nginx.rule=Host(`$DOMAIN`) || Host(`www.$DOMAIN`) || Host(`agenda.$DOMAIN`) || Host(`lespass.$DOMAIN`) || Host(`linterupteur.$DOMAIN`) || Host(`demo.$DOMAIN`) || Host(`bis.domainbis.localhost`) || Host(`domainbis.localhost`) || Host(`festival.$DOMAIN`)  || Host(`la-lowcow-motiv.$DOMAIN`)
       - traefik.http.routers.lespass_nginx.rule=Host(`$DOMAIN`) || HostRegexp(`${DOMAIN_REGEX}`)
       - traefik.http.services.lespass_nginx.loadbalancer.server.port=80
     networks:

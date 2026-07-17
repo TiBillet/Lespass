@@ -36,7 +36,7 @@ class Command(BaseCommand):
 
         # Fabrication d'un deuxième tenant pour de la fédération
         with schema_context('public'):
-            name = "Chantefrein"
+            name = "Festival"
             domain = os.getenv("DOMAIN")
             tenant, created = Client.objects.get_or_create(
                 schema_name=slugify(name),
@@ -55,7 +55,7 @@ class Command(BaseCommand):
             user.is_staff = True
             user.save()
 
-        tenant2 = Client.objects.get(name="Chantefrein")
+        tenant2 = Client.objects.get(name="Festival")
 
         for tenant in [tenant1, tenant2]:
             config = Configuration.get_solo()

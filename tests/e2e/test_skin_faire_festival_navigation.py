@@ -1,6 +1,6 @@
 """
-Tests E2E : navigation HTMX sous le skin faire_festival (tenant chantefrein).
-/ E2E tests: HTMX navigation under the faire_festival skin (chantefrein tenant).
+Tests E2E : navigation HTMX sous le skin faire_festival (tenant festival).
+/ E2E tests: HTMX navigation under the faire_festival skin (festival tenant).
 
 LOCALISATION : tests/e2e/test_skin_faire_festival_navigation.py
 
@@ -15,7 +15,7 @@ panels missing from the headless fragment (dead buttons after a swap), and the
 views returning the FULL document to HTMX requests. This test locks both.
 
 Flow :
-1. Chargement complet de /event/ sur chantefrein (skin faire_festival).
+1. Chargement complet de /event/ sur festival (skin faire_festival).
 2. Clic navbar « Adhesions » (hx-get, hx-target=body) -> swap HTMX reel.
 3. Verifie : URL poussee, skin toujours applique, UNE seule navbar,
    pas de document imbrique (le fragment headless a bien ete servi).
@@ -31,14 +31,14 @@ from playwright.sync_api import expect
 pytestmark = pytest.mark.e2e
 
 DOMAIN = os.environ.get("DOMAIN", "tibillet.localhost")
-URL_CHANTEFREIN = f"https://chantefrein.{DOMAIN}"
+URL_FESTIVAL = f"https://festival.{DOMAIN}"
 
 
 def test_navigation_htmx_skin_faire_festival_et_panneaux(page):
     """Navigation HTMX sous skin ff : fragment headless + panneaux du contrat."""
     # 1. Chargement complet de l'agenda (squelette shell.html).
     # / Full load of the agenda page (shell.html skeleton).
-    page.goto(f"{URL_CHANTEFREIN}/event/")
+    page.goto(f"{URL_FESTIVAL}/event/")
     expect(page.locator(".skin-faire-festival").first).to_be_visible()
 
     # 2. Clic sur le lien navbar « Adhesions » : c'est un hx-get avec

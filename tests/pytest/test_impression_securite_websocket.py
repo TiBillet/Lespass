@@ -199,11 +199,11 @@ def test_le_canal_redis_porte_le_nom_du_lieu():
     identifiant_imprimante = uuid.uuid4()
 
     canal_du_lieu_a = nom_du_groupe_websocket("lespass", identifiant_imprimante)
-    canal_du_lieu_b = nom_du_groupe_websocket("chantefrein", identifiant_imprimante)
+    canal_du_lieu_b = nom_du_groupe_websocket("festival", identifiant_imprimante)
 
     assert canal_du_lieu_a != canal_du_lieu_b
     assert "lespass" in canal_du_lieu_a
-    assert "chantefrein" in canal_du_lieu_b
+    assert "festival" in canal_du_lieu_b
 
 
 def test_l_emetteur_et_le_recepteur_calculent_le_meme_canal():

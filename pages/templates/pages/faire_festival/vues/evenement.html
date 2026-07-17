@@ -53,11 +53,16 @@
     </script>
 
     <!-- Schema.org Event structured data -->
-    {# JSON-LD Event construit côté Python (json.dumps) — l'ancien JSON fait
-   main était invalide (audit SEO 2026-07-05) : retours à la ligne non
-   échappés, virgule traînante, virgule décimale dans geo, offers jamais
-   rendu (event.price_min inexistant). / Python-built Event JSON-LD — the
-   old hand-made JSON was invalid. #}
+    {% comment %}
+        JSON-LD Event construit côté Python (json.dumps), jamais à la main dans le
+        gabarit : un JSON écrit à la main ne peut garantir ni l'échappement des
+        retours à la ligne, ni l'absence de virgule traînante, ni le point décimal
+        dans geo — et un JSON-LD invalide est ignoré EN SILENCE par les moteurs.
+        / Event JSON-LD built in Python (json.dumps), never hand-written in the
+        template: hand-made JSON cannot guarantee newline escaping, the absence of a
+        trailing comma, nor a decimal point in geo — and invalid JSON-LD is silently
+        ignored by crawlers.
+    {% endcomment %}
     {% jsonld_event event %}
 {% endblock %}
 
