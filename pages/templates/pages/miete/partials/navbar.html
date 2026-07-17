@@ -1,0 +1,152 @@
+{% load i18n %}
+{% comment %}
+NAVBAR — LE MENU EST FAIT DE BULLES
+/ Navbar — the menu is made of bubbles
+
+LOCALISATION : pages/templates/pages/miete/partials/navbar.html
+
+C'est le geste signature du skin : chaque entree de menu est une bulle de
+pensee dessinee, vectorisee depuis les originaux du lieu (cf. partials/bulle.html).
+
+AUCUN LIBELLE N'EST ECRIT ICI. Ils viennent tous de `main_nav`, que le serveur
+construit depuis les pages publiees du tenant (cf. BaseBillet/views.py:get_context).
+Un skin decrit A QUOI CA RESSEMBLE, jamais CE QUE CA FAIT — donc pas de
+« Des Evenements » en dur : n'importe quel lieu doit pouvoir porter ce skin.
+/ NO LABEL IS HARD-CODED HERE. They all come from `main_nav`, built server-side
+from the tenant's published pages. A skin describes what it looks like, never
+what it does — so any venue can wear this skin.
+
+LA COULEUR TOURNE PAR POSITION. {% templatetag openblock %} cycle {% templatetag closeblock %}
+distribue les cinq teintes relevees sur les dessins du lieu. Les cinq passent le
+contraste AA avec l'encre noire (cf. tokens.css) : quel que soit l'ordre des
+pages, aucun libelle ne devient illisible.
+/ Colour cycles by position through the five sampled tints. All five pass AA
+against black ink, so no ordering can produce an unreadable label.
+
+CONTRAT D'ACCESSIBILITE DE LA BULLE :
+  - le dessin SVG est decoratif (aria-hidden, focusable=false) ;
+  - le libelle est du VRAI texte, dans le flux, traduisible, redimensionnable ;
+  - c'est le <a> qui porte le nom accessible, via ce texte ;
+  - la page courante porte aria-current="page" ;
+  - le focus est visible et n'est jamais anime (cf. miete.css).
+/ Bubble accessibility contract: the SVG is decorative; the label is real text
+in the flow; the <a> takes its accessible name from that text; the current page
+carries aria-current; focus is visible and never animated.
+
+FLUX D'UN CLIC :
+  clic sur .miete-bulle -> hx-get vers item.url -> hx-target="body"
+  -> le serveur repond avec headless.html (skin miete) -> swap.
+/ Click flow: .miete-bulle -> hx-get -> hx-target=body -> headless.html -> swap.
+{% endcomment %}
+
+<nav class="miete-nav" aria-label="{% translate 'Menu principal' %}"
+     data-testid="miete-nav">
+
+    {# La marque. Pas une bulle : c'est le retour a l'accueil, pas une rubrique. #}
+    {# / The wordmark. Not a bubble: it is the way home, not a section. #}
+    <a class="miete-nav__marque" href="/" hx-get="/" hx-target="body" hx-push-url="true"
+       data-testid="miete-nav-marque">
+        {% if config.logo %}
+            {% include 'commun/partials/picture.html' with img=config.logo alt=config.organisation style='max-width: 3.5rem' %}
+        {% else %}
+            {{ config.organisation }}
+        {% endif %}
+    </a>
+
+    {# --------------------------------------------------------------------- #}
+    {# LES BULLES.                                                            #}
+    {#                                                                        #}
+    {# data-loading-target n'est pose QUE sur ce conteneur de liens, jamais   #}
+    {# sur un conteneur qui porte des formulaires : l'overlay se declencherait #}
+    {# aussi a chaque envoi de formulaire.                                     #}
+    {# / data-loading-target is scoped to this links container only.          #}
+    {# --------------------------------------------------------------------- #}
+    <ul class="miete-nav__bulles" data-loading-target="#tibillet-spinner"
+        data-loading-delay="{{ loading_delay|default:'400' }}">
+
+        {% for item in main_nav %}
+            <li class="miete-nav__item">
+                <a class="miete-bulle miete-bulle--{% cycle 'jaune' 'vert' 'rose' 'vermillon' 'cyan' %}"
+                   href="{{ item.url }}"
+                   hx-get="{{ item.url }}" hx-target="body" hx-push-url="true"
+                   {% if url_name == item.name %}aria-current="page"{% endif %}
+                   data-testid="miete-bulle-{{ item.name }}">
+                    {% include "pages/miete/partials/bulle.html" %}
+                    <span class="miete-bulle__libelle">{% translate item.label %}</span>
+                </a>
+
+                {% if item.children %}
+                    {# Les sous-pages : de simples liens texte sous la bulle.        #}
+                    {# Pas de menu deroulant — un deroulant demande du JS, un piege  #}
+                    {# au clavier de plus, et masque des destinations. Ici tout est  #}
+                    {# visible et atteignable d'emblee.                              #}
+                    {# / Sub-pages as plain text links under the bubble. No dropdown: #}
+                    {# a dropdown needs JS, adds a keyboard trap, and hides           #}
+                    {# destinations. Here everything is visible and reachable.        #}
+                    <ul class="miete-nav__enfants">
+                        {% for enfant in item.children %}
+                            <li>
+                                <a class="miete-nav__enfant"
+                                   href="{{ enfant.url }}"
+                                   hx-get="{{ enfant.url }}" hx-target="body" hx-push-url="true"
+                                   {% if url_name == enfant.name %}aria-current="page"{% endif %}>
+                                    {{ enfant.label }}
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ul>
+
+    {# --------------------------------------------------------------------- #}
+    {# LES OUTILS.                                                            #}
+    {#                                                                        #}
+    {# Ce ne sont pas des rubriques mais des commandes : elles n'ont donc pas  #}
+    {# de bulle. Les ids #contactPanel et #loginPanel sont FIGES par le        #}
+    {# contrat de skin (Bootstrap y refere en dur) — ne jamais les renommer.   #}
+    {# / Commands, not sections: no bubble. #contactPanel and #loginPanel are  #}
+    {# FROZEN by the skin contract — never rename them.                        #}
+    {# --------------------------------------------------------------------- #}
+    <div class="miete-nav__outils">
+        <button class="miete-lien-outil" type="button"
+                data-bs-toggle="offcanvas" data-bs-target="#contactPanel"
+                aria-controls="contactPanel" data-testid="miete-nav-contact">
+            {% translate 'Contact and support' %}
+        </button>
+
+        <div class="dropdown">
+            <button class="miete-lien-outil dropdown-toggle" type="button"
+                    id="languageDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-translate" aria-hidden="true"></i>
+                {% translate "Language" %}
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="languageDropdown">
+                <li><button class="dropdown-item language-select-btn" data-lang="fr">{% translate "French" %}</button></li>
+                <li><button class="dropdown-item language-select-btn" data-lang="en">{% translate "English" %}</button></li>
+            </ul>
+        </div>
+
+        <button id="themeToggle" class="miete-lien-outil" type="button"
+                title="{% translate 'Toggle theme' %}">
+            <i class="bi bi-circle-half" aria-hidden="true"></i>
+            {% translate "Theme" %}
+        </button>
+
+        {% if user.is_authenticated %}
+            <a class="miete-lien-outil" href="/my_account/"
+               hx-get="/my_account/" hx-target="body" hx-push-url="true"
+               data-testid="miete-nav-compte">
+                <i class="bi bi-person-circle" aria-hidden="true"></i>
+                {% translate 'My account' %}
+            </a>
+        {% else %}
+            <button class="miete-lien-outil" type="button"
+                    data-bs-toggle="offcanvas" data-bs-target="#loginPanel"
+                    aria-controls="loginPanel" data-testid="miete-nav-connexion">
+                {% translate 'Log in' %}
+            </button>
+        {% endif %}
+    </div>
+</nav>

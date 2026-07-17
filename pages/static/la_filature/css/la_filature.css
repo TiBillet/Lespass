@@ -1,0 +1,576 @@
+/*
+ * la_filature.css — habillage du skin "la_filature" des blocs de l'app pages.
+ * / Styling of the "la_filature" skin blocks (pages app).
+ *
+ * LOCALISATION : pages/static/la_filature/css/la_filature.css
+ * PORTEE : charge PAR-DESSUS pages/css/tb-blocs.css, jamais a la place.
+ *   tb-blocs.css fournit la STRUCTURE (grille, gouttiere unique, rythme,
+ *   responsive, focus, reduced-motion) via ses jetons --tb-*. Ce fichier ne
+ *   fournit que l'IDENTITE : polices, couleurs, filets, pilules.
+ *   Consequence voulue : les corrections futures du socle profitent
+ *   automatiquement a ce skin. Ne PAS recopier sa mise en page ici.
+ * / SCOPE: loaded ON TOP of tb-blocs.css, never instead of it. tb-blocs.css
+ *   owns structure via its --tb-* tokens; this file owns identity only.
+ *
+ * SYSTEME : voir pages/templates/pages/la_filature/DESIGN.md (ADN extrait du
+ *   site historique lafilature-villeurbanne.fr, WordPress+Divi, 2026-07-16).
+ *
+ * CONTRAT DE JETONS : voir TECH_DOC/SESSIONS/SKINS/CHANTIER-10-SOCLE-TOKENS.md
+ *   (proprietaire : agent socle). Noms figes. QUATRE roles, pas deux — c'est le
+ *   coeur du contrat et ce qui rend le jaune de ce skin possible :
+ *     --tb-accent            l'ENCRE. Le socle l'utilise en `color:` 7 fois
+ *                            (liens de .tb-bloc__texte, fil d'ariane, intitules).
+ *                            Doit TOUJOURS etre lisible sur le papier.
+ *     --tb-accent-contraste  ce qui se pose SUR --tb-accent.
+ *     --tb-accent-vif        le GESTE (filets, bordures, anneaux). Le socle n'y
+ *                            pose JAMAIS de texte : d'ou la possibilite d'y
+ *                            mettre du jaune sans rien casser.
+ *     --tb-fond              le FOND d'un element plein.
+ *     --tb-fond-contraste    l'encre posee SUR --tb-fond.
+ *   Repli : --tb-fond vaut --tb-accent si on ne pose rien (zero regression).
+ *
+ *   PIEGE EVITE : mettre une teinte claire dans --skin-accent pour obtenir un
+ *   aplat colore teindrait DU MEME COUP les liens de .tb-bloc__texte (a 1.92:1
+ *   pour un jaune) — invisible a la relecture, parce que l'aplat, lui, aurait
+ *   l'air correct. Le fond a donc son propre jeton. On ne met dans --tb-accent
+ *   que des valeurs portantes.
+ *
+ *   Nos points d'entree pour le CHROME : --skin-accent / --skin-accent-vif /
+ *   --skin-accent-contraste / --skin-fond / --skin-fond-contraste /
+ *   --skin-accent-sombre / --skin-accent-contraste-sombre. Le socle LIT ces
+ *   variables depuis :root (indirection) : on gagne quel que soit l'ordre de
+ *   chargement, contrairement a une redefinition directe.
+ * / TOKEN CONTRACT: FOUR roles, not two. --tb-accent is used with `color:` 7
+ *   times, so it must always be legible; a light hue there silently kills the
+ *   links. --tb-accent-vif is decoration the socle never puts text on. --tb-fond
+ *   is a full element's ground. The socle READS our --skin-* from :root.
+ *
+ * PARTI PRIS : papier creme (jamais blanc), display Bayon condense, corps Asap,
+ *   et LE geste du lieu — un accent par bloc, en rotation cyan -> magenta ->
+ *   jaune, chaque titre souligne d'un filet de 6px de sa teinte.
+ *
+ * ZERO CDN : les polices sont servies en local depuis la_filature/fonts/
+ *   (regle du projet, cf. en-tete de tb-blocs.css). Aucun @import, aucune
+ *   ressource externe. Bayon et Asap sont sous licence OFL (self-host permis).
+ * / ZERO CDN: fonts served locally, per the project rule. OFL-licensed.
+ */
+
+/* ---------------------------------------------------------------------------
+ * 1. Polices locales / Local fonts
+ * Sous-ensemble latin uniquement : U+0000-00FF + U+0152-0153 couvrent les
+ * accents francais (e, e, a, c, o) et la ligature oe de « occupant.e.s ».
+ * / Latin subset only; covers French accents and the oe ligature.
+ * ------------------------------------------------------------------------- */
+
+@font-face {
+    font-family: 'Bayon';
+    src: url('../fonts/Bayon-Regular.woff2') format('woff2');
+    font-weight: 400;          /* Bayon n'a QU'UNE graisse. / Single weight only. */
+    font-style: normal;
+    font-display: swap;
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+2000-206F, U+20AC;
+}
+
+@font-face {
+    font-family: 'Asap';
+    src: url('../fonts/Asap-Variable.woff2') format('woff2-variations');
+    font-weight: 400 700;      /* Police variable : un fichier, toutes les graisses. */
+    font-style: normal;
+    font-display: swap;
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+2000-206F, U+20AC;
+}
+
+@font-face {
+    font-family: 'Asap';
+    src: url('../fonts/Asap-Variable-latin-ext.woff2') format('woff2-variations');
+    font-weight: 400 700;
+    font-style: normal;
+    font-display: swap;
+    unicode-range: U+0100-02BA, U+1E00-1E9F, U+2020-2027;
+}
+
+/* ---------------------------------------------------------------------------
+ * 2. Palette du lieu + point d'entree CHROME
+ * Valeurs exactes extraites du site historique. Voir DESIGN.md § Tokens.
+ * / The venue's palette + the chrome entry point.
+ * ------------------------------------------------------------------------- */
+
+:root {
+    /* --- Palette (valeurs exactes du site historique) ---------------------- */
+    --filature-creme:         #FFF4BD;  /* oklch(96.3% 0.071 98.1) — LE papier */
+    --filature-encre:         #2A2621;  /* 13.54:1 sur creme */
+
+    /* Le GESTE : teintes saturees. Filets, aplats, bordures. Jamais du texte.
+       / The GESTURE: saturated hues. Rules, fills, borders. Never text. */
+    --filature-cyan:          #1C9DD8;
+    --filature-magenta:       #E51B74;
+    --filature-jaune:         #F6E921;
+
+    /* L'ENCRE : meme teinte, assombrie, portante pour le texte.
+       Le jaune n'en a pas — voir § 3. / No yellow ink twin, see § 3. */
+    --filature-cyan-encre:    #0076AE;  /* 4.50:1 sur creme, 5.00:1 sous blanc */
+    --filature-magenta-encre: #DA006C;  /* 4.51:1 sur creme, 5.00:1 sous blanc */
+
+    /* --- CHROME (navbar, footer, vues non-CMS) ---------------------------- */
+    /* Points d'entree du contrat socle. Le socle LIT ces variables : on n'a
+       donc PAS besoin de gagner la course au chargement. Sans ca, le chrome
+       prendrait le defaut du socle (letsi) au-dessus de nos blocs CMJ.
+       Le cyan est la teinte primaire du lieu (barre de nav du site d'origine).
+       / Socle contract entry points. The socle READS these, so load order does
+       not matter. Cyan is the venue's primary hue (source site's nav bar). */
+    --skin-accent:            var(--filature-cyan-encre);
+    --skin-accent-vif:        var(--filature-cyan);
+    --skin-accent-contraste:  #FFFFFF;  /* 5.00:1 sur --skin-accent */
+
+    /* Texte secondaire (sous-titres, role d'auteur, texte de carte — 11 usages
+       dans le socle). A POSER OBLIGATOIREMENT : le socle ne le derive plus de
+       --tb-texte, il a un defaut EN DUR (#63515e, un gris mauve de sa palette
+       letsi) qui atterrirait tel quel sur notre papier creme. Lisible (6.60:1),
+       mais hors palette : ce n'est pas la couleur du lieu.
+       Notre valeur : l'encre du lieu adoucie VERS le papier — donc toujours dans
+       la palette, jamais un gris importe.
+       / MUST be set: the socle no longer derives it from --tb-texte and its
+       hardcoded default is a mauve from ITS palette. Ours is the venue's ink
+       softened toward the venue's paper. */
+    --skin-texte-doux:        color-mix(in srgb, var(--filature-encre) 70%, var(--filature-creme));
+    --skin-texte-doux-sombre: color-mix(in srgb, var(--filature-creme) 60%, var(--filature-encre));
+
+    /* --- CHROME en mode sombre / Dark-mode chrome ------------------------ *
+     * Le socle bascule sur [data-bs-theme="dark"] et y lit ces deux jetons
+     * (tb-blocs.css). Sans eux, le chrome de CE skin prendrait le letsi du
+     * socle en thème sombre — une navbar rose sur des blocs CMJ.
+     *
+     * Le basculement est DOUBLE, et c'est contre-intuitif : sur le crème, le
+     * cyan VIF ne porte pas de texte (2.76:1, c'est une décoration) ; sur le
+     * fond sombre #212529 le MÊME cyan vif monte à 5.04:1 — il devient l'encre.
+     * Et c'est l'encre chaude qui tient dessus (4.91:1), pas le blanc (3.06:1).
+     * Geste et encre échangent leurs rôles quand le fond s'inverse.
+     * / The socle reads these under [data-bs-theme="dark"]. The flip is DOUBLE:
+     * on cream the vivid cyan can't carry text; on dark it becomes the ink, and
+     * the warm ink — not white — is what holds on top of it. */
+    /* ATTENTION — le chrome sombre a DEUX surfaces, pas une. Le corps est sur
+       --bs-body-bg (#212529) mais le PIED DE PAGE est sur --bs-tertiary-bg
+       (#2b3035), qui est plus CLAIRE. Un accent calibre sur le corps passe (5.04:1)
+       et echoue sur le pied (4.35:1) — mesure, pas theorie. On calibre donc sur la
+       surface la plus CLAIRE des deux, jamais sur notre papier.
+       #21A0DB = le cyan du lieu remonte de 0.7% de luminance : imperceptible a
+       l'oeil, suffisant pour les deux surfaces.
+       / The dark chrome has TWO surfaces: the footer sits on --bs-tertiary-bg,
+       which is LIGHTER than the body. Calibrate on the lightest of the two. */
+    --filature-cyan-chrome-sombre:  #21A0DB;  /* oklch(66.6% 0.134 235.6) */
+    --skin-accent-sombre:           var(--filature-cyan-chrome-sombre);  /* corps 5.23:1 · pied 4.51:1 */
+    --skin-accent-contraste-sombre: var(--filature-encre);               /* 5.09:1 dessus */
+
+    /* --- Papier sombre : LES DEUX NEUTRES ECHANGENT ----------------------- *
+     * Le lieu a deux neutres, un creme et une encre. En sombre, ils permutent :
+     * l'encre devient le papier, le creme devient le texte. Meme rapport, 13.54:1,
+     * simplement retourne. C'est toujours La Filature — pas un gris Bootstrap
+     * plaque sur une marque creme.
+     * / The venue has two neutrals. In dark they swap: the ink becomes the paper,
+     * the cream becomes the text. Same 13.54:1 ratio, inverted. */
+    --filature-papier-sombre: var(--filature-encre);   /* #2A2621 */
+    --filature-texte-sombre:  var(--filature-creme);   /* 13.54:1 dessus */
+
+    /* Le magenta est la SEULE teinte a ne pas tenir sur le papier sombre
+       (3.39:1). Eclairci a L=67.2% : 4.51:1 sur le papier ET 4.51:1 sous
+       l'encre en aplat — il satisfait les deux contraintes a la fois.
+       Le cyan (4.91:1) et le jaune (11.87:1) passent tels quels.
+       / Magenta is the only hue that fails on the dark paper; lightened to
+       satisfy both constraints at once. Cyan and yellow pass as-is. */
+    --filature-magenta-sombre: #FF3E88;  /* oklch(67.2% 0.232 2.8) */
+}
+
+/* ---------------------------------------------------------------------------
+ * 3. Jetons des blocs / Block tokens
+ * On REDEFINIT les jetons --tb-* que le socle declare. Meme selecteur (.tb-page),
+ * feuille chargee apres tb-blocs.css (cf. le <link> de page.html) : zero
+ * !important necessaire.
+ * / We redefine the socle's --tb-* tokens; loaded after tb-blocs.css.
+ * ------------------------------------------------------------------------- */
+
+.tb-page {
+    --tb-surface:     var(--filature-creme);
+    --tb-surface-alt: #FFFFFF;          /* respiration : le blanc est l'exception */
+    --tb-texte:       var(--filature-encre);
+    --tb-bordure:     color-mix(in srgb, var(--filature-encre) 18%, transparent);
+
+    /* Display condense du lieu. Replis : Impact et Haettenschweiler sont les
+       seules piles systeme de meme couleur (condensees, grasses, romaines).
+       / Fallbacks are the only system stacks with the same voice. */
+    --tb-police-titre: 'Bayon', Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+
+    /* Pilule : 25px sur le site d'origine. / Pill radius from the source. */
+    --tb-rayon:    25px;
+    --tb-rayon-sm: 25px;
+
+    /* Le filet de 6px — LE geste signature. / The 6px rule: signature gesture. */
+    --filature-filet: 6px;
+
+    /* Ombres coupees : le site d'origine n'en a aucune, la profondeur se fait
+       a la couleur pleine. / No shadows in the source; depth is flat colour. */
+    --tb-ombre:       none;
+    --tb-ombre-forte: none;
+
+    /* Corps Asap sur tout le bloc. / Body font for the whole block. */
+    font-family: 'Asap', Helvetica, Arial, sans-serif;
+    font-size: 19px;                    /* taille de corps du site d'origine */
+    background-color: var(--tb-surface);
+    color: var(--tb-texte);
+}
+
+/* ---------------------------------------------------------------------------
+ * 4. LE GESTE — rotation cyan -> magenta -> jaune, un accent par bloc
+ * Cycle de 3, quel que soit le nombre de blocs : 5, 7, 12 — il boucle.
+ * / The signature: one accent per block, cycling. Loops at any block count.
+ *
+ * Selecteur volontairement PLUS PROFOND que le :root du socle (.tb-page
+ * .tb-bloc…) : la portee nous fait gagner sans dependre de l'ordre.
+ * / Deliberately deeper than the socle's :root: scope wins, not order.
+ *
+ * QUATRE roles par bloc, et il faut les distinguer (contrat socle) :
+ *   --tb-accent + --tb-accent-contraste  l'encre (liens, intitules) et ce qui se
+ *                                        pose dessus. TOUJOURS lisible.
+ *   --tb-accent-vif                      le geste. Filets, bordures. Le socle n'y
+ *                                        pose pas de texte.
+ *   --tb-fond + --tb-fond-contraste      l'aplat des blocs pleins (hero, CTA) et
+ *                                        l'encre dessus. C'est ICI que le
+ *                                        retournement du jaune prend effet.
+ * ------------------------------------------------------------------------- */
+
+/* --- Cyan : teinte sombre -> l'aplat prend l'encre, le texte est blanc ----- */
+.tb-page .tb-bloc:nth-of-type(3n+1) {
+    --tb-accent:            var(--filature-cyan-encre);
+    --tb-accent-vif:        var(--filature-cyan);
+    --tb-accent-contraste:  #FFFFFF;              /* 5.00:1 */
+    --tb-fond:              var(--filature-cyan-encre);
+    --tb-fond-contraste:    #FFFFFF;              /* 5.00:1 */
+}
+
+/* --- Magenta : idem cyan -------------------------------------------------- */
+.tb-page .tb-bloc:nth-of-type(3n+2) {
+    --tb-accent:            var(--filature-magenta-encre);
+    --tb-accent-vif:        var(--filature-magenta);
+    --tb-accent-contraste:  #FFFFFF;              /* 5.00:1 */
+    --tb-fond:              var(--filature-magenta-encre);
+    --tb-fond-contraste:    #FFFFFF;              /* 5.00:1 */
+}
+
+/* --- Jaune : LE RETOURNEMENT --------------------------------------------- *
+ * Le jaune n'a pas de jumeau encre : a 4.5:1 il vire a l'olive (#7F6F00) et
+ * ce n'est plus la couleur du lieu. Le site d'origine posait du jaune EN TEXTE
+ * sur blanc -> 1.27:1, illisible. On inverse le rapport : le jaune devient
+ * FOND et l'encre chaude passe dessus -> 11.87:1. La couleur reste criarde et
+ * devient lisible. C'est le patron « teinte claire saturee = geste, pas encre ».
+ * / Yellow has no ink twin (olive at 4.5:1). The source used yellow AS TEXT on
+ * white (1.27:1). We flip it: yellow becomes the GROUND, warm ink sits on top
+ * (11.87:1). The hue stays loud and becomes legible.
+ * ------------------------------------------------------------------------- */
+.tb-page .tb-bloc:nth-of-type(3n+3) {
+    /* L'encre reste sombre : c'est elle qui teinte les LIENS du bloc. Y mettre
+       du jaune les mettrait a 1.14:1 sans que l'aplat en paraisse affecte.
+       / The ink stays dark: it colours the block's LINKS. */
+    --tb-accent:            var(--filature-encre);  /* pas de jumeau jaune */
+    --tb-accent-contraste:  #FFFFFF;                /* 15.03:1 sur l'encre */
+    --tb-accent-vif:        var(--filature-jaune);  /* le socle n'y met pas de texte */
+    /* Le retournement : le jaune est un FOND, l'encre passe dessus. */
+    --tb-fond:              var(--filature-jaune);
+    --tb-fond-contraste:    var(--filature-encre);  /* 11.87:1 */
+}
+
+/* ---------------------------------------------------------------------------
+ * 4bis. Un seul filet par titre / One rule per title
+ * Le socle dessine son propre filet de 2.5rem x 3px AU-DESSUS des h2
+ * (tb-blocs.css h2.tb-bloc__titre::before). L'ADN du lieu n'en a qu'UN, de 6px,
+ * EN DESSOUS et de la largeur du texte. Sans cette regle, chaque titre sortirait
+ * avec deux filets. On coupe celui du socle plutot que de le detourner : son
+ * intention (un rappel discret) n'est pas la notre (un soulignement franc).
+ * / The socle draws its own 2.5rem x 3px rule ABOVE h2 titles. The venue's DNA
+ * has exactly ONE rule: 6px, below, text-width. Two rules would be noise.
+ * ------------------------------------------------------------------------- */
+
+.tb-page h2.tb-bloc__titre::before {
+    display: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * 4ter. MODE SOMBRE — le papier bascule, la rotation reste
+ *
+ * POURQUOI ce skin suit le mode sombre alors que son ADN n'en a pas : le theme
+ * est une PREFERENCE UTILISATEUR (bouton de navbar + localStorage, cf.
+ * commun/js/theme-switcher.mjs), pas un reglage de marque. Un skin qui la
+ * confisquerait ferait passer sa marque avant le confort de lecture de la
+ * personne. Et l'alternative — ne rien faire — produit un chrome sombre au-dessus
+ * de blocs cremes : un resultat que PERSONNE n'a dessine.
+ * / The theme is a USER PREFERENCE, not a brand setting. Doing nothing would
+ * produce dark chrome over cream blocks — a combination nobody designed.
+ *
+ * CE QUI BASCULE : les deux neutres du lieu PERMUTENT (l'encre devient le
+ * papier, le creme devient le texte, 13.54:1 dans les deux sens). La rotation
+ * CMJ, elle, ne bouge pas : c'est l'identite, elle survit au fond.
+ *
+ * CE QUI S'INVERSE AUSSI : en clair, le titre prend l'ENCRE et le filet le VIF —
+ * c'etait la correction d'accessibilite imposee par le papier clair. Sur papier
+ * sombre, la contrainte disparait : le VIF porte le texte (cyan 4.91:1, jaune
+ * 11.87:1). Titre et filet redeviennent donc de la MEME teinte — c'est-a-dire
+ * exactement ce que faisait le site d'origine.
+ * / In light, the ink carries the title and the vivid hue the rule — an
+ * accessibility correction forced by the light paper. On dark paper the vivid
+ * hue carries text, so title and rule share one hue again, as the source did.
+ *
+ * Specificite : [data-bs-theme="dark"] .tb-page .tb-bloc:… (0,4,0) bat notre
+ * regle de rotation (0,3,0). Aucun !important, aucun changement au contrat.
+ * ------------------------------------------------------------------------- */
+
+[data-bs-theme="dark"] .tb-page {
+    --tb-surface:     var(--filature-papier-sombre);
+    --tb-surface-alt: color-mix(in srgb, var(--filature-creme) 8%, var(--filature-papier-sombre));
+    --tb-texte:       var(--filature-texte-sombre);
+    --tb-bordure:     color-mix(in srgb, var(--filature-creme) 22%, transparent);
+}
+
+/* Le vif devient l'encre ; l'encre du lieu devient ce qu'on pose dessus. */
+[data-bs-theme="dark"] .tb-page .tb-bloc:nth-of-type(3n+1) {
+    --tb-accent:            var(--filature-cyan);           /* 4.91:1 sur papier sombre */
+    --tb-accent-contraste:  var(--filature-encre);          /* 4.91:1 */
+    --tb-accent-vif:        var(--filature-cyan);
+    --tb-fond:              var(--filature-cyan);
+    --tb-fond-contraste:    var(--filature-encre);          /* 4.91:1 */
+}
+
+[data-bs-theme="dark"] .tb-page .tb-bloc:nth-of-type(3n+2) {
+    --tb-accent:            var(--filature-magenta-sombre); /* 4.51:1 — seul eclairci */
+    --tb-accent-contraste:  var(--filature-encre);          /* 4.51:1 */
+    --tb-accent-vif:        var(--filature-magenta-sombre);
+    --tb-fond:              var(--filature-magenta-sombre);
+    --tb-fond-contraste:    var(--filature-encre);          /* 4.51:1 */
+}
+
+/* Le jaune n'a plus besoin d'etre retourne : sur papier sombre il porte du
+   texte tout seul (11.87:1). La contrainte etait celle du papier clair.
+   / On dark paper the yellow carries text on its own; no flip needed. */
+[data-bs-theme="dark"] .tb-page .tb-bloc:nth-of-type(3n+3) {
+    --tb-accent:            var(--filature-jaune);          /* 11.87:1 */
+    --tb-accent-contraste:  var(--filature-encre);          /* 11.87:1 */
+    --tb-accent-vif:        var(--filature-jaune);
+    --tb-fond:              var(--filature-jaune);
+    --tb-fond-contraste:    var(--filature-encre);          /* 11.87:1 */
+}
+
+/* Le voile du focus reprend le cyan vif, seul lisible sur papier sombre. */
+[data-bs-theme="dark"] .tb-page :focus-visible {
+    outline-color: var(--filature-cyan);
+}
+
+/* ---------------------------------------------------------------------------
+ * 5. Titres : Bayon, grand, souligne du filet de 6px
+ * / Titles: Bayon, large, underlined by the 6px rule.
+ * ------------------------------------------------------------------------- */
+
+.tb-bloc__titre {
+    /* 70px sur le site d'origine, mais en dur : il ne survivait pas au mobile.
+       clamp() garde l'intention et tient a 320px. / clamp keeps the intent. */
+    font-size: clamp(2.5rem, 6vw, 4.375rem);
+    font-weight: 400;                   /* Bayon n'a que le 400 */
+    line-height: 1.05;
+    letter-spacing: 0.01em;
+    color: var(--tb-accent);
+    /* LE geste : le filet prend la teinte vive, le texte prend l'encre. Les
+       deux sont de la meme famille : l'oeil lit UNE couleur.
+       / The rule takes the vivid hue, the text the ink. One colour read. */
+    border-bottom: var(--filature-filet) solid var(--tb-accent-vif);
+    padding-bottom: 0.12em;
+    /* Le filet s'arrete au texte, il ne traverse pas la page.
+       / The rule stops at the text; it does not span the page. */
+    display: inline-block;
+    /* Bayon est condense : un titre long doit pouvoir se casser.
+       / Bayon is condensed: long titles must be able to break. */
+    overflow-wrap: anywhere;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.tb-bloc__sous-titre {
+    font-family: 'Asap', Helvetica, Arial, sans-serif;
+    font-weight: 500;
+    color: color-mix(in srgb, var(--tb-texte) 78%, transparent);
+}
+
+/* ---------------------------------------------------------------------------
+ * 6. Boutons : fond blanc, texte encre, bordure 6px, pilule
+ * Le bouton « plein » du site d'origine est en fait un bouton BLANC a grosse
+ * bordure. On reprend ce rapport plutot que l'aplat du socle.
+ * / The source's "primary" button is a white button with a thick border.
+ * ------------------------------------------------------------------------- */
+
+.tb-bloc__bouton {
+    font-family: 'Asap', Helvetica, Arial, sans-serif;
+    font-weight: 600;
+    border-width: var(--filature-filet);
+    border-style: solid;
+}
+
+/* La bordure prend l'ENCRE, pas le vif — deux raisons qui convergent.
+ * ACCESSIBILITE : une bordure est un contour d'element d'interface, il lui faut
+ * 3:1. Le vif sur un bouton blanc n'y est pas (cyan 2.76:1, jaune 1.14:1 —
+ * invisible). L'encre, si (cyan 5.00:1, magenta 5.00:1, encre 15.03:1).
+ * FIDELITE : le site d'origine ne declarait PAS de border-color — Divi la fait
+ * retomber sur `color`. Sa bordure etait donc deja de la teinte de son texte.
+ * / The border takes the INK, not the vivid hue: a UI boundary needs 3:1, which
+ * the vivid hue misses on a white button. And the source never declared a
+ * border-color — Divi falls back to `color`, so its border already matched its text. */
+.tb-bloc__bouton--plein {
+    background-color: var(--tb-surface-alt);   /* le blanc, seule exception au creme */
+    color: var(--tb-accent);
+    border-color: var(--tb-accent);
+}
+
+.tb-bloc__bouton--plein:hover {
+    background-color: var(--tb-accent);
+    color: var(--tb-accent-contraste);
+    transform: translateY(-2px);
+}
+
+.tb-bloc__bouton--contour {
+    background-color: transparent;
+    color: var(--tb-accent);
+    border-color: var(--tb-accent);   /* meme raison qu'au-dessus */
+}
+
+.tb-bloc__bouton--contour:hover {
+    background-color: var(--tb-accent);
+    color: var(--tb-accent-contraste);
+}
+
+/* ---------------------------------------------------------------------------
+ * 7. Blocs a fond plein / Flooded blocks
+ * Ils consomment la paire --tb-fond / --tb-fond-contraste, PAS
+ * --tb-accent : c'est la que le retournement du jaune prend effet.
+ * / They consume the flood pair, not --tb-accent: that is where the yellow flip
+ * actually happens.
+ * ------------------------------------------------------------------------- */
+
+/* HERO SANS image : aplat plein, encre dessus.
+   / Imageless HERO: full flood, ink on top. */
+.tb-bloc--hero {
+    background-color: var(--tb-fond);
+    color: var(--tb-fond-contraste);
+    border-bottom: none;
+    text-align: left;                   /* l'original est aligne a gauche */
+}
+
+.tb-bloc--hero .tb-bloc__titre {
+    color: var(--tb-fond-contraste);
+    border-bottom-color: var(--tb-fond-contraste);
+}
+
+/* HERO AVEC image — LE PIEGE, corrige apres avoir VU le rendu.
+ *
+ * Le socle ne pose PAS le titre sur la photo : il pose une CARTE creme
+ * (tb-blocs.css `.tb-bloc--hero-image .tb-bloc__contenu` -> background
+ * --tb-surface) et met le texte dedans. Notre premiere version forcait le titre
+ * en creme, en supposant un titre pose a meme la photo comme sur le site
+ * d'origine : resultat, CREME SUR CREME — le titre etait dans le DOM, invisible
+ * a l'ecran. Exactement la faute qu'on reproche au site d'origine (blanc sur
+ * blanc, 1.00:1). Aucun calcul ne pouvait l'attraper : ils portaient tous sur un
+ * rapport de couleurs que le markup ne produit pas.
+ *
+ * Le parti du socle est MEILLEUR que celui de l'original, qui pariait sur une
+ * photo sombre : la carte tient quelle que soit la photo. On l'adopte, et le
+ * titre reprend simplement l'encre du bloc — donc cyan sur creme (4.50:1), avec
+ * son filet cyan vif. Le bloc reste « le bloc cyan », l'ADN est tenu.
+ * / The socle puts the text in a CREAM CARD over the photo, not on the photo.
+ * Our first version forced a cream title -> cream on cream, invisible. Only the
+ * render caught it. The socle's card is more robust than the source's bet on a
+ * dark photo, so we adopt it: the title takes the block's ink.
+ * ------------------------------------------------------------------------- */
+.tb-bloc--hero-image .tb-bloc__contenu {
+    /* La carte porte le papier ; on ne redefinit que ce qui est a nous. */
+    color: var(--tb-texte);
+}
+
+.tb-bloc--hero-image .tb-bloc__titre {
+    color: var(--tb-accent);
+    border-bottom-color: var(--tb-accent-vif);
+}
+
+.tb-bloc--hero-image .tb-bloc__sous-titre {
+    color: color-mix(in srgb, var(--tb-texte) 78%, transparent);
+}
+
+/* CTA : le site d'origine termine sur un aplat cyan pleine largeur avec un
+   bouton blanc inverse. / CTA: full-bleed flood, inverted white button. */
+.tb-bloc--cta {
+    background-color: var(--tb-fond);
+    color: var(--tb-fond-contraste);
+    border-block: none;
+}
+
+/* SUR UN APLAT, LE GESTE CHANGE DE JETON — vu au rendu, pas au calcul.
+ *
+ * --tb-accent-vif et --tb-fond sont la MEME famille chromatique (c'est tout
+ * l'interet du systeme : un bloc = une couleur). Consequence : un geste vif
+ * trace SUR l'aplat de sa propre teinte disparait. Le cas jaune est le plus
+ * criant (jaune sur jaune), mais le cyan vif sur cyan-encre souffre pareil.
+ * Sur un aplat, le geste passe donc a --tb-fond-contraste — la seule valeur
+ * garantie lisible sur ce fond.
+ * REGLE : --tb-accent-vif n'est un geste valide que sur le PAPIER.
+ * / On a flood, the vivid gesture and the ground share a hue, so the gesture
+ * vanishes. On a flood, gestures take --tb-fond-contraste instead.
+ * ------------------------------------------------------------------------- */
+.tb-bloc--cta .tb-bloc__contenu {
+    border-left: var(--filature-filet) solid var(--tb-fond-contraste);
+}
+
+.tb-bloc--cta .tb-bloc__titre {
+    color: var(--tb-fond-contraste);
+    border-bottom-color: var(--tb-fond-contraste);
+}
+
+.tb-bloc--cta .tb-bloc__bouton--plein {
+    background-color: var(--tb-fond-contraste);
+    color: var(--tb-fond);
+    border-color: var(--tb-fond-contraste);
+}
+
+/* Le bouton contour sur un aplat : sa bordure vive serait invisible. */
+.tb-bloc--cta .tb-bloc__bouton--contour {
+    color: var(--tb-fond-contraste);
+    border-color: var(--tb-fond-contraste);
+}
+
+.tb-bloc--cta .tb-bloc__bouton--contour:hover {
+    background-color: var(--tb-fond-contraste);
+    color: var(--tb-fond);
+}
+
+/* Meme raison sur le hero sans image (lui aussi en aplat). */
+.tb-bloc--hero .tb-bloc__bouton--contour {
+    color: var(--tb-fond-contraste);
+    border-color: var(--tb-fond-contraste);
+}
+
+/* ---------------------------------------------------------------------------
+ * 8. Focus : anneau visible, jamais anime (regle Hallmark + socle)
+ * / Focus: visible ring, never animated.
+ * ------------------------------------------------------------------------- */
+
+.tb-page :focus-visible {
+    outline: 3px solid var(--filature-cyan-encre);
+    outline-offset: 3px;
+    transition: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * 9. Mouvement : coupe. Le site d'origine ne charge AUCUNE bibliotheque et
+ * n'anime rien. On ne rajoute pas ce qu'il n'avait pas.
+ * / Motion: cut. The source loads no library and animates nothing.
+ * ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+    .tb-bloc__bouton,
+    .tb-bloc__bouton--plein:hover,
+    .tb-bloc__bouton--contour:hover {
+        transform: none;
+        transition: opacity 150ms linear;
+    }
+}

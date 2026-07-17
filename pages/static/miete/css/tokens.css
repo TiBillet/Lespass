@@ -1,0 +1,279 @@
+/* Hallmark · macrostructure: Long Document · genre: playful
+ * theme: studied-DNA « MIETE » (cousin catalogue : Hum) · studied: yes
+ * DNA-source: url — https://web.archive.org/web/20250321051225/https://lamiete.com/
+ * axes: light / humanist-sans (Luciole) / warm (vermillon ~37°)
+ * nav: bulles (bespoke) · footer: Ft3 index · enrichment: Tier B (SVG dessinés à la main)
+ * pre-emit critique: P5 H4 E4 S5 R5 V4
+ *
+ * LOCALISATION : pages/static/miete/css/tokens.css
+ *
+ * Jetons de design du skin « miete ». Ce fichier ne contient QUE des variables
+ * et les @font-face. Toute la mise en page vit dans miete.css, qui ne doit
+ * jamais ecrire une couleur ou une police en dur : toujours var(--...).
+ * / Design tokens for the "miete" skin. Variables and @font-face ONLY.
+ * All layout lives in miete.css, which must never hard-code a colour or a font.
+ *
+ * Systeme verrouille : pages/templates/pages/miete/design.md — il voyage AVEC
+ * le skin. Toute couleur ou police ajoutee ici doit y etre justifiee.
+ * / Locked system: pages/templates/pages/miete/design.md — it travels WITH the
+ * skin. Any colour or font added here must be justified there.
+ */
+
+/* -------------------------------------------------------------------------- */
+/* Typographie                                                                 */
+/*                                                                             */
+/* Luciole est DEJA dans le projet : BaseBillet/static/commun/font/luciole/.    */
+/* Le skin n'embarque AUCUNE fonte, il pointe sur le commun. Les chemins sont   */
+/* relatifs a STATIC_ROOT apres collectstatic : miete/css/ -> ../../commun/.    */
+/* / Luciole already ships with the project. The skin bundles NO font of its    */
+/* own; it points at the shared folder.                                         */
+/*                                                                             */
+/* Luciole est dessinee pour la basse vision : zero barre, « a » a empattement, */
+/* 6 et 9 dissymetriques. La MIETE l'utilise sur TOUS les roles typographiques. */
+/* Ce n'est pas un pairing display+body, c'est « la mono-fonte EST le design ». */
+/* Ne pas la remplacer.                                                         */
+/* / Luciole is drawn for low vision. Single family by design. Do not swap it.  */
+/*                                                                             */
+/* Luciole © Laurent Bourcellier & Jonathan Perez — CC BY 4.0.                  */
+/* Licence : BaseBillet/static/polices/Luciole/Read Me.txt                      */
+/* -------------------------------------------------------------------------- */
+
+@font-face {
+    font-family: 'Luciole';
+    src: url('../../commun/font/luciole/luciole.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Luciole';
+    src: url('../../commun/font/luciole/luciole-bold.woff2') format('woff2');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Luciole';
+    src: url('../../commun/font/luciole/luciole-italic.woff2') format('woff2');
+    font-weight: 400;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Luciole';
+    src: url('../../commun/font/luciole/luciole-bold-italic.woff2') format('woff2');
+    font-weight: 700;
+    font-style: italic;
+    font-display: swap;
+}
+
+/* -------------------------------------------------------------------------- */
+/* LES JETONS VIVENT SUR :root — ET C'EST OBLIGATOIRE, PAS UN CONFORT.        */
+/*                                                                             */
+/* Le socle lit les skins par indirection : il ecrit, sur :root,               */
+/*     --tb-accent: var(--skin-accent, <son defaut>)                           */
+/* Cette substitution se fait sur :root AVEC LE --skin-accent VU PAR :root,    */
+/* puis la valeur CALCULEE descend par heritage. Un --skin-accent pose sur un  */
+/* descendant (.skin-miete) arrive donc TROP TARD : il n'est jamais lu.        */
+/* Verifie au navigateur, pas deduit :                                          */
+/*     --skin-accent sur .skin-miete -> --tb-accent reste #e61c51 (aucun effet) */
+/*     --skin-accent sur :root       -> --tb-accent prend la valeur (marche)    */
+/* / The socle reads skins by indirection on :root. The substitution uses the   */
+/* --skin-* AS SEEN BY :root, then the COMPUTED value inherits down. A --skin-* */
+/* set on a descendant is never read. Verified in the browser, not deduced.     */
+/*                                                                             */
+/* Poser des VARIABLES sur :root ne deborde sur rien : une propriete            */
+/* personnalisee ne peint aucun pixel tant qu'une regle ne la consomme pas, et  */
+/* toutes nos regles restent scopees sous .skin-miete (cf. miete.css). Ce       */
+/* fichier n'est d'ailleurs charge que par le shell de ce skin.                 */
+/* / Putting VARIABLES on :root leaks nothing: a custom property paints no pixel */
+/* until a rule consumes it, and all our rules stay scoped under .skin-miete.    */
+/* -------------------------------------------------------------------------- */
+:root {
+    /* ---------------------------------------------------------------------- */
+    /* Surfaces. Source : #ffffff dominant, #303030 en bandeau sombre.         */
+    /* ---------------------------------------------------------------------- */
+    --color-paper: oklch(100% 0 0);                 /* #ffffff — source        */
+    --color-paper-2: oklch(96.5% 0 90);             /* derive — surface douce  */
+    --color-paper-dark: oklch(30.9% 0 90);          /* #303030 — bandeau       */
+    --color-rule: oklch(90.7% 0 90);                /* #e0e0e0 — filets        */
+
+    /* ---------------------------------------------------------------------- */
+    /* Encre. Les trois passent AA largement sur le papier blanc.              */
+    /* ---------------------------------------------------------------------- */
+    --color-ink: oklch(44.6% 0 90);                 /* #545454 — 7,57:1        */
+    --color-ink-strong: oklch(30.9% 0 90);          /* #303030 — 13,20:1       */
+    --color-ink-max: oklch(0% 0 0);                 /* #000000 — 21:1          */
+
+    /* ---------------------------------------------------------------------- */
+    /* Accent. LA REGLE, et elle vient des dessins du lieu :                   */
+    /* une encre NOIRE sur un aplat colore, JAMAIS du blanc.                   */
+    /*                                                                          */
+    /* Le vermillon de la MIETE ne porte que 3,62:1 face au blanc — sous le     */
+    /* seuil AA de 4,5:1. Le meme vermillon porte 5,70:1 face au noir. Les      */
+    /* bulles dessinees par le lieu ont toujours mis du noir dedans ; ce sont   */
+    /* ses boutons CSS (label blanc) qui echouaient. On suit les bulles.        */
+    /* / Black ink on colour fills, never white. The venue's own artwork already */
+    /* got this right; its CSS buttons did not.                                 */
+    /* ---------------------------------------------------------------------- */
+    --color-accent: oklch(63.7% 0.186 37);          /* #E5562B — marque        */
+    --color-accent-ink: var(--color-ink-max);       /* sur accent — 5,70:1     */
+    --color-accent-text: oklch(53.4% 0.165 36.6);   /* #B83E18 — 5,61:1/blanc  */
+    --color-focus: oklch(53.4% 0.165 36.6);         /* #B83E18 — 5,61:1/blanc  */
+
+    /* ---------------------------------------------------------------------- */
+    /* Palette des bulles, relevee sur les dessins du lieu.                    */
+    /* Le chiffre est le contraste avec --color-ink-max (noir). TOUTES         */
+    /* passent AA (4,5:1) pour du texte courant. C'est la condition pour       */
+    /* qu'un libelle de menu puisse etre pose dessus.                          */
+    /* / Sampled from the venue's own artwork. Ratios are against black ink.   */
+    /* ---------------------------------------------------------------------- */
+    --bulle-jaune: oklch(88.4% 0.126 85);           /* #FFD271 — 14,71:1       */
+    --bulle-vert: oklch(74.1% 0.142 133);           /* #86BE5C —  9,53:1       */
+    --bulle-cyan: oklch(76.7% 0.089 210);           /* #69C3D3 — 10,35:1       */
+    --bulle-rose: oklch(65.0% 0.203 357);           /* #E94A90 —  5,85:1       */
+    --bulle-vermillon: oklch(63.7% 0.186 37);       /* #E5562B —  5,70:1       */
+
+    /* ---------------------------------------------------------------------- */
+    /* Typographie                                                             */
+    /*                                                                          */
+    /* L'echelle de la source tient en TROIS tailles : 14 / 18 / 24 px.        */
+    /* Le corps a 14px est releve a 16px (1rem) : la source compensait avec un */
+    /* bouton « Augmenter le texte », mais un plancher vaut mieux qu'une        */
+    /* rustine. Tout est en rem : si la personne grossit le texte de son        */
+    /* navigateur, TOUT grandit, bulles comprises.                              */
+    /* / Source scale is 14/18/24px. Body lifted 14 -> 16px. Everything in rem  */
+    /* so the whole skin scales with the user's font-size setting.              */
+    /* ---------------------------------------------------------------------- */
+    --font-display: 'Luciole', system-ui, -apple-system, sans-serif;
+    --font-body: 'Luciole', system-ui, -apple-system, sans-serif;
+
+    --text-body: 1rem;                              /* 16px — releve de 14px   */
+    --text-lead: 1.125rem;                          /* 18px — source           */
+    --text-display: 1.5rem;                         /* 24px — source           */
+
+    /* Espacement 4pt.                                                         */
+    --space-3xs: 0.25rem;
+    --space-2xs: 0.5rem;
+    --space-xs: 0.75rem;
+    --space-sm: 1rem;
+    --space-md: 1.5rem;
+    --space-lg: 2rem;
+    --space-xl: 3rem;
+    --space-2xl: 4rem;
+
+    /* La source n'a qu'UN rayon, 3px. La MIETE est quasi-carree.              */
+    /* / The source declares a single radius, 3px. */
+    --radius-card: 3px;
+    --radius-input: 3px;
+    --radius-pill: 3px;
+
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --dur-fast: 180ms;
+    --dur-base: 240ms;
+}
+
+/* -------------------------------------------------------------------------- */
+/* MODE SOMBRE                                                                 */
+/*                                                                             */
+/* Le projet bascule via [data-bs-theme="dark"] pose sur <html> par le bouton  */
+/* Theme de la navbar (commun/js/theme-switcher.mjs, valeur en localStorage).   */
+/*                                                                             */
+/* POURQUOI CE BLOC EXISTE : sans lui, .skin-miete forcait un papier BLANC en  */
+/* dur pendant que le chrome Bootstrap passait au noir — skin blanc, panneaux  */
+/* noirs. Et l'encre douce #545454 tombait a 2,11:1 sur le fond sombre.        */
+/* Mesure au navigateur, pas deduite.                                          */
+/* / The project flips via [data-bs-theme="dark"]. Without this block the skin  */
+/* stayed white while the Bootstrap chrome went dark, and the soft ink dropped  */
+/* to 2.11:1. Measured in the browser, not deduced.                             */
+/*                                                                             */
+/* CE QUI NE BOUGE PAS, ET C'EST VOULU : --color-ink-max (le noir des bulles)  */
+/* et les cinq teintes. Le contraste d'un libelle sur sa bulle ne depend que du */
+/* couple encre/teinte — le fond de page n'y entre pas. Les bulles gardent donc */
+/* exactement les memes chiffres en sombre : jaune 14,71:1 ... vermillon 5,70:1. */
+/* / UNCHANGED ON PURPOSE: the bubbles' black ink and the five tints. A label's  */
+/* contrast against its bubble never involves the page background.              */
+/* -------------------------------------------------------------------------- */
+[data-bs-theme="dark"] {
+    --color-paper: oklch(26.2% 0.009 248.2);        /* #212529 — le fond du projet */
+    --color-paper-2: oklch(30.6% 0.011 248.2);      /* #2B3035                     */
+    --color-paper-dark: oklch(30.6% 0.011 248.2);
+    --color-rule: oklch(38% 0.010 248);
+
+    --color-ink: oklch(86.2% 0.007 340.4);          /* #D5D0D3 — 10,13:1           */
+    --color-ink-strong: oklch(95.5% 0.004 337.4);   /* #F2EFF1 — 13,51:1           */
+
+    /* L'accent EN TEXTE doit s'eclaircir : sur le fond sombre, le jumeau        */
+    /* assombri #B83E18 s'effondre a 2,75:1. L'eclairci porte 6,64:1.            */
+    /* / The accent AS TEXT must lighten: the darkened twin collapses to 2.75:1.  */
+    --color-accent-text: oklch(75.3% 0.155 42.0);   /* #FF8A5B — 6,64:1            */
+    --color-focus: oklch(75.3% 0.155 42.0);
+}
+
+/* ========================================================================== */
+/* POINTS D'ENTREE DU SOCLE — le skin POSE --skin-*, le socle LIT --skin-*    */
+/*                                                                             */
+/* Contrat : TECH_DOC/SESSIONS/SKINS/CHANTIER-10-SOCLE-TOKENS.md              */
+/*                                                                             */
+/* Sans ce bloc, TOUT ce que le skin ne dessine pas lui-meme — navbar, pied,   */
+/* agenda, adhesions, evenement, blocs CMS — sort dans l'accent du socle       */
+/* (letsi #e61c51, un rose). Mesure au navigateur avant correction.            */
+/* / Without this block, everything the skin does not draw itself comes out in  */
+/* the socle's pink accent. Measured before fixing.                             */
+/*                                                                             */
+/* LES DEUX ROLES NE SONT PAS INTERCHANGEABLES — c'est tout l'interet du       */
+/* decouplage fait par le socle, et ce qui nous rend le vermillon de MARQUE :   */
+/*   --skin-accent      = L'ENCRE. On lui pose --skin-accent-contraste DESSUS, */
+/*                        et il sert AUSSI de couleur de lien dans le texte.    */
+/*                        Le vermillon de marque y echoue (3,69:1 sur blanc),   */
+/*                        donc c'est le jumeau assombri qui prend ce poste.     */
+/*   --skin-accent-vif  = LE GESTE. Filets, bordures, aplats decoratifs. Le     */
+/*                        socle n'y pose JAMAIS de texte : le vermillon de      */
+/*                        MARQUE peut donc y aller tel quel.                    */
+/*   --skin-fond        = L'APLAT d'un element plein (bouton). Decouple de      */
+/*                        l'encre, donc le vermillon de MARQUE revient ici,     */
+/*                        avec du NOIR dessus — exactement la regle des bulles. */
+/* / The two roles are not interchangeable: --skin-accent is INK (and link      */
+/* colour), --skin-accent-vif is the GESTURE (never carries text), --skin-fond  */
+/* is the FILL. The brand vermillion is unusable as ink but perfect as fill.    */
+/* ========================================================================== */
+:root {
+    --skin-accent: oklch(53.4% 0.165 36.6);            /* #B83E18 — encre, 5,61:1/blanc */
+    --skin-accent-vif: oklch(63.7% 0.186 37);          /* #E5562B — geste, sans texte   */
+    --skin-accent-contraste: oklch(100% 0 0);          /* blanc sur #B83E18 — 5,61:1    */
+
+    --skin-fond: oklch(63.7% 0.186 37);                /* #E5562B — LE VERMILLON DE MARQUE */
+    --skin-fond-contraste: oklch(0% 0 0);              /* noir dessus — 5,70:1          */
+
+    --skin-texte-doux: oklch(44.6% 0 90);              /* #545454 — 7,57:1 sur blanc    */
+
+    /* Sombre. Le socle a ses propres points d'entree pour ces trois-la.         */
+    /* L'accent en encre doit s'ECLAIRCIR : le jumeau assombri tombe a 2,75:1    */
+    /* sur #212529. Et sur l'eclairci, c'est le NOIR qui porte (9,04:1), pas le  */
+    /* blanc (2,32:1). Sans cette seconde bascule, tous les boutons pleins       */
+    /* tomberaient en sombre.                                                     */
+    /* / Dark: the ink accent must LIGHTEN, and on the lightened tint it is BLACK */
+    /* that carries (9.04:1), not white (2.32:1).                                 */
+    --skin-accent-sombre: oklch(75.3% 0.155 42.0);     /* #FF8A5B — 6,64:1/#212529 */
+    --skin-accent-contraste-sombre: oklch(0% 0 0);     /* noir — 9,04:1            */
+    --skin-texte-doux-sombre: oklch(86.2% 0.007 340.4);/* #D5D0D3 — 10,13:1        */
+
+    /* L'ASYMETRIE DU MODE SOMBRE — la connaitre evite un piege silencieux.      */
+    /* Dans le bloc [data-bs-theme="dark"] de tb-blocs.css, trois jetons sont    */
+    /* REMPLACES par leur jumeau -sombre : accent, accent-contraste, texte-doux. */
+    /* Les trois autres — vif, fond, fond-contraste — TRAVERSENT inchanges.      */
+    /* Consequence : ne poser que la version claire de l'un des trois premiers   */
+    /* fait retomber le skin sur le letsi rose du socle en sombre, SANS ERREUR.  */
+    /* Les trois -sombre sont donc poses ci-dessus, et --skin-fond n'a           */
+    /* volontairement pas de variante : notre aplat de marque traverse les deux  */
+    /* themes avec la meme encre noire — ce qu'on veut d'une couleur de marque.  */
+    /* / DARK-MODE ASYMMETRY: accent / accent-contraste / texte-doux are REPLACED */
+    /* by their -sombre twin; vif / fond / fond-contraste TRAVERSE unchanged.     */
+    /* Setting only the light version of one of the first three silently falls     */
+    /* back to the socle's pink in dark mode.                                     */
+    /* (Chercher le bloc « MODE SOMBRE » de tb-blocs.css — pas un numero de       */
+    /* ligne, il bouge. / Search for the block, not a line number.)               */
+}

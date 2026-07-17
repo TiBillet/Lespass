@@ -8,7 +8,17 @@
 </p>
 
 {% for date_key, events in dated_events.items %}
-    <h2 class="fs-5 p-3 text-dark" style="background: var(--mayaj-pons);">
+    {% comment %}
+        Intitulé de date : même geste que les titres de blocs (serif + filet vif),
+        pour que l'agenda et les pages CMS se lisent comme un seul site alors qu'ils
+        sont rendus par deux chemins différents.
+        Jamais d'aplat en dégradé derrière ce titre : sur une rampe de couleur, le
+        contraste du texte dépend de l'endroit où chaque mot tombe.
+        / Date heading: same gesture as the block titles, so the agenda and the CMS
+        pages read as one site despite two different render paths. Never a gradient
+        slab behind it: on a colour ramp the contrast depends on where words land.
+    {% endcomment %}
+    <h2 class="tb-agenda__date">
         {{ date_key|date:'l j F'|capfirst }}
     </h2>
     {% for event in events %}

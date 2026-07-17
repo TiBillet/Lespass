@@ -1,0 +1,72 @@
+{% load i18n static %}{# Squelette headless du skin miete — reponses HTMX (hx-target="body"). / Miete headless skeleton — HTMX responses. #}
+
+{% comment %}
+SQUELETTE HEADLESS — LES REPONSES HTMX
+/ Headless skeleton — HTMX responses
+
+LOCALISATION : pages/templates/pages/miete/headless.html
+
+Sert quand la requete est HTMX : pas de <head>, seulement le corps a echanger
+(cf. pages.services.gabarit_skin, qui choisit headless ou shell selon request.htmx).
+/ Used for HTMX requests: no <head>, only the body to swap.
+
+POURQUOI CE FICHIER EXISTE — LE PIEGE :
+headless.html du socle inclut « pages/classic/partials/navbar.html » EN DUR.
+Sans cette surcharge, la premiere navigation HTMX rendrait la navbar du socle a
+la place des bulles : le skin aurait l'air de fonctionner au chargement de la
+page, puis se casserait au premier clic. Panne silencieuse, difficile a voir.
+/ WHY THIS FILE EXISTS — THE TRAP: the base headless.html hard-codes the classic
+navbar. Without this override, the first HTMX navigation would render the base
+navbar instead of the bubbles: the skin would look fine on page load, then break
+on the first click. A silent failure.
+
+Le CSS du skin est scope sous .skin-miete. La navbar ET le pied de page doivent
+donc etre DEDANS, ici aussi : hx-target="body" remplace tout le corps, donc ce
+gabarit doit reposer le scope lui-meme. Le <head> (et donc les feuilles de
+style) survit au swap : rien a recharger.
+/ The skin CSS is scoped under .skin-miete, so the navbar AND footer must be
+INSIDE it here too: hx-target="body" replaces the whole body, so this template
+must lay the scope down again. The <head> survives the swap: nothing to reload.
+{% endcomment %}
+
+{# htmx recupere ce <title> automatiquement quand hx-target == body. #}
+{# / htmx picks this <title> up automatically when hx-target == body. #}
+<title>{% block title %}{% translate 'Home' %}{% endblock %} | {{ config.organisation }}</title>
+
+<div class="skin-miete d-flex flex-column flex-fill">
+
+    <a class="miete-evitement" href="#miete-contenu">
+        {% translate "Aller au contenu principal" %}
+    </a>
+
+    {% include "pages/miete/partials/navbar.html" %}
+
+    <div id="miete-contenu" class="flex-fill d-flex flex-column" tabindex="-1">
+        {% block main %}{% endblock main %}
+    </div>
+
+    {% include "pages/miete/partials/footer.html" %}
+
+</div>
+
+{% block offcanvas_globaux %}
+    {% comment %}
+    Chrome partage : memes panneaux globaux qu'en page complete — necessaires
+    aussi en reponse HTMX (hx-target="body" remplace tout le contenu).
+    Ils restent HORS de .skin-miete : le chrome n'est pas skinnable par gabarit
+    (decision 3 du contrat de skin).
+    / Shared chrome: same global panels as the full page — also needed in HTMX
+    responses. Kept OUTSIDE .skin-miete: the chrome is not skinnable by template.
+    {% endcomment %}
+    {% include "commun/offcanvas/contact.html" %}
+    {% include "commun/offcanvas/connexion.html" %}
+{% endblock offcanvas_globaux %}
+
+{% block offcanvas %}{% endblock offcanvas %}
+
+{% include "commun/toasts.html" %}
+
+<!-- spinner -->
+{% include "commun/loading.html" %}
+
+{% block scripts %}{% endblock scripts %}

@@ -3,63 +3,162 @@
  * / Styling of the pages app "classic" skin blocks.
  *
  * LOCALISATION : pages/static/pages/css/tb-blocs.css
- * PORTEE : chargé UNIQUEMENT par pages/classic/page.html. Ne concerne pas le skin
- * faire_festival (qui a ses propres gabarits + CSS). / Loaded ONLY by the classic
- * page template. Does not affect the faire_festival skin.
+ * PORTEE : chargé par pages/classic/page.html. Les JETONS (:root) habillent aussi
+ * le chrome et TOUT skin qui retombe sur classic par le fallback ; les RÈGLES
+ * (.tb-bloc*) n'habillent que le moteur de blocs.
+ * / Loaded by classic/page.html. The TOKENS (:root) also dress the chrome and any
+ * skin falling back on classic; the RULES (.tb-bloc*) only dress the block engine.
  *
  * PARTI PRIS : thème ÉDITORIAL autonome (magazine). Titres en serif (caractère),
- * corps en sans hérité (lisibilité), UNE seule teinte d'accent — celle du tenant
- * (--bs-primary) — utilisée avec parcimonie (filets, intitulés, bouton principal).
- * Contraste fort, rythme de sections marqué, profondeur sobre (ombres douces).
+ * corps en sans hérité (lisibilité), UNE seule famille d'accent — le losean (océan)
+ * du skin `reunion`, dédoublé en ENCRE portante et GESTE vif — utilisée avec
+ * parcimonie (filets, intitulés, bouton principal). Contraste fort, rythme de
+ * sections marqué, profondeur sobre (ombres douces).
  * / DESIGN INTENT: self-contained EDITORIAL theme (magazine). Serif titles
- * (character), inherited sans body (readability), a SINGLE accent — the tenant's
- * (--bs-primary) — used sparingly (rules, labels, primary button). Strong
- * contrast, clear section rhythm, restrained depth (soft shadows).
+ * (character), inherited sans body (readability), a SINGLE accent family — the
+ * `reunion` skin's losean (ocean), split into a carrying INK and a vivid GESTURE —
+ * used sparingly (rules, labels, primary button). Strong contrast, clear section
+ * rhythm, restrained depth (soft shadows).
  *
  * Hallmark : accent unique (jamais de dégradé violet), asymétrie (contenu biaisé),
  * focus visible, reduced-motion respecté, minmax(0,1fr), largeur de lecture bornée.
  * Zéro CDN : polices = piles système (aucun @import), aucune ressource externe.
  */
 
-.tb-page {
-    /* Jetons locaux / Local tokens */
-    --tb-espace-section: clamp(2.5rem, 5.5vw, 4.5rem);
-    --tb-largeur-max: 72rem;
-    --tb-largeur-lecture: 40rem;
-    /* LA gouttière horizontale unique de tous les blocs (audit grille
-       2026-07-05 : chaque bloc avait la sienne, rien ne s'alignait).
-       / THE single horizontal gutter of every block. */
-    --tb-gouttiere: clamp(1.25rem, 5vw, 4rem);
-    /* Largeur d'une boîte AUTONOME (qui porte sa gouttière en padding).
-       Géométriquement identique à une section pleine largeur + contenu
-       centré : contenu à max((100vw - largeur-max)/2, gouttière) du bord.
-       Sans ce calc, une boîte « max-width + padding gouttière » décale son
-       contenu de +gouttière par rapport aux sections (les cartes semblaient
-       « plus à l'intérieur » que les titres).
-       / Width of a SELF-CONTAINED box (carrying its gutter as padding).
-       Geometrically identical to a full-width section with centered content.
-       Without this calc, such boxes shift their content by +gutter vs
-       sections (cards looked more inset than titles). */
-    --tb-largeur-boite: calc(var(--tb-largeur-max) + 2 * var(--tb-gouttiere));
+/* JETONS DU SOCLE — portée :root, pas .tb-page.
+   / SOCLE TOKENS — :root scope, not .tb-page.
 
-    /* Accent unique : couleur du tenant, repli bleu éditorial sobre.
-       / Single accent: tenant color, sober editorial blue fallback. */
-    --tb-accent: var(--bs-primary, #1d4ed8);
-    --tb-accent-contraste: #ffffff;
+   La portée est :root parce que le chrome (navbar, footer, vues/agenda,
+   vues/adhesions, vues/evenement) vit HORS du <main class="tb-page"> que pose
+   page.html : sur .tb-page, les jetons n'atteignaient que les pages CMS, et le
+   chrome restait en Bootstrap brut. Un skin qui veut habiller le chrome n'avait
+   aucun crochet.
+   / :root because the chrome lives OUTSIDE the <main class="tb-page"> set by
+   page.html: scoped to .tb-page, the tokens never reached it.
+
+   POINTS D'ENTRÉE DES SKINS : le socle LIT --skin-*, le skin POSE --skin-*.
+   C'est une indirection, PAS une redéfinition, et c'est indispensable :
+   page.html charge ce fichier dans le <body>, donc APRÈS le CSS du skin chargé
+   dans le <head> de son shell. À spécificité égale le dernier chargé gagne — un
+   `:root { --tb-accent: … }` posé par un skin PERDRAIT. En lisant --skin-accent,
+   le socle laisse le skin gagner quel que soit l'ordre de chargement.
+   / The socle READS --skin-*, the skin SETS --skin-*. An indirection, not an
+   override: this file loads after the skin's CSS, so a skin's `:root` redefinition
+   would lose. Reading --skin-* lets the skin win regardless of load order.
+
+   OÙ POSER SES --skin-* : sur `:root` (ou sur la classe de skin du <body>), jamais
+   sur un conteneur interne. Le chrome — navbar, pied de page, agenda, adhésions —
+   vit HORS de <main class="tb-page"> : des --skin-* posés sur .tb-page ne
+   l'atteindraient pas, et le chrome garderait l'accent du socle.
+   Pour faire varier l'accent PAR BLOC (rotation de teintes), c'est l'inverse : on
+   pose --tb-accent directement sur un sélecteur plus profond
+   (`.tb-page .tb-bloc:nth-of-type(3n+1)`), et la portée l'emporte. Les deux
+   cohabitent : --skin-* sur :root pour le chrome, --tb-* en profondeur pour les blocs.
+   / Set --skin-* on :root (or the body's skin class), never on an inner container:
+   the chrome lives OUTSIDE .tb-page. To vary the accent PER BLOCK, do the opposite —
+   set --tb-accent on a deeper selector and let scope win. Both coexist.
+
+   LE MODE SOMBRE N'EST PAS SYMÉTRIQUE — à savoir avant d'écrire un skin :
+     REMPLACÉS en sombre : --skin-accent → --skin-accent-sombre
+                           --skin-accent-contraste → --skin-accent-contraste-sombre
+                           --skin-texte-doux → --skin-texte-doux-sombre
+     TRAVERSENT inchangés : --skin-accent-vif, --skin-fond, --skin-fond-contraste
+   Un skin qui ne pose QUE la version claire de l'un des trois premiers retombe donc
+   SILENCIEUSEMENT sur le défaut du socle en thème sombre — un letsi rose au milieu
+   de son identité. Poser les deux versions, ou aucune.
+   / DARK MODE IS NOT SYMMETRIC: the three inks above are REPLACED by their -sombre
+   twin, while vif/fond/fond-contraste pass through unchanged. A skin setting only
+   the light version of an ink silently falls back to the socle's default in dark.
+
+   Contrat figé — cf. TECH_DOC/SESSIONS/SKINS/CHANTIER-10-SOCLE-TOKENS.md */
+:root {
+    /* ACCENT — deux jetons, deux rôles. Ne pas les confondre.
+       / ACCENT — two tokens, two roles. Do not mix them up.
+
+       --tb-accent est LA VALEUR PORTANTE : on pose --tb-accent-contraste DESSUS
+       (.tb-bloc__bouton--plein, .tb-bloc__bouton--contour:hover). Le socle
+       garantit >= 4.5:1 pour ses valeurs. Un skin qui change --skin-accent doit
+       fournir un --skin-accent-contraste cohérent.
+       / --tb-accent is THE CARRYING VALUE: --tb-accent-contraste sits ON it.
+
+       --tb-accent-vif est LE GESTE : filets, bordures, aplats décoratifs.
+       Le socle n'y pose JAMAIS de texte — un skin peut donc y mettre une teinte
+       claire (jaune) sans rien casser.
+       / --tb-accent-vif is THE GESTURE: rules, borders, decorative fills. The
+       socle NEVER puts text on it.
+
+       Défauts : losean (océan), une teinte du skin `reunion` déjà présente dans
+       commun/css/vars.css (--kouler-losean #4296cc). Le geste est le losean quasi
+       pur #4195cc (3.01:1 sur la pire surface claire — juste au-dessus du seuil de
+       geste, MAIS très insuffisant pour du texte) ; l'encre est son jumeau assombri
+       #2d76a6. À l'œil, une seule couleur.
+       / Defaults: losean (ocean), a `reunion` skin hue already in vars.css. The
+       gesture is near-pure losean (just above the gesture threshold, nowhere near
+       enough for text); the ink is its darkened twin.
+
+       L'encre se calibre sur --bs-tertiary-bg (#f6f5f1), pas sur le blanc : le
+       site a DEUX surfaces claires et le pied de page est sur la tertiary, la plus
+       sombre des deux. Une encre qui ne passe que sur le blanc est illisible dans
+       le pied, sans que rien ne le signale. #dc184b tient les deux (4.91:1 et
+       4.50:1) et porte le blanc à 4.91:1.
+       Vérifié par tests/pytest/test_socle_contrastes.py.
+       / The ink is calibrated on --bs-tertiary-bg, not on white: the site has TWO
+       light surfaces and the footer sits on the darker one. */
+    --tb-accent: var(--skin-accent, #2d76a6);
+    --tb-accent-vif: var(--skin-accent-vif, #4195cc);
+    --tb-accent-contraste: var(--skin-accent-contraste, #ffffff);
+
+    /* FOND D'UN ÉLÉMENT PLEIN (bouton --plein, aplat de bloc) et l'encre qu'on
+       pose dessus. Découplé de --tb-accent parce que --tb-accent sert AUSSI
+       d'encre (.tb-bloc__texte a, .tb-fil-ariane a) : une teinte utilisable en
+       aplat n'est pas forcément lisible en texte, et inversement.
+       / BACKGROUND of a filled element and the ink on it. Decoupled from
+       --tb-accent because --tb-accent is ALSO used as ink.
+
+       Le cas qui force le découplage : une teinte claire et saturée (jaune kari
+       #e9b322) fait un bon FOND — encre sombre dessus à 8.36:1 — mais une encre
+       illisible : 1.92:1 sur blanc. Sans ce découplage, un skin voulant un CTA
+       jaune devait poser --skin-accent: jaune, ce qui teintait du même coup TOUS
+       les liens à 1.92:1.
+       / A light saturated hue makes a good FILL (dark ink on it: 8.36:1) but an
+       unreadable ink (1.92:1 on white). Without this split, a skin wanting a
+       yellow CTA had to poison every link colour.
+
+       Par défaut le fond EST l'accent : comportement identique sans réglage.
+       / By default the fill IS the accent: identical behaviour when unset. */
+    --tb-fond: var(--skin-fond, var(--tb-accent));
+    --tb-fond-contraste: var(--skin-fond-contraste, var(--tb-accent-contraste));
 
     /* Texte/surfaces : contraste fort, fond cassé (pas blanc pur) pour l'œil.
-       / Text/surfaces: strong contrast, off-white background (easier on the eye). */
+       Ces chaînes-là restent sur --bs-* : elles sont neutres et thème-conscientes
+       (Bootstrap les permute sur [data-bs-theme]), c'est ce qui donne le mode
+       sombre gratuitement. Seule la chaîne ACCENT est cassée, parce que
+       --bs-primary n'est pas thème-conscient : c'est une couleur de marque.
+       / These chains stay on --bs-*: they are neutral and theme-aware, which is
+       what gives dark mode for free. Only the ACCENT chain is broken. */
     --tb-texte: var(--bs-body-color, #18181b);
-    --tb-texte-doux: color-mix(in srgb, var(--tb-texte) 66%, transparent);
+    /* Encre douce : une VRAIE couleur (piton, 7.32:1 sur blanc), pas un lavis
+       d'opacité. Un color-mix vers `transparent` laisse le contraste dépendre de
+       ce qui passe derrière : posé sur --tb-surface il tient, posé sur une image
+       ou un aplat il tombe sans prévenir. Une encre se nomme.
+       / Soft ink: a REAL colour (7.32:1 on white), not an opacity wash. A
+       color-mix toward `transparent` makes contrast depend on whatever shows
+       through — fine on --tb-surface, silently failing over an image. */
+    --tb-texte-doux: var(--skin-texte-doux, #63515e);
     --tb-surface: var(--bs-body-bg, #ffffff);
     --tb-surface-alt: var(--bs-tertiary-bg, #f6f5f1);
     --tb-bordure: var(--bs-border-color, #e3e1da);
 
-    /* Fond du HERO sans image : neutre legerement teinte accent, pour creer un
-       « moment d'arrivee » (le surface-alt seul est trop proche du blanc).
-       / Imageless HERO background: neutral slightly tinted with accent, to create
-       an "arrival" moment (surface-alt alone is too close to white). */
-    --tb-hero-fond: color-mix(in srgb, var(--tb-accent) 4%, var(--tb-surface-alt));
+    /* Fond du HERO sans image. C'est le papier alterné, pas un lavis d'accent :
+       un color-mix teinte fabrique une surface de plus, hors des deux que le
+       socle calibre, et l'accent y tombe sous le seuil (4.23:1 à 4 % de teinte
+       sur surface-alt). Le « moment d'arrivée » se joue à la typographie et au
+       filet, pas à un fond rosé.
+       / Imageless HERO background: alternate paper, not an accent wash. A tint
+       creates one more surface outside the two the socle calibrates, and the
+       accent falls below the threshold there (4.23:1). The arrival moment is
+       carried by type and rule, not by a tinted background. */
+    --tb-hero-fond: var(--tb-surface-alt);
 
     /* Police de titre éditoriale (serif système, zéro téléchargement).
        / Editorial title font (system serif, zero download). */
@@ -72,9 +171,80 @@
     --tb-ombre: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
     --tb-ombre-forte: 0 2px 6px rgba(0, 0, 0, 0.08), 0 18px 40px rgba(0, 0, 0, 0.12);
     --tb-transition: 180ms ease;
+}
 
-    /* Pas de scroll horizontal sur mobile / No horizontal scroll on mobile */
+/* MODE SOMBRE — deux bascules, pas une, et un calibrage sur DEUX surfaces.
+   / DARK MODE — two flips, not one, and a calibration against TWO surfaces.
+
+   1) LA TEINTE bascule. L'encre claire #e61c51 tombe à 3.42:1 sur le fond sombre :
+      elle ne porte plus de texte. Il faut son jumeau éclairci.
+   2) LE CONTRASTE bascule AUSSI. Le blanc ne tient pas sur l'accent éclairci
+      (2.95:1) — c'est l'encre sombre pitonbraz qui passe, à 5.44:1. Sans cette
+      seconde bascule, TOUS les boutons pleins du site échoueraient en sombre.
+
+   LE CALIBRAGE, ET C'EST LUI QUI PIÈGE : en sombre, le site a DEUX surfaces, et
+   toute encre doit passer sur LA PLUS CLAIRE des deux.
+     --bs-body-bg     #212529  le corps de page
+     --bs-tertiary-bg #2b3035  le pied de page, les surfaces alternées
+   Une encre calibrée sur le seul #212529 est lisible dans le corps et illisible
+   dans le pied, sans que rien ne le signale. #509ed0 tient les deux (5.25:1 /
+   4.53:1). Vérifié par tests/pytest/test_socle_contrastes.py.
+   / THE CALIBRATION TRAP: in dark mode the site has TWO surfaces, and every ink
+   must clear 4.5:1 on the LIGHTER one. */
+[data-bs-theme="dark"] {
+    --tb-accent: var(--skin-accent-sombre, #509ed0);
+    --tb-accent-contraste: var(--skin-accent-contraste-sombre, #291e26);
+    /* piton éclairci — calibré lui aussi sur #2b3035, la surface la PLUS CLAIRE,
+       et pas sur #212529 : le piton clair tombe à 2.11:1 en sombre, et un jumeau
+       calibré sur le seul corps de page rendait le pied à 3.89:1.
+       / Lightened piton, calibrated on the LIGHTER surface too. */
+    --tb-texte-doux: var(--skin-texte-doux-sombre, #a5919f);
+}
+
+/* JETONS DE MISE EN PAGE — sur :root, comme les jetons de couleur, et pour la
+   même raison : le chrome (pied de page, navbar) les consomme et vit HORS de
+   .tb-page. Scopés à .tb-page, `padding-inline: var(--tb-gouttiere)` dans le
+   pied de page ne résout rien — pas d'erreur, juste une gouttière nulle, un
+   texte collé au bord et un débordement horizontal.
+   La gouttière est UNE et unique pour tout le site : c'est elle qui aligne le
+   pied de page sur les blocs (audit grille 2026-07-05 : chaque bloc avait la
+   sienne, rien ne s'alignait).
+   / LAYOUT TOKENS — on :root, like the colour tokens, and for the same reason:
+   the chrome consumes them and lives OUTSIDE .tb-page. Scoped to .tb-page,
+   `padding-inline: var(--tb-gouttiere)` in the footer resolves to nothing — no
+   error, just a null gutter, text glued to the edge and horizontal overflow. */
+:root {
+    --tb-espace-section: clamp(2.5rem, 5.5vw, 4.5rem);
+    --tb-largeur-max: 72rem;
+    --tb-largeur-lecture: 40rem;
+    --tb-gouttiere: clamp(1.25rem, 5vw, 4rem);
+    /* Largeur d'une boîte AUTONOME (qui porte sa gouttière en padding).
+       Géométriquement identique à une section pleine largeur + contenu
+       centré : contenu à max((100vw - largeur-max)/2, gouttière) du bord.
+       Sans ce calc, une boîte « max-width + padding gouttière » décale son
+       contenu de +gouttière par rapport aux sections (les cartes semblaient
+       « plus à l'intérieur » que les titres).
+       / Width of a SELF-CONTAINED box (carrying its gutter as padding).
+       Geometrically identical to a full-width section with centered content.
+       Without this calc, such boxes shift their content by +gutter vs
+       sections (cards looked more inset than titles). */
+    --tb-largeur-boite: calc(var(--tb-largeur-max) + 2 * var(--tb-gouttiere));
+}
+
+/* Jamais de défilement horizontal — sur html ET body, et jamais `hidden`.
+   `hidden` sur la racine casse `position: sticky` et le défilement ancré ;
+   `clip` non. Porté ici et pas seulement sur .tb-page : un débordement du pied
+   de page ou de la navbar est hors .tb-page, donc son scroll ne serait pas
+   coupé (Hallmark, gate 34).
+   / Never a horizontal scrollbar — on html AND body, never `hidden`: `hidden` on
+   the root breaks `position: sticky` and scroll anchoring; `clip` does not.
+   Here rather than only on .tb-page: footer/navbar overflow lives outside it. */
+html,
+body {
     overflow-x: clip;
+}
+
+.tb-page {
     color: var(--tb-texte);
     background-color: var(--tb-surface);
 }
@@ -143,7 +313,10 @@ h2.tb-bloc__titre::before {
     width: 2.5rem;
     height: 3px;
     margin-bottom: 1rem;
-    background-color: var(--tb-accent);
+    /* Filet décoratif : aucun texte ne se pose dessus, donc c'est LE GESTE
+       (teinte vive), pas l'encre. / Decorative rule: no text sits on it, so it
+       takes THE GESTURE, not the ink. */
+    background-color: var(--tb-accent-vif);
     border-radius: 2px;
 }
 
@@ -203,12 +376,19 @@ h2.tb-bloc__titre::before {
 
 /* plein / filled */
 .tb-bloc__bouton--plein {
-    background-color: var(--tb-accent);
-    color: var(--tb-accent-contraste);
+    background-color: var(--tb-fond);
+    color: var(--tb-fond-contraste);
+    /* La bordure suit LE FOND, pas l'accent. .tb-bloc__bouton pose une bordure
+       --tb-accent pour le bouton contour ; sur un bouton plein dont le fond est
+       découplé (--skin-fond), garder l'accent cerclerait l'aplat d'une AUTRE
+       teinte — un CTA jaune bordé de cyan.
+       / The border follows THE FILL, not the accent: on a filled button whose fill
+       is decoupled, keeping the accent would ring the slab in a different hue. */
+    border-color: var(--tb-fond);
 }
 .tb-bloc__bouton--plein:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 18px color-mix(in srgb, var(--tb-accent) 35%, transparent);
+    box-shadow: 0 6px 18px color-mix(in srgb, var(--tb-fond) 35%, transparent);
 }
 .tb-bloc__bouton--plein:active { transform: translateY(0); box-shadow: none; }
 
@@ -217,7 +397,11 @@ h2.tb-bloc__titre::before {
     background-color: transparent;
     color: var(--tb-accent);
 }
-.tb-bloc__bouton--contour:hover { background-color: var(--tb-accent); color: var(--tb-accent-contraste); }
+.tb-bloc__bouton--contour:hover {
+    background-color: var(--tb-fond);
+    color: var(--tb-fond-contraste);
+    border-color: var(--tb-fond);
+}
 .tb-bloc__bouton--contour:active { transform: translateY(1px); }
 
 /* focus visible : anneau net, jamais animé (Hallmark).
@@ -344,15 +528,27 @@ h2.tb-bloc__titre::before {
 .tb-bloc--sans-image .tb-bloc__contenu { max-width: var(--tb-largeur-max); }
 
 /* ---------------------------------------------------------------------------
- * CTA — bande teintée d'accent, filet à gauche (asymétrie), titre serif.
- * / CTA — accent-tinted band, left rule (asymmetry), serif title.
+ * CTA — bande de papier alterné, filet à gauche (asymétrie), titre serif.
+ * / CTA — alternate-paper band, left rule (asymmetry), serif title.
+ *
+ * LE FOND EST UNE SURFACE CONNUE, JAMAIS UN LAVIS D'ACCENT. Un
+ * `color-mix(accent 7%, surface)` fabrique une TROISIÈME surface, plus sombre que
+ * les deux que le socle calibre — l'accent y tombe à 4.40:1 alors qu'il tient
+ * 4.91:1 sur le papier. Chaque lavis est une surface de plus à vérifier, et une
+ * de plus à oublier. Le rythme se fait au papier (--tb-surface-alt, déjà
+ * calibrée) et le geste au filet ; la couleur reste dans le filet.
+ * / THE BACKGROUND IS A KNOWN SURFACE, NEVER AN ACCENT WASH. A `color-mix` tint
+ * creates a THIRD surface, darker than the two the socle calibrates: the accent
+ * drops to 4.40:1 there. Rhythm comes from the paper, the gesture from the rule.
  * ------------------------------------------------------------------------- */
 .tb-bloc--cta {
-    background-color: color-mix(in srgb, var(--tb-accent) 7%, var(--tb-surface));
-    border-block: 1px solid color-mix(in srgb, var(--tb-accent) 18%, var(--tb-bordure));
+    background-color: var(--tb-surface-alt);
+    border-block: 1px solid var(--tb-bordure);
 }
 .tb-bloc--cta .tb-bloc__contenu {
-    border-left: 4px solid var(--tb-accent);
+    /* Le filet est LE GESTE : aucun texte ne se pose dessus.
+       / The rule is THE GESTURE: no text sits on it. */
+    border-left: 4px solid var(--tb-accent-vif);
     padding-left: clamp(1.25rem, 3vw, 2.25rem);
     max-width: 54rem;
     margin-inline: 0 auto;
@@ -905,4 +1101,548 @@ h2.tb-bloc__titre::before {
     max-width: 100%;
     border: 0;
     display: block;
+}
+
+/* ===========================================================================
+ * LE CHROME — pied de page et barre de navigation.
+ * / THE CHROME — footer and navigation bar.
+ *
+ * Le chrome vit HORS de <main class="tb-page"> : il n'est pas rendu par le
+ * moteur de blocs mais par les partials du skin (partials/footer.html,
+ * partials/navbar.html). C'est pourquoi ces règles ciblent .tb-chrome* et non
+ * .tb-bloc*, et pourquoi les jetons sont sur :root et non sur .tb-page.
+ * / The chrome lives OUTSIDE <main class="tb-page">: it is rendered by the
+ * skin's partials, not the block engine. Hence .tb-chrome* selectors, and hence
+ * the tokens sitting on :root.
+ *
+ * Ces règles n'arrivent que parce que classic/shell.html charge ce fichier dans
+ * son <head>. Un skin qui a son PROPRE shell.html ne les reçoit pas s'il ne
+ * charge pas ce fichier — c'est voulu : son chrome est à lui.
+ * / These rules only arrive because classic/shell.html loads this file. A skin
+ * with its OWN shell does not get them unless it loads the file — by design.
+ * ------------------------------------------------------------------------- */
+
+/* PIED DE PAGE / FOOTER */
+.tb-chrome-pied {
+    background-color: var(--tb-surface-alt);
+    color: var(--tb-texte);
+    /* Filet unique en haut : c'est LE GESTE qui rattache le pied à l'identité,
+       à la place d'un aplat coloré. / A single top rule: THE GESTURE tying the
+       footer to the identity, instead of a coloured slab. */
+    border-top: 3px solid var(--tb-accent-vif);
+    padding-block: clamp(2.5rem, 5vw, 4rem) 2rem;
+}
+
+.tb-chrome-pied__grille {
+    box-sizing: border-box;
+    max-width: var(--tb-largeur-boite);
+    margin-inline: auto;
+    padding-inline: var(--tb-gouttiere);
+    display: grid;
+    /* minmax(0,1fr) et pas 1fr : une piste 1fr refuse de passer sous la largeur
+       de son contenu et provoque un débordement horizontal (Hallmark).
+       / minmax(0,1fr), never bare 1fr: a 1fr track refuses to shrink below its
+       content and causes horizontal overflow. */
+    grid-template-columns: minmax(0, 1fr);
+    gap: clamp(2rem, 4vw, 3.5rem);
+}
+@media (min-width: 62em) {
+    .tb-chrome-pied__grille {
+        /* Asymétrique : la colonne éditoriale porte deux fois le poids des deux
+           colonnes de liens. Trois colonnes égales = la grille de pied
+           reconnaissable entre toutes. / Asymmetric on purpose: three equal
+           columns is the most recognisable footer grid there is. */
+        grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr);
+    }
+}
+
+.tb-chrome-pied__titre {
+    font-family: var(--tb-police-titre);
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    margin: 0 0 1rem;
+    color: var(--tb-texte);
+}
+
+.tb-chrome-pied__liens {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.tb-chrome-pied__lien {
+    display: inline-block;
+    /* Jamais cliquable sur deux lignes (Hallmark, gate 49) : ces libellés sont
+       des entrées de menu, ils sont courts par nature. Le `nowrap` est tenable
+       ICI parce que la piste de grille est en minmax(0, 1fr) — elle peut se
+       rétrécir sous la largeur du texte sans pousser la page.
+       / Never a two-line target: these are menu entries, short by nature. */
+    white-space: nowrap;
+    min-height: 44px;      /* cible tactile / touch target */
+    line-height: 44px;
+    color: var(--tb-texte);
+    text-decoration: none;
+    border: 0;
+    background: none;
+    padding: 0;
+    font: inherit;
+    cursor: pointer;
+    /* Le survol est porté par un filet, pas par un changement de couleur : la
+       couleur reste l'encre, donc le contraste ne bouge jamais.
+       / Hover carried by a rule, not a colour change: the ink stays put, so the
+       contrast never moves. */
+    box-shadow: inset 0 -1px 0 0 transparent;
+    transition: box-shadow var(--tb-transition);
+}
+.tb-chrome-pied__lien:hover {
+    box-shadow: inset 0 -1px 0 0 var(--tb-accent-vif);
+}
+.tb-chrome-pied__lien[aria-current="page"] {
+    box-shadow: inset 0 -2px 0 0 var(--tb-accent-vif);
+    font-weight: 600;
+}
+.tb-chrome-pied__lien:focus-visible {
+    /* Anneau net, jamais animé (Hallmark). / Crisp ring, never animated. */
+    outline: 3px solid var(--tb-accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+.tb-chrome-pied__texte {
+    color: var(--tb-texte-doux);
+    max-width: var(--tb-largeur-lecture);
+    margin: 0 0 1rem;
+}
+.tb-chrome-pied__accroche {
+    font-family: var(--tb-police-titre);
+    font-size: 1.15rem;
+    color: var(--tb-texte);
+    max-width: var(--tb-largeur-lecture);
+    margin: 0 0 1rem;
+}
+
+.tb-chrome-pied__filet {
+    border: 0;
+    border-top: 1px solid var(--tb-bordure);
+    margin: 1.5rem 0;
+}
+
+/* Les deux liens TiBillet : fléchés, pas boutonnés. Un libellé long tient sur
+   un lien, jamais sur un bouton — et un lien fléché ne devient pas un texte
+   cliquable sur deux lignes (Hallmark, gate 49).
+   / The two TiBillet links: arrowed, not buttoned. A long label fits a link,
+   never a button. */
+.tb-chrome-pied__liens--fleches { margin-top: 1.25rem; gap: 0.35rem; }
+
+.tb-chrome-pied__fleche {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    min-height: 44px;
+    color: var(--tb-accent);
+    text-decoration: none;
+    font-weight: 600;
+    /* Le libellé peut faire deux lignes SANS être une cible cliquable de deux
+       lignes : la puce et la flèche restent alignées sur la première ligne.
+       / The label may wrap without the target reading as two-line clickable. */
+    max-width: var(--tb-largeur-lecture);
+}
+.tb-chrome-pied__fleche span {
+    box-shadow: inset 0 -1px 0 0 transparent;
+    transition: box-shadow var(--tb-transition);
+}
+.tb-chrome-pied__fleche:hover span {
+    box-shadow: inset 0 -1px 0 0 var(--tb-accent-vif);
+}
+.tb-chrome-pied__fleche:focus-visible {
+    outline: 3px solid var(--tb-accent);
+    outline-offset: 3px;
+    border-radius: 2px;
+}
+
+/* Mention France 2030 : bande de bas de page, discrète. */
+.tb-chrome-pied__mention {
+    box-sizing: border-box;
+    max-width: var(--tb-largeur-boite);
+    margin: 2.5rem auto 0;
+    padding-inline: var(--tb-gouttiere);
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--tb-bordure);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1.5rem;
+    font-size: 0.85rem;
+    color: var(--tb-texte-doux);
+}
+.tb-chrome-pied__mention p { margin: 0; max-width: 42ch; }
+.tb-chrome-pied__mention img { max-width: 100%; height: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+    .tb-chrome-pied__lien,
+    .tb-chrome-pied__fleche span {
+        transition: none;
+    }
+}
+
+/* AGENDA — intitulé de date.
+   / AGENDA — date heading.
+
+   Même geste que h2.tb-bloc__titre : serif + filet vif. L'agenda et les pages CMS
+   se lisent ainsi comme un seul site, alors qu'ils sont rendus par deux chemins
+   différents (vues/ d'un côté, moteur de blocs de l'autre).
+   / Same gesture as the block titles, so the agenda and the CMS pages read as one
+   site despite being rendered by two different paths. */
+.tb-agenda__date {
+    font-family: var(--tb-police-titre);
+    font-size: clamp(1.15rem, 2.2vw, 1.4rem);
+    font-weight: 600;
+    color: var(--tb-texte);
+    margin: 2.5rem 0 1rem;
+    padding-bottom: 0.5rem;
+    /* Le filet prend LE GESTE (teinte vive) : aucun texte ne se pose dessus.
+       / The rule takes THE GESTURE: no text sits on it. */
+    border-bottom: 2px solid var(--tb-accent-vif);
+}
+.tb-agenda__date:first-of-type { margin-top: 0; }
+
+/* ACCORDÉON (événement : horaires, lieu, bénévoles) — entête.
+   / ACCORDION (event: schedule, place, volunteers) — header.
+
+   Le libellé est une encre sur le papier ; la couleur est un filet à gauche — un
+   repère, pas un fond. Jamais d'aplat en dégradé derrière un libellé : sur une
+   rampe de couleur, le contraste du texte dépend de l'endroit où chaque mot tombe.
+   / The label is ink on paper; the colour is a rule — a marker, not a fill. Never a
+   gradient slab behind a label: on a colour ramp the contrast depends on where each
+   word lands. */
+.tb-accordeon__entete {
+    font-family: var(--tb-police-titre);
+    font-weight: 600;
+    color: var(--tb-texte);
+    background-color: var(--tb-surface-alt);
+    border-left: 4px solid var(--tb-accent-vif);
+}
+/* Bootstrap repeint l'entête ouverte via --bs-accordion-active-bg/-color et pose
+   une ombre interne. Sans cette reprise, l'entête ouverte repasse en bleu
+   Bootstrap alors que l'entête fermée est à nos jetons.
+   / Bootstrap repaints the open header via its own variables; without this, an
+   open header reverts to Bootstrap blue while the closed one uses our tokens. */
+.tb-accordeon__entete:not(.collapsed) {
+    color: var(--tb-texte);
+    background-color: var(--tb-surface-alt);
+    box-shadow: none;
+}
+.tb-accordeon__entete:focus-visible {
+    outline: 3px solid var(--tb-accent);
+    outline-offset: -3px;
+    box-shadow: none;
+}
+
+/* ADHÉSIONS — la grille des offres.
+   / MEMBERSHIPS — the offers grid.
+
+   Pas de grille de `card` Bootstrap ici : `card` + `card-img-top` + `card-footer`
+   portant un bouton plein pleine largeur est le motif le plus templaté qui existe,
+   reconnaissable sur des milliers de sites, et il ne dit rien du lieu.
+   / No Bootstrap card grid here: it is the single most templated pattern there is,
+   and it says nothing about the venue. */
+.tb-adhesions__grille {
+    display: grid;
+    /* minmax(0, …) et jamais `1fr` nu : une piste 1fr refuse de passer sous la
+       largeur intrinsèque de son contenu, et une image l'élargit jusqu'au
+       débordement horizontal (Hallmark, gate 50).
+       / minmax(0, …), never bare 1fr: an image would push the track past the
+       viewport. */
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+    gap: clamp(1.5rem, 3vw, 2.5rem);
+    margin-block: 2rem 3.5rem;
+}
+
+.tb-adhesion {
+    display: flex;
+    flex-direction: column;
+    /* Pas de carte flottante : un filet et du papier. La profondeur vient du
+       contraste de surface, pas d'une ombre portée.
+       / No floating card: a rule and paper. Depth comes from surface contrast. */
+    background-color: var(--tb-surface);
+    border: 1px solid var(--tb-bordure);
+    border-radius: var(--tb-rayon);
+    overflow: hidden;
+    transition: border-color var(--tb-transition);
+}
+.tb-adhesion:hover { border-color: var(--tb-accent-vif); }
+
+.tb-adhesion__image {
+    width: 100%;
+    height: auto;
+    display: block;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+}
+
+.tb-adhesion__corps {
+    padding: 1.25rem 1.25rem 0.5rem;
+    /* Pousse le pied en bas quelles que soient les hauteurs de texte : les cartes
+       d'une même rangée alignent leurs boutons. / Pushes the footer down so buttons
+       align across a row. */
+    flex: 1 1 auto;
+}
+
+.tb-adhesion__titre {
+    font-family: var(--tb-police-titre);
+    font-size: 1.3rem;
+    font-weight: 600;
+    line-height: 1.25;
+    color: var(--tb-texte);
+    margin: 0 0 0.6rem;
+    /* Un mot long (« Intercommunalité ») ne doit pas élargir la piste.
+       / A long word must not widen the track. */
+    overflow-wrap: anywhere;
+    min-width: 0;
+}
+
+.tb-adhesion__texte {
+    color: var(--tb-texte-doux);
+    margin: 0 0 0.75rem;
+    font-size: 0.95rem;
+}
+
+.tb-adhesion__pied {
+    padding: 0.5rem 1.25rem 1.25rem;
+}
+
+.tb-adhesion__bouton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    width: 100%;
+    min-height: 44px;
+    padding: 0.6rem 1.25rem;
+    border-radius: var(--tb-rayon-sm);
+    border: 1.5px solid var(--tb-accent);
+    background-color: transparent;
+    color: var(--tb-accent);
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: background-color var(--tb-transition), color var(--tb-transition);
+}
+/* Le bouton est en CONTOUR au repos et se remplit au survol : sur une grille de
+   6 offres, 6 aplats pleins se disputent l'attention et aucune ne l'obtient.
+   / Outline at rest, filled on hover: six solid buttons on a grid all shout, so
+   none of them is heard. */
+.tb-adhesion__bouton:hover {
+    background-color: var(--tb-fond);
+    color: var(--tb-fond-contraste);
+    border-color: var(--tb-fond);
+}
+.tb-adhesion__bouton:focus-visible {
+    outline: 3px solid var(--tb-accent);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tb-adhesion,
+    .tb-adhesion__bouton { transition: none; }
+}
+
+/* ÉTIQUETTES (tags) — pastille + encre, jamais un aplat coloré.
+   / TAGS — a dot plus ink, never a coloured slab.
+
+   LA COULEUR EST UNE DONNÉE DU LIEU, PAS UN CHOIX DE DESIGN. Tag.color est un
+   champ que le gestionnaire renseigne dans l'admin pour coder ses catégories.
+   On ne la remplace pas : on change la façon de la montrer.
+
+   Pourquoi pas un aplat : BaseBillet.Tag.contrast_fg choisit noir ou blanc par la
+   méthode YIQ, qui n'est PAS le calcul de contraste WCAG. Sur une teinte comme le
+   letsi #e93363, YIQ retourne blanc — or blanc sur letsi ne fait que 4.10:1, sous
+   le seuil de 4.5:1. Un aplat rendait donc la lisibilité dépendante de la couleur
+   choisie par le lieu, et le lieu n'a aucun moyen de le savoir.
+   En pastille, le libellé est TOUJOURS de l'encre sur du papier : la lisibilité ne
+   dépend plus de la couleur, et le code couleur du lieu reste lu d'un coup d'œil.
+   Accessoirement, dix-sept aplats saturés côte à côte ne hiérarchisent rien.
+   / The colour is the venue's DATA, not a design choice. We do not replace it — we
+   change how it is shown. Tag.contrast_fg picks black/white via YIQ, which is not
+   WCAG: on some hues it returns white at 4.10:1 (below 4.5:1). As a slab, legibility
+   depended on the venue's colour pick, with no way for them to know. As a dot, the
+   label is always ink on paper. */
+.tb-etiquette {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    /* Jamais cliquable sur deux lignes (Hallmark, gate 49). Un nom d'étiquette est
+       court par nature. / Never a two-line target: a tag name is short by nature. */
+    white-space: nowrap;
+    min-height: 32px;
+    padding: 0.25rem 0.7rem;
+    margin: 0 0.35rem 0.35rem 0;
+    border: 1px solid var(--tb-bordure);
+    border-radius: 999px;
+    background-color: var(--tb-surface);
+    color: var(--tb-texte);
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: border-color var(--tb-transition), background-color var(--tb-transition);
+}
+/* LA pastille : c'est elle qui porte la couleur du lieu. Aucun texte dessus, donc
+   aucune contrainte de contraste — n'importe quelle teinte y est licite.
+   / THE dot carries the venue's colour. No text sits on it, so any hue is legal. */
+.tb-etiquette::before {
+    content: "";
+    flex: none;
+    width: 0.6em;
+    height: 0.6em;
+    border-radius: 50%;
+    background-color: var(--tb-etiquette-teinte, var(--tb-accent-vif));
+    /* Un contour, pour que la pastille se voie quelle que soit la teinte choisie
+       par le lieu. Il est posé en ENCRE : il doit contraster avec le PAPIER, pas
+       avec la pastille — un contour noir en mode sombre fait disparaître une
+       teinte foncée exactement comme un contour clair ferait disparaître une
+       teinte claire sur papier blanc. --tb-texte suit le mode, le contour aussi.
+       / A ring so the dot shows whatever hue the venue picked. It is INK: it must
+       contrast with the PAPER, not with the dot. A black ring in dark mode hides a
+       dark hue just as a light ring would hide a light one on white paper. */
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tb-texte) 22%, transparent);
+}
+.tb-etiquette:hover {
+    border-color: var(--tb-etiquette-teinte, var(--tb-accent-vif));
+    background-color: var(--tb-surface-alt);
+}
+.tb-etiquette:focus-visible {
+    outline: 3px solid var(--tb-accent);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tb-etiquette { transition: none; }
+}
+
+/* ===========================================================================
+ * LES BOUTONS BOOTSTRAP DE MARQUE — rebranchés sur les jetons du socle.
+ * / BOOTSTRAP BRAND BUTTONS — rewired onto the socle's tokens.
+ *
+ * POURQUOI ICI PLUTÔT QUE DANS CHAQUE GABARIT : `.btn-primary` est posé sur les
+ * CTA les plus visibles du site — le déclencheur de réservation d'un événement,
+ * le « voir plus » de l'agenda, les boutons de l'accueil, la carte d'un lieu. Les
+ * rhabiller un par un demanderait de toucher huit gabarits et laisserait le
+ * neuvième derrière. Bootstrap 5.3 pilotant ses boutons par des variables CSS,
+ * il suffit de rebrancher les variables : les gabarits ne bougent pas et un
+ * `.btn-primary` écrit demain hérite du bon accent tout seul.
+ * / Bootstrap 5.3 drives its buttons through CSS variables, so rewiring the
+ * variables dresses every `.btn-primary` at once — including ones written later.
+ *
+ * PÉRIMÈTRE VOLONTAIREMENT ÉTROIT : seuls `primary` et `outline-primary` sont
+ * rebranchés. Ce sont des couleurs de MARQUE — « primary » ne veut rien dire
+ * d'autre que « la couleur du site ». `btn-success`, `btn-danger` et
+ * `btn-warning` sont des couleurs SÉMANTIQUES : le vert d'une adhésion validée et
+ * le rouge d'un événement complet disent quelque chose que l'accent du lieu ne
+ * doit pas écraser. Ce fichier étant chargé par le shell, il atteint aussi le
+ * chrome partagé de `commun/` — les repeindre casserait le sens là-bas.
+ * / DELIBERATELY NARROW: only primary/outline-primary are rewired. Those are BRAND
+ * colours. success/danger/warning are SEMANTIC: the green of a confirmed membership
+ * and the red of a sold-out event carry meaning the venue's accent must not erase.
+ * ------------------------------------------------------------------------- */
+.btn-primary {
+    --bs-btn-color: var(--tb-fond-contraste);
+    --bs-btn-bg: var(--tb-fond);
+    --bs-btn-border-color: var(--tb-fond);
+    --bs-btn-hover-color: var(--tb-fond-contraste);
+    --bs-btn-hover-bg: color-mix(in srgb, var(--tb-fond) 88%, black);
+    --bs-btn-hover-border-color: color-mix(in srgb, var(--tb-fond) 88%, black);
+    --bs-btn-active-color: var(--tb-fond-contraste);
+    --bs-btn-active-bg: color-mix(in srgb, var(--tb-fond) 80%, black);
+    --bs-btn-active-border-color: color-mix(in srgb, var(--tb-fond) 80%, black);
+    --bs-btn-disabled-color: var(--tb-fond-contraste);
+    --bs-btn-disabled-bg: var(--tb-fond);
+    --bs-btn-disabled-border-color: var(--tb-fond);
+}
+
+.btn-outline-primary {
+    --bs-btn-color: var(--tb-accent);
+    --bs-btn-border-color: var(--tb-accent);
+    --bs-btn-hover-color: var(--tb-fond-contraste);
+    --bs-btn-hover-bg: var(--tb-fond);
+    --bs-btn-hover-border-color: var(--tb-fond);
+    --bs-btn-active-color: var(--tb-fond-contraste);
+    --bs-btn-active-bg: var(--tb-fond);
+    --bs-btn-active-border-color: var(--tb-fond);
+    --bs-btn-disabled-color: var(--tb-accent);
+    --bs-btn-disabled-border-color: var(--tb-accent);
+}
+
+/* L'anneau de focus de Bootstrap est un halo de --bs-btn-focus-shadow-rgb, qui
+   reste sur le bleu par défaut. Il lui faut le triplet R,G,B de l'accent, que
+   var(--tb-accent) ne peut pas fournir (c'est un hex). On pose donc l'anneau du
+   socle, net et jamais animé, comme sur les autres boutons.
+   / Bootstrap's focus halo needs an R,G,B triplet, which our hex token cannot
+   supply. We use the socle's crisp ring instead. */
+.btn-primary:focus-visible,
+.btn-outline-primary:focus-visible {
+    outline: 3px solid var(--tb-accent);
+    outline-offset: 3px;
+    box-shadow: none;
+}
+
+/* Les contrôles de formulaire cochés — cases et boutons radio du tunnel de
+   réservation et du formulaire d'adhésion.
+   / Checked form controls — the booking tunnel and membership form.
+
+   Bootstrap compile le bleu de `:checked` EN DUR dans son CSS (`$primary` figé à
+   la compilation Sass), et non via une variable : contrairement aux boutons, il
+   n'y a aucun `--bs-*` à rebrancher. La règle doit donc réécrire la couleur.
+   Sans elle, un lieu voit ses cases à cocher en bleu Bootstrap au milieu de son
+   propre accent, dans le tunnel où il encaisse.
+   / Bootstrap hardcodes the `:checked` blue at Sass-compile time rather than
+   exposing a variable, so unlike buttons there is no `--bs-*` to rewire. */
+.form-check-input:checked {
+    background-color: var(--tb-fond);
+    border-color: var(--tb-fond);
+}
+.form-check-input:focus-visible {
+    outline: 3px solid var(--tb-accent);
+    outline-offset: 2px;
+    box-shadow: none;
+}
+/* `accent-color` couvre les contrôles natifs que Bootstrap n'habille pas
+   (input range, checkbox hors .form-check-input).
+   / `accent-color` covers native controls Bootstrap does not restyle. */
+:root {
+    accent-color: var(--tb-fond);
+}
+
+/* Le bouton d'action secondaire — « Annuler », « Effacer ».
+   / The secondary action button — "Cancel", "Clear".
+
+   Bootstrap fige `--bs-btn-color: #6c757d` sur .btn-outline-secondary : un gris
+   moyen, qui ne suit PAS le thème. Il tient sur le blanc (4.69:1) et tombe partout
+   ailleurs — 4.30:1 sur le papier alterné, 3.29:1 sur le corps sombre, 2.84:1 sur
+   le pied sombre. Un bouton « Annuler » illisible dès qu'on quitte le fond blanc.
+   --tb-texte-doux est une encre calibrée sur les deux surfaces ET les deux thèmes :
+   la lisibilité suit le thème toute seule.
+   / Bootstrap pins a fixed mid-grey that does NOT follow the theme: it holds on
+   white and fails everywhere else (down to 2.84:1 on the dark footer). Our soft ink
+   is calibrated for both surfaces in both themes. */
+.btn-outline-secondary {
+    --bs-btn-color: var(--tb-texte-doux);
+    --bs-btn-border-color: var(--tb-bordure);
+    --bs-btn-hover-color: var(--tb-texte);
+    --bs-btn-hover-bg: var(--tb-surface-alt);
+    --bs-btn-hover-border-color: var(--tb-texte-doux);
+    --bs-btn-active-color: var(--tb-texte);
+    --bs-btn-active-bg: var(--tb-surface-alt);
+    --bs-btn-active-border-color: var(--tb-texte-doux);
+    --bs-btn-disabled-color: var(--tb-texte-doux);
+    --bs-btn-disabled-border-color: var(--tb-bordure);
+}
+.btn-outline-secondary:focus-visible {
+    outline: 3px solid var(--tb-accent);
+    outline-offset: 3px;
+    box-shadow: none;
 }

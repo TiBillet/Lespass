@@ -38,24 +38,23 @@
         {% endblock adhesions_tunnel %}
 
         {% block adhesions_grille %}
-        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-3 mb-5">
+        <div class="tb-adhesions__grille">
             {% for product in products %}
                 {% if product.publish %}
-                    <div class="col">
-                        <div class="card h-100">
-                            {% include 'commun/partials/picture.html' with img=product.img alt=product.name class='card-img-top' ratio='16x9' %}
-                            <div class="card-body">
-                                <h3 class="card-title">{{ product.name }}</h3>
+                    <div class="tb-adhesion">
+                            {% include 'commun/partials/picture.html' with img=product.img alt=product.name class='tb-adhesion__image' ratio='16x9' %}
+                            <div class="tb-adhesion__corps">
+                                <h3 class="tb-adhesion__titre">{{ product.name }}</h3>
                                 {% if product.short_description %}
-                                    <p class="card-text">{{ product.short_description }}</p>
+                                    <p class="tb-adhesion__texte">{{ product.short_description }}</p>
                                 {% endif %}
                                 {% if product.long_description %}
-                                    <p class="card-text">{{ product.long_description | safe }}</p>
+                                    <p class="tb-adhesion__texte">{{ product.long_description | safe }}</p>
                                 {% endif %}
                             </div>
-                            <div class="card-footer">
+                            <div class="tb-adhesion__pied">
                                 {% if embed %}
-                                    <a class="btn btn-primary w-100 my-3 js-membership-form-btn"
+                                    <a class="tb-adhesion__bouton js-membership-form-btn"
                                        type="button"
                                        href="/memberships/?open={{ product.uuid }}" target="_blank">
                                         <i class="bi bi-plus"></i>
@@ -65,7 +64,7 @@
                                     </a>
                                 {% else %}
                                     <button
-                                            class="btn btn-primary w-100 my-3 js-membership-form-btn"
+                                            class="tb-adhesion__bouton js-membership-form-btn"
                                             type="button"
                                             hx-get="/memberships/{{ product.uuid }}/" hx-swap="innerHTML"
                                             hx-target="#offcanvas-membership"
@@ -81,7 +80,6 @@
                                     </button>
                                 {% endif %}
                             </div>
-                        </div>
                     </div>
                 {% endif %}
             {% endfor %}
@@ -91,26 +89,24 @@
     {% block adhesions_federees %}
     {% if federated_tenants %}
         <h4>{% trans "Découvrez les adhésions des espaces fédérés :" %}</h4>
-        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-3 mb-5">
+        <div class="tb-adhesions__grille">
             {% for tenant in federated_tenants %}
-                <div class="col">
-                    <div class="card h-100">
+                <div class="tb-adhesion">
                         {% if tenant.img_url %}
-                            <img src="{{ tenant.img_url }}" class="card-img-top" alt="{{ tenant.name }}" style="aspect-ratio: 16/9; object-fit: cover;">
+                            <img src="{{ tenant.img_url }}" class="tb-adhesion__image" alt="{{ tenant.name }}">
                         {% endif %}
-                        <div class="card-body">
-                            <h3 class="card-title">{{ tenant.name }}</h3>
+                        <div class="tb-adhesion__corps">
+                            <h3 class="tb-adhesion__titre">{{ tenant.name }}</h3>
                             {% if tenant.short_description %}
-                                <p class="card-text">{{ tenant.short_description }}</p>
+                                <p class="tb-adhesion__texte">{{ tenant.short_description }}</p>
                             {% endif %}
                         </div>
-                        <div class="card-footer">
-                            <a href="https://{{ tenant.domain }}/memberships/" class="btn btn-primary w-100 my-3" target="_blank">
+                        <div class="tb-adhesion__pied">
+                            <a href="https://{{ tenant.domain }}/memberships/" class="tb-adhesion__bouton" target="_blank">
                                 <i class="bi bi-arrow-right"></i>
                                 Voir les adhésions
                             </a>
                         </div>
-                    </div>
                 </div>
             {% endfor %}
         </div>

@@ -1,0 +1,85 @@
+{% comment %}
+BULLE DE PENSEE — LE DESSIN, ET RIEN QUE LE DESSIN
+/ Thought bubble — the drawing, and nothing but the drawing
+
+LOCALISATION : pages/templates/pages/miete/partials/bulle.html
+
+Vectorisation des bulles dessinees par La MIETE (PNG 1024x1024 d'origine).
+Grammaire relevee sur les originaux :
+  - une forme organique pleine (le nuage),
+  - un contour noir fin, volontairement DESALIGNE par-dessus (tirage riso),
+  - une bulle-queue en bas a gauche,
+  - trois petales noirs qui s'eventent en bas a droite,
+  - deux pastilles colorees en haut a gauche.
+/ Vectorised from La MIETE's own bubble artwork. Grammar: organic fill + a thin
+black outline deliberately off-register + a tail + three petals + two pastilles.
+
+CE DESSIN NE PORTE AUCUN TEXTE — C'EST LE POINT.
+Les originaux ont leur libelle cuit dans le pixel. Un lecteur d'ecran ne le voit
+pas, et le bouton « Augmenter le texte » du lieu ne le grossit pas. Ici le
+libelle est du VRAI texte HTML, pose par-dessus par navbar.html. Le SVG est donc
+decoratif : aria-hidden + focusable="false", il sort de l'arbre d'accessibilite
+et du parcours au clavier.
+/ THIS DRAWING CARRIES NO TEXT — THAT IS THE POINT. The originals bake their
+label into the pixels: invisible to a screen reader, and the venue's own
+"Augmenter le texte" tool cannot scale it. Here the label is real HTML text.
+The SVG is decorative: aria-hidden + focusable="false".
+
+COULEUR : elle n'est PAS ecrite ici. Elle vient de --bulle-active, posee par la
+classe de variante (.miete-bulle--jaune, --vert, --rose...) dans miete.css.
+/ Colour is not written here. It comes from --bulle-active, set by the variant
+class in miete.css.
+
+preserveAspectRatio="none" : le dessin epouse la boite du lien. La boite garde
+un ratio (aspect-ratio dans miete.css), donc l'etirement reste marginal ; il ne
+survient que si un libelle tres long ou un reglage d'espacement du texte force
+la boite a grandir. Le nuage est organique : il encaisse. Verifie au rendu.
+/ The box keeps an aspect-ratio, so stretching stays marginal. The organic cloud
+tolerates it. Verified by rendering.
+{% endcomment %}
+
+<svg class="miete-bulle__dessin" viewBox="0 0 200 180" preserveAspectRatio="none"
+     aria-hidden="true" focusable="false">
+
+    {# La forme pleine : le nuage + sa queue. / The fill: cloud + tail. #}
+    <path class="miete-bulle__fond"
+          d="M 74.2 40.7 A 34.0 34.0 0 0 1 121.6 39.3 A 30.0 30.0 0 0 1 156.4 66.4
+             A 26.0 26.0 0 0 1 158.1 106.1 A 30.0 30.0 0 0 1 125.8 135.3
+             A 34.0 34.0 0 0 1 78.4 136.7 A 26.0 26.0 0 0 1 43.6 109.6
+             A 30.0 30.0 0 0 1 41.9 69.9 A 30.0 30.0 0 0 1 74.2 40.7 Z"/>
+    <circle class="miete-bulle__fond" cx="50" cy="152" r="11"/>
+
+    {# Les trois petales. / The three petals. #}
+    <g class="miete-bulle__petales">
+        <ellipse cx="152" cy="152" rx="3.1" ry="9" transform="rotate(18 152 152)"/>
+        <ellipse cx="164" cy="146" rx="3.1" ry="9.4" transform="rotate(46 164 146)"/>
+        <ellipse cx="174" cy="137" rx="3.1" ry="9" transform="rotate(74 174 137)"/>
+    </g>
+
+    {# Les deux pastilles. / The two pastilles. #}
+    <ellipse class="miete-bulle__pastille-a" cx="56" cy="42" rx="15" ry="13"
+             transform="rotate(-14 56 42)"/>
+    <rect class="miete-bulle__pastille-b" x="34" y="52" width="38" height="18" rx="9"
+          transform="rotate(-14 53 61)"/>
+
+    {% comment %}
+    Le contour desaligne, PAR-DESSUS : c'est lui qui fait le « dessine a la main ».
+    / The off-register outline, ON TOP: this is what makes it read hand-drawn.
+
+    {% templatetag openbrace %}# … #{% templatetag closebrace %} est MONO-LIGNE. Le lexer de Django compile
+    tag_re SANS re.DOTALL, donc le « . » ne franchit pas le saut de ligne : un
+    {% templatetag openbrace %}# … #{% templatetag closebrace %} sur deux lignes n'est jamais reconnu comme un commentaire et
+    part TEL QUEL dans la sortie. Multi-lignes => {% templatetag openblock %} comment {% templatetag closeblock %} obligatoire.
+    / {% templatetag openbrace %}# … #{% templatetag closebrace %} is SINGLE-LINE. Django's lexer compiles tag_re WITHOUT
+    re.DOTALL, so a multi-line one is never recognised and is emitted verbatim.
+    {% endcomment %}
+    <g class="miete-bulle__contour" transform="translate(-7,-9)">
+        <path d="M 74.2 40.7 A 34.0 34.0 0 0 1 121.6 39.3 A 30.0 30.0 0 0 1 156.4 66.4
+                 A 26.0 26.0 0 0 1 158.1 106.1 A 30.0 30.0 0 0 1 125.8 135.3
+                 A 34.0 34.0 0 0 1 78.4 136.7 A 26.0 26.0 0 0 1 43.6 109.6
+                 A 30.0 30.0 0 0 1 41.9 69.9 A 30.0 30.0 0 0 1 74.2 40.7 Z"/>
+        <circle cx="50" cy="152" r="11"/>
+        <ellipse cx="56" cy="42" rx="15" ry="13" transform="rotate(-14 56 42)"/>
+        <rect x="34" y="52" width="38" height="18" rx="9" transform="rotate(-14 53 61)"/>
+    </g>
+</svg>

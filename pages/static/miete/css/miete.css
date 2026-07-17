@@ -1,0 +1,659 @@
+/* Hallmark · macrostructure: Long Document · genre: playful
+ * theme: studied-DNA « MIETE » · nav: bulles (bespoke) · footer: Ft3 index
+ * pre-emit critique: P5 H4 E4 S5 R5 V4
+ *
+ * LOCALISATION : pages/static/miete/css/miete.css
+ *
+ * Mise en page du skin « miete ». Ce fichier n'ecrit JAMAIS une couleur ni une
+ * police en dur : tout passe par les jetons de tokens.css.
+ * / Layout for the "miete" skin. Never hard-codes a colour or a font: everything
+ * goes through the tokens declared in tokens.css.
+ *
+ * TOUT EST SCOPE SOUS .skin-miete. Sans ce scope, le skin deborderait sur le
+ * chrome partage (offcanvas, tunnels) et sur l'admin.
+ * / Everything is scoped under .skin-miete, otherwise the skin would leak onto
+ * the shared chrome and the admin.
+ */
+
+/* ========================================================================== */
+/* SOCLE                                                                       */
+/* ========================================================================== */
+
+.skin-miete {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    line-height: 1.6;
+}
+
+.skin-miete h1,
+.skin-miete h2,
+.skin-miete h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    color: var(--color-ink-strong);
+    /* Un mot tres long ne doit jamais pousser une barre de defilement          */
+    /* horizontale sur un petit ecran. / A very long word must never push a     */
+    /* horizontal scrollbar on a small screen.                                  */
+    overflow-wrap: anywhere;
+    min-inline-size: 0;
+}
+
+/* Le lien d'evitement. La source en a un (« Aller au contenu principal ») et    */
+/* c'est le premier outil de qui navigue au clavier : il saute la nav pour       */
+/* atteindre le contenu. Invisible tant qu'il n'a pas le focus.                  */
+/* / The skip link. The source has one, and it is the first tool of anyone       */
+/* navigating by keyboard. Invisible until focused.                              */
+.skin-miete .miete-evitement {
+    position: absolute;
+    inset-inline-start: var(--space-2xs);
+    inset-block-start: var(--space-2xs);
+    z-index: 100;
+    padding: var(--space-2xs) var(--space-sm);
+    background-color: var(--color-accent);
+    color: var(--color-accent-ink);
+    font-weight: 700;
+    border-radius: var(--radius-card);
+    /* Hors ecran tant qu'il n'a pas le focus — mais JAMAIS display:none, sinon  */
+    /* il ne serait plus focusable. / Off-screen until focused — never           */
+    /* display:none, which would make it unfocusable.                            */
+    transform: translateY(-200%);
+}
+
+.skin-miete .miete-evitement:focus {
+    transform: translateY(0);
+}
+
+/* ========================================================================== */
+/* NAVBAR                                                                      */
+/* ========================================================================== */
+
+.skin-miete .miete-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-md) var(--space-sm);
+    border-block-end: 1px solid var(--color-rule);
+}
+
+.skin-miete .miete-nav__marque {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: var(--text-display);
+    color: var(--color-ink-strong);
+    text-decoration: none;
+}
+
+.skin-miete .miete-nav__bulles {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: center;
+    gap: var(--space-sm);
+    /* On enleve la puce et le retrait de la liste : la bulle EST la puce.       */
+    /* La liste reste un <ul> — un lecteur d'ecran annonce « liste de N          */
+    /* elements », ce qui est exactement ce qu'est un menu.                       */
+    /* / Bullets removed but the <ul> stays: a screen reader announces "list of  */
+    /* N items", which is precisely what a menu is.                              */
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    flex: 1 1 auto;
+}
+
+.skin-miete .miete-nav__item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-3xs);
+}
+
+/* ========================================================================== */
+/* LA BULLE — LE GESTE SIGNATURE                                               */
+/*                                                                             */
+/* Taille en `em`, jamais en px. C'est LE point : quand la personne grossit le  */
+/* texte de son navigateur, la bulle grandit AVEC lui — dessin et libelle       */
+/* ensemble, dans les memes proportions. Les originaux du lieu ne pouvaient pas */
+/* faire ca : leur libelle etait cuit dans le pixel.                            */
+/* / Sized in `em`, never px. When the user enlarges text, the whole bubble      */
+/* grows with it. The venue's raster originals could not do this.                */
+/* ========================================================================== */
+
+.skin-miete .miete-bulle {
+    position: relative;
+    display: grid;
+    place-items: center;
+    inline-size: 11em;
+    /* LE RATIO EST UN PLANCHER, PAS UNE CAGE.                                   */
+    /* min-block-size (et non aspect-ratio) vaut la hauteur du viewBox 200x180   */
+    /* pour cette largeur : la bulle est ronde au repos, mais si le libelle est  */
+    /* long — ou si la personne force un espacement du texte (WCAG 1.4.12) — la  */
+    /* boite GRANDIT au lieu de laisser le texte deborder du nuage.              */
+    /* Avec aspect-ratio, elle etait figee et le texte sortait du dessin.        */
+    /* Verifie au rendu.                                                          */
+    /* / THE RATIO IS A FLOOR, NOT A CAGE. min-block-size rather than            */
+    /* aspect-ratio: the bubble is round at rest, but grows when the label is     */
+    /* long or when the user forces text spacing, instead of letting the text     */
+    /* spill out of the drawing. Verified by rendering.                           */
+    min-block-size: 9.9em;
+    /* Le nuage n'occupe pas tout le viewBox : sa panse tient dans la zone       */
+    /* centrale. Ce padding y confine le texte. En pourcentage, il se calcule    */
+    /* sur la largeur — donc il suit la bulle quand le texte grossit.            */
+    /* / The cloud does not fill the viewBox: this padding confines the text to   */
+    /* its belly. Percentage padding resolves against the width, so it follows    */
+    /* the bubble as the text scales.                                             */
+    padding: 22% 21%;
+    text-decoration: none;
+    text-align: center;
+    /* L'encre des bulles est NOIRE. Les cinq teintes ont ete choisies pour      */
+    /* passer AA face au noir (cf. tokens.css). Jamais de blanc ici.             */
+    /* / Bubble ink is BLACK. All five tints pass AA against black.              */
+    color: var(--color-ink-max);
+    font-family: var(--font-display);
+    font-weight: 700;
+}
+
+/* Le dessin : dessous, decoratif, transparent aux clics.                       */
+/* / The drawing: underneath, decorative, click-through.                         */
+.skin-miete .miete-bulle__dessin {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    z-index: 0;
+    pointer-events: none;
+}
+
+/* Le libelle : par-dessus, dans le flux, VRAI texte.                           */
+/* max-inline-size le maintient dans la panse du nuage — au-dela, il mordrait   */
+/* sur le contour. / The label: on top, real text, kept inside the cloud belly.  */
+.skin-miete .miete-bulle__libelle {
+    position: relative;
+    z-index: 1;
+    /* break-word et NON anywhere : `anywhere` coupe a l'interieur des mots des  */
+    /* qu'il y a mieux a faire, et on obtient « Des Evenement / s ». break-word  */
+    /* ne coupe un mot QUE s'il ne peut pas tenir autrement. hyphens:auto pose   */
+    /* alors une vraie cesure — il s'appuie sur le lang= du <html>, que le       */
+    /* squelette renseigne deja. / break-word, NOT anywhere: `anywhere` breaks    */
+    /* inside words even when it needn't, giving "Des Evenement / s".             */
+    overflow-wrap: break-word;
+    hyphens: auto;
+}
+
+/* Les couleurs. Chaque variante pose --bulle-active (la panse) et ses deux      */
+/* pastilles. Les pastilles changent d'une bulle a l'autre, comme dans les       */
+/* originaux : c'est ce qui empeche la rangee de ressembler a un gabarit.        */
+/* / Each variant sets the belly tint and its two pastilles. The pastilles differ */
+/* from bubble to bubble, as in the originals — that is what keeps the row from   */
+/* reading as a template. */
+.skin-miete .miete-bulle--jaune {
+    --bulle-active: var(--bulle-jaune);
+    --pastille-a: var(--bulle-vermillon);
+    --pastille-b: var(--bulle-rose);
+}
+
+.skin-miete .miete-bulle--vert {
+    --bulle-active: var(--bulle-vert);
+    --pastille-a: var(--bulle-vermillon);
+    --pastille-b: var(--bulle-cyan);
+}
+
+.skin-miete .miete-bulle--rose {
+    --bulle-active: var(--bulle-rose);
+    --pastille-a: var(--bulle-cyan);
+    --pastille-b: var(--bulle-jaune);
+}
+
+.skin-miete .miete-bulle--vermillon {
+    --bulle-active: var(--bulle-vermillon);
+    --pastille-a: var(--bulle-cyan);
+    --pastille-b: var(--bulle-vert);
+}
+
+.skin-miete .miete-bulle--cyan {
+    --bulle-active: var(--bulle-cyan);
+    --pastille-a: var(--bulle-rose);
+    --pastille-b: var(--bulle-jaune);
+}
+
+.skin-miete .miete-bulle__fond {
+    fill: var(--bulle-active);
+}
+
+.skin-miete .miete-bulle__petales {
+    fill: var(--color-ink-max);
+}
+
+.skin-miete .miete-bulle__pastille-a {
+    fill: var(--pastille-a);
+}
+
+.skin-miete .miete-bulle__pastille-b {
+    fill: var(--pastille-b);
+}
+
+/* Le contour desaligne. vector-effect garde le trait a la meme epaisseur quelle */
+/* que soit la taille de la bulle : sans lui, une grosse bulle aurait un gros    */
+/* trait et le dessin perdrait sa finesse.                                       */
+/* / vector-effect keeps the stroke hairline-thin at any bubble size.             */
+.skin-miete .miete-bulle__contour {
+    fill: none;
+    stroke: var(--color-ink-max);
+    stroke-width: 1.1;
+    vector-effect: non-scaling-stroke;
+}
+
+/* Le survol : la bulle monte d'un cheveu. Rien d'autre. Pas de mise a          */
+/* l'echelle, pas de rebond. / Hover: the bubble lifts a hair. Nothing else.    */
+.skin-miete .miete-bulle {
+    transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.skin-miete .miete-bulle:hover {
+    transform: translateY(-3px);
+}
+
+.skin-miete .miete-bulle:active {
+    transform: translateY(0);
+}
+
+/* La page courante. On ne se repose PAS sur la seule couleur : un soulignement */
+/* dessine porte l'information, lisible meme sans percevoir les teintes.         */
+/* aria-current fait le meme travail pour les lecteurs d'ecran.                  */
+/* / The current page is not signalled by colour alone: a drawn underline        */
+/* carries the information too. aria-current does the same for screen readers.   */
+.skin-miete .miete-bulle[aria-current="page"] .miete-bulle__libelle {
+    text-decoration: underline;
+    text-decoration-thickness: 3px;
+    text-underline-offset: 4px;
+}
+
+/* Les sous-pages : de simples liens texte, pas de deroulant.                    */
+.skin-miete .miete-nav__enfants {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-3xs);
+}
+
+.skin-miete .miete-nav__enfant {
+    color: var(--color-ink);
+    font-size: var(--text-body);
+    /* Les liens sont soulignes par defaut. La source propose un bouton « Liens  */
+    /* soulignes » — s'il faut un bouton pour ca, c'est que le defaut est        */
+    /* mauvais. Ici c'est le defaut. / Links are underlined by default. The       */
+    /* source ships an "underline links" button; if you need a button for that,  */
+    /* the default was wrong. Here it is the default.                             */
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.skin-miete .miete-nav__enfant:hover {
+    color: var(--color-accent-text);
+}
+
+/* Les outils. Ce sont des commandes, pas des rubriques : pas de bulle.          */
+.skin-miete .miete-nav__outils {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.skin-miete .miete-lien-outil {
+    /* Cible tactile : 44px de cote minimum, meme quand le libelle est court.    */
+    /* / Touch target: at least 44px, even for a short label.                     */
+    min-block-size: 44px;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-3xs);
+    padding: var(--space-2xs) var(--space-xs);
+    border: 2px solid transparent;
+    border-radius: var(--radius-card);
+    background: none;
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+}
+
+.skin-miete .miete-lien-outil:hover {
+    color: var(--color-accent-text);
+    border-color: var(--color-rule);
+}
+
+/* ========================================================================== */
+/* BOUTONS                                                                     */
+/*                                                                             */
+/* La regle vient des bulles du lieu : encre NOIRE sur aplat colore.            */
+/* Un label blanc sur le vermillon donnerait 3,62:1 — sous le seuil AA. C'est   */
+/* l'erreur du site d'origine ; on ne la reprend pas.                           */
+/* / The rule comes from the venue's own bubbles: BLACK ink on colour fills.    */
+/* A white label on the vermillion would be 3.62:1 — below AA. That was the      */
+/* original site's mistake; we do not carry it over.                             */
+/* ========================================================================== */
+
+/* Un lien accent DANS DU TEXTE prend la version assombrie : le vermillon de     */
+/* marque ne porte que 3,62:1 sur le papier blanc.                               */
+/* / An accent link inside running text takes the darkened tint.                  */
+.skin-miete a:not([class]) {
+    color: var(--color-accent-text);
+    text-underline-offset: 2px;
+}
+
+/* ========================================================================== */
+/* PONT VERS LE SOCLE — blocs CMS, agenda, evenement, adhesions                */
+/*                                                                             */
+/* Ce skin ne surcharge que shell, headless, navbar, footer et bulle. TOUT le  */
+/* reste — les ~20 blocs du moteur de pages, l'agenda, l'evenement, les        */
+/* adhesions — lui arrive par le FALLBACK sur pages/classic/. C'est donc le    */
+/* socle qui les rend, avec SES jetons --tb-* (pages/static/pages/css/         */
+/* tb-blocs.css). Sans ce pont, une page CMS du skin sortirait avec des titres */
+/* en Georgia serif, un rayon de 10px et l'accent du socle : l'oppose de l'ADN. */
+/* / This skin only overrides shell/headless/navbar/footer/bulle. Everything    */
+/* else falls back to pages/classic/ and is rendered by the base with ITS       */
+/* --tb-* tokens. Without this bridge, a CMS page would come out in Georgia     */
+/* serif with a 10px radius and the base accent.                                */
+/*                                                                             */
+/* LE SELECTEUR N'EST PAS NEGOCIABLE : .skin-miete .tb-page, et surtout PAS    */
+/* .skin-miete seul. tb-blocs.css declare ces jetons SUR .tb-page lui-meme.    */
+/* Une variable posee sur .skin-miete — un ancetre plus lointain — serait donc */
+/* ecrasee : pour les proprietes personnalisees, c'est l'element le plus PROCHE */
+/* qui gagne, pas le selecteur le plus specifique. Il faut viser .tb-page       */
+/* lui-meme et gagner en specificite : (0,2,0) contre (0,1,0). Bonus : ca rend  */
+/* le pont insensible a l'ordre de chargement — tb-blocs.css est charge dans le */
+/* bloc main (classic/page.html), donc APRES ce fichier.                        */
+/* / THE SELECTOR IS NOT NEGOTIABLE: .skin-miete .tb-page, never .skin-miete    */
+/* alone. The base declares these tokens ON .tb-page itself, and for custom     */
+/* properties the CLOSEST element wins, not the most specific selector. Target  */
+/* .tb-page itself and win on specificity: (0,2,0) over (0,1,0). This also makes */
+/* the bridge immune to load order.                                             */
+/* ========================================================================== */
+
+/* L'ACCENT, LE FOND ET L'ENCRE DOUCE NE SONT PLUS ICI : ils passent par les
+   points d'entree --skin-* poses sur :root (cf. tokens.css). Le socle les lit
+   lui-meme, et ils atteignent AUSSI le chrome — navbar, pied, agenda,
+   adhesions, evenement — qui vit HORS de .tb-page et qu'un pont scope ici
+   n'aurait jamais touche.
+   / The accent, fill and soft ink now go through the --skin-* entry points on
+   :root. They also reach the chrome, which lives OUTSIDE .tb-page.
+
+   Ne restent ici que les jetons SANS point d'entree --skin-*, et qu'il faut
+   donc surcharger sur .tb-page lui-meme, en specificite (0,2,0) contre (0,1,0).
+   / Only the tokens with no --skin-* entry point remain here. */
+.skin-miete .tb-page {
+    /* Luciole, et pas la serif systeme du socle. C'est LE point de l'ADN : une */
+    /* seule famille partout, choisie pour la lisibilite. Laisser Georgia ici   */
+    /* ferait deux skins dans un seul.                                          */
+    /* / Luciole, not the base's system serif. Single family everywhere is THE   */
+    /* point of this DNA.                                                        */
+    --tb-police-titre: var(--font-display);
+
+    /* La MIETE est quasi-carree : sa source ne declare qu'un rayon, 3px.       */
+    /* / The venue's source declares a single radius, 3px.                       */
+    --tb-rayon: var(--radius-card);
+    --tb-rayon-sm: var(--radius-card);
+
+    /* Le socle utilise `ease`, la courbe par defaut du navigateur — celle que  */
+    /* personne n'a choisie. On pose la notre.                                   */
+    /* / The base uses the browser default `ease`. We name ours.                 */
+    --tb-transition: var(--dur-fast) var(--ease-out);
+}
+
+/* --tb-texte, --tb-surface, --tb-surface-alt et --tb-bordure ne sont PAS
+   surcharges : le socle les branche sur les --bs-* de Bootstrap, qui sont
+   neutres et theme-conscients. C'est ce qui donne le mode sombre gratuitement.
+   Les figer sur nos valeurs claires rendrait le skin blanc en thème sombre —
+   c'est exactement le bug qu'on vient de corriger.
+   / Not overridden: the socle wires them to Bootstrap's theme-aware --bs-*.
+   Pinning them to our light values is what made the skin stay white in dark. */
+
+/* ========================================================================== */
+/* RETOUCHE DU CHROME PARTAGE                                                  */
+/*                                                                             */
+/* Le chrome (tunnel d'adhesion, filtres de l'agenda, offcanvas) est partage   */
+/* et NON skinnable par gabarit. Le contrat de skin prevoit ce cas : « Retouche */
+/* visuelle du chrome = CSS global depuis le skin uniquement. » C'est ici.     */
+/* / The chrome is shared and not skinnable by template. The skin contract      */
+/* allows exactly one lever: global CSS from the skin. This is it.              */
+/*                                                                             */
+/* POURQUOI C'EST NECESSAIRE, ET POURQUOI --skin-* NE SUFFIT PAS :             */
+/* le bouton « Adherer » — le CTA principal du tunnel d'adhesion — est un       */
+/* .btn-primary de Bootstrap, pas un jeton --tb-*. Or Bootstrap 5.3 compile    */
+/* la couleur EN DUR : `.btn-primary { --bs-btn-bg: #0d6efd }`, et non          */
+/* `var(--bs-primary)`. Surcharger --bs-primary ne changerait donc RIEN : il    */
+/* faut passer par l'API --bs-btn-* de Bootstrap. Constate au rendu : le CTA    */
+/* sortait en bleu Bootstrap sur toute la page adhesions.                       */
+/* / The membership CTA is a Bootstrap .btn-primary, and Bootstrap 5.3 compiles */
+/* the colour AS A LITERAL, not var(--bs-primary). Overriding --bs-primary does */
+/* nothing; you must go through the --bs-btn-* API. Seen at render time.        */
+/* ========================================================================== */
+
+/* LE SOCLE HABILLE DEJA .btn-primary ET .btn-outline-primary sur --tb-fond /
+   --tb-accent (section « LES BOUTONS BOOTSTRAP DE MARQUE » de tb-blocs.css).
+   Ils prennent donc nos --skin-fond / --skin-accent tout seuls, y compris dans
+   le chrome partage de commun/ (tunnels de reservation et d'adhesion, panneau de
+   connexion), que ce fichier n'atteindrait pas s'il etait scope.
+   On ne redefinit NI l'aplat, NI l'encre, NI le contour : rien que deux ecarts.
+   / The socle already dresses both buttons from our --skin-* tokens, including in
+   the shared chrome. Only two divergences remain.
+
+   NON SCOPE SOUS .skin-miete, VOLONTAIREMENT : le chrome partage vit HORS de
+   .skin-miete (cf. shell.html). Ce fichier n'est charge que par le shell de ce
+   skin : sa portee est deja celle du skin. Il est charge APRES tb-blocs.css,
+   donc a specificite egale (0,1,0) il gagne.
+   / NOT scoped on purpose: the shared chrome lives OUTSIDE .skin-miete, and this
+   file is only ever loaded by this skin's shell. */
+.btn-primary {
+    /* ECART 1 — LE SENS DU GESTE.                                              */
+    /* Le socle assombrit l'aplat au survol et a l'actif (color-mix vers black). */
+    /* Ca suppose une encre CLAIRE : sur le letsi, qui porte du blanc,           */
+    /* assombrir augmente le contraste. Notre aplat porte du NOIR, donc          */
+    /* assombrir le REDUIT. Mesure avec notre vermillon : repos 5,70:1,          */
+    /* survol 4,57:1, actif 3,89:1 — l'etat actif passe SOUS le seuil AA.        */
+    /* On eclaircit : survol 6,58:1, actif 7,32:1.                               */
+    /* / The socle darkens on hover/active, which assumes LIGHT ink. Ours is      */
+    /* BLACK, so darkening lowers contrast — active fell to 3.89:1. We lighten.   */
+    --bs-btn-hover-bg: color-mix(in srgb, var(--tb-fond) 88%, white);
+    --bs-btn-active-bg: color-mix(in srgb, var(--tb-fond) 80%, white);
+
+    /* ECART 2 — LA BORDURE NOIRE.                                              */
+    /* Le socle aligne la bordure sur l'aplat (invisible — voulu chez lui). La   */
+    /* source de la MIETE borde ses boutons a 2px : on garde le geste, et il     */
+    /* tient le meme role que le contour des bulles.                             */
+    /* / The socle aligns the border with the fill. The venue's source borders    */
+    /* its buttons at 2px: we keep that gesture.                                  */
+    --bs-btn-border-color: var(--color-ink-max);
+    --bs-btn-hover-border-color: var(--color-ink-max);
+    --bs-btn-active-border-color: var(--color-ink-max);
+    --bs-btn-disabled-border-color: var(--color-ink-max);
+    --bs-btn-border-width: 2px;
+
+    --bs-btn-border-radius: var(--radius-card);
+    --bs-btn-font-family: var(--font-display);
+}
+
+/* .btn-outline-primary : rien a corriger. Le socle y met --tb-accent en encre   */
+/* et bordure (notre jumeau assombri, 5,61:1) et bascule au survol sur           */
+/* --tb-fond + --tb-fond-contraste (vermillon + noir, 5,70:1). Les deux passent. */
+/* Seul le rayon nous appartient : la MIETE est quasi-carree.                     */
+/* / Nothing to fix: the socle's outline variant already lands on our tokens.     */
+.btn-outline-primary {
+    --bs-btn-border-radius: var(--radius-card);
+}
+
+/* ========================================================================== */
+/* FOCUS — Ft, et jamais anime                                                  */
+/*                                                                             */
+/* :focus-visible et pas :focus : l'anneau apparait au clavier, pas sous la      */
+/* souris. Il ne transitionne JAMAIS — un anneau qui met 200ms a apparaitre est  */
+/* un anneau qu'on rate. outline (pas border) : ca ne deplace aucune mise en     */
+/* page. / :focus-visible, never animated, outline not border.                   */
+/* ========================================================================== */
+
+.skin-miete a:focus-visible,
+.skin-miete button:focus-visible,
+.skin-miete .miete-bulle:focus-visible,
+.skin-miete .miete-evitement:focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 3px;
+    border-radius: var(--radius-card);
+    transition: none;
+}
+
+/* ========================================================================== */
+/* PREFERENCES DE LA PERSONNE                                                  */
+/* ========================================================================== */
+
+/* Mouvement reduit : plus aucun deplacement. Le survol garde une trace visible  */
+/* — sinon on retirerait de l'information au lieu d'en retirer du mouvement.     */
+/* / Reduced motion: no movement left. Hover keeps a visible cue, otherwise we   */
+/* would be removing information rather than movement.                            */
+@media (prefers-reduced-motion: reduce) {
+    .skin-miete .miete-bulle,
+    .skin-miete .miete-evitement {
+        transition: none;
+    }
+
+    .skin-miete .miete-bulle:hover {
+        transform: none;
+    }
+
+    .skin-miete .miete-bulle:hover .miete-bulle__libelle {
+        text-decoration: underline;
+        text-decoration-thickness: 3px;
+        text-underline-offset: 4px;
+    }
+}
+
+/* Contraste renforce : le trait s'epaissit et l'encre passe au noir partout.    */
+/* / More contrast: thicker strokes, black ink everywhere.                        */
+@media (prefers-contrast: more) {
+    .skin-miete {
+        color: var(--color-ink-max);
+    }
+
+    .skin-miete .miete-bulle__contour {
+        stroke-width: 2;
+    }
+
+    .skin-miete .miete-lien-outil {
+        border-color: var(--color-ink-max);
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* CONTRASTES FORCES (Windows « contraste eleve », et equivalents)              */
+/*                                                                             */
+/* Dans ce mode, le systeme IMPOSE sa propre palette : il ecrase color,          */
+/* background-color, border-color — et aussi fill et stroke. Nos bulles          */
+/* deviendraient donc des aplats systeme uniformes, et le dessin ne voudrait     */
+/* plus rien dire : cinq bulles identiques, sans distinction possible.            */
+/*                                                                             */
+/* La bonne reponse n'est pas de forcer nos couleurs (forced-color-adjust:none   */
+/* revient a dire a la personne « ta preference ne compte pas »). C'est de       */
+/* RETIRER le decor et de rendre le menu tel qu'il est vraiment : une liste de   */
+/* boutons bordes, dans la palette que la personne a choisie.                    */
+/*                                                                             */
+/* CanvasText et Highlight sont des couleurs systeme : elles suivent cette       */
+/* palette au lieu de la contredire.                                             */
+/* / In forced-colors mode the OS overrides fill and stroke too, so the artwork  */
+/* would collapse into five identical system-coloured blobs. The right answer is */
+/* not to force our colours back (that tells the user their preference does not  */
+/* count) — it is to DROP the decoration and render the menu as what it really   */
+/* is: a list of bordered buttons in the user's own palette.                      */
+/* -------------------------------------------------------------------------- */
+@media (forced-colors: active) {
+    .skin-miete .miete-bulle__dessin {
+        display: none;
+    }
+
+    .skin-miete .miete-bulle {
+        inline-size: auto;
+        min-block-size: 44px;
+        padding: var(--space-2xs) var(--space-sm);
+        border: 2px solid CanvasText;
+        border-radius: var(--radius-card);
+    }
+
+    .skin-miete .miete-bulle[aria-current="page"] {
+        border-width: 4px;
+    }
+
+    .skin-miete .miete-bouton {
+        border-color: CanvasText;
+    }
+
+    .skin-miete a:focus-visible,
+    .skin-miete button:focus-visible {
+        outline-color: Highlight;
+    }
+}
+
+/* ========================================================================== */
+/* PIED DE PAGE — Ft3 index en colonnes                                        */
+/* ========================================================================== */
+
+.skin-miete .miete-pied {
+    margin-block-start: var(--space-2xl);
+    padding: var(--space-xl) var(--space-sm);
+    border-block-start: 1px solid var(--color-rule);
+    background-color: var(--color-paper-2);
+}
+
+.skin-miete .miete-pied__colonnes {
+    display: grid;
+    /* minmax(0, …) et pas 1fr nu : une colonne au contenu large ne peut pas     */
+    /* deborder de la grille. / minmax(0, …) rather than a bare 1fr so a wide    */
+    /* column cannot blow out the grid.                                           */
+    grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
+    gap: var(--space-lg);
+    max-inline-size: 70rem;
+    margin-inline: auto;
+}
+
+.skin-miete .miete-pied__titre {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: var(--text-lead);
+    color: var(--color-ink-strong);
+    margin-block-end: var(--space-2xs);
+}
+
+.skin-miete .miete-pied__liens {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs);
+}
+
+.skin-miete .miete-pied__liens a {
+    color: var(--color-ink);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    /* Cible tactile : 24px minimum entre deux liens empiles (WCAG 2.5.8).       */
+    /* / Touch target: 24px minimum between stacked links (WCAG 2.5.8).           */
+    display: inline-block;
+    padding-block: var(--space-3xs);
+}
+
+.skin-miete .miete-pied__liens a:hover {
+    color: var(--color-accent-text);
+}
+
+.skin-miete .miete-pied__mention {
+    max-inline-size: 70rem;
+    margin: var(--space-lg) auto 0;
+    padding-block-start: var(--space-sm);
+    border-block-start: 1px solid var(--color-rule);
+    font-size: var(--text-body);
+}

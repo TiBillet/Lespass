@@ -1,0 +1,99 @@
+{% load i18n %}
+{% comment %}
+PIED DE PAGE — Ft3, INDEX EN COLONNES
+/ Footer — Ft3, index columns
+
+LOCALISATION : pages/templates/pages/miete/partials/footer.html
+
+Archetype releve sur le site du lieu : quatre colonnes d'index (Contact,
+Nos actualites, Outils d'accessibilite, Mentions legales).
+/ Archetype extracted from the venue's site: four index columns.
+
+Comme la navbar, ce gabarit N'ECRIT AUCUN LIBELLE DE RUBRIQUE : ils viennent
+tous de `main_nav`. Un skin decrit a quoi ca ressemble, jamais ce que ca fait.
+/ Like the navbar, this template hard-codes NO section label: they all come
+from `main_nav`.
+
+Pas de bulles ici : elles sont le geste du menu principal. En repeter huit en
+pied de page les banaliserait — et alourdirait la page pour rien.
+/ No bubbles here: they are the main menu's gesture. Repeating eight of them in
+the footer would cheapen them.
+{% endcomment %}
+
+<footer class="miete-pied" data-testid="miete-pied">
+    <div class="miete-pied__colonnes">
+
+        {# --- Les rubriques du site. / The site's sections. --- #}
+        <div>
+            <h2 class="miete-pied__titre">{{ config.organisation }}</h2>
+            <ul class="miete-pied__liens">
+                {% for item in main_nav %}
+                    <li>
+                        <a href="{{ item.url }}"
+                           hx-get="{{ item.url }}" hx-target="body" hx-push-url="true"
+                           {% if url_name == item.name %}aria-current="page"{% endif %}>
+                            {% translate item.label %}
+                        </a>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        {# --- Les commandes. / The commands. --- #}
+        <div>
+            <h2 class="miete-pied__titre">{% translate "Contact and support" %}</h2>
+            <ul class="miete-pied__liens">
+                <li>
+                    {# Les ids #contactPanel et #loginPanel sont FIGES par le contrat #}
+                    {# de skin : Bootstrap y refere en dur. Ne jamais les renommer.   #}
+                    {# / FROZEN by the skin contract — never rename.                  #}
+                    <a href="#" data-bs-toggle="offcanvas" data-bs-target="#contactPanel"
+                       aria-controls="contactPanel">
+                        {% translate 'Contact and support' %}
+                    </a>
+                </li>
+                <li>
+                    {% if user.is_authenticated %}
+                        <a href="/my_account/" hx-get="/my_account/"
+                           hx-target="body" hx-push-url="true">
+                            {% translate 'My account' %}
+                        </a>
+                    {% else %}
+                        <a href="#" data-bs-toggle="offcanvas" data-bs-target="#loginPanel"
+                           aria-controls="loginPanel">
+                            {% translate 'Log in' %}
+                        </a>
+                    {% endif %}
+                </li>
+            </ul>
+        </div>
+
+        {# --- Le reseau. / The network. --- #}
+        <div>
+            <h2 class="miete-pied__titre">{% translate "Venez contribuer à TiBillet" %}</h2>
+            <p>{% trans "TiBillet is a collective organization toolbox" %}</p>
+            <ul class="miete-pied__liens">
+                <li>
+                    <a href="https://tibillet.coop/" rel="noopener">
+                        {% translate "Create a TiBillet space for your collective" %}
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    {% comment %}
+    L'ATTRIBUTION DE LA POLICE — ELLE N'EST PAS DECORATIVE, ELLE EST DUE.
+    / The font attribution — not decorative, it is owed.
+
+    Luciole est distribuee sous CC BY 4.0 : la licence EXIGE l'attribution des
+    auteurs partout ou la fonte est redistribuee, et ce skin la redistribue.
+    Ne pas retirer cette ligne. Licence complete dans le depot :
+    BaseBillet/static/polices/Luciole/Read Me.txt
+    / Luciole ships under CC BY 4.0: the licence REQUIRES attribution wherever the
+    font is redistributed, and this skin redistributes it. Do not remove.
+    {% endcomment %}
+    <p class="miete-pied__mention">
+        {% blocktrans %}Cette page est composée en Luciole, un caractère dessiné pour la basse vision par Laurent Bourcellier et Jonathan Perez, distribué sous licence CC BY 4.0.{% endblocktrans %}
+    </p>
+</footer>

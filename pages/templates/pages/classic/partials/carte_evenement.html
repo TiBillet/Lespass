@@ -73,8 +73,8 @@ embed, loading_delay, search inherited).
     </div>
     <div class="col-md-auto text-md-end event-tags">
         {% for tag in event.tag.all %}
-            <a href="?tag={{ tag.slug }}" hx-boost="true" class="btn btn-sm mb-1"
-               style="{{ tag.style_attr }}">
+            <a href="?tag={{ tag.slug }}" hx-boost="true" class="tb-etiquette"
+               style="--tb-etiquette-teinte: {{ tag.color }}">
                 {{ tag.name }}
             </a>
         {% endfor %}

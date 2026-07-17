@@ -465,7 +465,27 @@
             {% trans 'Total&nbsp;:' %} <span class="js-total-amount" data-testid="booking-total-amount">0</span> {% trans 'ticket(s)' %}
             <span class="js-total-has-price">
                 {% trans 'for' %}
-                <span class="fs-5 badge bg-secondary-subtle mb-md-0"><span
+                {% comment %}
+                    text-secondary-emphasis est INDISPENSABLE, jamais décoratif : le
+                    montant que la personne lit avant de payer en dépend.
+                    `.badge` de Bootstrap pose `color: #fff` par défaut, et un fond
+                    `bg-*-subtle` est CLAIR par construction. Les deux ensemble, sans
+                    encre explicite, donnent du blanc sur gris clair — 1.28:1, invisible.
+                    Un fond `-subtle` se marie avec `text-*-emphasis`, jamais avec le
+                    blanc du badge.
+                    Le piège ne se voit qu'en thème CLAIR, c'est-à-dire le thème par
+                    DÉFAUT (commun/js/theme-switcher.mjs : localStorage || 'light') : en
+                    sombre, `bg-secondary-subtle` devient un fond foncé et le blanc
+                    repasse à 17.94:1. Auditer en sombre ne montre rien.
+                    Mesuré : 10.51:1 en clair, 7.84:1 en sombre.
+                    / text-secondary-emphasis is REQUIRED, never decorative: the total the
+                    user reads before paying depends on it. Bootstrap's `.badge` sets
+                    `color: #fff`, and `bg-*-subtle` is a LIGHT background: together, with
+                    no explicit ink, that is white on light grey — 1.28:1, invisible. A
+                    `-subtle` background pairs with `text-*-emphasis`, never with the
+                    badge's white. The trap only shows in LIGHT mode — the DEFAULT theme.
+                {% endcomment %}
+                <span class="fs-5 badge bg-secondary-subtle text-secondary-emphasis mb-md-0"><span
                         class="js-total-price" data-testid="booking-total-price">1,00</span>&nbsp;€</span>
             </span>
         </h4>
@@ -493,7 +513,17 @@
 
 
         <button type="submit" class="btn btn-primary w-100 mb-3" data-loading-disable data-testid="booking-submit">{% trans 'Send booking request' %}</button>
-        <a href="." class="btn btn-danger d-block" data-testid="booking-cancel">{% trans 'Cancel' %}</a>
+        {% comment %}
+            « Annuler » n'est PAS une action destructrice : c'est un <a href="."> qui
+            recharge la page. Il ne prend donc jamais `btn-danger` — le rouge de
+            Bootstrap annonce une destruction, et il mentirait ici.
+            Il ne prend pas non plus `btn-primary` : l'action principale est juste
+            au-dessus, et deux boutons pleins côte à côte ne hiérarchisent rien.
+            / "Cancel" is NOT destructive: it is an <a href="."> that reloads the page.
+            It never takes `btn-danger` — Bootstrap's red announces destruction and
+            would lie here — nor `btn-primary`, which the real action above already is.
+        {% endcomment %}
+        <a href="." class="btn btn-outline-secondary d-block" data-testid="booking-cancel">{% trans 'Cancel' %}</a>
     </div>
 </form>
 

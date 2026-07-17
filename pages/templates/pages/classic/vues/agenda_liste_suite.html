@@ -8,7 +8,9 @@ Suite de la liste d'événements (bouton « voir plus », HTMX outerHTML sur
 Same content as agenda_liste.html WITHOUT the RSS header.
 {% endcomment %}
 {% for date_key, events in dated_events.items %}
-    <h2 class="fs-5 p-3 text-dark" style="background: var(--mayaj-pons);">
+    {# Même intitulé de date que agenda_liste.html — voir le commentaire là-bas. #}
+    {# / Same date heading as agenda_liste.html — see the comment there. #}
+    <h2 class="tb-agenda__date">
         {{ date_key|date:'l j F'|capfirst }}
     </h2>
     {% for event in events %}

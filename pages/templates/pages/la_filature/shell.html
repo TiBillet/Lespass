@@ -89,23 +89,30 @@
           href="{% static 'commun/css/bootstrap-icons.min.css' %}">
     <link rel="stylesheet" href="{% static 'commun/css/vars.css' %}">
     <link rel="stylesheet" href="{% static 'commun/css/tibillet.css' %}">
-    <link rel="stylesheet" href="{% static 'commun/css/swal.css' %}">
-
-    {# Socle du skin classic : les JETONS (:root) et l'habillage du chrome. #}
-    {# Chargé ICI, dans le shell, et pas seulement depuis page.html : page.html #}
-    {# ne rend que les pages CMS, donc les jetons n'atteignaient ni l'agenda, ni #}
-    {# les adhésions, ni le détail d'un événement — qui restaient en Bootstrap nu. #}
-    {# Le shell, lui, enveloppe TOUTES les pages. #}
-    {# page.html garde SON propre <link> : il est dans le <body> pour survivre aux #}
-    {# navigations HTMX (le squelette headless n'a pas de <head>). Les deux liens #}
-    {# coexistent, le navigateur déduplique via son cache. #}
-    {# Placé APRÈS bootstrap.min.css : à spécificité égale le dernier chargé gagne. #}
-    {# / The classic skin's base: TOKENS (:root) + chrome styling. Loaded HERE in #}
-    {# the shell, not only from page.html, which renders CMS pages only — so the #}
-    {# tokens never reached the agenda, memberships or event pages. The shell wraps #}
-    {# EVERY page. page.html keeps its own <link> (in the body, to survive HTMX #}
-    {# navigation); the browser dedupes. After bootstrap.min.css so it wins. #}
+    {# Socle des blocs. INDISPENSABLE ICI, et pas seulement dans page.html : le #}
+    {# shell enveloppe TOUTES les pages, alors que page.html ne rend que les #}
+    {# pages CMS. Sans ce <link>, l'agenda, la fiche evenement et les adhesions #}
+    {# ne recoivent NI les jetons --tb-* NI le rebranchement de .btn-primary : #}
+    {# elles ressortent en bleu Bootstrap a cote de nos blocs cyan. #}
+    {# Doit rester APRES bootstrap.min.css et AVANT la_filature.css. #}
+    {# / The blocks base. REQUIRED HERE, not only in page.html: the shell wraps #}
+    {# EVERY page while page.html only renders CMS pages. Without it, agenda / #}
+    {# event / memberships get no tokens and no button rebinding. #}
     <link rel="stylesheet" href="{% static 'pages/css/tb-blocs.css' %}">
+
+    {# Skin la_filature. Les polices Bayon + Asap sont servies EN LOCAL depuis #}
+    {# la_filature/fonts/ : les @font-face sont declares dans la_filature.css. #}
+    {# Zero CDN, zero @import, aucune ressource externe (regle du projet, cf. #}
+    {# en-tete de tb-blocs.css) — le site d'origine les chargeait depuis Google #}
+    {# Fonts, on ne reprend pas cette dependance. #}
+    {# Ce <link> habille le CHROME (navbar, footer, vues non-CMS). Les blocs #}
+    {# des pages CMS sont, eux, habilles par le <link> de page.html, charge #}
+    {# apres tb-blocs.css (l'ordre y est porteur de sens — voir page.html). #}
+    {# / Skin CSS. Bayon + Asap served LOCALLY; @font-face live in the skin CSS. #}
+    {# Zero CDN per project rule. This link dresses the chrome; CMS blocks are #}
+    {# dressed by page.html's link, which must follow tb-blocs.css. #}
+    <link rel="stylesheet" href="{% static 'la_filature/css/la_filature.css' %}">
+    <link rel="stylesheet" href="{% static 'commun/css/swal.css' %}">
 
     <script src="{% static 'commun/js/bootstrap.bundle.min.5.3.3.js' %}"></script>
     {% comment %}

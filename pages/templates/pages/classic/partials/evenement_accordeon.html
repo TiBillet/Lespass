@@ -4,13 +4,12 @@
     {% if event.long_description %}
         <div class="accordion-item">
             <h2 class="accordion-header">
-                <button class="accordion-button text-dark"
+                <button class="accordion-button tb-accordeon__entete"
                         type="button"
                         data-bs-toggle="collapse"
                         data-bs-target="#schedule"
                         aria-expanded="true"
-                        aria-controls="schedule"
-                        style="background: var(--mayaj-pons);">
+                        aria-controls="schedule">
                     {% translate "Schedule" %}
                 </button>
             </h2>
@@ -29,13 +28,12 @@
     {% endif %}
     <div class="accordion-item">
         <h2 class="accordion-header">
-            <button class="accordion-button text-dark"
+            <button class="accordion-button tb-accordeon__entete"
                     type="button"
                     data-bs-toggle="collapse"
                     data-bs-target="#timeAndPlace"
                     aria-expanded="true"
-                    aria-controls="timeAndPlace"
-                    style="background: var(--mayaj-pons);">
+                    aria-controls="timeAndPlace">
                 {% translate "Time and place" %}
             </button>
         </h2>

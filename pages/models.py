@@ -126,15 +126,26 @@ class ConfigurationSite(SingletonModel):
     """
 
     # Choix du theme graphique (skin) pour l'affichage du site.
-    # Par defaut : "reunion" (theme existant). Option : "faire_festival".
-    # / Graphic theme (skin) choice for the site display.
-    # Default: "reunion" (existing theme). Option: "faire_festival".
+    #
+    # LA VALEUR DOIT ETRE LE NOM DU DOSSIER du skin : le resolveur
+    # pages.services.gabarit_skin() construit "pages/<skin>/<gabarit>". Une valeur
+    # qui ne correspond a aucun dossier retombe silencieusement sur classic (le
+    # socle) — c'est le cas VOULU de "reunion", qui n'a volontairement pas de
+    # dossier et designe donc le socle (decision 1 du PLAN-MIGRATION-SKINS).
+    # / THE VALUE MUST BE THE SKIN'S FOLDER NAME: the resolver builds
+    # "pages/<skin>/<template>". A value matching no folder silently falls back to
+    # classic — which is the INTENDED case for "reunion" (no folder on purpose).
+    #
+    # Ajouter une choice est une decision mainteneur (cf. CONTRAT-DE-SKIN.md § 8).
+    # / Adding a choice is a maintainer decision.
     skin = models.CharField(
         max_length=50,
         default="reunion",
         choices=[
             ("reunion", "Réunion (thème par défaut)"),
             ("faire_festival", "Faire Festival (thème brutaliste)"),
+            ("la_filature", "La Filature (tiers-lieu)"),
+            ("miete", "La MIETE (tiers-lieu)"),
         ],
         verbose_name=_("Thème graphique du site"),
         help_text=_("Sélectionnez le thème visuel à utiliser pour l'affichage du site web."),

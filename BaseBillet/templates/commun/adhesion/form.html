@@ -621,6 +621,16 @@
             {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}
                 {% translate 'Send my subscription request' %}{% endif %}
         </button>
-        <a href="." class="btn btn-danger d-block test-membership-bt-cancel" data-testid="membership-cancel">{% translate 'Cancel' %}</a>
+        {% comment %}
+            « Annuler » n'est PAS une action destructrice : c'est un <a href="."> qui
+            recharge la page. Il ne prend donc jamais `btn-danger` — le rouge de
+            Bootstrap annonce une destruction, et il mentirait ici.
+            Il ne prend pas non plus `btn-primary` : l'action principale est juste
+            au-dessus, et deux boutons pleins côte à côte ne hiérarchisent rien.
+            / "Cancel" is NOT destructive: it is an <a href="."> that reloads the page.
+            It never takes `btn-danger` — Bootstrap's red announces destruction and
+            would lie here — nor `btn-primary`, which the real action above already is.
+        {% endcomment %}
+        <a href="." class="btn btn-outline-secondary d-block test-membership-bt-cancel" data-testid="membership-cancel">{% translate 'Cancel' %}</a>
     </div>
 </form>

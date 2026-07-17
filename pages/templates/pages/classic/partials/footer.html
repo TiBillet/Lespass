@@ -1,50 +1,68 @@
 {% load i18n static %}
+{% comment %}
+    PIED DE PAGE — chrome du skin classic.
+    / FOOTER — classic skin chrome.
+    LOCALISATION : pages/templates/pages/classic/partials/footer.html
 
-<footer class="bg-secondary-subtle pb-5">
-    <div class="container-lg py-5">
-        <div class="row">
+    Habillé par la section « LE CHROME » de pages/static/pages/css/tb-blocs.css,
+    chargée depuis classic/shell.html. Le markup est neutre (.tb-chrome-pied*) :
+    un skin le rhabille en posant --skin-accent & co, sans copier ce fichier.
+    / Styled by the "CHROME" section of tb-blocs.css, loaded from classic/shell.html.
+    Neutral markup: a skin redresses it via --skin-* without copying this file.
 
-            {# main nav #}
-            <div class="col-12 col-md-3 pb-5 pb-md-0">
-                <h4>{{ config.organisation }}</h4>
-                <ul class="nav flex-column">
-                    {% for item in main_nav %}
-                        <li class="nav-item">
-                            <a class="nav-link{% if url_name == item.name %} active" aria-current="page{% endif %}"
-                               href="{{ item.url }}">
-                                {% translate item.label %}
-                            </a>
-                        </li>
-                    {% endfor %}
-                    <li class="nav-item">
-                        <a class="nav-link"
-                           href="#"
-                           data-bs-toggle="offcanvas"
-                           data-bs-target="#contactPanel"
-                           aria-controls="contactPanel">
-                            {% translate 'Contact and support' %}
+    Les ids du chrome (#contactPanel, #loginPanel) sont FIGÉS par le
+    CONTRAT-DE-SKIN.md § 5 — Bootstrap et HTMX y réfèrent en dur.
+    / The chrome ids are FROZEN by the skin contract: Bootstrap and HTMX hardcode them.
+{% endcomment %}
+
+<footer class="tb-chrome-pied" data-testid="chrome-pied">
+    <div class="tb-chrome-pied__grille">
+
+        {# Colonne 1 : navigation du lieu / Column 1: venue navigation #}
+        <nav aria-label="{% translate 'Navigation du site' %}">
+            <h2 class="tb-chrome-pied__titre">{{ config.organisation }}</h2>
+            <ul class="tb-chrome-pied__liens">
+                {% for item in main_nav %}
+                    <li>
+                        <a class="tb-chrome-pied__lien"
+                           href="{{ item.url }}"
+                           {% if url_name == item.name %}aria-current="page"{% endif %}
+                           data-testid="pied-lien-{{ item.name }}">
+                            {% translate item.label %}
                         </a>
                     </li>
-                </ul>
-                <hr>
-                <ul class="nav">
-                    <li class="nav-item">
-                        {% if user.is_authenticated == False %}
-                            <button
-                                    class="nav-link"
-                                    data-bs-toggle="offcanvas"
-                                    data-bs-target="#loginPanel"
-                                    aria-controls="loginPanel">
-                                {% translate 'Log in' %}
-                            </button>
-                        {% else %}
-                            <a class="nav-link" href="/my_account/">
-                                {% translate 'My account' %}
-                            </a>
-                        {% endif %}
-                    </li>
-                </ul>
-            </div>
+                {% endfor %}
+                <li>
+                    <a class="tb-chrome-pied__lien"
+                       href="#"
+                       data-bs-toggle="offcanvas"
+                       data-bs-target="#contactPanel"
+                       aria-controls="contactPanel"
+                       data-testid="pied-lien-contact">
+                        {% translate 'Contact and support' %}
+                    </a>
+                </li>
+            </ul>
+            <hr class="tb-chrome-pied__filet">
+            <ul class="tb-chrome-pied__liens">
+                <li>
+                    {% if user.is_authenticated == False %}
+                        <button class="tb-chrome-pied__lien"
+                                data-bs-toggle="offcanvas"
+                                data-bs-target="#loginPanel"
+                                aria-controls="loginPanel"
+                                data-testid="pied-lien-connexion">
+                            {% translate 'Log in' %}
+                        </button>
+                    {% else %}
+                        <a class="tb-chrome-pied__lien" href="/my_account/"
+                           data-testid="pied-lien-compte">
+                            {% translate 'My account' %}
+                        </a>
+                    {% endif %}
+                </li>
+            </ul>
+        </nav>
 
             {% comment %} network members
             <div class="col-md pb-5 pb-md-0">
@@ -81,9 +99,13 @@
                 </ul>
             </div>  {% endcomment %}
 
-            {# tibillet info — colonne du milieu / middle column #}
-            <div class="col-12 col-md-6">
-                <h4>
+        {% comment %}
+            Colonne 2 : TiBillet — colonne éditoriale, porte 2x le poids des deux
+            colonnes de liens (grille asymétrique).
+            / Column 2: TiBillet — editorial column, carries 2x the weight.
+        {% endcomment %}
+        <div>
+            <h2 class="tb-chrome-pied__titre">
                     <svg class="align-baseline" width="90" height="20" fill="currentColor"
                          viewBox="0 0 50.357453 11.821528"
                          xmlns="http://www.w3.org/2000/svg">
@@ -94,45 +116,73 @@
                         </g>
                     </svg>
                     <span class="visually-hidden">TiBillet</span>
-                </h4>
-                <p class="lead">{% trans "Ticketing, subscriptions and local currencies for your community." %}</p>
-                <hr/>
-                <p>
-                    {% trans "TiBillet is a collective organization toolbox: online wallet for my local currencies, cash and cashless register, ticketing system, subscriptions, collective federation, all of it open-source." %}
-                </p>
-                            <p>
-                                <a href="/onboard/" class="btn btn-success d-block">
-                                    <i class="bi bi-stars"> </i>{% translate "Create a TiBillet space for your collective" %}
-                                </a>
-                            </p>
-                                                <p>
-                                <a href="https://codecommun.tibillet.coop/crowd/" class="btn btn-warning d-block">
-                                    <i class="bi bi-tools"> </i>{% translate "Venez contribuer à TiBillet" %}
-                                </a>
-                            </p>
+            </h2>
+            <p class="tb-chrome-pied__accroche">
+                {% trans "Ticketing, subscriptions and local currencies for your community." %}
+            </p>
+            <p class="tb-chrome-pied__texte">
+                {% trans "TiBillet is a collective organization toolbox: online wallet for my local currencies, cash and cashless register, ticketing system, subscriptions, collective federation, all of it open-source." %}
+            </p>
+            {% comment %}
+                Deux liens éditoriaux, pas deux boutons — et c'est une contrainte,
+                pas un goût : « Créez un espace TiBillet pour votre collectif » est
+                trop long pour une ligne de bouton. En bouton, le libellé déborde de
+                sa colonne ou devient un texte cliquable sur deux lignes. Un lien
+                fléché porte un libellé long sans faire ni l'un ni l'autre.
+                Ces deux liens promeuvent TiBillet dans le pied de page d'un lieu :
+                ils ne prennent jamais une couleur sémantique (succès, avertissement)
+                qui ne dit rien de ce qu'ils font, et jamais plus d'attention que le
+                contenu du lieu lui-même.
+                / Editorial links, not buttons: the label is too long for a
+                single-line button — as one it overflows its column or becomes
+                two-line clickable text. They never take a semantic colour, and never
+                more attention than the venue's own content.
+            {% endcomment %}
+            <ul class="tb-chrome-pied__liens tb-chrome-pied__liens--fleches">
+                <li>
+                    <a href="/onboard/"
+                       class="tb-chrome-pied__fleche"
+                       data-testid="pied-action-onboard">
+                        <i class="bi bi-stars" aria-hidden="true"></i>
+                        <span>{% translate "Create a TiBillet space for your collective" %}</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="https://codecommun.tibillet.coop/crowd/"
+                       class="tb-chrome-pied__fleche"
+                       data-testid="pied-action-contribuer">
+                        <i class="bi bi-tools" aria-hidden="true"></i>
+                        <span>{% translate "Venez contribuer à TiBillet" %}</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
 
-                    </div>
-            {# Colonne 3 : liens communauté TiBillet / Column 3: TiBillet community links #}
-            <div class="col-12 col-md-3">
-                        {# Liens communauté TiBillet — bloc commun partagé avec le pied de page public. #}
-                        {# / TiBillet community links — shared block reused by the public footer. #}
-                        <ul class="nav flex-column">
-                            {% include "seo/partials/tibillet_community_links.html" %}
-                        </ul>
-                    </div>
-                </div>
-        {# Mention France 2030 — bande pleine largeur sous les 3 colonnes. #}
-        {# / France 2030 funding statement — full-width band below the 3 columns. #}
-        <hr class="mt-5 mb-4">
-        <div class="row fs-6 text-secondary align-items-center g-3">
-                    <p class="col-md">
-                        Opération soutenue par l’État dans le cadre du dispositif
-                        « Solutions de billetteries innovantes » de France 2030,
-                        opéré par la Caisse des Dépôts.
-                    </p>
-                    <p class="col-md">
-                        <img src="{% static 'commun/img/france_2030.png' %}" alt="Logo France 2030" />
-                    </p>
-                </div>
+        {# Colonne 3 : liens communauté TiBillet / Column 3: TiBillet community links #}
+        <nav aria-label="{% translate 'Communauté TiBillet' %}">
+            <h2 class="tb-chrome-pied__titre">{% translate "Communauté" %}</h2>
+            {% comment %}
+                Bloc commun partagé avec le pied de page public (app seo). Il rend
+                des liens portant la classe `nav-link {{ link_class }}` :
+                `link_class` est SON point d'extension prévu, c'est par là qu'on
+                lui passe l'habillage du skin sans toucher à l'app seo, qui est
+                hors du périmètre du socle.
+                / Shared block owned by the seo app. `link_class` is its intended
+                extension point — we dress it from here without touching seo.
+            {% endcomment %}
+            <ul class="tb-chrome-pied__liens">
+                {% include "seo/partials/tibillet_community_links.html" with link_class="tb-chrome-pied__lien" %}
+            </ul>
+        </nav>
+    </div>
+    {# Mention France 2030 — bande sous les 3 colonnes, alignée sur la gouttière. #}
+    {# / France 2030 funding statement — band below the 3 columns. #}
+    <div class="tb-chrome-pied__mention" data-testid="pied-mention">
+        <p>
+            Opération soutenue par l’État dans le cadre du dispositif
+            « Solutions de billetteries innovantes » de France 2030,
+            opéré par la Caisse des Dépôts.
+        </p>
+        <img src="{% static 'commun/img/france_2030.png' %}" alt="Logo France 2030" width="120">
     </div>
 </footer>

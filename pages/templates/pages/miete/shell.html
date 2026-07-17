@@ -91,21 +91,58 @@
     <link rel="stylesheet" href="{% static 'commun/css/tibillet.css' %}">
     <link rel="stylesheet" href="{% static 'commun/css/swal.css' %}">
 
-    {# Socle du skin classic : les JETONS (:root) et l'habillage du chrome. #}
-    {# Chargé ICI, dans le shell, et pas seulement depuis page.html : page.html #}
-    {# ne rend que les pages CMS, donc les jetons n'atteignaient ni l'agenda, ni #}
-    {# les adhésions, ni le détail d'un événement — qui restaient en Bootstrap nu. #}
-    {# Le shell, lui, enveloppe TOUTES les pages. #}
-    {# page.html garde SON propre <link> : il est dans le <body> pour survivre aux #}
-    {# navigations HTMX (le squelette headless n'a pas de <head>). Les deux liens #}
-    {# coexistent, le navigateur déduplique via son cache. #}
-    {# Placé APRÈS bootstrap.min.css : à spécificité égale le dernier chargé gagne. #}
-    {# / The classic skin's base: TOKENS (:root) + chrome styling. Loaded HERE in #}
-    {# the shell, not only from page.html, which renders CMS pages only — so the #}
-    {# tokens never reached the agenda, memberships or event pages. The shell wraps #}
-    {# EVERY page. page.html keeps its own <link> (in the body, to survive HTMX #}
-    {# navigation); the browser dedupes. After bootstrap.min.css so it wins. #}
+    {% comment %}
+    LE SOCLE — tb-blocs.css habille AUSSI le chrome, pas seulement les pages CMS.
+    / The base — tb-blocs.css also dresses the chrome, not just CMS pages.
+
+    A charger meme si ce skin ne surcharge pas page.html : .tb-etiquette (les
+    etiquettes de l'agenda, de la carte d'evenement et de la page evenement) n'est
+    definie QUE dans ce fichier. Sans ce <link>, les etiquettes retombent en liens
+    soulignes nus, sans pastille et sans separation — constate au rendu.
+    / Load it even though this skin does not override page.html: .tb-etiquette is
+    defined ONLY here. Without this <link> the tags fall back to bare underlined
+    links. Seen at render time.
+
+    PIEGE DE COPIE — A RELIRE APRES CHAQUE VAGUE DU SOCLE : ce shell est une
+    COPIE de classic/shell.html, donc un instantane. Le socle a ajoute ce <link>
+    a classic/shell.html APRES la copie, et le skin ne l'a pas suivi : il a
+    silencieusement perdu l'habillage des etiquettes. Un skin herite du socle
+    par le FALLBACK, jamais des fichiers qu'il a copies.
+    / COPY TRAP — RE-READ AFTER EVERY BASE WAVE: this shell is a SNAPSHOT copy of
+    classic/shell.html. The base added this <link> after the copy was taken, and
+    the skin did not follow. A skin inherits from the base through the FALLBACK,
+    never through the files it has copied.
+
+    Apres bootstrap.min.css pour gagner la cascade, et AVANT le CSS du skin pour
+    que le skin garde le dernier mot. / After bootstrap to win the cascade, and
+    BEFORE the skin CSS so the skin keeps the last word.
+    {% endcomment %}
     <link rel="stylesheet" href="{% static 'pages/css/tb-blocs.css' %}">
+
+    {% comment %}
+    LE SKIN MIETE — CSS PROPRE AU SKIN, CHARGE EN DERNIER
+    / The miete skin CSS, loaded last
+
+    L'ORDRE COMPTE. tokens.css d'abord (il ne pose que des variables et les
+    @font-face), miete.css ensuite (il les consomme). Et les deux APRES
+    bootstrap et tibillet.css, sinon le socle gagnerait la cascade.
+    / ORDER MATTERS. tokens.css first (variables + @font-face only), miete.css
+    second (it consumes them). Both AFTER bootstrap and tibillet.css.
+
+    Le CSS est scope sous .skin-miete (cf. le <div> plus bas dans ce fichier) :
+    il n'atteint donc jamais le chrome partage ni l'admin.
+    / The CSS is scoped under .skin-miete, so it never reaches the shared chrome.
+
+    Charge dans le <head> et pas dans {% templatetag openblock %} block extra_meta {% templatetag closeblock %} : ce bloc est
+    reserve au SEO par le contrat de skin, et il est PERDU en reponse HTMX
+    (headless n'a pas de <head>). Ici ca n'est pas un probleme — hx-target="body"
+    ne remplace que le corps, le <head> et donc ces feuilles survivent au swap.
+    / Loaded in <head>, not in the extra_meta block (SEO-only per the skin
+    contract, and lost in HTMX responses). Not an issue: hx-target="body" only
+    swaps the body, so the <head> and these stylesheets survive the swap.
+    {% endcomment %}
+    <link rel="stylesheet" href="{% static 'miete/css/tokens.css' %}">
+    <link rel="stylesheet" href="{% static 'miete/css/miete.css' %}">
 
     <script src="{% static 'commun/js/bootstrap.bundle.min.5.3.3.js' %}"></script>
     {% comment %}
@@ -173,17 +210,55 @@
 
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-ext="loading-states" class="min-vh-100 d-flex flex-column">
 
-{% if not embed %} <!-- Pas de navbar si embed -->
-    {% include "pages/classic/partials/navbar.html" %}
-{% endif %}
+{% comment %}
+TOUT LE SKIN VIT DANS .skin-miete
+/ The whole skin lives inside .skin-miete
 
-<main class="flex-fill d-flex flex-column">
-    {% block main %}{% endblock main %}
-</main>
+Le CSS du skin est scope sous cette classe. La navbar ET le pied de page
+doivent donc etre DEDANS : sinon, apres un swap HTMX (hx-target="body"), ils
+se retrouveraient hors du scope et perdraient leur style, en silence. C'est le
+meme piege que le skin faire_festival documente dans son headless.html.
+/ The skin CSS is scoped under this class, so the navbar AND the footer must be
+INSIDE it: otherwise, after an HTMX body swap, they would fall outside the scope
+and silently lose their styling. Same trap faire_festival documents.
+{% endcomment %}
+<div class="skin-miete d-flex flex-column flex-fill">
 
-{% if not embed %} <!-- Pas de footer si embed -->
-    {% include "pages/classic/partials/footer.html" %}
-{% endif %}
+    {% if not embed %} <!-- Pas de navbar si embed -->
+        {% comment %}
+        LE LIEN D'EVITEMENT — le premier element de la page, toujours.
+        / The skip link — always the first element on the page.
+
+        La MIETE en a un sur son site (« Aller au contenu principal »), et il
+        est indispensable ici : le menu est fait de bulles, donc de N liens a
+        traverser avant d'atteindre le contenu. Sans ce lien, qui navigue au
+        clavier se tape toute la rangee a chaque page.
+        Il est hors ecran mais JAMAIS display:none — sinon il ne serait plus
+        focusable, et ne servirait plus a rien.
+        / The venue's site has one, and it is essential here: the menu is made of
+        bubbles, i.e. N links to cross before reaching the content. Off-screen but
+        never display:none, which would make it unfocusable.
+        {% endcomment %}
+        <a class="miete-evitement" href="#miete-contenu">
+            {% translate "Aller au contenu principal" %}
+        </a>
+
+        {% include "pages/miete/partials/navbar.html" %}
+    {% endif %}
+
+    {# tabindex="-1" : sans lui, certains navigateurs deplacent la vue mais PAS #}
+    {# le focus clavier — le lien d'evitement ne ferait alors qu'a moitie son   #}
+    {# travail. / Without tabindex="-1", some browsers move the viewport but    #}
+    {# not the keyboard focus, so the skip link would only half work.           #}
+    <main id="miete-contenu" class="flex-fill d-flex flex-column" tabindex="-1">
+        {% block main %}{% endblock main %}
+    </main>
+
+    {% if not embed %} <!-- Pas de footer si embed -->
+        {% include "pages/miete/partials/footer.html" %}
+    {% endif %}
+
+</div>
 
 {% if not embed %}
     {% block offcanvas_globaux %}
