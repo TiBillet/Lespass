@@ -29,3 +29,14 @@ if settings.DEBUG:
 
 if settings.DEBUG and not settings.TEST :
     urlpatterns += [path("__reload__/", include("django_browser_reload.urls")), ]
+
+# Register custom error handlers
+# handler404 : page 404 skin-aware + HTMX-aware (actif quand DEBUG=0).
+# Sans ces handlers sur le tenant public, Django rend 404.html/500.html avec
+# les vues par defaut, qui n'injectent PAS base_template : {% extends base_template %}
+# recoit '' -> TemplateSyntaxError, qui declenche 500.html -> re-crash en boucle.
+# / handler404: skin-aware + HTMX-aware 404 page (active when DEBUG=0).
+# Without these handlers on the public tenant, Django's default error views render
+# 404.html/500.html without base_template -> TemplateSyntaxError -> 500 -> loop.
+handler404 = 'BaseBillet.views.handler404'
+handler500 = 'BaseBillet.views.handler500'

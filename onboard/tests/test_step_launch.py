@@ -90,7 +90,7 @@ def _make_wc_at_launch(client, cleanup=None, tenant=None, error_message=""):
         wc = WaitingConfiguration.objects.create(
             organisation="Launch Test",
             email=unique_email,
-            dns_choice="tibillet.coop",
+            dns_choice="tibillet.localhost",
             email_confirmed=True,
             current_step=WaitingConfiguration.STEP_LAUNCH,
             phone="",
@@ -286,7 +286,7 @@ def test_resume_magic_link_valid_redirects_to_current_step(
         wc = WaitingConfiguration.objects.create(
             organisation="Resume Test",
             email=unique_email,
-            dns_choice="tibillet.coop",
+            dns_choice="tibillet.localhost",
             email_confirmed=True,
             current_step=WaitingConfiguration.STEP_LAUNCH,
             phone="",

@@ -37,7 +37,7 @@ services:
     links:
       - fedow_memcached:memcached
     volumes:
-      - fedow_database:/home/fedow/Fedow/database
+      - ./database/fedow_database:/home/fedow/Fedow/database
     networks:
       - backend
     command: "bash start.sh"
@@ -78,7 +78,7 @@ services:
     hostname: lespass_postgres
     logging: *default-logging
     volumes:
-      - lespass_dev_db:/var/lib/postgresql/data
+      - ./database/lespass_dev_db:/var/lib/postgresql/data
     env_file: .env
     networks:
       - backend

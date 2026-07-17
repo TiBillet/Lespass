@@ -5,7 +5,6 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, Optional, List
 
 import stripe
-from django.conf import settings
 from django.db import connection
 from django.db.models import Q
 from django.utils import timezone
@@ -1022,10 +1021,15 @@ class TenantCreateValidator:
             # le slug du nom si absent (compat anciens brouillons / autres flux).
             # / Sub-domain slug: honour the slug entered at the "Your venue" step
             # (editable), falling back to the name slug if missing.
+            # Suffixe du domaine : le choix de l'utilisateur (etape « Votre lieu »),
+            # avec repli sur le 1er suffixe disponible derive de l'environnement
+            # (DOMAIN + ADDITIONAL_DOMAINS). Plus de domaine code en dur, plus de
+            # forcage DEBUG : en dev, DOMAIN vaut deja 'tibillet.localhost'.
+            # / Domain suffix: the user's choice, fallback on the 1st env-derived
+            # suffix. No hardcoded domain, no DEBUG override.
+            from onboard.services import dns_suffixes_disponibles
             slug = waiting_config.slug or slugify(name)
-            dns = waiting_config.dns_choice if waiting_config.dns_choice else 'tibillet.coop'
-            if settings.DEBUG:
-                dns = "tibillet.localhost"
+            dns = waiting_config.dns_choice or dns_suffixes_disponibles()[0]
 
             tenant.name = name
             tenant.on_trial = False

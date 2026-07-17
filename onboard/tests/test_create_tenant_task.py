@@ -67,7 +67,7 @@ def _make_wc(cleanup_waiting_configs):
         wc = WaitingConfiguration.objects.create(
             organisation=f"CreateTaskOrg-{suffix}",
             email=f"create-task-user-{suffix}@example.com",
-            dns_choice="tibillet.coop",
+            dns_choice="tibillet.localhost",
             phone="0102030405",  # champ obligatoire / required
             email_confirmed=True,
         )

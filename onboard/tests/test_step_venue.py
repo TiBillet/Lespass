@@ -19,7 +19,7 @@ PIEGE : `WaitingConfiguration` vit dans le schema `meta` -> `schema_context("met
 import time
 
 import pytest
-from django.test import Client, override_settings
+from django.test import Client
 from django_tenants.utils import schema_context
 
 from MetaBillet.models import WaitingConfiguration
@@ -42,7 +42,7 @@ def _create_wc_at(step, client, cleanup=None, organisation="Venue Test"):
         wc = WaitingConfiguration.objects.create(
             organisation=organisation,
             email=unique_email,
-            dns_choice="tibillet.coop",
+            dns_choice="tibillet.localhost",
             email_confirmed=True,
             current_step=step,
             phone="",
@@ -77,7 +77,7 @@ def test_venue_post_valid_updates_draft_and_advances(cleanup_waiting_configs):
     resp = client.post("/onboard/venue/", data={
         "name": nom,
         "slug": f"lieu-test-{suffixe}",
-        "dns_choice": "tibillet.coop",
+        "dns_choice": "tibillet.localhost",
     })
     assert resp.status_code in (302, 303)
     assert resp["Location"] == "/onboard/place/"
@@ -95,7 +95,7 @@ def test_venue_post_existing_name_returns_422(cleanup_waiting_configs):
     resp = client.post("/onboard/venue/", data={
         "name": "LESPASS",  # casse différente du tenant `lespass`
         "slug": f"lespass-x-{int(time.time() * 1000)}",
-        "dns_choice": "tibillet.coop",
+        "dns_choice": "tibillet.localhost",
     })
     assert resp.status_code == 422
     assert b"name" in resp.content
@@ -103,24 +103,22 @@ def test_venue_post_existing_name_returns_422(cleanup_waiting_configs):
 
 def test_venue_serializer_rejects_existing_domain():
     """
-    Domaine déjà pris -> 422 sur `slug`. En DEBUG (dev), le suffixe bascule sur
-    'tibillet.localhost' (comme au Lancement) : le slug 'lespass' donne le
-    domaine existant 'lespass.tibillet.localhost'. On force DEBUG=True pour un
-    test déterministe quel que soit le réglage d'environnement.
-    / Existing domain -> 422 on `slug`. In DEBUG the suffix becomes
-    'tibillet.localhost' (like at Launch): slug 'lespass' yields the existing
-    'lespass.tibillet.localhost'. We force DEBUG=True for determinism.
+    Domaine déjà pris -> 422 sur `slug`. Le suffixe est le choix de l'utilisateur
+    (dérivé de l'environnement) : en test, `DOMAIN` vaut 'tibillet.localhost', donc
+    le slug 'lespass' donne le domaine existant 'lespass.tibillet.localhost'.
+    / Existing domain -> 422 on `slug`. The suffix is the user's choice (env-
+    derived): in tests `DOMAIN` is 'tibillet.localhost', so slug 'lespass' yields
+    the existing 'lespass.tibillet.localhost'.
     """
     from onboard.serializers import OnboardVenueSerializer
 
-    with override_settings(DEBUG=True):
-        serializer = OnboardVenueSerializer(data={
-            "name": f"Nom Unique {int(time.time() * 1000)}",  # nom libre -> on isole le check slug
-            "slug": "lespass",
-            "dns_choice": "tibillet.coop",
-        })
-        assert not serializer.is_valid()
-        assert "slug" in serializer.errors
+    serializer = OnboardVenueSerializer(data={
+        "name": f"Nom Unique {int(time.time() * 1000)}",  # nom libre -> on isole le check slug
+        "slug": "lespass",
+        "dns_choice": "tibillet.localhost",
+    })
+    assert not serializer.is_valid()
+    assert "slug" in serializer.errors
 
 
 def test_venue_post_keeps_tl_address_in_session(cleanup_waiting_configs):
@@ -133,7 +131,7 @@ def test_venue_post_keeps_tl_address_in_session(cleanup_waiting_configs):
     client.post("/onboard/venue/", data={
         "name": f"Lieu TL {suffixe}",
         "slug": f"lieu-tl-{suffixe}",
-        "dns_choice": "tibillet.coop",
+        "dns_choice": "tibillet.localhost",
         "tl_adresse": adresse,
         "tl_lat": "-21.0096",
         "tl_lng": "55.2705",
@@ -163,7 +161,7 @@ def test_venue_post_coordonnees_invalides_ignorees(cleanup_waiting_configs):
     resp = client.post("/onboard/venue/", data={
         "name": f"Lieu Bad {suffixe}",
         "slug": f"lieu-bad-{suffixe}",
-        "dns_choice": "tibillet.coop",
+        "dns_choice": "tibillet.localhost",
         "tl_adresse": "Un lieu quelque part",
         "tl_lat": "<script>alert(1)</script>",
         "tl_lng": "pas-un-nombre",

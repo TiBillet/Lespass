@@ -28,15 +28,19 @@ from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
 
-# Choix des suffixes DNS proposes a l'utilisateur. / DNS suffix choices.
-# On les declare en tuple immuable au top du module : `ChoiceField` exige
-# un iterable de choix, et un tuple en constante module evite la duplication.
-# Feedback mainteneur 2026-05-15 : `tibillet.fr` retire du choix utilisateur
-# (on ne garde que les domaines coop/re actifs en prod).
-# / Declared at module top as an immutable tuple. Maintainer feedback
-# 2026-05-15: `tibillet.fr` removed from the user choices (only the active
-# coop/re domains remain).
-DNS_CHOICES = ("tibillet.coop", "tibillet.re")
+# Choix des suffixes DNS proposes a l'utilisateur, derives de l'environnement
+# (`DOMAIN` + `ADDITIONAL_DOMAINS`) via l'unique source de verite
+# `dns_suffixes_disponibles()`. Plus aucun domaine n'est code en dur ici : un
+# deploiement change sa liste de suffixes en editant son `.env`, sans toucher au
+# code. Le 1er suffixe est le choix par defaut du formulaire.
+# / DNS suffix choices, derived from the environment (DOMAIN +
+# ADDITIONAL_DOMAINS) through the single source of truth
+# `dns_suffixes_disponibles()`. No domain is hardcoded anymore. The 1st suffix
+# is the form's default choice.
+from onboard.services import dns_suffixes_disponibles
+
+DNS_CHOICES = tuple(dns_suffixes_disponibles())
+DNS_DEFAUT = DNS_CHOICES[0]
 
 
 class OnboardIdentitySerializer(serializers.Serializer):
@@ -137,7 +141,7 @@ class OnboardVenueSerializer(serializers.Serializer):
     # SlugField valide le format (minuscules, chiffres, tirets).
     # / The sub-domain slug (pre-filled from the name, editable).
     slug = serializers.SlugField(max_length=50, required=True, allow_blank=False)
-    dns_choice = serializers.ChoiceField(choices=DNS_CHOICES, default="tibillet.coop")
+    dns_choice = serializers.ChoiceField(choices=DNS_CHOICES, default=DNS_DEFAUT)
 
     def validate_name(self, value):
         """
@@ -174,22 +178,19 @@ class OnboardVenueSerializer(serializers.Serializer):
         Vérifie que l'adresse web choisie (slug + suffixe) n'est pas déjà prise
         par un tenant existant. On reproduit la construction du domaine faite au
         Lancement (`TenantCreateValidator.create_tenant`) : suffixe = dns_choice,
-        forcé à 'tibillet.localhost' en DEBUG (dev). Sans ce check, le conflit
-        de domaine ne serait découvert qu'au Lancement.
+        avec repli sur le 1er suffixe disponible (dérivé de l'env). Sans ce check,
+        le conflit de domaine ne serait découvert qu'au Lancement.
         / Check the chosen web address (slug + suffix) isn't already taken. We
-        mirror the domain build done at Launch (dns_choice, forced to
-        'tibillet.localhost' in DEBUG). Without this, the conflict would only
-        surface at Launch.
+        mirror the domain build done at Launch (dns_choice, fallback on the 1st
+        env-derived suffix). Without this, the conflict would only surface at
+        Launch.
         """
-        from django.conf import settings
         from django_tenants.utils import schema_context
 
         from Customers.models import Domain
 
         slug = attrs.get("slug", "")
-        dns = attrs.get("dns_choice") or "tibillet.coop"
-        if settings.DEBUG:
-            dns = "tibillet.localhost"
+        dns = attrs.get("dns_choice") or DNS_DEFAUT
         domaine = f"{slug}.{dns}"
         with schema_context("public"):
             domaine_deja_pris = Domain.objects.filter(domain=domaine).exists()

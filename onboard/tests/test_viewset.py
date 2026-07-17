@@ -60,7 +60,7 @@ def test_session_helpers_round_trip(cleanup_waiting_configs):
     wc = WaitingConfiguration.objects.create(
         organisation="OnboardTestViewsetOrg",
         email="onboard-test-viewset@example.com",
-        dns_choice="tibillet.coop",
+        dns_choice="tibillet.localhost",
         phone="0102030405",
     )
     cleanup_waiting_configs(wc)

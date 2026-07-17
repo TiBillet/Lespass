@@ -16,6 +16,7 @@ counter is equivalent security for a short-lived 6-digit code.
 
 import hashlib
 import logging
+import os
 import secrets
 from datetime import timedelta
 
@@ -207,3 +208,66 @@ def geocode(query):
     }
     cache.set(cache_key, payload, GEOCODE_CACHE_TTL)
     return payload
+
+
+# Suffixes de domaine "preferes" : s'ils sont presents dans la liste derivee de
+# l'environnement, on les remonte en tete (le 1er suffixe = choix par defaut du
+# formulaire d'onboarding). L'ordre ici est l'ordre de priorite : tibillet.coop
+# passe avant tibillet.localhost. Feedback mainteneur 2026-07-17 : tibillet.coop
+# doit rester le choix par defaut meme s'il est declare dans ADDITIONAL_DOMAINS
+# (et non dans DOMAIN).
+# / "Preferred" domain suffixes: if present in the env-derived list, they are
+# moved to the front (1st suffix = default choice in the onboarding form).
+SUFFIXES_DNS_PREFERES = ("tibillet.coop", "tibillet.localhost")
+
+
+def dns_suffixes_disponibles():
+    """
+    Liste ordonnee des suffixes de domaine proposes a la creation d'un tenant.
+    / Ordered list of domain suffixes offered when creating a tenant.
+
+    LOCALISATION : onboard/services.py
+
+    Source de verite unique, derivee de l'environnement :
+      - `DOMAIN` : le domaine wildcard principal (ex. tibillet.coop en prod,
+        tibillet.localhost en dev).
+      - `ADDITIONAL_DOMAINS` : domaines additionnels du modele SaaS multi-domaine,
+        separes par des virgules (ex. "tibillet.re,tibillet.coop").
+    Les doublons sont retires en gardant le 1er ordre d'apparition, puis les
+    suffixes de `SUFFIXES_DNS_PREFERES` sont remontes en tete. Le 1er element
+    est le choix par defaut du formulaire.
+
+    / Single source of truth, derived from the environment (DOMAIN +
+    ADDITIONAL_DOMAINS). Duplicates removed, preferred suffixes moved to the
+    front. The 1st element is the form's default choice.
+    """
+    # 1. Le domaine principal en premier, puis les domaines additionnels.
+    #    / Main domain first, then the additional domains.
+    suffixes = []
+    domaine_principal = os.environ.get("DOMAIN", "").strip()
+    if domaine_principal:
+        suffixes.append(domaine_principal)
+
+    domaines_additionnels = os.environ.get("ADDITIONAL_DOMAINS", "")
+    for domaine in domaines_additionnels.split(","):
+        domaine_nettoye = domaine.strip()
+        if domaine_nettoye and domaine_nettoye not in suffixes:
+            suffixes.append(domaine_nettoye)
+
+    # 2. Repli minimal si l'environnement est vide (ne doit pas arriver en prod,
+    #    mais garantit une liste non vide pour le formulaire et la validation).
+    #    / Minimal fallback if the env is empty (guarantees a non-empty list).
+    if not suffixes:
+        suffixes = ["tibillet.localhost"]
+
+    # 3. On remonte les suffixes preferes en tete, dans l'ordre de priorite.
+    #    On insere du moins prioritaire au plus prioritaire pour que le 1er de
+    #    SUFFIXES_DNS_PREFERES finisse en tete de liste.
+    #    / Move preferred suffixes to the front, least-priority first so the
+    #    first preferred one ends up at index 0.
+    for suffixe_prefere in reversed(SUFFIXES_DNS_PREFERES):
+        if suffixe_prefere in suffixes:
+            suffixes.remove(suffixe_prefere)
+            suffixes.insert(0, suffixe_prefere)
+
+    return suffixes

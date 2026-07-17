@@ -105,15 +105,16 @@
                        data-testid="onboard-venue-slug">
             </div>
             <div class="col-12 col-sm-auto">
+                {# Suffixes DNS derives de l'environnement (DOMAIN + ADDITIONAL_DOMAINS),
+                   passes par la vue dans `dns_choices`. Le 1er est le choix par defaut.
+                   / Env-derived DNS suffixes passed by the view; 1st = default choice. #}
                 <div class="onboard-dns-radios" role="radiogroup" aria-label="{% translate 'Suffixe de domaine' %}">
-                    <input type="radio" class="btn-check" name="dns_choice" id="onboard-venue-dns-coop"
-                           value="tibillet.coop" data-testid="onboard-venue-dns-coop"
-                           {% if initial.dns_choice == 'tibillet.re' %}{% else %}checked{% endif %}>
-                    <label class="btn btn-outline-success" for="onboard-venue-dns-coop">.coop</label>
-                    <input type="radio" class="btn-check" name="dns_choice" id="onboard-venue-dns-re"
-                           value="tibillet.re" data-testid="onboard-venue-dns-re"
-                           {% if initial.dns_choice == 'tibillet.re' %}checked{% endif %}>
-                    <label class="btn btn-outline-success" for="onboard-venue-dns-re">.re</label>
+                    {% for suffixe in dns_choices %}
+                    <input type="radio" class="btn-check" name="dns_choice" id="onboard-venue-dns-{{ suffixe|slugify }}"
+                           value="{{ suffixe }}" data-testid="onboard-venue-dns-{{ suffixe|slugify }}"
+                           {% if initial.dns_choice == suffixe %}checked{% elif not initial.dns_choice and forloop.first %}checked{% endif %}>
+                    <label class="btn btn-outline-success" for="onboard-venue-dns-{{ suffixe|slugify }}">{{ suffixe }}</label>
+                    {% endfor %}
                 </div>
             </div>
         </div>
@@ -122,7 +123,7 @@
         {% endif %}
         <div class="form-text">
             {% translate "Votre adresse finale :" %}
-            <code data-testid="onboard-venue-domain-preview"><span id="onboard-venue-domain-slug">…</span><span id="onboard-venue-domain-suffix">.tibillet.coop</span></code>
+            <code data-testid="onboard-venue-domain-preview"><span id="onboard-venue-domain-slug">…</span><span id="onboard-venue-domain-suffix">.{{ initial.dns_choice|default:dns_choices.0 }}</span></code>
         </div>
     </div>
 
@@ -184,7 +185,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function maj_apercu() {
         var radio = document.querySelector('input[name="dns_choice"]:checked');
-        var suffixe = radio ? radio.value : "tibillet.coop";
+        // Repli sur le 1er suffixe fourni par le serveur (jamais un domaine en dur).
+        // / Fallback on the 1st server-provided suffix (never a hardcoded domain).
+        var suffixe = radio ? radio.value : "{{ dns_choices.0 }}";
         if (apercu_slug) { apercu_slug.textContent = (champ_slug.value || slugify(champ_nom.value)) || "…"; }
         if (apercu_suffixe) { apercu_suffixe.textContent = "." + suffixe; }
     }

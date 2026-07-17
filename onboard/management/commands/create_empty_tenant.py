@@ -36,6 +36,7 @@ from django.core.management.base import BaseCommand
 from django.utils.translation import gettext_lazy as _
 
 from Customers.models import Client, Domain
+from onboard.services import dns_suffixes_disponibles
 
 
 class Command(BaseCommand):
@@ -59,6 +60,10 @@ class Command(BaseCommand):
         # triggers ~200 migrations on the new schema (5-7 min).
         count = options["count"]
         created = []
+        # Suffixe du domaine technique jetable, derive de l'environnement (il sera
+        # de toute facon renomme a la prise de slot). / Throwaway technical domain
+        # suffix, env-derived (renamed anyway when the slot is taken).
+        suffixe_dns = dns_suffixes_disponibles()[0]
 
         for _i in range(count):
             # Genere un schema/name unique pour ne pas entrer en conflit.
@@ -79,7 +84,7 @@ class Command(BaseCommand):
             # / Technical domain, renamed when the slot is taken by
             # `WaitingConfiguration.create_tenant()`.
             Domain.objects.create(
-                domain=f"{slug}.tibillet.coop",
+                domain=f"{slug}.{suffixe_dns}",
                 tenant=tenant,
                 is_primary=True,
             )

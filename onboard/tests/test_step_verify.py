@@ -96,7 +96,7 @@ def _create_wc_with_otp(client, otp_clair="123456", cleanup=None):
         wc = WaitingConfiguration.objects.create(
             organisation="Verify Test",
             email=unique_email,
-            dns_choice="tibillet.coop",
+            dns_choice="tibillet.localhost",
             otp_hash=otp_hash,
             otp_expires_at=timezone.now() + timedelta(minutes=10),
             current_step=WaitingConfiguration.STEP_VERIFY,

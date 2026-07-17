@@ -1505,13 +1505,19 @@ class OnboardViewSet(viewsets.ViewSet):
         if redirect_response is not None:
             return redirect_response
 
+        # Suffixes DNS derives de l'environnement (source unique). Le 1er est le
+        # choix par defaut. / Env-derived DNS suffixes (single source). 1st = default.
+        from onboard.services import dns_suffixes_disponibles
+        dns_choices = dns_suffixes_disponibles()
+
         if request.method == "GET":
             return render(request, "onboard/steps/03_venue.html", {
                 "step": "venue", "wc": wc,
+                "dns_choices": dns_choices,
                 "initial": {
                     "name": wc.organisation,
                     "slug": wc.slug,
-                    "dns_choice": wc.dns_choice or "tibillet.coop",
+                    "dns_choice": wc.dns_choice or dns_choices[0],
                 },
             })
 
@@ -1526,6 +1532,7 @@ class OnboardViewSet(viewsets.ViewSet):
         if not serializer.is_valid():
             return render(request, "onboard/steps/03_venue.html", {
                 "step": "venue", "wc": wc,
+                "dns_choices": dns_choices,
                 "errors": serializer.errors, "initial": initial,
             }, status=422)
 

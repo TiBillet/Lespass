@@ -116,7 +116,7 @@ def test_identity_post_creates_wc_and_redirects_to_verify(cleanup_waiting_config
             "first_name": "Jonas",
             "last_name": "Test",
             "name": "Mon Lieu Test",
-            "dns_choice": "tibillet.coop",
+            "dns_choice": "tibillet.localhost",
             "cgu": "on",
             # Captcha valide (x + y == answer). / Valid captcha.
             "x": 4, "y": 5, "answer": 9,
@@ -188,7 +188,7 @@ def test_identity_post_same_email_twice_reuses_draft_and_skips_second_otp(
         "first_name": "Jonas",
         "last_name": "Test",
         "name": "Mon Lieu Test",
-        "dns_choice": "tibillet.coop",
+        "dns_choice": "tibillet.localhost",
         "cgu": "on",
         # Captcha valide (x + y == answer). / Valid captcha.
         "x": 4, "y": 5, "answer": 9,
@@ -325,7 +325,7 @@ def test_identity_post_with_invitation_attaches_it(
                 "first_name": "I",
                 "last_name": "N",
                 "name": "Lieu invite",
-                "dns_choice": "tibillet.coop",
+                "dns_choice": "tibillet.localhost",
                 "cgu": "on",
                 # Captcha valide (x + y == answer). / Valid captcha.
                 "x": 4, "y": 5, "answer": 9,
@@ -360,7 +360,7 @@ def test_venue_serializer_rejects_existing_tenant_name():
     serializer = OnboardVenueSerializer(data={
         "name": "LESPASS",  # Casse différente du tenant existant `lespass`.
         "slug": "lespass-onboard-test",
-        "dns_choice": "tibillet.coop",
+        "dns_choice": "tibillet.localhost",
     })
     assert not serializer.is_valid()
     assert "name" in serializer.errors

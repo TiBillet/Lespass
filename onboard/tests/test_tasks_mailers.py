@@ -51,7 +51,7 @@ class OnboardOtpMailerTests(TestCase):
             self.wc = WaitingConfiguration.objects.create(
                 organisation="OtpTestOrg",
                 email="otp-user@example.com",
-                dns_choice="tibillet.coop",
+                dns_choice="tibillet.localhost",
                 phone="0102030405",  # champ obligatoire / required field
             )
             self.wc_uuid = str(self.wc.uuid)
@@ -131,7 +131,7 @@ class OnboardReadyMailerTests(TestCase):
             self.wc = WaitingConfiguration.objects.create(
                 organisation="ReadyTestOrg",
                 email="ready-user@example.com",
-                dns_choice="tibillet.coop",
+                dns_choice="tibillet.localhost",
                 phone="0102030405",
                 tenant=self.tenant,
             )

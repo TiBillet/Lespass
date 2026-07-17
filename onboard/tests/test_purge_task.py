@@ -33,7 +33,7 @@ def test_purge_removes_old_unfinalized_drafts(cleanup_waiting_configs):
         old = WaitingConfiguration.objects.create(
             organisation="PurgeOldOrg",
             email="purge-old@example.com",
-            dns_choice="tibillet.coop",
+            dns_choice="tibillet.localhost",
             phone="0102030405",  # champ obligatoire / required field
         )
         cleanup_waiting_configs(old)  # garde-fou si la purge echoue
@@ -51,7 +51,7 @@ def test_purge_removes_old_unfinalized_drafts(cleanup_waiting_configs):
         recent = WaitingConfiguration.objects.create(
             organisation="PurgeRecentOrg",
             email="purge-recent@example.com",
-            dns_choice="tibillet.coop",
+            dns_choice="tibillet.localhost",
             phone="0102030405",
         )
         cleanup_waiting_configs(recent)
@@ -93,7 +93,7 @@ def test_purge_keeps_finalized_drafts(cleanup_waiting_configs, lespass_tenant):
         finalized = WaitingConfiguration.objects.create(
             organisation="PurgeFinalizedOrg",
             email="purge-finalized@example.com",
-            dns_choice="tibillet.coop",
+            dns_choice="tibillet.localhost",
             phone="0102030405",
             tenant=lespass_tenant,  # WC deja finalise / WC already finalized
         )

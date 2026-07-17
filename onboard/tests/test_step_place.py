@@ -84,7 +84,7 @@ def test_place_get_kicks_out_unauthenticated_user_to_identity(cleanup_waiting_co
         wc = WaitingConfiguration.objects.create(
             organisation="Kickout Test",
             email=unique_email,
-            dns_choice="tibillet.coop",
+            dns_choice="tibillet.localhost",
             email_confirmed=True,
             current_step=WaitingConfiguration.STEP_PLACE,
             phone="",
@@ -131,7 +131,7 @@ def _create_wc_at_place(client, cleanup=None):
         wc = WaitingConfiguration.objects.create(
             organisation="Place Test",
             email=unique_email,
-            dns_choice="tibillet.coop",
+            dns_choice="tibillet.localhost",
             email_confirmed=True,
             current_step=WaitingConfiguration.STEP_PLACE,
             phone="",
