@@ -75,12 +75,6 @@ class Command(BaseCommand):
         except Client.DoesNotExist:
             self.stderr.write(f"Tenant introuvable : {schema}")
             return
-        # Le bloc IFRAME d'« Infos pratiques » integre un formulaire Framaforms :
-        # son hote doit figurer dans la whitelist ROOT, sinon le bloc ne rend rien.
-        # / The IFRAME block embeds a Framaforms form: its host must be in the ROOT
-        # whitelist, otherwise the block renders nothing.
-        self._whitelister_domaine_embed("framaforms.org")
-
         with tenant_context(tenant):
             self._charger_accueil()
             self._charger_le_faire_festival()
@@ -104,38 +98,6 @@ class Command(BaseCommand):
         config.skin = "faire_festival"
         config.save()
         self.stdout.write("  → skin force a 'faire_festival'.")
-
-    # ------------------------------------------------------------------
-    # Helper : autorise un hote dans la whitelist ROOT des blocs IFRAME.
-    # / Helper: allow a host in the ROOT whitelist for IFRAME blocks.
-    # ------------------------------------------------------------------
-    def _whitelister_domaine_embed(self, domaine):
-        """
-        Ajoute un domaine a la whitelist ROOT des blocs IFRAME (idempotent).
-        / Adds a host to the ROOT whitelist for IFRAME blocks (idempotent).
-
-        RootConfiguration est un singleton SHARED (schema public) : la whitelist
-        vaut pour TOUS les tenants. On vide le cache django-solo pour qu'elle
-        soit immediatement effective.
-        / RootConfiguration is a SHARED singleton (public schema): the whitelist
-        applies to ALL tenants. We clear the django-solo cache so it takes effect
-        immediately.
-        """
-        from django.core.cache import cache
-        from root_billet.models import RootConfiguration
-
-        config = RootConfiguration.get_solo()
-        lignes = [
-            ligne.strip()
-            for ligne in (config.domaines_embed_autorises or "").splitlines()
-            if ligne.strip()
-        ]
-        if domaine not in lignes:
-            lignes.append(domaine)
-            config.domaines_embed_autorises = "\n".join(lignes)
-            config.save()
-            cache.clear()
-            self.stdout.write(f"  → domaine iframe autorise (ROOT) : {domaine}")
 
     # ------------------------------------------------------------------
     # Helper : recupere une Page par slug, ou la cree (puis vide ses blocs).
@@ -526,20 +488,12 @@ class Command(BaseCommand):
             embed_url="https://videos-libr.es/w/r2XVKcqhLPVBDujoMVrTcF",
         )
 
-        # 13 — IFRAME : contenu integre libre, a hauteur choisie. On l'illustre
-        # par un FORMULAIRE, pas par une carte : le bloc CARTE_LEAFLET ci-dessus
-        # fait deja la carte, et le modele decrit IFRAME comme « formulaire,
-        # widget ». L'hote est autorise cote ROOT par _whitelister_domaine_embed
-        # (appele dans handle) — sans quoi le bloc ne rend rien.
-        # / IFRAME: free-height embedded content, illustrated by a FORM rather than
-        # a map (the CARTE_LEAFLET block above already covers maps, and the model
-        # describes IFRAME as "form, widget"). Host whitelisted at ROOT level.
-        Bloc.objects.create(
-            page=page, type_bloc=Bloc.IFRAME, position=13,
-            titre="Devenir bénévole",
-            embed_url="https://framaforms.org/",
-            hauteur_px=520,
-        )
+        # Pas de bloc IFRAME dans la demo : il demande une URL de formulaire/widget
+        # REELLE et externe, que la fixture n'a pas a inventer. Le type reste
+        # disponible dans l'admin, avec sa whitelist ROOT.
+        # / No IFRAME block in the demo: it needs a REAL external form/widget URL,
+        # which the fixture has no business inventing. The type stays available in
+        # the admin, with its ROOT whitelist.
 
     def _charger_accueil(self):
         from pages.models import Bloc, ImageGalerie

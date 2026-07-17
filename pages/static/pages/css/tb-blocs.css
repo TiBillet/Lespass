@@ -3,9 +3,14 @@
  * / Styling of the pages app "classic" skin blocks.
  *
  * LOCALISATION : pages/static/pages/css/tb-blocs.css
- * PORTEE : chargé UNIQUEMENT par pages/classic/page.html. Ne concerne pas le skin
- * faire_festival (qui a ses propres gabarits + CSS). / Loaded ONLY by the classic
- * page template. Does not affect the faire_festival skin.
+ * PORTEE : chargé par pages/classic/page.html ET par pages/faire_festival/page.html.
+ * Ce dernier n'habille que 11 des 19 types de blocs : les 8 autres retombent sur le
+ * socle classic, dont le balisage est en .tb-bloc*. Il prend les JETONS via la classe
+ * `tb-jetons`, mais PAS l'habillage `.tb-page` (qui imposerait son fond et sa couleur
+ * de texte par-dessus l'identité du skin).
+ * / SCOPE: loaded by the classic page template AND by the faire_festival one. The
+ * latter only styles 11 of the 19 block types; the other 8 fall back to the classic
+ * base. It takes the TOKENS via `tb-jetons`, but NOT the `.tb-page` styling.
  *
  * PARTI PRIS : thème ÉDITORIAL autonome (magazine). Titres en serif (caractère),
  * corps en sans hérité (lisibilité), UNE seule teinte d'accent — celle du tenant

@@ -56,14 +56,6 @@ class Command(BaseCommand):
         except Client.DoesNotExist:
             self.stderr.write(f"Tenant introuvable : {schema}")
             return
-        # Le bloc IFRAME de démo intègre un formulaire Framaforms : on autorise son
-        # hôte dans la whitelist ROOT (sinon le tag iframe_libre n'affiche rien).
-        # RootConfiguration est SHARED (schéma public) : on l'écrit hors tenant_context.
-        # / The demo IFRAME block embeds a Framaforms form: whitelist its host in the
-        # ROOT config (otherwise iframe_libre renders nothing). RootConfiguration is
-        # SHARED (public schema): written outside tenant_context.
-        self._whitelister_domaine_embed("framaforms.org")
-
         with tenant_context(tenant):
             from pages.models import Page
             # Nettoyage : on retire les anciennes pages secondaires (multi-pages).
@@ -88,32 +80,6 @@ class Command(BaseCommand):
         config.skin = "reunion"  # = gabarits classic
         config.save()
         self.stdout.write("  → skin forcé à 'reunion' (classic).")
-
-    def _whitelister_domaine_embed(self, domaine):
-        """
-        Ajoute un domaine à la whitelist ROOT des blocs IFRAME (idempotent).
-        / Adds a host to the ROOT whitelist for IFRAME blocks (idempotent).
-
-        RootConfiguration est un singleton SHARED (schéma public). On vide le cache
-        django-solo pour que la whitelist soit immédiatement effective.
-        / RootConfiguration is a SHARED singleton (public schema). We clear the
-        django-solo cache so the whitelist takes effect immediately.
-        """
-        from django.core.cache import cache
-        from root_billet.models import RootConfiguration
-
-        config = RootConfiguration.get_solo()
-        lignes = [
-            ligne.strip()
-            for ligne in (config.domaines_embed_autorises or "").splitlines()
-            if ligne.strip()
-        ]
-        if domaine not in lignes:
-            lignes.append(domaine)
-            config.domaines_embed_autorises = "\n".join(lignes)
-            config.save()
-            cache.clear()
-            self.stdout.write(f"  → domaine iframe autorisé (ROOT) : {domaine}")
 
     def _poser_fichier(self, obj, champ, chemin_static):
         chemin = finders.find(chemin_static)
@@ -560,23 +526,13 @@ class Command(BaseCommand):
             points_gps=[{"lat": 45.7719, "lng": 4.8902, "label": "Lespass"}],
         )
 
-        # === 19bis. IFRAME — contenu intégré libre (formulaire) ===
-        # Le bloc IFRAME sert à intégrer un contenu externe à hauteur libre. On
-        # l'illustre par un FORMULAIRE, pas par une carte : le bloc CARTE_LEAFLET
-        # ci-dessus fait déjà la carte, et le modèle décrit IFRAME comme
-        # « formulaire, widget ». L'hôte est autorisé côté ROOT via
-        # _whitelister_domaine_embed. Pour une autre intégration, remplacer
-        # embed_url et autoriser son domaine dans « Configuration racine →
-        # Domaines iframe autorisés ».
-        # / The IFRAME block embeds free-height external content, illustrated by a
-        # FORM rather than a map (CARTE_LEAFLET above already covers maps, and the
-        # model describes IFRAME as "form, widget"). Host whitelisted at ROOT level.
-        bloc(
-            type_bloc=Bloc.IFRAME,
-            titre="Proposer un projet",
-            embed_url="https://framaforms.org/",
-            hauteur_px=520,
-        )
+        # Pas de bloc IFRAME dans la démo : il demande une URL de formulaire/widget
+        # RÉELLE et externe, que la fixture n'a pas à inventer. Le type reste
+        # disponible dans l'admin — y poser une URL suppose d'autoriser son domaine
+        # dans « Configuration racine → Domaines iframe autorisés ».
+        # / No IFRAME block in the demo: it needs a REAL external form/widget URL,
+        # which the fixture has no business inventing. The type stays available in
+        # the admin — using it means whitelisting its host in the ROOT config.
 
         # === 20. FAQ x3 (non repliable) ===
         for question, reponse in [
