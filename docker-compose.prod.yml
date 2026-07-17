@@ -63,7 +63,6 @@ services:
       - traefik.http.routers.fedow_nginx.tls.certresolver=le-alpn
       - traefik.http.routers.fedow_nginx.rule=Host(`fedow.${DOMAIN}`)
       - traefik.http.routers.fedow_nginx.priority=100
-      - traefik.http.routers.fedow_nginx.middlewares=crowdsec@file
       - traefik.http.services.fedow_nginx.loadbalancer.server.port=80
     networks:
       - frontend
@@ -129,11 +128,6 @@ services:
       - lespass_memcached:memcached
     networks:
       - backend
-    extra_hosts:
-      - fedow.${DOMAIN}:172.17.0.1
-      - laboutik.${DOMAIN}:172.17.0.1
-      - lespass.${DOMAIN}:172.17.0.1
-      - festival.${DOMAIN}:172.17.0.1
     # start.sh lance supervisord qui orchestre gunicorn (HTTP :8002),
     # daphne (WebSockets :7999) et celery (worker + beat) dans CE conteneur.
     # Plus de service lespass_celery séparé : un seul conteneur en prod.
@@ -163,28 +157,26 @@ services:
       - traefik.http.services.lespass_nginx.loadbalancer.server.port=80
 
       # Router A — wildcard OVH : *.DOMAIN + apex
-#      - traefik.http.routers.lespass-ovh.entrypoints=websecure
-#      - traefik.http.routers.lespass-ovh.tls=true
-#      - traefik.http.routers.lespass-ovh.tls.certresolver=le-ovh
-#      - traefik.http.routers.lespass-ovh.tls.domains[0].main=${DOMAIN}
-#      - traefik.http.routers.lespass-ovh.tls.domains[0].sans=*.${DOMAIN}
-#      - traefik.http.routers.lespass-ovh.rule=Host(`${DOMAIN}`) || Host(`lespass.${DOMAIN}`) || HostRegexp(`${DOMAIN_REGEX}`)
-#      - traefik.http.routers.lespass-ovh.middlewares=crowdsec@file
-#
-#      # Router B — wildcard Gandi : *.DOMAIN_GANDI + apex
-#      - traefik.http.routers.lespass-gandi.entrypoints=websecure
-#      - traefik.http.routers.lespass-gandi.tls=true
-#      - traefik.http.routers.lespass-gandi.tls.certresolver=le-gandi
-#      - traefik.http.routers.lespass-gandi.tls.domains[0].main=${DOMAIN_GANDI}
-#      - traefik.http.routers.lespass-gandi.tls.domains[0].sans=*.${DOMAIN_GANDI}
-#      - traefik.http.routers.lespass-gandi.rule=Host(`${DOMAIN_GANDI}`) || HostRegexp(`${DOMAIN_GANDI_REGEX}`)
-#      - traefik.http.routers.lespass-gandi.middlewares=crowdsec@file
+      - traefik.http.routers.lespass-ovh.entrypoints=websecure
+      - traefik.http.routers.lespass-ovh.tls=true
+      - traefik.http.routers.lespass-ovh.tls.certresolver=le-ovh
+      - traefik.http.routers.lespass-ovh.tls.domains[0].main=${DOMAIN}
+      - traefik.http.routers.lespass-ovh.tls.domains[0].sans=*.${DOMAIN}
+      - traefik.http.routers.lespass-ovh.rule=Host(`${DOMAIN}`) || HostRegexp(`${DOMAIN_REGEX}`)
+
+      # Router B — wildcard Gandi : *.DOMAIN_GANDI + apex
+      - traefik.http.routers.lespass-gandi.entrypoints=websecure
+      - traefik.http.routers.lespass-gandi.tls=true
+      - traefik.http.routers.lespass-gandi.tls.certresolver=le-gandi
+      - traefik.http.routers.lespass-gandi.tls.domains[0].main=${DOMAIN_GANDI}
+      - traefik.http.routers.lespass-gandi.tls.domains[0].sans=*.${DOMAIN_GANDI}
+      - traefik.http.routers.lespass-gandi.rule=Host(`${DOMAIN_GANDI}`) || HostRegexp(`${DOMAIN_GANDI_REGEX}`)
 
       # Router C — hôte simple (TLS challenge)
-      - traefik.http.routers.lespass-simple.entrypoints=websecure
-      - traefik.http.routers.lespass-simple.tls=true
-      - traefik.http.routers.lespass-simple.tls.certresolver=le-alpn
-      - traefik.http.routers.lespass-simple.rule=Host(`${DOMAIN}`) || Host(`lespass.${DOMAIN}`) || Host(`festival.${DOMAIN}`)
+#      - traefik.http.routers.lespass-simple.entrypoints=websecure
+#      - traefik.http.routers.lespass-simple.tls=true
+#      - traefik.http.routers.lespass-simple.tls.certresolver=le-alpn
+#      - traefik.http.routers.lespass-simple.rule=Host(`${DOMAIN}`) || Host(`lespass.${DOMAIN}`) || Host(`festival.${DOMAIN}`)
 
 
 
