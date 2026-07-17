@@ -256,3 +256,51 @@
     outline-offset: 3px;
     box-shadow: none;
 }
+
+/* ===========================================================================
+ * LE SKIN CLASSIC EN MODE SOMBRE — rattrapage des usages TEXTE.
+ * / THE CLASSIC SKIN IN DARK MODE — catching up the TEXT usages.
+ *
+ * pages/static/pages/css/tb-blocs.css:47 fait `--tb-accent: var(--bs-primary)`,
+ * et consomme CE MEME jeton pour trois rôles :
+ *     APLAT (background-color)  4 fois   il porte --tb-accent-contraste, du blanc
+ *                                        codé en dur ligne 48 : il doit rester SOMBRE.
+ *     TEXTE (color)             7 fois   il est posé sur le papier de la page :
+ *                                        en sombre, il doit s'ÉCLAIRCIR.
+ *     GESTE (border/outline)    7 fois   indifférent.
+ *
+ * Les deux premiers exigent le contraire l'un de l'autre. Aucune valeur de
+ * --bs-primary ne satisfait les deux : ce n'est pas un réglage à trouver, c'est
+ * une contradiction. On garde donc --bs-primary sur l'APLAT (le cas où un échec
+ * serait un texte blanc illisible sur un bouton), et on rattrape ici les 7 usages
+ * TEXTE, un par un.
+ * / tb-blocs.css uses ONE token for three roles; the FILL and the TEXT demand
+ * opposite values in dark mode. No value of --bs-primary satisfies both. We keep
+ * --bs-primary on the FILL and catch up the 7 TEXT usages here.
+ *
+ * Mesuré : ces textes passent de 3.12:1 à 5.25:1 sur le corps de page.
+ * (Avec le bleu par défaut de Bootstrap ils étaient à 3.43:1 : le mode sombre du
+ * skin était déjà sous le seuil avant que la marque n'existe.)
+ *
+ * CE BLOC DISPARAÎT le jour où tb-blocs.css sépare l'aplat de l'encre — il n'a
+ * de raison d'être que tant qu'un seul jeton porte les deux rôles.
+ * / THIS BLOCK GOES AWAY the day tb-blocs.css splits the fill from the ink.
+ * ------------------------------------------------------------------------- */
+[data-bs-theme="dark"] .tb-fil-ariane a,
+[data-bs-theme="dark"] .tb-bloc__texte a,
+[data-bs-theme="dark"] .tb-bloc__bouton--contour,
+[data-bs-theme="dark"] .tb-bloc--temoignage .tb-bloc__citation::before,
+[data-bs-theme="dark"] .tb-bloc__carte-surtitre,
+[data-bs-theme="dark"] .tb-bloc__infos-badge,
+[data-bs-theme="dark"] .tb-bloc__faq-details summary::after {
+    color: var(--tb-marque-encre-sombre);
+}
+
+/* Le bouton contour se REMPLIT au survol : son fond redevient un aplat, donc son
+   libellé doit repasser au contraste de l'aplat. Sans cette ligne, le survol
+   poserait l'encre claire sur l'aplat clair.
+   / The outline button FILLS on hover: its background becomes a slab again, so its
+   label must go back to the slab's contrast. */
+[data-bs-theme="dark"] .tb-bloc__bouton--contour:hover {
+    color: var(--tb-marque-contraste);
+}

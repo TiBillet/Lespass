@@ -45,7 +45,14 @@
     {# .tb-bloc*. Without this sheet they render UNSTYLED. Loaded INSIDE main, #}
     {# not in extra_meta: the headless skeleton (HTMX responses) has no <head>. #}
     <link rel="stylesheet" href="{% static 'pages/css/tb-blocs.css' %}">
-    <div class="container-fluid conteneur-principal plein-ecran" data-testid="page-{{ page_courante.slug }}">
+    {# tb-jetons (et NON tb-page) : porte les jetons des blocs du socle #}
+    {# (gouttiere, largeur max, rayons...) sans son habillage, qui imposerait #}
+    {# un fond blanc et un texte noir par-dessus le motif et l'identite du #}
+    {# skin. Sans ces jetons, var(--tb-gouttiere) est indefini : les blocs en #}
+    {# fallback se collent aux bords. #}
+    {# / tb-jetons (NOT tb-page): carries the base blocks' tokens without its #}
+    {# styling, which would force a white background over the skin's identity. #}
+    <div class="container-fluid conteneur-principal plein-ecran tb-jetons" data-testid="page-{{ page_courante.slug }}">
         {# h1 de secours quand aucun bloc HERO ne le fournit (SEO + a11y), #}
         {# et fil d'Ariane des sous-pages — alignés sur le skin classic. #}
         {# / Fallback h1 when no HERO block provides it, and sub-page #}

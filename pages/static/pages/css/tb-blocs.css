@@ -21,7 +21,16 @@
  * Zéro CDN : polices = piles système (aucun @import), aucune ressource externe.
  */
 
-.tb-page {
+/* Les JETONS des blocs, sans aucun habillage.
+   .tb-page = le socle classic, qui prend les jetons ET son habillage (plus bas).
+   .tb-jetons = pour un skin qui affiche des blocs du socle sans adopter son
+   habillage : sans ces jetons, var(--tb-gouttiere) & co sont INDEFINIS, donc
+   les paddings tombent a 0 et les blocs se collent aux bords.
+   / The block TOKENS, with no styling. .tb-page = the classic base (tokens +
+   styling below). .tb-jetons = for a skin rendering base blocks without adopting
+   the base styling: without these tokens the gutters resolve to 0. */
+.tb-page,
+.tb-jetons {
     /* Jetons locaux / Local tokens */
     --tb-espace-section: clamp(2.5rem, 5.5vw, 4.5rem);
     --tb-largeur-max: 72rem;
@@ -72,7 +81,13 @@
     --tb-ombre: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
     --tb-ombre-forte: 0 2px 6px rgba(0, 0, 0, 0.08), 0 18px 40px rgba(0, 0, 0, 0.12);
     --tb-transition: 180ms ease;
+}
 
+/* Habillage du socle classic UNIQUEMENT : un skin qui ne veut que les jetons
+   (.tb-jetons) garde son propre fond et sa propre couleur de texte.
+   / Classic base styling ONLY: a skin taking just the tokens (.tb-jetons) keeps
+   its own background and text color. */
+.tb-page {
     /* Pas de scroll horizontal sur mobile / No horizontal scroll on mobile */
     overflow-x: clip;
     color: var(--tb-texte);
@@ -591,6 +606,18 @@ h2.tb-bloc__titre::before {
     margin-bottom: 1.75rem;
     padding-left: 1rem;
     border-left: 2px solid var(--tb-bordure);
+    /* Une ENTREE de FAQ n'est pas une SECTION. .tb-bloc pose padding-block:
+       var(--tb-espace-section) sur tout bloc — 70px en haut et en bas — pour
+       separer des sections les unes des autres. Ici le conteneur .tb-faq-colonnes
+       porte deja ce padding : le laisser sur chaque entree le compte DEUX fois et
+       matelasse chaque question de 140px pour ~44px de texte. Le filet de gauche
+       rend la chose visible : il mesurait 185px de haut pour une ligne.
+       L'air entre deux questions, c'est margin-bottom, pas le padding de section.
+       / A FAQ ENTRY is not a SECTION. .tb-bloc gives every block the section
+       padding meant to separate sections; the .tb-faq-colonnes wrapper already
+       carries it, so keeping it on each entry counts it TWICE — 140px of padding
+       for one line of text. The air between questions is margin-bottom. */
+    padding-block: 0;
 }
 .tb-bloc__faq-question {
     margin: 0 0 0.5rem;
@@ -618,17 +645,24 @@ h2.tb-bloc__titre::before {
     display: flex;
     align-items: center;
     min-height: 44px;
-    padding-right: 1.75rem;
     margin-bottom: 0;
     touch-action: manipulation;
 }
 .tb-bloc__faq-details summary::-webkit-details-marker { display: none; }
 .tb-bloc__faq-details summary::after {
     content: "+";
-    position: absolute;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
+    /* Placé par le flux du flex (le summary est deja `display: flex`), et NON en
+       position: absolute. Dans un conteneur `column-count`, Chrome peint un
+       descendant absolu dans le mauvais fragment de colonne : le marqueur d'une
+       question de la colonne gauche apparaissait en haut de la colonne droite,
+       et sa question se retrouvait sans marqueur. `margin-left: auto` le pousse
+       a droite sans dependre du fragment.
+       / Placed by the flex flow, NOT position: absolute. Inside a `column-count`
+       container Chrome paints an absolute descendant in the wrong column
+       fragment: the marker of a left-column question showed at the top of the
+       right column, leaving its own question unmarked. */
+    margin-left: auto;
+    padding-left: 0.75rem;
     font-weight: 400;
     color: var(--tb-accent);
 }
@@ -690,7 +724,18 @@ h2.tb-bloc__titre::before {
  * IMAGE seule — centrée, profondeur sobre.
  * / Standalone IMAGE — centered, sober depth.
  * ------------------------------------------------------------------------- */
-.tb-bloc--image { text-align: center; }
+.tb-bloc--image {
+    text-align: center;
+    /* Une image pleine largeur EST le contenu, pas un texte pose dans une section :
+       elle n'a pas besoin d'une section d'air autour d'elle pour se detacher, son
+       cadre le fait deja. Avec le padding de section entier, une image de 640px
+       occupait un bloc de 780px, et deux blocs consecutifs mettaient 140px entre
+       leurs contenus. La moitie suffit a la separer de ses voisines.
+       / A full-width image IS the content, not text sitting inside a section: its
+       own frame already detaches it, so it does not need a section's worth of air.
+       Half the section spacing is enough to separate it from its neighbours. */
+    padding-block: calc(var(--tb-espace-section) / 2);
+}
 .tb-bloc__image-seule {
     max-width: 100%;
     height: auto;
