@@ -75,11 +75,11 @@ class Command(BaseCommand):
         except Client.DoesNotExist:
             self.stderr.write(f"Tenant introuvable : {schema}")
             return
-        # Le bloc IFRAME d'« Infos pratiques » integre un plan OpenStreetMap : son
-        # hote doit figurer dans la whitelist ROOT, sinon le bloc ne rend rien.
-        # / The IFRAME block embeds an OpenStreetMap plan: its host must be in the
-        # ROOT whitelist, otherwise the block renders nothing.
-        self._whitelister_domaine_embed("www.openstreetmap.org")
+        # Le bloc IFRAME d'« Infos pratiques » integre un formulaire Framaforms :
+        # son hote doit figurer dans la whitelist ROOT, sinon le bloc ne rend rien.
+        # / The IFRAME block embeds a Framaforms form: its host must be in the ROOT
+        # whitelist, otherwise the block renders nothing.
+        self._whitelister_domaine_embed("framaforms.org")
 
         with tenant_context(tenant):
             self._charger_accueil()
@@ -526,20 +526,19 @@ class Command(BaseCommand):
             embed_url="https://videos-libr.es/w/r2XVKcqhLPVBDujoMVrTcF",
         )
 
-        # 13 — IFRAME : contenu integre libre, a hauteur choisie. L'hote est
-        # autorise cote ROOT par _whitelister_domaine_embed (appele dans handle) —
-        # sans quoi le bloc ne rend rien.
-        # / IFRAME: free-height embedded content. The host is whitelisted at ROOT
-        # level by _whitelister_domaine_embed (called in handle), otherwise the
-        # block renders nothing.
+        # 13 — IFRAME : contenu integre libre, a hauteur choisie. On l'illustre
+        # par un FORMULAIRE, pas par une carte : le bloc CARTE_LEAFLET ci-dessus
+        # fait deja la carte, et le modele decrit IFRAME comme « formulaire,
+        # widget ». L'hote est autorise cote ROOT par _whitelister_domaine_embed
+        # (appele dans handle) — sans quoi le bloc ne rend rien.
+        # / IFRAME: free-height embedded content, illustrated by a FORM rather than
+        # a map (the CARTE_LEAFLET block above already covers maps, and the model
+        # describes IFRAME as "form, widget"). Host whitelisted at ROOT level.
         Bloc.objects.create(
             page=page, type_bloc=Bloc.IFRAME, position=13,
-            titre="Le plan d'accès",
-            embed_url=(
-                "https://www.openstreetmap.org/export/embed.html"
-                "?bbox=4.8530,45.7560,4.8930,45.7760&layer=mapnik&marker=45.7660,4.8730"
-            ),
-            hauteur_px=420,
+            titre="Devenir bénévole",
+            embed_url="https://framaforms.org/",
+            hauteur_px=520,
         )
 
     def _charger_accueil(self):

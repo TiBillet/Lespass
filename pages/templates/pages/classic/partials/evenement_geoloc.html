@@ -10,6 +10,9 @@
      the vendored project). imagePath points to the local marker icons. -->
 <link rel="stylesheet" href="{% static 'pages/vendor/leaflet/leaflet.css' %}"/>
 <script src="{% static 'pages/vendor/leaflet/leaflet.js' %}"></script>
+<!-- Fond de carte commun a tout le projet (MapTiler + repli sans cle).
+     / Project-wide shared basemap (MapTiler + keyless fallback). -->
+<script src="{% static 'cartes/tb_fond_de_carte.js' %}"></script>
 <script>
     L.Icon.Default.imagePath = '{% static "pages/vendor/leaflet/images/" %}';
 </script>
@@ -74,8 +77,11 @@
         </a>
     </div>
 
+    {# data-maptiler-key : lu par le script ci-dessous et passe au fond de carte #}
+    {# commun. / Read by the script below and passed to the shared basemap. #}
     <div id="map-{{ event.id }}" class="map-container"
-         aria-label="{% trans 'Map showing the location of' %} {{ event.name }}" 
+         data-maptiler-key="{{ maptiler_key|default:'' }}"
+         aria-label="{% trans 'Map showing the location of' %} {{ event.name }}"
          role="application"
          aria-hidden="true"></div>
 
@@ -146,11 +152,14 @@
                     attributionControl: true
                 });
 
-                // Add the OpenStreetMap tile layer
-                const tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    maxZoom: 19,
-                    attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                });
+                // Fond de carte commun a tout le projet (cf. tb_fond_de_carte.js).
+                // Il pose deja la couche sur la carte et la retourne : les
+                // ecouteurs ci-dessous s'y attachent, le chargement des tuiles
+                // etant asynchrone (aucun evenement n'est manque).
+                // / Project-wide shared basemap. It already adds the layer to the
+                // map and returns it: the listeners below attach to it, tile
+                // loading being asynchronous (no event is missed).
+                const tileLayer = tbPoserFondDeCarte(mapInstance, mapElement.dataset.maptilerKey);
 
                 // Add event listeners for tile loading
                 tileLayer.on('loading', function () {
@@ -170,8 +179,6 @@
                 tileLayer.on('tileerror', function (error) {
                     console.error('Tile error:', error);
                 });
-
-                tileLayer.addTo(mapInstance);
 
                 // Add a marker at the exact coordinates
                 const marker = L.marker([lat, lng], {

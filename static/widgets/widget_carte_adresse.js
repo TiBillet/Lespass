@@ -40,12 +40,9 @@
     // cache (each user hits Nominatim) — fine for our volume.
     const URL_NOMINATIM_REVERSE = "https://nominatim.openstreetmap.org/reverse";
     const URL_NOMINATIM_SEARCH = "https://nominatim.openstreetmap.org/search";
-    const URL_TUILES_CARTODB = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png";
-    const ATTRIBUTION_TUILES = "&copy; OpenStreetMap &copy; CARTO";
     const CENTRE_FRANCE = [46.6, 2.5];
     const ZOOM_FRANCE = 5;
     const ZOOM_DETAIL = 15;
-    const SOUS_DOMAINES_CARTODB = "abcd";
 
     /**
      * Initialise un widget pour un container DOM donné.
@@ -100,11 +97,9 @@
             a_des_coords_initiales ? ZOOM_DETAIL : ZOOM_FRANCE,
         );
 
-        L.tileLayer(URL_TUILES_CARTODB, {
-            attribution: ATTRIBUTION_TUILES,
-            subdomains: SOUS_DOMAINES_CARTODB,
-            maxZoom: 20,
-        }).addTo(map);
+        // Fond de carte commun a tout le projet (cf. static/cartes/tb_fond_de_carte.js).
+        // / Project-wide shared basemap.
+        tbPoserFondDeCarte(map, container.dataset.maptilerKey);
 
         // Déplace le zoom control en haut à droite : par défaut Leaflet le
         // pose en `topleft`, où vit aussi la search bar leaflet-geosearch.

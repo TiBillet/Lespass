@@ -86,5 +86,8 @@
 {% block scripts %}
     <script src="{% static 'seo/vendor/leaflet/leaflet.js' %}"></script>
     <script src="{% static 'seo/vendor/leaflet/markercluster.js' %}"></script>
+    {# Fond de carte commun : AVANT explorer.js, qui appelle tbPoserFondDeCarte. #}
+    {# / Shared basemap: BEFORE explorer.js, which calls tbPoserFondDeCarte. #}
+    <script src="{% static 'cartes/tb_fond_de_carte.js' %}"></script>
     <script src="{% static 'seo/explorer.js' %}"></script>
 {% endblock %}

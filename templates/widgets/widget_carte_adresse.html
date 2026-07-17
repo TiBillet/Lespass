@@ -40,6 +40,7 @@ draggable marker. Reverse geocoding via /widgets/geocode-reverse/.
          data-identifiant="{{ identifiant_widget }}"
          data-lat-initiale="{{ latitude_initiale|default_if_none:''|unlocalize }}"
          data-lng-initiale="{{ longitude_initiale|default_if_none:''|unlocalize }}"
+         data-maptiler-key="{{ maptiler_key|default:'' }}"
          data-adresse-initiale="{{ adresse_initiale|default_if_none:''|escape }}"
          data-rue-initiale="{{ rue_initiale|default_if_none:''|escape }}"
          data-cp-initiale="{{ cp_initiale|default_if_none:''|escape }}"
@@ -130,6 +131,11 @@ draggable marker. Reverse geocoding via /widgets/geocode-reverse/.
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet-geosearch@4.4.0/dist/bundle.min.js"></script>
+{# Fond de carte commun : sans `defer`, donc tbPoserFondDeCarte est defini avant #}
+{# widget_carte_adresse.js, qui lui est differe et s'execute plus tard. #}
+{# / Shared basemap: no `defer`, so tbPoserFondDeCarte is defined before the #}
+{# deferred widget_carte_adresse.js runs. #}
+<script src="{% static 'cartes/tb_fond_de_carte.js' %}"></script>
 <script src="{% static 'widgets/widget_carte_adresse.js' %}" defer></script>
 
 {% endwith %}{% endwith %}{% endwith %}{% endwith %}{% endwith %}{% endwith %}

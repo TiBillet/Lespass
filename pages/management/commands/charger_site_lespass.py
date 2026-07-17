@@ -56,13 +56,13 @@ class Command(BaseCommand):
         except Client.DoesNotExist:
             self.stderr.write(f"Tenant introuvable : {schema}")
             return
-        # Le bloc IFRAME de démo intègre une carte OpenStreetMap : on autorise son
+        # Le bloc IFRAME de démo intègre un formulaire Framaforms : on autorise son
         # hôte dans la whitelist ROOT (sinon le tag iframe_libre n'affiche rien).
         # RootConfiguration est SHARED (schéma public) : on l'écrit hors tenant_context.
-        # / The demo IFRAME block embeds an OpenStreetMap map: whitelist its host in the
+        # / The demo IFRAME block embeds a Framaforms form: whitelist its host in the
         # ROOT config (otherwise iframe_libre renders nothing). RootConfiguration is
         # SHARED (public schema): written outside tenant_context.
-        self._whitelister_domaine_embed("www.openstreetmap.org")
+        self._whitelister_domaine_embed("framaforms.org")
 
         with tenant_context(tenant):
             from pages.models import Page
@@ -560,23 +560,22 @@ class Command(BaseCommand):
             points_gps=[{"lat": 45.7719, "lng": 4.8902, "label": "Lespass"}],
         )
 
-        # === 19bis. IFRAME — contenu intégré libre (plan OpenStreetMap) ===
-        # Le bloc IFRAME sert à intégrer un contenu externe à hauteur libre. En démo
-        # on montre un plan OpenStreetMap (son hôte est autorisé côté ROOT via
-        # _whitelister_domaine_embed). Même bloc pour une NEWSLETTER (ex. Ghost) :
-        # remplacer embed_url par l'URL du formulaire et autoriser son domaine dans
-        # « Configuration racine → Domaines iframe autorisés ».
-        # / The IFRAME block embeds free-height external content. Demo shows an
-        # OpenStreetMap plan (host whitelisted at ROOT level). Same block for a
-        # NEWSLETTER (e.g. Ghost): swap embed_url and whitelist its domain.
+        # === 19bis. IFRAME — contenu intégré libre (formulaire) ===
+        # Le bloc IFRAME sert à intégrer un contenu externe à hauteur libre. On
+        # l'illustre par un FORMULAIRE, pas par une carte : le bloc CARTE_LEAFLET
+        # ci-dessus fait déjà la carte, et le modèle décrit IFRAME comme
+        # « formulaire, widget ». L'hôte est autorisé côté ROOT via
+        # _whitelister_domaine_embed. Pour une autre intégration, remplacer
+        # embed_url et autoriser son domaine dans « Configuration racine →
+        # Domaines iframe autorisés ».
+        # / The IFRAME block embeds free-height external content, illustrated by a
+        # FORM rather than a map (CARTE_LEAFLET above already covers maps, and the
+        # model describes IFRAME as "form, widget"). Host whitelisted at ROOT level.
         bloc(
             type_bloc=Bloc.IFRAME,
-            titre="Le plan d'accès",
-            embed_url=(
-                "https://www.openstreetmap.org/export/embed.html"
-                "?bbox=4.8700,45.7650,4.9100,45.7800&layer=mapnik&marker=45.7719,4.8902"
-            ),
-            hauteur_px=420,
+            titre="Proposer un projet",
+            embed_url="https://framaforms.org/",
+            hauteur_px=520,
         )
 
         # === 20. FAQ x3 (non repliable) ===

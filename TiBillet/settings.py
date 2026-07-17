@@ -318,6 +318,11 @@ TEMPLATES = [
                 # TiBillet/seo_indexing.py et SESSIONS/SEO/CHANTIER-01.
                 # / Expose `noindex_seo: bool` to base templates.
                 'TiBillet.seo_indexing.noindex_context',
+                # Expose `maptiler_key: str` a tous les gabarits qui rendent une
+                # carte (blocs, geoloc, explorer, widget d'adresse). Voir
+                # TiBillet/maptiler.py et static/cartes/tb_fond_de_carte.js.
+                # / Expose `maptiler_key: str` to every template rendering a map.
+                'TiBillet.maptiler.maptiler_context',
             ],
         },
     }

@@ -7,11 +7,21 @@
 {% with uid=bloc.uuid|stringformat:"s" %}
 <div class="tb-bloc__carte" data-testid="bloc-carte-leaflet">
     {% if bloc.titre %}<h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>{% endif %}
+    {# data-maptiler-key : lu par le script ci-dessous et passe au fond de carte #}
+    {# commun. / Read by the script below and passed to the shared basemap. #}
     <div id="carte-leaflet-{{ uid }}" class="tb-bloc__leaflet-carte"
+         data-maptiler-key="{{ maptiler_key|default:'' }}"
          aria-label="{% translate 'Carte interactive' %}"></div>
     {% if bloc.badge %}<p class="tb-bloc__carte-legende">{{ bloc.badge }}</p>{% endif %}
 
     {% with json_id="points-"|add:uid %}{{ bloc.points_gps|json_script:json_id }}{% endwith %}
+
+    {# Fond de carte commun : script bloquant, donc tbPoserFondDeCarte est defini #}
+    {# avant que le script ci-dessous ne l'appelle. Le navigateur dedoublonne les #}
+    {# <script src> identiques quand la page porte plusieurs cartes. #}
+    {# / Shared basemap: blocking script, so tbPoserFondDeCarte is defined before #}
+    {# the script below calls it. The browser dedupes identical <script src>. #}
+    <script src="{% static 'cartes/tb_fond_de_carte.js' %}"></script>
 
     <script>
     (function () {
@@ -27,9 +37,9 @@
             // / Marker images path (self-hosted Leaflet).
             L.Icon.Default.imagePath = '{% static "pages/vendor/leaflet/images/" %}';
             var map = L.map('carte-leaflet-' + uid).setView([pts[0].lat, pts[0].lng], 13);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; OSM &copy; CARTO', maxZoom: 19
-            }).addTo(map);
+            // Fond de carte commun a tout le projet (cf. tb_fond_de_carte.js).
+            // / Project-wide shared basemap.
+            tbPoserFondDeCarte(map, c.dataset.maptilerKey);
             pts.forEach(function (p) {
                 var m = L.marker([p.lat, p.lng]).addTo(map);
                 if (p.label) {
