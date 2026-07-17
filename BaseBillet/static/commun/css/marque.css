@@ -1,0 +1,258 @@
+/*
+ * marque.css — LA couleur d'identité du site, et le seul endroit où on la change.
+ * / marque.css — THE site's identity colour, and the only place to change it.
+ *
+ * LOCALISATION : BaseBillet/static/commun/css/marque.css
+ * PORTEE : chargé juste après commun/css/vars.css par pages/classic/shell.html et
+ * par seo/templates/seo/base.html. L'onboard (onboard/base_wizard.html) étend
+ * seo/base.html, il en hérite donc sans rien charger de plus. Ces deux points
+ * couvrent le site public, la page racine et le tunnel d'inscription.
+ * / Loaded right after vars.css by the classic shell and the seo base. The onboard
+ * wizard extends seo/base.html, so it inherits it. These two points cover the
+ * public site, the root page and the signup wizard.
+ *
+ * ============================================================================
+ * POURQUOI CE FICHIER EXISTE
+ * ============================================================================
+ * vars.css porte la CHARTE (les --kouler-*, identiques au palette.css du kit
+ * graphique). Une charte est faite pour un logo et pour l'impression : ses
+ * couleurs ne sont pas de l'encre d'écran. Mesuré, sur blanc :
+ *
+ *     Zanana   #e9b322   1.92:1     Gris 50%  #808080   3.95:1
+ *     Loséyan  #4296cc   3.25:1     Letchi    #e93363   4.10:1
+ *     Chouchou #259d49   3.50:1     Piton     #63515e   7.32:1
+ *
+ * CINQ des six ne portent PAS de texte (il en faut 4.5:1). Ce n'est pas un défaut
+ * de la charte : c'est ce qu'est une charte. Chaque kouler a donc besoin d'un
+ * JUMEAU assombri pour porter du texte, et d'un jumeau éclairci pour le thème
+ * sombre. D'où deux rôles, et non un :
+ *
+ *     --tb-marque        LE GESTE   la couleur de la charte, telle quelle.
+ *                                   Filets, bordures, aplats décoratifs.
+ *                                   On n'y pose JAMAIS de texte.
+ *     --tb-marque-encre  L'ENCRE    son jumeau assombri. Texte, liens, et fond
+ *                                   des boutons pleins (--tb-marque-contraste
+ *                                   se pose dessus).
+ *
+ * À l'œil, les deux sont la même couleur. C'est voulu.
+ * / The charter is a logo/print palette: five of its six colours cannot carry text.
+ * Hence two roles: the GESTURE (the charter colour, never text on it) and the INK
+ * (its darkened twin, which carries text). To the eye they read as one colour.
+ *
+ * ============================================================================
+ * CHANGER L'IDENTITÉ DU SITE : remplacer LE bloc ci-dessous par un autre.
+ * ============================================================================
+ * Les valeurs sont PRÉCALCULÉES et vérifiées par tests/pytest/test_marque.py.
+ * Ne pas en inventer à la main : chaque encre est calibrée sur les DEUX surfaces
+ * du site (le corps de page ET le pied, qui n'ont pas la même clarté), dans les
+ * DEUX thèmes. Une encre calibrée sur le seul corps de page échoue dans le pied,
+ * en silence.
+ *
+ * Les jeux -rgb existent parce que Bootstrap en a besoin sous forme de triplets
+ * (il fait rgba(var(--bs-link-color-rgb), …)), et que color-mix() n'en produit pas.
+ * / The values are PRECOMPUTED and verified by the test. Do not invent new ones by
+ * hand. The -rgb sets exist because Bootstrap needs R,G,B triplets, which
+ * color-mix() cannot produce.
+ */
+
+:root {
+    /* ======================= LOSÉYAN — l'océan. ACTIF. ======================= */
+    --tb-marque: var(--kouler-losean);              /* #4296cc — la charte */
+    --tb-marque-encre: #2d76a6;                     /* 4.94:1 blanc · 4.53:1 alt */
+    --tb-marque-encre-rgb: 45, 118, 166;
+    --tb-marque-encre-sombre: #509ed0;              /* 5.25:1 corps · 4.53:1 pied */
+    --tb-marque-encre-sombre-rgb: 80, 158, 208;
+    --tb-marque-survol-rgb: 36, 94, 133;            /* 6.97:1 */
+    --tb-marque-survol-sombre-rgb: 115, 177, 217;   /* 6.63:1 */
+    --tb-marque-contraste: #ffffff;                 /* sur l'encre : 4.94:1 */
+    --tb-marque-contraste-sombre: #291e26;          /* sur le jumeau : 5.46:1 */
+
+    /* ======================= LETCHI — le rose. ==============================
+    --tb-marque: var(--kouler-letsi);
+    --tb-marque-encre: #dc184b;
+    --tb-marque-encre-rgb: 220, 24, 75;
+    --tb-marque-encre-sombre: #ef6a8d;
+    --tb-marque-encre-sombre-rgb: 239, 106, 141;
+    --tb-marque-survol-rgb: 176, 19, 60;
+    --tb-marque-survol-sombre-rgb: 242, 136, 164;
+    --tb-marque-contraste: #ffffff;
+    --tb-marque-contraste-sombre: #291e26;
+    ATTENTION : le Letchi est à 10° de teinte du rouge `btn-danger` de Bootstrap.
+    Une action principale et un bouton destructeur deviennent confusables. À ne
+    prendre que si les `btn-danger` décoratifs ont été retirés d'abord.
+    ======================================================================== */
+
+    /* ======================= CHOUCHOU — le vert. ============================
+    --tb-marque: var(--kouler-sousou);
+    --tb-marque-encre: #1f813c;
+    --tb-marque-encre-rgb: 31, 129, 60;
+    --tb-marque-encre-sombre: #28ac50;
+    --tb-marque-encre-sombre-rgb: 40, 172, 80;
+    --tb-marque-survol-rgb: 25, 103, 48;
+    --tb-marque-survol-sombre-rgb: 83, 189, 115;
+    --tb-marque-contraste: #ffffff;
+    --tb-marque-contraste-sombre: #291e26;
+    ATTENTION : même remarque avec le vert `btn-success`, qui signifie « réussi ».
+    ======================================================================== */
+
+    /* ======================= PITON — le mauve volcanique. ===================
+    --tb-marque: var(--kouler-piton);
+    --tb-marque-encre: #63515e;
+    --tb-marque-encre-rgb: 99, 81, 94;
+    --tb-marque-encre-sombre: #a5919f;
+    --tb-marque-encre-sombre-rgb: 165, 145, 159;
+    --tb-marque-survol-rgb: 79, 65, 75;
+    --tb-marque-survol-sombre-rgb: 183, 167, 178;
+    --tb-marque-contraste: #ffffff;
+    --tb-marque-contraste-sombre: #291e26;
+    Le Piton est la SEULE kouler qui porte du texte telle quelle (7.32:1) : son
+    « jumeau » clair est elle-même. Identité très sobre, presque neutre.
+    ======================================================================== */
+
+    /* ======================= ZANANA (jaune) : IMPOSSIBLE. ===================
+    Son jumeau à 4.5:1 est #8e6b0e — un olive, qui n'est plus la couleur. Une
+    teinte claire et saturée est un GESTE, pas une encre. Le jaune peut servir
+    d'aplat (encre sombre dessus : 8.36:1), jamais de couleur d'identité.
+    ======================================================================== */
+
+    /* ------------------------------------------------------------------------
+     * BOOTSTRAP — on rebranche sa couleur primaire ET ses liens sur la marque.
+     * ------------------------------------------------------------------------
+     * --bs-primary n'était défini NULLE PART dans le projet : le #0d6efd visible
+     * partout était le défaut de Bootstrap, que personne n'avait choisi.
+     * --bs-link-color est le second larron, et le plus discret : il alimente
+     * .nav-link (via --bs-nav-link-color) et tous les <a>. Le rebrancher est ce
+     * qui fait basculer la navigation, pas seulement les boutons.
+     * / Neither was ever set by the project. --bs-link-color is the quiet one: it
+     * feeds .nav-link and every <a>. Rewiring it is what flips the navigation. */
+    --tb-marque-lien: var(--tb-marque-encre);
+    --tb-marque-lien-rgb: var(--tb-marque-encre-rgb);
+
+    /* --bs-primary ne bascule PAS en sombre : c'est un aplat. Voir plus bas. */
+    --bs-primary: var(--tb-marque-encre);
+    --bs-primary-rgb: var(--tb-marque-encre-rgb);
+    --bs-link-color: var(--tb-marque-lien);
+    --bs-link-color-rgb: var(--tb-marque-lien-rgb);
+    --bs-link-hover-color: rgb(var(--tb-marque-survol-rgb));
+    --bs-link-hover-color-rgb: var(--tb-marque-survol-rgb);
+}
+
+/* ===========================================================================
+ * MODE SOMBRE — seul le TEXTE bascule. Pas les aplats.
+ * / DARK MODE — only the TEXT flips. Not the fills.
+ *
+ * La distinction est la meme que celle que fait Bootstrap lui-meme, et elle est
+ * juste : il fait basculer --bs-link-color (#0d6efd -> #6ea8fe) et laisse
+ * --bs-primary tel quel dans les deux themes.
+ *
+ *   UN APLAT (fond de bouton) porte SON PROPRE contraste : le blanc posé dessus
+ *   ne voit que l'aplat, jamais le papier de la page. Le theme ne le concerne pas.
+ *   Le faire basculer vers le jumeau CLAIR mettrait du blanc sur du clair — 2.94:1.
+ *
+ *   UN LIEN est posé SUR le papier. En sombre, le papier devient sombre, donc
+ *   l'encre doit s'eclaircir. Sans quoi : #2d76a6 sur #212529 = 2.94:1.
+ *
+ * Les deux echouent au meme chiffre, pour des raisons opposees. D'ou deux jetons.
+ * / A FILL carries its own contrast: the white on it never sees the page's paper,
+ * so the theme is irrelevant to it. A LINK sits ON the paper and must lighten.
+ * Both fail at the same ratio, for opposite reasons. Hence two tokens.
+ * ------------------------------------------------------------------------- */
+[data-bs-theme="dark"] {
+    /* Le lien, et lui seul. / The link, and only the link. */
+    --tb-marque-lien: var(--tb-marque-encre-sombre);
+    --tb-marque-lien-rgb: var(--tb-marque-encre-sombre-rgb);
+    --tb-marque-survol-rgb: var(--tb-marque-survol-sombre-rgb);
+
+    --bs-link-color: var(--tb-marque-lien);
+    --bs-link-color-rgb: var(--tb-marque-lien-rgb);
+    --bs-link-hover-color: rgb(var(--tb-marque-survol-rgb));
+    --bs-link-hover-color-rgb: var(--tb-marque-survol-rgb);
+}
+
+/* ===========================================================================
+ * LES RÈGLES OÙ BOOTSTRAP ÉCRIT SA COULEUR EN DUR
+ * / THE RULES WHERE BOOTSTRAP HARDCODES ITS COLOUR
+ *
+ * Bootstrap expose --bs-primary, mais ne s'en sert pas partout : son Sass compile
+ * #0d6efd en littéral dans une douzaine de règles. Redéfinir --bs-primary ne les
+ * atteint donc pas — il faut rebrancher leurs variables une par une.
+ * Toutes lisent --tb-marque-encre : un seul réglage plus haut les pilote toutes.
+ * / Bootstrap exposes --bs-primary but does not use it everywhere: its Sass compiles
+ * the literal into a dozen rules. Redefining --bs-primary does not reach them.
+ * ------------------------------------------------------------------------- */
+
+.btn-primary {
+    --bs-btn-color: var(--tb-marque-contraste);
+    --bs-btn-bg: var(--tb-marque-encre);
+    --bs-btn-border-color: var(--tb-marque-encre);
+    --bs-btn-hover-color: var(--tb-marque-contraste);
+    --bs-btn-hover-bg: color-mix(in srgb, var(--tb-marque-encre) 86%, black);
+    --bs-btn-hover-border-color: color-mix(in srgb, var(--tb-marque-encre) 86%, black);
+    --bs-btn-active-color: var(--tb-marque-contraste);
+    --bs-btn-active-bg: color-mix(in srgb, var(--tb-marque-encre) 78%, black);
+    --bs-btn-active-border-color: color-mix(in srgb, var(--tb-marque-encre) 78%, black);
+    --bs-btn-disabled-color: var(--tb-marque-contraste);
+    --bs-btn-disabled-bg: var(--tb-marque-encre);
+    --bs-btn-disabled-border-color: var(--tb-marque-encre);
+    --bs-btn-focus-shadow-rgb: var(--tb-marque-encre-rgb);
+}
+
+.btn-outline-primary {
+    --bs-btn-color: var(--tb-marque-encre);
+    --bs-btn-border-color: var(--tb-marque-encre);
+    --bs-btn-hover-color: var(--tb-marque-contraste);
+    --bs-btn-hover-bg: var(--tb-marque-encre);
+    --bs-btn-hover-border-color: var(--tb-marque-encre);
+    --bs-btn-active-color: var(--tb-marque-contraste);
+    --bs-btn-active-bg: var(--tb-marque-encre);
+    --bs-btn-active-border-color: var(--tb-marque-encre);
+    --bs-btn-disabled-color: var(--tb-marque-encre);
+    --bs-btn-disabled-border-color: var(--tb-marque-encre);
+    --bs-btn-focus-shadow-rgb: var(--tb-marque-encre-rgb);
+}
+
+/* Cases à cocher et boutons radio : Bootstrap y compile le bleu au Sass, il n'y a
+   aucune variable à rebrancher — il faut réécrire la couleur.
+   / Checkboxes and radios: Bootstrap compiles the blue at Sass time here; there is
+   no variable to rewire, the colour must be overwritten. */
+.form-check-input:checked {
+    background-color: var(--tb-marque-encre);
+    border-color: var(--tb-marque-encre);
+}
+.form-check-input[type="checkbox"]:indeterminate {
+    background-color: var(--tb-marque-encre);
+    border-color: var(--tb-marque-encre);
+}
+.form-check-input:focus {
+    border-color: var(--tb-marque-encre);
+    box-shadow: 0 0 0 0.25rem rgba(var(--tb-marque-encre-rgb), 0.25);
+}
+
+/* Curseurs de plage. / Range sliders. */
+.form-range::-webkit-slider-thumb { background-color: var(--tb-marque-encre); }
+.form-range::-moz-range-thumb { background-color: var(--tb-marque-encre); }
+
+/* Menus déroulants, onglets, pagination, listes : tous exposent une variable. */
+.dropdown-menu { --bs-dropdown-link-active-bg: var(--tb-marque-encre); }
+.nav-pills { --bs-nav-pills-link-active-bg: var(--tb-marque-encre); }
+.pagination {
+    --bs-pagination-color: var(--tb-marque-encre);
+    --bs-pagination-hover-color: var(--tb-marque-encre);
+    --bs-pagination-focus-color: var(--tb-marque-encre);
+    --bs-pagination-active-bg: var(--tb-marque-encre);
+    --bs-pagination-active-border-color: var(--tb-marque-encre);
+}
+.progress, .progress-stacked { --bs-progress-bar-bg: var(--tb-marque-encre); }
+.list-group {
+    --bs-list-group-active-bg: var(--tb-marque-encre);
+    --bs-list-group-active-border-color: var(--tb-marque-encre);
+}
+
+/* L'anneau de focus : net, jamais animé, et à la couleur de la marque.
+   / The focus ring: crisp, never animated, brand-coloured. */
+.btn-primary:focus-visible,
+.btn-outline-primary:focus-visible {
+    outline: 3px solid var(--tb-marque-encre);
+    outline-offset: 3px;
+    box-shadow: none;
+}

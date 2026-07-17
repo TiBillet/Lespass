@@ -32,6 +32,19 @@
 {% endblock %}
 
 {% block main %}
+    {# CSS commun des blocs (.tb-bloc*) : ce skin ne fournit un gabarit que pour #}
+    {# 11 des 19 types de blocs ; les 8 autres retombent sur le socle classic, #}
+    {# dont le balisage est en .tb-bloc*. Sans cette feuille, ils s'affichent #}
+    {# SANS AUCUN style (logos geants, images empilees, listes nues). #}
+    {# Charge DANS le main, pas dans extra_meta : le squelette headless #}
+    {# (reponses HTMX) n'a pas de <head>, un asset en extra_meta n'arriverait #}
+    {# donc jamais lors d'une navigation HTMX. Un <link> dans le body est valide #}
+    {# en HTML5 et le navigateur deduplique via son cache. #}
+    {# / Common blocks CSS (.tb-bloc*): this skin only styles 11 of the 19 block #}
+    {# types; the other 8 fall back to the classic base, whose markup uses #}
+    {# .tb-bloc*. Without this sheet they render UNSTYLED. Loaded INSIDE main, #}
+    {# not in extra_meta: the headless skeleton (HTMX responses) has no <head>. #}
+    <link rel="stylesheet" href="{% static 'pages/css/tb-blocs.css' %}">
     <div class="container-fluid conteneur-principal plein-ecran" data-testid="page-{{ page_courante.slug }}">
         {# h1 de secours quand aucun bloc HERO ne le fournit (SEO + a11y), #}
         {# et fil d'Ariane des sous-pages — alignés sur le skin classic. #}
