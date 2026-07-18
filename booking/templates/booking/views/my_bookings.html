@@ -65,7 +65,7 @@ Flux / Flow:
                             <div class="col-md-4">
                                 {% if booking.resource.product.img %}
                                     <img src="{{ booking.resource.product.img.hdr.url }}"
-                                         alt="{{ booking.resource.product.name }}"
+                                         alt="{{ booking.resource.name }}"
                                          class="img-fluid rounded-start"
                                          style="height: 100%; min-height: 160px; object-fit: cover; width: 100%;">
                                 {% else %}
@@ -87,7 +87,7 @@ Flux / Flow:
                                         <a href="{% url 'booking-resource' pk=booking.resource.pk %}"
                                            class="text-decoration-none"
                                            data-testid="booking-resource-link-{{ booking.resource.pk }}">
-                                            {{ booking.resource.product.name }}
+                                            {{ booking.resource.name }}
                                         </a>
                                         - {{ booking.total_paid }} €
                                     </h3>
@@ -155,7 +155,7 @@ Flux / Flow:
                             <div class="col-md-4">
                                 {% if booking.resource.product.img %}
                                     <img src="{{ booking.resource.product.img.hdr.url }}"
-                                         alt="{{ booking.resource.product.name }}"
+                                         alt="{{ booking.resource.name }}"
                                          class="img-fluid rounded-start"
                                          style="height: 100%; min-height: 160px; object-fit: cover; width: 100%;">
                                 {% else %}
@@ -177,7 +177,7 @@ Flux / Flow:
                                         <a href="{% url 'booking-resource' pk=booking.resource.pk %}"
                                            class="text-decoration-none text-muted"
                                            data-testid="booking-resource-link-{{ booking.resource.pk }}">
-                                            {{ booking.resource.product.name }}
+                                            {{ booking.resource.name }}
                                         </a>
                                     </h3>
                                     <div class="card-text hstack flex-wrap gap-3">

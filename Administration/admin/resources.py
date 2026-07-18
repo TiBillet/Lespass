@@ -162,7 +162,7 @@ class ResourceAddAdmin(ModelForm):
 @admin.register(Resource, site=staff_admin_site)
 class ResourceAdmin(ModelAdmin):
     # list_display = ['name', 'get_product_name', 'get_product_tags', 'capacity', 'weekly_opening', 'calendar']
-    list_display = ['get_product_name', 'capacity', 'weekly_opening', 'calendar']
+    list_display = ['name', 'capacity', 'weekly_opening', 'calendar']
 
     form = ResourceAddAdmin
 
@@ -181,10 +181,6 @@ class ResourceAdmin(ModelAdmin):
     @admin.display(description=_('Product Name'))
     def get_product_name(self, obj):
         return obj.product.name
-
-    @admin.display(description=_('Product Tags'))
-    def get_product_tags(self, obj):
-        return obj.product.tag
 
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)

@@ -308,7 +308,8 @@ class CommandeService:
                     continue
 
                 price = Price.objects.get(uuid=item['price_uuid'])
-                amount_dec = CommandeService._resolve_amount(price, item)
+
+                # TODO-FOR-DAY-BOOKING : add logic for DAY based booking
 
                 # Code promo de cet item specifiquement (pas du panier global).
                 # / Promo code for this specific item (not cart-global).
@@ -379,32 +380,6 @@ class CommandeService:
         / Compute the Decimal amount to use for this price + item."""
         if price.free_price and item.get('custom_amount'):
             return Decimal(str(item['custom_amount']))
-
-        if item.get('type') == "resource":
-
-            total_estimation = item.get('total_estimation')
-            if not total_estimation:
-                raise CommandeServiceError(_("Missing total_estimation for resource item."))
-
-            try:
-                total_estimation_amount = Decimal(total_estimation)
-            except InvalidOperation:
-                raise CommandeServiceError(_("Invalid total_estimation for resource item."))
-
-            # Verification de coherence avec le montant calcule depuis les parametres.
-            # / Consistency check against amount computed from parameters.
-            slot_duration_minutes = Decimal(item.get('slot_duration_minutes', 0))
-            slot_count = Decimal(item.get('slot_count', 0))
-            price_amount = price.prix or Decimal(0)
-            expected_amount = slot_duration_minutes / Decimal(60) * slot_count * price_amount
-
-            if total_estimation_amount != expected_amount:
-                raise CommandeServiceError(
-                    _("total_estimation does not match expected resource amount.")
-                )
-
-            return total_estimation_amount
-
 
         return price.prix or Decimal("0.00")
 

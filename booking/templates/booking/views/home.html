@@ -33,7 +33,7 @@ Ressources sans groupe affichées en premier, sous forme de cartes.
     <div class="card h-100" data-testid="booking-resource-card-{{ resource.pk }}">
       {% if resource.product.img %}
         <img src="{{ resource.product.img.hdr.url }}"
-             alt="{{ resource.product.name }}"
+             alt="{{ resource.name }}"
              class="card-img-top"
              style="height: 180px; object-fit: cover;"
              data-testid="booking-resource-image-{{ resource.pk }}">
@@ -49,11 +49,11 @@ Ressources sans groupe affichées en premier, sous forme de cartes.
           <a href="{% url 'booking-resource' pk=resource.pk %}"
              class="text-decoration-none"
              data-testid="booking-resource-link-{{ resource.pk }}">
-            {{ resource.product.name }}
+            {{ resource.name }}
           </a>
         </h5>
-        {% if resource.product.short_description %}
-          <p class="card-text text-muted small mb-0">{{ resource.product.short_description }}</p>
+        {% if resource.description %}
+          <p class="card-text text-muted small mb-0">{{ resource.description }}</p>
         {% endif %}
         <div class="d-flex justify-content-end mt-auto pt-3">
           <a href="{% url 'booking-resource' pk=resource.pk %}"
@@ -87,7 +87,7 @@ Groupes de ressources, triés par nom alphabétique.
     <div class="card h-100" data-testid="booking-resource-card-{{ resource.pk }}">
       {% if resource.product.img %}
         <img src="{{ resource.product.img.hdr.url }}"
-             alt="{{ resource.product.name }}"
+             alt="{{ resource.name }}"
              class="card-img-top"
              style="height: 180px; object-fit: cover;"
              data-testid="booking-resource-image-{{ resource.pk }}">
@@ -103,11 +103,11 @@ Groupes de ressources, triés par nom alphabétique.
           <a href="{% url 'booking-resource' pk=resource.pk %}"
              class="text-decoration-none"
              data-testid="booking-resource-link-{{ resource.pk }}">
-            {{ resource.product.name }}
+            {{ resource.name }}
           </a>
         </h5>
-        {% if resource.product.short_description %}
-          <p class="card-text text-muted small mb-0">{{ resource.product.short_description }}</p>
+        {% if resource.description %}
+          <p class="card-text text-muted small mb-0">{{ resource.description }}</p>
         {% endif %}
         <div class="d-flex justify-content-end mt-auto pt-3">
           <a href="{% url 'booking-resource' pk=resource.pk %}"

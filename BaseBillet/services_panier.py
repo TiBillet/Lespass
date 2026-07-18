@@ -757,6 +757,8 @@ class PanierSession:
         from BaseBillet.models import Price, Product
         from booking.models import Resource
 
+        # TODO-FOR-DAY-BOOKING : add logic for DAY based booking
+
         # # Validation 1 : Price existe et publié
         # # Validation 1: Price exists and published
         try:
@@ -795,6 +797,7 @@ class PanierSession:
 
         # Validation 5 : free_price → custom_amount >= min
         # Validation 5: free_price → custom_amount >= min
+        custom_amount_dec = None
         if price.free_price:
             if custom_amount is None:
                 raise InvalidItemError(_("An amount is required for the free price."))
@@ -903,7 +906,11 @@ class PanierSession:
         if price.free_price:
             price_to_compute = custom_amount_dec
 
-        total_estimation = Decimal(slot_duration_minutes) / Decimal(60) * Decimal(slot_count) * Decimal(price_to_compute)
+        if resource.slot_type == resource.HOUR:
+            total_estimation = Decimal(slot_duration_minutes) / Decimal(60) * Decimal(slot_count) * Decimal(price_to_compute)
+        elif resource.slot_type == resource.DAY:
+            # TODO-FOR-DAY-BOOKING
+            total_estimation = Decimal(slot_count) * Decimal(price_to_compute)
 
 
         item = {
@@ -914,7 +921,7 @@ class PanierSession:
             'slot_count': str(slot_count),
             'total_estimation' : str(total_estimation),
             'resource_uuid': str(resource_uuid),
-            'custom_amount': str(custom_amount_dec) if custom_amount_dec is not None else None,
+            'custom_amount': str(custom_amount_dec),
             'options': [str(o) for o in (options or [])],
             'custom_form': dict(custom_form or {}),
             'firstname': clean_firstname,

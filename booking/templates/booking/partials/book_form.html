@@ -219,7 +219,7 @@ DEPENDENCIES :
                                     {% if price.free_price %}
                                         {{ price.name }}
                                     {% else %}
-                                        {{ price.name }} - {{ price.prix }}€ {% if resource.slot_type == resource.HOUR %} /h {% endif %}
+                                        {{ price.name }} - {{ price.prix }}€ {% translate 'par heure' %}
                                     {% endif %}
                                     {% if price.out_of_stock %}({% trans "Out of stock." %}){% endif %}
                                     {% if price|in_list:price_max_per_user_reached %}

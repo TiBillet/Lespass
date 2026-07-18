@@ -26,8 +26,8 @@ DEPENDENCIES :
   - booking/views.py:book()                   -> partial HTMX booking/partials/book_form.html
   - htmx (charge par le skin base.html)
 -->
-{% block title %}{{ resource.product.name }}{% endblock %}
-{% block meta_description %}{{ resource.product.long_description|truncatewords:20 }}{% endblock %}
+{% block title %}{{ resource.name }}{% endblock %}
+{% block meta_description %}{{ resource.description|truncatewords:20 }}{% endblock %}
 
 {% block booking_content %}
 
@@ -47,15 +47,15 @@ DEPENDENCIES :
     <div class="mb-4" data-testid="booking-resource-header">
         {% if resource.product.img %}
             <img src="{{ resource.product.img.hdr.url }}"
-                 alt="{{ resource.product.name }}"
+                 alt="{{ resource.name }}"
                  class="img-fluid rounded mb-3"
                  style="max-height: 300px; object-fit: cover; width: 100%;"
                  data-testid="booking-resource-image">
         {% endif %}
 
-        <h1 data-testid="booking-resource-name">{{ resource.product.name }}</h1>
-        {% if resource.product.long_description %}
-            <p class="text-muted" data-testid="booking-resource-description">{{ resource.product.long_description }}</p>
+        <h1 data-testid="booking-resource-name">{{ resource.name }}</h1>
+        {% if resource.description %}
+            <p class="text-muted" data-testid="booking-resource-description">{{ resource.description }}</p>
         {% endif %}
     </div>
 
@@ -478,6 +478,7 @@ DEPENDENCIES :
         <div id="booking-calendar" class="booking-calendar" data-testid="booking-calendar"
              data-resource-pk="{{ resource.pk }}"
              data-book-url="{% url 'booking-book' pk=resource.pk %}">
+
             <!--
             ===========================
             VERSION DESKTOP
@@ -485,6 +486,32 @@ DEPENDENCIES :
             -->
             <div class="booking-calendar-desktop d-none d-md-block" data-testid="booking-calendar-desktop">
 
+                <div class="mb-3" data-testid="booking-resource-selector">
+                    <label for="resource-select" class="form-label">{% translate "Ressource" %}</label>
+                    <select id="resource-select" class="form-select" data-testid="booking-resource-select">
+                        {% for group in resource_choices %}
+                            {% if group.group_name %}
+                                <optgroup label="{{ group.group_name }}">
+                                    {% for resource in group.resources %}
+                                        <option value="{{ resource.pk }}"
+                                                {% if resource.selected %}selected{% endif %}
+                                                data-testid="booking-resource-option-{{ resource.pk }}">
+                                            {{ resource.name }}
+                                        </option>
+                                    {% endfor %}
+                                </optgroup>
+                            {% else %}
+                                {% for resource in group.resources %}
+                                    <option value="{{ resource.pk }}"
+                                            {% if resource.selected %}selected{% endif %}
+                                            data-testid="booking-resource-option-{{ resource.pk }}">
+                                        {{ resource.name }}
+                                    </option>
+                                {% endfor %}
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
                 <!--
                 Navigation par semaine.
                 / Week navigation.
@@ -804,6 +831,18 @@ DEPENDENCIES :
             const desktopNextButton = document.getElementById('calendar-next-week');
             const desktopWeekLabel = document.getElementById('calendar-week-label');
             let desktopCurrentIndex = 0;
+
+            // Selecteur de ressource : redirige vers la ressource choisie.
+            // / Resource selector: redirect to the chosen resource.
+            document.body.addEventListener('change', function (event) {
+                if (event.target.id !== 'resource-select') {
+                    return;
+                }
+                const selectedPk = event.target.value;
+                if (selectedPk) {
+                    window.location.href = '/booking/' + selectedPk + '/resource/';
+                }
+            });
 
             function showDesktopWeek(index) {
                 if (index < 0 || index >= desktopWeekElements.length) {

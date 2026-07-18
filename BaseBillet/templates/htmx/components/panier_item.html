@@ -52,22 +52,54 @@
             </div>
         {% endif %}
         <div class="flex-grow-1">
-            <div class="fw-semibold">{{ detail.resource.product.name }} - {{ detail.hours }}h à partir du {{ detail.start_datetime }} </div>
+            <div class="fw-semibold">
+                {{ detail.resource.name }} -
+                {% if detail.resource.slot_type == detail.resource.HOUR %}
+                    {{ detail.hours }}h à partir du {{ detail.start_datetime }}
+                {% elif detail.resource.slot_type == detail.resource.DAY %}
+                    {# # TODO-FOR-DAY-BOOKING #}
+                    {{ detail.start_datetime }}
+                {% endif %}
+            </div>
             <small class="text-muted">
                 {% trans "Resource" %} &middot; {{ detail.price.name }}
                 {% if detail.price and detail.price.free_price %}
-                    &middot; {{ detail.custom_amount }} €/h
+                    &middot; {{ detail.custom_amount }}
+                    {% if detail.resource.slot_type == detail.resource.HOUR %}
+                        €/{% translate 'heure' %}
+                    {% elif detail.resource.slot_type == detail.resource.DAY %}
+                        €/{% translate 'jour' %}
+                    {% endif %}
                 {% elif detail.price.prix and not detail.price.free_price %}
-                    &middot; {{ detail.price.prix }} €/h
+                    &middot; {{ detail.price.prix }}
+                    {% if detail.resource.slot_type == detail.resource.HOUR %}
+                        €/{% translate 'heure' %}
+                    {% elif detail.resource.slot_type == detail.resource.DAY %}
+                        €/{% translate 'jour' %}
+                    {% endif %}
                 {% endif %}
-                &middot;
-                {{ detail.slot_count }} slot de {{ detail.slot_duration_minutes }}min
-                &middot;
-                {% if detail.price and detail.price.free_price %}
-                    {{ detail.hours }}h * {{ detail.custom_amount }}€/h = {{ detail.total_estimation }}€
-                {% elif True %}
-                    {{ detail.hours }}h * {{ detail.price.prix }}€/h = {{ detail.total_estimation }}€
+
+                {% if detail.resource.slot_type == detail.resource.HOUR %}
+                    &middot;
+                    {{ detail.slot_count }} slot de {{ detail.slot_duration_minutes }}min
+                    &middot;
+                    {% if detail.price and detail.price.free_price %}
+                        {{ detail.hours }}h * {{ detail.custom_amount }}€/h = {{ detail.total_estimation }}€
+                    {% elif detail.price.prix and not detail.price.free_price %}
+                        {{ detail.hours }}h * {{ detail.price.prix }}€/h = {{ detail.total_estimation }}€
+                    {% endif %}
+                {% elif detail.resource.slot_type == detail.resource.DAY %}
+                    {# # TODO-FOR-DAY-BOOKING #}
+                    &middot;
+                    {% if detail.price and detail.price.free_price %}
+                        {{ detail.days }} {% translate 'jours' %} * {{ detail.custom_amount }}€/j = {{ detail.total_estimation }}€
+                    {% elif detail.price.prix and not detail.price.free_price %}
+                        {{ detail.days }} {% translate 'jours' %} * {{ detail.price.prix }}€/j = {{ detail.total_estimation }}€
+                    {% endif %}
                 {% endif %}
+
+
+
             </small>
         </div>
 

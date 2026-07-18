@@ -39,10 +39,10 @@ def send_booking_cancellation_user(booking_uuid: str):
 
     # Montant potentiel associé à ce ticket (indicatif)
     refund_amount = 0
+
     try:
         if booking.can_refund():
-            for ticket in booking.tickets.all():
-                refund_amount += ticket.paid()
+            refund_amount = booking.total_paid()
     except Exception:
         refund_amount = None
 

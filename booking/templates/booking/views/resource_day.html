@@ -1,0 +1,372 @@
+{% extends "booking/booking_base.html" %}
+{% load i18n static l10n tibitags %}
+
+<!--
+LOCALISATION : booking/templates/booking/views/resource_day.html
+
+Detail d'une ressource journaliere avec calendrier mensuel.
+/ Day-resource detail with monthly calendar.
+
+Flux / Flow:
+  GET /booking/<pk>/resource/
+  Contexte / Context: resource, requested_month, month_weeks, prev_month, next_month,
+                      today, weekday_labels, resource_choices
+
+Comportement / Behavior:
+  - Affiche un calendrier mensuel complet (7 jours par semaine).
+  - Navigation vers le mois precedent et le mois suivant via HTMX (recharge
+    uniquement le calendrier).
+  - Les jours libres sont cliquables et ouvrent le formulaire de confirmation.
+  - Le formulaire de confirmation permet de reserver plusieurs jours consécutifs.
+  - Les jours hors mois, passes, complets ou hors horizon sont non cliquables.
+
+DEPENDENCIES :
+  - booking/templates/booking/partials/resource_day_calendar.html -> calendrier HTMX
+  - booking/views.py:_render_resource_day_page()                 -> contexte
+  - booking/views.py:book()                                      -> partial HTMX book_form.html
+  - htmx (charge par le skin base.html)
+-->
+{% block title %}{{ resource.name }}{% endblock %}
+{% block meta_description %}{{ resource.description|truncatewords:20 }}{% endblock %}
+
+{% block booking_content %}
+
+    <!--
+    Lien retour vers la liste des ressources.
+    / Back link to the resource list.
+    -->
+    <a href="{% url 'booking-list' %}" class="btn btn-outline-secondary btn-sm mb-4" data-testid="booking-back-btn">
+        <i class="bi bi-arrow-left" aria-hidden="true"></i>
+        {% translate "Retour" %}
+    </a>
+
+    <!--
+    En-tete : nom, image, description de la ressource.
+    / Header: resource name, image, description.
+    -->
+    <div class="mb-4" data-testid="booking-resource-header">
+        {% if resource.product.img %}
+            <img src="{{ resource.product.img.hdr.url }}"
+                 alt="{{ resource.name }}"
+                 class="img-fluid rounded mb-3"
+                 style="max-height: 300px; object-fit: cover; width: 100%;"
+                 data-testid="booking-resource-image">
+        {% endif %}
+
+        <h1 data-testid="booking-resource-name">{{ resource.name }}</h1>
+        {% if resource.description %}
+            <p class="text-muted" data-testid="booking-resource-description">{{ resource.description }}</p>
+        {% endif %}
+    </div>
+
+    <!-- booking panel -->
+    <div class="offcanvas-start offcanvas" tabindex="-1" id="bookingPanel" aria-labelledby="bookingPanelLabel">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title" id="bookingPanelLabel">
+                {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}
+                    {% translate 'Subscribe' %}{% endif %}
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas"
+                    aria-label="{% translate 'Close' %}"></button>
+        </div>
+        <div class="offcanvas-body" id="offcanvas-booking">
+        </div>
+    </div>
+
+    {% if month_weeks %}
+        <style>
+            /*
+             * Styles du calendrier mensuel de reservation journaliere.
+             * / Monthly day-booking calendar styles.
+             *
+             * LOCALISATION : booking/templates/booking/views/resource_day.html
+             */
+            .booking-month-calendar {
+                background: var(--bs-body-bg);
+                border: 1px solid var(--bs-border-color);
+                border-radius: var(--bs-border-radius-lg);
+                padding: 1rem;
+            }
+
+            .month-nav {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 1rem;
+                gap: 0.5rem;
+            }
+
+            .month-label {
+                font-weight: 500;
+                font-size: 1.1rem;
+            }
+
+            .month-grid {
+                display: grid;
+                grid-template-columns: repeat(7, 1fr);
+                gap: 1px;
+                background-color: var(--bs-border-color);
+                border: 1px solid var(--bs-border-color);
+                border-radius: var(--bs-border-radius);
+                overflow: hidden;
+            }
+
+            .month-weekday-header {
+                background: var(--bs-body-bg);
+                padding: 0.5rem;
+                text-align: center;
+                font-weight: 600;
+                font-size: 0.85rem;
+            }
+
+            .month-day {
+                background: var(--bs-body-bg);
+                min-height: 90px;
+                padding: 0.5rem;
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                justify-content: flex-start;
+                position: relative;
+                transition: transform 0.1s ease;
+            }
+
+            .month-day-number {
+                font-weight: 600;
+                font-size: 0.95rem;
+                margin-bottom: 0.25rem;
+            }
+
+            .month-day-other-month {
+                color: var(--bs-secondary-color);
+                background: var(--bs-tertiary-bg);
+            }
+
+            .month-day-today {
+                box-shadow: inset 0 0 0 2px var(--bs-primary);
+            }
+
+            .month-day-free {
+                background-color: var(--bs-success-bg-subtle);
+                cursor: pointer;
+            }
+
+            .month-day-free:hover,
+            .month-day-free:focus {
+                transform: scale(1.01);
+                box-shadow: 0 0 0 2px var(--bs-success);
+                outline: none;
+                z-index: 1;
+            }
+
+            .month-day-busy {
+                background-color: var(--bs-secondary-bg);
+                color: var(--bs-secondary-color);
+                cursor: not-allowed;
+            }
+
+            .month-day-cart {
+                background: linear-gradient(135deg, #E0529F, #EF7B35, #E3C53F, #4FB477, #37A6C4);
+                color: #fff;
+                cursor: default;
+            }
+
+            .month-day-past {
+                background-color: var(--bs-secondary-bg);
+                color: var(--bs-secondary-color);
+                cursor: not-allowed;
+            }
+
+            .month-day-past .month-day-number {
+                text-decoration: line-through;
+            }
+
+            .month-day-unavailable {
+                background-color: var(--bs-body-bg);
+                color: var(--bs-secondary-color);
+                cursor: not-allowed;
+            }
+
+            .month-day-capacity {
+                font-size: 0.75rem;
+                opacity: 0.9;
+                margin-top: auto;
+            }
+
+            .month-day-status {
+                font-size: 0.7rem;
+                font-weight: 500;
+                text-transform: uppercase;
+                letter-spacing: 0.02em;
+            }
+
+            .calendar-legend {
+                display: flex;
+                gap: 1rem;
+                margin-top: 1rem;
+                flex-wrap: wrap;
+                font-size: 0.85rem;
+            }
+
+            .calendar-legend-item {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.35rem;
+            }
+
+            .calendar-legend-color {
+                display: inline-block;
+                width: 14px;
+                height: 14px;
+                border-radius: 3px;
+                border: 1px solid var(--bs-border-color);
+            }
+
+            .calendar-legend-free {
+                background-color: var(--bs-success-bg-subtle);
+                border-color: var(--bs-success-border-subtle);
+            }
+
+            .calendar-legend-busy {
+                background-color: var(--bs-secondary-bg);
+            }
+
+            .calendar-legend-cart {
+                background: linear-gradient(135deg, #E0529F, #EF7B35, #E3C53F, #4FB477, #37A6C4);
+            }
+
+            .calendar-legend-past {
+                background: repeating-linear-gradient(
+                    45deg,
+                    var(--bs-secondary-bg),
+                    var(--bs-secondary-bg) 4px,
+                    var(--bs-body-bg) 4px,
+                    var(--bs-body-bg) 8px
+                );
+            }
+
+            .calendar-legend-unavailable {
+                background-color: var(--bs-body-bg);
+                border-style: dashed;
+            }
+
+            /* Offcanvas responsive sizing: full width on mobile, double width on desktop */
+            #bookingPanel { --bs-offcanvas-width: 100vw; }
+            @media (min-width: 992px) { /* lg and up */
+                #bookingPanel { --bs-offcanvas-width: 800px; }
+            }
+
+            @media (max-width: 576px) {
+                .month-day {
+                    min-height: 60px;
+                    padding: 0.25rem;
+                }
+                .month-day-number {
+                    font-size: 0.85rem;
+                }
+                .month-day-status,
+                .month-day-capacity {
+                    font-size: 0.6rem;
+                }
+            }
+        </style>
+
+        {% include "booking/partials/resource_day_calendar.html" %}
+
+    {% else %}
+        <!--
+        Etat vide : aucun jour disponible dans le mois affiche.
+        / Empty state: no day available in the displayed month.
+        -->
+        <p class="text-muted" data-testid="booking-calendar-empty">
+            {% translate "Aucun jour disponible dans ce mois." %}
+        </p>
+    {% endif %}
+
+{% endblock booking_content %}
+
+{% block scripts %}
+    <!--
+    Configuration HTMX pour swapper les erreurs 422 et 500.
+    / HTMX configuration to swap content on 422 and 500 errors.
+    -->
+    <script>
+        document.addEventListener("htmx:beforeOnLoad", function (event) {
+            const status_code_de_la_reponse = event.detail.xhr.status;
+            if (status_code_de_la_reponse === 422 || status_code_de_la_reponse === 500) {
+                event.detail.shouldSwap = true;
+                event.detail.isError = false;
+            }
+        });
+    </script>
+
+    <!--
+    Ouvre un offcanvas avec le formulaire de reservation HTMX.
+    / Opens an offcanvas with the HTMX booking form.
+    -->
+    <script>
+        (function () {
+            // Ouvre un offcanvas avec le formulaire de reservation HTMX.
+            // / Open an offcanvas with the HTMX booking form.
+            function openBookingPopup(slotElement) {
+                const calendar = slotElement.closest('#booking-calendar');
+                const baseUrl = calendar.getAttribute('data-book-url');
+                const startDatetime = slotElement.getAttribute('data-start-datetime');
+                const groupEnd = slotElement.getAttribute('data-group-end');
+                const url = baseUrl + '?start_datetime=' + encodeURIComponent(startDatetime)
+                    + '&group_end=' + encodeURIComponent(groupEnd);
+
+                const offcanvasElement = document.querySelector('#bookingPanel');
+                // On attend que HTMX ait fini le swap avant d'ouvrir l'offcanvas.
+                // / Wait for HTMX to finish swapping before opening the offcanvas.
+                offcanvasElement.addEventListener('htmx:afterSettle', function handler() {
+                    offcanvasElement.removeEventListener('htmx:afterSettle', handler);
+                    const offcanvas = bootstrap.Offcanvas.getOrCreateInstance(offcanvasElement);
+                    offcanvas.show();
+                });
+
+                htmx.ajax('GET', url, {
+                    target: '#offcanvas-booking',
+                    swap: 'innerHTML'
+                });
+            }
+
+            // Selecteur de ressource : redirige vers la ressource choisie.
+            // / Resource selector: redirect to the chosen resource.
+            document.body.addEventListener('change', function (event) {
+                if (event.target.id !== 'resource-select') {
+                    return;
+                }
+                const selectedPk = event.target.value;
+                if (selectedPk) {
+                    window.location.href = '/booking/' + selectedPk + '/resource/';
+                }
+            });
+
+            // Ecoute les clics sur les jours libres.
+            // / Listen for clicks on free days.
+            document.body.addEventListener('click', function (event) {
+                const slotElement = event.target.closest('.month-day-free');
+                if (!slotElement) {
+                    return;
+                }
+                event.preventDefault();
+                openBookingPopup(slotElement);
+            });
+
+            // Support clavier : Enter ou Espace sur un jour libre.
+            // / Keyboard support: Enter or Space on a free day.
+            document.body.addEventListener('keydown', function (event) {
+                if (event.key !== 'Enter' && event.key !== ' ') {
+                    return;
+                }
+                const slotElement = event.target.closest('.month-day-free');
+                if (!slotElement) {
+                    return;
+                }
+                event.preventDefault();
+                openBookingPopup(slotElement);
+            });
+        })();
+    </script>
+{% endblock scripts %}

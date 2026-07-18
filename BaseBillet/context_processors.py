@@ -104,11 +104,17 @@ def _build_items_with_details(panier):
                 resource = Resource.objects.get(pk=item['resource_uuid'])
                 detail['resource'] = resource
                 detail['start_datetime'] = datetime.fromisoformat(item.get("start_datetime"))
-                detail['slot_duration_minutes'] = item.get("slot_duration_minutes")
-                detail['slot_count'] = item.get("slot_count")
-                detail['total_estimation'] = item.get("total_estimation")
 
-                detail['hours'] = item.get("hours")
+                if resource.slot_type == Resource.HOUR:
+                    detail['slot_duration_minutes'] = item.get("slot_duration_minutes")
+                    detail['slot_count'] = item.get("slot_count")
+                    detail['total_estimation'] = item.get("total_estimation")
+                    detail['hours'] = item.get("hours")
+                elif resource.slot_type == Resource.DAY:
+                    # TODO-FOR-DAY-BOOKING
+                    detail["days"] = item.get("days")
+                    pass
+
             except Resource.DoesNotExist:
                 continue
 

@@ -25,7 +25,7 @@ Détails de la réservation à annuler.
 -->
 <div class="card mb-4" data-testid="booking-cancel-details">
   <div class="card-body">
-    <h2 class="card-title h5">{{ booking.resource.product.name }}</h2>
+    <h2 class="card-title h5">{{ booking.resource.name }}</h2>
     <p class="mb-1">
       <strong>{{ booking.start_datetime|date:"l d F Y" }}</strong>
       {% translate "à" %} {{ booking.start_datetime|date:"H\hi" }}

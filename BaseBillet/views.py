@@ -4916,7 +4916,7 @@ class PanierMVT(viewsets.ViewSet):
                 request, message=_("Checkout failed. Please try again."), level='error'
             )
 
-        # Check si l'état du flag success, puis affiche les erreurs retourné par "materialiser"
+        # Check si l'état du flag success, puis affiche les erreurs retournées par "materialiser"
         if not success:
             messages.error(request,_("Checkout failed. Please try again. See errors below."))
 
@@ -5140,7 +5140,7 @@ class PanierMVT(viewsets.ViewSet):
             cancellation_deadline = None
             cancellation_possible = False
             if start_datetime:
-                cancellation_deadline = start_datetime - datetime.timedelta(
+                cancellation_deadline = start_datetime - timedelta(
                     hours=resource.cancellation_deadline_hours,
                 )
                 cancellation_possible = timezone.now() <= cancellation_deadline

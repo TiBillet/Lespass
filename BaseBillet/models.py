@@ -2887,17 +2887,12 @@ class Paiement_stripe(models.Model):
     fedow_transactions = models.ManyToManyField(FedowTransaction, blank=True, related_name="paiement_stripe")
 
     def is_fully_refunded(self):
-        # If total is not 0, the paiement is not fully refunded
-        if self.total() != 0:
-            return False
-
-        # If any ligne_article has a status different from REFUNDED or CREDIT_NOTE (avoir), the paiement is not fully refunded
-        for ligne_article in self.lignearticles.all():
-            if ligne_article.status not in [LigneArticle.REFUNDED, LigneArticle.CREDIT_NOTE]:
-                return False
+        # If total is 0, the paiement is totally refunded
+        if self.total() == 0:
+            return True
 
         # Else the paiement is fully refunded
-        return True
+        return False
 
     # total = models.FloatField(default=0)
     def total(self):

@@ -36,7 +36,18 @@ class Resource(models.Model):
     / Availability is computed on the fly from weekly_opening and calendar.
     """
 
-    # Replaced by tag
+    name = models.CharField(
+        max_length=250,
+        verbose_name=_("Name")
+    )
+
+    description = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name=_("Long description"),
+        help_text=_("Displayed only for membership/subscription products.")
+    )
+
     group = models.ForeignKey(
         'ResourceGroup',
         on_delete=models.PROTECT,
@@ -49,7 +60,7 @@ class Resource(models.Model):
     product = models.ForeignKey(
         Product,
         on_delete=models.PROTECT,
-        related_name='product',
+        related_name='resources',
         verbose_name=_('Produit'),
     )
 
@@ -59,6 +70,7 @@ class Resource(models.Model):
         related_name='resources',
         verbose_name=_('Calendar'),
     )
+
     weekly_opening = models.ForeignKey(
         'WeeklyOpening',
         on_delete=models.PROTECT,
@@ -71,19 +83,32 @@ class Resource(models.Model):
         verbose_name=_('Capacity'),
         help_text=_('Maximum simultaneous bookings per slot. 1 = exclusive use.'),
     )
+
     cancellation_deadline_hours = models.PositiveIntegerField(
         default=24,
         verbose_name=_('Cancellation deadline (hours)'),
         help_text=_('Hours before slot start within which cancellation is allowed.'),
     )
 
-    # Replaced by futur publish date
     booking_horizon_days = models.PositiveIntegerField(
         default=28,
         verbose_name=_('Booking horizon (days)'),
         help_text=_('How far ahead a member can book.'),
     )
 
+    HOUR, DAY = "H", "D"
+
+    STATUS_CHOICES = [
+        (HOUR, _("à l'heure")),
+        (DAY, _('à la journée')),
+    ]
+
+    slot_type = models.CharField(
+        max_length=1,
+        choices=STATUS_CHOICES,
+        default=HOUR,
+        verbose_name=_('Type de réservation'),
+    )
 
 
     class Meta:
@@ -95,6 +120,7 @@ class Resource(models.Model):
 
     def __str__(self):
         return self.product.name
+
 
 class ResourceGroup(models.Model):
     """
@@ -551,7 +577,7 @@ class Booking(models.Model):
 
     def to_pay(self):
         to_pay = 0
-        for ligne_article in self.lignearticles.filter(status__in=[LigneArticle.UNPAID, LigneArticle.VALID]):
+        for ligne_article in self.lignearticles.filter(status__in=[LigneArticle.UNPAID, LigneArticle.CREATED]):
             ligne_article: LigneArticle
             to_pay += int(ligne_article.amount * ligne_article.qty)  # int car on multiplie un int par un float
         return dround(to_pay)
