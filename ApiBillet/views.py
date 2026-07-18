@@ -282,18 +282,23 @@ class EventsViewSet(DeprecatedV1Mixin, viewsets.ViewSet):
         ).order_by('datetime')
 
         if only_futur:
-            timezone = Configuration.get_solo().get_tzinfo()
-
-            # Get the timezone
-            now = datetime.now()
-            # Convert it to the tenant configured timezone
-            now = now.astimezone(timezone)
-            # Remove one day to it to also show recent events
-            now = now.replace(day=now.day-1)
+            # On part d'HIER : un evenement commence hier soir est encore d'actualite.
+            #
+            # ATTENTION — NE PAS revenir a `now.replace(day=now.day - 1)` : le 1er du mois,
+            # `day - 1` vaut 0 et Python leve `ValueError: day is out of range for month`.
+            # L'endpoint plantait donc un jour sur trente. C'est `timedelta` qu'il faut,
+            # jamais `replace(day=...)`.
+            #
+            # `django.utils.timezone.now()` est deja "aware" : le comparer a un
+            # DateTimeField suffit. Convertir vers la timezone du tenant ne changeait rien
+            # au filtrage (meme instant, seul l'AFFICHAGE differe).
+            # / Start from YESTERDAY. NEVER go back to `replace(day=now.day - 1)`: on the
+            # 1st of the month day-1 == 0 and Python raises ValueError. Use timedelta.
+            hier = timezone.now() - timedelta(days=1)
 
             events = events.filter(
-                Q(datetime__gte=now) |
-                Q(end_datetime__gte=now)
+                Q(datetime__gte=hier) |
+                Q(end_datetime__gte=hier)
             )
 
         if filter:
@@ -1218,6 +1223,17 @@ class Webhook_stripe(APIView):
                 paiement_stripe.lignearticles.all().update(status=LigneArticle.FAILED)
                 paiement_stripe.save()
 
+                # Échec du prélèvement SEPA : on réarme les adhésions liées qui
+                # étaient "paiement soumis, en attente". On les repasse en
+                # "validé par admin" pour que l'adhérent puisse relancer un
+                # paiement via son lien (sinon il reste bloqué sur un lien inactif).
+                # / SEPA debit failed: rearm linked memberships that were
+                # "payment pending" back to "admin validated" so the member can
+                # pay again via the link (otherwise stuck on a dead link).
+                for membership in paiement_stripe.membership.filter(status=Membership.PAYMENT_PENDING):
+                    membership.status = Membership.ADMIN_VALID
+                    membership.save(update_fields=['status'])
+
                 # envoyer ici le mail d'echec de paiement
                 send_payment_refused_user.delay(str(paiement_stripe.uuid))
                 return Response(f"Traité par /api/Webhook_stripe : {paiement_stripe.get_status_display()}", status=status.HTTP_200_OK)
@@ -1356,9 +1372,28 @@ class Webhook_stripe(APIView):
 
                     except Membership.DoesNotExist:
                         logger.info((f'    Nouvelle adhésion, facture pas encore comptabilisée : {invoice}'))
-                    except Exception:
-                        logger.error((f'    erreur dans Webhook_stripe customer.subscription.updated : {Exception}'))
-                        raise Exception
+                    except Client.DoesNotExist:
+                        # Le tenant du metadata n'existe pas sur cette instance : ce
+                        # webhook n'est pas pour nous (abonnement d'un autre
+                        # environnement, ou tenant supprimé). On acquitte avec un 204
+                        # pour que Stripe arrête de réessayer, au lieu d'une 500.
+                        # / The metadata tenant does not exist on this instance: this
+                        # webhook is not for us. Acknowledge with 204 so Stripe stops
+                        # retrying, instead of a 500.
+                        logger.warning(
+                            f"    Webhook_stripe : tenant {tenant_uuid} inconnu sur cette "
+                            f"instance, webhook ignoré (pas pour nous)."
+                        )
+                        return Response("Tenant inconnu, ignoré.", status=status.HTTP_204_NO_CONTENT)
+                    except Exception as e:
+                        # On loggue l'erreur RÉELLE (et non la classe Exception) puis on
+                        # la relaie telle quelle pour que Stripe retente (erreur transitoire).
+                        # / Log the REAL error (not the Exception class) then re-raise it
+                        # as-is so Stripe retries (transient error).
+                        logger.error(
+                            f"    erreur dans Webhook_stripe customer.subscription.updated : {e}"
+                        )
+                        raise
 
         # Réponse pour l'api stripe qui envoie des webhook pour tout autre que la validation de paiement.
         # Si on renvoie une erreur, ils suppriment le webhook de leur côté.

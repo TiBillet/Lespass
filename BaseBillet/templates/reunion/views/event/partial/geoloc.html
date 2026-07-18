@@ -1,15 +1,17 @@
 {% load static %}
 {% load i18n %}
 
-<!-- Leaflet CSS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-      crossorigin=""/>
-
-<!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-        crossorigin=""></script>
+<!--
+Leaflet VENDORE en local (meme copie que la carto federation), pas de CDN.
+Le CDN unpkg et le serveur de tuiles tile.openstreetmap.org renvoyaient des 403
+selon le navigateur (referer/origin) : on evite les deux en servant Leaflet
+depuis nos statiques et en prenant le meme fond de carte que /federation/.
+/ Leaflet vendored locally (same copy as the federation map), no CDN. unpkg and
+tile.openstreetmap.org returned 403 depending on the browser: we serve Leaflet
+from our own static files and use the same basemap as /federation/.
+-->
+<link rel="stylesheet" href="{% static 'seo/vendor/leaflet/leaflet.css' %}"/>
+<script src="{% static 'seo/vendor/leaflet/leaflet.js' %}"></script>
 
 <style>
     .map-section {
@@ -143,11 +145,36 @@
                     attributionControl: true
                 });
 
-                // Add the OpenStreetMap tile layer
-                const tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    maxZoom: 19,
-                    attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                });
+                // Fond de carte, identique a la carto federation (explorer.js).
+                // Si une cle MapTiler est fournie -> style "dataviz-v4" en francais,
+                // tuiles HD. Sinon repli sur les tuiles "Humanitarian" (HOT) hebergees
+                // par OpenStreetMap France : labels en francais, sans cle API, OK en
+                // localhost, et pas de 403 comme tile.openstreetmap.org.
+                // / Basemap identical to the federation map (explorer.js). MapTiler if a
+                // key is set, otherwise OSM France Humanitarian (HOT) tiles: no API key,
+                // works on localhost, and no 403 like tile.openstreetmap.org.
+                const maptilerKey = "{{ maptiler_key|default:''|escapejs }}";
+                let tileLayer;
+                if (maptilerKey) {
+                    tileLayer = L.tileLayer(
+                        'https://api.maptiler.com/maps/dataviz-v4/{z}/{x}/{y}.png?key='
+                            + maptilerKey + '&language=fr',
+                        {
+                            attribution: '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                            tileSize: 512,
+                            zoomOffset: -1,
+                            minZoom: 1,
+                            maxZoom: 20,
+                            crossOrigin: true
+                        }
+                    );
+                } else {
+                    tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+                        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, style <a href="https://www.hotosm.org/">Humanitarian OSM Team</a> &middot; <a href="https://openstreetmap.fr/">OpenStreetMap France</a>',
+                        maxZoom: 20,
+                        subdomains: 'abc'
+                    });
+                }
 
                 // Add event listeners for tile loading
                 tileLayer.on('loading', function () {

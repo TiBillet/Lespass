@@ -1,0 +1,53 @@
+{% extends base_template %}
+{% load i18n static %}
+{% comment %}
+PAGE "LIEN DE PAIEMENT INVALIDE / INACTIF"
+/ "Invalid / inactive payment link" page
+
+LOCALISATION : BaseBillet/templates/reunion/views/membership/payment_link_invalid.html
+
+Affichee quand le lien de paiement ne correspond a aucune adhesion payable :
+adhesion introuvable, annulee, ou pas encore validee par un admin.
+Remplace l'ancien 404 JSON brut par un message clair pour l'utilisateur.
+/ Shown when the payment link does not match any payable membership:
+unknown, cancelled, or not yet validated by an admin.
+Replaces the former raw JSON 404 with a clear message for the user.
+{% endcomment %}
+
+{% block main %}
+<div class="container py-5" data-testid="membership-payment-link-invalid">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+
+                    <div class="text-center mb-4">
+                        <i class="bi bi-exclamation-triangle fs-1 text-secondary" aria-hidden="true"></i>
+                        <h2 class="mt-3">{% translate "Ce lien de paiement n'est plus valide" %}</h2>
+                    </div>
+
+                    <div class="alert alert-warning" role="alert" aria-live="polite">
+                        <p class="mb-0">
+                            {% translate "Ce lien de paiement n'est pas (ou plus) actif. Si vous pensez qu'il s'agit d'une erreur, contactez l'organisateur." %}
+                        </p>
+                    </div>
+
+                    <div class="text-center" role="group" aria-label="{% translate 'Navigation' %}">
+                        <a href="/memberships/" class="btn btn-primary"
+                           data-testid="membership-payment-invalid-link-memberships">
+                            {% translate "Voir les adhésions" %}
+                        </a>
+                        <a href="/" class="btn btn-outline-secondary ms-2"
+                           data-testid="membership-payment-invalid-link-home">
+                            {% translate "Retour à l'accueil" %}
+                        </a>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock main %}

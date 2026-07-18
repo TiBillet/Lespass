@@ -99,11 +99,27 @@ class Command(BaseCommand):
                 "Garantit un etat propre et reproductible."
             ),
         )
+        parser.add_argument(
+            '--e2e-only',
+            action='store_true',
+            help=(
+                "Genere UNIQUEMENT les fixtures de la suite E2E (events/produits "
+                "'E2E Test — ...' dans le tenant lespass). Skip _handle_full / "
+                "_handle_quick / ventes. Idempotent — ideal apres un flush."
+            ),
+        )
 
     def handle(self, *args, **options):
         quick_mode = options.get('quick', False)
         sales_only = options.get('sales_only', False)
         no_sales = options.get('no_sales', False)
+        e2e_only = options.get('e2e_only', False)
+
+        # Mode --e2e-only : skip tout sauf les fixtures E2E (rapide, post-flush).
+        # / --e2e-only: skip everything but the E2E fixtures (fast, post-flush).
+        if e2e_only:
+            self._seed_e2e_fixtures(options)
+            return
 
         # Mode --sales-only : skip _handle_full / _handle_quick, juste seed les ventes.
         # / --sales-only: skip full/quick, just seed sales.
@@ -130,6 +146,12 @@ class Command(BaseCommand):
             ))
         else:
             self._handle_seed_ventes(options)
+
+        # Fixtures dediees aux tests E2E (tests/e2e/) : toujours seedees apres
+        # la creation (--full) ou la restauration (--quick) du tenant lespass.
+        # / E2E test fixtures (tests/e2e/): always seeded after the lespass
+        # tenant is created (--full) or restored (--quick).
+        self._seed_e2e_fixtures(options)
 
     def _handle_seed_ventes(self, options):
         """
@@ -189,6 +211,130 @@ class Command(BaseCommand):
                 ))
 
         afficher_warning_cas_non_couverts(self.stdout)
+
+    def _seed_e2e_fixtures(self, options):
+        """Cree les fixtures dediees a la suite E2E (tests/e2e/).
+        / Seed fixtures dedicated to the E2E suite (tests/e2e/).
+
+        Contrat consomme par la fixture `e2e_slugs` de tests/e2e/conftest.py :
+        dans le tenant 'lespass', 3 events + 4 produits (+ tarifs) nommes
+        "E2E Test — ...". Idempotent (get_or_create) : relancable sans doublon.
+        Events publies + futurs + tagges pour que les tests /explorer/
+        (cards event, tag chips) ne SKIP plus.
+
+        / Contract consumed by the `e2e_slugs` fixture (tests/e2e/conftest.py):
+        in the 'lespass' tenant, 3 events + 4 products (+ prices) named
+        "E2E Test — ...". Idempotent (get_or_create). Events are published +
+        future + tagged so the /explorer/ tests (event cards, tag chips) no
+        longer SKIP.
+        """
+        from django.utils import timezone
+
+        tenant = Client.objects.filter(schema_name='lespass').first()
+        if tenant is None:
+            self.stderr.write(self.style.ERROR(
+                "Tenant 'lespass' introuvable : lancez demo_data_v2 (sans "
+                "--sales-only) avant de seeder les fixtures E2E."
+            ))
+            return
+
+        # Date future commune : garantit la visibilite dans /explorer/.
+        # / Common future date: ensures visibility in /explorer/.
+        when = timezone.now() + timedelta(days=30)
+
+        with tenant_context(tenant):
+            # Adresse + tag partages par les 3 events de test.
+            # / Address + tag shared by the 3 test events.
+            adresse, _ = PostalAddress.objects.get_or_create(
+                name="E2E Test — Lieu",
+                defaults={
+                    'street_address': "1 rue des Tests",
+                    'address_locality': "Villeurbanne",
+                    'postal_code': "69100",
+                    'address_country': "FR",
+                    'latitude': "45.7676",
+                    'longitude': "4.8799",
+                },
+            )
+            tag, _ = Tag.objects.get_or_create(
+                name="E2E Test", defaults={'color': "#2196F3"},
+            )
+
+            # 1) Adhesion (creee en premier : referencee par le billet gated).
+            # / Membership (created first: referenced by the gated ticket).
+            adhesion, _ = Product.objects.get_or_create(
+                name="E2E Test — Adhesion",
+                defaults={
+                    'categorie_article': Product.ADHESION,
+                    'short_description': "Adhesion de test E2E.",
+                },
+            )
+            Price.objects.get_or_create(
+                product=adhesion, name="Gratuite",
+                defaults={'prix': Decimal("0"), 'publish': True},
+            )
+
+            # Helper local : cree (ou recupere) un event publie/futur/tagge.
+            # / Local helper: create (or fetch) a published/future/tagged event.
+            def _ensure_event(name):
+                event, _created = Event.objects.get_or_create(
+                    name=name,
+                    defaults={
+                        'datetime': when,
+                        'categorie': Event.CONCERT,
+                        'postal_address': adresse,
+                        'jauge_max': 100,
+                        'max_per_user': 10,
+                        'published': True,
+                    },
+                )
+                event.tag.add(tag)
+                return event
+
+            # 2) Event gratuit + billet FREERES.
+            # Le tarif "Tarif gratuit" est auto-cree par le signal post_save du
+            # Product FREERES (BaseBillet/models.py) — ne pas le creer ici.
+            # / Free event + FREERES ticket. The "Tarif gratuit" price is
+            # auto-created by the FREERES Product post_save signal — do NOT
+            # create it here.
+            event_gratuit = _ensure_event("E2E Test — Event gratuit")
+            billet_gratuit, _ = Product.objects.get_or_create(
+                name="E2E Test — Billet gratuit",
+                defaults={'categorie_article': Product.FREERES},
+            )
+            event_gratuit.products.add(billet_gratuit)
+
+            # 3) Event payant + billet a prix plein.
+            # / Paid event + full-price ticket.
+            event_payant = _ensure_event("E2E Test — Event payant")
+            billet_payant, _ = Product.objects.get_or_create(
+                name="E2E Test — Billet payant",
+                defaults={'categorie_article': Product.BILLET},
+            )
+            Price.objects.get_or_create(
+                product=billet_payant, name="Plein tarif",
+                defaults={'prix': Decimal("10"), 'publish': True},
+            )
+            event_payant.products.add(billet_payant)
+
+            # 4) Event gated + billet reserve aux adherents (adhesion obligatoire).
+            # / Gated event + members-only ticket (required membership).
+            event_gated = _ensure_event("E2E Test — Event gated")
+            billet_gated, _ = Product.objects.get_or_create(
+                name="E2E Test — Billet gated",
+                defaults={'categorie_article': Product.BILLET},
+            )
+            prix_gated, _ = Price.objects.get_or_create(
+                product=billet_gated, name="Tarif adherent",
+                defaults={'prix': Decimal("5"), 'publish': True},
+            )
+            prix_gated.adhesions_obligatoires.add(adhesion)
+            event_gated.products.add(billet_gated)
+
+        self.stdout.write(self.style.SUCCESS(
+            "Fixtures E2E assurees sur 'lespass' : 3 events + 4 produits "
+            "(prefixe 'E2E Test — ')."
+        ))
 
     # Chemin du dump SQL généré par le mode full, utilisé par --quick pour restaurer la base
     DUMP_PATH = '/DjangoFiles/demo_data.sql.gz'
@@ -314,6 +460,11 @@ class Command(BaseCommand):
                "stripe_mode_test": True,
                "stripe_connect_account_test": os.environ.get('TEST_STRIPE_CONNECT_ACCOUNT'),
                "stripe_payouts_enabled": True,
+               # Accepte le prélèvement SEPA (adhésions à validation manuelle).
+               # Nécessite que la capability SEPA soit active sur le compte connecté.
+               # / Accept SEPA direct debit (manual-validation memberships).
+               # Requires the SEPA capability to be active on the connected account.
+               "stripe_accept_sepa": True,
                "site_web": "https://tibillet.org",
                "legal_documents": "https://tibillet.org/cgucgv",
                "adresse": {
@@ -1341,6 +1492,27 @@ class Command(BaseCommand):
                     if addr_obj:
                         config.postal_address = addr_obj
                     config.save()
+
+                    # Active le prélèvement SEPA si la fixture le demande.
+                    # On le fait APRÈS le save principal et dans un bloc isolé :
+                    # Configuration.save() vérifie la capability SEPA via l'API
+                    # Stripe et lève une erreur si elle n'est pas active sur le
+                    # compte connecté. Sans cet isolement, un compte sans SEPA
+                    # ferait perdre toute la configuration du tenant.
+                    # / Enable SEPA only if requested, after the main save and in an
+                    # isolated block: Configuration.save() checks the Stripe SEPA
+                    # capability and raises if inactive. Without isolation, a compte
+                    # without SEPA would discard the whole tenant configuration.
+                    if fx.get('stripe_accept_sepa'):
+                        try:
+                            config.stripe_accept_sepa = True
+                            config.save()
+                            logger.info(f"SEPA activé pour {tenant.name}")
+                        except Exception as e:
+                            logger.warning(
+                                f"SEPA non activé pour {tenant.name} "
+                                f"(capability Stripe absente ou inactive ?) : {e}"
+                            )
 
                 except Exception as e:
                     logger.warning(f"Impossible de configurer Configuration pour {tenant.name}: {e}")

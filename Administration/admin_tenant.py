@@ -3,6 +3,7 @@ from Administration.admin.dashboard import (  # noqa: F401
     MODULE_FIELDS, _build_modules_context, adhesion_badge_callback,
 )
 
+
 from Administration.admin.resources import (  # noqa: F401
     CalendarAdmin, WeeklyOpeningAdmin, BookingAdmin, ResourceGroupAdmin, ResourceAdmin
 )
@@ -15,6 +16,21 @@ from Administration.admin.mixins import HelpDisplayMixin
 
 from Administration.admin.site import staff_admin_site, sanitize_textfields
 
+# IMPORT A EFFET DE BORD — NE PAS SUPPRIMER, MEME S'IL PARAIT INUTILISE.
+# Importer ces modules EXECUTE leurs decorateurs @admin.register(...), qui enregistrent
+# ProductAdmin et PriceAdmin sur staff_admin_site. Sans cet import, ils ne sont jamais
+# enregistres, et Django refuse de demarrer :
+#   admin.E039 — An admin for model "Product" has to be registered to be referenced by
+#   EventAdmin.autocomplete_fields
+# La directive noqa F401 ci-dessous est INDISPENSABLE : sans elle, `ruff check --fix`
+# supprime l'import (il le voit comme mort) et casse tout l'admin.
+# / SIDE-EFFECT IMPORT — DO NOT REMOVE. It runs the @admin.register decorators that
+# register ProductAdmin and PriceAdmin. Without it Django refuses to boot (admin.E039).
+# The noqa F401 directive below is REQUIRED, otherwise `ruff check --fix` deletes it.
+from Administration.admin import (  # noqa: F401
+    products,
+    prices,
+)
 
 import json
 import logging
@@ -26,38 +42,29 @@ from urllib.parse import urlencode
 from uuid import UUID, uuid4
 from unfold.utils import parse_datetime_str
 from django.core.validators import EMPTY_VALUES
-from collections.abc import Iterator
 from django.urls import path, reverse, NoReverseMatch
 
 from django.contrib import admin
 from django.contrib.admin.options import ModelAdmin
-from django.contrib.admin.views.main import ChangeList
-from django.core.validators import EMPTY_VALUES
-from django.db.models import Model, QuerySet
-from django.db.models.fields import DateField, DateTimeField, Field
+from django.db.models import Model
 from django.forms import ValidationError
 from django.http import HttpRequest
 
-from unfold.contrib.filters.forms import RangeDateForm, RangeDateTimeForm
-from unfold.utils import parse_date_str, parse_datetime_str
 
 import requests
 import segno
 from django import forms
-from django.conf import settings
-from django.contrib import admin
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.signing import TimestampSigner
 from django.db import models, connection, IntegrityError, transaction as db_transaction
-from django.db.models import Model, Count, Q, Prefetch, F
-from django.forms import ModelForm, Form, HiddenInput
-from django.http import HttpResponse, HttpRequest, HttpResponseRedirect
-from django.template.response import TemplateResponse
+from django.db.models import Count, Q, Prefetch, F
+from django.forms import ModelForm, Form
+from django.http import HttpResponse
 from django.shortcuts import redirect, get_object_or_404
 from django.template.defaultfilters import slugify
 from django.template.loader import render_to_string
-from django.urls import reverse, re_path
+from django.urls import re_path
 from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
@@ -90,34 +97,27 @@ from unfold.contrib.forms.widgets import WysiwygWidget
 from unfold.contrib.import_export.forms import ExportForm, ImportForm
 from unfold.decorators import display, action
 from unfold.sections import TableSection, TemplateSection
-from unfold.sites import UnfoldAdminSite
 from unfold.widgets import (
-    UnfoldAdminCheckboxSelectMultiple,
     UnfoldAdminEmailInputWidget,
-    UnfoldAdminRadioSelectWidget,
     UnfoldAdminColorInputWidget,
     UnfoldAdminSelectWidget,
     UnfoldAdminTextInputWidget,
-    UnfoldBooleanSwitchWidget,
     UnfoldAdminSelect2Widget
 )
 
 from Administration.importers.ticket_exporter import TicketExportResource
 from Administration.importers.lignearticle_exporter import LigneArticleExportResource
-from Administration.utils import clean_html
 from ApiBillet.permissions import TenantAdminPermissionWithRequest, RootPermissionWithRequest
-from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
+from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import HumanUser, TibilletUser, Wallet
 from AuthBillet.utils import get_or_create_user
-from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
+from BaseBillet.models import Configuration, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
-    FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp, ProductFormField, \
-    PromotionalCode, Tva, MembershipProduct, FederationConfiguration
+    FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp, MembershipProduct, FederationConfiguration, ProductSold
 from BaseBillet.tasks import webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
     send_reservation_cancellation_user, send_sale_to_laboutik, forge_connexion_url
 from Customers.models import Client
-from MetaBillet.models import WaitingConfiguration
 from crowds.models import Contribution, Vote, Participation, CrowdConfig, Initiative, BudgetItem
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
@@ -125,7 +125,6 @@ from fedow_connect.utils import dround
 from fedow_public.models import AssetFedowPublic as Asset, AssetFedowPublic
 
 # from simple_history.admin import SimpleHistoryAdmin
-from stripe._error import InvalidRequestError
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +185,7 @@ class ExternalApiKeyAdmin(ModelAdmin):
             messages.add_message(
                 request,
                 messages.SUCCESS,
-                _(f"Copy this key and save it somewhere safe! It will not be saved on our servers and can only be displayed this one time.")
+                _("Copy this key and save it somewhere safe! It will not be saved on our servers and can only be displayed this one time.")
             )
             messages.add_message(
                 request,
@@ -196,6 +195,50 @@ class ExternalApiKeyAdmin(ModelAdmin):
             obj.key = api_key
             obj.user = request.user
         super().save_model(request, obj, form, change)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        # Etancheite multi-tenant : pour le champ "gift_asset", on ne propose
+        # QUE les assets rechargeables dont le tenant courant est l'origine
+        # (c'est-a-dire ses propres assets). Sans cela, le menu deroulant
+        # listait les assets de TOUS les lieux (AssetFedowPublic vit dans le
+        # schema public, partage), et un lieu pouvait choisir l'asset cadeau
+        # d'un autre lieu. On filtre aussi sur les categories rechargeables,
+        # comme le fait limit_choices_to sur le modele.
+        # / Multi-tenant isolation: on "gift_asset", only offer refillable
+        # assets owned by the CURRENT tenant (its own assets). Otherwise the
+        # dropdown listed every place's assets (AssetFedowPublic lives in the
+        # shared public schema) and a place could pick another place's gift
+        # asset. We also keep the refillable-category filter (like the model's
+        # limit_choices_to).
+        if db_field.name == "gift_asset":
+            kwargs["queryset"] = AssetFedowPublic.objects.filter(
+                origin=connection.tenant,
+                category__in=AssetFedowPublic.REFILLABLE_CATEGORIES,
+            )
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        # Pour le champ "gift_asset" (asset cadeau a recharger), on retire les
+        # petites icones "ajouter / modifier / voir l'asset" affichees a cote
+        # du menu deroulant. Ces raccourcis ouvrent l'admin des assets, qui
+        # masque volontairement les assets de type badgeuse (BDG) : cliquer
+        # dessus renvoyait une erreur "cet asset n'existe pas". Le simple choix
+        # dans la liste suffit ici : on ne gere pas les assets depuis la cle API.
+        # On surcharge formfield_for_dbfield (et non formfield_for_foreignkey)
+        # car Django enveloppe le widget dans le RelatedFieldWidgetWrapper APRES
+        # formfield_for_foreignkey : il faut donc agir une fois l'enveloppe posee.
+        # / Remove the add/change/view related-object icons on "gift_asset".
+        # They open the Asset admin, which hides BDG assets and raised a
+        # "does not exist" error. We override formfield_for_dbfield (not
+        # formfield_for_foreignkey) because Django wraps the widget in the
+        # RelatedFieldWidgetWrapper AFTER formfield_for_foreignkey runs.
+        formfield = super().formfield_for_dbfield(db_field, request, **kwargs)
+        if db_field.name == "gift_asset" and formfield is not None:
+            formfield.widget.can_add_related = False
+            formfield.widget.can_change_related = False
+            formfield.widget.can_delete_related = False
+            formfield.widget.can_view_related = False
+        return formfield
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -447,6 +490,29 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         is_active = getattr(configuration, field_name)
         module_name = str(MODULE_FIELDS[field_name]["name"])
 
+        # Certains modules demandent une INSTALLATION cote serveur avant d'etre utilisables
+        # (la newsletter a besoin d'une instance Ghost, dimensionnee selon le volume de
+        # mails). Ils sont marques `superadmin_seulement` dans MODULE_FIELDS.
+        #
+        # Un gestionnaire ordinaire qui clique ne recoit PAS un refus sec : on lui affiche
+        # une invitation a contacter l'equipe TiBillet, avec les liens utiles. C'est une
+        # porte d'entree, pas un mur.
+        # / Some modules need a SERVER-SIDE install first (the newsletter needs a Ghost
+        # instance, sized for the mail volume). A regular manager gets an invitation to
+        # reach out, not a blunt refusal.
+        module_reserve_au_superadmin = MODULE_FIELDS[field_name].get(
+            "superadmin_seulement", False
+        )
+        utilisateur_est_superadmin = request.user.is_superuser
+
+        if module_reserve_au_superadmin and not utilisateur_est_superadmin:
+            html = render_to_string(
+                'admin/dashboard_module_modal_contact.html',
+                {"module_name": module_name},
+                request=request,
+            )
+            return HttpResponse(html)
+
         toggle_url = reverse(
             'staff_admin:configuration-module-toggle',
             args=[field_name],
@@ -468,6 +534,22 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         """HTMX POST : bascule un module et renvoie les cartes mises a jour."""
         if field_name not in MODULE_FIELDS:
             return HttpResponse("", status=400)
+
+        # SECURITE : le controle est refait ICI, dans le POST, et pas seulement dans la
+        # modale. La modale n'est que de l'affichage — une requete forgee la contournerait.
+        # On ne fait JAMAIS confiance a l'interface pour appliquer une regle d'acces.
+        # / SECURITY: the check is re-done HERE, in the POST, not only in the modal. The
+        # modal is display only; a crafted request would bypass it. Never trust the UI to
+        # enforce an access rule.
+        module_reserve_au_superadmin = MODULE_FIELDS[field_name].get(
+            "superadmin_seulement", False
+        )
+        if module_reserve_au_superadmin and not request.user.is_superuser:
+            logger.warning(
+                f"module_toggle : '{request.user}' a tente d'activer le module "
+                f"'{field_name}', reserve aux superadmins."
+            )
+            return HttpResponse("", status=403)
 
         configuration = Configuration.get_solo()
         current_value = getattr(configuration, field_name)
@@ -511,7 +593,7 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
 
         if obj.server_cashless and obj.key_cashless:
             if obj.check_serveur_cashless():
-                messages.add_message(request, messages.INFO, _(f"Cashless server ONLINE"))
+                messages.add_message(request, messages.INFO, _("Cashless server ONLINE"))
             else:
                 messages.add_message(request, messages.ERROR, _("Cashless server OFFLINE or BAD KEY"))
 
@@ -1415,7 +1497,13 @@ class MembershipStatusFilter(admin.SimpleListFilter):
             return queryset.filter(status=Membership.ADMIN_WAITING)
 
         if value == "wp":
-            return queryset.filter(status__in=[Membership.WAITING_PAYMENT, Membership.ADMIN_VALID])
+            # PAYMENT_PENDING : paiement soumis mais débit pas encore confirmé (SEPA).
+            # / PAYMENT_PENDING: payment submitted but debit not confirmed yet (SEPA).
+            return queryset.filter(status__in=[
+                Membership.WAITING_PAYMENT,
+                Membership.ADMIN_VALID,
+                Membership.PAYMENT_PENDING,
+            ])
 
         if value == "canceled":
             return queryset.filter(status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED])
@@ -1596,6 +1684,42 @@ class MembershipAdmin(HelpDisplayMixin, ModelAdmin, ImportExportModelAdmin):
             .prefetch_related('price__product__form_fields')
         )
 
+    def get_export_formats(self):
+        """
+        Met le format Excel (XLSX) en premier dans le menu d'export.
+        / Put the Excel (XLSX) format first in the export dropdown.
+
+        LOCALISATION : Administration/admin_tenant.py (MembershipAdmin)
+
+        Pourquoi : un fichier CSV s'ouvre mal dans Excel en langue francaise.
+        Excel attend le point-virgule comme separateur de colonnes, mais le
+        CSV utilise la virgule. Du coup toutes les colonnes (email, nom...)
+        se retrouvent dans une seule cellule et on ne peut pas recuperer
+        facilement la liste des mails.
+        Le format Excel (XLSX) n'a pas ce probleme : il s'ouvre toujours en
+        colonnes propres. On le remonte donc en tete de la liste pour que les
+        utilisateur-ices le voient et le choisissent en premier.
+        / A CSV opens badly in French Excel (comma vs semicolon separator),
+        / so XLSX is moved to the top of the export format list.
+        """
+        # On recupere la liste des formats fournie par django-import-export
+        # / Get the export formats provided by django-import-export
+        formats_disponibles = super().get_export_formats()
+
+        # On separe le format Excel (XLSX) des autres formats
+        # / Split the Excel (XLSX) format from the others
+        formats_excel = []
+        autres_formats = []
+        for format_export in formats_disponibles:
+            if format_export().get_extension() == "xlsx":
+                formats_excel.append(format_export)
+            else:
+                autres_formats.append(format_export)
+
+        # XLSX en premier, puis les autres formats dans leur ordre d'origine
+        # / XLSX first, then the other formats in their original order
+        return formats_excel + autres_formats
+
     @display(description=_("User"))
     def user_email_link(self, obj):
         if obj.user:
@@ -1611,10 +1735,26 @@ class MembershipAdmin(HelpDisplayMixin, ModelAdmin, ImportExportModelAdmin):
     def price_product_display(self, obj: Membership):
         return f"{obj.price.product.name} / {obj.price.name}"
 
+    @display(description=_("Statut de l'adhésion"))
+    def display_status_membership(self, obj: Membership):
+        # Badge couleur selon l'état : vert = valide, rouge = annulé, gris = autre
+        # (dont "Paiement soumis, en attente"). En lecture seule : le statut est
+        # piloté par la machine à états du paiement, il ne se modifie jamais a la main.
+        # / Colored badge by state: green = valid, red = cancelled, grey = other.
+        # Read-only: the status is driven by the payment state machine, never edited by hand.
+        badge_fond, badge_texte = _badge_couleur_adhesion(obj.is_valid(), obj.status)
+        return format_html(
+            '<span style="background-color:{}; color:{}; padding:2px 10px; '
+            'border-radius:9999px; font-size:.85em;">{}</span>',
+            badge_fond, badge_texte, obj.get_status_display(),
+        )
+
     def get_readonly_fields(self, request, obj=None):
         readonly_fields = super().get_readonly_fields(request, obj)
         if obj:  # On est en train de modifier
-            return list(readonly_fields) + ['user_email_link', 'price_product_display']
+            return list(readonly_fields) + [
+                'display_status_membership', 'user_email_link', 'price_product_display',
+            ]
         return readonly_fields
 
     # def get_fields(self, request, obj=None):
@@ -1998,6 +2138,19 @@ class PostalAddressAdmin(ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
+    def save_model(self, request, obj, form, change):
+        # Une seule adresse principale par lieu. Cocher "adresse principale" ici
+        # decoche automatiquement toutes les autres : la derniere cochee gagne.
+        # La requete tourne dans le schema du tenant courant -> portee par tenant.
+        # / Only one main address per venue. Ticking "main address" here silently
+        # unticks all the others: the last one ticked wins. The query runs in the
+        # current tenant schema, so it is naturally tenant-scoped.
+        super().save_model(request, obj, form, change)
+        if obj.is_main:
+            PostalAddress.objects.exclude(pk=obj.pk).filter(is_main=True).update(
+                is_main=False
+            )
+
 
 ##### EVENT ADMIN
 
@@ -2297,6 +2450,9 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
                 'published',
                 'private',
                 'archived',
+                # Auteur de l'event (ex : proposeur via le wizard public), en lecture seule.
+                # / Event author (e.g. public-wizard proposer), read-only.
+                'display_created_by',
             ),
         }),
     )
@@ -2313,6 +2469,9 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     list_editable = ['published', ]
     readonly_fields = (
         'display_valid_tickets_count',
+        # Affiche en lecture seule sur la fiche event (bas du bloc Publier).
+        # / Read-only on the event change form (bottom of the Publish block).
+        'display_created_by',
     )
 
     search_fields = ['name']
@@ -2369,6 +2528,21 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
             )
         )
 
+    def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
+        # On enveloppe la vue d'ajout/édition pour transformer une IntegrityError
+        # (contrainte unique name+datetime) en message propre plutôt qu'une 500.
+        # Cas typique : double-clic sur "Enregistrer" / double soumission. La
+        # validation du formulaire (unique_together) était passée, mais un INSERT
+        # concurrent a déjà créé l'évènement entre temps (course / TOCTOU).
+        # / Wrap the add/change view to turn an IntegrityError (unique name+datetime
+        # constraint) into a clean message instead of a 500. Typical case: a
+        # double "Save" submit slipping past the form's unique validation.
+        try:
+            return super().changeform_view(request, object_id, form_url, extra_context)
+        except IntegrityError:
+            messages.error(request, _("Un évènement avec le même nom et la même date existe déjà."))
+            return redirect(reverse(f"{self.admin_site.name}:BaseBillet_event_changelist"))
+
     def save_model(self, request, obj: Event, form, change):
         # Sanitize all TextField inputs to avoid XSS via WysiwYG/TextField
         sanitize_textfields(obj)
@@ -2408,6 +2582,16 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
             count = instance.valid_tickets_count()
         return f"{count} / {instance.jauge_max}"
 
+    @display(description=_("Créé par"))
+    def display_created_by(self, instance: Event):
+        # Affiche l'utilisateur qui a cree l'event (ex : proposeur via le wizard
+        # public). Tiret si inconnu (events anciens ou crees par script/import).
+        # / Show the user who created the event (e.g. public-wizard proposer).
+        # Dash if unknown (legacy events or created by a script/import).
+        if instance.created_by:
+            return instance.created_by.email
+        return "—"
+
     @action(
         description=_("Archive"),
         permissions=["custom_actions_row"],
@@ -2429,7 +2613,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         try:
             duplicate = self._duplicate_event(obj, date_adjustment="day")
             messages.success(request, _("Event duplicated successfully"))
-        except IntegrityError as e:
+        except IntegrityError:
             messages.error(request, _("Un evenement avec le même nom et date semble déja dupliqué"))
 
         return redirect(request.META["HTTP_REFERER"])
@@ -2446,7 +2630,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         try:
             duplicate = self._duplicate_event(obj, date_adjustment="week")
             messages.success(request, _("Event duplicated successfully"))
-        except IntegrityError as e:
+        except IntegrityError:
             messages.error(request, _("Un evenement avec le même nom et date semble déja dupliqué"))
 
         return redirect(request.META["HTTP_REFERER"])
@@ -2463,7 +2647,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         try:
             duplicate = self._duplicate_event(obj, date_adjustment="week2")
             messages.success(request, _("Event duplicated successfully"))
-        except IntegrityError as e:
+        except IntegrityError:
             messages.error(request, _("Un evenement avec le même nom et date semble déja dupliqué"))
 
         return redirect(request.META["HTTP_REFERER"])
@@ -2480,7 +2664,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         try:
             duplicate = self._duplicate_event(obj, date_adjustment="month")
             messages.success(request, _("Event duplicated successfully"))
-        except IntegrityError as e:
+        except IntegrityError:
             messages.error(request, _("Un evenement avec le même nom et date semble déja dupliqué"))
         return redirect(request.META["HTTP_REFERER"])
 
@@ -2593,11 +2777,24 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         Action bulk : pour chaque event selectionne qui est une proposition
         en attente, set is_proposal=False + published=True.
         / Bulk action: approve and publish selected pending proposals.
+
+        IMPORTANT (cf. CHANTIER-08) : on publie via save() par instance, et NON
+        via queryset.update() en masse. .update() ne declenche PAS le signal
+        post_save declencher_refresh_seo_cache -> sans lui, l'event approuve
+        n'apparait sur la carte reseau qu'au prochain beat 4h. save() declenche
+        le signal -> rebuild SEO debounce -> l'event apparait en ~15s.
+        / We publish with per-instance save(), NOT bulk queryset.update():
+        .update() does not fire the post_save signal that refreshes the SEO
+        cache, so the approved event would only appear on the network map at the
+        next 4h beat. save() fires the signal -> debounced SEO rebuild.
         """
-        nb_approuvees = queryset.filter(is_proposal=True, published=False).update(
-            is_proposal=False,
-            published=True,
-        )
+        propositions_en_attente = queryset.filter(is_proposal=True, published=False)
+        nb_approuvees = 0
+        for proposition in propositions_en_attente:
+            proposition.is_proposal = False
+            proposition.published = True
+            proposition.save(update_fields=["is_proposal", "published"])
+            nb_approuvees += 1
         self.message_user(
             request,
             _("%(n)s proposal(s) approved.") % {"n": nb_approuvees},
@@ -2644,25 +2841,84 @@ class ReservationValidFilter(admin.SimpleListFilter):
             ).distinct()
 
 
+def _build_event_price_options():
+    """
+    Construit les choix du select tarif du formulaire d'ajout de réservation :
+    une option par couple (évènement, tarif).
+    / Builds the rate select choices: one option per (event, rate) pair.
+
+    Un même tarif (Product/Price) peut être partagé par plusieurs évènements —
+    typiquement "Réservation gratuite", rattaché à tous les évènements gratuits.
+    On génère donc une entrée distincte PAR évènement ; sinon les évènements qui
+    partagent un tarif n'auraient pas d'entrée propre et seraient invisibles.
+    / A rate can be shared across several events (e.g. "Free booking" linked to
+      every free event), so we emit one entry per event; otherwise events sharing
+      a rate would have no entry of their own and stay invisible.
+
+    Valeur : "event_uuid:price_uuid" — l'évènement est explicite (pas de
+    déduction ambiguë). Libellé cherchable : "03/07 - Évènement - Tarif - prix€".
+    / Value: "event_uuid:price_uuid" (explicit event). Searchable label.
+
+    La source est la même que la billetterie publique : event.products -> prices.
+    / Same source as the public ticketing: event.products -> prices.
+
+    Renvoie un tuple (choix, donnees) :
+    - choix : liste [(valeur, libellé)] pour le ChoiceField.
+    - donnees : dict {valeur: {"prix": float, "libre": bool}} pour le JS
+      d'auto-remplissage du champ "Prix par billet".
+    / Returns (choices, data): choices for the ChoiceField, and a {value: {...}}
+      map used by the per-ticket price autofill JS.
+    """
+    limite_date = timezone.localtime() - timedelta(days=1)
+    evenements = (
+        Event.objects.filter(datetime__gte=limite_date)
+        .order_by("datetime")
+        .prefetch_related("products__prices")
+    )
+    choix = [("", _("Choisir un tarif"))]
+    donnees = {}
+    for evenement in evenements:
+        date_affichee = evenement.datetime.strftime("%d/%m")
+        for produit in evenement.products.all():
+            for tarif in produit.prices.all():
+                valeur = f"{evenement.uuid}:{tarif.uuid}"
+                libelle = f"{date_affichee} - {evenement.name} - {tarif.name} - {tarif.prix}€"
+                choix.append((valeur, libelle))
+                donnees[valeur] = {"prix": float(tarif.prix), "libre": bool(tarif.free_price)}
+    return choix, donnees
+
+
 class ReservationAddAdmin(ModelForm):
-    # Uniquement les tarif Adhésion
-    email = forms.ModelChoiceField(
+    email = forms.EmailField(
         required=True,
-        queryset=TibilletUser.objects.all(),
-        empty_label=_("Select a user"),  # Texte affiché par défaut
+        widget=UnfoldAdminEmailInputWidget(),
         label="Email",
-        widget=UnfoldAdminSelect2Widget,
     )
 
-    pricesold = forms.ModelChoiceField(
-        queryset=PriceSold.objects.filter(
-            productsold__event__datetime__gte=timezone.localtime() - timedelta(days=1)).order_by(
-            "productsold__event__datetime"),
-        # Remplis le champ select avec les objets Price
-        empty_label=_("Select a product"),  # Texte affiché par défaut
+    # Une option par couple (évènement, tarif) — voir _build_event_price_choices.
+    # Les choix sont construits dans __init__ (une requête à chaque affichage du
+    # formulaire). La valeur est "event_uuid:price_uuid".
+    # / One option per (event, rate) pair — see _build_event_price_choices.
+    #   Choices are built in __init__. Value is "event_uuid:price_uuid".
+    price = forms.ChoiceField(
         required=True,
         widget=UnfoldAdminSelect2Widget,
-        label=_("Rate")
+        label=_("Rate"),
+        help_text=_("Tarif d'un évènement à venir. Le produit vendu est créé automatiquement si besoin."),
+    )
+
+    # Prix PAR billet (montant unitaire). Rempli automatiquement à la sélection
+    # du tarif (JS), obligatoire pour un tarif à prix libre. Si laissé vide pour
+    # un tarif normal, on utilise le prix du tarif. Le total = prix × quantité.
+    # / Price PER ticket (unit amount). Auto-filled on rate selection (JS),
+    #   required for an open-price rate. If left empty for a normal rate, the
+    #   rate's price is used. Total = price × quantity.
+    amount = forms.FloatField(
+        required=False,
+        min_value=0,
+        widget=UnfoldAdminTextInputWidget(attrs={"type": "number", "step": "0.01", "min": "0"}),
+        label=_("Prix par billet"),
+        help_text=_("Montant payé pour UN billet (multiplié par la quantité). Obligatoire pour un tarif à prix libre."),
     )
 
     # options_checkbox = forms.ModelMultipleChoiceField(
@@ -2682,10 +2938,16 @@ class ReservationAddAdmin(ModelForm):
     #     label=_("Single choice menu"),
     # )
 
+    # Obligatoire, avec une option vide en tête : on force un choix conscient.
+    # Sans ça, le 1er choix de PaymentMethod.classic() est "Offert" (FREE) et une
+    # validation distraite créait une vente offerte par erreur.
+    # / Required, with an empty first option: forces a conscious choice. Otherwise
+    #   the first choice of PaymentMethod.classic() is "Offered" (FREE) and an
+    #   inattentive submit created an offered sale by mistake.
     payment_method = forms.ChoiceField(
-        required=False,
-        choices=PaymentMethod.classic(),  # on retire les choix token
-        widget=UnfoldAdminSelectWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
+        required=True,
+        choices=[("", _("Sélectionner un moyen de paiement"))] + PaymentMethod.classic(),
+        widget=UnfoldAdminSelectWidget(),
         label=_("Payment method"),
     )
 
@@ -2705,28 +2967,94 @@ class ReservationAddAdmin(ModelForm):
         # 'last_name',
         # ]
 
+    class Media:
+        # JS d'auto-remplissage du "Prix par billet" à la sélection du tarif.
+        # / JS that autofills the per-ticket price on rate selection.
+        js = ("admin/js/reservation_price_autofill.js",)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Construction des choix du select tarif (une option par couple
+        # évènement/tarif) et des données pour le JS d'auto-remplissage du prix.
+        # / Build the rate choices (one per event/rate pair) and the data used by
+        #   the price autofill JS.
+        choix, donnees = _build_event_price_options()
+        self.fields["price"].choices = choix
+        # Le JS lit ce mapping {valeur: {prix, libre}} pour pré-remplir le montant
+        # et rendre le champ obligatoire si le tarif est à prix libre.
+        # / The JS reads this {value: {prix, libre}} map to prefill the amount and
+        #   make the field required for open-price rates.
+        self.fields["price"].widget.attrs["data-prices"] = json.dumps(donnees)
+
+    @staticmethod
+    def _extraire_evenement_et_tarif(valeur):
+        """
+        Décompose la valeur "event_uuid:price_uuid" du champ price en
+        (Event, Price). Renvoie (None, None) si vide ou invalide.
+        / Splits the "event_uuid:price_uuid" value into (Event, Price).
+        """
+        if not valeur or ":" not in valeur:
+            return None, None
+        event_uuid, price_uuid = valeur.split(":", 1)
+        try:
+            evenement = Event.objects.get(uuid=event_uuid)
+            tarif = Price.objects.get(uuid=price_uuid)
+        except (Event.DoesNotExist, Price.DoesNotExist, ValueError):
+            return None, None
+        return evenement, tarif
+
     def clean_payment_method(self):
         cleaned_data = self.cleaned_data
-        pricesold = cleaned_data.get('pricesold')
+        # Le champ "price" vaut "event_uuid:price_uuid" : on récupère le tarif
+        # pour vérifier la cohérence avec la méthode de paiement.
+        # / "price" is "event_uuid:price_uuid": fetch the rate to check coherence.
+        _evenement, tarif = self._extraire_evenement_et_tarif(cleaned_data.get('price'))
         payment_method = cleaned_data.get('payment_method')
-        # pricesold peut être None si le champ a des erreurs de validation ou n'est pas renseigné
-        # On ne valide la méthode de paiement que si on a un produit
-        if pricesold and getattr(pricesold, 'productsold', None):
-            if pricesold.productsold.categorie_article == Product.FREERES and payment_method != PaymentMethod.FREE:
-                raise forms.ValidationError(_("Une reservation gratuite doit être en paiement OFFERT"), code="invalid")
+        # On ne valide la méthode de paiement que si on a un tarif.
+        # / Only check the payment method when a rate is set.
+        if tarif and tarif.product.categorie_article == Product.FREERES and payment_method != PaymentMethod.FREE:
+            raise forms.ValidationError(_("Une reservation gratuite doit être en paiement OFFERT"), code="invalid")
         return payment_method
 
     def clean(self):
-        return super().clean()
+        cleaned_data = super().clean()
+        _evenement, tarif = self._extraire_evenement_et_tarif(cleaned_data.get('price'))
+        montant = cleaned_data.get('amount')
+        payment_method = cleaned_data.get('payment_method')
+        # Pour un tarif à prix libre payant, le prix par billet est obligatoire
+        # (le tarif n'a pas de prix fixe à appliquer).
+        # / For a paid open-price rate, the per-ticket price is required
+        #   (there is no fixed rate price to apply).
+        if tarif and tarif.free_price and payment_method != PaymentMethod.FREE:
+            if montant is None or montant <= 0:
+                self.add_error('amount', _("Indiquez le prix par billet pour un tarif à prix libre."))
+        return cleaned_data
 
     def save(self, commit=True):
         cleaned_data = self.cleaned_data
 
+        # Le champ "email" est un EmailField : l'admin saisit une adresse.
+        # get_or_create_user retrouve le compte ou le cree, et l'associe au
+        # tenant courant. send_mail=False : pas de mail de validation, la
+        # reservation est creee directement cote admin.
+        # / The "email" field is an EmailField: get_or_create_user finds or
+        #   creates the account (linked to the current tenant), no validation mail.
         email = self.cleaned_data.pop('email')
-        user = get_or_create_user(email)
+        user = get_or_create_user(email, send_mail=False)
 
-        pricesold: PriceSold = cleaned_data.pop('pricesold')
-        event: Event = pricesold.productsold.event
+        # Le champ "price" vaut "event_uuid:price_uuid" : l'évènement est
+        # explicite (un même tarif peut être partagé entre plusieurs évènements).
+        # On matérialise le produit vendu (ProductSold) et le tarif vendu
+        # (PriceSold) si besoin : ils n'existent qu'après une première vente.
+        # / "price" is "event_uuid:price_uuid": the event is explicit (a rate can
+        #   be shared across events). Materialize ProductSold/PriceSold if needed.
+        event, price = self._extraire_evenement_et_tarif(cleaned_data.pop('price'))
+        productsold, _created = ProductSold.objects.get_or_create(
+            product=price.product, event=event,
+        )
+        pricesold, _created = PriceSold.objects.get_or_create(
+            productsold=productsold, price=price, prix=price.prix,
+        )
 
         reservation: Reservation = self.instance
         reservation.user_commande = user
@@ -2745,6 +3073,7 @@ class ReservationAddAdmin(ModelForm):
         ### Création des billets associés
         payment_method = self.cleaned_data.pop('payment_method')
         quantity = self.cleaned_data.pop('quantity', 1) or 1
+        montant_saisi = self.cleaned_data.pop('amount', None)
         for _ in range(quantity):
             Ticket.objects.create(
                 payment_method=payment_method,
@@ -2754,12 +3083,25 @@ class ReservationAddAdmin(ModelForm):
                 pricesold=pricesold,
             )
 
-        # Création de la ligne comptables
-        # Si offert, le montant est 0
+        # Prix unitaire PAR billet : le montant saisi s'il est fourni, sinon le
+        # prix du tarif.
+        # / Per-ticket price: the typed amount if provided, else the rate's price.
+        if montant_saisi is not None and montant_saisi != '':
+            prix_unitaire = dround(Decimal(str(montant_saisi)))
+        else:
+            prix_unitaire = pricesold.prix
+
+        # LigneArticle.amount est le montant UNITAIRE en centimes : la quantité
+        # est portée par le champ qty, et le total = amount × qty (cf.
+        # comptabilite/services.py et LigneArticle.total()). Ne PAS multiplier
+        # par quantity ici, sinon double comptage (amount × qty²).
+        # / LigneArticle.amount is the UNIT amount in cents: quantity is held by
+        #   the qty field and total = amount × qty. Do NOT multiply by quantity
+        #   here, otherwise it is double-counted (amount × qty²).
         if payment_method == PaymentMethod.FREE:
             amount = 0
         else:
-            amount = int(pricesold.prix * quantity * 100)
+            amount = int(prix_unitaire * 100)
 
         vente = LigneArticle.objects.create(
             pricesold=pricesold,
@@ -3462,9 +3804,40 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
     add_form = GhostConfigAddform
 
     readonly_fields = ["has_key", "ghost_last_log"]
-    actions_detail = ["test_api_ghost_admin_button"]
 
-    @display(description=_("Has key"), boolean=True)
+    # Le panneau s'affiche AVANT le formulaire. Il remplace les anciens boutons du bandeau
+    # (`actions_detail`) : trois libelles nus, sans un mot d'explication, dans un coin de
+    # l'ecran. Le panneau, lui, dit ce que fait chaque bouton — et surtout ce qu'il NE fait
+    # PAS : un brouillon n'est jamais publie ni envoye.
+    # / The panel replaces the old bare `actions_detail` buttons. It says what each button
+    # does — and above all what it does NOT do: a draft is never published nor sent.
+    change_form_before_template = "admin/ghost/panneau_newsletter.html"
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        """
+        Injecte le contexte du panneau affiche AVANT le formulaire.
+        / Inject the context of the panel shown BEFORE the form.
+
+        LOCALISATION : Administration/admin_tenant.py (GhostConfigAdmin)
+
+        C'est TOUT ce que l'admin fait pour ce panneau : lui donner ses boutons. La logique
+        (tester la connexion, generer le brouillon) vit dans `newsletter/views.py`, avec ses
+        permissions DRF — pas ici, dans un module d'admin de 4000 lignes.
+        / This is ALL the admin does for the panel: hand it its buttons. The logic lives in
+        `newsletter/views.py`, with its own DRF permissions.
+
+        La liste des fenetres appartient a l'app newsletter : c'est elle qui fabrique les
+        brouillons, et c'est elle qui VALIDE la valeur recue (liste blanche). Le gabarit
+        boucle dessus. Ajouter « 90 jours » ne demande donc qu'une valeur, a un seul endroit.
+        / The window list belongs to the newsletter app: it builds the drafts and VALIDATES
+        the received value. One value, one place.
+        """
+        from newsletter.views import FENETRES_DE_BROUILLON_EN_JOURS
+
+        extra_context = extra_context or {}
+        extra_context["fenetres_de_brouillon"] = FENETRES_DE_BROUILLON_EN_JOURS
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
     def has_key(self, instance: GhostConfig):
         return True if instance.ghost_key else False
 
@@ -3518,48 +3891,6 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
 
             # Always save the model, even in error cases
             super().save_model(request, obj, form, change)
-
-    @action(description=_("Test Api"),
-            url_path="test_api_ghost_admin_button",
-            permissions=["custom_actions_detail"])
-    def test_api_ghost_admin_button(self, request, object_id):
-
-        from sib_api_v3_sdk.rest import ApiException
-        try:
-            ghost_config = GhostConfig.get_solo()
-            ghost_url = ghost_config.ghost_url
-            ghost_key = ghost_config.get_api_key()
-        except ApiException as e:
-            ghost_config.last_log = f"{e}"
-            logger.warning("ApiException when calling AccountApi->get_account: %s\n" % e)
-            messages.error(request, _(f"Api not OK : {e}"))
-            return redirect(request.META["HTTP_REFERER"])
-        except Exception:
-            messages.error(request, _("La connexion à l'API Ghost a échoué. L'API a potentiellement mal été configuré "))
-            return redirect(request.META["HTTP_REFERER"])
-
-
-        if not ghost_url or not ghost_key:
-            messages.error(request, _("Ghost URL or API key is missing"))
-            return redirect(request.META["HTTP_REFERER"])
-
-        try:
-            response = self.test_api_ghost(ghost_url, ghost_key)
-            # Update the last_log field with the response
-            ghost_config.ghost_last_log = f"{timezone.now()} - Status: {response.status_code} - Response: {response.text}"
-            ghost_config.save()
-
-            if response.ok:
-                messages.success(request, _("Ghost API connection successful"))
-            else:
-                messages.error(request, _(f"Ghost API connection failed: {response.status_code} - {response.reason}"))
-
-        except Exception as e:
-            ghost_config.ghost_last_log = f"{timezone.now()} - Error: {type(e).__name__} - {str(e)}"
-            ghost_config.save()
-            messages.error(request, _(f"Error testing Ghost API: {type(e).__name__} - {str(e)}"))
-
-        return redirect(request.META["HTTP_REFERER"])
 
     def has_custom_actions_detail_permission(self, request, object_id):
         return TenantAdminPermissionWithRequest(request)
@@ -3760,7 +4091,7 @@ class BrevoConfigAdmin(SingletonModelAdmin, ModelAdmin):
             api_instance = sib_api_v3_sdk.AccountApi(sib_api_v3_sdk.ApiClient(configuration))
             api_response = api_instance.get_account()
             brevo_config.last_log = api_response
-            messages.success(request, _(f"Api OK"))
+            messages.success(request, _("Api OK"))
         except ApiException as e:
             brevo_config.last_log = f"{e}"
             logger.warning("ApiException when calling AccountApi->get_account: %s\n" % e)
@@ -3807,12 +4138,16 @@ class AssetAdmin(ModelAdmin):
     ]
 
     readonly_fields = [
+        # Identifiant unique de l'asset, affiche en lecture seule sur la fiche.
+        # / Asset unique identifier, shown read-only on the change form.
+        'uuid',
         'created_at',
         'wallet_origin',
         'federated_with',
     ]
 
     fields = [
+        "uuid",
         "name",
         "currency_code",
         "category",

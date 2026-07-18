@@ -122,6 +122,9 @@ class TransactionSimpleValidator(serializers.Serializer):
     FIRST, SALE, CREATION, REFILL, TRANSFER, SUBSCRIBE, BADGE, FUSION, REFUND, VOID = 'FST', 'SAL', 'CRE', 'REF', 'TRF', 'SUB', 'BDG', 'FUS', 'RFD', 'VID'
     QRCODE_SALE = 'QRS'
     DEPOSIT = 'BNK'
+    # Action ajoutée côté serveur Fedow : correction de dérive lors d'une réconciliation
+    # Action added on the Fedow server side: drift correction during a reconciliation
+    CORRECTION = 'COR'
 
     TYPE_ACTION = (
         (FIRST, _("First block")),
@@ -136,6 +139,7 @@ class TransactionSimpleValidator(serializers.Serializer):
         (REFUND, _('Refund')),
         (VOID, 'Pass card / wallet dissociation'),
         (DEPOSIT, 'Remise en banque'),
+        (CORRECTION, _("Correction de dérive (réconciliation)")),
     )
     action = serializers.ChoiceField(choices=TYPE_ACTION)
     get_action_display = serializers.CharField()

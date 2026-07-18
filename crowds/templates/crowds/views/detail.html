@@ -41,7 +41,7 @@
                 </h1>
 
                 {# Admin buttons #}
-                {% if user.is_staff or user.is_superuser %}
+                {% if user.is_staff or user.is_superuser or user.is_current_tenant_admin %}
                     <div class="d-flex gap-2 flex-shrink-0" data-testid="admin-actions">
                         {% if not initiative.closed %}
                             <form method="post" action="{{ initiative.get_absolute_url }}close/" style="display:inline;">

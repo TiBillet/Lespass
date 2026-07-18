@@ -664,6 +664,36 @@ def get_sidebar_navigation(request):
             }
         )
 
+    # --- Newsletter : visible SEULEMENT si le module est actif ---
+    #
+    # Le module est desactive par defaut et ne s'active que par un superadmin (une instance
+    # Ghost doit d'abord etre installee et dimensionnee). Tant qu'il est inactif, la section
+    # n'existe pas dans la sidebar : inutile de montrer une config Ghost a un lieu qui n'a
+    # pas de serveur Ghost.
+    #
+    # C'est ici que vit desormais la configuration Ghost — elle etait auparavant perdue au
+    # milieu de « Outils externes », a cote de Webhook et Brevo.
+    # / Newsletter: shown ONLY when the module is active. The Ghost config lives here now;
+    # it used to sit lost in "External tools", next to Webhook and Brevo.
+    if configuration.module_newsletter:
+        navigation.append(
+            {
+                "title": _("Newsletter"),
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": _("Serveur Ghost"),
+                        "icon": "mail",
+                        "link": reverse_lazy(
+                            "staff_admin:BaseBillet_ghostconfig_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                ],
+            }
+        )
+
     # --- Toujours visible : External tools ---
     navigation.append(
         {
@@ -683,14 +713,6 @@ def get_sidebar_navigation(request):
                     "title": _("Webhook"),
                     "icon": "webhook",
                     "link": reverse_lazy("staff_admin:BaseBillet_webhook_changelist"),
-                    "permission": admin_permission,
-                },
-                {
-                    "title": _("Ghost"),
-                    "icon": "circle",
-                    "link": reverse_lazy(
-                        "staff_admin:BaseBillet_ghostconfig_changelist"
-                    ),
                     "permission": admin_permission,
                 },
                 {
@@ -779,6 +801,21 @@ MODULE_FIELDS = {
             "c'est l'agenda participatif. Tout se règle dans « Options de fédération »."
         ),
         "testid": "dashboard-card-federation",
+    },
+    # Newsletter : desactive par defaut, activable par un SUPERADMIN seulement.
+    # Une instance Ghost doit d'abord etre installee et dimensionnee (la charge serveur
+    # depend du volume de mails). Un gestionnaire qui clique voit une invitation a
+    # contacter l'equipe TiBillet — pas un refus sec. Voir `superadmin_seulement`.
+    # / Newsletter: OFF by default, SUPERADMIN-ONLY. A Ghost instance must be installed
+    # and sized first. A regular manager clicking it gets an invitation to reach out.
+    "module_newsletter": {
+        "name": _("Newsletter"),
+        "description": _(
+            "Evènements, rappels d'adhésions, résumé de vos activités, "
+            "pilotez votre newsletter avec TiBillet !"
+        ),
+        "testid": "dashboard-card-newsletter",
+        "superadmin_seulement": True,
     },
     # FROM V2 : TO IMPLEMENT LATER ON
     # "module_monnaie_locale": {

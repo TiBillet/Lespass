@@ -329,7 +329,7 @@ class GlobalFundingViewset(viewsets.ViewSet):
         """
         if not request.user.is_authenticated:
             return JsonResponse({"error": _("Authentication required.")}, status=401)
-        if not (request.user.is_staff or request.user.is_superuser):
+        if not (request.user.is_staff or request.user.is_superuser or request.user.is_current_tenant_admin):
             return JsonResponse({"error": _("Permission denied.")}, status=403)
 
         serializer = GlobalFundingAllocateSerializer(data=request.data)
@@ -945,7 +945,7 @@ class InitiativeViewSet(viewsets.ViewSet):
 
         if not request.user.is_authenticated:
             return _render_updated_fragment(status_code=401)
-        if not (request.user.is_staff or request.user.is_superuser):
+        if not (request.user.is_staff or request.user.is_superuser or request.user.is_current_tenant_admin):
             return _render_updated_fragment(status_code=403)
 
         budget_item = get_object_or_404(BudgetItem, pk=bid, initiative=initiative)
@@ -978,7 +978,7 @@ class InitiativeViewSet(viewsets.ViewSet):
 
         if not request.user.is_authenticated:
             return _render_updated_fragment(status_code=401)
-        if not (request.user.is_staff or request.user.is_superuser):
+        if not (request.user.is_staff or request.user.is_superuser or request.user.is_current_tenant_admin):
             return _render_updated_fragment(status_code=403)
 
         budget_item = get_object_or_404(BudgetItem, pk=bid, initiative=initiative)
@@ -1057,7 +1057,7 @@ class InitiativeViewSet(viewsets.ViewSet):
 
         if not request.user.is_authenticated:
             return _render_participations(401)
-        if not (request.user.is_staff or request.user.is_superuser):
+        if not (request.user.is_staff or request.user.is_superuser or request.user.is_current_tenant_admin):
             return _render_participations(403)
             
         if participation_obj.state != Participation.State.REQUESTED:
@@ -1088,7 +1088,7 @@ class InitiativeViewSet(viewsets.ViewSet):
 
         if not request.user.is_authenticated:
             return _render_participations(401)
-        if not (request.user.is_staff or request.user.is_superuser):
+        if not (request.user.is_staff or request.user.is_superuser or request.user.is_current_tenant_admin):
             return _render_participations(403)
             
         if participation_obj.state != Participation.State.COMPLETED_USER:
@@ -1248,7 +1248,7 @@ class InitiativeViewSet(viewsets.ViewSet):
 
         if not request.user.is_authenticated:
             return _render_contributions(status_code=401)
-        if not (request.user.is_staff or request.user.is_superuser):
+        if not (request.user.is_staff or request.user.is_superuser or request.user.is_current_tenant_admin):
             return _render_contributions(status_code=403)
             
         contribution_obj = get_object_or_404(Contribution, pk=cid, initiative=initiative)
@@ -1276,7 +1276,7 @@ class InitiativeViewSet(viewsets.ViewSet):
         """
         if not request.user.is_authenticated:
             return JsonResponse({"error": _("Authentication required.")}, status=401)
-        if not (request.user.is_staff or request.user.is_superuser):
+        if not (request.user.is_staff or request.user.is_superuser or request.user.is_current_tenant_admin):
             return JsonResponse({"error": _("Permission denied.")}, status=403)
 
         initiative = get_object_or_404(Initiative, pk=pk)
@@ -1305,7 +1305,7 @@ class InitiativeViewSet(viewsets.ViewSet):
         """
         if not request.user.is_authenticated:
             return JsonResponse({"error": _("Authentication required.")}, status=401)
-        if not (request.user.is_staff or request.user.is_superuser):
+        if not (request.user.is_staff or request.user.is_superuser or request.user.is_current_tenant_admin):
             return JsonResponse({"error": _("Permission denied.")}, status=403)
 
         initiative = get_object_or_404(Initiative, pk=pk)

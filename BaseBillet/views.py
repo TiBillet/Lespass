@@ -18,7 +18,6 @@ from django.core import signing
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.core.serializers.json import DjangoJSONEncoder
-from django.core.signing import TimestampSigner
 from django.db import connection, IntegrityError, transaction as db_transaction
 from django.db.models import Count, Q, Sum
 from django.http import HttpResponse, HttpRequest, Http404, HttpResponseRedirect
@@ -38,7 +37,6 @@ from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
 from ApiBillet.permissions import TenantAdminPermission, CanInitiatePaymentPermission, CanCreateEventPermission
@@ -55,14 +53,11 @@ from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invo
     contact_mailer, send_to_ghost_email, send_sale_to_laboutik, \
     send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, \
     send_ticket_cancellation_user, send_email_generique, \
-    send_membership_pending_admin, send_membership_pending_user, send_membership_payment_link_user
-from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
-    ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator, EventQuickCreateSerializer, \
-    PaiementHorsLigneSerializer, WizardPlaceSelectSerializer, WizardPlaceMapSerializer, \
+    send_membership_payment_link_user
+from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator, PaiementHorsLigneSerializer, WizardPlaceSelectSerializer, WizardPlaceMapSerializer, \
     WizardEventSerializer
 from Administration.utils import clean_html as admin_clean_html
 from Customers.models import Client, Domain
-from MetaBillet.models import WaitingConfiguration
 from TiBillet import settings
 from booking.models import Booking
 from crowds.models import CrowdConfig, Initiative
@@ -70,7 +65,6 @@ from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
 from fedow_connect.utils import dround
 from fedow_connect.validators import TransactionSimpleValidator
-from fedow_public.models import AssetFedowPublic
 from root_billet.models import RootConfiguration
 from django.utils.dateparse import parse_datetime
 
@@ -143,6 +137,7 @@ def get_context(request):
     # context_cached = cache.get(f'get_context_{connection.tenant.uuid}')
     # if context_cached:
     #     return context_cached
+    from django.conf import settings
 
     config = Configuration.get_solo()
     crowd_config = CrowdConfig.get_solo()
@@ -177,6 +172,11 @@ def get_context(request):
         "config": config,
         "crowd_config": crowd_config,
         "meta_url": meta_url,
+        # Cle MapTiler pour les fonds de carte (vide -> repli OSM France HOT).
+        # Utilisee par la carte de la page event (geoloc.html), meme fond que la
+        # carto federation. / MapTiler key for basemaps (empty -> OSM France HOT
+        # fallback). Used by the event page map, same basemap as the federation map.
+        "maptiler_key": settings.MAPTILER_KEY,
         "header": True,
         # "tenant": connection.tenant,
         "formbricks_api_host": formbricks_config.api_host,
@@ -243,7 +243,7 @@ def get_context(request):
 
     if crowd_config.active and Initiative.objects.exists() and config.module_crowdfunding:
         navbar.append({
-            'name': f'crowd-list',
+            'name': 'crowd-list',
             'url': '/contrib/',
             'label': f'{crowd_config.title}',
             'icon': 'people-fill'
@@ -459,7 +459,7 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
 
             domain = get_object_or_404(Domain, domain=lespass_domain)
             primary_domain = domain.tenant.get_primary_domain()
-            if not primary_domain.domain in request.build_absolute_uri():
+            if primary_domain.domain not in request.build_absolute_uri():
                 return HttpResponseRedirect(f"https://{primary_domain}/qr/{qrcode_uuid}/")
 
             if not serialized_qrcode_card:
@@ -559,7 +559,16 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
         qrcode_uuid = validator.validated_data['qrcode_uuid']
         linked_serialized_card = fedowAPI.NFCcard.linkwallet_cardqrcode(user=user, qrcode_uuid=qrcode_uuid)
         if not linked_serialized_card:
-            messages.add_message(request, messages.ERROR, _("Not valid"))
+            # QR code inconnu de Fedow (carte non enregistrée / pas encore activée) ou
+            # échec de la liaison. On affiche un message explicite et on s'arrête : sans
+            # ce return, le code plus bas faisait linked_serialized_card['qrcode_uuid']
+            # sur False → TypeError "'bool' object is not subscriptable" (500).
+            # / Unknown QR code on Fedow side (card not registered / not activated yet) or
+            # link failure. Show an explicit message and stop: without this return, the code
+            # below did linked_serialized_card['qrcode_uuid'] on False → TypeError 500.
+            messages.add_message(request, messages.ERROR,
+                                 _("Cette carte n'est pas reconnue. Elle n'est peut-être pas encore activée."))
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         # On retourne sur la page GET /qr/
         # Qui redirigera si besoin et affichera l'erreur
@@ -1033,7 +1042,7 @@ class MyAccount(viewsets.ViewSet):
         value = token_fed[0]['value']
         if value < 1:
             messages.add_message(request, messages.ERROR,
-                                 _(f"Your wallet is already empty."))
+                                 _("Your wallet is already empty."))
             return HttpResponseClientRedirect('/my_account/')
 
         status_code, result = fedowAPI.wallet.refund_fed_by_signature(user)
@@ -1049,7 +1058,7 @@ class MyAccount(viewsets.ViewSet):
                 'title': f"Remboursement de {amount_eur} € initié",
                 'sub_title': "TiBillet",
                 'main_text': f"La demande de remboursement de la somme {amount_eur} € a été envoyée à notre prestataire bancaire (Stripe).",
-                'main_text_2': f"Il apparaitra sur votre relevé sous 10 jours. Passé ce délai sans remboursement, veuillez nous contacter sur contact@tibillet.re, nous pourrons vérifier ensemble.",
+                'main_text_2': "Il apparaitra sur votre relevé sous 10 jours. Passé ce délai sans remboursement, veuillez nous contacter sur contact@tibillet.re, nous pourrons vérifier ensemble.",
                 'table_info': {'Montant remboursé': f'{amount_eur} €'},
                 'end_text': "À bientôt !",
                 'signature': "Marvin, le robot TiBillet",
@@ -1058,13 +1067,13 @@ class MyAccount(viewsets.ViewSet):
             return HttpResponseClientRedirect('/my_account/')
         else:
             messages.add_message(request, messages.WARNING,
-                                 _(f"Apologies, it seems you need to manually request a refund. You can go to one of the collective's register, or send ar email to: contact@tibillet.re ."))
+                                 _("Apologies, it seems you need to manually request a refund. You can go to one of the collective's register, or send ar email to: contact@tibillet.re ."))
             return HttpResponseClientRedirect('/my_account/')
 
     @staticmethod
     def get_place_cached_info(place_uuid):
         # Recherche des infos dans le cache :
-        place_info = cache.get(f"place_uuid")
+        place_info = cache.get("place_uuid")
         if place_info:
             logger.info("place info from cache GET")
             return place_info.get(place_uuid)
@@ -1082,7 +1091,7 @@ class MyAccount(viewsets.ViewSet):
                     }
 
             logger.info("place info to cache SET")
-            cache.set(f"place_uuid", place_info, 3600)
+            cache.set("place_uuid", place_info, 3600)
         return place_info.get(place_uuid)
 
     @action(detail=False, methods=['GET'])
@@ -1224,7 +1233,7 @@ class MyAccount(viewsets.ViewSet):
                 messages.add_message(request, messages.SUCCESS, _("Refilled wallet"))
             else:
                 messages.add_message(request, messages.ERROR, _("Payment verification error"))
-        except Exception as e:
+        except Exception:
             messages.add_message(request, messages.ERROR, _("Payment verification error"))
 
         return redirect('/my_account/')
@@ -1844,10 +1853,12 @@ class FederationViewset(viewsets.ViewSet):
 
         # Contexte standard du skin + variables specifiques a l'explorer
         # / Standard skin context + explorer-specific variables
+        from django.conf import settings
         template_context = get_context(request)
         template_context.update({
             'explorer_data': explorer_data,
             'current_tenant_uuid': current_uuid,
+            'maptiler_key': settings.MAPTILER_KEY,
             'has_other_federated_places': has_other_federated_places,
             'federation_json_ld': federation_json_ld,
             'breadcrumb_json_ld': breadcrumb_json_ld,
@@ -2007,14 +2018,14 @@ class EventMVT(viewsets.ViewSet):
             uuids_a_ajouter = uuids_thematiques - uuids_deja_presents
             for client_thematique in Client.objects.filter(uuid__in=uuids_a_ajouter):
                 tenants.append({
+                    # tag_filter = n'afficher QUE ces tags. Ce tenant n'est pas un
+                    # voisin choisi a la main : on ne veut de lui que les events qui
+                    # portent un des tags de la federation thematique, rien d'autre.
+                    # / tag_filter = show ONLY these tags. This tenant was not hand-picked:
+                    # we only want its events carrying one of the thematic federation tags.
                     "tenant": client_thematique,
-                    "tag_filter": [],
-                    # tag_exclude = INCLURE uniquement ces tags (sémantique
-                    # historique inversée du moteur) : on ne récupère que les
-                    # events thématiques de ce tenant.
-                    # / tag_exclude = include-only these tags (engine's inverted
-                    # semantics): only this tenant's thematic events are fetched.
-                    "tag_exclude": tags_federation_slugs,
+                    "tag_filter": tags_federation_slugs,
+                    "tag_exclude": [],
                 })
 
         # Récupération de tous les évènements de la fédération
@@ -2027,8 +2038,14 @@ class EventMVT(viewsets.ViewSet):
                 ).filter(
                     published=True,
                     datetime__gte=timezone.localtime() - timedelta(days=1),  # On prend les évènement a partir d'hier
-                ).exclude(
-                    tag__slug__in=tenant['tag_filter']
+                    # Un event ARCHIVE est un event retiré de l'agenda. Il ne doit plus
+                    # y apparaitre, meme s'il reste publié. Le cache SEO (carte,
+                    # explorateur) applique déjà ce filtre partout : sans lui ici,
+                    # l'agenda était le SEUL endroit où un event archivé restait visible.
+                    # / An ARCHIVED event is one removed from the agenda. The SEO cache
+                    # already filters it everywhere; without this, the agenda was the only
+                    # place where an archived event stayed visible.
+                    archived=False,
                 ).exclude(
                     categorie=Event.ACTION
                 )  # Les Actions sont affichés dans la page de l'evenement parent
@@ -2038,8 +2055,21 @@ class EventMVT(viewsets.ViewSet):
                         private=False
                     )
 
-                if len(tenant['tag_exclude']) > 0:
+                # Les deux filtres de tags d'un lieu federe, dans le sens annonce par
+                # les libelles de l'admin (FederatedPlace.tag_filter / tag_exclude).
+                # Le matching se fait par SLUG : les objets Tag appartiennent au schema
+                # de CHAQUE tenant, comparer les pk ne marcherait pas.
+                # Un tag_filter non vide restreint : on ne garde QUE ces tags.
+                # / A tenant's two tag filters, matching the admin labels.
+                # / Slug-based matching: Tag objects live in each tenant's own schema.
+                if len(tenant['tag_filter']) > 0:
                     events = events.filter(
+                        tag__slug__in=tenant['tag_filter'])
+
+                # Un tag_exclude non vide retire : on jette les events portant ces tags.
+                # / A non-empty tag_exclude drops events carrying any of these tags.
+                if len(tenant['tag_exclude']) > 0:
+                    events = events.exclude(
                         tag__slug__in=tenant['tag_exclude'])
                 if tags:
                     # Utiliser une annotation pour compter les tags correspondants
@@ -2529,11 +2559,11 @@ class EventMVT(viewsets.ViewSet):
                                  _('Payment confirmed. Tickets sent to your email. You can also view your tickets through "My account > Bookings".'))
             # Déja traité et validé.
             elif paiement_stripe.status == Paiement_stripe.PENDING:
-                messages.add_message(request, messages.WARNING, _(f"Your payment is awaiting validation."))
+                messages.add_message(request, messages.WARNING, _("Your payment is awaiting validation."))
             else:
                 messages.add_message(request, messages.WARNING,
-                                     _(f"An error has occurred, please contact the administrator."))
-        except MessageFailure as e:
+                                     _("An error has occurred, please contact the administrator."))
+        except MessageFailure:
             # Surement un test unitaire, les messages plantent a travers la Factory Request
             pass
         except Exception as e:
@@ -2563,7 +2593,7 @@ class Badge(viewsets.ViewSet):
         fedowAPI = FedowAPI()
         transaction = fedowAPI.badge.badge_in(user, product)
 
-        messages.add_message(request, messages.SUCCESS, _(f"Check in registered!"))
+        messages.add_message(request, messages.SUCCESS, _("Check in registered!"))
 
         return render(request, "reunion/partials/account/badge_switch.html", context={})
 
@@ -2571,7 +2601,7 @@ class Badge(viewsets.ViewSet):
     def check_out(self, request: HttpRequest):
         template_context = get_context(request)
         fedowAPI = FedowAPI()
-        messages.add_message(request, messages.SUCCESS, _(f"Check out registered!"))
+        messages.add_message(request, messages.SUCCESS, _("Check out registered!"))
         return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
     def get_permissions(self):
@@ -2775,11 +2805,11 @@ class MembershipMVT(viewsets.ViewSet):
                     # Si le produit n'existe pas dans les tenants fédérés, on affiche la page 404 personnalisée
                     context = get_context(request)
                     return render(request, "reunion/views/membership/404.html", context=context, status=404)
-            except Exception as e:
+            except Exception:
                 # En cas d'erreur lors de la recherche dans les tenants fédérés, on affiche la page 404 personnalisée
                 context = get_context(request)
                 return render(request, "reunion/views/membership/404.html", context=context, status=404)
-        except Exception as e:
+        except Exception:
             # Pour toute autre erreur, on affiche la page 404 personnalisée
             context = get_context(request)
             return render(request, "reunion/views/membership/404.html", context=context, status=404)
@@ -2805,7 +2835,57 @@ class MembershipMVT(viewsets.ViewSet):
         3. Si trouve : verifie le statut de la session Stripe
         4. Redirige vers Stripe ou affiche une page d'info
         """
-        membership = get_object_or_404(Membership, uuid=uuid.UUID(pk), status=Membership.ADMIN_VALID)
+        # On récupère l'adhésion SANS filtrer sur le statut. Cela permet
+        # d'afficher un message clair selon l'état de l'adhésion, au lieu du
+        # 404 JSON brut renvoyé auparavant par get_object_or_404.
+        # / Fetch the membership WITHOUT a status filter, so we can show a clear
+        # message depending on its state, instead of the previous raw JSON 404.
+        try:
+            membership = Membership.objects.get(uuid=uuid.UUID(pk))
+        except (Membership.DoesNotExist, ValueError):
+            context = get_context(request)
+            return render(
+                request,
+                "reunion/views/membership/payment_link_invalid.html",
+                context=context,
+                status=404,
+            )
+
+        context = get_context(request)
+        context['membership'] = membership
+
+        # Adhésion déjà payée (CB) ou active (abonnement) : plus rien à payer.
+        # / Membership already paid (card) or active (subscription): nothing to pay.
+        if membership.status in [Membership.ONCE, Membership.AUTO]:
+            return render(
+                request,
+                "reunion/views/membership/payment_already_done.html",
+                context=context,
+            )
+
+        # Paiement déjà soumis, débit en cours (SEPA jusqu'à 14 jours).
+        # On ne recrée surtout PAS de checkout : ce serait un 2e prélèvement.
+        # / Payment already submitted, debit pending (SEPA up to 14 days).
+        # We must NOT recreate a checkout: it would be a 2nd debit.
+        if membership.status == Membership.PAYMENT_PENDING:
+            return render(
+                request,
+                "reunion/views/membership/payment_already_pending.html",
+                context=context,
+            )
+
+        # Adhésion annulée, ou lien reçu avant validation admin : lien inactif.
+        # / Cancelled membership, or link used before admin validation: dead link.
+        if membership.status != Membership.ADMIN_VALID:
+            return render(
+                request,
+                "reunion/views/membership/payment_link_invalid.html",
+                context=context,
+                status=409,
+            )
+
+        # À partir d'ici : statut ADMIN_VALID, on peut créer/réutiliser un checkout.
+        # / From here: ADMIN_VALID status, we can create/reuse a checkout.
 
         # Chercher un paiement Stripe deja en cours pour cette adhesion
         # On filtre sur PENDING et OPEN : ce sont les statuts avant encaissement
@@ -2859,12 +2939,20 @@ class MembershipMVT(viewsets.ViewSet):
                 paiement_stripe_existant.save(update_fields=['status'])
 
             except Exception as e:
-                # Erreur API Stripe : on marque comme expire et on continue
-                # / Stripe API error: mark as expired and continue
+                # Erreur API Stripe : en cas de doute, on NE recrée PAS de
+                # checkout (cela pourrait générer un 2e prélèvement). On affiche
+                # la page "paiement en cours". L'adhérent réessaiera plus tard si
+                # le paiement n'avait pas abouti ; aucun risque de doublon.
+                # / Stripe API error: when in doubt, do NOT recreate a checkout
+                # (risk of a 2nd debit). Show the "payment pending" page instead.
                 logger.warning(
-                    f"get_checkout_for_membership : erreur recuperation session Stripe : {e}")
-                paiement_stripe_existant.status = Paiement_stripe.EXPIRE
-                paiement_stripe_existant.save(update_fields=['status'])
+                    f"get_checkout_for_membership : erreur recuperation session Stripe, "
+                    f"affichage page paiement en cours (pas de nouveau checkout) : {e}")
+                return render(
+                    request,
+                    "reunion/views/membership/payment_already_pending.html",
+                    context=context,
+                )
 
         # Aucun paiement existant ou session expiree : on cree un nouveau checkout
         # / No existing payment or expired session: create a new checkout
@@ -2957,16 +3045,16 @@ class MembershipMVT(viewsets.ViewSet):
         try:
             if paiement_stripe.traitement_en_cours:
                 messages.add_message(request, messages.SUCCESS,
-                                     _(f"Your payment has been validated and is being processed. Thank you very much!"))
+                                     _("Your payment has been validated and is being processed. Thank you very much!"))
             elif paiement_stripe.status == Paiement_stripe.VALID:
                 messages.add_message(request, messages.SUCCESS,
-                                     _(f"Your subscription has been validated. You will receive a confirmation email. Thank you very much!"))
+                                     _("Your subscription has been validated. You will receive a confirmation email. Thank you very much!"))
             elif paiement_stripe.status == Paiement_stripe.PENDING:
-                messages.add_message(request, messages.WARNING, _(f"Your payment is awaiting validation."))
+                messages.add_message(request, messages.WARNING, _("Your payment is awaiting validation."))
             else:
                 messages.add_message(request, messages.WARNING,
-                                     _(f"An error has occurred, please contact the administrator."))
-        except MessageFailure as e:
+                                     _("An error has occurred, please contact the administrator."))
+        except MessageFailure:
             # Surement un test unitaire, les messages plantent a travers la Factory Request
             pass
         except Exception as e:
@@ -2986,7 +3074,7 @@ class MembershipMVT(viewsets.ViewSet):
             return HttpResponse(_('PDF generation error'), status=500)
 
         response = HttpResponse(pdf_binary, content_type='application/pdf')
-        response['Content-Disposition'] = f'inline; filename="facture.pdf"'
+        response['Content-Disposition'] = 'inline; filename="facture.pdf"'
         return response
 
     @action(detail=True, methods=['GET'])
@@ -4533,6 +4621,24 @@ class EventWizard(viewsets.ViewSet):
         garde = self._garde_acces(request)
         if garde:
             return garde
+
+        # Email du proposeur (visiteur anonyme) : le bouton « Utiliser ce lieu »
+        # est un formulaire DISTINCT du form principal de l'etape 1, donc l'email
+        # saisi plus haut n'y est pas poste nativement (le JS l'y injecte). On le
+        # memorise en session ICI, exactement comme le fait _wizard_etape_choix_lieu
+        # pour le chemin classique. Sans ca, la finalisation ne retrouve pas
+        # l'email et renvoie l'utilisateur au debut. Obligatoire pour un anonyme.
+        # / Proposer email (anonymous visitor): the "Use this place" button is a
+        # SEPARATE form from step 1's main form, so the email above is not POSTed
+        # natively (the JS injects it). Store it in session HERE, just like
+        # _wizard_etape_choix_lieu does for the classic path. Required for anonymous.
+        if not request.user.is_authenticated:
+            email_proposeur = (request.POST.get("email_proposeur") or "").strip()
+            if not email_proposeur:
+                messages.add_message(request, messages.WARNING,
+                    _("Merci d'indiquer votre adresse e-mail pour proposer un évènement."))
+                return redirect("event-wizard-place")
+            request.session[self._session_key("email_proposeur")] = email_proposeur
 
         from BaseBillet.services.tiers_lieux import valider_coordonnees
 

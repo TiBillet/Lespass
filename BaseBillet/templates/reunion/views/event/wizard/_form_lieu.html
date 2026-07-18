@@ -495,6 +495,54 @@ Variables attendues :
             maj_etat_continuer();
         });
 
+        // Bouton « Utiliser ce lieu » d'une fiche Tiers-Lieux : son formulaire est
+        // DISTINCT du form principal (imbrique via HTMX), donc l'email saisi plus
+        // haut n'y est PAS poste nativement. On ecoute le CLIC sur le bouton (et
+        // PAS l'evenement 'submit' : le 'submit' d'un formulaire imbrique ne remonte
+        // pas jusqu'a `document`, alors que le 'click' bubble toujours — verifie en
+        // navigateur). Au clic, avant l'envoi natif, on copie l'email dans un champ
+        // cache de CE form. Si l'email est vide, on bloque (preventDefault empeche la
+        // soumission native du bouton) et on signale le champ, comme le `required`
+        // du form principal. Sans ca, use_tierslieux renvoie au debut.
+        // / The Tiers-Lieux "Use this place" button lives in a SEPARATE form (HTMX-
+        // nested), so the email above is not POSTed natively with it. We listen on
+        // CLICK (NOT 'submit': a nested form's 'submit' does not bubble to `document`,
+        // whereas 'click' always does — verified in-browser). On click, before the
+        // native submit, copy the email into a hidden field of THIS form. If empty,
+        // block (preventDefault stops the native submit) and flag the field.
+        document.addEventListener('click', function (evenement) {
+            var bouton = evenement.target.closest('[data-testid="wizard-tierslieux-use"]');
+            if (!bouton) { return; }
+            var form_tierslieux = bouton.closest('[data-testid="wizard-tierslieux-card"]');
+            if (!form_tierslieux) { return; }
+            // Pas de champ email = visiteur connecte : rien a injecter.
+            // / No email field = logged-in visitor: nothing to inject.
+            var champ_email = document.getElementById('email_proposeur');
+            if (!champ_email) { return; }
+            var email = (champ_email.value || '').trim();
+            if (!email) {
+                // Email obligatoire pour un anonyme : on bloque l'envoi natif et on
+                // affiche la validation native sur le champ.
+                // / Email required for anonymous: block native submit, show validity.
+                evenement.preventDefault();
+                champ_email.reportValidity();
+                champ_email.focus();
+                return;
+            }
+            // Injecte (ou met a jour) l'email dans un champ cache de CE form, avant
+            // que le clic ne declenche l'envoi natif du formulaire.
+            // / Inject (or update) the email into a hidden field of THIS form, before
+            // the click triggers the native form submit.
+            var champ_cache = form_tierslieux.querySelector('input[name="email_proposeur"]');
+            if (!champ_cache) {
+                champ_cache = document.createElement('input');
+                champ_cache.type = 'hidden';
+                champ_cache.name = 'email_proposeur';
+                form_tierslieux.appendChild(champ_cache);
+            }
+            champ_cache.value = email;
+        });
+
         // Etat initial au chargement : applique le mode, le surlignage, le
         // plafond d'affichage, et l'etat du bouton Continuer (grise par defaut).
         // / Initial state on load: mode, highlight, display cap, and Continue

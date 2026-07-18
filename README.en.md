@@ -1,8 +1,3 @@
-> [!CAUTION]
-> The V2 branch is an alpha prototype : NOT FOR PROD
-> 
-> Use main branch only for production
-
 <h1 align="center">
   <!-- CAPTURE: TiBillet logo (the current one or a new one if you have it) -->
   <br>
@@ -111,9 +106,12 @@ A few examples of what TiBillet makes possible today:
 TiBillet runs in Docker. A single command to launch the development environment:
 
 ```bash
-git clone https://github.com/TiBillet/TiBillet.git
-cd TiBillet
+git clone https://github.com/TiBillet/Lespass.git
+cd Lespass
 cp env_example .env        # Configure environment variables
+
+# network
+docker network create frontend
 
 # Lespass only:
 docker compose up -d

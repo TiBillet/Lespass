@@ -63,12 +63,7 @@ CONTRIBUTEURS = [
     {"nom": "France Tiers-Lieux", "logo": "contributeurs/ftl.png", "url": ""},  # à vérifier : nom + URL / to verify: name + URL
     {"nom": "La Compagnie des Tiers-Lieux", "logo": "contributeurs/Compagnie des tiers lieux.svg", "url": ""},  # à vérifier : URL / to verify: URL
     {"nom": "Circa", "logo": "contributeurs/circa.png", "url": ""},  # à vérifier : URL / to verify: URL
-    # Logo CoopCircuit fourni en blanc sur transparent (invisible sur tuile claire) :
-    # on pointe vers une version inversee (RGB negatif, transparence conservee).
-    # / CoopCircuit logo shipped as white-on-transparent (invisible on a light tile):
-    # we point to an inverted version (negative RGB, alpha preserved).
-    {"nom": "CoopCircuit", "logo": "contributeurs/coopcircuit-noir.png", "url": "https://coopcircuit.org/"},
-    # Soutiens institutionnels / Institutional support
+    {"nom": "CoopCircuits", "logo": "contributeurs/coopcircuit-noir.png", "url": "https://coopcircuits.fr/"},
     {"nom": "JetBrains", "logo": "contributeurs/jet_brain_beam.png", "url": "https://jb.gg/OpenSourceSupport"},
     {"nom": "France 2030", "logo": "contributeurs/france_2030.png", "url": "https://www.economie.gouv.fr/france-2030"},
 ]
@@ -359,6 +354,7 @@ def explorer(request):
 
     URL: GET /explorer/
     """
+    from django.conf import settings
     from seo.services import build_explorer_data
 
     explorer_data = build_explorer_data()
@@ -396,6 +392,7 @@ def explorer(request):
         # ROOT public : aucun tenant courant a highlighter sur la carte.
         # / Public ROOT: no current tenant to highlight on the map.
         "current_tenant_uuid": "",
+        "maptiler_key": settings.MAPTILER_KEY,
         "federation_json_ld": json_for_html(federation_json_ld_dict),
         "page_title": _("Explorer - TiBillet"),
         "page_description": _(

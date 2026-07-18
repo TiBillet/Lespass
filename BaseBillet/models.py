@@ -562,6 +562,20 @@ class Configuration(SingletonModel):
         verbose_name=_("Federation module"),
     )
 
+    # Newsletter : pilote une instance Ghost auto-hebergee depuis TiBillet.
+    #
+    # DESACTIVE PAR DEFAUT, et ACTIVABLE PAR UN SUPERADMIN SEULEMENT : une instance Ghost
+    # doit d'abord etre installee et dimensionnee (la charge serveur depend du volume de
+    # mails). Un gestionnaire qui tente de l'activer voit une invitation a contacter
+    # l'equipe TiBillet, pas un simple refus.
+    # / Newsletter: drives a self-hosted Ghost instance from TiBillet.
+    # OFF by default, SUPERADMIN-ONLY: a Ghost instance must be installed and sized first
+    # (server load depends on the mail volume).
+    module_newsletter = models.BooleanField(
+        default=False,
+        verbose_name=_("Newsletter module"),
+    )
+
     # NOTE : tout l'agenda participatif (activation + propositions anonymes +
     # tag automatique) vit desormais sur FederationConfiguration. Il s'active
     # dans l'admin "Options de federation", plus dans le dashboard des modules.
@@ -1737,20 +1751,31 @@ class Event(models.Model):
         if cached_result is not None:
             return cached_result
 
-        # Algo pour récupérer l'image à afficher.
+        # Chaine de repli a TROIS niveaux : l'image de l'evenement, sinon celle du LIEU,
+        # sinon celle de la CONFIGURATION du tenant. Un evenement finit donc toujours par
+        # avoir une image, tant que le tenant en a une.
+        #
+        # ATTENTION au piege corrige ici : ecrire `elif self.postal_address:` avec un `if`
+        # imbrique rend le `else` (l'image de configuration) INATTEIGNABLE des que
+        # l'evenement a une adresse SANS image. Or Event.save() assigne d'office l'adresse
+        # de la configuration quand elle est vide — l'evenement en a donc presque toujours
+        # une, et le troisieme niveau ne servait JAMAIS.
+        # Il faut tester `postal_address ET son image` d'un seul tenant pour que le repli
+        # continue jusqu'a la configuration.
+        #
+        # / THREE-level fallback: event image, else VENUE image, else tenant CONFIG image.
+        # Beware: `elif self.postal_address:` with a nested `if` makes the config branch
+        # UNREACHABLE as soon as the event has an address without an image — and save()
+        # always assigns one. Test address AND its image together.
         result = None
         if self.img:
             result = self.img
-        elif self.postal_address:
-            if self.postal_address.img:
-                result = self.postal_address.img
+        elif self.postal_address and self.postal_address.img:
+            result = self.postal_address.img
         else:
             config = Configuration.get_solo()
             if config.img:
-                # logger.info("config img")
                 result = config.img
-            else:
-                result = None
 
         # Cache the result for 1 hour (3600 seconds)
         cache.set(cache_key, result, 3600)
@@ -3043,6 +3068,19 @@ class Paiement_stripe(models.Model):
         else:
             self.status = Paiement_stripe.CANCELED
 
+        # Adhésion : le checkout a été soumis mais le débit n'est pas encore
+        # confirmé (cas SEPA, jusqu'à 14 jours). On bascule les adhésions liées
+        # de "validé par admin" vers "paiement soumis, en attente" pour que le
+        # lien de paiement ne génère plus de nouveau checkout. Cela ferme la
+        # fenêtre où un re-clic recréait une session et donc un 2e prélèvement.
+        # / Membership: checkout submitted but debit not confirmed yet (SEPA).
+        # Move linked memberships from "admin validated" to "payment pending" so
+        # the payment link stops creating new checkouts (duplicate debit fix).
+        if self.status == Paiement_stripe.PENDING:
+            for membership in self.membership.filter(status=Membership.ADMIN_VALID):
+                membership.status = Membership.PAYMENT_PENDING
+                membership.save(update_fields=['status'])
+
         # le .save() lance le process BaseBillet.triggers.TRIGGER_LigneArticlePaid_ActionByCategorie
         # qui modifie le status de chaque ligne
 
@@ -3121,6 +3159,18 @@ class LigneArticle(models.Model):
 
     metadata = models.JSONField(blank=True, null=True)
 
+    # Cle d'idempotence fournie par le client (header Idempotency-Key de l'API).
+    # Sert a empecher les double-credits : une meme cle = une seule ligne.
+    # NULL pour toutes les ventes classiques (billets, adhesions, POS) : la
+    # contrainte d'unicite ne s'applique qu'aux lignes qui portent une cle.
+    # / Client-provided idempotency key (API Idempotency-Key header). Prevents
+    # double credits: one key = one line. NULL for all classic sales; the
+    # unique constraint only applies to lines that carry a key.
+    idempotency_key = models.CharField(
+        max_length=255, blank=True, null=True, db_index=True,
+        verbose_name=_("Idempotency key"),
+    )
+
     # Avoir : lien vers la ligne originale / Credit note: link to original line
     credit_note_for = models.ForeignKey(
         'self', on_delete=models.PROTECT, blank=True, null=True,
@@ -3130,6 +3180,17 @@ class LigneArticle(models.Model):
 
     class Meta:
         ordering = ('-datetime',)
+        constraints = [
+            # Unicite de la cle d'idempotence, uniquement quand elle est presente.
+            # Le schema etant isole par tenant, l'unicite est de fait par tenant.
+            # / Idempotency key uniqueness, only when present. Schema is isolated
+            # per tenant, so uniqueness is effectively per tenant.
+            models.UniqueConstraint(
+                fields=['idempotency_key'],
+                condition=Q(idempotency_key__isnull=False),
+                name='unique_lignearticle_idempotency_key',
+            ),
+        ]
 
     def uuid_8(self):
         return f"{self.uuid}".partition('-')[0]
@@ -3210,12 +3271,16 @@ class LigneArticle(models.Model):
         return f"{self.uuid}"
 
     def user_email(self):
-        if self.membership:
-            if self.membership.user:
-                return self.membership.user.email
-        elif self.paiement_stripe:
-            if self.paiement_stripe.user:
-                return self.paiement_stripe.user.email
+        # Vente liée à une réservation (billetterie, y compris vente via l'admin).
+        # / Sale linked to a reservation (ticketing, including admin sale).
+        if self.reservation and self.reservation.user_commande:
+            return self.reservation.user_commande.email
+        # Adhésion / Membership.
+        if self.membership and self.membership.user:
+            return self.membership.user.email
+        # Paiement en ligne Stripe / Online Stripe payment.
+        if self.paiement_stripe and self.paiement_stripe.user:
+            return self.paiement_stripe.user.email
         return None
 
 class Membership(models.Model):
@@ -3311,6 +3376,14 @@ class Membership(models.Model):
     WAITING_PAYMENT = 'WP'
     ADMIN, IMPORT, LABOUTIK = 'D', 'I', 'L'
     ADMIN_WAITING, ADMIN_VALID = 'AW', 'AV'
+    # Le membre a soumis son paiement (checkout validé) mais le débit n'est pas
+    # encore confirmé. Cas typique : prélèvement SEPA, qui prend jusqu'à 14 jours.
+    # Tant que l'adhésion est dans cet état, le lien de paiement ne doit plus
+    # générer de nouveau checkout (protection contre les doubles prélèvements).
+    # / Member submitted payment (checkout completed) but debit not confirmed yet.
+    # Typical case: SEPA direct debit (up to 14 days). While in this state, the
+    # payment link must not generate a new checkout (duplicate debit protection).
+    PAYMENT_PENDING = 'PP'
     ONCE, AUTO =  'A', 'O'
     CANCELED, ADMIN_CANCELED = 'C', 'AC'
     STATUS_CHOICES = [
@@ -3323,6 +3396,7 @@ class Membership(models.Model):
         # Pour les validations manuelles
         (ADMIN_WAITING, _('En attente de validation par un admin')),
         (ADMIN_VALID, _('Confirmé par un admin, en attente de paiement')),
+        (PAYMENT_PENDING, _('Paiement soumis, en attente de validation bancaire')),
 
         (ONCE, _('Payé en ligne')),
         (AUTO, _('Payé en ligne (récurrent)')),

@@ -18,7 +18,7 @@ import os
 from django.core.cache import cache
 from django.db import connection
 from django.utils import timezone
-from django_tenants.utils import tenant_context
+from django_tenants.utils import schema_context, tenant_context
 
 from Customers.models import Client
 
@@ -43,22 +43,41 @@ def _memcached_key(cache_type, tenant_uuid):
     return f"seo:{cache_type}:{tenant_part}"
 
 
+# Pourquoi forcer le schema public (cf. CHANTIER-08, bug L1) :
+# Le cache 'default' utilise KEY_FUNCTION=django_tenants.cache.make_key, qui
+# prefixe CHAQUE cle par le schema courant (isolation cache par tenant). Or le
+# cache SEO porte des AGREGATS GLOBAUX (tenant=None) partages par tout le reseau.
+# Sans precaution, le worker (qui s'execute dans le schema du tenant declencheur)
+# ecrit la cle sous "lespass:...", invisible depuis le schema public (page ROOT
+# /explorer/) et les autres tenants -> ils lisent une copie perimee jusqu'au TTL
+# (4h). On epingle donc le schema public pour TOUTES les operations L1 SEO : la
+# cle n'est plus prefixee par le schema d'execution, et une seule entree L1 est
+# partagee entre le worker, la page ROOT et chaque tenant.
+# / Why pin the public schema (CHANTIER-08, L1 bug):
+# The 'default' cache uses django-tenants make_key, which prefixes every key with
+# the current schema. SEO holds GLOBAL aggregates shared across the whole network.
+# Pinning the public schema keeps the key un-prefixed, so one shared L1 entry is
+# seen by the worker, the ROOT page and every tenant.
+
+
 def set_memcached_l1(cache_type, tenant_uuid, data):
     """
-    Ecrit dans Memcached L1 avec TTL de 4h.
-    / Write to Memcached L1 with 4h TTL.
+    Ecrit dans Memcached L1 avec TTL de 4h, sous une cle GLOBALE (schema public).
+    / Write to Memcached L1 with 4h TTL, under a GLOBAL key (public schema).
     """
     key = _memcached_key(cache_type, tenant_uuid)
-    cache.set(key, data, MEMCACHED_L1_TTL)
+    with schema_context("public"):
+        cache.set(key, data, MEMCACHED_L1_TTL)
 
 
 def get_memcached_l1(cache_type, tenant_uuid):
     """
-    Lit depuis Memcached L1. Retourne None si absent ou expire.
-    / Read from Memcached L1. Returns None if missing or expired.
+    Lit depuis Memcached L1 (cle GLOBALE, schema public). Retourne None si absent.
+    / Read from Memcached L1 (GLOBAL key, public schema). Returns None if missing.
     """
     key = _memcached_key(cache_type, tenant_uuid)
-    return cache.get(key)
+    with schema_context("public"):
+        return cache.get(key)
 
 
 # ---------------------------------------------------------------------------
@@ -163,7 +182,7 @@ def get_active_tenants_with_counts():
             f"SELECT %s AS tenant_id, %s AS schema_name, "
             f"(SELECT COUNT(*) "
             f' FROM "{schema}"."BaseBillet_event" '
-            f" WHERE published = true AND datetime >= %s"
+            f" WHERE published = true AND archived = false AND datetime >= %s"
             f") AS event_count, "
             f"(SELECT COUNT(*) "
             f' FROM "{schema}"."BaseBillet_product" '
@@ -210,7 +229,7 @@ def get_counts_for_tenant(schema_name):
     sql = (
         f"SELECT "
         f'(SELECT COUNT(*) FROM "{schema_name}"."BaseBillet_event" '
-        f" WHERE published = true AND datetime >= %s) AS event_count, "
+        f" WHERE published = true AND archived = false AND datetime >= %s) AS event_count, "
         f'(SELECT COUNT(*) FROM "{schema_name}"."BaseBillet_product" '
         f"   WHERE publish = true AND categorie_article IN ({placeholders_categories})"
         f") AS product_count"
@@ -252,11 +271,15 @@ def get_events_for_tenants(tenant_schemas):
         # federation automatique par tags.
         # / Also fetch `private`: a private event must not leak through the
         # network map nor through tag-based auto federation.
+        # Filtre archived = false : un event archive (retire de l'agenda) ne doit
+        # plus apparaitre sur la carte ni dans les popups, meme s'il reste publie.
+        # / archived = false filter: an archived event must not show on the map or
+        # popups anymore, even if still published.
         parts.append(
             f"SELECT %s AS tenant_id, uuid::text AS uuid, name, slug, short_description, "
             f"datetime, end_datetime, img, postal_address_id, private "
             f'FROM "{schema_name}"."BaseBillet_event" '
-            f"WHERE published = true AND datetime >= %s"
+            f"WHERE published = true AND archived = false AND datetime >= %s"
         )
         params.extend([str(tenant_uuid), now])
 
@@ -319,7 +342,7 @@ def get_event_tags_for_tenants(tenant_schemas):
             f'FROM "{schema_name}"."BaseBillet_event" e '
             f'JOIN "{schema_name}"."BaseBillet_event_tag" et ON et.event_id = e.uuid '
             f'JOIN "{schema_name}"."BaseBillet_tag" t ON t.uuid = et.tag_id '
-            f"WHERE e.published = true AND e.datetime >= %s"
+            f"WHERE e.published = true AND e.archived = false AND e.datetime >= %s"
         )
         params.append(now)
 
@@ -425,6 +448,16 @@ def build_tenant_config_data(client):
 
             # Adresse postale / Postal address
             if config.postal_address:
+                # L'adresse de la Configuration du tenant EST son adresse principale.
+                # C'est cette cle que build_aggregate_points compare pour poser le flag
+                # is_main_address sur le bon point, et c'est ce point que la carte vise
+                # quand on clique sur un lieu dans la liste (explorer.js, focusOnLieu).
+                # Le champ PostalAddress.is_main n'est PAS la source de verite ici.
+                # / The tenant Configuration address IS its main address. This key drives
+                # the is_main_address flag in build_aggregate_points, which the map uses
+                # to focus the right marker. PostalAddress.is_main is NOT the source of
+                # truth here.
+                data["postal_address_id"] = config.postal_address_id
                 data["locality"] = config.postal_address.address_locality or ""
                 data["country"] = config.postal_address.address_country or ""
                 # Coordonnees GPS / GPS coordinates
@@ -481,9 +514,16 @@ def get_postal_addresses_for_tenants(tenant_schemas):
             continue
         with tenant_context(tenant):
             pa_list = []
+            # order_by("pk") : sans tri explicite, PostgreSQL rend les lignes dans un
+            # ordre arbitraire, qui change au fil des ecritures. Cet ordre se propage
+            # jusqu'aux markers de la carte (explorer.js, markersByTenant) : sans lui,
+            # deux rebuilds du cache peuvent viser une adresse differente au clic.
+            # / order_by("pk"): without explicit ordering PostgreSQL returns rows in an
+            # arbitrary order that drifts as rows are written. That order propagates to
+            # the map markers, so two cache rebuilds could focus a different address.
             queryset = PostalAddress.objects.exclude(
                 latitude__isnull=True
-            ).exclude(longitude__isnull=True)
+            ).exclude(longitude__isnull=True).order_by("pk")
             for pa in queryset:
                 pa_list.append({
                     "pa_id": pa.pk,

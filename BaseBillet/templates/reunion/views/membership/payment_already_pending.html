@@ -1,5 +1,6 @@
+{% extends base_template %}
 {% load i18n static %}
-<!--
+{% comment %}
 PAGE "PAIEMENT DEJA EN COURS" — PROTECTION DOUBLON SEPA
 / "Payment already pending" page — SEPA duplicate protection
 
@@ -11,14 +12,12 @@ Le prelevement SEPA peut prendre jusqu'a 14 jours ouvrables.
 
 FLUX :
 1. L'utilisateur clique (a nouveau) sur le lien de paiement recu par email
-2. BaseBillet/views.py:get_checkout_for_membership detecte un paiement existant
-3. La session Stripe est "complete" (l'utilisateur a deja valide son prelevement)
+2. BaseBillet/views.py:get_checkout_for_membership detecte une adhesion deja payee/soumise
+3. L'adhesion est en statut PAYMENT_PENDING (paiement soumis, debit en cours)
 4. Cette page est affichee a la place d'un nouveau checkout
--->
+{% endcomment %}
 
-{% extends base_template %}
-
-{% block content %}
+{% block main %}
 <div class="container py-5" data-testid="membership-payment-already-pending">
     <div class="row justify-content-center">
         <div class="col-md-8 col-lg-6">
@@ -77,4 +76,4 @@ FLUX :
         </div>
     </div>
 </div>
-{% endblock %}
+{% endblock main %}

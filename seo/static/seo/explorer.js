@@ -61,6 +61,11 @@
         },
     };
 
+    // Niveau de zoom applique quand on met un marker au centre de la carte (clic sur
+    // une carte de lieu ou d'evenement dans la liste). Assez proche pour lire la rue.
+    // / Zoom level applied when a marker is centered (click on a venue or event card).
+    const ZOOM_FOCUS_MARKER = 15;
+
     // ============================================================
     // STATE — encapsulé, jamais sur window
     // / STATE — encapsulated, never on window
@@ -121,6 +126,9 @@
         if (!dom.root) return;
         const ds = dom.root.dataset;
         config.currentTenantUuid = ds.currentTenantUuid || '';
+        // Cle MapTiler (optionnelle) : si presente, on utilise MapTiler ; sinon HOT.
+        // / MapTiler key (optional): if present, use MapTiler; otherwise HOT.
+        config.maptilerKey = ds.maptilerKey || '';
         // Surcharge i18n depuis data-i18n-* / Override i18n from data-i18n-*
         if (ds.i18nEmpty) config.i18n.empty = ds.i18nEmpty;
         if (ds.i18nVisit) config.i18n.visit = ds.i18nVisit;
@@ -406,11 +414,25 @@
         renderList(lieuxCards, eventCards);
         updateCounters(lieuxCards.length, eventCards.length || countEventsInPAs(paVisibles));
 
-        // 3. Markers visibles = PA visibles. Dict pa_id -> true pour update map.
-        // / Visible markers = visible PAs. Dict pa_id -> true for map update.
+        // 3. Markers visibles : la source depend du mode.
+        //    - Mode "lieu" : 1 marker par PA visible (filtre text+tag).
+        //    - Mode "evenement" : seulement les lieux ayant AU MOINS un event
+        //      visible (eventCards porte le pa_id de chaque event). Ainsi les
+        //      puces se synchronisent avec la liste d'evenements : un lieu sans
+        //      event a venir disparait de la carte en mode evenement.
+        // / Visible markers: source depends on the mode.
+        //   - "lieu" mode: 1 marker per visible PA (text+tag filter).
+        //   - "event" mode: only venues with at least one visible event, so the
+        //     markers stay in sync with the event list.
         const visiblePaIds = {};
-        for (let i = 0; i < paVisibles.length; i++) {
-            visiblePaIds[paVisibles[i].pa_id] = true;
+        if (state.filters.view === 'event') {
+            for (let i = 0; i < eventCards.length; i++) {
+                visiblePaIds[eventCards[i].pa_id] = true;
+            }
+        } else {
+            for (let i = 0; i < paVisibles.length; i++) {
+                visiblePaIds[paVisibles[i].pa_id] = true;
+            }
         }
         if (state.mapInitialized) {
             updateMapMarkersByPA(visiblePaIds);
@@ -882,13 +904,36 @@
 
         state.map = L.map('explorer-map', { zoomControl: true, scrollWheelZoom: true });
 
-        // CartoDB Voyager : pas de restriction referer (OSM bloque localhost)
-        // / CartoDB Voyager: no referer restriction (OSM blocks localhost)
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
-            maxZoom: 19,
-            subdomains: 'abcd',
-        }).addTo(state.map);
+        // Fond de carte. Si une cle MapTiler est fournie (settings.MAPTILER_KEY ->
+        // data-maptiler-key), on utilise MapTiler (style "dataviz-v4" epure, en
+        // francais, tuiles HD). Sinon, repli sur les tuiles "Humanitarian" (HOT) par
+        // OpenStreetMap France : labels en francais, sans cle API, OK en localhost.
+        // / Basemap. If a MapTiler key is provided, use MapTiler (epured "dataviz-v4",
+        // HD tiles). Otherwise fall back to Humanitarian (HOT) tiles hosted by OSM
+        // France: French labels, no API key, works on localhost.
+        if (config.maptilerKey) {
+            // tuiles 512px (HD) -> tileSize 512 + zoomOffset -1 cote Leaflet.
+            // language=fr force les labels en francais. crossOrigin pour le retina.
+            // / 512px (HD) tiles -> tileSize 512 + zoomOffset -1. language=fr forces French.
+            L.tileLayer(
+                'https://api.maptiler.com/maps/dataviz-v4/{z}/{x}/{y}.png?key='
+                    + config.maptilerKey + '&language=fr',
+                {
+                    attribution: '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                    tileSize: 512,
+                    zoomOffset: -1,
+                    minZoom: 1,
+                    maxZoom: 20,
+                    crossOrigin: true,
+                }
+            ).addTo(state.map);
+        } else {
+            L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, style <a href="https://www.hotosm.org/">Humanitarian OSM Team</a> &middot; <a href="https://openstreetmap.fr/">OpenStreetMap France</a>',
+                maxZoom: 20,
+                subdomains: 'abc',
+            }).addTo(state.map);
+        }
 
         state.markerCluster = L.markerClusterGroup();
         state.map.addLayer(state.markerCluster);
@@ -954,11 +999,15 @@
             if (!state.markersByTenant[point.tenant_id]) {
                 state.markersByTenant[point.tenant_id] = [];
             }
-            state.markersByTenant[point.tenant_id].push(point.pa_id);
-            // Priorite : si is_main_address, on l'utilise comme premier ancre
-            // / Priority: main_address goes first in the lookup list
+            // L'adresse principale du lieu passe en tete de la liste : c'est elle que
+            // focusOnLieu() vise au clic sur une carte de lieu. Les autres adresses
+            // suivent, dans l'ordre du cache (pk croissant).
+            // / The venue main address goes first: focusOnLieu() targets it on card
+            // click. Other addresses follow, in cache order (ascending pk).
             if (point.is_main_address) {
                 state.markersByTenant[point.tenant_id].unshift(point.pa_id);
+            } else {
+                state.markersByTenant[point.tenant_id].push(point.pa_id);
             }
 
             state.markerCluster.addLayer(marker);
@@ -1041,33 +1090,83 @@
     // / FOCUS LIEU — zoom + popup + accordion + highlight
     // ============================================================
 
+    function markerEstSurLaCarte(marker) {
+        // Un marker enferme dans un cluster n'est PAS sur la carte : il n'a pas d'icone
+        // dans le DOM. C'est la difference qui decide comment l'atteindre (cf.
+        // montrerLeMarkerPuisOuvrirLePopup).
+        // / A clustered marker is NOT on the map: it has no icon in the DOM.
+        return !!(marker && marker._icon);
+    }
+
+    function montrerLeMarkerPuisOuvrirLePopup(marker, tenantId) {
+        // INDISPENSABLE : openPopup() ne fait RIEN sur un marker enferme dans un
+        // cluster, car ce marker n'est pas sur la carte. C'est le cas des que deux
+        // adresses sont proches, et TOUJOURS quand deux adresses ont les memes
+        // coordonnees (un lieu du reseau et le lieu courant a la meme adresse) : le
+        // cluster ne se defait alors a aucun zoom. zoomToShowLayer() est l'API de
+        // markercluster pour ce cas : elle zoome, ou fait le spiderfy si les
+        // coordonnees sont identiques, puis rend la main.
+        // / openPopup() is a no-op on a clustered marker (it is not on the map). Two
+        // addresses with identical coordinates stay clustered at every zoom level.
+        // zoomToShowLayer() zooms — or spiderfies for identical coordinates — then
+        // calls back.
+        const ouvrirLePopup = function () {
+            marker.openPopup();
+            // Le highlight lit les pins dans le DOM. Un pin clusterise n'y est pas
+            // encore : on surligne donc APRES que le cluster se soit ouvert.
+            // / Highlight reads pins from the DOM: do it AFTER the cluster opened.
+            if (tenantId) highlightPin(tenantId);
+        };
+
+        if (markerEstSurLaCarte(marker)) {
+            // Marker deja visible : on se rapproche sans jamais dezoomer (dezoomer
+            // pourrait le re-clusteriser et refermer le popup).
+            // / Already visible: zoom in, never out (zooming out could re-cluster it).
+            if (state.map.getZoom() < ZOOM_FOCUS_MARKER) {
+                state.map.setView(marker.getLatLng(), ZOOM_FOCUS_MARKER, { animate: true });
+            }
+            ouvrirLePopup();
+            return;
+        }
+
+        if (state.markerCluster && typeof state.markerCluster.zoomToShowLayer === 'function') {
+            state.markerCluster.zoomToShowLayer(marker, ouvrirLePopup);
+            return;
+        }
+
+        // Repli si la lib markercluster est absente : comportement historique.
+        // / Fallback when markercluster is missing: historical behaviour.
+        state.map.setView(marker.getLatLng(), ZOOM_FOCUS_MARKER, { animate: true });
+        setTimeout(ouvrirLePopup, 200);
+    }
+
+    function trouverMarkerVisibleDuLieu(tenantId) {
+        // 1 lieu peut avoir N adresses, donc N markers. On rend le PREMIER qui est
+        // encore dans le cluster : les filtres (texte, tag) en retirent, et
+        // zoomToShowLayer() leve une TypeError sur un marker retire (markercluster
+        // efface son __parent au removeLayer).
+        // L'ordre de la liste place l'adresse principale en tete (cf. addMarkers).
+        // / A venue may have N addresses. Return the FIRST marker still in the cluster:
+        // filters remove markers, and zoomToShowLayer() throws on a removed one. The
+        // main address comes first in the list (cf. addMarkers).
+        const paIds = (state.markersByTenant && state.markersByTenant[tenantId]) || [];
+        for (let i = 0; i < paIds.length; i++) {
+            const marker = state.markers[paIds[i]];
+            if (!marker) continue;
+            if (state.markerCluster && !state.markerCluster.hasLayer(marker)) continue;
+            return marker;
+        }
+        return null;
+    }
+
     function focusOnLieu(tenantId) {
         if (window.innerWidth < 992 && state.currentView === 'list') toggleView();
         if (!state.mapInitialized) initMap();
-        // 1 tenant peut avoir N markers (N PA). On prend le premier de la liste
-        // inversee (qui place is_main_address en tete, cf. addMarkers).
-        // / 1 tenant may have N markers (N PAs). Take the first from the reverse
-        // lookup list (which places is_main_address first, cf. addMarkers).
-        const paIds = (state.markersByTenant && state.markersByTenant[tenantId]) || [];
-        if (paIds.length === 0) return;
-        const marker = state.markers[paIds[0]];
+
+        const marker = trouverMarkerVisibleDuLieu(tenantId);
         if (!marker) return;
 
-        state.map.setView(marker.getLatLng(), 15, { animate: true });
-
-        // Utiliser l'event animationend du cluster si possible, sinon fallback timing reduit
-        // / Use cluster animationend event if available, otherwise reduced timing fallback
-        if (state.markerCluster && typeof state.markerCluster.once === 'function') {
-            let fallback = setTimeout(function () { marker.openPopup(); }, 500);
-            state.markerCluster.once('animationend', function () {
-                clearTimeout(fallback);
-                marker.openPopup();
-            });
-        } else {
-            setTimeout(function () { marker.openPopup(); }, 200);
-        }
-
-        highlightPin(tenantId);
+        montrerLeMarkerPuisOuvrirLePopup(marker, tenantId);
 
         if (window.innerWidth >= 992) {
             openLieuAccordion(tenantId);
@@ -1076,27 +1175,19 @@
 
     function focusOnPA(paId, tenantId) {
         // Centre la carte sur une adresse precise (PA), utilise au clic d'une card event.
-        // Le marker peut ne pas exister (lieu sans coordonnees) : on sort proprement.
-        // / Center the map on a specific address (PA), used on event card click.
-        // The marker may not exist (addressless venue): bail out gracefully.
+        // Le marker peut ne pas exister (lieu sans coordonnees), ou avoir ete retire du
+        // cluster par un filtre : on sort proprement.
+        // / Center the map on a specific address (PA), used on event card click. The
+        // marker may not exist (addressless venue), or may have been filtered out of the
+        // cluster: bail out gracefully.
         if (window.innerWidth < 992 && state.currentView === 'list') toggleView();
         if (!state.mapInitialized) initMap();
+
         const marker = state.markers[paId];
         if (!marker) return;
+        if (state.markerCluster && !state.markerCluster.hasLayer(marker)) return;
 
-        state.map.setView(marker.getLatLng(), 15, { animate: true });
-
-        if (state.markerCluster && typeof state.markerCluster.once === 'function') {
-            let fallback = setTimeout(function () { marker.openPopup(); }, 500);
-            state.markerCluster.once('animationend', function () {
-                clearTimeout(fallback);
-                marker.openPopup();
-            });
-        } else {
-            setTimeout(function () { marker.openPopup(); }, 200);
-        }
-
-        if (tenantId) highlightPin(tenantId);
+        montrerLeMarkerPuisOuvrirLePopup(marker, tenantId);
     }
 
     function highlightPin(tenantId) {

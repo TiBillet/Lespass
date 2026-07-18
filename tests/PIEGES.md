@@ -2659,5 +2659,158 @@ dans `locale/en/LC_MESSAGES/django.po` (ex. « Mark as completed », pas
 
 ---
 
+### Piege : rien ne s'affiche au clic dans un panneau d'admin ? Regardez la CONSOLE, pas htmx
+
+**htmx ne fait AUCUN swap si la reponse est en 4xx ou 5xx.** Il n'affiche rien, ne previent
+pas, et l'erreur n'apparait QUE dans la console du navigateur :
+
+```
+[ERROR] htmx.js — Response Status Error Code 500 from /mon/endpoint/
+```
+
+Vecu (juillet 2026, panneau Newsletter) : la vue renvoyait 500 a cause d'un objet
+`Configuration` perime en cache (voir le piege du SingletonModel plus bas). Cote navigateur :
+un clic, et RIEN. J'ai soupconne htmx, le CSRF, les permissions, le double chargement de
+htmx... pendant des heures. **La console le disait des la premiere seconde.**
+
+**Le reflexe :** au moindre « je clique et il ne se passe rien », ouvrir la console AVANT de
+toucher au JS. Et verifier l'endpoint en direct :
+
+```bash
+docker exec lespass_django poetry run python manage.py shell -c "..."  # doit renvoyer 200
+```
+
+Voir aussi la Quirk htmx n°2 du skill `djc` : les erreurs HTTP ne declenchent pas de swap.
+
+---
+
+### Piege : les `django.messages` ne s'affichent PAS sur la page de modification de l'admin
+
+Complement au piege deja documente plus haut. **Verifie en vrai** sur
+`GhostConfigAdmin` : un `messages.warning(request, ...)` depuis une vue custom part bien en
+session (`get_messages(request)` le retrouve), mais la page `/admin/<app>/<model>/` ne
+l'affiche **jamais**. Le gestionnaire clique, et **il ne se passe RIEN a l'ecran**.
+
+Les toasts qu'on croit voir marcher apparaissent en fait sur le **dashboard**, apres une
+redirection — pas sur la page de modification.
+
+**Solution retenue** : ne pas dependre de `django.messages` dans un panneau d'admin. La vue
+renvoie un **partial HTML**, et HTMX l'injecte dans une zone de reponse du panneau. Le retour
+apparait la ou l'utilisateur vient de cliquer — c'est meilleur de toute facon.
+
+```html
+<button type="button"
+        hx-post="{% url '...' %}"
+        hx-target="#ma-zone-de-reponse"
+        hx-swap="innerHTML">Agir</button>
+
+<div id="ma-zone-de-reponse" aria-live="polite"></div>
+```
+
+---
+
+### Piege : un `<form>` dans un `change_form_before_template` soumet le formulaire de l'ADMIN
+
+Un `change_form_before_template` est rendu **A L'INTERIEUR** du `<form>` de l'admin Django.
+Un `<form>` imbrique est du **HTML invalide** : le navigateur ignore l'interne et soumet
+l'**externe**.
+
+Cliquer sur un bouton de votre panneau **ENREGISTRE la configuration** au lieu de lancer
+votre action. (Constate en vrai : « GhostConfig object (1) was changed successfully ».)
+
+Meme piege avec un `<button>` sans `type` : dans un `<form>`, il vaut `type="submit"`.
+
+```html
+<!-- MAL : form imbrique + button sans type -->
+<form method="post" action="{% url '...' %}">
+    <button>Agir</button>          <!-- = submit -> enregistre l'admin -->
+</form>
+
+<!-- BON : pas de form, bouton autonome en hx-post -->
+<div hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+    <button type="button" hx-post="{% url '...' %}" hx-target="#zone">Agir</button>
+</div>
+```
+
+Voir aussi le Piege 58 (double submit HTMX).
+
+---
+
+### Le cache d'un SingletonModel et un champ neuf : ce qui se passe VRAIMENT
+
+> **Ce piege disait exactement le contraire jusqu'au 2026-07-14.** Il affirmait qu'ajouter un
+> champ a `Configuration` faisait repondre **500 a tout l'admin** tant qu'on n'avait pas purge le
+> cache, avec pour symptome `AttributeError: 'Configuration' object has no attribute
+> 'module_newsletter'`. **C'est faux** — verifie dans le code de Django et reproduit sur le vrai
+> memcached. La consigne « purge le cache » envoyait le prochain incident sur une fausse piste.
+
+**Les premisses etaient justes :** `SOLO_CACHE = 'default'` → django-solo **pickle l'instance**
+et la met dans memcached (TTL **300 s** par defaut ; cle **par schema** grace a
+`django_tenants.cache.make_key`). Le cache est **externe au process** : il survit a un
+redemarrage de Django. Et `get_sidebar_navigation()` lit bien `Configuration.get_solo()` sur
+**chaque** page d'admin — donc si elle cassait, tout l'admin casserait.
+
+**Mais l'objet perime ne casse pas. Il se repare tout seul.** Django ne pickle que le
+`__dict__` de l'instance (`Model.__getstate__`) — **jamais la classe**. Or c'est la **classe** qui
+porte, pour chaque champ concret, un descripteur `DeferredAttribute` (`Field.contribute_to_class`).
+Quand on lit un attribut absent du `__dict__`, le descripteur prend la main et appelle
+`refresh_from_db(fields=[le_champ])` : Django fait un **SELECT cible** et rend la bonne valeur.
+
+Reproduit sur le vrai memcached, avec un objet fabrique a l'identique du cas reel :
+
+```
+module_newsletter dans le __dict__ apres unpickle ? False
+ACCES -> valeur = False  (type bool)
+AttributeError ? NON
+Requetes SQL declenchees par l'acces : 1
+   SELECT "BaseBillet_configuration"."id", "BaseBillet_configuration"."module_newsletter" FROM ...
+```
+
+**Cout reel : un SELECT de plus par requete, pendant au plus 5 minutes.** Une degradation, pas une
+panne. (`refresh_from_db` corrige l'instance en memoire mais **ne reecrit pas le cache** :
+`set_to_cache()` n'est appele que dans `save()`.)
+
+**Le symptome cite etait meme incompatible avec la cause invoquee.** `AttributeError: ... has no
+attribute 'module_newsletter'` exige que **la classe Python n'ait pas le champ** (sans descripteur,
+pas de repli). C'est un `models.py` sans le champ — un etat que le cache est **incapable** de
+produire, puisqu'il ne transporte pas la classe.
+
+**Donc : si l'admin tombe en 500 apres une migration de `SingletonModel`, ce n'est PAS le cache.**
+Cherchez un `ProgrammingError` :
+
+```
+django.db.utils.ProgrammingError: column "module_newsletter" does not exist
+django.db.utils.ProgrammingError: relation "BaseBillet_configuration" does not exist
+```
+
+→ `migrate_schemas` n'est pas passe sur **tous** les tenants. Purger le cache n'y changera **rien**.
+
+**Le seul cas ou la purge est OBLIGATOIRE : une valeur modifiee sans passer par `save()`**
+(`queryset.update()`, UPDATE SQL, data migration). Le cache n'est reecrit que dans `save()` : la
+valeur perimee est alors servie jusqu'a expiration du TTL. Et dans ce cas, **purge ciblee, par
+tenant** — la cle de cache est par schema :
+
+```python
+from django_tenants.utils import tenant_context
+from Customers.models import Client
+from BaseBillet.models import Configuration
+
+for tenant in Client.objects.all():
+    with tenant_context(tenant):
+        Configuration.clear_cache()   # cache.delete(cle_du_schema_courant)
+```
+
+**Ne PAS utiliser `cache.clear()`** : sur memcached c'est un `flush_all`. Ca vide **tout**, **tous
+tenants confondus**, y compris le cache SEO et la carte du reseau — dont la reconstruction coute
+cher. Le marteau-pilon pour un probleme qui, la plupart du temps, n'existe pas.
+
+Corrige le 2026-07-14 (merge `main` → `main-fedow-import`), apres verification dans les sources de
+Django 4.2 et de django-solo 2.5.1, et reproduction dans le conteneur. Relecture par un agent
+Fable, qui a **refute** le diagnostic initial.
+
+---
+
 *Ce document est un commun numerique. Prenez-en soin !*
 *This document is a digital common. Take care of it!*
+
+

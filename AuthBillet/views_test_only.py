@@ -148,6 +148,24 @@ def force_login_for_e2e(request):
     except user_model.DoesNotExist:
         return JsonResponse({"detail": "user not found"}, status=404)
 
+    # Etape 3bis : garantir que le user est actif.
+    # get_or_create_user cree les users inactifs par defaut (activation par
+    # magic-link). Or login() pose une session que ModelBackend.get_user()
+    # refuse de re-authentifier si is_active=False → session fantome qui
+    # redirige vers l'accueil. Cet endpoint etant deja triple-gate (DEBUG +
+    # token E2E), on active le user pour que la session soit reellement
+    # exploitable. Auto-repare l'etat apres un flush/reseed, pour chaque dev.
+    # / Step 3b: ensure the user is active.
+    # get_or_create_user creates users inactive by default (magic-link
+    # activation). But login() sets a session that ModelBackend.get_user()
+    # refuses to re-authenticate when is_active=False → phantom session that
+    # redirects home. This endpoint is already triple-gated (DEBUG + E2E
+    # token), so we activate the user to make the session usable. Self-heals
+    # the state after a flush/reseed, for every dev.
+    if not user_a_connecter.is_active:
+        user_a_connecter.is_active = True
+        user_a_connecter.save(update_fields=["is_active"])
+
     # Etape 4 : force le login
     # login() cree une session, la sauvegarde, et pose le cookie sur la reponse
     # / Step 4: force login

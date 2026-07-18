@@ -4,17 +4,56 @@ import random
 import string
 
 from rest_framework import serializers
-from django.db import transaction
+from django.db import connection, transaction
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 
 from BaseBillet.models import Event, PostalAddress, Tag, OptionGenerale, LigneArticle, Price, PriceSold, Product, ProductFormField, Reservation, Membership
-from crowds.models import Initiative, BudgetItem, Participation, Vote
+from crowds.models import Initiative, BudgetItem, Participation
 from fedow_connect.utils import dround
 from Administration.utils import clean_html
 
 # Image validation utilities
 from PIL import Image, UnidentifiedImageError
+
+
+def _url_absolue_du_media(chemin_du_media):
+    """
+    Transforme un chemin de media en URL ABSOLUE sur le domaine du tenant courant.
+    / Turn a media path into an ABSOLUTE URL on the current tenant's domain.
+
+    LOCALISATION : api_v2/serializers.py
+
+    "/media/images/concert.jpg" -> "https://mon-lieu.tibillet.coop/media/images/concert.jpg"
+
+    POURQUOI : `FieldFile.url` renvoie un chemin RELATIF. Pour un client d'API externe —
+    un site tiers, une newsletter, une appli mobile — c'est inexploitable : il ne peut pas
+    deviner sur quel domaine le resoudre. On prefixe donc par le domaine primaire du tenant.
+    / WHY: FieldFile.url returns a RELATIVE path, unusable by an external API client.
+
+    On passe par connection.tenant (et non par la requete HTTP) pour que ca marche aussi
+    hors contexte web : tache Celery, management command, generation de newsletter.
+    / We use connection.tenant, not the HTTP request, so it also works outside a web
+    context: Celery task, management command, newsletter generation.
+
+    :param chemin_du_media: le chemin renvoye par FieldFile.url, ex "/media/images/x.jpg"
+    :return: l'URL absolue, ou le chemin d'origine si le tenant n'a pas de domaine
+    """
+    if not chemin_du_media:
+        return None
+
+    # Deja absolue (stockage S3, CDN...) : on n'y touche pas.
+    # / Already absolute (S3, CDN...): leave it alone.
+    if chemin_du_media.startswith("http://") or chemin_du_media.startswith("https://"):
+        return chemin_du_media
+
+    domaine_primaire = connection.tenant.get_primary_domain()
+    if not domaine_primaire:
+        # Tenant sans domaine primaire : on degrade proprement plutot que de planter.
+        # / Tenant with no primary domain: degrade gracefully instead of crashing.
+        return chemin_du_media
+
+    return f"https://{domaine_primaire.domain}{chemin_du_media}"
 
 
 def _validate_uploaded_image(file_obj):
@@ -78,18 +117,26 @@ class PostalAddressAsSchemaSerializer(serializers.ModelSerializer):
         )
 
     def _image_urls(self, instance: PostalAddress) -> List[str]:
+        """
+        Les images du lieu, en URL ABSOLUE.
+        / The venue's images, as ABSOLUTE URLs.
+
+        Meme correction que pour Event : `FieldFile.url` renvoie un chemin RELATIF,
+        inexploitable par un client d'API externe. Voir _url_absolue_du_media.
+        / Same fix as for Event: FieldFile.url returns a RELATIVE path.
+        """
         urls: List[str] = []
         try:
             if instance.img:
-                urls.append(instance.img.url)
+                urls.append(_url_absolue_du_media(instance.img.url))
         except Exception:
             pass
         try:
             if instance.sticker_img:
-                urls.append(instance.sticker_img.url)
+                urls.append(_url_absolue_du_media(instance.sticker_img.url))
         except Exception:
             pass
-        return urls
+        return [url for url in urls if url]
 
     def to_representation(self, instance: PostalAddress) -> Dict[str, Any]:
         data = super().to_representation(instance)
@@ -140,7 +187,10 @@ SCHEMA_TYPE_TO_CATEGORY = {
 
 # Build a normalized mapping from translated display label -> internal code
 # so that clients may pass additionalType with the human-readable label.
-_display_norm = lambda s: str(s).strip().lower() if s is not None else ""
+def _display_norm(s):
+    return str(s).strip().lower() if s is not None else ""
+
+
 DISPLAY_TO_CATEGORY = { _display_norm(lbl): code for code, lbl in Event.TYPE_CHOICES }
 
 
@@ -161,18 +211,46 @@ class EventSchemaSerializer(serializers.ModelSerializer):
         )
 
     def _image_urls(self, instance: Event) -> List[str]:
+        """
+        Les images de l'evenement, en URL ABSOLUE, avec le fallback du moteur.
+        / The event's images, as ABSOLUTE URLs, with the engine's fallback.
+
+        LOCALISATION : api_v2/serializers.py
+
+        DEUX CORRECTIONS PAR RAPPORT A L'ANCIEN COMPORTEMENT :
+
+        1. On passe par `instance.get_img()`, et non `instance.img` brut. C'est la methode
+           qu'utilise le moteur d'evenements du site : elle retombe sur l'image du LIEU,
+           puis sur celle de la CONFIGURATION du tenant. Un evenement sans image propre a
+           donc une image sur le site — il en a maintenant une dans l'API aussi.
+
+        2. Les URLs sont ABSOLUES. `instance.img.url` renvoie "/media/images/x.jpg" : un
+           client d'API externe ne peut pas savoir sur quel domaine le resoudre. On prefixe
+           par le domaine primaire du tenant.
+
+        / 1. Use get_img() (venue then tenant-config fallback), like the site's event engine.
+        / 2. Return ABSOLUTE URLs: a relative "/media/..." is unusable for an API client.
+        """
         urls: List[str] = []
+
+        # L'image principale, avec le fallback lieu -> configuration.
+        # / The main image, with the venue -> config fallback.
         try:
-            if instance.img:
-                urls.append(instance.img.url)
+            image_principale = instance.get_img()
+            if image_principale:
+                urls.append(_url_absolue_du_media(image_principale.url))
         except Exception:
             pass
+
+        # La vignette d'agenda : pas de fallback, elle est facultative par nature.
+        # / The agenda thumbnail: no fallback, it is optional by design.
         try:
             if instance.sticker_img:
-                urls.append(instance.sticker_img.url)
+                urls.append(_url_absolue_du_media(instance.sticker_img.url))
         except Exception:
             pass
-        return urls
+
+        return [url for url in urls if url]
 
     def _additional_properties(self, instance: Event) -> List[Dict[str, Any]]:
         props: List[Dict[str, Any]] = []
@@ -826,18 +904,59 @@ class ProductCreateSerializer(serializers.Serializer):
                 return prop.get("value")
         return None
 
-    def _extract_event_uuid(self, related: Any, add_props: List[Dict[str, Any]]) -> Optional[str]:
-        if isinstance(related, str):
-            return related
-        if isinstance(related, dict):
-            identifier = related.get("identifier") or related.get("id") or related.get("uuid")
+    def _extract_one_event_uuid(self, element: Any) -> Optional[str]:
+        """
+        Extrait l'UUID d'un seul element isRelatedTo (string ou objet schema.org).
+        / Extract the UUID from a single isRelatedTo element (string or object).
+        """
+        if isinstance(element, str):
+            valeur = element.strip()
+            return valeur or None
+        if isinstance(element, dict):
+            identifier = element.get("identifier") or element.get("id") or element.get("uuid")
             if identifier:
-                return str(identifier)
-
-        fallback = self._extract_additional_property(add_props, "eventUuid")
-        if isinstance(fallback, str) and fallback.strip():
-            return fallback.strip()
+                valeur = str(identifier).strip()
+                return valeur or None
         return None
+
+    def _extract_event_uuids(self, related: Any, add_props: List[Dict[str, Any]]) -> List[str]:
+        """
+        Retourne la liste des UUID d'evenements a relier au produit.
+        / Return the list of event UUIDs to link to the product.
+
+        isRelatedTo accepte trois formes :
+        - une string (un seul event)              -> ["uuid"]
+        - un objet schema.org {identifier: ...}   -> ["uuid"]
+        - une liste de strings et/ou d'objets     -> ["uuidA", "uuidB", ...]
+        En dernier recours, on lit additionalProperty["eventUuid"].
+        / isRelatedTo accepts a string, a schema.org object, or a list of both.
+        Falls back to additionalProperty["eventUuid"].
+        """
+        uuids: List[str] = []
+
+        # Cas liste : on parcourt chaque element / List case: iterate each element
+        if isinstance(related, list):
+            for element in related:
+                uuid_trouve = self._extract_one_event_uuid(element)
+                if uuid_trouve:
+                    uuids.append(uuid_trouve)
+        # Cas simple : string ou objet unique / Single case: string or object
+        else:
+            uuid_trouve = self._extract_one_event_uuid(related)
+            if uuid_trouve:
+                uuids.append(uuid_trouve)
+
+        # Repli : additionalProperty["eventUuid"] (string unique)
+        # / Fallback: additionalProperty["eventUuid"] (single string)
+        if not uuids:
+            fallback = self._extract_additional_property(add_props, "eventUuid")
+            if isinstance(fallback, str) and fallback.strip():
+                uuids.append(fallback.strip())
+
+        # Dedoublonnage en gardant l'ordre d'apparition
+        # / De-duplicate while keeping the order of appearance
+        uuids_uniques = list(dict.fromkeys(uuids))
+        return uuids_uniques
 
     def _parse_form_fields(self, add_props: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         raw_fields = self._extract_additional_property(add_props, "formFields")
@@ -999,12 +1118,18 @@ class ProductCreateSerializer(serializers.Serializer):
                     help_text=field.get("helpText"),
                 )
 
-            event_uuid = self._extract_event_uuid(related, add_props)
-            if event_uuid:
+            # On relie le produit a un ou plusieurs evenements.
+            # Un meme produit peut etre partage sur N evenements (M2M Event.products).
+            # / Link the product to one or several events.
+            # The same product can be shared across N events (M2M Event.products).
+            event_uuids = self._extract_event_uuids(related, add_props)
+            for event_uuid in event_uuids:
                 try:
                     event = Event.objects.get(uuid=event_uuid)
                 except Event.DoesNotExist:
-                    raise serializers.ValidationError({"isRelatedTo": "Event not found."})
+                    raise serializers.ValidationError(
+                        {"isRelatedTo": f"Event not found: {event_uuid}"}
+                    )
                 event.products.add(product)
 
         return product
@@ -1295,7 +1420,7 @@ class MembershipCreateSerializer(serializers.Serializer):
         from types import SimpleNamespace
 
         from BaseBillet.validators import MembershipValidator
-        from BaseBillet.models import Membership, SaleOrigin, PaymentMethod
+        from BaseBillet.models import Membership, SaleOrigin
 
         member = validated_data.get("member") or {}
         plan = validated_data.get("membershipPlan") or {}

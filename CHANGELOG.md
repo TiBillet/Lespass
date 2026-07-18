@@ -1,5 +1,930 @@
 # Changelog / Journal des modifications
 
+## Carte page event : même fond que le réseau + une seule adresse principale / Event page map: same basemap as the network + a single main address
+
+**Date :** 2026-07-16
+**Migration :** **Non**
+
+### 1. La carte de la page évènement n'affichait plus les tuiles (403)
+
+**Quoi / What :** sur la page d'un évènement, le bouton « Voir la carte » ouvrait
+une carte qui restait parfois grise (tuiles non chargées), surtout sur Firefox.
+
+**Pourquoi / Why :** le partial `geoloc.html` chargeait Leaflet depuis le CDN
+**unpkg** et demandait ses tuiles à `tile.openstreetmap.org` — serveur à politique
+d'usage stricte qui renvoie des **403** selon l'origine/referer du navigateur (d'où
+la différence Firefox / Chrome). On sert désormais **Leaflet vendoré** en local et
+le **même fond de carte que la carto réseau** (`/federation/`) : MapTiler si une clé
+`MAPTILER_KEY` est configurée, sinon les tuiles **OpenStreetMap France (HOT)**, en
+français, sans clé API, qui ne bloquent pas.
+
+### 2. Une seule adresse principale par lieu
+
+**Quoi / What :** dans l'admin des adresses postales, on pouvait cocher « adresse
+principale » (`is_main`) sur plusieurs adresses à la fois.
+
+**Pourquoi / Why :** cocher une adresse comme principale **décoche désormais
+automatiquement** les autres (la dernière cochée gagne). Une seule adresse
+principale reste garantie par lieu, sans message d'erreur bloquant.
+
+### Fichiers modifiés / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/templates/reunion/views/event/partial/geoloc.html` | Leaflet vendoré + fond MapTiler / OSM France HOT au lieu d'unpkg + tile.openstreetmap.org |
+| `BaseBillet/views.py` | `get_context()` expose `maptiler_key` (dispo pour toutes les pages) |
+| `Administration/admin_tenant.py` | `PostalAddressAdmin.save_model()` : cocher `is_main` décoche les autres |
+| `tests/pytest/test_event_map_tiles.py` | Nouveau — le partial carte utilise le bon fond, plus unpkg/tile.openstreetmap.org |
+| `tests/pytest/test_postal_address_is_main.py` | Nouveau — une seule adresse principale après bascule |
+
+### Migration
+
+- **Migration nécessaire / Migration required :** Non
+
+## Carte du réseau : les événements d'un lieu redeviennent accessibles / Network map: a venue's events are reachable again
+
+**Date :** 2026-07-14
+**Migration :** **Non** — mais **le cache SEO doit être reconstruit** (`refresh_seo_cache`) :
+les fragments existants portent `is_main_address: false` sur tous les points.
+
+### 1. Le popup d'un lieu ne s'ouvrait jamais quand deux adresses se superposent
+
+**Quoi / What :** sur la carte « Réseau local » (`/federation/`) et sur `/explorer/`, cliquer sur
+un lieu dont l'adresse a exactement les mêmes coordonnées qu'une autre n'ouvrait aucun popup : ses
+événements semblaient avoir disparu, alors qu'ils étaient bien présents dans le cache et dans la
+liste.
+
+**Pourquoi / Why :** `marker.openPopup()` ne fait **rien** sur un marqueur enfermé dans un cluster
+Leaflet — ce marqueur n'est pas sur la carte. Deux adresses aux coordonnées identiques restent
+clusterisées à **tous** les niveaux de zoom (aucun zoom ne peut séparer deux points confondus). Le
+code zoomait puis appelait `openPopup()` dans le vide. On utilise désormais
+`markerCluster.zoomToShowLayer()`, l'API prévue pour ce cas : elle zoome, ou fait le *spiderfy* si
+les coordonnées sont identiques, puis rend la main.
+
+Aucune donnée n'était en cause : `pa_id` est préfixé par l'UUID du tenant, deux lieux à la même
+adresse restent bien deux points distincts avec leurs propres événements.
+
+### 2. Le clic sur un lieu visait une adresse au hasard, pas son adresse principale
+
+**Quoi / What :** un lieu ayant plusieurs adresses voyait la carte se centrer sur l'une d'elles au
+hasard, et l'adresse ciblée pouvait changer d'un rebuild du cache à l'autre.
+
+**Pourquoi / Why :** `build_tenant_config_data()` n'exposait jamais `postal_address_id`, donc le
+flag `is_main_address` valait **toujours** `false` et le tri qui place l'adresse principale en tête
+ne s'appliquait jamais. En outre, les adresses étaient lues sans `order_by()` : PostgreSQL les rend
+alors dans un ordre arbitraire, qui dérive au fil des écritures.
+
+### Fichiers modifiés / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/static/seo/explorer.js` | `focusOnLieu()` / `focusOnPA()` passent par `zoomToShowLayer()` ; le marqueur visé est choisi parmi ceux réellement présents dans le cluster ; le surlignage du pin attend l'ouverture du cluster |
+| `seo/services.py` | `build_tenant_config_data()` expose `postal_address_id` ; `get_postal_addresses_for_tenants()` trie par `pk` |
+| `tests/pytest/test_seo_aggregate_points.py` | 3 tests : tri par `pk`, `postal_address_id` exposé, deux lieux à la même adresse gardent leurs événements |
+| `tests/e2e/test_explorer_adresse_dupliquee.py` | Nouveau — reproduit le bug (deux lieux à l'adresse identique) et vérifie l'ouverture du popup |
+
+### Migration
+
+- **Migration nécessaire / Migration required :** Non
+- **Cache à reconstruire / Cache rebuild required :** Oui —
+  `docker exec lespass_django poetry run python manage.py shell -c "from seo.tasks import refresh_seo_cache; refresh_seo_cache()"`
+
+## Module Newsletter activable, et `ruff --fix` rendu inoffensif / Newsletter module toggle, and `ruff --fix` made harmless
+
+**Date :** 2026-07-13
+**Migration :** **Oui** — `BaseBillet.0221_configuration_module_newsletter`
+
+### 1. Le module Newsletter s'active depuis le dashboard
+
+Nouvelle carte **« Newsletter »** : *« Evènements, rappels d'adhésions, résumé de vos activités,
+pilotez votre newsletter avec TiBillet ! »*
+
+- **Désactivé par défaut**, et **activable par un superadmin seulement** : une instance Ghost
+  doit d'abord être installée et **dimensionnée** (la charge serveur dépend du volume de mails).
+- Un gestionnaire ordinaire qui clique ne reçoit **pas un refus sec** : une modale l'invite à
+  contacter l'équipe TiBillet (email, Matrix, Discord) pour estimer la charge.
+- **Le POST de bascule est protégé lui aussi** — la modale n'est que de l'affichage, une requête
+  forgée la contournerait. On ne fait jamais confiance à l'interface pour appliquer une règle
+  d'accès.
+- Nouveau groupe **« Newsletter »** dans la sidebar Unfold, **visible seulement si le module est
+  actif**. La config **Ghost y déménage** : elle était perdue dans « Outils externes », entre
+  Webhook et Brevo.
+
+### 2. `ruff check --fix` ne peut plus casser le projet
+
+Le `CLAUDE.md` affirmait que `ruff check --fix` était « sans danger ». **C'est faux** : il a
+supprimé un import à effet de bord **nu** (`from Administration.admin import products, prices`),
+`ProductAdmin` n'était plus enregistré, Django a refusé de démarrer (`admin.E039`), et **319
+tests sont partis en erreur** — la fixture `conftest.py` appelle `manage.py test_api_key`, qui ne
+bootait plus. Le symptôme était à des kilomètres de la cause.
+
+Audit : **141 imports F401 « fixables »** dans le projet, et **aucune configuration ruff**.
+
+- **Ceinture** — `[tool.ruff.lint.per-file-ignores]` dans `pyproject.toml` : F401 est désormais
+  ignoré sur `admin*.py`, `admin/*.py`, `apps.py`, `signals.py`, `triggers.py`, `settings.py`,
+  `__init__.py`. `ruff --fix` **ne peut plus y toucher**.
+- **Bretelles** — `tests/pytest/test_django_system_checks.py` : la suite échoue immédiatement si
+  un enregistrement d'admin disparaît. Vérifié par sabotage.
+
+### 3. Deux bugs corrigés
+
+- **L'agenda affichait les événements archivés.** `federated_events_filter` ne filtrait pas
+  `archived`, alors que `seo/services.py` le filtre à quatre endroits. Un événement archivé
+  disparaissait de la carte mais **restait sur l'agenda**. Corrigé.
+- **`Event.get_img()` : le troisième niveau de repli était inatteignable.** Le code écrivait
+  `elif self.postal_address:` avec un `if` imbriqué — le `else` (image de la configuration) ne
+  s'exécutait donc **que si l'événement n'avait aucune adresse**. Or `Event.save()` en assigne
+  une d'office. Résultat : un événement sans image propre, dans un lieu sans image, n'avait
+  **aucune** image. Sur les données de dev : **124 événements sur 136 étaient sans image ; ils en
+  ont tous une maintenant.**
+- **L'API v2 renvoyait les images en URL relative** (`/media/…`) — inexploitable par un client
+  externe. Elles sont désormais **absolues**, sur le domaine du tenant, et passent par
+  `get_img()` (le même repli que le moteur d'événements du site).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | `Configuration.module_newsletter` (défaut **False**) · `Event.get_img()` : chaîne de repli réparée |
+| `BaseBillet/views.py` | `federated_events_filter` : ajout du filtre `archived=False` |
+| `api_v2/serializers.py` | `_url_absolue_du_media()` · images absolues + repli `get_img()` (Event **et** PostalAddress) |
+| `Administration/admin/dashboard.py` | Carte du module · groupe sidebar « Newsletter » · Ghost déplacé |
+| `Administration/admin_tenant.py` | Blocage superadmin dans la **modale** ET dans le **POST** |
+| `Administration/templates/admin/dashboard_module_modal_contact.html` | **Nouveau** — la modale de contact |
+| `pyproject.toml` | **Nouveau** — `[tool.ruff.lint.per-file-ignores]` |
+| `tests/pytest/test_module_newsletter_activation.py` | **Nouveau** — 7 tests |
+| `tests/pytest/test_django_system_checks.py` | **Nouveau** — 2 tests (le filet) |
+
+### Migration
+- **Migration nécessaire / Migration required : OUI**
+  ```bash
+  docker exec lespass_django poetry run python manage.py migrate_schemas --executor=multiprocessing
+  ```
+- Le module est à **False** partout : aucun tenant n'est impacté tant qu'un superadmin ne
+  l'active pas.
+
+---
+
+## Newsletter : brouillons Ghost depuis les événements fédérés / Newsletter: Ghost drafts from federated events
+
+**Date :** 2026-07-13
+**Migration :** Non / No
+
+**Quoi / What :** Deux boutons dans l'admin (« Brouillon newsletter — 7 jours » / « — 30 jours »)
+génèrent, dans l'instance **Ghost** auto-hébergée du tenant, un **brouillon** de newsletter
+listant les événements à venir du tenant **et de son réseau fédéré**. Le brouillon n'est
+**jamais publié ni envoyé** : le gestionnaire le relit, l'élague et l'envoie à la main depuis
+Ghost.
+
+**Pourquoi / Why :** les gestionnaires recopiaient leur agenda à la main dans l'éditeur Ghost.
+
+### Le point technique central
+Le contenu d'un post Ghost est du **Lexical** (JSON à cartes typées), un format **non
+documenté**. Mais le convertisseur `?source=html` de Ghost **reconstruit ses cartes natives**
+à partir des conventions de balisage `kg-*`. On envoie donc du **HTML sémantique, sans aucun
+style inline** : chaque événement devient une **carte `product`** native (image + titre +
+infos + bouton), séparée par un `<hr>` (carte divider). L'**apparence est le travail de Ghost**,
+via ses réglages de design newsletter — la couleur d'accent du site habille les boutons.
+*Validé bout-en-bout contre une vraie instance Ghost 6.52 et les données de production.*
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `newsletter/` | **Nouvelle app** (sans modèle, sans migration) : `client_ghost.py` (JWT + POST du brouillon), `collecte.py` (events du réseau fédéré, cross-schema), `rendu.py` + template (HTML `kg-*`), `services.py` (orchestration) |
+| `TiBillet/settings.py` | `'newsletter'` ajouté à `TENANT_APPS` |
+| `Administration/admin_tenant.py` | `GhostConfigAdmin` : deux actions détail. **`test_api_ghost_admin_button` conservé.** Restauration de l'import à effet de bord `from Administration.admin import (products, prices)`, **protégé par `# noqa: F401`** — `ruff --fix` l'avait supprimé, cassant l'enregistrement de `ProductAdmin` (`admin.E039`) |
+| `tests/pytest/test_newsletter_ghost.py` | **Nouveau** — 50 tests |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non. `GhostConfig` (URL + clé Fernet) existait déjà.
+
+---
+
+## Correction : `?only_futur=1` renvoyait 500 sur les API events (v1 et v2) / Fix: `?only_futur=1` returned 500
+
+**Date :** 2026-07-13
+**Migration :** Non / No
+
+**Quoi / What :** `GET /api/v2/events/?only_futur=1` renvoyait **500 à tous les coups**.
+`api_v2/views.py` faisait `import datetime` (le **module**) puis appelait `datetime.now()` —
+qui n'existe que sur la **classe** `datetime.datetime`. Chaque appel levait
+`AttributeError: module 'datetime' has no attribute 'now'`.
+
+Un **second bug, latent**, se cachait juste derrière — et il était bien vivant en **v1** :
+`now.replace(day=now.day - 1)` lève `ValueError: day is out of range for month` le **1er de
+chaque mois** (`day - 1 == 0`). L'endpoint v1 plantait donc **un jour sur trente**.
+
+**Nouveau / New :** paramètre **`next_days=N`** sur `/api/v2/events/` — les événements des N
+prochains jours (entier entre 1 et 366, sinon **400**). Il l'emporte sur `only_futur`.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `api_v2/views.py` | `EventViewSet.list` : `timezone.now() - timedelta(days=1)` au lieu de `replace(day=…)`. Ajout de `next_days` avec validation. La conversion vers la timezone du tenant est retirée : elle ne changeait rien au filtrage (même instant, seul l'affichage diffère) |
+| `ApiBillet/views.py` | Même correctif sur la v1 (le crash du 1er du mois) |
+| `api_v2/openapi-schema.yaml` | `listEvents` : les paramètres `only_futur`, `next_days`, `filter` et la réponse `400` sont enfin documentés |
+| `tests/pytest/test_api_v2_events_filtres_temps.py` | **Nouveau** — 11 tests |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+
+---
+
+## Correction : les tags d'un lieu fédéré étaient appliqués à l'envers / Fix: a federated place's tags were applied backwards
+
+**Date :** 2026-07-13
+**Migration :** Non / No
+
+**Quoi / What :** Le moteur de l'agenda fédéré (`EventMVT.federated_events_filter`)
+appliquait `FederatedPlace.tag_filter` et `tag_exclude` dans le sens **inverse** de ce
+qu'annoncent les libellés de l'admin — les seuls que voit le gestionnaire :
+
+| Champ | Libellé de l'admin | Ce que faisait le moteur |
+|---|---|---|
+| `tag_filter` | « N'afficher que ces tags » | **excluait** ces tags |
+| `tag_exclude` | « Exclure ces tags » | n'affichait **que** ces tags |
+
+**Pourquoi c'était grave / Why it mattered :** la panne était **muette**. Quand les deux
+listes étaient remplies, le moteur excluait ce qu'on voulait voir puis ne gardait que ce
+qu'on voulait cacher : l'intersection était vide et **le lieu fédéré disparaissait
+entièrement de l'agenda**, sans erreur ni avertissement. Constaté sur les données de démo :
+`la-maison-des-communs` était invisible depuis `lespass`, et de `chantefrein` seules les
+réunions s'affichaient — alors que la config demandait précisément de les exclure.
+
+`demo_data_v2.py` et les `help_text` du modèle suivaient déjà la sémantique documentée :
+seul le moteur divergeait. Aucun test ne couvrait ces deux champs, ce qui explique la
+longévité du bug.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/views.py` | `federated_events_filter` : `tag_filter` devient un `.filter()` conditionnel, `tag_exclude` un `.exclude()`. La fédération automatique par tags rangeait ses slugs dans `tag_exclude` pour exploiter l'inversion : ils passent dans `tag_filter`. |
+| `tests/pytest/test_federation_tags_semantique.py` | **Nouveau.** Trois tests de non-régression, dont un qui attrape spécifiquement la disparition muette du voisin (les deux autres passent « à vide » dans ce cas). |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non
+- **Données existantes :** aucune permutation `tag_filter` ↔ `tag_exclude` n'est appliquée.
+  Un gestionnaire ayant configuré ses tags d'après les libellés de l'admin voit simplement sa
+  configuration se mettre à faire ce qu'il demandait. Voir
+  `TECH_DOC/SESSIONS/NEWSLETTER/CHANTIER-01-semantique-tags-federes.md` §6.
+- **Au déploiement :** vider le cache — `federated_events_filter` met en cache la page 1 et
+  les pages par date de l'agenda, qui portent encore l'ancien comportement.
+
+## Corrections : relance d'adhésion tronquée, tâche welcome morte, bouton fermer du panneau ticket / Fixes: truncated membership reminder, dead welcome task, ticket panel close button
+
+**Date :** 2026-07-03
+**Migration :** Non / No
+
+**Quoi / What :** Trois corrections de bugs découverts pendant l'audit de la session skins.
+
+**1. `membership_renewal_reminder` s'arrêtait au premier adhérent / stopped at the first member**
+- Le `return mail.sended` était DANS la boucle `for membership` : seul le premier
+  adhérent (du premier tenant) recevait l'email de relance, puis la tâche Celery
+  se terminait. Le `return` est supprimé : chaque adhérent est traité, une erreur
+  d'envoi est loggée et n'interrompt plus les suivants.
+- Correction aussi du message de log copié-collé trompeur (« send_welcome_email »
+  → « membership_renewal_reminder »).
+
+**2. Suppression de la tâche morte `send_welcome_email` / dead task removed**
+- Jamais appelée nulle part, et son template `emails/welcome/welcome_email.html`
+  n'existe pas (l'erreur `TemplateDoesNotExist` était avalée par le `try/except`).
+  Le seul `welcome_email.html` existant est l'email legacy de création d'instance
+  (`reunion/views/tenant/emails/`), au contexte incompatible — remplacé depuis par
+  `onboard/emails/ready.html`. La tâche est supprimée.
+
+**3. Bouton fermer du panneau ticket inopérant / ticket panel close button broken**
+- `data-bs-dismiss="ticketPanel"` (valeur invalide) → `data-bs-dismiss="offcanvas"`.
+  Le bouton ✕ de l'offcanvas `#ticketPanel` (page « Mes réservations ») ferme
+  désormais le panneau.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/tasks.py` | Suppression `send_welcome_email` ; fix `return` dans la boucle de `membership_renewal_reminder` + log |
+| `BaseBillet/templates/reunion/views/account/reservations.html` | `data-bs-dismiss="offcanvas"` sur le bouton close |
+
+
+
+**Date :** 2026-06-30
+**Migration :** Oui / Yes — `BaseBillet/migrations/0220_lignearticle_idempotency_key_and_more.py`
+
+**Quoi / What :** Trois corrections sur l'API v2, remontées par un intégrateur.
+
+**1. Partager un produit sur plusieurs événements / Share a product across several events**
+- `isRelatedTo` accepte désormais une **liste** (UUID et/ou objets schema.org) au
+  `POST /api/v2/products/` : le produit est attaché à tous les events listés.
+  Avant, une liste renvoyait 201 mais n'attachait rien.
+- Nouvelle route `POST /api/v2/events/{uuid}/link-product/` : attache un (ou
+  plusieurs) produit(s) **déjà créé(s)** à un événement (M2M `Event.products`),
+  sans en créer un nouveau. Accepte `productId`, `productIds`, `product`, `products`.
+
+**2. Double ticket sur un sous-événement / Double ticket on a sub-event**
+- Un sous-événement (avec `parent`) est forcé en catégorie `ACTION`. Le
+  `TicketCreator` créait alors DEUX tickets quand l'event avait aussi un produit
+  réservable : le bon, plus un ticket « bénévole » vide (sans `pricesold`, donc
+  `identifier` vide en sortie). Désormais `method_A` n'est appelé que si aucun
+  produit n'a été traité (`products_dict` vide).
+
+**3. Sécurité idempotence de la recharge cadeau / Gift-refill idempotency hardening**
+- `POST /api/v2/wallet-refills/` : l'`Idempotency-Key` est désormais **obligatoire**
+  (400 si absente) et stockée en **base** (`LigneArticle.idempotency_key`,
+  contrainte d'unicité = verrou atomique contre les requêtes concurrentes), au
+  lieu d'un cache best-effort. Même clé + même corps → 208 ; même clé + corps
+  **différent** → 409 ; une clé dont la tentative précédente a échoué (Fedow) peut
+  être ré-essayée. Résout le risque de double-crédit (TOCTOU + réutilisation de clé).
+
+**Pourquoi / Why :** Limites/risques signalés sur l'API v2 (réutilisation produit,
+tickets parasites, double-crédit possible sur recharge).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `api_v2/serializers.py` | `isRelatedTo` en liste (`_extract_event_uuids`), boucle d'attachement ; nettoyage ruff |
+| `api_v2/views.py` | route `link_product` ; refonte idempotence wallet-refill (verrou DB, 208/409/retry) |
+| `api_v2/openapi-schema.yaml` | doc route `link-product`, `isRelatedTo` liste, header `Idempotency-Key` requis + 409 |
+| `api_v2/README.md` | doc idempotence en base, header obligatoire |
+| `BaseBillet/validators.py` | `method_A` appelé seulement si `products_dict` vide |
+| `BaseBillet/models.py` | `LigneArticle.idempotency_key` + `UniqueConstraint` conditionnelle |
+| `tests/pytest/test_api_v2_product_link_event.py` | **nouveau** — 6 tests (multi-events + link-product) |
+| `tests/pytest/test_reservation_subevent_tickets.py` | **nouveau** — 4 tests (1 ticket par cas) |
+| `tests/pytest/test_api_v2_wallet_refill.py` | + 4 tests idempotence (208/409/400/retry), maj des tests existants |
+
+### Migration
+- **Migration nécessaire / Migration required :** Oui / Yes
+- `migrate_schemas --executor=multiprocessing` (ajout colonne `idempotency_key`
+  nullable + contrainte unique conditionnelle sur `LigneArticle` ; additif, sans risque).
+
+### i18n
+- Nouvelles chaînes `_()` à traduire (FR source) : `Idempotency-Key header is required.`,
+  `Idempotency-Key already used with different parameters.`,
+  `A refill with this key is already in progress.`,
+  `No product identifier provided. Use productId or productIds.`
+  → à passer au workflow `makemessages` / `compilemessages` (côté mainteneur).
+
+## Test carte NFC ↔ wallet Fedow : rendu autonome (plus de skip) / Fedow card test made self-contained
+
+**Date :** 2026-06-29
+**Migration :** Non / No
+
+**Quoi / What :** Le test d'intégration `test_membership_card_wallet_fedow` ne
+**skippe plus** : sa fixture fabrique elle-même une carte NFC éphémère chez Fedow
+si aucune n'est disponible. Il résiste désormais à un reset complet (`down -v`,
+qui vide la base Fedow) et ne dépend plus d'une carte renseignée dans `.env`.
+
+**Pourquoi / Why :** Les cartes NFC vivent dans le serveur Fedow (`fedow_django`),
+dont le `start.sh` ne crée aucune carte au démarrage (les cartes de démo sont
+dans `demo_data`, jamais lancé). Après un `down -v`, plus aucune carte → le test
+skippait. Solution : créer la carte **via l'API Fedow** depuis Lespass.
+
+**Fix / Fix :** nouvelle méthode `NFCcardFedow.create_cards(cards_data)` dans
+`fedow_connect/fedow_api.py` — POST signé par la place du tenant vers l'endpoint
+Fedow `card` (`CardAPI.create`, `HasKeyAndPlaceSignature`), idempotent (201/409).
+La fixture `carte_fedow_ephemere` réutilise `FEDOW_TEST_CARD_NUMBER` s'il pointe
+une carte encore éphémère, sinon **fabrique une carte fraîche** (numéro/tag
+aléatoires). Prérequis : place Fedow signable (cas par défaut en dev).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `fedow_connect/fedow_api.py` | + `NFCcardFedow.create_cards()` (POST signé `card`) |
+| `tests/pytest/test_membership_card_wallet_fedow.py` | fixture autonome + test `create_cards` (TDD) |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No.
+
+## Carte explorer : fond de carte MapTiler (style dataviz) avec repli OSM France / MapTiler basemap with OSM France fallback
+
+**Date :** 2026-06-29
+**Migration :** Non / No (front + variable d'env `MAPTILER_KEY`)
+
+**Quoi / What :** Le fond de carte utilise **MapTiler** (style `dataviz-v4`, épuré)
+quand une clé est configurée, sinon **repli** sur les tuiles **Humanitarian (HOT)
+d'OpenStreetMap France**. La clé MapTiler vient de `MAPTILER_KEY` (`.env`), jamais
+en dur dans le code.
+
+**Pourquoi / Why :** CARTO Voyager affichait les régions françaises en anglais.
+MapTiler offre un style épuré (idéal pour faire ressortir les markers) et des
+garanties de prod ; OSM France reste le repli gratuit/sans clé (et le défaut en dev
+si `MAPTILER_KEY` est vide). Branchement : `settings.MAPTILER_KEY` →
+contexte des vues → `data-maptiler-key` sur `#explorer-root` → `explorer.js`.
+
+**Limite langue / Language note :** sur les tuiles **raster** MapTiler, `?language=fr`
+n'a **pas** d'effet (labels figés au rendu). Les villes françaises s'affichent en
+français, mais les pays/villes étrangers restent en anglais (« Geneva »,
+« Switzerland »). Pour un français complet : créer un style FR dans le dashboard
+MapTiler (Customize → langue), ou passer au SDK vectoriel (MapLibre, `language: 'fr'`).
+
+**Sécurité clé :** la clé MapTiler est exposée côté client (URL des tuiles) →
+**à restreindre par domaine** dans le dashboard MapTiler (Allowed origins).
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `TiBillet/settings.py` | `MAPTILER_KEY = os.environ.get('MAPTILER_KEY', '')` |
+| `seo/views.py` + `BaseBillet/views.py` | passent `maptiler_key` au contexte (explorer ROOT + federation tenant) |
+| `seo/templates/seo/partials/explorer_widget.html` | `data-maptiler-key` sur `#explorer-root` |
+| `seo/static/seo/explorer.js` | `tileLayer` : MapTiler `dataviz-v4` si clé, sinon repli HOT / OSM France |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No. Renseigner `MAPTILER_KEY`
+  dans `.env` (sinon repli HOT automatique) + redémarrer le conteneur pour charger l'env.
+
+## Carte explorer : markers synchronisés au mode « Événements » + barre de recherche resserrée / Explorer map: markers synced with "Events" mode + tightened search bar
+
+**Date :** 2026-06-29
+**Migration :** Non / No
+
+**Quoi / What :** Sur la carte explorer, en mode « Événements », les markers ne
+montrent plus que les lieux ayant au moins un événement visible (les lieux sans
+événement à venir disparaissent de la carte). La barre de recherche et le toggle
+« Lieux / Événements » forment un groupe compact **centré** (au lieu d'une barre
+pleine largeur avec les boutons collés au bord). Le fondu dégradé qui estompait à
+tort le bouton « Événements » est retiré.
+
+**Pourquoi / Why :** Les markers réagissaient déjà aux filtres texte et tag (via
+`updateMapMarkersByPA`), mais le toggle Lieux/Événements ne changeait que la liste
+de gauche, pas les markers. Côté layout, la barre s'étirait sur toute la largeur
+(boutons collés au bord), puis une 1ʳᵉ tentative laissait un grand vide au milieu.
+
+**Fix / Fix :** Dans `applyFilters()`, la source des markers visibles dépend du
+mode : en mode « événement », `visiblePaIds` est construit depuis les `pa_id` des
+événements visibles (`eventCards`) au lieu de toutes les PA. CSS : le groupe
+`.explorer-search-row` est borné (`max-width: 760px`) et **centré** (`margin: 0 auto`),
+la barre (`flex:1` + `min-width:0`) remplit jusqu'au toggle (plus de vide) ; retrait
+du `mask-image` (fondu droit) sur `.explorer-pills` qui estompait le bouton
+« Événements » (toggle à 2 boutons → jamais de scroll) ; responsive mobile conservé.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/static/seo/explorer.js` | `applyFilters` : markers = lieux avec events visibles en mode « événement » |
+| `seo/static/seo/explorer.css` | groupe recherche+toggle borné et compact à gauche (responsive mobile conservé) |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No (front statique).
+- Note : vider le cache navigateur / hard reload pour récupérer les statiques.
+
+## Infra : limite item Memcached relevée (1 Mo → 8 Mo) pour l'agrégat SEO / Memcached item size raised for the SEO aggregate
+
+**Date :** 2026-06-29
+**Migration :** Non / No (infra — recréation du conteneur memcached)
+
+**Quoi / What :** Le service `lespass_memcached` est lancé avec `-I 8m -m 256`
+(au lieu des défauts 1 Mo / 64 Mo).
+
+**Pourquoi / Why :** L'agrégat SEO `AGGREGATE_EVENTS` pèse ~687 o/event et contient
+tous les events futurs publiés du réseau. À ~1500 events futurs il atteint la limite
+Memcached par défaut (1 Mo) ; au-delà le `set` L1 échoue silencieusement → la page
+relit la DB à chaque fois (cache inutile). `-I 8m` repousse le mur à ~12 000 events
+futurs ; `-m 256` donne la mémoire totale pour ces gros items sans évictions.
+Alternative durable (non faite) : borner l'agrégat aux N prochains mois.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `docker-compose.yml` | `lespass_memcached` : `command: ["memcached", "-m", "256", "-I", "8m"]` |
+| `docker-compose.pre-prod.yml` | idem |
+| `docker-compose.v1.pre-prod.yml` | idem |
+
+### Application / Apply
+- **Recréer le conteneur** (vide le cache, reconstruit au prochain rebuild/MISS) :
+  `docker compose up -d lespass_memcached` (et `-f docker-compose.pre-prod.yml` en prod).
+- Ajuster `-m 256` selon la RAM du serveur.
+
+## Agenda participatif : l'approbation d'une proposition ne rafraîchissait pas la carte / Proposal approval didn't refresh the map
+
+**Date :** 2026-06-29
+**Migration :** Non / No
+
+**Quoi / What :** Approuver une proposition publique (agenda participatif) via
+l'action admin « Approuver et publier les propositions sélectionnées » la publiait
+bien, mais l'event **n'apparaissait sur la carte réseau qu'au beat 4 h**.
+
+**Pourquoi / Why :** L'action utilisait `queryset.update(is_proposal=False,
+published=True)`. Le `.update()` en masse **ne déclenche pas le signal
+`post_save`** → `declencher_refresh_seo_cache` n'était jamais appelé → pas de
+rebuild SEO. (Le toggle « Publier » de la liste et l'édition via le formulaire,
+qui passent par `save()`, déclenchaient bien le signal — seule l'action bulk était
+touchée.)
+
+**Fix / Fix :** L'action publie désormais via `save(update_fields=["is_proposal",
+"published"])` par instance (boucle), ce qui déclenche `post_save` → rebuild SEO
+débouncé → l'event approuvé apparaît sur la carte en ~15-20 s. Vérifié par test +
+en conditions réelles (Chrome) : toggle « Publier » → event présent dans
+`AGGREGATE_EVENTS`, L1 cohérent cross-schema.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/admin_tenant.py` | `approuver_propositions` : `save()` par instance au lieu de `queryset.update()` (déclenche le signal SEO) |
+| `tests/pytest/test_seo_cache_fragments.py` | +1 test : l'approbation d'une proposition déclenche le rebuild SEO |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No.
+
+## Carte réseau : débounce du rebuild rendu global + plafond anti-famine / Global rebuild debounce + maxWait cap
+
+**Date :** 2026-06-29
+**Migration :** Non / No
+
+**Quoi / What :** Le débounce du rebuild d'agrégats est désormais **global** (1 cycle
+pour tout le réseau, plus 1 par tenant) et protégé contre la **famine** par un
+plafond « maxWait ».
+
+**Pourquoi / Why :** (1) Les clés de débounce passaient par le cache `default`
+préfixé par schema (`make_key`) → le verrou « global » était en réalité **par
+tenant** : sous un pic multi-lieux, on lançait N rebuilds redondants (chacun
+recombine pourtant tout le réseau). (2) Le débounce *trailing* seul risquait la
+**famine** : sous un flux continu de modifs (< 15 s d'intervalle : import, grosse
+saison), l'échéance était repoussée indéfiniment et le rebuild ne partait jamais
+avant le beat 4 h — recréant le symptôme corrigé.
+
+**Fix / Fix :** Les 3 clés de débounce (`seo_rebuild_echeance`,
+`seo_rebuild_plafond`, `seo_rebuild_planifie`) sont manipulées sous
+`schema_context("public")` → **réellement globales**. Ajout d'un **plafond maxWait**
+(`REBUILD_MAXWAIT = 60 s`) posé une seule fois au début d'une série : le rebuild
+s'exécute au plus tôt entre l'échéance trailing (dernière modif + 15 s) et le
+plafond (1ʳᵉ modif + 60 s). Conséquences : sous pic simultané → **1 rebuild** au
+lieu de N ; sous flux dense → **≤ 1 rebuild / 60 s** (charge bornée, pas de famine),
+objectif « 500 tenants » du CHANTIER-07 enfin tenu.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/tasks.py` | +`REBUILD_MAXWAIT` + constantes de clés ; `planifier_rebuild_agregats` (plafond + clés globales `schema_context("public")`) ; garde de `rebuild_seo_aggregates` : cible = min(échéance trailing, plafond maxWait) |
+| `tests/pytest/test_seo_cache_fragments.py` | +2 tests : recombinaison au plafond maxWait, plafond posé une seule fois |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No.
+
+## Carte réseau : cache L1 SEO périmé par schema (cause racine du retard ~4h) / SEO L1 cache stale per-schema
+
+**Date :** 2026-06-29
+**Migration :** Non / No
+
+**Quoi / What :** Cause racine confirmée du symptôme « les nouveaux events/adresses
+n'apparaissent qu'au bout de plusieurs heures ». Le cache L1 Memcached lu par les
+pages publiques restait **périmé jusqu'au TTL (4 h)** même après le recalcul.
+
+**Pourquoi / Why :** `CACHES['default']` utilise
+`KEY_FUNCTION = django_tenants.cache.make_key`, qui **préfixe chaque clé de cache
+par le schema courant** (isolation cache par tenant). Or les agrégats SEO sont
+**globaux** (`tenant=None`, partagés par tout le réseau). Le worker Celery exécute
+le rebuild dans le schema du tenant déclencheur → il écrivait la clé sous
+`lespass:…:seo:aggregate_lieux`, **invisible** depuis le schema `public` (page ROOT
+`/explorer/`) et les autres tenants. Chaque schema avait sa propre copie L1 ; seule
+celle du schema déclencheur était fraîche. Les autres lisaient du périmé jusqu'au
+TTL 4 h (ou un MISS). Vérifié : L1 lu valait 19 en `public`/`lespass` mais 15 en
+`le-coeur-en-or`/`chantefrein` pour la même donnée globale.
+
+**Fix / Fix :** Les helpers L1 SEO (`set_memcached_l1` / `get_memcached_l1`)
+épinglent désormais le schema `public` (`with schema_context("public")`) autour de
+l'opération cache. La clé n'est donc plus préfixée par le schema d'exécution : une
+**seule entrée L1 globale** est partagée par le worker, la page ROOT et chaque
+tenant. Vérifié de bout en bout (Chrome) : après création d'un event, L1 identique
+sur tous les schemas (public = lespass = le-coeur-en-or) et carte ROOT à jour en
+~20 s, **sans rebuild manuel**.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/services.py` | `set_memcached_l1` / `get_memcached_l1` : `with schema_context("public")` autour du `cache.set` / `cache.get` (clé L1 globale, non préfixée par tenant) |
+| `tests/pytest/test_seo_cache_fragments.py` | +1 test : agrégat global écrit dans un schema tenant lu identique depuis public + autre tenant |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No. Les anciennes clés L1
+  préfixées par tenant expirent seules (TTL 4 h) et ne sont plus lues.
+
+## Carte réseau : events/adresses fraîchement sauvés n'apparaissaient pas / Network map: freshly saved events & addresses didn't show up
+
+**Date :** 2026-06-29
+**Migration :** Non / No
+
+**Quoi / What :** Sur la carte ROOT (`/explorer/`), un nouvel évènement ou une
+nouvelle adresse pouvait rester invisible jusqu'au prochain passage du beat
+Celery (jusqu'à 4 h), alors que le tenant venait de sauvegarder.
+
+**Pourquoi / Why :** Le rebuild de l'agrégat `AGGREGATE_POINTS` (lu par la carte)
+était déclenché en **débounce « front montant »** : la tâche était planifiée à
+`T_première_modif + 180 s`. Si une modif arrivait tard dans cette fenêtre, son
+fragment `TENANT_POINTS` (countdown plus court) pouvait être recombiné **trop
+tôt** — le rebuild figeait un agrégat à partir d'un fragment pas encore à jour —
+et **aucun rebuild de rattrapage** n'était garanti. Seul le beat 4 h corrigeait.
+Aggravé par une « fenêtre morte » du débounce fragment (countdown 30 s < TTL
+verrou 60 s).
+
+**Fix / Fix :** Passage à un **débounce « front descendant » (trailing)**. Chaque
+`post_save`/`post_delete` Event/PostalAddress repousse une échéance
+(`seo_rebuild_echeance = now + 15 s`) et planifie au plus une tâche rebuild par
+fenêtre. À son réveil, `rebuild_seo_aggregates` recombine **seulement si**
+l'échéance est atteinte ; sinon il se **replanifie** pile à l'échéance. Garantie :
+un rebuild s'exécute **toujours après la dernière modif**, sur des fragments à
+jour. Le beat 4 h appelle `rebuild_seo_aggregates(force=True)` (recombine
+toujours, filet anti-dérive). Countdown du fragment réduit à 5 s et TTL du verrou
+aligné (fin de la fenêtre morte). Latence perçue : ~20 s au lieu de 3 min → 4 h.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/tasks.py` | `planifier_rebuild_agregats()` (débounce trailing) ; garde + `force` dans `rebuild_seo_aggregates` ; beat en `force=True` ; constantes `REBUILD_TRAILING_WINDOW`/`REBUILD_MARGE` |
+| `BaseBillet/signals.py` | `declencher_refresh_seo_cache` : fragment countdown 5 s (TTL aligné) ; rebuild via `planifier_rebuild_agregats()` (remplace le front montant 180 s) |
+| `tests/pytest/test_seo_cache_fragments.py` | +4 tests : abstention/replanification, recombinaison à l'échéance, `force=True`, débounce du helper |
+
+### Migration
+- **Migration nécessaire / Migration required :** Non / No (logique Celery + cache uniquement).
+
+## Admin réservation : fix crash `'TibilletUser' has no attribute 'lower'` / Admin reservation: fix crash on add
+
+**Date :** 2026-06-26
+**Migration :** Non / No
+
+**Quoi / What :** L'ajout d'une réservation depuis l'admin
+(`/admin/BaseBillet/reservation/add/`) plantait avec
+`AttributeError: 'TibilletUser' object has no attribute 'lower'` dès qu'un
+utilisateur était sélectionné (Sentry 7574740199).
+
+**Pourquoi / Why :** un commit du 2026-06-03 avait transformé le champ `email`
+d'un `forms.EmailField` (saisie d'une adresse) en
+`forms.ModelChoiceField(queryset=TibilletUser.objects.all())` (Select2 pour
+chercher un utilisateur existant) — **sans adapter `save()`**. `cleaned_data['email']`
+renvoyait donc un objet `TibilletUser`, que `save()` passait toujours à
+`get_or_create_user()`, lequel appelle `email.lower()` → crash. Bug introduit
+le 3 juin, déclenché en prod le 25.
+
+**Fix :** retour à un **input texte simple** (`forms.EmailField`), l'usage
+historique. `save()` retrouve ou crée l'utilisateur via
+`get_or_create_user(email, send_mail=False)` (pas de mail de validation : la
+réservation est créée côté admin). Effet de bord positif : supprime la fuite
+cross-tenant du `queryset=TibilletUser.objects.all()` (qui listait tous les
+utilisateurs de la plateforme).
+
+**Bonus — choix du tarif :** le champ tarif listait les `PriceSold`, qui
+n'existent **qu'après une première vente** : les évènements payants à venir
+jamais vendus n'apparaissaient pas (un seul tarif visible). Il liste désormais
+**une option par couple (évènement, tarif)** (`ChoiceField`, valeur
+`event_uuid:price_uuid`, libellé cherchable « date — évènement — tarif — prix »),
+et `save()` **matérialise** le `ProductSold` + `PriceSold` au moment de la
+création, comme le flow de vente.
+
+Le couple est nécessaire car un même tarif (`Product`/`Price`) peut être
+**partagé entre plusieurs évènements** — typiquement « Réservation gratuite »
+(`views.py` ajoute le même produit FREERES à chaque évènement gratuit). Un
+select listant les `Price` n'aurait montré qu'**une** option pour N évènements
+et aurait réservé sur le mauvais évènement (le premier). Avec le couple, chaque
+évènement a sa propre entrée et la réservation cible le bon évènement.
+
+**Bonus — email manquant dans la liste des ventes :** la colonne « user_email »
+de l'admin `LigneArticle` restait **vide** pour les ventes via l'admin.
+`LigneArticle.user_email()` ne gérait que `membership` et `paiement_stripe`,
+jamais `reservation`. Ajout du cas `reservation.user_commande` (en priorité).
+
+**Bonus — champ « Prix par billet » :** nouveau champ `amount` (montant unitaire
+**par billet**). Il se **pré-remplit** automatiquement à la sélection du tarif
+(JS) et devient **obligatoire** pour un tarif à **prix libre** (`free_price`).
+Un libellé « prix € × quantité = total € » rappelle que le montant est par billet.
+
+**Bonus — moyen de paiement obligatoire :** le select `payment_method` est
+désormais **requis** et commence par « Sélectionner un moyen de paiement »
+(option vide). Avant, le 1er choix proposé était « Offert » (`FREE`) : une
+validation distraite créait une **vente offerte par erreur**.
+
+**Fix — double comptage du montant (bug pré-existant) :** `save()` stockait
+`LigneArticle.amount = prix × quantité × 100`, or `amount` est le **montant
+UNITAIRE en centimes** (le total est `amount × qty`, cf. `comptabilite/services.py`
+et `LigneArticle.total()`). Une réservation admin de N billets était donc comptée
+`× N` en trop (ex. 8 € × 3 affichait 72 € au lieu de 24 €). Corrigé en
+`amount = prix_unitaire × 100`. **⚠️ Données : les `LigneArticle` payantes créées
+via ce formulaire avant ce correctif (sale_origin = `ADMIN`, qty > 1) ont un
+`amount` surévalué** — à vérifier/corriger en base si nécessaire.
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/admin_tenant.py` | `ReservationAddAdmin` : champ `email` → `EmailField` ; `save()` → `get_or_create_user(email, send_mail=False)` ; champ tarif `price` (`ChoiceField`, une option par couple évènement/tarif via `_build_event_price_options`) ; champ `amount` (prix par billet) + `clean()` (requis si prix libre) ; `save()`/`clean_payment_method` parsent `event_uuid:price_uuid` ; `class Media` (JS d'auto-remplissage) |
+| `Administration/static/admin/js/reservation_price_autofill.js` | **Nouveau** : auto-remplissage du prix à la sélection du tarif, requis si prix libre, libellé total |
+| `BaseBillet/models.py` | `LigneArticle.user_email()` : gère le cas `reservation.user_commande` (colonne email des ventes admin) |
+| `tests/pytest/test_admin_reservation_add.py` | **Nouveau** : 7 tests (gratuit + payant, **tarif partagé → 2 options + bon event**, **prix par billet override**, **prix libre requis**, **moyen de paiement requis**, garde-fous), avec vérif `amount`/`total()` et `user_email()` |
+
+## Wizard event public : fix email perdu via le chemin Tiers-Lieux / Public event wizard: fix email lost via the Tiers-Lieux path
+
+**Date :** 2026-06-18
+**Migration :** Non / No
+
+**Quoi / What :** Un visiteur **anonyme** qui choisissait son lieu via le recensement national
+**Tiers-Lieux** (bouton « Utiliser ce lieu ») voyait, à la soumission finale, son évènement
+**rejeté** avec retour au début et le message « Merci d'indiquer votre adresse e-mail… », alors
+que l'email était bien renseigné.
+
+**Pourquoi / Why :** le bouton « Utiliser ce lieu » est un **formulaire distinct** du form principal
+de l'étape 1 (imbriqué via HTMX). Le navigateur ne postait donc que les champs du lieu — **pas
+l'email**, qui vit dans le form principal. L'action `use_tierslieux` ne stockait jamais
+`email_proposeur` en session (contrairement au chemin classique `_wizard_etape_choix_lieu`), donc
+la finalisation ne le retrouvait pas. Le chemin « adresse existante » / « nouveau lieu manuel »
+n'était pas affecté (d'où le bug visible uniquement via l'API Tiers-Lieux).
+
+**Fix :**
+- JS (`_form_lieu.html`) : au **clic** sur « Utiliser ce lieu », l'email du proposeur est injecté
+  dans un champ caché du form Tiers-Lieux avant l'envoi natif (et le clic est bloqué avec
+  `preventDefault()` + `reportValidity()` si l'email est vide). On écoute le `click` et **pas** le
+  `submit` : le `submit` d'un **formulaire imbriqué** ne remonte pas jusqu'à `document` (vérifié en
+  navigateur), donc une délégation `submit` ne se déclencherait jamais.
+- Serveur (`use_tierslieux`) : lecture de `email_proposeur` dans le POST et stockage en session pour
+  les anonymes, exactement comme `_wizard_etape_choix_lieu`. Garde défensive : email vide → retour
+  étape 1 avec le même message (POST forgé / session perdue).
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/views.py` | `EventWizard.use_tierslieux` : capture + stockage session de `email_proposeur` (anonyme) |
+| `BaseBillet/templates/reunion/views/event/wizard/_form_lieu.html` | JS : injection de l'email dans le form Tiers-Lieux au submit |
+| `tests/pytest/test_event_wizard_unifie.py` | `test_use_tierslieux_anonyme_garde_email_en_session` (régression) |
+
+## i18n EN : sync + complétion des traductions manquantes + fix extraction f-string / i18n EN: sync + fill missing translations + f-string extraction fix
+
+**Date :** 2026-06-18
+**Migration :** Non / No
+
+**Quoi / What :**
+1. **Sync FR/EN** (mode SYNC du skill i18n-translate) : 9 chaînes fuzzy / fuites de langue corrigées.
+2. **Complétion EN** : 74 chaînes de **source française** sans traduction anglaise (msgstr EN vide →
+   français affiché sur le site anglais) traduites FR→EN. Surtout l'app **crowds/contrib**
+   (`Filter by tags`, `venues & organisations`, `contributors`, etc.). Les ~1463 autres msgstr EN
+   vides sont de **source anglaise** (repli correct) et restent intacts.
+3. **Fix extraction f-string** dans `minutes_to_human` (`BaseBillet/templatetags/tibitags.py`) :
+   les unités de durée `_('j')` / `_('h')` / `_('min')` étaient **à l'intérieur de f-strings**
+   (`f"{n} {_('j')}"`) → `makemessages` (xgettext) **n'extrait pas** un `_()` dans une f-string,
+   donc « j/h/min » restaient en français partout (ex. « 2 j » sur la page Contribuez). Les `_()`
+   sont sortis dans des variables locales + commentaires `# Translators:`. **Nécessite un nouveau
+   `makemessages`** pour extraire ces 3 unités, puis traduire « j » → « d » en anglais.
+
+**Pourquoi / Why :** supprimer le français qui fuit sur le site anglais (chaînes externalisées mais
+non traduites), et corriger un piège d'extraction qui rendait 3 unités invisibles à `makemessages`.
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `locale/en/LC_MESSAGES/django.po` | 9 (sync) + 74 (complétion FR→EN) msgstr remplis ; intégrité blocs 2526=2526, `msgfmt` OK |
+| `locale/fr/LC_MESSAGES/django.po` | corrections fuzzy du sync (FR inchangé pour la complétion EN) |
+| `BaseBillet/templatetags/tibitags.py` | `minutes_to_human` : `_()` sortis des f-strings (extraction xgettext) + `# Translators:` |
+
+## Admin clé API & asset : fix icônes asset cadeau, nettoyage assets démo BDG, UUID asset lisible / Admin API key & asset: gift-asset icon fix, BDG demo-asset cleanup, readable asset UUID
+
+**Date :** 2026-06-18
+**Migration :** Non / No
+
+**Contexte / Context :** Remontée utilisateur sur **Admin → Outils externes → Clé API**. En changeant
+l'asset cadeau (`gift_asset`) d'une clé puis en enregistrant, l'utilisateur croyait que le
+changement n'était pas pris en compte et voyait une **erreur sur le nouvel asset**.
+
+**Quoi / What :**
+1. **Bug clé API expliqué et corrigé.** La sauvegarde de `gift_asset` **fonctionnait** (vérifié :
+   la valeur change bien en base). L'erreur venait des **icônes crayon / œil / +** affichées à côté
+   du menu déroulant : elles ouvrent l'admin des assets, qui **masque volontairement les assets
+   badgeuse (BDG)** → clic = erreur « cet asset n'existe pas ». On retire ces icônes de gestion
+   d'asset sur le champ `gift_asset` (`formfield_for_dbfield`) : on ne gère pas les assets depuis
+   la page clé API, la sélection dans la liste suffit.
+2. **Assets démo « [DEMO] Biere / Soft / Sandwich » (catégorie BDG) supprimés.** Origine : la
+   fixture `_demo_data_v2_ventes.py` créait ces produits en `Product.BADGE` (mauvaise catégorie :
+   ce sont des **ventes de comptoir**, pas des badgeuses). Le signal post_save
+   `send_membership_and_badge_product_to_fedow` transformait alors chaque produit BADGE en asset
+   BDG, qui polluait les listes d'assets (et le menu `gift_asset`). Fixture corrigée en
+   `Product.NONE` + 3 assets BDG supprimés de la base dev + 3 produits démo repassés en `NONE`.
+3. **UUID de l'asset en lecture seule** sur la page change d'un asset (`AssetAdmin`).
+4. **Étanchéité multi-tenant sur `gift_asset` (faille corrigée).** `AssetFedowPublic` vit dans le
+   schéma public partagé : le menu déroulant listait les assets de **tous les lieux**, un lieu
+   pouvait donc choisir l'asset cadeau d'un autre. Le queryset est désormais restreint aux assets
+   **dont le tenant courant est l'origine** (`origin = connection.tenant`), via
+   `ExternalApiKeyAdmin.formfield_for_foreignkey`. Vérifié : un asset d'un autre tenant n'apparaît
+   plus et est rejeté en validation. (Surfaces déjà sûres : `Price.fedow_reward_asset` filtre déjà
+   `origin=client` ; `Initiative.asset` n'est pas un champ éditable.)
+5. **Démo badgeuse retirée de `demo_data.py`.** Le bloc « Badgeuse co-working » (produit `BADGE` +
+   tarif « Passage ») et la phrase qui l'annonçait dans la description de l'instance démo sont
+   supprimés (« on n'utilise plus les badges »). Aucune donnée en base : ce bloc n'avait jamais été
+   exécuté sur la base dev.
+
+**Pourquoi / Why :** lever l'ambiguïté côté utilisateur (« on n'utilise plus les badges »), retirer
+des données démo trompeuses, exposer l'identifiant technique de l'asset quand on en a besoin, et
+**garantir l'isolation multi-tenant** sur le choix de l'asset cadeau.
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/admin_tenant.py` | `ExternalApiKeyAdmin.formfield_for_foreignkey` : queryset `gift_asset` limité à `origin = tenant` + catégories rechargeables. `ExternalApiKeyAdmin.formfield_for_dbfield` : retire add/change/delete/view related sur `gift_asset`. `AssetAdmin` : `uuid` ajouté en `readonly_fields` + `fields` |
+| `Administration/management/commands/_demo_data_v2_ventes.py` | Produits démo Biere/Soft/Sandwich : `Product.BADGE` → `Product.NONE` (évite la création d'assets BDG parasites) |
+| `Administration/management/commands/demo_data.py` | Bloc « Badgeuse co-working » (produit BADGE + tarif) supprimé + phrase descriptive associée retirée |
+| Base dev (one-shot, pas de code) | Suppression des 3 assets BDG `[DEMO] *` + produits démo repassés en `NONE` |
+
+## API v2 recharge cadeau : traçabilité LigneArticle + fix 500 Fedow / API v2 gift refill: LigneArticle traceability + Fedow 500 fix
+
+**Date :** 2026-06-18
+**Migration :** Non / No
+
+**Contexte / Context :** `POST /api/v2/wallet-refills/` ne fonctionnait **pas du tout** en réel
+(500), mais les tests **mockaient Fedow** et le cachaient. L'endpoint Fedow réutilisé
+(`refill_from_lespass_to_user_wallet`) est en fait celui de la **récompense d'adhésion** : son
+serializer exige `ligne_article_uuid` + `membership_uuid` + `product_uuid` + `price_uuid`. Une
+recharge cadeau directe n'a aucun de ces objets. De plus, aucune **trace comptable** n'était créée.
+
+**Quoi / What :**
+1. **Le fix Fedow (option C, sans toucher Fedow)** : le serializer Fedow prévoit un bypass via le
+   flag `rewarded_from_ticket_scanned` (crédit direct sans contexte de vente, déjà utilisé pour les
+   récompenses de scan de ticket). La vue le passe désormais dans le metadata → la recharge
+   **crédite réellement** le wallet. Validé en intégration réelle (solde vérifié sur Fedow).
+2. La vue crée une **LigneArticle de traçabilité** AVANT l'appel Fedow (un produit
+   `RECHARGE_CASHLESS` par asset, tarif 0 €, `payment_method=FREE`) et passe son `uuid` dans le
+   metadata. Comme une recharge offerte sur LaBoutik V1 : on trace tout ce qui est crédité.
+3. Succès Fedow → ligne `VALID` ; échec → ligne `FAILED` + **502** propre (au lieu de la 500 brute).
+   Pas de double-crédit (ligne `CREATED`, `_state.adding` → aucun trigger ; `trigger_R` commenté).
+4. **Restriction d'assets alignée sur Fedow** : `REFILLABLE = {cadeau TNF, temps TIM, fidélité FID}`.
+   **BADGE (BDG) retiré** (Fedow le refuse via `validate_asset`, et il n'est plus utilisé) ; euro
+   (TLF) et fédéré (FED) rejetés en 422.
+5. **Tests convertis en intégration RÉELLE** (plus de mock du crédit Fedow) : recharge de chaque
+   type (cadeau/temps/fidélité) via l'API + **vérification du solde réel** sur Fedow, et idempotence
+   réelle. La fixture crée les assets sur Fedow (comme l'admin : `wallet_origin = place.wallet` +
+   `get_or_create_token_asset`). Mocks conservés uniquement pour simuler l'indisponibilité (503) et
+   la panne Fedow (502), non reproductibles en réel.
+
+**Pourquoi / Why :** auditer toute recharge (trou comptable) et rendre l'erreur Fedow propre et
+traçable, **sans toucher au serveur Fedow** (option choisie par le mainteneur).
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `api_v2/views.py` | `WalletRefillViewSet` : flag `rewarded_from_ticket_scanned` (bypass Fedow) + `_creer_ligne_article_recharge` + `ligne_article_uuid` dans metadata + succès/échec (VALID/FAILED, 502) |
+| `fedow_public/models.py` | `REFILLABLE_CATEGORIES` : retrait de `BADGE` (aligné sur `validate_asset` côté Fedow) |
+| `tests/pytest/test_api_v2_wallet_refill.py` | Rejet FED testé (422) ; **tests d'intégration réels** (recharge cadeau/temps/fidélité + vérif solde Fedow + idempotence) via fixture `fedow_real_setup` (assets créés sur Fedow) ; test échec Fedow → 502 + ligne FAILED |
+
+## Tests : couverture du remboursement Stripe + helper Stripe Checkout multi-moyens / Tests: Stripe refund coverage + multi-method Checkout helper
+
+**Date :** 2026-06-18
+**Migration :** Non / No
+
+**Quoi / What :**
+1. **Nouveau `tests/pytest/test_stripe_refund.py`** (3 tests) — couvre le remboursement Stripe, jusqu'ici non testé : (a) `cancel_and_refund_resa()` — `stripe.Refund.create` (montant + `payment_intent`), paiement `REFUNDED`, avoir négatif, réservation + billets annulés ; (b) réservation gratuite → aucun refund ; (c) **remboursement partiel** `cancel_and_refund_ticket()` — 1 billet sur 4 (montant d'**un** billet, pas du panier ; avoir `qty=-1` ; paiement reste `VALID`). Le test (a) documente que `cancel_and_refund_resa` rembourse `amount_total` (le **paiement entier**) — à revoir pour les paniers.
+2. **`tests/e2e/conftest.py` — `fill_stripe_card`** : déplie l'accordéon « Carte » de Stripe Checkout (`data-testid="card-accordion-item-button"`, `dispatch_event`) quand plusieurs moyens sont actifs (Carte + SEPA). Attend que le formulaire soit monté (accordéon **ou** champ carte). Reste compatible « carte seule » (no-op). Débloque `test_membership_manual_validation_stripe` après activation de SEPA sur le compte de test.
+
+**Pourquoi / Why :** le chemin de remboursement Stripe n'avait aucune couverture (les tests d'avoir/annulation utilisent des objets gratuits) ; et l'activation de SEPA a changé la page Checkout (sélecteur de moyen de paiement), cassant le helper partagé.
+
+### Fichiers / Files
+| Fichier / File | Changement / Change |
+|---|---|
+| `tests/pytest/test_stripe_refund.py` | Nouveau — 2 tests (refund payé + gratuit sans refund) |
+| `tests/e2e/conftest.py` | `fill_stripe_card` : sélection « Carte » sur Checkout multi-moyens |
+
+## Adhésions SEPA : lien de paiement à usage unique (anti double prélèvement) / SEPA memberships: single-use payment link (duplicate debit fix)
+
+**Date :** 2026-06-17
+**Migration :** Oui / Yes — `BaseBillet/migrations/0219_alter_membership_status.py` (`migrate_schemas`)
+
+**Contexte / Context :** pour une adhésion à validation manuelle (caisse sociale
+alimentaire), l'admin valide l'adhésion (`ADMIN_VALID`) et un mail envoie un lien de
+paiement. En carte bancaire, le paiement est immédiat → l'adhésion passe `ONCE` → le lien
+devient inactif. En **prélèvement SEPA**, le débit prend 3 à 14 jours pendant lesquels
+l'adhésion restait `ADMIN_VALID` : le lien restait actif. Recliquer dessus pouvait, via le
+`except` réseau de la vue, **recréer un checkout** et donc un **2e prélèvement** (cas signalé
+« Damien GARNIER »). De plus, une adhésion déjà payée renvoyait un **404 JSON brut** illisible.
+
+**Quoi / What :**
+1. **Nouveau statut `Membership.PAYMENT_PENDING` ('PP')** — « Paiement soumis, en attente de
+   validation bancaire ». Posé dans `Paiement_stripe.update_checkout_status()` dès que le
+   paiement ressort `PENDING` (checkout soumis mais non débité) ; déclenché par le webhook
+   `checkout.session.completed` **et** par le retour navigateur. Le succès final repasse en
+   `ONCE`/`AUTO` (inchangé), l'échec SEPA (`async_payment_failed`) réarme en `ADMIN_VALID`.
+2. **`get_checkout_for_membership` route selon le statut** au lieu d'un `get_object_or_404` :
+   `ADMIN_VALID` → checkout ; `PAYMENT_PENDING` → page « paiement en cours » ; `ONCE`/`AUTO`
+   → page « adhésion déjà active » ; annulée/introuvable → page « lien invalide ». Plus aucun
+   404 JSON brut.
+3. **`except` Stripe bloquant** — en cas d'erreur API au moment de vérifier la session, on
+   n'ouvre plus jamais de nouveau checkout : on affiche « paiement en cours ».
+4. **Bug latent corrigé** — les templates membership utilisaient `{% block content %}` (le
+   skin attend `{% block main %}`) et avaient `{% load %}` avant `{% extends %}` : ils
+   rendaient une page vide. Corrigé sur `payment_already_pending.html` + 2 nouveaux templates.
+
+**Pourquoi / Why :** matérialiser l'état « paiement soumis » sur l'adhésion elle-même rend la
+protection fiable et locale (aucun appel Stripe nécessaire pour bloquer), et symétrique avec
+le comportement déjà sûr de la carte bancaire.
+
+**Hors périmètre / Out of scope :** le cas « deux adhésions distinctes pour la même personne »
+(relève de `max_per_user`), non traité ici.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | Statut `PAYMENT_PENDING` + bascule `ADMIN_VALID → PAYMENT_PENDING` dans `update_checkout_status` |
+| `BaseBillet/migrations/0219_alter_membership_status.py` | Nouveau choix de statut (généré) |
+| `BaseBillet/views.py` | `get_checkout_for_membership` : routage HTML par statut + `except` bloquant |
+| `ApiBillet/views.py` | `async_payment_failed` : réarmement `PAYMENT_PENDING → ADMIN_VALID` |
+| `Administration/admin_tenant.py` | Filtre « Attente de paiement » inclut `PAYMENT_PENDING` ; statut de l'adhésion affiché en lecture seule (badge couleur) sur la fiche détail |
+| `BaseBillet/templates/reunion/views/membership/payment_already_pending.html` | Bloc `main` + `{% extends %}` en tête |
+| `BaseBillet/templates/.../payment_already_done.html` | Nouveau — page « adhésion déjà active » |
+| `BaseBillet/templates/.../payment_link_invalid.html` | Nouveau — page « lien invalide » |
+| `Administration/management/commands/backfill_membership_payment_pending.py` | Nouveau — régularise en prod les adhésions SEPA déjà soumises restées `ADMIN_VALID` (dry-run par défaut, `--apply`, `--verify-stripe`) |
+| `tests/pytest/test_membership_sepa_payment_link.py` | Nouveau — 4 tests (routage + bascule de statut) |
+| `tests/e2e/test_sepa_duplicate_protection.py` | Test 3 adapté au nouveau comportement (200 + page, plus de 404) ; force `ONCE` explicitement |
+| `tests/e2e/conftest.py` | `fill_stripe_card` : déplie l'accordéon « Carte » (`data-testid="card-accordion-item-button"`, `dispatch_event`) quand plusieurs moyens sont actifs (Carte + SEPA) ; reste compatible carte seule (no-op) |
+
+### i18n
+Nouvelles chaînes FR à extraire/compiler (`makemessages` + `compilemessages`) — à faire par le mainteneur.
+
 ## Onboarding : fin de la cascade de mails OTP + durcissement de l'endpoint public / Onboarding: stop the OTP mail burst + harden the public endpoint
 
 **Date :** 2026-06-15

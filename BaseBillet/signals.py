@@ -606,34 +606,43 @@ def declencher_refresh_seo_cache(sender, instance, **kwargs):
 
     LOCALISATION : BaseBillet/signals.py
 
-    Deux taches Celery, deux debounces de granularite differente :
+    Deux taches Celery :
     - refresh_tenant_seo_cache(tenant) : recalcule les fragments du SEUL tenant courant
-      (1 schema). Debounce PAR TENANT (60s).
-    - rebuild_seo_aggregates() : recompose les agregats par recombinaison des fragments
-      (zero cross-schema). Debounce GLOBAL (180s) -> borne la charge a 500 tenants,
-      independamment du volume de post_save.
-    Le countdown du fragment (30s) < celui du rebuild (180s) : le fragment est a jour
-    quand le rebuild recombine. Jamais de recalcul des schemas des autres tenants.
-    / Two Celery tasks, two debounce granularities: per-tenant fragment refresh (60s) +
-    global aggregate rebuild (180s). Never recomputes other tenants' schemas.
+      (1 schema). Debounce PAR TENANT, countdown court (5s) aligne sur le TTL du verrou
+      (pas de "fenetre morte" ou une modif ne replanifierait pas de fragment).
+    - rebuild_seo_aggregates() : recompose les agregats (zero cross-schema), planifie via
+      planifier_rebuild_agregats() en debounce "trailing" -> s'execute APRES la derniere
+      modif, donc recombine toujours des fragments a jour. Jamais de recalcul des autres tenants.
+    / Two Celery tasks: per-tenant fragment refresh (short countdown, no dead window) +
+    aggregate rebuild scheduled via a TRAILING debounce (runs AFTER the last change,
+    always recombining current fragments). Never recomputes other tenants' schemas.
+
+    Ancien comportement (corrige, cf. CHANTIER-08) : le rebuild etait planifie en
+    "front montant" (180s apres la PREMIERE modif d'une rafale), si bien qu'une modif
+    tardive voyait son fragment recombine trop tot et restait invisible jusqu'au beat 4h.
+    / Former behavior (fixed): the rebuild was scheduled on the LEADING edge, so a late
+    change could be recombined too early and stay invisible until the 4h beat.
     """
     # Imports locaux : evite tout import circulaire avec seo.tasks.
     # / Local imports: avoid circular import with seo.tasks.
     from django.core.cache import cache
     from django.db import connection
-    from seo.tasks import refresh_tenant_seo_cache, rebuild_seo_aggregates
+    from seo.tasks import planifier_rebuild_agregats, refresh_tenant_seo_cache
 
     tenant = getattr(connection, "tenant", None)
     tenant_uuid = str(getattr(tenant, "uuid", "")) if tenant else ""
     if not tenant_uuid:
         return
 
-    # Debounce PAR TENANT : 1 refresh fragment / 60s / tenant.
-    # / Per-tenant debounce: 1 fragment refresh / 60s / tenant.
-    if cache.add(f"seo_refresh_tenant_{tenant_uuid}", "1", 60):
-        refresh_tenant_seo_cache.apply_async(args=[tenant_uuid], countdown=30)
+    # Fragment du tenant : countdown court (5s) pour etre a jour bien avant le
+    # rebuild d'agregats. TTL du verrou aligne sur le countdown : une modif qui
+    # arrive juste apres l'execution du fragment replanifie bien un nouveau fragment.
+    # / Tenant fragment: short countdown so it is current well before the aggregate
+    # rebuild. Lock TTL aligned on the countdown: no dead window.
+    if cache.add(f"seo_refresh_tenant_{tenant_uuid}", "1", 5):
+        refresh_tenant_seo_cache.apply_async(args=[tenant_uuid], countdown=5)
 
-    # Debounce GLOBAL : 1 rebuild agregats / 180s, quel que soit le volume de modifs.
-    # / Global debounce: 1 aggregate rebuild / 180s, regardless of modification volume.
-    if cache.add("seo_rebuild_aggregates", "1", 180):
-        rebuild_seo_aggregates.apply_async(countdown=180)
+    # Rebuild d'agregats : debounce "trailing". Chaque modif repousse l'echeance ;
+    # le rebuild s'execute APRES la derniere modif (cf. seo/tasks.py).
+    # / Aggregate rebuild: trailing debounce. Each change pushes the deadline.
+    planifier_rebuild_agregats()

@@ -782,6 +782,59 @@ def fill_stripe_card():
         if email_input.is_visible(timeout=3_000):
             email_input.fill(email)
 
+        # Sélection du moyen de paiement "Carte".
+        # Quand plusieurs moyens sont actifs (ex: Carte + Prélèvement SEPA), Stripe
+        # Checkout affiche un accordéon : les champs carte ne sont révélés qu'après
+        # avoir déplié l'item "Carte". Le bouton porte un data-testid stable
+        # (indépendant de la langue). Sa zone de clic chevauche le radio (qui
+        # intercepte les events), d'où le clic forcé. Si la carte est le seul moyen,
+        # ce bouton n'existe pas : on ne fait rien (no-op).
+        # / Pick the "Card" payment method. With several methods (e.g. Card + SEPA),
+        # Stripe Checkout shows an accordion; the card fields only appear after
+        # expanding the "Card" item. The button has a stable data-testid; its click
+        # area overlaps the radio (which intercepts events), hence the forced click.
+        # No-op when card is the only method (button absent).
+        # Attendre que le formulaire de paiement Stripe soit monté (SPA React).
+        # Deux cas possibles :
+        #  - SEPA activé : un accordéon de moyens de paiement (Carte + SEPA) ;
+        #  - SEPA désactivé : les champs carte directement (carte seule).
+        # On attend donc l'un OU l'autre, pour ne pas tester trop tôt (le test
+        # arrive en "domcontentloaded", avant le rendu React).
+        # / Wait for Stripe's payment form to mount. Two cases: a methods accordion
+        # (Card + SEPA) or the card field directly (card only). Wait for either.
+        try:
+            page.locator(
+                '[data-testid="card-accordion-item-button"], input#cardNumber'
+            ).first.wait_for(state="visible", timeout=20_000)
+        except Exception:
+            pass
+
+        # Si l'accordéon "Carte" est présent (plusieurs moyens actifs), il faut le
+        # déplier pour révéler les champs carte. S'il est absent (carte seule), on
+        # ne fait rien : les champs sont déjà affichés.
+        # / If the "Card" accordion is present (several methods), expand it to
+        # reveal the card fields. If absent (card only), do nothing.
+        bouton_carte = page.locator('[data-testid="card-accordion-item-button"]').first
+        try:
+            if bouton_carte.count() > 0:
+                # On envoie directement l'événement DOM "click" : la zone de clic
+                # de Stripe chevauche le radio (interception) et déjoue un clic
+                # Playwright classique, alors qu'un dispatch_event déplie bien
+                # l'accordéon. / Dispatch the DOM click event directly: Stripe's
+                # overlapping click area defeats a regular Playwright click, while
+                # dispatch_event reliably expands the accordion.
+                bouton_carte.dispatch_event('click')
+                # Attendre l'apparition des champs carte (sinon on continue).
+                # / Wait for the card fields to appear (otherwise just continue).
+                try:
+                    page.locator('input#cardNumber').first.wait_for(
+                        state="visible", timeout=5_000
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
         # Stratégie 1 : sélecteurs par rôle (Stripe Checkout récent)
         # / Strategy 1: role-based selectors (recent Stripe Checkout)
         card_number = page.get_by_role("textbox", name=re.compile(r"card number", re.I)).first

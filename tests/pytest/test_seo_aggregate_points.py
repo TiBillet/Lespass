@@ -42,8 +42,14 @@ def test_get_postal_addresses_for_tenants_construit_dict_correct():
     fake_pa.address_locality = "Paris"
     fake_pa.address_country = "France"
 
+    # Le mock rejoue la chaine du queryset : .exclude().exclude().order_by().
+    # order_by("pk") est INDISPENSABLE cote code : sans tri explicite, PostgreSQL
+    # rend les adresses dans un ordre arbitraire, et la carte vise alors une adresse
+    # differente d'un rebuild du cache a l'autre.
+    # / The mock replays the queryset chain, including the mandatory order_by("pk").
     fake_qs = MagicMock()
     fake_qs.exclude.return_value = fake_qs
+    fake_qs.order_by.return_value = fake_qs
     fake_qs.__iter__ = lambda self: iter([fake_pa])
 
     fake_tenant = MagicMock()
@@ -259,3 +265,111 @@ def test_build_aggregate_points_tags_vide_si_event_sans_tag():
         )
     event = result["points"][0]["events_futurs"][0]
     assert event["tags"] == []
+
+
+def test_get_postal_addresses_for_tenants_trie_les_adresses_par_pk():
+    """
+    Les adresses sortent triees par pk croissant.
+    / Addresses come out sorted by ascending pk.
+
+    Sans order_by explicite, PostgreSQL rend les lignes dans un ordre arbitraire,
+    qui bouge au fil des ecritures. Cet ordre se propage jusqu'aux markers de la
+    carte : un lieu vise au clic changerait d'adresse d'un rebuild du cache a l'autre.
+    / Without explicit ordering, PostgreSQL returns rows in an arbitrary, drifting
+    order that propagates to the map markers.
+    """
+    from seo.services import get_postal_addresses_for_tenants
+
+    fake_qs = MagicMock()
+    fake_qs.exclude.return_value = fake_qs
+    fake_qs.order_by.return_value = fake_qs
+    fake_qs.__iter__ = lambda self: iter([])
+
+    fake_tenant = MagicMock()
+    fake_tenant.schema_name = "fake_schema"
+
+    with patch("Customers.models.Client.objects.get", return_value=fake_tenant), \
+         patch("django_tenants.utils.tenant_context"), \
+         patch("BaseBillet.models.PostalAddress.objects") as mock_objects:
+        mock_objects.exclude.return_value = fake_qs
+        get_postal_addresses_for_tenants([("uuid-A", "fake_schema")])
+
+    fake_qs.order_by.assert_called_once_with("pk")
+
+
+def test_build_aggregate_points_deux_tenants_meme_adresse_gardent_leurs_events():
+    """
+    Deux lieux differents a la MEME adresse (memes coordonnees) restent deux points
+    distincts, chacun avec ses propres evenements.
+    / Two different venues at the SAME address stay two distinct points, each keeping
+    its own events.
+
+    C'est le scenario du bug remonte : le lieu qui affiche la carte du reseau possede
+    une PostalAddress aux coordonnees exactes d'un lieu federe. Les pk de PostalAddress
+    repartent a 1 dans chaque schema tenant : sans le prefixe tenant_uuid sur pa_id, les
+    deux points s'ecraseraient cote JS et les evenements du lieu federe dispararaitraient.
+    / Reported-bug scenario: PostalAddress pks restart at 1 in every tenant schema, so
+    without the tenant_uuid prefix on pa_id the two points would collide.
+    """
+    from seo.services import build_aggregate_points
+
+    # Meme pk (1) et memes coordonnees dans les deux schemas : le pire cas.
+    # / Same pk (1) and same coordinates in both schemas: the worst case.
+    adresse_partagee = {
+        "pa_id": 1, "latitude": 45.766, "longitude": 4.873,
+        "name": "La grange", "street_address": "", "postal_code": "69100",
+        "address_locality": "Villeurbanne", "address_country": "FR",
+    }
+    event_du_lieu_federe = {
+        "uuid": "ev-federe", "name": "Bal trad", "slug": "bal-trad",
+        "datetime": "2026-10-27T20:00:00+00:00", "postal_address_id": 1,
+    }
+
+    with patch("seo.services.get_postal_addresses_for_tenants", return_value={
+        "uuid-carte": [dict(adresse_partagee)],
+        "uuid-federe": [dict(adresse_partagee)],
+    }):
+        result = build_aggregate_points(
+            [("uuid-carte", "schema-carte"), ("uuid-federe", "schema-federe")],
+            configs_by_tenant={
+                "uuid-carte": {"organisation": "Lieu qui affiche la carte", "domain": "carte.test"},
+                "uuid-federe": {"organisation": "Lieu federe", "domain": "federe.test"},
+            },
+            # Seul le lieu federe a un evenement a cette adresse.
+            # / Only the federated venue has an event at this address.
+            events_by_tenant={"uuid-federe": [event_du_lieu_federe]},
+        )
+
+    points_par_id = {p["pa_id"]: p for p in result["points"]}
+    assert set(points_par_id) == {"uuid-carte:1", "uuid-federe:1"}
+
+    # L'evenement reste sur le point du lieu federe, et n'est pas absorbe par l'autre.
+    # / The event stays on the federated venue point, and is not absorbed by the other.
+    assert points_par_id["uuid-federe:1"]["events_futurs_count_total"] == 1
+    assert points_par_id["uuid-federe:1"]["events_futurs"][0]["name"] == "Bal trad"
+    assert points_par_id["uuid-carte:1"]["events_futurs_count_total"] == 0
+
+
+def test_build_tenant_config_data_expose_l_id_de_l_adresse_principale(tenant):
+    """
+    build_tenant_config_data expose postal_address_id = l'adresse de la Configuration.
+    / build_tenant_config_data exposes postal_address_id = the Configuration address.
+
+    C'est ce champ que build_aggregate_points compare pour poser is_main_address, donc
+    c'est lui qui decide quel marker la carte vise au clic sur un lieu (explorer.js,
+    focusOnLieu). S'il reste a None, aucun point n'est marque comme principal et la
+    carte vise une adresse quelconque du lieu.
+    / This field drives is_main_address, hence which marker the map focuses on click.
+    """
+    from django_tenants.utils import tenant_context
+
+    from BaseBillet.models import Configuration
+    from seo.services import build_tenant_config_data
+
+    with tenant_context(tenant):
+        config_du_tenant = Configuration.get_solo()
+        id_adresse_principale_attendu = config_du_tenant.postal_address_id
+
+    data = build_tenant_config_data(tenant)
+
+    assert data["postal_address_id"] == id_adresse_principale_attendu

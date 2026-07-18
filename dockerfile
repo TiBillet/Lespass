@@ -10,6 +10,13 @@ RUN apt-get install -y --no-install-recommends postgresql-client
 
 RUN apt-get install -y nano iputils-ping curl borgbackup cron gettext
 
+## PLAYWRIGHT / CHROMIUM — librairies systeme requises par chrome-headless-shell (tests E2E)
+## / System libraries required by Playwright's chrome-headless-shell (E2E tests)
+RUN apt-get install -y --no-install-recommends \
+    libnspr4 libnss3 libatk1.0-0 libatk-bridge2.0-0 libdbus-1-3 \
+    libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 \
+    libxkbcommon0 libasound2 libatspi2.0-0
+
 RUN useradd -ms /bin/bash tibillet
 USER tibillet
 

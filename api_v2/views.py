@@ -1,11 +1,12 @@
-import datetime
 import re
 import uuid as uuid_module
+from datetime import timedelta
 
-from django.db import connection
+from django.db import connection, IntegrityError, transaction
 from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from rest_framework import viewsets, status
 from rest_framework.response import Response
@@ -16,8 +17,7 @@ from django.core.cache import cache
 from ApiBillet.permissions import TenantAdminApiPermission
 from ApiBillet.views import get_permission_Api_ALL_Admin
 from AuthBillet.models import TibilletUser
-from BaseBillet.models import Event, PostalAddress, LigneArticle, Product, Reservation, Membership, logger, \
-    Configuration
+from BaseBillet.models import Event, PostalAddress, LigneArticle, Product, Reservation, Membership, logger
 from crowds.models import Initiative, BudgetItem, Participation, Vote
 from .permissions import SemanticApiKeyPermission
 from .serializers import (
@@ -226,25 +226,81 @@ class EventViewSet(viewsets.ViewSet):
     lookup_field = "uuid"
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
+    # Bornes du parametre `next_days`. Au-dela d'un an, autant tout demander.
+    # / Bounds for the `next_days` parameter.
+    NEXT_DAYS_MINIMUM = 1
+    NEXT_DAYS_MAXIMUM = 366
+
     def list(self, request):
+        """
+        Liste les evenements publies. / List published events.
+
+        Parametres de filtrage du temps (facultatifs) :
+        - `only_futur=1`  : les evenements a venir (depuis hier)
+        - `next_days=30`  : les evenements des N prochains jours (depuis hier)
+        `next_days` l'emporte sur `only_futur` s'ils sont fournis tous les deux.
+
+        On part d'HIER, et non de maintenant : un evenement commence hier soir est
+        encore d'actualite. L'agenda du site part lui aussi d'hier.
+        / We start from YESTERDAY, not now: an event that started last night is still
+        relevant. The site's agenda also starts from yesterday.
+
+        EN REVANCHE, cette API est PLUS LARGE que l'agenda : elle garde aussi les
+        evenements EN COURS — commences il y a longtemps, mais qui ne sont pas encore
+        termines (un festival d'une semaine, par exemple). C'est le role du
+        `end_datetime__gte`, que l'agenda n'a pas.
+        / BUT this API is BROADER than the agenda: it also keeps ONGOING events (started
+        long ago, not finished yet — a week-long festival). That is what `end_datetime__gte`
+        does; the agenda has no such clause.
+        """
         only_futur = request.GET.get("only_futur", None)
+        next_days = request.GET.get("next_days", None)
         filter = request.GET.get("filter", None)
 
         queryset = Event.objects.filter(published=True)
-        if only_futur:
-            timezone = Configuration.get_solo().get_tzinfo()
 
-            # Get the timezone
-            now = datetime.now()
-            # Convert it to the tenant configured timezone
-            now = now.astimezone(timezone)
-            # Remove one day to it to also show recent events
-            now = now.replace(day=now.day-1)
+        # timezone.now() est deja "aware" (UTC) et se compare correctement a un
+        # DateTimeField. Inutile de bricoler la timezone du tenant : le filtrage se fait
+        # sur un instant, pas sur un affichage.
+        # / timezone.now() is already aware (UTC) and compares correctly to a DateTimeField.
+        debut_de_la_fenetre = timezone.now() - timedelta(days=1)
 
-            queryset = queryset.filter(
-                Q(datetime__gte=now) |
-                Q(end_datetime__gte=now)
+        # Un evenement est retenu s'il COMMENCE apres la borne, ou s'il SE TERMINE apres
+        # (donc s'il est en cours). / Keep events starting after the bound, or still running.
+        est_a_venir_ou_en_cours = Q(datetime__gte=debut_de_la_fenetre) | Q(
+            end_datetime__gte=debut_de_la_fenetre
+        )
+
+        if next_days:
+            try:
+                nombre_de_jours = int(next_days)
+            except (TypeError, ValueError):
+                return Response(
+                    {"error": _("next_days doit être un nombre entier de jours.")},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if not (self.NEXT_DAYS_MINIMUM <= nombre_de_jours <= self.NEXT_DAYS_MAXIMUM):
+                return Response(
+                    {
+                        "error": _(
+                            "next_days doit être compris entre %(mini)s et %(maxi)s."
+                        )
+                        % {
+                            "mini": self.NEXT_DAYS_MINIMUM,
+                            "maxi": self.NEXT_DAYS_MAXIMUM,
+                        }
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            fin_de_la_fenetre = timezone.now() + timedelta(days=nombre_de_jours)
+            queryset = queryset.filter(est_a_venir_ou_en_cours).filter(
+                datetime__lt=fin_de_la_fenetre
             )
+
+        elif only_futur:
+            queryset = queryset.filter(est_a_venir_ou_en_cours)
 
         if filter:
             # Filter by name and descriptions
@@ -316,7 +372,95 @@ class EventViewSet(viewsets.ViewSet):
             address = pa_serializer.save()
         # Link and save
         event.postal_address = address
-        event.save(update_fields=["postal_address"]) 
+        event.save(update_fields=["postal_address"])
+        return Response(EventSchemaSerializer(event).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="link-product", permission_classes=[SemanticApiKeyPermission])
+    def link_product(self, request, uuid=None, **kwargs):
+        """
+        Attache un ou plusieurs produits EXISTANTS a cet evenement.
+        / Attach one or several EXISTING products to this event.
+
+        LOCALISATION : api_v2/views.py — EventViewSet
+
+        Un meme produit peut etre partage sur plusieurs evenements grace a la
+        relation ManyToMany Event.products. Cette route relie des produits
+        DEJA crees, sans en creer de nouveau (contrairement a
+        POST /api/v2/products/ qui cree le produit puis l'attache).
+        / The same product can be shared across several events via the
+        ManyToMany Event.products. This route links ALREADY created products
+        without creating a new one.
+
+        Formes de body acceptees (souples) :
+        - {"productId": "<uuid>"}                          (un seul produit)
+        - {"productIds": ["<uuidA>", "<uuidB>"]}           (plusieurs)
+        - {"product": {"@type": "Product", "identifier": "<uuid>"}}
+        - {"products": ["<uuid>", {"identifier": "<uuid>"}]}
+
+        Renvoie l'evenement mis a jour (schema.org/Event).
+        / Returns the updated Event (schema.org/Event).
+        """
+        event = get_objet_par_uuid_ou_404(Event, uuid)
+
+        # On rassemble les valeurs depuis les cles tolerees.
+        # / Collect values from the accepted keys.
+        valeurs_brutes = []
+        for cle in ("productIds", "products", "productId", "product"):
+            valeur = request.data.get(cle)
+            if valeur is None:
+                continue
+            if isinstance(valeur, list):
+                valeurs_brutes.extend(valeur)
+            else:
+                valeurs_brutes.append(valeur)
+
+        # On extrait l'UUID de chaque valeur (string directe ou objet schema.org).
+        # / Extract the UUID from each value (plain string or schema.org object).
+        product_uuids = []
+        for valeur in valeurs_brutes:
+            if isinstance(valeur, str):
+                nettoye = valeur.strip()
+                if nettoye:
+                    product_uuids.append(nettoye)
+            elif isinstance(valeur, dict):
+                identifier = valeur.get("identifier") or valeur.get("id") or valeur.get("uuid")
+                if identifier:
+                    product_uuids.append(str(identifier).strip())
+
+        # Dedoublonnage en gardant l'ordre / De-duplicate keeping order
+        product_uuids = list(dict.fromkeys(product_uuids))
+
+        if not product_uuids:
+            return Response(
+                {"detail": _("No product identifier provided. Use productId or productIds.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # On verifie que TOUS les produits existent AVANT d'attacher quoi que ce
+        # soit (pas d'attachement partiel si un uuid est faux).
+        # / Verify ALL products exist BEFORE attaching anything (no partial link).
+        produits = []
+        for product_uuid in product_uuids:
+            try:
+                uuid_module.UUID(str(product_uuid))
+            except (ValueError, TypeError, AttributeError):
+                return Response(
+                    {"detail": f"Invalid product identifier: {product_uuid}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            try:
+                produits.append(Product.objects.get(uuid=product_uuid))
+            except Product.DoesNotExist:
+                return Response(
+                    {"detail": f"Product not found: {product_uuid}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Attachement M2M (idempotent : add() ne cree pas de doublon)
+        # / M2M attachment (idempotent: add() does not duplicate)
+        for produit in produits:
+            event.products.add(produit)
+
         return Response(EventSchemaSerializer(event).data, status=status.HTTP_200_OK)
 
 
@@ -483,7 +627,12 @@ class WalletRefillViewSet(viewsets.ViewSet):
 
     Header : Authorization: Api-Key <key> (cle restreinte a un asset cadeau via
     ExternalApiKey.gift_asset).
-    Header optionnel : Idempotency-Key (anti double-credit, cache best-effort).
+    Header OBLIGATOIRE : Idempotency-Key. Comme cet endpoint credite des tokens,
+    la cle d'idempotence est exigee (anti double-credit). Elle est stockee en
+    base sur LigneArticle.idempotency_key (contrainte d'unicite = verrou).
+    / MANDATORY header: Idempotency-Key. This endpoint credits tokens, so the
+    idempotency key is required (anti double-credit). Stored in DB on
+    LigneArticle.idempotency_key (unique constraint = lock).
 
     FLUX :
     1. Recupere l'objet cle API pour connaitre l'asset cadeau autorise.
@@ -491,8 +640,9 @@ class WalletRefillViewSet(viewsets.ViewSet):
     3. Resout l'asset et verifie qu'il est de categorie cadeau (TNF).
     4. Verifie que l'asset demande est bien celui autorise sur la cle.
     5. Verifie le plafond.
-    6. Idempotence (cache par tenant).
-    7. Cree/recupere l'user, verifie Fedow, credite la tirelire.
+    6. Exige la cle d'idempotence (400 si absente).
+    7. Cree/recupere l'user, verifie Fedow.
+    8. Verrou d'idempotence en base, puis credite la tirelire.
     """
     permission_classes = [SemanticApiKeyPermission]
     parser_classes = (MultiPartParser, FormParser, JSONParser)
@@ -537,55 +687,262 @@ class WalletRefillViewSet(viewsets.ViewSet):
             return Response({"detail": _("Amount above the maximum allowed.")},
                             status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
-        # 7. Idempotence (cache best-effort, cle par tenant)
-        # / Idempotency (best-effort cache, per-tenant key)
-        idempotency_key = request.META.get("HTTP_IDEMPOTENCY_KEY")
-        cache_key = None
-        if idempotency_key:
-            cache_key = f"api:gift_refill:idem:{connection.tenant.pk}:{idempotency_key}"
-            cached = cache.get(cache_key)
-            if cached is not None:
-                # Rejeu idempotent : la transaction a deja ete creee, on renvoie
-                # la reponse stockee sans recrediter. 208 = deja traite.
-                # / Idempotent replay: transaction already created, return the
-                # stored response without re-crediting. 208 = already reported.
-                return Response(cached, status=status.HTTP_208_ALREADY_REPORTED)
+        # 6. Cle d'idempotence OBLIGATOIRE (anti double-credit, stockee en base).
+        # La cle est fournie par le client (header Idempotency-Key). Comme cet
+        # endpoint credite des tokens, on l'EXIGE : sans cle, pas de filet.
+        # / Mandatory idempotency key (anti double-credit, stored in DB). The key
+        # is client-provided (Idempotency-Key header). This endpoint credits
+        # tokens, so we REQUIRE it: no key, no safety net.
+        from BaseBillet.models import LigneArticle
 
-        # 8. User / User
+        idempotency_key = request.META.get("HTTP_IDEMPOTENCY_KEY")
+        if not idempotency_key or not str(idempotency_key).strip():
+            return Response(
+                {"detail": _("Idempotency-Key header is required.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        idempotency_key = str(idempotency_key).strip()
+
+        # 7. User / User
         user = get_or_create_user(email)
         if not user:
             return Response({"detail": _("Invalid email.")},
                             status=status.HTTP_406_NOT_ACCEPTABLE)
 
-        # 9. Fedow dispo ? / Fedow available?
+        # Fedow dispo ? / Fedow available?
         if not FedowConfig.get_solo().can_fedow():
             return Response({"detail": _("Fedow service unavailable.")},
                             status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-        # 10. Credit / Refill
+        # 8. Verrou d'idempotence en base.
+        # La contrainte d'unicite sur LigneArticle.idempotency_key garantit
+        # qu'une seule ligne existe par cle. On gere les rejeux :
+        # - meme cle + corps DIFFERENT -> 409 (cle reutilisee a tort)
+        # - meme cle + ligne VALID     -> 208 (on renvoie la transaction stockee)
+        # - meme cle + ligne CREATED   -> 409 (un credit est deja en cours)
+        # - meme cle + ligne FAILED    -> on RETENTE (rien n'a ete credite)
+        # / DB idempotency lock. Unique constraint guarantees one line per key.
+        ligne_existante = LigneArticle.objects.filter(
+            idempotency_key=idempotency_key,
+        ).first()
+
+        if ligne_existante is not None:
+            # Le corps doit etre identique a la 1ere requete portant cette cle.
+            # On compare l'email du DESTINATAIRE RESOLU (user.email), pas l'email
+            # brut du payload : get_or_create_user peut normaliser l'email, et on
+            # veut qu'un meme destinataire ne declenche pas un faux 409. Un
+            # destinataire different (autre user) declenche bien un 409.
+            # / The body must match the first request using this key. We compare
+            # the RESOLVED recipient email (user.email), not the raw payload email:
+            # get_or_create_user may normalize it. A different recipient -> 409.
+            email_precedent = (ligne_existante.metadata or {}).get("email", "")
+            corps_identique = (
+                ligne_existante.amount == amount
+                and str(ligne_existante.asset) == str(asset.uuid)
+                and email_precedent == getattr(user, "email", "")
+            )
+            if not corps_identique:
+                return Response(
+                    {"detail": _("Idempotency-Key already used with different parameters.")},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            if ligne_existante.status == LigneArticle.VALID:
+                # Rejeu d'une recharge deja faite : on renvoie la transaction
+                # stockee sans recrediter. / Replay of a done refill.
+                return Response(
+                    self._payload_money_transfer_depuis_ligne(ligne_existante),
+                    status=status.HTTP_208_ALREADY_REPORTED,
+                )
+
+            if ligne_existante.status == LigneArticle.CREATED:
+                # Un credit est en cours (requete concurrente ou interrompue).
+                # / A credit is in progress (concurrent or interrupted request).
+                return Response(
+                    {"detail": _("A refill with this key is already in progress.")},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            # Statut FAILED : le credit precedent a echoue, rien n'a ete credite.
+            # On REUTILISE la ligne et on retente. / FAILED: retry with same line.
+            ligne_article = ligne_existante
+            LigneArticle.objects.filter(pk=ligne_article.pk).update(
+                status=LigneArticle.CREATED,
+            )
+        else:
+            # Premiere requete pour cette cle : on cree la ligne "recharge cadeau"
+            # AVANT d'appeler Fedow (Fedow exige metadata.ligne_article_uuid, et
+            # on garde une trace comptable). La contrainte d'unicite fait office
+            # de verrou contre les requetes concurrentes : la 2e create leve
+            # IntegrityError -> 409. On enveloppe dans un savepoint atomic pour
+            # que l'IntegrityError n'invalide pas une transaction de requete plus
+            # large (ATOMIC_REQUESTS).
+            # / First request for this key: create the line BEFORE calling Fedow.
+            # The unique constraint acts as a lock; concurrent create raises
+            # IntegrityError -> 409. Wrapped in an atomic savepoint so the error
+            # does not break a wider request transaction.
+            try:
+                with transaction.atomic():
+                    ligne_article = self._creer_ligne_article_recharge(
+                        asset, amount, user, api_key, idempotency_key,
+                    )
+            except IntegrityError:
+                return Response(
+                    {"detail": _("A refill with this key is already in progress.")},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+        # 9. Credit / Refill
+        # IMPORTANT : l'endpoint Fedow refill_from_lespass_to_user_wallet est, par
+        # defaut, concu pour la RECOMPENSE D'ADHESION : son serializer exige
+        # membership_uuid / product_uuid / price_uuid (cf Fedow
+        # TransactionRefilFromLespassSerializer.validate_metadata). Une recharge
+        # cadeau directe n'a aucun de ces objets. Fedow prevoit pour ce cas un
+        # bypass : le flag `rewarded_from_ticket_scanned` (un credit direct sans
+        # contexte de vente, deja utilise pour les recompenses de scan de ticket).
+        # On le reutilise ici pour un credit direct, et on garde `ligne_article_uuid`
+        # pour notre tracabilite comptable.
+        # / The Fedow refill endpoint is meant for MEMBERSHIP REWARD and requires
+        # membership/product/price uuids. A direct gift refill has none. Fedow
+        # offers a bypass flag `rewarded_from_ticket_scanned` (direct credit with
+        # no sale context). We reuse it, keeping ligne_article_uuid for our audit.
         fedowAPI = FedowAPI()
         metadata = {
             "reason": f"API gift refill: {amount} {asset.name}",
             "api_key": api_key.name,
+            "ligne_article_uuid": str(ligne_article.uuid),
+            "rewarded_from_ticket_scanned": True,  # bypass validation vente Fedow
+            "idempotency_key": idempotency_key,
         }
-        if idempotency_key:
-            metadata["idempotency_key"] = idempotency_key
-        reward_tx = fedowAPI.transaction.refill_from_lespass_to_user_wallet(
-            user=user, amount=amount, asset=asset, metadata=metadata,
+        try:
+            reward_tx = fedowAPI.transaction.refill_from_lespass_to_user_wallet(
+                user=user, amount=amount, asset=asset, metadata=metadata,
+            )
+        except Exception as e:
+            # Echec Fedow : la ligne passe FAILED (via .update() -> aucun signal)
+            # et on renvoie une erreur propre au lieu de la 500 brute precedente.
+            # / Fedow failure: mark the line FAILED (via .update() -> no signal)
+            # and return a clean error instead of the previous raw 500.
+            LigneArticle.objects.filter(pk=ligne_article.pk).update(
+                status=LigneArticle.FAILED,
+            )
+            logger.error(
+                f"WalletRefill : echec Fedow, ligne {ligne_article.uuid} -> FAILED : {e}"
+            )
+            return Response({"detail": _("Wallet provider error.")},
+                            status=status.HTTP_502_BAD_GATEWAY)
+
+        # Succes : on stocke l'uuid de la transaction Fedow dans la metadata
+        # (pour pouvoir reconstruire la reponse sur un rejeu idempotent), et la
+        # ligne passe VALID (via .update() -> aucun trigger).
+        # / Success: store the Fedow transaction uuid in metadata (to rebuild the
+        # response on an idempotent replay), and mark the line VALID.
+        tx_uuid = str(reward_tx.get("uuid"))
+        metadata_ligne = dict(ligne_article.metadata or {})
+        metadata_ligne["fedow_tx_uuid"] = tx_uuid
+        LigneArticle.objects.filter(pk=ligne_article.pk).update(
+            status=LigneArticle.VALID,
+            metadata=metadata_ligne,
         )
 
-        # 11. Reponse schema.org MoneyTransfer
+        # 10. Reponse schema.org MoneyTransfer
         payload = {
             "@context": "https://schema.org",
             "@type": "MoneyTransfer",
-            "identifier": str(reward_tx.get("uuid")),
+            "identifier": tx_uuid,
             "amount": amount,
             "asset": str(asset.uuid),
             "recipient": {"@type": "Person", "email": email},
         }
-        if cache_key:
-            cache.set(cache_key, payload, timeout=60 * 60 * 48)  # 48h
         return Response(payload, status=status.HTTP_201_CREATED)
+
+    def _payload_money_transfer_depuis_ligne(self, ligne_article):
+        """
+        Reconstruit le payload schema.org MoneyTransfer depuis une LigneArticle
+        deja creditee (utilise pour le rejeu idempotent en 208).
+        / Rebuild the schema.org MoneyTransfer payload from an already-credited
+        LigneArticle (used for the idempotent 208 replay).
+
+        LOCALISATION : api_v2/views.py — WalletRefillViewSet
+        """
+        meta = ligne_article.metadata or {}
+        return {
+            "@context": "https://schema.org",
+            "@type": "MoneyTransfer",
+            "identifier": meta.get("fedow_tx_uuid", ""),
+            "amount": ligne_article.amount,
+            "asset": str(ligne_article.asset) if ligne_article.asset else "",
+            "recipient": {"@type": "Person", "email": meta.get("email", "")},
+        }
+
+    def _creer_ligne_article_recharge(self, asset, amount, user, api_key, idempotency_key=None):
+        """
+        Cree une LigneArticle qui trace une recharge cadeau (audit comptable).
+        / Create a LigneArticle tracing a gift refill (accounting audit).
+
+        LOCALISATION : api_v2/views.py — WalletRefillViewSet
+
+        Un produit RECHARGE_CASHLESS dedie par asset (decision : un produit par
+        asset). Tarif a 0 € : la recharge est OFFERTE (payment_method=FREE).
+        Le ProductSold / PriceSold sont crees a la main pour NE PAS declencher
+        d'appel Stripe (get_or_create_price_sold appelle get_id_price_stripe).
+        / One RECHARGE_CASHLESS product per asset. 0 € price: the refill is
+        OFFERED (payment_method=FREE). ProductSold/PriceSold created by hand to
+        avoid the Stripe call done by get_or_create_price_sold.
+
+        La ligne est creee en CREATED. Aucun trigger ne se declenche :
+        _state.adding=True a la creation (cf signals.py), et trigger_R
+        (RECHARGE_CASHLESS) n'existe pas. Le credit reel est fait par l'appel
+        Fedow direct, pas par cette ligne -> pas de double credit.
+        / Created as CREATED. No trigger fires (adding=True + no trigger_R).
+        """
+        from decimal import Decimal
+
+        from BaseBillet.models import (
+            Product, Price, ProductSold, PriceSold, LigneArticle,
+            PaymentMethod, SaleOrigin,
+        )
+        from AuthBillet.models import Wallet
+
+        # Produit + tarif de recharge dedies a cet asset (idempotent).
+        # / Refill product + price dedicated to this asset (idempotent).
+        produit, _created = Product.objects.get_or_create(
+            categorie_article=Product.RECHARGE_CASHLESS,
+            name=f"Recharge {asset.name}",
+        )
+        prix, _created = Price.objects.get_or_create(
+            product=produit,
+            name="Recharge API",
+            defaults={"prix": Decimal("0")},
+        )
+        productsold, _created = ProductSold.objects.get_or_create(
+            product=produit, event=None,
+        )
+        pricesold, _created = PriceSold.objects.get_or_create(
+            productsold=productsold, price=prix, prix=Decimal("0"),
+        )
+
+        # wallet : seulement si c'est un vrai Wallet (None sinon). On ne fait pas
+        # confiance aveuglement a user.wallet (peut etre absent).
+        # / wallet: only a real Wallet (None otherwise).
+        wallet = user.wallet if isinstance(getattr(user, "wallet", None), Wallet) else None
+
+        return LigneArticle.objects.create(
+            pricesold=pricesold,
+            amount=amount,  # unites brutes de l'asset creditees / raw asset units credited
+            qty=Decimal("1"),
+            asset=asset.uuid,
+            wallet=wallet,
+            payment_method=PaymentMethod.FREE,  # recharge offerte / offered refill
+            sale_origin=SaleOrigin.LESPASS,
+            status=LigneArticle.CREATED,
+            idempotency_key=idempotency_key,
+            metadata={
+                "source": "api_v2_wallet_refill",
+                "api_key": api_key.name,
+                "email": getattr(user, "email", ""),
+            },
+        )
 
 
 class SaleViewSet(viewsets.ViewSet):
