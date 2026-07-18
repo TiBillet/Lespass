@@ -545,25 +545,31 @@ def get_sidebar_navigation(request):
                 "collapsible": True,
                 "items": [
                     {
-                        "title": _("Resources"),
+                        "title": _("Produit ressources"),
+                        "icon": "chair",
+                        "link": reverse_lazy("staff_admin:BaseBillet_resourceproduct_changelist"),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("Ressources"),
                         "icon": "chair",
                         "link": reverse_lazy("staff_admin:booking_resource_changelist"),
                         "permission": admin_permission,
                     },
                     {
-                        "title": _("Resource groups"),
+                        "title": _("Groupe de ressources"),
                         "icon": "stacks",
                         "link": reverse_lazy("staff_admin:booking_resourcegroup_changelist"),
                         "permission": admin_permission,
                     },
                     {
-                        "title": _("Calendars"),
+                        "title": _("Calendriers"),
                         "icon": "calendar_month",
                         "link": reverse_lazy("staff_admin:booking_calendar_changelist"),
                         "permission": admin_permission,
                     },
                     {
-                        "title": _("Weekly openings"),
+                        "title": _("Période d'ouverture"),
                         "icon": "schedule",
                         "link": reverse_lazy("staff_admin:booking_weeklyopening_changelist"),
                         "permission": admin_permission,
@@ -844,11 +850,11 @@ MODULE_FIELDS = {
     #     "link_label": _("Open kiosk"),
     #     "link_icon": "fa-display",
     # },
-    # "module_booking": {
-    #     "name": _("Booking"),
-    #     "description": _("Resource booking: rooms, equipment, coworking desks."),
-    #     "testid": "dashboard-card-booking",
-    # },
+    "module_booking": {
+        "name": _("Booking"),
+        "description": _("Resource booking: rooms, equipment, coworking desks."),
+        "testid": "dashboard-card-booking",
+    },
 }
 
 

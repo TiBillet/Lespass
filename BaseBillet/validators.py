@@ -186,7 +186,9 @@ class TicketCreator():
 
     def __init__(self, reservation: Reservation, products_dict: dict, promo_code: PromotionalCode = None, custom_amounts: dict = None,
                  sale_origin: str = SaleOrigin.LESPASS,
+                 create_checkout: bool = True,
                  paid_externally: bool = False, external_payment_method: str = None):
+
         self.products_dict = products_dict
         self.reservation = reservation
         self.user = reservation.user_commande
@@ -194,6 +196,15 @@ class TicketCreator():
         self.custom_amounts = custom_amounts or {}
         # Source de vente (ex: LESPASS, API) / Sale source (e.g., LESPASS, API)
         self.sale_origin = sale_origin
+
+        # Si False, on ne déclenche pas get_checkout_stripe() à la fin de method_B.
+        # Utilisé par CommandeService.materialiser() qui consolide toutes les
+        # LigneArticle puis crée UN SEUL checkout Stripe pour la commande entière.
+        # / If False, skip get_checkout_stripe() at the end of method_B.
+        # Used by CommandeService.materialiser() which consolidates all
+        # LigneArticle then creates ONE Stripe checkout for the entire order.
+        self.create_checkout = create_checkout
+
         # Billet déjà payé ailleurs (ex : en caisse LaBoutik).
         # Le paiement a eu lieu hors ligne : espèce ou carte bancaire au comptoir.
         # Dans ce cas, on ne crée pas de checkout Stripe.
@@ -201,6 +212,7 @@ class TicketCreator():
         # / Ticket already paid elsewhere (e.g., LaBoutik cash register).
         self.paid_externally = paid_externally
         self.external_payment_method = external_payment_method
+
         # La liste des objets a vendre pour la création du paiement stripe
         self.list_line_article_sold = []
 
@@ -369,7 +381,17 @@ class TicketCreator():
             reservation.save()
             return tickets
 
-        self.checkout_link = self.get_checkout_stripe()
+        if self.create_checkout:
+            self.checkout_link = self.get_checkout_stripe()
+        # Si create_checkout=False : le caller (CommandeService) appellera
+        # lui-même CreationPaiementStripe avec toutes les lignes consolidées.
+        # / If create_checkout=False: caller (CommandeService) will call
+        # CreationPaiementStripe itself with all consolidated lines.
+
+        # Set tickets as not activ, because else they are not mark as "Ticket.NOT_SCANNED" in the signal "reservation_paid"
+        reservation.tickets.all().update(status=Ticket.NOT_ACTIV)
+
+
         return tickets
 
     def get_checkout_stripe(self):
