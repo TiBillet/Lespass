@@ -186,6 +186,7 @@ TENANT_APPS = (
     'tibrss',
     'fedow_connect',
     'crowds',
+    'booking',
     'comptabilite',
 )
 
@@ -267,6 +268,7 @@ TEMPLATES = [
                 # TiBillet/seo_indexing.py et SESSIONS/SEO/CHANTIER-01.
                 # / Expose `noindex_seo: bool` to base templates.
                 'TiBillet.seo_indexing.noindex_context',
+                'BaseBillet.context_processors.panier_context',
             ],
         },
     }

@@ -1,0 +1,524 @@
+<!--
+Formulaire de confirmation de reservation — version partial pour SweetAlert2.
+/ Booking confirmation form — partial version for SweetAlert2.
+
+LOCALISATION : booking/templates/booking/partials/book_form.html
+
+Ce partial est charge via HTMX dans une popup SweetAlert2 depuis resource.html.
+Il est aussi utilise en fallback si JavaScript est desactive (redirection vers
+la page complete booking/views/book.html).
+/ This partial is loaded via HTMX into a SweetAlert2 popup from resource.html.
+It is also used as a fallback if JavaScript is disabled (redirects to the full
+booking/views/book.html page).
+
+Flux / Flow:
+  GET  /booking/<pk>/book/?start_datetime=...&group_end=... (htmx)
+       -> BookingViewSet._book_get() -> ce partial
+  POST /booking/<pk>/book/
+       -> BookingViewSet._book_post() -> redirection ou re-render 422 de ce partial
+
+DEPENDENCIES :
+  - booking/views.py:_book_get()  -> contexte
+  - booking/views.py:_book_post() -> redirection ou re-render avec erreurs
+-->
+{% load i18n l10n static tibitags %}
+<div class="booking-confirm-partial" data-testid="booking-confirm-partial">
+
+    <style>
+        #id_end_time{
+            flex: 1;
+            font-size: 14px;
+            padding: 8px 10px;
+            border-radius: var(--bs-border-radius);
+            border: 2px solid var(--bs-border-color);
+            background: var(--bs-body-bg);
+            color: var(--bs-body-color);
+        }
+    </style>
+
+    <!--
+    Message de modification concurrente — un creneau a ete pris pendant la saisie.
+    / Race condition message — a slot was taken while the user was filling the form.
+    -->
+    {% if race_condition %}
+        <div class="alert alert-warning" role="alert" data-testid="booking-race-condition-msg">
+            {% translate "Un créneau a été réservé entre temps. Vérifiez les disponibilités ci-dessous." %}
+        </div>
+    {% endif %}
+
+    <!--
+    Message d'erreur generique (validation POST).
+    / Generic error message (POST validation).
+    -->
+    {% if error and not race_condition %}
+        <div class="alert alert-danger" role="alert" data-testid="booking-error-msg">
+            {% if error.non_field_errors %}
+                {% for msg in error.non_field_errors %}{{ msg }} {% endfor %}
+            {% else %}
+                {{ error }}
+            {% endif %}
+        </div>
+    {% endif %}
+
+    <!--
+    Informations sur le creneau de depart.
+    / Information about the starting slot.
+    -->
+    {% if slot %}
+        <div class="card mb-3" data-testid="booking-slot-summary">
+            <div class="card-body">
+                <h2 class="card-title h5">{% translate "Créneau sélectionné" %}</h2>
+                <p class="mb-1">
+                    <strong>{{ slot.start|date:"l d F Y" }}</strong>
+                    {% translate "à" %} {{ slot.start|date:"H\hi" }}
+                </p>
+                <p class="mb-0 text-muted">
+                    {% translate "Durée par créneau :" %} {{ slot.slot_duration_minutes }}{% translate "min" %}
+                </p>
+                {% if resource.capacity > 1 %}
+                    <p class="mb-0 text-muted">
+                        {% blocktrans count n=slot.remaining_capacity %}{{ n }} place disponible{% plural %}{{ n }} places disponibles{% endblocktrans %}
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+
+    <!--
+    Formulaire de confirmation.
+    / Confirmation form.
+    -->
+    <form id="booking-form"
+          method="post"
+          action="{% url 'booking-book' pk=resource.pk %}"
+          data-testid="booking-confirm-form"
+          hx-post="{% url 'booking-book' pk=resource.pk %}"
+          hx-target="closest .booking-confirm-partial"
+          hx-swap="innerHTML">
+        {% csrf_token %}
+
+        <!--
+        Choix du tarif.
+        / Price selection.
+        -->
+        <div class="mb-3">
+            <h4 class="h6">{% translate "Tarifs" %} : </h4>
+                {% for price in resource.published_prices %}
+                    <div class="p-3 js-order" data-testid="booking-price-{{ price.uuid }}">
+                        <label for="amount-{{ price.uuid }}" class="form-label">
+                            <strong>{{ price.name }}</strong>
+                            {% if not price.free_price and price.prix > 0 %}&nbsp;:
+                                <span class="js-order-price">{{ price.prix }}</span>&nbsp;€ {% if resource.slot_type == resource.HOUR %} /h {% endif %}
+                            {% elif price.free_price %}
+                                <span class="js-order-price-alt d-none">{% trans 'at an open price' %}</span>
+                            {% endif %}
+                        </label>
+                        {% if price.product|in_list:product_max_per_user_reached %}
+                            <div class="alert alert-danger" role="alert">
+                                {% trans "You have reached the maximum number of reservations possible for this event." %}
+                            </div>
+                        {% elif price|in_list:price_max_per_user_reached %}
+                            <div class="alert alert-danger" role="alert">
+                                {% trans "You have reached the maximum number of reservations possible for this price." %}
+                            </div>
+                        {% elif price|price_out_of_stock:event %}
+                            <div class="alert alert-danger" role="alert">
+                                {% trans "This price is no longer available." %}
+                            </div>
+                        {% elif price.adhesions_obligatoires.exists %}
+                            {% with is_in_cart=price.adhesions_obligatoires.all|in_cart:panier.adhesions_product_ids %}
+                                {% if is_in_cart %}
+                                    {# --- Adhesion requise est dans le panier → tarif selectionnable --- #}
+                                    {# --- Required membership in cart → rate selectable --- #}
+                                    <div class="alert alert-info small py-2 mb-2" role="alert">
+                                        <i class="bi bi-bag-check me-1" aria-hidden="true"></i>
+                                        {% trans "Accessible via the membership in your cart." %}
+                                    </div>
+
+                                    <div class="form-check me-3">
+                                        <input id="price-{{ price.uuid }}"
+                                               class="form-check-input {% if price.free_price %}free-price-radio{% endif %}"
+                                               type="radio" name="price"
+                                               value="{{ price.uuid }}"
+                                               required
+                                               {% if price.out_of_stock or price|in_list:price_max_per_user_reached %}disabled{% endif %}
+                                               {% if published_prices_count == 1 %}checked{% endif %}
+                                               {% if price.free_price %}data-target="custom-amount-container-{{ price.uuid }}"{% endif %}
+                                               data-testid="membership-price-{{ price.uuid }}">
+                                        <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}"
+                                               for="price-{{ price.uuid }}">
+                                            {% if price.free_price %}
+                                                {{ price.name }}
+                                            {% else %}
+                                                {{ price.name }} - {{ price.prix }}€ {% if resource.slot_type == resource.HOUR %} /h {% endif %}
+                                            {% endif %}
+                                            {% if price.out_of_stock %}({% trans "Out of stock." %}){% endif %}
+                                            {% if price|in_list:price_max_per_user_reached %}
+                                                <div class="alert alert-danger mt-1" role="alert">
+                                                    {% trans "You have reached the maximum number of subscriptions possible for this rate." %}
+                                                </div>
+                                            {% endif %}
+                                        </label>
+                                    </div>
+                                {% elif not user.is_authenticated %}
+                                    <div class="alert alert-danger" role="alert">
+                                        {% trans "Log in to access this rate." %}
+                                    </div>
+                                {% elif not user|is_membership:price.adhesions_obligatoires %}
+                                    <!-- Adhésion obligatoire pour selectionner ce produit ! -->
+                                    <div class="alert alert-info" role="alert">
+                                        {% trans "You must have" %}
+                                        {% for adhesion in price.adhesions_obligatoires.all %}
+                                            <a href="/memberships/?open={{ adhesion.uuid }}">{{ adhesion.name }}</a>{% if not forloop.last %}
+                                            {% trans "or" %}{% endif %}
+                                        {% endfor %}
+                                        {% trans "to book this rate." %}
+                                    </div>
+                                {% else %}
+                                    <span class="d-flex align-items-baseline gap-3"></span>
+                                    <div class="form-check me-3">
+                                        <input id="price-{{ price.uuid }}"
+                                               class="form-check-input {% if price.free_price %}free-price-radio{% endif %}"
+                                               type="radio" name="price"
+                                               value="{{ price.uuid }}"
+                                               required
+                                               {% if price.out_of_stock or price|in_list:price_max_per_user_reached %}disabled{% endif %}
+                                               {% if published_prices_count == 1 %}checked{% endif %}
+                                               {% if price.free_price %}data-target="custom-amount-container-{{ price.uuid }}"{% endif %}
+                                               data-testid="membership-price-{{ price.uuid }}">
+                                        <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}"
+                                               for="price-{{ price.uuid }}">
+                                            {% if price.free_price %}
+                                                {{ price.name }}
+                                            {% else %}
+                                                {{ price.name }} - {{ price.prix }}€ {% if resource.slot_type == resource.HOUR %} /h {% endif %}
+                                            {% endif %}
+                                            {% if price.out_of_stock %}({% trans "Out of stock." %}){% endif %}
+                                            {% if price|in_list:price_max_per_user_reached %}
+                                                <div class="alert alert-danger mt-1" role="alert">
+                                                    {% trans "You have reached the maximum number of subscriptions possible for this rate." %}
+                                                </div>
+                                            {% endif %}
+                                        </label>
+                                    </div>
+                                {% endif %}
+                            {% endwith %}
+                        {% else %}
+                            <div class="form-check me-3">
+                                <input id="price-{{ price.uuid }}"
+                                       class="form-check-input {% if price.free_price %}free-price-radio{% endif %}"
+                                       type="radio" name="price"
+                                       value="{{ price.uuid }}"
+                                       required
+                                       {% if price.out_of_stock or price|in_list:price_max_per_user_reached %}disabled{% endif %}
+                                       {% if published_prices_count == 1 %}checked{% endif %}
+                                       {% if price.free_price %}data-target="custom-amount-container-{{ price.uuid }}"{% endif %}
+                                       data-testid="membership-price-{{ price.uuid }}">
+                                <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}"
+                                       for="price-{{ price.uuid }}">
+                                    {% if price.free_price %}
+                                        {{ price.name }}
+                                    {% else %}
+                                        {{ price.name }} - {{ price.prix }}€ {% translate 'par heure' %}
+                                    {% endif %}
+                                    {% if price.out_of_stock %}({% trans "Out of stock." %}){% endif %}
+                                    {% if price|in_list:price_max_per_user_reached %}
+                                        <div class="alert alert-danger mt-1" role="alert">
+                                            {% trans "You have reached the maximum number of subscriptions possible for this rate." %}
+                                        </div>
+                                    {% endif %}
+                                </label>
+                            </div>
+                        {% endif %}
+
+                        {% if price.free_price %}
+                            <div id="custom-amount-container-{{ price.uuid }}"
+                                 class="custom-amount-container mt-3 p-3 border border-primary-subtle rounded bg-body-tertiary"
+                                 style="display: none;"
+                                 data-testid="booking-custom-amount-container-{{ price.uuid }}">
+                                <input id="custom_amount-{{ price.uuid }}"
+                                       class="form-control form-control-lg custom-amount-input js-order-custom-price"
+                                       type="number"
+                                       name="custom_amount_{{ price.uuid }}"
+                                        {# unlocalize : en locale FR, min="5,00" (virgule) est invalide en HTML #}
+                                        {# / unlocalize: in FR locale, min="5,00" (comma) is invalid HTML #}
+                                       min="{{ price.prix|unlocalize }}"
+                                       max="999999.99"
+                                       step="0.10"
+                                       placeholder="{% trans "Enter the amount (minimum" %} {{ price.prix }}€)"
+                                       aria-describedby="custom-amount-help-{{ price.uuid }}"
+                                       data-testid="booking-custom-amount-{{ price.uuid }}">
+                                <div class="invalid-feedback"
+                                     id="custom-amount-error-{{ price.uuid }}"
+                                     data-testid="booking-custom-amount-error-{{ price.uuid }}"></div>
+                                <small id="custom-amount-help-{{ price.uuid }}" class="form-text text-muted">
+                                    {% trans "Enter the desired amount per hour" %}
+                                </small>
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+
+            <script>
+                (function () {
+                    const form = document.getElementById('booking-form');
+                    if (!form) return;
+
+                    // Validate before HTMX sends the request
+                    form.addEventListener('htmx:configRequest', function (event) {
+
+                        // Validation du prix libre
+                        let okFreePrice = true;
+                        const selectedRadio = form.querySelector('input[name="price"]:checked') || form.querySelector('input[name="price"][type="hidden"]');
+                        if (selectedRadio && (selectedRadio.classList.contains('free-price-radio') || selectedRadio.type === 'hidden')) {
+                            // On cherche l'input custom_amount correspondant au prix sélectionné
+                            // Si c'est un input hidden (un seul prix), on prend le premier .custom-amount-input qu'on trouve
+                            const container = selectedRadio.type === 'hidden' ?
+                                form.querySelector('.custom-amount-input')?.closest('.bg-body-tertiary') :
+                                document.getElementById(selectedRadio.getAttribute('data-target'));
+
+                            if (container) {
+                                const input = container.querySelector('.custom-amount-input');
+                                if (input && !input.value) {
+                                    okFreePrice = false;
+                                    input.classList.add('is-invalid');
+                                    input.focus();
+                                } else if (input && parseFloat(input.value) > 999999.99) {
+                                    // Montant trop élevé / Amount too high
+                                    okFreePrice = false;
+                                    input.classList.add('is-invalid');
+                                    input.focus();
+                                } else if (input) {
+                                    input.classList.remove('is-invalid');
+                                }
+                            }
+                        }
+
+                        if (!(okFreePrice)) {
+                            event.preventDefault();
+                        }
+                    });
+
+                    // Gestion de l'affichage des inputs de prix libre
+                    const allRadios = form.querySelectorAll('input[name="price"]');
+                    const customAmountContainers = form.querySelectorAll('.custom-amount-container');
+
+                    function updateCustomAmounts() {
+                        customAmountContainers.forEach(container => {
+                            container.style.display = 'none';
+                            const input = container.querySelector('.custom-amount-input');
+                            if (input) {
+                                input.required = false;
+                                input.value = ''; // Reset value when hidden
+                            }
+                        });
+
+                        const selectedRadio = form.querySelector('input[name="price"]:checked');
+                        if (selectedRadio && selectedRadio.classList.contains('free-price-radio')) {
+                            const targetId = selectedRadio.getAttribute('data-target');
+                            const targetContainer = document.getElementById(targetId);
+                            if (targetContainer) {
+                                targetContainer.style.display = 'block';
+                                const input = targetContainer.querySelector('.custom-amount-input');
+                                if (input) input.required = true;
+                            }
+                        }
+                    }
+
+                    allRadios.forEach(radio => {
+                        radio.addEventListener('change', updateCustomAmounts);
+                    });
+
+                    // Appel initial pour régler l'affichage au chargement
+                    updateCustomAmounts();
+                })();
+            </script>
+
+{#            {% for price in resource.product.prices.all %}#}
+{#                <div class="form-check mb-2">#}
+{#                    <input id="price-{{ price.uuid }}"#}
+{#                           class="form-check-input"#}
+{#                           type="radio"#}
+{#                           name="price"#}
+{#                           value="{{ price.uuid }}"#}
+{#                           required#}
+{#                           {% if forloop.first %}checked{% endif %}#}
+{#                           data-testid="booking-price-{{ price.uuid }}">#}
+{#                    <label class="form-check-label" for="price-{{ price.uuid }}">#}
+{#                        {{ price.name }} - {{ price.prix }}€#}
+{#                    </label>#}
+{#                </div>#}
+{#            {% empty %}#}
+{#                <div class="alert alert-warning" role="alert" data-testid="booking-no-price-msg">#}
+{#                    {% translate "Aucun tarif disponible pour cette ressource." %}#}
+{#                </div>#}
+{#            {% endfor %}#}
+        </div>
+
+        <!--
+        Nombre de creneaux — input si plusieurs disponibles, champ cache si un seul.
+        / Slot count — input if several available, hidden field if only one.
+        -->
+{#        {% if max_slot_count > 1 %}#}
+{#            <div class="mb-3">#}
+{##}
+{##}
+{#                <label for="id_slot_count" class="form-label fw-semibold">#}
+{#                    {% translate "Nombre de créneaux" %}#}
+{#                </label>#}
+{#                <input type="number"#}
+{#                       id="id_slot_count"#}
+{#                       name="slot_count"#}
+{#                       value="1"#}
+{#                       min="1"#}
+{#                       max="{{ max_slot_count }}"#}
+{#                       class="form-control"#}
+{#                       style="max-width: 120px;"#}
+{#                       data-testid="booking-slot-count-input">#}
+{#                <div class="form-text">#}
+{#                    {% blocktrans with max=max_slot_count %}Maximum : {{ max }} créneaux consécutifs.{% endblocktrans %}#}
+{#                </div>#}
+{#            </div>#}
+{#        {% else %}#}
+{#            <input type="hidden" name="slot_count" value="1">#}
+{#        {% endif %}#}
+
+        <div class="mb-3">
+            <label for="id_end_time">
+                {% translate "Heure de fin" %}
+            </label>
+            <select id="id_end_time" name="end_time">
+                {# Iterate over possible end hours #}
+                {% for slot in consecutive_slots %}
+                    <option value="{{ slot.end|date:'Y-m-d\TH:i:s' }}">{{ slot.end|date:'H:i' }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        {% translate "First name" as default_first_label %}
+        {% with first_label=config.first_input_label_membership|default:default_first_label %}
+            <div class="form-floating mb-3">
+                <input name="firstname" type="text" class="form-control" placeholder="{{ first_label }}"
+                       role="textbox" value="{{ user.first_name|default:"" }}"
+                       aria-label="{{ first_label }}" required data-testid="membership-firstname">
+                <label for="firstname">{{ first_label }}</label>
+            </div>
+        {% endwith %}
+
+        {% translate "Last name or organization" as default_second_label %}
+        {% with second_label=config.second_input_label_membership|default:default_second_label %}
+            <div class="form-floating mb-3">
+                <input name="lastname" type="text" class="form-control" placeholder="{{ second_label }}"
+                       role="textbox" value="{{ user.last_name|default:"" }}"
+                       aria-label="{{ second_label }}" required data-testid="membership-lastname">
+                <label for="lastname">{{ second_label }}</label>
+            </div>
+        {% endwith %}
+
+        <!--
+        Champs caches : start_datetime, group_end et resource.
+        / Hidden fields: start_datetime, group_end and resource.
+        -->
+        <input type="hidden" name="start_datetime" value="{{ start_datetime|date:'Y-m-d\TH:i:s' }}">
+        <input type="hidden" name="group_end" value="{{ group_end|date:'Y-m-d\TH:i:s' }}">
+        <input type="hidden" name="resource" value="{{ resource.pk }}">
+
+        <!--
+        Message d'annulation : date limite si possible, sinon annulation impossible.
+        / Cancellation message: deadline if possible, otherwise cancellation not possible.
+        -->
+        {% if cancellation_possible %}
+            <div class="alert alert-info mb-3" role="note" data-testid="booking-cancellation-notice">
+                <i class="bi bi-info-circle" aria-hidden="true"></i>
+                {% blocktrans with deadline=cancellation_deadline|date:"d F Y à H\hi" %}
+                    Vous pouvez annuler jusqu'au {{ deadline }}.
+                {% endblocktrans %}
+            </div>
+        {% else %}
+            <div class="alert alert-warning mb-3" role="note" data-testid="booking-cancellation-notice">
+                <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                {% translate "L'annulation ne sera pas possible pour ce créneau." %}
+            </div>
+        {% endif %}
+
+        <!--
+        Boutons d'action.
+        / Action buttons.
+        -->
+        <div class="">
+            {% if user.is_authenticated %}
+                {% if panier.count > 0 %}
+                    {# Panier non vide : 2 boutons qui finissent tous les deux au panier. #}
+                    {# 1) Ajouter au panier (cumul). 2) Ajouter + payer : enchaine le checkout. #}
+                    {# / Cart non-empty: both buttons end at cart. #}
+                    {# 1) Add to cart. 2) Add + pay: chain to checkout. #}
+                    <button type="button"
+                            class="btn btn-primary w-100 mb-2"
+                            hx-post="/panier/add/resource/"
+                            hx-include="closest form"
+                            hx-swap="none"
+                            data-loading-disable
+                            data-testid="resource-add-to-cart"
+                            aria-label="{% translate 'Add this resource to your cart' %}">
+                        <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
+                        {% blocktrans with n=panier.count %}Add to cart ({{ n }} already in){% endblocktrans %}
+                    </button>
+                    <button type="button"
+                            class="btn btn-outline-primary w-100 mb-2"
+                            hx-post="/panier/add/resource/"
+                            hx-include="closest form"
+                            hx-vals='{"then": "checkout"}'
+                            hx-swap="none"
+                            data-loading-disable
+                            data-testid="resource-add-and-pay"
+                            aria-label="{% translate 'Add to cart and pay all items' %}">
+                        <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
+                        {% translate "Add to cart and pay" %}
+                    </button>
+                {% else %}
+                    <button type="button"
+                            class="btn btn-primary w-100 mb-2"
+                            hx-post="/panier/add/resource/"
+                            hx-include="closest form"
+                            hx-swap="none"
+                            data-loading-disable
+                            data-testid="resource-add-to-cart"
+                            aria-label="{% translate 'Add this resource to your cart' %}">
+                        <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
+                        {% translate "Add to cart" %}
+                    </button>
+                    <button id="resource-submit" type="submit"
+                            class="btn btn-outline-primary w-100 mb-2"
+                            data-loading-disable
+                            data-testid="resource-submit"
+                            aria-label="{% translate 'Pay this resource now' %}">
+                        <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
+                        {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}
+                            {% translate 'Pay now' %}{% endif %}
+                    </button>
+                {% endif %}
+            {% else %}
+                <button id="resource-submit" type="submit"
+                        class="btn btn-primary w-100 mb-2"
+                        data-loading-disable
+                        data-testid="resource-submit">
+                    <i class="bi bi-send-fill me-2" aria-hidden="true"></i>
+                    {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}
+                        {% translate 'Send my subscription request' %}{% endif %}
+                </button>
+                <button type="button"
+                        class="btn btn-outline-primary w-100 mb-2"
+                        data-bs-toggle="offcanvas"
+                        data-bs-target="#loginPanel"
+                        data-testid="resource-add-to-cart-login"
+                        aria-label="{% translate 'Log in to add this resource to your cart' %}">
+                    <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
+                    {% translate "Log in to add to cart" %}
+                </button>
+            {% endif %}
+            <button type="button" class="btn btn-link text-muted w-100 d-block test-resource-bt-cancel" data-bs-dismiss="offcanvas" aria-label="Annuler">
+                {% translate "Annuler" %}
+            </button>
+        </div>
+    </form>
+</div>

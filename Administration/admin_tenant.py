@@ -3,6 +3,9 @@ from Administration.admin.dashboard import (  # noqa: F401
     MODULE_FIELDS, _build_modules_context, adhesion_badge_callback,
 )
 
+from Administration.admin.resources import (  # noqa: F401
+    CalendarAdmin, WeeklyOpeningAdmin, BookingAdmin, ResourceGroupAdmin, ResourceAdmin
+)
 from Administration.admin import (
     products,
     prices
@@ -1538,6 +1541,9 @@ class MembershipAdmin(HelpDisplayMixin, ModelAdmin, ImportExportModelAdmin):
     list_sections = [MembershipCustomFormSection]
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
+
+    exclude = ["commande"]
+
     # Ajoute un bloc personnalisé après le formulaire dans la vue change
     change_form_after_template = "admin/membership/custom_form.html"
 
@@ -2839,6 +2845,8 @@ class ReservationAdmin(ModelAdmin):
     # Formulaire de création. A besoin de get_form pour fonctionner
     add_form = ReservationAddAdmin
     autocomplete_fields = ["event",]
+
+    exclude = ["commande"]
 
     def get_form(self, request, obj=None, **kwargs):
         """ Si c'est un add, on modifie le formulaire"""

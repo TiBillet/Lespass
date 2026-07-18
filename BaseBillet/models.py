@@ -40,6 +40,7 @@ from stripe import InvalidRequestError
 import AuthBillet.models
 from AuthBillet.models import HumanUser, RsaKey
 from Customers.models import Client
+from PaiementStripe.utils import partial_refund_payment
 from QrcodeCashless.models import CarteCashless
 from TiBillet import settings
 from fedow_connect.utils import dround, sign_message, verify_signature, data_to_b64
@@ -627,7 +628,6 @@ class Configuration(SingletonModel):
         help_text=_("Enable resource booking (rooms, equipment, coworking desks)."),
     )
     # NEW V2 END
-
     currency_code = models.CharField(max_length=3, default="EUR")
 
     additional_text_in_membership_mail = models.TextField(
@@ -1002,10 +1002,13 @@ class Product(models.Model):
         verbose_name=_('Product image'),
     )
 
+    # USED CHAR :   A B C D E F G | | | | | M N | P Q R S T U V | | | |
+    # UNUSED CHAR : | | | | | | | H I J K L | | O | | | | | | | W X Y Z
     NONE, BILLET, PACK, RECHARGE_CASHLESS = 'N', 'B', 'P', 'R'
     RECHARGE_FEDERATED, VETEMENT, MERCH, ADHESION, BADGE = 'S', 'T', 'M', 'A', 'G'
     DON, FREERES, NEED_VALIDATION = 'D', 'F', 'V' # DON / Reservation gratuite / Besoin de validation
     QRCODE_MA = 'Q'
+    RESOURCE = 'C'
 
     # FROM V2 : TODO
     # Recharge cashless FED : produit système créé par bootstrap_fed_asset.
@@ -1029,6 +1032,7 @@ class Product(models.Model):
         (ADHESION, _('Subscription or membership')),
         (BADGE, _('Punchclock')),
         (QRCODE_MA, _('QrCode paiement on my account')),
+        (RESOURCE, _('Ressource')),
         # (FUT, _("Keg (connected tap)")), # FROM V2 : TO IMPLEMENT WITH TIHEUREUSE
         # (DON, _('Don')),
         # (NEED_VALIDATION, _('Nécessite une validation manuelle'))
@@ -1144,6 +1148,17 @@ class MembershipProduct(Product):
         verbose_name = _("Membership product")
         verbose_name_plural = _("Membership products")
 
+class ResourceProduct(Product):
+    """Proxy pour afficher uniquement les produits ressources (réservation de salle/machine) dans l'admin.
+    Proxy to display only resource products in admin.
+    Meme table, zero migration."""
+
+    class Meta:
+        proxy = True
+        verbose_name = _("Resource product")
+        verbose_name_plural = _("Resources products")
+
+
 # FROM V2 : TODO
 class POSProduct(Product):
     """Proxy pour afficher uniquement les produits de caisse dans l'admin.
@@ -1224,6 +1239,123 @@ class PromotionalCode(models.Model):
         verbose_name = _('Promotional code')
         verbose_name_plural = _('Promotional codes')
         ordering = ('-date_created',)
+
+class Commande(models.Model):
+    """
+    Commande unifiée : regroupe plusieurs reservations et adhésions dans un achat
+    unique (panier multi-events). Sert de pivot sémantique, découplé du moyen de
+    paiement (Stripe aujourd'hui, autres moyens plus tard).
+
+    / Unified order: groups several reservations and memberships into a single
+    purchase (multi-event cart). Semantic pivot, decoupled from the payment mean
+    (Stripe today, other means later).
+
+    Liens (FK inverses) :
+      - commande.reservations           → Reservation.commande (FK nullable)
+      - commande.memberships_commande   → Membership.commande (FK nullable)
+      - commande.bookings   → Booking.commande (FK nullable)
+      - commande.paiement_stripe        → Paiement_stripe (OneToOne nullable, reverse=commande_obj)
+    """
+
+    uuid = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        unique=True,
+        db_index=True,
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="commandes",
+        verbose_name=_("Buyer"),
+        help_text=_(
+            "Utilisateur acheteur (résolu par email au checkout). "
+            "/ Buyer user (resolved by email at checkout)."
+        ),
+    )
+
+    # Informations acheteur, capturées au moment du checkout
+    # / Buyer information, captured at checkout time
+    email_acheteur = models.EmailField(
+        verbose_name=_("Buyer email"),
+    )
+    first_name = models.CharField(
+        max_length=200,
+        verbose_name=_("First name"),
+    )
+    last_name = models.CharField(
+        max_length=200,
+        verbose_name=_("Last name"),
+    )
+
+    # Statuts du cycle de vie d'une commande
+    # / Order lifecycle statuses
+    DRAFT = "DRAFT"
+    PENDING = "PENDING"
+    PAID = "PAID"
+    CANCELED = "CANCELED"
+    EXPIRED = "EXPIRED"
+    STATUS_CHOICES = [
+        (DRAFT, _("Draft")),
+        (PENDING, _("Pending payment")),
+        (PAID, _("Paid")),
+        (CANCELED, _("Canceled")),
+        (EXPIRED, _("Expired")),
+    ]
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default=DRAFT,
+        verbose_name=_("Order status"),
+    )
+
+    # Lien optionnel vers le paiement Stripe.
+    # Nullable car :
+    #   - une commande gratuite (total 0€) n'a pas de paiement
+    #   - une commande DRAFT pré-checkout n'a pas encore de paiement
+    # / Optional link to the Stripe payment. Nullable because:
+    #   - a free order (total 0€) has no payment
+    #   - a DRAFT pre-checkout order has no payment yet
+    paiement_stripe = models.OneToOneField(
+        "Paiement_stripe",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="commande_obj",
+        verbose_name=_("Stripe payment"),
+    )
+
+    # Code promo appliqué au panier (au plus un par commande en v1).
+    # / Promotional code applied to the cart (at most one per order in v1).
+    promo_code = models.ForeignKey(
+        PromotionalCode,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="commandes",
+        verbose_name=_("Promotional code"),
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Created at"))
+    paid_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Paid at"),
+    )
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = _("Order")
+        verbose_name_plural = _("Orders")
+
+    def __str__(self):
+        return f"Commande {str(self.uuid)[:8]} ({self.status})"
+
+    def uuid_8(self):
+        """Raccourci d'affichage. / Display shortcut."""
+        return f"{self.uuid}".partition("-")[0]
 
 
 @receiver(post_save, sender=Product)
@@ -2178,9 +2310,28 @@ class Reservation(models.Model):
                                                                       on_delete=models.PROTECT,
                                                                       related_name='reservations')
 
-    event = models.ForeignKey(Event,
-                              on_delete=models.PROTECT,
-                              related_name="reservation")
+    event = models.ForeignKey(
+        Event, on_delete=models.PROTECT, related_name="reservation"
+    )
+
+    # FK optionnelle vers la commande qui regroupe cette reservation avec d'autres
+    # (billets d'autres events + adhésions). Nullable pour que les flows directs
+    # existants (mono-event sans panier) continuent de fonctionner sans régression.
+    # / Optional FK to the order that groups this reservation with others
+    # (tickets from other events + memberships). Nullable so that existing
+    # direct flows (mono-event without cart) continue to work without regression.
+    commande = models.ForeignKey(
+        "Commande",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reservations",
+        verbose_name=_("Order"),
+        help_text=_(
+            "Renseignée uniquement si la reservation a été créée via un panier multi-items. "
+            "/ Only set if the reservation was created via a multi-item cart."
+        ),
+    )
 
     CANCELED, CREATED, UNPAID, FREERES, FREERES_USERACTIV, PAID, PAID_ERROR, PAID_NOMAIL, VALID, = 'C', 'R', 'U', 'F', 'FA', 'P', 'PE', 'PN', 'V'
     TYPE_CHOICES = [
@@ -2248,6 +2399,9 @@ class Reservation(models.Model):
             ]):
                 articles_paid.append(ligne)
         return articles_paid
+
+    def valid_tickets(self):
+        return self.tickets.filter(status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED])
 
     def total_paid(self):
         total_paid = 0
@@ -2334,6 +2488,10 @@ class Reservation(models.Model):
 
     @atomic
     def cancel_and_refund_resa(self):
+
+        if self.status == Reservation.CANCELED:
+            raise Exception(_("This reservation has already been canceled."))
+
         if self.tickets.filter(status=Ticket.SCANNED).exists():
             raise Exception(_("You cannot cancel a reservation that has been scanned."))
 
@@ -2343,51 +2501,34 @@ class Reservation(models.Model):
             config = Configuration.get_solo()
             # stripe.api_key = config.get_stripe_api()
             stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-            for paiement in self.paiements.filter(status__in=[Paiement_stripe.VALID,
-                                                              Paiement_stripe.PAID,
-                                                              Paiement_stripe.NOTSYNC,
-                                                              ]):
-                paiement: Paiement_stripe
-                checkout = paiement.get_checkout_session()
-                payment_intent = checkout.payment_intent
 
-                try:
-                    refund = stripe.Refund.create(
-                        payment_intent=payment_intent,
-                        reason='requested_by_customer',
-                        amount=checkout.amount_total,
-                        stripe_account=config.get_stripe_connect_account()
-                    )
-                    logger.info(f"Refund stripe : {refund.status}")
-                    paiement.status = Paiement_stripe.REFUNDED
-                    paiement.save()
+            # Si la commande est faite AVEC le panier, récupère la lignearticle depuis self
+            if self.commande and self.lignearticles:
+                # Récupère le paiement et les lignes articles
+                paiement = self.lignearticles.first().paiement_stripe
+                lignes = self.lignearticles.filter(status__in=[LigneArticle.VALID, LigneArticle.PAID])
 
-                    for lignearticle in paiement.lignearticles.filter(status=LigneArticle.VALID):
-                        metadata = lignearticle.metadata if lignearticle.metadata else {}
-                        metadata['original_lignearticle_uuid'] = str(lignearticle.uuid)
-                        refunded_line = LigneArticle.objects.create(
-                            datetime=timezone.now(),
-                            pricesold=lignearticle.pricesold,
-                            qty=-lignearticle.qty,  # ! Attention negative
-                            amount=lignearticle.amount,
-                            vat=lignearticle.vat,
-                            paiement_stripe=paiement,
-                            payment_method=lignearticle.payment_method,
-                            asset=lignearticle.asset,
-                            wallet=lignearticle.wallet,
-                            status=LigneArticle.CREATED,
-                            sended_to_laboutik=False,
-                            metadata=metadata,
-                            sale_origin=SaleOrigin.LESPASS,
-                        )
-                        refunded_line.status = LigneArticle.REFUNDED  # pour envoyer le trigger qui va informer LaBoutik
-                        refunded_line.save()
-                except InvalidRequestError as e:
-                    logger.error(f"CheckoutStripe Refund InvalidRequestError {e}")
-                    raise Exception(f"CheckoutStripe Refund InvalidRequestError {e}")
-                except Exception as e:
-                    logger.error(f"CheckoutStripe Refund Exception : {e}")
-                    raise e
+                # Pour chaque ligne récupère le nombre de ticket valid, pour ne pas remboursé des tickets qui l'aurait déjà été
+                for ligne in lignes:
+                    valid_ticket = self.tickets.filter(status__in=[Ticket.NOT_SCANNED,Ticket.SCANNED],pricesold=ligne.pricesold)
+                    ligne.to_refund_qty = valid_ticket.count()
+
+                # Appel la fonction helper pour gérer le refund
+                partial_refund_payment(paiement, config, lignes)
+
+            # Si la commande est faite SANS le panier, récupère la lignearticle depuis le paiement
+            elif self.paiements.count() > 0:
+                for paiement in self.paiements.filter(status__in=[Paiement_stripe.VALID,
+                                                                  Paiement_stripe.PAID,
+                                                                  Paiement_stripe.NOTSYNC,
+                                                                  ]):
+
+                    lignes = paiement.lignearticles.filter(status__in=[LigneArticle.VALID, LigneArticle.PAID])
+                    for ligne in lignes:
+                        valid_ticket = self.tickets.filter(status__in=[Ticket.NOT_SCANNED,Ticket.SCANNED],pricesold=ligne.pricesold)
+                        ligne.to_refund_qty = valid_ticket.count()
+
+                    partial_refund_payment(paiement, config, lignes)
 
         # 2) Avoir pour les lignes hors-Stripe (reservations admin : cheque, especes, etc.)
         # / Credit note for non-Stripe lines (admin reservations: check, cash, etc.)
@@ -2412,28 +2553,22 @@ class Reservation(models.Model):
         - Sets the Ticket status to CANCELED
         """
         # Basic guards
+        if ticket.status == Ticket.CANCELED:
+            raise Exception(_("This ticket has already been canceled."))
         if ticket.reservation != self:
             raise Exception(_("Ticket does not belong to this reservation."))
         if ticket.status == Ticket.SCANNED:
             raise Exception(_("You cannot cancel a ticket that has been scanned."))
 
-        refunded = False
-        # If reservation had a payment try partial refund
+        refund = False
+        # If reservation had a payment and ticket has a price superior to free, try partial refund
         if self.total_paid() > 0:
             config = Configuration.get_solo()
             stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
 
-            # Find the paiement/lignearticle corresponding to this ticket
-            for paiement in self.paiements.filter(status__in=[Paiement_stripe.VALID,
-                                                              Paiement_stripe.PAID,
-                                                              Paiement_stripe.NOTSYNC,
-                                                              ]):
-                try:
-                    checkout = paiement.get_checkout_session()
-                    payment_intent = checkout.payment_intent
-                except Exception:
-                    payment_intent = paiement.payment_intent_id
 
+            if self.commande and self.lignearticles:
+                paiement = self.lignearticles.first().paiement_stripe
                 ligne = paiement.lignearticles.filter(
                     pricesold=ticket.pricesold,
                     status__in=[LigneArticle.PAID, LigneArticle.VALID]
@@ -2441,63 +2576,48 @@ class Reservation(models.Model):
                 if not ligne:
                     raise Exception(_("Ticket does not have a matching LigneArticle."))
 
-                amount = ligne.amount * 1  # un seul ticket !
-                try:
-                    if amount > 0 and payment_intent:
-                        refund = stripe.Refund.create(
-                            payment_intent=payment_intent,
-                            reason='requested_by_customer',
-                            amount=amount,
-                            stripe_account=config.get_stripe_connect_account()
-                        )
-                        logger.info(f"Partial refund stripe for one ticket: {refund.status}")
-                    # Update accounting line status to REFUNDED if it was VALID to trigger signals
-                    if ligne.status == LigneArticle.VALID:
-                        metadata = ligne.metadata if ligne.metadata else {}
-                        metadata['original_lignearticle_uuid'] = str(ligne.uuid)
-                        refunded_line = LigneArticle.objects.create(
-                            datetime=timezone.now(),
-                            pricesold=ligne.pricesold,
-                            qty=-1,  # ! Attention negative
-                            amount=ligne.amount,
-                            vat=ligne.vat,
-                            paiement_stripe=paiement,
-                            payment_method=ligne.payment_method,
-                            asset=ligne.asset,
-                            wallet=ligne.wallet,
-                            status=LigneArticle.CREATED,
-                            sended_to_laboutik=False,
-                            metadata=metadata,
-                            sale_origin=SaleOrigin.LESPASS,
-                        )
-                        refunded_line.status = LigneArticle.REFUNDED  # pour envoyer le trigger qui va informer LaBoutik
-                        refunded_line.save()
-                    refunded = True
+                # Refund only one ticket from the `ligne` using specified_quantity=1
+                partial_refund_payment(paiement, config, [ligne], specified_quantity=1)
+                logger.info(f"Partial refund stripe for one ticket")
+            elif self.paiements.count() > 0:
+
+                # Find the paiement/lignearticle corresponding to this ticket
+                for paiement in self.paiements.filter(status__in=[Paiement_stripe.VALID,
+                                                                  Paiement_stripe.PAID,
+                                                                  Paiement_stripe.NOTSYNC,
+                                                                  ]):
+
+
+                    ligne = paiement.lignearticles.filter(
+                        pricesold=ticket.pricesold,
+                        status__in=[LigneArticle.PAID, LigneArticle.VALID]
+                    ).first()
+                    if not ligne:
+                        raise Exception(_("Ticket does not have a matching LigneArticle."))
+
+                    # Refund only one ticket from the `ligne` using specified_quantity=1
+                    partial_refund_payment(paiement, config, [ligne], specified_quantity=1)
+                    logger.info(f"Partial refund stripe for one ticket")
+
                     break
-                except InvalidRequestError as e:
-                    logger.error(f"Partial Refund InvalidRequestError {e}")
-                    raise Exception(f"Stripe refund error: {e}")
-                except Exception as e:
-                    logger.error(f"Partial Refund Exception : {e}")
-                    raise e
 
         # 2) Avoir pour les lignes hors-Stripe (ticket admin : cheque, especes, etc.)
         # / Credit note for non-Stripe lines (admin ticket: check, cash, etc.)
-        if not refunded:
+        if not refund:
             lignes_hors_stripe = self._lignes_hors_stripe(
                 pricesold_ids=[ticket.pricesold_id]
             )
             for ligne in lignes_hors_stripe:
                 self._creer_avoir(ligne)
                 logger.info(f"Credit note created for non-Stripe line {ligne.uuid} (single ticket cancel)")
-                refunded = True
+                refund = True
                 break  # Un seul avoir pour un seul ticket
 
         # Cancel the ticket regardless of refund result
         ticket.status = Ticket.CANCELED
         ticket.save()
 
-        return self.cancel_text() if refunded else _("Ticket cancelled.")
+        return self.cancel_text() if refund else _("Ticket cancelled.")
 
     def __str__(self):
         return f"{self.user_commande.email} - {str(self.uuid).partition('-')[0]}"
@@ -2695,6 +2815,18 @@ class Paiement_stripe(models.Model):
     datetime = models.DateTimeField(auto_now=True)
 
     checkout_session_id_stripe = models.CharField(max_length=80, blank=True, null=True)
+    checkout_session_url = models.URLField(
+        max_length=1024,
+        blank=True,
+        null=True,
+        verbose_name=_("Stripe checkout URL"),
+        help_text=_(
+            "URL Stripe Checkout persistée après création — permet de rediriger "
+            "l'utilisateur vers le paiement sans rappeler Stripe. "
+            "/ Stripe Checkout URL persisted after creation — allows redirecting "
+            "the user to payment without recalling Stripe."
+        ),
+    )
     payment_intent_id = models.CharField(max_length=80, blank=True, null=True)
     metadata_stripe = JSONField(blank=True, null=True)
     customer_stripe = models.CharField(max_length=20, blank=True, null=True)  # pas utile
@@ -2706,7 +2838,7 @@ class Paiement_stripe(models.Model):
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, blank=True, null=True)
 
-    NON, OPEN, PENDING, EXPIRE, FAILED, PAID, VALID, NOTSYNC, CANCELED, REFUNDED = 'N', 'O', 'W', 'E', 'F', 'P', 'V', 'S', 'C', 'R'
+    NON, OPEN, PENDING, EXPIRE, FAILED, PAID, VALID, NOTSYNC, CANCELED, REFUNDED, PARTIALLY_REFUNDED = 'N', 'O', 'W', 'E', 'F', 'P', 'V', 'S', 'C', 'R', 'H'
     STATUS_CHOICES = (
         (NON, _('Payment link not generated')),
         (OPEN, _('Sent to Stripe')),
@@ -2718,6 +2850,7 @@ class Paiement_stripe(models.Model):
         (NOTSYNC, _('Paid but issues with LaBoutik sync')),  # envoyé sur serveur cashless qui retourne une erreur
         (CANCELED, _('Cancelled')),
         (REFUNDED, _('Refunded')),
+        (PARTIALLY_REFUNDED, _("Partiellement remboursé"))
     )
     status = models.CharField(max_length=1, choices=STATUS_CHOICES, default=NON, verbose_name="Order status")
 
@@ -2736,6 +2869,8 @@ class Paiement_stripe(models.Model):
     reservation = models.ForeignKey(Reservation, on_delete=models.PROTECT, blank=True, null=True,
                                     related_name="paiements")
 
+    booking = models.ForeignKey("booking.Booking", on_delete=models.PROTECT, blank=True, null=True, related_name="paiements")
+
     QRCODE, API_BILLETTERIE, FRONT_BILLETTERIE, FRONT_CROWDS, INVOICE, TRANSFERT = 'Q', 'B', 'F', 'C', 'I', 'T'
     SOURCE_CHOICES = (
         (QRCODE, _('From QR code scan')),  # ancien api. A virer ?
@@ -2750,6 +2885,14 @@ class Paiement_stripe(models.Model):
                               verbose_name="Order source")
 
     fedow_transactions = models.ManyToManyField(FedowTransaction, blank=True, related_name="paiement_stripe")
+
+    def is_fully_refunded(self):
+        # If total is 0, the paiement is totally refunded
+        if self.total() == 0:
+            return True
+
+        # Else the paiement is fully refunded
+        return False
 
     # total = models.FloatField(default=0)
     def total(self):
@@ -2940,6 +3083,9 @@ class LigneArticle(models.Model):
                                      related_name="lignearticles", verbose_name=_("Reservation"))
     membership = models.ForeignKey("Membership", on_delete=models.PROTECT, blank=True, null=True,
                                    verbose_name=_("Linked subscription"), related_name="lignearticles")
+    booking = models.ForeignKey("booking.Booking", on_delete=models.PROTECT, blank=True, null=True,
+                                   verbose_name=_("Resources reservation"), related_name="lignearticles")
+
 
     ### INFO DE PAIEMENT
     sale_origin = models.CharField(max_length=2, choices=SaleOrigin.choices, default=SaleOrigin.LESPASS,
@@ -3079,6 +3225,29 @@ class Membership(models.Model):
     price = models.ForeignKey(Price, on_delete=models.PROTECT, related_name='membership',
                               verbose_name=_('Product / price'),
                               null=True, blank=True)
+
+    # FK optionnelle vers la commande qui regroupe cette adhésion avec d'autres
+    # items (billets, autres adhésions). Nullable pour que les flows directs
+    # existants (adhésion isolée via MembershipValidator) continuent de fonctionner.
+    # / Optional FK to the order that groups this membership with other items
+    # (tickets, other memberships). Nullable so that existing direct flows
+    # (standalone membership via MembershipValidator) continue to work.
+    commande = models.ForeignKey(
+        "Commande",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        # Asymétrique avec Reservation.commande (related_name="reservations") :
+        # "memberships" est déjà pris par le FK user → Membership.
+        # / Asymmetric with Reservation.commande: "memberships" already taken by user FK.
+        related_name="memberships_commande",
+        verbose_name=_("Order"),
+        help_text=_(
+            "Renseignée uniquement si l'adhésion a été créée via un panier multi-items. "
+            "/ Only set if the membership was created via a multi-item cart."
+        ),
+    )
+
 
     asset_fedow = models.UUIDField(null=True, blank=True)
     card_number = models.CharField(max_length=16, null=True, blank=True)

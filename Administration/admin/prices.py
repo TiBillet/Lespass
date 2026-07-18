@@ -226,6 +226,8 @@ class PriceAdmin(ModelAdmin):
     form = PriceChangeForm
     autocomplete_fields = ["adhesions_obligatoires"]
 
+    search_fields = ['name']
+
     conditional_fields = {
         "iteration": "recurring_payment == true",
         "commitment": "iteration > 0",

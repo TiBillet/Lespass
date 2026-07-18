@@ -18,6 +18,7 @@ from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation, \
     trigger_product_update_tasks, send_sale_to_laboutik, send_refund_to_laboutik, webhook_membership, \
     refill_from_lespass_to_user_wallet_from_ticket_scanned
 from BaseBillet.triggers import TRIGGER_LigneArticlePaid_ActionByCategorie
+from booking.models import Booking
 from fedow_connect.fedow_api import AssetFedow
 from fedow_connect.models import FedowConfig
 
@@ -47,13 +48,26 @@ def set_ligne_article_paid(old_instance: Paiement_stripe, new_instance: Paiement
         ligne_article.status = LigneArticle.PAID
         ligne_article.save()
 
-    # s'il y a une réservation, on la met aussi en payée :
+    # On rassemble toutes les reservations à valider : la FK legacy (flow mono-event)
+    # + les FK sur les LigneArticle (nouveau : flow panier multi-events).
+    # Le set() dédoublonne automatiquement : flow mono-event = 1 seule reservation.
+    # / Gather all reservations to validate: legacy FK (mono-event flow) + FKs on
+    # LigneArticle (new: multi-event cart flow). set() dedupes: mono-event = 1 single reservation.
+    reservations_a_valider = set()
     if new_instance.reservation:
+        reservations_a_valider.add(new_instance.reservation)
+
+    for ligne in new_instance.lignearticles.all():
+        if ligne.reservation:
+            reservations_a_valider.add(ligne.reservation)
+
+    if reservations_a_valider:
         logger.info(
-            f"        PAIEMENT_STRIPE set_ligne_article_paid : Toutes les ligne_article on été passé en {LigneArticle.PAID} et on été save()")
-        logger.info(f"        On passe la reservation en PAID et save()")
-        new_instance.reservation.status = Reservation.PAID
-        new_instance.reservation.save()
+            f"        PAIEMENT_STRIPE set_ligne_article_paid : {len(reservations_a_valider)} reservation(s) à valider")
+        for reservation in reservations_a_valider:
+            logger.info(f"        On passe la reservation {str(reservation.uuid)[:8]} en PAID et save()")
+            reservation.status = Reservation.PAID
+            reservation.save()
 
     logger.info(f"    END PAIEMENT_STRIPE set_ligne_article_paid\n")
 
@@ -355,7 +369,12 @@ PRE_SAVE_TRANSITIONS = {
         Ticket.NOT_SCANNED: {
             Ticket.SCANNED: check_reward,
         }
-    }
+    },
+    # 'BOOKING' : {
+    #     Booking.WAITING_PAYMENT: {
+    #         Booking.PAID_BY_USER: booking_paid
+    #     }
+    # }
 }
 
 
@@ -473,6 +492,109 @@ def create_lignearticle_if_membership_created_on_admin(sender, instance: Members
         webhook_membership.delay(membership.pk)
 
 
+# FROM V2 : to implement later with fedow/laboutik
+
+# --- BROADCAST JAUGE BILLETTERIE VIA WEBSOCKET ---
+# / Ticket gauge WebSocket broadcast
+#
+# def _safe_broadcast_jauge(event_pk):
+#     """
+#     Recharge l'event depuis la DB et broadcast la jauge a toutes les caisses.
+#     Separe du signal pour eviter les problemes de closure avec l'ORM.
+#     / Reloads the event from DB and broadcasts the gauge to all POS terminals.
+#     Separated from the signal to avoid ORM closure issues.
+#
+#     LOCALISATION : BaseBillet/signals.py
+#
+#     Appele par transaction.on_commit() — s'execute APRES le commit.
+#     L'objet Event en memoire peut etre stale, on recharge depuis la DB.
+#     Le try/except evite de casser si le channel layer (Redis) est down.
+#     """
+#     from BaseBillet.models import Event
+#
+#     try:
+#         from wsocket.broadcast import broadcast_jauge_event
+#         event = Event.objects.get(pk=event_pk)
+#         broadcast_jauge_event(event)
+#     except Event.DoesNotExist:
+#         pass
+#     except Exception as e:
+#         logger.warning(f"[WS] Erreur broadcast jauge event {event_pk}: {e}")
+#
+#
+# @receiver(post_save, sender=Ticket)
+# def broadcast_jauge_apres_ticket_save(sender, instance, **kwargs):
+#     """
+#     Apres chaque sauvegarde d'un Ticket, broadcaster la jauge de l'event.
+#     Couvre toutes les sources : POS, vente en ligne, admin, remboursement.
+#     / After each Ticket save, broadcast the event gauge.
+#     Covers all sources: POS, online sale, admin, refund.
+#
+#     LOCALISATION : BaseBillet/signals.py
+#
+#     Utilise on_commit() pour ne broadcaster qu'apres le commit de la transaction.
+#     Si la transaction rollback, le broadcast n'est jamais envoye.
+#
+#     FLUX :
+#     1. Ticket.save() declenche post_save
+#     2. On recupere l'event via ticket.reservation.event
+#     3. on_commit() differe _safe_broadcast_jauge(event.pk)
+#     4. Apres commit : recharge l'event, recalcule la jauge, broadcast
+#     """
+#     from django.db import transaction
+#
+#     ticket = instance
+#     reservation = ticket.reservation
+#     if not reservation or not reservation.event_id:
+#         return
+#
+#     event_pk = reservation.event_id
+#
+#     # Differer le broadcast jusqu'au commit de la transaction
+#     # Si la transaction rollback, le broadcast n'est jamais envoye
+#     # / Defer broadcast until transaction commit
+#     # If the transaction rolls back, the broadcast is never sent
+#     transaction.on_commit(
+#         lambda: _safe_broadcast_jauge(event_pk)
+#     )
+
+
+######################## SIGNAL COMMANDE ########################
+
+
+@receiver(post_save, sender=Paiement_stripe)
+def commande_mark_paid_when_paiement_valid(sender, instance: Paiement_stripe, **kwargs):
+    """
+    Dès qu'un Paiement_stripe passe à VALID, on marque la Commande liée
+    comme PAID + paid_at=now. Utilisé par le flow panier multi-events.
+
+    / As soon as a Paiement_stripe goes to VALID, mark the linked Commande
+    as PAID + paid_at=now. Used by the multi-event cart flow.
+
+    Rétrocompat : les Paiement_stripe sans Commande (flow legacy) ne
+    déclenchent aucune action (commande_obj n'existe pas → AttributeError attrapée).
+    / Backward compat: Paiement_stripe without Commande (legacy flow) trigger
+    no action (commande_obj doesn't exist → AttributeError caught).
+    """
+    if instance.status != Paiement_stripe.VALID:
+        return
+    try:
+        commande = instance.commande_obj  # OneToOne reverse
+    except Exception:
+        return
+    if commande is None:
+        return
+    from BaseBillet.models import Commande
+    if commande.status != Commande.PAID:
+        commande.status = Commande.PAID
+        commande.paid_at = timezone.now()
+        commande.save(update_fields=["status", "paid_at"])
+        logger.info(
+            f"    SIGNAL COMMANDE : Commande {commande.uuid_8()} → PAID (paiement {instance.uuid_8()} VALID)"
+        )
+
+        
+        
 @receiver(post_save, sender=Event)
 @receiver(post_delete, sender=Event)
 @receiver(post_save, sender=PostalAddress)
@@ -515,4 +637,3 @@ def declencher_refresh_seo_cache(sender, instance, **kwargs):
     # / Global debounce: 1 aggregate rebuild / 180s, regardless of modification volume.
     if cache.add("seo_rebuild_aggregates", "1", 180):
         rebuild_seo_aggregates.apply_async(countdown=180)
-
