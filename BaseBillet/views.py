@@ -5034,7 +5034,7 @@ class PanierMVT(viewsets.ViewSet):
 
         # Le panier est vide apres materialisation reussie.
         # / Cart is empty after successful materialization.
-        # panier.clear()
+        panier.clear()
 
         # Redirection selon le cas (payant/gratuit).
         # / Redirect based on case (paid/free).

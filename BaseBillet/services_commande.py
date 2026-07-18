@@ -328,6 +328,12 @@ class CommandeService:
 
                 resource = Resource.objects.get(pk=item.get('resource_uuid'))
 
+                custom_amount = None
+                try:
+                    custom_amount = Decimal(item.get('custom_amount'))
+                except Exception as e:
+                    pass
+
                 is_valid, result, checkout_url = validate_new_booking(
                     resource              = resource,
                     start_datetime        = datetime.fromisoformat(item.get('start_datetime')),
@@ -340,8 +346,9 @@ class CommandeService:
                     create_checkout = False,
                     last_name=resolved_lastname,
                     first_name=resolved_firstname,
-                    custom_amount=Decimal(item.get('custom_amount')),
+                    custom_amount=custom_amount,
                 )
+
                 if not is_valid:
                     raise CommandeServiceError(_("Booking not valide : ") + result)
 
