@@ -927,7 +927,7 @@ class PanierSession:
             'firstname': clean_firstname,
             'lastname': clean_lastname,
             'promotional_code_name': validated_promo_name,
-            'hours' : float(slot_duration_minutes)/60*float(slot_count)
+            'hours' : int(slot_duration_minutes)/60*int(slot_count)
         }
         self._data['items'].append(item)
         self._save()
