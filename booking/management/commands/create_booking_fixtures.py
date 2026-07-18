@@ -288,6 +288,8 @@ class Command(BaseCommand):
 
         resources_data = [
             {
+                "name": "Salle de coworking 3 bureau",
+                "description" : "Une salle lumineuse avec 3 bureau et 6 prises.",
                 "product_name": "Coworking",
                 "calendar": calendrier,
                 "weekly_opening": coworking_opening,
@@ -295,6 +297,8 @@ class Command(BaseCommand):
                 "group": None,
             },
             {
+                "name": "Imprimante Bambu Lab",
+                "description" : "Une imprimante vraiment super et très rapide.",
                 "product_name": "Imprimante 3D",
                 "calendar": calendrier,
                 "weekly_opening": coworking_opening,
@@ -302,6 +306,8 @@ class Command(BaseCommand):
                 "group": None,
             },
             {
+                "name": "Petite salle #1",
+                "description" : "Une salle de 30m² permettant plein de choses.",
                 "product_name": "Petite salle",
                 "calendar": calendrier,
                 "weekly_opening": repet_opening,
@@ -309,6 +315,8 @@ class Command(BaseCommand):
                 "group": groupe_repet,
             },
             {
+                "name": "Grande salle #1",
+                "description" : "Une salle de 100m² au première étage, parfait pour tout type d'atelier",
                 "product_name": "Grande salle",
                 "calendar": calendrier,
                 "weekly_opening": repet_opening,
@@ -321,6 +329,8 @@ class Command(BaseCommand):
             Resource.objects.update_or_create(
                 product=products_by_name[data["product_name"]],
                 defaults={
+                    "name": data["name"],
+                    "description": data["description"],
                     "calendar": data["calendar"],
                     "weekly_opening": data["weekly_opening"],
                     "capacity": data["capacity"],

@@ -628,7 +628,7 @@ def validate_new_booking(resource,
                 pricesold=price_sold,
                 qty=1,
                 amount=dec_to_int(price_sold.prix),
-                status=LigneArticle.VALID,
+                status=LigneArticle.CREATED,
                 payment_method=external_payment_method or PaymentMethod.UNKNOWN,
                 sale_origin=sale_origin,
                 promotional_code=promo_code,
@@ -688,6 +688,7 @@ def get_checkout_stripe(booking):
         success_url="stripe_return/",
         cancel_url="stripe_return/",
         absolute_domain=f"https://{tenant.get_primary_domain()}/event/",
+        accept_sepa=False,
     )
 
     if not new_paiement_stripe.is_valid():
