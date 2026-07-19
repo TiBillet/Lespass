@@ -23,14 +23,18 @@ pytestmark = pytest.mark.django_db
 def test_rendre_markdown_convertit_le_markdown_en_html():
     """Titres, gras et listes Markdown deviennent du HTML — et les titres sont
     DÉMOTÉS d'un niveau (# devient h2) : le h1 appartient à la Page, jamais au
-    contenu markdown (audit SEO 2026-07-05)."""
+    contenu markdown. Chaque titre porte une ancre, cible du sommaire."""
     from pages.templatetags.pages_tags import rendre_markdown
 
     html = rendre_markdown("# Mon titre\n\nDu **gras** et une liste :\n\n- un\n- deux")
     # '# ' -> h2 (démotion), jamais de h1 dans le contenu markdown.
     # / '# ' -> h2 (demotion), never an h1 inside markdown content.
-    assert "<h2>Mon titre</h2>" in html
+    assert '<h2 id="mon-titre">Mon titre</h2>' in html
     assert "<h1>" not in html
+    # L'ancre survit au sanitize : sans elle, le sommaire pointerait dans le
+    # vide. / The anchor survives sanitizing; without it the summary would
+    # point nowhere.
+    assert 'id="mon-titre"' in html
     assert "<strong>gras</strong>" in html
     assert "<li>un</li>" in html
 
@@ -79,7 +83,7 @@ def test_rendre_bloc_markdown_resout_les_references_galerie(tenant, nettoyer_pag
     with tenant_context(tenant):
         page = Page.objects.create(titre="Pytest MD img", slug="pytest-md-img", publie=True)
         bloc = Bloc.objects.create(
-            page=page, type_bloc=Bloc.MARKDOWN, position=1,
+            page=page, type_bloc=Bloc.TEXTE, position=1,
             texte=(
                 "Avant ![La fresque](galerie:1) milieu "
                 "![](galerie:2) après ![oubli](galerie:9)"
@@ -171,14 +175,14 @@ def test_page_blog_rend_markdown_et_sous_pages(tenant, api_client, nettoyer_page
     from pages.models import Bloc, Page
 
     with tenant_context(tenant):
-        # est_blog=True : typage EXPLICITE (le bloc LISTE_SOUS_PAGES est de la
-        # présentation pure et ne type rien). / est_blog=True: EXPLICIT typing
+        # : typage EXPLICITE (le bloc LISTE_SOUS_PAGES est de la
+        # présentation pure et ne type rien). /: EXPLICIT typing
         # (the LISTE_SOUS_PAGES block is presentation only, it types nothing).
         index_blog = Page.objects.create(
-            titre="Pytest Blog", slug="pytest-blog-index", publie=True, est_blog=True
+            titre="Pytest Blog", slug="pytest-blog-index", publie=True
         )
         Bloc.objects.create(
-            page=index_blog, type_bloc=Bloc.LISTE_SOUS_PAGES, position=1,
+            page=index_blog, type_bloc=Bloc.LISTE, source=Bloc.SOUS_PAGES, position=1,
             titre="Derniers articles", nombre_max=6,
         )
         article = Page.objects.create(
@@ -186,7 +190,7 @@ def test_page_blog_rend_markdown_et_sous_pages(tenant, api_client, nettoyer_page
             parent=index_blog, meta_description="Le premier article de test.",
         )
         Bloc.objects.create(
-            page=article, type_bloc=Bloc.MARKDOWN, position=1,
+            page=article, type_bloc=Bloc.TEXTE, position=1,
             texte="## Sous-titre markdown\n\nParagraphe avec du **gras**.",
         )
 
@@ -201,17 +205,17 @@ def test_page_blog_rend_markdown_et_sous_pages(tenant, api_client, nettoyer_page
     # / The article renders MD as HTML — '##' becomes h3 (one-level demotion)
     # and the page's h1 is page.html's fallback title.
     contenu_article = api_client.get("/pytest-article-un/").content.decode()
-    assert "<h3>Sous-titre markdown</h3>" in contenu_article
+    assert "Sous-titre markdown</h3>" in contenu_article
     assert "<strong>gras</strong>" in contenu_article
     assert contenu_article.count("<h1") == 1  # le titre de secours / fallback title
     assert "Pytest Article Un" in contenu_article
 
-    # SEO article (E-E-A-T) : la sous-page d'un index de blog émet un JSON-LD
-    # Article (datePublished + author Organization) et affiche la signature
-    # date/auteur ; l'index lui-même reste une WebPage sans signature.
-    # / Article SEO (E-E-A-T): a blog-index sub-page emits an Article JSON-LD
-    # (datePublished + Organization author) and shows the visible byline;
-    # the index itself stays a WebPage without a byline.
+    # SEO : le moteur ne distingue pas de type « article ». Toute page publique
+    # est une WebPage, sous-page ou non, et aucune ne porte de signature
+    # date/auteur. Le JSON-LD reste du JSON valide.
+    # / SEO: the engine types no "article". Every public page is a WebPage,
+    # sub-page or not, and none carries a date/author byline. The JSON-LD
+    # stays valid JSON.
     import json as json_lib
     import re as re_lib
     types_articles = []
@@ -221,9 +225,140 @@ def test_page_blog_rend_markdown_et_sous_pages(tenant, api_client, nettoyer_page
         donnees = json_lib.loads(bloc_jsonld)  # doit être du JSON valide / must parse
         for noeud in donnees.get("@graph", [donnees]):
             types_articles.append(noeud.get("@type"))
-            if noeud.get("@type") == "Article":
-                assert noeud["datePublished"]
-                assert noeud["author"]["@type"] == "Organization"
-    assert "Article" in types_articles
-    assert 'data-testid="page-signature"' in contenu_article
+    assert "WebPage" in types_articles
+    assert "Article" not in types_articles
+    assert 'data-testid="page-signature"' not in contenu_article
     assert 'data-testid="page-signature"' not in contenu_index
+
+
+# ---------------------------------------------------------------------------
+# Ancres, coloration syntaxique et sommaire de page
+# ---------------------------------------------------------------------------
+def test_le_sanitize_conserve_ancres_et_coloration():
+    """
+    nh3 garde `id` sur les titres et `class` sur le code.
+
+    Ce sont les deux attributs dont depend tout le reste : sans `id`, le
+    sommaire pointe dans le vide ; sans `class`, la coloration syntaxique est
+    invisible. nh3 les retire par defaut, d'ou la liste blanche explicite.
+    """
+    from pages.templatetags.pages_tags import rendre_markdown
+
+    html = rendre_markdown("## Un titre\n\n```python\nx = 1\n```")
+    assert 'id="un-titre"' in html
+    assert 'class="codehilite"' in html
+
+
+def test_demotion_des_titres_resiste_aux_attributs():
+    """
+    La demotion tient meme quand les titres portent une ancre.
+
+    Elle se fait a la construction de l'arbre Markdown (baselevel), pas par
+    remplacement de chaines sur le HTML produit : un `<h2 id="...">` ne
+    correspondrait a aucune chaine `<h2>` et la demotion echouerait en silence.
+    """
+    from pages.templatetags.pages_tags import rendre_markdown
+
+    html = rendre_markdown("# Niveau un\n\n## Niveau deux")
+    assert "<h1" not in html
+    assert "<h2 id=" in html
+    assert "<h3 id=" in html
+
+
+def test_deux_blocs_de_texte_ont_des_ancres_distinctes(tenant, nettoyer_pages):
+    """
+    Deux blocs qui portent le meme titre produisent des ancres differentes.
+
+    Sans prefixe par bloc, les deux titres donneraient le meme `id` et le
+    sommaire n'atteindrait que le premier.
+    """
+    from pages.models import Bloc, Page
+    from pages.templatetags.pages_tags import rendre_bloc_markdown, table_des_matieres
+
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Doublons", slug="pytest-ancres", publie=True)
+        premier = Bloc.objects.create(
+            page=page, type_bloc=Bloc.TEXTE, position=1, texte="## Le meme titre")
+        second = Bloc.objects.create(
+            page=page, type_bloc=Bloc.TEXTE, position=2, texte="## Le meme titre")
+
+        assert rendre_bloc_markdown(premier) != rendre_bloc_markdown(second)
+
+        ancres = [entree["ancre"] for entree in table_des_matieres(page)]
+        assert len(ancres) == 2
+        assert len(set(ancres)) == 2
+
+
+def test_sommaire_vide_quand_la_page_n_a_aucun_titre(tenant, nettoyer_pages):
+    """Une page sans titre ne produit pas de sommaire : le gabarit n'affiche rien."""
+    from pages.models import Bloc, Page
+    from pages.templatetags.pages_tags import table_des_matieres
+
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Sans titre", slug="pytest-sans-titre")
+        Bloc.objects.create(
+            page=page, type_bloc=Bloc.TEXTE, position=1, texte="Juste du texte.")
+        assert table_des_matieres(page) == []
+
+
+def test_references_galerie_survivent_a_une_renumerotation(tenant, nettoyer_pages):  # noqa: F811
+    """
+    Reordonner les images d'un article ne decale pas ses references.
+
+    Le glisser-deposer d'Unfold renumerote le champ `position` a partir de
+    ZERO, alors que les images creees par l'API ou les commandes de seed
+    partent de UN. Si ![legende](galerie:N) se resolvait sur la valeur brute de
+    `position`, un simple reordonnancement ferait glisser d'un cran toutes les
+    images d'un article deja publie — sans aucun message.
+    La resolution se fait donc sur le RANG D'AFFICHAGE : galerie:1 est la
+    premiere image de l'encart, quelle que soit la numerotation en base.
+    """
+    import base64
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from pages.models import Bloc, ImageGalerie, Page
+    from pages.templatetags.pages_tags import rendre_bloc_markdown
+
+    png_minuscule = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGBg"
+        "AAAABQABh6FO1AAAAABJRU5ErkJggg=="
+    )
+
+    with tenant_context(tenant):
+        page = Page.objects.create(
+            titre="Pytest renum", slug="pytest-renum", publie=True
+        )
+        bloc = Bloc.objects.create(
+            page=page, type_bloc=Bloc.TEXTE, position=1,
+            texte="Une ![Premiere](galerie:1) et deux ![Seconde](galerie:2).",
+        )
+        # Numerotation 1-based, celle des commandes de seed et de l'API.
+        premiere = ImageGalerie.objects.create(bloc=bloc, position=1, legende="Une")
+        premiere.image.save(
+            "pytest-renum-1.png", SimpleUploadedFile("r1.png", png_minuscule), save=True
+        )
+        seconde = ImageGalerie.objects.create(bloc=bloc, position=2, legende="Deux")
+        seconde.image.save(
+            "pytest-renum-2.png", SimpleUploadedFile("r2.png", png_minuscule), save=True
+        )
+
+        html_avant = str(rendre_bloc_markdown(bloc))
+        assert html_avant.count("<img") == 2
+        assert "introuvable" not in html_avant
+
+        # Le glisser-deposer d'Unfold : meme ordre, numerotation 0-based.
+        premiere.position = 0
+        premiere.save(update_fields=["position"])
+        seconde.position = 1
+        seconde.save(update_fields=["position"])
+
+        bloc.refresh_from_db()
+        html_apres = str(rendre_bloc_markdown(bloc))
+
+        assert html_apres.count("<img") == 2
+        assert "introuvable" not in html_apres
+        assert html_avant == html_apres
+
+        for illustration in (premiere, seconde):
+            illustration.image.delete(save=False)

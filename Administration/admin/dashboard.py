@@ -108,25 +108,21 @@ def get_sidebar_navigation(request):
                 "collapsible": True,
                 "items": [
                     {
-                        # Edition principale : les blocs (approche inversee).
-                        # / Primary editing: the blocks (inverted approach).
-                        "title": _("Blocs"),
-                        "icon": "dashboard",
-                        "link": reverse_lazy("staff_admin:pages_bloc_changelist"),
-                        "permission": admin_permission,
-                    },
-                    {
-                        "title": _("Pages"),
-                        "icon": "web",
-                        "link": reverse_lazy("staff_admin:pages_page_changelist"),
-                        "permission": admin_permission,
-                    },
-                    {
                         "title": _("Configuration du site"),
                         "icon": "palette",
                         "link": reverse_lazy(
                             "staff_admin:pages_configurationsite_changelist"
                         ),
+                        "permission": admin_permission,
+                    },
+                    {
+                        # Les blocs n'ont pas d'entree propre : on les edite
+                        # depuis l'onglet « Blocs » de la page qui les porte.
+                        # / Blocks get no entry of their own: they are edited
+                        # from the "Blocks" tab of the page carrying them.
+                        "title": _("Pages"),
+                        "icon": "web",
+                        "link": reverse_lazy("staff_admin:pages_page_changelist"),
                         "permission": admin_permission,
                     },
                 ],

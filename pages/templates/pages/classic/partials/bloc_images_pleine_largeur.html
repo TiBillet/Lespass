@@ -1,0 +1,22 @@
+{% load static i18n %}
+{% comment %}
+    BLOC IMAGES / affichage PLEINE_LARGEUR — skin classic.
+    Une photo qui occupe toute la largeur du bloc.
+    / IMAGES block / PLEINE_LARGEUR display — classic skin. A full-width photo.
+
+    LOCALISATION : pages/templates/pages/classic/partials/bloc_images_pleine_largeur.html
+
+    L'image vient du champ plat `image`, pas de la relation ImageGalerie : c'est
+    lui qui porte les grandes variations, jusqu'a 1920 px (`fhd`). Les affichages
+    a plusieurs images (GRILLE, BANDE_LOGOS) utilisent ImageGalerie, dont les
+    variations plafonnent a 480 px — assez pour des vignettes et des logos.
+    / The image comes from the flat `image` field, which carries the large
+    variations (up to 1920 px). Multi-image displays use ImageGalerie instead.
+{% endcomment %}
+<section class="tb-bloc tb-bloc--image" data-testid="bloc-images-pleine-largeur">
+    {% if bloc.image %}
+        <img class="tb-bloc__image-seule"
+             src="{{ bloc.image.fhd.url }}"
+             alt="{{ bloc.titre }}" loading="lazy">
+    {% endif %}
+</section>

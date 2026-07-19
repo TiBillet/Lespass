@@ -1,0 +1,26 @@
+{% load static i18n %}
+{% comment %}
+    BLOC IMAGES / affichage VIGNETTE_TITRE — skin classic.
+    Une petite image centree a sa taille naturelle : une image-titre dessinee,
+    un pictogramme. Ce n'est PAS une photo — d'ou la classe --vignette qui
+    l'empeche de s'etirer sur toute la largeur.
+    / IMAGES block / VIGNETTE_TITRE display — a small image centred at its
+    natural size (a drawn title-image, a pictogram), never stretched.
+
+    LOCALISATION : pages/templates/pages/classic/partials/bloc_images_vignette_titre.html
+
+    Le choix entre photo pleine largeur et vignette vient de `affichage`, et
+    chaque valeur a son propre gabarit. Ne jamais le deduire du contenu du bloc
+    (la presence d'un titre, par exemple) : une photo titree se retrouverait
+    reduite a une vignette.
+    / The full-width / vignette choice comes from `affichage`, one template per
+    value. Never infer it from the block's content (e.g. having a title): a
+    titled photo would be shrunk to a thumbnail.
+{% endcomment %}
+<section class="tb-bloc tb-bloc--image" data-testid="bloc-images-vignette-titre">
+    {% if bloc.image %}
+        <img class="tb-bloc__image-seule tb-bloc__image-seule--vignette"
+             src="{{ bloc.image.fhd.url }}"
+             alt="{{ bloc.titre }}" loading="lazy">
+    {% endif %}
+</section>

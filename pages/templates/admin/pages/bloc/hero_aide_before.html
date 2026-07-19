@@ -1,21 +1,23 @@
 {% load i18n %}
 {% comment %}
-    Note d'aide affichée au-dessus du formulaire Bloc, UNIQUEMENT quand le type
-    sélectionné est HERO. Rappelle que l'image de fond n'est pas réglable ici :
-    c'est l'image générique du lieu (Configuration → Image de fond).
-    / Help note above the Bloc form, ONLY when the selected type is HERO. Reminds
-    that the background image is not set here: it's the venue's generic image
-    (Configuration → Background image).
+    Note d'aide affichée au-dessus du formulaire Bloc, UNIQUEMENT pour une
+    SECTION affichée en BANNIÈRE. Rappelle que l'image de fond n'est pas réglable
+    ici : c'est l'image générique du lieu (Configuration → Image de fond).
+    / Help note above the Bloc form, ONLY for a SECTION displayed as a BANNIERE.
+    Reminds that the background image is not set here: it's the venue's generic
+    image (Configuration → Background image).
 
     LOCALISATION : pages/templates/admin/pages/bloc/hero_aide_before.html
 
-    Visibilité pilotée par Alpine.js via `type_bloc` — la même variable de scope
-    qu'utilise `conditional_fields` d'Unfold. `x-cloak` évite le flash au chargement.
-    / Visibility driven by Alpine.js via `type_bloc` — the same scope variable used
-    by Unfold's `conditional_fields`. `x-cloak` avoids a flash on load.
+    Visibilité pilotée par Alpine.js via `type_bloc` et `affichage` — les mêmes
+    variables de scope qu'utilise `conditional_fields` d'Unfold. `x-cloak` évite
+    le flash au chargement.
+    / Visibility driven by Alpine.js via `type_bloc` and `affichage` — the same
+    scope variables used by Unfold's `conditional_fields`. `x-cloak` avoids a
+    flash on load.
 {% endcomment %}
 <style>[x-cloak] { display: none !important; }</style>
-<div x-show="typeof type_bloc !== 'undefined' && type_bloc === 'HERO'"
+<div x-show="typeof type_bloc !== 'undefined' && type_bloc === 'SECTION' && affichage === 'BANNIERE'"
      x-cloak
      data-testid="hero-aide-image"
      style="display: flex; gap: 12px; align-items: flex-start;
@@ -26,18 +28,19 @@
     <span class="material-symbols-outlined" aria-hidden="true"
           style="color: var(--color-primary-500);">image</span>
     <div style="font-size: 0.875rem; line-height: 1.5;">
-        <strong>{% translate "Image de fond du HERO" %}</strong><br>
+        <strong>{% translate "Image de fond de la bannière" %}</strong><br>
         {% blocktranslate %}Le fond de la bannière est l'image de fond générale du lieu, définie dans « Paramètres » (Image de fond). Elle n'est pas réglable ici : modifiez-la depuis les Paramètres pour qu'elle s'applique partout. Sans image, la bannière affiche le titre et le sous-titre, centrés.{% endblocktranslate %}
     </div>
 </div>
 
 {% comment %}
-    Aide MARKDOWN : syntaxe des images d'illustration (inline « Images » du
-    bloc, référencées dans le texte). Même mécanisme Alpine que l'aide HERO.
-    / MARKDOWN help: illustration-images syntax (block's images inline,
-    referenced in the text). Same Alpine mechanism as the HERO help.
+    Aide du bloc TEXTE : syntaxe des images d'illustration (inline « Images »
+    du bloc, référencées dans le texte). Même mécanisme Alpine que l'aide de la
+    bannière ci-dessus.
+    / TEXTE block help: illustration-images syntax (block's images inline,
+    referenced in the text). Same Alpine mechanism as the banner help above.
 {% endcomment %}
-<div x-show="typeof type_bloc !== 'undefined' && type_bloc === 'MARKDOWN'"
+<div x-show="typeof type_bloc !== 'undefined' && type_bloc === 'TEXTE'"
      x-cloak
      data-testid="markdown-aide-images"
      style="display: flex; gap: 12px; align-items: flex-start;

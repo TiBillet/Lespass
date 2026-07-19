@@ -260,61 +260,19 @@ def get_context(request):
             'icon': 'people-fill'
         })
 
-    # Pages publiees du tenant (app pages), ajoutees a la navigation.
-    # La page d'accueil (est_accueil) pointe vers la racine "/" ; les autres
-    # pages vers /<slug>/. Le tout uniquement si le module pages est actif.
+    # Entrees de navigation issues des pages du tenant. La construction vit
+    # dans l'app `pages` : c'est elle qui connait l'arbre, la regle
+    # d'affichage de chaque racine et la forme des URLs.
     # Import local pour eviter un import circulaire avec pages.views.
-    # / Tenant published pages (pages app), added to the navigation.
-    # The home page (est_accueil) links to the root "/"; the other pages to
-    # /<slug>/. Only if the pages module is active.
-    # Local import to avoid a circular import with pages.views.
+    # / Navigation entries coming from the tenant's pages. The construction
+    # lives in the `pages` app: it knows the tree, each root's display rule and
+    # the shape of the URLs. Local import to avoid a circular import.
     navbar_pages: list = []
     if config.module_pages:
         from pages.models import Page
+        from pages.services import construire_navbar_pages
 
-        pages_publiees = (
-            Page.objects.filter(publie=True)
-            .select_related("parent")
-            .order_by("position", "titre")
-        )
-
-        # Index des sous-pages publiees par parent (uuid) pour les menus
-        # deroulants. EXCEPTION : les enfants d'une page BLOG (est_blog, champ
-        # explicite) ne vont pas dans le dropdown — un blog en accumulerait
-        # des dizaines ; le clic navbar mene directement a l'index qui liste
-        # les articles en cartes.
-        # / Index of published sub-pages by parent (uuid) for the dropdown
-        # menus. EXCEPTION: children of a BLOG page (explicit est_blog field)
-        # do not go in the dropdown — a blog would pile up dozens; the navbar
-        # click goes straight to the index, which lists the articles as cards.
-        enfants_par_parent: dict = {}
-        for page_publiee in pages_publiees:
-            if page_publiee.parent_id and not page_publiee.parent.est_blog:
-                enfants_par_parent.setdefault(page_publiee.parent_id, []).append(page_publiee)
-
-        for page_publiee in pages_publiees:
-            # Les sous-pages sont rendues DANS le dropdown de leur parent, pas a plat.
-            # / Sub-pages are rendered IN their parent's dropdown, not flat.
-            if page_publiee.parent_id:
-                continue
-            url_page = "/" if page_publiee.est_accueil else f"/{page_publiee.slug}/"
-            navbar_pages.append({
-                'name': f'page-{page_publiee.slug}',
-                'url': url_page,
-                'label': page_publiee.titre,
-                'icon': 'house-door' if page_publiee.est_accueil else 'file-earmark-text',
-                # Sous-pages (menu deroulant) : liste vide si la page n'en a pas.
-                # / Sub-pages (dropdown menu): empty list if the page has none.
-                'children': [
-                    {
-                        'name': f'page-{enfant.slug}',
-                        'url': f'/{enfant.slug}/',
-                        'label': enfant.titre,
-                        'icon': 'file-earmark-text',
-                    }
-                    for enfant in enfants_par_parent.get(page_publiee.pk, [])
-                ],
-            })
+        navbar_pages = construire_navbar_pages(Page)
 
     # Fin de menu, toujours dans cet ordre : agenda puis adhesions
     # (le bouton contact est dans le gabarit navbar, toujours apres eux).
@@ -1846,7 +1804,7 @@ def index(request):
 # NOTE nettoyage 2026-07-05 : les vues infos_pratiques() et le_faire_festival()
 # ont été SUPPRIMÉES. Leurs routes avaient déjà été retirées de BaseBillet/urls.py :
 # ces contenus sont des pages CMS de l'app pages (seedées par
-# charger_demo_faire_festival), servies par le catch-all /<slug>/.
+# charger_site_faire_festival), servies par le catch-all /<slug>/.
 # / Cleanup note: the infos_pratiques() and le_faire_festival() views were
 # REMOVED. Their routes were already gone from BaseBillet/urls.py: these
 # contents are pages-app CMS pages served by the /<slug>/ catch-all.

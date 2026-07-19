@@ -3,13 +3,10 @@
 
 {% comment %}
     Gabarit de page — skin faire_festival.
-    Conteneur de la home faire_festival (conteneur-principal plein-ecran, motif de fond).
-    3 types de groupes (cf. pages.services.grouper_blocs) :
-      - "section_video" : video a gauche / texte + cartes + bouton a droite (section 2).
-      - "grille" : ligne de cartes Bootstrap.
-      - "solo" : bloc seul.
-    / Page template — faire_festival skin. Handles the 3 group types: section_video
-    (video left / text + cards + button right), grille (card row), solo.
+    Conteneur de la home (conteneur-principal plein-ecran, motif de fond), puis
+    la suite ordonnee des blocs, chacun rendu par son propre gabarit.
+    / Page template — faire_festival skin. Full-screen patterned container, then
+    the ordered sequence of blocks, each rendered by its own template.
 
     LOCALISATION : pages/templates/pages/faire_festival/page.html
 {% endcomment %}
@@ -33,18 +30,25 @@
 
 {% block main %}
     {# CSS commun des blocs (.tb-bloc*) : ce skin ne fournit un gabarit que pour #}
-    {# 11 des 19 types de blocs ; les 8 autres retombent sur le socle classic, #}
-    {# dont le balisage est en .tb-bloc*. Sans cette feuille, ils s'affichent #}
-    {# SANS AUCUN style (logos geants, images empilees, listes nues). #}
+    {# une partie des couples (type, affichage) ; les autres retombent sur le #}
+    {# socle classic, dont le balisage est en .tb-bloc*. Sans cette feuille, #}
+    {# ils s'affichent SANS AUCUN style (logos geants, listes nues). #}
     {# Charge DANS le main, pas dans extra_meta : le squelette headless #}
     {# (reponses HTMX) n'a pas de <head>, un asset en extra_meta n'arriverait #}
     {# donc jamais lors d'une navigation HTMX. Un <link> dans le body est valide #}
     {# en HTML5 et le navigateur deduplique via son cache. #}
-    {# / Common blocks CSS (.tb-bloc*): this skin only styles 11 of the 19 block #}
-    {# types; the other 8 fall back to the classic base, whose markup uses #}
-    {# .tb-bloc*. Without this sheet they render UNSTYLED. Loaded INSIDE main, #}
+    {# / Common blocks CSS (.tb-bloc*): this skin only styles some of the #}
+    {# (type, affichage) pairs; the others fall back to the classic base, whose #}
+    {# markup uses .tb-bloc*. Without this sheet they render UNSTYLED. #}
     {# not in extra_meta: the headless skeleton (HTMX responses) has no <head>. #}
     <link rel="stylesheet" href="{% static 'pages/css/tb-blocs.css' %}">
+    {# Sommaire vivant : marque l'entree de la section en cours de lecture. #}
+    {# Charge ICI et non dans extra_meta, pour la meme raison que le CSS #}
+    {# ci-dessus : une reponse HTMX n'a pas de <head>. `defer` laisse la page #}
+    {# s'afficher d'abord — le script n'est utile qu'une fois le texte pose. #}
+    {# / Live table of contents. Loaded HERE, not in extra_meta, for the same #}
+    {# reason as the CSS above: an HTMX response has no <head>. #}
+    <script src="{% static 'pages/js/sommaire_actif.js' %}" defer></script>
     {# tb-jetons (et NON tb-page) : porte les jetons des blocs du socle #}
     {# (gouttiere, largeur max, rayons...) sans son habillage, qui imposerait #}
     {# un fond blanc et un texte noir par-dessus le motif et l'identite du #}
@@ -52,8 +56,52 @@
     {# fallback se collent aux bords. #}
     {# / tb-jetons (NOT tb-page): carries the base blocks' tokens without its #}
     {# styling, which would force a white background over the skin's identity. #}
-    <div class="container-fluid conteneur-principal plein-ecran tb-jetons" data-testid="page-{{ page_courante.slug }}">
-        {# h1 de secours quand aucun bloc HERO ne le fournit (SEO + a11y), #}
+    <div class="container-fluid conteneur-principal plein-ecran tb-jetons tb-flux" data-testid="page-{{ page_courante.slug }}">
+        {% comment %}
+Menu lateral de la rubrique, place EN TETE du conteneur : la grille range
+ses enfants dans l'ordre du DOM, donc un menu declare plus bas se
+retrouverait a droite du contenu. Il n'est rendu que quand la racine de
+l'arbre courant est affichee en menu lateral — le service renvoie un dict
+vide sinon, et rien ne s'affiche.
+/ Section side menu, placed FIRST in the container: the grid lays its
+children out in DOM order, so a menu declared further down would end up to
+the right of the content. Only rendered when the current tree's root is
+displayed as a side menu.
+{% endcomment %}
+        {% if menu_lateral.entrees %}
+            {% include "pages/classic/partials/menu_lateral.html" %}
+        {% endif %}
+        {% comment %}
+Fil d'Ariane visible. La chaine vient du tag `fil_ariane`, la meme que
+celle du JSON-LD : l'affichage et les donnees structurees ne peuvent pas
+raconter deux histoires differentes. Le tag rend une liste vide pour une
+page de premier niveau, donc rien ne s'affiche.
+
+IL PRECEDE LE TITRE, dans le DOM comme a l'ecran : il situe la page avant
+de la nommer, et un lecteur d'ecran suit alors le meme ordre que l'oeil.
+Le placer apres le titre et le remonter en CSS ferait diverger les deux.
+/ Visible breadcrumb. The chain comes from the `fil_ariane` tag, the same
+one the JSON-LD uses, so display and structured data cannot tell two
+different stories. The tag returns an empty list for a top-level page.
+
+IT PRECEDES THE TITLE, in the DOM as on screen: it locates the page before
+naming it, so a screen reader follows the same order as the eye. Placing it
+after the title and lifting it with CSS would make the two diverge.
+{% endcomment %}
+        {% fil_ariane page_courante as maillons %}
+        {% if maillons %}
+            <nav class="tb-fil-ariane" aria-label="{% translate 'Fil d’Ariane' %}">
+                {% for maillon in maillons %}
+                    {% if maillon.est_la_page_courante %}
+                        <span aria-current="page">{{ maillon.titre }}</span>
+                    {% else %}
+                        <a href="{{ maillon.url }}">{{ maillon.titre }}</a>
+                        <span aria-hidden="true">›</span>
+                    {% endif %}
+                {% endfor %}
+            </nav>
+        {% endif %}
+        {# h1 de secours quand aucune banniere ne le fournit (SEO + a11y), #}
         {# et fil d'Ariane des sous-pages — alignés sur le skin classic. #}
         {# / Fallback h1 when no HERO block provides it, and sub-page #}
         {# breadcrumb — aligned with the classic skin. #}
@@ -62,133 +110,45 @@
                 <h1 class="texte-bleu police-titre" data-testid="page-titre">{{ page_courante.titre }}</h1>
             </div>
         {% endif %}
-        {# Ligne date/auteur VISIBLE sur les articles (E-E-A-T) — même règle #}
-        {# que le skin classic. / VISIBLE date/author byline on articles #}
-        {# (E-E-A-T) — same rule as the classic skin. #}
-        {% if page_est_un_article %}
-            <p class="container texte-bleu police-mono small" data-testid="page-signature">
-                {% blocktranslate with date_publication=page_courante.created_at|date:"j F Y" organisation=config.organisation %}Publié le {{ date_publication }} par {{ organisation }}{% endblocktranslate %}
-                {% if page_courante.updated_at|date:"Yj" != page_courante.created_at|date:"Yj" %}
-                    · {% blocktranslate with date_maj=page_courante.updated_at|date:"j F Y" %}mis à jour le {{ date_maj }}{% endblocktranslate %}
-                {% endif %}
-            </p>
+        {% comment %}
+ Sommaire de la page, construit depuis les titres de ses blocs de
+           texte. Rendu dans un <details> replie : il n'occupe donc pas l'ecran
+           sur une page courte, et il ne demande ni JavaScript ni colonne
+           supplementaire. Le tag renvoie une liste vide quand la page n'a aucun
+           titre : rien ne s'affiche alors.
+           / Page table of contents, built from its text blocks' headings.
+           Rendered in a collapsed <details>: it takes no room on a short page
+           and needs neither JavaScript nor an extra column. The tag returns an
+           empty list when the page has no heading, so nothing shows.
+{% endcomment %}
+        {% table_des_matieres page_courante as sommaire %}
+        {% if sommaire %}
+            <details class="tb-sommaire" data-testid="page-sommaire">
+                <summary class="tb-sommaire__titre">{% translate "Sommaire" %}</summary>
+                <ul class="tb-sommaire__liste">
+                    {% for entree in sommaire %}
+                        <li class="tb-sommaire__entree tb-sommaire__entree--niveau-{{ entree.niveau }}">
+                            <a href="#{{ entree.ancre }}">{{ entree.titre }}</a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </details>
         {% endif %}
-        {% if page_courante.parent %}
-            <nav class="container texte-bleu police-mono small pt-2" aria-label="{% translate 'Fil d’Ariane' %}">
-                <a class="texte-bleu" href="/">{% translate "Accueil" %}</a>
-                <span aria-hidden="true">›</span>
-                {# Maillon parent seulement s'il est PUBLIÉ. / Parent crumb only if PUBLISHED. #}
-                {% if page_courante.parent.publie %}
-                    <a class="texte-bleu" href="/{{ page_courante.parent.slug }}/">{{ page_courante.parent.titre }}</a>
-                    <span aria-hidden="true">›</span>
-                {% endif %}
-                <span aria-current="page">{{ page_courante.titre }}</span>
-            </nav>
-        {% endif %}
-        {% for groupe in groupes_blocs %}
-
-            {% if groupe.type == "grille" %}
-                {# Ligne de cartes centree. / Centered card row. #}
-                <section class="container py-4">
-                    <div class="row g-4 justify-content-center text-center">
-                        {% for bloc in groupe.blocs %}
-                            {% templates_bloc bloc as gabarits_bloc %}
-                            {% include gabarits_bloc %}
-                        {% endfor %}
-                    </div>
-                </section>
-
-            {% elif groupe.type == "faq" %}
-                {# FAQ : plusieurs questions a la suite reparties en 2 colonnes (CSS columns). #}
-                {# / FAQ: consecutive questions split into 2 columns (CSS columns). #}
-                <section class="container conteneur-principal pb-5" data-testid="faq-groupe">
-                    <style>.faq-colonnes{column-count:2;column-gap:3rem}.faq-colonnes .faq-item{break-inside:avoid}@media(max-width:768px){.faq-colonnes{column-count:1}}</style>
-                    <div class="faq-colonnes">
-                        {% for bloc in groupe.blocs %}
-                            {% templates_bloc bloc as gabarits_bloc %}
-                            {% include gabarits_bloc %}
-                        {% endfor %}
-                    </div>
-                </section>
-
-            {% elif groupe.type == "section_carte" %}
-                {# Infos (gauche) + carte Leaflet (droite). / Info (left) + Leaflet map (right). #}
-                <section class="container-fluid py-5 conteneur-principal" data-testid="section-carte">
-                    <div class="container">
-                        <div class="row g-5">
-                            <div class="col-12 col-lg-6">
-                                {% with bloc=groupe.info %}
-                                    {% templates_bloc bloc as gabarits_bloc %}
-                                    {% include gabarits_bloc %}
-                                {% endwith %}
-                            </div>
-                            <div class="col-12 col-lg-6">
-                                {% with bloc=groupe.carte %}
-                                    {% templates_bloc bloc as gabarits_bloc %}
-                                    {% include gabarits_bloc %}
-                                {% endwith %}
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-            {% elif groupe.type == "section_video" %}
-                {# Section 2 : video (gauche) | titre + texte + cartes + bouton (droite). #}
-                {# / Section 2: video (left) | title + text + cards + button (right). #}
-                {% with video=groupe.video %}
-                    <section class="container py-5">
-                        <div class="row">
-                            {% if video.video %}
-                                <div class="col-md-5 mb-4 mb-md-0 bordure-epaisse">
-                                    <div class="h-100 d-flex align-items-center justify-content-center p-2">
-                                        <video autoplay loop muted playsinline webkit-playsinline class="w-100"
-                                               style="max-height: 380px; object-fit: cover; background-color: var(--couleur-jaune-principal);"
-                                               src="{{ video.video.url }}"></video>
-                                    </div>
-                                </div>
-                            {% endif %}
-                            <div class="col-md-7 ps-md-5">
-                                <div class="mb-4">
-                                    {% if video.titre %}
-                                        <div class="d-inline-block bordure-epaisse bg-white px-4 py-2 mb-3 rounded-pill">
-                                            <h2 class="m-0 texte-bleu police-mono fw-bold" style="font-size: 1.17em;">{{ video.titre }}</h2>
-                                        </div>
-                                    {% endif %}
-                                    {% if video.texte %}
-                                        <div class="texte-bleu police-mono small lh-sm">{{ video.texte|safe }}</div>
-                                    {% endif %}
-                                </div>
-                                {% if groupe.cartes %}
-                                    <div class="row g-3 justify-content-center text-center">
-                                        {% for bloc in groupe.cartes %}
-                                            {% templates_bloc bloc as gabarits_bloc %}
-                                            {% include gabarits_bloc %}
-                                        {% endfor %}
-                                    </div>
-                                {% endif %}
-                                {% if groupe.cta %}
-                                    <div class="mt-4">
-                                        <a href="{{ groupe.cta.bouton_url|default:'#' }}"
-                                           class="btn bouton-action police-titre pe-3"
-                                           style="max-width: min(90vw, 300px); width: 100%; padding: 0.5rem 0.5rem; font-size: 0.7rem;"
-                                           {% if groupe.cta.bouton_url %}hx-get="{{ groupe.cta.bouton_url }}" hx-target="body" hx-push-url="true"{% endif %}>
-                                            {{ groupe.cta.bouton_label }}
-                                        </a>
-                                    </div>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </section>
-                {% endwith %}
-
-            {% else %}
-                {% with bloc=groupe.bloc %}
-                    {% templates_bloc bloc as gabarits_bloc %}
-                    {% include gabarits_bloc %}
-                {% endwith %}
-            {% endif %}
-
+        {% comment %}
+ Les blocs sont parcourus dans l'ordre, un par un : CHAQUE BLOC SE
+           REND SEUL. Ce skin empile comme le socle classic ; la mise en page
+           cote a cote est portee par la grille .tb-flux (voir tb-blocs.css).
+           Ne jamais reintroduire ici de regroupement calcule en Python : la
+           mise en page dependrait du voisinage des blocs.
+           / Blocks are iterated in order, one by one: EACH BLOCK RENDERS ALONE.
+           This skin stacks like the classic base; side-by-side layout comes
+           from the .tb-flux grid. Never reintroduce Python-side grouping. 
+{% endcomment %}
+        {% for bloc in blocs %}
+            {% templates_bloc bloc as gabarits_bloc %}
+            {% include gabarits_bloc %}
         {% endfor %}
+        {% include "pages/classic/partials/navigation_voisines.html" %}
     </div>
 {% endblock %}
 

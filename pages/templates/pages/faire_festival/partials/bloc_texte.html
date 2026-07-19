@@ -1,0 +1,33 @@
+{% load i18n pages_tags %}
+{% comment %}
+    BLOC TEXTE — skin faire_festival. Titre rendu en badge de section
+    (badge-festival, comme les labels de la page infos pratiques) + texte mono bleu.
+    / TEXTE block — faire_festival skin. Title rendered as a section badge
+    (badge-festival, like the infos pratiques labels) + blue mono text.
+
+    LOCALISATION : pages/templates/pages/faire_festival/partials/bloc_texte.html
+
+    Le rendu passe par `rendre_bloc_markdown` et NON par `rendre_markdown` : le
+    premier prend le bloc entier, donc il resout les references d'images
+    ![legende](galerie:N) et prefixe les ancres de titres avec l'identifiant du
+    bloc. Avec le second, les images sortiraient sans source (nh3 retire un
+    `src="galerie:1"`, schema inconnu) et deux blocs partageant un titre
+    auraient la meme ancre — le sommaire de page pointerait a cote.
+    / Rendering goes through `rendre_bloc_markdown`, NOT `rendre_markdown`: the
+    former takes the whole block, so it resolves ![caption](galerie:N) image
+    references and prefixes heading anchors with the block id. With the latter,
+    images render sourceless and anchors collide between blocks.
+
+    La classe `tb-markdown` porte la coloration syntaxique et la marge de
+    defilement des ancres, definies dans tb-blocs.css.
+    / The `tb-markdown` class carries syntax highlighting and the anchors'
+    scroll margin, both defined in tb-blocs.css.
+{% endcomment %}
+<section class="container py-4" data-testid="bloc-texte">
+    {% if bloc.titre %}
+        <h2 class="badge-festival horaire-texte">{{ bloc.titre }}</h2>
+    {% endif %}
+    {% if bloc.texte %}
+        <div class="texte-bleu police-mono lh-sm tb-markdown">{{ bloc|rendre_bloc_markdown }}</div>
+    {% endif %}
+</section>

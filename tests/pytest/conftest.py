@@ -1,5 +1,6 @@
 import os
 import subprocess
+import sys
 import pytest
 
 try:
@@ -67,8 +68,14 @@ def _inject_cli_env(request):
             # On est dans le conteneur — 'docker' n'existe pas ici.
             # / We're inside the container — 'docker' binary doesn't exist here.
             try:
+                # sys.executable = l'interpreteur qui fait tourner pytest, donc
+                # celui du virtualenv. `python` nu pointerait sur le Python
+                # systeme du conteneur, qui n'a pas Django installe.
+                # / sys.executable = the interpreter running pytest, i.e. the
+                # virtualenv's. A bare `python` would resolve to the container's
+                # system Python, which has no Django installed.
                 result = subprocess.run(
-                    ["python", "manage.py", "test_api_key"],
+                    [sys.executable, "manage.py", "test_api_key"],
                     capture_output=True,
                     text=True,
                     cwd="/DjangoFiles",

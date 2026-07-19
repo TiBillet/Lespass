@@ -42,29 +42,32 @@ def rendre_page(request, page):
     # On range donc l'objet Page sous une autre cle.
     # / WARNING: get_context already sets context["page"] = pagination number.
     # So we store the Page object under another key.
-    from pages.services import grouper_blocs
 
-    blocs = page.blocs.all()
+    # prefetch_related : sans lui, chaque bloc a images (galerie, bande de
+    # logos) declenche sa propre requete au moment du rendu.
+    # / prefetch_related: without it, every image-bearing block fires its own
+    # query at render time.
+    blocs = page.blocs.all().prefetch_related("images_galerie")
     context["page_courante"] = page
     context["blocs"] = blocs
-    # Le <h1> d'une page CMS est porté par le bloc HERO. S'il n'y en a pas,
-    # page.html affiche un h1 de secours avec le titre de la page (audit SEO
-    # 2026-07-05 : 0 h1 sur toute page sans HERO — blog, pages simples).
-    # / A CMS page's <h1> comes from the HERO block. Without one, page.html
-    # shows a fallback h1 with the page title (SEO audit: 0 h1 otherwise).
-    context["page_a_un_bloc_hero"] = any(b.type_bloc == "HERO" for b in blocs)
-    # Une page est un ARTICLE si son parent est une page BLOG (champ explicite
-    # est_blog — le bloc LISTE_SOUS_PAGES est de la pure présentation et ne
-    # type rien, décision mainteneur 2026-07-05). Les articles affichent une
-    # ligne date/auteur (E-E-A-T) et émettent un JSON-LD Article.
-    # / A page is an ARTICLE when its parent is a BLOG page (explicit est_blog
-    # field — the LISTE_SOUS_PAGES block is purely presentational and types
-    # nothing). Articles show a visible date/author byline (E-E-A-T) and emit
-    # an Article JSON-LD.
-    context["page_est_un_article"] = bool(page.parent_id and page.parent.est_blog)
-    # Groupes pour le rendu : les CARTE consecutives sont regroupees en grille.
-    # / Render groups: consecutive CARTE blocks are bundled into a grid.
-    context["groupes_blocs"] = grouper_blocs(blocs)
+    # Le <h1> est porte par une SECTION affichee en banniere. Sans elle,
+    # page.html sort un h1 de secours avec le titre de la page.
+    # / The <h1> comes from a SECTION displayed as a banner. Without one,
+    # page.html falls back to an h1 holding the page title.
+    context["page_a_un_bloc_hero"] = any(
+        b.type_bloc == "SECTION" and b.affichage == "BANNIERE" for b in blocs
+    )
+    # Menu lateral et navigation precedent/suivant : ils n'existent que pour
+    # une page dont la racine est affichee en menu lateral. Le service rend un
+    # dict vide sinon, et le gabarit n'affiche alors rien.
+    # Ce calcul ne vit PAS dans get_context : celui-ci tourne sur toutes les
+    # vues du site (agenda, adhesions...), qui n'ont pas d'arbre de pages.
+    # / Side menu and previous/next navigation: they only exist for a page
+    # whose root is displayed as a side menu. This does NOT live in
+    # get_context, which runs on every view of the site.
+    from pages.services import construire_menu_lateral
+
+    context["menu_lateral"] = construire_menu_lateral(Page, page)
     context["skin_courant"] = skin
 
     # Gabarit de page du skin courant, fallback "classic" (premier trouve).

@@ -1,9 +1,9 @@
 """
 Construit une LANDING PAGE UNIQUE de démonstration pour le tenant `lespass` via le
-moteur pages (skin classic). Une seule page (l'accueil) qui enchaîne LES 14 TYPES
-DE BLOCS dans un flow cohérent — une grande page vitrine.
+moteur pages (skin classic). Une seule page (l'accueil) qui enchaîne les 7 types
+de blocs et leurs affichages dans un flow cohérent — une grande page vitrine.
 / Builds a SINGLE demo LANDING PAGE for the `lespass` tenant via the pages engine
-(classic skin). One page (the home) chaining ALL 14 BLOCK TYPES in a coherent flow.
+(classic skin). One page (the home) chaining the 7 block types and their displays.
 
 LOCALISATION : pages/management/commands/charger_site_lespass.py
 
@@ -14,7 +14,7 @@ après le seed du tenant lespass (config + events). Peut aussi être lancé seul
     python manage.py charger_site_lespass --no-skin     # ne force pas le skin
 
 Les images sont les belles images génériques du projet (BaseBillet/static/images/
-404-N.jpg) UPLOADÉES dans le média du tenant. Le bloc EVENEMENTS est dynamique
+404-N.jpg) UPLOADÉES dans le média du tenant. Le bloc LISTE est dynamique
 (vrais events de lespass). La vidéo EMBED est une vidéo PeerTube (videos-libr.es).
 """
 
@@ -64,6 +64,9 @@ class Command(BaseCommand):
             self._construire_landing()
             self._construire_sous_menu()
             self._construire_blog()
+            # En dernier : ce bloc pointe vers une page construite juste au-dessus.
+            # / Last: this block points at a page built just above.
+            self._ajouter_les_derniers_articles_a_l_accueil()
             if options["skin"]:
                 self._forcer_skin()
         self.stdout.write(
@@ -80,6 +83,31 @@ class Command(BaseCommand):
         config.skin = "reunion"  # = gabarits classic
         config.save()
         self.stdout.write("  → skin forcé à 'reunion' (classic).")
+
+    def _autoriser_hote_embed(self, hote):
+        """
+        Ajoute un hôte à la liste blanche GLOBALE des iframes (config ROOT).
+        / Adds a host to the GLOBAL iframe whitelist (ROOT config).
+
+        La liste est partagée par tous les tenants (RootConfiguration vit dans
+        le schéma public) : on ajoute une ligne sans jamais écraser les hôtes
+        déjà autorisés par le mainteneur.
+        / The list is shared across tenants, so we append a line and never
+        overwrite hosts the maintainer already allowed.
+        """
+        from django_tenants.utils import schema_context
+
+        from root_billet.models import RootConfiguration
+
+        with schema_context("public"):
+            config = RootConfiguration.get_solo()
+            hotes = [ligne.strip() for ligne in config.domaines_embed_autorises.splitlines() if ligne.strip()]
+            if hote in hotes:
+                return
+            hotes.append(hote)
+            config.domaines_embed_autorises = "\n".join(hotes)
+            config.save()
+            self.stdout.write(f"  → hôte iframe autorisé : {hote}")
 
     def _poser_fichier(self, obj, champ, chemin_static):
         chemin = finders.find(chemin_static)
@@ -127,17 +155,16 @@ class Command(BaseCommand):
             image_partage="404-6.jpg",
         )
         Bloc.objects.create(
-            page=a_propos, type_bloc=Bloc.PARAGRAPHE, position=1,
+            page=a_propos, type_bloc=Bloc.TEXTE, position=1,
             titre="À propos de Lespass",
             texte=(
-                "<p>Lespass est un lieu culturel géré en coopérative d'usage : "
+                "Lespass est un lieu culturel géré en coopérative d'usage : "
                 "adhérent·e·s, bénévoles et salarié·e·s décident ensemble de la "
-                "programmation, des tarifs et des grands choix du lieu.</p>"
+                "programmation, des tarifs et des grands choix du lieu.\n"
             ),
         )
         b = Bloc.objects.create(
-            page=a_propos, type_bloc=Bloc.IMAGE_TEXTE, position=2,
-            image_position=Bloc.GAUCHE, titre="Une gouvernance partagée",
+            page=a_propos, type_bloc=Bloc.SECTION, affichage=Bloc.TEXTE_IMAGE_GAUCHE, position=2, titre="Une gouvernance partagée",
             texte=(
                 "<p>Une personne, une voix : chaque adhérent·e peut prendre part aux "
                 "assemblées et aux commissions. La coopérative appartient à celles et "
@@ -146,7 +173,7 @@ class Command(BaseCommand):
         )
         self._poser_fichier(b, "image", IMG + "404-7.jpg")
         Bloc.objects.create(
-            page=a_propos, type_bloc=Bloc.CTA, position=3,
+            page=a_propos, type_bloc=Bloc.SECTION, affichage=Bloc.APPEL_ACTION, position=3,
             titre="Envie de participer ?",
             sous_titre="Rejoignez la coopérative et prenez part aux décisions.",
             bouton_label="Adhérer", bouton_url="/memberships/",
@@ -162,37 +189,35 @@ class Command(BaseCommand):
         )
         # 1 — Image en en-tête.
         b = Bloc.objects.create(
-            page=histoire, type_bloc=Bloc.IMAGE, position=1, titre="Notre histoire",
+            page=histoire, type_bloc=Bloc.IMAGES, affichage=Bloc.PLEINE_LARGEUR, position=1, titre="Notre histoire",
         )
         self._poser_fichier(b, "image", IMG + "404-8.jpg")
         # 2 — Texte brut.
         Bloc.objects.create(
-            page=histoire, type_bloc=Bloc.PARAGRAPHE, position=2,
+            page=histoire, type_bloc=Bloc.TEXTE, position=2,
             titre="D'une idée à un lieu",
             texte=(
-                "<p>Tout a commencé autour d'une table, avec l'envie d'un groupe "
+                "Tout a commencé autour d'une table, avec l'envie d'un groupe "
                 "d'habitant·e·s : disposer d'un lieu à soi pour se réunir, créer et "
-                "faire vivre la culture localement.</p>"
-                "<p>De réunions en chantiers participatifs, le projet a grandi jusqu'à "
+                "faire vivre la culture localement.\n\n"
+                "De réunions en chantiers participatifs, le projet a grandi jusqu'à "
                 "ouvrir ses portes : une salle, des ateliers, un café associatif — et "
-                "une coopérative pour en prendre soin ensemble.</p>"
+                "une coopérative pour en prendre soin ensemble.\n"
             ),
         )
         # 3 — Vidéo sous le texte.
         b = Bloc.objects.create(
-            page=histoire, type_bloc=Bloc.VIDEO_TEXTE, position=3,
+            page=histoire, type_bloc=Bloc.SECTION, affichage=Bloc.TEXTE_VIDEO, position=3,
             titre="Le lieu en mouvement",
             texte="<p>Quelques images de la vie quotidienne du lieu.</p>",
         )
         self._poser_fichier(b, "video", VIDEO)
 
     # ------------------------------------------------------------------
-    # Blog de démo : page « Journal » (bloc LISTE_SOUS_PAGES) + 2 articles
-    # (blocs MARKDOWN). Vitrine du duo de blocs du CHANTIER-09 : le parent est
-    # l'index du blog, les sous-pages sont les articles.
-    # / Demo blog: "Journal" page (LISTE_SOUS_PAGES block) + 2 articles
-    # (MARKDOWN blocks). Showcases the CHANTIER-09 block duo: the parent is
-    # the blog index, the sub-pages are the articles.
+    # Journal de démo : une page index portant un bloc LISTE sur ses
+    # sous-pages, et 2 sous-pages portant chacune un bloc TEXTE (l'article).
+    # / Demo journal: an index page carrying a LISTE block over its sub-pages,
+    # and 2 sub-pages each carrying a TEXTE block (the article).
     # ------------------------------------------------------------------
     def _construire_blog(self):
         from pages.models import Bloc
@@ -204,19 +229,14 @@ class Command(BaseCommand):
             "annonces de la coopérative, publiés au fil de l'eau.",
             image_partage="404-2.jpg",
         )
-        # Typage explicite : les sous-pages du journal sont des ARTICLES
-        # (signature date/auteur, hors dropdown navbar).
-        # / Explicit typing: the journal's sub-pages are ARTICLES.
-        journal.est_blog = True
-        journal.save()
         Bloc.objects.create(
-            page=journal, type_bloc=Bloc.PARAGRAPHE, position=1,
+            page=journal, type_bloc=Bloc.TEXTE, position=1,
             titre="",
-            texte="<p>Ce que l'on fabrique, rate et réussit — raconté au fil "
-                  "de l'eau par l'équipe et les bénévoles.</p>",
+            texte="Ce que l'on fabrique, rate et réussit — raconté au fil "
+                  "de l'eau par l'équipe et les bénévoles.\n",
         )
         Bloc.objects.create(
-            page=journal, type_bloc=Bloc.LISTE_SOUS_PAGES, position=2,
+            page=journal, type_bloc=Bloc.LISTE, source=Bloc.SOUS_PAGES, position=2,
             titre="Derniers articles", nombre_max=6,
         )
 
@@ -229,7 +249,7 @@ class Command(BaseCommand):
             parent=journal, image_partage="404-3.jpg",
         )
         bloc_fresque = Bloc.objects.create(
-            page=article_fresque, type_bloc=Bloc.MARKDOWN, position=1,
+            page=article_fresque, type_bloc=Bloc.TEXTE, position=1,
             texte=(
                 "Trois week-ends, quarante paires de mains, et un mur de vingt "
                 "mètres qui ne ressemble plus à rien de ce qu'il était.\n\n"
@@ -269,7 +289,7 @@ class Command(BaseCommand):
             parent=journal, image_partage="404-4.jpg",
         )
         Bloc.objects.create(
-            page=article_repair, type_bloc=Bloc.MARKDOWN, position=1,
+            page=article_repair, type_bloc=Bloc.TEXTE, position=1,
             texte=(
                 "Un samedi par mois depuis un an, l'atelier se remplit de "
                 "grille-pain muets, de vélos qui grincent et de lampes "
@@ -291,6 +311,50 @@ class Command(BaseCommand):
                 "spécialisé d'un mois sur l'autre.\n\n"
                 "Prochaine session : voir [l'agenda](/event/)."
             ),
+        )
+
+    def _ajouter_les_derniers_articles_a_l_accueil(self):
+        """
+        Pose sur l'accueil un bloc LISTE qui affiche les articles du journal.
+        / Adds a LISTE block on the home page showing the journal's articles.
+
+        Ce bloc demontre le champ `page_source` : une LISTE de sous-pages
+        affiche par defaut les enfants de SA page, mais l'accueil n'en a pas.
+        En pointant le journal, l'accueil relaie ses articles.
+        Il se pose apres coup, parce que la page journal n'existe pas encore au
+        moment ou la landing est construite.
+        / This block demonstrates the `page_source` field: a sub-pages LISTE
+        shows its own page's children by default, but the home page has none.
+        Pointing at the journal makes the home page relay its articles. It is
+        added afterwards because the journal does not exist yet when the landing
+        is built.
+        """
+        from pages.models import Bloc, Page
+
+        accueil = Page.objects.filter(est_accueil=True).first()
+        journal = Page.objects.filter(slug="journal").first()
+        if accueil is None or journal is None:
+            return
+
+        # Le bloc s'insere AVANT le dernier bloc de la page, qui est l'appel a
+        # l'action final : une vitrine se termine sur son invitation, pas sur
+        # une liste d'articles. On decale donc ce dernier bloc d'un cran.
+        # / The block goes in BEFORE the page's last block, the final call to
+        # action: a showcase ends on its invitation, not on a list of articles.
+        # So we push that last block one step down.
+        dernier = accueil.blocs.order_by("-position").first()
+        position_du_journal = dernier.position
+        dernier.position += 1
+        dernier.save(update_fields=["position"])
+
+        Bloc.objects.create(
+            page=accueil,
+            position=position_du_journal,
+            type_bloc=Bloc.LISTE,
+            source=Bloc.SOUS_PAGES,
+            page_source=journal,
+            titre="Le journal du lieu",
+            nombre_max=3,
         )
 
     # ------------------------------------------------------------------
@@ -325,7 +389,7 @@ class Command(BaseCommand):
             return Bloc.objects.create(page=page, position=suivant(), **kwargs)
 
         def titre_section(texte):
-            bloc(type_bloc=Bloc.PARAGRAPHE, titre=texte)
+            bloc(type_bloc=Bloc.TEXTE, titre=texte)
 
         # Fond du HERO : image générale du lieu (Configuration.img), lue au rendu
         # par le template (le HERO n'a plus de champ image propre).
@@ -336,7 +400,7 @@ class Command(BaseCommand):
 
         # === 1. HERO — bannière d'identité (titre + sous-titre) ===
         bloc(
-            type_bloc=Bloc.HERO,
+            type_bloc=Bloc.SECTION, affichage=Bloc.BANNIERE,
             titre="Bienvenue à Lespass",
             sous_titre="Un lieu culturel coopératif : concerts, ateliers, "
                        "résidences et convivialité — porté par ses adhérent·e·s.",
@@ -344,28 +408,28 @@ class Command(BaseCommand):
 
         # === 1bis. CTA — actions (agenda / adhésions) ===
         bloc(
-            type_bloc=Bloc.CTA,
+            type_bloc=Bloc.SECTION, affichage=Bloc.APPEL_ACTION,
             bouton_label="Voir l'agenda", bouton_url="/event/",
             bouton2_label="Adhérer", bouton2_url="/memberships/",
         )
 
-        # === 2. PARAGRAPHE — présentation ===
+        # === 2. TEXTE — présentation ===
         bloc(
-            type_bloc=Bloc.PARAGRAPHE,
+            type_bloc=Bloc.TEXTE,
             titre="Un lieu qui nous appartient",
             texte=(
-                "<p>Lespass est un tiers-lieu culturel géré en coopérative : la "
+                "Lespass est un tiers-lieu culturel géré en coopérative : la "
                 "programmation, les tarifs et les choix se décident ensemble. On y "
-                "vient pour écouter, apprendre, fabriquer et se rencontrer.</p>"
-                "<ul><li>Concerts, spectacles et scènes ouvertes</li>"
-                "<li>Ateliers, résidences et chantiers participatifs</li>"
-                "<li>Un café associatif et un espace de coworking</li></ul>"
+                "vient pour écouter, apprendre, fabriquer et se rencontrer.\n\n"
+                "- Concerts, spectacles et scènes ouvertes\n"
+                "- Ateliers, résidences et chantiers participatifs\n"
+                "- Un café associatif et un espace de coworking\n"
             ),
         )
 
         # === 3. EVENEMENTS — agenda dynamique ===
         bloc(
-            type_bloc=Bloc.EVENEMENTS,
+            type_bloc=Bloc.LISTE, source=Bloc.EVENEMENTS,
             titre="Nos prochains rendez-vous", nombre_max=6,
         )
 
@@ -373,12 +437,12 @@ class Command(BaseCommand):
         titre_section("Le lieu")
 
         # === 5. IMAGE ===
-        b = bloc(type_bloc=Bloc.IMAGE, titre="Le lieu")
+        b = bloc(type_bloc=Bloc.IMAGES, affichage=Bloc.PLEINE_LARGEUR, titre="Le lieu")
         self._poser_fichier(b, "image", IMG + "404-6.jpg")
 
         # === 6-7. IMAGE_TEXTE (alternance G/D) ===
         b = bloc(
-            type_bloc=Bloc.IMAGE_TEXTE, image_position=Bloc.GAUCHE,
+            type_bloc=Bloc.SECTION, affichage=Bloc.TEXTE_IMAGE_GAUCHE,
             titre="Une salle modulable",
             texte=(
                 "<p>Concerts assis ou debout, conférences, projections : la salle "
@@ -389,7 +453,7 @@ class Command(BaseCommand):
         )
         self._poser_fichier(b, "image", IMG + "404-7.jpg")
         b = bloc(
-            type_bloc=Bloc.IMAGE_TEXTE, image_position=Bloc.DROITE,
+            type_bloc=Bloc.SECTION, affichage=Bloc.TEXTE_IMAGE_DROITE,
             titre="Des ateliers ouverts",
             texte=(
                 "<p>Bois, sérigraphie, couture, électronique : nos ateliers sont "
@@ -399,20 +463,57 @@ class Command(BaseCommand):
         )
         self._poser_fichier(b, "image", IMG + "404-8.jpg")
 
+        # === 7 bis. SECTION composee : media + texte + sous-cartes ===
+        # Les sous-cartes vivent dans le champ `contenu` du bloc, en donnees
+        # texte : elles se rangent DANS la colonne de la section, la ou des
+        # blocs CARTE voisins se rangeraient a cote d'elle.
+        # / Composed SECTION: media + text + sub-cards. The sub-cards live in the
+        # block's `contenu` field as text data, laid out INSIDE the section's
+        # column — where neighbouring CARTE blocks would sit beside it.
+        b = bloc(
+            type_bloc=Bloc.SECTION, affichage=Bloc.MEDIA_ET_CARTES,
+            titre="Une semaine à Lespass",
+            texte=(
+                "Chaque jour a sa couleur : on répare le mardi, on répète le "
+                "jeudi, on danse le samedi."
+            ),
+            contenu=[
+                {"titre": "Mardi", "badge": "Atelier",
+                 "texte": "Repair café : on démonte, on diagnostique, on répare."},
+                {"titre": "Jeudi", "badge": "Répétition",
+                 "texte": "La scène est ouverte aux groupes du quartier."},
+                {"titre": "Samedi", "badge": "Concert",
+                 "texte": "Programmation locale, tarif libre pour les adhérent·e·s."},
+            ],
+        )
+        self._poser_fichier(b, "image", IMG + "404-9.jpg")
+
+        # === 7 ter. IMAGES / VIGNETTE_TITRE : image-titre centree ===
+        b = bloc(
+            type_bloc=Bloc.IMAGES, affichage=Bloc.VIGNETTE_TITRE,
+            titre="Notre affiche de saison",
+        )
+        self._poser_fichier(b, "image", IMG + "404-10.jpg")
+
         # === 8. GALERIE ===
-        galerie = bloc(type_bloc=Bloc.GALERIE, titre="En images")
+        # Images distinctes de celles deja posees plus haut (404-9 sur la section
+        # composee, 404-10 sur la vignette-titre) : une galerie qui repete les
+        # visuels de la page donne l'impression d'un fonds d'images pauvre.
+        # / Images distinct from those used above: a gallery repeating the page's
+        # visuals makes the image library look thin.
+        galerie = bloc(type_bloc=Bloc.IMAGES, affichage=Bloc.GRILLE, titre="En images")
         for index, (nom, legende) in enumerate([
-            ("404-9.jpg", "La salle de concert"),
-            ("404-10.jpg", "Le café associatif"),
-            ("404-11.jpg", "Un atelier partagé"),
-            ("404-12.jpg", "Le coworking"),
+            ("404-17.jpg", "La salle de concert"),
+            ("404-18.jpg", "Le café associatif"),
+            ("404-19.jpg", "Un atelier partagé"),
+            ("404-20.jpg", "Le coworking"),
         ], start=1):
             img = ImageGalerie.objects.create(bloc=galerie, position=index, legende=legende)
             self._poser_fichier(img, "image", IMG + nom)
 
         # === 9. VIDEO_TEXTE (suivi d'un PARAGRAPHE -> pas d'absorption de cartes) ===
         b = bloc(
-            type_bloc=Bloc.VIDEO_TEXTE,
+            type_bloc=Bloc.SECTION, affichage=Bloc.TEXTE_VIDEO,
             titre="Le lieu en mouvement",
             texte=(
                 "<p>Une minute pour ressentir l'ambiance des soirs de concert : "
@@ -434,14 +535,14 @@ class Command(BaseCommand):
              "Une communauté qui documente et transmet.", "La communauté", "/federation/"),
         ]:
             c = bloc(
-                type_bloc=Bloc.CARTE, surtitre=surtitre, titre=titre, texte=texte,
+                type_bloc=Bloc.SECTION, affichage=Bloc.CARTE, sous_titre=surtitre, titre=titre, texte=texte,
                 bouton_label=label, bouton_url=url,
             )
             self._poser_fichier(c, "image", IMG + nom)
 
         # === 12. TEMOIGNAGE ===
         b = bloc(
-            type_bloc=Bloc.TEMOIGNAGE,
+            type_bloc=Bloc.SECTION, affichage=Bloc.CITATION,
             texte="J'ai poussé la porte pour un concert, je suis restée pour la "
                   "communauté. Lespass, c'est devenu mon deuxième chez-moi.",
             auteur_nom="Camille Dubreuil", auteur_role="Adhérente depuis 2024",
@@ -450,7 +551,7 @@ class Command(BaseCommand):
 
         # === 13. EMBED (vidéo PeerTube) ===
         bloc(
-            type_bloc=Bloc.EMBED,
+            type_bloc=Bloc.INTEGRATION, affichage=Bloc.VIDEO,
             titre="Découvrir le projet en vidéo",
             embed_url="https://videos-libr.es/w/r2XVKcqhLPVBDujoMVrTcF",
         )
@@ -470,20 +571,20 @@ class Command(BaseCommand):
              "Devenez sociétaire et participez à la gouvernance du projet."),
         ]:
             c = bloc(
-                type_bloc=Bloc.CARTE, surtitre=surtitre, titre=titre, texte=texte,
+                type_bloc=Bloc.SECTION, affichage=Bloc.CARTE, sous_titre=surtitre, titre=titre, texte=texte,
                 bouton_label="Choisir", bouton_url="/memberships/",
             )
             self._poser_fichier(c, "image", IMG + nom)
 
         # === 16. CTA ===
         bloc(
-            type_bloc=Bloc.CTA,
+            type_bloc=Bloc.SECTION, affichage=Bloc.APPEL_ACTION,
             titre="Rejoignez la coopérative",
             sous_titre="Toutes les formules sont accessibles en ligne, en quelques clics.",
             bouton_label="Adhérer", bouton_url="/memberships/",
         )
 
-        # === 17. FAQ x3 repliable (accordéon) ===
+        # === 17. FAQ x3 (accordéon) ===
         for question, reponse in [
             ("Faut-il être adhérent·e pour venir ?",
              "<p>Non, la plupart des événements sont ouverts à tou·te·s. L'adhésion "
@@ -495,14 +596,22 @@ class Command(BaseCommand):
              "<p>Les adhésions annuelles courent sur l'année ; les souscriptions "
              "mensuelles peuvent être arrêtées dans le respect de l'engagement initial.</p>"),
         ]:
-            bloc(type_bloc=Bloc.FAQ, repliable=True, titre=question, texte=reponse)
+            bloc(type_bloc=Bloc.FAQ, titre=question, texte=reponse)
 
         # === 18. Infos pratiques (titre de section) ===
         titre_section("Infos pratiques")
 
-        # === 19. INFOS + CARTE_LEAFLET (côte à côte) ===
+        # === 19. LIEU : infos pratiques et carte côte à côte ===
+        # UN SEUL bloc porte les deux colonnes : `contenu` remplit la colonne de
+        # gauche, `badge` + `points_gps` la carte de droite. Deux blocs LIEU
+        # separes donneraient deux sections a moitie vides.
+        # / A SINGLE block carries both columns: `contenu` fills the left one,
+        # `badge` + `points_gps` the right-hand map. Two separate LIEU blocks
+        # would render as two half-empty sections.
         bloc(
-            type_bloc=Bloc.INFOS,
+            type_bloc=Bloc.LIEU,
+            badge="LESPASS — 12 RUE DE LA COOPÉRATIVE, 69100 VILLEURBANNE",
+            points_gps=[{"lat": 45.7719, "lng": 4.8902, "label": "Lespass"}],
             contenu=[
                 {"type": "badge", "texte": "Nous trouver"},
                 {"type": "para", "texte": "Au cœur de Villeurbanne, accès facile en transports."},
@@ -520,21 +629,29 @@ class Command(BaseCommand):
                 ]},
             ],
         )
+
+        # === 19 bis. INTEGRATION / WIDGET : contenu externe libre ===
+        # Un iframe libre n'est rendu que si son HÔTE figure dans la liste
+        # blanche globale du ROOT ; sinon le gabarit affiche un message
+        # d'indisponibilité. La démo autorise donc `openstreetmap.org`
+        # (cf. _autoriser_hote_embed) pour montrer le bloc en fonctionnement
+        # plutôt qu'un message d'erreur.
+        # / A free iframe only renders if its HOST is in the ROOT global
+        # whitelist; otherwise the template shows an unavailability message. The
+        # demo therefore whitelists `openstreetmap.org` to show the block
+        # working rather than an error.
+        self._autoriser_hote_embed("www.openstreetmap.org")
         bloc(
-            type_bloc=Bloc.CARTE_LEAFLET,
-            badge="LESPASS — 12 RUE DE LA COOPÉRATIVE, 69100 VILLEURBANNE",
-            points_gps=[{"lat": 45.7719, "lng": 4.8902, "label": "Lespass"}],
+            type_bloc=Bloc.INTEGRATION, affichage=Bloc.WIDGET,
+            titre="Nous situer sur la carte",
+            embed_url=(
+                "https://www.openstreetmap.org/export/embed.html"
+                "?bbox=4.878%2C45.766%2C4.902%2C45.778&layer=mapnik"
+            ),
+            hauteur_px=420,
         )
 
-        # Pas de bloc IFRAME dans la démo : il demande une URL de formulaire/widget
-        # RÉELLE et externe, que la fixture n'a pas à inventer. Le type reste
-        # disponible dans l'admin — y poser une URL suppose d'autoriser son domaine
-        # dans « Configuration racine → Domaines iframe autorisés ».
-        # / No IFRAME block in the demo: it needs a REAL external form/widget URL,
-        # which the fixture has no business inventing. The type stays available in
-        # the admin — using it means whitelisting its host in the ROOT config.
-
-        # === 20. FAQ x3 (non repliable) ===
+        # === 20. FAQ x3 ===
         for question, reponse in [
             ("Y a-t-il un bar / une restauration ?",
              "<p>Oui, un café associatif propose boissons et petite restauration les "
@@ -554,7 +671,7 @@ class Command(BaseCommand):
         # sait pas redimensionner un SVG. lien_url renseigné = logo cliquable.
         # / Partner logos reused from the ROOT landing. PNG/JPG only (Pillow can't
         # resize SVG). A set lien_url makes the logo clickable.
-        partenaires = bloc(type_bloc=Bloc.PARTENAIRES, titre="Ils nous soutiennent")
+        partenaires = bloc(type_bloc=Bloc.IMAGES, affichage=Bloc.BANDE_LOGOS, titre="Ils nous soutiennent")
         for index, (fichier, legende, lien) in enumerate([
             ("ftl.png", "France Tiers-Lieux", "https://francetierslieux.fr"),
             ("coopcircuit-noir.png", "CoopCircuits", "https://coopcircuits.fr"),
@@ -573,7 +690,7 @@ class Command(BaseCommand):
         # vendorisé (zéro CDN) ; embed_url = l'instance Ghost (data-site).
         # / Ghost newsletter signup. Vendored script; embed_url = the Ghost instance.
         bloc(
-            type_bloc=Bloc.NEWSLETTER,
+            type_bloc=Bloc.INTEGRATION, affichage=Bloc.NEWSLETTER,
             embed_url="https://ghost.tibillet.coop/",
             titre="Les news de TiBillet",
             sous_titre="La boîte à outils d'organisation collective",
@@ -581,7 +698,7 @@ class Command(BaseCommand):
 
         # === 21. CTA final ===
         bloc(
-            type_bloc=Bloc.CTA,
+            type_bloc=Bloc.SECTION, affichage=Bloc.APPEL_ACTION,
             titre="Prêt·e à nous rejoindre ?",
             sous_titre="L'adhésion est à prix libre et ouvre les portes de la coopérative.",
             bouton_label="Adhérer maintenant", bouton_url="/memberships/",

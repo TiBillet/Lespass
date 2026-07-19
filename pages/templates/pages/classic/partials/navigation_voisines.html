@@ -1,0 +1,31 @@
+{% load i18n %}
+{% comment %}
+PRECEDENT / SUIVANT — les deux pages voisines dans la rubrique.
+/ PREVIOUS / NEXT — the two neighbouring pages in the section.
+
+LOCALISATION : pages/templates/pages/classic/partials/navigation_voisines.html
+
+Les voisines suivent le meme parcours que le menu lateral et restent dans
+l'arbre courant : la derniere page d'une rubrique n'enchaine donc jamais sur
+la premiere d'une autre.
+/ Neighbours follow the same walk as the side menu and stay inside the
+current tree: a section's last page never links to another section's first.
+{% endcomment %}
+{% if menu_lateral.precedente or menu_lateral.suivante %}
+    <nav class="tb-voisines" aria-label="{% translate 'Pages voisines' %}" data-testid="navigation-voisines">
+        {% if menu_lateral.precedente %}
+            <a class="tb-voisines__lien tb-voisines__lien--precedente"
+               href="{{ menu_lateral.precedente.get_absolute_url }}">
+                <span class="tb-voisines__sens">← {% translate "Précédent" %}</span>
+                <span class="tb-voisines__titre">{{ menu_lateral.precedente.titre }}</span>
+            </a>
+        {% endif %}
+        {% if menu_lateral.suivante %}
+            <a class="tb-voisines__lien tb-voisines__lien--suivante"
+               href="{{ menu_lateral.suivante.get_absolute_url }}">
+                <span class="tb-voisines__sens">{% translate "Suivant" %} →</span>
+                <span class="tb-voisines__titre">{{ menu_lateral.suivante.titre }}</span>
+            </a>
+        {% endif %}
+    </nav>
+{% endif %}

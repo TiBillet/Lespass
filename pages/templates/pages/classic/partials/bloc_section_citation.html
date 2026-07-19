@@ -1,0 +1,36 @@
+{% load i18n %}
+{% comment %}
+    BLOC SECTION / affichage CITATION — citation + auteur.
+    / TESTIMONIAL block — quote + author.
+    LOCALISATION : pages/templates/pages/classic/partials/bloc_section_citation.html
+
+    Champs : texte (citation), auteur_nom, auteur_role, auteur_photo.
+    Honnetete (regle Hallmark) : on n'affiche QUE ce que le gestionnaire a saisi,
+    jamais de chiffre ou de nom invente.
+    / Fields: text (quote), author_name, author_role, author_photo.
+    Honesty (Hallmark rule): we ONLY show what the manager entered, never an
+    invented figure or name.
+{% endcomment %}
+<figure class="tb-bloc tb-bloc--temoignage" data-testid="bloc-section-citation">
+    {% if bloc.texte %}
+        <blockquote class="tb-bloc__citation">{{ bloc.texte|safe }}</blockquote>
+    {% endif %}
+    {% if bloc.auteur_nom or bloc.auteur_role or bloc.auteur_photo %}
+        <figcaption class="tb-bloc__auteur">
+            {% if bloc.auteur_photo %}
+                <img class="tb-bloc__auteur-photo"
+                     src="{{ bloc.auteur_photo.thumbnail.url }}"
+                     alt="{{ bloc.auteur_nom }}"
+                     loading="lazy">
+            {% endif %}
+            <span class="tb-bloc__auteur-infos">
+                {% if bloc.auteur_nom %}
+                    <span class="tb-bloc__auteur-nom">{{ bloc.auteur_nom }}</span>
+                {% endif %}
+                {% if bloc.auteur_role %}
+                    <span class="tb-bloc__auteur-role">{{ bloc.auteur_role }}</span>
+                {% endif %}
+            </span>
+        </figcaption>
+    {% endif %}
+</figure>

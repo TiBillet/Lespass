@@ -1280,7 +1280,7 @@ class BlocViewSet(viewsets.ViewSet):
             # clean_html (mutilerait autoliens/tableaux). Securite au rendu via nh3
             # (rendre_markdown). Meme exception qu'a la creation et dans l'admin.
             # / MARKDOWN: `texte` is markdown source, not HTML — no clean_html.
-            if bloc.type_bloc == "MARKDOWN":
+            if bloc.type_bloc == "TEXTE":
                 bloc.texte = request.data["text"] or ""
             else:
                 bloc.texte = clean_html(request.data["text"] or "")
@@ -1311,6 +1311,18 @@ class BlocViewSet(viewsets.ViewSet):
         # Fichiers multipart (image, video, etc.) appliques avant le save unique.
         # / Multipart files (image, video, etc.) applied before the single save.
         _appliquer_fichiers_multipart(request, bloc)
+
+        # Meme validation qu'a la creation : un PATCH ne doit pas pouvoir poser
+        # un affichage etranger au type, sinon la page publique qui porte ce
+        # bloc sort en 500 au prochain rendu. Import local, comme les autres
+        # appels a serializers dans ce module.
+        # / Same validation as on creation: a PATCH must not be able to set an
+        # affichage foreign to the type. Local import, like the other calls to
+        # serializers in this module.
+        from api_v2.serializers import _valider_le_bloc
+
+        _valider_le_bloc(bloc)
+
         bloc.save()
         return Response(BlocSchemaSerializer(bloc).data)
 

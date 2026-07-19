@@ -35,7 +35,10 @@
     </nav>
 
     <header class="fd-header" data-testid="hub-header">
-        <h1 class="fd-title">{% translate "Fonctionnalités" %}</h1>
+        {# H1 descriptif (mots-cles) plutot qu'un seul mot « Fonctionnalites » : #}
+        {# meilleur signal de pertinence pour les moteurs.                      #}
+        {# / Keyword-rich H1 instead of a single word: better relevance signal. #}
+        <h1 class="fd-title">{% translate "Fonctionnalités de billetterie coopérative pour lieux culturels" %}</h1>
         <p class="fd-tagline">{% translate "Une solution complète pour les lieux culturels et associatifs." %}</p>
     </header>
 

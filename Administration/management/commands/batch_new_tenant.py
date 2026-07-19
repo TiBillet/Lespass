@@ -14,6 +14,7 @@ from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, FederatedPlace
 from Customers.models import Client, Domain
 from fedow_connect.fedow_api import FedowAPI
+from onboard.services import dns_suffixes_disponibles
 from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger(__name__)
@@ -93,9 +94,11 @@ class Command(BaseCommand):
         input_path = options['file']
         send_mail = options['mail']  # True si -m est présent, False sinon
 
-        base_domain = 'tibillet.coop'
-        if not base_domain:
-            raise CommandError("Variable d'environnement DOMAIN manquante")
+        # Suffixe de domaine derive de l'environnement (DOMAIN + ADDITIONAL_DOMAINS),
+        # via la meme source unique que l'onboarding. Le 1er suffixe est le choix par
+        # defaut (cf. onboard.services.dns_suffixes_disponibles). Plus de domaine code
+        # en dur ici. / Env-derived domain suffix (same single source as onboarding).
+        base_domain = dns_suffixes_disponibles()[0]
 
         created_clients: List[Tuple[Client, dict]] = []
         # Exemple : [(<Client: tenant1>, {'Name': 'Mon Org', 'slug': 'mon-org', 'emails': ['admin@ex.com']}), ...]

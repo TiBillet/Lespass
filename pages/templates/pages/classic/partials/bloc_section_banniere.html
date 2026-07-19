@@ -1,0 +1,26 @@
+{% load i18n %}
+{% comment %}
+    BLOC SECTION / affichage BANNIERE — banniere d'ouverture (identite du lieu).
+    / SECTION block / BANNIERE display — opening banner (venue identity).
+    LOCALISATION : pages/templates/pages/classic/partials/bloc_section_banniere.html
+
+    Champs du bloc : titre, sous_titre.
+    Image de fond : image generique du lieu (config.img), lue au rendu. Si absente,
+    le hero passe en « recentre sobre » (fond teinte, contenu centre).
+    Les actions (boutons) vivent dans une section en appel a l'action.
+    / Block fields: title, subtitle. Background: the venue's generic image
+    (config.img), read at render time. If absent, the hero falls back to the
+    centered sober layout. Actions live in a separate SECTION block / BANNIERE display.
+{% endcomment %}
+<section class="tb-bloc tb-bloc--hero{% if config.img %} tb-bloc--hero-image{% endif %}"
+         data-testid="bloc-section-banniere"
+         {% if config.img %}style="--tb-hero-image: url('{{ config.img.fhd.url }}');"{% endif %}>
+    <div class="tb-bloc__contenu">
+        {% if bloc.titre %}
+            <h1 class="tb-bloc__titre">{{ bloc.titre }}</h1>
+        {% endif %}
+        {% if bloc.sous_titre %}
+            <p class="tb-bloc__sous-titre">{{ bloc.sous_titre }}</p>
+        {% endif %}
+    </div>
+</section>

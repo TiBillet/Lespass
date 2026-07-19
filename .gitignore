@@ -182,6 +182,16 @@ AGENTS.md
 docker-compose-filaos.yml
 letsencrypt/acme.json
 
+# Certificats de dev generes par mkcert : contiennent une CLE PRIVEE.
+# Chaque dev genere les siens (cf. tuto en haut du docker-compose.yml).
+# / Local mkcert dev certificates: contain a private key, never commit.
+/certs/
+# Filet de securite : mkcert lance sans -cert-file ecrit a la racine du projet
+# (ex: tibillet.localhost+3.pem). On refuse tout .pem/.key hors dossier dedie.
+# / Safety net for mkcert run without -cert-file, which writes to the repo root.
+*.pem
+*.key
+
 
 # laboutik client Cordova/android
 *.apk

@@ -1,0 +1,12 @@
+{% comment %}
+    BLOC SECTION / affichage TEXTE_IMAGE_GAUCHE — image a gauche, texte a droite.
+    / SECTION block / TEXTE_IMAGE_GAUCHE display — image left, text right.
+
+    LOCALISATION : pages/templates/pages/classic/partials/bloc_section_texte_image_gauche.html
+
+    Le markup vit dans le socle partage _section_texte_image.html : seul le cote
+    change entre cet affichage et son symetrique.
+    / The markup lives in the shared base _section_texte_image.html: only the
+    side differs between this display and its mirror.
+{% endcomment %}
+{% include "pages/classic/partials/_section_texte_image.html" with cote="gauche" %}

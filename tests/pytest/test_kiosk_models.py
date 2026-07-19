@@ -344,10 +344,19 @@ def test_le_formulaire_enregistre_le_lecteur_chez_stripe(tenant, clean_kiosk):
             mock_root.return_value.get_stripe_api.return_value = "sk_test_x"
             mock_create.return_value = type("R", (), {"id": "tmr_ok456"})()
 
+            # Code d'enregistrement DEDIE a ce test, jamais "simulated-wpe".
+            # Le formulaire refuse un code deja porte par un autre lecteur, et
+            # la base de dev contient de vrais lecteurs de demonstration qui
+            # utilisent le code de simulation Stripe. Un code prefixe "TEST_"
+            # est nettoye par la fixture clean_kiosk, donc toujours libre.
+            # / Registration code DEDICATED to this test, never "simulated-wpe".
+            # The form rejects a code already held by another reader, and the
+            # dev database holds real demo readers using Stripe's simulation
+            # code. A "TEST_"-prefixed code is cleaned by clean_kiosk.
             form = TPEBancaireForm(data={
                 "name": "TEST_LecteurAccepte",
                 "tpe_type": TPEBancaire.STRIPE_WISEPOS,
-                "registration_code": "simulated-wpe",
+                "registration_code": "TEST_code-enregistrement-accepte",
                 "active": True,
             })
             assert form.is_valid() is True, form.errors

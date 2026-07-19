@@ -10,8 +10,6 @@ events/products/static. Réutilise TenantSitemap (domaine du tenant + https).
 /static. Reuses TenantSitemap (tenant domain + https).
 """
 
-from django.urls import reverse
-
 from BaseBillet.sitemap import TenantSitemap
 from pages.models import Page
 
@@ -40,9 +38,7 @@ class PageSitemap(TenantSitemap):
 
     def location(self, obj):
         # Chemin absolu SANS protocole ni domaine (cf. doc Django).
-        # La page d'accueil est servie sur la racine "/".
+        # L'adresse vient de la page elle-meme : voir Page.get_absolute_url().
         # / Absolute path WITHOUT protocol or domain (see Django docs).
-        # The home page is served on root "/".
-        if obj.est_accueil:
-            return "/"
-        return reverse("pages:page_publique", kwargs={"slug": obj.slug})
+        # The address comes from the page itself: see Page.get_absolute_url().
+        return obj.get_absolute_url()

@@ -1,0 +1,24 @@
+{% load static i18n %}
+{% comment %}
+    BLOC IMAGES / affichage PLEINE_LARGEUR — skin faire_festival.
+    Photo pleine largeur : les cliches et le plan du festival. Le champ titre ne
+    sert QUE de texte alternatif.
+    / IMAGES block / PLEINE_LARGEUR display — a full-width photo (shots, festival
+    map). The title field is only the alt text.
+
+    LOCALISATION : pages/templates/pages/faire_festival/partials/bloc_images_pleine_largeur.html
+
+    L'image vient du champ plat `image`, qui porte les grandes variations
+    (jusqu'a 1920 px, `fhd`). Les affichages a plusieurs images (GRILLE,
+    BANDE_LOGOS) passent par la relation ImageGalerie.
+    / The image comes from the flat `image` field, which carries the large
+    variations. Multi-image displays use the ImageGalerie relation instead.
+{% endcomment %}
+<section class="container conteneur-principal pb-0 mb-0" data-testid="bloc-images-pleine-largeur">
+    <div class="plan-container text-center m-0 pb-0 mb-0">
+        {% if bloc.image %}
+            <img src="{{ bloc.image.fhd.url }}"
+                 class="img-fluid d-block mx-auto" style="max-width: 100%; height: auto;" alt="{{ bloc.titre }}" loading="lazy">
+        {% endif %}
+    </div>
+</section>

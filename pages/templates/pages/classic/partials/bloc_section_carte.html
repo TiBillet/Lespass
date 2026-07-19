@@ -1,0 +1,39 @@
+{% load static i18n %}
+{% comment %}
+    BLOC SECTION / affichage CARTE — skin classic.
+    Une carte : image, sur-titre, titre, texte, bouton.
+    / SECTION block / CARTE display — a card: image, kicker, title, text, button.
+
+    LOCALISATION : pages/templates/pages/classic/partials/bloc_section_carte.html
+
+    Les cartes qui se suivent se rangent cote a cote grace a la grille de
+    <main> : la classe .tb-bloc--carte fait occuper 4 colonnes sur 12 (voir
+    .tb-flux dans tb-blocs.css). Poser une carte n'a donc aucun effet sur les
+    blocs voisins.
+    / Consecutive cards sit side by side thanks to the <main> grid: the
+    .tb-bloc--carte class spans 4 of 12 columns. Adding a card never changes
+    how the neighbouring blocks look.
+
+    Le sur-titre (« JOUR 01 ») se saisit dans `sous_titre`.
+    / The kicker is entered in `sous_titre`.
+{% endcomment %}
+<article class="tb-bloc tb-bloc--carte tb-colonnes-4" data-testid="bloc-section-carte">
+    {% if bloc.image %}
+        <img class="tb-bloc__carte-image"
+             src="{{ bloc.image.med.url }}"
+             alt="{{ bloc.titre }}" loading="lazy">
+    {% endif %}
+    {% if bloc.sous_titre or bloc.badge %}
+        <p class="tb-bloc__carte-surtitre">
+            {{ bloc.sous_titre }}
+            {% if bloc.badge %}<span class="tb-bloc__carte-badge">{{ bloc.badge }}</span>{% endif %}
+        </p>
+    {% endif %}
+    {% if bloc.titre %}<h3 class="tb-bloc__carte-titre">{{ bloc.titre }}</h3>{% endif %}
+    {% if bloc.texte %}<div class="tb-bloc__carte-texte">{{ bloc.texte|safe }}</div>{% endif %}
+    {% if bloc.bouton_label %}
+        <a class="tb-bloc__bouton tb-bloc__bouton--plein"
+           href="{{ bloc.bouton_url|default:'#' }}"
+           data-testid="bloc-section-carte-bouton">{{ bloc.bouton_label }}</a>
+    {% endif %}
+</article>

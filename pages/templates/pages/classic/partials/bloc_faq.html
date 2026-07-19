@@ -1,21 +1,26 @@
 {% load i18n %}
 {% comment %}
-    BLOC FAQ — skin classic. Une question / reponse. HTML cote template ;
-    base = texte seul (titre = question, texte = reponse).
-    Si bloc.repliable : accordeon natif <details>/<summary> (repliable, accessible,
-    zero JS). Sinon : reponse ouverte (comportement historique).
-    / One question/answer. HTML in the template. If bloc.repliable: native
-    <details>/<summary> accordion (collapsible, accessible, zero JS). Otherwise:
-    open answer (historical behavior).
+    BLOC FAQ — skin classic. Une question et sa reponse.
+    / FAQ block — classic skin. One question and its answer.
+
+    LOCALISATION : pages/templates/pages/classic/partials/bloc_faq.html
+
+    Le HTML et les classes vivent ici ; la base ne stocke que du texte
+    (titre = la question, texte = la reponse).
+    / HTML and classes live here; the database stores text only
+    (titre = the question, texte = the answer).
+
+    La reponse est repliee dans un <details>/<summary> natif : accessible au
+    clavier et aux lecteurs d'ecran, sans une ligne de JavaScript. Les questions
+    voisines se rangent en deux colonnes grace a la grille de page
+    (classe tb-colonnes-6, cf. tb-blocs.css).
+    / The answer collapses into a native <details>/<summary>: keyboard- and
+    screen-reader-accessible, with no JavaScript. Neighbouring questions sit in
+    two columns thanks to the page grid (tb-colonnes-6 class).
 {% endcomment %}
-<div class="tb-bloc tb-bloc--faq" data-testid="bloc-faq">
-    {% if bloc.repliable %}
-        <details class="tb-bloc__faq-details">
-            {% if bloc.titre %}<summary class="tb-bloc__faq-question">{{ bloc.titre }}</summary>{% endif %}
-            {% if bloc.texte %}<div class="tb-bloc__faq-reponse">{{ bloc.texte|safe }}</div>{% endif %}
-        </details>
-    {% else %}
-        {% if bloc.titre %}<h3 class="tb-bloc__faq-question">{{ bloc.titre }}</h3>{% endif %}
+<div class="tb-bloc tb-bloc--faq tb-colonnes-6" data-testid="bloc-faq">
+    <details class="tb-bloc__faq-details">
+        {% if bloc.titre %}<summary class="tb-bloc__faq-question">{{ bloc.titre }}</summary>{% endif %}
         {% if bloc.texte %}<div class="tb-bloc__faq-reponse">{{ bloc.texte|safe }}</div>{% endif %}
-    {% endif %}
+    </details>
 </div>

@@ -1,0 +1,26 @@
+{% load static i18n %}
+{% comment %}
+    BLOC IMAGES / affichage VIGNETTE_TITRE — skin faire_festival.
+    Image-titre de section, centree a sa taille naturelle : les PNG dessines de
+    la maquette du festival (style titre-programme). Le champ titre ne sert QUE
+    de texte alternatif.
+    / IMAGES block / VIGNETTE_TITRE display — a natural-size centred section
+    title-image (the festival mock-up's drawn PNGs). The title field is alt text.
+
+    LOCALISATION : pages/templates/pages/faire_festival/partials/bloc_images_vignette_titre.html
+
+    Le choix vignette / pleine largeur vient de `affichage`, et chaque valeur a
+    son propre gabarit. Ne jamais le deduire du contenu du bloc (la presence
+    d'un titre, par exemple) : une photo titree se retrouverait reduite a une
+    vignette.
+    / The vignette / full-width choice comes from `affichage`, one template per
+    value. Never infer it from the block's content (e.g. having a title).
+{% endcomment %}
+<section class="container py-5">
+    <div class="titre-principal titre-programme mb-5 w-100" data-testid="bloc-images-vignette-titre">
+        {% if bloc.image %}
+            <img src="{{ bloc.image.fhd.url }}"
+                 class="img-fluid" alt="{{ bloc.titre }}" loading="lazy">
+        {% endif %}
+    </div>
+</section>

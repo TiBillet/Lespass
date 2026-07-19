@@ -1279,6 +1279,96 @@ prods_a_nettoyer = (
 )
 ```
 
+**9.111 — `test_demarrer_skin.py` TUE le serveur de dev, et 6 tests HTTP tombent en 502.**
+Symptome : on lance la suite complete, elle finit avec ~6 echecs sans rapport entre
+eux (`test_event_images`, `test_membership_create`, `test_postal_address_*`,
+`test_reservation_create`, `test_event_create_extended`), dont un `502 <html>`. On
+cherche la regression dans son propre code : elle n'existe pas.
+
+Cause : `test_demarrer_skin.py` cree un dossier de gabarits
+`pages/templates/pages/pytest-skin-jetable/` (via `call_command("demarrer_skin", ...)`)
+puis le supprime avec `shutil.rmtree`. Pendant ce temps, le `StatReloader` du serveur
+de dev fait un `glob` sur l'arborescence des templates : il voit le dossier
+apparaitre, l'ajoute a sa liste de surveillance, le dossier disparait, et le reloader
+leve une `FileNotFoundError` **non rattrapee** :
+
+```
+File "django/utils/autoreload.py", line 410, in snapshot_files
+FileNotFoundError: [Errno 2] No such file or directory:
+    '/DjangoFiles/pages/templates/pages/pytest-skin-jetable'
+```
+
+**Le serveur meurt.** `test_demarrer_skin` passant avant `test_event_*` dans l'ordre
+alphabetique, tous les tests qui tapent le serveur en HTTP reel echouent ensuite.
+
+**Diagnostic en 5 secondes** — avant de chercher quoi que ce soit dans son code :
+```bash
+curl -sk -o /dev/null -w "%{http_code}\n" https://<tenant>.tibillet.localhost/
+# 502 -> le serveur est mort, les echecs ne viennent pas de toi
+```
+Puis lire le pane du serveur : `tmux capture-pane -t 0.1 -p | tail -40`.
+
+**Regle :** relancer le serveur (`rsp` dans le shell du conteneur) et rejouer les
+tests echoues avant de conclure a une regression. Les tests qui creent ou suppriment
+des **dossiers** sous `pages/templates/` sont incompatibles avec un serveur en
+auto-reload tournant en parallele.
+
+**9.113 — Migration qui mele DDL et DML : « pending trigger events », et application PARTIELLE en multi-tenant.**
+Une migration qui ajoute des colonnes (DDL) **puis** convertit les donnees avec un
+`RunPython` (DML) **puis** supprime des colonnes (DDL) echoue sous Postgres :
+
+```
+OperationalError: cannot ALTER TABLE "pages_bloc" because it has pending trigger events
+OperationalError: cannot CREATE INDEX "pages_bloc" because it has pending trigger events
+```
+
+Postgres refuse un `ALTER`/`CREATE INDEX` sur une table qui vient de recevoir des
+`UPDATE`/`DELETE` dans la **meme transaction**.
+
+**Le piege multi-tenant, bien plus couteux :** `migrate_schemas` traite les schemas
+un par un. La migration **reussit** sur tous les schemas **vides** (le `RunPython`
+n'y fait rien, donc aucun trigger event) et **echoue** sur ceux qui portent des
+donnees. On se retrouve avec une base **a moitie migree** : ici, 31 schemas passes
+a l'etat final et 5 restes en arriere — dont les 3 seuls qui contenaient des blocs.
+
+**La regle en trois points :**
+
+1. **`atomic = False`** sur la migration qui mele DDL et DML — Django enchaine alors
+   chaque operation dans sa propre transaction.
+2. **Les suppressions de colonnes dans une migration SEPAREE**, jamais dans celle qui
+   convertit les donnees. Et attention : `makemigrations` place les `RemoveField`
+   **en premier**, donc il detruit les colonnes AVANT que le `RunPython` puisse les
+   lire — l'ordre genere est a corriger a la main.
+3. **Toujours relire l'etat de TOUS les schemas apres un echec**, pas seulement de
+   celui qu'on regarde :
+
+```python
+c.execute("SELECT column_name FROM information_schema.columns "
+          "WHERE table_schema=%s AND table_name='pages_bloc'", [schema])
+c.execute('SELECT name FROM "' + schema + '".django_migrations WHERE app=%s', ['pages'])
+```
+
+Les schemas deja arrives a l'etat final se rattrapent avec
+`migrate_schemas --schema=<nom> --fake pages <numero>` — **apres avoir verifie qu'ils
+sont bien vides**, sinon on marque comme faite une conversion qui n'a jamais eu lieu.
+
+**9.112 — Un test qui pose une valeur unique se heurte aux donnees reelles de la base de dev.**
+`test_kiosk_models::test_le_formulaire_enregistre_le_lecteur_chez_stripe` utilisait
+le code Stripe `"simulated-wpe"`. Or `TPEBancaireForm` refuse un code deja porte par
+un autre lecteur, et la base de dev contient un vrai lecteur de demonstration
+(`TPE Démo (simulé)`, tenant `lespass`) qui utilise exactement ce code. Le test passe
+sur une base fraiche et echoue des qu'une demo existe — echec **intermittent** selon
+la machine.
+
+La fixture `clean_kiosk` ne rattrape pas le cas : elle nettoie par
+`name__startswith="TEST_"`, alors que le conflit porte sur `registration_code`.
+
+**Regle :** sur base de dev partagee (pattern du projet : pas de rollback), tout
+champ **unique** pose par un test doit porter un prefixe de test
+(`TEST_code-enregistrement-accepte`), jamais une valeur « realiste » qu'un humain
+pourrait avoir saisie dans l'admin. Et ne jamais supprimer la donnee reelle qui gene :
+c'est celle du mainteneur.
+
 ---
 
 ### Piege 71 : Locale francaise et DecimalField dans les templates JS

@@ -1,0 +1,33 @@
+{% load i18n %}
+{% comment %}
+MENU LATERAL — l'arbre de la rubrique courante, deplie en entier.
+/ SIDE MENU — the current section's tree, fully unfolded.
+
+LOCALISATION : pages/templates/pages/classic/partials/menu_lateral.html
+
+N'est rendu que pour une page dont la racine est affichee en menu lateral :
+le service `construire_menu_lateral` renvoie un dict vide sinon, et ce
+gabarit n'est alors pas inclus.
+/ Only rendered for a page whose root is displayed as a side menu.
+
+Le menu s'ouvre en tiroir sur petit ecran, via un <details> natif : pas de
+JavaScript, et l'etat plie/deplie survit sans etat cote serveur.
+/ The menu becomes a drawer on small screens via a native <details>: no
+JavaScript, and the open/closed state needs no server-side state.
+{% endcomment %}
+<details class="tb-menu-lateral" data-testid="menu-lateral">
+    <summary class="tb-menu-lateral__titre">{% translate "Dans cette rubrique" %}</summary>
+    <nav aria-label="{% translate 'Menu de la rubrique' %}">
+        <ul class="tb-menu-lateral__liste">
+            {% for entree in menu_lateral.entrees %}
+                <li class="tb-menu-lateral__entree tb-menu-lateral__entree--niveau-{{ entree.profondeur }}">
+                    {% if entree.est_la_page_courante %}
+                        <span class="tb-menu-lateral__courante" aria-current="page">{{ entree.titre }}</span>
+                    {% else %}
+                        <a href="{{ entree.url }}">{{ entree.titre }}</a>
+                    {% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+    </nav>
+</details>

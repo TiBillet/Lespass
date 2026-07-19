@@ -36,7 +36,14 @@ def nettoyer_pages(tenant):
     yield
 
     with tenant_context(tenant):
-        Page.objects.filter(slug__startswith="pytest-").delete()
+        # Suppression des FEUILLES vers la racine : `Page.parent` est en
+        # PROTECT, donc supprimer un parent avant ses enfants leve une
+        # ProtectedError. On detache d'abord, puis on supprime.
+        # / Delete LEAVES first: `Page.parent` is PROTECT, so removing a parent
+        # before its children raises ProtectedError. Detach, then delete.
+        pages_de_test = Page.objects.filter(slug__startswith="pytest-")
+        pages_de_test.update(parent=None)
+        pages_de_test.delete()
         # On remet l'etat d'avant : seules les pages d'accueil d'origine sont cochees.
         # / Restore the prior state: only the original home pages stay checked.
         Page.objects.exclude(pk__in=accueil_avant).filter(est_accueil=True).update(
@@ -59,6 +66,34 @@ def test_creation_page_et_str(tenant, nettoyer_pages):
         assert "brouillon" in str(page)  # publie=False par defaut
 
 
+def test_get_absolute_url_page_normale(tenant, nettoyer_pages):
+    """Une page ordinaire est servie sur /<slug>/."""
+    from pages.models import Page
+
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Pytest Infos", slug="pytest-infos")
+        assert page.get_absolute_url() == "/pytest-infos/"
+
+
+def test_get_absolute_url_page_accueil(tenant, nettoyer_pages):
+    """
+    La page d'accueil est servie sur la racine, PAS sur /<slug>/.
+    / The home page is served on the root, NOT on /<slug>/.
+
+    C'est la regle que get_absolute_url() centralise : elle etait auparavant
+    dupliquee dans le sitemap, la navbar, l'admin, l'API et trois gabarits.
+    / This is the rule get_absolute_url() centralises: it used to be duplicated
+    across the sitemap, the navbar, the admin, the API and three templates.
+    """
+    from pages.models import Page
+
+    with tenant_context(tenant):
+        page = Page.objects.create(
+            titre="Pytest Home", slug="pytest-home", est_accueil=True
+        )
+        assert page.get_absolute_url() == "/"
+
+
 def test_slug_reserve_est_rejete(tenant):
     """Un slug reserve (ex: 'event') leve une ValidationError au full_clean()."""
     from pages.models import Page
@@ -75,83 +110,77 @@ def test_blocs_ordonnes_par_position(tenant, nettoyer_pages):
 
     with tenant_context(tenant):
         page = Page.objects.create(titre="Ordre", slug="pytest-ordre")
-        Bloc.objects.create(page=page, type_bloc=Bloc.CTA, position=3)
-        Bloc.objects.create(page=page, type_bloc=Bloc.HERO, position=1)
-        Bloc.objects.create(page=page, type_bloc=Bloc.PARAGRAPHE, position=2)
+        Bloc.objects.create(page=page, type_bloc=Bloc.SECTION, affichage=Bloc.APPEL_ACTION, position=3)
+        Bloc.objects.create(page=page, type_bloc=Bloc.SECTION, affichage=Bloc.BANNIERE, position=1)
+        Bloc.objects.create(page=page, type_bloc=Bloc.TEXTE, position=2)
 
         positions = list(page.blocs.values_list("position", flat=True))
         assert positions == [1, 2, 3]
 
 
-def test_grouper_blocs_section_carte():
-    """Un bloc INFOS suivi d'un CARTE_LEAFLET forme un groupe section_carte
-    (infos a gauche, carte a droite)."""
-    from pages.models import Bloc
-    from pages.services import grouper_blocs
+def test_un_bloc_n_influence_pas_ses_voisins(tenant, nettoyer_pages):
+    """
+    Le rendu d'un bloc ne depend pas des blocs qui l'entourent.
 
-    blocs = [
-        Bloc(type_bloc=Bloc.INFOS),
-        Bloc(type_bloc=Bloc.CARTE_LEAFLET),
-        Bloc(type_bloc=Bloc.PARAGRAPHE),
-    ]
-    groupes = grouper_blocs(blocs)
-    assert groupes[0]["type"] == "section_carte"
-    assert groupes[0]["info"].type_bloc == "INFOS"
-    assert groupes[0]["carte"].type_bloc == "CARTE_LEAFLET"
-    # Le PARAGRAPHE qui suit reste un bloc seul.
-    assert groupes[1]["type"] == "solo"
+    C'est la garantie centrale du moteur : la page se lit bloc par bloc, dans
+    l'ordre, et rien n'est regroupe cote serveur. Sans elle, glisser un bloc
+    dans l'admin changerait l'apparence de deux autres sans le montrer.
+    La mise en page cote a cote est portee par la grille CSS, pas par Python.
+    """
+    from pages.models import Bloc, Page
+    from pages.templatetags.pages_tags import templates_bloc
 
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Voisins", slug="pytest-voisins", publie=True)
+        carte = Bloc.objects.create(
+            page=page, type_bloc=Bloc.SECTION, affichage=Bloc.CARTE,
+            position=1, titre="Une carte",
+        )
+        gabarits_seule = templates_bloc({"skin_courant": "classic"}, carte)
 
-def test_grouper_blocs_faq_deux_colonnes():
-    """Des blocs FAQ consecutifs sont regroupes (rendus en 2 colonnes)."""
-    from pages.models import Bloc
-    from pages.services import grouper_blocs
-
-    blocs = [Bloc(type_bloc=Bloc.FAQ), Bloc(type_bloc=Bloc.FAQ), Bloc(type_bloc=Bloc.FAQ)]
-    groupes = grouper_blocs(blocs)
-    assert len(groupes) == 1
-    assert groupes[0]["type"] == "faq"
-    assert len(groupes[0]["blocs"]) == 3
-
-
-def test_grouper_blocs_regroupe_cartes_consecutives():
-    """grouper_blocs regroupe les CARTE consecutives, isole les autres blocs."""
-    from pages.models import Bloc
-    from pages.services import grouper_blocs
-
-    blocs = [
-        Bloc(type_bloc=Bloc.HERO),
-        Bloc(type_bloc=Bloc.CARTE),
-        Bloc(type_bloc=Bloc.CARTE),
-        Bloc(type_bloc=Bloc.CTA),
-        Bloc(type_bloc=Bloc.CARTE),
-    ]
-    groupes = grouper_blocs(blocs)
-    types = [g["type"] for g in groupes]
-    # HERO seul, [CARTE, CARTE] en grille, CTA seul, [CARTE] en grille.
-    assert types == ["solo", "grille", "solo", "grille"]
-    assert len(groupes[1]["blocs"]) == 2
-    assert len(groupes[3]["blocs"]) == 1
+        # On entoure la carte d'autres blocs : son gabarit ne bouge pas.
+        Bloc.objects.create(page=page, type_bloc=Bloc.TEXTE, position=0, texte="avant")
+        Bloc.objects.create(
+            page=page, type_bloc=Bloc.SECTION, affichage=Bloc.CARTE,
+            position=2, titre="Une voisine",
+        )
+        carte.refresh_from_db()
+        assert templates_bloc({"skin_courant": "classic"}, carte) == gabarits_seule
 
 
-def test_grouper_blocs_section_video_absorbe_cartes_et_cta():
-    """Un VIDEO_TEXTE absorbe les CARTE suivantes + un CTA en une section_video."""
-    from pages.models import Bloc
-    from pages.services import grouper_blocs
+def test_affichage_etranger_au_type_est_refuse(tenant, nettoyer_pages):
+    """
+    Un affichage qui n'appartient pas au type du bloc est rejete.
 
-    blocs = [
-        Bloc(type_bloc=Bloc.VIDEO_TEXTE),
-        Bloc(type_bloc=Bloc.CARTE),
-        Bloc(type_bloc=Bloc.CARTE),
-        Bloc(type_bloc=Bloc.CTA),
-        Bloc(type_bloc=Bloc.IMAGE),
-    ]
-    groupes = grouper_blocs(blocs)
-    assert groupes[0]["type"] == "section_video"
-    assert len(groupes[0]["cartes"]) == 2
-    assert groupes[0]["cta"] is not None
-    # L'IMAGE qui suit n'est PAS absorbee : groupe solo separe.
-    assert groupes[1]["type"] == "solo"
+    Le modele ne porte qu'UN champ `affichage`, avec l'union de toutes les
+    valeurs : Django ne sait pas restreindre des choices selon un autre champ.
+    C'est donc clean() qui tient la table, sinon le rendu chercherait un
+    gabarit inexistant.
+    """
+    from pages.models import Bloc, Page
+
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Affichage", slug="pytest-affichage")
+        bloc = Bloc(page=page, type_bloc=Bloc.SECTION, affichage=Bloc.BANDE_LOGOS)
+        with pytest.raises(ValidationError):
+            bloc.full_clean()
+
+
+def test_affichage_par_defaut_pose_au_save(tenant, nettoyer_pages):
+    """
+    Un bloc enregistre sans affichage en recoit un.
+
+    Un type a plusieurs rendus n'a pas de gabarit generique : sans affichage,
+    le rendu chercherait « bloc_section.html », qui n'existe pas, et la page
+    entiere sortirait en erreur. Le defaut est pose au save() et pas seulement
+    au clean(), parce qu'un objects.create() (migration, seed) ne valide rien.
+    """
+    from pages.models import Bloc, Page
+
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Defaut", slug="pytest-defaut")
+        bloc = Bloc.objects.create(page=page, type_bloc=Bloc.SECTION, position=1)
+        assert bloc.affichage == Bloc.BANNIERE
 
 
 def test_templates_bloc_fallback_classic():
@@ -159,11 +188,17 @@ def test_templates_bloc_fallback_classic():
     from pages.models import Bloc
     from pages.templatetags.pages_tags import templates_bloc
 
-    bloc = Bloc(type_bloc=Bloc.HERO)
+    bloc = Bloc(type_bloc=Bloc.SECTION, affichage=Bloc.BANNIERE)
     resultat = templates_bloc({"skin_courant": "faire_festival"}, bloc)
+    # Le gabarit le plus precis d'abord (type + affichage), puis le repli sur
+    # le type ; a chaque etage, le skin courant avant le socle classic.
+    # / Most specific template first (type + affichage), then the type
+    # fallback; at each level, the current skin before the classic base.
     assert resultat == [
-        "pages/faire_festival/partials/bloc_hero.html",
-        "pages/classic/partials/bloc_hero.html",
+        "pages/faire_festival/partials/bloc_section_banniere.html",
+        "pages/classic/partials/bloc_section_banniere.html",
+        "pages/faire_festival/partials/bloc_section.html",
+        "pages/classic/partials/bloc_section.html",
     ]
 
 
@@ -198,7 +233,7 @@ def test_page_publiee_est_rendue(tenant, api_client, nettoyer_pages):
             titre="Page Rendue Pytest", slug="pytest-rendue", publie=True
         )
         Bloc.objects.create(
-            page=page, type_bloc=Bloc.HERO, position=1, titre="Mon Hero Pytest"
+            page=page, type_bloc=Bloc.SECTION, affichage=Bloc.BANNIERE, position=1, titre="Mon Hero Pytest"
         )
 
     reponse = api_client.get("/pytest-rendue/")
@@ -299,14 +334,14 @@ def test_bloc_evenements_liste_les_a_venir(tenant, api_client, nettoyer_pages):
         # the test event (+3 days) could rank beyond the [:100] slice and the
         # test failed depending on DB state. 32000 = deterministic.
         Bloc.objects.create(
-            page=page, type_bloc=Bloc.EVENEMENTS, position=1,
+            page=page, type_bloc=Bloc.LISTE, source=Bloc.EVENEMENTS, position=1,
             titre="À venir", nombre_max=32000,
         )
 
     try:
         reponse = api_client.get("/pytest-evts/")
         contenu = reponse.content.decode()
-        assert "bloc-evenements-liste" in contenu
+        assert "bloc-liste-evenements" in contenu
         assert f"Evenement futur {marqueur}" in contenu
         assert f"Evenement passe {marqueur}" not in contenu
     finally:
@@ -358,48 +393,23 @@ def test_url_schema_dangereux():
     assert url_a_schema_dangereux(None) is False
 
 
-def test_bloc_galerie_et_faq_repliable(tenant, api_client, nettoyer_pages):
-    """La galerie rend sa section ; une FAQ repliable rend un <details>."""
+def test_bloc_images_grille_et_faq_accordeon(tenant, api_client, nettoyer_pages):
+    """La galerie rend sa section ; une FAQ rend un accordeon <details>."""
     from pages.models import Bloc, Page
 
     with tenant_context(tenant):
         page = Page.objects.create(titre="Médias", slug="pytest-media", publie=True)
-        Bloc.objects.create(page=page, type_bloc=Bloc.GALERIE, position=1, titre="Galerie")
+        Bloc.objects.create(page=page, type_bloc=Bloc.IMAGES, affichage=Bloc.GRILLE, position=1, titre="Galerie")
         Bloc.objects.create(
-            page=page, type_bloc=Bloc.FAQ, position=2, repliable=True,
+            page=page, type_bloc=Bloc.FAQ, position=2,
             titre="Repliable ?", texte="<p>Oui.</p>",
         )
 
     reponse = api_client.get("/pytest-media/")
     contenu = reponse.content.decode()
     assert "tb-bloc--galerie" in contenu
-    # FAQ repliable -> accordéon natif <details>.
+    # La FAQ est toujours un accordéon natif <details>.
     assert "<details" in contenu
-
-
-def test_page_hierarchie_un_seul_niveau(tenant, nettoyer_pages):
-    """La hiérarchie parent/enfant est limitée à UN niveau (validé par clean)."""
-    from pages.models import Page
-
-    with tenant_context(tenant):
-        parent = Page.objects.create(titre="Parent", slug="pytest-parent")
-        enfant = Page.objects.create(titre="Enfant", slug="pytest-enfant", parent=parent)
-
-        # Un petit-enfant (enfant d'un enfant) est refusé.
-        petit = Page(titre="Petit", slug="pytest-petit", parent=enfant)
-        with pytest.raises(ValidationError):
-            petit.full_clean()
-
-        # Une page qui a déjà des sous-pages ne peut pas devenir elle-même enfant.
-        autre = Page.objects.create(titre="Autre", slug="pytest-autre")
-        parent.parent = autre
-        with pytest.raises(ValidationError):
-            parent.full_clean()
-
-        # L'accueil ne peut pas être une sous-page.
-        acc = Page(titre="Acc", slug="pytest-acc", est_accueil=True, parent=autre)
-        with pytest.raises(ValidationError):
-            acc.full_clean()
 
 
 def test_jsonld_breadcrumb_sous_page(tenant, api_client, nettoyer_pages):
@@ -463,11 +473,14 @@ def test_bloc_admin_a_des_conditional_fields():
 
     regles = BlocAdmin.conditional_fields
     # image_position visible uniquement pour le bloc Image + texte
-    assert "IMAGE_TEXTE" in regles["image_position"]
+    # La visibilite est DERIVEE du catalogue : un champ n'apparait que pour
+    # les types qui le declarent. / Visibility is DERIVED from the catalogue.
+    assert "SECTION" in regles["affichage"]
+    assert "LISTE" in regles["source"]
     # auteur_nom visible uniquement pour le temoignage
-    assert "TEMOIGNAGE" in regles["auteur_nom"]
+    assert "SECTION" in regles["auteur_nom"]
     # sous_titre partage par Hero et CTA (test du .includes)
-    assert "HERO" in regles["sous_titre"] and "CTA" in regles["sous_titre"]
+    assert "SECTION" in regles["sous_titre"]
 
 
 def test_changelist_pages_accessible_admin(admin_client):
@@ -483,7 +496,7 @@ def test_texte_du_bloc_est_nettoye(tenant):
     from pages.models import Bloc
 
     bloc = Bloc(
-        type_bloc=Bloc.PARAGRAPHE,
+        type_bloc=Bloc.TEXTE,
         texte="<p>Bonjour</p><script>alert('xss')</script>",
     )
     sanitize_textfields(bloc)
@@ -495,7 +508,7 @@ def test_texte_du_bloc_est_nettoye(tenant):
 # construire_page_accueil (home auto-generee : HERO -> PARAGRAPHE -> CTA)
 # / construire_page_accueil (auto home: HERO -> PARAGRAPH -> CTA)
 # ---------------------------------------------------------------------------
-def test_construire_page_accueil_hero_paragraphe_cta(tenant, nettoyer_pages):
+def test_construire_page_accueil_banniere_texte_appel_action(tenant, nettoyer_pages):
     """
     Home auto : HERO(1) sans image ni boutons, PARAGRAPHE(2) avec la description
     PASSEE (pas celle de config), CTA(3) avec les 2 boutons module-aware.
@@ -535,10 +548,11 @@ def test_construire_page_accueil_hero_paragraphe_cta(tenant, nettoyer_pages):
             assert page is not None
 
             blocs = list(page.blocs.order_by("position"))
-            assert [b.type_bloc for b in blocs] == ["HERO", "PARAGRAPHE", "CTA"]
+            assert [b.type_bloc for b in blocs] == ["SECTION", "TEXTE", "SECTION"]
+            assert [b.affichage for b in blocs] == ["BANNIERE", "", "APPEL_ACTION"]
 
-            # HERO : titre + sous-titre, PAS d'image ni de boutons.
-            # / HERO: title + subtitle, NO image, NO buttons.
+            # La banniere porte titre + sous-titre, PAS d'image ni de boutons.
+            # / The banner carries title + subtitle, NO image, NO buttons.
             hero = blocs[0]
             assert hero.titre == "Lieu Pytest"
             assert hero.sous_titre == "Court pytest"
@@ -601,12 +615,12 @@ def test_construire_page_accueil_sans_desc_longue_paragraphe_vide(tenant, nettoy
             types = [b.type_bloc for b in blocs]
             # Le PARAGRAPHE est present meme vide.
             # / The PARAGRAPH is present even when empty.
-            assert types == ["HERO", "PARAGRAPHE", "CTA"]
+            assert types == ["SECTION", "TEXTE", "SECTION"]
             assert blocs[1].texte == ""
 
             # Seul le module adhesion est actif -> bouton principal = adhesions.
             # / Only the membership module is active -> primary button = memberships.
-            cta = page.blocs.get(type_bloc="CTA")
+            cta = page.blocs.get(affichage="APPEL_ACTION")
             assert cta.bouton_url == "/memberships/"
             assert not cta.bouton2_label
         finally:
@@ -617,7 +631,7 @@ def test_construire_page_accueil_sans_desc_longue_paragraphe_vide(tenant, nettoy
 # ---------------------------------------------------------------------------
 # CHANTIER 06 — Blocs IFRAME + PARTENAIRES
 # ---------------------------------------------------------------------------
-def test_creation_bloc_iframe(tenant, nettoyer_pages):
+def test_creation_bloc_integration_widget(tenant, nettoyer_pages):
     """Un bloc IFRAME se cree avec embed_url + hauteur_px."""
     from pages.models import Bloc, Page
 
@@ -625,11 +639,12 @@ def test_creation_bloc_iframe(tenant, nettoyer_pages):
         page = Page.objects.create(titre="Pytest Iframe", slug="pytest-iframe")
         bloc = Bloc.objects.create(
             page=page,
-            type_bloc=Bloc.IFRAME,
+            type_bloc=Bloc.INTEGRATION, affichage=Bloc.WIDGET,
             embed_url="https://newsletter.ghost.io/abonnement",
             hauteur_px=500,
         )
-        assert bloc.type_bloc == "IFRAME"
+        assert bloc.type_bloc == "INTEGRATION"
+        assert bloc.affichage == "WIDGET"
         assert bloc.hauteur_px == 500
 
 
@@ -639,7 +654,7 @@ def test_hauteur_px_bornee(tenant, nettoyer_pages):
 
     with tenant_context(tenant):
         page = Page.objects.create(titre="Pytest Iframe H", slug="pytest-iframe-h")
-        bloc = Bloc(page=page, type_bloc=Bloc.IFRAME, hauteur_px=50)
+        bloc = Bloc(page=page, type_bloc=Bloc.INTEGRATION, affichage=Bloc.WIDGET, hauteur_px=50)
         with pytest.raises(ValidationError) as exc:
             bloc.full_clean()
         assert "hauteur_px" in exc.value.error_dict
@@ -651,7 +666,7 @@ def test_image_galerie_lien_url_ok(tenant, nettoyer_pages):
 
     with tenant_context(tenant):
         page = Page.objects.create(titre="Pytest Part", slug="pytest-part")
-        bloc = Bloc.objects.create(page=page, type_bloc=Bloc.PARTENAIRES)
+        bloc = Bloc.objects.create(page=page, type_bloc=Bloc.IMAGES, affichage=Bloc.BANDE_LOGOS)
         img = ImageGalerie(bloc=bloc, lien_url="https://partenaire.example/", position=1)
         img.full_clean()  # ne leve pas
         img.save()
@@ -664,7 +679,7 @@ def test_image_galerie_lien_url_dangereux_rejete(tenant, nettoyer_pages):
 
     with tenant_context(tenant):
         page = Page.objects.create(titre="Pytest Part X", slug="pytest-part-x")
-        bloc = Bloc.objects.create(page=page, type_bloc=Bloc.PARTENAIRES)
+        bloc = Bloc.objects.create(page=page, type_bloc=Bloc.IMAGES, affichage=Bloc.BANDE_LOGOS)
         img = ImageGalerie(bloc=bloc, lien_url="javascript:alert(1)", position=1)
         with pytest.raises(ValidationError):
             img.full_clean()
@@ -763,24 +778,39 @@ def test_get_inlines_partenaires(tenant, nettoyer_pages):
 
     with tenant_context(tenant):
         page = Page.objects.create(titre="Pytest Adm", slug="pytest-adm")
-        bloc = Bloc.objects.create(page=page, type_bloc=Bloc.PARTENAIRES)
+        bloc = Bloc.objects.create(page=page, type_bloc=Bloc.IMAGES, affichage=Bloc.BANDE_LOGOS)
         admin = BlocAdmin(Bloc, staff_admin_site)
         request = RequestFactory().get("/")
         inlines = admin.get_inlines(request, bloc)
         assert ImageGalerieInline in inlines
 
 
-def test_conditional_fields_nouveaux_types():
-    """titre visible pour IFRAME/PARTENAIRES ; hauteur_px pour IFRAME."""
+def test_conditional_fields_se_resserrent_par_affichage():
+    """
+    Un champ ne s'affiche que pour les affichages dont le gabarit le rend.
+
+    `hauteur_px` n'est lu que par INTEGRATION/WIDGET : le proposer sur VIDEO ou
+    NEWSLETTER ferait saisir une valeur que le rendu ignore. Meme logique pour
+    les champs d'auteur, propres a SECTION/CITATION.
+    """
     from Administration.admin.site import staff_admin_site
     from pages.admin import BlocAdmin
     from pages.models import Bloc
 
     admin = BlocAdmin(Bloc, staff_admin_site)
-    assert "IFRAME" in admin.conditional_fields["titre"]
-    assert "PARTENAIRES" in admin.conditional_fields["titre"]
-    assert admin.conditional_fields["hauteur_px"] == "type_bloc == 'IFRAME'"
-    assert "IFRAME" in admin.conditional_fields["embed_url"]
+
+    # Resserre au couple (type, affichage).
+    assert admin.conditional_fields["hauteur_px"] == (
+        "(type_bloc == 'INTEGRATION' && affichage == 'WIDGET')"
+    )
+    assert admin.conditional_fields["auteur_nom"] == (
+        "(type_bloc == 'SECTION' && affichage == 'CITATION')"
+    )
+    # Les trois affichages d'INTEGRATION rendent tous embed_url.
+    assert "INTEGRATION" in admin.conditional_fields["embed_url"]
+    assert "INTEGRATION" in admin.conditional_fields["titre"]
+    # Un type a rendu unique reste pilote par son seul type.
+    assert admin.conditional_fields["points_gps"] == "type_bloc == 'LIEU'"
     assert "hauteur_px" in admin.fields
 
 
@@ -804,8 +834,8 @@ def test_rootconfig_admin_superadmin_strict(tenant):
     assert list(admin.get_fields(request)) == ["domaines_embed_autorises"]
 
 
-def test_rendu_bloc_iframe(tenant, whitelist_embed, nettoyer_pages):
-    """bloc_iframe : hote autorise -> <iframe> ; hote refuse -> message honnete."""
+def test_rendu_bloc_integration_widget(tenant, whitelist_embed, nettoyer_pages):
+    """bloc_integration_widget : hote autorise -> <iframe> ; hote refuse -> message honnete."""
     from django.template.loader import render_to_string
 
     from pages.models import Bloc, Page
@@ -814,37 +844,37 @@ def test_rendu_bloc_iframe(tenant, whitelist_embed, nettoyer_pages):
         _set_whitelist_embed("newsletter.ghost.io")
         page = Page.objects.create(titre="Pytest Rif", slug="pytest-rif")
         bloc_ok = Bloc.objects.create(
-            page=page, type_bloc=Bloc.IFRAME,
+            page=page, type_bloc=Bloc.INTEGRATION, affichage=Bloc.WIDGET,
             embed_url="https://newsletter.ghost.io/abo", hauteur_px=400,
         )
-        html_ok = render_to_string("pages/classic/partials/bloc_iframe.html", {"bloc": bloc_ok})
+        html_ok = render_to_string("pages/classic/partials/bloc_integration_widget.html", {"bloc": bloc_ok})
         assert "<iframe" in html_ok
-        assert 'data-testid="bloc-iframe"' in html_ok
+        assert 'data-testid="bloc-integration-widget"' in html_ok
 
         bloc_ko = Bloc.objects.create(
-            page=page, type_bloc=Bloc.IFRAME,
+            page=page, type_bloc=Bloc.INTEGRATION, affichage=Bloc.WIDGET,
             embed_url="https://evil.example/x", hauteur_px=400,
         )
-        html_ko = render_to_string("pages/classic/partials/bloc_iframe.html", {"bloc": bloc_ko})
+        html_ko = render_to_string("pages/classic/partials/bloc_integration_widget.html", {"bloc": bloc_ko})
         assert "<iframe" not in html_ko
         assert ("hote non autoris" in html_ko.lower()) or ("host" in html_ko.lower())
 
 
-def test_rendu_bloc_partenaires_lien(tenant, nettoyer_pages):
-    """bloc_partenaires : conteneur + testid rendus (logo cliquable teste en Chrome)."""
+def test_rendu_bloc_images_bande_logos_lien(tenant, nettoyer_pages):
+    """bloc_images_bande_logos : conteneur + testid rendus (logo cliquable teste en Chrome)."""
     from django.template.loader import render_to_string
 
     from pages.models import Bloc, Page
 
     with tenant_context(tenant):
         page = Page.objects.create(titre="Pytest Rpart", slug="pytest-rpart")
-        bloc = Bloc.objects.create(page=page, type_bloc=Bloc.PARTENAIRES)
-        html = render_to_string("pages/classic/partials/bloc_partenaires.html", {"bloc": bloc})
-        assert 'data-testid="bloc-partenaires"' in html
+        bloc = Bloc.objects.create(page=page, type_bloc=Bloc.IMAGES, affichage=Bloc.BANDE_LOGOS)
+        html = render_to_string("pages/classic/partials/bloc_images_bande_logos.html", {"bloc": bloc})
+        assert 'data-testid="bloc-images-bande-logos"' in html
 
 
-def test_rendu_bloc_newsletter(tenant, nettoyer_pages):
-    """bloc_newsletter : script Ghost VENDORISÉ + data-site = embed_url ; vide si pas d'URL."""
+def test_rendu_bloc_integration_newsletter(tenant, nettoyer_pages):
+    """bloc_integration_newsletter : script Ghost VENDORISÉ + data-site = embed_url ; vide si pas d'URL."""
     from django.template.loader import render_to_string
 
     from pages.models import Bloc, Page
@@ -852,19 +882,236 @@ def test_rendu_bloc_newsletter(tenant, nettoyer_pages):
     with tenant_context(tenant):
         page = Page.objects.create(titre="Pytest News", slug="pytest-news")
         bloc = Bloc.objects.create(
-            page=page, type_bloc=Bloc.NEWSLETTER,
+            page=page, type_bloc=Bloc.INTEGRATION, affichage=Bloc.NEWSLETTER,
             embed_url="https://ghost.tibillet.coop/",
             titre="Les news de TiBillet",
             sous_titre="La boite a outils d'organisation collective",
         )
-        html = render_to_string("pages/classic/partials/bloc_newsletter.html", {"bloc": bloc})
+        html = render_to_string("pages/classic/partials/bloc_integration_newsletter.html", {"bloc": bloc})
         # Script servi en LOCAL (vendorisé), pas depuis un CDN.
         assert "pages/vendor/ghost/signup-form.min.js" in html
         assert "cdn.jsdelivr.net" not in html
         assert 'data-site="https://ghost.tibillet.coop/"' in html
-        assert 'data-testid="bloc-newsletter"' in html
+        assert 'data-testid="bloc-integration-newsletter"' in html
 
         # Sans URL d'instance -> aucune section rendue.
-        bloc_vide = Bloc.objects.create(page=page, type_bloc=Bloc.NEWSLETTER, embed_url="")
-        html_vide = render_to_string("pages/classic/partials/bloc_newsletter.html", {"bloc": bloc_vide})
+        bloc_vide = Bloc.objects.create(page=page, type_bloc=Bloc.INTEGRATION, affichage=Bloc.NEWSLETTER, embed_url="")
+        html_vide = render_to_string("pages/classic/partials/bloc_integration_newsletter.html", {"bloc": bloc_vide})
         assert "bloc-newsletter" not in html_vide
+
+
+# ---------------------------------------------------------------------------
+# Arbre a N niveaux, place dans la navigation, menu lateral
+# ---------------------------------------------------------------------------
+def test_arbre_profondeur_bornee_et_sans_cycle(tenant, nettoyer_pages):
+    """
+    L'arbre accepte la profondeur prevue, refuse un niveau de plus et tout cycle.
+
+    Un cycle ne se voit pas en base mais fait boucler sans fin tout ce qui
+    remonte l'arbre : fil d'Ariane, menu lateral, precedent/suivant.
+    """
+    from pages.models import Page, PROFONDEUR_MAX_ARBRE
+
+    with tenant_context(tenant):
+        precedente, creees = None, []
+        for rang in range(1, PROFONDEUR_MAX_ARBRE + 1):
+            page = Page(titre=f"N{rang}", slug=f"pytest-arbre-{rang}", parent=precedente)
+            page.full_clean()
+            page.save()
+            creees.append(page)
+            precedente = page
+        assert creees[-1].profondeur() == PROFONDEUR_MAX_ARBRE
+
+        trop_profonde = Page(titre="trop", slug="pytest-arbre-trop", parent=precedente)
+        with pytest.raises(ValidationError):
+            trop_profonde.full_clean()
+
+        # Une page ne peut pas devenir la descendante d'elle-meme.
+        racine = creees[0]
+        racine.parent = creees[-1]
+        with pytest.raises(ValidationError):
+            racine.full_clean()
+
+        # PROTECT : on ne supprime pas un noeud qui porte des enfants.
+        from django.db.models import ProtectedError
+        with pytest.raises(ProtectedError):
+            creees[0].delete()
+
+        for page in reversed(creees):
+            page.parent = None
+            page.save()
+        for page in creees:
+            page.delete()
+
+
+def test_page_accueil_reste_une_racine_sans_enfants(tenant, nettoyer_pages):
+    """
+    La page d'accueil ne peut ni avoir un parent, ni porter des sous-pages.
+
+    Elle est servie sur « / » tout en portant un slug : ses descendants
+    auraient un rattachement ambigu.
+    """
+    from pages.models import Page
+
+    with tenant_context(tenant):
+        rubrique = Page.objects.create(titre="Rubrique", slug="pytest-rubrique")
+        accueil = Page(titre="Home", slug="pytest-home-arbre",
+                       est_accueil=True, parent=rubrique)
+        with pytest.raises(ValidationError):
+            accueil.full_clean()
+
+        # Une page qui a des enfants ne peut pas devenir la page d'accueil.
+        enfant = Page.objects.create(titre="Fille", slug="pytest-fille", parent=rubrique)
+        rubrique.est_accueil = True
+        with pytest.raises(ValidationError):
+            rubrique.full_clean()
+        enfant.delete()
+
+
+def test_navbar_une_racine_hors_navigation_n_apparait_pas(tenant, nettoyer_pages):
+    """
+    `affichage_nav` decide de la place d'une racine dans la barre de navigation.
+
+    Une racine en menu lateral y figure SANS deroulant : son arbre est deja
+    donne en entier par le menu de gauche, le repeter en haut ferait deux
+    navigations pour une seule structure.
+    """
+    from pages.models import Page
+    from pages.services import construire_navbar_pages
+
+    with tenant_context(tenant):
+        cachee = Page.objects.create(
+            titre="Cachee", slug="pytest-nav-aucun", publie=True,
+            affichage_nav=Page.AUCUN)
+        doc = Page.objects.create(
+            titre="Doc", slug="pytest-nav-sidebar", publie=True,
+            affichage_nav=Page.SIDEBAR)
+        Page.objects.create(
+            titre="Chapitre", slug="pytest-nav-chapitre", publie=True, parent=doc)
+
+        entrees = {e["label"]: e for e in construire_navbar_pages(Page)}
+        assert "Cachee" not in entrees
+        assert "Doc" in entrees
+        assert entrees["Doc"]["children"] == []
+
+        cachee.delete()
+
+
+def test_menu_lateral_et_pages_voisines(tenant, nettoyer_pages):
+    """
+    Le menu lateral deplie l'arbre de la rubrique, et les voisines le suivent.
+
+    Precedent/suivant restent DANS l'arbre courant : une chaine qui traverserait
+    deux arbres enchainerait la derniere page d'une rubrique sur la premiere
+    d'une autre, sans rapport.
+    """
+    from pages.models import Page
+    from pages.services import construire_menu_lateral
+
+    with tenant_context(tenant):
+        doc = Page.objects.create(
+            titre="Guide", slug="pytest-guide", publie=True,
+            affichage_nav=Page.SIDEBAR)
+        un = Page.objects.create(titre="Un", slug="pytest-guide-1",
+                                 publie=True, parent=doc, position=1)
+        deux = Page.objects.create(titre="Deux", slug="pytest-guide-2",
+                                   publie=True, parent=doc, position=2)
+        # Un arbre voisin, en dehors de la rubrique.
+        Page.objects.create(titre="Ailleurs", slug="pytest-ailleurs", publie=True)
+
+        menu = construire_menu_lateral(Page, un)
+        assert [e["titre"] for e in menu["entrees"]] == ["Guide", "Un", "Deux"]
+        assert menu["precedente"].pk == doc.pk
+        assert menu["suivante"].pk == deux.pk
+
+        # La derniere page de la rubrique n'enchaine sur rien.
+        assert construire_menu_lateral(Page, deux)["suivante"] is None
+
+        # Une page hors rubrique en menu lateral n'a pas de menu du tout.
+        hors = Page.objects.get(slug="pytest-ailleurs")
+        assert construire_menu_lateral(Page, hors) == {}
+
+
+def test_fil_ariane_omet_un_ancetre_non_publie(tenant, nettoyer_pages):
+    """
+    Un ancetre en brouillon ne figure pas dans le fil d'Ariane.
+
+    Le lien menerait a un 404, pour un visiteur comme pour un moteur.
+    """
+    from pages.models import Page
+    from pages.templatetags.pages_tags import fil_ariane
+
+    with tenant_context(tenant):
+        brouillon = Page.objects.create(
+            titre="Brouillon", slug="pytest-brouillon", publie=False)
+        fille = Page.objects.create(
+            titre="Fille", slug="pytest-fille-publiee", publie=True, parent=brouillon)
+
+        titres = [m["titre"] for m in fil_ariane(fille)]
+        assert "Brouillon" not in titres
+        assert titres[0] == "Accueil"
+        assert titres[-1] == "Fille"
+
+
+def test_save_formset_ne_renvoie_pas_en_fin_un_bloc_glisse_en_tete(tenant, nettoyer_pages):  # noqa: F811
+    """
+    Reordonner les blocs depuis l'onglet respecte le geste de l'utilisateur.
+
+    Le tri d'Unfold renumerote les positions A PARTIR DE ZERO. Si save_formset
+    traitait la position 0 comme « non renseignee », le bloc que l'on vient de
+    glisser en tete se verrait attribuer max+1 : il repartirait en DERNIER,
+    l'exact inverse du geste. Placer un bloc en tete deviendrait impossible.
+    """
+    from django_tenants.utils import tenant_context
+
+    from Administration.admin.site import staff_admin_site
+    from pages.admin import PageAdmin
+    from pages.models import Bloc, Page
+
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Pytest ordre", slug="pytest-ordre")
+        premier = Bloc.objects.create(page=page, type_bloc=Bloc.TEXTE, position=1, titre="A")
+        deuxieme = Bloc.objects.create(page=page, type_bloc=Bloc.TEXTE, position=2, titre="B")
+        troisieme = Bloc.objects.create(page=page, type_bloc=Bloc.TEXTE, position=3, titre="C")
+
+        # Ce que le JS d'Unfold envoie quand on glisse C en tete : C=0, A=1, B=2.
+        troisieme.position = 0
+        premier.position = 1
+        deuxieme.position = 2
+
+        class FormsetFactice:
+            model = Bloc
+            deleted_objects = []
+
+            def save(self, commit=True):
+                return [troisieme, premier, deuxieme]
+
+            def save_m2m(self):
+                pass
+
+        class FormFactice:
+            instance = page
+
+        admin = PageAdmin(Page, staff_admin_site)
+        admin.save_formset(None, FormFactice(), FormsetFactice(), change=True)
+
+        ordre = list(page.blocs.order_by("position").values_list("titre", flat=True))
+        assert ordre == ["C", "A", "B"], f"ordre obtenu : {ordre}"
+
+
+def test_les_inlines_ne_dependent_pas_des_permissions_modele():
+    """
+    Les inlines de l'app pages portent leurs 4 permissions.
+
+    Sans override, Django retombe sur `user.has_perm()`, qu'un administrateur
+    de tenant ne possede pas : Django ecarte alors l'inline du formulaire. Pour
+    ImageGalerieInline, cela rendait l'encart « Images » invisible a tout le
+    monde sauf un superuser — donc les galeries et les images d'article
+    inutilisables.
+    """
+    from pages.admin import BlocInline, ImageGalerieInline
+
+    for inline in (BlocInline, ImageGalerieInline):
+        for nom in ("has_view_permission", "has_add_permission",
+                    "has_change_permission", "has_delete_permission"):
+            assert nom in vars(inline), f"{inline.__name__} n'override pas {nom}"

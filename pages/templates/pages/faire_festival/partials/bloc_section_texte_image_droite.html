@@ -1,0 +1,12 @@
+{% comment %}
+    BLOC SECTION / affichage TEXTE_IMAGE_DROITE — skin faire_festival.
+    Image a droite, texte a l'gauche.
+    / SECTION block / TEXTE_IMAGE_DROITE display — faire_festival skin.
+
+    LOCALISATION : pages/templates/pages/faire_festival/partials/bloc_section_texte_image_droite.html
+
+    Le markup vit dans le socle partage _section_texte_image.html : seul le cote
+    change entre cet affichage et son symetrique.
+    / The markup lives in the shared base: only the side differs.
+{% endcomment %}
+{% include "pages/faire_festival/partials/_section_texte_image.html" with cote="droite" %}

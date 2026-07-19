@@ -109,40 +109,57 @@
   {% endcomment %}
 
   {% comment %}
-  OUVERTURE AUTO DE L'OFFCANVAS DE CONNEXION
-  / Auto-open the login offcanvas
+  OUVERTURE AUTO D'UN OFFCANVAS DEPUIS L'URL
+  / Auto-open an offcanvas from the URL
 
   LOCALISATION : BaseBillet/templates/pages/classic/partials/navbar.html
 
-  Quand une vue serveur redirige un visiteur anonyme avec le parametre
-  `?login=1` (ex : tentative de proposer un evenement sans etre connecte,
-  cf. EventWizardPublic._require_login_or_redirect), on ouvre automatiquement
-  l'offcanvas de connexion #loginPanel via l'API Bootstrap deja chargee.
-  On nettoie ensuite l'URL pour qu'un rafraichissement ne le rouvre pas.
+  Un parametre d'URL ouvre automatiquement le panneau correspondant, via l'API
+  Bootstrap deja chargee, puis l'URL est nettoyee (un rafraichissement ne le
+  rouvre pas) :
+    - `?login=1`   -> panneau de connexion #loginPanel (ex : vue serveur qui
+                      redirige un visiteur anonyme, cf.
+                      EventWizardPublic._require_login_or_redirect).
+    - `?contact=1` -> panneau « Contact et support » #contactPanel (ex : un bouton
+                      CTA d'une page qui pointe vers `?contact=1`).
 
-  / When a server view redirects an anonymous visitor with `?login=1`, open the
-  login offcanvas automatically using the already-loaded Bootstrap API, then
-  clean the URL so a refresh won't reopen it.
+  / A URL param auto-opens the matching offcanvas via the already-loaded Bootstrap
+  API, then the URL is cleaned so a refresh won't reopen it.
   {% endcomment %}
   <script>
     document.addEventListener("DOMContentLoaded", function () {
-      // On ne fait rien si le parametre ?login=1 est absent.
-      // / Do nothing if the ?login=1 param is absent.
+      // Parametre d'URL -> id du panneau offcanvas a ouvrir.
+      // / URL param -> id of the offcanvas panel to open.
+      const panneauxParParametre = {
+        login: "loginPanel",
+        contact: "contactPanel",
+      };
+
       const parametresUrl = new URLSearchParams(window.location.search);
-      if (!parametresUrl.has("login")) {
+
+      // On cherche le premier parametre present et on ouvre son panneau.
+      // / Find the first present param and open its panel.
+      let parametreTrouve = null;
+      for (const [parametre, idPanneau] of Object.entries(panneauxParParametre)) {
+        if (parametresUrl.has(parametre)) {
+          const panneau = document.getElementById(idPanneau);
+          if (panneau) {
+            bootstrap.Offcanvas.getOrCreateInstance(panneau).show();
+          }
+          parametreTrouve = parametre;
+          break;
+        }
+      }
+
+      // Aucun parametre reconnu : rien a faire.
+      // / No recognized param: nothing to do.
+      if (!parametreTrouve) {
         return;
       }
 
-      // Ouvre l'offcanvas de connexion (meme mecanisme que les autres panneaux).
-      // / Open the login offcanvas (same mechanism as the other panels).
-      const panneauConnexion = document.getElementById("loginPanel");
-      if (panneauConnexion) {
-        bootstrap.Offcanvas.getOrCreateInstance(panneauConnexion).show();
-      }
-
-      // Retire ?login=1 de l'URL sans recharger la page.
-      // / Remove ?login=1 from the URL without reloading.
-      parametresUrl.delete("login");
+      // Retire le parametre de l'URL sans recharger la page.
+      // / Remove the param from the URL without reloading.
+      parametresUrl.delete(parametreTrouve);
       const requete = parametresUrl.toString();
       const nouvelleUrl =
         window.location.pathname +

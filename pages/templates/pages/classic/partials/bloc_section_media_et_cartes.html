@@ -1,0 +1,61 @@
+{% load static i18n %}
+{% comment %}
+    BLOC SECTION / affichage MEDIA_ET_CARTES — skin classic.
+    Le media et le texte, puis les sous-cartes en grille, puis le bouton.
+    / SECTION block / MEDIA_ET_CARTES display — media and text, then the
+    sub-cards as a grid, then the button.
+
+    LOCALISATION : pages/templates/pages/classic/partials/bloc_section_media_et_cartes.html
+
+    Les sous-cartes viennent de `bloc.contenu`, une liste d'items TEXTE :
+        [{"titre": "JOUR 01", "texte": "…", "badge": "gratuit"}, …]
+    Ce sont des DONNEES, pas des blocs : elles appartiennent a cette section et
+    la suivent quand on la deplace. Le HTML et les classes sont ici ; la base ne
+    stocke que du texte.
+    / Sub-cards come from `bloc.contenu`, a list of TEXT items. They are DATA,
+    not blocks: they belong to this section and travel with it. HTML and classes
+    live here; the DB stores text only.
+
+    Ce socle empile ce que le skin faire_festival dispose en deux colonnes : le
+    rendu differe, le contenu est le meme.
+    / This base stacks what the faire_festival skin lays out in two columns.
+{% endcomment %}
+<section class="tb-bloc tb-bloc--media-cartes" data-testid="bloc-section-media-et-cartes">
+    <div class="tb-bloc__contenu">
+        {% if bloc.video %}
+            {# playsinline : sans lui, iOS force le plein ecran. #}
+            {# / playsinline: without it, iOS forces fullscreen. #}
+            <video class="tb-bloc__video" autoplay loop muted playsinline webkit-playsinline
+                   src="{{ bloc.video.url }}"></video>
+        {% elif bloc.image %}
+            <img class="tb-bloc__image" src="{{ bloc.image.hdr.url }}"
+                 alt="{{ bloc.titre }}" loading="lazy">
+        {% endif %}
+
+        {% if bloc.titre %}<h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>{% endif %}
+        {% if bloc.texte %}<div class="tb-bloc__texte">{{ bloc.texte|safe }}</div>{% endif %}
+
+        {% if bloc.contenu %}
+            <div class="tb-sous-cartes">
+                {% for carte in bloc.contenu %}
+                    <article class="tb-sous-carte">
+                        <p class="tb-sous-carte__titre">
+                            {{ carte.titre }}
+                            {% if carte.badge %}<span class="tb-bloc__carte-badge">{{ carte.badge }}</span>{% endif %}
+                        </p>
+                        {% if carte.texte %}
+                            <div class="tb-sous-carte__texte">{{ carte.texte|linebreaksbr }}</div>
+                        {% endif %}
+                    </article>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        {% if bloc.bouton_label %}
+            <div class="tb-bloc__boutons">
+                <a class="tb-bloc__bouton tb-bloc__bouton--plein"
+                   href="{{ bloc.bouton_url|default:'#' }}">{{ bloc.bouton_label }}</a>
+            </div>
+        {% endif %}
+    </div>
+</section>

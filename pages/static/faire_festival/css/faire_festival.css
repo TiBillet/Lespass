@@ -170,6 +170,20 @@
     z-index: 1000;     /* Au-dessus de tous les autres éléments */
 }
 
+/* L'entete de ce skin reste fixe en haut de l'ecran : les colonnes collantes
+   (menu de rubrique, sommaire) et les ancres du sommaire doivent donc se caler
+   PLUS BAS que lui. Sans ce decalage, le titre du sommaire et ses deux
+   premieres entrees passaient sous le bandeau jaune au defilement.
+   / This skin's header stays fixed at the top: sticky columns and heading
+   anchors must therefore sit LOWER than it. Without this offset the table of
+   contents' title and first two entries slid under the yellow band. */
+.skin-faire-festival {
+    --tb-sticky-top: 6.5rem;
+}
+.skin-faire-festival .tb-markdown :is(h1, h2, h3, h4, h5, h6) {
+    scroll-margin-top: 6.5rem;
+}
+
 /* ==========================================================================
    8. BOUTONS
    ========================================================================== */
@@ -436,7 +450,10 @@
    12. CARTES DES JOURS (Page d'accueil)
    ========================================================================== */
 .skin-faire-festival .carte-jour {
-    /* Style de base pour les blocs de présentation des jours */
+    /* La carte remplit sa colonne : les pilules de trois jours voisins se
+       posent alors sur la meme ligne, quel que soit le texte en dessous.
+       / The card fills its column so neighbouring day pills share a baseline. */
+    height: 100%;
 }
 
 .skin-faire-festival .en-tete-jour {
@@ -1013,24 +1030,40 @@
 .skin-faire-festival .image-etape {
     width: 100%;
     max-width: 200px;
-    min-height: 150px;
+    /* Hauteur FIXE, et non min-height : les illustrations de trois etapes
+       voisines n'ont ni la meme forme ni le meme cadrage. Une zone d'image de
+       hauteur constante fait demarrer les trois textes au meme niveau.
+       / FIXED height, not min-height: three neighbouring illustrations differ
+       in shape. A constant image zone starts the three texts at the same level. */
+    height: 180px;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
 .skin-faire-festival .image-etape img {
-    max-height: 280px;
+    max-height: 100%;
     width: auto;
     object-fit: contain;
 }
 
-/* Description de l'étape */
-.skin-faire-festival .etape-tuto p {
+/* Description de l'étape : elle absorbe l'espace variable et se centre dedans,
+   ce qui pousse le bouton en bas de la carte. Le gabarit rend le texte dans un
+   <div>, pas dans un <p> : les deux sont vises, sinon la regle ne s'applique a
+   rien et les boutons forment un escalier.
+   / The step description soaks up the slack and centres in it, pushing the
+   button to the card's bottom. The template renders a <div>, not a <p>: both
+   are targeted, otherwise the rule matches nothing. */
+.skin-faire-festival .etape-tuto p,
+.skin-faire-festival .etape-tuto > .police-mono {
     flex-grow: 1;
     display: flex;
     align-items: center;
 }
+
+/* Le bouton se cale en bas : tous les boutons d'une rangee sur la meme ligne.
+   / The button pins to the bottom: every button of a row on one baseline. */
+.skin-faire-festival .etape-tuto .bouton-action { margin-top: auto; }
 
 
 /* ==========================================================================
@@ -1106,6 +1139,22 @@
 /* Liens des icônes réseaux sociaux - sans soulignement */
 .skin-faire-festival .footer-faire-festival section a {
     text-decoration: none !important;
+}
+
+/* ==========================================================================
+   INTRODUCTION DE PAGE
+   ========================================================================== */
+
+/* Un bloc texte placé juste après l'image-titre pleine largeur ouvre la page :
+   il est centré, comme un chapeau d'article.
+   La règle vit ici et non en base : le HTML stocké dans un bloc est nettoyé au
+   rendu (nh3 retire class et style), donc la mise en forme appartient au skin.
+   / A text block placed right after the full-width title image opens the page:
+   it is centered, like an article standfirst. The rule lives here, not in the
+   database: HTML stored in a block is sanitized at render time (nh3 strips
+   class and style), so formatting belongs to the skin. */
+.skin-faire-festival [data-testid="bloc-images-pleine-largeur"] + [data-testid="bloc-texte"] {
+    text-align: center;
 }
 
 /* ==========================================================================

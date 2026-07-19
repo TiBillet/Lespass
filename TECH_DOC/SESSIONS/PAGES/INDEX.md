@@ -28,6 +28,7 @@ une séquence ordonnée de blocs typés.
 | 04 | Pont métier : programme événements + bouton billetterie | À faire | 3 | _à créer_ |
 | 05 | API v2 pages : fabriquer un site via API (perm. clé + CRUD + catalogue) | Spec validée | 4 | [CHANTIER-05-api-v2-pages.md](./CHANTIER-05-api-v2-pages.md) |
 | 06 | Blocs `IFRAME` (intégration libre + whitelist ROOT) + `PARTENAIRES` (logos cliquables) | Spec validée (review fable) | 2 | [CHANTIER-06-blocs-iframe-partenaires.md](./CHANTIER-06-blocs-iframe-partenaires.md) |
+| 07 | Moteur documentaire : arbre à N niveaux, URLs hiérarchiques, sidebar, TOC | Spec validée (review fable) | 5 | [CHANTIER-07-moteur-documentaire.md](./CHANTIER-07-moteur-documentaire.md) |
 
 ## Décisions verrouillées (résumé — détail dans SPEC.md)
 
@@ -37,8 +38,21 @@ une séquence ordonnée de blocs typés.
 - **Édition** : `Bloc` en fiche standalone avec `conditional_fields` **natif**
   Unfold (gère le select `type_bloc`) ; `Page` avec inline léger (aperçu +
   drag-drop ordre). **Zéro JS maison.**
-- **Navbar** plate : pages `publie=True` triées par `position`.
-- **URLs** `/<slug>/` + liste de slugs réservés.
+- **Navigation** pilotée par `affichage_nav` (`NAVBAR` / `SIDEBAR` / `AUCUN`), posé
+  sur la racine d'un arbre et hérité par ses descendants. Matrice de visibilité
+  complète dans CHANTIER-07 §2.8. _(Remplace la règle « navbar plate » —
+  CHANTIER-07, 2026-07-18.)_
+- **Arbre de pages** à N niveaux (profondeur max 6), mais **URLs plates**
+  `/<slug>/` + liste de slugs réservés : l'arbre pilote la navigation (sidebar,
+  fil d'Ariane, précédent/suivant), **pas** la forme de l'URL. L'URL hiérarchique
+  est un chantier séparé. _(CHANTIER-07 §2.7.)_
+- **URL d'une page** : toujours via `Page.get_absolute_url()`, jamais reconstruite
+  à la main. _(CHANTIER-07 lot A.)_
+- **Catalogue de blocs** : 7 types organisés par intention, la variation visuelle
+  portée par le champ `affichage` validé contre le type. **Jamais un nouveau TYPE
+  pour une variation purement visuelle.** _(CHANTIER-07 §2.1 et §2.3.)_
+- **Aucun groupement implicite** : chaque bloc se rend seul, les mises en page
+  côte à côte passent par la grille CSS de `<main>`. _(CHANTIER-07 §2.5.)_
 - **CSS** : classes sémantiques `.tb-bloc*` (markup neutre dans l'app),
   habillage par skin via CSS, conforme Hallmark par défaut.
 

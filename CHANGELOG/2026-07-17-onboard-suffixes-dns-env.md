@@ -38,6 +38,7 @@ premier. / The 1st suffix is the form default; `tibillet.coop` then
 | `onboard/templates/onboard/steps/03_venue.html` | radios générées par boucle sur `dns_choices` ; preview sans domaine en dur |
 | `BaseBillet/validators.py` | construction du domaine final : suffixe dérivé, retrait forçage DEBUG |
 | `onboard/management/commands/create_empty_tenant.py` | domaine technique du pool dérivé du 1er suffixe |
+| `Administration/management/commands/batch_new_tenant.py` | résidu `base_domain = 'tibillet.coop'` remplacé par le 1er suffixe dérivé de l'env |
 | `onboard/tests/*.py` | `dns_choice` de test aligné sur `tibillet.localhost` (DOMAIN de test) |
 | `onboard/tests/test_services_dns.py` | **nouveau** : tests unitaires de la fonction |
 

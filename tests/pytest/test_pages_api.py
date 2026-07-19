@@ -1,4 +1,5 @@
 import pytest
+from rest_framework import serializers
 from django_tenants.utils import tenant_context
 from Customers.models import Client
 from BaseBillet.models import ExternalApiKey
@@ -33,13 +34,21 @@ def test_catalogue_blocs_couvre_tous_les_types():
     # La whitelist est l'union, et ne contient que de vrais champs du modele.
     noms_champs_modele = {f.name for f in Bloc._meta.get_fields()}
     assert CHAMPS_BLOC_AUTORISES <= noms_champs_modele
-    # Exemple cible : FAQ porte titre + texte + repliable.
-    assert set(CHAMPS_PAR_TYPE["FAQ"]) == {"titre", "texte", "repliable"}
-    # Nouveaux blocs (CHANTIER-06) : champs attendus.
-    # / New blocks (CHANTIER-06): expected fields.
-    assert set(CHAMPS_PAR_TYPE["IFRAME"]) == {"titre", "embed_url", "hauteur_px"}
-    assert set(CHAMPS_PAR_TYPE["NEWSLETTER"]) == {"titre", "sous_titre", "embed_url"}
-    assert CHAMPS_PAR_TYPE["PARTENAIRES"] == ["titre"]
+    # Un type a rendu unique ne porte que ses champs de contenu.
+    # / A single-rendering type only carries its content fields.
+    assert set(CHAMPS_PAR_TYPE["FAQ"]) == {"titre", "texte"}
+    # Un type a plusieurs rendus declare `affichage` : sans lui, l'API ne
+    # pourrait pas choisir la forme du bloc.
+    # / A multi-rendering type declares `affichage`: without it the API could
+    # not pick the block's shape.
+    assert "affichage" in CHAMPS_PAR_TYPE["INTEGRATION"]
+    assert set(CHAMPS_PAR_TYPE["INTEGRATION"]) == {
+        "affichage", "titre", "sous_titre", "embed_url", "hauteur_px"}
+    assert set(CHAMPS_PAR_TYPE["IMAGES"]) == {"affichage", "titre", "image"}
+    # La source d'une liste choisit une requete, pas un rendu : ce n'est donc
+    # pas un affichage. / A list's source picks a query, not a rendering.
+    assert "source" in CHAMPS_PAR_TYPE["LISTE"]
+    assert "affichage" not in CHAMPS_PAR_TYPE["LISTE"]
 
 
 @pytest.mark.django_db
@@ -57,7 +66,6 @@ def test_bloc_create_serializer_cree_un_bloc_faq():
             "headline": "Une question ?",
             "text": "<p>Une reponse <script>alert(1)</script></p>",
             "additionalProperty": [
-                {"@type": "PropertyValue", "name": "repliable", "value": True},
             ],
         }
         ser = BlocCreateSerializer(data=payload, context={"page": page})
@@ -65,7 +73,6 @@ def test_bloc_create_serializer_cree_un_bloc_faq():
         bloc = ser.save()
         assert bloc.type_bloc == "FAQ"
         assert bloc.titre == "Une question ?"
-        assert bloc.repliable is True
         # Sanitize : le <script> est retire du texte.
         assert "<script>" not in bloc.texte
         # Representation JSON-LD.
@@ -93,8 +100,8 @@ def test_page_create_serializer_nested_cree_page_et_blocs():
                 {"@type": "PropertyValue", "name": "publie", "value": True},
             ],
             "hasPart": [
-                {"additionalType": "HERO", "headline": "Bienvenue"},
-                {"additionalType": "PARAGRAPHE", "text": "<p>Bonjour</p>"},
+                {"additionalType": "SECTION", "headline": "Bienvenue"},
+                {"additionalType": "TEXTE", "text": "<p>Bonjour</p>"},
             ],
         }
         ser = PageCreateSerializer(data=payload, context={"request": None})
@@ -106,7 +113,7 @@ def test_page_create_serializer_nested_cree_page_et_blocs():
         out = PageSchemaSerializer(page).data
         assert out["@type"] == "WebPage"
         assert len(out["hasPart"]) == 2
-        assert out["hasPart"][0]["additionalType"] == "HERO"
+        assert out["hasPart"][0]["additionalType"] == "SECTION"
 
 
 @pytest.mark.django_db
@@ -156,7 +163,7 @@ def test_http_create_page_nested_puis_patch_et_delete_bloc(cle_pages):
         "additionalProperty": [
             {"@type": "PropertyValue", "name": "slug", "value": "page-e2e"},
         ],
-        "hasPart": [{"additionalType": "PARAGRAPHE", "text": "<p>Hi</p>"}],
+        "hasPart": [{"additionalType": "TEXTE", "text": "<p>Hi</p>"}],
     }
     r = client.post("/api/v2/pages/", body, format="json", **auth)
     assert r.status_code == 201, r.content
@@ -241,7 +248,7 @@ def test_bloc_create_neutralise_url_javascript():
     with tenant_context(tenant):
         page = Page.objects.create(titre="x", slug="xss-bouton")
         ser = BlocCreateSerializer(data={
-            "additionalType": "CTA",
+            "additionalType": "SECTION",
             "headline": "Clique",
             "additionalProperty": [
                 {"@type": "PropertyValue", "name": "bouton_label", "value": "Go"},
@@ -271,7 +278,7 @@ def test_bloc_create_ignore_champ_video_en_additional_property():
     with tenant_context(tenant):
         page = Page.objects.create(titre="x", slug="video-string")
         ser = BlocCreateSerializer(data={
-            "additionalType": "VIDEO_TEXTE",
+            "additionalType": "SECTION",
             "additionalProperty": [
                 {"@type": "PropertyValue", "name": "video", "value": "javascript:alert(1)"},
             ],
@@ -298,7 +305,7 @@ def test_bloc_create_image_secondaire_url_dangereuse_leve_400():
     with tenant_context(tenant):
         page = Page.objects.create(titre="x", slug="img-sec-danger")
         ser = BlocCreateSerializer(data={
-            "additionalType": "CARTE_LEAFLET",
+            "additionalType": "LIEU",
             "additionalProperty": [
                 {"@type": "PropertyValue", "name": "image_secondaire", "value": "javascript:alert(1)"},
             ],
@@ -350,7 +357,7 @@ def test_bloc_image_par_url_ok(monkeypatch):
     with tenant_context(tenant):
         page = Page.objects.create(titre="img", slug="img-url-ok")
         ser = BlocCreateSerializer(data={
-            "additionalType": "IMAGE",
+            "additionalType": "IMAGES",
             "image": "https://exemple.fr/photo.png",
         }, context={"page": page})
         assert ser.is_valid(), ser.errors
@@ -384,7 +391,7 @@ def test_http_patch_bloc_neutralise_url_javascript(cle_pages):
             "HTTP_HOST": "lespass.tibillet.localhost"}
     body = {"@type": "WebPage", "name": "XSS patch",
             "additionalProperty": [{"@type": "PropertyValue", "name": "slug", "value": "xss-patch"}],
-            "hasPart": [{"additionalType": "CTA", "headline": "x"}]}
+            "hasPart": [{"additionalType": "SECTION", "headline": "x"}]}
     r = client.post("/api/v2/pages/", body, format="json", **auth)
     assert r.status_code == 201, r.content
     bloc_uuid = r.json()["hasPart"][0]["identifier"]
@@ -427,7 +434,7 @@ def test_http_ajouter_bloc_multipart_upload_image(cle_pages):
             "HTTP_HOST": "lespass.tibillet.localhost"}
     fichier = SimpleUploadedFile("p.png", _png_bytes(), content_type="image/png")
     r = client.post(f"/api/v2/pages/{page_uuid}/blocs/",
-                    {"additionalType": "IMAGE", "image": fichier},
+                    {"additionalType": "IMAGES", "image": fichier},
                     format="multipart", **auth)
     assert r.status_code == 201, r.content
     with tenant_context(tenant):
@@ -448,7 +455,7 @@ def test_http_patch_bloc_multipart_upload_image(cle_pages):
     tenant = Client.objects.get(schema_name="lespass")
     with tenant_context(tenant):
         page = Page.objects.create(titre="m2", slug="multipart-patch")
-        bloc = Bloc.objects.create(page=page, type_bloc="IMAGE")
+        bloc = Bloc.objects.create(page=page, type_bloc="IMAGES", affichage="PLEINE_LARGEUR")
         bloc_uuid = str(bloc.uuid)
 
     client = APIClient()
@@ -476,12 +483,18 @@ def test_http_block_types_catalogue(cle_pages):
     # / The catalogue exposes all model types (including the new CHANTIER-06 ones).
     from pages.models import Bloc
     assert types == {code for code, _ in Bloc.TYPE_BLOC_CHOICES}
-    assert {"MARKDOWN", "LISTE_SOUS_PAGES", "IFRAME", "PARTENAIRES", "NEWSLETTER"} <= types
-    # IFRAME expose bien hauteur_px ; NEWSLETTER expose embed_url.
-    iframe = next(b for b in r.json()["blockTypes"] if b["type"] == "IFRAME")
-    assert "hauteur_px" in iframe["fields"]
+    # Les 7 types d'intention, et rien d'autre : le catalogue est ferme.
+    # / The 7 intent types and nothing else: the catalogue is closed.
+    assert types == {
+        "TEXTE", "SECTION", "IMAGES", "INTEGRATION", "LIEU", "FAQ", "LISTE"}
+    # INTEGRATION expose hauteur_px et l'affichage qui choisit son pipeline.
+    # / INTEGRATION exposes hauteur_px and the affichage picking its pipeline.
+    integration = next(
+        b for b in r.json()["blockTypes"] if b["type"] == "INTEGRATION")
+    assert "hauteur_px" in integration["fields"]
+    assert "affichage" in integration["fields"]
     faq = next(b for b in r.json()["blockTypes"] if b["type"] == "FAQ")
-    assert set(faq["fields"]) == {"titre", "texte", "repliable"}
+    assert set(faq["fields"]) == {"titre", "texte"}
     # Chaque entree a un label non vide (i18n display).
     assert all(b["label"] for b in r.json()["blockTypes"])
 
@@ -500,7 +513,7 @@ def test_bloc_carte_leaflet_points_gps_roundtrip():
         page = Page.objects.create(titre="c", slug="leaflet-rt")
         pts = [{"lat": 43.6, "lng": 1.44, "label": "La Cite"}]
         ser = BlocCreateSerializer(data={
-            "additionalType": "CARTE_LEAFLET",
+            "additionalType": "LIEU",
             "additionalProperty": [
                 {"@type": "PropertyValue", "name": "points_gps", "value": pts},
             ],
@@ -528,7 +541,7 @@ def test_bloc_points_gps_doit_etre_une_liste():
     with tenant_context(tenant):
         page = Page.objects.create(titre="c2", slug="leaflet-bad")
         ser = BlocCreateSerializer(data={
-            "additionalType": "CARTE_LEAFLET",
+            "additionalType": "LIEU",
             "additionalProperty": [
                 {"@type": "PropertyValue", "name": "points_gps", "value": {"lat": 1}},
             ],
@@ -570,7 +583,7 @@ def test_bloc_galerie_cree_et_expose_imageobjects(monkeypatch):
     with tenant_context(tenant):
         page = Page.objects.create(titre="g", slug="galerie-rt")
         ser = BlocCreateSerializer(data={
-            "additionalType": "GALERIE",
+            "additionalType": "IMAGES",
             "image": [
                 {"@type": "ImageObject", "contentUrl": "https://ex.fr/a.png", "caption": "A"},
                 {"@type": "ImageObject", "contentUrl": "https://ex.fr/b.png", "caption": "B"},
@@ -620,7 +633,7 @@ def test_http_patch_bloc_points_gps_doit_etre_liste(cle_pages):
             "HTTP_HOST": "lespass.tibillet.localhost"}
     body = {"@type": "WebPage", "name": "pg",
             "additionalProperty": [{"@type": "PropertyValue", "name": "slug", "value": "patch-gps"}],
-            "hasPart": [{"additionalType": "CARTE_LEAFLET", "headline": "c"}]}
+            "hasPart": [{"additionalType": "LIEU", "headline": "c"}]}
     r = client.post("/api/v2/pages/", body, format="json", **auth)
     assert r.status_code == 201, r.content
     bloc_uuid = r.json()["hasPart"][0]["identifier"]
@@ -651,7 +664,7 @@ def test_http_ajouter_bloc_multipart_video_est_ignoree(cle_pages):
             "HTTP_HOST": "lespass.tibillet.localhost"}
     faux_video = SimpleUploadedFile("clip.mp4", b"\x00\x00\x00\x18ftypmp42", content_type="video/mp4")
     r = client.post(f"/api/v2/pages/{page_uuid}/blocs/",
-                    {"additionalType": "VIDEO_TEXTE", "video": faux_video},
+                    {"additionalType": "SECTION", "video": faux_video},
                     format="multipart", **auth)
     assert r.status_code == 201, r.content
     with tenant_context(tenant):
@@ -709,27 +722,42 @@ def test_page_create_parent_introuvable_400(cle_pages):
 
 
 @pytest.mark.django_db
-def test_page_create_hierarchie_deux_niveaux_refusee_400(cle_pages):
-    """Un seul niveau : rattacher une page à un parent qui a déjà un parent -> 400.
-    / One level only: attaching to a parent that already has a parent -> 400."""
+def test_page_create_hierarchie_profonde_puis_trop_profonde(cle_pages):
+    """
+    L'API accepte un arbre profond, et refuse le niveau de trop en 400.
+
+    La profondeur est bornee cote modele : sans ce garde, un arbre sans fin
+    rendrait la navigation illisible et l'admin inutilisable.
+    """
     from rest_framework.test import APIClient
+    from pages.models import PROFONDEUR_MAX_ARBRE
+
     client = APIClient()
     auth = {"HTTP_AUTHORIZATION": f"Api-Key {cle_pages}",
             "HTTP_HOST": "lespass.tibillet.localhost"}
-    for slug in ("niveau-a",):
-        client.post("/api/v2/pages/", {"name": "A", "additionalProperty": [
-            {"@type": "PropertyValue", "name": "slug", "value": "niveau-a"}], "hasPart": []},
-            format="json", **auth)
-    # B enfant de A (OK)
-    rb = client.post("/api/v2/pages/", {"name": "B", "isPartOf": "niveau-a",
-        "additionalProperty": [{"@type": "PropertyValue", "name": "slug", "value": "niveau-b"}],
-        "hasPart": []}, format="json", **auth)
-    assert rb.status_code == 201, rb.content
-    # C enfant de B -> refuse (B a deja un parent = 2 niveaux)
-    rc = client.post("/api/v2/pages/", {"name": "C", "isPartOf": "niveau-b",
-        "additionalProperty": [{"@type": "PropertyValue", "name": "slug", "value": "niveau-c"}],
-        "hasPart": []}, format="json", **auth)
-    assert rc.status_code == 400, rc.content
+
+    parent_slug = None
+    for rang in range(1, PROFONDEUR_MAX_ARBRE + 1):
+        charge = {
+            "name": f"Niveau {rang}",
+            "additionalProperty": [
+                {"@type": "PropertyValue", "name": "slug", "value": f"niveau-{rang}"}],
+            "hasPart": [],
+        }
+        if parent_slug:
+            charge["isPartOf"] = parent_slug
+        reponse = client.post("/api/v2/pages/", charge, format="json", **auth)
+        assert reponse.status_code == 201, reponse.content
+        parent_slug = f"niveau-{rang}"
+
+    # Un niveau de plus est refuse, avec un 400 et non un 500.
+    de_trop = client.post("/api/v2/pages/", {
+        "name": "De trop", "isPartOf": parent_slug,
+        "additionalProperty": [
+            {"@type": "PropertyValue", "name": "slug", "value": "niveau-de-trop"}],
+        "hasPart": [],
+    }, format="json", **auth)
+    assert de_trop.status_code == 400, de_trop.content
 
 
 @pytest.mark.django_db
@@ -776,7 +804,7 @@ def test_page_nested_galerie_url_dangereuse_ne_cree_rien(monkeypatch):
             "name": "Galerie KO",
             "additionalProperty": [{"@type": "PropertyValue", "name": "slug", "value": "galerie-ko"}],
             "hasPart": [{
-                "additionalType": "GALERIE",
+                "additionalType": "IMAGES",
                 "image": [{"@type": "ImageObject", "contentUrl": "javascript:alert(1)"}],
             }],
         }
@@ -793,7 +821,7 @@ def test_page_nested_galerie_url_dangereuse_ne_cree_rien(monkeypatch):
 # CHANTIER 06 — Création via API v2 des blocs IFRAME / NEWSLETTER / PARTENAIRES
 # ---------------------------------------------------------------------------
 @pytest.mark.django_db
-def test_bloc_iframe_cree_avec_hauteur_px():
+def test_bloc_integration_widget_cree_avec_hauteur_px():
     """IFRAME : embed_url + hauteur_px (additionalProperty) -> settés ; roundtrip lecture."""
     from pages.models import Page
     from api_v2.serializers import BlocCreateSerializer, BlocSchemaSerializer
@@ -802,9 +830,14 @@ def test_bloc_iframe_cree_avec_hauteur_px():
     with tenant_context(tenant):
         page = Page.objects.create(titre="i", slug="iframe-api")
         ser = BlocCreateSerializer(data={
-            "additionalType": "IFRAME",
+            "additionalType": "INTEGRATION",
             "headline": "Le plan",
             "additionalProperty": [
+                # L'affichage choisit le pipeline de securite du contenu
+                # integre : il se pose explicitement, jamais depuis l'URL.
+                # / The affichage picks the embedded content's security
+                # pipeline: set explicitly, never inferred from the URL.
+                {"@type": "PropertyValue", "name": "affichage", "value": "WIDGET"},
                 {"@type": "PropertyValue", "name": "embed_url",
                  "value": "https://www.openstreetmap.org/export/embed.html"},
                 {"@type": "PropertyValue", "name": "hauteur_px", "value": 420},
@@ -812,7 +845,8 @@ def test_bloc_iframe_cree_avec_hauteur_px():
         }, context={"page": page})
         assert ser.is_valid(), ser.errors
         bloc = ser.save()
-        assert bloc.type_bloc == "IFRAME"
+        assert bloc.type_bloc == "INTEGRATION"
+        assert bloc.affichage == "WIDGET"
         assert bloc.embed_url == "https://www.openstreetmap.org/export/embed.html"
         assert bloc.hauteur_px == 420
         out = BlocSchemaSerializer(bloc).data
@@ -821,7 +855,7 @@ def test_bloc_iframe_cree_avec_hauteur_px():
 
 
 @pytest.mark.django_db
-def test_bloc_newsletter_cree_avec_embed_url():
+def test_bloc_integration_newsletter_cree_avec_embed_url():
     """NEWSLETTER : headline/alternativeHeadline + embed_url (data-site Ghost)."""
     from pages.models import Page
     from api_v2.serializers import BlocCreateSerializer
@@ -830,24 +864,26 @@ def test_bloc_newsletter_cree_avec_embed_url():
     with tenant_context(tenant):
         page = Page.objects.create(titre="n", slug="newsletter-api")
         ser = BlocCreateSerializer(data={
-            "additionalType": "NEWSLETTER",
+            "additionalType": "INTEGRATION",
             "headline": "Les news de TiBillet",
             "alternativeHeadline": "La boite a outils d'organisation collective",
             "additionalProperty": [
+                {"@type": "PropertyValue", "name": "affichage", "value": "NEWSLETTER"},
                 {"@type": "PropertyValue", "name": "embed_url",
                  "value": "https://ghost.tibillet.coop/"},
             ],
         }, context={"page": page})
         assert ser.is_valid(), ser.errors
         bloc = ser.save()
-        assert bloc.type_bloc == "NEWSLETTER"
+        assert bloc.type_bloc == "INTEGRATION"
+        assert bloc.affichage == "NEWSLETTER"
         assert bloc.titre == "Les news de TiBillet"
         assert bloc.sous_titre == "La boite a outils d'organisation collective"
         assert bloc.embed_url == "https://ghost.tibillet.coop/"
 
 
 @pytest.mark.django_db
-def test_bloc_partenaires_cree_logos_cliquables(monkeypatch):
+def test_bloc_images_bande_logos_cree_logos_cliquables(monkeypatch):
     """PARTENAIRES : liste d'ImageObject (contentUrl + caption + url) -> logos avec lien_url ;
     url dangereuse neutralisee ; sortie expose `url` seulement si lien present."""
     import io
@@ -874,8 +910,13 @@ def test_bloc_partenaires_cree_logos_cliquables(monkeypatch):
     with tenant_context(tenant):
         page = Page.objects.create(titre="p", slug="partenaires-api")
         ser = BlocCreateSerializer(data={
-            "additionalType": "PARTENAIRES",
+            "additionalType": "IMAGES",
             "headline": "Ils nous soutiennent",
+            # Une bande de logos : plusieurs images, donc la relation
+            # ImageGalerie. / A logo strip: several images, hence ImageGalerie.
+            "additionalProperty": [
+                {"@type": "PropertyValue", "name": "affichage", "value": "BANDE_LOGOS"},
+            ],
             "image": [
                 {"@type": "ImageObject", "contentUrl": "https://ex.fr/a.png",
                  "caption": "Alpha", "url": "https://alpha.example/"},
@@ -887,7 +928,8 @@ def test_bloc_partenaires_cree_logos_cliquables(monkeypatch):
         }, context={"page": page})
         assert ser.is_valid(), ser.errors
         bloc = ser.save()
-        assert bloc.type_bloc == "PARTENAIRES"
+        assert bloc.type_bloc == "IMAGES"
+        assert bloc.affichage == "BANDE_LOGOS"
         assert bloc.images_galerie.count() == 3
         logos = list(bloc.images_galerie.order_by("position"))
         assert logos[0].lien_url == "https://alpha.example/"
@@ -899,53 +941,40 @@ def test_bloc_partenaires_cree_logos_cliquables(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Extensions CHANTIER site : est_blog + MARKDOWN (source preservee, images importees)
+# Bloc TEXTE : source Markdown preservee, images referencees importees
 # ---------------------------------------------------------------------------
-@pytest.mark.django_db
-def test_page_create_est_blog():
-    """est_blog est settable via l'API (additionalProperty)."""
-    from pages.models import Page
-    from api_v2.serializers import PageCreateSerializer
-
-    tenant = Client.objects.get(schema_name="lespass")
-    with tenant_context(tenant):
-        ser = PageCreateSerializer(data={
-            "@context": "https://schema.org", "@type": "WebPage", "name": "Blog test",
-            "additionalProperty": [
-                {"name": "slug", "value": "pytest-blog-estblog"},
-                {"name": "publie", "value": True},
-                {"name": "est_blog", "value": True},
-            ],
-        })
-        assert ser.is_valid(), ser.errors
-        page = ser.save()
-        try:
-            assert page.est_blog is True
-        finally:
-            page.delete()
-
-
 def _monkey_download_ok(monkeypatch):
-    import io
-    from PIL import Image as PILImage
-    buf = io.BytesIO()
-    PILImage.new("RGB", (8, 8), "red").save(buf, format="PNG")
-    png = buf.getvalue()
+    """
+    Fait reussir le telechargement d'une image distante, sans reseau.
+
+    Neutralise le garde SSRF (qui refuserait un hote interne) et remplace la
+    requete HTTP par une reponse portant un PNG minimal.
+    / Makes a remote image download succeed without network access: disables
+    the SSRF guard and replaces the HTTP request with a tiny PNG response.
+    """
+    contenu_png = _png_bytes()
 
     class FakeResp:
         status_code = 200
-        headers = {"Content-Type": "image/png"}
-        content = png
-        def raise_for_status(self): pass
-        def iter_content(self, chunk_size=65536): yield self.content
-        def close(self): pass
+        headers = {"Content-Type": "image/png", "Content-Length": str(len(contenu_png))}
+        content = contenu_png
+
+        def raise_for_status(self):
+            pass
+
+        def iter_content(self, chunk_size=65536):
+            yield self.content
+
+        def close(self):
+            pass
 
     monkeypatch.setattr("api_v2.serializers._hote_est_interne", lambda h: False)
     monkeypatch.setattr("api_v2.serializers.requests.get", lambda *a, **k: FakeResp())
 
 
+
 @pytest.mark.django_db
-def test_bloc_markdown_importe_images_et_preserve_source(monkeypatch):
+def test_bloc_texte_importe_images_et_preserve_source(monkeypatch):
     """MARKDOWN : ![](http-url) -> importee en galerie:N (ImageGalerie) ; la source
     markdown n'est PAS mutilee par clean_html (les autoliens/gras restent)."""
     from pages.models import Page
@@ -957,7 +986,7 @@ def test_bloc_markdown_importe_images_et_preserve_source(monkeypatch):
         page = Page.objects.create(titre="md", slug="pytest-md-img")
         md = ("## Titre\n\nDu **gras** et un autolien <https://exemple.fr>.\n\n"
               "![une image](https://ex.fr/a.png)\n\nFin.")
-        ser = BlocCreateSerializer(data={"additionalType": "MARKDOWN", "text": md},
+        ser = BlocCreateSerializer(data={"additionalType": "TEXTE", "text": md},
                                    context={"page": page})
         assert ser.is_valid(), ser.errors
         bloc = ser.save()
@@ -970,7 +999,7 @@ def test_bloc_markdown_importe_images_et_preserve_source(monkeypatch):
 
 
 @pytest.mark.django_db
-def test_bloc_markdown_image_morte_garde_url(monkeypatch):
+def test_bloc_texte_image_morte_garde_url(monkeypatch):
     """Une image markdown inaccessible ne casse PAS le POST : on garde l'URL externe."""
     from rest_framework import serializers as drf
     from pages.models import Page
@@ -984,7 +1013,7 @@ def test_bloc_markdown_image_morte_garde_url(monkeypatch):
     with tenant_context(tenant):
         page = Page.objects.create(titre="md2", slug="pytest-md-dead")
         md = "Texte.\n\n![morte](https://ex.fr/introuvable.png)\n\nFin."
-        ser = BlocCreateSerializer(data={"additionalType": "MARKDOWN", "text": md},
+        ser = BlocCreateSerializer(data={"additionalType": "TEXTE", "text": md},
                                    context={"page": page})
         assert ser.is_valid(), ser.errors
         bloc = ser.save()  # ne leve pas
@@ -993,7 +1022,7 @@ def test_bloc_markdown_image_morte_garde_url(monkeypatch):
 
 
 @pytest.mark.django_db
-def test_http_patch_bloc_markdown_ne_mutile_pas(cle_pages, monkeypatch):
+def test_http_patch_bloc_texte_ne_mutile_pas(cle_pages, monkeypatch):
     """PATCH d'un bloc MARKDOWN ne passe pas par clean_html (source preservee)."""
     from rest_framework.test import APIClient
     from pages.models import Page, Bloc
@@ -1001,7 +1030,7 @@ def test_http_patch_bloc_markdown_ne_mutile_pas(cle_pages, monkeypatch):
     tenant = Client.objects.get(schema_name="lespass")
     with tenant_context(tenant):
         page = Page.objects.create(titre="mdp", slug="pytest-md-patch")
-        bloc = Bloc.objects.create(page=page, type_bloc=Bloc.MARKDOWN, texte="ancien")
+        bloc = Bloc.objects.create(page=page, type_bloc=Bloc.TEXTE, texte="ancien")
         uuid = str(bloc.uuid)
 
     client = APIClient()
@@ -1016,3 +1045,125 @@ def test_http_patch_bloc_markdown_ne_mutile_pas(cle_pages, monkeypatch):
         assert "<https://exemple.fr>" in bloc.texte
         assert "**gras**" in bloc.texte
         Page.objects.filter(slug="pytest-md-patch").delete()
+
+
+@pytest.mark.django_db
+def test_api_refuse_un_affichage_etranger_au_type():
+    """
+    L'API refuse un couple (type, affichage) que le catalogue n'autorise pas.
+
+    Sans ce garde, l'API stocke un couple qu'AUCUN gabarit ne sait rendre : la
+    page publique qui porte le bloc sort alors en 500, loin de l'appel fautif.
+    La table AFFICHAGES_PAR_TYPE doit donc s'appliquer a la creation comme au
+    PATCH, pas seulement dans l'admin.
+    """
+    from django_tenants.utils import tenant_context
+    from Customers.models import Client
+    from pages.models import Page
+    from api_v2.serializers import BlocCreateSerializer
+
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Garde", slug="pytest-garde-affichage")
+        ser = BlocCreateSerializer(data={
+            "additionalType": "SECTION",
+            "headline": "Une section",
+            "additionalProperty": [
+                # BANDE_LOGOS appartient au type IMAGES, pas a SECTION.
+                {"@type": "PropertyValue", "name": "affichage", "value": "BANDE_LOGOS"},
+            ],
+        }, context={"page": page})
+        ser.is_valid()
+        with pytest.raises(serializers.ValidationError) as erreur:
+            ser.save()
+        assert "affichage" in erreur.value.detail
+        page.delete()
+
+
+def test_chaque_couple_type_affichage_a_un_gabarit():
+    """
+    Tout couple (type, affichage) stockable sait se rendre.
+
+    Le rendu cherche `bloc_<type>_<affichage>.html` puis retombe sur
+    `bloc_<type>.html`. Un couple sans aucun des deux fait sortir la page
+    entiere en TemplateDoesNotExist — et rien avant le rendu ne l'annonce.
+    """
+    from django.template.loader import select_template
+    from django.template import TemplateDoesNotExist
+    from pages.blocs_catalogue import AFFICHAGES_PAR_TYPE
+
+    manquants = []
+    for type_bloc, affichages in AFFICHAGES_PAR_TYPE.items():
+        # Un type a rendu unique n'a qu'un gabarit ; sinon un par affichage.
+        for affichage in (affichages or ("",)):
+            candidats = []
+            if affichage:
+                candidats.append(
+                    f"pages/classic/partials/bloc_{type_bloc.lower()}_{affichage.lower()}.html")
+            candidats.append(f"pages/classic/partials/bloc_{type_bloc.lower()}.html")
+            try:
+                select_template(candidats)
+            except TemplateDoesNotExist:
+                manquants.append((type_bloc, affichage))
+
+    assert manquants == [], f"couples sans gabarit : {manquants}"
+
+
+def test_champs_par_affichage_est_un_sous_ensemble_du_type():
+    """
+    Tout champ declare pour un affichage existe dans son type.
+
+    CHAMPS_PAR_AFFICHAGE resserre CHAMPS_PAR_TYPE au niveau de l'affichage
+    (c'est lui qui pilote conditional_fields dans l'admin). Un champ qui y
+    figure sans etre dans le type ne serait jamais rendu visible : le
+    formulaire n'a pas ce champ a montrer.
+    """
+    from pages.blocs_catalogue import CHAMPS_PAR_AFFICHAGE, CHAMPS_PAR_TYPE
+
+    intrus = []
+    for type_bloc, par_affichage in CHAMPS_PAR_AFFICHAGE.items():
+        champs_du_type = set(CHAMPS_PAR_TYPE[type_bloc])
+        for affichage, champs in par_affichage.items():
+            for champ in champs:
+                if champ not in champs_du_type:
+                    intrus.append((type_bloc, affichage, champ))
+
+    assert intrus == [], f"champs hors du type : {intrus}"
+
+
+def test_chaque_affichage_declare_ses_champs():
+    """
+    Un type liste dans CHAMPS_PAR_AFFICHAGE couvre TOUS ses affichages.
+
+    Un affichage oublie retomberait sur « aucun champ » dans
+    `_visibilite_des_champs()` : sa fiche s'ouvrirait vide dans l'admin, sans
+    aucun message d'erreur.
+    """
+    from pages.blocs_catalogue import AFFICHAGES_PAR_TYPE, CHAMPS_PAR_AFFICHAGE
+
+    oublies = []
+    for type_bloc, par_affichage in CHAMPS_PAR_AFFICHAGE.items():
+        for affichage in AFFICHAGES_PAR_TYPE[type_bloc]:
+            if affichage not in par_affichage:
+                oublies.append((type_bloc, affichage))
+
+    assert oublies == [], f"affichages sans champs declares : {oublies}"
+
+
+def test_chaque_champ_du_catalogue_est_visible_quelque_part():
+    """
+    Aucun champ du catalogue n'est rendu inatteignable par le resserrage.
+
+    Si un champ est declare pour un type mais pour AUCUN de ses affichages, il
+    reste dans le formulaire sans jamais s'afficher : impossible a saisir.
+    """
+    from pages.admin import _CHAMPS_DU_CATALOGUE, _visibilite_des_champs
+
+    visibilite = _visibilite_des_champs()
+    invisibles = [
+        champ
+        for champ in _CHAMPS_DU_CATALOGUE
+        if champ != "affichage" and not visibilite.get(champ)
+    ]
+
+    assert invisibles == [], f"champs jamais affichables : {invisibles}"

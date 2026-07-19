@@ -181,6 +181,16 @@ class Command(BaseCommand):
                 "_handle_quick / ventes. Idempotent — ideal apres un flush."
             ),
         )
+        parser.add_argument(
+            '--no-e2e',
+            action='store_true',
+            help=(
+                "Ne cree PAS les fixtures de la suite E2E ('E2E Test — ...'). "
+                "A utiliser pour un flush de DEMONSTRATION : ces objets de test "
+                "apparaissent sinon dans l'agenda et la page des adhesions du "
+                "tenant lespass. Les tests E2E les recreent avec --e2e-only."
+            ),
+        )
 
     def handle(self, *args, **options):
         quick_mode = options.get('quick', False)
@@ -220,11 +230,20 @@ class Command(BaseCommand):
         else:
             self._handle_seed_ventes(options)
 
-        # Fixtures dediees aux tests E2E (tests/e2e/) : toujours seedees apres
-        # la creation (--full) ou la restauration (--quick) du tenant lespass.
-        # / E2E test fixtures (tests/e2e/): always seeded after the lespass
-        # tenant is created (--full) or restored (--quick).
-        self._seed_e2e_fixtures(options)
+        # Fixtures dediees aux tests E2E (tests/e2e/) : seedees apres la creation
+        # (--full) ou la restauration (--quick) du tenant lespass, sauf si
+        # --no-e2e. Ces objets s'appellent « E2E Test — ... » et sont visibles du
+        # public : pour un flush de DEMONSTRATION, on les laisse de cote.
+        # / E2E test fixtures: seeded after the lespass tenant is created or
+        # restored, unless --no-e2e. These objects are named "E2E Test — ..." and
+        # are publicly visible: a DEMO flush leaves them out.
+        if options.get('no_e2e', False):
+            self.stdout.write(self.style.WARNING(
+                "Fixtures E2E non generees (--no-e2e). "
+                "Lancer 'demo_data_v2 --e2e-only' avant la suite E2E."
+            ))
+        else:
+            self._seed_e2e_fixtures(options)
 
         # 1. Cartes du simulateur NFC creees D'ABORD dans Fedow (source de verite des
         # wallets de carte), via l'API key de place. Doit PRECEDER le seed POS pour que
@@ -278,6 +297,22 @@ class Command(BaseCommand):
         # skin: after a flush the demo covers BOTH skins.
         self._seed_site_pages_festival()
 
+        # Site documentaire du tenant « La Maison des Communs » : arborescence
+        # de rubriques et d'articles, avec menu latéral. C'est le seul des trois
+        # à exercer l'arbre de pages en profondeur (le seul aussi à charger du
+        # contenu markdown depuis les fixtures bundlées).
+        # / Documentation website for the "La Maison des Communs" tenant: a tree
+        # of sections and articles, with a side menu. The only one of the three
+        # exercising the page tree in depth.
+        self._seed_site_pages_codecommun()
+
+        # Les trois seeds ci-dessus sont gardés par un try/except : un échec y
+        # laisserait un site VIDE sans que le flush ne signale quoi que ce soit.
+        # On vérifie donc le résultat.
+        # / The three seeds above are guarded by try/except: a failure would
+        # leave an EMPTY site with the flush reporting success. So we check.
+        self._verifier_les_sites_de_demo()
+
     def _seed_site_pages_lespass(self):
         """
         Construit le site web complet du tenant lespass via la commande
@@ -298,10 +333,10 @@ class Command(BaseCommand):
     def _seed_site_pages_festival(self):
         """
         Construit le site vitrine du tenant festival via la commande
-        `charger_demo_faire_festival` (qui force le skin faire_festival).
+        `charger_site_faire_festival --contenu=demo` (qui force le skin).
         Gardé (try/except) : en mode light le tenant festival n'existe pas,
         et un échec côté pages ne doit jamais casser le seed.
-        / Builds the festival showcase website via `charger_demo_faire_festival`
+        / Builds the festival showcase website via `charger_site_faire_festival`
         (which forces the faire_festival skin). Guarded: in light mode the
         festival tenant does not exist, and a pages failure must never
         break the seed.
@@ -309,10 +344,86 @@ class Command(BaseCommand):
         from django.core.management import call_command
 
         try:
-            call_command("charger_demo_faire_festival", schema="festival")
+            call_command("charger_site_faire_festival", schema="festival", contenu="demo")
         except Exception as erreur:
             self.stderr.write(self.style.WARNING(
                 f"Site vitrine 'festival' (faire_festival) non généré "
+                f"(non bloquant) : {erreur}"
+            ))
+
+    def _verifier_les_sites_de_demo(self):
+        """
+        Verifie que les trois sites de demo ont bien ete construits.
+        / Checks the three demo websites were actually built.
+
+        Les seeds pages sont volontairement non bloquants (un tenant absent en
+        mode light ne doit pas casser le flush). Le revers, c'est qu'un vrai
+        echec — fixture manquante, import casse — passerait inapercu et
+        laisserait un site vide le jour d'une demonstration. On relit donc la
+        base et on affiche un recapitulatif, avec un avertissement VISIBLE si
+        un site manque a l'appel.
+        / The page seeds are deliberately non-blocking (a missing tenant in
+        light mode must not break the flush). The flip side is that a real
+        failure would go unnoticed and leave an empty site on demo day. So we
+        read the database back and print a summary, with a VISIBLE warning if a
+        site is missing.
+        """
+        from django_tenants.utils import schema_context
+
+        from Customers.models import Client as TenantClient
+
+        attendus = {
+            "lespass": "charger_site_lespass",
+            "festival": "charger_site_faire_festival",
+            "la-maison-des-communs": "charger_site_codecommun",
+        }
+
+        self.stdout.write("Sites web de demonstration :")
+        for schema, commande in attendus.items():
+            if not TenantClient.objects.filter(schema_name=schema).exists():
+                # Tenant absent : normal en mode light, rien a verifier.
+                # / Tenant absent: expected in light mode, nothing to check.
+                continue
+            with schema_context(schema):
+                from pages.models import Bloc, Page
+
+                nb_pages = Page.objects.count()
+                nb_blocs = Bloc.objects.count()
+                accueil = Page.objects.filter(est_accueil=True, publie=True).first()
+
+            if accueil is None or nb_blocs < 5:
+                self.stdout.write(self.style.ERROR(
+                    f"  ✗ {schema} : site incomplet "
+                    f"({nb_pages} page(s), {nb_blocs} bloc(s), "
+                    f"accueil publie : {'oui' if accueil else 'NON'}). "
+                    f"Relancer : manage.py {commande} --schema={schema}"
+                ))
+            else:
+                self.stdout.write(self.style.SUCCESS(
+                    f"  ✓ {schema} : {nb_pages} page(s), {nb_blocs} bloc(s)"
+                ))
+
+    def _seed_site_pages_codecommun(self):
+        """
+        Construit le site documentaire de « La Maison des Communs » via la
+        commande `charger_site_codecommun`.
+        / Builds the "La Maison des Communs" documentation website.
+
+        Le schéma vaut `slugify(nom du tenant)`, soit `la-maison-des-communs`
+        (la commande a `codecommun` pour défaut, qui ne correspond à aucun
+        tenant de la démo).
+        Gardé (try/except) : en mode light le tenant n'existe pas, et un échec
+        côté pages ne doit jamais casser le seed.
+        / The schema is `slugify(tenant name)`. Guarded: in light mode the
+        tenant does not exist, and a pages failure must never break the seed.
+        """
+        from django.core.management import call_command
+
+        try:
+            call_command("charger_site_codecommun", schema="la-maison-des-communs")
+        except Exception as erreur:
+            self.stderr.write(self.style.WARNING(
+                f"Site documentaire 'la-maison-des-communs' non généré "
                 f"(non bloquant) : {erreur}"
             ))
 
@@ -715,8 +826,17 @@ class Command(BaseCommand):
             return
 
         # Date future commune : garantit la visibilite dans /explorer/.
-        # / Common future date: ensures visibility in /explorer/.
-        when = timezone.now() + timedelta(days=30)
+        # Volontairement PLUS LOINTAINE que les evenements de demo (qui vont
+        # jusqu'a +540 jours) : l'agenda trie par date croissante, donc a +30
+        # jours ces objets de test occupaient les premieres cartes de la page
+        # d'accueil de lespass — « E2E Test — Event gratuit », sans image, en
+        # tete de la vitrine. Les tests E2E resolvent ces fixtures par NOM, pas
+        # par date : les eloigner ne change rien pour eux.
+        # / Common future date, deliberately FURTHER OUT than the demo events
+        # (up to +540 days): the agenda sorts by ascending date, so at +30 days
+        # these test objects took the first cards of the lespass home page. The
+        # E2E tests resolve these fixtures by NAME, not by date.
+        when = timezone.now() + timedelta(days=700)
 
         with tenant_context(tenant):
             # Adresse + tag partages par les 3 events de test.
@@ -1356,6 +1476,27 @@ class Command(BaseCommand):
                      "products": [{"name": "Réservation à prix libre", "categorie_article": "BILLET",
                                     "nominative": False,
                                     "prices": [{"name": "Prix libre", "prix": 1, "free_price": True}]}],
+                     "tags": ["Prix libre"]},
+                    # Deux évènements festifs de plus : sans eux, l'agenda de la
+                    # page d'accueil du festival est occupé pour moitié par les
+                    # réunions internes ci-dessous (qui existent pour tester les
+                    # filtres de fédération, pas pour être montrées au public).
+                    # / Two more festive events: without them, the festival home
+                    # page agenda is half filled with the internal meetings below
+                    # (which exist to test federation filters, not to be shown).
+                    {"name": "Bal de clôture — fanfare et guinguette", "categorie": "CONCERT",
+                     "reservation": "payante",
+                     "short_description": "Trois fanfares, une piste de danse, jusqu'au bout de la nuit.",
+                     "products": [{"name": "Billet bal", "categorie_article": "BILLET", "nominative": False,
+                                    "prices": [{"name": "Plein tarif", "prix": 10},
+                                               {"name": "Adhérent·e", "prix": 6}]}],
+                     "tags": ["World"]},
+                    {"name": "Atelier bois — fabriquer son tabouret", "categorie": "ATELIER",
+                     "reservation": "payante",
+                     "short_description": "Une journée à l'établi : vous repartez avec votre tabouret.",
+                     "products": [{"name": "Inscription atelier", "categorie_article": "BILLET",
+                                    "nominative": True,
+                                    "prices": [{"name": "Tarif unique", "prix": 15}]}],
                      "tags": ["Prix libre"]},
                     {  # Evènements de type réunion pour tester les filtres de fédération
                         "name": "Point Coop' du festival",
@@ -2158,6 +2299,19 @@ class Command(BaseCommand):
                     except Exception:
                         # Secours: +200 jours
                         when = timezone.now() + timedelta(days=200)
+                    # L'heure aussi est tirée au hasard par faker : sans cette
+                    # remise à l'heure, la démo affiche « Journée apprenante,
+                    # 03H47 » ou « Concert, 06H12 ». On garde la date tirée et
+                    # on pose une heure de programmation plausible, à la
+                    # demi-heure. / faker also randomises the time: without this
+                    # reset the demo shows a concert at 06:12. We keep the drawn
+                    # date and set a believable programme time, on the half hour.
+                    when = when.replace(
+                        hour=random.choice([10, 14, 17, 18, 19, 20, 21]),
+                        minute=random.choice([0, 30]),
+                        second=0,
+                        microsecond=0,
+                    )
                     event_obj, created_event = Event.objects.get_or_create(
                         name=ev['name'],
                         defaults={

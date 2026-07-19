@@ -11,6 +11,17 @@
 {% if json_ld_features %}
 <script type="application/ld+json">{{ json_ld_features|safe }}</script>
 {% endif %}
+{# SoftwareApplication : declare TiBillet (logiciel libre) comme entite      #}
+{# principale de la page. FAQPage : alimente les resultats enrichis a partir #}
+{# des memes questions que la section FAQ ci-dessous (source unique).        #}
+{# / SoftwareApplication: declares TiBillet as the page's main entity.        #}
+{# FAQPage: rich results from the same questions as the FAQ section below.    #}
+{% if json_ld_software %}
+<script type="application/ld+json">{{ json_ld_software|safe }}</script>
+{% endif %}
+{% if json_ld_faq %}
+<script type="application/ld+json">{{ json_ld_faq|safe }}</script>
+{% endif %}
 {% endblock %}
 
 {# Le hero est HORS du container (full-width via main_wrapper). #}
@@ -62,9 +73,16 @@
             </div>
         </div>
         <div class="hero-logo" aria-hidden="true">
+            {# LCP desktop probable : on le priorise (fetchpriority) et on fixe   #}
+            {# width/height au ratio du viewBox (50.36 x 22.20) pour eviter le    #}
+            {# CLS. Le logo est masque sur mobile (cf. seo.css).                   #}
+            {# / Likely desktop LCP: prioritised + width/height at the viewBox     #}
+            {# ratio to avoid CLS. Hidden on mobile (see seo.css).                 #}
             <img src="{% static 'seo/tibillet-logo-couleur.svg' %}"
                  alt=""
-                 class="hero-logo-img">
+                 class="hero-logo-img"
+                 width="320" height="141"
+                 fetchpriority="high">
         </div>
     </div>
 </section>
@@ -288,6 +306,31 @@
             </a>
             {% endfor %}
         </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{# ================================================================ #}
+{# FAQ — questions frequentes. Chaque question est un <details>       #}
+{# natif (accessible, sans JS). Les memes Q/R alimentent le JSON-LD   #}
+{# FAQPage injecte dans le <head> (source unique : FAQ_ITEMS dans     #}
+{# seo/views.py). Objectif double : expliquer TiBillet concretement   #}
+{# ET gagner des resultats enrichis en recherche.                     #}
+{# / FAQ — frequent questions. Each is a native <details> (accessible,#}
+{# no JS). The same Q/A back the FAQPage JSON-LD in <head> (single     #}
+{# source: FAQ_ITEMS in seo/views.py). Double goal: explain TiBillet   #}
+{# concretely AND earn SERP rich results.                             #}
+{# ================================================================ #}
+{% if faq_items %}
+<section class="faq-section" data-testid="faq-section" aria-labelledby="faq-heading">
+    <h2 class="faq-heading" id="faq-heading">{% translate "Questions fréquentes" %}</h2>
+    <div class="faq-list">
+        {% for item in faq_items %}
+        <details class="faq-item" data-testid="faq-item-{{ forloop.counter }}">
+            <summary class="faq-summary">{{ item.question }}</summary>
+            <p class="faq-answer">{{ item.reponse }}</p>
+        </details>
         {% endfor %}
     </div>
 </section>

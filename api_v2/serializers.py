@@ -1902,6 +1902,29 @@ class BlocSchemaSerializer(serializers.Serializer):
         return {k: v for k, v in payload.items() if v not in (None, "", [])}
 
 
+def _valider_le_bloc(bloc):
+    """
+    Passe un Bloc par la validation du modele et rend une erreur d'API lisible.
+    / Runs a Bloc through model validation and raises a readable API error.
+
+    LOCALISATION : api_v2/serializers.py
+
+    Une `ValidationError` de Django qui remonte telle quelle a travers DRF
+    devient un 500 : on la retraduit en erreur de serializer, donc en 400 avec
+    le detail du champ fautif.
+    / A Django `ValidationError` bubbling through DRF becomes a 500: it is
+    translated into a serializer error, hence a 400 naming the offending field.
+    """
+    from django.core.exceptions import ValidationError as DjangoValidationError
+
+    from pages.blocs_catalogue import CHAMPS_FICHIER
+
+    try:
+        bloc.full_clean(exclude=["uuid", "page", *CHAMPS_FICHIER])
+    except DjangoValidationError as erreur:
+        raise serializers.ValidationError(erreur.message_dict)
+
+
 class BlocCreateSerializer(serializers.Serializer):
     """Valide un WebPageElement entrant et cree un Bloc rattache a une Page.
     / Validates an incoming WebPageElement and creates a Bloc on a Page.
@@ -1971,11 +1994,11 @@ class BlocCreateSerializer(serializers.Serializer):
                     fichiers_galerie.append((fichier, legende, index, lien))
         elif isinstance(valeur_image, list):
             # Une liste d'images n'est acceptee que pour GALERIE et PARTENAIRES.
-            # / A list of images is only accepted for the GALLERY and PARTNERS types.
+            # / A list of images is only accepted for the IMAGES type.
             raise serializers.ValidationError(
-                {"image": _("Une liste d'images n'est acceptee que pour les blocs GALERIE et PARTENAIRES.")})
+                {"image": _("Une liste d'images n'est acceptee que pour les blocs IMAGES.")})
 
-        # Bloc MARKDOWN : on importe les images referencees dans le markdown
+        # Bloc TEXTE : on importe les images referencees dans le markdown
         # (![alt](http...)) et on reecrit le texte en ![alt](galerie:N), le mecanisme
         # que rendre_bloc_markdown resout au rendu (via les ImageGalerie du bloc). Ainsi
         # un article de blog est autonome : ses images sont posees sur le tenant, pas
@@ -1984,7 +2007,7 @@ class BlocCreateSerializer(serializers.Serializer):
         # to ![alt](galerie:N) (resolved at render time via the block's ImageGalerie),
         # so the article is self-hosted. Download failure -> keep the external URL.
         texte_markdown_reecrit = None
-        if type_bloc == "MARKDOWN":
+        if type_bloc == "TEXTE":
             import re as _re_md
 
             texte_md = validated_data.get("text") or ""
@@ -2028,7 +2051,7 @@ class BlocCreateSerializer(serializers.Serializer):
             bloc.position = validated_data["position"]
 
         # Champs standard -> champs modele. / Standard fields -> model fields.
-        est_markdown = validated_data["additionalType"] == "MARKDOWN"
+        est_markdown = validated_data["additionalType"] == "TEXTE"
         for cle_std, nom_champ in MAPPING_STANDARD_VERS_CHAMP.items():
             if cle_std in validated_data:
                 valeur = validated_data[cle_std]
@@ -2076,6 +2099,19 @@ class BlocCreateSerializer(serializers.Serializer):
         if fichiers["image"]:
             bloc.image = fichiers["image"]
 
+        # Validation du modele AVANT d'ecrire : c'est elle qui refuse un
+        # affichage etranger au type. Sans elle, l'API stocke un couple que
+        # AUCUN gabarit ne sait rendre, et la page publique qui porte ce bloc
+        # sort en 500 — l'erreur apparait donc loin de l'appel qui l'a causee.
+        # Les champs fichiers sont exclus : ils viennent d'etre poses en memoire
+        # et leur validation d'upload a deja eu lieu.
+        # / Model validation BEFORE writing: it rejects an affichage foreign to
+        # the type. Without it the API stores a pair NO template can render, and
+        # the public page holding that block returns a 500 — far from the call
+        # that caused it. File fields are excluded: they were just set in memory
+        # and their upload validation already ran.
+        _valider_le_bloc(bloc)
+
         bloc.save()
 
         # Galerie pre-telechargee (FK : bloc deja persiste). / Pre-downloaded gallery.
@@ -2107,7 +2143,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 # Champs meta de Page acceptes via additionalProperty (whitelist).
 # / Page meta fields accepted via additionalProperty (whitelist).
 CHAMPS_PAGE_AUTORISES = frozenset({
-    "slug", "position", "publie", "est_accueil", "est_blog", "noindex",
+    "slug", "position", "publie", "est_accueil", "noindex",
     "meta_title", "meta_description",
 })
 
@@ -2152,7 +2188,7 @@ class PageSchemaSerializer(serializers.Serializer):
             is_part_of = {
                 "@type": "WebPage",
                 "identifier": str(parent.uuid),
-                "url": f"/{parent.slug}/",
+                "url": parent.get_absolute_url(),
                 "name": parent.titre,
             }
 
@@ -2161,7 +2197,7 @@ class PageSchemaSerializer(serializers.Serializer):
             "@type": "WebPage",
             "identifier": str(instance.uuid),
             "name": instance.titre,
-            "url": f"/{instance.slug}/",
+            "url": instance.get_absolute_url(),
             "description": instance.meta_description or None,
             "isPartOf": is_part_of,
             "hasPart": blocs or None,

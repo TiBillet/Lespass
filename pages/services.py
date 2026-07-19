@@ -71,92 +71,6 @@ def gabarit_skin(nom_du_gabarit):
         return chemin_dans_le_socle
 
 
-def grouper_blocs(blocs):
-    """
-    Regroupe les blocs pour le rendu. Retourne une liste de groupes typés :
-    / Groups blocks for rendering. Returns a list of typed groups:
-
-    - {"type": "section_video", "video": bloc, "cartes": [...], "cta": bloc|None}
-        Un bloc VIDEO_TEXTE absorbe les CARTE qui le suivent immediatement, plus un
-        CTA eventuel : c'est la section « video a gauche / texte + cartes + bouton a
-        droite » (reproduit la section 2 de la home faire_festival).
-    - {"type": "grille", "blocs": [cartes]}
-        Une suite de CARTE consecutives (hors section_video) -> une grille.
-    - {"type": "solo", "bloc": bloc}
-        Tout autre bloc, rendu seul.
-    / - "section_video": a VIDEO_TEXTE block absorbs the CARTE blocks right after it,
-        plus an optional CTA (the "video left / text + cards + button right" section).
-    - "grille": a run of consecutive CARTE blocks -> a grid.
-    - "solo": any other block, rendered alone.
-
-    Le template page.html (par skin) decide du balisage de chaque type de groupe.
-    / The (per-skin) page.html template decides the markup for each group type.
-    """
-    blocs = list(blocs)
-    groupes = []
-    i = 0
-    n = len(blocs)
-    while i < n:
-        bloc = blocs[i]
-
-        if bloc.type_bloc == "VIDEO_TEXTE":
-            # Section composee : on absorbe les CARTE suivantes puis un CTA eventuel.
-            # / Composed section: absorb the following CARTE blocks then an optional CTA.
-            j = i + 1
-            cartes = []
-            while j < n and blocs[j].type_bloc == "CARTE":
-                cartes.append(blocs[j])
-                j += 1
-            cta = None
-            if j < n and blocs[j].type_bloc == "CTA":
-                cta = blocs[j]
-                j += 1
-            groupes.append(
-                {"type": "section_video", "video": bloc, "cartes": cartes, "cta": cta}
-            )
-            i = j
-
-        elif bloc.type_bloc == "CARTE":
-            # Grille de cartes consecutives.
-            # / Grid of consecutive cards.
-            cartes = []
-            while i < n and blocs[i].type_bloc == "CARTE":
-                cartes.append(blocs[i])
-                i += 1
-            groupes.append({"type": "grille", "blocs": cartes})
-
-        elif bloc.type_bloc == "INFOS":
-            # Bloc d'infos : s'il est suivi d'une carte Leaflet, on les affiche cote a
-            # cote (infos a gauche, carte a droite). Sinon, bloc seul.
-            # / Info block: if followed by a Leaflet map, render them side by side
-            # (info left, map right). Otherwise standalone.
-            if i + 1 < n and blocs[i + 1].type_bloc == "CARTE_LEAFLET":
-                groupes.append(
-                    {"type": "section_carte", "info": bloc, "carte": blocs[i + 1]}
-                )
-                i += 2
-            else:
-                groupes.append({"type": "solo", "bloc": bloc})
-                i += 1
-
-        elif bloc.type_bloc == "FAQ":
-            # FAQ consecutives regroupees (rendues en 2 colonnes par le template).
-            # / Consecutive FAQ blocks grouped (rendered in 2 columns by the template).
-            faqs = []
-            while i < n and blocs[i].type_bloc == "FAQ":
-                faqs.append(blocs[i])
-                i += 1
-            groupes.append({"type": "faq", "blocs": faqs})
-
-        else:
-            # Bloc seul.
-            # / Standalone block.
-            groupes.append({"type": "solo", "bloc": bloc})
-            i += 1
-
-    return groupes
-
-
 def _slug_accueil_libre(PageModel):
     """
     Retourne un slug libre pour la page d'accueil ("accueil", sinon "accueil-2"...).
@@ -183,7 +97,7 @@ def construire_page_accueil(PageModel, BlocModel, config, description_longue=Non
     :param BlocModel: la classe Bloc (reelle ou historique).
     :param config: l'instance Configuration du tenant (organisation, descriptions,
         modules...).
-    :param description_longue: texte du bloc PARAGRAPHE (TOUJOURS cree, meme vide).
+    :param description_longue: texte du bloc TEXTE (TOUJOURS cree, meme vide).
         None = on prend celle de la config (flux migration tenants existants).
         Une chaine, meme vide = on l'utilise telle quelle (flux onboarding : evite
         le texte d'accueil hardcode ecrit par create_tenant).
@@ -220,39 +134,50 @@ def construire_page_accueil(PageModel, BlocModel, config, description_longue=Non
         meta_description=description_courte[:255],
     )
 
-    # --- Bloc HERO (pos 1) : banniere d'identite, titre + sous-titre ---
+    # Le couple (type_bloc, affichage) est ecrit en CHAINES et non via les
+    # constantes du modele : la fonction recoit aussi des modeles HISTORIQUES
+    # (migration de donnees), qui ne portent pas les constantes de classe.
+    # Un affichage vide sur un bloc SECTION laisserait le rendu chercher un
+    # gabarit « bloc_section.html » qui n'existe pas.
+    # / The (type_bloc, affichage) pair is written as STRINGS, not via the model
+    # constants: this function also receives HISTORICAL models (data migration),
+    # which carry no class constants. An empty affichage on a SECTION block
+    # would send the renderer looking for a template that does not exist.
+
+    # --- Banniere d'identite (pos 1) : titre + sous-titre ---
     # Pas de champ image : le fond est l'image generique du lieu (config.img),
-    # lue au rendu par le template. / HERO block (pos 1): identity banner, title
-    # + subtitle. No image field: the background is the venue's generic image
-    # (config.img), read at render time by the template.
+    # lue au rendu par le template. / Identity banner (pos 1): title + subtitle.
+    # No image field: the background is the venue's generic image, read at
+    # render time by the template.
     BlocModel.objects.create(
         page=page,
-        type_bloc="HERO",
+        type_bloc="SECTION",
+        affichage="BANNIERE",
         position=1,
         titre=nom_lieu,
         sous_titre=description_courte,
     )
 
-    # --- Bloc PARAGRAPHE (pos 2) : description longue (texte riche deja nettoye) ---
+    # --- Texte (pos 2) : description longue ---
     # TOUJOURS cree, meme vide : l'utilisateur pourra le remplir plus tard depuis
     # l'admin (le template ne rend rien tant que le texte est vide).
-    # / PARAGRAPH block (pos 2): long description. ALWAYS created, even empty: the
-    # user can fill it later from the admin (the template renders nothing while
-    # the text is empty).
+    # / Text (pos 2): long description. ALWAYS created, even empty: the user can
+    # fill it later from the admin (the template renders nothing while empty).
     BlocModel.objects.create(
         page=page,
-        type_bloc="PARAGRAPHE",
+        type_bloc="TEXTE",
         position=2,
         texte=description_longue,
     )
 
-    # --- Bloc CTA (pos 3) : actions selon les modules actifs ---
+    # --- Appel a l'action (pos 3) : actions selon les modules actifs ---
     # Memes URL et memes libelles que la navbar (get_context) : agenda puis
     # adhesions. Cree uniquement s'il porte au moins une action.
-    # / CTA block (pos 3): actions depending on active modules. Same URLs and
-    # labels as the navbar (agenda then memberships). Created only if it carries
-    # at least one action.
-    cta = BlocModel(page=page, type_bloc="CTA", position=3)
+    # / Call to action (pos 3): actions depending on active modules. Same URLs
+    # and labels as the navbar. Created only if it carries at least one action.
+    cta = BlocModel(
+        page=page, type_bloc="SECTION", affichage="APPEL_ACTION", position=3
+    )
 
     if getattr(config, "module_billetterie", False):
         cta.bouton_label = getattr(config, "event_menu_name", "") or _("Calendar")
@@ -273,3 +198,201 @@ def construire_page_accueil(PageModel, BlocModel, config, description_longue=Non
         cta.save()
 
     return page
+
+
+def _arbre_des_pages_publiees(PageModel):
+    """
+    Charge toutes les pages publiees en UNE requete et les range par parent.
+    / Loads every published page in ONE query and indexes them by parent.
+
+    LOCALISATION : pages/services.py
+
+    L'arbre est construit en memoire plutot qu'en base : a l'echelle d'un site
+    (quelques dizaines a quelques centaines de pages), une seule requete suivie
+    d'un tri Python coute moins qu'une requete recursive, et se lit sans
+    connaitre les CTE.
+    / The tree is built in memory rather than in SQL: at a site's scale, one
+    query plus a Python pass costs less than a recursive query, and reads
+    without knowing CTEs.
+
+    Ne retourne QUE les pages publiees : une page en brouillon ne doit
+    apparaitre dans aucun menu, meme pour un administrateur connecte.
+    / Returns ONLY published pages: a draft must appear in no menu.
+
+    :return: (racines, enfants_par_parent) — les pages de premier niveau, et
+        l'index uuid_du_parent -> [pages enfants], les deux tries pour
+        l'affichage.
+    """
+    pages = list(
+        PageModel.objects.filter(publie=True)
+        .select_related("parent")
+        .order_by("position", "titre")
+    )
+
+    racines = []
+    enfants_par_parent = {}
+    for page in pages:
+        if page.parent_id:
+            enfants_par_parent.setdefault(page.parent_id, []).append(page)
+        else:
+            racines.append(page)
+    return racines, enfants_par_parent
+
+
+def _maillon_de_navigation(page, enfants=()):
+    """
+    Traduit une page en entree de menu.
+    / Turns a page into a menu entry.
+    """
+    return {
+        "name": f"page-{page.slug}",
+        "url": page.get_absolute_url(),
+        "label": page.titre,
+        "icon": "house-door" if page.est_accueil else "file-earmark-text",
+        "children": [_maillon_de_navigation(enfant) for enfant in enfants],
+    }
+
+
+def construire_navbar_pages(PageModel):
+    """
+    Construit les entrees de barre de navigation issues des pages du tenant.
+    / Builds the navigation bar entries coming from the tenant's pages.
+
+    LOCALISATION : pages/services.py
+
+    Une racine apparait dans la barre selon son `affichage_nav` :
+      - NAVBAR  : elle y figure, ses enfants directs en menu deroulant ;
+      - SIDEBAR : elle y figure aussi, mais SANS deroulant — son arbre se
+        deplie dans le menu lateral de la page, pas dans la barre du haut ;
+      - AUCUN   : elle n'y figure pas.
+    Les descendants n'ont jamais d'entree propre : ils vivent dans le
+    deroulant de leur racine ou dans le menu lateral.
+    / A root appears in the bar according to its `affichage_nav`. Descendants
+    never get their own entry: they live in their root's dropdown or in the
+    side menu.
+    """
+    racines, enfants_par_parent = _arbre_des_pages_publiees(PageModel)
+
+    entrees = []
+    for racine in racines:
+        if racine.affichage_nav == PageModel.AUCUN:
+            continue
+        # Une racine en menu lateral n'ouvre pas de deroulant : son arbre est
+        # deja donne en entier par le menu de gauche, le repeter en haut
+        # ferait deux navigations pour une seule structure.
+        # / A side-menu root opens no dropdown: its tree is already given in
+        # full by the left menu.
+        enfants = ()
+        if racine.affichage_nav == PageModel.NAVBAR:
+            enfants = enfants_par_parent.get(racine.pk, ())
+        entrees.append(_maillon_de_navigation(racine, enfants))
+    return entrees
+
+
+def _racine_de(page):
+    """
+    Remonte jusqu'a la racine de l'arbre auquel la page appartient.
+    / Walks up to the root of the tree the page belongs to.
+
+    La remontee est bornee : une hierarchie circulaire ecrite hors validation
+    ferait sinon boucler sans fin.
+    / The walk is bounded: a circular hierarchy written outside validation
+    would otherwise loop forever.
+    """
+    from pages.models import PROFONDEUR_MAX_ARBRE
+
+    courante = page
+    rang = 0
+    while courante.parent is not None and rang < PROFONDEUR_MAX_ARBRE:
+        courante = courante.parent
+        rang += 1
+    return courante
+
+
+def _parcours_en_profondeur(racine, enfants_par_parent, profondeur=1):
+    """
+    Met l'arbre a plat dans l'ordre de lecture : une page, puis ses enfants.
+    / Flattens the tree in reading order: a page, then its children.
+
+    C'est l'ordre du menu lateral ET celui de la navigation precedent/suivant :
+    les deux decrivent le meme parcours, donc ils ne peuvent pas diverger.
+    / This is both the side menu's order and the previous/next order: they
+    describe the same walk, so they cannot drift apart.
+    """
+    entrees = [{"page": racine, "profondeur": profondeur}]
+    for enfant in enfants_par_parent.get(racine.pk, ()):
+        entrees.extend(
+            _parcours_en_profondeur(enfant, enfants_par_parent, profondeur + 1)
+        )
+    return entrees
+
+
+def construire_menu_lateral(PageModel, page_courante):
+    """
+    Construit le menu lateral de la page, et ses voisines precedente/suivante.
+    / Builds the page's side menu, plus its previous/next neighbours.
+
+    LOCALISATION : pages/services.py
+
+    Le menu n'existe que pour une page dont la RACINE est en SIDEBAR : c'est
+    une navigation de documentation, elle n'a pas de sens sur une page isolee.
+    / The menu only exists for a page whose ROOT is in SIDEBAR: it is a
+    documentation navigation, meaningless on a standalone page.
+
+    Precedent/suivant suivent le MEME parcours que le menu, et restent DANS
+    l'arbre courant : une chaine qui traverserait deux arbres enchainerait la
+    derniere page d'une rubrique sur la premiere d'une autre, sans rapport.
+    / Previous/next follow the SAME walk as the menu and stay INSIDE the
+    current tree: a chain crossing two trees would link the last page of one
+    section to the first of an unrelated one.
+
+    :return: un dict {entrees, precedente, suivante}, vide si la page n'est pas
+        dans un arbre affiche en menu lateral.
+    """
+    if page_courante is None:
+        return {}
+
+    racine = _racine_de(page_courante)
+    if racine.affichage_nav != PageModel.SIDEBAR:
+        return {}
+    # Racine en brouillon : elle n'a pas d'adresse publique. Le parcours part
+    # d'elle sans condition, donc la lister mettrait en tete du menu un lien
+    # qui renvoie 404 a un visiteur. Aucun menu vaut mieux qu'un menu qui ment.
+    # / Draft root: it has no public address. The walk starts from it
+    # unconditionally, so listing it would put a link 404-ing for visitors at
+    # the top of the menu. No menu beats a lying menu.
+    if not racine.publie:
+        return {}
+
+    _, enfants_par_parent = _arbre_des_pages_publiees(PageModel)
+    parcours = _parcours_en_profondeur(racine, enfants_par_parent)
+
+    entrees = [
+        {
+            "titre": entree["page"].titre,
+            "url": entree["page"].get_absolute_url(),
+            "profondeur": entree["profondeur"],
+            "est_la_page_courante": entree["page"].pk == page_courante.pk,
+        }
+        for entree in parcours
+    ]
+
+    # Position de la page dans le parcours : elle en est absente si elle est en
+    # brouillon (l'arbre ne liste que les pages publiees) — on ne propose alors
+    # aucune voisine plutot que de designer les mauvaises.
+    # / The page is missing from the walk when it is a draft (the tree only
+    # lists published pages): we then offer no neighbour rather than the wrong
+    # ones.
+    rang = next(
+        (i for i, entree in enumerate(parcours)
+         if entree["page"].pk == page_courante.pk),
+        None,
+    )
+    if rang is None:
+        return {"entrees": entrees, "precedente": None, "suivante": None}
+
+    return {
+        "entrees": entrees,
+        "precedente": parcours[rang - 1]["page"] if rang > 0 else None,
+        "suivante": parcours[rang + 1]["page"] if rang + 1 < len(parcours) else None,
+    }

@@ -39,6 +39,14 @@
     /* Jetons locaux / Local tokens */
     --tb-espace-section: clamp(2.5rem, 5.5vw, 4.5rem);
     --tb-largeur-max: 72rem;
+
+    /* Hauteur reservee au-dessus des colonnes collantes et des ancres. Un skin
+       dont l'entete reste fixe la surcharge, sinon le haut du menu et du
+       sommaire disparait dessous au defilement.
+       / Space reserved above sticky columns and anchors. A skin with a fixed
+       header overrides it, otherwise the top of the menu and table of contents
+       vanishes underneath when scrolling. */
+    --tb-sticky-top: 1.5rem;
     --tb-largeur-lecture: 40rem;
     /* LA gouttière horizontale unique de tous les blocs (audit grille
        2026-07-05 : chaque bloc avait la sienne, rien ne s'alignait).
@@ -99,6 +107,138 @@
     background-color: var(--tb-surface);
 }
 
+/* GRILLE DE PAGE — 12 colonnes.
+   C'est ici que se joue la mise en page cote a cote. Chaque bloc occupe la
+   largeur qu'il declare (voir --tb-colonnes plus bas) : par defaut les 12
+   colonnes, donc pleine largeur ; une carte 4 ; une FAQ 6. Des blocs voisins
+   qui n'occupent pas tout se rangent donc d'eux-memes sur la meme ligne.
+
+   Classe SEPAREE de .tb-page : le skin faire_festival pose .tb-flux pour
+   obtenir la grille sans .tb-page, dont le fond blanc et le texte noir
+   ecraseraient son identite.
+   / PAGE GRID — 12 columns. Each block spans what it declares (12 by default,
+   4 for a card, 6 for a FAQ), so neighbours line up on their own. Kept apart
+   from .tb-page: the faire_festival skin adds .tb-flux for the grid without
+   .tb-page's white background, which would erase its identity. */
+.tb-flux {
+    /* Air entre deux blocs-colonnes voisins (cartes, FAQ).
+       / Air between two neighbouring column blocks. */
+    --tb-grille-gap: clamp(1.25rem, 3vw, 2rem);
+
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    column-gap: var(--tb-grille-gap);
+
+    /* CADRAGE : la zone de contenu vaut min(100% - 2 gouttieres, largeur-max)
+       et reste centree. C'est la grille qui le porte, parce que les
+       blocs-colonnes (cartes, FAQ) sont des enfants directs : eux seuls
+       dependent du conteneur pour ne pas toucher le bord de l'ecran.
+       / FRAMING: the content zone is min(100% - 2 gutters, max-width), centered.
+       The grid carries it because column blocks are direct children and depend
+       on the container to stay off the screen edge. */
+    padding-inline: max(var(--tb-gouttiere), calc((100% - var(--tb-largeur-max)) / 2));
+
+    /* La page ouvre et ferme sur la meme respiration que l'espace entre blocs.
+       / The page opens and closes on the same breathing room. */
+    padding-block: calc(var(--tb-espace-section) / 2);
+
+    /* Les blocs pleine largeur debordent d'une largeur d'ascenseur : leurs
+       marges negatives se mesurent en 100vw, qui compte l'ascenseur vertical,
+       alors que la grille se mesure en 100%, qui ne le compte pas. Sans cette
+       coupe, un ascenseur HORIZONTAL apparait sur toute la page.
+       `clip` et non `hidden` : `hidden` creerait un conteneur de defilement et
+       casserait tout `position: sticky` place dans un bloc.
+       / Full-bleed blocks overflow by one scrollbar width: their negative
+       margins use 100vw (which counts the vertical scrollbar) while the grid
+       uses 100% (which does not). Without this, a HORIZONTAL scrollbar shows
+       up. `clip`, not `hidden`: `hidden` would create a scroll container and
+       break any `position: sticky` inside a block. */
+    overflow-x: clip;
+
+    /* Les voisins d'une meme rangee s'etirent a la hauteur du plus grand.
+       C'est cet etirement qui permet a un pied de carte de se caler en bas
+       (margin-top: auto) : sans lui, les boutons de trois cartes de textes
+       inegaux forment un escalier.
+       / Same-row neighbours stretch to the tallest. This is what lets a card
+       footer pin to the bottom; without it, buttons form a staircase. */
+    align-items: stretch;
+}
+
+/* La grille porte deja la gouttiere : un bloc du socle ne pose pas la sienne
+   par-dessus, sinon le retrait est compte deux fois et les cartes paraissent
+   plus larges que les textes.
+   / The grid already carries the gutter: base blocks must not add theirs on
+   top, or the inset counts twice. */
+.tb-flux > .tb-bloc,
+.tb-flux > .tb-grille,
+.tb-flux > .tb-faq-colonnes {
+    padding-inline: 0;
+    max-width: none;
+    /* `margin-inline: auto` est a retirer, pas seulement a neutraliser en
+       largeur : sur un ITEM DE GRILLE, une marge automatique annule
+       l'etirement (`justify-self: stretch`). L'element se dimensionne alors
+       sur son contenu au lieu d'occuper sa zone — une grille de cartes se
+       reduit a la largeur d'UNE carte et les cartes s'empilent.
+       / `margin-inline: auto` must be removed, not just capped: on a GRID
+       ITEM an auto margin cancels `justify-self: stretch`, so the element
+       sizes to its content instead of filling its area — a card grid shrinks
+       to one card wide and the cards stack. */
+    margin-inline: 0;
+}
+
+/* PLEINE LARGEUR (banniere a image de fond, bandes teintees) : le bloc annule
+   le cadrage par marges negatives, puis reprend le meme calcul en padding pour
+   recentrer son contenu. On mesure en 100vw et non en 100% : le pourcentage
+   d'un item de grille se resout contre sa zone de grille, deja retrecie.
+   / FULL-BLEED: cancel the framing with negative margins, re-add the same calc
+   as padding to re-center the content. Measured in 100vw, not 100%: a grid
+   item's percentage resolves against its already-shrunk grid area. */
+.tb-flux > .tb-pleine-largeur,
+.tb-flux > .tb-bloc--hero,
+.tb-flux > .tb-bloc--cta,
+.tb-flux > .tb-bloc--temoignage {
+    /* `width: auto` est indispensable, pas decoratif : un bloc qui fixe sa
+       largeur (une `.container-fluid` de Bootstrap vaut `width: 100%`) n'est
+       plus etire par la grille. Il garde alors la largeur de sa ZONE, les
+       marges negatives ne font que le decaler, et son propre padding ampute
+       le contenu d'autant — les colonnes se retrouvent ecrasees a gauche.
+       / `width: auto` is required, not decorative: a block that fixes its own
+       width (Bootstrap's `.container-fluid` is `width: 100%`) is no longer
+       stretched by the grid. It keeps its GRID AREA width, the negative
+       margins merely shift it, and its own padding eats the content. */
+    width: auto;
+    max-width: none;
+    margin-inline: calc(-1 * max(var(--tb-gouttiere), (100vw - var(--tb-largeur-max)) / 2));
+    padding-inline: max(var(--tb-gouttiere), calc((100vw - var(--tb-largeur-max)) / 2));
+}
+
+/* Chaque enfant direct de la page occupe le nombre de colonnes qu'il declare.
+   `minmax(0, ...)` et non `1fr` : sans lui, une image ou un <pre> trop large
+   force la colonne a s'elargir et fait deborder la page horizontalement.
+   / Every direct child spans the columns it declares. `minmax(0, ...)`, not
+   `1fr`: without it a wide image or <pre> blows the page out horizontally. */
+.tb-flux > * {
+    grid-column: span var(--tb-colonnes, 12);
+    min-width: 0;
+}
+
+/* Largeur d'un bloc dans la grille. Classes STRUCTURELLES, volontairement
+   separees des classes d'habillage (.tb-bloc--carte & co) : un skin qui a son
+   propre look pose la largeur sans heriter du style du socle classic.
+   / A block's width in the grid. STRUCTURAL classes, deliberately kept apart
+   from styling classes: a skin with its own look can set the width without
+   inheriting the classic base styling. */
+.tb-flux > .tb-colonnes-4 { --tb-colonnes: 4; }
+.tb-flux > .tb-colonnes-6 { --tb-colonnes: 6; }
+
+/* Sur petit ecran, tout repasse sur une seule colonne : un tiers de telephone
+   est illisible. / On small screens everything stacks: a third of a phone is
+   unreadable. */
+@media (max-width: 62rem) {
+    .tb-flux > .tb-colonnes-4,
+    .tb-flux > .tb-colonnes-6 { --tb-colonnes: 12; }
+}
+
 /* Fil d'Ariane (sous-pages) : discret, accent sur les liens, aligné aux blocs.
    / Breadcrumb (sub-pages): discreet, accent links, aligned with the blocks. */
 .tb-fil-ariane {
@@ -121,7 +261,15 @@
    / Common container for each block: max width + vertical breathing room. */
 .tb-bloc {
     box-sizing: border-box;
-    padding-block: var(--tb-espace-section);
+    /* RYTHME VERTICAL : chaque bloc porte une DEMI-section en haut et en bas,
+       donc deux blocs qui se suivent totalisent exactement un espace-section.
+       Les bandes a fond colore reprennent la section pleine plus bas : leur
+       padding vit DANS leur fond et se lit comme la hauteur de la bande, pas
+       comme un espacement.
+       / VERTICAL RHYTHM: every block carries half a section top and bottom, so
+       two neighbours add up to exactly one section. Tinted bands take the full
+       section back below: their padding lives inside their background. */
+    padding-block: calc(var(--tb-espace-section) / 2);
     /* Gouttière ALIGNANTE : au moins la gouttière, et au moins ce qu'il faut
        pour poser le bord du contenu sur le conteneur commun (largeur-max
        centrée). Sans ce max(), les blocs à contenu calé à gauche (CTA,
@@ -450,7 +598,7 @@ h2.tb-bloc__titre::before {
 }
 .tb-grille .tb-bloc { padding: 0; }
 
-/* Carte : image en tête + surtitre accent + titre serif + texte + bouton.
+/* Carte : image en tete + sur-titre accent + titre serif + texte + bouton.
    Profondeur sobre + lift au survol. / Card: header image + accent overline +
    serif title + text + button. Sober depth + hover lift. */
 .tb-bloc--carte {
@@ -464,10 +612,25 @@ h2.tb-bloc__titre::before {
     transition: transform var(--tb-transition), box-shadow var(--tb-transition);
 }
 .tb-bloc--carte:hover { transform: translateY(-4px); box-shadow: var(--tb-ombre-forte); }
+/* Image de carte : ENTIERE, jamais recadree.
+   `contain` montre toute l'image ; une affiche de concert ou un logo ne perd
+   donc ni son titre ni ses bords. La boite garde un `aspect-ratio` FIXE : la
+   hauteur d'image est la meme sur toutes les cartes d'une rangee, donc les
+   titres, les textes et les boutons restent alignes entre eux. Avec une
+   hauteur libre, chaque carte demarrerait son titre a un niveau different.
+   Le fond neutre habille les bandes laissees par les images dont les
+   proportions different de la boite.
+   / Card image: WHOLE, never cropped. `contain` shows the entire image, so a
+   gig poster or a logo keeps its edges. The box keeps a FIXED `aspect-ratio`:
+   image height is identical across a row, so titles, texts and buttons stay
+   aligned. With a free height, every card would start its title at a
+   different level. The neutral background dresses the bands left by images
+   whose proportions differ from the box. */
 .tb-bloc__carte-image {
     width: 100%;
     aspect-ratio: 3 / 2;
-    object-fit: cover;
+    object-fit: contain;
+    background-color: var(--tb-surface-alt);
     display: block;
 }
 /* Corps de carte : padding interne (l'image est à fleur de bord). */
@@ -475,7 +638,46 @@ h2.tb-bloc__titre::before {
 .tb-bloc--carte > :not(.tb-bloc__carte-image) { margin-inline: 1.25rem; }
 .tb-bloc--carte > .tb-bloc__carte-surtitre { margin-top: 1.25rem; }
 .tb-bloc--carte > :last-child { margin-bottom: 1.25rem; }
-.tb-bloc--carte > .tb-bloc__bouton { margin-top: 1rem; }
+/* Aligne les boutons des cartes d'une meme grille : la grille etire deja chaque
+   carte a la hauteur de la ligne (align-items: stretch), donc margin-top:auto
+   pousse le bouton EN BAS de chaque carte -> tous les boutons a la meme hauteur,
+   quelle que soit la longueur du texte. Le texte garde un ecart minimal via sa
+   propre marge basse (les marges flex ne fusionnent pas).
+   / Align buttons across cards in a grid: the grid already stretches each card to
+   the row height, so margin-top:auto pushes the button to the BOTTOM of each card
+   -> all buttons at the same height, whatever the text length. */
+.tb-bloc--carte > .tb-bloc__bouton { margin-top: auto; }
+
+/* Une carte n'est PAS une section : le padding de section gonflerait
+   l'interieur de la bordure de ~70px verticaux. L'air interne vient des marges
+   de ses enfants. / A card is NOT a section: section padding would inflate the
+   inside of its border. Inner air comes from its children's margins. */
+.tb-flux > .tb-bloc--carte { padding: 0; }
+
+/* Le texte absorbe l'espace variable : le titre reste cale en haut et le
+   bouton en bas, quelle que soit la longueur du texte.
+   / The text soaks up the slack: title stays top, button stays bottom. */
+.tb-bloc--carte > .tb-bloc__carte-texte { flex-grow: 1; }
+
+/* Meme largeur de bouton sur toutes les cartes d'une rangee.
+   / Same button width across a row of cards. */
+.tb-bloc--carte .tb-bloc__bouton { align-self: stretch; }
+
+/* De l'air entre l'image et le premier element qui la suit (une carte de
+   sous-page commence par un titre, sans sur-titre).
+   / Breathing room between the image and whatever follows it. */
+.tb-bloc--carte > .tb-bloc__carte-image + * { margin-top: 1.25rem; }
+
+/* Les blocs-colonnes ne sont pas des sections : leur air vertical est le gap
+   de la grille, porte en marge. Deux rangees de cartes sont donc separees d'un
+   gap complet. / Column blocks are not sections: their vertical air is the
+   grid gap, carried as a margin, so two rows end up one full gap apart. */
+.tb-flux > .tb-colonnes-4,
+.tb-flux > .tb-colonnes-6 {
+    padding-block: 0;
+    margin-block: calc(var(--tb-grille-gap) / 2);
+}
+.tb-bloc--carte > .tb-bloc__carte-texte { margin-bottom: 1rem; }
 .tb-bloc__carte-surtitre {
     margin-bottom: 0.35rem;
     font-weight: 700;
@@ -500,6 +702,15 @@ h2.tb-bloc__titre::before {
     font-weight: 600;
     font-size: 1.3rem;
     line-height: 1.2;
+    /* Equilibre le retour a la ligne : evite un mot seul sur la derniere ligne
+       (detail UI). / Balance wrapping to avoid an orphan word on the last line. */
+    text-wrap: balance;
+}
+/* Meme equilibrage sur les titres/sous-titres de bloc (HERO, CTA, sections).
+   / Same balancing on block titles/subtitles. */
+.tb-bloc__titre,
+.tb-bloc__sous-titre {
+    text-wrap: balance;
 }
 .tb-bloc__carte-texte { font-size: 0.97rem; line-height: 1.55; color: var(--tb-texte-doux); }
 /* Carte sans image : on remet un padding haut pour le surtitre/titre. */
@@ -542,7 +753,7 @@ h2.tb-bloc__titre::before {
     .tb-bloc--carte-leaflet .tb-bloc__leaflet-grille { grid-template-columns: 1fr; }
 }
 
-/* Cas SOLO : un bloc INFOS ou une carte Leaflet rendu SEUL (hors section
+/* Cas SOLO : la carte d'un bloc LIEU rendue SEULE (hors section
    côte-à-côte) n'a pas de wrapper porteur du gutter. On lui redonne le padding
    et le container d'un bloc normal — puis on l'annule dans la grille côte-à-côte
    (qui gère déjà l'espacement). `.tb-bloc__carte` = racine du partial Leaflet.
@@ -606,6 +817,15 @@ h2.tb-bloc__titre::before {
     padding-block: var(--tb-espace-section);
     padding-inline: var(--tb-gouttiere);
 }
+/* Une entree de FAQ est posee directement dans le flux : c'est elle qui porte
+   son filet et son air, sans conteneur intermediaire. Les memes declarations
+   sont reprises ci-dessous pour le cas ou un conteneur en colonnes existe.
+   / A FAQ entry sits directly in the flux and carries its own rule and air. */
+.tb-flux > .tb-bloc--faq {
+    padding-left: 1rem;
+    border-left: 2px solid var(--tb-bordure);
+}
+
 .tb-faq-colonnes .tb-bloc--faq {
     break-inside: avoid;
     margin-bottom: 1.75rem;
@@ -791,18 +1011,28 @@ h2.tb-bloc__titre::before {
 }
 
 /* ============================================================
-   BLOC MARKDOWN — texte long (article/blog).
+   BLOC TEXTE — contenu long redige en Markdown.
    Habille le HTML produit par le filtre rendre_markdown (titres,
    listes, code, citations, tableaux). Le skin peut surcharger via
    son propre CSS. / MARKDOWN block — long-form text. Styles the
    HTML produced by the rendre_markdown filter.
    ============================================================ */
-.tb-markdown { line-height: 1.65; max-width: 72ch; }
+/* Interligne 1.8 : le confort de lecture d'un texte long tient d'abord a
+   l'espace entre les lignes. Les sites de documentation qui se lisent bien
+   sont tous autour de cette valeur.
+   / 1.8 line height: reading comfort on long text comes first from the space
+   between lines. Documentation sites that read well all sit around this. */
+.tb-markdown { line-height: 1.8; max-width: 72ch; }
 .tb-markdown h1, .tb-markdown h2, .tb-markdown h3,
 .tb-markdown h4, .tb-markdown h5, .tb-markdown h6 {
-    margin: 1.4em 0 .5em;
+    /* Beaucoup d'air AVANT, peu APRES : le titre appartient visuellement au
+       paragraphe qu'il annonce, pas a celui qu'il termine.
+       / Much air BEFORE, little AFTER: the heading visually belongs to the
+       paragraph it announces, not the one it ends. */
+    margin: 2.2em 0 .6em;
     line-height: 1.25;
 }
+.tb-markdown > :first-child { margin-top: 0; }
 .tb-markdown p { margin: 0 0 1em; }
 .tb-markdown ul, .tb-markdown ol { margin: 0 0 1em; padding-left: 1.5em; }
 .tb-markdown li { margin-bottom: .35em; }
@@ -835,7 +1065,7 @@ h2.tb-bloc__titre::before {
 .tb-markdown img { max-width: 100%; height: auto; }
 .tb-markdown hr { margin: 2em 0; border: 0; border-top: 1px solid var(--tb-surface-alt, rgba(127, 127, 127, .35)); }
 
-/* Titre de secours d'une page CMS sans bloc HERO (h1 SEO/a11y).
+/* Titre de secours d'une page sans banniere (h1 SEO/a11y).
    / Fallback title of a CMS page without a HERO block. */
 .tb-page__titre {
     margin: 1.2em auto .4em;
@@ -865,6 +1095,12 @@ h2.tb-bloc__titre::before {
    sticks to it: without these rules, the section's bottom spacing + the
    grid's top spacing stacked up (~2 x section spacing of emptiness).
    ============================================================ */
+/* Le titre d'une liste colle a la grille de cartes qui le suit.
+   La classe rendue par bloc_liste.html est `tb-bloc--liste-titre`.
+   / A list title hugs the card grid that follows it. */
+.tb-bloc--liste-titre { padding-block-end: 0; }
+.tb-bloc--liste-titre + .tb-grille { padding-block-start: 1.5rem; }
+
 .tb-bloc--evenements-titre,
 .tb-bloc--liste-sous-pages-titre {
     padding-block-end: 0;
@@ -955,4 +1191,522 @@ h2.tb-bloc__titre::before {
     max-width: 100%;
     border: 0;
     display: block;
+}
+
+/* --------------------------------------------------------------------------
+   BLOC SECTION / affichage MEDIA_ET_CARTES — le media, le texte, puis les
+   sous-cartes portees par le champ `contenu` du bloc.
+   / SECTION block / MEDIA_ET_CARTES display — media, text, then the sub-cards
+   carried by the block's `contenu` field.
+   -------------------------------------------------------------------------- */
+.tb-bloc--media-cartes .tb-bloc__video,
+.tb-bloc--media-cartes .tb-bloc__image {
+    width: 100%;
+    max-height: 26rem;
+    object-fit: cover;
+    border-radius: var(--tb-rayon);
+    margin-bottom: 1.5rem;
+}
+
+/* Les sous-cartes se rangent d'elles-memes : autant de colonnes que la largeur
+   en autorise, jamais moins de 14rem chacune.
+   / Sub-cards flow on their own: as many columns as the width allows. */
+.tb-sous-cartes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+    gap: 1.25rem;
+    margin-block: 1.75rem;
+}
+
+.tb-sous-carte {
+    padding-left: 1rem;
+    border-left: 3px solid var(--tb-accent);
+}
+
+.tb-sous-carte__titre {
+    margin: 0 0 0.35rem;
+    font-family: var(--tb-police-titre);
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--tb-texte);
+}
+
+.tb-sous-carte__texte {
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: var(--tb-texte-doux);
+}
+
+/* --------------------------------------------------------------------------
+   SOMMAIRE DE PAGE — les titres des blocs de texte, replies dans un <details>.
+   / PAGE TABLE OF CONTENTS — the text blocks' headings, in a <details>.
+   -------------------------------------------------------------------------- */
+/* Le sommaire vit dans la marge DROITE, en vis-a-vis du menu de rubrique a
+   gauche : la page se lit alors entre deux reperes — ou je suis dans le site,
+   ou j'en suis dans la page. C'est la disposition des sites de documentation.
+   Ni fond ni cadre : du texte pose dans la marge.
+   / The table of contents lives in the RIGHT margin, facing the section menu
+   on the left: the page then reads between two markers — where I am in the
+   site, where I am in the page. No background, no frame: text in the margin. */
+.tb-sommaire {
+    padding: 0;
+    border: 0;
+    background: none;
+    margin-block: 0;
+}
+
+.tb-sommaire__titre {
+    cursor: pointer;
+    font-family: var(--tb-police-titre);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--tb-texte-doux);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.tb-sommaire__liste {
+    margin: 0.9rem 0 0;
+    padding-left: 0;
+    list-style: none;
+}
+
+.tb-sommaire__entree { margin-block: 0; font-size: 0.9rem; line-height: 1.35; }
+.tb-sommaire__entree a {
+    display: block;
+    padding: 0.3rem 0.6rem;
+    border-radius: var(--tb-rayon-sm);
+    color: var(--tb-texte-doux);
+    text-decoration: none;
+    transition: background-color var(--tb-transition), color var(--tb-transition);
+}
+.tb-sommaire__entree a:hover {
+    color: var(--tb-texte);
+    background: var(--tb-surface-alt);
+}
+
+/* Section en cours de lecture, posee par pages/js/sommaire_actif.js. Le trait
+   vertical marque la position autant que la couleur : sur une liste de titres,
+   un simple changement de teinte se repere mal du coin de l'oeil.
+   Sans JavaScript, aucune entree ne porte cette classe et le sommaire reste
+   une liste de liens ordinaire.
+   / Section currently being read, set by pages/js/sommaire_actif.js. The
+   vertical rule marks the position as much as the colour does. Without
+   JavaScript no entry carries this class and the ToC stays a plain list. */
+.tb-sommaire__entree--active > a {
+    color: var(--tb-accent);
+    font-weight: 600;
+    box-shadow: inset 2px 0 0 var(--tb-accent);
+}
+
+/* Le deplacement du marqueur suit la lecture : anime, il attire l'oeil hors du
+   texte. On ne l'anime donc pas, et on respecte de toute facon la preference
+   systeme. / The marker follows the reading: animating it would pull the eye
+   away from the text. */
+@media (prefers-reduced-motion: reduce) {
+    .tb-sommaire__entree a { transition: none; }
+}
+
+/* Le retrait dit la profondeur du titre. / Indentation shows heading depth. */
+.tb-sommaire__entree--niveau-2 { padding-left: 0.6rem; }
+.tb-sommaire__entree--niveau-3 { padding-left: 1.2rem; }
+.tb-sommaire__entree--niveau-4 { padding-left: 1.8rem; }
+
+/* Une ancre visee par le sommaire ne doit pas se retrouver sous une entete
+   collante. / An anchor targeted by the summary must not land under a sticky
+   header. */
+.tb-markdown :is(h2, h3, h4, h5, h6) { scroll-margin-top: 5rem; }
+
+/* --------------------------------------------------------------------------
+   COLORATION SYNTAXIQUE (classes produites par codehilite/Pygments).
+   Palette SOBRE et monochrome-plus-un-accent : un bloc de code doit se lire,
+   pas clignoter. Seuls les elements qui portent du sens sont teintes —
+   commentaires en retrait, chaines et nombres a l'accent, mots-cles en gras.
+   / SYNTAX HIGHLIGHTING (codehilite/Pygments classes). SOBER palette: a code
+   block should read, not blink. Only meaningful tokens are tinted.
+   -------------------------------------------------------------------------- */
+.tb-markdown .codehilite {
+    overflow-x: auto;                 /* un code long defile DANS son cadre */
+    padding: 1rem 1.25rem;
+    border-radius: var(--tb-rayon-sm);
+    background: var(--tb-surface-alt);
+    border: 1px solid var(--tb-bordure);
+}
+
+.tb-markdown .codehilite pre { margin: 0; }
+
+.tb-markdown .codehilite .c,                     /* commentaire */
+.tb-markdown .codehilite .c1,
+.tb-markdown .codehilite .cm { color: var(--tb-texte-doux); font-style: italic; }
+
+.tb-markdown .codehilite .k,                     /* mot-cle */
+.tb-markdown .codehilite .kd,
+.tb-markdown .codehilite .kn { font-weight: 600; }
+
+.tb-markdown .codehilite .s,                     /* chaine */
+.tb-markdown .codehilite .s1,
+.tb-markdown .codehilite .s2,
+.tb-markdown .codehilite .mi,                    /* nombre */
+.tb-markdown .codehilite .mf { color: var(--tb-accent); }
+
+/* --------------------------------------------------------------------------
+   MENU LATERAL — l'arbre de la rubrique, a gauche du contenu sur grand ecran.
+   / SIDE MENU — the section's tree, left of the content on wide screens.
+   -------------------------------------------------------------------------- */
+.tb-menu-lateral {
+    --tb-colonnes: 3;
+    /* Padding horizontal minimal : la colonne fait ~264 px, et chaque rem
+       rogne sur la largeur de texte. Avec 1.25rem de chaque cote il ne restait
+       que 188 px, ou un titre d'article s'enroulait sur quatre lignes.
+       / Minimal horizontal padding: the column is ~264px and every rem eats
+       into the text width. With 1.25rem each side only 188px were left, where
+       an article title wrapped onto four lines. */
+    padding: 0.25rem 0.75rem 0.25rem 0;
+
+    /* Le menu occupe sa colonne sur TOUTES les lignes de la grille.
+       `1 / -1` ne conviendrait pas : `-1` designe la derniere ligne EXPLICITE,
+       or les lignes sont ici implicites (creees par le flux des blocs) — le
+       menu ne couvrirait que la premiere, les blocs suivants repasseraient
+       dessous et le menu colle en `sticky` les recouvrirait au defilement.
+       / The menu spans its column across EVERY row. `1 / -1` would not do:
+       `-1` means the last EXPLICIT row, and rows here are implicit — the menu
+       would cover only the first one and the sticky menu would then overlap
+       the blocks flowing underneath. */
+    grid-column: 1 / span 3;
+    grid-row: 1 / span 999;
+    align-self: start;
+    /* Le menu suit la lecture sur les pages longues.
+       PAS de `max-height` + `overflow-y` : une barre de defilement dans la
+       marge attire l'oeil autant que le contenu qu'elle sert. Le menu coule
+       librement ; sur une rubrique tres longue il defile avec la page, ce qui
+       est le comportement attendu d'une table des matieres de site.
+       / The menu follows the reading on long pages. NO `max-height` +
+       `overflow-y`: a scrollbar in the margin draws as much attention as the
+       content it serves. The menu flows freely. */
+    position: sticky;
+    top: var(--tb-sticky-top);
+}
+
+/* Le titre du menu est une etiquette, pas un titre de section : discret,
+   il annonce la rubrique sans concurrencer le titre de la page.
+   / The menu title is a label, not a section heading: discreet. */
+.tb-menu-lateral__titre {
+    cursor: pointer;
+    font-family: var(--tb-police-titre);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--tb-texte-doux);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.tb-menu-lateral__liste { margin: 0.9rem 0 0; padding-left: 0; list-style: none; }
+.tb-menu-lateral__entree { margin-block: 0; font-size: 0.9rem; line-height: 1.35; }
+
+/* Chaque entree est une zone cliquable pleine largeur : la cible est confortable
+   et le survol se lit comme un element d'interface, pas comme un lien de texte.
+   / Each entry is a full-width click target: comfortable to hit, and the hover
+   reads as a UI element rather than a text link. */
+.tb-menu-lateral__entree a {
+    display: block;
+    padding: 0.3rem 0.6rem;
+    border-radius: var(--tb-rayon-sm);
+    color: var(--tb-texte-doux);
+    text-decoration: none;
+    transition: background-color var(--tb-transition), color var(--tb-transition);
+}
+.tb-menu-lateral__entree a:hover {
+    color: var(--tb-texte);
+    background: var(--tb-surface-alt);
+}
+
+/* La page ouverte se distingue sans dependre de la seule couleur : le fond
+   plein la designe, le poids la confirme. Pas de filet lateral — il ajoutait
+   un trait de plus dans une marge qu'on cherche a calmer.
+   / The open page stands out without relying on colour alone: a solid
+   background names it, the weight confirms it. No side rule — it added one
+   more line to a margin we are trying to quieten. */
+/* La page ouverte n'est PAS un lien (on y est deja) : le gabarit rend un
+   <span>, pas un <a>. Le selecteur doit donc viser l'element lui-meme, et
+   reprendre le calage du lien voisin pour que la colonne reste alignee.
+   / The open page is NOT a link (we are already on it): the template renders a
+   <span>. The selector targets the element itself and repeats the sibling
+   link's padding so the column stays aligned. */
+.tb-menu-lateral__courante {
+    display: block;
+    padding: 0.3rem 0.6rem;
+    border-radius: var(--tb-rayon-sm);
+    font-weight: 600;
+    color: var(--tb-accent);
+    background: var(--tb-surface-alt);
+}
+
+/* Le retrait dit la profondeur dans l'arbre. Il s'applique a l'entree, et le
+   lien remplit ce qui reste : la zone cliquable suit le retrait.
+   / Indentation shows tree depth, applied to the entry so the link fills what
+   is left: the click target follows the indent. */
+.tb-menu-lateral__entree--niveau-2 { padding-left: 0.6rem; }
+.tb-menu-lateral__entree--niveau-3 { padding-left: 1.2rem; }
+.tb-menu-lateral__entree--niveau-4 { padding-left: 1.8rem; }
+.tb-menu-lateral__entree--niveau-5 { padding-left: 2.4rem; }
+.tb-menu-lateral__entree--niveau-6 { padding-left: 3rem; }
+
+/* Quand le menu est la, tout le reste du contenu lui laisse la place.
+   On cible les ENFANTS DIRECTS plutot qu'une liste de classes : chaque skin
+   habille ses blocs a sa facon (le skin festival enveloppe les siens dans des
+   `container` Bootstrap), et une liste nommee en oublierait toujours un — il
+   passerait alors en pleine largeur et casserait la colonne.
+   Les blocs qui declarent deja leur largeur (cartes `.tb-colonnes-4`, FAQ
+   `.tb-colonnes-6`) sont exclus nommement : sans cela ils recevaient toute la
+   colonne de contenu et trois cartes s'empilaient au lieu de se ranger.
+   / When the menu is there, everything else makes room for it. DIRECT CHILDREN
+   are targeted rather than a list of classes: each skin dresses its blocks
+   differently, and a named list would always miss one. Blocks that already
+   declare their width are excluded. */
+.tb-flux:has(> .tb-menu-lateral) > *:not(.tb-menu-lateral):not(.tb-sommaire):not(.tb-colonnes-4):not(.tb-colonnes-6) {
+    /* Placement EXPLICITE dans la colonne de droite, et non un simple `span 9` :
+       l'auto-placement remplirait les colonnes libres a partir de la premiere,
+       donc sous le menu. / EXPLICIT placement in the right-hand column, not a
+       plain `span 9`: auto-placement would fill free columns from the first
+       one, i.e. underneath the menu. */
+    grid-column: 4 / -1;
+}
+
+/* Un bloc pleine largeur (banniere, appel a l'action, citation) etale ses
+   marges negatives sur 100vw pour toucher les bords de l'ecran. Des qu'une
+   marge est occupee par le menu ou le sommaire, ces marges le recouvrent : sur
+   un ecran large le bandeau mangeait la moitie du menu. Dans ces modes, le
+   bloc reste donc dans sa zone et retrouve un padding normal.
+   / A full-bleed block spreads negative margins over 100vw to touch the screen
+   edges. As soon as a margin is taken by the menu or the table of contents,
+   those margins cover it. In these modes the block stays inside its area. */
+.tb-flux:has(> .tb-menu-lateral) > :is(.tb-pleine-largeur, .tb-bloc--hero, .tb-bloc--cta, .tb-bloc--temoignage),
+.tb-flux:has(> .tb-sommaire) > :is(.tb-pleine-largeur, .tb-bloc--hero, .tb-bloc--cta, .tb-bloc--temoignage) {
+    margin-inline: 0;
+    padding-inline: clamp(1.25rem, 3vw, 2.25rem);
+    border-radius: var(--tb-rayon);
+}
+
+/* Sur GRAND ecran, le menu et le sommaire sont deplies d'office : ce sont des
+   colonnes de reperage, pas des tiroirs. L'ouverture se fait ICI et non par un
+   attribut `open` dans le gabarit, parce qu'un `open` en dur vaut AUSSI pour le
+   mobile — le menu deplie y occupait 845 px avant le titre de l'article, soit
+   presque deux ecrans de defilement avant la premiere ligne de texte.
+   `::details-content` permet de deplier depuis la feuille de style. Sur un
+   navigateur qui ne le connait pas encore, les deux blocs restent replies et
+   s'ouvrent au clic : une degradation lisible, pas une page cassee.
+   / On LARGE screens the menu and table of contents are unfolded by default:
+   they are locating columns, not drawers. The unfolding happens HERE and not
+   through an `open` attribute in the template, because a hard-coded `open`
+   also applies to mobile — the unfolded menu took 845px before the article
+   title. Browsers without `::details-content` keep them folded, opening on
+   click: a readable degradation, not a broken page. */
+@media (min-width: 62.001rem) {
+    .tb-menu-lateral::details-content,
+    .tb-sommaire::details-content {
+        content-visibility: visible;
+        block-size: auto;
+    }
+
+    /* Deplies d'office, ces deux blocs ne sont plus des tiroirs : le triangle
+       promettrait un pliage qui n'a plus lieu, et le curseur main suggererait
+       une action. On retire les deux — l'intitule redevient une etiquette.
+       En mobile le marqueur reste, puisque le pliage y sert vraiment.
+       / Unfolded by default, these two are no longer drawers: the triangle
+       would promise a fold that no longer happens. On mobile the marker stays,
+       where folding genuinely serves. */
+    .tb-menu-lateral > summary,
+    .tb-sommaire > summary {
+        list-style: none;
+        cursor: default;
+    }
+    .tb-menu-lateral > summary::-webkit-details-marker,
+    .tb-sommaire > summary::-webkit-details-marker {
+        display: none;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   TROIS COLONNES — menu de rubrique | contenu | sommaire de la page.
+   / THREE COLUMNS — section menu | content | page table of contents.
+
+   Le sommaire n'existe que si la page a des titres : une page-index qui ne
+   liste que des cartes n'en a pas, et la grille retombe alors d'elle-meme sur
+   deux colonnes. Aucune colonne vide a prevoir — c'est `:has()` qui decide,
+   pas une classe posee dans le gabarit.
+   / The table of contents only exists when the page has headings: an index
+   page listing cards has none, and the grid falls back to two columns on its
+   own. No empty column to plan for — `:has()` decides, not a class in the
+   template.
+   -------------------------------------------------------------------------- */
+/* Avec deux marges occupees, le texte se retrouve a l'etroit : sur la largeur
+   par defaut il ne restait que ~55 caracteres par ligne, en deca du confort de
+   lecture (65 a 75). On elargit donc la grille dans ce mode — et seulement
+   dans ce mode, pour ne pas toucher aux pages en pleine largeur.
+   La grille garde ses 12 colonnes : les blocs-cartes s'y placent toujours de
+   la meme facon. / With both margins occupied the text gets cramped: at the
+   default width only ~55 characters per line remained, below the comfortable
+   range (65-75). So we widen the grid in this mode only. The grid keeps its 12
+   columns: card blocks still place themselves the same way. */
+.tb-flux:has(> .tb-menu-lateral):has(> .tb-sommaire) {
+    --tb-largeur-max: 84rem;
+}
+
+.tb-flux:has(> .tb-sommaire) > .tb-sommaire {
+    --tb-colonnes: 3;
+    grid-column: 10 / -1;
+    grid-row: 1 / span 999;
+    align-self: start;
+    position: sticky;
+    top: var(--tb-sticky-top);
+}
+
+/* Le contenu s'arrete avant la colonne du sommaire. Sans menu a gauche il
+   part de la premiere colonne, avec menu il part de la quatrieme.
+   / The content stops before the table-of-contents column. */
+.tb-flux:has(> .tb-sommaire) > *:not(.tb-sommaire):not(.tb-menu-lateral):not(.tb-colonnes-4):not(.tb-colonnes-6) {
+    grid-column: 1 / span 9;
+}
+.tb-flux:has(> .tb-menu-lateral):has(> .tb-sommaire) > *:not(.tb-sommaire):not(.tb-menu-lateral):not(.tb-colonnes-4):not(.tb-colonnes-6) {
+    grid-column: 4 / span 6;
+}
+
+/* Le titre, le fil d'Ariane et la signature portent leur propre gouttiere,
+   utile quand ils s'etendent sur toute la largeur de la page. En trois
+   colonnes cette gouttiere fait double emploi avec celle de la grille : le
+   titre se decalait alors de 12 px vers la droite par rapport au texte, ce qui
+   se lit comme un defaut d'alignement.
+   / Title, breadcrumb and byline carry their own gutter, useful when they span
+   the full page width. In three columns that gutter duplicates the grid's: the
+   title ended up 12px right of the body text, reading as a misalignment. */
+.tb-flux:has(> .tb-sommaire) > .tb-page__titre,
+.tb-flux:has(> .tb-sommaire) > .tb-fil-ariane,
+.tb-flux:has(> .tb-sommaire) > .tb-page__signature,
+.tb-flux:has(> .tb-menu-lateral) > .tb-page__titre,
+.tb-flux:has(> .tb-menu-lateral) > .tb-fil-ariane,
+.tb-flux:has(> .tb-menu-lateral) > .tb-page__signature {
+    padding-inline: 0;
+    margin-inline: 0;
+    max-width: none;
+}
+
+/* Le fil d'Ariane precede le titre DANS LE GABARIT : plus besoin de le
+   remonter en CSS, et l'ordre de lecture d'un lecteur d'ecran suit celui de
+   l'oeil. Il ne reste que le calage vertical.
+   / The breadcrumb precedes the title IN THE TEMPLATE: no CSS reordering
+   needed, and a screen reader's reading order matches the eye's. */
+.tb-flux:has(> .tb-menu-lateral) > .tb-fil-ariane {
+    padding-top: 0;
+}
+
+/* Entre 62rem et 75rem (tablette en paysage), les trois colonnes TIENNENT mais
+   le texte tombe a ~51 caracteres par ligne — sous le confort de lecture que
+   cette disposition cherche justement a retrouver. On sacrifie donc le
+   sommaire AVANT le menu : savoir ou l'on est dans le site importe plus que
+   savoir ou l'on en est dans la page. Le sommaire repasse dans le flux, replie.
+   / Between 62rem and 75rem the three columns FIT but the text drops to ~51
+   characters per line. So we give up the table of contents BEFORE the menu:
+   knowing where you are in the site matters more than where you are in the
+   page. It returns to the flow, folded. */
+@media (min-width: 62.001rem) and (max-width: 75rem) {
+    .tb-flux:has(> .tb-menu-lateral):has(> .tb-sommaire) {
+        --tb-largeur-max: 72rem;
+    }
+    .tb-flux:has(> .tb-menu-lateral) > .tb-sommaire {
+        grid-column: 4 / -1;
+        grid-row: auto;
+        position: static;
+    }
+    .tb-flux:has(> .tb-menu-lateral):has(> .tb-sommaire) > *:not(.tb-sommaire):not(.tb-menu-lateral):not(.tb-colonnes-4):not(.tb-colonnes-6) {
+        grid-column: 4 / -1;
+    }
+    /* Replie a nouveau : sur cette largeur le sommaire precede l'article.
+       / Folded again: at this width the ToC precedes the article. */
+    .tb-sommaire::details-content { content-visibility: hidden; }
+}
+
+/* Sur petit ecran, le menu passe au-dessus du contenu, replie en tiroir.
+   / On small screens the menu moves above the content, folded as a drawer. */
+@media (max-width: 62rem) {
+    .tb-menu-lateral {
+        --tb-colonnes: 12;
+        position: static;
+        max-height: none;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--tb-bordure);
+    }
+    /* Sur petit ecran, plus de colonne laterale : tout s'empile. Le sommaire
+       repasse dans le flux, sous le titre, la ou il se lit avant l'article.
+       / On small screens there is no side column: everything stacks. The table
+       of contents returns to the flow, under the title. */
+    /* Ces selecteurs REPRENNENT ceux du mode colonnes, exclusions comprises.
+       Une media query ne l'emporte pas sur la specificite : la regle desktop
+       compte six classes, une regle mobile qui n'en compterait que deux
+       perdrait, et le contenu resterait sur six colonnes d'un ecran de
+       telephone — soit une colonne de 200 px ou chaque mot du titre tombe sur
+       sa propre ligne.
+       / These selectors MIRROR the column-mode ones, exclusions included. A
+       media query does not beat specificity: the desktop rule counts six
+       classes, so a two-class mobile rule would lose and the content would
+       stay on six columns of a phone screen. */
+    .tb-flux:has(> .tb-menu-lateral) > *,
+    .tb-flux:has(> .tb-menu-lateral) > .tb-menu-lateral,
+    .tb-flux:has(> .tb-sommaire) > *,
+    .tb-flux:has(> .tb-sommaire) > .tb-sommaire,
+    .tb-flux:has(> .tb-menu-lateral) > *:not(.tb-menu-lateral):not(.tb-sommaire):not(.tb-colonnes-4):not(.tb-colonnes-6),
+    .tb-flux:has(> .tb-sommaire) > *:not(.tb-sommaire):not(.tb-menu-lateral):not(.tb-colonnes-4):not(.tb-colonnes-6),
+    .tb-flux:has(> .tb-menu-lateral):has(> .tb-sommaire) > *:not(.tb-sommaire):not(.tb-menu-lateral):not(.tb-colonnes-4):not(.tb-colonnes-6) {
+        grid-column: 1 / -1;
+        grid-row: auto;
+    }
+    .tb-flux:has(> .tb-sommaire) > .tb-sommaire {
+        position: static;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid var(--tb-bordure);
+    }
+}
+
+/* --------------------------------------------------------------------------
+   PRECEDENT / SUIVANT — les deux pages voisines, en pied de page.
+   / PREVIOUS / NEXT — the two neighbouring pages, at the page's foot.
+   -------------------------------------------------------------------------- */
+.tb-voisines {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: space-between;
+    margin-block: var(--tb-espace-section);
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--tb-bordure);
+}
+
+.tb-voisines__lien {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    max-width: 22rem;
+    padding: 0.85rem 1.1rem;
+    border: 1px solid var(--tb-bordure);
+    border-radius: var(--tb-rayon-sm);
+    text-decoration: none;
+    transition: border-color var(--tb-transition);
+}
+
+.tb-voisines__lien:hover { border-color: var(--tb-accent); }
+
+/* Le lien « suivant » se cale a droite, meme sans « precedent » en face.
+   / The "next" link sits right, even with no "previous" facing it. */
+.tb-voisines__lien--suivante { margin-left: auto; text-align: right; }
+
+.tb-voisines__sens {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--tb-texte-doux);
+}
+
+.tb-voisines__titre {
+    font-family: var(--tb-police-titre);
+    font-weight: 600;
+    color: var(--tb-texte);
 }

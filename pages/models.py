@@ -6,9 +6,11 @@ LOCALISATION : pages/models.py
 
 CONCEPT (StreamField) :
 Une page n'est pas un gros bloc de HTML, ni une structure figee.
-C'est une SUITE ORDONNEE de blocs types. Le gestionnaire empile des blocs
-(Hero, Paragraphe, Image+texte, CTA, Temoignage) et les reordonne librement.
-Le catalogue des types est ferme (choices) : la page reste toujours propre.
+C'est une SUITE ORDONNEE de blocs types. Le gestionnaire empile des blocs et
+les reordonne librement. Le catalogue des types est FERME (choices) : sept
+types organises par intention (« j'ecris du texte », « je mets en avant »...),
+la variation visuelle etant portee par le champ `affichage`. Voir
+pages/blocs_catalogue.py, source unique du catalogue.
 / A page is neither a big HTML blob nor a rigid structure. It is an ORDERED
 SEQUENCE of typed blocks. The catalogue of block types is closed (choices).
 
@@ -25,6 +27,7 @@ import uuid
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from solo.models import SingletonModel
 from stdimage import StdImageField
@@ -148,6 +151,14 @@ class ConfigurationSite(SingletonModel):
         return f"Configuration du site (skin : {self.skin})"
 
 
+# Profondeur maximale d'un arbre de pages : la racine compte pour 1.
+# Au-dela, la navigation devient illisible (un menu lateral a sept niveaux ne
+# se lit plus) et l'admin ne sait pas manipuler l'arbre confortablement.
+# / Maximum depth of a page tree, the root counting as 1. Beyond that,
+# navigation becomes unreadable and the admin cannot handle the tree.
+PROFONDEUR_MAX_ARBRE = 6
+
+
 # Variations de l'image de partage d'une Page : social_card (format og:image) +
 # med (apercu dans l'admin). / Page share image variations: social_card (og:image
 # format) + med (admin preview).
@@ -162,9 +173,22 @@ class Page(models.Model):
     Une page publique composee de blocs (relation un-a-plusieurs vers Bloc).
     / A public page made of blocks (one-to-many relation to Bloc).
 
-    Servie sur /<slug>/. Visible dans la navbar si publie=True, triee par position.
-    / Served on /<slug>/. Shown in the navbar if publie=True, ordered by position.
+    Servie sur /<slug>/. Sa place dans la navigation vient de `affichage_nav`,
+    lu sur la racine de son arbre.
+    / Served on /<slug>/. Its place in the navigation comes from
+    `affichage_nav`, read on its tree's root.
     """
+
+    # --- Place dans la navigation / Place in the navigation ---
+    NAVBAR = "NAVBAR"
+    SIDEBAR = "SIDEBAR"
+    AUCUN = "AUCUN"
+
+    AFFICHAGE_NAV_CHOICES = [
+        (NAVBAR, _("Barre de navigation")),
+        (SIDEBAR, _("Menu latéral (documentation)")),
+        (AUCUN, _("Hors navigation")),
+    ]
 
     # Identifiant unique (convention du projet : UUID en cle primaire).
     # / Unique identifier (project convention: UUID primary key).
@@ -219,21 +243,25 @@ class Page(models.Model):
         help_text=_("Si coche, cette page est servie sur la racine du site (/). Une seule a la fois."),
     )
 
-    # Typage EXPLICITE « blog » (meme pattern que est_accueil, decision
-    # mainteneur 2026-07-05) : les sous-pages d'un blog sont des ARTICLES —
-    # JSON-LD Article + signature date/auteur, et elles ne s'etalent pas dans
-    # le menu deroulant de la navbar (le clic mene a l'index). Le bloc
-    # LISTE_SOUS_PAGES reste de la pure presentation, posable sur n'importe
-    # quelle page (accueil comprise) sans effet de bord.
-    # / EXPLICIT "blog" typing (same pattern as est_accueil): a blog's
-    # sub-pages are ARTICLES — Article JSON-LD + date/author byline, and they
-    # do not pile up in the navbar dropdown (the click goes to the index).
-    # The LISTE_SOUS_PAGES block stays purely presentational, usable on any
-    # page (home included) without side effects.
-    est_blog = models.BooleanField(
-        default=False,
-        verbose_name=_("Page blog"),
-        help_text=_("Si coche, les sous-pages sont des articles : signature date/auteur, pas de menu deroulant dans la barre de navigation."),
+
+    # Place de la page dans la navigation du site.
+    # Lu UNIQUEMENT sur la racine d'un arbre : les descendants heritent du
+    # choix de leur racine. Le formulaire masque donc le champ des qu'une page
+    # parente est renseignee — une valeur saisissable et silencieusement
+    # ignoree serait de la magie au sens FALC.
+    # / The page's place in the site navigation. Read ONLY on a tree's root:
+    # descendants inherit their root's choice. The form hides the field as soon
+    # as a parent is set — a settable but silently ignored value would be magic.
+    affichage_nav = models.CharField(
+        max_length=20,
+        choices=AFFICHAGE_NAV_CHOICES,
+        default=NAVBAR,
+        verbose_name=_("Place dans la navigation"),
+        help_text=_("Barre de navigation : la page y figure, avec ses sous-pages en "
+                    "menu déroulant. Menu latéral : la page ouvre un menu de "
+                    "documentation à gauche, où tout son arbre se déplie. "
+                    "Hors navigation : la page reste accessible par son adresse et "
+                    "par un bloc Liste, mais n'apparaît dans aucun menu."),
     )
 
     # Description courte pour les moteurs de recherche (donnee SEO = champ de modele,
@@ -284,25 +312,30 @@ class Page(models.Model):
         help_text=_("Si coche : la page n'est pas indexee et reste hors du sitemap."),
     )
 
-    # Page parente (auto-relation) : si renseignee, cette page devient un sous-menu
-    # deroulant sous la page parente dans la navbar. UN SEUL NIVEAU de profondeur
-    # (verifie dans clean()). L'URL reste plate (/<slug>/) ; la hierarchie sert a la
-    # navigation et au fil d'Ariane (BreadcrumbList). Si le parent est supprime, les
-    # enfants redeviennent top-level (SET_NULL).
-    # / Parent page (self-relation): if set, this page becomes a dropdown sub-item
-    # under the parent in the navbar. ONE level only (checked in clean()). The URL
-    # stays flat (/<slug>/); the hierarchy drives navigation + breadcrumb. On parent
-    # deletion, children become top-level (SET_NULL).
+    # Page parente (auto-relation) : si renseignee, cette page est rangee sous la
+    # page parente. L'arbre accepte PROFONDEUR_MAX_ARBRE niveaux, et clean() en
+    # refuse davantage comme il refuse les cycles. L'URL reste plate (/<slug>/) ;
+    # la hierarchie sert a la navigation, au fil d'Ariane (BreadcrumbList), au
+    # menu lateral et aux blocs LISTE.
+    # PROTECT : supprimer une page qui a des enfants rendrait ces enfants
+    # injoignables par la navigation, sans que rien ne le signale. On force donc
+    # a rattacher (ou supprimer) les enfants d'abord.
+    # / Parent page (self-relation): if set, this page is filed under the parent.
+    # The tree accepts PROFONDEUR_MAX_ARBRE levels; clean() rejects deeper trees
+    # and cycles alike. The URL stays flat (/<slug>/); the hierarchy drives
+    # navigation, breadcrumb, side menu and LISTE blocks.
+    # PROTECT: deleting a page with children would leave them unreachable from
+    # the navigation with no warning, so children must be moved or removed first.
     parent = models.ForeignKey(
         "self",
         null=True,
         blank=True,
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         related_name="enfants",
-        limit_choices_to={"parent__isnull": True, "est_accueil": False},
         verbose_name=_("Page parente (sous-menu)"),
-        help_text=_("Si renseignée, cette page apparaît dans un menu déroulant sous "
-                    "la page parente. Un seul niveau de profondeur."),
+        help_text=_("Si renseignée, cette page est rangée sous la page parente : "
+                    "elle hérite de son fil d'Ariane et peut être listée "
+                    "automatiquement. Six niveaux de profondeur au maximum."),
     )
 
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Cree le"))
@@ -317,38 +350,120 @@ class Page(models.Model):
         statut = _("publiee") if self.publie else _("brouillon")
         return f"{self.titre} ({statut})"
 
+    def get_absolute_url(self):
+        """
+        Adresse publique de la page.
+        / Public address of the page.
+
+        LOCALISATION : pages/models.py
+
+        C'est la source UNIQUE de l'adresse d'une Page. Personne ne doit
+        reconstruire cette adresse ailleurs — ni en Python (f"/{slug}/"), ni
+        dans un gabarit (href="/{{ page.slug }}/"), ni dans un serializer.
+        La regle « la page d'accueil est servie sur la racine du site » ne
+        vit qu'ici : si elle change, elle change a un seul endroit.
+        / This is the SINGLE source of a Page's address. Nobody should rebuild
+        it elsewhere — not in Python, not in a template, not in a serializer.
+        The rule "the home page is served on the site root" lives only here.
+
+        :return: le chemin absolu, sans protocole ni domaine (str).
+            Exemples : "/" pour la page d'accueil, "/infos-pratiques/" sinon.
+        """
+        # La page d'accueil du tenant remplace la home par defaut : elle est
+        # servie sur la racine, pas sur /<slug>/.
+        # / The tenant home page replaces the default home: it is served on the
+        # root, not on /<slug>/.
+        if self.est_accueil:
+            return "/"
+
+        return reverse("pages:page_publique", kwargs={"slug": self.slug})
+
+    def profondeur(self):
+        """
+        Rang de la page dans son arbre : 1 pour une racine, 2 pour son enfant.
+        / The page's rank in its tree: 1 for a root, 2 for its child.
+
+        LOCALISATION : pages/models.py
+
+        La remontee s'arrete a PROFONDEUR_MAX_ARBRE meme si la chaine continue :
+        une hierarchie circulaire ecrite hors validation (migration, script)
+        ferait sinon boucler l'appel a l'infini.
+        / The walk stops at PROFONDEUR_MAX_ARBRE even if the chain goes on: a
+        circular hierarchy written outside validation would otherwise loop.
+        """
+        rang = 1
+        ancetre = self.parent
+        while ancetre is not None and rang <= PROFONDEUR_MAX_ARBRE:
+            rang += 1
+            ancetre = ancetre.parent
+        return rang
+
     def clean(self):
         """
-        Valide la hiérarchie parent/enfant : un seul niveau, pas d'auto-parent,
-        l'accueil ne peut pas être une sous-page.
-        / Validates the parent/child hierarchy: one level only, no self-parent, the
-        home page cannot be a sub-page.
+        Valide la place de la page dans l'arbre.
+        / Validates the page's place in the tree.
+
+        LOCALISATION : pages/models.py
+
+        Trois regles, et rien de plus :
+
+        1. AUCUN CYCLE. Une page ne peut etre ni sa propre parente, ni la
+           descendante d'elle-meme. Un cycle ne se voit pas en base mais fait
+           boucler sans fin tout ce qui remonte l'arbre — fil d'Ariane, menu
+           lateral, navigation precedent/suivant.
+        2. PROFONDEUR BORNEE. Un arbre plus profond que PROFONDEUR_MAX_ARBRE
+           devient illisible en navigation, et l'admin ne sait pas le manipuler
+           confortablement.
+        3. LA PAGE D'ACCUEIL RESTE UNE RACINE, et n'a pas d'enfants. Elle est
+           servie sur « / » tout en portant un slug : ses descendants auraient
+           un rattachement ambigu.
+        / Three rules: no cycle (an endless walk would hang every feature that
+        climbs the tree), a bounded depth, and the home page stays a childless
+        root (it is served on "/" while carrying a slug, so its descendants
+        would have an ambiguous attachment).
         """
         super().clean()
-        if self.parent_id:
-            if self.parent_id == self.pk:
+
+        if self.est_accueil and self.parent_id:
+            raise ValidationError(
+                {"parent": _("La page d'accueil ne peut pas être une sous-page.")}
+            )
+
+        # Une page d'accueil qui a deja des enfants ne peut pas le rester.
+        # / A home page that already has children cannot stay one.
+        if self.est_accueil and self.pk and self.enfants.exists():
+            raise ValidationError(
+                {"est_accueil": _("Cette page a des sous-pages : elle ne peut pas "
+                                  "être la page d'accueil.")}
+            )
+
+        if not self.parent_id:
+            return
+
+        if self.parent_id == self.pk:
+            raise ValidationError(
+                {"parent": _("Une page ne peut pas être sa propre page parente.")}
+            )
+
+        # Remontee de la chaine : on cherche la page elle-meme parmi ses
+        # ancetres, et on mesure la profondeur au passage.
+        # / Walk up the chain: look for the page among its own ancestors, and
+        # measure the depth on the way.
+        ancetre = self.parent
+        rang = 1
+        while ancetre is not None:
+            if ancetre.pk == self.pk:
                 raise ValidationError(
-                    {"parent": _("Une page ne peut pas être sa propre page parente.")}
+                    {"parent": _("Cette page est déjà une page parente de celle "
+                                 "choisie : la hiérarchie tournerait en rond.")}
                 )
-            if self.est_accueil:
+            rang += 1
+            if rang > PROFONDEUR_MAX_ARBRE:
                 raise ValidationError(
-                    {"parent": _("La page d'accueil ne peut pas être une sous-page.")}
+                    {"parent": _("Hiérarchie trop profonde : %(max)s niveaux au "
+                                 "maximum.") % {"max": PROFONDEUR_MAX_ARBRE}}
                 )
-            # Un seul niveau : le parent ne doit pas lui-même avoir un parent.
-            # / One level only: the parent must not itself have a parent.
-            if self.parent.parent_id is not None:
-                raise ValidationError(
-                    {"parent": _("Un seul niveau de sous-menu est permis : la page "
-                                 "parente ne peut pas elle-même être une sous-page.")}
-                )
-            # Un seul niveau : une page qui a déjà des sous-pages ne peut pas devenir
-            # elle-même une sous-page. / One level: a page that already has children
-            # cannot itself become a child.
-            if self.pk and self.enfants.exists():
-                raise ValidationError(
-                    {"parent": _("Cette page a déjà des sous-pages : elle ne peut pas "
-                                 "devenir elle-même une sous-page.")}
-                )
+            ancetre = ancetre.parent
 
     def save(self, *args, **kwargs):
         """
@@ -377,74 +492,98 @@ class Bloc(models.Model):
     admin (via Unfold's native conditional_fields).
 
     Champs PLATS partages entre types + 2 JSONField pour les blocs structures
-    (points_gps pour la carte Leaflet, contenu pour le bloc Infos). Pas de M2M.
+    (points_gps pour la carte du bloc LIEU, contenu pour ses items typés). Pas de M2M.
     / Flat fields shared across types + 2 JSONField for structured blocks
     (points_gps for the Leaflet map, contenu for the Infos block). No M2M.
     """
 
     # --- Types de blocs (catalogue ferme) / Block types (closed catalogue) ---
-    HERO = "HERO"
-    PARAGRAPHE = "PARAGRAPHE"
-    IMAGE_TEXTE = "IMAGE_TEXTE"
-    CTA = "CTA"
-    TEMOIGNAGE = "TEMOIGNAGE"
-    VIDEO_TEXTE = "VIDEO_TEXTE"
-    CARTE = "CARTE"
-    IMAGE = "IMAGE"
-    CARTE_LEAFLET = "CARTE_LEAFLET"
+    #
+    # SEPT types, organises par INTENTION de la personne qui construit la page
+    # (« j'ecris du texte », « je mets en avant », « je montre des images »...),
+    # et non par rendu. La variation VISUELLE a l'interieur d'un type est portee
+    # par le champ `affichage` (voir AFFICHAGES_PAR_TYPE dans blocs_catalogue).
+    # Regle : JAMAIS un nouveau TYPE pour une variation purement visuelle.
+    # / SEVEN types, organised by the page builder's INTENT, not by rendering.
+    # The VISUAL variation inside a type is carried by the `affichage` field.
+    # Rule: NEVER a new TYPE for a purely visual variation.
+    TEXTE = "TEXTE"
+    SECTION = "SECTION"
+    IMAGES = "IMAGES"
+    INTEGRATION = "INTEGRATION"
+    LIEU = "LIEU"
     FAQ = "FAQ"
-    INFOS = "INFOS"
-    EVENEMENTS = "EVENEMENTS"
-    GALERIE = "GALERIE"
-    EMBED = "EMBED"
-    MARKDOWN = "MARKDOWN"
-    LISTE_SOUS_PAGES = "LISTE_SOUS_PAGES"
-    IFRAME = "IFRAME"
-    PARTENAIRES = "PARTENAIRES"
-    NEWSLETTER = "NEWSLETTER"
+    LISTE = "LISTE"
 
     TYPE_BLOC_CHOICES = [
-        (HERO, _("Hero (banniere d'ouverture)")),
-        (PARAGRAPHE, _("Paragraphe riche")),
-        (IMAGE_TEXTE, _("Image + texte")),
-        (CTA, _("Appel a l'action (CTA)")),
-        (TEMOIGNAGE, _("Temoignage")),
-        (VIDEO_TEXTE, _("Video + texte")),
-        (CARTE, _("Carte (regroupee en grille si plusieurs a la suite)")),
-        (IMAGE, _("Image seule")),
-        (CARTE_LEAFLET, _("Carte Leaflet (points GPS)")),
-        (INFOS, _("Infos structurees (badges, horaires, transports) - a cote d'une carte")),
-        (FAQ, _("Question / reponse (regroupee en 2 colonnes si plusieurs a la suite)")),
-        (EVENEMENTS, _("Prochains evenements (liste automatique depuis l'agenda)")),
-        (GALERIE, _("Galerie d'images (plusieurs photos en grille)")),
-        (EMBED, _("Contenu integre (video YouTube/Vimeo/PeerTube, carte OSM)")),
-        (MARKDOWN, _("Markdown (texte long : article, page de blog)")),
-        (LISTE_SOUS_PAGES, _("Liste des sous-pages (cartes - index de blog)")),
-        (IFRAME, _("Contenu integre libre (formulaire, widget — domaines autorises par le ROOT)")),
-        (PARTENAIRES, _("Partenaires (bande de logos cliquables)")),
-        (NEWSLETTER, _("Inscription newsletter (formulaire Ghost)")),
+        (TEXTE, _("Texte (article, paragraphe — écrit en Markdown)")),
+        (SECTION, _("Section mise en avant (bannière, texte + média, carte, appel à l'action, citation)")),
+        (IMAGES, _("Images (une photo, une galerie, une bande de logos)")),
+        (INTEGRATION, _("Contenu intégré (vidéo en ligne, formulaire, newsletter)")),
+        (LIEU, _("Lieu (carte des points GPS + infos pratiques)")),
+        (FAQ, _("Question / réponse")),
+        (LISTE, _("Liste automatique (sous-pages ou prochains évènements)")),
     ]
 
-    # --- Position de l'image pour le bloc Image+texte / Image side for Image+text ---
-    GAUCHE = "GAUCHE"
-    DROITE = "DROITE"
-    IMAGE_POSITION_CHOICES = [
-        (GAUCHE, _("Image a gauche")),
-        (DROITE, _("Image a droite")),
-    ]
+    # --- Affichages : la variation VISUELLE a l'interieur d'un type ---
+    # Un seul champ porte l'UNION des valeurs (Django ne sait pas conditionner
+    # des choices par la valeur d'un autre champ). C'est `clean()` qui refuse un
+    # affichage etranger au type, en s'appuyant sur AFFICHAGES_PAR_TYPE.
+    # / A single field carries the UNION of the values (Django cannot condition
+    # choices on another field). `clean()` rejects an affichage foreign to the
+    # type, based on AFFICHAGES_PAR_TYPE.
 
-    # --- Affichage du bloc IMAGE (choix EXPLICITE, decision mainteneur
-    # 2026-07-05). Avant, le skin faire_festival choisissait selon la presence
-    # du titre : un interrupteur cache, mauvais pattern — une photo titree
-    # devenait une vignette minuscule. / IMAGE block display (EXPLICIT choice).
-    # Before, the faire_festival skin switched on the title presence: a hidden
-    # toggle, bad pattern — a titled photo became a tiny thumbnail. ---
+    # SECTION
+    BANNIERE = "BANNIERE"
+    TEXTE_IMAGE_GAUCHE = "TEXTE_IMAGE_GAUCHE"
+    TEXTE_IMAGE_DROITE = "TEXTE_IMAGE_DROITE"
+    TEXTE_VIDEO = "TEXTE_VIDEO"
+    MEDIA_ET_CARTES = "MEDIA_ET_CARTES"
+    CARTE = "CARTE"
+    APPEL_ACTION = "APPEL_ACTION"
+    CITATION = "CITATION"
+    # IMAGES
     PLEINE_LARGEUR = "PLEINE_LARGEUR"
     VIGNETTE_TITRE = "VIGNETTE_TITRE"
-    AFFICHAGE_IMAGE_CHOICES = [
-        (PLEINE_LARGEUR, _("Pleine largeur (photo)")),
-        (VIGNETTE_TITRE, _("Vignette centree (image-titre dessinee)")),
+    GRILLE = "GRILLE"
+    BANDE_LOGOS = "BANDE_LOGOS"
+    # INTEGRATION
+    VIDEO = "VIDEO"
+    WIDGET = "WIDGET"
+    NEWSLETTER = "NEWSLETTER"
+
+    AFFICHAGE_CHOICES = [
+        # SECTION
+        (BANNIERE, _("Bannière d'ouverture")),
+        (TEXTE_IMAGE_GAUCHE, _("Texte avec image à gauche")),
+        (TEXTE_IMAGE_DROITE, _("Texte avec image à droite")),
+        (TEXTE_VIDEO, _("Texte avec vidéo (fichier déposé)")),
+        (MEDIA_ET_CARTES, _("Média + texte + sous-cartes (section composée)")),
+        (CARTE, _("Carte (se range en grille avec les cartes voisines)")),
+        (APPEL_ACTION, _("Appel à l'action (boutons mis en avant)")),
+        (CITATION, _("Citation / témoignage signé")),
+        # IMAGES
+        (PLEINE_LARGEUR, _("Photo pleine largeur")),
+        (VIGNETTE_TITRE, _("Vignette centrée (image-titre dessinée)")),
+        (GRILLE, _("Galerie en grille")),
+        (BANDE_LOGOS, _("Bande de logos cliquables")),
+        # INTEGRATION
+        (VIDEO, _("Vidéo en ligne (YouTube / Vimeo / PeerTube)")),
+        (WIDGET, _("Formulaire ou widget (hôte autorisé par le ROOT)")),
+        (NEWSLETTER, _("Inscription newsletter (Ghost)")),
     ]
+
+    # --- Source de donnees du bloc LISTE ---
+    # `source` n'est PAS un affichage : elle choisit une REQUETE, pas un rendu.
+    # / `source` is NOT an affichage: it picks a QUERY, not a rendering.
+    SOUS_PAGES = "SOUS_PAGES"
+    EVENEMENTS = "EVENEMENTS"
+
+    SOURCE_CHOICES = [
+        (SOUS_PAGES, _("Les sous-pages d'une page")),
+        (EVENEMENTS, _("Les prochains évènements de l'agenda")),
+    ]
+
 
     # Variations d'image generees automatiquement (memes tailles que Event).
     # / Auto-generated image variations (same sizes as Event).
@@ -458,8 +597,8 @@ class Bloc(models.Model):
         "social_card": (1200, 630, True),
     }
 
-    # Variations pour la photo d'auteur d'un temoignage (petit format carre).
-    # / Variations for a testimonial author photo (small square format).
+    # Variations de la photo signant une citation (petit format carre).
+    # / Variations of the photo signing a quote (small square format).
     VARIATIONS_PHOTO_AUTEUR = {
         "med": (480, 480),
         "thumbnail": (150, 150, True),
@@ -487,6 +626,48 @@ class Bloc(models.Model):
         help_text=_("Choisit le gabarit du bloc. Les champs s'adaptent automatiquement."),
     )
 
+    # La variation VISUELLE a l'interieur du type. Vide = le rendu unique du
+    # type (TEXTE, LIEU, FAQ, LISTE n'ont qu'un seul rendu). `clean()` refuse
+    # un affichage qui n'appartient pas au type choisi.
+    # / The VISUAL variation inside the type. Empty = the type's single
+    # rendering. `clean()` rejects an affichage foreign to the chosen type.
+    affichage = models.CharField(
+        max_length=20,
+        blank=True,
+        choices=AFFICHAGE_CHOICES,
+        verbose_name=_("Affichage"),
+        help_text=_("Comment ce bloc s'affiche. Les choix dépendent du type de bloc."),
+    )
+
+    # Bloc LISTE : d'ou viennent les elements listes. Ce n'est PAS un affichage
+    # (ca choisit une requete, pas un rendu).
+    # / LISTE block: where the listed items come from. NOT an affichage.
+    source = models.CharField(
+        max_length=20,
+        blank=True,
+        choices=SOURCE_CHOICES,
+        verbose_name=_("Source de la liste"),
+        help_text=_("Bloc Liste : ce qu'on liste (les sous-pages d'une page, ou l'agenda)."),
+    )
+
+    # Bloc LISTE + source SOUS_PAGES : de quelle page on liste les enfants.
+    # Vide = la page qui porte le bloc (cas courant : un index de rubrique).
+    # PROTECT et non SET_NULL : si la page visee disparaissait, un SET_NULL
+    # ferait basculer le bloc en silence sur « les enfants de la page courante »
+    # — il changerait de contenu au lieu de signaler le probleme.
+    # / LISTE block with SOUS_PAGES source: whose children to list. Empty = the
+    # page holding the block. PROTECT, not SET_NULL: SET_NULL would silently
+    # switch the block to "the current page's children" instead of failing.
+    page_source = models.ForeignKey(
+        Page,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="blocs_qui_listent_mes_enfants",
+        verbose_name=_("Page à lister"),
+        help_text=_("Bloc Liste : la page dont on affiche les sous-pages. Vide = la page courante."),
+    )
+
     # Ordre du bloc dans la page (croissant). Reordonnable par glisser-deposer.
     # / Block order within the page (ascending). Reorderable by drag-and-drop.
     position = models.PositiveIntegerField(
@@ -509,17 +690,9 @@ class Bloc(models.Model):
         max_length=300,
         blank=True,
         verbose_name=_("Sous-titre"),
-        help_text=_("Texte secondaire sous le titre (Hero et CTA)."),
+        help_text=_("Texte secondaire sous le titre. Sert aussi de sur-titre sur une carte."),
     )
 
-    # Sur-titre d'une carte (ex. « JOUR 01 »), affiche en en-tete.
-    # / Card eyebrow (e.g. "JOUR 01"), shown as a header.
-    surtitre = models.CharField(
-        max_length=120,
-        blank=True,
-        verbose_name=_("Sur-titre (carte)"),
-        help_text=_("Petit titre en haut d'une carte (ex. « JOUR 01 »)."),
-    )
 
     # Petit badge optionnel sur une carte (ex. « gratuit »).
     # / Optional small badge on a card (e.g. "gratuit").
@@ -540,8 +713,10 @@ class Bloc(models.Model):
         help_text=_("Contenu riche (paragraphe, description, citation)."),
     )
 
-    # Image principale (fond du Hero, ou image laterale d'Image+texte).
-    # / Main image (Hero background, or side image of Image+text).
+    # Media principal du bloc : l'illustration posee a cote d'un texte, le
+    # visuel d'une carte, le logo d'un lieu.
+    # / The block's main media: the illustration beside a text, a card's
+    # visual, a venue's logo.
     image = StdImageField(
         upload_to="images/pages/",
         blank=True,
@@ -549,13 +724,13 @@ class Bloc(models.Model):
         delete_orphans=True,
         validators=[valider_taille_image],
         verbose_name=_("Image"),
-        help_text=_("Image du bloc (fond du Hero ou illustration laterale)."),
+        help_text=_("Image du bloc : illustration laterale, visuel de carte, logo d'un lieu."),
     )
 
-    # Seconde image uploadee (ex. badge date du Hero, logo a cote d'une carte).
-    # Vrai moteur d'upload (comme le reste de TiBillet), avec variations.
-    # / Second uploaded image (e.g. Hero date badge, logo next to a map). Real
-    # upload engine (like the rest of TiBillet), with variations.
+    # Seconde image, quand un bloc en porte deux (le logo d'un lieu et son
+    # badge de dates, par exemple). Vrai moteur d'upload, avec variations.
+    # / A second image, when a block carries two (a venue's logo and its date
+    # badge). Real upload engine, with variations.
     image_secondaire = StdImageField(
         upload_to="images/pages/",
         blank=True,
@@ -572,7 +747,7 @@ class Bloc(models.Model):
         upload_to="videos/pages/",
         blank=True,
         verbose_name=_("Video"),
-        help_text=_("Fichier video (mp4/webm) pour le bloc Video + texte."),
+        help_text=_("Fichier video (mp4/webm) depose. Pour une video en ligne, utiliser un bloc Contenu integre."),
     )
 
     # Points GPS pour le bloc carte Leaflet : liste de marqueurs.
@@ -589,13 +764,15 @@ class Bloc(models.Model):
         help_text=_('Liste de marqueurs : [{"lat": 43.55, "lng": 1.48, "label": "La Cité"}].'),
     )
 
-    # Contenu structure de la colonne gauche du bloc CARTE_LEAFLET : liste d'items
-    # TYPES (donnees TEXTE, jamais de HTML). Le HTML/les classes sont dans le template.
+    # Contenu structure d'un bloc, en liste d'items TYPES (donnees TEXTE,
+    # jamais de HTML — le HTML et les classes vivent dans le gabarit) :
+    #   - LIEU : les infos pratiques posees a cote de la carte ;
+    #   - SECTION en affichage MEDIA_ET_CARTES : les sous-cartes de la section.
     # Types d'item : "badge" (texte), "para" (texte), "horaire" (texte),
     # "adresse" (texte multi-lignes), "accessibilite" (texte),
     # "transport" (titre + lignes[]). / Structured content for the left column of the
-    # CARTE_LEAFLET block: list of TYPED items (TEXT data only, never HTML). The HTML
-    # and CSS classes live in the template.
+    # / A block's structured content, as TYPED items (TEXT only, never HTML):
+    # LIEU's practical info, or a MEDIA_ET_CARTES section's sub-cards.
     contenu = models.JSONField(
         default=list,
         blank=True,
@@ -604,75 +781,48 @@ class Bloc(models.Model):
     )
 
     # Nombre maximum d'elements affiches par les blocs a liste automatique
-    # (EVENEMENTS et LISTE_SOUS_PAGES).
+    # (bloc LISTE, quelle que soit sa source).
     # / Maximum number of items shown by the auto-list blocks
-    # (EVENEMENTS and LISTE_SOUS_PAGES).
+    # (LISTE block, whatever its source).
     nombre_max = models.PositiveSmallIntegerField(
         default=6,
         verbose_name=_("Nombre d'éléments"),
         help_text=_("Nombre maximum d'éléments affichés (blocs Prochains évènements et Liste des sous-pages)."),
     )
 
-    # Bloc FAQ : si True, chaque question est repliable (accordéon <details>).
-    # Sinon (défaut), la réponse reste ouverte (comportement historique).
-    # / FAQ block: if True, each question is collapsible (accordion <details>).
-    # Otherwise (default), the answer stays open (historical behavior).
-    repliable = models.BooleanField(
-        default=False,
-        verbose_name=_("FAQ repliable (accordéon)"),
-        help_text=_("Si coché, les réponses de la FAQ sont repliées et s'ouvrent au clic."),
-    )
 
     # URL du contenu à intégrer, PARTAGÉE par deux blocs :
-    # - EMBED : vidéo YouTube/Vimeo/PeerTube (whitelist codée, cf. tag embed_iframe).
-    # - IFRAME : contenu libre newsletter/formulaire (whitelist ROOT, cf. tag
-    #   iframe_libre). Dans les deux cas, on n'injecte JAMAIS un iframe vers un hôte
-    #   arbitraire (sécurité). Pour une carte, utiliser plutôt le bloc CARTE_LEAFLET.
-    # / URL of the content to embed, SHARED by two blocks: EMBED (YouTube/Vimeo/
-    # PeerTube video, coded whitelist) and IFRAME (free newsletter/form content, ROOT
-    # whitelist). We NEVER inject an iframe to an arbitrary host (security).
+    # L'affichage du bloc INTEGRATION decide de ce qu'on en fait :
+    # - VIDEO : YouTube / Vimeo / PeerTube (whitelist codee, cf. tag embed_iframe) ;
+    # - WIDGET : formulaire ou widget libre (whitelist ROOT, cf. tag iframe_libre) ;
+    # - NEWSLETTER : l'adresse de l'instance Ghost.
+    # Dans tous les cas, on n'injecte JAMAIS un iframe vers un hote arbitraire.
+    # Pour une carte geographique, utiliser un bloc LIEU.
+    # / The INTEGRATION block's affichage decides what happens to this URL:
+    # VIDEO (coded whitelist), WIDGET (ROOT whitelist) or NEWSLETTER. We NEVER
+    # inject an iframe to an arbitrary host. For a map, use a LIEU block.
     embed_url = models.URLField(
         max_length=500,
         blank=True,
         verbose_name=_("URL à intégrer (embed)"),
-        help_text=_("Lien du contenu a integrer. EMBED : video YouTube/Vimeo/PeerTube. "
-                    "IFRAME : formulaire/widget (hote autorise par le ROOT). "
-                    "NEWSLETTER : adresse de l'instance Ghost (ex. https://ghost.exemple.coop/)."),
+        help_text=_("Lien du contenu a integrer, selon l'affichage choisi. "
+                    "Video : YouTube / Vimeo / PeerTube. "
+                    "Formulaire ou widget : hote autorise par le ROOT. "
+                    "Newsletter : adresse de l'instance Ghost (ex. https://ghost.exemple.coop/)."),
     )
 
-    # Hauteur en pixels de l'iframe du bloc IFRAME. Un formulaire newsletter n'a
-    # pas de ratio fixe (contrairement a une video 16:9) : on fixe une hauteur.
-    # / Iframe height in pixels for the IFRAME block. A newsletter form has no
-    # fixed ratio (unlike a 16:9 video): we set an explicit height.
+    # Hauteur du cadre integre, en pixels. Un formulaire n'a pas de ratio fixe
+    # (contrairement a une video 16:9) : sa hauteur se declare.
+    # / Embedded frame height in pixels. A form has no fixed ratio (unlike a
+    # 16:9 video), so its height is declared.
     hauteur_px = models.PositiveIntegerField(
         default=600,
         validators=[MinValueValidator(100), MaxValueValidator(4000)],
         verbose_name=_("Hauteur de l'iframe (pixels)"),
-        help_text=_("Hauteur du cadre integre, en pixels (bloc Contenu integre libre)."),
+        help_text=_("Hauteur du cadre integre, en pixels (affichage Formulaire ou widget)."),
     )
 
-    # Cote ou s'affiche l'image dans le bloc Image+texte.
-    # / Side where the image is shown in the Image+text block.
-    image_position = models.CharField(
-        max_length=10,
-        choices=IMAGE_POSITION_CHOICES,
-        default=GAUCHE,
-        blank=True,
-        verbose_name=_("Position de l'image"),
-        help_text=_("Cote ou afficher l'image (bloc Image + texte)."),
-    )
 
-    # Affichage du bloc IMAGE : photo pleine largeur (defaut) ou vignette
-    # centree a taille naturelle (images-titres dessinees du skin festival).
-    # / IMAGE block display: full-width photo (default) or natural-size
-    # centered thumbnail (the festival skin's drawn title-images).
-    affichage_image = models.CharField(
-        max_length=20,
-        choices=AFFICHAGE_IMAGE_CHOICES,
-        default=PLEINE_LARGEUR,
-        verbose_name=_("Affichage de l'image"),
-        help_text=_("Bloc Image seule : pleine largeur pour une photo, vignette centree pour une petite image-titre."),
-    )
 
     # --- Boutons (Hero, Image+texte, CTA) / Buttons ---
     # URL en CharField (pas URLField) pour autoriser les liens internes relatifs
@@ -739,15 +889,112 @@ class Bloc(models.Model):
             return f"{libelle_type} — {self.titre}"
         return f"{libelle_type} (#{self.position})"
 
+    def poser_affichage_par_defaut(self):
+        """
+        Donne un affichage au bloc quand aucun n'a ete choisi.
+        / Gives the block an affichage when none was chosen.
+
+        LOCALISATION : pages/models.py
+
+        Un type a plusieurs rendus (SECTION, IMAGES, INTEGRATION) n'a pas de
+        gabarit « generique » : le rendu cherche `bloc_<type>_<affichage>.html`
+        et, sans affichage, retomberait sur un `bloc_<type>.html` qui n'existe
+        pas — la page entiere sortirait en erreur. On pose donc le rendu le plus
+        neutre du type plutot que de laisser le champ vide.
+        / A multi-rendering type has no "generic" template: rendering looks for
+        `bloc_<type>_<affichage>.html` and, with no affichage, would fall back
+        to a `bloc_<type>.html` that does not exist — the whole page would
+        error. So we set the type's most neutral rendering.
+        """
+        from pages.blocs_catalogue import AFFICHAGE_PAR_DEFAUT
+
+        if not self.affichage:
+            self.affichage = AFFICHAGE_PAR_DEFAUT.get(self.type_bloc, "")
+
+    def save(self, *args, **kwargs):
+        """
+        Enregistre le bloc apres s'etre assure qu'il a un affichage.
+        / Saves the block after making sure it has an affichage.
+
+        Le defaut est pose ICI et pas seulement dans clean() : un
+        `objects.create()` (migration de donnees, commande de chargement, seed)
+        n'appelle jamais clean(), et produirait donc un bloc irrendable.
+        / The default is set HERE, not only in clean(): an `objects.create()`
+        (data migration, loading command, seed) never calls clean() and would
+        otherwise produce an unrenderable block.
+        """
+        self.poser_affichage_par_defaut()
+        super().save(*args, **kwargs)
+
+    def clean(self):
+        """
+        Verifie que l'affichage choisi appartient bien au type du bloc.
+        / Checks the chosen affichage belongs to the block's type.
+
+        LOCALISATION : pages/models.py
+
+        Le modele ne porte qu'UN champ `affichage`, avec l'UNION de toutes les
+        valeurs : Django ne sait pas restreindre des choices selon la valeur
+        d'un autre champ. Sans cette methode, un bloc SECTION accepterait
+        « bande de logos » (un affichage du type IMAGES) et le rendu tomberait
+        sur un gabarit qui n'existe pas.
+        / The model carries ONE `affichage` field holding the UNION of all
+        values: Django cannot restrict choices by another field's value.
+        Without this method, a SECTION block would accept an IMAGES affichage
+        and the rendering would look for a template that does not exist.
+
+        La table de reference est AFFICHAGES_PAR_TYPE (pages/blocs_catalogue.py)
+        — la meme que celle lue par l'API et par l'admin. Une seule source.
+        / The reference table is AFFICHAGES_PAR_TYPE, the same one read by the
+        API and the admin. A single source.
+        """
+        super().clean()
+
+        # Import local : blocs_catalogue n'importe rien de models, mais on garde
+        # le meme reflexe que les autres imports de ce fichier.
+        # / Local import: same habit as the other imports of this file.
+        from pages.blocs_catalogue import AFFICHAGES_PAR_TYPE
+
+        self.poser_affichage_par_defaut()
+        affichages_permis = AFFICHAGES_PAR_TYPE.get(self.type_bloc, ())
+
+        # Un type a rendu unique (TEXTE, LIEU, FAQ, LISTE) n'accepte aucun
+        # affichage : le champ doit rester vide.
+        # / A single-rendering type accepts no affichage: the field stays empty.
+        if not affichages_permis:
+            if self.affichage:
+                raise ValidationError({
+                    "affichage": _(
+                        "Le type de bloc « %(type)s » n'a qu'un seul affichage : "
+                        "ce champ doit rester vide."
+                    ) % {"type": self.get_type_bloc_display()},
+                })
+            return
+
+        # Un type a plusieurs rendus n'accepte que les siens.
+        # / A multi-rendering type only accepts its own.
+        if self.affichage and self.affichage not in affichages_permis:
+            raise ValidationError({
+                "affichage": _(
+                    "L'affichage « %(affichage)s » n'existe pas pour le type de "
+                    "bloc « %(type)s »."
+                ) % {
+                    "affichage": self.affichage,
+                    "type": self.get_type_bloc_display(),
+                },
+            })
+
 
 class ImageGalerie(models.Model):
     """
-    Une image d'un bloc GALERIE. Relation plusieurs-images-vers-un-bloc : c'est le
-    seul cas du moteur où un bloc porte plusieurs fichiers (les autres blocs ont des
-    champs image plats). Édité en inline (TabularInline) dans l'admin du Bloc.
-    / One image of a GALERIE block. Many-images-to-one-block relation: the only case
-    in the engine where a block carries several files (other blocks use flat image
-    fields). Edited as an inline (TabularInline) in the Bloc admin.
+    Une image rattachee a un bloc. Relation plusieurs-images-vers-un-bloc :
+    c'est le seul cas du moteur ou un bloc porte plusieurs fichiers (les autres
+    blocs ont un champ image plat). Editee en inline (TabularInline) dans
+    l'admin du Bloc. Sert aux blocs IMAGES en galerie ou en bande de logos, et
+    aux images referencees depuis un bloc TEXTE (![legende](galerie:N)).
+    / An image attached to a block. Many-images-to-one-block relation: the only
+    case in the engine where a block carries several files. Used by IMAGES
+    blocks (grid or logo strip) and by images referenced from a TEXTE block.
 
     LOCALISATION : pages/models.py
     """
@@ -756,8 +1003,8 @@ class ImageGalerie(models.Model):
         primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True
     )
 
-    # Le bloc GALERIE auquel cette image appartient. Suppression en cascade.
-    # / The GALERIE block this image belongs to. Cascade delete.
+    # Le bloc auquel cette image appartient. Suppression en cascade.
+    # / The block this image belongs to. Cascade delete.
     bloc = models.ForeignKey(
         Bloc,
         on_delete=models.CASCADE,
@@ -786,13 +1033,14 @@ class ImageGalerie(models.Model):
         help_text=_("Texte alternatif et légende de l'image (optionnel)."),
     )
 
-    # Lien optionnel de l'image : si renseigne, l'image devient cliquable (nouvel
-    # onglet). Utilise par le bloc PARTENAIRES (logo -> site du partenaire) mais
-    # valable pour TOUT bloc a ImageGalerie (ex. GALERIE). Le HTML du lien est dans
-    # le template. Validator anti-XSS : l'inline ne passe pas par BlocAdmin.save_model.
-    # / Optional image link: if set, the image becomes clickable (new tab). Used by
-    # PARTENAIRES (logo -> partner site), valid for ANY ImageGalerie block. Anti-XSS
-    # validator: the inline does not go through BlocAdmin.save_model.
+    # Lien optionnel de l'image : si renseigne, l'image devient cliquable
+    # (nouvel onglet). Sert surtout a une bande de logos (chaque logo mene au
+    # site du partenaire), mais vaut pour toute image de galerie. Le HTML du
+    # lien est dans le gabarit. Validator anti-XSS : l'inline ne passe PAS par
+    # BlocAdmin.save_model, donc rien ne neutraliserait l'URL sans lui.
+    # / Optional image link making the image clickable. Mostly for a logo strip,
+    # but valid for any gallery image. Anti-XSS validator: the inline does not
+    # go through BlocAdmin.save_model, so nothing else would neutralise it.
     lien_url = models.CharField(
         max_length=500,
         blank=True,

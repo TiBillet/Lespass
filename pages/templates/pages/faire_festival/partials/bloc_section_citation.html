@@ -1,0 +1,23 @@
+{% load static i18n %}
+{% comment %}
+    BLOC SECTION / affichage CITATION — skin faire_festival. Citation encadree (bordure-epaisse) + auteur.
+    / TESTIMONIAL block — faire_festival skin. Framed quote + author.
+{% endcomment %}
+<section class="container py-5" data-testid="bloc-section-citation">
+    <figure class="bordure-epaisse bg-white p-4 mx-auto m-0" style="max-width: 50rem;">
+        {% if bloc.texte %}
+            <blockquote class="texte-bleu police-mono fst-italic m-0">{{ bloc.texte|safe }}</blockquote>
+        {% endif %}
+        {% if bloc.auteur_nom or bloc.auteur_role or bloc.auteur_photo %}
+            <figcaption class="d-flex align-items-center gap-3 mt-3">
+                {% if bloc.auteur_photo %}
+                    <img src="{{ bloc.auteur_photo.thumbnail.url }}" class="rounded-circle" width="48" height="48" alt="{{ bloc.auteur_nom }}" loading="lazy">
+                {% endif %}
+                <span>
+                    {% if bloc.auteur_nom %}<span class="d-block texte-bleu police-titre">{{ bloc.auteur_nom }}</span>{% endif %}
+                    {% if bloc.auteur_role %}<span class="d-block texte-bleu police-mono small">{{ bloc.auteur_role }}</span>{% endif %}
+                </span>
+            </figcaption>
+        {% endif %}
+    </figure>
+</section>

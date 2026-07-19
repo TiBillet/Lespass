@@ -3,6 +3,11 @@
     src: url('../font/luciole/luciole.woff2') format('woff2');
     font-weight: normal;
     font-style: normal;
+    /* swap : le texte s'affiche tout de suite en police de secours, puis bascule.
+       Sans ca, le corps de page (police du LCP) reste invisible au chargement.
+       / swap: text shows immediately in a fallback, then swaps. Without it the
+       body text (the LCP font) stays invisible while the font loads. */
+    font-display: swap;
 }
 
 @font-face {
@@ -10,6 +15,7 @@
     src: url('../font/luciole/luciole-bold.woff2') format('woff2');
     font-weight: bold;
     font-style: normal;
+    font-display: swap;
 }
 
 /* 
@@ -25,6 +31,7 @@
     src: url('../font/staatliches/staatliches.woff2') format('woff2');
     font-weight: normal;
     font-style: normal;
+    font-display: swap;
 }
 
 /* playwrite-is */

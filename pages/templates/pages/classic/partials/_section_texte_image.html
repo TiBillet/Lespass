@@ -1,0 +1,48 @@
+{% load i18n %}
+{% comment %}
+    SOCLE PARTAGE — section « texte + image », le cote de l'image en parametre.
+    / SHARED BASE — "text + image" section, image side passed as a parameter.
+
+    LOCALISATION : pages/templates/pages/classic/partials/_section_texte_image.html
+
+    N'est JAMAIS inclus directement par la page : il l'est par les deux gabarits
+    d'affichage, qui sont les seuls noms que le moteur resout —
+    bloc_section_texte_image_gauche.html et ..._droite.html. Le trait de
+    soulignement en tete de nom signale ce socle interne.
+    / NEVER included directly by the page: the two display templates include it.
+    The leading underscore marks it as an internal base.
+
+    Parametre attendu / Expected parameter :
+      cote = "gauche" | "droite"
+{% endcomment %}
+<section class="tb-bloc tb-bloc--image-texte tb-bloc--image-{{ cote }}{% if not bloc.image %} tb-bloc--sans-image{% endif %}"
+         data-testid="bloc-section-texte-image-{{ cote }}">
+    {% if bloc.image %}
+        <div class="tb-bloc__media">
+            <img class="tb-bloc__image"
+                 src="{{ bloc.image.hdr.url }}"
+                 alt="{{ bloc.titre }}"
+                 loading="lazy">
+        </div>
+    {% endif %}
+    <div class="tb-bloc__contenu">
+        {% if bloc.titre %}
+            <h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>
+        {% endif %}
+        {% if bloc.texte %}
+            {# HTML, pas du Markdown : le texte d'une SECTION est saisi au #}
+            {# WYSIWYG et nettoye par clean_html a l'enregistrement. Seul le #}
+            {# type TEXTE stocke du Markdown. #}
+            {# / HTML, not Markdown: a SECTION's text is WYSIWYG-entered and #}
+            {# sanitised by clean_html on save. Only TEXTE stores Markdown. #}
+            <div class="tb-bloc__texte">{{ bloc.texte|safe }}</div>
+        {% endif %}
+        {% if bloc.bouton_label %}
+            <div class="tb-bloc__boutons">
+                <a class="tb-bloc__bouton tb-bloc__bouton--plein"
+                   href="{{ bloc.bouton_url|default:'#' }}"
+                   data-testid="bloc-section-texte-image-bouton">{{ bloc.bouton_label }}</a>
+            </div>
+        {% endif %}
+    </div>
+</section>

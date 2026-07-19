@@ -24,7 +24,7 @@ from django.template.response import TemplateResponse
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
-from seo.features import FEATURE_DETAILS
+from seo.features import DOC_BASE, FEATURE_DETAILS
 from seo.models import SEOCache
 from seo.views_common import (
     build_json_ld_federation,
@@ -66,6 +66,64 @@ CONTRIBUTEURS = [
     {"nom": "CoopCircuits", "logo": "contributeurs/coopcircuit-noir.png", "url": "https://coopcircuits.fr/"},
     {"nom": "JetBrains", "logo": "contributeurs/jet_brain_beam.png", "url": "https://jb.gg/OpenSourceSupport"},
     {"nom": "France 2030", "logo": "contributeurs/france_2030.png", "url": "https://www.economie.gouv.fr/france-2030"},
+]
+
+
+# Questions frequentes de la landing. Double emploi VOULU :
+#   1. Contenu humain — la section FAQ explique concretement ce que fait TiBillet.
+#   2. SEO — alimente le JSON-LD schema.org/FAQPage (resultats enrichis en SERP).
+# Le texte source est en FRANCAIS ; la reponse est volontairement courte et factuelle.
+# Pour ajouter une question : ajouter un dict {question, reponse} ici. La section
+# et le JSON-LD se mettent a jour ensemble (source unique).
+# / Landing FAQ. Intentional double duty: (1) human content explaining what TiBillet
+# does, (2) feeds the schema.org/FAQPage JSON-LD (SERP rich results). Single source.
+FAQ_ITEMS = [
+    {
+        "question": _("TiBillet prélève-t-il une commission sur les billets ?"),
+        "reponse": _(
+            "Non. TiBillet ne prélève aucune commission par billet ni frais de "
+            "dossier caché : le prix affiché est le prix payé, et la totalité "
+            "revient à votre structure. Les seuls frais éventuels sont ceux, "
+            "transparents, de votre prestataire de paiement."
+        ),
+    },
+    {
+        "question": _("TiBillet est-il vraiment libre et gratuit ?"),
+        "reponse": _(
+            "Oui. TiBillet est un logiciel libre publié sous licence AGPLv3 : le "
+            "code est ouvert, auditable, et personne — pas même la coopérative — "
+            "ne peut le fermer ou le verrouiller contre vous. Vous pouvez "
+            "l'héberger vous-même ou passer par un hébergement mutualisé."
+        ),
+    },
+    {
+        "question": _("Puis-je récupérer et réutiliser mes données ?"),
+        "reponse": _(
+            "Oui. Les données non personnelles de votre lieu — événements, "
+            "programmation — sont accessibles par une API ouverte au format "
+            "standard schema.org / JSON-LD, sous licence libre. Vos données "
+            "circulent : rien n'est enfermé dans un format propriétaire."
+        ),
+    },
+    {
+        "question": _("Qu'est-ce que la fédération de lieux ?"),
+        "reponse": _(
+            "La fédération relie des lieux qui choisissent de coopérer. Chaque "
+            "lieu garde son autonomie — son agenda, sa caisse, ses adhésions — "
+            "tout en partageant ce qu'il veut : une même carte sans contact sert "
+            "dans plusieurs lieux, les agendas se croisent, une monnaie locale "
+            "peut circuler. Vous décidez avec qui vous fédérer."
+        ),
+    },
+    {
+        "question": _("Qui développe et gouverne TiBillet ?"),
+        "reponse": _(
+            "TiBillet est porté par la Coopérative Code Commun, une SCIC à trois "
+            "collèges égaux : animateur·ices, contributeur·ices et utilisateur·ices. "
+            "Le code libre est la première brique ; la gouvernance partagée et la "
+            "communauté vivante en font un véritable commun numérique."
+        ),
+    },
 ]
 
 
@@ -185,6 +243,47 @@ def landing(request):
         )
     json_ld_features = json_for_html(build_json_ld_item_list(feature_list_items))
 
+    # JSON-LD SoftwareApplication : TiBillet est un logiciel. Ce bloc le declare
+    # comme entite principale de la page (les pages de detail le referencent deja
+    # en `about`). Il peut debloquer des resultats enrichis et aide les LLMs a
+    # comprendre que la page presente une application libre et gratuite.
+    # / JSON-LD SoftwareApplication: declares TiBillet as the page's main entity.
+    # May unlock rich results and helps LLMs understand this is a free/libre app.
+    json_ld_software = json_for_html({
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "TiBillet",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "description": str(_(
+            "Billetterie, adhésions, caisse enregistreuse, cashless NFC et monnaies "
+            "locales pour les lieux culturels et associatifs. Logiciel libre et fédéré."
+        )),
+        "url": request.build_absolute_uri("/"),
+        "softwareHelp": DOC_BASE,
+        # Gratuit et libre : offre a 0 EUR + licence AGPLv3.
+        # / Free and libre: 0 EUR offer + AGPLv3 license.
+        "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR"},
+        "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+    })
+
+    # JSON-LD FAQPage : construit depuis FAQ_ITEMS (source unique, aussi affichee
+    # en section FAQ). On serialise le texte des chaines `_()` lazy avec str().
+    # / JSON-LD FAQPage: built from FAQ_ITEMS (single source, also shown as the FAQ
+    # section). Lazy `_()` strings are serialised with str().
+    json_ld_faq = json_for_html({
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {
+                "@type": "Question",
+                "name": str(item["question"]),
+                "acceptedAnswer": {"@type": "Answer", "text": str(item["reponse"])},
+            }
+            for item in FAQ_ITEMS
+        ],
+    })
+
     context = {
         "lieux_pour_bandeau": lieux_pour_bandeau,
         "marquee_lieux_duration_sec": marquee_lieux_duration_sec,
@@ -195,6 +294,15 @@ def landing(request):
         # ItemList des pages de fonctionnalites (SEO sitelinks).
         # / Feature pages ItemList (SEO sitelinks).
         "json_ld_features": json_ld_features,
+        # SoftwareApplication + FAQPage : injectes dans <head> par landing.html
+        # (bloc extra_head), en plus des JSON-LD deja rendus par base.html.
+        # / SoftwareApplication + FAQPage: injected in <head> by landing.html.
+        "json_ld_software": json_ld_software,
+        "json_ld_faq": json_ld_faq,
+        # Questions frequentes : rendues en section FAQ (details/summary) ET
+        # source du JSON-LD FAQPage ci-dessus.
+        # / FAQ: rendered as a FAQ section AND source of the FAQPage JSON-LD.
+        "faq_items": FAQ_ITEMS,
         # Contributeurs de TiBillet — section "Ils contribuent" (logos cliquables).
         # / TiBillet contributors — "They contribute" section (clickable logos).
         "contributeurs": CONTRIBUTEURS,
@@ -570,10 +678,15 @@ def sitemap_root_view(request):
     from xml.sax.saxutils import escape as xml_escape
 
     # Pages fixes du ROOT / Fixed ROOT pages.
+    # /explorer/ est volontairement noindex (outil interactif) : on ne le liste
+    # PAS dans le sitemap. Mettre une URL noindex dans un sitemap envoie a Google
+    # un signal contradictoire (« indexe-moi » / « n'indexe pas »).
+    # / /explorer/ is deliberately noindex (interactive tool): we do NOT list it
+    # in the sitemap. A noindex URL in a sitemap sends Google a contradictory
+    # signal ("index me" / "do not index").
     urls = [
         request.build_absolute_uri("/"),
         request.build_absolute_uri("/features/"),
-        request.build_absolute_uri("/explorer/"),
     ]
     # Une URL par page de fonctionnalite / One URL per feature page.
     for feature_slug in FEATURE_DETAILS:

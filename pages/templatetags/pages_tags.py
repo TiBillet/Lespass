@@ -10,8 +10,86 @@ import json
 from django import template
 from django.utils.html import strip_tags
 from django.utils.safestring import mark_safe
+from django.utils.translation import gettext as _
 
 register = template.Library()
+
+
+# Profondeur maximale remontee par le fil d'Ariane. C'est un garde-fou : une
+# hierarchie circulaire (une page dont un ancetre serait elle-meme) ferait
+# boucler la remontee a l'infini, et le rendu de la page ne rendrait jamais la
+# main. `Page.clean()` refuse deja les cycles, mais rien ne garantit qu'une
+# donnee ecrite hors validation (migration, script) respecte cette regle.
+# / Maximum depth walked by the breadcrumb. A safety net: a circular hierarchy
+# would loop forever and the page would never finish rendering. `Page.clean()`
+# already rejects cycles, but nothing guarantees data written outside
+# validation (a migration, a script) respects that rule.
+PROFONDEUR_MAX_FIL_ARIANE = 10
+
+
+@register.simple_tag
+def fil_ariane(page):
+    """
+    Retourne la chaine d'ancetres d'une page, de la racine du site jusqu'a elle.
+    / Returns a page's ancestor chain, from the site root down to itself.
+
+    LOCALISATION : pages/templatetags/pages_tags.py
+
+    SOURCE UNIQUE du fil d'Ariane. Les trois endroits qui l'affichaient le
+    reconstruisaient chacun de leur cote — le JSON-LD, le gabarit du socle et
+    celui du skin — et une hierarchie a plus d'un niveau aurait demande trois
+    reecritures a garder synchronisees.
+    / SINGLE SOURCE of the breadcrumb. The three places that displayed it each
+    rebuilt it on their own, so a deeper hierarchy would have meant three
+    rewrites to keep in sync.
+
+    Un maillon est un dict {titre, url, est_la_page_courante}. Les ancetres
+    NON PUBLIES sont omis : un lien vers un brouillon menerait a un 404, aussi
+    bien pour un visiteur que pour un moteur de recherche.
+    / A crumb is a {titre, url, est_la_page_courante} dict. UNPUBLISHED
+    ancestors are left out: a link to a draft leads to a 404, for a visitor as
+    much as for a search engine.
+
+    Retourne une liste vide pour une page de premier niveau : il n'y a alors
+    rien a afficher, et le gabarit ne pose pas de fil d'Ariane a un seul maillon.
+    / Returns an empty list for a top-level page: there is nothing to show.
+
+    Utilisation : {% fil_ariane page_courante as maillons %}
+    """
+    if page is None or not page.parent_id:
+        return []
+
+    # On remonte de la page vers la racine, puis on retourne la liste : c'est
+    # l'ordre de lecture (Accueil > Rubrique > Page).
+    # / Walk up from the page to the root, then reverse: that is reading order.
+    ancetres = []
+    courante = page.parent
+    profondeur = 0
+    while courante is not None and profondeur < PROFONDEUR_MAX_FIL_ARIANE:
+        if courante.publie:
+            ancetres.append({
+                "titre": courante.titre,
+                "url": courante.get_absolute_url(),
+                "est_la_page_courante": False,
+            })
+        courante = courante.parent
+        profondeur += 1
+    ancetres.reverse()
+
+    # gettext (immediat) et non gettext_lazy : ce libelle part aussi dans le
+    # JSON-LD, et json.dumps ne sait pas serialiser un objet de traduction
+    # differee. Le tag s'execute au rendu, donc la langue active est la bonne.
+    # / gettext (immediate), not gettext_lazy: this label also goes into the
+    # JSON-LD, and json.dumps cannot serialise a lazy translation object. The
+    # tag runs at render time, so the active language is the right one.
+    maillons = [{"titre": _("Accueil"), "url": "/", "est_la_page_courante": False}]
+    maillons.extend(ancetres)
+    maillons.append({
+        "titre": page.titre,
+        "url": page.get_absolute_url(),
+        "est_la_page_courante": True,
+    })
+    return maillons
 
 
 @register.simple_tag(takes_context=True)
@@ -35,34 +113,11 @@ def jsonld_page(context, page):
     description = page.meta_description or (getattr(config, "organisation", "") or "")
     nom_organisation = getattr(config, "organisation", "") or ""
 
-    # ARTICLE ou WebPage ? Une page dont le parent est une page BLOG (champ
-    # explicite est_blog) est un article : on émet le type schema.org/Article
-    # avec datePublished/dateModified (champs created_at/updated_at du modèle)
-    # et author = l'Organization du lieu (pas de champ auteur sur Page : pour
-    # un blog d'organisation, c'est le bon auteur).
-    # / ARTICLE or WebPage? A page whose parent is a BLOG page (explicit
-    # est_blog field) is an article: emit schema.org/Article with
-    # datePublished/dateModified and author = the venue's Organization.
-    page_est_un_article = bool(page.parent_id and page.parent.est_blog)
-    if page_est_un_article:
-        page_web = {
-            "@type": "Article",
-            "headline": nom,
-            "url": url,
-            "datePublished": page.created_at.isoformat(),
-            "dateModified": page.updated_at.isoformat(),
-            "author": {"@type": "Organization", "name": nom_organisation},
-            "publisher": {"@type": "Organization", "name": nom_organisation},
-        }
-        if page.image:
-            # URL absolue obligatoire pour les parseurs d'images structurées.
-            # / Absolute URL required by structured-image parsers.
-            page_web["image"] = (
-                request.build_absolute_uri(page.image.social_card.url)
-                if request else page.image.social_card.url
-            )
-    else:
-        page_web = {"@type": "WebPage", "name": nom, "url": url}
+    # Toute page publique est une WebPage. Le moteur ne distingue plus de
+    # type « article » : une page reste une page, quel que soit son parent.
+    # / Every public page is a WebPage. The engine no longer tells "articles"
+    # apart: a page is a page, whatever its parent.
+    page_web = {"@type": "WebPage", "name": nom, "url": url}
     if description:
         page_web["description"] = description
     graphe = [page_web]
@@ -83,29 +138,31 @@ def jsonld_page(context, page):
             ],
         })
 
-    # BreadcrumbList : fil d'Ariane si la page est une sous-page (Accueil > Parent >
-    # Page) -> éligible au résultat enrichi « fil d'Ariane » Google.
-    # / BreadcrumbList: breadcrumb if the page is a sub-page (Home > Parent > Page)
-    # -> eligible for Google's breadcrumb rich result.
-    if page.parent_id:
-        racine = request.build_absolute_uri("/") if request else "/"
-        maillons = [{"@type": "ListItem", "position": 1, "name": "Accueil", "item": racine}]
-        # Maillon parent seulement s'il est PUBLIÉ (même règle que le fil
-        # d'ariane visible : pas de lien structuré vers un brouillon → 404).
-        # / Parent crumb only if PUBLISHED (same rule as the visible
-        # breadcrumb: no structured link to a draft → 404).
-        parent = page.parent
-        if parent.publie:
-            url_parent = (
-                request.build_absolute_uri(f"/{parent.slug}/") if request else f"/{parent.slug}/"
-            )
-            maillons.append(
-                {"@type": "ListItem", "position": 2, "name": parent.titre, "item": url_parent}
-            )
-        maillons.append(
-            {"@type": "ListItem", "position": len(maillons) + 1, "name": page.titre, "item": url}
-        )
-        graphe.append({"@type": "BreadcrumbList", "itemListElement": maillons})
+    # BreadcrumbList : le fil d'Ariane structure, eligible au resultat enrichi
+    # Google. La chaine vient du tag `fil_ariane` — la MEME que celle affichee
+    # par les gabarits, donc les deux ne peuvent pas diverger.
+    # / BreadcrumbList: the structured breadcrumb, eligible for Google's rich
+    # result. The chain comes from the `fil_ariane` tag — the SAME one the
+    # templates display, so the two cannot drift apart.
+    maillons = fil_ariane(page)
+    if maillons:
+        graphe.append({
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+                {
+                    "@type": "ListItem",
+                    "position": rang,
+                    "name": maillon["titre"],
+                    # URL absolue : un fil d'Ariane structure se lit hors du site.
+                    # / Absolute URL: a structured breadcrumb is read off-site.
+                    "item": (
+                        request.build_absolute_uri(maillon["url"])
+                        if request else maillon["url"]
+                    ),
+                }
+                for rang, maillon in enumerate(maillons, start=1)
+            ],
+        })
 
     data = {"@context": "https://schema.org", "@graph": graphe}
     # ensure_ascii=False garde les accents ; on echappe <, > et & (comme Django
@@ -233,7 +290,7 @@ def embed_iframe(url):
 
 def _domaines_embed_autorises():
     """
-    Ensemble des hotes autorises pour un bloc IFRAME (whitelist GLOBALE ROOT).
+    Ensemble des hotes autorises pour un contenu integre en widget (whitelist ROOT).
     Lit RootConfiguration.domaines_embed_autorises (SHARED_APPS, schema public ;
     lisible depuis un tenant via le search_path). Normalise chaque ligne : on
     retire espaces, casse, et un eventuel schema/slash (un ROOT collera souvent
@@ -454,8 +511,30 @@ def rendre_bloc_markdown(bloc):
 
     texte = bloc.texte or ""
 
-    # Index position -> image de l'inline. / position -> inline image index.
-    images_par_position = {img.position: img for img in bloc.images_galerie.all()}
+    # Index RANG -> image de l'inline, le rang commencant a 1.
+    # On numerote par le RANG D'AFFICHAGE, pas par la valeur brute du champ
+    # `position` : le glisser-deposer d'Unfold renumerote les positions a
+    # partir de ZERO, alors que les images creees par ailleurs partent de UN.
+    # Resoudre sur la valeur brute ferait donc glisser d'un cran toutes les
+    # references ![legende](galerie:N) d'un article des qu'on reordonne ses
+    # images — en silence. Le rang, lui, dit ce que l'auteur voit : galerie:1
+    # est la premiere image de l'encart.
+    # / RANK -> inline image index, ranks starting at 1. We number by DISPLAY
+    # RANK, not by the raw `position` value: Unfold's drag-and-drop renumbers
+    # positions from ZERO while images created elsewhere start at ONE. Resolving
+    # on the raw value would silently shift every ![caption](galerie:N)
+    # reference by one as soon as the images are reordered. The rank matches
+    # what the author sees: galerie:1 is the first image of the inline.
+    # `.all()` et non `.order_by("position")` : ImageGalerie.Meta trie deja par
+    # position, et un order_by explicite REFAIT une requete en ignorant le
+    # prefetch_related pose par la vue — une requete par bloc de texte.
+    # / `.all()`, not `.order_by("position")`: ImageGalerie.Meta already orders
+    # by position, and an explicit order_by REISSUES a query, bypassing the
+    # view's prefetch_related — one query per text block.
+    images_par_position = {
+        rang: image
+        for rang, image in enumerate(bloc.images_galerie.all(), start=1)
+    }
 
     def remplacer(correspondance):
         alt = correspondance.group("alt")
@@ -475,65 +554,188 @@ def rendre_bloc_markdown(bloc):
         remplacer,
         texte,
     )
-    return rendre_markdown(texte)
+    # Le prefixe d'ancre rend les identifiants de titres uniques a l'echelle de
+    # la page : deux blocs qui portent le meme titre auraient sinon la meme
+    # ancre, et le sommaire n'en atteindrait qu'un.
+    # / The anchor prefix keeps heading ids unique page-wide: two blocks sharing
+    # a heading would otherwise produce the same anchor.
+    return rendre_markdown(texte, _prefixe_ancre_du_bloc(bloc))
 
 
-@register.filter
-def rendre_markdown(texte_markdown):
+# Attributs conserves par le sanitize, en plus de ceux que nh3 autorise deja.
+# `id` sur les titres : c'est la cible des ancres, donc de la table des matieres.
+# `class` sur les conteneurs de code : c'est ce qui porte la coloration
+# syntaxique. Sans cette liste, nh3 les retire tous les deux et la TOC pointe
+# dans le vide pendant que le code s'affiche en gris.
+# / Attributes kept by the sanitizer, on top of nh3's defaults. `id` on
+# headings is the anchor target (hence the table of contents); `class` on code
+# containers carries syntax highlighting. Without this, nh3 strips both.
+ATTRIBUTS_TITRES = ("h1", "h2", "h3", "h4", "h5", "h6")
+ATTRIBUTS_CODE = ("div", "pre", "code", "span", "table", "td", "th")
+
+# Les titres du contenu commencent au niveau 2 : le <h1> appartient a la Page
+# (banniere ou titre de secours), jamais au corps d'un bloc. Un auteur qui tape
+# « # » obtiendrait sinon un second <h1>.
+# / Content headings start at level 2: the <h1> belongs to the Page, never to a
+# block's body. Otherwise an author typing "# " would produce a second <h1>.
+NIVEAU_DE_BASE_DES_TITRES = 2
+
+
+def _fabriquer_convertisseur(prefixe_ancre=""):
     """
-    Convertit un texte Markdown en HTML SÛR (bloc MARKDOWN).
-    / Converts Markdown text into SAFE HTML (MARKDOWN block).
+    Fabrique un convertisseur Markdown configure pour le moteur.
+    / Builds a Markdown converter configured for the engine.
 
     LOCALISATION : pages/templatetags/pages_tags.py
 
-    Deux étapes, dans cet ordre :
-    1. markdown.markdown() avec l'extension "extra" (tableaux, code clôturé,
-       notes) et "sane_lists" (listes prévisibles).
-    2. nh3.clean() : sanitize du HTML produit. NON NÉGOCIABLE — même si seuls
-       les admins du tenant écrivent, un XSS stocké dans une page publique
-       reste un XSS (vol de session d'un autre admin, defacement).
-       nh3 garde les balises de contenu (titres, listes, liens, tableaux,
-       images, code) et retire scripts, handlers on*, javascript: etc.
-    / Two steps: markdown.markdown() with "extra" + "sane_lists", then
-    nh3.clean() — non-negotiable sanitize (a stored XSS in a public page is
-    still an XSS). nh3 keeps content tags and strips scripts/on*/javascript:.
+    `baselevel` fait la demotion des titres NATIVEMENT, a la construction de
+    l'arbre : ne jamais la refaire ensuite par des remplacements de chaines sur
+    le HTML produit, qui cesseraient de correspondre des qu'un titre porte un
+    attribut (`<h2 id="...">`), et echoueraient en silence.
+    / `baselevel` demotes headings NATIVELY while building the tree: never redo
+    it afterwards with string replacements on the produced HTML — they stop
+    matching as soon as a heading carries an attribute, and fail silently.
+
+    :param prefixe_ancre: prefixe applique aux identifiants de titres. Deux
+        blocs d'une meme page qui portent le meme titre produiraient sinon deux
+        fois le meme `id` : le navigateur n'en atteindrait qu'un.
+        / prefix applied to heading ids: two blocks sharing a heading would
+        otherwise produce the same `id` twice.
+    """
+    import markdown as bibliotheque_markdown
+    from markdown.extensions.toc import slugify_unicode
+
+    def slug_prefixe(valeur, separateur):
+        # slugify_unicode et non slugify : le second jette les accents, donc
+        # « Présentation » et « Presentation » donneraient la meme ancre.
+        # / slugify_unicode, not slugify: the latter drops accents.
+        base = slugify_unicode(valeur, separateur)
+        return f"{prefixe_ancre}{base}" if prefixe_ancre else base
+
+    return bibliotheque_markdown.Markdown(
+        extensions=["extra", "sane_lists", "toc", "codehilite"],
+        extension_configs={
+            "toc": {"baselevel": NIVEAU_DE_BASE_DES_TITRES, "slugify": slug_prefixe},
+            # `guess_lang: False` : sans langue declaree, on ne colorise pas
+            # plutot que de deviner faux. / Do not guess: no declared language
+            # means no colouring, rather than wrong colouring.
+            "codehilite": {"guess_lang": False},
+        },
+    )
+
+
+def _attributs_autorises():
+    """
+    Liste blanche d'attributs passee au sanitize.
+    / Attribute whitelist handed to the sanitizer.
+    """
+    import nh3
+
+    autorises = {balise: set(attrs) for balise, attrs in nh3.ALLOWED_ATTRIBUTES.items()}
+    for balise in ATTRIBUTS_TITRES:
+        autorises.setdefault(balise, set()).add("id")
+    for balise in ATTRIBUTS_CODE:
+        autorises.setdefault(balise, set()).add("class")
+    return autorises
+
+
+@register.filter
+def rendre_markdown(texte_markdown, prefixe_ancre=""):
+    """
+    Rend du Markdown en HTML sur : titres ancres, code colorise, HTML sanitize.
+    / Renders Markdown to HTML: anchored headings, highlighted code, sanitized.
+
+    LOCALISATION : pages/templatetags/pages_tags.py
+
+    Deux etapes, dans cet ordre :
+    1. markdown.Markdown().convert() produit le HTML (avec les `id` de titres
+       et les `class` de coloration) ;
+    2. nh3.clean() le nettoie. NON NEGOCIABLE — meme si seuls les admins du
+       tenant ecrivent, un XSS stocke dans une page publique reste un XSS (vol
+       de session d'un autre admin, defacement). nh3 garde les balises de
+       contenu et retire scripts, handlers on*, javascript: etc.
+    / Two steps: convert, then sanitize. The sanitize is non-negotiable — a
+    stored XSS in a public page is still an XSS.
 
     Utilisation : {{ bloc.texte|rendre_markdown }}
     """
-    import markdown as bibliotheque_markdown
     import nh3
 
     if not texte_markdown:
         return ""
 
-    html_genere = bibliotheque_markdown.markdown(
-        texte_markdown,
-        extensions=["extra", "sane_lists"],
-    )
-    html_nettoye = nh3.clean(html_genere)
+    convertisseur = _fabriquer_convertisseur(prefixe_ancre)
+    html_genere = convertisseur.convert(texte_markdown)
+    return mark_safe(nh3.clean(html_genere, attributes=_attributs_autorises()))
 
-    # DÉMOTION des titres d'un niveau (h1→h2 … h5→h6) : le h1 de la page
-    # appartient à la Page (bloc HERO ou titre de page.html), jamais au
-    # contenu markdown — sinon un auteur qui tape « # » crée un double h1
-    # (audit SEO 2026-07-05). Ordre décroissant pour ne pas re-décaler.
-    # / Heading DEMOTION by one level (h1→h2 … h5→h6): the page's h1 belongs
-    # to the Page (HERO block or page.html title), never to markdown content —
-    # otherwise a "# " author creates a duplicate h1. Descending order so
-    # nothing gets shifted twice.
-    for niveau in (5, 4, 3, 2, 1):
-        html_nettoye = html_nettoye.replace(f"<h{niveau}>", f"<h{niveau + 1}>")
-        html_nettoye = html_nettoye.replace(f"</h{niveau}>", f"</h{niveau + 1}>")
 
-    return mark_safe(html_nettoye)
+@register.simple_tag
+def table_des_matieres(page):
+    """
+    Retourne les titres des blocs de texte d'une page, pour son sommaire.
+    / Returns the headings of a page's text blocks, for its table of contents.
+
+    LOCALISATION : pages/templatetags/pages_tags.py
+
+    Le sommaire appartient a la PAGE, pas au bloc : une page peut porter
+    plusieurs blocs de texte, et un sommaire par bloc en afficherait autant.
+    Les ancres sont prefixees par bloc (voir `rendre_markdown`), ce qui les
+    garde uniques quand deux blocs partagent un titre.
+    / The table of contents belongs to the PAGE, not the block: a page may
+    carry several text blocks, and one summary per block would show several.
+
+    Retourne une liste de dicts {niveau, titre, ancre}, vide si la page n'a
+    aucun titre — le gabarit n'affiche alors rien.
+    / Returns a list of {niveau, titre, ancre} dicts, empty when the page has
+    no heading — the template then shows nothing.
+
+    Utilisation : {% table_des_matieres page_courante as sommaire %}
+    """
+    if page is None:
+        return []
+
+    entrees = []
+    for bloc in page.blocs.all():
+        if bloc.type_bloc != "TEXTE" or not bloc.texte:
+            continue
+        # Le texte est reconverti pour lire ses titres. C'est un second rendu
+        # du meme contenu : acceptable sur des pages de cette taille, et cela
+        # evite de faire remonter un etat depuis le filtre de rendu.
+        # / The text is converted again to read its headings: a second render
+        # of the same content, acceptable at this page size.
+        convertisseur = _fabriquer_convertisseur(_prefixe_ancre_du_bloc(bloc))
+        convertisseur.convert(bloc.texte)
+        for jeton in convertisseur.toc_tokens:
+            entrees.extend(_aplatir_titres(jeton))
+    return entrees
+
+
+def _prefixe_ancre_du_bloc(bloc):
+    """
+    Prefixe d'ancre propre a un bloc, stable entre deux rendus.
+    / A block's own anchor prefix, stable across renders.
+    """
+    return f"b{str(bloc.uuid)[:8]}-"
+
+
+def _aplatir_titres(jeton, niveau=1):
+    """
+    Met a plat l'arbre de titres rendu par l'extension toc.
+    / Flattens the heading tree produced by the toc extension.
+    """
+    entrees = [{"niveau": niveau, "titre": jeton["name"], "ancre": jeton["id"]}]
+    for enfant in jeton.get("children", []):
+        entrees.extend(_aplatir_titres(enfant, niveau + 1))
+    return entrees
 
 
 @register.simple_tag
 def sous_pages_publiees(page_courante, nombre_max=6):
     """
-    Retourne les sous-pages PUBLIÉES de la page courante (bloc LISTE_SOUS_PAGES),
+    Retourne les sous-pages PUBLIÉES d'une page (bloc LISTE, source SOUS_PAGES),
     triées comme la navbar (position puis titre), limitées à nombre_max.
     Requête DIRECTE sur le modèle — même pattern que evenements_a_venir.
-    / Returns the current page's PUBLISHED sub-pages (LISTE_SOUS_PAGES block),
+    / Returns a page's PUBLISHED sub-pages (LISTE block, SOUS_PAGES source),
     sorted like the navbar (position then title), limited to nombre_max.
     DIRECT model query — same pattern as evenements_a_venir.
 
@@ -552,7 +754,7 @@ def evenements_a_venir(nombre_max=6):
     """
     Retourne les prochains evenements publies du tenant, tries par date croissante,
     limites a `nombre_max`. Requete DIRECTE sur le modele (pas d'API) — le bloc
-    EVENEMENTS est ainsi dynamique sans dependre de l'API.
+    LISTE est ainsi dynamique sans dependre de l'API.
     / Returns the tenant's upcoming published events, sorted by ascending date,
     limited to `nombre_max`. DIRECT model query (no API) — makes the EVENEMENTS
     block dynamic without depending on the API.
@@ -595,7 +797,24 @@ def templates_bloc(context, bloc):
     """
     skin = context.get("skin_courant", "classic")
     type_bloc = bloc.type_bloc.lower()
-    return [
-        f"pages/{skin}/partials/bloc_{type_bloc}.html",
-        f"pages/classic/partials/bloc_{type_bloc}.html",
-    ]
+
+    # Le gabarit le plus precis d'abord : le couple (type, affichage). Un type a
+    # rendu unique (TEXTE, LIEU, FAQ, LISTE) n'a pas d'affichage et retombe donc
+    # directement sur bloc_<type>.html.
+    # / Most specific template first: the (type, affichage) pair. A
+    # single-rendering type has no affichage and falls straight through.
+    candidats = []
+
+    if bloc.affichage:
+        affichage = bloc.affichage.lower()
+        candidats.append(f"pages/{skin}/partials/bloc_{type_bloc}_{affichage}.html")
+        candidats.append(f"pages/classic/partials/bloc_{type_bloc}_{affichage}.html")
+
+    # Repli sur le gabarit du type : un skin peut ne surcharger qu'un affichage,
+    # et un type a rendu unique n'a que celui-ci.
+    # / Fallback on the type template: a skin may override a single affichage,
+    # and a single-rendering type only has this one.
+    candidats.append(f"pages/{skin}/partials/bloc_{type_bloc}.html")
+    candidats.append(f"pages/classic/partials/bloc_{type_bloc}.html")
+
+    return candidats

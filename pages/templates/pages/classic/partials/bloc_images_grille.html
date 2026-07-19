@@ -1,0 +1,38 @@
+{% load i18n %}
+{% comment %}
+    BLOC IMAGES / affichage GRILLE — skin classic. Grille responsive d'images (modele ImageGalerie,
+    relation plusieurs-images-vers-un-bloc). Chaque image a une legende optionnelle.
+    / IMAGES block / GRILLE display — classic skin. Responsive image grid (ImageGalerie model,
+    many-images-to-one-block). Each image has an optional caption.
+{% endcomment %}
+<section class="tb-bloc tb-bloc--galerie" data-testid="bloc-images-grille">
+    <div class="tb-bloc__contenu">
+        {% if bloc.titre %}<h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>{% endif %}
+        {% with images=bloc.images_galerie.all %}
+            {% if images %}
+                <div class="tb-galerie">
+                    {% for img in images %}
+                        {% if img.image %}
+                            <figure class="tb-galerie__item">
+                                {% if img.lien_url %}
+                                    <a href="{{ img.lien_url }}" target="_blank" rel="noopener">
+                                        <img class="tb-galerie__image"
+                                             src="{{ img.image.med.url }}"
+                                             alt="{{ img.legende }}" loading="lazy">
+                                    </a>
+                                {% else %}
+                                    <img class="tb-galerie__image"
+                                         src="{{ img.image.med.url }}"
+                                         alt="{{ img.legende }}" loading="lazy">
+                                {% endif %}
+                                {% if img.legende %}
+                                    <figcaption class="tb-galerie__legende">{{ img.legende }}</figcaption>
+                                {% endif %}
+                            </figure>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+    </div>
+</section>

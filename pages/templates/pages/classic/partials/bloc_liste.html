@@ -1,0 +1,114 @@
+{% load i18n pages_tags %}
+{% comment %}
+    BLOC LISTE — skin classic. Liste AUTOMATIQUE, en cartes.
+    / LISTE block — classic skin. AUTOMATIC list, as cards.
+
+    LOCALISATION : pages/templates/pages/classic/partials/bloc_liste.html
+
+    Le champ `source` choisit la REQUETE, pas le rendu — les deux sources
+    produisent les memes cartes :
+      - SOUS_PAGES : les sous-pages publiees d'une page (index de rubrique).
+        `page_source` dit de quelle page ; vide = la page qui porte le bloc.
+      - EVENEMENTS : les prochains evenements publies de l'agenda.
+    C'est pour ca que `source` n'est PAS un affichage : un affichage change la
+    forme, une source change la donnee.
+    / The `source` field picks the QUERY, not the rendering — both sources
+    produce the same cards. That is why `source` is not an `affichage`.
+
+    Champs : titre (optionnel), source, page_source, nombre_max (defaut 6).
+{% endcomment %}
+{% comment %}
+    Le titre du bloc ne s'affiche pas s'il repete celui de la page. Une
+    page-index nommee « Blog » qui porte un bloc liste nomme « Blog » affichait
+    le mot deux fois de suite, en deux tailles differentes.
+    / The block title is hidden when it repeats the page title. An index page
+    named "Blog" carrying a list block named "Blog" showed the word twice.
+{% endcomment %}
+{% if bloc.titre and bloc.titre != page_courante.titre %}
+    <section class="tb-bloc tb-bloc--liste-titre" data-testid="bloc-liste-titre">
+        <div class="tb-bloc__contenu">
+            <h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>
+        </div>
+    </section>
+{% endif %}
+
+{% if bloc.source == "EVENEMENTS" %}
+
+    {% evenements_a_venir bloc.nombre_max as evenements %}
+    {% if evenements %}
+        <div class="tb-grille" data-testid="bloc-liste-evenements">
+            {% for event in evenements %}
+                <article class="tb-bloc tb-bloc--carte">
+                    {% if event.img %}
+                        {# Variation "hdr" et non "crop_hdr" : les variations #}
+                        {# "crop_*" sont recadrees a la generation (960x540 #}
+                        {# force), l'affiche d'un evenement y perdrait ses #}
+                        {# bords. "hdr" redimensionne sans recadrer, et la #}
+                        {# carte affiche l'image entiere (cf. tb-blocs.css). #}
+                        {# / "hdr", not "crop_hdr": "crop_*" variations are #}
+                        {# cropped at generation time, which would cut an #}
+                        {# event poster's edges. "hdr" resizes without #}
+                        {# cropping, and the card shows the whole image. #}
+                        <img class="tb-bloc__carte-image"
+                             src="{{ event.img.hdr.url }}"
+                             alt="{{ event.name }}" loading="lazy">
+                    {% endif %}
+                    <p class="tb-bloc__carte-surtitre">{{ event.datetime|date:"l j F · H\hi" }}</p>
+                    <h3 class="tb-bloc__carte-titre">{{ event.name }}</h3>
+                    {% if event.short_description %}
+                        <div class="tb-bloc__carte-texte">{{ event.short_description }}</div>
+                    {% endif %}
+                    <a class="tb-bloc__bouton tb-bloc__bouton--plein"
+                       href="/event/{{ event.slug }}/">{% translate "Voir l'évènement" %}</a>
+                </article>
+            {% endfor %}
+        </div>
+    {% else %}
+        {# Etat vide honnete : on n'invente rien (regle Hallmark). #}
+        {# / Honest empty state: we invent nothing (Hallmark rule). #}
+        <section class="tb-bloc" data-testid="bloc-liste-evenements-vide">
+            <div class="tb-bloc__contenu">
+                <p class="tb-bloc__texte">{% translate "Aucun évènement à venir pour le moment." %}</p>
+            </div>
+        </section>
+    {% endif %}
+
+{% else %}
+
+    {# `page_source` vide : on liste les sous-pages de la page courante. #}
+    {# / Empty `page_source`: list the current page's sub-pages. #}
+    {% sous_pages_publiees bloc.page_source|default:page_courante bloc.nombre_max as sous_pages %}
+    {% if sous_pages %}
+        <div class="tb-grille" data-testid="bloc-liste-sous-pages">
+            {% for sous_page in sous_pages %}
+                <article class="tb-bloc tb-bloc--carte">
+                    {% if sous_page.image %}
+                        {# Variation "med" : Page.image n'a que social_card et med #}
+                        {# (VARIATIONS_PARTAGE). / "med" variation: Page.image only #}
+                        {# has social_card and med. #}
+                        <img class="tb-bloc__carte-image"
+                             src="{{ sous_page.image.med.url }}"
+                             alt="{{ sous_page.titre }}" loading="lazy">
+                    {% endif %}
+                    <h3 class="tb-bloc__carte-titre">{{ sous_page.titre }}</h3>
+                    {% if sous_page.meta_description %}
+                        <p class="tb-bloc__carte-texte">{{ sous_page.meta_description }}</p>
+                    {% endif %}
+                    <a class="tb-bloc__bouton tb-bloc__bouton--plein"
+                       href="{{ sous_page.get_absolute_url }}"
+                       hx-get="{{ sous_page.get_absolute_url }}" hx-target="body" hx-push-url="true">
+                        {% translate "Lire la suite" %}
+                    </a>
+                </article>
+            {% endfor %}
+        </div>
+    {% else %}
+        {# Etat vide honnete : rien d'invente. / Honest empty state. #}
+        <section class="tb-bloc" data-testid="bloc-liste-sous-pages-vide">
+            <div class="tb-bloc__contenu">
+                <p class="tb-bloc__texte">{% translate "Aucune page publiée pour le moment." %}</p>
+            </div>
+        </section>
+    {% endif %}
+
+{% endif %}

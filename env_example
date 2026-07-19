@@ -31,6 +31,12 @@ DOMAIN_REGEX=^.+\.tibillet\.localhost$$ # regex for wildcard matching — escape
 
 FEDOW_DOMAIN='fedow.tibillet.localhost' # the same as Fedow
 
+# Nom du certificat HTTPS de dev, sans extension : 'dev' -> certs/dev.pem + certs/dev-key.pem
+# Genere avec mkcert. Procedure complete dans le docker-compose.yml, au-dessus du service traefik.
+# Sans cette variable, `docker compose up` refuse de demarrer (garde-fou volontaire).
+# / Dev HTTPS certificate base name, generated with mkcert. See docker-compose.yml for the how-to.
+TLS_CERT_NAME='dev'
+
 ADDITIONAL_DOMAINS='domainbis.localhost' # optional - add addiotional domain for SaaS model, séparated with comma. ex : 'domainbis.localhost,domainter.localhost'
 SUB='lespass' # the sub domain of your first place ex : if 'lespass', it will be accessible on https://lespass.tibillet.coop
 META='agenda' # the federated agenda for all events on all tenants. If 'agenda', it will be accessible, for exemple, on https://agenda.tibillet.coop

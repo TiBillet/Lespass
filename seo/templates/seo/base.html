@@ -81,7 +81,11 @@
     <link rel="stylesheet" href="{% static 'commun/css/tibillet.css' %}">
     <link rel="stylesheet" href="{% static 'seo/seo.css' %}">
 
-    <script src="{% static 'commun/js/bootstrap.bundle.min.5.3.3.js' %}"></script>
+    {# defer : Bootstrap ne bloque plus le parsing du HTML. Le rendu (FCP/LCP) #}
+    {# part plus tot ; les composants JS (dropdown, collapse) s'activent apres. #}
+    {# / defer: Bootstrap no longer blocks HTML parsing. Paint starts earlier; #}
+    {# JS components (dropdown, collapse) wire up after the document is parsed. #}
+    <script defer src="{% static 'commun/js/bootstrap.bundle.min.5.3.3.js' %}"></script>
     <script type="module">
         import * as ThemeSwitcher from '{% static "commun/js/theme-switcher.mjs" %}'
         ThemeSwitcher.init()
@@ -149,8 +153,14 @@
                 </li>
             </ul>
             <div class="navbar-nav d-flex mb-0">
-                {# Recherche globale : soumet vers Explorer qui gere le filtre texte. #}
-                {# / Global search: submits to Explorer which handles the text filter. #}
+                {# Recherche globale : uniquement SUR la page Explorer, ou le filtre #}
+                {# texte a un sens (elle pilote la carte + la liste). Ailleurs, la    #}
+                {# barre ne servait a rien sinon renvoyer vers Explorer. On la masque  #}
+                {# donc hors Explorer (detection par le nom de route resolue).         #}
+                {# / Global search: ONLY on the Explorer page, where the text filter   #}
+                {# drives the map + list. Elsewhere it did nothing but bounce to       #}
+                {# Explorer, so we hide it off-Explorer (via the resolved route name). #}
+                {% if request.resolver_match.url_name == 'explorer' %}
                 <form class="d-flex" action="/explorer/" method="get" role="search">
                     <input class="form-control me-2" type="search" name="q"
                            placeholder="{% translate 'Rechercher...' %}" aria-label="{% translate 'Rechercher' %}"
@@ -159,6 +169,7 @@
                         <i class="bi bi-search" aria-hidden="true"></i>
                     </button>
                 </form>
+                {% endif %}
                 {# Sélecteur de langue : formulaire Django set_language (POST + CSRF intégré). #}
                 {# Pas de JS custom ni de cookie CSRF requis ; chaque bouton soumet la langue. #}
                 {# / Language selector: Django set_language form (POST + built-in CSRF). #}

@@ -1,38 +1,90 @@
 /*
- * Styles communs pour les pages SEO ROOT.
- * / Common styles for ROOT SEO pages.
+ * Styles du site public ROOT (landing, hub /features/, pages de detail).
+ * / Styles for the ROOT public site (landing, /features/ hub, detail pages).
  *
- * LOCALISATION: seo/static/seo/seo.css
+ * LOCALISATION : seo/static/seo/seo.css
+ *
+ * ============================================================================
+ * COULEUR : on consomme la MARQUE, on ne code aucune couleur en dur.
+ * ============================================================================
+ * L'identite du site est portee par commun/css/marque.css (bleu Loseyan). Ce
+ * fichier n'invente aucune couleur : il lit les jetons de marque.
+ *
+ *   --tb-marque         LE GESTE  (bleu #4296cc). Filets, soulignes, aplats
+ *                                 decoratifs, bordures. JAMAIS sous du texte.
+ *   --tb-marque-encre   L'ENCRE   son jumeau assombri. Texte et liens bleus,
+ *                                 fond des boutons pleins (contraste teste).
+ *   --tb-marque-contraste         ce qui se pose SUR l'encre (blanc).
+ *   var(--bs-link-color)          l'encre cablee par Bootstrap (bascule en sombre).
+ *
+ * Les surfaces (fond, bordures, texte secondaire) viennent des jetons Bootstrap
+ * (--bs-body-bg, --bs-tertiary-bg, --bs-border-color...) : ils s'adaptent seuls
+ * au theme clair/sombre.
+ * / We consume the brand tokens; we hardcode no colour. --tb-marque = the gesture
+ * (never under text), --tb-marque-encre = the ink (text/links/button fills).
  */
 
-/* Equilibrer les titres (pas de mot orphelin sur la derniere ligne) */
-/* / Balance headings (no orphan word on last line) */
+/* Equilibrer les titres (pas de mot orphelin sur la derniere ligne). */
+/* / Balance headings (no orphan word on the last line). */
 h1, h2, h3, .lead {
     text-wrap: balance;
 }
 
-/* Antialiased pour un rendu net sur tous les OS */
-/* / Antialiased for crisp rendering on all OSes */
+/* Antialiased pour un rendu net sur tous les OS. */
+/* / Antialiased for crisp rendering on all OSes. */
 body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
 
-
-/* ================================================================ */
-/* HERO — style tibillet.org : gradient sur mots-cles + logo         */
-/* / HERO — tibillet.org style: gradient on keywords + logo          */
-/* ================================================================ */
-
-/* Fond gris-vert subtil comme tibillet.org / Subtle gray-green bg like tibillet.org */
-.hero-section {
-    background: var(--bs-tertiary-bg, #f0f4f3);
-    padding: 3rem 1rem 2.5rem;
-    margin-bottom: 2rem;
+/* Cartes generiques (page /recherche/) : filet hairline, bordure bleue au survol. */
+/* / Generic cards (/recherche/): hairline rule, blue border on hover. */
+.seo-card {
+    border: 1px solid var(--bs-border-color);
+    transition: border-color 200ms var(--ease-out, ease), transform 200ms var(--ease-out, ease), box-shadow 200ms var(--ease-out, ease);
 }
 
-/* Layout 2 colonnes : texte a gauche, logo a droite */
-/* / 2 columns: text left, logo right */
+.seo-card:hover {
+    border-color: var(--tb-marque);
+    box-shadow: 0 8px 24px -14px rgba(0, 0, 0, 0.30);
+    transform: translateY(-2px);
+}
+
+.seo-card .card-img-top {
+    outline: 1px solid var(--bs-border-color);
+    outline-offset: -1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .seo-card {
+        transition: none;
+    }
+    .seo-card:hover {
+        transform: none;
+    }
+}
+
+
+/* ================================================================ */
+/* HERO — mots-cles en display Staatliches soulignes de bleu.        */
+/* Fini le degrade text-clip : le geste, c'est un filet bleu DESSOUS */
+/* le mot, pas une couleur qui remplit le texte.                     */
+/* / HERO — keywords in Staatliches display, underlined in brand blue.*/
+/* No more text-clip gradient: the gesture is a blue rule UNDER the   */
+/* word, not a colour filling the glyphs.                            */
+/* ================================================================ */
+
+.hero-section {
+    background: var(--bs-tertiary-bg);
+    /* Filet bleu de marque en bas du hero : structure editoriale nette. */
+    /* / Brand-blue rule at the bottom of the hero: crisp editorial edge. */
+    border-bottom: 3px solid var(--tb-marque);
+    padding: 3.5rem 1rem 3rem;
+    margin-bottom: 2.5rem;
+}
+
+/* Layout 2 colonnes : texte a gauche, logo a droite. */
+/* / 2 columns: text left, logo right. */
 .hero-layout {
     max-width: 1100px;
     margin: 0 auto;
@@ -45,27 +97,38 @@ body {
     flex: 1;
 }
 
-/* Titre H1 — style tibillet.org avec mots-cles en gradient vert */
-/* / H1 title — tibillet.org style with green gradient keywords */
+/* Titre H1 — corps en Luciole ; les mots-cles passent en Staatliches. */
+/* / H1 title — Luciole body; keywords switch to Staatliches. */
 .hero-title {
-    font-size: clamp(1.8rem, 3.5vw, 2.8rem);
-    font-weight: 800;
-    line-height: 1.2;
-    letter-spacing: -0.02em;
+    font-size: clamp(1.9rem, 3.6vw, 3rem);
+    font-weight: 700;
+    line-height: 1.18;
+    letter-spacing: -0.01em;
     margin-bottom: 2rem;
+    /* Coupe les mots trop longs plutot que de deborder (mobile). */
+    /* / Break over-long words instead of overflowing (mobile). */
+    overflow-wrap: anywhere;
 }
 
-/* Mots-cles en gradient vert/bleu palette TiBillet */
-/* / Keywords in green/blue gradient from TiBillet palette */
-/* Palette : sousou=#259d49, losean=#4296cc, kari=#e9b322 */
+/* Mot-cle : police display condensee + filet bleu dessine dessous. */
+/* Le texte reste en couleur de corps (lisible) ; le bleu est le GESTE. */
+/* / Keyword: condensed display face + a drawn blue rule underneath. The */
+/* text stays body-coloured (readable); the blue is the GESTURE. */
 .hero-kw {
-    background: linear-gradient(135deg, #259d49 0%, #4296cc 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    font-family: staatliches, sans-serif;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    /* Le filet bleu : un fond lineaire cale en bas, epais de ~0.14em. */
+    /* / The blue rule: a linear background pinned to the bottom, ~0.14em thick. */
+    background-image: linear-gradient(var(--tb-marque), var(--tb-marque));
+    background-repeat: no-repeat;
+    background-position: 0 100%;
+    background-size: 100% 0.14em;
+    padding-bottom: 0.06em;
 }
 
-/* Boutons CTA / CTA buttons */
+/* Boutons CTA. La principale = plein bleu de marque (encre + contraste teste). */
+/* / CTA buttons. Primary = solid brand blue (ink + tested contrast). */
 .hero-cta {
     display: flex;
     gap: 0.75rem;
@@ -73,93 +136,128 @@ body {
 }
 
 .hero-btn-primary {
-    font-weight: 600;
+    font-weight: 700;
     padding: 0.65rem 1.8rem;
     border-radius: 8px;
-    background: #259d49;
-    border-color: #259d49;
-    color: #fff;
+    background: var(--tb-marque-encre);
+    border: 1px solid var(--tb-marque-encre);
+    color: var(--tb-marque-contraste);
+    white-space: nowrap;
+    transition: background 200ms var(--ease-out, ease), transform 150ms var(--ease-out, ease);
 }
 
 .hero-btn-primary:hover {
-    background: #1e8a3f;
-    border-color: #1e8a3f;
-    color: #fff;
+    /* Assombrit l'encre au survol (meme geste que .btn-primary de marque.css). */
+    /* / Darken the ink on hover (same move as marque.css .btn-primary). */
+    background: color-mix(in srgb, var(--tb-marque-encre) 86%, black);
+    border-color: color-mix(in srgb, var(--tb-marque-encre) 86%, black);
+    color: var(--tb-marque-contraste);
+    transform: translateY(-1px);
+}
+
+.hero-btn-primary:focus-visible {
+    outline: 3px solid var(--tb-marque-encre);
+    outline-offset: 3px;
 }
 
 .hero-btn-secondary {
     font-weight: 600;
     padding: 0.65rem 1.8rem;
     border-radius: 8px;
-    border: 2px solid var(--bs-border-color, #dee2e6);
+    border: 1px solid var(--bs-border-color);
     background: transparent;
     color: var(--bs-body-color);
+    transition: border-color 200ms var(--ease-out, ease), color 200ms var(--ease-out, ease);
 }
 
 .hero-btn-secondary:hover {
-    border-color: #259d49;
-    color: #259d49;
+    /* Le contour prend l'encre bleue (texte + bordure) : lisible, sur-charte. */
+    /* / The outline takes the blue ink (text + border): readable, on-brand. */
+    border-color: var(--tb-marque-encre);
+    color: var(--bs-link-color);
 }
 
-/* Logo TiBillet a droite — masque sur mobile */
-/* / TiBillet logo on right — hidden on mobile */
+.hero-btn-secondary:focus-visible {
+    outline: 3px solid var(--tb-marque-encre);
+    outline-offset: 3px;
+}
+
+/* Logo TiBillet a droite — masque sur mobile. */
+/* / TiBillet logo on the right — hidden on mobile. */
 .hero-logo {
     flex-shrink: 0;
 }
 
 .hero-logo-img {
-    max-width: 320px;
+    width: 320px;
+    max-width: 100%;
     height: auto;
 }
 
-/* Responsive mobile : empilage vertical, logo cache */
-/* / Mobile responsive: vertical stack, logo hidden */
 @media (max-width: 767.98px) {
     .hero-layout {
         flex-direction: column;
         text-align: center;
     }
-
     .hero-logo {
         display: none;
     }
-
     .hero-cta {
         justify-content: center;
     }
-
     .hero-section {
-        padding: 2rem 1rem;
+        padding: 2.5rem 1rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hero-btn-primary {
+        transition: none;
+    }
+    .hero-btn-primary:hover {
+        transform: none;
     }
 }
 
 
 /* ================================================================ */
-/* PHILOSOPHIE — texte de fond 2 colonnes                            */
-/* / PHILOSOPHY — 2-column background text                           */
+/* PHILOSOPHIE — texte editorial, filet bleu de section.             */
+/* / PHILOSOPHY — editorial text, blue section rule.                 */
 /* ================================================================ */
 
 .philo-section {
-    margin-bottom: 3rem;
-    padding: 2rem 0;
+    max-width: 1000px;
+    margin: 0 auto 4rem;
+    padding: 1rem 0;
 }
 
 .philo-title {
-    text-align: center;
+    font-family: staatliches, sans-serif;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    font-size: clamp(1.6rem, 3vw, 2.2rem);
     margin-bottom: 1.5rem;
-    font-weight: 700;
+    /* Filet bleu court sous le titre : signature de section, pas un trait plein. */
+    /* / Short blue rule under the heading: a section signature, not a full line. */
+    padding-bottom: 0.6rem;
+    border-bottom: 2px solid var(--tb-marque);
+    display: inline-block;
 }
 
 .philo-columns {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 2rem;
+    gap: 2.5rem;
 }
 
 .philo-col p {
-    font-size: 0.95rem;
-    line-height: 1.7;
-    color: var(--bs-secondary-color, #6c757d);
+    font-size: 1rem;
+    line-height: 1.75;
+    color: var(--bs-secondary-color);
+}
+
+.philo-col strong {
+    color: var(--bs-body-color);
 }
 
 @media (max-width: 767.98px) {
@@ -171,714 +269,129 @@ body {
 
 
 /* ================================================================ */
-/* FONCTIONNALITES — grille 3x2 avec icones                          */
-/* / FEATURES — 3x2 grid with icons                                 */
+/* FONCTIONNALITES — grille de cartes editoriales, icone bleue plate.*/
+/* Fini les pastilles a degrade : l'icone est un carre a fond bleu   */
+/* tres doux, l'icone elle-meme en encre bleue.                      */
+/* / FEATURES — editorial card grid, flat blue icon. No gradient      */
+/* pills: a softly blue-tinted square, the glyph in blue ink.        */
 /* ================================================================ */
 
 .features-section {
-    margin-bottom: 3rem;
-    padding: 2.5rem 0;
+    max-width: 1100px;
+    margin: 0 auto 4rem;
+    padding: 1rem 0;
 }
 
 .features-heading {
     text-align: center;
-    font-weight: 700;
+    font-family: staatliches, sans-serif;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    font-size: clamp(1.7rem, 3vw, 2.4rem);
     margin-bottom: 0.5rem;
 }
 
 .features-subheading {
-    color: var(--bs-secondary-color, #6c757d);
+    color: var(--bs-secondary-color);
     margin-bottom: 2.5rem;
+    font-size: 1.05rem;
 }
 
 .features-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 2rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.25rem;
 }
 
+/* Carte = lien vers la page de detail. Filet hairline, pas d'ombre flottante. */
+/* / Card = link to the detail page. Hairline rule, no floating shadow. */
 .feature-card {
-    text-align: center;
-    padding: 1.5rem 1rem;
+    padding: 1.5rem 1.4rem;
 }
 
-/* Icone dans un cercle colore / Icon in a colored circle */
+.feature-card--link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 12px;
+    background: var(--bs-body-bg);
+    transition: border-color 200ms var(--ease-out, ease), transform 200ms var(--ease-out, ease), box-shadow 200ms var(--ease-out, ease);
+}
+
+.feature-card--link:hover {
+    /* Au survol : la bordure prend le bleu de marque + un leger relief. */
+    /* / On hover: the border takes brand blue + a slight lift. */
+    border-color: var(--tb-marque);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px -14px rgba(0, 0, 0, 0.30);
+}
+
+.feature-card--link:focus-visible {
+    outline: 3px solid var(--tb-marque-encre);
+    outline-offset: 2px;
+}
+
+/* Icone : carre a coins doux, fond bleu tres leger, glyphe en encre bleue. */
+/* / Icon: soft-cornered square, very light blue fill, blue-ink glyph. */
 .feature-icon {
-    width: 64px;
-    height: 64px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, rgba(37, 157, 73, 0.12) 0%, rgba(66, 150, 204, 0.12) 100%);
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--tb-marque) 12%, transparent);
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto 1rem;
+    margin-bottom: 1rem;
     font-size: 1.5rem;
-    color: #259d49;
+    color: var(--bs-link-color);
 }
 
 .feature-title {
-    font-size: 1.05rem;
+    font-size: 1.1rem;
     font-weight: 700;
     margin-bottom: 0.5rem;
 }
 
 .feature-desc {
-    font-size: 0.88rem;
+    font-size: 0.92rem;
     line-height: 1.6;
-    color: var(--bs-secondary-color, #6c757d);
+    color: var(--bs-secondary-color);
     margin-bottom: 0;
 }
 
-/* Responsive : 2 colonnes tablette, 1 colonne mobile */
-/* / Responsive: 2 cols tablet, 1 col mobile */
+/* Affordance « En savoir plus → » — encre bleue, fleche qui avance au survol. */
+/* / "Learn more →" affordance — blue ink, arrow nudges on hover. */
+.feature-more {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 0.9rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--bs-link-color);
+}
+
+.feature-more i {
+    transition: transform 200ms var(--ease-out, ease);
+}
+
+.feature-card--link:hover .feature-more i {
+    transform: translateX(3px);
+}
+
+/* Responsive : 2 colonnes tablette, 1 colonne mobile. */
+/* / Responsive: 2 cols tablet, 1 col mobile. */
 @media (max-width: 991.98px) {
     .features-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 
 @media (max-width: 575.98px) {
     .features-grid {
         grid-template-columns: 1fr;
-        gap: 1rem;
     }
-}
-
-
-/* ================================================================ */
-/* CONTRIBUER — panneau d'appel a participation (dans Fonctionnalites)*/
-/* Remplace l'ancien accordeon roadmap "Futur de TiBillet".          */
-/* Lien en dur vers l'espace contributif de la cooperative.          */
-/* / CONTRIBUTE — participation call-to-action panel (in Features).   */
-/* Replaces the old roadmap "Futur de TiBillet" accordion.           */
-/* Hardcoded link to the cooperative contribution space.             */
-/* ================================================================ */
-
-.contribute-panel {
-    margin-top: 3rem;
-    border-radius: 16px;
-    /* Fond gradient tres doux + anneau vert : se distingue de la grille. */
-    /* / Very soft gradient bg + green ring: stands out from the grid.    */
-    background: linear-gradient(135deg, rgba(37, 157, 73, 0.07) 0%, rgba(66, 150, 204, 0.07) 100%);
-    box-shadow:
-        0 0 0 1px rgba(37, 157, 73, 0.18),
-        0 8px 24px -12px rgba(0, 0, 0, 0.12);
-    padding: 2.75rem 1.5rem;
-}
-
-/* Contenu centre, largeur lisible (pas de lignes trop longues). */
-/* / Centered content, readable width (no over-long lines).      */
-.contribute-body {
-    max-width: 720px;
-    margin: 0 auto;
-    text-align: center;
-}
-
-/* Icone fusee dans un cercle gradient plein (palette TiBillet vert/bleu). */
-/* / Rocket icon in a solid gradient circle (TiBillet green/blue palette). */
-.contribute-icon {
-    width: 64px;
-    height: 64px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #259d49 0%, #4296cc 100%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 1.25rem;
-    font-size: 1.6rem;
-    color: #fff;
-}
-
-.contribute-title {
-    font-size: clamp(1.3rem, 2.5vw, 1.7rem);
-    font-weight: 800;
-    letter-spacing: -0.01em;
-    margin-bottom: 0.85rem;
-}
-
-.contribute-lead {
-    font-size: 0.95rem;
-    line-height: 1.7;
-    color: var(--bs-secondary-color, #6c757d);
-    margin-bottom: 1.5rem;
-}
-
-/* Pastilles des chantiers ouverts — wrap centre, sans puces de liste. */
-/* / Open-work chips — centered wrap, no list bullets.                 */
-.contribute-chantiers {
-    list-style: none;
-    padding: 0;
-    margin: 0 0 1.75rem;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.6rem;
-}
-
-.contribute-chantier {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.4rem 0.85rem;
-    border-radius: 999px;
-    background: var(--bs-body-bg, #fff);
-    box-shadow: inset 0 0 0 1px rgba(37, 157, 73, 0.22);
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: var(--bs-body-color, #212529);
-}
-
-.contribute-chantier i {
-    color: #259d49;
-    font-size: 0.95rem;
-}
-
-/* Bloc bouton + rappel du domaine destination. */
-/* / Button block + destination domain reminder.  */
-.contribute-cta {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.6rem;
-}
-
-.contribute-btn {
-    font-weight: 700;
-    padding: 0.7rem 2rem;
-    border-radius: 8px;
-    background: #259d49;
-    border: 1px solid #259d49;
-    color: #fff;
-    display: inline-flex;
-    align-items: center;
-    /* Le libelle reste sur une seule ligne a toutes les largeurs. */
-    /* / Label stays on a single line at every width.              */
-    white-space: nowrap;
-    transition: background 200ms ease, transform 150ms ease;
-}
-
-.contribute-btn:hover {
-    background: #1e8a3f;
-    border-color: #1e8a3f;
-    color: #fff;
-    transform: translateY(-1px);
-}
-
-/* Anneau de focus visible et instantane (jamais anime). */
-/* / Visible, instant focus ring (never animated).        */
-.contribute-btn:focus-visible {
-    outline: 2px solid #259d49;
-    outline-offset: 2px;
-}
-
-.contribute-cta-hint {
-    font-size: 0.8rem;
-    color: var(--bs-secondary-color, #6c757d);
-    display: inline-flex;
-    align-items: center;
-}
-
-/* Reduce-motion : pas de translation au survol du bouton. */
-/* / Reduce-motion: no hover translation on the button.    */
-@media (prefers-reduced-motion: reduce) {
-    .contribute-btn {
-        transition: none;
-    }
-    .contribute-btn:hover {
-        transform: none;
-    }
-}
-
-/* Mobile : padding reduit pour ne pas serrer le contenu. */
-/* / Mobile: reduced padding so content isn't cramped.    */
-@media (max-width: 575.98px) {
-    .contribute-panel {
-        padding: 2rem 1rem;
-    }
-}
-
-
-/* Chiffres tabulaires pour les compteurs (largeur egale, pas de "saut") */
-/* / Tabular numbers for counters (equal width, no "jump") */
-.stat-number {
-    font-variant-numeric: tabular-nums;
-}
-
-/* Cartes avec ombres douces plutot que bordures */
-/* / Cards with soft shadows instead of borders */
-.seo-card {
-    border: none;
-    box-shadow:
-        0px 0px 0px 1px rgba(0, 0, 0, 0.06),
-        0px 1px 2px -1px rgba(0, 0, 0, 0.06),
-        0px 2px 4px 0px rgba(0, 0, 0, 0.04);
-    transition: box-shadow 200ms ease, transform 200ms ease;
-}
-
-.seo-card:hover {
-    box-shadow:
-        0px 0px 0px 1px rgba(0, 0, 0, 0.08),
-        0px 2px 6px -1px rgba(0, 0, 0, 0.10),
-        0px 4px 8px 0px rgba(0, 0, 0, 0.06);
-    transform: translateY(-2px);
-}
-
-/* Outline discret sur les images dans les cartes */
-/* / Subtle outline on images inside cards */
-.seo-card .card-img-top {
-    outline: 1px solid rgba(0, 0, 0, 0.10);
-    outline-offset: -1px;
-}
-
-
-/* ================================================================ */
-/* Bandeau deferoulant "Nos lieux vivants" — marquee CSS infini      */
-/* / Scrolling marquee "Nos lieux vivants" — infinite CSS marquee    */
-/* ================================================================ */
-
-/* Animation de defilement continu / Continuous scroll animation */
-@keyframes marquee-scroll {
-    0% { transform: translateX(0); }
-    100% { transform: translateX(-100%); }
-}
-
-/* Conteneur : masque le debordement, pas de scrollbar */
-/* / Container: hides overflow, no scrollbar */
-.marquee-track {
-    display: flex;
-    overflow: hidden;
-    gap: 0;
-    /* Masque progressif sur les bords (effet fondu)
-       / Progressive mask on edges (fade effect) */
-    -webkit-mask-image: linear-gradient(
-        to right,
-        transparent 0%,
-        black 6%,
-        black 94%,
-        transparent 100%
-    );
-    mask-image: linear-gradient(
-        to right,
-        transparent 0%,
-        black 6%,
-        black 94%,
-        transparent 100%
-    );
-}
-
-/* Bande de contenu : defilement infini, duree pilotee par CSS variable.    */
-/* La duree est calculee cote serveur (seo/views.py::landing) pour garder   */
-/* une vitesse de defilement constante quel que soit le nombre de lieux.    */
-/* Sans cette variable (autres pages), valeur par defaut a 30s.             */
-/* / Content strip: infinite scroll, duration driven by CSS variable.       */
-/* Computed server-side (seo/views.py::landing) to keep constant scroll     */
-/* speed regardless of how many lieux there are. Falls back to 30s.         */
-.marquee-content {
-    display: flex;
-    gap: 1rem;
-    padding-right: 1rem;
-    flex-shrink: 0;
-    animation: marquee-scroll var(--marquee-duration, 30s) linear infinite;
-}
-
-/* Pause au survol — respect du prefers-reduced-motion */
-/* / Pause on hover — respects prefers-reduced-motion */
-.marquee-track:hover .marquee-content {
-    animation-play-state: paused;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .marquee-content {
-        animation: none;
-    }
-    .marquee-track {
-        overflow-x: auto;
-        -webkit-mask-image: none;
-        mask-image: none;
-    }
-}
-
-/* Item individuel : logo/initiale + nom du lieu */
-/* / Individual item: logo/initial + venue name */
-.marquee-item {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.5rem 1rem;
-    border-radius: 2rem;
-    background: var(--bs-tertiary-bg, rgba(0, 0, 0, 0.03));
-    text-decoration: none;
-    color: var(--bs-body-color);
-    white-space: nowrap;
-    flex-shrink: 0;
-    transition: background 200ms ease, box-shadow 200ms ease;
-}
-
-.marquee-item:hover {
-    background: var(--bs-secondary-bg, rgba(0, 0, 0, 0.06));
-    box-shadow:
-        0 0 0 1px rgba(0, 0, 0, 0.08),
-        0 2px 6px rgba(0, 0, 0, 0.08);
-    color: var(--bs-body-color);
-    text-decoration: none;
-}
-
-/* Logo du lieu (quand il existe) / Venue logo (when available) */
-.marquee-logo {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    object-fit: contain;
-    outline: 1px solid rgba(0, 0, 0, 0.08);
-    outline-offset: -1px;
-    background: white;
-}
-
-/* Initiale (fallback quand pas de logo) / Initial (fallback when no logo) */
-/* Couleurs distribuees via nth-child pour varier les teintes */
-/* / Colors distributed via nth-child to vary hues */
-.marquee-initiale {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 0.95rem;
-    color: white;
-    flex-shrink: 0;
-}
-
-/* 6 couleurs en rotation / 6 rotating colors */
-.marquee-initiale[data-index="0"] { background: #6366f1; }
-.marquee-initiale[data-index="1"] { background: #f59e0b; }
-.marquee-initiale[data-index="2"] { background: #10b981; }
-.marquee-initiale[data-index="3"] { background: #ef4444; }
-.marquee-initiale[data-index="4"] { background: #8b5cf6; }
-.marquee-initiale[data-index="5"] { background: #06b6d4; }
-.marquee-initiale[data-index="6"] { background: #6366f1; }
-.marquee-initiale[data-index="7"] { background: #f59e0b; }
-.marquee-initiale[data-index="8"] { background: #10b981; }
-.marquee-initiale[data-index="9"] { background: #ef4444; }
-.marquee-initiale[data-index="10"] { background: #8b5cf6; }
-.marquee-initiale[data-index="11"] { background: #06b6d4; }
-
-/* Nom du lieu / Venue name */
-.marquee-name {
-    font-size: 0.9rem;
-    font-weight: 500;
-}
-
-
-/* ================================================================ */
-/* Bandeau deferoulant "Prochains evenements" — marquee avec vignettes */
-/* / Scrolling marquee "Upcoming events" — marquee with thumbnails   */
-/* ================================================================ */
-
-/* La bande events defile plus lentement (plus de contenu visible) */
-/* / Event strip scrolls slower (more visible content) */
-.marquee-content--events {
-    gap: 1.25rem;
-    padding-right: 1.25rem;
-    animation-duration: 45s;
-}
-
-/* Carte event dans le marquee : vignette + texte */
-/* / Event card in marquee: thumbnail + text */
-.event-marquee-card {
-    display: flex;
-    flex-direction: column;
-    width: 260px;
-    flex-shrink: 0;
-    border-radius: 12px;
-    overflow: hidden;
-    text-decoration: none;
-    color: var(--bs-body-color);
-    background: var(--bs-body-bg, #fff);
-    box-shadow:
-        0px 0px 0px 1px rgba(0, 0, 0, 0.06),
-        0px 1px 2px -1px rgba(0, 0, 0, 0.06),
-        0px 2px 4px 0px rgba(0, 0, 0, 0.04);
-    transition: box-shadow 200ms ease, transform 200ms ease;
-}
-
-.event-marquee-card:hover {
-    box-shadow:
-        0px 0px 0px 1px rgba(0, 0, 0, 0.08),
-        0px 2px 8px -1px rgba(0, 0, 0, 0.12),
-        0px 4px 12px 0px rgba(0, 0, 0, 0.08);
-    transform: translateY(-3px);
-    color: var(--bs-body-color);
-    text-decoration: none;
-}
-
-/* Conteneur de la vignette (ratio 16:9 fixe) / Thumbnail container (fixed 16:9 ratio) */
-.event-marquee-img-wrapper {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 16 / 9;
-    overflow: hidden;
-    background: var(--bs-tertiary-bg, #f0f0f0);
-}
-
-.event-marquee-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    /* Outline discret a l'interieur de l'image (regle UI) */
-    /* / Subtle outline inside the image (UI rule) */
-    outline: 1px solid rgba(0, 0, 0, 0.08);
-    outline-offset: -1px;
-    transition: transform 400ms ease;
-}
-
-/* Zoom leger au survol de la carte / Slight zoom on card hover */
-.event-marquee-card:hover .event-marquee-img {
-    transform: scale(1.04);
-}
-
-/* Placeholder quand pas d'image / Placeholder when no image */
-.event-marquee-img-placeholder {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 2rem;
-    color: white;
-}
-
-.event-marquee-img-placeholder[data-index="0"] { background: #6366f1; }
-.event-marquee-img-placeholder[data-index="1"] { background: #f59e0b; }
-.event-marquee-img-placeholder[data-index="2"] { background: #10b981; }
-.event-marquee-img-placeholder[data-index="3"] { background: #ef4444; }
-.event-marquee-img-placeholder[data-index="4"] { background: #8b5cf6; }
-.event-marquee-img-placeholder[data-index="5"] { background: #06b6d4; }
-.event-marquee-img-placeholder[data-index="6"] { background: #6366f1; }
-.event-marquee-img-placeholder[data-index="7"] { background: #f59e0b; }
-.event-marquee-img-placeholder[data-index="8"] { background: #10b981; }
-.event-marquee-img-placeholder[data-index="9"] { background: #ef4444; }
-.event-marquee-img-placeholder[data-index="10"] { background: #8b5cf6; }
-.event-marquee-img-placeholder[data-index="11"] { background: #06b6d4; }
-
-/* Corps texte de la carte event / Event card text body */
-.event-marquee-body {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    padding: 0.65rem 0.75rem 0.75rem;
-}
-
-/* Nom de l'evenement — max 2 lignes avec ellipsis */
-/* / Event name — max 2 lines with ellipsis */
-.event-marquee-name {
-    font-size: 0.88rem;
-    font-weight: 600;
-    line-height: 1.3;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-/* Date et lieu : petits, discrets / Date and venue: small, subtle */
-.event-marquee-date,
-.event-marquee-lieu {
-    font-size: 0.76rem;
-    color: var(--bs-secondary-color, #6c757d);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.event-marquee-date i,
-.event-marquee-lieu i {
-    font-size: 0.7rem;
-    margin-right: 0.2rem;
-}
-
-/* Border-radius concentrique : rayon ext (12) = rayon int (8) + padding visuel (4) */
-/* / Concentric border-radius: outer (12) = inner (8) + visual padding (4) */
-.event-marquee-img-wrapper {
-    border-radius: 8px 8px 0 0;
-}
-
-/* Responsive : cards plus petites sur mobile */
-/* / Responsive: smaller cards on mobile */
-@media (max-width: 575.98px) {
-    .event-marquee-card {
-        width: 220px;
-    }
-    .event-marquee-name {
-        font-size: 0.82rem;
-    }
-}
-
-
-/* ================================================================ */
-/* ILS CONTRIBUENT — grille statique de logos cliquables + noms      */
-/* / THEY CONTRIBUTE — static grid of clickable logos + names        */
-/* ================================================================ */
-
-/* Panneau gris doux sur toute la section : un cadre "joli" qui       */
-/* detache la section du fond de page et fait ressortir les tuiles    */
-/* blanches des logos. var(--bs-secondary-bg) s'adapte au theme       */
-/* clair/sombre (gris clair en clair, gris fonce en sombre).          */
-/* / Soft gray panel over the whole section: a tasteful frame that    */
-/* separates it from the page background and makes the white logo     */
-/* tiles stand out. var(--bs-secondary-bg) adapts to light/dark.      */
-.contributeurs-section {
-    margin-bottom: 3rem;
-    padding: 2.5rem 1.5rem;
-    background: var(--bs-secondary-bg, #e9ecef);
-    border-radius: 1rem;
-}
-
-.contributeurs-heading {
-    font-weight: 700;
-    margin-bottom: 0.5rem;
-}
-
-.contributeurs-subheading {
-    color: var(--bs-secondary-color, #6c757d);
-    margin-bottom: 2.5rem;
-}
-
-/* Grille auto-fit centree : s'adapte au nombre de logos sans qu'on   */
-/* fixe un nombre de colonnes.                                        */
-/* / Auto-fit centered grid: adapts to the number of logos.           */
-.contributeurs-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 1.75rem 1rem;
-    align-items: start;
-    justify-items: center;
-    max-width: 1000px;
-    margin: 0 auto;
-}
-
-/* Une cellule = la tuile du logo + le nom dessous, empiles verticalement. */
-/* / One cell = the logo tile + the name below, stacked vertically.        */
-.contributeur-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.6rem;
-    width: 100%;
-    text-decoration: none;
-    color: var(--bs-body-color);
-}
-
-/* Tuile blanche : les logos a fond blanc (JPG) s'y fondent et les    */
-/* logos colores ou sombres ressortent nettement.                     */
-/* / White tile: white-background logos (JPG) blend in and colored or */
-/* dark logos stand out clearly.                                      */
-.contributeur-logo-box {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 96px;
-    padding: 0.9rem 1rem;
-    background: #fff;
-    border: 1px solid rgba(0, 0, 0, 0.06);
-    border-radius: 0.75rem;
-    transition: box-shadow 200ms ease, transform 200ms ease;
-}
-
-/* Relief uniquement sur les logos cliquables (les <a>), pas les <span>) */
-/* / Hover lift only on clickable logos (the <a>), not the <span>)       */
-a.contributeur-item:hover .contributeur-logo-box {
-    box-shadow:
-        0 0 0 1px rgba(0, 0, 0, 0.08),
-        0 6px 16px rgba(0, 0, 0, 0.12);
-    transform: translateY(-2px);
-}
-
-/* Logo en couleur, contenu sans deformation.                         */
-/* / Color logo, contained without distortion.                       */
-.contributeur-logo {
-    max-width: 100%;
-    max-height: 60px;
-    width: auto;
-    height: auto;
-    object-fit: contain;
-}
-
-/* Nom du contributeur sous la tuile (texte lisible, contraste AA).   */
-/* / Contributor name below the tile (readable text, AA contrast).    */
-.contributeur-nom {
-    font-size: 0.82rem;
-    font-weight: 600;
-    line-height: 1.25;
-    text-align: center;
-    color: var(--bs-body-color);
-}
-
-/* Responsive : tuiles un peu plus petites sur mobile */
-/* / Responsive: slightly smaller tiles on mobile */
-@media (max-width: 575.98px) {
-    .contributeurs-grid {
-        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-        gap: 1.25rem 0.75rem;
-    }
-    .contributeur-logo-box {
-        height: 80px;
-        padding: 0.6rem;
-    }
-    .contributeur-logo {
-        max-height: 48px;
-    }
-}
-
-
-/* ================================================================ */
-/* FONCTIONNALITES CLIQUABLES — carte qui mene a la page de detail   */
-/* La carte devient un <a> ; on neutralise le style lien et on ajoute */
-/* un relief au survol + l'affordance "En savoir plus".              */
-/* / CLICKABLE FEATURES — card linking to the detail page.           */
-/* The card becomes an <a>; reset link styling, add hover lift +      */
-/* an "En savoir plus" affordance.                                    */
-/* ================================================================ */
-
-.feature-card--link {
-    display: block;
-    text-decoration: none;
-    color: inherit;
-    border-radius: 12px;
-    transition: transform 200ms ease, box-shadow 200ms ease, background 200ms ease;
-}
-
-.feature-card--link:hover {
-    transform: translateY(-3px);
-    background: linear-gradient(135deg, rgba(37, 157, 73, 0.05) 0%, rgba(66, 150, 204, 0.05) 100%);
-    box-shadow:
-        0 0 0 1px rgba(37, 157, 73, 0.18),
-        0 10px 24px -12px rgba(0, 0, 0, 0.15);
-}
-
-.feature-card--link:focus-visible {
-    outline: 2px solid #259d49;
-    outline-offset: 2px;
-}
-
-/* Affordance "En savoir plus →" — accent vert, fleche qui avance au survol. */
-/* / "Learn more →" affordance — green accent, arrow nudges on hover.        */
-.feature-more {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    margin-top: 0.85rem;
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: #259d49;
-}
-
-.feature-more i {
-    transition: transform 200ms ease;
-}
-
-.feature-card--link:hover .feature-more i {
-    transform: translateX(3px);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -896,15 +409,584 @@ a.contributeur-item:hover .contributeur-logo-box {
 
 
 /* ================================================================ */
-/* PAGE DE DETAIL D'UNE FONCTIONNALITE                               */
-/* Article lisible : fil d'Ariane, en-tete, intro, sections alternees */
-/* texte/capture, appels a l'action, maillage interne.               */
-/* / FEATURE DETAIL PAGE — readable article: breadcrumb, header,     */
-/* intro, alternating text/screenshot sections, CTAs, internal links. */
+/* CONTRIBUER — panneau d'appel a participation (dans Fonctionnalites)*/
+/* Dé-verdi : encadre bleu de marque, plus de degrade vert/bleu.     */
+/* / CONTRIBUTE — participation panel. De-greened: brand-blue frame.  */
 /* ================================================================ */
 
-/* Largeur d'article confortable (plus etroit que container-lg). */
-/* / Comfortable article width (narrower than container-lg).     */
+.contribute-panel {
+    margin-top: 3rem;
+    border-radius: 16px;
+    /* Fond bleu tres doux + anneau bleu : se detache de la grille. */
+    /* / Very soft blue fill + blue ring: stands out from the grid. */
+    background: color-mix(in srgb, var(--tb-marque) 7%, var(--bs-body-bg));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tb-marque) 45%, transparent);
+    padding: 2.75rem 1.5rem;
+}
+
+.contribute-body {
+    max-width: 720px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+/* Icone fusee : carre bleu plein (encre), glyphe en contraste. */
+/* / Rocket icon: solid blue (ink) square, contrast glyph. */
+.contribute-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 14px;
+    background: var(--tb-marque-encre);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.25rem;
+    font-size: 1.6rem;
+    color: var(--tb-marque-contraste);
+}
+
+.contribute-title {
+    font-family: staatliches, sans-serif;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    font-size: clamp(1.4rem, 2.6vw, 1.9rem);
+    margin-bottom: 0.85rem;
+}
+
+.contribute-lead {
+    font-size: 1rem;
+    line-height: 1.7;
+    color: var(--bs-secondary-color);
+    margin-bottom: 1.5rem;
+}
+
+/* Pastilles des chantiers ouverts — contour bleu, wrap centre. */
+/* / Open-work chips — blue outline, centered wrap. */
+.contribute-chantiers {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1.75rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.6rem;
+}
+
+.contribute-chantier {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.85rem;
+    border-radius: 999px;
+    background: var(--bs-body-bg);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tb-marque) 40%, transparent);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--bs-body-color);
+}
+
+.contribute-chantier i {
+    color: var(--bs-link-color);
+    font-size: 0.95rem;
+}
+
+.contribute-cta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.contribute-btn {
+    font-weight: 700;
+    padding: 0.7rem 2rem;
+    border-radius: 8px;
+    background: var(--tb-marque-encre);
+    border: 1px solid var(--tb-marque-encre);
+    color: var(--tb-marque-contraste);
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    transition: background 200ms var(--ease-out, ease), transform 150ms var(--ease-out, ease);
+}
+
+.contribute-btn:hover {
+    background: color-mix(in srgb, var(--tb-marque-encre) 86%, black);
+    border-color: color-mix(in srgb, var(--tb-marque-encre) 86%, black);
+    color: var(--tb-marque-contraste);
+    transform: translateY(-1px);
+}
+
+.contribute-btn:focus-visible {
+    outline: 3px solid var(--tb-marque-encre);
+    outline-offset: 3px;
+}
+
+.contribute-cta-hint {
+    font-size: 0.8rem;
+    color: var(--bs-secondary-color);
+    display: inline-flex;
+    align-items: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .contribute-btn {
+        transition: none;
+    }
+    .contribute-btn:hover {
+        transform: none;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .contribute-panel {
+        padding: 2rem 1rem;
+    }
+}
+
+
+/* ================================================================ */
+/* FAQ — questions frequentes en <details>/<summary> natifs.         */
+/* Accessible sans JS. Sert aussi le JSON-LD FAQPage (rich results). */
+/* / FAQ — native <details>/<summary>. Accessible without JS. Also    */
+/* backs the FAQPage JSON-LD (rich results).                         */
+/* ================================================================ */
+
+.faq-section {
+    max-width: 820px;
+    margin: 0 auto 4rem;
+    padding: 1rem 0;
+}
+
+.faq-heading {
+    text-align: center;
+    font-family: staatliches, sans-serif;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    font-size: clamp(1.7rem, 3vw, 2.4rem);
+    margin-bottom: 2rem;
+}
+
+/* Chaque question = un filet hairline en haut ; ensemble = liste editoriale. */
+/* / Each question = a hairline top rule; together = an editorial list. */
+.faq-item {
+    border-top: 1px solid var(--bs-border-color);
+}
+
+.faq-item:last-child {
+    border-bottom: 1px solid var(--bs-border-color);
+}
+
+.faq-summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 1.1rem 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+/* Retire le marqueur natif (triangle) sur tous les navigateurs. */
+/* / Remove the native marker (triangle) across browsers. */
+.faq-summary::-webkit-details-marker {
+    display: none;
+}
+
+/* Signe « + » en encre bleue, pivote en « x » quand la question est ouverte. */
+/* / Blue-ink "+" sign, rotates into "x" when the question is open. */
+.faq-summary::after {
+    content: "+";
+    font-family: luciole, sans-serif;
+    font-weight: 400;
+    font-size: 1.6rem;
+    line-height: 1;
+    color: var(--bs-link-color);
+    flex-shrink: 0;
+    transition: transform 200ms var(--ease-out, ease);
+}
+
+.faq-item[open] .faq-summary::after {
+    transform: rotate(45deg);
+}
+
+.faq-summary:focus-visible {
+    outline: 3px solid var(--tb-marque-encre);
+    outline-offset: 3px;
+    border-radius: 4px;
+}
+
+.faq-answer {
+    padding: 0 0 1.2rem;
+    max-width: 68ch;
+    font-size: 0.98rem;
+    line-height: 1.7;
+    color: var(--bs-secondary-color);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .faq-summary::after {
+        transition: none;
+    }
+}
+
+
+/* ================================================================ */
+/* Bandeau deferoulant « Nos lieux vivants » — marquee CSS infini.   */
+/* / Scrolling marquee "Nos lieux vivants" — infinite CSS marquee.   */
+/* ================================================================ */
+
+@keyframes marquee-scroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
+}
+
+.marquee-section {
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.marquee-section h2 {
+    font-family: staatliches, sans-serif;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+}
+
+.marquee-track {
+    display: flex;
+    overflow: hidden;
+    gap: 0;
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%);
+    mask-image: linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%);
+}
+
+.marquee-content {
+    display: flex;
+    gap: 1rem;
+    padding-right: 1rem;
+    flex-shrink: 0;
+    animation: marquee-scroll var(--marquee-duration, 30s) linear infinite;
+}
+
+.marquee-track:hover .marquee-content {
+    animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .marquee-content {
+        animation: none;
+    }
+    .marquee-track {
+        overflow-x: auto;
+        -webkit-mask-image: none;
+        mask-image: none;
+    }
+}
+
+.marquee-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 1rem;
+    border-radius: 2rem;
+    background: var(--bs-tertiary-bg);
+    text-decoration: none;
+    color: var(--bs-body-color);
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background 200ms var(--ease-out, ease), box-shadow 200ms var(--ease-out, ease);
+}
+
+.marquee-item:hover {
+    background: var(--bs-secondary-bg);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tb-marque) 45%, transparent);
+    color: var(--bs-body-color);
+    text-decoration: none;
+}
+
+.marquee-logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: contain;
+    outline: 1px solid var(--bs-border-color);
+    outline-offset: -1px;
+    background: #fff;
+}
+
+/* Initiale (fallback sans logo) — DÉ-ARC-EN-CIELISÉ : deux tons de bleu de */
+/* marque en alternance (les deux portent du blanc, contraste verifie).    */
+/* / Initial (no-logo fallback) — DE-RAINBOWED: two alternating brand-blue */
+/* tones (both carry white text, contrast checked).                        */
+.marquee-initiale {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #fff;
+    flex-shrink: 0;
+    background: var(--tb-marque-encre);        /* #2d76a6 — 4.94:1 sur blanc */
+}
+
+.marquee-item:nth-child(even) .marquee-initiale {
+    background: rgb(36, 94, 133);              /* survol #245e85 — 6.97:1 */
+}
+
+.marquee-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+
+/* ================================================================ */
+/* Bandeau « Prochains evenements » — marquee avec vignettes.        */
+/* / "Upcoming events" marquee — with thumbnails.                    */
+/* ================================================================ */
+
+.marquee-content--events {
+    gap: 1.25rem;
+    padding-right: 1.25rem;
+    animation-duration: 45s;
+}
+
+.event-marquee-card {
+    display: flex;
+    flex-direction: column;
+    width: 260px;
+    flex-shrink: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    text-decoration: none;
+    color: var(--bs-body-color);
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    transition: border-color 200ms var(--ease-out, ease), transform 200ms var(--ease-out, ease), box-shadow 200ms var(--ease-out, ease);
+}
+
+.event-marquee-card:hover {
+    border-color: var(--tb-marque);
+    box-shadow: 0 8px 24px -14px rgba(0, 0, 0, 0.30);
+    transform: translateY(-3px);
+    color: var(--bs-body-color);
+    text-decoration: none;
+}
+
+.event-marquee-img-wrapper {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    background: var(--bs-tertiary-bg);
+    border-radius: 12px 12px 0 0;
+}
+
+.event-marquee-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    outline: 1px solid var(--bs-border-color);
+    outline-offset: -1px;
+    transition: transform 400ms var(--ease-out, ease);
+}
+
+.event-marquee-card:hover .event-marquee-img {
+    transform: scale(1.04);
+}
+
+/* Placeholder sans image — deux tons de bleu en alternance. */
+/* / No-image placeholder — two alternating brand-blue tones. */
+.event-marquee-img-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    color: #fff;
+    background: var(--tb-marque-encre);
+}
+
+.marquee-content--events .event-marquee-card:nth-child(even) .event-marquee-img-placeholder {
+    background: rgb(36, 94, 133);
+}
+
+.event-marquee-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.65rem 0.75rem 0.75rem;
+}
+
+.event-marquee-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.event-marquee-date,
+.event-marquee-lieu {
+    font-size: 0.76rem;
+    color: var(--bs-secondary-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.event-marquee-date i,
+.event-marquee-lieu i {
+    font-size: 0.7rem;
+    margin-right: 0.2rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .event-marquee-card,
+    .event-marquee-img {
+        transition: none;
+    }
+    .event-marquee-card:hover {
+        transform: none;
+    }
+    .event-marquee-card:hover .event-marquee-img {
+        transform: none;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .event-marquee-card {
+        width: 220px;
+    }
+    .event-marquee-name {
+        font-size: 0.84rem;
+    }
+}
+
+
+/* ================================================================ */
+/* ILS CONTRIBUENT — grille de logos cliquables + noms.              */
+/* / THEY CONTRIBUTE — grid of clickable logos + names.              */
+/* ================================================================ */
+
+.contributeurs-section {
+    max-width: 1100px;
+    margin: 0 auto 4rem;
+    padding: 2.5rem 1.5rem;
+    background: var(--bs-secondary-bg);
+    border-radius: 1rem;
+}
+
+.contributeurs-heading {
+    text-align: center;
+    font-family: staatliches, sans-serif;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    font-size: clamp(1.6rem, 3vw, 2.2rem);
+    margin-bottom: 0.5rem;
+}
+
+.contributeurs-subheading {
+    color: var(--bs-secondary-color);
+    margin-bottom: 2.5rem;
+}
+
+.contributeurs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1.75rem 1rem;
+    align-items: start;
+    justify-items: center;
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.contributeur-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    text-decoration: none;
+    color: var(--bs-body-color);
+}
+
+.contributeur-logo-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 96px;
+    padding: 0.9rem 1rem;
+    background: #fff;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.75rem;
+    transition: border-color 200ms var(--ease-out, ease), transform 200ms var(--ease-out, ease), box-shadow 200ms var(--ease-out, ease);
+}
+
+/* Relief uniquement sur les logos cliquables (les <a>), pas les <span>. */
+/* / Hover lift only on clickable logos (the <a>), not the <span>. */
+a.contributeur-item:hover .contributeur-logo-box {
+    border-color: var(--tb-marque);
+    box-shadow: 0 6px 16px -8px rgba(0, 0, 0, 0.30);
+    transform: translateY(-2px);
+}
+
+.contributeur-logo {
+    max-width: 100%;
+    max-height: 60px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}
+
+.contributeur-nom {
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1.25;
+    text-align: center;
+    color: var(--bs-body-color);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .contributeur-logo-box {
+        transition: none;
+    }
+    a.contributeur-item:hover .contributeur-logo-box {
+        transform: none;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .contributeurs-grid {
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 1.25rem 0.75rem;
+    }
+    .contributeur-logo-box {
+        height: 80px;
+        padding: 0.6rem;
+    }
+    .contributeur-logo {
+        max-height: 48px;
+    }
+}
+
+
+/* ================================================================ */
+/* PAGE DE DETAIL D'UNE FONCTIONNALITE (.fd-*) — dé-verdi.           */
+/* Article lisible : fil d'Ariane, en-tete, sections texte/capture,  */
+/* appels a l'action, maillage interne. Meme feuille que la landing, */
+/* donc le passage au bleu couvre aussi le hub et les pages detail.  */
+/* / FEATURE DETAIL PAGE (.fd-*) — de-greened. Shared stylesheet, so  */
+/* the switch to blue covers the hub and detail pages too.           */
+/* ================================================================ */
+
 .fd-page {
     max-width: 1000px;
 }
@@ -912,11 +994,11 @@ a.contributeur-item:hover .contributeur-logo-box {
 .fd-breadcrumb {
     font-size: 0.85rem;
     margin-bottom: 1.75rem;
-    color: var(--bs-secondary-color, #6c757d);
+    color: var(--bs-secondary-color);
 }
 
 .fd-breadcrumb a {
-    color: #259d49;
+    color: var(--bs-link-color);
     text-decoration: none;
 }
 
@@ -925,7 +1007,7 @@ a.contributeur-item:hover .contributeur-logo-box {
 }
 
 .fd-breadcrumb a:focus-visible {
-    outline: 2px solid #259d49;
+    outline: 3px solid var(--tb-marque-encre);
     outline-offset: 2px;
     border-radius: 3px;
 }
@@ -939,36 +1021,38 @@ a.contributeur-item:hover .contributeur-logo-box {
     font-weight: 600;
 }
 
-/* En-tete : icone gradient + titre + accroche. */
-/* / Header: gradient icon + title + tagline.    */
 .fd-header {
     margin-bottom: 1.5rem;
 }
 
+/* En-tete : carre bleu plein (encre) + glyphe contraste. */
+/* / Header: solid blue (ink) square + contrast glyph. */
 .fd-icon {
-    width: 72px;
-    height: 72px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #259d49 0%, #4296cc 100%);
+    width: 66px;
+    height: 66px;
+    border-radius: 16px;
+    background: var(--tb-marque-encre);
     display: flex;
     align-items: center;
     justify-content: center;
     margin-bottom: 1.25rem;
     font-size: 1.9rem;
-    color: #fff;
+    color: var(--tb-marque-contraste);
 }
 
 .fd-title {
-    font-size: clamp(1.9rem, 4vw, 2.6rem);
-    font-weight: 800;
-    letter-spacing: -0.02em;
+    font-family: staatliches, sans-serif;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    font-size: clamp(2rem, 4.2vw, 2.9rem);
     margin-bottom: 0.5rem;
+    overflow-wrap: anywhere;
 }
 
 .fd-tagline {
     font-size: 1.15rem;
-    font-weight: 500;
-    color: #259d49;
+    font-weight: 600;
+    color: var(--bs-link-color);
     margin-bottom: 0;
 }
 
@@ -980,8 +1064,6 @@ a.contributeur-item:hover .contributeur-logo-box {
     margin-bottom: 3rem;
 }
 
-/* Sections alternees texte / capture (2 colonnes sur desktop). */
-/* / Alternating text / screenshot sections (2 columns on desktop). */
 .fd-sections {
     display: flex;
     flex-direction: column;
@@ -996,8 +1078,6 @@ a.contributeur-item:hover .contributeur-logo-box {
     align-items: center;
 }
 
-/* Une section sur deux inverse l'ordre (capture a gauche). */
-/* / Every other section flips the order (screenshot on the left). */
 .fd-section:nth-child(even) .fd-section-text {
     order: 2;
 }
@@ -1015,27 +1095,27 @@ a.contributeur-item:hover .contributeur-logo-box {
 .fd-section-text p {
     font-size: 0.98rem;
     line-height: 1.7;
-    color: var(--bs-secondary-color, #6c757d);
+    color: var(--bs-secondary-color);
     margin-bottom: 0;
 }
 
-/* Capture a venir : cadre pointille etiquete, pas de fausse image. */
-/* / Screenshot to come: labelled dashed frame, no fake image.      */
 .fd-figure {
     margin: 0;
 }
 
+/* Capture a venir : cadre pointille bleu etiquete, pas de fausse image. */
+/* / Screenshot to come: labelled dashed blue frame, no fake image. */
 .fd-figure-placeholder {
     aspect-ratio: 16 / 10;
     border-radius: 12px;
-    border: 1px dashed rgba(37, 157, 73, 0.35);
-    background: linear-gradient(135deg, rgba(37, 157, 73, 0.06) 0%, rgba(66, 150, 204, 0.06) 100%);
+    border: 1px dashed color-mix(in srgb, var(--tb-marque) 55%, transparent);
+    background: color-mix(in srgb, var(--tb-marque) 6%, var(--bs-body-bg));
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    color: #259d49;
+    color: var(--bs-link-color);
 }
 
 .fd-figure-placeholder i {
@@ -1052,11 +1132,10 @@ a.contributeur-item:hover .contributeur-logo-box {
 .fd-figcaption {
     margin-top: 0.6rem;
     font-size: 0.8rem;
-    color: var(--bs-secondary-color, #6c757d);
+    color: var(--bs-secondary-color);
     text-align: center;
 }
 
-/* Appels a l'action. / Calls to action. */
 .fd-cta {
     display: flex;
     flex-wrap: wrap;
@@ -1068,24 +1147,24 @@ a.contributeur-item:hover .contributeur-logo-box {
     font-weight: 700;
     padding: 0.7rem 1.8rem;
     border-radius: 8px;
-    background: #259d49;
-    border: 1px solid #259d49;
-    color: #fff;
+    background: var(--tb-marque-encre);
+    border: 1px solid var(--tb-marque-encre);
+    color: var(--tb-marque-contraste);
     display: inline-flex;
     align-items: center;
     white-space: nowrap;
-    transition: background 200ms ease, transform 150ms ease;
+    transition: background 200ms var(--ease-out, ease), transform 150ms var(--ease-out, ease);
 }
 
 .fd-btn-primary:hover {
-    background: #1e8a3f;
-    border-color: #1e8a3f;
-    color: #fff;
+    background: color-mix(in srgb, var(--tb-marque-encre) 86%, black);
+    border-color: color-mix(in srgb, var(--tb-marque-encre) 86%, black);
+    color: var(--tb-marque-contraste);
     transform: translateY(-1px);
 }
 
 .fd-btn-primary:focus-visible {
-    outline: 2px solid #259d49;
+    outline: 3px solid var(--tb-marque-encre);
     outline-offset: 2px;
 }
 
@@ -1093,29 +1172,29 @@ a.contributeur-item:hover .contributeur-logo-box {
     font-weight: 600;
     padding: 0.7rem 1.8rem;
     border-radius: 8px;
-    border: 2px solid var(--bs-border-color, #dee2e6);
+    border: 1px solid var(--bs-border-color);
     background: transparent;
     color: var(--bs-body-color);
     display: inline-flex;
     align-items: center;
     white-space: nowrap;
-    transition: border-color 200ms ease, color 200ms ease;
+    transition: border-color 200ms var(--ease-out, ease), color 200ms var(--ease-out, ease);
 }
 
 .fd-btn-secondary:hover {
-    border-color: #259d49;
-    color: #259d49;
+    border-color: var(--tb-marque-encre);
+    color: var(--bs-link-color);
 }
 
 .fd-btn-secondary:focus-visible {
-    outline: 2px solid #259d49;
+    outline: 3px solid var(--tb-marque-encre);
     outline-offset: 2px;
 }
 
 /* Maillage interne : autres fonctionnalites. */
-/* / Internal linking: other features.        */
+/* / Internal linking: other features. */
 .fd-related {
-    border-top: 1px solid var(--bs-border-color-translucent, rgba(0, 0, 0, 0.08));
+    border-top: 1px solid var(--bs-border-color);
     padding-top: 2rem;
 }
 
@@ -1142,33 +1221,31 @@ a.contributeur-item:hover .contributeur-logo-box {
     border-radius: 10px;
     text-decoration: none;
     color: var(--bs-body-color);
-    box-shadow: inset 0 0 0 1px rgba(37, 157, 73, 0.2);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tb-marque) 40%, transparent);
     font-weight: 600;
     font-size: 0.92rem;
-    transition: background 200ms ease, box-shadow 200ms ease;
+    transition: background 200ms var(--ease-out, ease), box-shadow 200ms var(--ease-out, ease);
 }
 
 .fd-related-item > i:first-child {
-    color: #259d49;
+    color: var(--bs-link-color);
     font-size: 1.1rem;
 }
 
 .fd-related-item .ms-auto {
-    color: #259d49;
+    color: var(--bs-link-color);
 }
 
 .fd-related-item:hover {
-    background: linear-gradient(135deg, rgba(37, 157, 73, 0.06) 0%, rgba(66, 150, 204, 0.06) 100%);
-    box-shadow: inset 0 0 0 1px rgba(37, 157, 73, 0.4);
+    background: color-mix(in srgb, var(--tb-marque) 6%, var(--bs-body-bg));
+    box-shadow: inset 0 0 0 1px var(--tb-marque);
 }
 
 .fd-related-item:focus-visible {
-    outline: 2px solid #259d49;
+    outline: 3px solid var(--tb-marque-encre);
     outline-offset: 2px;
 }
 
-/* Mobile : sections en 1 colonne, ordre texte puis capture. */
-/* / Mobile: single-column sections, text then screenshot.    */
 @media (max-width: 767.98px) {
     .fd-section {
         grid-template-columns: 1fr;

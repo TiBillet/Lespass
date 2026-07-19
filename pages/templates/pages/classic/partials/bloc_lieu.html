@@ -1,0 +1,138 @@
+{% load static i18n %}
+{% comment %}
+    BLOC LIEU — skin classic. Les infos pratiques a gauche, la carte a droite.
+    / LIEU block — classic skin. Practical info on the left, map on the right.
+
+    LOCALISATION : pages/templates/pages/classic/partials/bloc_lieu.html
+
+    UN SEUL BLOC porte les deux moities : ce qui se lit comme un ensemble a
+    l'ecran s'edite comme un ensemble. Les separer en deux blocs obligerait a
+    les garder voisins dans la page pour que la mise en page tienne.
+    / ONE BLOCK carries both halves: what reads as a single unit on screen is
+    edited as a single unit. Splitting them would force the two blocks to stay
+    adjacent for the layout to hold.
+
+    Champs : titre, badge (legende sous la carte), points_gps (les marqueurs),
+    contenu (les items typés de la colonne de gauche : badge, para, horaire,
+    adresse, accessibilite, transport).
+{% endcomment %}
+<section class="tb-bloc tb-bloc--carte-leaflet" data-testid="bloc-lieu">
+    <div class="tb-bloc__leaflet-grille">
+
+        {# --- Colonne gauche : les infos pratiques ------------------------ #}
+        {% comment %}
+Une colonne sans contenu n'est pas rendue : un bloc qui ne porte
+qu'une carte afficherait sinon une moitie de section vide.
+{% endcomment %}
+        {% comment %}
+/ A column with no content is not rendered: a block carrying only a
+map would otherwise show an empty half-section.
+{% endcomment %}
+        {% if bloc.contenu %}
+        {# Les items sont des DONNEES TEXTE : le HTML et les classes vivent   #}
+        {# ici, jamais en base. / Items are TEXT DATA: HTML and CSS classes   #}
+        {# live here, never in the database.                                  #}
+        <div class="tb-bloc__infos" data-testid="bloc-lieu-infos">
+            {% for item in bloc.contenu %}
+                {% if item.type == "badge" %}
+                    <p class="tb-bloc__infos-badge">{{ item.texte }}</p>
+                {% elif item.type == "para" %}
+                    <p>{{ item.texte }}</p>
+                {% elif item.type == "horaire" %}
+                    <p class="tb-bloc__infos-horaire">{{ item.texte }}</p>
+                {% elif item.type == "adresse" %}
+                    <address>{{ item.texte|linebreaksbr }}</address>
+                {% elif item.type == "accessibilite" %}
+                    <p><em>{{ item.texte }}</em></p>
+                {% elif item.type == "transport" %}
+                    <div class="tb-bloc__infos-transport">
+                        <h3>{{ item.titre }}</h3>
+                        <ul>{% for ligne in item.lignes %}<li>{{ ligne }}</li>{% endfor %}</ul>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {# --- Colonne droite : la carte ----------------------------------- #}
+        {% comment %}
+Le cadre de carte ne se pose que s'il y a des points a montrer :
+sans marqueur, Leaflet laisse un rectangle borde de 400 px vide.
+{% endcomment %}
+        {% comment %}
+/ The map frame only appears when there are points to show: with no
+marker, Leaflet leaves an empty 400 px bordered rectangle.
+{% endcomment %}
+        {% if bloc.points_gps %}
+        {% with uid=bloc.uuid|stringformat:"s" %}
+        <div class="tb-bloc__carte" data-testid="bloc-lieu-carte">
+            {% if bloc.titre %}<h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>{% endif %}
+            {# data-maptiler-key : lu par le script ci-dessous et passe au fond de carte #}
+            {# commun. / Read by the script below and passed to the shared basemap. #}
+            <div id="carte-leaflet-{{ uid }}" class="tb-bloc__leaflet-carte"
+                 data-maptiler-key="{{ maptiler_key|default:'' }}"
+                 aria-label="{% translate 'Carte interactive' %}"></div>
+            {% if bloc.badge %}<p class="tb-bloc__carte-legende">{{ bloc.badge }}</p>{% endif %}
+
+            {% with json_id="points-"|add:uid %}{{ bloc.points_gps|json_script:json_id }}{% endwith %}
+
+            {# Fond de carte commun : script bloquant, donc tbPoserFondDeCarte est defini #}
+            {# avant que le script ci-dessous ne l'appelle. Le navigateur dedoublonne les #}
+            {# <script src> identiques quand la page porte plusieurs cartes. #}
+            {# / Shared basemap: blocking script, so tbPoserFondDeCarte is defined before #}
+            {# the script below calls it. The browser dedupes identical <script src>. #}
+            <script src="{% static 'cartes/tb_fond_de_carte.js' %}"></script>
+
+            <script>
+            (function () {
+                var uid = "{{ uid }}";
+                function initCarte() {
+                    var c = document.getElementById('carte-leaflet-' + uid);
+                    if (!c || c._leaflet_id) { return; }
+                    var n = document.getElementById('points-' + uid);
+                    var pts = [];
+                    try { pts = JSON.parse(n.textContent) || []; } catch (e) { pts = []; }
+                    if (!pts.length) { return; }
+                    // Chemin des images de marqueur (Leaflet self-hoste).
+                    // / Marker images path (self-hosted Leaflet).
+                    L.Icon.Default.imagePath = '{% static "pages/vendor/leaflet/images/" %}';
+                    var map = L.map('carte-leaflet-' + uid).setView([pts[0].lat, pts[0].lng], 13);
+                    // Fond de carte commun a tout le projet (cf. tb_fond_de_carte.js).
+                    // / Project-wide shared basemap.
+                    tbPoserFondDeCarte(map, c.dataset.maptilerKey);
+                    pts.forEach(function (p) {
+                        var m = L.marker([p.lat, p.lng]).addTo(map);
+                        if (p.label) {
+                            // textContent (pas innerHTML) : le label est traite comme du
+                            // TEXTE, jamais du HTML -> pas d'injection XSS via points_gps.
+                            // / textContent (not innerHTML): the label is TEXT, never HTML
+                            // -> no XSS injection via points_gps.
+                            var span = document.createElement('span');
+                            span.textContent = p.label;
+                            m.bindPopup(span);
+                        }
+                    });
+                }
+                function charger(cb) {
+                    if (typeof L !== 'undefined') { cb(); return; }
+                    if (!document.getElementById('leaflet-css')) {
+                        var css = document.createElement('link');
+                        css.id = 'leaflet-css'; css.rel = 'stylesheet';
+                        css.href = '{% static "pages/vendor/leaflet/leaflet.css" %}';
+                        document.head.appendChild(css);
+                    }
+                    var js = document.getElementById('leaflet-js');
+                    if (js) { js.addEventListener('load', cb); return; }
+                    js = document.createElement('script');
+                    js.id = 'leaflet-js'; js.src = '{% static "pages/vendor/leaflet/leaflet.js" %}';
+                    js.onload = cb; document.head.appendChild(js);
+                }
+                charger(initCarte);
+            })();
+            </script>
+        </div>
+        {% endwith %}
+        {% endif %}
+
+    </div>
+</section>

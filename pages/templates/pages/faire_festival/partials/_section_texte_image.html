@@ -1,0 +1,40 @@
+{% load static i18n %}
+{% comment %}
+    SOCLE PARTAGE — section « texte + image », skin faire_festival.
+    Image encadree + texte mono bleu ; le cote de l'image arrive en parametre.
+    / SHARED BASE — "text + image" section, faire_festival skin. Framed image +
+    blue mono text; the image side is passed as a parameter.
+
+    LOCALISATION : pages/templates/pages/faire_festival/partials/_section_texte_image.html
+
+    N'est JAMAIS inclus directement par la page : il l'est par les deux gabarits
+    d'affichage, seuls noms que le moteur resout. Le trait de soulignement en
+    tete signale ce socle interne.
+    / NEVER included directly: the two display templates include it. The leading
+    underscore marks it as an internal base.
+
+    Parametre attendu / Expected parameter :
+      cote = "gauche" | "droite"
+{% endcomment %}
+<section class="container py-5" data-testid="bloc-section-texte-image-{{ cote }}">
+    <div class="row align-items-center g-4">
+        {% if bloc.image %}
+            <div class="col-md-6 mb-3 mb-md-0 {% if cote == 'droite' %}order-md-2{% endif %}">
+                <img class="img-fluid w-100"
+                     src="{{ bloc.image.hdr.url }}"
+                     alt="{{ bloc.titre }}" loading="lazy">
+            </div>
+        {% endif %}
+        <div class="col-md-6">
+            {% if bloc.titre %}
+                <h2 class="police-titre texte-bleu text-uppercase">{{ bloc.titre }}</h2>
+            {% endif %}
+            {% if bloc.texte %}
+                <div class="texte-bleu police-mono lh-sm">{{ bloc.texte|safe }}</div>
+            {% endif %}
+            {% if bloc.bouton_label %}
+                <a href="{{ bloc.bouton_url|default:'#' }}" class="btn bouton-action mt-3" style="max-width: 300px;">{{ bloc.bouton_label }}</a>
+            {% endif %}
+        </div>
+    </div>
+</section>

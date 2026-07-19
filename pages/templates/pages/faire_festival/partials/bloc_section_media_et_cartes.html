@@ -1,0 +1,77 @@
+{% load static i18n %}
+{% comment %}
+    BLOC SECTION / affichage MEDIA_ET_CARTES — skin faire_festival.
+    Media encadre a gauche ; a droite le titre en pilule, le texte, les
+    sous-cartes puis le bouton.
+    / SECTION block / MEDIA_ET_CARTES display — framed media on the left; title
+    pill, text, sub-cards and button on the right.
+
+    LOCALISATION : pages/templates/pages/faire_festival/partials/bloc_section_media_et_cartes.html
+
+    Les sous-cartes viennent de `bloc.contenu`, une liste d'items TEXTE :
+        [{"titre": "JOUR 01", "texte": "…", "badge": "gratuit"}, …]
+    Ce sont des DONNEES, pas des blocs : elles vivent a l'interieur de la
+    colonne droite, ou une liste de blocs ne saurait les placer. Le HTML et les
+    classes sont ici ; la base ne stocke que du texte.
+    / Sub-cards come from `bloc.contenu`, a list of TEXT items. They are DATA,
+    not blocks: they live inside the right-hand column, where a flat block list
+    could not put them. HTML and classes live here; the DB stores text only.
+{% endcomment %}
+<section class="container py-5" data-testid="bloc-section-media-et-cartes">
+    <div class="row align-items-center g-4">
+
+        <div class="col-md-5">
+            <div class="bordure-epaisse p-2 h-100 d-flex align-items-center justify-content-center">
+                {% if bloc.video %}
+                    {# playsinline : sans lui, iOS force le plein ecran. #}
+                    {# / playsinline: without it, iOS forces fullscreen. #}
+                    <video autoplay loop muted playsinline webkit-playsinline class="w-100"
+                           style="max-height: 380px; object-fit: cover; background-color: var(--couleur-jaune-principal);"
+                           src="{{ bloc.video.url }}"></video>
+                {% elif bloc.image %}
+                    <img class="img-fluid" src="{{ bloc.image.hdr.url }}"
+                         alt="{{ bloc.titre }}" loading="lazy">
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="col-md-7 ps-md-5">
+            {% if bloc.titre %}
+                <div class="d-inline-block bordure-epaisse bg-white px-4 py-2 mb-3 rounded-pill">
+                    <h2 class="m-0 texte-bleu police-mono fw-bold" style="font-size: 1.17em;">{{ bloc.titre }}</h2>
+                </div>
+            {% endif %}
+            {% if bloc.texte %}
+                <div class="texte-bleu police-mono small lh-sm mb-4">{{ bloc.texte|safe }}</div>
+            {% endif %}
+
+            {% if bloc.contenu %}
+                <div class="row g-3 mb-4">
+                    {% for carte in bloc.contenu %}
+                        <div class="col-md-4">
+                            <div class="carte-jour">
+                                <div class="en-tete-jour fond-jaune bordure-epaisse px-3 py-1 mb-2 position-relative">
+                                    <h3 class="m-0 texte-bleu police-titre">{{ carte.titre }}</h3>
+                                    {% if carte.badge %}
+                                        <div class="badge-gratuit position-absolute"
+                                             style="top:-20px; right:-34px; transform: rotate(30deg); background: white; padding: 0px 8px; border-radius: 20px; z-index: 10;">
+                                            <span class="texte-bleu police-mono small fw-bold">{{ carte.badge }}</span>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                {% if carte.texte %}
+                                    <div class="small texte-bleu police-mono">{{ carte.texte|linebreaksbr }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {% if bloc.bouton_label %}
+                <a href="{{ bloc.bouton_url|default:'#' }}" class="btn bouton-action">{{ bloc.bouton_label }}</a>
+            {% endif %}
+        </div>
+
+    </div>
+</section>

@@ -1,0 +1,34 @@
+{% load i18n %}
+{% comment %}
+    BLOC IMAGES / affichage BANDE_LOGOS — skin classic. Bande de logos (modele ImageGalerie, reutilise).
+    Chaque logo est cliquable si img.lien_url est renseigne (nouvel onglet, rel=noopener).
+    Logos monochromes au repos, couleur au survol (CSS filter, conforme Hallmark).
+    / IMAGES block / BANDE_LOGOS display — classic skin. Logo strip (ImageGalerie reused). Each logo is
+    clickable if img.lien_url is set (new tab, rel=noopener). Grayscale at rest.
+{% endcomment %}
+<section class="tb-bloc tb-bloc--partenaires" data-testid="bloc-images-bande-logos">
+    <div class="tb-bloc__contenu">
+        {% if bloc.titre %}<h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>{% endif %}
+        {% with images=bloc.images_galerie.all %}
+            {% if images %}
+                <div class="tb-partenaires">
+                    {% for img in images %}
+                        {% if img.image %}
+                            {% if img.lien_url %}
+                                <a class="tb-partenaires__lien" href="{{ img.lien_url }}"
+                                   target="_blank" rel="noopener"
+                                   aria-label="{% blocktranslate with nom=img.legende %}Site du partenaire {{ nom }}{% endblocktranslate %}">
+                                    <img class="tb-partenaires__logo" src="{{ img.image.med.url }}"
+                                         alt="{{ img.legende }}" loading="lazy">
+                                </a>
+                            {% else %}
+                                <img class="tb-partenaires__logo" src="{{ img.image.med.url }}"
+                                     alt="{{ img.legende }}" loading="lazy">
+                            {% endif %}
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+    </div>
+</section>

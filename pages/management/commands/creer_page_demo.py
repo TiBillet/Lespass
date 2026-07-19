@@ -1,13 +1,16 @@
 """
-Cree une page d'accueil de demonstration avec un bloc de chaque type.
-/ Creates a demo home page with one block of each type.
+Cree une page d'accueil de demonstration minimale : quelques blocs SECTION et
+un bloc TEXTE. Pour une revue visuelle de TOUS les types et de toutes leurs
+combinaisons, voir la commande charger_site_lespass.
+/ Creates a minimal demo home page: a few SECTION blocks and one TEXTE block.
+For a visual review of EVERY type and combination, see charger_site_lespass.
 
 LOCALISATION : pages/management/commands/creer_page_demo.py
 
-But : tester visuellement le rendu de la racine "/" par l'app pages, avec tous
-les types de blocs. Idempotent : on recree la page et ses blocs a chaque appel.
-/ Goal: visually test the rendering of the root "/" by the pages app, with all
-block types. Idempotent: the page and its blocks are recreated on each call.
+But : tester visuellement le rendu de la racine "/" par l'app pages.
+Idempotent : on recree la page et ses blocs a chaque appel.
+/ Goal: visually test the rendering of the root "/" by the pages app.
+Idempotent: the page and its blocks are recreated on each call.
 
 Usage :
     python manage.py creer_page_demo            # tenant "lespass" par defaut
@@ -22,7 +25,7 @@ from pages.models import Bloc, Page
 
 
 class Command(BaseCommand):
-    help = "Cree une page d'accueil de demonstration (tous les types de blocs)."
+    help = "Cree une page d'accueil de demonstration (quelques blocs)."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -71,26 +74,25 @@ class Command(BaseCommand):
         # sont portées par le bloc CTA plus bas.
         Bloc.objects.create(
             page=page,
-            type_bloc=Bloc.HERO,
+            type_bloc=Bloc.SECTION, affichage=Bloc.BANNIERE,
             position=1,
             titre="Bienvenue à Lespass",
             sous_titre="Un lieu culturel, sa programmation et ses adhésions, "
             "réunis sur une page composée de blocs.",
         )
 
-        # 2 — PARAGRAPHE
+        # 2 — TEXTE
         Bloc.objects.create(
             page=page,
-            type_bloc=Bloc.PARAGRAPHE,
+            type_bloc=Bloc.TEXTE,
             position=2,
             titre="Notre lieu",
             texte=(
-                "<p>Ce paragraphe riche est édité avec l'éditeur de texte de "
-                "l'administration. On peut y mettre du <strong>gras</strong>, de "
-                "l'<em>italique</em> et des listes.</p>"
-                "<ul><li>Concerts et spectacles</li>"
-                "<li>Ateliers et résidences</li>"
-                "<li>Espace de convivialité</li></ul>"
+                "Ce texte est édité en Markdown dans l'administration. On peut y "
+                "mettre du **gras**, de l'*italique* et des listes.\n\n"
+                "- Concerts et spectacles\n"
+                "- Ateliers et résidences\n"
+                "- Espace de convivialité\n"
             ),
         )
 
@@ -98,7 +100,7 @@ class Command(BaseCommand):
         # / IMAGE + TEXT (no image in the demo: can be added via the admin)
         Bloc.objects.create(
             page=page,
-            type_bloc=Bloc.IMAGE_TEXTE,
+            type_bloc=Bloc.SECTION, affichage=Bloc.TEXTE_IMAGE_DROITE,
             position=3,
             titre="Image et texte",
             texte=(
@@ -106,7 +108,6 @@ class Command(BaseCommand):
                 "placée à gauche ou à droite. Ajoutez une image depuis "
                 "l'administration pour voir la mise en page complète.</p>"
             ),
-            image_position=Bloc.DROITE,
             bouton_label="En savoir plus",
             bouton_url="/event/",
         )
@@ -114,7 +115,7 @@ class Command(BaseCommand):
         # 4 — CTA
         Bloc.objects.create(
             page=page,
-            type_bloc=Bloc.CTA,
+            type_bloc=Bloc.SECTION, affichage=Bloc.APPEL_ACTION,
             position=4,
             titre="Envie de nous rejoindre ?",
             sous_titre="Prenez une adhésion et soutenez le lieu toute l'année.",
@@ -127,7 +128,7 @@ class Command(BaseCommand):
         # 5 — TEMOIGNAGE
         Bloc.objects.create(
             page=page,
-            type_bloc=Bloc.TEMOIGNAGE,
+            type_bloc=Bloc.SECTION, affichage=Bloc.CITATION,
             position=5,
             texte="<p>Un lieu chaleureux et une équipe accueillante. "
             "On s'y sent tout de suite chez soi.</p>",

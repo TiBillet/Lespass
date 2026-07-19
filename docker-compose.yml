@@ -5,6 +5,69 @@ services:
   #########
   # TRAEFIK PROXY
   #########
+  # ---------------------------------------------------------------------------
+  # HTTPS EN DEV SANS AVERTISSEMENT NAVIGATEUR — mini tuto
+  # ---------------------------------------------------------------------------
+  # Probleme : les domaines de dev sont en `.localhost`. Let's Encrypt ne peut
+  # PAS les signer (TLD reserve, aucune validation ACME possible). Sans rien,
+  # Traefik sert son certificat auto-signe par defaut, regenere a chaque
+  # redemarrage -> Chrome/Firefox rale a chaque fois.
+  #
+  # Solution : mkcert cree une autorite de certification (CA) LOCALE, l'installe
+  # dans le magasin de confiance du systeme ET dans ceux de Firefox/Chrome, puis
+  # signe un certificat pour nos domaines. Les navigateurs font confiance a cette
+  # CA -> plus aucun avertissement, definitivement.
+  #
+  # ETAPE 1 — installer mkcert et sa CA (UNE SEULE FOIS par machine de dev) :
+  #
+  #   sudo apt install libnss3-tools mkcert          # requis pour Firefox/Chrome
+  #   mkcert -install                          # installe la CA locale
+  #
+  # ETAPE 2 — generer le certificat, a la racine du projet (commande sur UNE
+  # seule ligne, et GUILLEMETS SIMPLES obligatoires autour du wildcard) :
+  #
+  #   mkdir -p certs
+  #   mkcert -cert-file certs/dev.pem -key-file certs/dev-key.pem 'tibillet.localhost' '*.tibillet.localhost'
+  #
+  # ETAPE 2bis — VERIFIER, avant meme d'ouvrir le navigateur :
+  #
+  #   openssl x509 -in certs/dev.pem -noout -ext subjectAltName
+  #
+  #   La sortie DOIT contenir les deux entrees :
+  #     DNS:tibillet.localhost, DNS:*.tibillet.localhost
+  #
+  #   PIEGE (deja rencontre) : si le `*` perd ses guillemets, le shell l'avale et
+  #   mkcert genere un certificat SANS le wildcard, EN SILENCE — aucune erreur.
+  #   Chrome affiche alors ERR_CERT_COMMON_NAME_INVALID sur lespass.tibillet.
+  #   localhost, ce qui ressemble a un probleme de CA alors que la CA est bonne.
+  #   Ne pas debugger le trust store : verifier d'abord les SAN ci-dessus.
+  #
+  #   Un wildcard ne couvre QU'UN SEUL niveau : `*.tibillet.localhost` ne couvre
+  #   pas `bis.domainbis.localhost`. Tout domaine supplementaire (cf.
+  #   ADDITIONAL_DOMAINS dans le .env) doit etre ajoute explicitement a la
+  #   commande, avec son propre wildcard.
+  #
+  # ETAPE 3 — declarer le nom du certificat dans le .env (cf. env_example) :
+  #
+  #   TLS_CERT_NAME='dev'     # -> certs/dev.pem + certs/dev-key.pem
+  #
+  # ETAPE 4 — `docker compose up -d traefik`. C'est tout, la conf est ci-dessous.
+  #
+  # SI TU SAUTES CES ETAPES : `docker compose up` REFUSE de demarrer et affiche
+  # un message renvoyant vers ce tuto (garde-fou `${TLS_CERT_NAME:?...}` dans le
+  # bloc `configs:` en bas de fichier). C'est volontaire : sans certificat,
+  # Traefik ne sert plus aucun certificat du tout et le HTTPS tombe — mieux vaut
+  # un echec net et explicite qu'une stack a moitie cassee.
+  #
+  # NE JAMAIS COMMITER certs/ : il contient une cle privee. Chaque dev genere sa
+  # propre CA avec sa propre cle (cf. .gitignore).
+  #
+  # PIEGE connu : les appels HTTPS conteneur -> conteneur (Fedow -> Lespass via
+  # extra_hosts) ne connaissent pas cette CA. Si un tel appel echoue en
+  # "certificate verify failed", monter $(mkcert -CAROOT)/rootCA.pem dans
+  # /usr/local/share/ca-certificates/ de l'image concernee puis lancer
+  # update-ca-certificates.
+  # ---------------------------------------------------------------------------
   traefik:
     image: "traefik:latest"
     container_name: "traefik"
@@ -14,6 +77,10 @@ services:
       - "--providers.docker=true"
       - "--providers.docker.network=frontend"
       - "--providers.docker.exposedbydefault=false"
+      # Provider "file" : le certificat par defaut ne peut PAS etre declare via
+      # des labels Docker, seulement par fichier. Ce fichier est genere par
+      # Docker depuis le bloc `configs:` en bas de ce docker-compose.yml.
+      - "--providers.file.filename=/etc/traefik/dynamic.yml"
       - "--entrypoints.entrypoints-https.address=:443"
       - "--entrypoints.entrypoints-http.address=:80"
       - "--entrypoints.entrypoints-http.http.redirections.entryPoint.to=entrypoints-https"
@@ -23,6 +90,11 @@ services:
       - "443:443"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      # Les certificats generes par mkcert a l'etape 2.
+      - "./certs:/certs:ro"
+    configs:
+      - source: traefik_tls_dynamic
+        target: /etc/traefik/dynamic.yml
     restart: unless-stopped
     networks:
       - frontend
@@ -215,6 +287,37 @@ volumes:
   lespass_dev_db:
   fedow_database:
   fedow_dev_db:
+
+# -----------------------------------------------------------------------------
+# CONFIGURATION DYNAMIQUE TRAEFIK — ecrite ici, pas dans un fichier separe.
+# -----------------------------------------------------------------------------
+# `content:` permet a Docker Compose de materialiser le contenu ci-dessous en
+# fichier dans le conteneur (monte sur /etc/traefik/dynamic.yml, cf. le service
+# traefik). Tout reste donc dans ce seul docker-compose.yml.
+#
+# Ce qu'on declare : le certificat par DEFAUT du store TLS. Tous les routers qui
+# ont `tls=true` (lespass_nginx, fedow_nginx...) l'utilisent automatiquement,
+# sans avoir a modifier leurs labels.
+#
+# Les chemins pointent vers ./certs monte en lecture seule dans le conteneur.
+# Ces deux fichiers sont produits par la commande mkcert de l'ETAPE 2 (voir le
+# tuto en haut de ce fichier, au-dessus du service traefik).
+#
+# GARDE-FOU : `${VAR:?message}` fait echouer `docker compose up` AVANT tout
+# demarrage si TLS_CERT_NAME n'est pas defini dans le .env, en affichant le
+# message ci-dessous. Sans ce garde-fou, la stack demarrerait puis Traefik
+# echouerait sur "failed to find any PEM data in certificate input" et ne
+# servirait plus AUCUN certificat — HTTPS casse, avec un message obscur.
+# / Fails fast with an explicit message instead of a cryptic Traefik TLS error.
+configs:
+  traefik_tls_dynamic:
+    content: |
+      tls:
+        stores:
+          default:
+            defaultCertificate:
+              certFile: /certs/${TLS_CERT_NAME:?Certificat HTTPS de dev absent. Lire le tuto en tete du docker-compose.yml (au-dessus du service traefik) - resume - 1) mkcert -install  2) mkcert -cert-file certs/dev.pem -key-file certs/dev-key.pem '$DOMAIN' '*.$DOMAIN'  3) ajouter TLS_CERT_NAME=dev dans le .env (cf. env_example)}.pem
+              keyFile: /certs/${TLS_CERT_NAME}-key.pem
 
 
 # Pour test stripe :
