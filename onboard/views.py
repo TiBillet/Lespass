@@ -2380,20 +2380,34 @@ class OnboardViewSet(viewsets.ViewSet):
         POST `/onboard/launch/retry/` -> reset l'erreur + re-enqueue.
 
         Comportement :
+          0. Si une tentative tient deja le claim d'idempotence : on ne
+             touche a RIEN et on rend `status_busy.html` (cf. ci-dessous).
           1. Reset `wc.error_message=""` dans le schema `meta`.
           2. Re-enqueue `create_tenant_from_draft.delay(wc_uuid=str(uuid))`.
           3. Retourne le partial `status_progress.html` pour relancer le
              polling cote HTMX.
+
+        L'etape 0 n'est pas cosmetique : sans elle, un retry lance pendant
+        qu'une tentative tient le claim effacait l'erreur et affichait « en
+        cours » alors que la task re-enqueuee sortait aussitot sans rien
+        ecrire. L'ecran pollait alors dans le vide jusqu'au timeout.
 
         Si pas de WC en session : 404.
 
         / POST `/onboard/launch/retry/` -> reset error + re-enqueue.
 
         Behavior:
+          0. If an attempt already holds the idempotency claim: touch
+             NOTHING and render `status_busy.html`.
           1. Reset `wc.error_message=""` in the `meta` schema.
           2. Re-enqueue `create_tenant_from_draft.delay(...)`.
           3. Return the `status_progress.html` partial to restart HTMX
              polling.
+
+        Step 0 is not cosmetic: without it, a retry fired while the claim
+        was held cleared the error and claimed "in progress" while the
+        re-enqueued task bailed out writing nothing — the screen polled
+        into the void until timeout.
 
         Without WC in session: 404.
         """
@@ -2405,9 +2419,47 @@ class OnboardViewSet(viewsets.ViewSet):
         # module (qui tirent BaseBillet.models, donc plus de monde).
         # / Local import: avoid loading Celery tasks at module top
         # (they pull BaseBillet.models, hence more code).
+        from django.core.cache import cache
         from django.utils import timezone
 
         from onboard.tasks import create_tenant_from_draft
+
+        # UNE TENTATIVE TIENT-ELLE DEJA LE VERROU ? On le demande AVANT
+        # d'effacer quoi que ce soit.
+        #
+        # `create_tenant_from_draft` commence par un claim d'idempotence
+        # (`cache.add(claim_key, ...)`, cf. onboard/tasks.py). Si ce claim
+        # est deja pris, la task re-enqueuee sort AUSSITOT sans rien
+        # ecrire — ni erreur, ni tenant. Effacer `error_message` et rendre
+        # `status_progress` dans ce cas serait un mensonge : plus personne
+        # n'ecrirait jamais rien, et l'ecran pollerait dans le vide
+        # jusqu'au timeout de 5 min. C'etait le bug : « le retry affiche le
+        # polling mais rien ne se passe ».
+        #
+        # Le claim peut etre tenu par une tentative reellement en cours, ou
+        # rester orphelin jusqu'a l'expiration de son TTL (5 min) si un
+        # worker a ete tue entre `cache.add` et `cache.delete`. Dans les
+        # deux cas la reponse est la meme : on ne relance pas, on garde
+        # l'erreur en base, et on laisse le polling afficher le verdict
+        # reel.
+        #
+        # `cache.get` et non `cache.add` : on ne veut PAS poser de verrou
+        # depuis la vue (si le process mourait juste apres, on laisserait un
+        # claim orphelin de plus). On se contente de lire.
+        #
+        # PIEGE MULTI-TENANT : les cles de cache sont prefixees par le
+        # schema courant (`KEY_FUNCTION: django_tenants.cache.make_key`).
+        # Un claim pose depuis un autre schema serait invisible ici. La
+        # task s'execute dans le schema d'ou elle a ete enqueuee — donc
+        # celui de cette requete : les cles coincident.
+        # / Is an attempt already holding the lock? Ask BEFORE clearing
+        # anything. The task bails out immediately when the claim is taken,
+        # so clearing the error here would leave the UI polling forever.
+        # Read-only check (`cache.get`), and beware: cache keys are
+        # schema-prefixed.
+        claim_key = f"onboard:create_tenant_claim:{wc.uuid}"
+        if cache.get(claim_key) is not None:
+            return render(request, "onboard/partials/status_busy.html")
 
         # Reset atomique via `.update()` (pas de re-fetch necessaire).
         # / Atomic reset via `.update()` (no re-fetch needed).

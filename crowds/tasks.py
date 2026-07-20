@@ -193,7 +193,7 @@ def email_contribution_paid_user(schema_name: str, contribution_uuid: str) -> bo
                     "url": initiative_url,
                     "text": str(_("Voir le projet")),
                 },
-                "button_color": "#009058",
+                "button_color": "#2d76a6",
                 "end_text": str(_("Merci pour votre contribution")),
                 "signature": config.organisation,
             }

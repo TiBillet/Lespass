@@ -150,8 +150,7 @@
                 {% endfor %}
                 {# Total de la catégorie / Category total #}
                 <tr style="background: #e8f5e9; font-weight: bold;">
-                    {# colspan adapte selon presence de la colonne Poids/Vol
-                       / colspan adapted depending on Weight/Vol column presence #}
+                    {# colspan adapte selon presence de la colonne Poids/Vol / colspan adapted depending on Weight/Vol column presence #}
                     <td colspan="{% if afficher_col_poids %}7{% else %}6{% endif %}" style="padding: 6px 8px; border: 1px solid #ddd;">{% translate "Total" %} {{ categorie_nom }}</td>
                     <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ categorie_data.total_ttc|euros }}</td>
                     <td colspan="2" style="padding: 6px 8px; border: 1px solid #ddd;"></td>

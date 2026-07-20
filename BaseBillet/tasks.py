@@ -263,7 +263,7 @@ def context_for_membership_email(membership: "Membership"):
             _('Product'): f'{membership.price.product.name} - {membership.price.name}',
             _('Contribution'): f'{membership.contribution_value} {config.currency_code}',
         },
-        'button_color': "#009058",
+        'button_color': "#2d76a6",
         'button': {
             'text': _('REQUEST RECEIPT'),
             'url': f'https://{domain}/memberships/{membership.pk}/invoice/',
@@ -382,7 +382,7 @@ def send_membership_pending_admin(membership_uuid: str):
             _('Email'): f"{membership.user.email if membership.user else ''}",
             _('Date de demande'): date_format(membership.date_added, format='DATETIME_FORMAT', use_l10n=True),
         },
-        'button_color': "#009058",
+        'button_color': "#2d76a6",
         'button': {
             'text': _("Ouvrir l’administration"),
             'url': f'https://{domain}/admin/BaseBillet/membership/'
@@ -476,7 +476,7 @@ def send_membership_pending_user(membership_uuid: str):
             _('Montant'): f"{dround(membership.contribution_value)} {config.currency_code}",
             _('Date de demande'): date_format(membership.date_added, format='DATETIME_FORMAT', use_l10n=True),
         },
-        'button_color': "#009058",
+        'button_color': "#2d76a6",
         'button': button,
         'next_text_1': _("Si vous n'êtes pas à l'origine de cette demande, merci de contacter l'équipe TiBillet."),
         'end_text': _("À bientôt !"),
@@ -803,7 +803,7 @@ def send_payment_refused_user(paiement_stripe_uuid: str, reason: str = None):
         'main_text_2': main_text_2,
         'main_text_3': main_text_3,
         'table_info': table_info,
-        'button_color': "#009058",
+        'button_color': "#2d76a6",
         'button': button,
         'next_text_1': _("Vous n’avez rien à faire. Nous vous écrirons quand ce sera validé."),
         'end_text': _("Merci et à bientôt !"),
@@ -858,7 +858,7 @@ def send_membership_payment_link_user(membership_uuid: str):
             _('Produit'): f'{membership.price.product.name} - {membership.price.name}',
             _('Montant'): f"{amount} {config.currency_code}",
         },
-        'button_color': "#009058",
+        'button_color': "#2d76a6",
         'button': {
             'text': _("Payer maintenant"),
             'url': f"https://{tenant_url}/memberships/{membership.uuid}/get_checkout_for_membership",

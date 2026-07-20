@@ -301,6 +301,61 @@ def test_sommaire_vide_quand_la_page_n_a_aucun_titre(tenant, nettoyer_pages):
         assert table_des_matieres(page) == []
 
 
+def test_le_sommaire_exige_au_moins_deux_titres(tenant, nettoyer_pages, api_client):
+    """
+    Un seul titre : pas de sommaire a l'ecran. Deux titres : sommaire rendu.
+
+    Le tag `table_des_matieres` renvoie bien l'entree unique — c'est le GABARIT
+    qui la tait. Un sommaire d'une seule ligne occupe une colonne entiere de la
+    grille pour n'apprendre au lecteur rien qu'il ne voie deja.
+    / One heading: no ToC on screen. Two headings: ToC rendered. The tag does
+    return the single entry — the TEMPLATE is what hides it: a one-line ToC eats
+    a whole grid column to teach the reader nothing.
+    """
+    from pages.models import Bloc, Page
+
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Un seul titre", slug="pytest-sommaire-seuil", publie=True)
+        bloc = Bloc.objects.create(
+            page=page, type_bloc=Bloc.TEXTE, position=1, texte="## Titre unique\n\nDu texte.")
+
+    assert 'data-testid="page-sommaire"' not in api_client.get("/pytest-sommaire-seuil/").content.decode()
+
+    # Un second titre fait apparaitre le sommaire. / A second heading brings it back.
+    with tenant_context(tenant):
+        bloc.texte = "## Premier titre\n\nDu texte.\n\n## Second titre\n\nEncore du texte."
+        bloc.save()
+
+    assert 'data-testid="page-sommaire"' in api_client.get("/pytest-sommaire-seuil/").content.decode()
+
+
+def test_afficher_sommaire_decoche_masque_le_sommaire(tenant, nettoyer_pages, api_client):
+    """
+    `Page.afficher_sommaire = False` retire le sommaire meme avec assez de titres.
+
+    C'est le choix explicite de l'admin : certaines pages tres visuelles n'en
+    veulent pas, quel que soit le nombre de titres.
+    / The admin's explicit choice: some visual-heavy pages don't want a ToC,
+    however many headings they have.
+    """
+    from pages.models import Bloc, Page
+
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Sans sommaire", slug="pytest-sommaire-decoche", publie=True)
+        Bloc.objects.create(
+            page=page, type_bloc=Bloc.TEXTE, position=1,
+            texte="## Premier titre\n\nTexte.\n\n## Second titre\n\nTexte.")
+
+    # Coche par defaut : le sommaire est la. / Checked by default: the ToC shows.
+    assert 'data-testid="page-sommaire"' in api_client.get("/pytest-sommaire-decoche/").content.decode()
+
+    with tenant_context(tenant):
+        page.afficher_sommaire = False
+        page.save()
+
+    assert 'data-testid="page-sommaire"' not in api_client.get("/pytest-sommaire-decoche/").content.decode()
+
+
 def test_references_galerie_survivent_a_une_renumerotation(tenant, nettoyer_pages):  # noqa: F811
     """
     Reordonner les images d'un article ne decale pas ses references.

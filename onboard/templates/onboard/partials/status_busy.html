@@ -1,0 +1,52 @@
+{% load i18n %}
+{% comment %}
+LOCALISATION: onboard/templates/onboard/partials/status_busy.html
+
+Partial rendu par `OnboardViewSet.launch_retry` quand une tentative de
+creation TIENT DEJA le claim d'idempotence
+(`onboard:create_tenant_claim:<uuid>`, cf. onboard/tasks.py).
+
+POURQUOI CE PARTIAL EXISTE : re-enqueuer la task dans ce cas ne sert a
+rien — elle sortirait aussitot sur le claim, sans rien ecrire. Si la vue
+avait quand meme efface `wc.error_message` et affiche « en cours »,
+personne n'ecrirait plus jamais ni erreur ni tenant, et l'ecran pollerait
+dans le vide jusqu'au timeout de 5 min. On dit donc la verite : une
+tentative tourne, on attend son verdict.
+
+CRUCIAL : `hx-trigger="every 2s"` est present, comme dans
+status_progress.html. C'est ce qui permet a l'ecran d'afficher le VRAI
+resultat de la tentative en vol (succes -> status_done, echec ->
+status_error, avec le bouton « Reessayer » de nouveau utile).
+
+Contexte attendu : aucun.
+
+/ Partial rendered by `launch_retry` when a creation attempt ALREADY holds
+the idempotency claim. Re-enqueueing would be a no-op (the task bails out
+on the claim), and clearing the error would leave the UI polling forever.
+So we tell the truth and keep polling until the in-flight attempt reports
+its real outcome.
+{% endcomment %}
+<div class="alert alert-warning d-flex align-items-center mb-0"
+     role="status"
+     data-testid="onboard-status-busy"
+     hx-get="{% url 'onboard-launch-status' %}"
+     hx-trigger="every 2s"
+     hx-swap="innerHTML"
+     hx-target="#status">
+    <div class="spinner-border spinner-border-sm me-2"
+         role="status"
+         aria-hidden="true">
+        <span class="visually-hidden">{% translate "Chargement..." %}</span>
+    </div>
+    <div class="flex-grow-1">
+        <strong>{% translate "Une tentative est déjà en cours" %}</strong>
+        <div class="small text-muted">
+            {% blocktranslate trimmed %}
+                Une création est déjà lancée pour votre espace. Inutile de
+                relancer : nous affichons le résultat dès qu'il est connu.
+                Si l'erreur revient, le bouton « Réessayer » sera de nouveau
+                disponible.
+            {% endblocktranslate %}
+        </div>
+    </div>
+</div>

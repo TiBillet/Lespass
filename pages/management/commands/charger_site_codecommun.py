@@ -719,7 +719,7 @@ class Command(BaseCommand):
             (
                 "TiBillet",
                 "kit/logos/png/monochrome.png",
-                "https://tibillet.org/fr",
+                "https://tibillet.coop",
                 "Tibillet est une suite d'outils pour faciliter nos organisations "
                 "collectives : système de caisse, adhésions/abonnement, monnaie "
                 "temps/locales, billetterie, cashless, agenda fédéré, Sécurité "
@@ -728,7 +728,7 @@ class Command(BaseCommand):
             (
                 "O2Badge",
                 "badge_blanc.png",
-                "https://github.com/CoopCodeCommun/FossBadge",
+                "https://openbadge.coop",
                 "Plateforme complète de gestion de badges numériques ouverts (Open "
                 "Badges). Valorisons collectivement nos savoirs-faire et tout ce qui "
                 "relève de l'expérience humaine !",

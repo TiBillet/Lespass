@@ -212,6 +212,22 @@
     padding-inline: max(var(--tb-gouttiere), calc((100vw - var(--tb-largeur-max)) / 2));
 }
 
+/* UNE PAGE QUI OUVRE SUR UN BLOC PLEINE LARGEUR COLLE A L'ENTETE.
+   Le `padding-block` d'ouverture de .tb-flux laisse sinon une bande de fond
+   entre le menu et l'image du hero : la bande et le menu se lisent comme un
+   seul aplat, et le menu parait bien plus epais qu'il n'est.
+   Ne s'applique qu'au PREMIER enfant : les pages qui ouvrent sur du texte, un
+   fil d'Ariane ou un menu lateral gardent leur respiration, et le padding du
+   bas n'est pas touche.
+   / A PAGE OPENING ON A FULL-BLEED BLOCK SITS FLUSH AGAINST THE HEADER.
+   Otherwise .tb-flux's opening padding leaves a band of background between the
+   menu and the hero image: band and menu read as one solid area, making the
+   menu look far thicker than it is. First child only, so pages opening on
+   text, a breadcrumb or a side menu keep their breathing room. */
+.tb-flux:has(> :first-child:is(.tb-pleine-largeur, .tb-bloc--hero)) {
+    padding-block-start: 0;
+}
+
 /* Chaque enfant direct de la page occupe le nombre de colonnes qu'il declare.
    `minmax(0, ...)` et non `1fr` : sans lui, une image ou un <pre> trop large
    force la colonne a s'elargir et fait deborder la page horizontalement.

@@ -239,13 +239,25 @@ def onboard_ready_mailer(wc_uuid):
     )
 
 
+# PAS d'`autoretry_for` ICI, VOLONTAIREMENT.
+#
+# `create_tenant()` est une operation lourde et non idempotente (elle
+# consomme un slot du pool, cree un schema Postgres et joue toutes les
+# migrations). La rejouer automatiquement apportait peu et coutait cher :
+# chaque tentative replanifiee reprend le claim d'idempotence, et le clic
+# « Reessayer » de l'utilisateur tombait alors dans une fenetre ou la task
+# re-enqueuee sortait aussitot sans rien faire (cf. `launch_retry`).
+#
+# La reprise est donc MANUELLE et explicite : l'erreur est ecrite dans
+# `wc.error_message`, l'ecran l'affiche, et l'utilisateur decide de
+# relancer. Un admin garde l'action manuelle de l'admin Django en filet.
+# / NO `autoretry_for` here, on purpose: `create_tenant()` is heavy and not
+# idempotent, and each auto-replanned attempt re-took the idempotency
+# claim, making the user's "Retry" click a silent no-op. Recovery is
+# manual and explicit instead.
 @shared_task(
     name="onboard.tasks.create_tenant_from_draft",
     bind=True,
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    retry_backoff_max=120,
-    max_retries=3,
 )
 def create_tenant_from_draft(self, wc_uuid):
     """
@@ -268,9 +280,11 @@ def create_tenant_from_draft(self, wc_uuid):
          (cf. bloc commente ci-dessous).
       6. Enqueue `onboard_ready_mailer.delay(wc_uuid=...)`.
 
-    En cas d'exception non geree : `autoretry_for` declenche jusqu'a 3 retries
-    avec backoff exponentiel. Au-dela, l'erreur est ecrite dans
-    `wc.error_message` et la task abandonne.
+    En cas d'exception non geree : l'erreur est ecrite dans
+    `wc.error_message`, le claim est libere, et la task abandonne (pas de
+    replanification automatique — cf. le commentaire au-dessus du
+    decorateur). L'ecran de lancement affiche l'erreur et l'utilisateur
+    relance lui-meme via le bouton « Reessayer ».
 
     / Behavior:
       1. Idempotent: returns early if `wc.tenant_id` is set.
@@ -288,9 +302,10 @@ def create_tenant_from_draft(self, wc_uuid):
          (see commented block below).
       6. Enqueues `onboard_ready_mailer.delay(wc_uuid=...)`.
 
-    Unhandled exceptions trigger `autoretry_for` up to 3 retries with
-    exponential backoff. After that, the error is written to
-    `wc.error_message` and the task gives up.
+    Unhandled exceptions: the error is written to `wc.error_message`, the
+    claim is released, and the task gives up (no automatic replanning —
+    see the comment above the decorator). The launch screen shows the
+    error and the user retries explicitly.
 
     LOCALISATION: onboard/tasks.py::create_tenant_from_draft
 
@@ -373,12 +388,17 @@ def create_tenant_from_draft(self, wc_uuid):
     try:
         new_tenant = wc.create_tenant()
     except Exception as exc:
-        # On capture le message, on libere le claim pour permettre un retry
-        # propre (sinon le claim TTL bloquerait pendant 5min), puis on raise
-        # pour declencher autoretry Celery.
-        # / Capture the message, release the claim so retries can proceed
-        # (otherwise the 5min TTL would block), then re-raise to trigger
-        # Celery autoretry.
+        # On capture le message, puis on LIBERE LE CLAIM : sans ca, le TTL
+        # de 5 min le laisserait pose, et le bouton « Reessayer » de
+        # l'utilisateur serait ignore en silence pendant tout ce temps
+        # (cf. `launch_retry`, qui rend `status_busy` dans ce cas).
+        # Le `raise` final sert a marquer la task FAILURE et a journaliser
+        # la stack ; il ne declenche plus de replanification (pas
+        # d'`autoretry_for`, cf. commentaire du decorateur).
+        # / Capture the message, then RELEASE THE CLAIM: otherwise its 5min
+        # TTL would silently swallow the user's "Retry" clicks. The final
+        # `raise` only marks the task FAILURE and logs the stack; it no
+        # longer triggers replanning.
         with schema_context("meta"):
             wc.refresh_from_db()
             wc.error_message = f"create_tenant() raised: {exc}"
@@ -410,14 +430,17 @@ def create_tenant_from_draft(self, wc_uuid):
     if wc.street_address:
         # Try/except IMPORTANT : si la creation PostalAddress raise (cas
         # pathologique, ex: contrainte DB exotique), on NE doit PAS re-lever
-        # l'exception. Sinon le `autoretry_for=(Exception,)` Celery relance
-        # la task, qui voit `wc.tenant_id is not None` au prochain passage
-        # (idempotence) et early-return → l'adresse ne serait JAMAIS creee.
+        # l'exception. A ce stade le tenant EXISTE deja : re-lever ferait
+        # echouer la task apres coup et sauterait tout ce qui suit (events,
+        # page d'accueil, mail « votre espace est pret »), pour une adresse
+        # manquante. Une relance ne rattraperait rien non plus : au passage
+        # suivant, `wc.tenant_id is not None` fait early-return.
         # L'admin peut toujours la saisir manuellement dans l'admin Unfold.
         # `logger.error` remonte sur Sentry (alerte ops).
-        # / Try/except CRITICAL: a PostalAddress failure must NOT re-raise,
-        # otherwise Celery autoretry sees `wc.tenant_id is not None` and
-        # early-returns idempotently → address would never be created.
+        # / Try/except CRITICAL: a PostalAddress failure must NOT re-raise.
+        # The tenant already EXISTS here; re-raising would skip everything
+        # that follows (events, home page, "space ready" email) over a
+        # missing address — and a rerun early-returns on `wc.tenant_id`.
         # Admin can fill it manually. `logger.error` surfaces to Sentry.
         try:
             with tenant_context(new_tenant):
@@ -459,11 +482,12 @@ def create_tenant_from_draft(self, wc_uuid):
     # bien le contenu saisi par l'utilisateur.
     #
     # Memes precautions que pour PostalAddress (cf. piege #23 : try/except
-    # sans re-raise pour ne pas casser l'idempotence Celery).
+    # sans re-raise, le tenant existe deja et la suite de la task doit
+    # aboutir).
     # / Transfer wizard long_description + logo to Configuration. The
     # BaseBillet chain `wc.create_tenant()` doesn't copy them (writes a
-    # default welcome text). Same try/except precaution as PostalAddress
-    # to preserve Celery autoretry idempotence.
+    # default welcome text). Same try/except precaution as PostalAddress:
+    # the tenant already exists and the rest of the task must complete.
     if wc.long_description or wc.logo:
         try:
             with tenant_context(new_tenant):
