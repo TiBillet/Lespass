@@ -6330,6 +6330,7 @@ class PaiementViewSet(viewsets.ViewSet):
             total_nfc = sum(debits_par_asset_pour_affichage.values())
 
             context_complement = {
+                "action": "initUrlAddition();",
                 "tag_id_carte1": tag_id_client,
                 "detail_cascade": detail_cascade_affichage,
                 "cascade_carte1_json": cascade_json,
