@@ -8,7 +8,7 @@
     by the ROOT whitelist. Free height (no 16:9 ratio). Unauthorized host -> honest
     message.
 {% endcomment %}
-{% iframe_libre bloc.embed_url bloc.hauteur_px as integre %}
+{% iframe_libre bloc.embed_url bloc.hauteur_px bloc.titre as integre %}
 {# Condition externe : on rend la section aussi quand l'URL est fournie mais l'hote #}
 {# refuse, pour afficher le message honnete (sinon section muette). #}
 {% if integre or bloc.titre or bloc.embed_url %}

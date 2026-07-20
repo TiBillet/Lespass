@@ -7,7 +7,7 @@
     embed_iframe tag, which validates the host (whitelist) and rebuilds the embed
     URL. An unknown host renders NOTHING (security). Responsive 16:9 wrapper.
 {% endcomment %}
-{% embed_iframe bloc.embed_url as integre %}
+{% embed_iframe bloc.embed_url bloc.titre as integre %}
 {# `bloc.embed_url` fait partie de la condition : sans lui, une URL fournie mais #}
 {# refusee ET un titre vide feraient disparaitre le bloc en silence, au lieu #}
 {# d'afficher le message d'indisponibilite prevu plus bas. #}

@@ -1,6 +1,11 @@
 {% load i18n %}
 
-<nav class="navbar navbar-expand-xl bg-body" data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
+{# aria-label : la page compte plusieurs <nav> (menu principal, menu de la #}
+{# rubrique, fil d'Ariane, pages voisines). Sans nom, un lecteur d'ecran les #}
+{# annonce toutes « navigation » et l'auditeur ne peut pas les distinguer. #}
+{# / aria-label: the page holds several <nav> landmarks. Without a name, a #}
+{# screen reader announces them all as "navigation". #}
+<nav class="navbar navbar-expand-xl bg-body" aria-label="{% translate 'Menu principal' %}" data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
     <div class="container-lg justify-content-between">
       <a class="navbar-brand flex-grow-1" href="/" hx-get="/" hx-target="body" hx-push-url="true">
         {% if config.logo %}
@@ -51,20 +56,21 @@
           {% endfor %}
 
           <li class="nav-item">
-            <a class="nav-link"
-                href=""
+            {# Un <button> : cet element ouvre un panneau, il ne mene nulle part. #}
+            {# / A <button>: this opens a panel, it navigates nowhere. #}
+            <button type="button" class="nav-link border-0 bg-transparent"
                 data-bs-toggle="offcanvas"
                 data-bs-target="#contactPanel"
                 aria-controls="contactPanel">
               <i class="bi bi-question-lg"></i>
               {% translate 'Contact and support' %}
-            </a>
+            </button>
           </li>
         </ul>
 
         <div class="navbar-nav d-flex mb-0">
           <div class="nav-item dropdown">
-            <button class="nav-link border-0 bg-transparent dropdown-toggle" id="languageDropdown" data-bs-toggle="dropdown" aria-expanded="false" title="{% trans 'Switch language' %}">
+            <button class="nav-link border-0 bg-transparent dropdown-toggle" id="languageDropdown" data-bs-toggle="dropdown" aria-expanded="false" title="{% trans 'Switch language' %}" aria-label="{% trans 'Switch language' %}">
               <i class="bi bi-translate"></i>
               <span class="d-xl-none">{% trans "Language" %}</span>
             </button>
@@ -74,7 +80,7 @@
             </ul>
           </div>
           <div class="nav-item">
-            <button id="themeToggle" class="nav-link border-0 bg-transparent" title="{% trans 'Toggle theme' %}">
+            <button id="themeToggle" class="nav-link border-0 bg-transparent" title="{% trans 'Toggle theme' %}" aria-label="{% trans 'Toggle theme' %}">
               <i class="bi bi-circle-half"></i>
               <span class="d-xl-none">{% trans "Theme" %}</span>
             </button>

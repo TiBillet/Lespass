@@ -17,6 +17,20 @@
     adresse, accessibilite, transport).
 {% endcomment %}
 <section class="tb-bloc tb-bloc--carte-leaflet" data-testid="bloc-lieu">
+
+    {# Le titre coiffe le bloc entier, avant la grille deux colonnes, et non #}
+    {# la seule colonne de la carte : un bloc lieu sans coordonnees GPS n'a pas #}
+    {# de carte, et ses <h3> de transport doivent quand meme avoir un titre #}
+    {# parent dans le plan de la page. #}
+    {# / The title heads the whole block, before the two-column grid, not just #}
+    {# the map column: a place block without GPS has no map, and its transport #}
+    {# <h3> headings still need a parent heading in the page outline. #}
+    {% if bloc.titre %}
+        <div class="tb-bloc__leaflet-titre">
+            <h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>
+        </div>
+    {% endif %}
+
     <div class="tb-bloc__leaflet-grille">
 
         {# --- Colonne gauche : les infos pratiques ------------------------ #}
@@ -66,7 +80,6 @@ marker, Leaflet leaves an empty 400 px bordered rectangle.
         {% if bloc.points_gps %}
         {% with uid=bloc.uuid|stringformat:"s" %}
         <div class="tb-bloc__carte" data-testid="bloc-lieu-carte">
-            {% if bloc.titre %}<h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>{% endif %}
             {# data-maptiler-key : lu par le script ci-dessous et passe au fond de carte #}
             {# commun. / Read by the script below and passed to the shared basemap. #}
             <div id="carte-leaflet-{{ uid }}" class="tb-bloc__leaflet-carte"

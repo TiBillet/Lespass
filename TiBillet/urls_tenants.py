@@ -34,33 +34,56 @@ urlpatterns = [
         'pages': PageSitemap,
     }, 'template_name': 'sitemaps/sitemap.xml'}, name='django.contrib.sitemaps.views.sitemap'),
 
-    re_path(r'api/user/', include('AuthBillet.urls')),
+    # ------------------------------------------------------------------
+    # POURQUOI TOUS CES MOTIFS COMMENCENT PAR « ^ »
+    # / WHY EVERY PATTERN BELOW STARTS WITH "^"
+    #
+    # Django applique le motif d'un `re_path` avec `re.search()`, et non
+    # `re.match()` : sans « ^ », le motif matche N'IMPORTE OU dans le chemin.
+    # `r'crowd/'` capturait donc « /notre-crowd/ », et `r'api/'` capturait
+    # « /documentation-api/ ». Une Page portant un tel slug devenait
+    # introuvable — 403, ou pire, le contenu d'une autre app servi a sa place —
+    # sans qu'aucune erreur ne previenne la personne qui l'avait creee.
+    # `path()` n'a pas ce probleme : il est ancre par construction.
+    # / Django matches a `re_path` with `re.search()`, not `re.match()`: without
+    # "^" the pattern matches ANYWHERE in the path. `r'crowd/'` therefore
+    # captured "/notre-crowd/". A Page using such a slug became unreachable,
+    # silently. `path()` is unaffected: it is anchored by construction.
+    #
+    # Ancrage verrouille par un test :
+    # tests/pytest/test_site_codecommun.py
+    # ::test_les_routes_core_sont_ancrees_et_ne_capturent_pas_un_slug_de_page
+    # / Anchoring is locked down by a test (see above).
+    # ------------------------------------------------------------------
+    re_path(r'^api/user/', include('AuthBillet.urls')),
     path('i18n/', include('django.conf.urls.i18n')),
 
     path('api/webhook_stripe/', Webhook_stripe.as_view()),
 
 
     # New semantic API v2
-    re_path(r'api/v2/', include('api_v2.urls')),
+    re_path(r'^api/v2/', include('api_v2.urls')),
 
-    re_path(r'api/', include('ApiBillet.urls')),
+    re_path(r'^api/', include('ApiBillet.urls')),
 
     # Le panneau Newsletter de l'admin. Routes NON publiques : le ViewSet est protege par
     # TenantAdminPermission. Appelees en HTMX depuis
     # Administration/templates/admin/ghost/panneau_newsletter.html
     # / The admin's Newsletter panel. NOT public: the ViewSet is guarded by
     # TenantAdminPermission. Called with HTMX from the admin panel.
-    re_path(r'newsletter/', include('newsletter.urls')),
+    re_path(r'^newsletter/', include('newsletter.urls')),
 
     # re_path(r'qr/', include('QrcodeCashless.urls')),
-    re_path(r'rss/', include('tibrss.urls')),
-    re_path(r'logout/', include('tibrss.urls')),
+    # Flux RSS des evenements : /rss/latest/feed/. La deconnexion, elle, vit
+    # dans BaseBillet/urls.py ('deconnexion/' et son alias 'logout/').
+    # / Events RSS feed. Logging out lives in BaseBillet/urls.py.
+    re_path(r'^rss/', include('tibrss.urls')),
 
     # fwh : fedow Webhook
-    re_path(r'fwh/', include('fedow_connect.urls')),
-    re_path(r'fedow/', include('fedow_public.urls')),
-    re_path(r'crowd/', include('crowds.urls')),
-    re_path(r'contrib/', include('crowds.urls')),
+    re_path(r'^fwh/', include('fedow_connect.urls')),
+    re_path(r'^fedow/', include('fedow_public.urls')),
+    re_path(r'^crowd/', include('crowds.urls')),
+    re_path(r'^contrib/', include('crowds.urls')),
 
     # Wizard d'onboarding nouveau tenant (SHARED : accessible aussi sur ROOT).
     # / Onboarding wizard for new tenants (SHARED: also reachable on ROOT).

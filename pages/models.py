@@ -51,6 +51,10 @@ SLUGS_RESERVES = frozenset({
     # Routes techniques / fichiers
     # / Technical routes / files
     "admin", "api", "static", "media", "robots.txt", "humans.txt",
+    # Autres prefixes d'URL montes par TiBillet/urls_tenants.py.
+    # / Other URL prefixes mounted by TiBillet/urls_tenants.py.
+    "rss", "logout", "fwh", "fedow", "crowd", "contrib", "newsletter",
+    "stripe", "laboutik", "kiosk", "controlvanne", "i18n", "sitemap.xml",
 })
 
 

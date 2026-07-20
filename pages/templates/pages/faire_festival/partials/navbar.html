@@ -5,7 +5,10 @@
      Inspiré de la maquette Faire Festival avec le style brutaliste jaune/bleu
      ======================================================================= -->
 <header class="container-fluid py-3 bordure-bas-epaisse fond-jaune">
-    <nav class="navbar navbar-expand-md p-0">
+    {# aria-label : la page compte plusieurs <nav>. Sans nom, un lecteur #}
+    {# d'ecran les annonce toutes « navigation ». #}
+    {# / aria-label: the page holds several <nav> landmarks. #}
+    <nav class="navbar navbar-expand-md p-0" aria-label="{% translate 'Menu principal' %}">
         <div class="container-fluid p-0 position-relative">
 
             <!-- ================================================================
@@ -100,14 +103,16 @@
 {% endfor %}
 
                     <!-- Bouton Contact (déclenche l'offcanvas de réunion) -->
-                    <a href="#"
+                    {# Un <button> : cet element ouvre un panneau, il ne mene #}
+                    {# nulle part. / A <button>: this opens a panel. #}
+                    <button type="button"
                        class="btn bouton-pilule bouton-contact bg-white texte-bleu text-center"
                        data-bs-toggle="offcanvas"
                        data-bs-target="#contactPanel"
                        aria-controls="contactPanel">
                         <i class="bi bi-question-lg me-1"></i>
                         {% translate 'Contact' %}
-                    </a>
+                    </button>
 
                 </div>
 

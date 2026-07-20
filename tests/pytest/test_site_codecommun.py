@@ -6,13 +6,12 @@ LOCALISATION : tests/pytest/test_site_codecommun.py
 
 Ces tests sont RAPIDES et sans base : ils valident la cohérence des slugs et la
 réécriture des liens, PAS le chargement complet (qui uploade ~90 images et se
-vérifie à la main, cf. le CHANGELOG). Le test central verrouille la classe de bug
-rencontrée pendant la migration : un slug se terminant par un token de route core
-NON ANCRÉE (re_path('fedow/'), re_path('api/')...) est capté par cette route et
-renvoie un 403 au lieu de la page. / These tests are FAST and DB-free: they check
-slug consistency and link rewriting, NOT the full load. The central test guards the
-bug found during migration: a slug ending with an UNANCHORED core-route token
-(re_path('fedow/'), ...) is swallowed by that route and returns 403.
+vérifie à la main, cf. le CHANGELOG). Le test central verrouille l'ancrage des
+routes core : un `re_path` privé de son « ^ » capture n'importe quel slug qui
+contient son token, et la Page devient introuvable.
+/ These tests are FAST and DB-free: they check slug consistency and link
+rewriting, NOT the full load. The central test locks down core-route anchoring:
+a `re_path` missing its "^" swallows any slug containing its token.
 """
 
 from pages.fixtures.site_codecommun.manifest import CATEGORIES
@@ -21,11 +20,13 @@ from pages.models import SLUGS_RESERVES
 
 CommandeSiteCodecommun = module_commande.Command
 
-# Tokens des routes core NON ANCRÉES de TiBillet/urls_tenants.py (re_path sans ^).
-# Un slug qui se TERMINE par l'un d'eux verrait /<slug>/ capté par la route (la
-# route matche « token/ » n'importe où via .search()) -> 403. / Tokens of the
-# UNANCHORED core routes: a slug ENDING with one of them would 403.
-TOKENS_ROUTES_NON_ANCREES = (
+# Tokens des routes core montées en `re_path` dans TiBillet/urls_tenants.py.
+# Ces routes sont ANCRÉES (`^token/`) : un slug qui se termine par l'un d'eux est
+# donc parfaitement valide, et c'est exactement ce que verrouille le test
+# ci-dessous. / Tokens of the core routes mounted with `re_path`. Those routes
+# are ANCHORED, so a slug ending with one of them is perfectly valid — which is
+# what the test below locks down.
+TOKENS_DE_ROUTES_CORE = (
     "fedow",
     "fwh",
     "api",
@@ -65,19 +66,34 @@ def test_tous_les_slugs_sont_uniques():
     assert not doublons, f"Slugs en double : {doublons}"
 
 
-def test_aucun_slug_ne_finit_par_un_token_de_route_non_ancree():
+def test_les_routes_core_sont_ancrees_et_ne_capturent_pas_un_slug_de_page():
     """
-    Régression : aucun slug ne doit se terminer par un token de route core non
-    ancrée (sinon 403). C'est ce qui bloquait « tibillet-fedow » et
-    « federation-part5-fedow » pendant la migration.
-    / Regression: no slug may end with an unanchored core-route token (else 403).
+    Régression : les `re_path` de TiBillet/urls_tenants.py doivent rester
+    ancrés par « ^ ».
+
+    Django applique le motif d'un `re_path` avec `re.search()` : sans « ^ », un
+    motif comme `r'crowd/'` matche N'IMPORTE OU dans le chemin. « /notre-crowd/ »
+    partait alors vers l'app crowds, et « /guide-newsletter/ » renvoyait un 403 —
+    la Page devenait introuvable, en silence, sans que rien n'ait prévenu la
+    personne qui l'avait créée.
+
+    On vérifie le COMPORTEMENT (où mène l'URL) et non le texte du fichier : c'est
+    ce qui compte, et ça reste vrai si les routes sont réorganisées.
+    / Regression: the `re_path` routes must stay anchored with "^". Django
+    matches them with `re.search()`, so an unanchored pattern captures the path
+    anywhere. We assert the BEHAVIOUR (where the URL leads), not the file text.
     """
-    slugs = _tous_les_slugs()
-    for slug in slugs:
-        for token in TOKENS_ROUTES_NON_ANCREES:
-            assert not slug.endswith(token), (
-                f"Le slug '{slug}' se termine par '{token}' : la route core "
-                f"re_path('{token}/') le capterait -> 403. Renommer le slug."
+    from django.test import override_settings
+    from django.urls import resolve
+
+    with override_settings(ROOT_URLCONF="TiBillet.urls_tenants"):
+        for token in TOKENS_DE_ROUTES_CORE:
+            correspondance = resolve(f"/notre-{token}/")
+            assert correspondance.func.__module__.startswith("pages."), (
+                f"L'URL '/notre-{token}/' est partie vers "
+                f"'{correspondance.func.__module__}' au lieu du moteur de pages : "
+                f"la route re_path('{token}/') a perdu son « ^ » et capture "
+                f"maintenant n'importe quel slug contenant '{token}/'."
             )
 
 

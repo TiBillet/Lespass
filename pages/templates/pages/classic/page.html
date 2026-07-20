@@ -14,13 +14,34 @@
     LOCALISATION : pages/templates/pages/classic/page.html
 {% endcomment %}
 
+{# Adresse officielle de la page, et non l'adresse demandee : un lien tracke #}
+{# (?utm_source=...) ou la page d'accueil atteinte par /accueil/ pointent #}
+{# ainsi vers la MEME URL canonique. Sans cela, chaque variante se declarait #}
+{# canonique et le moteur voyait plusieurs pages la ou il n'y en a qu'une. #}
+{# La source de l'adresse reste Page.get_absolute_url(). #}
+{# / The page's official address, not the requested one: tracked links and #}
+{# the home page reached through /accueil/ all point at the SAME canonical #}
+{# URL. The address still comes from Page.get_absolute_url(). #}
+{% block canonical %}https://{{ request.get_host }}{{ page_courante.get_absolute_url }}{% endblock %}
 {% block title %}{{ page_courante.meta_title|default:page_courante.titre }}{% endblock %}
 {% block meta_description %}{% if page_courante.meta_description %}{{ page_courante.meta_description }}{% elif config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}
 {# noindex si la page le demande (sinon comportement par defaut du base). #}
 {# / noindex if the page asks for it (otherwise base default behavior). #}
 {% block meta_robots %}{% if page_courante.noindex %}noindex, nofollow{% else %}{{ block.super }}{% endif %}{% endblock %}
-{% block og_title %}{{ page_courante.titre }} | {{ config.organisation }}{% endblock %}
+{# Les cartes de partage disent la MEME chose que le <title> : meta_title #}
+{# d'abord, repli sur le titre affiche. #}
+{# / Share cards say the SAME thing as <title>: meta_title first, then title. #}
+{% block og_title %}{{ page_courante.meta_title|default:page_courante.titre }} | {{ config.organisation }}{% endblock %}
 {% block og_description %}{{ page_courante.meta_description|default:config.organisation }}{% endblock %}
+{# Twitter a ses propres balises, distinctes des og:* : sans ces deux blocs #}
+{# elles retombent sur la valeur du site entier. #}
+{# / Twitter has its own tags, separate from og:*: without these two blocks #}
+{# they fall back to the site-wide value. #}
+{% block twitter_title %}{{ page_courante.meta_title|default:page_courante.titre }} | {{ config.organisation }}{% endblock %}
+{% block twitter_description %}{{ page_courante.meta_description|default:config.organisation }}{% endblock %}
+{# Texte alternatif de l'image partagee : le titre de la page, pas le nom du #}
+{# site. / Shared image alt text: the page title, not the site name. #}
+{% block og_image_alt %}{{ page_courante.titre }}{% endblock %}
 {# Image de partage de la page (og + twitter), repli sur l'image du site (base). #}
 {# / Page share image (og + twitter), falling back to the site image (base). #}
 {% block og_image %}{% if page_courante.image %}https://{{ request.get_host }}{{ page_courante.image.social_card.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
@@ -54,7 +75,13 @@
     {# / Live table of contents. Loaded HERE, not in extra_meta, for the same #}
     {# reason as the CSS above: an HTMX response has no <head>. #}
     <script src="{% static 'pages/js/sommaire_actif.js' %}" defer></script>
-    <main class="tb-page tb-flux" data-testid="page-{{ page_courante.slug }}">
+    {# Un <div> et non un <main> : shell.html ouvre deja le <main> de la page, #}
+    {# et HTML n'autorise qu'un seul <main> par document. La mise en page tient #}
+    {# aux classes .tb-page/.tb-flux, pas au nom de la balise. #}
+    {# / A <div>, not a <main>: shell.html already opens the page's <main>, and #}
+    {# HTML allows a single <main> per document. Layout comes from the #}
+    {# .tb-page/.tb-flux classes, not from the tag name. #}
+    <div class="tb-page tb-flux" data-testid="page-{{ page_courante.slug }}">
         {% comment %}
 Menu lateral de la rubrique, place EN TETE du conteneur : la grille range
 ses enfants dans l'ordre du DOM, donc un menu declare plus bas se
@@ -137,18 +164,18 @@ after the title and lifting it with CSS would make the two diverge.
            Python (« ce bloc absorbe les suivants ») : la mise en page
            dependrait du voisinage, et deplacer un bloc changerait l'apparence
            des autres sans que l'admin le montre.
-           La mise en page cote a cote est portee par la grille de <main> :
+           La mise en page cote a cote est portee par la grille .tb-flux :
            chaque bloc declare le nombre de colonnes qu'il occupe (voir
            .tb-flux dans tb-blocs.css).
            / Blocks are iterated in order, one by one: EACH BLOCK RENDERS ALONE.
            Never reintroduce Python-side grouping here — layout would depend on
-           neighbouring blocks. Side-by-side layout comes from the <main> grid,
-           where each block declares its column span (see .tb-flux). 
+           neighbouring blocks. Side-by-side layout comes from the .tb-flux
+           grid, where each block declares its column span.
 {% endcomment %}
         {% for bloc in blocs %}
             {% templates_bloc bloc as gabarits_bloc %}
             {% include gabarits_bloc %}
         {% endfor %}
         {% include "pages/classic/partials/navigation_voisines.html" %}
-    </main>
+    </div>
 {% endblock %}

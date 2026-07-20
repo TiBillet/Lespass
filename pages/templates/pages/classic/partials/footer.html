@@ -17,13 +17,15 @@
                         </li>
                     {% endfor %}
                     <li class="nav-item">
-                        <a class="nav-link"
-                           href="#"
+                        {# Un <button> : cet element ouvre un panneau, il ne mene #}
+                        {# nulle part. / A <button>: this opens a panel, it #}
+                        {# navigates nowhere. #}
+                        <button type="button" class="nav-link border-0 bg-transparent"
                            data-bs-toggle="offcanvas"
                            data-bs-target="#contactPanel"
                            aria-controls="contactPanel">
                             {% translate 'Contact and support' %}
-                        </a>
+                        </button>
                     </li>
                 </ul>
                 <hr>

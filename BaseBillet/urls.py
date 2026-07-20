@@ -98,6 +98,10 @@ urlpatterns = [
 
     path('connexion/', base_view.connexion, name='connexion'),
     path('deconnexion/', base_view.deconnexion, name='deconnexion'),
+    # Alias anglais de 'deconnexion/', pour un site servi en francais comme en
+    # anglais. Meme vue : il n'y a qu'une facon de se deconnecter.
+    # / English alias of 'deconnexion/'. Same view: one way to log out.
+    path('logout/', base_view.deconnexion, name='logout'),
     path('emailconfirmation/<str:token>', base_view.emailconfirmation, name='emailconfirmation'),
     # Routes legacy 'infos-pratiques' et 'le-faire-festival' RETIREES : ces pages
     # sont desormais des Page de l'app pages (slugs liberes). La route attrape-tout

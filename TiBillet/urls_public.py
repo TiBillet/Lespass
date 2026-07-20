@@ -10,7 +10,13 @@ urlpatterns = [
     path('api/webhook_stripe/', Webhook_stripe.as_view()),
     path('api/discovery/', include('discovery.urls')),
 
-    re_path(r'api/user/', include('AuthBillet.urls')),
+    # « ^ » obligatoire : Django applique un `re_path` avec `re.search()`, donc
+    # un motif non ancre matche n'importe ou dans le chemin. Meme raison que
+    # dans urls_tenants.py, ou le detail est explique.
+    # / "^" required: Django matches a `re_path` with `re.search()`, so an
+    # unanchored pattern matches anywhere in the path. Same reason as in
+    # urls_tenants.py, where the details are explained.
+    re_path(r'^api/user/', include('AuthBillet.urls')),
     path('i18n/', include('django.conf.urls.i18n')),
 
     # Wizard d'onboarding nouveau tenant (SHARED : accessible aussi sur tenants).

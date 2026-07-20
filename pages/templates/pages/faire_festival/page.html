@@ -11,13 +11,25 @@
     LOCALISATION : pages/templates/pages/faire_festival/page.html
 {% endcomment %}
 
+{# Adresse officielle de la page, et non l'adresse demandee : un lien tracke #}
+{# (?utm_source=...) ou la page d'accueil atteinte par /accueil/ pointent #}
+{# ainsi vers la MEME URL canonique. La source reste get_absolute_url(). #}
+{# / The page's official address, not the requested one, so tracked links and #}
+{# /accueil/ all point at the SAME canonical URL. #}
+{% block canonical %}https://{{ request.get_host }}{{ page_courante.get_absolute_url }}{% endblock %}
 {% block title %}{{ page_courante.meta_title|default:page_courante.titre }}{% endblock %}
 {% block meta_description %}{% if page_courante.meta_description %}{{ page_courante.meta_description }}{% elif config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}
 {% block meta_robots %}{% if page_courante.noindex %}noindex, nofollow{% else %}{{ block.super }}{% endif %}{% endblock %}
-{% block og_title %}{{ page_courante.titre }} | {{ config.organisation }}{% endblock %}
+{# Les cartes de partage disent la MEME chose que le <title> : elles partent #}
+{# donc de meta_title, avec repli sur le titre affiche. #}
+{# / Share cards say the SAME thing as <title>: meta_title first, then title. #}
+{% block og_title %}{{ page_courante.meta_title|default:page_courante.titre }} | {{ config.organisation }}{% endblock %}
 {% block og_description %}{{ page_courante.meta_description|default:config.organisation }}{% endblock %}
 {% block og_image %}{% if page_courante.image %}https://{{ request.get_host }}{{ page_courante.image.social_card.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
-{% block twitter_title %}{{ page_courante.titre }} | {{ config.organisation }}{% endblock %}
+{# Texte alternatif de l'image partagee : le titre de la page, pas le nom du #}
+{# site. / Shared image alt text: the page title, not the site name. #}
+{% block og_image_alt %}{{ page_courante.titre }}{% endblock %}
+{% block twitter_title %}{{ page_courante.meta_title|default:page_courante.titre }} | {{ config.organisation }}{% endblock %}
 {% block twitter_description %}{{ page_courante.meta_description|default:config.organisation }}{% endblock %}
 {% block twitter_image %}{% if page_courante.image %}https://{{ request.get_host }}{{ page_courante.image.social_card.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
 

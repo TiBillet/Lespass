@@ -18,6 +18,15 @@
 {% endcomment %}
 <section class="container-fluid py-5 conteneur-principal tb-pleine-largeur" data-testid="bloc-lieu">
     <div class="container">
+        {# Le titre du bloc coiffe les deux colonnes. Sans lui, les <h3> des #}
+        {# moyens de transport n'avaient aucun titre parent dans le plan de la #}
+        {# page : le <h1> etait suivi directement de <h3>. #}
+        {# / The block title heads both columns. Without it the transport <h3> #}
+        {# headings had no parent in the page outline: <h1> was followed #}
+        {# straight by <h3>. #}
+        {% if bloc.titre %}
+            <h2 class="police-titre texte-bleu text-uppercase mb-4">{{ bloc.titre }}</h2>
+        {% endif %}
         <div class="row g-5">
             {% comment %}
 Une colonne sans contenu n'est pas rendue : un bloc qui ne

@@ -6,6 +6,7 @@ LOCALISATION : pages/templatetags/pages_tags.py
 """
 
 import json
+import re
 
 from django import template
 from django.utils.html import strip_tags
@@ -120,23 +121,47 @@ def jsonld_page(context, page):
     page_web = {"@type": "WebPage", "name": nom, "url": url}
     if description:
         page_web["description"] = description
+    # Dates de publication et de derniere mise a jour : elles disent au moteur
+    # si le contenu est frais, et s'affichent parfois dans les resultats.
+    # / Publication and last-update dates: they tell the engine how fresh the
+    # content is, and sometimes show up in search results.
+    if page.created_at:
+        page_web["datePublished"] = page.created_at.isoformat()
+    if page.updated_at:
+        page_web["dateModified"] = page.updated_at.isoformat()
     graphe = [page_web]
 
     # FAQPage : seulement si la page a des blocs FAQ avec une question.
     # / FAQPage: only if the page has FAQ blocks with a question.
     faqs = [b for b in page.blocs.all() if b.type_bloc == "FAQ" and b.titre]
     if faqs:
-        graphe.append({
-            "@type": "FAQPage",
-            "mainEntity": [
-                {
-                    "@type": "Question",
-                    "name": bloc.titre,
-                    "acceptedAnswer": {"@type": "Answer", "text": strip_tags(bloc.texte)},
-                }
-                for bloc in faqs
-            ],
-        })
+        questions = []
+        for bloc in faqs:
+            # La reponse est du HTML riche (editeur WYSIWYG). Retirer les
+            # balises sans precaution colle la fin d'un paragraphe au debut du
+            # suivant : « ...possibilite de :Faire decouvrir... ». On pose donc
+            # une espace a la place de chaque fin de bloc AVANT de depouiller,
+            # puis on ramene les espaces multiples a une seule.
+            # / The answer is rich HTML. Stripping tags naively glues the end of
+            # a paragraph to the start of the next one, so we insert a space
+            # where each block-level tag closes, then collapse whitespace.
+            # `<br>` est auto-fermant : il s'ecrit `<br>` ou `<br/>`, jamais
+            # `</br>`. Il lui faut donc sa propre alternative dans le motif.
+            # / `<br>` is self-closing: it never appears as `</br>`, so it needs
+            # its own alternative in the pattern.
+            texte_espace = re.sub(
+                r"<br\s*/?>|</(p|li|div|h[1-6])\s*>",
+                " ",
+                bloc.texte or "",
+                flags=re.IGNORECASE,
+            )
+            texte_propre = " ".join(strip_tags(texte_espace).split())
+            questions.append({
+                "@type": "Question",
+                "name": bloc.titre,
+                "acceptedAnswer": {"@type": "Answer", "text": texte_propre},
+            })
+        graphe.append({"@type": "FAQPage", "mainEntity": questions})
 
     # BreadcrumbList : le fil d'Ariane structure, eligible au resultat enrichi
     # Google. La chaine vient du tag `fil_ariane` — la MEME que celle affichee
@@ -212,7 +237,7 @@ def _id_valide(identifiant):
 
 
 @register.simple_tag
-def embed_iframe(url):
+def embed_iframe(url, titre=""):
     """
     Rend un iframe responsive 16:9 pour une URL d'une LISTE BLANCHE d'hôtes
     (YouTube, Vimeo, et instances PeerTube autorisées). Tout autre hôte -> chaîne
@@ -278,9 +303,16 @@ def embed_iframe(url):
         # / Unknown host/id: render nothing (no arbitrary iframe).
         return ""
 
+    # Le titre de l'iframe est ce qu'annonce un lecteur d'ecran a la place du
+    # contenu integre. Le titre du bloc le decrit ; sans lui, tous les embeds
+    # d'une page s'annoncent « Contenu integre » et deviennent indiscernables.
+    # / The iframe title is what a screen reader announces instead of the
+    # embedded content. Without the block title, every embed on a page
+    # announces itself identically.
+    titre_iframe = escape(titre) if titre else "Contenu intégré"
     iframe = (
         f'<div class="tb-embed">'
-        f'<iframe src="{escape(src)}" title="Contenu intégré" loading="lazy" '
+        f'<iframe src="{escape(src)}" title="{titre_iframe}" loading="lazy" '
         f'allow="accelerometer; autoplay; clipboard-write; encrypted-media; '
         f'gyroscope; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin">'
         f"</iframe></div>"
@@ -322,7 +354,7 @@ def _domaines_embed_autorises():
 
 
 @register.simple_tag
-def iframe_libre(url, hauteur=600):
+def iframe_libre(url, hauteur=600, titre=""):
     """
     Rend un <iframe> pour une URL HTTPS dont l'hote est dans la whitelist GLOBALE
     ROOT (RootConfiguration.domaines_embed_autorises). Tout autre cas -> chaine
@@ -360,9 +392,12 @@ def iframe_libre(url, hauteur=600):
     except (ValueError, TypeError):
         hauteur_int = 600
 
+    # Meme raison que dans embed_iframe : le titre du bloc decrit le contenu.
+    # / Same reason as in embed_iframe: the block title describes the content.
+    titre_iframe = escape(titre) if titre else "Contenu intégré"
     iframe = (
         f'<div class="tb-iframe">'
-        f'<iframe src="{escape(url)}" title="Contenu integre" height="{hauteur_int}" '
+        f'<iframe src="{escape(url)}" title="{titre_iframe}" height="{hauteur_int}" '
         f'loading="lazy" referrerpolicy="no-referrer" '
         f'sandbox="allow-scripts allow-same-origin allow-forms allow-popups">'
         f"</iframe></div>"

@@ -128,8 +128,10 @@ REDIRECTIONS_MANUELLES = {
     # La fiche « hebergement » est inlinée dans la page /services/.
     # / The "hebergement" doc is inlined into the /services/ page.
     "hebergement": "/services/",
-    # Article de blog renommé : « fedow » en fin de slug déclenchait un 403 (la
-    # route core re_path('fedow/') n'est pas ancrée). / Blog article renamed:
-    # a trailing "fedow" slug hit a 403 (unanchored core route re_path('fedow/')).
+    # Article de blog renommé pendant la migration. Le slug d'origine finissait
+    # par « fedow », ce qu'une route core alors non ancrée capturait (403). Les
+    # routes sont ancrées depuis, mais la redirection reste : l'ancienne adresse
+    # a circulé. / Blog article renamed during the migration. The redirect stays:
+    # the old address has been shared.
     "federation-part5-fedow": "/federation-part5/",
 }
