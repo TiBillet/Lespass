@@ -21,7 +21,10 @@
 
     {# Open Graph / Facebook #}
     <meta property="og:type" content="website">
-    <meta property="og:url" content="{{ request.build_absolute_uri }}">
+    {# Meme URL que la canonique, sans query string : un partage avec #}
+    {# ?utm_source=... doit pointer la page, pas sa variante tracke. #}
+    {# / Same URL as the canonical, query string stripped. #}
+    <meta property="og:url" content="{{ canonical_url|default:request.build_absolute_uri }}">
     <meta property="og:title" content="{{ page_title|default:'TiBillet' }}">
     <meta property="og:description" content="{{ page_description|default:'Logiciel libre de billetterie et lieux culturels' }}">
     <meta property="og:site_name" content="TiBillet">
@@ -38,7 +41,7 @@
 
     {# Twitter #}
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:url" content="{{ request.build_absolute_uri }}">
+    <meta name="twitter:url" content="{{ canonical_url|default:request.build_absolute_uri }}">
     <meta name="twitter:title" content="{{ page_title|default:'TiBillet' }}">
     <meta name="twitter:description" content="{{ page_description|default:'Logiciel libre de billetterie et lieux culturels' }}">
     <meta name="twitter:image" content="{{ social_image }}">
@@ -261,7 +264,7 @@
         {# the left, logo right-aligned (container edge), vertically centered.    #}
         {# The logo lives in BaseBillet/static/reunion, served on public too.     #}
         <hr class="mt-5 mb-4">
-        <div class="row fs-6 text-secondary align-items-center g-3">
+        <div class="row fs-6 text-body-secondary align-items-center g-3">
             <div class="col-md-8">
                 <p class="mb-0">
                     {% blocktranslate %}Opération soutenue par l’État dans le cadre du dispositif « Solutions de billetteries innovantes » de France 2030, opéré par la Caisse des Dépôts.{% endblocktranslate %}
@@ -271,6 +274,35 @@
                 <img src="{% static 'commun/img/france_2030.png' %}" alt="{% translate 'Logo France 2030' %}" height="64">
             </div>
         </div>
+
+        {# Liens legaux, en href BRUT et non en {% url %} : le namespace `seo`  #}
+        {# n'est monte que dans urls_public. Ce gabarit est aussi etendu par    #}
+        {# onboard/base_wizard.html, dont les urls sont montees sur les tenants #}
+        {# — un {% url 'seo:...' %} y leverait NoReverseMatch. Meme raison que  #}
+        {# pour /features/ et /explorer/ plus haut.                            #}
+        {# / Raw hrefs, not {% url %}: the `seo` namespace only exists in       #}
+        {# urls_public, and this template is also extended by the onboard       #}
+        {# wizard, whose urls are mounted on tenants.                          #}
+        <hr class="mt-4 mb-3">
+        <nav aria-label="{% translate 'Informations légales' %}" data-testid="footer-legal">
+            <ul class="nav justify-content-center justify-content-md-start fs-6">
+                <li class="nav-item">
+                    <a class="nav-link px-2 text-body-secondary"
+                       href="/mentions-legales/"
+                       data-testid="footer-legal-mentions">{% translate "Mentions légales" %}</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link px-2 text-body-secondary"
+                       href="/cgu/"
+                       data-testid="footer-legal-cgu">{% translate "CGU" %}</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link px-2 text-body-secondary"
+                       href="/confidentialite/"
+                       data-testid="footer-legal-confidentialite">{% translate "Confidentialité" %}</a>
+                </li>
+            </ul>
+        </nav>
     </div>
 </footer>
 

@@ -289,11 +289,12 @@ def robots_txt(request):
     URL d'acces / Access URL: https://yourdomain.com/robots.txt
 
     Si l'instance est marquee noindex (au moins un flag d'env
-    DEBUG/TEST/DEMO/STRIPE_TEST a 1), on sert `Disallow: /` pour
+    DEBUG/TEST/DEMO a 1 ; STRIPE_TEST est exclu, cf.
+    TiBillet/seo_indexing.py), on sert `Disallow: /` pour
     bloquer le crawl. Sinon : `Allow: /` + sitemap.
     Voir TiBillet/seo_indexing.py pour la regle complete.
     / If the instance is marked noindex (at least one env flag
-    DEBUG/TEST/DEMO/STRIPE_TEST is 1), we serve `Disallow: /`.
+    DEBUG/TEST/DEMO is 1; STRIPE_TEST is excluded), we serve `Disallow: /`.
     Otherwise: `Allow: /` + sitemap reference.
     """
     if should_noindex():

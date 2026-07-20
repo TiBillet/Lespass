@@ -14,7 +14,7 @@ from django.templatetags.static import static
 from django.urls import path
 from django.views.generic import RedirectView
 
-from seo import views
+from seo import views, views_legal
 from seo.views_common import humans_txt, robots_txt
 
 app_name = "seo"
@@ -29,6 +29,14 @@ urlpatterns = [
     path("features/<slug:slug>/", views.feature_detail, name="feature_detail"),
     path("recherche/", views.recherche, name="recherche"),
     path("explorer/", views.explorer, name="explorer"),
+    # Pages legales du site ROOT. Le texte vit dans des gabarits versionnes
+    # (seo/templates/seo/legal/) et non en base : l'historique git permet de
+    # prouver quel texte etait affiche a une date donnee.
+    # / ROOT legal pages. Text lives in versioned templates, not in the DB:
+    # git history proves which wording was live on a given date.
+    path("mentions-legales/", views_legal.mentions_legales, name="mentions_legales"),
+    path("cgu/", views_legal.cgu, name="cgu"),
+    path("confidentialite/", views_legal.confidentialite, name="confidentialite"),
     path("robots.txt", robots_txt, name="robots_txt"),
     path("humans.txt", humans_txt, name="humans_txt"),
     path("sitemap.xml", views.sitemap_index_view, name="sitemap_index"),

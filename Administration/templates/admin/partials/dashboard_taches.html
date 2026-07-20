@@ -1,0 +1,65 @@
+{% load i18n %}
+{# ---------------------------------------------------------------------- #}
+{# ENCART « CE QU'IL RESTE A FAIRE »                                       #}
+{# / "What's left to do" notice                                           #}
+{#                                                                        #}
+{# LOCALISATION : Administration/templates/admin/partials/dashboard_taches.html #}
+{#                                                                        #}
+{# Affiche tout en haut du dashboard la liste des informations manquantes #}
+{# qui penalisent le referencement du site public. L'encart disparait     #}
+{# automatiquement quand tout est rempli.                                 #}
+{# Recoit `taches_referencement` :                                        #}
+{#   - taches : liste {testid, icone, titre, explication}                 #}
+{#   - lien_configuration : URL de la page Configuration du tenant        #}
+{# / Shown at the very top of the dashboard. Disappears once complete.    #}
+{# ---------------------------------------------------------------------- #}
+{% if taches_referencement.taches %}
+<div data-testid="dashboard-taches-referencement"
+     class="bg-white flex flex-col p-6 rounded-default shadow-xs border border-base-200 dark:bg-base-900 dark:border-base-800 mb-8">
+
+    {# En-tete : icone d'alerte + titre + phrase d'explication generale #}
+    {# / Header: warning icon + title + general explanation #}
+    <div class="flex items-start gap-3 mb-4">
+        <span class="material-symbols-outlined" aria-hidden="true"
+              style="font-size:1.5rem;color:var(--color-primary-600,#d97706);flex-shrink:0">checklist</span>
+        <div>
+            <h2 class="font-semibold text-lg text-important">
+                {% translate "Ce qu'il reste à faire" %}
+            </h2>
+            <p class="text-sm text-base-500 dark:text-base-400 mt-1">
+                {% blocktranslate trimmed %}
+                    Pour que votre site soit bien référencé sur les moteurs de recherche
+                    et correctement affiché lorsqu'il est partagé, il reste quelques
+                    informations à compléter dans votre page de configuration.
+                {% endblocktranslate %}
+            </p>
+        </div>
+    </div>
+
+    {# Liste des informations manquantes, une ligne par tache #}
+    {# / List of missing settings, one row per task #}
+    <ul class="flex flex-col gap-3 mb-4">
+        {% for tache in taches_referencement.taches %}
+            <li data-testid="dashboard-{{ tache.testid }}"
+                class="flex items-start gap-3 p-3 rounded-default border border-base-200 dark:border-base-800">
+                <span class="material-symbols-outlined" aria-hidden="true"
+                      style="font-size:1.25rem;color:var(--color-base-400,#9ca3af);flex-shrink:0">{{ tache.icone }}</span>
+                <div>
+                    <div class="font-medium text-sm text-important">{{ tache.titre }}</div>
+                    <div class="text-sm text-base-500 dark:text-base-400 mt-0.5">{{ tache.explication }}</div>
+                </div>
+            </li>
+        {% endfor %}
+    </ul>
+
+    {# Bouton unique vers la page de configuration, ou tout se remplit #}
+    {# / Single button to the configuration page, where everything is filled #}
+    <a href="{{ taches_referencement.lien_configuration }}"
+       data-testid="dashboard-taches-lien-configuration"
+       class="bg-primary-600 border border-transparent flex font-medium gap-2 items-center justify-center px-3 py-2 rounded-default text-white text-sm self-start hover:bg-primary-700">
+        <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.1rem">settings</span>
+        {% translate "Compléter ma configuration" %}
+    </a>
+
+</div>
+{% endif %}

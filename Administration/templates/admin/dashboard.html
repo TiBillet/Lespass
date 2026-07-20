@@ -1,5 +1,12 @@
 {% load i18n %}
 
+{# Encart « Ce qu'il reste a faire » : volontairement HORS du test sur       #}
+{# `modules`, sinon il disparaitrait sur un tenant neuf sans aucun module    #}
+{# active — c'est-a-dire exactement le cas ou il est le plus utile.          #}
+{# / Deliberately OUTSIDE the `modules` test: otherwise it would vanish on a #}
+{# brand-new tenant with no module enabled, exactly when it matters most.    #}
+{% include "admin/partials/dashboard_taches.html" %}
+
 {% if modules or external_cards %}
 <div id="dashboard-modules" class="flex flex-col gap-4 mb-8">
 

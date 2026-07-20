@@ -1,0 +1,106 @@
+{% extends "seo/base.html" %}
+{% load i18n %}
+
+{% comment %}
+GABARIT COMMUN DES PAGES LEGALES
+/ Shared layout for legal pages
+
+LOCALISATION : seo/templates/seo/legal/base_legal.html
+
+Sert de socle aux trois documents legaux du site ROOT :
+- seo/legal/mentions_legales.html
+- seo/legal/cgu.html
+- seo/legal/confidentialite.html
+
+Chaque document remplit deux blocs : "titre_document" (le H1) et
+"corps_document" (le texte, en sections successives).
+
+La colonne est volontairement etroite (max 45em). Un texte juridique se lit
+mal sur toute la largeur d'un ecran : au-dela de ~75 caracteres par ligne,
+l'oeil perd le debut de la ligne suivante.
+/ The column is deliberately narrow: legal text is unreadable full-width.
+
+NOTE : ce bloc utilise {% templatetag openblock %} comment {% templatetag closeblock %}
+et non la syntaxe de commentaire courte, qui ne fonctionne QUE sur une seule
+ligne. Un commentaire court etale sur plusieurs lignes n'est pas un
+commentaire : Django execute son contenu.
+/ Uses the comment tag: the short comment syntax is single-line only.
+{% endcomment %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-9 col-xl-8">
+
+        {# lang="fr" EN DUR, et non {{ LANGUAGE_CODE }} : le corps de ces        #}
+        {# documents reste en francais meme quand l'interface est en anglais     #}
+        {# (relecture juridique avant traduction, cf. seo/views_legal.py). Sans  #}
+        {# cet attribut, une synthese vocale lirait 900 mots de francais avec    #}
+        {# une phonetique anglaise — inintelligible.                            #}
+        {# / Hardcoded lang="fr": the body stays French even when the UI is in   #}
+        {# English, so screen readers must not read it with English phonetics.   #}
+        <article class="py-3" lang="fr" style="max-width: 45em;" data-testid="legal-document">
+
+            <h1 class="mb-2">{% block titre_document %}{% endblock %}</h1>
+
+            {# Date de derniere modification — repere pour savoir quelle version #}
+            {# du texte s'applique. Fournie par la vue (seo/views_legal.py).     #}
+            {# / Last-modified date, tells which version applies. #}
+            <p class="text-body-secondary mb-4" data-testid="legal-date">
+                <i class="bi bi-clock-history me-1" aria-hidden="true"></i>
+                {% blocktranslate %}Dernière mise à jour : {{ date_mise_a_jour }}{% endblocktranslate %}
+            </p>
+
+            <hr class="mb-4">
+
+            {# Le texte du document. Les styles Bootstrap suffisent : on garde des #}
+            {# balises semantiques simples (h2, p, ul, dl) sans classe superflue.  #}
+            {# / The document body. Plain semantic tags, Bootstrap defaults. #}
+            <div class="lh-lg">
+                {% block corps_document %}{% endblock %}
+            </div>
+
+            <hr class="my-5">
+
+            {# Navigation entre les trois documents legaux. Chaque page pointe    #}
+            {# vers les deux autres : quelqu'un qui arrive sur les CGU depuis un  #}
+            {# moteur de recherche doit trouver la politique de confidentialite.  #}
+            {# / Cross-navigation between the three legal documents. #}
+            {# Le document courant est retire de la liste : « Autres documents » #}
+            {# qui se listerait lui-meme donnerait un lien rechargeant la page.  #}
+            {# `url_name` vient du resolveur, pas du contexte : rien a passer    #}
+            {# depuis les vues. / The current document is filtered out; a link   #}
+            {# reloading the current page under "Other documents" is misleading. #}
+            <nav aria-label="{% translate 'Autres documents légaux' %}" data-testid="legal-nav">
+                <h2 class="h5 mb-3">{% translate "Autres documents" %}</h2>
+                <ul class="list-unstyled mb-0">
+                    {% with courant=request.resolver_match.url_name %}
+                    {% if courant != 'mentions_legales' %}
+                    <li class="mb-2">
+                        <a href="{% url 'seo:mentions_legales' %}" data-testid="legal-nav-mentions">
+                            {% translate "Mentions légales" %}
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if courant != 'cgu' %}
+                    <li class="mb-2">
+                        <a href="{% url 'seo:cgu' %}" data-testid="legal-nav-cgu">
+                            {% translate "Conditions générales d'utilisation" %}
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if courant != 'confidentialite' %}
+                    <li class="mb-2">
+                        <a href="{% url 'seo:confidentialite' %}" data-testid="legal-nav-confidentialite">
+                            {% translate "Politique de confidentialité" %}
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% endwith %}
+                </ul>
+            </nav>
+
+        </article>
+
+    </div>
+</div>
+{% endblock content %}

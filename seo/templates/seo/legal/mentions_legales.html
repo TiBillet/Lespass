@@ -1,0 +1,144 @@
+{% extends "seo/legal/base_legal.html" %}
+{% load i18n %}
+
+{% comment %}
+MENTIONS LEGALES — page /mentions-legales/
+/ Legal notice — /mentions-legales/ page
+
+LOCALISATION : seo/templates/seo/legal/mentions_legales.html
+
+Contenu impose par la LCEN (loi pour la confiance dans l'economie numerique),
+article 6-III : identite de l'editeur, du directeur de la publication, et de
+l'hebergeur. L'omission est un delit, pas une simple negligence.
+
+Le corps du texte n'est pas traduit par gettext : voir la note i18n en tete de
+seo/views_legal.py.
+/ Mandatory LCEN art. 6-III content. Not gettext-wrapped on purpose.
+{% endcomment %}
+
+{% block titre_document %}Mentions légales{% endblock %}
+
+{% block corps_document %}
+
+<section data-testid="legal-editeur">
+    <h2 class="h4 mt-4">Qui édite ce site ?</h2>
+
+    <p>
+        Ce site est édité par <strong>SCIC TiBillet COOP</strong>, une Société Coopérative
+        d'Intérêt Collectif. Une coopérative, c'est une entreprise qui appartient à celles et
+        ceux qui y travaillent et qui l'utilisent. Les décisions s'y prennent collectivement.
+    </p>
+
+    <dl class="row mb-0">
+        <dt class="col-sm-4">Raison sociale</dt>
+        <dd class="col-sm-8">SCIC TiBillet COOP</dd>
+
+        <dt class="col-sm-4">Forme juridique</dt>
+        <dd class="col-sm-8">Société Coopérative d'Intérêt Collectif (SCIC)</dd>
+
+        <dt class="col-sm-4">Siège social</dt>
+        <dd class="col-sm-8">
+            150 rue du 4 Août 1789<br>
+            69100 Villeurbanne<br>
+            France
+        </dd>
+
+        <dt class="col-sm-4">SIREN</dt>
+        <dd class="col-sm-8">913 628 665</dd>
+
+        <dt class="col-sm-4">SIRET</dt>
+        <dd class="col-sm-8">913 628 665 00022</dd>
+
+        <dt class="col-sm-4">Code APE / NAF</dt>
+        <dd class="col-sm-8">9002Z — Activités de soutien au spectacle vivant</dd>
+
+        <dt class="col-sm-4">TVA intracommunautaire</dt>
+        <dd class="col-sm-8">FR75913628665</dd>
+
+        <dt class="col-sm-4">Numéro EORI</dt>
+        <dd class="col-sm-8">FR91362866500014</dd>
+
+        <dt class="col-sm-4">Téléphone</dt>
+        <dd class="col-sm-8"><a href="tel:+33752081947">07 52 08 19 47</a></dd>
+
+        <dt class="col-sm-4">Courriel</dt>
+        <dd class="col-sm-8"><a href="mailto:contact@tibillet.re">contact@tibillet.re</a></dd>
+    </dl>
+</section>
+
+<section data-testid="legal-directeur-publication">
+    <h2 class="h4 mt-5">Directeur de la publication</h2>
+    <p>
+        Le directeur de la publication est <strong>Jonas TURBEAUX</strong>. C'est la personne
+        responsable de ce qui est publié sur ce site.
+    </p>
+    <p>
+        Pour le joindre : <a href="mailto:contact@tibillet.re">contact@tibillet.re</a>
+    </p>
+</section>
+
+<section data-testid="legal-hebergeur">
+    <h2 class="h4 mt-5">Qui héberge ce site ?</h2>
+
+    <p>
+        Les serveurs qui font fonctionner TiBillet sont situés <strong>en France</strong>. Vos
+        données ne quittent pas le territoire français, sauf pour les paiements par carte
+        bancaire (voir la <a href="{% url 'seo:confidentialite' %}">politique de
+        confidentialité</a>).
+    </p>
+
+    <dl class="row mb-0">
+        <dt class="col-sm-4">Hébergeur</dt>
+        <dd class="col-sm-8">OVH SAS</dd>
+
+        <dt class="col-sm-4">Adresse</dt>
+        <dd class="col-sm-8">
+            2 rue Kellermann<br>
+            59100 Roubaix<br>
+            France
+        </dd>
+
+        <dt class="col-sm-4">Téléphone</dt>
+        <dd class="col-sm-8"><a href="tel:+33972101007">1007</a> (depuis la France)</dd>
+
+        <dt class="col-sm-4">Localisation des serveurs</dt>
+        <dd class="col-sm-8">Roubaix, France</dd>
+    </dl>
+</section>
+
+<section data-testid="legal-propriete">
+    <h2 class="h4 mt-5">À qui appartient TiBillet ?</h2>
+
+    <p>
+        Le logiciel TiBillet est un <strong>logiciel libre</strong>, publié sous licence
+        <strong>AGPLv3</strong>. Vous pouvez le lire, l'utiliser, le modifier et le
+        redistribuer. La seule obligation : redistribuer vos modifications sous la même
+        licence.
+    </p>
+    <p>
+        Le code source est public :
+        <a href="https://github.com/TiBillet" rel="noopener">github.com/TiBillet</a>
+    </p>
+    <p>
+        La marque « TiBillet », le logo et les textes de ce site appartiennent à la
+        coopérative. Les contenus publiés par les lieux qui utilisent TiBillet (affiches,
+        descriptions d'événements, photos) appartiennent à ces lieux.
+    </p>
+</section>
+
+<section data-testid="legal-reclamation">
+    <h2 class="h4 mt-5">Un problème, une réclamation ?</h2>
+
+    <p>
+        Écrivez-nous d'abord à <a href="mailto:contact@tibillet.re">contact@tibillet.re</a>.
+        Nous répondons, et la plupart des situations se règlent en discutant.
+    </p>
+    <p>
+        Si votre réclamation concerne un <strong>événement précis</strong> (un billet, un
+        remboursement, une annulation), adressez-vous <strong>au lieu organisateur</strong> :
+        c'est lui qui vous a vendu le billet, pas TiBillet. Voir les
+        <a href="{% url 'seo:cgu' %}">conditions générales d'utilisation</a>.
+    </p>
+</section>
+
+{% endblock corps_document %}

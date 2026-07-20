@@ -29,7 +29,7 @@ from django.utils.html import format_html
 from django.utils.http import urlsafe_base64_encode
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.csrf import requires_csrf_token
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_http_methods
 from django_htmx.http import HttpResponseClientRedirect
 from django_tenants.utils import tenant_context
 from rest_framework import viewsets, permissions, status
@@ -1758,7 +1758,10 @@ class QrCodeScanPay(viewsets.ViewSet):
     '''
 
 
-@require_GET
+# HEAD autorise en plus de GET : moniteurs de disponibilite, valideurs de
+# liens et crawlers l'utilisent, et `require_GET` leur renvoyait un 405.
+# / HEAD allowed too: uptime monitors, link checkers and crawlers use it.
+@require_http_methods(["GET", "HEAD"])
 def index(request):
     # On redirige vers la page d'adhésion en attendant que les events soient disponibles
     tenant: Client = connection.tenant

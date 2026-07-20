@@ -1163,12 +1163,156 @@ def _build_pos_card_context(configuration):
     }
 
 
+def _build_taches_referencement_context(configuration):
+    """Liste des informations manquantes qui penalisent le referencement du site.
+    / List of missing settings that hurt the website's search-engine visibility.
+
+    Chaque entree decrit UNE information a completer dans la page Configuration.
+    La liste est vide quand tout est rempli : l'encart disparait alors du dashboard.
+    / Each entry describes ONE setting to fill in the Configuration page.
+    Empty list when everything is filled: the dashboard notice then disappears.
+
+    Volontairement hors de toute classe ModelAdmin : Unfold wrappe les methodes
+    de classe via son systeme d'actions (cf. skill unfold, piege 23).
+    / Deliberately outside any ModelAdmin class: Unfold wraps class methods
+    through its actions system.
+    """
+    # Lien unique vers la page de configuration du tenant. Le reverse tolerant
+    # renvoie "#" si l'admin n'est pas disponible, plutot que de tout casser.
+    # Attention : l'app_label est "BaseBillet" avec ses majuscules, le nom
+    # d'URL n'est donc PAS en minuscules comme le veut l'usage Django.
+    # / Single link to the tenant configuration page; tolerant reverse -> "#".
+    # Note: app_label is "BaseBillet" (mixed case), so the URL name is NOT
+    # lowercase as usual in Django.
+    lien_configuration = _safe_rev_inner(
+        "staff_admin:BaseBillet_configuration_change",
+        args=[configuration.pk],
+    )
+
+    taches = []
+
+    # Image de partage : elle alimente la balise og:image (apercu sur les
+    # reseaux sociaux et dans les messageries). Sans elle, aucune vignette.
+    # / Sharing image: feeds the og:image tag. Without it, no social preview.
+    if not configuration.img:
+        taches.append({
+            "testid": "tache-image",
+            "icone": "image",
+            "titre": _("Ajouter une image de partage"),
+            "explication": _(
+                "Sans image, aucun aperçu ne s'affiche quand votre site est "
+                "partagé sur les réseaux sociaux ou dans une messagerie."
+            ),
+        })
+
+    # Description courte : utilisee comme meta description dans les resultats
+    # de recherche. C'est le texte que voit un visiteur avant de cliquer.
+    # / Short description: used as the meta description in search results.
+    if not configuration.short_description:
+        taches.append({
+            "testid": "tache-description-courte",
+            "icone": "short_text",
+            "titre": _("Écrire une description courte"),
+            "explication": _(
+                "C'est le texte affiché sous votre titre dans les résultats "
+                "de recherche. Une à deux phrases suffisent."
+            ),
+        })
+
+    # Description longue : contenu indexable, utile aux moteurs de recherche
+    # comme aux moteurs generatifs (IA) qui citent des sources.
+    # / Long description: indexable content, useful to search and AI engines.
+    if not configuration.long_description:
+        taches.append({
+            "testid": "tache-description-longue",
+            "icone": "notes",
+            "titre": _("Écrire une description longue"),
+            "explication": _(
+                "Présentez votre activité en détail. Ce texte est lu par les "
+                "moteurs de recherche et par les assistants IA."
+            ),
+        })
+
+    # Mentions legales / CGV : obligation legale des qu'on vend en ligne.
+    # On accepte DEUX sources : le lien externe historique (legal_documents)
+    # ou une page interne dediee. Si l'une des deux existe, la tache disparait.
+    # / Legal notice / T&C: accepts either the legacy external link or an
+    # internal page. Task disappears as soon as one of them exists.
+    if not configuration.legal_documents and not _page_legale_existe():
+        taches.append({
+            "testid": "tache-mentions-legales",
+            "icone": "gavel",
+            "titre": _("Renseigner vos mentions légales"),
+            "explication": _(
+                "Obligatoire dès que vous vendez en ligne. Renseignez le lien "
+                "vers vos conditions générales dans la configuration."
+            ),
+        })
+
+    # Identite legale : necessaire pour generer des mentions legales completes
+    # et pour les tickets de caisse.
+    # / Legal identity: required for complete legal notices and POS receipts.
+    if not configuration.siren and not configuration.tva_number:
+        taches.append({
+            "testid": "tache-identite-legale",
+            "icone": "badge",
+            "titre": _("Renseigner votre numéro SIREN ou TVA"),
+            "explication": _(
+                "Ces informations identifient votre organisation dans vos "
+                "mentions légales et sur vos justificatifs de vente."
+            ),
+        })
+
+    # Telephone : signal de contact direct, pris en compte par les moteurs
+    # de recherche locaux et par les agents IA qui cherchent a vous joindre.
+    # / Phone: direct contact signal for local search and AI agents.
+    if not configuration.phone:
+        taches.append({
+            "testid": "tache-telephone",
+            "icone": "call",
+            "titre": _("Ajouter un numéro de téléphone"),
+            "explication": _(
+                "Un contact direct rassure les visiteurs et améliore votre "
+                "référencement local."
+            ),
+        })
+
+    return {
+        "lien_configuration": lien_configuration,
+        "taches": taches,
+    }
+
+
+def _page_legale_existe():
+    """Vrai si une page interne de mentions legales est publiee sur ce tenant.
+    / True if an internal legal-notice page is published on this tenant.
+
+    Import local : l'app `pages` n'est pas toujours chargee au moment ou le
+    module admin est importe. On tolere son absence sans casser le dashboard.
+    / Local import: the `pages` app may not be loaded when this admin module is
+    imported. Tolerate its absence without breaking the dashboard.
+    """
+    try:
+        from pages.models import Page
+    except ImportError:
+        return False
+
+    return Page.objects.filter(
+        slug__in=["mentions-legales", "cgv", "cgu", "confidentialite"],
+        publie=True,
+    ).exists()
+
+
 def dashboard_callback(request, context):
 
     configuration = Configuration.get_solo()
 
     context.update(
         {
+            # Encart « Ce qu'il reste a faire » : informations manquantes qui
+            # penalisent le referencement. Affiche tout en haut du dashboard.
+            # / "What's left to do" notice: missing settings hurting SEO.
+            "taches_referencement": _build_taches_referencement_context(configuration),
             # Grille principale « Modules » : liste ordonnee, la carte POS unifiee
             # y est inseree a son rang (type "pos").
             # / Main "Modules" grid: ordered list, POS card inserted at its rank.

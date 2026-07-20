@@ -1,0 +1,366 @@
+{% extends "seo/legal/base_legal.html" %}
+{% load i18n %}
+
+{% comment %}
+CONDITIONS GENERALES D'UTILISATION — page /cgu/
+/ Terms of use — /cgu/ page
+
+LOCALISATION : seo/templates/seo/legal/cgu.html
+
+PERIMETRE — A LIRE AVANT TOUTE MODIFICATION :
+Ce document regit la relation entre la cooperative et les personnes qui
+UTILISENT LA PLATEFORME. Il ne regit pas la vente d'un billet.
+
+Quand quelqu'un achete un billet pour un concert, le contrat de vente le lie
+au LIEU ORGANISATEUR, pas a TiBillet. La cooperative fournit l'outil ; elle ne
+vend pas la place. L'article 3 pose ce principe, et il est la clause la plus
+importante du document : sans lui, la cooperative repondrait de chaque
+annulation de chaque evenement de chaque lieu.
+
+Les conditions de VENTE (retractation, remboursement, litiges sur une place)
+sont un document distinct, porte par chaque tenant, et restent a ecrire.
+/ Scope: coop <-> platform user. Ticket sales bind buyer to venue (art. 3).
+
+Le corps du texte n'est pas traduit par gettext : voir la note i18n en tete de
+seo/views_legal.py.
+{% endcomment %}
+
+{% block titre_document %}Conditions générales d'utilisation{% endblock %}
+
+{% block corps_document %}
+
+{# Sommaire : 13 sections et ~1300 mots, soit une dizaine d'ecrans sur   #}
+{# mobile. Sans lui, l'article 9 (portefeuille et comptes inactifs), le  #}
+{# plus engageant financierement, est hors de portee du lecteur.         #}
+{# Les ancres reprennent les `data-testid` deja poses sur les sections.  #}
+{# / Table of contents: 13 sections, ~1300 words. Anchors reuse the      #}
+{# data-testid already present on each section.                          #}
+<nav aria-label="Sommaire" data-testid="cgu-sommaire" class="mb-4 p-3 border rounded">
+    <h2 class="h6 mb-2">Sommaire</h2>
+    <ol class="mb-0 ps-3">
+        <li class="mb-1"><a href="#cgu-objet">1. De quoi parle ce document ?</a></li>
+        <li class="mb-1"><a href="#cgu-editeur">2. Qui sommes-nous ?</a></li>
+        <li class="mb-1"><a href="#cgu-role-plateforme">3. TiBillet est un outil, pas un vendeur de billets</a></li>
+        <li class="mb-1"><a href="#cgu-acces">4. Accès à la plateforme</a></li>
+        <li class="mb-1"><a href="#cgu-logiciel-libre">5. Un logiciel libre</a></li>
+        <li class="mb-1"><a href="#cgu-engagements">6. Ce que nous attendons de vous</a></li>
+        <li class="mb-1"><a href="#cgu-responsabilite">7. Notre responsabilité</a></li>
+        <li class="mb-1"><a href="#cgu-donnees">8. Vos données personnelles</a></li>
+        <li class="mb-1"><a href="#cgu-monnaie-fondante">9. Portefeuille et comptes inactifs (« monnaie fondante »)</a></li>
+        <li class="mb-1"><a href="#cgu-duree">10. Durée et modification de ces conditions</a></li>
+        <li class="mb-1"><a href="#cgu-litiges">11. En cas de désaccord</a></li>
+        <li class="mb-1"><a href="#cgu-bienveillance">12. Respect et bienveillance</a></li>
+        <li class="mb-1"><a href="#cgu-contact">13. Nous contacter</a></li>
+    </ol>
+</nav>
+
+{# tabindex="-1" : une <section> n'est pas focusable nativement. Sans lui,
+   un lien du sommaire deplace le defilement mais PAS le focus clavier, qui
+   reste sur le sommaire — la tabulation suivante repart en haut de page.
+   / Without tabindex="-1" an anchor moves the scroll but not the keyboard
+   focus, which stays on the table of contents. #}
+<section id="cgu-objet" tabindex="-1" data-testid="cgu-objet">
+    <h2 class="h4 mt-4">1. De quoi parle ce document ?</h2>
+
+    <p>
+        Ce document explique les règles d'utilisation de la plateforme TiBillet. En
+        utilisant TiBillet, vous acceptez ces règles. Pas de panique : c'est juste pour que
+        tout se passe bien entre nous.
+    </p>
+    <p>
+        Nous avons écrit ce texte pour qu'il soit lisible. Si un passage vous semble
+        obscur, écrivez-nous : nous le reformulerons.
+    </p>
+</section>
+
+<section id="cgu-editeur" tabindex="-1" data-testid="cgu-editeur">
+    <h2 class="h4 mt-5">2. Qui sommes-nous ?</h2>
+
+    <p>
+        TiBillet est édité par la <strong>SCIC TiBillet COOP</strong>, une coopérative dont
+        le siège est à Villeurbanne. L'identité complète, le numéro SIRET et les
+        coordonnées de l'hébergeur sont sur la page
+        <a href="{% url 'seo:mentions_legales' %}">mentions légales</a>.
+    </p>
+    <p>
+        Pour nous joindre : <a href="mailto:contact@tibillet.re">contact@tibillet.re</a>
+    </p>
+</section>
+
+<section id="cgu-role-plateforme" tabindex="-1" data-testid="cgu-role-plateforme">
+    <h2 class="h4 mt-5">3. TiBillet est un outil, pas un vendeur de billets</h2>
+
+    <p class="fw-semibold">
+        C'est le point le plus important de ce document.
+    </p>
+    <p>
+        TiBillet est une <strong>plateforme</strong>. Des lieux culturels, des associations
+        et des collectifs l'utilisent pour vendre leurs billets, gérer leurs adhésions et
+        publier leur programmation. Chacun de ces lieux dispose de son propre espace.
+    </p>
+    <p>
+        Quand vous achetez un billet, <strong>vous l'achetez au lieu organisateur</strong>,
+        pas à la coopérative TiBillet. Le contrat de vente vous lie à lui. Concrètement :
+    </p>
+    <ul>
+        <li>
+            C'est l'organisateur qui fixe les prix, les conditions d'accès et sa politique
+            de remboursement.
+        </li>
+        <li>
+            C'est l'organisateur qui répond en cas d'annulation, de report ou de litige sur
+            un événement.
+        </li>
+        <li>
+            C'est l'organisateur qui encaisse l'argent de la vente.
+        </li>
+        <li>
+            TiBillet fournit l'outil technique, et rien de plus.
+        </li>
+    </ul>
+    <p>
+        Chaque organisateur publie ses propres conditions de vente sur son espace. Lisez-les
+        avant d'acheter : ce sont elles qui s'appliquent à votre billet.
+    </p>
+    <p>
+        Si vous rencontrez un problème avec un événement, contactez d'abord l'organisateur.
+        Si vous n'obtenez pas de réponse, écrivez-nous : nous ne pouvons pas décider à sa
+        place, mais nous pouvons faire le lien.
+    </p>
+</section>
+
+<section id="cgu-acces" tabindex="-1" data-testid="cgu-acces">
+    <h2 class="h4 mt-5">4. Accès à la plateforme</h2>
+
+    <p>
+        La consultation de TiBillet est <strong>gratuite</strong> : parcourir les
+        événements, découvrir les lieux, chercher une date ne coûte rien et ne demande pas
+        de compte.
+    </p>
+    <p>
+        Certaines actions demandent de vous identifier : réserver une place, prendre une
+        adhésion, gérer un portefeuille. Dans ce cas, un compte est créé à partir de votre
+        adresse e-mail. Vous n'avez pas de mot de passe à retenir : nous vous envoyons un
+        lien de connexion par e-mail.
+    </p>
+    <p>
+        Les billets, adhésions et services proposés par les organisateurs peuvent être
+        payants. Les prix sont toujours affichés avant le paiement.
+    </p>
+    <p>
+        Vous avez besoin d'une connexion Internet. Il peut arriver que nous coupions
+        l'accès quelques minutes pour réparer ou améliorer quelque chose. Nous faisons ça
+        vite, et de préférence la nuit.
+    </p>
+</section>
+
+<section id="cgu-logiciel-libre" tabindex="-1" data-testid="cgu-logiciel-libre">
+    <h2 class="h4 mt-5">5. Un logiciel libre</h2>
+
+    <p>
+        TiBillet est un <strong>logiciel libre</strong> sous licence
+        <strong>AGPLv3</strong>. Vous pouvez lire le code, l'utiliser, le modifier et
+        l'installer chez vous.
+    </p>
+    <p>
+        Le code est ici :
+        <a href="https://github.com/TiBillet" rel="noopener">github.com/TiBillet</a>
+    </p>
+    <p>
+        Une seule obligation : si vous modifiez TiBillet et que vous le proposez à
+        d'autres, vous devez redistribuer vos modifications sous la même licence. C'est le
+        principe du logiciel libre : ce qui est partagé le reste.
+    </p>
+    <p>
+        Si vous nous prévenez, nous pouvons même vous aider.
+    </p>
+</section>
+
+<section id="cgu-engagements" tabindex="-1" data-testid="cgu-engagements">
+    <h2 class="h4 mt-5">6. Ce que nous attendons de vous</h2>
+
+    <p>En utilisant TiBillet, vous vous engagez à :</p>
+    <ul>
+        <li>
+            <strong>Ne pas nuire au service</strong> : pas de tentative d'intrusion, pas de
+            fraude, pas de surcharge volontaire des serveurs, pas d'extraction massive et
+            automatisée des données.
+        </li>
+        <li>
+            <strong>Donner des informations exactes</strong> : une adresse e-mail valide,
+            un nom qui est le vôtre. Un billet nominatif établi sous une fausse identité
+            peut être refusé à l'entrée.
+        </li>
+        <li>
+            <strong>Respecter les autres</strong> : les autres personnes qui utilisent
+            TiBillet, les organisateurs, et notre équipe.
+        </li>
+        <li>
+            <strong>Respecter la loi.</strong> Oui, même quand ce n'est pas amusant.
+        </li>
+    </ul>
+    <p>
+        Si un compte sert à nuire au service ou aux personnes, nous pouvons le suspendre.
+        Nous prévenons par e-mail et nous expliquons pourquoi, sauf urgence. Vous pouvez
+        toujours contester en nous écrivant.
+    </p>
+</section>
+
+<section id="cgu-responsabilite" tabindex="-1" data-testid="cgu-responsabilite">
+    <h2 class="h4 mt-5">7. Notre responsabilité</h2>
+
+    <p>
+        Nous faisons de notre mieux pour que TiBillet fonctionne et que les informations
+        affichées soient justes. Nous ne promettons pas la perfection.
+    </p>
+    <p>Nous ne sommes pas responsables :</p>
+    <ul>
+        <li>
+            des informations publiées par les organisateurs (horaires, tarifs, description
+            d'un événement) : elles viennent d'eux ;
+        </li>
+        <li>
+            de l'annulation, du report ou du déroulement d'un événement ;
+        </li>
+        <li>
+            d'une interruption due à votre connexion, à votre matériel, ou à une panne chez
+            un prestataire technique.
+        </li>
+    </ul>
+    <p>
+        En revanche, nous restons pleinement responsables de ce qui relève de nous : le
+        bon fonctionnement de l'outil et la protection de vos données. Aucune clause de ce
+        document ne limite les droits que la loi vous garantit en tant que consommateur.
+    </p>
+</section>
+
+<section id="cgu-donnees" tabindex="-1" data-testid="cgu-donnees">
+    <h2 class="h4 mt-5">8. Vos données personnelles</h2>
+
+    <p>
+        Nous ne vendons aucune donnée. Nous n'installons aucun traceur publicitaire. Les
+        serveurs sont en France.
+    </p>
+    <p>
+        Le détail — quelles données, pourquoi, combien de temps, qui y a accès, et comment
+        exercer vos droits — est dans la
+        <a href="{% url 'seo:confidentialite' %}">politique de confidentialité</a>.
+    </p>
+</section>
+
+<section id="cgu-monnaie-fondante" tabindex="-1" data-testid="cgu-monnaie-fondante">
+    <h2 class="h4 mt-5">9. Portefeuille et comptes inactifs (« monnaie fondante »)</h2>
+
+    <p>
+        TiBillet permet de charger de l'argent sur un portefeuille, parfois associé à une
+        carte sans contact, pour payer sur place dans les lieux du réseau.
+    </p>
+    <p>
+        Cet argent vous appartient. Vous pouvez le dépenser à tout moment dans les lieux
+        qui acceptent ce portefeuille.
+    </p>
+    <p class="fw-semibold">
+        Si un portefeuille reste inutilisé pendant plus d'un an, un prélèvement mensuel
+        s'applique.
+    </p>
+    <p>Voici précisément comment ça se passe :</p>
+    <ol>
+        <li>
+            Votre portefeuille contient encore de l'argent et n'a enregistré
+            <strong>aucune opération depuis douze mois</strong>.
+        </li>
+        <li>
+            Nous vous <strong>écrivons par e-mail</strong>, à l'adresse associée à votre
+            compte. Nous vous signalons le solde restant et nous vous proposons des
+            événements pour l'utiliser.
+        </li>
+        <li>
+            Si aucune opération n'intervient dans le mois qui suit cet e-mail, nous
+            prélevons <strong>1 € par mois</strong> sur le solde, jusqu'à épuisement.
+        </li>
+        <li>
+            Le prélèvement <strong>s'arrête dès que vous réutilisez le portefeuille</strong>.
+            Le solde restant redevient dépensable normalement.
+        </li>
+    </ol>
+    <p>
+        Les sommes ainsi récupérées sont réinvesties dans le réseau coopératif : un tiers
+        pour les lieux partenaires, un tiers pour financer de nouveaux projets, un tiers
+        pour les salaires de l'équipe.
+    </p>
+    <p>
+        Vous pouvez demander à tout moment le remboursement du solde de votre portefeuille
+        en nous écrivant. Nous vous demanderons de justifier votre identité, pour éviter
+        qu'un tiers ne récupère votre argent.
+    </p>
+</section>
+
+<section id="cgu-duree" tabindex="-1" data-testid="cgu-duree">
+    <h2 class="h4 mt-5">10. Durée et modification de ces conditions</h2>
+
+    <p>
+        Ces conditions s'appliquent tant que vous utilisez TiBillet. Si vous cessez de
+        l'utiliser, elles cessent de vous concerner.
+    </p>
+    <p>
+        Nous pouvons les modifier, par exemple si le service évolue ou si la loi change.
+        La date de dernière mise à jour est affichée en haut de cette page. Pour un
+        changement important, nous prévenons les personnes titulaires d'un compte par
+        e-mail.
+    </p>
+    <p>
+        Les conditions applicables à un achat sont celles qui étaient en ligne au moment de
+        cet achat.
+    </p>
+</section>
+
+<section id="cgu-litiges" tabindex="-1" data-testid="cgu-litiges">
+    <h2 class="h4 mt-5">11. En cas de désaccord</h2>
+
+    <p>
+        Écrivez-nous d'abord à <a href="mailto:contact@tibillet.re">contact@tibillet.re</a>.
+        Nous préférons de loin discuter.
+    </p>
+    <p>
+        Rappel : si le désaccord porte sur un billet ou un événement, il concerne
+        l'organisateur, pas la coopérative (voir l'article 3).
+    </p>
+    <p>
+        Ces conditions sont soumises au <strong>droit français</strong>. Si vous êtes
+        consommateur, vous conservez le droit de saisir le tribunal de votre lieu de
+        résidence : aucune clause de ce document ne vous en prive.
+    </p>
+</section>
+
+<section id="cgu-bienveillance" tabindex="-1" data-testid="cgu-bienveillance">
+    <h2 class="h4 mt-5">12. Respect et bienveillance</h2>
+
+    <p>
+        Notre coopérative est engagée dans la lutte contre les violences et le harcèlement
+        sexistes et sexuels. Des personnes référentes de l'équipe ont suivi une formation
+        VHSS, afin de garantir un espace sûr.
+    </p>
+    <p>
+        En utilisant TiBillet, vous vous engagez à respecter ces principes et à adopter un
+        comportement bienveillant.
+    </p>
+    <p>
+        Si vous êtes témoin ou victime d'un problème, parlez-nous-en. Nous sommes là pour
+        écouter et pour agir.
+    </p>
+</section>
+
+<section id="cgu-contact" tabindex="-1" data-testid="cgu-contact">
+    <h2 class="h4 mt-5">13. Nous contacter</h2>
+
+    <p>
+        Une question, une idée, un problème ? Écrivez à
+        <a href="mailto:contact@tibillet.re">contact@tibillet.re</a> ou venez discuter sur
+        <a href="https://discord.gg/7FJvtYx" rel="noopener">notre Discord</a>.
+    </p>
+    <p>
+        Merci d'utiliser TiBillet et de faire partie de cette aventure coopérative. 🎉
+    </p>
+</section>
+
+{% endblock corps_document %}

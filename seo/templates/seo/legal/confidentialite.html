@@ -1,0 +1,283 @@
+{% extends "seo/legal/base_legal.html" %}
+{% load i18n %}
+
+{% comment %}
+POLITIQUE DE CONFIDENTIALITE — page /confidentialite/
+/ Privacy policy — /confidentialite/ page
+
+LOCALISATION : seo/templates/seo/legal/confidentialite.html
+
+Information obligatoire des personnes concernees (RGPD, articles 13 et 14).
+
+POURQUOI IL N'Y A PAS DE BANDEAU COOKIES :
+La plateforme ne depose que des cookies STRICTEMENT NECESSAIRES (session,
+protection CSRF, langue). Ni traceur publicitaire, ni mesure d'audience
+tierce, ni ressource chargee depuis un domaine externe. La CNIL n'exige pas
+de consentement pour cette categorie. Le bandeau serait donc du bruit.
+
+ATTENTION : cette page dit « aucun traceur, aucun tiers ». C'est vrai
+aujourd'hui. Si un jour quelqu'un ajoute une mesure d'audience, une police
+Google, une carte tierce ou un pixel, CE TEXTE DEVIENT FAUX et le bandeau
+devient obligatoire. Mettre a jour ce fichier dans le meme commit.
+/ No cookie banner: strictly-necessary cookies only. If a third-party tracker
+is ever added, this text becomes false and a banner becomes mandatory.
+
+Le corps du texte n'est pas traduit par gettext : voir la note i18n en tete de
+seo/views_legal.py.
+{% endcomment %}
+
+{% block titre_document %}Politique de confidentialité{% endblock %}
+
+{% block corps_document %}
+
+<section data-testid="privacy-principes">
+    <h2 class="h4 mt-4">En résumé</h2>
+
+    <ul>
+        <li><strong>Nous ne vendons aucune donnée.</strong> Jamais, à personne.</li>
+        <li><strong>Aucun traceur publicitaire</strong>, aucune mesure d'audience tierce.</li>
+        <li><strong>Aucune ressource chargée depuis un site tiers</strong> qui vous suivrait.</li>
+        <li><strong>Serveurs en France</strong>, chez OVH à Roubaix.</li>
+        <li>Nous collectons le <strong>minimum</strong> nécessaire pour que le service marche.</li>
+    </ul>
+    <p>
+        Le reste de cette page détaille tout ça, parce que la loi nous demande d'être
+        précis.
+    </p>
+</section>
+
+<section data-testid="privacy-responsable">
+    <h2 class="h4 mt-5">Qui est responsable de vos données ?</h2>
+
+    <p>
+        La <strong>SCIC TiBillet COOP</strong> est responsable des données liées à votre
+        compte et au fonctionnement de la plateforme. Coordonnées complètes sur la page
+        <a href="{% url 'seo:mentions_legales' %}">mentions légales</a>.
+    </p>
+    <p>
+        <strong>Chaque lieu organisateur est responsable des données de ses propres
+        ventes.</strong> Quand vous réservez une place, l'organisateur voit votre nom et
+        votre e-mail : il en a besoin pour vous accueillir et pour gérer sa billetterie.
+        Il décide de ce qu'il en fait dans le cadre de la loi.
+    </p>
+    <p>
+        Techniquement, les données de chaque lieu sont stockées dans un espace séparé. Un
+        organisateur ne voit pas les clients d'un autre.
+    </p>
+</section>
+
+<section data-testid="privacy-donnees">
+    <h2 class="h4 mt-5">Quelles données, et pourquoi ?</h2>
+
+    <p>
+        Nous ne collectons une donnée que si elle sert à quelque chose de précis. Voici le
+        détail.
+    </p>
+
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <caption class="visually-hidden">
+                Données collectées par TiBillet, avec leur finalité, leur base légale et
+                leur durée de conservation
+            </caption>
+            <thead>
+                <tr>
+                    <th scope="col">Données</th>
+                    <th scope="col">Pourquoi</th>
+                    <th scope="col">Base légale</th>
+                    <th scope="col">Durée</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <th scope="row" class="fw-normal">Adresse e-mail</th>
+                    <td>Vous connecter, vous envoyer vos billets et vos confirmations</td>
+                    <td>Exécution du contrat</td>
+                    <td>Tant que le compte existe, puis 1 an</td>
+                </tr>
+                <tr>
+                    <th scope="row" class="fw-normal">Nom et prénom</th>
+                    <td>Établir les billets nominatifs et les adhésions</td>
+                    <td>Exécution du contrat</td>
+                    <td>Tant que le compte existe, puis 1 an</td>
+                </tr>
+                <tr>
+                    <th scope="row" class="fw-normal">Réservations et adhésions</th>
+                    <td>Vous donner accès à l'événement, prouver votre adhésion</td>
+                    <td>Exécution du contrat</td>
+                    <td>3 ans après le dernier contact</td>
+                </tr>
+                <tr>
+                    <th scope="row" class="fw-normal">Historique du portefeuille</th>
+                    <td>Tenir le solde à jour, retracer une opération contestée</td>
+                    <td>Exécution du contrat</td>
+                    <td>5 ans (obligation comptable)</td>
+                </tr>
+                <tr>
+                    <th scope="row" class="fw-normal">Factures et pièces comptables</th>
+                    <td>Répondre à nos obligations fiscales</td>
+                    <td>Obligation légale</td>
+                    <td>10 ans</td>
+                </tr>
+                <tr>
+                    <th scope="row" class="fw-normal">Inscription à une infolettre</th>
+                    <td>Vous envoyer les actualités que vous avez demandées</td>
+                    <td>Votre consentement</td>
+                    <td>Jusqu'à votre désinscription</td>
+                </tr>
+                <tr>
+                    <th scope="row" class="fw-normal">Journaux techniques</th>
+                    <td>Détecter les pannes et les tentatives d'intrusion</td>
+                    <td>Intérêt légitime (sécurité)</td>
+                    <td>12 mois maximum</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <p>
+        <strong>Nous ne voyons jamais votre numéro de carte bancaire.</strong> Il est saisi
+        directement chez notre prestataire de paiement, qui est agréé pour ça. Nous
+        recevons seulement une confirmation « payé » ou « refusé ».
+    </p>
+</section>
+
+<section data-testid="privacy-cookies">
+    <h2 class="h4 mt-5">Cookies : pourquoi il n'y a pas de bandeau</h2>
+
+    <p>
+        TiBillet ne dépose que des cookies <strong>strictement nécessaires</strong> au
+        fonctionnement du site :
+    </p>
+    <ul>
+        <li>
+            un cookie de <strong>session</strong>, pour vous garder connecté d'une page à
+            l'autre ;
+        </li>
+        <li>
+            un cookie <strong>anti-fraude (CSRF)</strong>, qui empêche un autre site
+            d'agir en votre nom ;
+        </li>
+        <li>
+            éventuellement un cookie de <strong>langue</strong>, pour se souvenir que vous
+            préférez le français ou l'anglais.
+        </li>
+    </ul>
+    <p>
+        Ces cookies ne servent qu'à faire marcher le site. Ils ne vous pistent pas, ils ne
+        sont partagés avec personne, et ils ne construisent aucun profil publicitaire.
+    </p>
+    <p>
+        La réglementation n'impose pas de recueillir votre consentement pour cette
+        catégorie de cookies. C'est pourquoi vous ne voyez pas de bandeau : nous n'en avons
+        pas besoin, et nous trouvons que ces bandeaux polluent la navigation pour rien.
+    </p>
+    <p>
+        <strong>Il n'y a aucun cookie publicitaire, aucun Google Analytics, aucun pixel de
+        réseau social.</strong>
+    </p>
+</section>
+
+<section data-testid="privacy-destinataires">
+    <h2 class="h4 mt-5">Qui a accès à vos données ?</h2>
+
+    <p>Le cercle est volontairement étroit.</p>
+
+    <dl>
+        <dt>L'équipe de la coopérative</dt>
+        <dd class="mb-3">
+            Uniquement les personnes qui en ont besoin, pour le support et la maintenance.
+        </dd>
+
+        <dt>Le lieu organisateur</dt>
+        <dd class="mb-3">
+            Pour la réservation que vous avez faite chez lui, et seulement celle-là.
+        </dd>
+
+        <dt>OVH SAS — hébergement</dt>
+        <dd class="mb-3">
+            Les serveurs sont à Roubaix, en France. OVH héberge les données ; il n'y accède
+            pas.
+        </dd>
+
+        <dt>Stripe — paiement par carte bancaire</dt>
+        <dd class="mb-3">
+            Nos paiements passent par Stripe Payments Europe (Irlande). Stripe traite les
+            données de carte bancaire et reçoit votre e-mail pour établir le reçu. Sa
+            société mère est américaine : c'est la seule étape du parcours qui sorte du
+            cadre strictement français. Cet encadrement repose sur les clauses
+            contractuelles types de la Commission européenne.
+        </dd>
+    </dl>
+
+    <p class="fw-semibold">
+        Nous ne vendons, ne louons et n'échangeons vos données avec personne d'autre. Il
+        n'y a pas de régie publicitaire, pas de courtier en données, pas de revente de
+        fichier.
+    </p>
+</section>
+
+<section data-testid="privacy-droits">
+    <h2 class="h4 mt-5">Vos droits</h2>
+
+    <p>Le RGPD vous donne des droits sur vos données. Vous pouvez :</p>
+    <ul>
+        <li><strong>Y accéder</strong> : demander une copie de ce que nous avons sur vous.</li>
+        <li><strong>Les corriger</strong> si quelque chose est faux.</li>
+        <li>
+            <strong>Les faire effacer</strong>, sauf ce que la loi nous oblige à garder
+            (les factures, par exemple).
+        </li>
+        <li><strong>Vous opposer</strong> à un traitement, ou en demander la limitation.</li>
+        <li>
+            <strong>Récupérer vos données</strong> dans un format lisible par une machine.
+        </li>
+        <li>
+            <strong>Retirer votre consentement</strong> à tout moment pour l'infolettre :
+            le lien de désinscription est en bas de chaque envoi.
+        </li>
+    </ul>
+    <p>
+        Pour exercer un de ces droits, écrivez à
+        <a href="mailto:contact@tibillet.re">contact@tibillet.re</a>. Nous répondons sous un
+        mois. Nous pouvons vous demander de justifier votre identité, pour éviter de
+        transmettre vos données à quelqu'un d'autre.
+    </p>
+    <p>
+        Si notre réponse ne vous satisfait pas, vous pouvez saisir la
+        <strong>CNIL</strong> :
+        <a href="https://www.cnil.fr/fr/plaintes" rel="noopener">cnil.fr/fr/plaintes</a>.
+    </p>
+</section>
+
+<section data-testid="privacy-securite">
+    <h2 class="h4 mt-5">Comment vos données sont protégées</h2>
+
+    <ul>
+        <li>Toutes les connexions au site sont chiffrées (HTTPS).</li>
+        <li>
+            Les données de chaque lieu sont stockées dans un espace de base de données
+            séparé.
+        </li>
+        <li>Les accès de l'équipe sont limités aux personnes qui en ont besoin.</li>
+        <li>Le code est public : n'importe qui peut l'auditer et signaler une faille.</li>
+    </ul>
+    <p>
+        Vous avez repéré un problème de sécurité ? Écrivez à
+        <a href="mailto:contact@tibillet.re">contact@tibillet.re</a>. Nous prenons ces
+        signalements au sérieux et nous ne poursuivons pas les personnes qui nous alertent
+        de bonne foi.
+    </p>
+</section>
+
+<section data-testid="privacy-modifications">
+    <h2 class="h4 mt-5">Modifications de cette politique</h2>
+
+    <p>
+        Si nos pratiques changent, nous mettons cette page à jour et nous modifions la date
+        affichée en haut. Pour un changement important, nous prévenons par e-mail les
+        personnes titulaires d'un compte.
+    </p>
+</section>
+
+{% endblock corps_document %}

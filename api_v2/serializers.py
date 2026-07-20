@@ -1919,6 +1919,16 @@ def _valider_le_bloc(bloc):
 
     from pages.blocs_catalogue import CHAMPS_FICHIER
 
+    # /!\ `CHAMPS_FICHIER` exclut aussi `video` de la validation, donc la liste
+    # blanche d'extensions (pages.models.valider_extension_video) NE s'applique
+    # PAS ici. C'est sans effet aujourd'hui : l'API n'accepte aucun upload
+    # video (`_appliquer_fichiers_multipart` ne traite que les images). Si un
+    # jour la video revient dans l'API, RETIRER `video` de cette exclusion —
+    # sans quoi un fichier executable pourrait atterrir dans /media, qui est
+    # partage par tous les tenants.
+    # / `CHAMPS_FICHIER` also excludes `video`, so the extension whitelist does
+    # NOT run here. Harmless today (the API accepts no video upload); if video
+    # ever returns to the API, drop it from this exclusion.
     try:
         bloc.full_clean(exclude=["uuid", "page", *CHAMPS_FICHIER])
     except DjangoValidationError as erreur:

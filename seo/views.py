@@ -357,7 +357,12 @@ def feature_detail(request, slug):
         raise Http404("Fonctionnalité inconnue / Unknown feature")
 
     titre = str(feature["title"])
-    page_url = request.build_absolute_uri()
+    # `request.path` et non l'URI complete : sans lui, la canonique embarque
+    # la query string, et chaque lien tracke (?utm_source=...) se declare
+    # canonique de lui-meme au lieu de pointer la page unique.
+    # / `request.path`, not the full URI: otherwise each tracked link
+    # canonicalises itself instead of pointing at the single page.
+    page_url = request.build_absolute_uri(request.path)
     accueil_url = request.build_absolute_uri("/")
     # Le fil d'Ariane pointe vers le hub /features/ (vraie page).
     # / Breadcrumb points to the /features/ hub (real page).
@@ -438,7 +443,7 @@ def features_hub(request):
     / Real indexable page reusing the landing features grid with its own H1.
     Breadcrumb target for detail pages and sitelinks entry point.
     """
-    page_url = request.build_absolute_uri()
+    page_url = request.build_absolute_uri(request.path)
     accueil_url = request.build_absolute_uri("/")
 
     # ItemList des pages de fonctionnalites (memes URLs que le sitemap ROOT).
@@ -596,6 +601,14 @@ def explorer(request):
 
     context = {
         "explorer_data": explorer_data,
+        # Canonique figee sur l'URL nue : le filtrage de la carte se fait cote
+        # navigateur, la vue ignore la query string. Sans cette ligne, chaque
+        # parametre (?utm_source=..., filtres partages) produirait un duplicata
+        # se declarant canonique de lui-meme, sur un espace infini.
+        # / Canonical pinned to the bare URL: filtering is client-side and the
+        # view ignores the query string, so any parameter would spawn a
+        # self-canonicalising duplicate.
+        "canonical_url": request.build_absolute_uri("/explorer/"),
         # ROOT public : aucun tenant courant a highlighter sur la carte.
         # / Public ROOT: no current tenant to highlight on the map.
         "current_tenant_uuid": "",
@@ -691,6 +704,15 @@ def sitemap_root_view(request):
     # Une URL par page de fonctionnalite / One URL per feature page.
     for feature_slug in FEATURE_DETAILS:
         urls.append(request.build_absolute_uri(f"/features/{feature_slug}/"))
+
+    # Pages legales. Elles sont indexables a dessein : leur presence est un
+    # signal de confiance, et les auditeurs de conformite les cherchent depuis
+    # la racine et depuis le sitemap.
+    # / Legal pages, deliberately indexable: presence is a trust signal and
+    # compliance crawlers look for them from the root and the sitemap.
+    urls.append(request.build_absolute_uri("/mentions-legales/"))
+    urls.append(request.build_absolute_uri("/cgu/"))
+    urls.append(request.build_absolute_uri("/confidentialite/"))
 
     lastmod = timezone.now().isoformat()[:10]
     xml_parts = [

@@ -80,9 +80,53 @@ class StaticViewSitemap(TenantSitemap):
     changefreq = "weekly"  # Static pages change infrequently
 
     def items(self):
-        # List of static pages to include
-        # / Liste des pages statiques a inclure
-        return ['index', 'event-list', 'membership_mvt-list', 'federation-list']
+        # Une section n'est declaree que si son module est actif ET qu'elle
+        # a du contenu : une page vide au sitemap est un signal negatif.
+        # Recalcule a chaque requete, donc une section reapparait seule des
+        # qu'elle se remplit.
+        # En cas de doute on INCLUT : exclure a tort coute du referencement.
+        # / A section is declared only if its module is on AND it has
+        # content. Recomputed per request. When unsure, include.
+
+        # Import local : evite un import circulaire (module charge par urls).
+        # / Local import: avoids a circular import.
+        from BaseBillet.models import (
+            Configuration,
+            FederatedPlace,
+            FederationConfiguration,
+            Product,
+        )
+
+        config = Configuration.get_solo()
+        pages = ['index']
+
+        # Meme filtre que EventSitemap, pour ne pas se contredire.
+        # / Same filter as EventSitemap.
+        if config.module_billetterie and Event.objects.filter(published=True).exists():
+            pages.append('event-list')
+
+        # La page liste les adhesions locales ET celles des lieux federes
+        # (cf. MembershipMVT.list) : tester les seules locales exclurait du
+        # sitemap une page pleine.
+        # / The page lists local memberships AND federated ones; testing only
+        # local products would drop a full page from the sitemap.
+        if config.module_adhesion and (
+            Product.objects.filter(
+                categorie_article=Product.ADHESION, publish=True,
+            ).exists()
+            or FederatedPlace.objects.filter(membership_visible=True).exists()
+        ):
+            pages.append('membership_mvt-list')
+
+        # La page se nourrit de trois sources (lieux declares, entrants,
+        # tags) ; on teste les deux moins couteuses.
+        # / Three sources feed this page; we test the two cheapest.
+        if config.module_federation:
+            config_federation = FederationConfiguration.get_solo()
+            if FederatedPlace.objects.exists() or config_federation.afficher_lieux_entrants:
+                pages.append('federation-list')
+
+        return pages
 
     def location(self, item):
         # Generate URLs for each static page - returns absolute path without protocol or domain

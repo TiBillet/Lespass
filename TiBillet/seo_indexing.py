@@ -5,11 +5,11 @@ Helper pour decider si une reponse doit etre marquee `noindex, nofollow`.
 LOCALISATION : TiBillet/seo_indexing.py
 
 Une reponse HTTP est marquee non-indexable quand AU MOINS UN flag
-d'environnement est a "1" : DEBUG, TEST, DEMO, STRIPE_TEST.
-Les instances de prod ont ces 4 flags a "0" dans leur .env.
+d'environnement est a "1" : DEBUG, TEST, DEMO.
+Les instances de prod ont ces 3 flags a "0" dans leur .env.
 
 / A response is marked non-indexable when AT LEAST ONE env flag is
-set to "1": DEBUG, TEST, DEMO, STRIPE_TEST.
+set to "1": DEBUG, TEST, DEMO.
 
 Voir TECH_DOC/SESSIONS/SEO/CHANTIER-01-noindex-dev.md pour la
 justification de cette regle (et pour les regles ecartees, comme
@@ -27,11 +27,13 @@ Utilise par :
 import os
 
 
-# Les 4 flags d'env qui declenchent le noindex. Si AU MOINS UN est a
-# "1" dans os.environ, l'instance est non-indexable.
-# / The 4 env flags that trigger noindex. If AT LEAST ONE equals "1"
-# in os.environ, the instance is non-indexable.
-_NOINDEX_FLAGS = ("DEBUG", "TEST", "DEMO", "STRIPE_TEST")
+# Flags d'env qui declenchent le noindex : un seul a "1" suffit.
+# `STRIPE_TEST` en est volontairement absent — il decrit le mode
+# d'encaissement, pas l'environnement. Une prod publique peut encaisser en
+# test tant que sa billetterie n'est pas ouverte.
+# / One flag at "1" is enough. `STRIPE_TEST` is deliberately excluded: it
+# describes the payment mode, not the environment.
+_NOINDEX_FLAGS = ("DEBUG", "TEST", "DEMO")
 
 
 def should_noindex():

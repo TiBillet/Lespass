@@ -80,6 +80,12 @@ def valider_slug_non_reserve(valeur):
 # aligned with the nginx limit (client_max_body_size 12M) and the v2 API.
 LIMITE_TAILLE_IMAGE = 10 * 1024 * 1024  # 10 Mo
 
+# Extensions video acceptees a l'upload. Liste BLANCHE : tout ce qui n'y est
+# pas est refuse (cf. valider_extension_video, et le commentaire securite qui
+# l'accompagne). / Whitelist of accepted video extensions; anything else is
+# rejected (see valider_extension_video).
+EXTENSIONS_VIDEO_AUTORISEES = frozenset({"mp4", "webm", "ogv", "ogg", "mov"})
+
 
 def valider_taille_image(fichier):
     """
@@ -94,6 +100,31 @@ def valider_taille_image(fichier):
             _("Image trop volumineuse (max %(mo)s Mo)."),
             params={"mo": LIMITE_TAILLE_IMAGE // (1024 * 1024)},
             code="image_trop_grande",
+        )
+
+
+def valider_extension_video(fichier):
+    """
+    N'accepte qu'une extension video connue.
+
+    SECURITE, ET PAS SEULEMENT CONFORT : `/media` est servi directement par
+    nginx, depuis un dossier PARTAGE par tous les tenants, et sans passer par
+    Django (donc sans `X-Content-Type-Options`). Un fichier `.html` depose ici
+    serait servi en `text/html` sur l'origine de N'IMPORTE QUEL tenant : du
+    script executable, poste par le staff d'un autre lieu.
+    / SECURITY, not convenience: `/media` is served straight from nginx, from a
+    folder SHARED by every tenant, bypassing Django (so no nosniff header). An
+    uploaded `.html` would run as script on ANY tenant's origin.
+    """
+    if not fichier:
+        return
+    nom = getattr(fichier, "name", "") or ""
+    extension = nom.rsplit(".", 1)[-1].lower() if "." in nom else ""
+    if extension not in EXTENSIONS_VIDEO_AUTORISEES:
+        raise ValidationError(
+            _("Format video non accepte. Formats autorises : %(liste)s."),
+            params={"liste": ", ".join(sorted(EXTENSIONS_VIDEO_AUTORISEES))},
+            code="extension_video_invalide",
         )
 
 
@@ -764,6 +795,7 @@ class Bloc(models.Model):
     video = models.FileField(
         upload_to="videos/pages/",
         blank=True,
+        validators=[valider_extension_video],
         verbose_name=_("Video"),
         help_text=_("Fichier video (mp4/webm) depose. Pour une video en ligne, utiliser un bloc Contenu integre."),
     )

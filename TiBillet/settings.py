@@ -46,6 +46,45 @@ TEST = os.environ.get('TEST') == '1'
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 7 * 12  # 12 weeks (3 month)
 SESSION_SAVE_EVERY_REQUEST = True
 
+# ----------------------------------------------------------------------
+# COOKIES — attribut Secure
+#
+# `Secure` interdit au navigateur d'envoyer le cookie sur une connexion en
+# clair. Sans lui, un reseau wifi hostile peut provoquer une seule requete
+# HTTP vers le domaine et recuperer le cookie de session au passage.
+#
+# POURQUOI CONDITIONNE A `not DEBUG` PLUTOT QU'A `True` EN DUR :
+# le client de test Django et les tests Playwright parlent en HTTP. Un
+# cookie `Secure` ne serait tout simplement pas pose, et toute la suite
+# authentifiee tomberait, avec un symptome trompeur (« utilisateur non
+# connecte ») a des kilometres de la cause.
+# / Conditioned on `not DEBUG` because the Django test client and Playwright
+# speak HTTP: a Secure cookie would never be set and every authenticated
+# test would fail with a misleading "not logged in" symptom.
+#
+# SANS RISQUE POUR LE MULTI-TENANT : `SESSION_COOKIE_DOMAIN` est desactive
+# (voir juste en dessous), donc le cookie est deja host-only. Il n'y a
+# aucun partage de session entre sous-domaines a preserver.
+# / Safe for multi-tenancy: SESSION_COOKIE_DOMAIN is off, the cookie is
+# already host-only, there is no cross-subdomain session to preserve.
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+
+# `SameSite` decide si le cookie part quand la requete vient d'un AUTRE site.
+#
+# On reste en `Lax` (qui est deja la valeur par defaut de Django) et on
+# l'ecrit explicitement pour que ce choix soit visible et documente.
+#
+# /!\ NE PAS PASSER EN `Strict`. Ca casserait deux parcours essentiels :
+#   - le retour depuis Stripe apres un paiement (l'utilisateur reviendrait
+#     deconnecte, et la reservation semblerait perdue) ;
+#   - les liens de connexion envoyes par e-mail, qui sont ouverts depuis un
+#     client mail, donc vus comme une navigation cross-site.
+# / Do NOT switch to Strict: it breaks the Stripe payment return and the
+# magic-link login e-mails (both are cross-site navigations).
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
+
 # TODO montrer ça à Sham
 # Mecanisme qui permet d'etre loggue sur toute les instances tibillet multi tenant
 # SECURITY WARNING: This setting is only safe if all subdomains are fully trusted and controlled by you
@@ -103,7 +142,42 @@ if os.environ.get('ADDITIONAL_DOMAINS'):
         CSRF_TRUSTED_ORIGINS.append(f'https://{domain}')
         CSRF_TRUSTED_ORIGINS.append(f'https://*.{domain}')
 
-# CORS_ORIGIN_WHITELIST = CSRF_TRUSTED_ORIGINS
+# ----------------------------------------------------------------------
+# CORS — ETAT REEL : LE PARTAGE CROSS-ORIGIN EST DESACTIVE
+#
+# Ce bloc trompe la lecture, d'ou cet avertissement. DEUX raisons cumulees
+# font qu'aucun reglage CORS n'est actif aujourd'hui :
+#
+# 1. `CORS_ORIGIN_WHITELIST` ci-dessous ne veut plus rien dire. Ce nom a ete
+#    remplace par `CORS_ALLOWED_ORIGINS` dans django-cors-headers 3.0, puis
+#    SUPPRIME en 4.0. Le projet est en 4.9 : ce reglage est ignore, en
+#    silence. Il n'autorise donc rien. (Accessoirement, les entrees a
+#    caractere joker comme `https://*.domaine` n'auraient de toute facon
+#    jamais fonctionne : CORS_ALLOWED_ORIGINS n'accepte que des origines
+#    exactes, les motifs passent par CORS_ALLOWED_ORIGIN_REGEXES.)
+#
+# 2. Le bloc qui suit est encadre par des triples guillemets. Ce n'est pas
+#    du code : c'est une CHAINE DE CARACTERES que Python evalue et jette.
+#    `CORS_ALLOW_ALL_ORIGINS = True` n'est donc PAS applique — ce qui est
+#    une bonne nouvelle, car combine a `CORS_ALLOW_CREDENTIALS = True` il
+#    aurait laisse n'importe quel site lire des reponses authentifiees.
+#
+# Verification, si un doute subsiste :
+#   manage.py shell -c "from django.conf import settings; \
+#       print(getattr(settings, 'CORS_ALLOW_ALL_ORIGINS', 'ABSENT'))"
+#
+# CONSEQUENCE PRATIQUE : le site ne repond a aucune requete cross-origin.
+# C'est la position la plus sure, et elle convient tant que tout est servi
+# depuis la meme origine (rendu serveur + HTMX). Si un client externe doit
+# un jour appeler l'API depuis un autre domaine, il faudra ecrire un vrai
+# `CORS_ALLOWED_ORIGINS` — ne PAS se contenter de sortir le bloc ci-dessous
+# de ses guillemets, il ouvrirait tout.
+# / CORS is fully OFF: `CORS_ORIGIN_WHITELIST` was removed in
+# django-cors-headers 4.0 (project runs 4.9) and the block below is a
+# string literal, not code. Safest position; keep it unless an external
+# origin genuinely needs the API — and then write CORS_ALLOWED_ORIGINS
+# properly rather than un-quoting the block.
+# ----------------------------------------------------------------------
 CORS_ORIGIN_WHITELIST = CSRF_TRUSTED_ORIGINS + ['http://localhost', ]
 """
 CORS_ALLOW_ALL_ORIGINS = True
