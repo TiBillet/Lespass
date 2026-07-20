@@ -43,6 +43,7 @@ would show them ALL, for every type, on every row.
 from django import forms
 from django.contrib import admin
 from django.db.models import Count, Max
+from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
@@ -756,6 +757,32 @@ class BlocAdminForm(forms.ModelForm):
             self.fields["texte_markdown"].widget.attrs["data-galerie"] = json.dumps(urls_galerie)
 
 
+# Ancre de l'onglet « Blocs » sur la fiche d'une page. Unfold nomme ses onglets
+# d'inline avec le prefixe du formset passe par slugify (cf. son gabarit
+# unfold/helpers/tab_items.html) ; ce prefixe est l'accesseur inverse de la cle
+# etrangere, soit related_name="blocs" sur Bloc.page.
+# / Anchor of the "Blocs" tab on a page form. Unfold names its inline tabs after
+# the slugified formset prefix, which is the reverse accessor of the foreign
+# key — here related_name="blocs" on Bloc.page.
+_ANCRE_ONGLET_BLOCS = "#blocs"
+
+
+def _url_onglet_blocs_de_la_page(page):
+    """
+    URL de la fiche d'une page, onglet « Blocs » deja ouvert.
+    / URL of a page form, with the "Blocs" tab already open.
+
+    LOCALISATION : pages/admin.py
+
+    Helper defini AU NIVEAU DU MODULE, jamais dans BlocAdmin : Unfold wrappe les
+    methodes d'un ModelAdmin avec son systeme d'actions et casserait l'appel.
+    / Module-level helper, never a ModelAdmin method: Unfold wraps ModelAdmin
+    methods with its action system and would break the call.
+    """
+    url_de_la_page = reverse("staff_admin:pages_page_change", args=[page.pk])
+    return f"{url_de_la_page}{_ANCRE_ONGLET_BLOCS}"
+
+
 @admin.register(Bloc, site=staff_admin_site)
 class BlocAdmin(ModelAdmin):
     """
@@ -929,6 +956,56 @@ class BlocAdmin(ModelAdmin):
             obj.position = derniere_position + 1
 
         super().save_model(request, obj, form, change)
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        """
+        Fil d'Ariane : on remplace « Blocs » par la PAGE d'appartenance.
+        / Breadcrumb: replace "Blocs" with the owning PAGE.
+
+        LOCALISATION : pages/admin.py — BlocAdmin.changeform_view
+
+        Le titre de page d'Unfold se construit a partir de `opts` et `original`
+        (cf. son template tag header_title). En y posant la Page, le fil devient
+        « Pages / <nom de la page> » et ramene la ou l'on editait, au lieu de la
+        liste de TOUS les blocs, ou l'on ne sait plus a quelle page ils
+        appartiennent.
+        / Unfold builds its page title from `opts` and `original`. Putting the
+        Page there makes the trail read "Pages / <page name>" and lead back to
+        where the user was editing, instead of the list of ALL blocks.
+        """
+        extra_context = extra_context or {}
+        if object_id:
+            bloc = Bloc.objects.select_related("page").filter(pk=object_id).first()
+            if bloc and bloc.page:
+                extra_context["opts"] = Page._meta
+                extra_context["original"] = bloc.page
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
+    def response_post_save_change(self, request, obj):
+        """
+        Apres « Enregistrer », on retourne a la fiche de la page, onglet Blocs.
+        / After "Save", go back to the page form, Blocs tab.
+
+        LOCALISATION : pages/admin.py — BlocAdmin.response_post_save_change
+
+        On surcharge `response_post_save_change` et NON `response_change` :
+        Django n'appelle ce hook que pour le bouton « Enregistrer » simple.
+        « Enregistrer et continuer les modifications » garde donc son
+        comportement normal (on reste sur la fiche du bloc).
+        / We override `response_post_save_change`, NOT `response_change`: Django
+        only calls this hook for the plain "Save" button, so "Save and continue
+        editing" keeps its normal behaviour.
+        """
+        if obj.page_id:
+            return HttpResponseRedirect(_url_onglet_blocs_de_la_page(obj.page))
+        return super().response_post_save_change(request, obj)
+
+    def response_post_save_add(self, request, obj):
+        # Meme retour apres la creation d'un bloc.
+        # / Same return trip after creating a block.
+        if obj.page_id:
+            return HttpResponseRedirect(_url_onglet_blocs_de_la_page(obj.page))
+        return super().response_post_save_add(request, obj)
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)

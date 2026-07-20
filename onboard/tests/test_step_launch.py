@@ -376,3 +376,65 @@ def test_launch_retry_resets_error_and_enqueues_task(cleanup_waiting_configs):
     # Task re-enqueuee avec le bon UUID. / Task re-enqueued with the
     # right UUID.
     mock_delay.assert_called_once_with(wc_uuid=str(wc.uuid))
+
+
+@pytest.mark.onboard
+def test_retry_ne_ment_pas_quand_une_tentative_tient_deja_le_claim(
+    cleanup_waiting_configs,
+):
+    """
+    Claim deja tenu -> le retry NE reset PAS l'erreur et NE promet rien.
+
+    Le claim `onboard:create_tenant_claim:<uuid>` est le verrou
+    d'idempotence de `create_tenant_from_draft`. Quand il est deja pris
+    (autoretry Celery en vol, ou claim orphelin laisse par un worker tue),
+    la task re-enqueuee sort AUSSITOT sans rien ecrire.
+
+    Si la vue avait efface `error_message` et affiche « en cours », plus
+    personne n'ecrirait jamais ni erreur ni tenant : l'ecran polle dans le
+    vide jusqu'au timeout de 5 min. C'est le bug que ce test verrouille.
+    On garde donc l'erreur en base et on annonce l'attente.
+
+    / Claim already held -> retry must NOT clear the error nor promise
+    anything. When the idempotency claim is taken, the re-enqueued task
+    returns immediately without writing anything; clearing the error would
+    leave the UI polling forever. So we keep the error and announce a wait.
+    """
+    from django.core.cache import cache
+
+    client = Client(HTTP_HOST=DEV_HOST)
+    wc = _make_wc_at_launch(
+        client, cleanup=cleanup_waiting_configs,
+        error_message="Erreur factice",
+    )
+
+    # Une tentative tient le claim. / A run holds the claim.
+    claim_key = f"onboard:create_tenant_claim:{wc.uuid}"
+    cache.delete(claim_key)
+    assert cache.add(claim_key, "1", timeout=300) is True
+
+    try:
+        with patch("onboard.tasks.create_tenant_from_draft.delay") as mock_delay:
+            response = client.post("/onboard/launch/retry/")
+
+        assert response.status_code == 200
+
+        # On ne relance PAS : la task sortirait aussitot sur le claim.
+        # / No re-enqueue: the task would bail out on the claim anyway.
+        mock_delay.assert_not_called()
+
+        # L'erreur reste en base : c'est elle qui redeviendra visible si la
+        # tentative en vol echoue. / The error stays: it becomes visible
+        # again if the in-flight run fails.
+        with schema_context("meta"):
+            wc.refresh_from_db()
+        assert wc.error_message == "Erreur factice", (
+            "L'erreur ne doit pas etre effacee tant qu'aucune relance n'a lieu."
+        )
+
+        # Le polling continue, pour afficher le vrai resultat de la
+        # tentative en vol. / Polling continues to show the real outcome.
+        assert b"every 2s" in response.content
+        assert b"onboard-status-busy" in response.content
+    finally:
+        cache.delete(claim_key)
