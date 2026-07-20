@@ -574,6 +574,7 @@ class PageAdmin(ModelAdmin):
                     # navigation and triggers the side menu. Without it in the
                     # form, the setting was only reachable via the API or the DB.
                     "affichage_nav",
+                    "afficher_sommaire",
                 ),
             },
         ),

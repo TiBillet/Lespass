@@ -316,6 +316,20 @@ class Page(models.Model):
         help_text=_("Si coche : la page n'est pas indexee et reste hors du sitemap."),
     )
 
+    # Si True, la page affiche son sommaire (table des matieres construite depuis
+    # les titres de ses blocs de texte). Decoche : le sommaire n'est pas rendu du
+    # tout, meme si la page a des titres. Certaines pages tres visuelles n'en
+    # veulent pas : le sommaire y occupe une colonne entiere pour rien.
+    # / If True, the page shows its table of contents (built from its text blocks'
+    # headings). Unchecked: the ToC is not rendered at all, even when the page has
+    # headings. Some visual-heavy pages don't want it: it eats a whole column.
+    afficher_sommaire = models.BooleanField(
+        default=True,
+        verbose_name=_("Afficher le sommaire"),
+        help_text=_("Si decoche : la page n'affiche pas sa table des matieres. "
+                    "Le sommaire reste masque quand la page a moins de deux titres."),
+    )
+
     # Page parente (auto-relation) : si renseignee, cette page est rangee sous la
     # page parente. L'arbre accepte PROFONDEUR_MAX_ARBRE niveaux, et clean() en
     # refuse davantage comme il refuse les cycles. L'URL reste plate (/<slug>/) ;

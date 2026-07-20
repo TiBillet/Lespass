@@ -8,7 +8,11 @@ Mail OTP envoye par onboard.tasks.onboard_otp_mailer.
 LOCALISATION : onboard/templates/onboard/emails/otp_code.html
 
 Design aligne sur ready.html (et welcome_email.html legacy) : table imbriquee,
-palette TiBillet (vert #009058, gris #70706d, noir #1d1d1b), Arial / Helvetica.
+palette TiBillet (bleu Loseyan encre #2d76a6, gris #70706d, noir #1d1d1b), Arial /
+Helvetica. La valeur est en DUR et non en var(--tb-marque-encre) : les clients
+mail (Outlook, Gmail) n'appliquent pas les variables CSS.
+/ TiBillet palette (Loseyan ink blue #2d76a6, ...). The value is HARD-CODED, not
+var(--tb-marque-encre): mail clients don't support CSS variables.
 Pas de bouton CTA — a la place, capsule visuelle qui met en valeur le code
 a 6 chiffres (letter-spacing genereux pour lisibilite et copier-coller).
 
@@ -49,13 +53,13 @@ onboard/tasks.py::onboard_otp_mailer.
                                 {% blocktrans with name=organisation %}Vous avez demandé la création de l'espace TiBillet « {{ name }} ». Pour confirmer votre adresse email et continuer la configuration, saisissez le code ci-dessous dans la page d'inscription :{% endblocktrans %}
                             </p>
 
-                            {# Capsule code PIN — encadre vert clair, code en grand pour lisibilite mobile + copier-coller facile. #}
-                            {# / PIN code capsule — light green frame, large font for mobile readability + easy copy-paste. #}
+                            {# Capsule code PIN — encadre bleu clair, code en grand pour lisibilite mobile + copier-coller facile. #}
+                            {# / PIN code capsule — light blue frame, large font for mobile readability + easy copy-paste. #}
                             <table style="width:100%;border-spacing: 0px;padding: 0px;margin: 24px 0;">
                                 <tr>
                                     <td align="center"
-                                        style="background:#e8f5ee;border:1px solid #009058;border-radius:8px;padding:24px 16px;">
-                                        <div style="font:bold 36px/44px 'Courier New', Courier, monospace;color:#009058;letter-spacing:12px;">
+                                        style="background:#e9f2f8;border:1px solid #2d76a6;border-radius:8px;padding:24px 16px;">
+                                        <div style="font:bold 36px/44px 'Courier New', Courier, monospace;color:#2d76a6;letter-spacing:12px;">
                                             {{ otp }}
                                         </div>
                                     </td>
@@ -70,7 +74,7 @@ onboard/tasks.py::onboard_otp_mailer.
 
                     <tr>
                         <td style="padding: 0 0 24px 0;">
-                            <h2 style="font-weight:600;color:#009058;font:18px/24px Arial, Helvetica, sans-serif;margin: 0 0 16px 0;">
+                            <h2 style="font-weight:600;color:#2d76a6;font:18px/24px Arial, Helvetica, sans-serif;margin: 0 0 16px 0;">
                                 {% trans "Vous n'êtes pas à l'origine de cette demande ?" %}
                             </h2>
                             <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0;">

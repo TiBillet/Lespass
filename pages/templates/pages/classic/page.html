@@ -140,13 +140,23 @@ after the title and lifting it with CSS would make the two diverge.
            sur une page courte, et il ne demande ni JavaScript ni colonne
            supplementaire. Le tag renvoie une liste vide quand la page n'a aucun
            titre : rien ne s'affiche alors.
+
+           DEUX CONDITIONS D'AFFICHAGE, et les deux comptent :
+           - `page_courante.afficher_sommaire` : le choix explicite de l'admin,
+             page par page (certaines pages tres visuelles n'en veulent pas).
+           - au moins DEUX entrees : un sommaire d'une seule ligne occupe une
+             colonne entiere de la grille pour ne rien apprendre au lecteur.
            / Page table of contents, built from its text blocks' headings.
            Rendered in a collapsed <details>: it takes no room on a short page
            and needs neither JavaScript nor an extra column. The tag returns an
            empty list when the page has no heading, so nothing shows.
+
+           TWO DISPLAY CONDITIONS, both required: the admin's explicit
+           `afficher_sommaire` choice, and at least TWO entries (a one-line ToC
+           eats a whole grid column and tells the reader nothing).
 {% endcomment %}
         {% table_des_matieres page_courante as sommaire %}
-        {% if sommaire %}
+        {% if page_courante.afficher_sommaire and sommaire|length >= 2 %}
             <details class="tb-sommaire" data-testid="page-sommaire">
                 <summary class="tb-sommaire__titre">{% translate "Sommaire" %}</summary>
                 <ul class="tb-sommaire__liste">

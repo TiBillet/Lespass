@@ -105,9 +105,17 @@
                        data-testid="onboard-venue-slug">
             </div>
             <div class="col-12 col-sm-auto">
-                {# Suffixes DNS derives de l'environnement (DOMAIN + ADDITIONAL_DOMAINS),
-                   passes par la vue dans `dns_choices`. Le 1er est le choix par defaut.
-                   / Env-derived DNS suffixes passed by the view; 1st = default choice. #}
+                {% comment %}
+                Suffixes DNS derives de l'environnement (DOMAIN + ADDITIONAL_DOMAINS),
+                passes par la vue dans `dns_choices`. Le 1er est le choix par defaut.
+                / Env-derived DNS suffixes passed by the view; 1st = default choice.
+
+                {% comment %} et non {# #} : la syntaxe {# #} de Django ne tient
+                QUE sur une seule ligne. Sur plusieurs lignes, le commentaire
+                n'est pas reconnu et s'affiche tel quel dans la page.
+                / {% comment %} and not {# #}: Django's {# #} is SINGLE-LINE only.
+                Spread over several lines it is not parsed and leaks to the page.
+                {% endcomment %}
                 <div class="onboard-dns-radios" role="radiogroup" aria-label="{% translate 'Suffixe de domaine' %}">
                     {% for suffixe in dns_choices %}
                     <input type="radio" class="btn-check" name="dns_choice" id="onboard-venue-dns-{{ suffixe|slugify }}"
