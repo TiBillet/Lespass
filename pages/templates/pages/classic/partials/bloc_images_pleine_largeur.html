@@ -16,7 +16,7 @@
 <section class="tb-bloc tb-bloc--image" data-testid="bloc-images-pleine-largeur">
     {% if bloc.image %}
         <img class="tb-bloc__image-seule"
-             src="{{ bloc.image.fhd.url }}"
+             {% if bloc.image.fhd.width and bloc.image.fhd.height %}width="{{ bloc.image.fhd.width }}" height="{{ bloc.image.fhd.height }}"{% endif %} src="{{ bloc.image.fhd.url }}"
              alt="{{ bloc.titre }}" loading="lazy">
     {% endif %}
 </section>

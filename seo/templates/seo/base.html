@@ -71,8 +71,12 @@
     <link rel="icon" type="image/png" sizes="192x192" href="{% static 'seo/favicon-192.png' %}">
     <link rel="apple-touch-icon" href="{% static 'seo/apple-touch-icon.png' %}">
     <link data-bs-stylesheet="bootstrap" href="{% static 'commun/css/bootstrap.min.5.3.3.css' %}" rel="stylesheet">
+    {# bootstrap-icons async (media=print + onload) : ~86 Ko non bloquants au #}
+    {# 1er paint. / bootstrap-icons async, not render-blocking. #}
     <link data-bs-stylesheet="bootstrap-icons" rel="stylesheet"
-          href="{% static 'commun/css/bootstrap-icons.min.css' %}">
+          href="{% static 'commun/css/bootstrap-icons.min.css' %}"
+          media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="{% static 'commun/css/bootstrap-icons.min.css' %}"></noscript>
     <link rel="stylesheet" href="{% static 'commun/css/vars.css' %}">
     {# LA couleur d'identite du site. Chargee APRES vars.css (qui porte la charte, #}
     {# les --kouler-*) car elle en derive les jumeaux accessibles, et APRES #}

@@ -28,7 +28,7 @@
             <video class="tb-bloc__video" autoplay loop muted playsinline webkit-playsinline
                    src="{{ bloc.video.url }}"></video>
         {% elif bloc.image %}
-            <img class="tb-bloc__image" src="{{ bloc.image.hdr.url }}"
+            <img class="tb-bloc__image" {% if bloc.image.hdr.width and bloc.image.hdr.height %}width="{{ bloc.image.hdr.width }}" height="{{ bloc.image.hdr.height }}"{% endif %} src="{{ bloc.image.hdr.url }}"
                  alt="{{ bloc.titre }}" loading="lazy">
         {% endif %}
 

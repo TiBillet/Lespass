@@ -55,6 +55,20 @@
     {# asset CSS/JS necessaire au rendu. / REMINDER: extra_meta only exists in #}
     {# shell.html. It is DROPPED in HTMX responses — SEO only, never a required asset. #}
     {% jsonld_page page_courante %}
+    {% comment %}
+    Precharge l'image du HERO, qui est le plus gros element au-dessus de la
+    ligne de flottaison (candidat LCP). Elle est posee en fond CSS
+    (--tb-hero-image dans bloc_section_banniere), donc le navigateur ne la
+    decouvre qu'apres avoir parse le CSS ET le bloc : le preload l'anticipe.
+    `fetchpriority="high"` la fait passer devant les autres telechargements.
+    Seulement au 1er chargement (extra_meta absent en navigation HTMX), ce qui
+    est justement ce que mesure Lighthouse.
+    / Preload the HERO background image (LCP candidate): set as a CSS background,
+    the browser discovers it late, so we anticipate it. First load only.
+    {% endcomment %}
+    {% if page_a_un_bloc_hero and config.img %}
+        <link rel="preload" as="image" href="{{ config.img.fhd.url }}" fetchpriority="high">
+    {% endif %}
 {% endblock %}
 
 {% block main %}

@@ -16,7 +16,13 @@
             <div class="titre-principal mb-4">
                 <h1 class="visually-hidden">{{ bloc.titre|default:config.organisation }}</h1>
                 {% if config.img %}
-                    <img src="{{ config.img.fhd.url }}" alt="{{ bloc.titre|default:config.organisation }}" class="img-fluid logo-homepage">
+                    {# Image du hero = candidat LCP : fetchpriority="high" la fait #}
+                    {# télécharger en priorité, loading="eager" évite tout lazy. #}
+                    {# width/height explicites réservent l'espace (anti-CLS). #}
+                    {# / Hero image = LCP candidate: high priority, eager, sized. #}
+                    <img src="{{ config.img.fhd.url }}" alt="{{ bloc.titre|default:config.organisation }}"
+                         class="img-fluid logo-homepage" fetchpriority="high" loading="eager"
+                         {% if config.img.fhd.width and config.img.fhd.height %}width="{{ config.img.fhd.width }}" height="{{ config.img.fhd.height }}"{% endif %}>
                 {% elif bloc.titre %}
                     <h2 class="police-titre texte-bleu text-uppercase">{{ bloc.titre }}</h2>
                 {% endif %}

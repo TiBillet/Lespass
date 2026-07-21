@@ -1,7 +1,7 @@
 ---
 slug: link-python
 title: Liens python
-description: Formations, recettes, compilation de note de blog. Apprennez Python !
+description: "Une sélection de ressources pour apprendre Python : formations, recettes de code et notes de blog de la coopérative Code Commun."
 sidebar_position: 10
 tags: [ python, dev, formations ]
 keywords: [ python, dev, formations ]

@@ -1,7 +1,7 @@
 ---
 slug: charte
 title: Charte et valeurs
-description: Les engagements et valeurs de la coopérative.
+description: "La charte de la coopérative Code Commun : nos engagements pour le logiciel libre, la vie privée, la gouvernance partagée et les communs numériques."
 sidebar_position: 1
 tags: [licence libre, coopérative, économie sociale et solidaire, vie privée]
 keywords: [licence libre, coopérative, économie sociale et solidaire, vie privée]

@@ -109,8 +109,16 @@
 
     <link rel="icon" type="image/png" href="{% static 'commun/img/favicon.png' %}">
     <link data-bs-stylesheet="bootstrap" href="{% static 'commun/css/bootstrap.min.5.3.3.css' %}" rel="stylesheet">
+    {# bootstrap-icons (~86 Ko) chargé sans bloquer le rendu : `media="print"` #}
+    {# le rend non applicable au 1er paint, `onload` le rebranche une fois reçu. #}
+    {# Les icônes ne sont pas critiques à l'affichage initial. Le <noscript> #}
+    {# garde le chargement classique quand JS est absent. #}
+    {# / bootstrap-icons loaded without blocking paint: media="print" makes it #}
+    {# non-render-blocking, onload swaps it in. Icons aren't critical to FCP. #}
     <link data-bs-stylesheet="bootstrap-icons" rel="stylesheet"
-          href="{% static 'commun/css/bootstrap-icons.min.css' %}">
+          href="{% static 'commun/css/bootstrap-icons.min.css' %}"
+          media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="{% static 'commun/css/bootstrap-icons.min.css' %}"></noscript>
     <link rel="stylesheet" href="{% static 'commun/css/vars.css' %}">
     {# LA couleur d'identite du site. Chargee APRES vars.css (qui porte la charte, #}
     {# les --kouler-*) car elle en derive les jumeaux accessibles, et APRES #}
@@ -122,7 +130,12 @@
     <link rel="stylesheet" href="{% static 'commun/css/tibillet.css' %}">
     <link rel="stylesheet" href="{% static 'commun/css/swal.css' %}">
 
-    <script src="{% static 'commun/js/bootstrap.bundle.min.5.3.3.js' %}"></script>
+    {# defer : Bootstrap ne bloque plus le parsing. Ses composants (dropdown, #}
+    {# offcanvas) s'initialisent au clic ou sur DOMContentLoaded, après les #}
+    {# scripts defer — dispo à temps. htmx, lui, reste NON defer (voir plus bas). #}
+    {# / defer: Bootstrap no longer blocks parsing; its components init on click #}
+    {# or DOMContentLoaded, after defer scripts. htmx stays non-defer (see below). #}
+    <script defer src="{% static 'commun/js/bootstrap.bundle.min.5.3.3.js' %}"></script>
     {% comment %}
     Config htmx (lue par htmx à son chargement) :
     - historyCacheSize 0 : pas de cliché du DOM dans le localStorage — après un
@@ -135,6 +148,13 @@
     and without a snapshot, back triggers a real full reload (guaranteed fresh).
     {% endcomment %}
     <meta name="htmx-config" content='{"historyCacheSize": 0, "refreshOnHistoryMiss": true}'>
+    {# htmx et loading-states laissés NON defer par prudence. Le gain d'un defer #}
+    {# serait marginal (htmx est petit, et le gros du blocage venait du CSS et #}
+    {# de bootstrap.bundle, déjà traités) alors que l'ordre htmx → extension est #}
+    {# sensible : on n'y touche pas pour un bénéfice négligeable. #}
+    {# / htmx and loading-states kept non-defer on purpose: the gain would be #}
+    {# marginal (htmx is small; the real blocking was CSS + bootstrap.bundle) #}
+    {# and the htmx → extension ordering is sensitive — not worth the risk. #}
     <script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
     <script>
         /**
@@ -167,7 +187,9 @@
         });
     </script>
     <script src="{% static 'mvt_htmx/js/loading-states.js' %}"></script>
-    <script src="{% static 'commun/js/sweetalert2@11.js' %}"></script>
+    {# defer : sweetalert2 n'est appelé que sur interaction (jamais au 1er paint). #}
+    {# / defer: sweetalert2 is only invoked on interaction. #}
+    <script defer src="{% static 'commun/js/sweetalert2@11.js' %}"></script>
     {% if formbricks_api_host %}
         <script src="{{ formbricks_api_host }}/js/formbricks.umd.cjs" async></script>
     {% endif %}

@@ -101,16 +101,33 @@ class BSCounter extends HTMLElement
         else return this.#toPrecision(0)
     }
 
-    // grab a stylesheet with a data-bs-stylesheet attribute
-    #getStyleSheet = name =>
-        [...document.styleSheets].find(sheet => sheet.ownerNode.dataset.bsStylesheet === name)
+    // grab the <link> node with a data-bs-stylesheet attribute.
+    // On lit le DOM (querySelector), PAS document.styleSheets : bootstrap-icons
+    // est chargé en media="print" (non bloquant), il peut donc ne PAS encore
+    // être dans document.styleSheets quand ce composant s'initialise sur une
+    // connexion lente. Le <link> du <head>, lui, est présent dès le parsing.
+    // / Read the DOM node, NOT document.styleSheets: bootstrap-icons loads
+    // async (media="print") and may not be in styleSheets yet when this
+    // component upgrades on a slow link; the <head> <link> is always present.
+    #getStyleSheetNode = name =>
+        document.querySelector(`link[data-bs-stylesheet="${name}"]`)
 
-    // add bs styles to the beginning of the shadow root
+    // add bs styles to the beginning of the shadow root.
+    // - `filter(Boolean)` : sans lui, une feuille absente prepend `undefined`,
+    //   que le DOM convertit en nœud texte « undefined » VISIBLE dans le compteur.
+    // - `clone.media = 'all'` : l'original bootstrap-icons est en media="print",
+    //   le clone doit s'appliquer dans le shadow DOM.
+    // / filter(Boolean) avoids prepending `undefined` (rendered as a visible
+    //   "undefined" text node); clone.media='all' overrides the print media.
     #importBS = () =>
         this.shadowRoot.prepend(
-            ...['bootstrap', 'bootstrap-icons'].map(id =>
-                this.#getStyleSheet(id)?.ownerNode.cloneNode()
-            )
+            ...['bootstrap', 'bootstrap-icons'].map(name => {
+                const node = this.#getStyleSheetNode(name)
+                if (!node) return null
+                const clone = node.cloneNode()
+                clone.media = 'all'
+                return clone
+            }).filter(Boolean)
         )
     
     #setupTemplate = () => {

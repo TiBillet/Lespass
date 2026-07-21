@@ -19,7 +19,7 @@
         <figcaption class="tb-bloc__auteur">
             {% if bloc.auteur_photo %}
                 <img class="tb-bloc__auteur-photo"
-                     src="{{ bloc.auteur_photo.thumbnail.url }}"
+                     {% if bloc.auteur_photo.thumbnail.width and bloc.auteur_photo.thumbnail.height %}width="{{ bloc.auteur_photo.thumbnail.width }}" height="{{ bloc.auteur_photo.thumbnail.height }}"{% endif %} src="{{ bloc.auteur_photo.thumbnail.url }}"
                      alt="{{ bloc.auteur_nom }}"
                      loading="lazy">
             {% endif %}

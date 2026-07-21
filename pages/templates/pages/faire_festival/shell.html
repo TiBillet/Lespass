@@ -88,7 +88,11 @@
     <link data-bs-stylesheet="bootstrap" href="{% static 'commun/css/bootstrap.min.5.3.3.css' %}" rel="stylesheet">
 
     <!-- Bootstrap Icons : Bibliothèque d'icônes -->
-    <link data-bs-stylesheet="bootstrap-icons" rel="stylesheet" href="{% static 'commun/css/bootstrap-icons.min.css' %}">
+    {# bootstrap-icons async (media=print + onload) : non bloquant au 1er paint. #}
+    {# / bootstrap-icons async, not render-blocking. #}
+    <link data-bs-stylesheet="bootstrap-icons" rel="stylesheet" href="{% static 'commun/css/bootstrap-icons.min.css' %}"
+          media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="{% static 'commun/css/bootstrap-icons.min.css' %}"></noscript>
 
     <!-- CSS personnalisé pour le thème Faire Festival (brutaliste jaune/bleu) -->
     <link rel="stylesheet" href="{% static 'commun/css/vars.css' %}">
@@ -106,7 +110,7 @@
          SCRIPTS JAVASCRIPT : Fonctionnalités interactives
          ================================================================ -->
     <!-- Bootstrap JS : servi en local (version 5.3.3) -->
-    <script src="{% static 'commun/js/bootstrap.bundle.min.5.3.3.js' %}"></script>
+    <script defer src="{% static 'commun/js/bootstrap.bundle.min.5.3.3.js' %}"></script>
 
     <!-- HTMX : Bibliothèque pour les requêtes AJAX sans JavaScript -->
     {% comment %}
@@ -121,6 +125,10 @@
     and without a snapshot, back triggers a real full reload (guaranteed fresh).
     {% endcomment %}
     <meta name="htmx-config" content='{"historyCacheSize": 0, "refreshOnHistoryMiss": true}'>
+    {# htmx et loading-states laissés non-defer par prudence : gain marginal, #}
+    {# ordre htmx → extension sensible. Voir classic/shell.html. #}
+    {# / htmx and loading-states kept non-defer: marginal gain, sensitive #}
+    {# ordering. See classic/shell.html. #}
     <script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
     <script>
         /**
@@ -173,7 +181,7 @@
     <script src="{% static 'mvt_htmx/js/loading-states.js' %}"></script>
 
     <!-- SweetAlert2 : Bibliothèque pour les alertes et modales élégantes -->
-    <script src="{% static 'commun/js/sweetalert2@11.js' %}"></script>
+    <script defer src="{% static 'commun/js/sweetalert2@11.js' %}"></script>
 
     <!-- Formbricks : Système de formulaires et sondages (si configuré) -->
     {% if formbricks_api_host %}

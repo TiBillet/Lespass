@@ -1,7 +1,7 @@
 ---
 slug: commun_numerique
 title: Des communs ?
-description: C'est quoi déjà, un commun ?
+description: Qu'est-ce qu'un commun numérique ? Licences libres, gouvernance partagée et économie sociale et solidaire, expliqués par la coopérative Code Commun.
 sidebar_position: 1
 tags: [licence libre, coopérative, économie sociale et solidaire, commun numérique]
 keywords: [licence libre, coopérative, économie sociale et solidaire, commun numérique]

@@ -715,9 +715,14 @@ class Command(BaseCommand):
 
         # 4-7 — Cartes logiciels (image + description + bouton « Découvrir »).
         # / Software cards (image + description + "Découvrir" button).
+        # Cartes des logiciels maintenus par la cooperative. Les titres portent
+        # le domaine (.coop / .org) : c'est aussi l'identifiant que les gens
+        # tapent dans leur navigateur. Ordre = importance decroissante.
+        # / Software cards. Titles carry the domain (.coop / .org), which is
+        # also what people type in their browser.
         logiciels = [
             (
-                "TiBillet",
+                "TiBillet.coop",
                 "kit/logos/png/monochrome.png",
                 "https://tibillet.coop",
                 "Tibillet est une suite d'outils pour faciliter nos organisations "
@@ -726,7 +731,7 @@ class Command(BaseCommand):
                 "Sociale Alimentaire... Une solution complète et libre.",
             ),
             (
-                "O2Badge",
+                "OpenBadge.coop",
                 "badge_blanc.png",
                 "https://openbadge.coop",
                 "Plateforme complète de gestion de badges numériques ouverts (Open "
@@ -734,12 +739,12 @@ class Command(BaseCommand):
                 "relève de l'expérience humaine !",
             ),
             (
-                "Reparons.org",
-                "soudure.png",
-                "https://reparons.org/",
-                "Plateforme libre de réservation d'ateliers de réparation. Vous avez "
-                "envie de réparer ou de créer ? Prenez rendez-vous et nous le faisons "
-                "ensemble !",
+                "Hypostasia.org",
+                "hypostasia.png",
+                "https://hypostasia.org",
+                "Un outil libre pour lire, extraire et débattre collectivement d'un "
+                "texte. Importez un PDF, un audio ou une page web, Hypostasia en "
+                "extrait le contenu et ouvre la discussion.",
             ),
             (
                 "Formations",
