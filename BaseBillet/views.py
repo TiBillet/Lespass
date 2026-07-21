@@ -92,6 +92,25 @@ def _contexte_page_erreur(request):
 
     LOCALISATION : BaseBillet/views.py
     """
+    # Sur le schema public, get_context() ne PEUT pas fonctionner : tous ses
+    # modeles (Configuration, CrowdConfig, Carrousel, Page) sont des
+    # TENANT_APPS, leurs tables n'existent que dans les schemas tenant. Les
+    # memes handlers 404/500 sont pourtant declares pour l'URLconf public
+    # (TiBillet/urls_public.py), donc chaque 404 du root — les scanners en
+    # produisent en continu — passerait ici. On rend le socle directement :
+    # sans cette garde, l'appel part quand meme, PostgreSQL journalise un
+    # ERROR "relation does not exist" et l'except plus bas le rattrape.
+    # / On the public schema get_context() CANNOT work: all its models are
+    # TENANT_APPS whose tables only exist in tenant schemas. Yet the same
+    # 404/500 handlers are declared for the public URLconf, so every root 404
+    # — scanners produce a stream of them — would land here. Render the base
+    # skin directly: without this guard the call still fires, PostgreSQL logs
+    # a "relation does not exist" ERROR, and the except below catches it.
+    if connection.schema_name == "public":
+        if request.htmx:
+            return {"base_template": "pages/classic/headless.html", "main_nav": []}
+        return {"base_template": "pages/classic/shell.html", "main_nav": []}
+
     try:
         return get_context(request)
     except Exception as erreur_contexte:

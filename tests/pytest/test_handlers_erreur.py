@@ -69,6 +69,29 @@ def test_handler404_rend_le_fragment_headless_sous_htmx(tenant):
     assert "404" in contenu
 
 
+def test_handler404_sur_schema_public_ne_touche_pas_la_base(django_assert_num_queries):
+    """
+    Sur le schema public, la 404 se rend SANS aucune requete SQL.
+
+    Les memes handlers servent l'URLconf public (TiBillet/urls_public.py), or
+    get_context() n'y lit que des TENANT_APPS : leurs tables n'existent pas
+    dans `public`. Chaque sonde de robot sur le root passe par ici, donc le
+    cout doit rester nul — une seule requete ici signifie que la garde de
+    _contexte_page_erreur a saute et que PostgreSQL journalise a nouveau un
+    ERROR "relation does not exist" par 404.
+    / On the public schema the 404 renders with NO SQL query at all. A single
+    query here means the guard in _contexte_page_erreur is gone and PostgreSQL
+    logs a "relation does not exist" ERROR per 404 again.
+    """
+    from BaseBillet.views import handler404
+
+    with django_assert_num_queries(0):
+        reponse = handler404(_fabriquer_requete("/wp-json/"))
+
+    assert reponse.status_code == 404
+    assert "<!doctype html>" in reponse.content.decode().lower()
+
+
 def test_handler500_rend_le_shell_avec_l_exception(tenant):
     """La 500 rend le shell du skin et transmet le type d'exception au gabarit."""
     from BaseBillet.views import handler500
