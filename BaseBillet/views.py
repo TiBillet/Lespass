@@ -238,17 +238,16 @@ def get_context(request):
         "formbricks_api_host": formbricks_config.api_host,
         "mode_test": True if os.environ.get('TEST') == '1' else False,
         # Delai avant l'overlay de chargement, en millisecondes (commun/loading.html).
-        # 800 et non 400 : une page publique repond en 200-500 ms en production,
-        # donc a 400 l'overlay s'ouvrait pile au moment ou la reponse arrivait —
-        # il vivait quelques dizaines de millisecondes, moins que sa propre
-        # transition d'entree (80 ms). Resultat : un flash de flou, exactement le
-        # blink que ce delai existe pour supprimer. 800 place le seuil au-dela du
-        # temps de reponse normal : l'overlay ne sort que pour une attente reelle.
-        # / Loading overlay delay in ms. 800, not 400: a public page answers in
-        # 200-500 ms in production, so at 400 the overlay opened right as the
-        # response landed and lived less than its own 80 ms fade-in — a flash of
-        # blur, the very blink this delay exists to remove.
-        "loading_delay": 800,
+        # 400 est un seuil de VISIBILITE, pas de confort : une page publique doit
+        # repondre sous 400 ms, donc un overlay qui apparait signale une lenteur
+        # reelle a corriger. Le monter pour "moins voir le spinner" masquerait le
+        # symptome sans traiter la cause — c'est le temps de reponse qu'il faut
+        # faire baisser, pas le seuil qu'il faut remonter.
+        # / Loading overlay delay in ms. 400 is a VISIBILITY threshold, not a
+        # comfort one: a public page should answer under 400 ms, so an overlay
+        # showing up flags real slowness. Raising it to "see the spinner less"
+        # would hide the symptom instead of fixing the response time.
+        "loading_delay": 400,
         "carrousel_event_list": Carrousel.objects.filter(on_event_list_page=True).order_by('order'),
         "main_nav": []
     }

@@ -28,8 +28,33 @@ And without timing, a slowness report could not be traced to network vs applicat
 
 | Fichier / File | Changement / Change |
 |---|---|
-| `nginx_prod/lespass_prod.conf` | nouveau `log_format tibillet` (contexte `http`), reference par `access_log` |
+| `nginx_prod/lespass_prod.conf` | nouveau `log_format tibillet` (contexte `http`), reference par `access_log` ; bloc `set_real_ip_from` / `real_ip_header` / `real_ip_recursive` |
 | `supervisor/conf.d/gunicorn.conf` | ajout de `--access-logformat` sur la ligne `command=` |
+
+### La vraie IP demande `real_ip`, pas seulement un champ de log
+
+Journaliser `$remote_addr` ne suffit pas : cette variable contient l'IP de **qui ouvre la
+connexion vers nginx**, c'est-a-dire **Traefik** (`172.18.0.x`), sur 100 % des lignes. La
+seule facon d'obtenir le visiteur est de reconstruire l'adresse depuis `X-Forwarded-For`,
+ce que fait le module `real_ip` :
+
+```nginx
+set_real_ip_from 172.16.0.0/12;   # + 10.0.0.0/8 et 192.168.0.0/16
+real_ip_header X-Forwarded-For;
+real_ip_recursive on;
+```
+
+`set_real_ip_from` liste les intermediaires a qui l'on fait confiance pour cet en-tete. **La
+restriction aux plages privees est ce qui rend l'operation sure** : un client ne peut pas se
+forger une fausse IP, puisque sa propre adresse source ne figure pas dans la liste. Elle est
+correcte ici parce que nginx n'est pas expose directement — seul Traefik l'est.
+
+`real_ip_recursive on` remonte la chaine `X-Forwarded-For` en ignorant les adresses de
+confiance et retient la premiere qui n'en est pas une : la bonne des qu'il y a plus d'un
+proxy en amont.
+
+/!\ Ceci corrige `$remote_addr` pour **tout le serveur**, pas seulement le log : toute regle
+future basee dessus (`limit_req`, `allow`/`deny`) verra elle aussi la vraie IP. C'est voulu.
 
 ### Ce que donnent les nouvelles lignes / What the new lines look like
 

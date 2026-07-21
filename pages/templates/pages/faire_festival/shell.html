@@ -97,6 +97,20 @@
     <!-- CSS personnalisé pour le thème Faire Festival (brutaliste jaune/bleu) -->
     <link rel="stylesheet" href="{% static 'commun/css/vars.css' %}">
     <link rel="stylesheet" href="{% static 'commun/css/tibillet.css' %}">
+    {# CSS des blocs de contenu. Ce skin n'habille qu'une partie des couples #}
+    {# (type, affichage) : les autres retombent sur le socle classic, dont le #}
+    {# balisage utilise .tb-bloc*. Sans cette feuille ils s'affichent NUS. #}
+    {# Elle est chargee AVANT faire_festival.css, qui la surcharge — l'inverse #}
+    {# ecraserait l'habillage du skin par le socle. #}
+    {# IL DOIT RESTER DANS CE <head> : la navigation HTMX remplace tout le #}
+    {# <body>, donc un <link> pose dans le corps de la page est retire du DOM a #}
+    {# chaque swap et le contenu se repeint sans style le temps de sa #}
+    {# revalidation. Le <head>, lui, n'est jamais swappe. #}
+    {# / Content blocks CSS — the skin only styles some (type, display) pairs, #}
+    {# the rest falls back to the classic base which uses .tb-bloc*. Loaded #}
+    {# BEFORE faire_festival.css, which overrides it. IT MUST STAY IN THIS #}
+    {# <head>: a <link> in the body is removed from the DOM on every HTMX swap. #}
+    <link rel="stylesheet" href="{% static 'pages/css/tb-blocs.css' %}">
     <link rel="stylesheet" href="{% static 'faire_festival/css/faire_festival.css' %}">
 
     <!-- CSS pour les alertes SweetAlert2 -->

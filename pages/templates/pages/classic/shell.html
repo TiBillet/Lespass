@@ -128,6 +128,21 @@
     {# accessible twins from it, and after bootstrap since it rewires its primary. #}
     <link rel="stylesheet" href="{% static 'commun/css/marque.css' %}">
     <link rel="stylesheet" href="{% static 'commun/css/tibillet.css' %}">
+    {# CSS des blocs de contenu (.tb-bloc*). IL DOIT RESTER DANS CE <head>, meme #}
+    {# si seules les pages de l'app `pages` s'en servent : la navigation HTMX #}
+    {# remplace tout le <body>, donc un <link> pose dans le corps de la page est #}
+    {# RETIRE du DOM a chaque swap. Ses styles sont alors desappliques d'un coup, #}
+    {# et le temps que le navigateur revalide le fichier (~25 ms, meme en cache) #}
+    {# le contenu s'affiche nu. Ici, le <head> n'est jamais swappe : la feuille #}
+    {# reste appliquee d'une page a l'autre. #}
+    {# 24 Ko gzippes charges une fois, y compris sur les vues sans bloc : c'est #}
+    {# le prix a payer pour ne plus voir la page se peindre sans style. #}
+    {# / Content blocks CSS. IT MUST STAY IN THIS <head>: HTMX navigation swaps #}
+    {# the whole <body>, so a <link> placed in the page body is REMOVED from the #}
+    {# DOM on every swap — its styles drop instantly and the content paints #}
+    {# unstyled until the browser revalidates the file (~25 ms, even cached). #}
+    {# The <head> is never swapped, so the sheet stays applied across pages. #}
+    <link rel="stylesheet" href="{% static 'pages/css/tb-blocs.css' %}">
     <link rel="stylesheet" href="{% static 'commun/css/swal.css' %}">
 
     {# defer : Bootstrap ne bloque plus le parsing. Ses composants (dropdown, #}

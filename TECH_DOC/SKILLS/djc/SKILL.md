@@ -406,7 +406,7 @@ form.addEventListener("htmx:configRequest", function(event) {
 
 The `loading-states` extension manages a global loading overlay during navigation. Activated on `<body>` via `hx-ext="loading-states"`.
 
-**UX principle:** the overlay (frosted glass blur + dark veil) only appears if the request takes longer than `loading_delay` ms (currently 800). Fast requests show nothing — no blink. The delay comes from `get_context()` (`BaseBillet/views.py`).
+**UX principle:** the overlay (frosted glass blur + dark veil) only appears if the request takes longer than `loading_delay` ms (400). Fast requests show nothing — no blink. The delay comes from `get_context()` (`BaseBillet/views.py`).
 
 #### L'overlay a UN SEUL déclencheur — et tu n'as rien à écrire
 
@@ -458,7 +458,7 @@ qu'on ne veut pas voiler tout l'écran. Il se cible lui-même et porte son propr
 </div>
 <div hx-get="/my_account/tokens_table/" hx-trigger="revealed"
      data-loading-target="#token-table-loader"
-     data-loading-delay="{{ loading_delay|default:'800' }}"></div>
+     data-loading-delay="{{ loading_delay|default:'400' }}"></div>
 ```
 
 - `data-loading-disable` sur un bouton : à laisser **sans délai**, la désactivation immédiate

@@ -7,11 +7,10 @@
 
 **Quoi / What :** l'overlay de chargement (`#tibillet-spinner`) s'affichait ~3 ms apres le
 debut de **toute** requete htmx, au lieu d'attendre le delai prevu. Quatre formulaires le
-declenchaient sans temporisation. Les attributs fautifs sont retires, et le seuil passe de
-400 a 800 ms.
+declenchaient sans temporisation ; leurs attributs sont retires. Le seuil reste a **400 ms**.
 / The loading overlay showed ~3 ms after the start of **any** htmx request instead of
-waiting for the delay. Four forms triggered it with no debounce. The offending attributes
-are removed and the threshold moves from 400 to 800 ms.
+waiting for the delay. Four forms triggered it with no debounce; their attributes are
+removed. The threshold stays at **400 ms**.
 
 **Pourquoi / Why :** `loading-states.js` cherche le delai avec
 `htmx.closest(sourceElt, '[data-loading-delay]')` et, **quand il n'en trouve pas, appelle le
@@ -37,7 +36,7 @@ reelle dans le navigateur :
 | | Requete | Overlay |
 |---|---|---|
 | Avant | 71 ms | **VISIBLE a +3 ms** |
-| Apres (seuil 800) | 79 ms | jamais affiche |
+| Apres | 79 ms | jamais affiche |
 | Apres, seuil force a 10 ms | 96 ms | VISIBLE a +12 ms, cache a +125 ms |
 
 La troisieme ligne verifie que le mecanisme n'a pas ete desactive : c'est bien le SEUIL qui
@@ -51,14 +50,16 @@ decide desormais, pas un declencheur parasite.
 | `BaseBillet/templates/commun/formulaires/contact.html` | idem |
 | `BaseBillet/templates/commun/formulaires/reservation.html` | idem |
 | `BaseBillet/templates/commun/adhesion/form.html` | idem |
-| `BaseBillet/templates/commun/loading.html` | delai par defaut 300 -> 800, + commentaire de garde sur le declencheur unique |
-| `BaseBillet/views.py` | `loading_delay` 400 -> 800 dans `get_context()` |
+| `BaseBillet/templates/commun/loading.html` | delai par defaut aligne sur 400, + commentaire de garde sur le declencheur unique |
+| `BaseBillet/views.py` | commentaire sur `loading_delay` (valeur inchangee : 400) |
 | `TECH_DOC/SKILLS/djc/SKILL.md` | section « HTMX Loading Overlay » reecrite |
 
-**Pourquoi 800 et pas 400 :** une page publique repond en 200-500 ms en production. A 400,
-l'overlay s'ouvrait pile au moment ou la reponse arrivait et vivait quelques dizaines de
-millisecondes — moins que sa propre transition d'entree (80 ms). Resultat : un flash de flou,
-exactement le blink que ce delai existe pour supprimer.
+**Pourquoi le seuil RESTE a 400 ms :** c'est un seuil de **visibilite**, pas de confort. Une
+page publique doit repondre sous 400 ms ; un overlay qui apparait signale donc une lenteur
+reelle, a corriger. Le monter pour « moins voir le spinner » masquerait le symptome sans
+traiter la cause. En production, la home de codecommun.coop repond aujourd'hui en 541 ms
+(`urt=0.542`) : l'overlay y apparait, et c'est le comportement voulu tant que ce temps n'a
+pas baisse.
 
 **Non touche :** `#token-table-loader` dans `fonctionnel/compte/balance.html`. C'est un
 spinner LOCAL correct — il se cible lui-meme et porte son propre delai.
@@ -83,10 +84,10 @@ rien — c'est un redirecteur, il n'agit que sur un element portant deja un attr
 ### Test 2 — l'overlay sort toujours quand c'est lent (LE test qui compte)
 
 C'est ici que le correctif pourrait avoir trop enleve. Chaque formulaire touche doit encore
-voiler l'ecran quand son traitement depasse 800 ms :
+voiler l'ecran quand son traitement depasse 400 ms :
 
 1. **Connexion** — panneau de connexion, saisir un email, valider. L'envoi du mail de
-   connexion prend plus de 800 ms : l'overlay doit apparaitre.
+   connexion prend plus de 400 ms : l'overlay doit apparaitre.
 2. **Contact** — panneau contact, envoyer un message (envoi d'email).
 3. **Reservation** — reserver une place sur un evenement payant (aller-retour Stripe).
 4. **Adhesion** — souscrire une adhesion payante.
