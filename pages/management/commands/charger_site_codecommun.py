@@ -678,7 +678,7 @@ class Command(BaseCommand):
             position=2,
             titre="Une fabrique collective",
             texte=(
-                "La Maison des Communs héberge **Code Commun**, une "
+                "Code Commun esst une "
                 "**coopérative (SCIC)**.  \n"
                 "Nous fabriquons des **logiciels** sous licences **libres**.  \n"
                 "Nous formons autant à l'utilisation qu'à la création de ces outils.  \n"
