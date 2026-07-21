@@ -55,16 +55,37 @@ SLUGS_RESERVES = frozenset({
     # / Other URL prefixes mounted by TiBillet/urls_tenants.py.
     "rss", "logout", "fwh", "fedow", "crowd", "contrib", "newsletter",
     "stripe", "laboutik", "kiosk", "controlvanne", "i18n", "sitemap.xml",
+    # Sondes WordPress coupees par nginx (voir PREFIXES_SLUGS_RESERVES).
+    # / WordPress probes cut by nginx (see PREFIXES_SLUGS_RESERVES).
+    "xmlrpc.php", "wlwmanifest.xml",
 })
+
+# Prefixes de slug bloques EN AMONT DE DJANGO, par nginx.
+# `nginx_prod/lespass_prod.conf` coupe les sondes WordPress avec un `return 444`
+# (connexion fermee sans reponse) : ces requetes n'atteignent jamais Django.
+# Une Page qui prendrait un tel slug serait donc INJOIGNABLE en production, et
+# de la pire facon — pas de 404, pas de message, juste une connexion qui se
+# ferme. On refuse le slug au moment de la saisie plutot que de laisser
+# decouvrir la panne des semaines plus tard.
+# / Slug prefixes blocked UPSTREAM of Django by nginx, which cuts WordPress
+# probes with `return 444`. A Page using such a slug would be unreachable in
+# production with no error message at all, so we refuse it at input time.
+PREFIXES_SLUGS_RESERVES = ("wp-",)
 
 
 def valider_slug_non_reserve(valeur):
     """
-    Verifie que le slug n'est pas dans la liste des slugs reserves.
-    / Checks the slug is not in the reserved slugs list.
+    Verifie que le slug n'entre en collision avec aucune route existante.
+    / Checks the slug does not collide with an existing route.
 
     Appele automatiquement par full_clean() (donc par les formulaires admin).
     / Called automatically by full_clean() (so by admin forms).
+
+    Deux familles de collisions :
+    - un slug EXACT deja pris par une route Django (SLUGS_RESERVES) ;
+    - un PREFIXE intercepte par nginx avant Django (PREFIXES_SLUGS_RESERVES).
+    / Two kinds of collision: an exact slug already taken by a Django route, and
+    a prefix intercepted by nginx before Django.
     """
     if valeur in SLUGS_RESERVES:
         raise ValidationError(
@@ -72,6 +93,18 @@ def valider_slug_non_reserve(valeur):
             params={"slug": valeur},
             code="slug_reserve",
         )
+
+    for prefixe_reserve in PREFIXES_SLUGS_RESERVES:
+        if valeur.startswith(prefixe_reserve):
+            raise ValidationError(
+                _(
+                    "Un slug ne peut pas commencer par « %(prefixe)s » : le serveur "
+                    "bloque ces adresses avant le site pour couper les scans "
+                    "automatiques. La page serait inaccessible."
+                ),
+                params={"prefixe": prefixe_reserve},
+                code="slug_prefixe_reserve",
+            )
 
 
 # Limite de taille des images uploadees (octets). Genereuse pour ne pas bloquer la

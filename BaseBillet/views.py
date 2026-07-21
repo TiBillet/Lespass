@@ -59,6 +59,13 @@ from BaseBillet.validators import LoginEmailValidator, MembershipValidator, Link
 from Administration.utils import clean_html as admin_clean_html
 from Customers.models import Client, Domain
 from TiBillet import settings
+# Le settings PARESSEUX de Django, sous alias : `TiBillet.settings` ci-dessus est
+# le module brut, fige a l'import, qu'un `override_settings()` de test ne touche
+# pas. Toute lecture qui doit refleter la configuration REELLE au moment de
+# l'execution passe par celui-ci.
+# / Django's lazy settings, aliased: the module imported above is frozen at import
+# time and ignores `override_settings()` in tests.
+from django.conf import settings as django_settings
 from crowds.models import CrowdConfig, Initiative
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
@@ -115,10 +122,20 @@ def _contexte_page_erreur(request):
     # / getattr, not request.htmx: an error handler ALSO runs when the middleware
     # chain failed early. HtmxMiddleware is 10th, TenantMainMiddleware 1st, so on
     # an unknown hostname the 404 fires before request.htmx exists.
+    # `sans_panneaux_globaux` retire les panneaux connexion et contact du
+    # gabarit : ils postent vers /connexion/ et /home/contact/, deux routes de
+    # TENANT qui n'existent pas dans l'URLconf public. Les afficher sur le
+    # domaine racine offrirait des formulaires qui echouent au premier envoi.
+    # / `sans_panneaux_globaux` drops the login and contact panels: they post to
+    # tenant-only routes absent from the public URLconf, so on the root domain
+    # they would be forms that fail on first submit.
     if connection.schema_name == "public":
+        contexte_public = {"main_nav": [], "sans_panneaux_globaux": True}
         if getattr(request, "htmx", False):
-            return {"base_template": "pages/classic/headless.html", "main_nav": []}
-        return {"base_template": "pages/classic/shell.html", "main_nav": []}
+            contexte_public["base_template"] = "pages/classic/headless.html"
+        else:
+            contexte_public["base_template"] = "pages/classic/shell.html"
+        return contexte_public
 
     try:
         return get_context(request)
@@ -153,11 +170,37 @@ def handler500(request, exception=None):
     exception_to_use = exception if exception else exc_value
 
     context = _contexte_page_erreur(request)
-    context.update({
-        'exception': str(exception_to_use) if exception_to_use else None,
-        'type_exception': type(exception_to_use).__name__ if exception_to_use else None,
-    })
-    logger.info({'exception': context.get('exception'), 'type_exception': context.get('type_exception')})
+
+    # Le detail de l'exception part dans les LOGS, jamais dans la page.
+    # / The exception detail goes to the LOGS, never to the page.
+    logger.error(
+        f"handler500 sur {request.path} : "
+        f"{type(exception_to_use).__name__ if exception_to_use else 'sans exception'} "
+        f"— {exception_to_use}",
+        exc_info=exception_to_use or True,
+    )
+
+    # Le message d'exception n'est transmis au gabarit QUE si DEBUG est actif.
+    # Ces handlers ne tournent justement qu'avec DEBUG=0 : sans cette garde, le
+    # message brut est affiche a n'importe quel visiteur anonyme, sur le domaine
+    # racine compris (urls_public.py declare les memes handlers). Il divulgue
+    # alors l'infrastructure — « password authentication failed for user
+    # "tibillet" », le nom des tables, l'hote PostgreSQL — et parfois une donnee
+    # personnelle : une IntegrityError sur un email renvoie l'adresse en clair a
+    # qui a provoque le conflit.
+    # Le gabarit 500.html prevoit deja la branche sans exception : il affiche un
+    # message neutre.
+    # / The exception message reaches the template ONLY under DEBUG. These
+    # handlers run precisely when DEBUG=0, so without this guard the raw message
+    # is shown to any anonymous visitor — leaking infrastructure details, and
+    # sometimes personal data (an IntegrityError on an email echoes the address).
+    # 500.html already renders a neutral message when the exception is absent.
+    if django_settings.DEBUG and exception_to_use:
+        context.update({
+            'exception': str(exception_to_use),
+            'type_exception': type(exception_to_use).__name__,
+        })
+
     return render(request, '500.html', context, status=500)
 
 

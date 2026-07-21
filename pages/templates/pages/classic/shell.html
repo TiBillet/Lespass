@@ -237,7 +237,13 @@
     {% include "pages/classic/partials/footer.html" %}
 {% endif %}
 
-{% if not embed %}
+{# `sans_panneaux_globaux` : pose par les handlers d'erreur sur le schema public #}
+{# (BaseBillet/views.py). Les panneaux connexion et contact postent vers des    #}
+{# routes de TENANT, absentes de l'URLconf public — les afficher sur le domaine #}
+{# racine donnerait des formulaires qui echouent a l'envoi.                     #}
+{# / `sans_panneaux_globaux` is set by the error handlers on the public schema: #}
+{# these panels post to tenant-only routes absent from the public URLconf.      #}
+{% if not embed and not sans_panneaux_globaux %}
     {% block offcanvas_globaux %}
         {% comment %}
         Chrome partagé : panneaux globaux, en fin de body (CHANTIER-02 lot C2).

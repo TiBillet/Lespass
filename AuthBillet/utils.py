@@ -11,17 +11,56 @@ logger = logging.getLogger(__name__)
 
 
 def get_client_ip(request):
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    """
+    Retourne l'adresse IP du visiteur, telle que le proxy l'a etablie.
+    / Returns the visitor's IP address, as established by the proxy.
+
+    LOCALISATION : AuthBillet/utils.py
+
+    L'ORDRE DES SOURCES EST UN CHOIX DE SECURITE, NE PAS L'INVERSER.
+
+    `X-Real-IP` est lu EN PREMIER parce que nginx l'IMPOSE : il vaut le
+    `$remote_addr` reconstruit par le module `real_ip` (cf. nginx_prod), qui
+    remonte la chaine `X-Forwarded-For` par la DROITE en ignorant les
+    intermediaires de confiance. C'est donc la seule valeur que le client ne
+    controle pas.
+
+    `X-Forwarded-For` ne sert qu'en REPLI, et on y prend le dernier element.
+    Cet en-tete s'ecrit en AJOUTANT A DROITE : son element de GAUCHE est celui
+    que le client a envoye lui-meme, donc entierement forgeable. Le lire
+    reviendrait a laisser n'importe qui choisir son identite.
+
+    Ce que cela protege : cette fonction sert d'identifiant de limitation de
+    debit (throttle DRF de l'identification, plafond de renvoi d'OTP dans
+    `onboard/views.py`). Prendre une valeur forgeable permettrait a la fois de
+    contourner ces plafonds — une IP differente a chaque requete — et de bloquer
+    une victime en remplissant le compteur associe a SON adresse.
+
+    / SOURCE ORDER IS A SECURITY CHOICE, DO NOT SWAP IT. `X-Real-IP` comes first
+    because nginx SETS it from the `real_ip`-rebuilt `$remote_addr`, which walks
+    `X-Forwarded-For` from the RIGHT skipping trusted hops — the client cannot
+    control it. `X-Forwarded-For` is a fallback only, and we take its LAST entry:
+    the header appends on the right, so its leftmost value is client-supplied.
+    This function identifies clients for rate limiting (DRF throttle, OTP resend
+    cap), so a forgeable value would both bypass the caps and let an attacker
+    lock out a victim by filling their counter.
+
+    :param request: l'objet Request Django
+    :return: l'adresse IP (str), ou None si aucune source n'est disponible
+    """
     x_real_ip = request.META.get('HTTP_X_REAL_IP')
+    if x_real_ip:
+        return x_real_ip.strip()
 
+    # Repli : le dernier maillon de la chaine, ajoute par le proxy le plus
+    # proche de nous — et non le premier, qui vient du client.
+    # / Fallback: the last hop, added by the nearest proxy — not the first,
+    # which comes from the client.
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
     if x_forwarded_for:
-        ip = x_forwarded_for.split(',')[0]
-    elif x_real_ip:
-        ip = x_real_ip
-    else:
-        ip = request.META.get('REMOTE_ADDR')
+        return x_forwarded_for.split(',')[-1].strip()
 
-    return ip
+    return request.META.get('REMOTE_ADDR')
 
 
 

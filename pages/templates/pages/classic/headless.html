@@ -15,11 +15,17 @@
     {% comment %}
     Chrome partagé : mêmes panneaux globaux qu'en page complète — nécessaires
     aussi en réponse HTMX (hx-target="body" remplace tout le contenu).
+    `sans_panneaux_globaux` est posé par les handlers d'erreur sur le schéma
+    public (BaseBillet/views.py) : ces panneaux postent vers des routes de
+    TENANT, absentes de l'URLconf public.
     / Shared chrome: same global panels as the full page — also needed in HTMX
-    responses (hx-target="body" replaces the whole content).
+    responses. `sans_panneaux_globaux` is set by the error handlers on the
+    public schema: these panels post to tenant-only routes.
     {% endcomment %}
-    {% include "commun/offcanvas/contact.html" %}
-    {% include "commun/offcanvas/connexion.html" %}
+    {% if not sans_panneaux_globaux %}
+        {% include "commun/offcanvas/contact.html" %}
+        {% include "commun/offcanvas/connexion.html" %}
+    {% endif %}
 {% endblock offcanvas_globaux %}
 
 {% block offcanvas %}{% endblock offcanvas %}

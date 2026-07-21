@@ -184,6 +184,51 @@ services:
       - backend
       - frontend
 
+  #########
+  # ROTATION DES JOURNAUX
+  #########
+
+  # Sans ce service, RIEN ne borne les fichiers de `./logs` : ils grossissent
+  # jusqu'a saturer le disque. Le plafond `logging:` des autres services ne les
+  # couvre pas — il ne s'applique qu'a la sortie standard des conteneurs, alors
+  # que nginx et gunicorn ecrivent, eux, directement dans le volume monte.
+  #
+  # POURQUOI UNE DUREE COURTE : depuis que nginx reconstruit l'adresse reelle du
+  # visiteur (bloc `real_ip` de lespass_prod.conf), ces journaux contiennent des
+  # DONNEES PERSONNELLES. Les conserver sans limite n'est ni utile — ils servent
+  # au diagnostic de latence, qui se fait sur quelques jours — ni defendable.
+  # 14 jours couvrent un incident et son analyse.
+  #
+  # `copytruncate` est le mode par defaut de cette image (verifie dans
+  # /usr/bin/logrotate.d/logrotate.sh) : le fichier est copie puis VIDE SUR
+  # PLACE, son inode ne change pas. C'est indispensable ici — nginx et gunicorn
+  # gardent leur descripteur ouvert et n'ont aucun signal a recevoir. Avec une
+  # rotation classique (renommage), ils continueraient d'ecrire dans le fichier
+  # renomme et le journal courant resterait vide pour toujours.
+  # NE PAS definir LOGROTATE_MODE sans mesurer cette consequence.
+  #
+  # / Without this service nothing bounds `./logs`: it grows until the disk is
+  # full. The `logging:` cap on other services does not cover it — that only
+  # applies to container stdout, while nginx and gunicorn write straight into
+  # the mounted volume. Retention is short because these logs now hold PERSONAL
+  # DATA (real visitor IPs, since the `real_ip` block). `copytruncate` is this
+  # image's default and is mandatory here: nginx and gunicorn keep their file
+  # descriptor open and receive no signal.
+  logrotate:
+    image: blacklabelops/logrotate:latest
+    container_name: lespass_logrotate
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      - LOGS_DIRECTORIES=/logs
+      - LOGROTATE_INTERVAL=daily
+      - LOGROTATE_COPIES=14
+      - LOGROTATE_COMPRESSION=compress
+    volumes:
+      - ./logs:/logs
+    networks:
+      - backend
+
 networks:
   frontend:
     external: true
