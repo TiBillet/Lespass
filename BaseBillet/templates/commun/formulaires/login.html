@@ -1,9 +1,7 @@
 {% load static i18n %}
 <form id="loginForm"
       hx-post="/connexion/" hx-target="body"
-      hx-swap="innerHTML"
-      data-loading-target="#tibillet-spinner"
-      data-loading-class="active">
+      hx-swap="innerHTML">
     <h4>{% trans "With an email" %}</h4>
     <div class="form-floating mb-3">
         <input type="email" class="form-control" id="loginEmail" placeholder="mon@email.fr" name="email" required>

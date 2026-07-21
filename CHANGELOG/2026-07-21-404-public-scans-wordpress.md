@@ -28,9 +28,9 @@ The page rendered fine, at the cost of a failing query and two log lines per pro
 
 | Fichier / File | Changement / Change |
 |---|---|
-| `BaseBillet/views.py` | `_contexte_page_erreur()` : garde `connection.schema_name == "public"` avant le `try`, rend le socle `pages/classic/` directement (shell ou headless selon HTMX) |
+| `BaseBillet/views.py` | `_contexte_page_erreur()` : garde `connection.schema_name == "public"` avant le `try`, rend le socle `pages/classic/` directement (shell ou headless selon HTMX). HTMX lu en `getattr(request, "htmx", False)` |
 | `nginx_prod/lespass_prod.conf` | Deux `location` en `return 444` : `^/wp-` et `^/(xmlrpc\.php\|wlwmanifest\.xml)$` |
-| `tests/pytest/test_handlers_erreur.py` | Nouveau test : la 404 sur `public` se rend avec zero requete SQL |
+| `tests/pytest/test_handlers_erreur.py` | Deux nouveaux tests : la 404 sur `public` se rend avec zero requete SQL, et se rend aussi sur une requete **sans attribut `htmx`** |
 
 Le `try/except` reste en place sous la garde : il couvre les vrais cas degrades
 (tenant casse, base injoignable), ou une page d'erreur doit TOUJOURS pouvoir s'afficher.
@@ -39,6 +39,22 @@ Le `try/except` reste en place sous la garde : il couvre les vrais cas degrades
 **Effet de bord voulu :** la 404 du schema public devient swappable en HTMX (le repli
 renvoyait toujours le shell complet, meme sur une requete HTMX).
 / Intended side effect: the public 404 is now HTMX-swappable.
+
+### HTMX lu en `getattr` : un handler d'erreur ne peut rien supposer des middlewares
+
+`HtmxMiddleware` est le **10e** de `MIDDLEWARE`, `TenantMainMiddleware` le **1er**. Sur un
+hostname qui n'est dans aucun `Customers_domain` — le DNS wildcard `*.codecommun.coop`
+repond pour des sous-domaines sans tenant, les robots les explorent — `TenantMainMiddleware`
+leve `Http404` et la chaine s'arrete **avant** `HtmxMiddleware` : `request.htmx` n'existe
+pas. Une lecture directe leve `AttributeError` dans `handler404`, puis a nouveau dans
+`handler500`, et le visiteur recoit un **500 nu** la ou un 404 etait attendu (Sentry
+`BILLETTERIE-COOP-SA`). La lecture passe donc par `getattr(request, "htmx", False)`.
+/ `HtmxMiddleware` is 10th, `TenantMainMiddleware` 1st: on a hostname with no tenant the
+chain stops before `request.htmx` is ever set, so the handlers read it via `getattr`.
+
+La regle vaut au-dela de cette ligne : **un handler d'erreur tourne precisement quand la
+chaine a echoue**, il ne peut donc dependre d'aucun attribut pose par un middleware.
+Le `try/except` couvre le reste (`get_context()` lit `request.htmx` lui aussi).
 
 ---
 
@@ -86,9 +102,20 @@ ancree.
 docker exec lespass_django poetry run pytest tests/pytest/test_handlers_erreur.py -q
 ```
 
-Attendu : `4 passed`. Le nouveau test
-`test_handler404_sur_schema_public_ne_touche_pas_la_base` echoue si la garde disparait
-(verifie en la neutralisant : il reproduit exactement le `WARNING` d'origine).
+Attendu : `5 passed`. Deux tests protegent la garde, tous deux verifies en neutralisant le
+code qu'ils couvrent :
+- `test_handler404_sur_schema_public_ne_touche_pas_la_base` echoue si la garde disparait
+  (il reproduit exactement le `WARNING` d'origine).
+- `test_handler404_sans_attribut_htmx_rend_quand_meme_la_page` fabrique une requete sans
+  `.htmx` — comme la production quand la chaine de middlewares casse avant
+  `HtmxMiddleware`. Sans le `getattr` il tombe sur
+  `AttributeError: 'WSGIRequest' object has no attribute 'htmx'`.
+
+### Test 4 — hostname sans tenant (le cas Sentry)
+
+1. Frapper un sous-domaine qui n'est dans aucun `Customers_domain` :
+   `curl -sk -o /dev/null -w '%{http_code}\n' https://nexistepas.tibillet.localhost/robots.txt`
+2. Attendu : `404`. Avant le correctif : `500`.
 
 ### Verification de la syntaxe nginx
 

@@ -106,8 +106,17 @@ def _contexte_page_erreur(request):
     # — scanners produce a stream of them — would land here. Render the base
     # skin directly: without this guard the call still fires, PostgreSQL logs
     # a "relation does not exist" ERROR, and the except below catches it.
+    # getattr et pas request.htmx : un handler d'erreur tourne AUSSI quand la
+    # chaine de middlewares a echoue avant d'arriver au bout. HtmxMiddleware est
+    # le 10e de MIDDLEWARE, TenantMainMiddleware le 1er : sur un hostname inconnu
+    # (bot sur un sous-domaine wildcard non declare) le 404 part alors que
+    # request.htmx n'a jamais ete pose. Une lecture directe leve AttributeError
+    # ici, puis a nouveau dans handler500, et le visiteur recoit un 500 nu.
+    # / getattr, not request.htmx: an error handler ALSO runs when the middleware
+    # chain failed early. HtmxMiddleware is 10th, TenantMainMiddleware 1st, so on
+    # an unknown hostname the 404 fires before request.htmx exists.
     if connection.schema_name == "public":
-        if request.htmx:
+        if getattr(request, "htmx", False):
             return {"base_template": "pages/classic/headless.html", "main_nav": []}
         return {"base_template": "pages/classic/shell.html", "main_nav": []}
 
@@ -228,7 +237,18 @@ def get_context(request):
         # "tenant": connection.tenant,
         "formbricks_api_host": formbricks_config.api_host,
         "mode_test": True if os.environ.get('TEST') == '1' else False,
-        "loading_delay": 400,
+        # Delai avant l'overlay de chargement, en millisecondes (commun/loading.html).
+        # 800 et non 400 : une page publique repond en 200-500 ms en production,
+        # donc a 400 l'overlay s'ouvrait pile au moment ou la reponse arrivait —
+        # il vivait quelques dizaines de millisecondes, moins que sa propre
+        # transition d'entree (80 ms). Resultat : un flash de flou, exactement le
+        # blink que ce delai existe pour supprimer. 800 place le seuil au-dela du
+        # temps de reponse normal : l'overlay ne sort que pour une attente reelle.
+        # / Loading overlay delay in ms. 800, not 400: a public page answers in
+        # 200-500 ms in production, so at 400 the overlay opened right as the
+        # response landed and lived less than its own 80 ms fade-in — a flash of
+        # blur, the very blink this delay exists to remove.
+        "loading_delay": 800,
         "carrousel_event_list": Carrousel.objects.filter(on_event_list_page=True).order_by('order'),
         "main_nav": []
     }
