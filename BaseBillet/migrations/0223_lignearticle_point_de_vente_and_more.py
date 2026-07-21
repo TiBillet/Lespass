@@ -7,7 +7,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('BaseBillet', '0222_categorieproduct_remove_configuration_skin_and_more'),
+        ('BaseBillet', '0222_categorieproduct_module_pages_reprise_du_skin'),
         ('laboutik', '0001_initial'),
     ]
 
