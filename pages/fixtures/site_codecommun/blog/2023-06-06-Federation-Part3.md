@@ -5,7 +5,7 @@ authors: jonas
 keywords: [cashless, fédération, portefeuille, wallet, openwallet, caisse enregistreuse, tibillet, réunion des tiers-lieux, RTLx, économie sociale et solidaire, ess, coopérative, scic]
 tags: [cashless, fédération, portefeuille, wallet, openwallet, caisse enregistreuse, tibillet, réunion des tiers-lieux, RTLx, économie sociale et solidaire, ess, coopérative, scic]
 image: /img/federons/04-start_fede_notitle.png
-description: Fédérons TiBillet, troisième partie.
+description: "Fédérer TiBillet, épisode 3 : la structure technique de la fédération et l'historique du projet, de l'idée à la coopérative."
 ---
 
 ![/img/federons/04-start_fede_notitle.png](/img/federons/04-start_fede_notitle.png)

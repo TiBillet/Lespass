@@ -50,8 +50,12 @@
 
     <link rel="icon" type="image/png" href="{% static 'commun/img/favicon.png' %}">
     <link data-bs-stylesheet="bootstrap" href="{% static 'commun/css/bootstrap.min.5.3.3.css' %}" rel="stylesheet">
+    {# bootstrap-icons async (media=print + onload) : non bloquant au 1er paint. #}
+    {# / bootstrap-icons async, not render-blocking. #}
     <link data-bs-stylesheet="bootstrap-icons" rel="stylesheet"
-          href="{% static 'commun/css/bootstrap-icons.min.css' %}">
+          href="{% static 'commun/css/bootstrap-icons.min.css' %}"
+          media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="{% static 'commun/css/bootstrap-icons.min.css' %}"></noscript>
     <link rel="stylesheet" href="{% static 'commun/css/vars.css' %}">
     <link rel="stylesheet" href="{% static 'commun/css/tibillet.css' %}">
 

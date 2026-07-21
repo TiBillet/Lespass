@@ -406,44 +406,80 @@ form.addEventListener("htmx:configRequest", function(event) {
 
 The `loading-states` extension manages a global loading overlay during navigation. Activated on `<body>` via `hx-ext="loading-states"`.
 
-**UX principle:** the overlay (frosted glass blur + dark veil) only appears if the request takes longer than `loading_delay` ms (default: 400ms). Fast requests show nothing — no blink.
+**UX principle:** the overlay (frosted glass blur + dark veil) only appears if the request takes longer than `loading_delay` ms (400). Fast requests show nothing — no blink. The delay comes from `get_context()` (`BaseBillet/views.py`).
 
-The delay is a context variable from `get_context()`, injected via `{{ loading_delay|default:'400' }}`.
+#### L'overlay a UN SEUL déclencheur — et tu n'as rien à écrire
 
-Key attributes:
-- `data-loading-class="active"` — on the overlay element, adds a CSS class (enables CSS transitions)
-- `data-loading-delay` — debounce in ms, prevents blink on fast requests
-- `data-loading-target="#tibillet-spinner"` — on parent containers of navigation links, points to the overlay
-- `data-loading-disable` — disables a button during a request (useful for form submit buttons)
+`#tibillet-spinner` (dans `commun/loading.html`) porte lui-même le couple
+`data-loading-class="active"` + `data-loading-delay`. L'extension le retrouve à **chaque**
+requête htmx du document : son scope est `document.body` tant qu'aucun `data-loading-states`
+n'est posé. Toute navigation et toute soumission de formulaire l'allument donc déjà, après
+le délai.
+
+**Conséquence pratique : pour qu'un lien ou un formulaire affiche l'overlay, il n'y a
+RIEN à ajouter dessus.** C'est déjà le cas.
+
+#### Le piège : `data-loading-class` sans `data-loading-delay`
+
+Dans `loading-states.js`, `queueLoadingState()` cherche le délai avec
+`htmx.closest(sourceElt, '[data-loading-delay]')`. **Si aucun délai n'est trouvé, il n'y a
+pas de temporisation du tout** — le callback part immédiatement. Un élément qui porte
+`data-loading-class` sans délai affiche donc l'overlay en ~3 ms, et il le fait sur
+**toutes** les requêtes de la page, pas seulement les siennes (le scope est global).
 
 ```html
-<!-- Navigation container — scoped spinner trigger -->
-<nav data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
-    <a href="/event/" hx-get="/event/" hx-target="body" hx-push-url="true">Agenda</a>
-</nav>
+<!-- MAUVAIS : allume l'overlay en ~3 ms, sur TOUTE requete de la page -->
+<!-- BAD: fires the overlay in ~3 ms, on EVERY request of the page -->
+<form hx-post="/memberships/"
+      data-loading-target="#tibillet-spinner"
+      data-loading-class="active">
+
+<!-- BON : rien. #tibillet-spinner s'en charge, avec le delai. -->
+<!-- GOOD: nothing. #tibillet-spinner already handles it, with the delay. -->
+<form hx-post="/memberships/">
 ```
 
-**Scoping rule:** never put `data-loading-target` on a container that holds forms (`hx-post`). The overlay would fire on form submissions too. Scope it to navigation links only.
+#### `data-loading-target` seul ne déclenche rien
+
+C'est un **redirecteur**, pas un déclencheur : il n'agit que sur un élément portant déjà un
+attribut actif (`data-loading`, `data-loading-class`, `-class-remove`, `-disable`,
+`-aria-busy`). Posé sur un `<nav>` ou un conteneur de liens qui n'en porte aucun, il est
+sans effet — du code mort qui donne l'illusion d'un scope.
+
+Le seul usage légitime : un **spinner local**, quand une zone de la page charge seule et
+qu'on ne veut pas voiler tout l'écran. Il se cible lui-même et porte son propre délai
+(voir `#token-table-loader` dans `fonctionnel/compte/balance.html`) :
 
 ```html
-<!-- BON : scope sur le conteneur de liens seulement -->
-<!-- GOOD: scoped to the links container only -->
-<div class="nav-links" data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
-    <a href="/event/" hx-get="/event/" hx-target="body" hx-push-url="true">Agenda</a>
+<div id="token-table-loader" data-loading data-loading-class="active" class="text-center">
+    <div class="spinner-border" role="status">
+        <span class="visually-hidden">{% translate "Chargement..." %}</span>
+    </div>
 </div>
-
-<!-- MAUVAIS : le formulaire va aussi declencher l'overlay -->
-<!-- BAD: the form will also trigger the overlay -->
-<div data-loading-target="#tibillet-spinner">
-    <a href="/event/" hx-get="/event/" hx-target="body">Agenda</a>
-    <form hx-post="/save/">...</form>
-</div>
+<div hx-get="/my_account/tokens_table/" hx-trigger="revealed"
+     data-loading-target="#token-table-loader"
+     data-loading-delay="{{ loading_delay|default:'400' }}"></div>
 ```
 
-Required CSS rule (already in `loading.html`):
+- `data-loading-disable` sur un bouton : à laisser **sans délai**, la désactivation immédiate
+  est ce qui empêche le double-clic.
+
+Required CSS rule (already in `loading.html`) — elle cache les spinners **locaux**, ceux qui
+portent `data-loading`. Elle ne s'applique pas à `#tibillet-spinner`, masqué par son
+`opacity: 0` :
 ```css
 [data-loading] { display: none; }
 ```
+
+**Comment vérifier** — l'inspection visuelle ne suffit pas, un overlay qui flashe 50 ms se
+voit mal. Dans la console du navigateur :
+```js
+new MutationObserver(m => console.log(performance.now(), sp.classList.contains('active')))
+  .observe(sp = document.querySelector('#tibillet-spinner'),
+           {attributes: true, attributeFilter: ['class']});
+```
+Puis navigue : l'écart entre la requête et le passage à `active` doit valoir le délai, pas
+quelques millisecondes.
 
 ### Quirks htmx — Comportements surprenants à connaître
 

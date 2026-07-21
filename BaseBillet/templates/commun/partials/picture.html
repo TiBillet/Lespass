@@ -17,9 +17,22 @@
     {% if img.crop_hdr.url %}<source srcset="{{ img.crop_hdr.url }}" media="(min-width: 960px), (min-height: 540px)" />{% endif %}
     {% if img.med.url %}<source srcset="{{ img.med.url }}" media="(min-width: 480px), (min-height: 480px)" />{% endif %}
     {% if img.crop.url %}<source srcset="{{ img.crop.url }}" media="(min-width: 480px), (min-height: 270px)" />{% endif %}
+    {# width/height = dimensions de l'original : donnent au navigateur le ratio #}
+    {# intrinseque pour reserver l'espace avant le chargement (anti-CLS). #}
+    {# `object-fit-cover` neutralise la distorsion quand une <source> recadree #}
+    {# (ratio different) est retenue. #}
+    {# ATTENTION : `.width`/`.height` OUVRENT le fichier image (I/O), au #}
+    {# contraire de `.url`. Sur une image du cache SEO federe dont le fichier #}
+    {# manque, y acceder leve FileNotFoundError. Le `{% templatetag openblock %} if a and b {% templatetag closeblock %}` le tolere #}
+    {# (smartif attrape l'exception et rend faux) — mais ne JAMAIS sortir #}
+    {# `.width` d'une garde `and` : `{% templatetag openvariable %} img.width {% templatetag closevariable %}` seul ferait un 500. #}
+    {# / `.width`/`.height` open the file (I/O), unlike `.url`; a missing #}
+    {# federated-cache file raises FileNotFoundError. The `and` guard tolerates #}
+    {# it (smartif swallows the exception); never use `.width` outside it. #}
     <img
         class="object-fit-cover w-100 h-100{% if class %} {{ class }}{% endif %}"
         {% if style %}style="{{ style }}"{% endif %}
+        {% if img.width and img.height %}width="{{ img.width }}" height="{{ img.height }}"{% endif %}
         src="{{ img.thumbnail.url|randImg }}" alt="{{ alt }}"
     />
 </picture>

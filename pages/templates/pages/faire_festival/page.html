@@ -41,19 +41,13 @@
 {% endblock %}
 
 {% block main %}
-    {# CSS commun des blocs (.tb-bloc*) : ce skin ne fournit un gabarit que pour #}
-    {# une partie des couples (type, affichage) ; les autres retombent sur le #}
-    {# socle classic, dont le balisage est en .tb-bloc*. Sans cette feuille, #}
-    {# ils s'affichent SANS AUCUN style (logos geants, listes nues). #}
-    {# Charge DANS le main, pas dans extra_meta : le squelette headless #}
-    {# (reponses HTMX) n'a pas de <head>, un asset en extra_meta n'arriverait #}
-    {# donc jamais lors d'une navigation HTMX. Un <link> dans le body est valide #}
-    {# en HTML5 et le navigateur deduplique via son cache. #}
-    {# / Common blocks CSS (.tb-bloc*): this skin only styles some of the #}
-    {# (type, affichage) pairs; the others fall back to the classic base, whose #}
-    {# markup uses .tb-bloc*. Without this sheet they render UNSTYLED. #}
-    {# not in extra_meta: the headless skeleton (HTMX responses) has no <head>. #}
-    <link rel="stylesheet" href="{% static 'pages/css/tb-blocs.css' %}">
+    {# Le CSS des blocs (tb-blocs.css) est charge par le <head> de ce skin #}
+    {# (faire_festival/shell.html), avant faire_festival.css qui le surcharge. #}
+    {# Pas ici : un <link> pose dans le corps est retire du DOM a chaque swap #}
+    {# HTMX, et la page se repeint sans style en attendant sa revalidation. #}
+    {# / tb-blocs.css is loaded by this skin's <head> (faire_festival/shell.html), #}
+    {# before faire_festival.css. Not here: a <link> in the body is removed from #}
+    {# the DOM on every HTMX swap. #}
     {# Sommaire vivant : marque l'entree de la section en cours de lecture. #}
     {# Charge ICI et non dans extra_meta, pour la meme raison que le CSS #}
     {# ci-dessus : une reponse HTMX n'a pas de <head>. `defer` laisse la page #}

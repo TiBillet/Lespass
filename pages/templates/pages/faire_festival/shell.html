@@ -88,11 +88,29 @@
     <link data-bs-stylesheet="bootstrap" href="{% static 'commun/css/bootstrap.min.5.3.3.css' %}" rel="stylesheet">
 
     <!-- Bootstrap Icons : Bibliothèque d'icônes -->
-    <link data-bs-stylesheet="bootstrap-icons" rel="stylesheet" href="{% static 'commun/css/bootstrap-icons.min.css' %}">
+    {# bootstrap-icons async (media=print + onload) : non bloquant au 1er paint. #}
+    {# / bootstrap-icons async, not render-blocking. #}
+    <link data-bs-stylesheet="bootstrap-icons" rel="stylesheet" href="{% static 'commun/css/bootstrap-icons.min.css' %}"
+          media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="{% static 'commun/css/bootstrap-icons.min.css' %}"></noscript>
 
     <!-- CSS personnalisé pour le thème Faire Festival (brutaliste jaune/bleu) -->
     <link rel="stylesheet" href="{% static 'commun/css/vars.css' %}">
     <link rel="stylesheet" href="{% static 'commun/css/tibillet.css' %}">
+    {# CSS des blocs de contenu. Ce skin n'habille qu'une partie des couples #}
+    {# (type, affichage) : les autres retombent sur le socle classic, dont le #}
+    {# balisage utilise .tb-bloc*. Sans cette feuille ils s'affichent NUS. #}
+    {# Elle est chargee AVANT faire_festival.css, qui la surcharge — l'inverse #}
+    {# ecraserait l'habillage du skin par le socle. #}
+    {# IL DOIT RESTER DANS CE <head> : la navigation HTMX remplace tout le #}
+    {# <body>, donc un <link> pose dans le corps de la page est retire du DOM a #}
+    {# chaque swap et le contenu se repeint sans style le temps de sa #}
+    {# revalidation. Le <head>, lui, n'est jamais swappe. #}
+    {# / Content blocks CSS — the skin only styles some (type, display) pairs, #}
+    {# the rest falls back to the classic base which uses .tb-bloc*. Loaded #}
+    {# BEFORE faire_festival.css, which overrides it. IT MUST STAY IN THIS #}
+    {# <head>: a <link> in the body is removed from the DOM on every HTMX swap. #}
+    <link rel="stylesheet" href="{% static 'pages/css/tb-blocs.css' %}">
     <link rel="stylesheet" href="{% static 'faire_festival/css/faire_festival.css' %}">
 
     <!-- CSS pour les alertes SweetAlert2 -->
@@ -106,7 +124,7 @@
          SCRIPTS JAVASCRIPT : Fonctionnalités interactives
          ================================================================ -->
     <!-- Bootstrap JS : servi en local (version 5.3.3) -->
-    <script src="{% static 'commun/js/bootstrap.bundle.min.5.3.3.js' %}"></script>
+    <script defer src="{% static 'commun/js/bootstrap.bundle.min.5.3.3.js' %}"></script>
 
     <!-- HTMX : Bibliothèque pour les requêtes AJAX sans JavaScript -->
     {% comment %}
@@ -121,6 +139,10 @@
     and without a snapshot, back triggers a real full reload (guaranteed fresh).
     {% endcomment %}
     <meta name="htmx-config" content='{"historyCacheSize": 0, "refreshOnHistoryMiss": true}'>
+    {# htmx et loading-states laissés non-defer par prudence : gain marginal, #}
+    {# ordre htmx → extension sensible. Voir classic/shell.html. #}
+    {# / htmx and loading-states kept non-defer: marginal gain, sensitive #}
+    {# ordering. See classic/shell.html. #}
     <script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
     <script>
         /**
@@ -173,7 +195,7 @@
     <script src="{% static 'mvt_htmx/js/loading-states.js' %}"></script>
 
     <!-- SweetAlert2 : Bibliothèque pour les alertes et modales élégantes -->
-    <script src="{% static 'commun/js/sweetalert2@11.js' %}"></script>
+    <script defer src="{% static 'commun/js/sweetalert2@11.js' %}"></script>
 
     <!-- Formbricks : Système de formulaires et sondages (si configuré) -->
     {% if formbricks_api_host %}

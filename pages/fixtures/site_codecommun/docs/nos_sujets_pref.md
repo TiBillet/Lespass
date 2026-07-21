@@ -1,7 +1,7 @@
 ---
 slug: subject-python
 title: IA, machine learning, data science, nos sujets préférés
-description: Formations, recettes, compilation de note de blog. Apprennez Python !
+description: "Les sujets de prédilection de la coopérative Code Commun : Python, IA, machine learning, data science, systèmes Linux et logiciel libre."
 sidebar_position: 1
 tags: [ python, dev, formations ]
 keywords: [ python, dev, formations ]

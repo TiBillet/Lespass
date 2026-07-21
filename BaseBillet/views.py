@@ -92,6 +92,34 @@ def _contexte_page_erreur(request):
 
     LOCALISATION : BaseBillet/views.py
     """
+    # Sur le schema public, get_context() ne PEUT pas fonctionner : tous ses
+    # modeles (Configuration, CrowdConfig, Carrousel, Page) sont des
+    # TENANT_APPS, leurs tables n'existent que dans les schemas tenant. Les
+    # memes handlers 404/500 sont pourtant declares pour l'URLconf public
+    # (TiBillet/urls_public.py), donc chaque 404 du root — les scanners en
+    # produisent en continu — passerait ici. On rend le socle directement :
+    # sans cette garde, l'appel part quand meme, PostgreSQL journalise un
+    # ERROR "relation does not exist" et l'except plus bas le rattrape.
+    # / On the public schema get_context() CANNOT work: all its models are
+    # TENANT_APPS whose tables only exist in tenant schemas. Yet the same
+    # 404/500 handlers are declared for the public URLconf, so every root 404
+    # — scanners produce a stream of them — would land here. Render the base
+    # skin directly: without this guard the call still fires, PostgreSQL logs
+    # a "relation does not exist" ERROR, and the except below catches it.
+    # getattr et pas request.htmx : un handler d'erreur tourne AUSSI quand la
+    # chaine de middlewares a echoue avant d'arriver au bout. HtmxMiddleware est
+    # le 10e de MIDDLEWARE, TenantMainMiddleware le 1er : sur un hostname inconnu
+    # (bot sur un sous-domaine wildcard non declare) le 404 part alors que
+    # request.htmx n'a jamais ete pose. Une lecture directe leve AttributeError
+    # ici, puis a nouveau dans handler500, et le visiteur recoit un 500 nu.
+    # / getattr, not request.htmx: an error handler ALSO runs when the middleware
+    # chain failed early. HtmxMiddleware is 10th, TenantMainMiddleware 1st, so on
+    # an unknown hostname the 404 fires before request.htmx exists.
+    if connection.schema_name == "public":
+        if getattr(request, "htmx", False):
+            return {"base_template": "pages/classic/headless.html", "main_nav": []}
+        return {"base_template": "pages/classic/shell.html", "main_nav": []}
+
     try:
         return get_context(request)
     except Exception as erreur_contexte:
@@ -209,6 +237,16 @@ def get_context(request):
         # "tenant": connection.tenant,
         "formbricks_api_host": formbricks_config.api_host,
         "mode_test": True if os.environ.get('TEST') == '1' else False,
+        # Delai avant l'overlay de chargement, en millisecondes (commun/loading.html).
+        # 400 est un seuil de VISIBILITE, pas de confort : une page publique doit
+        # repondre sous 400 ms, donc un overlay qui apparait signale une lenteur
+        # reelle a corriger. Le monter pour "moins voir le spinner" masquerait le
+        # symptome sans traiter la cause — c'est le temps de reponse qu'il faut
+        # faire baisser, pas le seuil qu'il faut remonter.
+        # / Loading overlay delay in ms. 400 is a VISIBILITY threshold, not a
+        # comfort one: a public page should answer under 400 ms, so an overlay
+        # showing up flags real slowness. Raising it to "see the spinner less"
+        # would hide the symptom instead of fixing the response time.
         "loading_delay": 400,
         "carrousel_event_list": Carrousel.objects.filter(on_event_list_page=True).order_by('order'),
         "main_nav": []

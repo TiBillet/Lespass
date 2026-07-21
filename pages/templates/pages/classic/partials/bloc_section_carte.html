@@ -20,7 +20,7 @@
 <article class="tb-bloc tb-bloc--carte tb-colonnes-4" data-testid="bloc-section-carte">
     {% if bloc.image %}
         <img class="tb-bloc__carte-image"
-             src="{{ bloc.image.med.url }}"
+             {% if bloc.image.med.width and bloc.image.med.height %}width="{{ bloc.image.med.width }}" height="{{ bloc.image.med.height }}"{% endif %} src="{{ bloc.image.med.url }}"
              alt="{{ bloc.titre }}" loading="lazy">
     {% endif %}
     {% if bloc.sous_titre or bloc.badge %}

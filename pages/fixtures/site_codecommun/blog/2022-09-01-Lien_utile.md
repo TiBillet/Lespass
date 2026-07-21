@@ -5,7 +5,7 @@ authors: jonas
 keywords: [cashless, fédération, portefeuille, wallet, liens utiles]
 tags: [cashless, fédération, portefeuille, wallet, liens utiles]
 image: /img/cr_220310_portefeuille_partage/FEDERONS-01.png
-description: Chantier en cours autour d'une réfléxion carte TiBillet partagée entre plusieurs lieux.
+description: Liens et ressources utiles autour de TiBillet, du cashless fédéré et des communs numériques, rassemblés par la coopérative Code Commun.
 ---
 
 Ce billet de blog n'en est pas vraiment un. C'est un recceuil de lien qui nous plait, qui nous inspire, ou qui nous

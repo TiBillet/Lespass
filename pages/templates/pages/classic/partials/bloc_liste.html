@@ -56,7 +56,7 @@
                         {# event poster's edges. "hdr" resizes without #}
                         {# cropping, and the card shows the whole image. #}
                         <img class="tb-bloc__carte-image"
-                             src="{{ event.img.hdr.url }}"
+                             {% if event.img.hdr.width and event.img.hdr.height %}width="{{ event.img.hdr.width }}" height="{{ event.img.hdr.height }}"{% endif %} src="{{ event.img.hdr.url }}"
                              alt="{{ event.name }}" loading="lazy">
                     {% endif %}
                     <p class="tb-bloc__carte-surtitre">{{ event.datetime|date:"l j F · H\hi" }}</p>
@@ -93,7 +93,7 @@
                         {# (VARIATIONS_PARTAGE). / "med" variation: Page.image only #}
                         {# has social_card and med. #}
                         <img class="tb-bloc__carte-image"
-                             src="{{ sous_page.image.med.url }}"
+                             {% if sous_page.image.med.width and sous_page.image.med.height %}width="{{ sous_page.image.med.width }}" height="{{ sous_page.image.med.height }}"{% endif %} src="{{ sous_page.image.med.url }}"
                              alt="{{ sous_page.titre }}" loading="lazy">
                     {% endif %}
                     <h3 class="tb-bloc__carte-titre">{{ sous_page.titre }}</h3>

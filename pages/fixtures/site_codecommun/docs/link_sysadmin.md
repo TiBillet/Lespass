@@ -28,5 +28,5 @@ On aime beaucoup OpenClassRoom ; ils sont très forts pour les bases, foncez !
 ## Aller plus loin
 
 - [OCR : Initiation à Docker](https://openclassrooms.com/fr/courses/2035766-optimisez-votre-deploiement-en-creant-des-conteneurs-avec-docker)
-- [Blog: Préparer son serveur pour acceuillir nos applications](http://localhost:3001/blog/sysadmin-mon-chaton-part1)
-- [Blog: Certificats Wildcard](http://localhost:3001/blog/sysadmin-mon-chaton-part2)
+- [Blog : Préparer son serveur pour accueillir nos applications](/sysadmin-mon-chaton-part1/)
+- [Blog : Certificats Wildcard](/sysadmin-mon-chaton-part2/)

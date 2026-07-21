@@ -1,12 +1,35 @@
 {% load i18n %}
 <!-- Overlay de chargement — effet verre depoli (frosted glass)
      / Loading overlay — frosted glass effect
-     Utilise data-loading-class pour ajouter .active (permet les transitions CSS).
-     Le delai est configurable via la variable {{ loading_delay }} de get_context().
-     Les liens de navigation declenchent ce spinner via data-loading-target="#tibillet-spinner". -->
+
+     CE BLOC EST LE SEUL DECLENCHEUR DE L'OVERLAY. Il porte lui-meme le couple
+     data-loading-class + data-loading-delay, et l'extension loading-states le
+     retrouve a CHAQUE requete htmx du document : son scope est `document.body`
+     tant qu'aucun `data-loading-states` n'est pose (cf. loading-states.js).
+     Toute navigation et toute soumission de formulaire l'allument donc deja,
+     apres le delai — sans que quoi que ce soit d'autre ait a le designer.
+
+     /!\ NE JAMAIS ajouter `data-loading-target="#tibillet-spinner"` +
+     `data-loading-class="active"` sur un formulaire ou un lien. Un element qui
+     porte `data-loading-class` SANS `data-loading-delay` tombe dans la branche
+     sans temporisation de loading-states.js : l'overlay s'affiche en ~3 ms au
+     lieu du delai prevu, sur TOUTES les requetes de la page — pas seulement les
+     siennes. C'est un doublon de ce bloc, et il court-circuite le debounce.
+     Un spinner LOCAL (une zone qui charge seule) reste legitime : il se cible
+     lui-meme et porte son propre delai — voir #token-table-loader dans
+     fonctionnel/compte/balance.html.
+
+     Le delai vient de {{ loading_delay }} (get_context, BaseBillet/views.py).
+     / THIS BLOCK IS THE ONLY TRIGGER of the overlay. It carries both
+     data-loading-class and data-loading-delay, and the extension finds it on
+     EVERY htmx request (its scope is `document.body` while no
+     `data-loading-states` is set). NEVER add data-loading-target +
+     data-loading-class to a form or link: without data-loading-delay it hits
+     the untimed branch of loading-states.js and shows the overlay in ~3 ms on
+     EVERY request of the page. Local spinners are fine (see balance.html). -->
 <div id="tibillet-spinner"
      data-loading-class="active"
-     data-loading-delay="{{ loading_delay|default:'300' }}"
+     data-loading-delay="{{ loading_delay|default:'400' }}"
      class="tibillet-overlay"
      aria-hidden="true">
     <div class="tibillet-overlay__spinner" role="status">

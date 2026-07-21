@@ -17,12 +17,12 @@
                                 {% if img.lien_url %}
                                     <a href="{{ img.lien_url }}" target="_blank" rel="noopener">
                                         <img class="tb-galerie__image"
-                                             src="{{ img.image.med.url }}"
+                                             {% if img.image.med.width and img.image.med.height %}width="{{ img.image.med.width }}" height="{{ img.image.med.height }}"{% endif %} src="{{ img.image.med.url }}"
                                              alt="{{ img.legende }}" loading="lazy">
                                     </a>
                                 {% else %}
                                     <img class="tb-galerie__image"
-                                         src="{{ img.image.med.url }}"
+                                         {% if img.image.med.width and img.image.med.height %}width="{{ img.image.med.width }}" height="{{ img.image.med.height }}"{% endif %} src="{{ img.image.med.url }}"
                                          alt="{{ img.legende }}" loading="lazy">
                                 {% endif %}
                                 {% if img.legende %}

@@ -69,8 +69,9 @@ CATEGORIES = [
         # Libellé court pour la navbar (le moteur utilise le titre comme label).
         # / Short label for the navbar (the engine uses the title as the label).
         "titre": "Blog",
-        "meta_description": "Les recettes de la coopérative pour de chouettes "
-        "communs numériques.",
+        "meta_description": "Le blog de la coopérative Code Commun : logiciel "
+        "libre, fédération TiBillet, Python, administration système et communs "
+        "numériques.",
         "position": 5,
         "dossier": "blog",
         # Articles du plus récent au plus ancien (position 1 = le plus récent).
