@@ -927,9 +927,47 @@ class Command(BaseCommand):
             prix_gated.adhesions_obligatoires.add(adhesion)
             event_gated.products.add(billet_gated)
 
+            # 5) Adhesion a validation selective : deux tarifs, dont "Solidaire".
+            # Ce produit est lu par test_membership_fix_solidaire.py, qui cherche
+            # un Product dont le nom contient "validation selective" et un Price
+            # nomme exactement "Solidaire". Sans lui en base, ce test se met en
+            # SKIP : il tourne avant test_membership_validation_product.py (ordre
+            # alphabetique des fichiers), qui est le seul a creer ce produit.
+            # Le nom et le libelle des tarifs sont donc un CONTRAT : les changer
+            # remet le test en SKIP silencieux.
+            # / Membership with selective validation: two prices, one "Solidaire".
+            # Read by test_membership_fix_solidaire.py, which looks for a Product
+            # whose name contains "validation selective" and a Price named exactly
+            # "Solidaire". Without it, that test SKIPs: it runs before
+            # test_membership_validation_product.py (alphabetical file order),
+            # the only test that creates this product. Names are a CONTRACT.
+            adhesion_validation_selective, _ = Product.objects.get_or_create(
+                name="Adhésion à validation sélective (Le Tiers-Lustre)",
+                defaults={
+                    'categorie_article': Product.ADHESION,
+                    'short_description': "Adhesion dont chaque demande est validee a la main.",
+                },
+            )
+            Price.objects.get_or_create(
+                product=adhesion_validation_selective, name="Solidaire",
+                defaults={
+                    'prix': Decimal("2"),
+                    'subscription_type': Price.YEAR,
+                    'publish': True,
+                },
+            )
+            Price.objects.get_or_create(
+                product=adhesion_validation_selective, name="Plein tarif",
+                defaults={
+                    'prix': Decimal("30"),
+                    'subscription_type': Price.YEAR,
+                    'publish': True,
+                },
+            )
+
         self.stdout.write(self.style.SUCCESS(
-            "Fixtures E2E assurees sur 'lespass' : 3 events + 4 produits "
-            "(prefixe 'E2E Test — ')."
+            "Fixtures E2E assurees sur 'lespass' : 3 events + 5 produits "
+            "(prefixe 'E2E Test — ' + adhesion a validation selective)."
         ))
 
     # Chemin du dump SQL généré par le mode full, utilisé par --quick pour restaurer la base
