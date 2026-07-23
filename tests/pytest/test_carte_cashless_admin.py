@@ -124,3 +124,87 @@ def test_admin_carte_cashless_isole_par_tenant(carte_du_tenant_a):
             admin_instance.get_queryset(request).values_list("pk", flat=True)
         )
     assert carte.pk not in ids_visibles_b
+
+
+def test_generation_par_defaut_rattachee_au_lieu_courant():
+    """Le filet auto renvoie une generation (Detail) rattachee au lieu courant,
+    et reste idempotent (aucun MultipleObjectsReturned au 2e appel).
+    / The auto net returns a generation tied to the current venue, idempotently."""
+    from QrcodeCashless.admin import _obtenir_la_generation_par_defaut_du_lieu
+
+    tenant_a = Client.objects.get(schema_name="lespass")
+
+    with tenant_context(tenant_a):
+        detail = _obtenir_la_generation_par_defaut_du_lieu()
+        assert detail.origine_id == tenant_a.pk
+
+        # Deuxieme appel : ne plante pas, renvoie une generation du meme lieu.
+        # / Second call: does not raise, returns a generation of the same venue.
+        detail_bis = _obtenir_la_generation_par_defaut_du_lieu()
+        assert detail_bis.origine_id == tenant_a.pk
+
+
+def test_carte_sans_generation_choisie_reste_visible():
+    """Coeur du fix : une carte rattachee a la generation par defaut (cas ou le
+    gestionnaire n'en a pas choisi) APPARAIT dans la liste admin du lieu.
+    / Core fix: a card attached to the default generation shows in the venue's list.
+
+    Mutation : si le filet ne rattachait PAS de Detail (detail=None), le filtre
+    detail.origine de get_queryset exclurait la carte et l'assert echouerait.
+    / Mutation: without the Detail (detail=None), get_queryset's detail.origine
+    filter would exclude the card and the assert would fail.
+    """
+    from QrcodeCashless.admin import (
+        _obtenir_la_generation_par_defaut_du_lieu,
+        staff_admin_site,
+    )
+
+    tenant_a = Client.objects.get(schema_name="lespass")
+    admin_instance = staff_admin_site._registry[CarteCashless]
+    request = RequestFactory().get("/admin/")
+    tag = _tag()
+
+    with tenant_context(tenant_a):
+        detail = _obtenir_la_generation_par_defaut_du_lieu()
+        carte = CarteCashless.objects.create(
+            tag_id=tag,
+            uuid=uuid_module.uuid4(),
+            number=tag,
+            detail=detail,
+        )
+        try:
+            ids_visibles = set(
+                admin_instance.get_queryset(request).values_list("pk", flat=True)
+            )
+            assert carte.pk in ids_visibles
+        finally:
+            # On supprime la carte (le Detail est reutilise entre les runs, on ne
+            # le touche pas : StdImageField delete_orphans plante sur image vide).
+            # / Delete the card; keep the Detail (delete_orphans crashes on empty img).
+            carte.delete()
+
+
+def test_form_ajout_preselectionne_la_generation_la_plus_haute():
+    """Le formulaire d'ajout pre-remplit `detail` avec la generation la plus haute
+    du lieu. Instancier le form ne plante jamais (guard si aucune generation).
+    / The add form pre-fills `detail` with the venue's highest generation; building
+    the form never crashes (guarded when there is no generation)."""
+    from QrcodeCashless.admin import CarteCashlessAddForm
+
+    tenant_a = Client.objects.get(schema_name="lespass")
+
+    with tenant_context(tenant_a):
+        # On garantit deux generations stables (slugs fixes, reutilises entre runs) :
+        # la plus haute (99) doit etre celle qui est pre-selectionnee.
+        # / Ensure two stable generations (fixed slugs): the highest (99) must win.
+        Detail.objects.get_or_create(
+            slug="test-carte-admin-gen-basse",
+            defaults={"base_url": "t1.localhost", "generation": 1, "origine": tenant_a},
+        )
+        generation_la_plus_haute, _ = Detail.objects.get_or_create(
+            slug="test-carte-admin-gen-haute",
+            defaults={"base_url": "t2.localhost", "generation": 99, "origine": tenant_a},
+        )
+
+        formulaire = CarteCashlessAddForm()
+        assert formulaire.fields["detail"].initial == generation_la_plus_haute

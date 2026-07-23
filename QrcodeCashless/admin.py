@@ -289,6 +289,63 @@ def _creer_ou_recuperer_la_carte_chez_fedow(tag_id, numero_imprime, uuid_du_qrco
     return numero_imprime, uuid_du_qrcode, False
 
 
+def _obtenir_la_generation_par_defaut_du_lieu():
+    """
+    Renvoie une generation de cartes (Detail) pour le lieu courant, creee au besoin.
+    / Returns a card generation (Detail) for the current venue, created if needed.
+
+    LOCALISATION : QrcodeCashless/admin.py
+
+    Filet de securite quand le gestionnaire ajoute une carte sans choisir de
+    generation. Sans Detail, la carte serait INVISIBLE dans la liste (le
+    changelist filtre sur detail.origine) et ne serait JAMAIS creee chez Fedow.
+    / Safety net when the manager adds a card without picking a generation.
+    Without a Detail the card is invisible (changelist filters on detail.origine)
+    and never created on Fedow.
+
+    On reutilise la generation la plus haute (la plus recente) du lieu s'il y en a
+    une, sinon on cree la generation 1. On NE fait PAS get_or_create(origine,
+    generation) : le couple (origine, generation) n'a AUCUNE contrainte d'unicite,
+    et un lieu peut deja porter plusieurs generations 1 (donnees de demo + creations
+    manuelles) -> get_or_create leverait MultipleObjectsReturned.
+    / We reuse the venue's highest (most recent) generation, else create generation
+    1. We do NOT get_or_create on (origine, generation): the pair has no unique
+    constraint and a venue may already carry several generation-1 rows, which would
+    raise MultipleObjectsReturned.
+
+    :return: Detail rattache au lieu courant (connection.tenant)
+    """
+    lieu_courant = connection.tenant
+
+    # Le lieu a-t-il deja une generation ? On prend la plus haute (la plus recente).
+    # / Does the venue already have a generation? Take the highest (most recent) one.
+    generation_existante = (
+        Detail.objects.filter(origine=lieu_courant).order_by("-generation").first()
+    )
+    if generation_existante is not None:
+        return generation_existante
+
+    # Aucune generation pour ce lieu : on cree la generation 1.
+    # base_url prefixe l'UUID dans le QR code imprime, deduit du domaine du lieu,
+    # exactement comme DetailAdmin.save_model. On ne remplit que si ca tient dans
+    # les 60 caracteres du champ.
+    # / No generation for this venue: create generation 1. base_url prefixes the
+    # printed QR code UUID, derived from the venue's domain like DetailAdmin does.
+    base_url = None
+    domaine_du_lieu = lieu_courant.get_primary_domain()
+    if domaine_du_lieu:
+        adresse_des_qrcodes = f"https://{domaine_du_lieu.domain}/qr/"
+        longueur_maximale = Detail._meta.get_field("base_url").max_length
+        if len(adresse_des_qrcodes) <= longueur_maximale:
+            base_url = adresse_des_qrcodes
+
+    return Detail.objects.create(
+        origine=lieu_courant,
+        generation=1,
+        base_url=base_url,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Detail — les generations de cartes / Card generations
 # ---------------------------------------------------------------------------
@@ -452,6 +509,29 @@ class CarteCashlessAddForm(forms.ModelForm):
         model = CarteCashless
         fields = ["detail"]
 
+    def __init__(self, *args, **kwargs):
+        """
+        Pre-selectionne la generation la plus haute (la plus recente) du lieu.
+        / Pre-selects the venue's highest (most recent) generation.
+
+        Confort d'affichage : le gestionnaire voit tout de suite a quelle
+        generation la carte sera rattachee, plutot qu'un select vide. Si le lieu
+        n'a encore AUCUNE generation, on ne pose rien — pas de plantage : le filet
+        de clean() en fabriquera une par defaut a l'enregistrement.
+        / Display comfort: the manager immediately sees which generation the card
+        will be tied to, rather than an empty select. If the venue has NO
+        generation yet, we set nothing — no crash: clean()'s net creates one on save.
+        """
+        super().__init__(*args, **kwargs)
+
+        generation_la_plus_haute = (
+            Detail.objects.filter(origine=connection.tenant)
+            .order_by("-generation")
+            .first()
+        )
+        if generation_la_plus_haute is not None:
+            self.fields["detail"].initial = generation_la_plus_haute
+
     def clean_tag_id(self):
         """Majuscules, puis 8 caracteres hexadecimaux exactement.
         / Uppercase, then exactly 8 hex chars."""
@@ -506,12 +586,22 @@ class CarteCashlessAddForm(forms.ModelForm):
         """
         donnees_nettoyees = super().clean()
 
-        # Si tag_id ou detail sont invalides, Django a deja pose l'erreur.
-        # Inutile d'appeler Fedow. / If tag_id or detail failed, don't call Fedow.
+        # Si tag_id est invalide, Django a deja pose l'erreur : on ne va pas plus
+        # loin. / If tag_id is invalid, Django already posted the error: stop here.
         tag_id = donnees_nettoyees.get("tag_id")
-        detail = donnees_nettoyees.get("detail")
-        if not tag_id or not detail:
+        if not tag_id:
             return donnees_nettoyees
+
+        # Le gestionnaire n'a pas choisi de generation : on fabrique (ou reutilise)
+        # celle par defaut du lieu courant. Sans ce filet, la carte serait
+        # invisible dans la liste et jamais creee chez Fedow.
+        # / No generation chosen: fabricate/reuse the venue's default one. Without
+        # this net, the card would be invisible in the list and never created on
+        # Fedow.
+        detail = donnees_nettoyees.get("detail")
+        if not detail:
+            detail = _obtenir_la_generation_par_defaut_du_lieu()
+            donnees_nettoyees["detail"] = detail
 
         # 1. Le lieu est-il appaire a Fedow ?
         # / Is the venue paired with Fedow?
