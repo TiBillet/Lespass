@@ -22,6 +22,7 @@ import random
 from django.core.paginator import Paginator
 from django.http import HttpResponse
 from django.template.response import TemplateResponse
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -404,12 +405,80 @@ def explorer(request):
     return TemplateResponse(request, "seo/explorer.html", context)
 
 
+# Pages ROOT publiees dans /sitemap-root.xml. Chaque entree : (nom d'URL,
+# priorite, frequence de changement).
+#
+# On liste uniquement les pages editoriales indexables :
+#   - `/explorer/` est volontairement absente : elle est servie en
+#     `noindex, nofollow` (cf. seo/templates/seo/explorer.html). Declarer une
+#     page noindex dans un sitemap envoie deux signaux contradictoires a
+#     Google.
+#   - `/recherche/` est absente aussi : une page de resultats de recherche
+#     sans requete n'a pas de contenu propre a indexer.
+#
+# / ROOT pages published in /sitemap-root.xml. Each entry: (URL name,
+# priority, change frequency).
+# Only indexable editorial pages are listed. `/explorer/` is deliberately
+# excluded (served `noindex, nofollow`): declaring a noindex page in a
+# sitemap sends Google two contradictory signals. `/recherche/` is excluded
+# too: a search results page with no query has no content of its own.
+PAGES_ROOT_SITEMAP = [
+    ("seo:landing", "1.0", "daily"),
+    ("seo:lieux", "0.8", "daily"),
+    ("seo:evenements", "0.8", "daily"),
+]
+
+
+def sitemap_root_view(request):
+    """
+    Sitemap des pages ROOT elles-memes (accueil, lieux, evenements).
+    / Sitemap for the ROOT pages themselves (home, venues, events).
+
+    URL: GET /sitemap-root.xml
+
+    LOCALISATION: seo/views.py
+
+    Pourquoi une vue separee : `/sitemap.xml` sert un `<sitemapindex>`, qui
+    ne peut contenir que des balises `<sitemap>` pointant vers d'autres
+    fichiers — jamais des `<url>` directement (spec sitemaps.org). Les pages
+    ROOT ont donc besoin de leur propre fichier `<urlset>`, reference depuis
+    l'index par `sitemap_index_view`.
+    / Why a separate view: `/sitemap.xml` serves a `<sitemapindex>`, which
+    may only contain `<sitemap>` entries pointing at other files — never
+    `<url>` entries (sitemaps.org spec). The ROOT pages therefore need their
+    own `<urlset>` file, referenced from the index by `sitemap_index_view`.
+    """
+    from xml.sax.saxutils import escape as xml_escape
+
+    # Meme date pour toutes les pages ROOT : leur contenu est un agregat du
+    # cache SEO, rafraichi quotidiennement par `refresh_seo_cache`.
+    # / Same date for every ROOT page: their content is an aggregate of the
+    # SEO cache, refreshed daily by `refresh_seo_cache`.
+    lastmod = timezone.now().date().isoformat()
+
+    xml_parts = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
+    for url_name, priority, changefreq in PAGES_ROOT_SITEMAP:
+        url_absolue = request.build_absolute_uri(reverse(url_name))
+        xml_parts.append("  <url>")
+        xml_parts.append(f"    <loc>{xml_escape(url_absolue)}</loc>")
+        xml_parts.append(f"    <lastmod>{lastmod}</lastmod>")
+        xml_parts.append(f"    <changefreq>{changefreq}</changefreq>")
+        xml_parts.append(f"    <priority>{priority}</priority>")
+        xml_parts.append("  </url>")
+    xml_parts.append("</urlset>")
+
+    return HttpResponse("\n".join(xml_parts), content_type="application/xml")
+
+
 def sitemap_index_view(request):
     """
     Sitemap index cross-tenant pour le ROOT.
-    Liste les sitemaps de chaque tenant actif.
+    Liste le sitemap des pages ROOT, puis celui de chaque tenant actif.
     / Cross-tenant sitemap index for ROOT.
-    Lists sitemaps for each active tenant.
+    Lists the ROOT pages sitemap, then each active tenant's sitemap.
 
     LOCALISATION: seo/views.py
     """
@@ -428,6 +497,19 @@ def sitemap_index_view(request):
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     ]
+
+    # Premiere entree : les pages ROOT (accueil, lieux, evenements). Sans
+    # elle, l'index ne declarait que les sitemaps des tenants et la home du
+    # ROOT n'etait soumise a Google par aucun sitemap.
+    # / First entry: the ROOT pages (home, venues, events). Without it the
+    # index only declared tenant sitemaps, and the ROOT home page was
+    # submitted to Google by no sitemap at all.
+    url_sitemap_root = request.build_absolute_uri(reverse("seo:sitemap_root"))
+    xml_parts.append("  <sitemap>")
+    xml_parts.append(f"    <loc>{xml_escape(url_sitemap_root)}</loc>")
+    xml_parts.append(f"    <lastmod>{timezone.now().date().isoformat()}</lastmod>")
+    xml_parts.append("  </sitemap>")
+
     for tenant in tenants:
         domain = tenant.get("domain", "")
         sitemap_url = tenant.get(

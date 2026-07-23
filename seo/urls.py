@@ -28,6 +28,13 @@ urlpatterns = [
     path("robots.txt", robots_txt, name="robots_txt"),
     path("humans.txt", humans_txt, name="humans_txt"),
     path("sitemap.xml", views.sitemap_index_view, name="sitemap_index"),
+    # Sitemap des pages ROOT elles-memes. Fichier separe car un
+    # <sitemapindex> ne peut pas contenir de <url> (spec sitemaps.org) :
+    # /sitemap.xml le reference comme premiere entree.
+    # / Sitemap for the ROOT pages themselves. Separate file because a
+    # <sitemapindex> cannot contain <url> entries (sitemaps.org spec):
+    # /sitemap.xml references it as its first entry.
+    path("sitemap-root.xml", views.sitemap_root_view, name="sitemap_root"),
     # /favicon.ico est demande automatiquement par les navigateurs sur toutes
     # les pages, y compris non-HTML (sitemap.xml, robots.txt). On evite le 404
     # en redirigeant vers le SVG vendore.

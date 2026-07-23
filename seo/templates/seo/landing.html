@@ -16,7 +16,16 @@
 <section class="hero-section" data-testid="hero-section">
     <div class="hero-layout">
         <div class="hero-text">
+            {# "TiBillet" est nomme dans le H1 : c'est la page de reference   #}
+            {# pour la requete de marque. Sans lui, une page interne avec le  #}
+            {# nom dans son titre passait devant la home dans les resultats.  #}
+            {# Nom propre : pas de {% translate %}.                           #}
+            {# / "TiBillet" is named in the H1: this is the reference page    #}
+            {# for the brand query. Without it, an inner page carrying the    #}
+            {# name in its title outranked the home page. Proper noun: no     #}
+            {# {% translate %}.                                               #}
             <h1 class="hero-title">
+                TiBillet —
                 <span class="hero-kw">{% translate "Adhésion" %}</span>,
                 {% translate "billetterie," %}
                 <br>

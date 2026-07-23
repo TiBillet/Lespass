@@ -9,9 +9,23 @@
     {% load i18n %}
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <meta name="description" content="{{ page_description|default:'TiBillet — Logiciel libre de billetterie et lieux culturels' }}">
+    {# Titre et description : deux facons de les definir, au choix.          #}
+    {#   1. Depuis une vue, via le contexte : `page_title` / `page_description`. #}
+    {#   2. Depuis un template enfant, via `{% block page_title %}`.          #}
+    {# Le block enveloppe la variable, donc les vues qui passent `page_title` #}
+    {# continuent de fonctionner a l'identique. Le block sert aux templates   #}
+    {# qui n'ont pas la main sur le contexte de la vue (ex. le wizard         #}
+    {# onboard, dont les ~30 `render()` ne passent pas de titre).             #}
+    {# / Title and description: two ways to set them.                        #}
+    {#   1. From a view, via context: `page_title` / `page_description`.     #}
+    {#   2. From a child template, via `{% block page_title %}`.             #}
+    {# The block wraps the variable, so views passing `page_title` keep      #}
+    {# working unchanged. The block is for templates that don't control the  #}
+    {# view context (e.g. the onboard wizard, whose ~30 `render()` calls     #}
+    {# pass no title).                                                        #}
+    <meta name="description" content="{% block page_description %}{{ page_description|default:'TiBillet — Logiciel libre de billetterie et lieux culturels' }}{% endblock %}">
     <meta name="robots" content="{% block meta_robots %}{% if noindex_seo %}noindex, nofollow{% else %}index, follow{% endif %}{% endblock %}">
-    <title>{{ page_title|default:"TiBillet" }}</title>
+    <title>{% block page_title %}{{ page_title|default:"TiBillet" }}{% endblock %}</title>
 
     {# Social card : image par defaut pour Open Graph et Twitter. #}
     {# Chaque vue peut surcharger via la variable `social_card_url`. #}

@@ -1,13 +1,51 @@
+# Ce qui NE DOIT PAS entrer dans l'image publiee sur Docker Hub.
+# / What must NEVER end up in the image published on Docker Hub.
+#
+# ATTENTION AU CHEMIN : le contexte de build est la RACINE du depot
+# (dockerfile : `COPY --chown=tibillet:tibillet ./ /DjangoFiles`). Les motifs
+# s'ecrivent donc `www/`, PAS `DjangoFiles/www` — un prefixe `DjangoFiles/`
+# ne matche rien, et l'exclusion est silencieusement sans effet.
+# / MIND THE PATH: the build context is the repo ROOT, so patterns are `www/`,
+# never `DjangoFiles/www` — such a prefix matches nothing, silently.
+
+# --- Secrets ---
 .env
 env*
-#.git
-Backup/dumps
-Backup/logs
+certs/
+
+# L'HISTORIQUE GIT. Quelques centaines de Mo, mais surtout : tout secret jamais
+# commite y reste recuperable (`git log -p`) meme s'il a ete retire de HEAD
+# depuis. Une image publique qui l'embarque publie donc l'integralite des cles
+# poussees par erreur un jour. C'est la ligne la plus importante de ce fichier.
+# / GIT HISTORY. Any secret ever committed stays recoverable via `git log -p`,
+# even if removed from HEAD since. A public image carrying it publishes them all.
+.git
+.github
+
+# --- Sorties d'execution : regenerees au demarrage, ou propres a une machine ---
+
+# `www/` porte STATIC_ROOT et MEDIA_ROOT (settings.py:534 et 544). STATIC_ROOT
+# est reconstruit au demarrage par le `collectstatic` de start.sh, il n'a donc
+# rien a faire dans l'image. MEDIA_ROOT, lui, contient les depots utilisateurs
+# de TOUS les tenants — plusieurs Go de donnees personnelles, a ne jamais publier.
+# /!\ Ne PAS exclure `static/` a la racine : c'est une source declaree dans
+# STATICFILES_DIRS, sans elle le collectstatic serait incomplet.
+# / `www/` holds STATIC_ROOT (rebuilt at boot by start.sh) and MEDIA_ROOT (every
+# tenant's user uploads). Do NOT exclude the root `static/`: it is a source dir.
+www/
+
+# Journaux : ils contiennent les adresses IP des visiteurs.
+# / Logs: they contain visitors' IP addresses.
+logs/
+
+# Sauvegardes et dumps de base.
+# / Backups and database dumps.
+Backup/
+backup/
+database/
+
+# --- Divers / Misc ---
 Docker
-DjangoFiles/www
-DjangoFiles/logs/gunicorn.logs
-DjangoFiles/logs/Djangologfile
-DjangoFiles/logs/nginxAccess.log
-DjangoFiles/logs/nginxError.log
-database/*
-backup/*
+.playwright-mcp/
+**/__pycache__/
+*.pyc

@@ -177,3 +177,42 @@ AGENTS.md
 /demo_data.sql.gz
 /Administration/Unfold_docs/
 /TECH_DOC/Unfold_docs/
+
+
+docker-compose-filaos.yml
+letsencrypt/acme.json
+
+# Certificats de dev generes par mkcert : contiennent une CLE PRIVEE.
+# Chaque dev genere les siens (cf. tuto en haut du docker-compose.yml).
+# / Local mkcert dev certificates: contain a private key, never commit.
+/certs/
+# Filet de securite : mkcert lance sans -cert-file ecrit a la racine du projet
+# (ex: tibillet.localhost+3.pem). On refuse tout .pem/.key hors dossier dedie.
+# / Safety net for mkcert run without -cert-file, which writes to the repo root.
+*.pem
+*.key
+
+
+# laboutik client Cordova/android
+*.apk
+**/mobile-app/node_modules/
+**/mobile-app/plugins/
+**/mobile-app/platforms/
+# autoriser www dans les plugins
+!laboutik_client_android_v2/cordova_local_plugins/**/www/
+!laboutik_client_android_v2/cordova_local_plugins/**/www/**
+!laboutik_client_android_v2/mobile-app/www/
+!laboutik_client_android_v2/mobile-app/www/**
+env.js
+
+# laboutik client pi/dektop
+!laboutik_client_pi_desktop_v2/www/
+!laboutik_client_pi_desktop_v2/www/**
+laboutik_client_pi_desktop_v2/configLaboutik.json
+laboutik_client_pi_desktop_v2/package-lock.json
+laboutik_client_android_v2/mobile-app/package-lock.json
+
+# Outillage agent IA local : jamais committe (secrets, etat local, workspaces jetables).
+# Les skills partages vivent dans api_v2/skills/ et sont lies ici par un symlink.
+# / Local AI tooling: never committed. Shared skills live in api_v2/skills/, symlinked here.
+/.claude/

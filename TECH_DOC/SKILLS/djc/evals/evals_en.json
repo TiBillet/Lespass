@@ -1,0 +1,96 @@
+{
+  "skill_name": "django-htmx-readable",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Create a Django ViewSet to manage a list of products (Product) with fields: name, description, price, in_stock. The ViewSet should have list() and retrieve() methods. Use very explicit variable names and add bilingual FR/EN comments explaining each step. Do not use ModelViewSet.",
+      "expected_output": "A Python file containing an explicit ViewSet with list() and retrieve() methods, verbose variable names, and bilingual comments",
+      "files": [],
+      "expectations": [
+        "The code uses viewsets.ViewSet and not ModelViewSet",
+        "The list() method contains an explicit query with select_related() or prefetch_related() if applicable",
+        "The retrieve() method uses get_object_or_404()",
+        "Variable names are verbose and explicit (example: 'products_in_stock_only' rather than 'products')",
+        "Each important section has a bilingual FR/EN comment",
+        "The code uses render() to return HTML templates",
+        "No use of hidden get_queryset()"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Create a DRF serializer to validate product creation form data. The product has: title (required, max 200 characters), description (optional), price (required, positive), availability_date (optional). Add custom validation that checks no product with the same title already exists. Do NOT use Django Forms, only DRF serializers.",
+      "expected_output": "A DRF serializer with explicit validation, bilingual error messages, and custom validate_title method",
+      "files": [],
+      "expectations": [
+        "The code uses serializers.Serializer or serializers.ModelSerializer",
+        "NO use of Django Forms (forms.Form or forms.ModelForm)",
+        "The title field has max_length=200 and bilingual error messages",
+        "A validate_title() method checks title uniqueness",
+        "The price field has validation to ensure it's positive",
+        "The create() method is explicit and doesn't use 'magic save()'",
+        "Error messages are in FR/EN"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Create an HTML template with HTMX that displays a list of products. Each product should have a 'View details' button that loads product details dynamically without page reload. Also add the CSRF token for HTMX requests. Use hx-target and hx-swap to inject content.",
+      "expected_output": "An HTML template with HTMX buttons configured for dynamic loading, with CSRF token and explanatory comments",
+      "files": [],
+      "expectations": [
+        "The template contains HTMX attributes: hx-get, hx-target, hx-swap",
+        "A container with an ID is defined to receive dynamic content (example: id='product-detail-container')",
+        "The CSRF token is included via hx-headers in the body or in each form",
+        "Buttons use hx-swap='innerHTML' or 'beforeend'",
+        "Bilingual FR/EN comments explain each HTMX element",
+        "URLs use Django's {% url %} template tag"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Create a custom action in a ViewSet that allows marking a product as 'on sale'. The action should: 1) check if the product is already on sale, 2) if yes, return a partial HTML indicating it's already done, 3) if not, mark the product on sale and return an HTMX partial with the new status. Use @action decorator.",
+      "expected_output": "A ViewSet method with @action, explicit step-by-step logic, and HTML partial returns for HTMX",
+      "files": [],
+      "expectations": [
+        "The code uses @action(detail=True, methods=['POST'])",
+        "The method has an explicit name like 'set_promotion' or 'mark_as_promotion'",
+        "The logic uses explicit if/else (no complex one-liner)",
+        "Variables have verbose names (example: 'product_already_in_promotion')",
+        "The method returns render() with an HTML partial, NOT JsonResponse",
+        "The code uses save(update_fields=[...]) to be explicit about what's saved",
+        "Bilingual FR/EN comments explain the logic"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Implement a toast notification system after deleting a product. The ViewSet should: 1) delete the product, 2) create a user message with Django messages, 3) return an HTMX response with an HX-Trigger header containing messages to display a toast. Also add minimal JavaScript code to listen for the toast event.",
+      "expected_output": "Python code with Django messages handling + HTMX headers, and JavaScript snippet to display toasts",
+      "files": [],
+      "expectations": [
+        "The code uses messages.add_message() from Django",
+        "An explicit variable saves the product title BEFORE deletion (example: 'product_title_for_message')",
+        "The response uses response['HX-Trigger'] with json.dumps()",
+        "The payload contains a structure {'toast': {'items': [...]}}",
+        "The JavaScript code listens for the event with document.body.addEventListener('toast', ...)",
+        "The code is explicit and verbose, no complex one-liner",
+        "Bilingual FR/EN comments explain each part"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Create a complete ViewSet to manage blog articles (BlogPost) with: list(), retrieve(), create(), update() and a search() action that filters by title. The ViewSet should include: 1) explicit queries with select_related for author, 2) validation via DRF serializer, 3) ultra-verbose variable names, 4) bilingual comments, 5) explicit error handling. Everything should be readable by a beginner.",
+      "expected_output": "A complete and pedagogical ViewSet with all CRUD methods, search action, and Easy-to-Read code",
+      "files": [],
+      "expectations": [
+        "Uses viewsets.ViewSet (NOT ModelViewSet)",
+        "The list() method has explicit select_related('author')",
+        "The create() method uses a serializer for validation",
+        "The update() method uses serializer.is_valid() and handles errors explicitly",
+        "The search() action uses @action(detail=False, methods=['GET'])",
+        "Variable names are extremely verbose (example: 'blog_posts_published_and_visible_to_user')",
+        "Each method has a bilingual FR/EN docstring",
+        "The code avoids complex comprehensions and uses simple for loops",
+        "No use of Django 'magic' (no get_queryset, get_serializer_class, etc.)"
+      ]
+    }
+  ]
+}

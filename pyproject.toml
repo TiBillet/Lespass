@@ -21,6 +21,13 @@ python-dateutil = "^2.8.2"
 django-solo = "^2"
 django-tenants = "^3.5.0"
 Markdown = "^3.5.1"
+# Coloration syntaxique des blocs de code Markdown (extension codehilite).
+# En dependance PRINCIPALE et non de dev : sans elle, codehilite degrade en
+# silence — la classe CSS est posee mais aucun element n'est colorise.
+# / Syntax highlighting for Markdown code blocks (codehilite extension).
+# A MAIN dependency, not a dev one: without it codehilite degrades
+# silently — the CSS class is emitted but nothing gets coloured.
+Pygments = "^2.17"
 djangorestframework-simplejwt = "^5"
 celery = "^5.3.6"
 redis = "^5"
@@ -49,6 +56,7 @@ djangorestframework-stubs = "^3.16.6"
 ruff = "^0.15.8"
 yamllint = "^1.38.0"
 playwright = "^1.60.0"
+django-cotton = "^2.7.2"
 
 [tool.poetry.group.dev.dependencies]
 django-debug-toolbar = "^4.2.0"

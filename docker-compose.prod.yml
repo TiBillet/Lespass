@@ -1,0 +1,244 @@
+####
+# PROD — utilise le Traefik externe (wildcard_conf)
+# Ne pas lancer en même temps que docker-compose.yml (dev)
+####
+
+# Rotation des logs Docker — plafonne chaque conteneur a 100 Mo (5 x 20 Mo).
+# Sans ca, le driver json-file grossit a l'infini (incident : 49 Go de logs).
+# Ancre reutilisee par chaque service via "logging: *default-logging".
+# / Docker log rotation — caps each container at 100 MB (5 x 20 MB).
+# Without it, the json-file driver grows unbounded (incident: 49 GB of logs).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+services:
+
+  #### FEDOW ####
+  fedow_memcached:
+    image: memcached:1.6
+    container_name: fedow_memcached
+    hostname: fedow_memcached
+    restart: always
+    logging: *default-logging
+    networks:
+      - backend
+
+  fedow_django:
+    image: tibillet/fedow:latest
+    container_name: fedow_django
+    hostname: fedow_django
+    restart: unless-stopped
+    env_file: .env
+    user: fedow
+    logging: *default-logging
+    links:
+      - fedow_memcached:memcached
+    volumes:
+      - fedow_database:/home/fedow/Fedow/database
+    networks:
+      - backend
+    command: "bash start.sh"
+
+  fedow_nginx:
+    image: nginx
+    restart: unless-stopped
+    container_name: fedow_nginx
+    hostname: fedow_nginx
+    logging: *default-logging
+    volumes:
+      - ./nginx/fedow_nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./logs:/logs
+    depends_on:
+      - fedow_django
+    links:
+      - fedow_django:fedow_django
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=frontend
+      - traefik.http.routers.fedow_nginx.entrypoints=websecure
+      - traefik.http.routers.fedow_nginx.tls=true
+      - traefik.http.routers.fedow_nginx.tls.certresolver=le-alpn
+      - traefik.http.routers.fedow_nginx.rule=Host(`fedow.${DOMAIN}`)
+      - traefik.http.routers.fedow_nginx.priority=100
+      - traefik.http.services.fedow_nginx.loadbalancer.server.port=80
+    networks:
+      - frontend
+      - backend
+
+  #########
+  # LESPASS
+  #########
+  lespass_postgres:
+    image: postgres:13-bookworm
+    restart: unless-stopped
+    container_name: lespass_postgres
+    hostname: lespass_postgres
+    logging: *default-logging
+    volumes:
+      - lespass_dev_db:/var/lib/postgresql/data
+    env_file: .env
+    networks:
+      - backend
+
+  lespass_memcached:
+    image: memcached:1.6
+    container_name: lespass_memcached
+    hostname: lespass_memcached
+    restart: unless-stopped
+    logging: *default-logging
+    # Limite item portee a 8 Mo (defaut 1 Mo) : l'agregat SEO AGGREGATE_EVENTS
+    # (~687 o/event) approche 1 Mo vers ~1500 events futurs ; au-dela le set L1
+    # echoue. -m 256 : memoire totale 256 Mo (defaut 64) pour accueillir ces gros
+    # items sans evictions. A ajuster selon la RAM dispo. cf. TECH_DOC SEO CHANTIER-08.
+    # / Item size raised to 8 MB (default 1 MB): SEO AGGREGATE_EVENTS nears 1 MB
+    # around ~1500 future events. -m 256: 256 MB total to avoid evictions.
+    command: ["memcached", "-m", "256", "-I", "8m"]
+    networks:
+      - backend
+
+  lespass_redis:
+    container_name: lespass_redis
+    hostname: lespass_redis
+    image: redis:7.2.3-bookworm
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      - backend
+
+  lespass_django:
+    build: .
+#    image: tibillet/lespass:latest
+    restart: unless-stopped
+    container_name: lespass_django
+    hostname: lespass_django
+    logging: *default-logging
+    volumes:
+      - ./:/DjangoFiles
+    env_file: .env
+    depends_on:
+      - lespass_postgres
+      - lespass_redis
+      - lespass_memcached
+    links:
+      - lespass_postgres:postgres
+      - lespass_redis:redis
+      - lespass_memcached:memcached
+    networks:
+      - backend
+    # start.sh lance supervisord qui orchestre gunicorn (HTTP :8002),
+    # daphne (WebSockets :7999) et celery (worker + beat) dans CE conteneur.
+    # Plus de service lespass_celery séparé : un seul conteneur en prod.
+    # / start.sh runs supervisord which orchestrates gunicorn (HTTP :8002),
+    # daphne (WebSockets :7999) and celery (worker + beat) in THIS container.
+    # No more separate lespass_celery service: a single production container.
+    command: "bash start.sh"
+
+  lespass_nginx:
+    image: nginx:latest
+    container_name: lespass_nginx
+    restart: unless-stopped
+    hostname: lespass_nginx
+    logging: *default-logging
+    links:
+      - lespass_django:lespass_django
+    volumes:
+      # Conf PROD : route /ws/ et /wss/ vers daphne (:7999), le reste vers
+      # gunicorn (:8002). / PROD conf: /ws/ and /wss/ → daphne (:7999),
+      # everything else → gunicorn (:8002).
+      - ./nginx_prod/lespass_prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./www:/www
+      - ./logs:/logs
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=frontend
+      - traefik.http.services.lespass_nginx.loadbalancer.server.port=80
+
+      # Router A — wildcard OVH : *.DOMAIN + apex
+      - traefik.http.routers.lespass-ovh.entrypoints=websecure
+      - traefik.http.routers.lespass-ovh.tls=true
+      - traefik.http.routers.lespass-ovh.tls.certresolver=le-ovh
+      - traefik.http.routers.lespass-ovh.tls.domains[0].main=${DOMAIN}
+      - traefik.http.routers.lespass-ovh.tls.domains[0].sans=*.${DOMAIN}
+      - traefik.http.routers.lespass-ovh.rule=Host(`${DOMAIN}`) || HostRegexp(`${DOMAIN_REGEX}`)
+
+      # Router B — wildcard Gandi : *.DOMAIN_GANDI + apex
+      - traefik.http.routers.lespass-gandi.entrypoints=websecure
+      - traefik.http.routers.lespass-gandi.tls=true
+      - traefik.http.routers.lespass-gandi.tls.certresolver=le-gandi
+      - traefik.http.routers.lespass-gandi.tls.domains[0].main=${DOMAIN_GANDI}
+      - traefik.http.routers.lespass-gandi.tls.domains[0].sans=*.${DOMAIN_GANDI}
+      - traefik.http.routers.lespass-gandi.rule=Host(`${DOMAIN_GANDI}`) || HostRegexp(`${DOMAIN_GANDI_REGEX}`)
+
+      # Router C — hôte simple (TLS challenge)
+#      - traefik.http.routers.lespass-simple.entrypoints=websecure
+#      - traefik.http.routers.lespass-simple.tls=true
+#      - traefik.http.routers.lespass-simple.tls.certresolver=le-alpn
+#      - traefik.http.routers.lespass-simple.rule=Host(`${DOMAIN}`) || Host(`lespass.${DOMAIN}`) || Host(`festival.${DOMAIN}`)
+
+
+
+    networks:
+      - backend
+      - frontend
+
+  #########
+  # ROTATION DES JOURNAUX
+  #########
+
+  # Sans ce service, RIEN ne borne les fichiers de `./logs` : ils grossissent
+  # jusqu'a saturer le disque. Le plafond `logging:` des autres services ne les
+  # couvre pas — il ne s'applique qu'a la sortie standard des conteneurs, alors
+  # que nginx et gunicorn ecrivent, eux, directement dans le volume monte.
+  #
+  # POURQUOI UNE DUREE COURTE : depuis que nginx reconstruit l'adresse reelle du
+  # visiteur (bloc `real_ip` de lespass_prod.conf), ces journaux contiennent des
+  # DONNEES PERSONNELLES. Les conserver sans limite n'est ni utile — ils servent
+  # au diagnostic de latence, qui se fait sur quelques jours — ni defendable.
+  # 14 jours couvrent un incident et son analyse.
+  #
+  # `copytruncate` est le mode par defaut de cette image (verifie dans
+  # /usr/bin/logrotate.d/logrotate.sh) : le fichier est copie puis VIDE SUR
+  # PLACE, son inode ne change pas. C'est indispensable ici — nginx et gunicorn
+  # gardent leur descripteur ouvert et n'ont aucun signal a recevoir. Avec une
+  # rotation classique (renommage), ils continueraient d'ecrire dans le fichier
+  # renomme et le journal courant resterait vide pour toujours.
+  # NE PAS definir LOGROTATE_MODE sans mesurer cette consequence.
+  #
+  # / Without this service nothing bounds `./logs`: it grows until the disk is
+  # full. The `logging:` cap on other services does not cover it — that only
+  # applies to container stdout, while nginx and gunicorn write straight into
+  # the mounted volume. Retention is short because these logs now hold PERSONAL
+  # DATA (real visitor IPs, since the `real_ip` block). `copytruncate` is this
+  # image's default and is mandatory here: nginx and gunicorn keep their file
+  # descriptor open and receive no signal.
+  logrotate:
+    image: blacklabelops/logrotate:latest
+    container_name: lespass_logrotate
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      - LOGS_DIRECTORIES=/logs
+      - LOGROTATE_INTERVAL=daily
+      - LOGROTATE_COPIES=14
+      - LOGROTATE_COMPRESSION=compress
+    volumes:
+      - ./logs:/logs
+    networks:
+      - backend
+
+networks:
+  frontend:
+    external: true
+  backend:
+
+volumes:
+  lespass_dev_db:
+  fedow_database:
+
+
+# Données persistantes dans ./data/ (bind mounts)
+# - ./data/postgres   : base PostgreSQL Lespass
+# - ./data/fedow      : base Fedow

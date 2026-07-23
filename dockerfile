@@ -8,7 +8,10 @@ RUN mkdir -p /usr/share/man/man1
 RUN mkdir -p /usr/share/man/man7
 RUN apt-get install -y --no-install-recommends postgresql-client
 
-RUN apt-get install -y nano iputils-ping curl borgbackup cron gettext
+# supervisor : orchestre gunicorn + daphne + celery dans le conteneur de prod
+# (voir supervisor/supervisord.conf, lance par start.sh)
+# / supervisor: orchestrates gunicorn + daphne + celery in the prod container
+RUN apt-get update && apt-get install -y nano iputils-ping curl borgbackup cron gettext supervisor
 
 ## PLAYWRIGHT / CHROMIUM — librairies systeme requises par chrome-headless-shell (tests E2E)
 ## / System libraries required by Playwright's chrome-headless-shell (E2E tests)
