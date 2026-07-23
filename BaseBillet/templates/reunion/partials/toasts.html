@@ -41,3 +41,61 @@
     {% endfor %}
     {% endif %}
 </div>
+
+<script>
+    // FR: Issue #431 — écoute l'évènement "toast" émis via HX-Trigger (pattern GUIDELINES
+    //     "HX-Trigger + django.messages") et reproduit le markup Bootstrap serveur ci-dessus.
+    // EN: Issue #431 — listens for the "toast" event sent via HX-Trigger (GUIDELINES
+    //     "HX-Trigger + django.messages" pattern) and replicates the server-side Bootstrap
+    //     markup above.
+    if (!window.__tibilletToastListener) {
+        window.__tibilletToastListener = true;
+        document.body.addEventListener('toast', function (e) {
+            const items = e && e.detail && e.detail.items;
+            if (!items || !items.length) return;
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+            // FR: Mêmes styles/labels que le rendu serveur ci-dessus.
+            // EN: Same styles/labels as the server-side rendering above.
+            const levels = {
+                'success': {css: 'text-bg-success', label: '{% trans 'Success' as l_success %}{{ l_success|escapejs }}'},
+                'info': {css: 'text-bg-info', label: '{% trans 'Heads up' as l_info %}{{ l_info|escapejs }}'},
+                'warning': {css: 'text-bg-warning', label: '{% trans 'Warning' as l_warning %}{{ l_warning|escapejs }}'},
+                'error': {css: 'text-bg-danger', label: '{% trans 'Error' as l_error %}{{ l_error|escapejs }}'},
+                'debug': {css: 'text-bg-secondary', label: '{% trans 'Debug' as l_debug %}{{ l_debug|escapejs }}'}
+            };
+            items.forEach(function (item) {
+                const level = levels[item.level] || levels['info'];
+                const toast = document.createElement('div');
+                toast.className = 'toast show';
+                toast.setAttribute('aria-atomic', 'true');
+                toast.setAttribute('role', item.level === 'error' ? 'alert' : 'status');
+                toast.setAttribute('aria-live', item.level === 'error' ? 'assertive' : 'polite');
+
+                const header = document.createElement('div');
+                header.className = 'd-flex flex-row justify-content-between toast-header rounded-top ' + level.css;
+                header.appendChild(document.createTextNode(level.label));
+                const closeBtn = document.createElement('button');
+                closeBtn.type = 'button';
+                closeBtn.className = 'btn-close';
+                closeBtn.setAttribute('data-bs-dismiss', 'toast');
+                closeBtn.setAttribute('aria-label', '{% trans 'Close' as l_close %}{{ l_close|escapejs }}');
+                header.appendChild(closeBtn);
+                toast.appendChild(header);
+
+                const hr = document.createElement('hr');
+                hr.className = 'horizontal dark m-0';
+                toast.appendChild(hr);
+
+                const body = document.createElement('div');
+                body.className = 'toast-body';
+                // FR: textContent (et non innerHTML) pour éviter toute injection XSS.
+                // EN: textContent (not innerHTML) to avoid any XSS injection.
+                body.textContent = item.text || '';
+                toast.appendChild(body);
+
+                container.appendChild(toast);
+            });
+        });
+    }
+</script>
