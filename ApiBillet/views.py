@@ -32,7 +32,7 @@ from ApiBillet.serializers import EventSerializer, EventWriteSerializer, PriceSe
 from AuthBillet.models import HumanUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, \
-    OptionGenerale, Membership, PaymentMethod, LigneArticle
+    OptionGenerale, Membership, PaymentMethod, LigneArticle, MembershipProduct
 from BaseBillet.tasks import create_ticket_pdf, send_stripe_bank_deposit_to_laboutik, send_payment_refused_user
 from BaseBillet.tasks import send_membership_sepa_pending_user
 from Customers.models import Client
@@ -235,8 +235,7 @@ class HereViewSet(DeprecatedV1Mixin, viewsets.ViewSet):
         dict_return = {'uuid': f"{connection.tenant.uuid}"}
         dict_return.update(place_serialized.data)
 
-        products_adhesion = Product.objects.filter(
-            categorie_article=Product.ADHESION,
+        products_adhesion = MembershipProduct.objects.filter(
             prices__isnull=False,
             publish=True,
         ).distinct()
