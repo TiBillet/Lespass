@@ -298,9 +298,27 @@ def test_vente_en_monnaie_locale_puis_remise_en_banque(
     assert 'STATUT=V' in sortie, f"La vente n'est pas validee : {sortie[-300:]}"
 
     # --- 5. Le lieu detient la monnaie encaissee ---
-    solde_du_lieu_apres_vente = _solde_du_lieu(django_shell, uuid_asset)
-    assert solde_du_lieu_apres_vente >= solde_du_lieu_avant + MONTANT_DE_LA_VENTE_CENTIMES, (
-        "Le Fedow n'a pas credite le lieu du montant encaisse."
+    #
+    # Le Fedow enregistre la transaction puis recalcule sa ventilation par lieu :
+    # celle-ci peut mettre un instant a refleter l'encaissement. On interroge donc
+    # jusqu'a la voir, plutot que de parier sur un delai fixe — meme precaution
+    # que pour la remise en banque a l'etape 8. Une lecture unique passe quand le
+    # fichier est lance seul et echoue en suite, ou le Fedow est plus sollicite.
+    # / The Fedow records the transaction then recomputes its per-venue breakdown,
+    # which may lag. Poll instead of betting on a fixed delay — same precaution as
+    # step 8. A single read passes in isolation and fails in a full suite.
+    attendu_pour_le_lieu = solde_du_lieu_avant + MONTANT_DE_LA_VENTE_CENTIMES
+    solde_du_lieu_apres_vente = solde_du_lieu_avant
+    for _tentative in range(10):
+        solde_du_lieu_apres_vente = _solde_du_lieu(django_shell, uuid_asset)
+        if solde_du_lieu_apres_vente >= attendu_pour_le_lieu:
+            break
+        time.sleep(2)
+
+    assert solde_du_lieu_apres_vente >= attendu_pour_le_lieu, (
+        f"Le Fedow n'a pas credite le lieu du montant encaisse : "
+        f"{solde_du_lieu_avant} → {solde_du_lieu_apres_vente}, "
+        f"attendu au moins {attendu_pour_le_lieu}."
     )
 
     # --- 6. Le gestionnaire voit la monnaie dans la ventilation ---

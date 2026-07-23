@@ -137,7 +137,46 @@ serait creditee, puis **debitee au paiement sans qu'aucune vente ne soit enregis
 face** (cf. `CHANGELOG/2026-07-22-qrcode-flux-complet-et-deux-500.md`). La fixture
 `monnaie_de_recompense` echoue si la categorie n'est pas encaissable.
 
-### Etat du seed : robuste pour l'adhesion, fragile pour le scan
+### Le seed de la recompense au scan — REPARE
+
+> Cette section decrivait un defaut ; il est corrige depuis (2026-07-23). Elle est
+> conservee parce qu'elle explique **comment** il a ete trouve et pourquoi il etait
+> invisible.
+
+Deux corrections dans `demo_data_v2.py`, au meme endroit :
+
+1. **La recherche de l'asset va desormais en BASE d'abord**, puis dans les assets declares
+   par le run — meme ordre que la recompense d'adhesion (l.2292), qui n'a jamais eu le
+   probleme :
+   ```python
+   asset_de_recompense = (
+       AssetFedowPublic.objects.filter(name=nom_asset_recompense).first()
+       or assets_by_name.get(nom_asset_recompense)
+   )
+   ```
+2. **Le drapeau n'est plus pose si l'asset est introuvable.** C'est la correction qui
+   compte : la tache exige les TROIS champs ensemble, donc `reward_on_ticket_scanned=True`
+   sans asset ne verse rien **et ne dit rien**. Mieux vaut ne rien activer et journaliser un
+   avertissement qu'installer un mecanisme muet.
+
+Verifie sur une base fraiche (flush + reseed) : les trois tarifs « Inscription benevolat »
+portent maintenant `asset=MTemps`, la ou ils avaient `None`. Et l'ancien motif reste
+demontrable a cote du nouveau :
+
+```
+ANCIEN motif (dict du run seul) -> None
+NOUVEAU motif (base puis dict)  -> MTemps
+```
+
+/ Two fixes: look up the asset in the DB first (like the membership reward path already
+did), and never set the flag when the asset is missing — a flag without an asset makes the
+mechanism silently inert. Verified on a freshly seeded database.
+
+**Reste ouvert** : le meme piege existe dans l'admin. Un gestionnaire qui coche la case sans
+choisir de monnaie obtient exactement l'etat qu'on vient de rendre impossible au seed. Une
+validation cote formulaire fermerait le sujet.
+
+### Ce que l'audit avait etabli / What the audit had established
 
 Les deux mecanismes ne sont pas seedes de la meme facon.
 
@@ -385,6 +424,35 @@ consecutifs.
 **La regle a retenir** (documentee en `PIEGES.md` 12.14) : sur un front tiers, un clic qui ne
 produit **aucune requete** n'est pas un probleme d'application — c'est le handler qui n'a pas
 ete atteint. Chercher du cote de l'evenement, pas du cote du serveur.
+
+### La parade est factorisee : `soumettre_paiement_stripe`
+
+Le meme motif vulnerable existait dans **tous** les tests qui paient sur Stripe :
+
+```python
+submit_btn.click()
+page.wait_for_url(lambda url: "tibillet.localhost" in url, timeout=60_000)
+```
+
+Ils passaient par chance. Quand le clic est ignore, c'est 60 s d'attente puis un echec dont
+le message accuse la navigation.
+
+La soumission robuste vit desormais dans une fixture partagee du conftest, appliquee a
+`test_stripe_smoke.py` (deux parcours), `test_membership_manual_validation_stripe.py` et
+`test_parcours_fedow_reel.py`. Le gain est d'abord une **classe entiere d'echecs
+intermittents supprimee** ; le temps n'est gagne que sur les runs ou le clic ratait — mais
+la, il l'est massivement (60 s d'attente vaine par occurrence).
+
+### Une lecture de solde qui manquait son polling
+
+Meme fichier, autre fragilite du meme genre : apres la vente, le solde du lieu etait lu
+**une seule fois**. Or le Fedow enregistre la transaction puis recalcule sa ventilation par
+lieu — celle-ci peut retarder. Le test passait lance seul et echouait en suite, quand le
+Fedow est plus sollicite.
+
+Corrige par un polling, exactement comme l'etape suivante du meme test le faisait deja pour
+la remise en banque. Le message d'erreur porte maintenant les deux montants, ce qui evite
+d'avoir a relancer pour comprendre.
 
 ### Et payer sans passer par le front ? Non, pas pour un Checkout heberge
 
