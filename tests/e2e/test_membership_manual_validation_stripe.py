@@ -149,6 +149,13 @@ def _rechercher_dans_liste_admin(page, email):
     return page.locator("#result_list tbody tr").filter(has_text=email)
 
 
+# Ce parcours ne s'acheve qu'au retour du webhook Stripe : l'adhesion ne passe
+# au statut paye que lorsque Stripe rappelle. Sans `stripe listen`, l'attente en
+# base tourne dans le vide et le test echoue au bout de ses 15 tentatives, pour
+# une raison qui n'a rien a voir avec le code.
+# / This journey only completes when the Stripe webhook returns. Without
+# `stripe listen` the DB polling spins for nothing and fails after 15 attempts.
+@pytest.mark.stripe_listen
 class TestMembershipManualValidationStripe:
     """Adhésion à validation manuelle + paiement Stripe via lien copié.
     / Manual validation membership + Stripe payment via copied link.
@@ -156,7 +163,7 @@ class TestMembershipManualValidationStripe:
 
     def test_flux_complet_validation_manuelle_stripe(
         self, page, create_product, login_as_admin, django_shell, fill_stripe_card,
-        api_key
+        soumettre_paiement_stripe, api_key
     ):
         """Flux complet : créer → valider → copier lien → payer → vérifier.
         / Full flow: create → validate → copy link → pay → verify.
@@ -376,9 +383,10 @@ class TestMembershipManualValidationStripe:
 
         # Soumettre le paiement Stripe.
         # / Submit the Stripe payment.
-        submit_button = page.locator('button[type="submit"]').first
-        expect(submit_button).to_be_enabled(timeout=30_000)
-        submit_button.click()
+        # Soumission robuste : un click() simple est parfois ignore par le
+        # front Stripe, sans erreur ni requete (PIEGES 12.14).
+        # / Robust submit: a plain click() is sometimes silently ignored.
+        soumettre_paiement_stripe(page)
 
         # Attendre le retour vers le site (confirmation de paiement).
         # / Wait for return to the site (payment confirmation).

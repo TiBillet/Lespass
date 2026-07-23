@@ -137,8 +137,10 @@ print("RESULTAT_JSON=" + json.dumps({{
 """
     resultat = _lancer_dans_django(code_de_preparation)
     if resultat.returncode != 0:
-        pytest.skip(
-            "Preparation impossible (conteneur Django injoignable). "
+        pytest.fail(
+            "Preparation impossible : le conteneur Django n'a pas repondu. "
+            "Un environnement casse doit rendre le test ROUGE, pas le faire "
+            "disparaitre du rapport.\n"
             f"Stderr : {resultat.stderr[:300]}"
         )
 
@@ -147,13 +149,18 @@ print("RESULTAT_JSON=" + json.dumps({{
         if ligne.startswith("RESULTAT_JSON=")
     ]
     if not ligne_resultat:
-        pytest.skip("Preparation : pas de resultat JSON renvoye par le conteneur.")
+        pytest.fail(
+            "Preparation : le conteneur n'a renvoye aucun RESULTAT_JSON. "
+            f"Sortie brute : {resultat.stdout[-300:]}"
+        )
 
     donnees = json.loads(ligne_resultat[0].removeprefix("RESULTAT_JSON="))
     if not donnees["nom_du_premier_event"]:
-        pytest.skip(
-            "Le lieu federe n'a aucun evenement futur a son adresse principale : "
-            "rien a verifier dans le popup."
+        pytest.fail(
+            "Le lieu federe 'festival' n'a aucun evenement futur a son adresse "
+            "principale : le popup n'a rien a afficher, le test ne prouve rien. "
+            "Reseeder : docker exec lespass_django poetry run python "
+            "manage.py demo_data_v2"
         )
 
     yield donnees

@@ -239,6 +239,62 @@ class Asset(models.Model):
     def __str__(self):
         return f'{self.name} ({self.get_category_display()})'
 
+    def save(self, *args, **kwargs):
+        """
+        Refuse la creation d'un asset local de categorie FED.
+        / Refuses to create a local asset of category FED.
+
+        LOCALISATION : fedow_core/models.py
+
+        La monnaie federee du reseau (FED) est servie par le Fedow distant. Le
+        moteur local n'en heberge aucune. Cette garde protege deux codes qui
+        filtrent sur la seule categorie, sans savoir distinguer les deux
+        moteurs, et qui prendraient donc un FED local pour la vraie monnaie
+        federee :
+
+        - la cascade de paiement du point de vente (laboutik/views.py), qui le
+          debiterait lors d'un achat ;
+        - le remboursement en especes de la caisse
+          (WalletService.rembourser_en_especes), qui le rendrait en billets.
+
+        Aucune contrainte de base ne joue ce role : UniqueConstraint
+        'unique_fed_asset' autorise UN asset FED, elle n'en interdit pas la
+        creation du premier.
+
+        / The network's federated currency is served by the remote Fedow. No
+        local one exists. This guard protects the POS payment cascade and the
+        cash refund, which both filter on the category alone and would mistake
+        a local FED for the real federated currency. The 'unique_fed_asset'
+        DB constraint allows ONE FED asset; it does not forbid creating it.
+
+        La garde se leve par le reglage FEDOW_AUTORISER_ASSET_FED_LOCAL, que
+        seuls les tests couvrant le code d'apres-migration activent, et qui
+        sautera quand la migration sera faite.
+
+        Le controle est dans save() et non dans clean() : clean() n'est appele
+        que par les formulaires, alors que les assets sont crees ici par l'ORM
+        et par des commandes de gestion.
+        / The check sits in save(), not clean(): clean() only runs for forms,
+        while assets are created here through the ORM and management commands.
+
+        :raises AssetFedLocalInterdit: si categorie FED et garde active
+        """
+        from django.conf import settings
+
+        from fedow_core.exceptions import AssetFedLocalInterdit
+
+        categorie_est_federee = (self.category == self.FED)
+        garde_est_levee = getattr(
+            settings,
+            'FEDOW_AUTORISER_ASSET_FED_LOCAL',
+            False,
+        )
+
+        if categorie_est_federee and not garde_est_levee:
+            raise AssetFedLocalInterdit()
+
+        super().save(*args, **kwargs)
+
 
 # ---------------------------------------------------------------------------
 # Token : le solde d'un wallet pour un asset donne

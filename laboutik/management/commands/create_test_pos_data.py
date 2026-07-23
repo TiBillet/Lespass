@@ -40,10 +40,13 @@ class Command(BaseCommand):
         # Idempotent : si deja present, ne recree rien. Necessaire pour les tests qui
         # utilisent la recharge V2 (Session 31).
         # / V2 FED infrastructure bootstrap. Idempotent. Needed for tests using V2 refill.
-        from django.core.management import call_command
         # S6 : PAS de FED local (garde anti-FED-local). bootstrap_fed_asset cree un
         # Client.FED + tenant federation_fed, interdit en S6 (le FED reste sur le Fedow legacy).
+        # L'import de call_command est commente avec son appel : garde depuis
+        # `Asset.save()`, la commande leverait de toute facon AssetFedLocalInterdit.
         # / S6: no local FED. bootstrap_fed_asset skipped (FED stays on the legacy Fedow).
+        # The call_command import is commented along with its call.
+        # from django.core.management import call_command
         # call_command('bootstrap_fed_asset')
 
         # Si on est deja dans un tenant_context (schema != "public"), on l'utilise.
@@ -1279,11 +1282,24 @@ class Command(BaseCommand):
                         category=FedowAsset.TNF,
                         active=True,
                     ).first()
-                    asset_fed_cascade = FedowAsset.objects.filter(
-                        tenant_origin=tenant_client,
-                        category=FedowAsset.FED,
-                        active=True,
-                    ).first()
+                    # CHANTIER EN COURS — recherche du FED local desactivee.
+                    # La monnaie federee du reseau vient du Fedow distant, et
+                    # `Asset.save()` interdit d'en creer une locale
+                    # (AssetFedLocalInterdit). Cette requete ne pouvait de toute
+                    # facon rien trouver : elle exige `tenant_origin=tenant_client`,
+                    # alors qu'un FED local appartiendrait au tenant federation_fed.
+                    # A reactiver apres la migration.
+                    # / WORK IN PROGRESS — local FED lookup disabled. The federated
+                    # currency comes from the remote Fedow and Asset.save() forbids
+                    # creating a local one. This query could never match anyway:
+                    # it requires tenant_origin=tenant_client, while a local FED
+                    # would belong to the federation_fed tenant.
+                    # asset_fed_cascade = FedowAsset.objects.filter(
+                    #     tenant_origin=tenant_client,
+                    #     category=FedowAsset.FED,
+                    #     active=True,
+                    # ).first()
+                    asset_fed_cascade = None
                     asset_tim_cascade = FedowAsset.objects.filter(
                         tenant_origin=tenant_client,
                         category=FedowAsset.TIM,

@@ -1238,8 +1238,7 @@ class EventQuickCreateSerializer(serializers.Serializer):
 
     def _get_tz(self):
         config = Configuration.get_solo()
-        import pytz
-        return pytz.timezone(getattr(config, 'fuseau_horaire', 'UTC'))
+        return config.get_tzinfo()
 
     def _parse_dt_local(self, raw: Optional[str]):
         if not raw:
@@ -1248,8 +1247,7 @@ class EventQuickCreateSerializer(serializers.Serializer):
         dt = datetime.fromisoformat(raw)
         # Si naïf, on localise dans le fuseau horaire de la configuration
         if dt.tzinfo is None:
-            tz = self._get_tz()
-            dt = tz.localize(dt)
+            dt = dt.replace(tzinfo=self._get_tz())
         return dt
 
     def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:

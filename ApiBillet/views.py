@@ -4,7 +4,6 @@ import json
 import logging
 from datetime import datetime, timedelta
 
-import pytz
 import stripe
 from cryptography.fernet import Fernet
 from django.contrib.auth import get_user_model
@@ -542,11 +541,22 @@ class OptionTicket(DeprecatedV1Mixin, viewsets.ViewSet):
 def borne_temps_4h():
     now = timezone.now()
     jour = now.date()
-    tzlocal = pytz.timezone(Configuration.get_solo().fuseau_horaire)
-    debut_jour = tzlocal.localize(datetime.combine(jour, datetime.min.time()), is_dst=None) + timedelta(
-        hours=4)
-    lendemain_quatre_heure = tzlocal.localize(datetime.combine(jour, datetime.max.time()), is_dst=None) + timedelta(
-        hours=4)
+    tzlocal = Configuration.get_solo().get_tzinfo()
+
+    # Les 4h sont ajoutees APRES avoir pose le fuseau, jamais avant : c'est ce
+    # qui permet a l'offset d'etre recalcule pour l'heure d'arrivee. Les deux
+    # nuits de bascule, la journee commerciale traverse le changement d'heure
+    # (qui a lieu vers 2h-3h du matin). Un fuseau qui figerait l'offset de
+    # minuit ferait deriver la borne d'une heure, et le ticket Z couvrirait la
+    # mauvaise plage. C'est aussi pour cela que le fuseau vient de
+    # `get_tzinfo()` (zoneinfo) et non de pytz.
+    # / The 4 hours are added AFTER attaching the timezone, never before: this
+    # lets the offset be recomputed for the resulting time. On the two DST
+    # nights the business day crosses the transition (around 2-3am). Freezing
+    # midnight's offset would drift the bound by an hour and the Z report would
+    # cover the wrong range.
+    debut_jour = datetime.combine(jour, datetime.min.time()).replace(tzinfo=tzlocal) + timedelta(hours=4)
+    lendemain_quatre_heure = datetime.combine(jour, datetime.max.time()).replace(tzinfo=tzlocal) + timedelta(hours=4)
 
     if now < debut_jour:
         # Alors on demande au petit matin.

@@ -296,3 +296,158 @@ class TestEnvoiReelEmail:
             )
 
             assert result is True, "L'envoi de l'email a echoue"
+
+
+class TestExportDepuisUnVraiRapport:
+    """Les exports partent d'un rapport REELLEMENT produit par le service.
+
+    Les tests voisins fabriquent un `rapport_json` a la main. C'est commode,
+    mais ca rend le fichier aveugle a la seule chose qui compte ici : le PDF et
+    le CSV lisent-ils les cles que le service produit VRAIMENT ? Un rapport
+    invente repond toujours oui.
+
+    Ces tests-ci construisent le rapport avec `RapportComptableService`, comme la
+    cloture le fait en production.
+    / The neighbouring tests hand-craft a rapport_json, which makes them blind to
+    the only thing that matters: do the exports read the keys the service really
+    produces? These build the report with RapportComptableService, as the real
+    closure does.
+    """
+
+    @pytest.fixture
+    def cloture_depuis_le_service(self, admin_user, tenant, premier_pv):
+        """Une vente reelle, un rapport calcule, une cloture qui le porte.
+        / A real sale, a computed report, a closure carrying it."""
+        from datetime import timedelta
+
+        from laboutik.reports import RapportComptableService
+
+        nom_du_produit = f"Export test {uuid.uuid4().hex[:8]}"
+
+        with schema_context(TENANT_SCHEMA):
+            produit = Product.objects.create(
+                name=nom_du_produit,
+                categorie_article=Product.NONE,
+            )
+            tarif = Price.objects.create(product=produit, name="Unite", prix=10)
+            produit_vendu = ProductSold.objects.create(product=produit)
+            tarif_vendu = PriceSold.objects.create(
+                productsold=produit_vendu, price=tarif, prix=10,
+            )
+            ligne = LigneArticle.objects.create(
+                pricesold=tarif_vendu,
+                qty=2,
+                amount=1000,
+                vat=20,
+                payment_method=PaymentMethod.CASH,
+                status=LigneArticle.VALID,
+                sale_origin=SaleOrigin.LABOUTIK,
+                point_de_vente=premier_pv,
+            )
+
+            maintenant = timezone.now()
+            service = RapportComptableService(
+                point_de_vente=premier_pv,
+                datetime_debut=maintenant - timedelta(minutes=5),
+                datetime_fin=maintenant + timedelta(minutes=5),
+            )
+            rapport = service.generer_rapport_complet()
+
+            cloture = ClotureCaisse.objects.create(
+                point_de_vente=premier_pv,
+                responsable=admin_user,
+                datetime_ouverture=maintenant - timedelta(minutes=5),
+                total_especes=2000,
+                total_carte_bancaire=0,
+                total_cashless=0,
+                total_general=2000,
+                nombre_transactions=1,
+                rapport_json=rapport,
+            )
+
+            yield {"cloture": cloture, "nom_du_produit": nom_du_produit}
+
+            # Ordre impose par les FK : cloture, puis ligne, puis les objets de
+            # catalogue. Le `.delete()` d'un `Product` sans image leve un
+            # `TypeError` dans django-stdimage (son callback post_delete
+            # travaille sur un chemin `None`) : on l'enveloppe pour ne pas faire
+            # echouer le teardown sur une lib tierce (PIEGES 10.1).
+            # / Order imposed by the FKs. Deleting a Product without an image
+            # raises TypeError inside django-stdimage, so we wrap it.
+            cloture.delete()
+            ligne.delete()
+            tarif_vendu.delete()
+            produit_vendu.delete()
+            tarif.delete()
+            try:
+                produit.delete()
+            except TypeError:
+                pass
+
+    def test_le_csv_contient_le_detail_des_produits_vendus(
+        self, cloture_depuis_le_service,
+    ):
+        """Le produit vendu apparait dans le CSV de cloture.
+
+        C'est le test qui manquait : le CSV lisait des cles que le service ne
+        produit plus, et rendait des sections vides sans lever d'erreur.
+        / The missing test: the CSV read keys the service no longer produces and
+        silently rendered empty sections.
+        """
+        with schema_context(TENANT_SCHEMA):
+            from laboutik.csv_export import generer_csv_cloture
+
+            contenu = generer_csv_cloture(cloture_depuis_le_service["cloture"])
+
+        assert cloture_depuis_le_service["nom_du_produit"] in contenu
+        assert "Ventilation TVA" in contenu or "VAT breakdown" in contenu
+
+    def test_le_pdf_se_genere_depuis_un_vrai_rapport(
+        self, cloture_depuis_le_service,
+    ):
+        """Le PDF se fabrique sans erreur a partir du rapport du service.
+        / The PDF builds without error from the service's report."""
+        with schema_context(TENANT_SCHEMA):
+            from laboutik.pdf import generer_pdf_cloture
+
+            pdf = generer_pdf_cloture(cloture_depuis_le_service["cloture"])
+
+        assert isinstance(pdf, bytes)
+        assert pdf.startswith(b"%PDF")
+
+    def test_les_sections_de_detail_ne_sont_pas_vides(
+        self, cloture_depuis_le_service,
+    ):
+        """La traduction du rapport vers les sections d'export produit du contenu.
+
+        Un dictionnaire vide passerait tous les tests d'export precedents, qui se
+        contentent de verifier qu'aucune exception n'est levee.
+        / An empty dict would pass every previous export test, which only check
+        that no exception is raised.
+        """
+        from laboutik.reports import sections_de_detail_pour_export
+
+        sections = sections_de_detail_pour_export(
+            cloture_depuis_le_service["cloture"].rapport_json,
+        )
+
+        assert sections["par_produit"], "Aucun produit dans les sections d'export"
+        assert sections["par_categorie"], "Aucune categorie dans les sections d'export"
+        assert sections["par_tva"], "Aucune ventilation TVA dans les sections d'export"
+
+    def test_une_cloture_ancienne_reste_lisible(self, cloture_avec_donnees):
+        """Les cloture archivees avant le changement de format s'exportent encore.
+
+        Leur `rapport_json` porte deja les sections a plat. Les reconstruire
+        depuis `detail_ventes`, absent chez elles, viderait leurs exports — une
+        cloture archivee doit se reimprimer a l'identique des annees apres.
+        / Closures archived before the format change already carry flat sections.
+        An archived closure must reprint identically years later.
+        """
+        from laboutik.reports import sections_de_detail_pour_export
+
+        sections = sections_de_detail_pour_export(cloture_avec_donnees.rapport_json)
+
+        assert "Bière pression" in sections["par_produit"]
+        assert sections["par_categorie"]["Boissons"] == 2000
+        assert sections["par_tva"]["20.00%"]["total_ht"] == 1667

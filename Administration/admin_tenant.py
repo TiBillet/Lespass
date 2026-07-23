@@ -1924,7 +1924,7 @@ class RangeDateTimeFilterWithTimeZone(RangeDateTimeFilter):
 
         if date_value_from not in EMPTY_VALUES and time_value_from not in EMPTY_VALUES:
             # Add the timezone to the datetime for the filter to work correctly
-            value_from = new_timezone.localize(parse_datetime_str(f"{date_value_from} {time_value_from}"))
+            value_from = parse_datetime_str(f"{date_value_from} {time_value_from}").replace(tzinfo=new_timezone)
 
             filters.update(
                 {
@@ -1934,7 +1934,7 @@ class RangeDateTimeFilterWithTimeZone(RangeDateTimeFilter):
 
         if date_value_to not in EMPTY_VALUES and time_value_to not in EMPTY_VALUES:
             # Add the timezone to the datetime for the filter to work correctly
-            value_to = new_timezone.localize(parse_datetime_str(f"{date_value_to} {time_value_to}"))
+            value_to = parse_datetime_str(f"{date_value_to} {time_value_to}").replace(tzinfo=new_timezone)
 
             filters.update(
                 {

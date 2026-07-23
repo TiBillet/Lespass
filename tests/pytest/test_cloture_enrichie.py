@@ -246,7 +246,6 @@ class TestClotureMensuelle:
         with schema_context(TENANT_SCHEMA):
             from laboutik.tasks import _generer_cloture_agregee
             from BaseBillet.models import Configuration
-            from datetime import date
 
             produit, prix = premier_produit_et_prix
 
@@ -271,7 +270,17 @@ class TestClotureMensuelle:
 
             # Compter les clotures J existantes ce mois-ci
             # / Count existing daily closures this month
-            aujourd_hui = date.today()
+            #
+            # La date est prise dans le fuseau DU LIEU, comme le fait la tache
+            # cron reelle : les bornes d'agregation sont ancrees sur l'heure du
+            # lieu. Utiliser date.today() (horloge serveur, UTC) donnerait un
+            # jour different des la fin de soiree pour un lieu en avance sur
+            # UTC, et la fenetre exclurait les clotures qu'on vient de creer.
+            # / The date is taken in the VENUE timezone, like the real cron
+            # task: aggregation bounds are anchored on venue time. Using
+            # date.today() (server clock, UTC) would yield a different day in
+            # the evening for a venue ahead of UTC.
+            aujourd_hui = timezone.now().astimezone(config_base.get_tzinfo()).date()
             nb_j_avant = ClotureCaisse.objects.filter(
                 niveau=ClotureCaisse.JOURNALIERE,
             ).count()

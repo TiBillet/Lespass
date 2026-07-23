@@ -34,6 +34,14 @@ def generer_pdf_cloture(cloture: ClotureCaisse) -> bytes:
 
     rapport = cloture.rapport_json
 
+    # Le rapport stocke groupe les ventes par categorie ; le gabarit attend des
+    # sections a plat. Cf. sections_de_detail_pour_export.
+    # / The stored report groups sales by category; the template expects flat
+    # sections.
+    from laboutik.reports import sections_de_detail_pour_export
+
+    sections_de_detail = sections_de_detail_pour_export(rapport)
+
     # Construire le contexte pour le template PDF
     # Build the context for the PDF template
     context = {
@@ -54,11 +62,11 @@ def generer_pdf_cloture(cloture: ClotureCaisse) -> bytes:
         # JSON report sections converted to euros
         "par_produit": {
             nom: {"total_euros": donnees.get("total", 0) / 100, "qty": donnees.get("qty", 0)}
-            for nom, donnees in rapport.get("par_produit", {}).items()
+            for nom, donnees in sections_de_detail["par_produit"].items()
         },
         "par_categorie": {
             nom: total_cts / 100
-            for nom, total_cts in rapport.get("par_categorie", {}).items()
+            for nom, total_cts in sections_de_detail["par_categorie"].items()
         },
         "par_tva": {
             taux_label: {
@@ -67,8 +75,12 @@ def generer_pdf_cloture(cloture: ClotureCaisse) -> bytes:
                 "total_tva_euros": tva.get("total_tva", 0) / 100,
                 "total_ttc_euros": tva.get("total_ttc", 0) / 100,
             }
-            for taux_label, tva in rapport.get("par_tva", {}).items()
+            for taux_label, tva in sections_de_detail["par_tva"].items()
         },
+        # Le rapport ne produit plus de section « commandes ». Le gabarit la
+        # conditionne (`{% if commandes %}`), elle disparait donc proprement.
+        # / The report no longer produces a "commandes" section; the template
+        # guards it, so it simply disappears.
         "commandes": rapport.get("commandes", {}),
     }
 

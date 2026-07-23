@@ -156,22 +156,35 @@ class LaboutikConfiguration(SingletonModel):
         ),
     )
 
-    # --- Mode ecole / formation (conformite LNE exigence 5) ---
-    # Quand actif, les ventes sont marquees LABOUTIK_TEST.
-    # Le bandeau "MODE ECOLE" est visible sur l'interface POS.
-    # Les tickets portent la mention "SIMULATION".
-    # / Training mode (LNE compliance req. 5).
-    # When active, sales are marked LABOUTIK_TEST.
-    # "TRAINING MODE" banner visible on POS interface.
-    # Receipts carry "SIMULATION" label.
+    # --- Mode ecole / formation (conformite LNE exigence 5) — DESACTIVE ---
+    # / Training mode (LNE compliance req. 5) — DISABLED
+    #
+    # Le mecanisme est hors service : il marquait les ventes d'une origine
+    # distincte qui n'existe pas dans `SaleOrigin`, si bien qu'activer le mode
+    # levait une `AttributeError` et bloquait tout encaissement au point de
+    # vente. Le champ reste ici, a False, pour ne pas perdre la donnee ni
+    # imposer une migration ; il n'est plus propose dans l'admin.
+    #
+    # Le bandeau POS (`cotton/header.html`) et la mention « SIMULATION » sur le
+    # ticket (`printing/formatters.py`) lisent toujours ce champ : ils sont
+    # inertes tant qu'il vaut False. Les laisser en place evite d'avoir a les
+    # reecrire quand le chantier de remise en conformite reprendra.
+    #
+    # / The mechanism is out of service: it tagged sales with an origin missing
+    # from SaleOrigin, so enabling it raised an AttributeError and blocked every
+    # sale. The field stays here, at False, and is no longer offered in the
+    # admin. The POS banner and the "SIMULATION" receipt label still read it and
+    # are inert while it is False.
+    #
+    # Voir CHANGELOG/2026-07-22-mode-ecole-desactive.md
     mode_ecole = models.BooleanField(
         default=False,
         verbose_name=_("Training mode"),
         help_text=_(
-            "Active le mode ecole. Les ventes sont marquees comme fictives "
-            "et exclues des rapports de production. "
-            "/ Enables training mode. Sales are marked as fictitious "
-            "and excluded from production reports."
+            "DESACTIVE — chantier de conformite LNE en cours. Ce reglage n'a "
+            "aucun effet et n'est plus modifiable depuis l'administration. "
+            "/ DISABLED — LNE compliance work in progress. This setting has no "
+            "effect and is no longer editable from the administration."
         ),
     )
 

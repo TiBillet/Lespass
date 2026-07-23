@@ -5,6 +5,7 @@ LANCEMENT :
     docker exec lespass_django poetry run pytest tests/pytest/test_card_refund_service.py -v --api-key dummy
 """
 import pytest
+from django.test import override_settings
 from django_tenants.utils import schema_context
 
 from fedow_core.exceptions import NoEligibleTokens
@@ -103,17 +104,27 @@ def asset_tlf_lespass(tenant_lespass, wallet_lieu_lespass):
 
 @pytest.fixture(scope="module")
 def asset_fed_unique(tenant_lespass, wallet_lieu_lespass):
-    """L'asset FED unique du systeme (decision projet : 1 seul FED)."""
+    """L'asset FED unique du systeme (decision projet : 1 seul FED).
+
+    Asset.save() interdit les assets FED locaux (AssetFedLocalInterdit) : la
+    monnaie federee du reseau est servie par le Fedow distant, et un FED local
+    serait debite par la caisse. Ces tests couvrent la branche FED de
+    rembourser_en_especes pour le jour ou le FED sera local ; ils levent donc
+    la garde le temps de fabriquer leur asset.
+    / Asset.save() forbids local FED assets. These tests cover the FED branch of
+    the cash refund for the post-migration world, so they lift the guard.
+    """
     existing = Asset.objects.filter(category=Asset.FED).first()
     if existing is not None:
         return existing
-    return AssetService.creer_asset(
-        tenant=tenant_lespass,
-        name=f'{REFUND_TEST_PREFIX} FED',
-        category=Asset.FED,
-        currency_code='EUR',
-        wallet_origin=wallet_lieu_lespass,
-    )
+    with override_settings(FEDOW_AUTORISER_ASSET_FED_LOCAL=True):
+        return AssetService.creer_asset(
+            tenant=tenant_lespass,
+            name=f'{REFUND_TEST_PREFIX} FED',
+            category=Asset.FED,
+            currency_code='EUR',
+            wallet_origin=wallet_lieu_lespass,
+        )
 
 
 @pytest.fixture
@@ -198,7 +209,7 @@ def test_rembourser_carte_avec_user_tlf_seul(
         lignes_cash = LigneArticle.objects.filter(
             carte=carte_avec_solde_tlf,
             payment_method=PaymentMethod.CASH,
-            sale_origin=SaleOrigin.ADMIN,
+            sale_origin=SaleOrigin.LABOUTIK,
         )
         assert lignes_cash.count() == 1
         assert lignes_cash.first().amount == -1000

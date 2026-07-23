@@ -7,7 +7,8 @@ from datetime import timedelta, datetime
 from decimal import Decimal
 from uuid import uuid4
 
-import pytz
+import zoneinfo
+
 import requests
 import stripe
 from cryptography.hazmat.backends import default_backend
@@ -515,7 +516,11 @@ class Configuration(SingletonModel):
     #     (TZ_REUNION, _('Indian/Reunion')),
     #     (TZ_PARIS, _('Europe/Paris')),
     # ]
-    TZ_CHOICES = zip(pytz.all_timezones, pytz.all_timezones)
+    # `available_timezones()` renvoie un SET : le tri est indispensable, sinon
+    # l'ordre de la liste deroulante changerait a chaque demarrage.
+    # / `available_timezones()` returns a SET: sorting is required, otherwise the
+    # dropdown order would change at every startup.
+    TZ_CHOICES = [(nom_du_fuseau, nom_du_fuseau) for nom_du_fuseau in sorted(zoneinfo.available_timezones())]
     fuseau_horaire = models.CharField(default="Europe/Paris",
                                       max_length=50,
                                       choices=TZ_CHOICES,
@@ -523,7 +528,18 @@ class Configuration(SingletonModel):
                                       )
 
     def get_tzinfo(self):
-        return pytz.timezone(self.fuseau_horaire)
+        """Fuseau du lieu, en zoneinfo (stdlib).
+        / Venue timezone, using zoneinfo (stdlib).
+
+        Ne JAMAIS revenir a pytz ici : un objet pytz passe a `replace(tzinfo=)`
+        ou additionne a un timedelta fige un offset historique (LMT, +00:09
+        pour Paris) au lieu de l'offset reel de la date. zoneinfo recalcule
+        l'offset apres coup, ce qui est le comportement attendu partout.
+        / NEVER go back to pytz here: a pytz object passed to `replace(tzinfo=)`
+        or added to a timedelta freezes a historical offset (LMT, +00:09 for
+        Paris) instead of the date's real offset.
+        """
+        return zoneinfo.ZoneInfo(self.fuseau_horaire)
 
     FRENCH, ENGLISH = 'fr', 'en'
     LANGUAGE_CHOICES = [
@@ -2251,7 +2267,7 @@ class Event(models.Model):
         Transforme le titre de l'evenemennt en slug, pour en faire une url lisible
         """
         config = Configuration.get_solo()
-        timezone = pytz.timezone(config.fuseau_horaire)
+        timezone = config.get_tzinfo()
         if not self.uuid:
             self.uuid = uuid.uuid4()
         self.slug = slugify(

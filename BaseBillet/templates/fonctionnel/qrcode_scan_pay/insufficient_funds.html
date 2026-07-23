@@ -1,4 +1,9 @@
-{% load i18n static %}
+{# `tibitags` porte le filtre `dround`, utilise plus bas pour afficher les #}
+{# montants en euros. Un `load` n'est jamais herite du gabarit parent : #}
+{# l'oublier ici fait repondre 500 a l'ecran de fonds insuffisants. #}
+{# / tibitags carries the `dround` filter used below. A load is never inherited #}
+{# from the parent template: omitting it makes this screen answer 500. #}
+{% load i18n static tibitags %}
 <div class="container" id="qrscanpay-container">
     <div class="row justify-content-center">
         <div class="col-md-8">

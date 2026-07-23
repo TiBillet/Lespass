@@ -117,11 +117,23 @@ def _extraire_lignes_article(debut, fin):
     """
     from BaseBillet.models import LigneArticle, SaleOrigin
 
-    # Filtrer uniquement les ventes caisse (production + test)
+    # Filtrer uniquement les ventes caisse.
     # Les ventes en ligne (billetterie, adhesions) ne sont pas du ressort de la caisse.
-    # / Filter only POS sales (production + test)
+    # / Filter POS sales only. Online sales are not the register's business.
+    #
+    # Le mode ecole (LNE exigence 5) devait marquer ses ventes d'une origine
+    # distincte, archivee ici aux cotes des ventes reelles. Ce mecanisme est
+    # DESACTIVE : l'origine qu'il utilisait n'existe pas dans `SaleOrigin`, ce
+    # qui faisait echouer cette extraction — et donc tout l'archivage fiscal —
+    # avec une `AttributeError`, que le mode ecole soit actif ou non.
+    # Voir CHANGELOG/2026-07-22-mode-ecole-desactive.md.
+    # / Training mode (LNE req. 5) was meant to tag its sales with a separate
+    # origin, archived here alongside real ones. That mechanism is DISABLED: the
+    # origin it used does not exist in SaleOrigin, which made this extraction —
+    # and therefore the whole fiscal archive — fail with an AttributeError,
+    # whether training mode was on or not.
     qs = LigneArticle.objects.filter(
-        sale_origin__in=[SaleOrigin.LABOUTIK, SaleOrigin.LABOUTIK_TEST],
+        sale_origin=SaleOrigin.LABOUTIK,
     ).select_related(
         'pricesold__productsold__product__categorie_pos',
         'point_de_vente',

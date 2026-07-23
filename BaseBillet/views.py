@@ -6,7 +6,7 @@ import uuid
 
 from Administration.utils import clean_text
 from datetime import date as date_type, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from io import BytesIO
 
 import segno
@@ -1432,6 +1432,24 @@ class MyAccount(viewsets.ViewSet):
         return redirect('/my_account/')
 
 
+# Les types de monnaie qu'un paiement par QR code accepte.
+# / The currency types a QR code payment accepts.
+#
+# Ce sont les libelles du formulaire du generateur, pas les categories Fedow.
+# « EURO » couvre les deux monnaies adossees a l'euro que les vues de paiement
+# savent traduire en moyen de paiement comptable : la monnaie federee du reseau
+# (categorie FED) et les tokens locaux fiduciaires (categorie TLF).
+#
+# « CADEAU » et « TEMPS » figurent dans le formulaire mais y sont desactives :
+# les vues ne sauraient pas quoi en faire, et le Fedow les debiterait sans
+# qu'aucune vente ne puisse etre enregistree.
+#
+# / These are the generator form's labels, not Fedow categories. "EURO" covers
+# the two euro-backed currencies the payment views can map to an accounting
+# payment method. "CADEAU" and "TEMPS" appear in the form but are disabled.
+TYPES_DE_MONNAIE_ENCAISSABLES_PAR_QRCODE = ['EURO', 'EUR']
+
+
 class QrCodeScanPay(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
@@ -1469,10 +1487,47 @@ class QrCodeScanPay(viewsets.ViewSet):
         user = request.user
 
         # Get the form data
-        amount = int(dround(Decimal(data.get('amount'))) * 100)
+        montant_saisi = data.get('amount')
         asset_type = data.get('asset_type', 'EUR')
 
-        if not amount or not asset_type:
+        # Seules les monnaies adossees a l'euro sont encaissables par QR code :
+        # la monnaie federee du reseau et les tokens locaux fiduciaires. Les
+        # deux vues de paiement ne savent traduire que ces categories-la en
+        # moyen de paiement comptable ; toute autre monnaie serait debitee par
+        # le Fedow sans qu'aucune vente ne puisse etre enregistree en face.
+        #
+        # Le formulaire ne propose deja que « EURO » (les autres options sont
+        # desactivees), mais un POST se falsifie : la garde est donc ici.
+        #
+        # / Only euro-backed currencies can be collected by QR code. The two
+        # payment views can translate no other category into an accounting
+        # payment method: any other currency would be debited by the Fedow with
+        # no sale recorded against it. The form already offers only EURO, but a
+        # POST can be forged, so the guard lives here.
+        if asset_type not in TYPES_DE_MONNAIE_ENCAISSABLES_PAR_QRCODE:
+            messages.add_message(
+                request, messages.ERROR,
+                _("Seuls les paiements en euros sont acceptes par QR code."),
+            )
+            return redirect('qrcodescanpay-get-generator')
+
+        # La conversion vient APRES la verification : `Decimal(None)` leve une
+        # `TypeError`, et `Decimal("abc")` une `InvalidOperation`. Convertir
+        # d'abord ferait repondre 500 a une simple saisie vide.
+        # / The conversion comes AFTER the check: Decimal(None) raises TypeError
+        # and Decimal("abc") raises InvalidOperation. Converting first would
+        # answer 500 to a plain empty input.
+        if not montant_saisi or not asset_type:
+            messages.add_message(request, messages.ERROR, _("Amount and asset type are required"))
+            return redirect('qrcodescanpay-get-generator')
+
+        try:
+            amount = int(dround(Decimal(montant_saisi)) * 100)
+        except (TypeError, ValueError, InvalidOperation):
+            messages.add_message(request, messages.ERROR, _("Amount and asset type are required"))
+            return redirect('qrcodescanpay-get-generator')
+
+        if not amount:
             messages.add_message(request, messages.ERROR, _("Amount and asset type are required"))
             return redirect('qrcodescanpay-get-generator')
 

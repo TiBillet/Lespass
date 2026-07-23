@@ -82,6 +82,37 @@ class MontantSuperieurDette(Exception):
         super().__init__(message)
 
 
+class AssetFedLocalInterdit(Exception):
+    """
+    Levee quand on tente de creer un Asset local de categorie FED.
+    / Raised when trying to create a local Asset of category FED.
+
+    LOCALISATION : fedow_core/exceptions.py
+    Levee par : Asset.save() (fedow_core/models.py)
+
+    La monnaie federee du reseau (FED) est servie par le Fedow distant, jamais
+    par le moteur local. Un Asset FED local serait pris pour la vraie monnaie
+    federee par plusieurs codes qui filtrent sur la categorie : la cascade de
+    paiement du point de vente le debiterait, et le remboursement en especes
+    de la caisse le rendrait en billets. Tant que la migration n'est pas faite,
+    il ne doit en exister aucun.
+
+    / The network's federated currency (FED) is served by the remote Fedow, never
+    by the local engine. A local FED Asset would be mistaken for the real thing
+    by every piece of code filtering on the category.
+
+    Pour lever la garde (apres migration, ou dans un test qui couvre
+    explicitement le code d'apres-migration) : reglage
+    settings.FEDOW_AUTORISER_ASSET_FED_LOCAL = True.
+    """
+
+    def __init__(self, message=None):
+        super().__init__(message or _(
+            "Creation d'un asset FED local interdite : la monnaie federee du "
+            "reseau est geree par le Fedow distant."
+        ))
+
+
 class CarteIntrouvable(Exception):
     """
     Carte non trouvee ou pas liee au user demande.

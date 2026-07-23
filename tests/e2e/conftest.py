@@ -477,6 +477,205 @@ def django_shell():
     return _run
 
 
+# --- Fixture comptable / Accounting fixture ---
+
+
+@pytest.fixture(scope="session")
+def instant_serveur(django_shell):
+    """Factory : l'heure COURANTE telle que la base la voit, en ISO 8601.
+
+    / Factory: the CURRENT time as the database sees it, ISO 8601.
+
+    Sert a poser la borne de depart d'une fenetre comptable juste avant l'action
+    qu'on veut mesurer. L'heure doit venir du serveur, pas du processus de test :
+    les deux peuvent etre sur des fuseaux differents, et un decalage de quelques
+    heures ferait lire une fenetre vide sans qu'aucune assertion ne le signale.
+    / Take the time from the server, not the test process: a timezone gap would
+    silently read an empty window.
+    """
+
+    def _maintenant():
+        sortie = django_shell(
+            "from django.utils import timezone\n"
+            "print('INSTANT=' + timezone.localtime().isoformat())"
+        )
+        for ligne in sortie.splitlines():
+            if ligne.startswith("INSTANT="):
+                return ligne[len("INSTANT=") :]
+        pytest.fail(f"Heure serveur illisible. Sortie : {sortie[-300:]}")
+
+    return _maintenant
+
+
+@pytest.fixture(scope="session")
+def rapports_comptables(django_shell):
+    """Factory : lit les DEUX rapports comptables depuis un instant donne.
+
+    / Factory: reads BOTH accounting reports since a given instant.
+
+    POURQUOI DEUX RAPPORTS / WHY TWO REPORTS
+    ------------------------------------------
+    Lespass en tient deux, avec des perimetres complementaires, et une vente
+    n'apparait JAMAIS dans les deux :
+
+    - **caisse** — `laboutik.reports.RapportComptableService`, ce que le caissier
+      cloture en fin de service (ticket X, ticket Z). Ne lit que les origines de
+      `ORIGINES_ENCAISSEES_PAR_LE_LIEU` : `LABOUTIK` et `TIREUSE`.
+    - **en_ligne** — `comptabilite.services.RapportComptableService`, la cloture
+      comptable des ventes a distance. Prend tout SAUF `LABOUTIK`.
+
+    Une vente correctement enregistree peut donc etre **invisible des deux** si
+    elle porte une origine mal choisie. C'est arrive aux remboursements de carte
+    (`ADMIN` au lieu de `LABOUTIK`) et aux ventes de tireuse. Verifier la seule
+    `LigneArticle` ne suffit pas : elle existe dans tous ces cas.
+
+    / A correctly recorded sale can be invisible to BOTH reports if it carries the
+    wrong origin. Checking the LigneArticle alone never catches this.
+
+    USAGE — poser la borne AVANT l'action, lire APRES :
+
+        depuis = instant_serveur()
+        # ... l'action qui encaisse ...
+        comptes = rapports_comptables(depuis)
+        assert comptes["caisse"]["especes"] == 500      # EXACT, pas un ecart
+
+    POURQUOI UNE BORNE FIXE, ET PAS DEUX MESURES / WHY A FIXED LOWER BOUND
+    -----------------------------------------------------------------------
+    La tentation est de mesurer avant, mesurer apres, et soustraire. Sur une
+    fenetre **glissante** (« les 6 dernieres heures »), c'est faux : entre les
+    deux mesures, la borne basse avance elle aussi, et de vieilles lignes sortent
+    de la fenetre par la gauche pendant que la nouvelle vente y entre par la
+    droite. Sur une base de developpement bien remplie, les deux mouvements se
+    compensent — l'ecart mesure vaut alors zero alors que la vente est
+    parfaitement comptabilisee.
+
+    En ancrant la borne basse a un instant fixe, la fenetre ne fait que
+    s'agrandir : elle ne contient QUE ce que le test vient de produire. Les
+    montants deviennent **exacts** au lieu d'etre des ecarts, ce qui est aussi
+    plus severe — un total juste ne peut plus se confondre avec un total qui a
+    seulement augmente.
+    / A sliding window makes deltas wrong: old lines leave on the left while the
+    new sale enters on the right, and on a well-filled dev DB the two cancel out.
+    A fixed lower bound only ever grows, so the window contains ONLY what the test
+    just produced — and the amounts become exact rather than relative.
+
+    :param depuis: borne basse, chaine ISO 8601 rendue par `instant_serveur()`.
+    :param nom_du_point_de_vente: PV dont on lit le rapport de caisse. `None`
+        (defaut) = tous points de vente confondus. Sans effet sur le perimetre
+        des lignes : la cloture est globale au tenant (PIEGES 9.64).
+    :return: dict {"caisse": {...}, "en_ligne": {...}}
+    """
+
+    def _lire(depuis, nom_du_point_de_vente=None):
+        filtre_pv = (
+            f"PointDeVente.objects.filter(name='{nom_du_point_de_vente}').first()"
+            if nom_du_point_de_vente
+            else "None"
+        )
+        sortie = django_shell(
+            "import json\n"
+            "from django.utils.dateparse import parse_datetime\n"
+            "from django.utils import timezone\n"
+            "from laboutik.models import PointDeVente\n"
+            "from laboutik.reports import RapportComptableService as RapportCaisse\n"
+            "from comptabilite.services import RapportComptableService as RapportEnLigne\n"
+            "fin = timezone.localtime()\n"
+            f"debut = parse_datetime('{depuis}')\n"
+            f"pv = {filtre_pv}\n"
+            "caisse = RapportCaisse(pv, debut, fin)\n"
+            "moyens = caisse.calculer_totaux_par_moyen()\n"
+            "recharges = caisse.calculer_recharges()\n"
+            "adhesions = caisse.calculer_adhesions()\n"
+            "en_ligne = RapportEnLigne(debut, fin)\n"
+            "moyens_en_ligne = en_ligne.calculer_totaux_par_moyen()\n"
+            "print('RAPPORTS_JSON=' + json.dumps({\n"
+            "    'caisse': {\n"
+            "        'especes': int(moyens.get('especes') or 0),\n"
+            "        'carte_bancaire': int(moyens.get('carte_bancaire') or 0),\n"
+            "        'total_recharges': int(recharges.get('total') or 0),\n"
+            "        'total_adhesions': int(adhesions.get('total') or 0),\n"
+            "        'solde_caisse': int(caisse.calculer_solde_caisse().get('solde') or 0),\n"
+            "    },\n"
+            "    'en_ligne': {\n"
+            "        cle: int(valeur)\n"
+            "        for cle, valeur in (moyens_en_ligne or {}).items()\n"
+            "        if isinstance(valeur, (int, float))\n"
+            "    },\n"
+            "}))"
+        )
+        for ligne in sortie.splitlines():
+            if ligne.startswith("RAPPORTS_JSON="):
+                return json.loads(ligne[len("RAPPORTS_JSON=") :])
+        pytest.fail(
+            "Lecture des rapports comptables impossible — le shell Django n'a "
+            f"rien imprime derriere RAPPORTS_JSON=. Sortie : {sortie[-500:]}"
+        )
+
+    return _lire
+
+
+@pytest.fixture(scope="session")
+def rapports_qui_voient_la_ligne(django_shell):
+    """Factory : dans LEQUEL des deux rapports comptables une ligne precise entre.
+
+    / Factory: which of the two accounting reports a given line falls into.
+
+    POURQUOI CE HELPER PLUTOT QU'UN TOTAL / WHY THIS RATHER THAN A TOTAL
+    ---------------------------------------------------------------------
+    Asserter un montant exact sur le rapport **en ligne** n'est pas fiable en
+    E2E : ses lignes arrivent par des webhooks Stripe, donc de facon
+    **asynchrone**. Le webhook d'un test precedent peut tomber pendant le test
+    suivant, et gonfler son total sans aucun rapport avec ce qu'il mesure. C'est
+    arrive : un renouvellement attendu a 100 relevait 200.
+
+    Le rapport de **caisse** n'a pas ce probleme (aucune source asynchrone), et
+    ses montants peuvent, eux, etre asserted au centime.
+
+    Ce helper repond a la seule question qui soit a la fois deterministe et
+    metier : **cette vente-la est-elle vue par un rapport, et lequel ?** Une
+    vente qui n'entre dans aucun des deux n'existe pour aucun comptable ; une
+    vente qui entre dans les deux est comptee deux fois.
+
+    / Asserting exact totals on the ONLINE report is unreliable: its lines arrive
+    via asynchronous Stripe webhooks, so a previous test's webhook can land during
+    the next one (observed: 200 where 100 was expected). The REGISTER report has
+    no async source and can be asserted to the cent. This helper answers the only
+    question that is both deterministic and meaningful: is THIS sale seen by a
+    report, and which one?
+
+    :param uuid_de_la_ligne: uuid de la `LigneArticle` a situer.
+    :param depuis: borne basse ISO 8601, rendue par `instant_serveur()`.
+    :return: dict {"caisse": bool, "en_ligne": bool}
+    """
+
+    def _situer(uuid_de_la_ligne, depuis):
+        sortie = django_shell(
+            "import json\n"
+            "from django.utils.dateparse import parse_datetime\n"
+            "from django.utils import timezone\n"
+            "from laboutik.reports import RapportComptableService as RapportCaisse\n"
+            "from comptabilite.services import RapportComptableService as RapportEnLigne\n"
+            "fin = timezone.localtime()\n"
+            f"debut = parse_datetime('{depuis}')\n"
+            f"uuid_vise = '{uuid_de_la_ligne}'\n"
+            "caisse = RapportCaisse(None, debut, fin)\n"
+            "en_ligne = RapportEnLigne(debut, fin)\n"
+            "print('SITUATION_JSON=' + json.dumps({\n"
+            "    'caisse': caisse.lignes.filter(uuid=uuid_vise).exists(),\n"
+            "    'en_ligne': en_ligne.queryset.filter(uuid=uuid_vise).exists(),\n"
+            "}))"
+        )
+        for ligne in sortie.splitlines():
+            if ligne.startswith("SITUATION_JSON="):
+                return json.loads(ligne[len("SITUATION_JSON=") :])
+        pytest.fail(
+            "Impossible de situer la ligne dans les rapports — le shell Django "
+            f"n'a rien imprime derriere SITUATION_JSON=. Sortie : {sortie[-500:]}"
+        )
+
+    return _situer
+
+
 @pytest.fixture(scope="session")
 def create_event(api_key):
     """Factory : crée un événement via l'API v2.
@@ -901,3 +1100,149 @@ def fill_stripe_card():
                     cvc_input.fill("424")
 
     return _fill
+
+
+@pytest.fixture(scope="session")
+def soumettre_paiement_stripe():
+    """Factory : soumet le formulaire Stripe Checkout, et insiste jusqu'à ce que ça parte.
+
+    / Factory: submits the Stripe Checkout form, insisting until it actually fires.
+
+    POURQUOI CETTE FIXTURE / WHY THIS FIXTURE
+    -------------------------------------------
+    Sur ce checkout, un `click()` Playwright donne bien le **focus** au bouton
+    « Pay » — le contour bleu est visible sur une capture — mais ne déclenche
+    **aucune requête réseau**. Le paiement ne part pas, rien ne s'affiche à
+    l'écran, aucune erreur de console : le test attend jusqu'à expiration et
+    échoue sur un timeout de navigation, ce qui envoie le diagnostic vers le
+    mauvais endroit (l'URL de retour, le webhook, le prestataire).
+
+    / A plain click() focuses the "Pay" button but fires NO network request. The
+    payment never starts, nothing is displayed, no console error: the test waits
+    until timeout and fails on a navigation error, which points the diagnosis at
+    the wrong place.
+
+    La parade : réessayer en alternant `click()` et `dispatch_event('click')`
+    jusqu'à ce que la page quitte `checkout.stripe.com`. Même parade que pour
+    l'accordéon des moyens de paiement dans `fill_stripe_card` ci-dessus.
+
+    Un `dispatch_event` **seul** ne suffit pas : le premier `click()` et
+    l'attente qui le suit sont nécessaires, le temps que le formulaire React
+    finisse de se valider.
+
+    Mesuré sur `test_recharge_federee_par_carte_bancaire` : le fichier passe de
+    ~2 min (quatre attentes vaines de 45 s) à ~47 s. Voir `PIEGES.md` 12.14.
+
+    :param page: la page Playwright, arrivée sur checkout.stripe.com
+    :param selecteur: le bouton à actionner. Par défaut celui du checkout hébergé.
+    :param tentatives: nombre de couples (click, dispatch) avant d'abandonner.
+    :return: True si la page a quitté Stripe, False sinon — l'appelant décide
+        quoi en faire (la plupart enchaînent sur un `wait_for_url` qui portera
+        le message d'erreur métier).
+    """
+
+    def _soumettre(
+        page,
+        selecteur='[data-testid="hosted-payment-submit-button"], button[type="submit"]',
+        tentatives=6,
+    ):
+        bouton = page.locator(selecteur).first
+        bouton.wait_for(state="visible", timeout=30_000)
+
+        for _tentative in range(tentatives):
+            bouton.click()
+            page.wait_for_timeout(4_000)
+            if "checkout.stripe.com" not in page.url:
+                return True
+            bouton.dispatch_event("click")
+            page.wait_for_timeout(4_000)
+            if "checkout.stripe.com" not in page.url:
+                return True
+        return False
+
+    return _soumettre
+
+
+# ---------------------------------------------------------------------------
+# Tests qui exigent `stripe listen`
+# ---------------------------------------------------------------------------
+#
+# Certains parcours ne s'achevent que lorsque Stripe rappelle le webhook de
+# confirmation : la recharge en monnaie federee, la validation d'une adhesion
+# payee en ligne. Sans `stripe listen`, ce rappel n'arrive jamais et le test
+# echoue au bout de son delai d'attente, pour une raison qui n'a rien a voir
+# avec le code.
+#
+# On les ignore donc quand le CLI n'est pas la — mais JAMAIS en silence. Un run
+# vert qui cache des tests non joues est pire qu'un run rouge : il donne une
+# confiance qu'on n'a pas.
+#
+# / Some journeys only complete when Stripe calls the confirmation webhook back.
+# Without `stripe listen` that call never comes, and the test fails on timeout
+# for a reason unrelated to the code. We skip them — but NEVER silently: a green
+# run hiding unplayed tests is worse than a red one.
+
+VARIABLE_STRIPE_LISTEN = 'E2E_STRIPE_LISTEN'
+
+# Renseigne par le hook de skip, relu par le resume de fin de run.
+# / Filled by the skip hook, read back by the end-of-run summary.
+_tests_stripe_ignores = []
+
+
+def _stripe_listen_est_actif():
+    """`stripe listen` tourne-t-il ? / Is `stripe listen` running?
+
+    On ne peut pas le detecter depuis le conteneur : le CLI tourne sur l'hote,
+    et ses processus n'y sont pas visibles. On se fie donc a une variable posee
+    a la main au lancement — d'ou l'importance de signaler bruyamment les tests
+    ignores, puisque l'oubli est facile.
+    / It cannot be detected from inside the container: the CLI runs on the host.
+    We rely on a manually set variable, hence the loud reporting.
+    """
+    return os.environ.get(VARIABLE_STRIPE_LISTEN) == '1'
+
+
+def pytest_collection_modifyitems(config, items):
+    """Ignore les tests marques `stripe_listen` quand le CLI n'est pas lance.
+    / Skips tests marked `stripe_listen` when the CLI is not running."""
+    if _stripe_listen_est_actif():
+        return
+
+    raison = pytest.mark.skip(
+        reason=(
+            f"`stripe listen` non lance ({VARIABLE_STRIPE_LISTEN}!=1) — "
+            "le webhook de confirmation n'arriverait jamais."
+        ),
+    )
+    for item in items:
+        if item.get_closest_marker('stripe_listen'):
+            _tests_stripe_ignores.append(item.nodeid)
+            item.add_marker(raison)
+
+
+def pytest_terminal_summary(terminalreporter, exitstatus, config):
+    """Affiche en fin de run ce qui n'a PAS ete joue faute de `stripe listen`.
+
+    Sans ce resume, la ligne « 12 passed, 2 skipped » se lit comme un succes
+    complet. Le but est qu'on ne puisse pas conclure « tout est vert » alors
+    qu'un parcours de paiement n'a pas ete verifie.
+    / Without this summary, "12 passed, 2 skipped" reads as full success.
+    """
+    if not _tests_stripe_ignores:
+        return
+
+    terminalreporter.write_sep('=', 'PARCOURS DE PAIEMENT NON VERIFIES', red=True, bold=True)
+    terminalreporter.write_line(
+        f"{len(_tests_stripe_ignores)} test(s) ont ete IGNORES faute de `stripe listen`.",
+        red=True, bold=True,
+    )
+    for identifiant in _tests_stripe_ignores:
+        terminalreporter.write_line(f"  - {identifiant}", red=True)
+    terminalreporter.write_line("")
+    terminalreporter.write_line("Pour les jouer / To run them:", bold=True)
+    terminalreporter.write_line("  1. sur l'hote : stripe listen")
+    terminalreporter.write_line(
+        f"  2. docker exec -e {VARIABLE_STRIPE_LISTEN}=1 lespass_django "
+        "poetry run pytest /DjangoFiles/tests/e2e/ -v",
+    )
+    terminalreporter.write_line("")

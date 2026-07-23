@@ -55,7 +55,14 @@ class LaboutikConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         (_('Interface caisse / POS interface'), {
             'fields': (
                 'taille_police_articles',
-                'mode_ecole',
+                # `mode_ecole` est volontairement absent : le mecanisme est
+                # desactive (l'origine de vente qu'il utilisait n'existe pas,
+                # l'activer bloquait tout encaissement). Le champ reste en base,
+                # a False, le temps du chantier de remise en conformite LNE.
+                # / mode_ecole is deliberately absent: the mechanism is disabled.
+                # The field stays in the database, at False, until the LNE
+                # compliance work is done.
+                # Voir CHANGELOG/2026-07-22-mode-ecole-desactive.md
             ),
         }),
         (_('Sunmi Cloud'), {

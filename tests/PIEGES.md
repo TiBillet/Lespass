@@ -3077,6 +3077,346 @@ deplace le probleme sur ses propres fixtures, pour la raison ci-dessus.
 
 ---
 
+### Piege : un teardown qui echoue en SILENCE, et le test qui casse six mois plus tard
+
+Le piege 11.9 (`Asset.delete()` / `Wallet.delete()` demandent un `tenant_context`) est deja
+documente plus haut **pour le code**. Applique a un **teardown de fixture**, il ne fait aucun
+bruit — et c'est ce silence qui coute cher.
+
+**Le motif exact :**
+
+```python
+@pytest.fixture(scope="module", autouse=True)
+def cleanup_test_data():
+    yield
+    try:
+        Transaction.objects.filter(asset__in=assets_de_test).delete()
+        Token.objects.filter(asset__in=assets_de_test).delete()
+        assets_de_test.delete()      # <- leve : cascade vers BaseBillet_product
+        wallets_de_test.delete()     # <- JAMAIS ATTEINT
+    except Exception:
+        pass                         # <- et personne ne le saura
+```
+
+`assets_de_test.delete()` cascade vers `BaseBillet.Product.asset`, une table de TENANT_APPS
+absente du schema public. La suppression leve `ProgrammingError`, le `except` l'avale, et
+**tout ce qui suit dans le teardown n'est jamais execute**.
+
+**Ce qu'on observe — et pourquoi c'est trompeur :**
+
+1. Le test passe. Vert. Aucun avertissement.
+2. Les objets s'accumulent dans la base de dev, un jeu par run. (Constate en juillet 2026 :
+   **22 assets** `[test_verify]` empiles par `test_verify_transactions.py`.)
+3. Des semaines plus tard, un test **d'un autre fichier** commence a echouer en suite
+   complete, tout en passant seul. On cherche la regression dans le dernier commit : elle
+   n'y est pas. La cause a des mois.
+
+**Le reflexe de diagnostic.** Quand un test casse en suite mais passe seul, avant de
+soupconner un pollueur voisin (cf. 12.5.bis), compter ce que la base a accumule :
+
+```python
+# docker exec lespass_django poetry run python /DjangoFiles/manage.py shell
+from fedow_core.models import Asset
+print(Asset.objects.filter(name__startswith='[mon_prefixe]').count())   # doit valoir 0
+```
+
+Un compteur qui monte a chaque run, c'est un teardown qui ment.
+
+**La regle, en trois points :**
+
+1. **Tout `delete()` d'un modele de SHARED_APPS dont la cascade touche une TENANT_APP va
+   dans un `tenant_context`** — `Asset` (vers `BaseBillet.Product`), `Wallet` (vers
+   `BaseBillet.LigneArticle`), `AssetFedowPublic` (vers `Configuration.fedow_reward_asset`).
+2. **`except Exception: pass` dans un teardown est un choix a justifier**, pas un reflexe.
+   S'il protege un `delete()` qui peut echouer sur une FK PROTECT, cibler l'exception
+   attendue (cf. 12.6). Sinon, le supprimer : mieux vaut un teardown rouge qu'une base qui
+   se remplit.
+3. **Verifier le teardown, pas seulement le test.** Lancer le fichier deux fois de suite et
+   compter les objets restants apres chaque passage : le nombre doit etre le meme.
+
+Le teardown fautif est repare (juillet 2026), mais **le motif existe probablement ailleurs**
+— chercher les `except Exception: pass` autour d'un `.delete()` dans `tests/pytest/`.
+
+Rencontre sur `test_verify_transactions.py`, en ajoutant les tests de la page solde
+(session garde anti-FED-local, 2026-07-22). Symptome : `test_verify_clean` rouge en suite
+complete, vert en isolation, sans aucun rapport avec le code de la session.
+
+---
+
+### Deux moteurs de monnaie qui ne se voient pas (E2E argent, 2026-07-22)
+
+**12.9 — La recharge au point de vente et le paiement par QR code ne parlent pas a la meme
+monnaie.**
+
+C'est le piege le plus couteux de ce domaine, parce que tout a l'air de fonctionner : la
+recharge reussit, le solde monte, et le paiement en ligne refuse quand meme.
+
+| | Recharge au comptoir | Paiement par QR code |
+|---|---|---|
+| Vue | `_executer_recharges` (`laboutik/views.py`) | `valid_payment` (`BaseBillet/views.py`) |
+| Moteur | `fedow_core` — **local** | `fedow_connect` — Fedow **distant** |
+| Monnaie du tenant | `fedow_core.Asset` « Monnaie locale » | `AssetFedowPublic` « MonaLocalim » |
+
+Le **portefeuille** est commun (meme uuid des deux cotes, `_obtenir_ou_creer_wallet` rend
+`carte.user.wallet`, miroir du portefeuille Fedow). Ce sont les **monnaies** qui different :
+`Product.asset` est une FK vers `fedow_core.Asset`, **jamais** vers `AssetFedowPublic`.
+
+Le point de vente sait **debiter** le Fedow distant (`_debiter_legacy`, cascade). Il n'a
+aucun chemin pour le **crediter**.
+
+**Consequence pour un test :** ne jamais ecrire « je recharge au comptoir, donc l'adherent
+peut payer en ligne ». Choisir le moteur selon la porte d'entree testee :
+
+```python
+# Solde vu par le POS (moteur local)
+Token.objects.filter(wallet=user.wallet, asset=produit.asset)   # fedow_core
+
+# Solde vu par le paiement en ligne (Fedow distant)
+FedowAPI().wallet.get_total_fiducial_and_all_federated_token(user, use_cache=False)
+```
+
+`use_cache=False` est obligatoire quand on veut observer une operation qui vient d'avoir
+lieu : sinon on relit la valeur memorisee **avant** elle.
+
+Mesure par `tests/e2e/test_recharge_pos_puis_qrcode.py`.
+
+**12.10 — `LigneArticle.CREATED` vaut `'O'`, pas `'C'` — `'C'` est `CANCELED`.**
+
+```python
+CANCELED, REFUNDED, CREATED = 'C', 'R', 'O'
+```
+
+Un test qui assert `status == 'C'` en croyant lire « en attente » lit en realite
+« annulee ». Toujours comparer a la constante, jamais a la lettre :
+
+```python
+# ❌ 'C' est CANCELED, pas CREATED
+assert ligne.status == 'C'
+
+# ✅
+assert ligne.status == LigneArticle.CREATED
+```
+
+**12.11 — `reward_on_ticket_scanned` exige TROIS champs ensemble, sinon il est inerte EN
+SILENCE.**
+
+`BaseBillet/tasks.py` teste
+`price.reward_on_ticket_scanned and price.fedow_reward_asset and price.fedow_reward_amount`.
+Un tarif dont la case est cochee mais dont `fedow_reward_asset` est `None` ne verse
+**jamais** rien, et **rien ne le signale** : ni erreur, ni log d'avertissement, ni billet en
+anomalie. C'est l'etat de trois tarifs « Inscription bénévolat » de la base de dev.
+
+Deux couches avalent en plus leurs exceptions (`check_reward` dans `signals.py`, et la tache
+elle-meme) : un versement refuse par le Fedow est invisible partout ailleurs que dans les
+logs de `lespass_celery`. **Un test de ce mecanisme DOIT relire le solde sur le Fedow** —
+verifier que le billet est passe « scanne » ne prouve rien.
+
+Corollaire : la monnaie de recompense doit etre de categorie `FED` ou `TLF`. `valid_payment`
+ne sait traduire que ces deux-la en moyen de paiement ; une recompense en `TIM` ou `TNF`
+serait debitee **sans qu'aucune vente ne soit enregistree en face**.
+
+**12.12 — `TicketAdmin.scanner` redirige vers `HTTP_REFERER` sans valeur de repli.**
+
+`/admin/BaseBillet/ticket/<pk>/scanner/` finit par
+`return redirect(request.META["HTTP_REFERER"])`. Un `page.goto` ou un `page.request.get` sans
+en-tete `Referer` leve une `KeyError` et repond 500 — alors que le scan lui-meme a bien eu
+lieu, ce qui rend le diagnostic trompeur.
+
+```python
+page.request.get(f'{base}/admin/BaseBillet/ticket/{pk}/scanner/',
+                 headers={'Referer': f'{base}/admin/BaseBillet/ticket/'})
+```
+
+**12.13.bis — Il y a PLUSIEURS produits de recharge euros dans la base de dev, et ils sont
+rattaches au meme point de vente.**
+
+Extension de 9.37 et 9.97, avec un declencheur nouveau : le signal `post_save` d'`Asset`
+cree un produit « Recharge {nom} » **et le rattache au point de vente cashless**. Tout test
+qui laisse derriere lui un asset TLF fabrique donc un second produit de recharge euros. Les
+tests controlvanne en laissent un, `[vc_test] TLF`.
+
+Consequence, avec le symptome le plus penible qui soit — **vert seul, rouge en suite** :
+
+```python
+# ❌ MultipleObjectsReturned en suite complete, OK quand le fichier est lance seul
+Product.objects.get(methode_caisse=Product.RECHARGE_EUROS)
+
+# ❌ Rend un produit different selon l'ordre de la base : aucun order_by
+pv.products.filter(methode_caisse=Product.RECHARGE_EUROS).first()
+
+# ✅ Nommer la monnaie visee
+pv.products.filter(methode_caisse=Product.RECHARGE_EUROS,
+                   asset__name='Monnaie locale').first()
+```
+
+**La regle :** un test d'argent designe la monnaie qu'il vise **par son nom ou son uuid**,
+jamais par sa categorie ni par sa methode de caisse. Et il passe cet identifiant a ses
+helpers plutot que de le redeviner a chaque appel.
+
+Rencontre sur `test_recharge_pos_puis_qrcode.py` : vert en isolation pendant toute l'ecriture
+du fichier, rouge au premier passage en suite E2E complete.
+
+**12.13.ter — Un total exact sur le rapport comptable EN LIGNE est un piege : ses lignes
+arrivent par webhook, donc en differe.**
+
+Les deux rapports ne se valent pas face a la concurrence :
+
+| Rapport | Source des lignes | Total exact assertable ? |
+|---|---|---|
+| caisse (`laboutik.reports`) | requetes HTTP synchrones du POS | **oui** |
+| en ligne (`comptabilite.services`) | webhooks Stripe, **asynchrones** | **non** |
+
+Le webhook d'un test peut tomber pendant le test **suivant** et gonfler son total sans
+aucun rapport avec ce qu'il mesure. Constate : un renouvellement attendu a 100 relevait 200,
+et un test voisin qui passait seul echouait en suite.
+
+Ancrer la borne basse de la fenetre (cf. ci-dessous) ne suffit PAS : le probleme n'est pas
+la fenetre qui glisse, c'est un evenement concurrent qui tombe dedans.
+
+**La parade** : ne pas asserter un total, mais **situer la ligne visee** — est-elle dans le
+queryset du rapport ? C'est deterministe, et c'est la vraie question metier (« cette vente
+est-elle vue par un comptable, et par lequel ? »).
+
+```python
+# ❌ Fragile : un webhook voisin fausse le total
+assert comptes["en_ligne"]["total"] == cotisation
+
+# ✅ Deterministe : LA ligne est-elle dans le perimetre ?
+assert RapportEnLigne(debut, fin).queryset.filter(uuid=uuid_vise).exists()
+assert not RapportCaisse(None, debut, fin).lignes.filter(uuid=uuid_vise).exists()
+```
+
+Helper partage : `rapports_qui_voient_la_ligne` (`tests/e2e/conftest.py`).
+
+**12.13.quater — Une fenetre comptable GLISSANTE rend tout delta faux.**
+
+Mesurer avant, mesurer apres, soustraire — le reflexe naturel — est faux sur une fenetre
+« les N dernieres heures ». Entre les deux mesures, la borne basse avance elle aussi : de
+vieilles lignes sortent par la gauche pendant que la vente entree par la droite. Sur une base
+de dev bien remplie, les deux mouvements **se compensent** et le delta vaut zero alors que la
+vente est parfaitement comptabilisee.
+
+Symptome vecu : `especes` bougeait correctement, `total_recharges` restait a 0 — le meme
+run, deux resultats contradictoires, parce que les lignes qui sortaient n'etaient pas de la
+meme nature que celle qui entrait.
+
+**La parade** : ancrer la borne basse a un instant fixe, pris AVANT l'action
+(`instant_serveur()` dans `tests/e2e/conftest.py`). La fenetre ne fait alors que s'agrandir
+et ne contient QUE ce que le test produit — les montants deviennent **exacts** au lieu d'etre
+des ecarts, ce qui est aussi plus severe.
+
+Prendre l'heure **du serveur**, jamais du processus de test : un decalage de fuseau ferait
+lire une fenetre vide sans qu'aucune assertion ne le signale.
+
+**12.13.quinquies — `stripe listen` peut mourir en cours de session, et tout devient
+ininterpretable.**
+
+`E2E_STRIPE_LISTEN=1` est **declaratif** : il dit « je promets que le CLI tourne », il ne le
+verifie pas (le conteneur ne voit pas les process de l'hote, cf. `tests/e2e/conftest.py`). Si
+le CLI meurt en cours de session, les tests marques `stripe_listen` s'executent quand meme et
+echouent — pour une raison qui n'a rien a voir avec le code.
+
+**Le cas vicieux** : cela invalide silencieusement une **verification par mutation**. Une
+mutation censee casser la recompense a fait echouer le test sur « aucune vente enregistree »
+— soit la meme assertion que la mutation precedente. Sans le message d'erreur qui nommait la
+cause possible, on aurait conclu que le test detectait la mutation. Il ne detectait que la
+panne.
+
+**La regle** : quand une mutation tombe sur une assertion **differente** de celle qu'elle
+vise, ne pas conclure — verifier l'environnement d'abord.
+
+```bash
+tmux list-panes -a -F "#{pane_current_command}" | grep stripe   # rien = CLI mort
+```
+
+Et faire porter aux assertions un message qui **nomme les causes d'environnement** : c'est ce
+qui a permis le diagnostic en quelques secondes.
+
+**12.14 — Le bouton « Pay » de Stripe Checkout ignore un `click()` Playwright, en silence.**
+
+Symptome le plus trompeur de la serie : le formulaire est **entierement rempli** (capture
+d'ecran a l'appui), le bouton est `enabled`, le clic lui donne bien le **focus** (contour
+bleu visible)… et il ne se passe **rien**. Ni requete reseau, ni message d'erreur, ni entree
+de console. Le test attend jusqu'a expiration et echoue sur un timeout de navigation, ce qui
+oriente le diagnostic vers le mauvais endroit (l'URL de retour, le webhook, le Fedow).
+
+Diagnostic qui tranche en un run — compter les requetes de paiement apres le clic :
+
+```python
+reponses = []
+page.on("response", lambda r: reponses.append(r.url))
+bouton.click()
+page.wait_for_timeout(6_000)
+print([u for u in reponses if "confirm" in u or "payment" in u])   # [] = rien n'est parti
+```
+
+**La parade** : reessayer, en alternant `click()` et `dispatch_event('click')`, jusqu'a ce
+que la page quitte `checkout.stripe.com`. C'est `dispatch_event` qui finit par passer — meme
+parade que pour l'accordeon des moyens de paiement dans `fill_stripe_card` (conftest).
+
+```python
+for _tentative in range(6):
+    bouton_payer.click()
+    page.wait_for_timeout(4_000)
+    if 'checkout.stripe.com' not in page.url:
+        break
+    bouton_payer.dispatch_event('click')
+    page.wait_for_timeout(4_000)
+    if 'checkout.stripe.com' not in page.url:
+        break
+```
+
+Un `dispatch_event` **seul** ne suffit pas : il faut le premier `click()` et l'attente qui
+le suit. Le formulaire React a besoin de ce temps pour finir de se valider.
+
+**Regle generale** : sur un front tiers qu'on ne maitrise pas, un clic qui ne produit
+**aucune requete** n'est pas un probleme d'application — c'est le handler qui n'a pas ete
+atteint. Chercher du cote de l'evenement, pas du cote du serveur.
+
+Rencontre sur `test_recharge_federee_par_carte_bancaire` (2026-07-23) : le test passait
+depuis la veille et s'est mis a echouer sans qu'aucun code de paiement n'ait bouge.
+
+**12.15 — On ne peut PAS payer un Checkout Session hebergee par l'API : le PaymentIntent
+n'existe pas encore.**
+
+La tentation, pour eviter le front React : recuperer la session et confirmer son
+`PaymentIntent` par l'API. Mesure faite :
+
+```
+SESSION_TROUVEE_SUR= compte_racine status=open montant=4377 pi=None mode=payment
+```
+
+`payment_intent` vaut **`None`** tant que le payeur n'a pas soumis le formulaire : Stripe le
+cree A la soumission. Il n'y a donc rien a confirmer, et la voie est fermee pour les
+paiements uniques passant par un Checkout heberge.
+
+Deux consequences utiles :
+
+- **Les ABONNEMENTS, eux, se pilotent entierement par l'API** — creation, horloge de test,
+  echeances, prelevement. `test_renouvellement_adhesion_recurrente.py` ne touche jamais un
+  navigateur. Quand un parcours de paiement peut etre exprime en abonnement, c'est la voie
+  rapide et fiable.
+- **Le checkout fabrique par Fedow vit sur le compte RACINE**, pas sur le compte Connect du
+  lieu : `stripe.checkout.Session.retrieve(id, stripe_account=connect)` repond
+  « No such checkout.session ». Le retrouver demande d'interroger le compte racine.
+
+**12.13 — Verifier par mutation un chemin qui passe par Celery : redemarrer le worker.**
+
+Une mutation dans `BaseBillet/tasks.py` n'a **aucun effet** tant que `lespass_celery` n'est
+pas redemarre (le worker charge les taches au demarrage, cf. 9.55). Sans redemarrage, le
+test reste vert et on conclut a tort qu'il ne teste rien.
+
+```bash
+docker restart lespass_celery && sleep 15
+```
+
+Le serveur HTTP, lui, recharge tout seul : une mutation dans `views.py` ou `signals.py` ne
+demande qu'une poignee de secondes.
+
+Rencontres en ecrivant les E2E recharge comptoir + recompense au scan (2026-07-22).
+
+---
+
 *Ce document est un commun numerique. Prenez-en soin !*
 *This document is a digital common. Take care of it!*
 

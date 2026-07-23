@@ -305,7 +305,7 @@ def test_vider_carte_execute_remboursement_complet(
     lignes_cash = LigneArticle.objects.filter(
         carte=carte_client_vc_avec_tlf,
         payment_method=PaymentMethod.CASH,
-        sale_origin=SaleOrigin.ADMIN,
+        sale_origin=SaleOrigin.LABOUTIK,
     )
     assert lignes_cash.count() == 1
     assert lignes_cash.first().amount == -1000

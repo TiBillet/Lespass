@@ -97,19 +97,53 @@ def asset_local(tenant_a, wallet_bar):
 
 @pytest.fixture(scope="module", autouse=True)
 def cleanup_test_data():
+    """
+    Supprime les objets de ce module.
+    / Deletes this module's objects.
+
+    Le `tenant_context` est indispensable : la cascade de `Asset.delete()`
+    atteint `BaseBillet.Product.asset`, une table de TENANT_APPS absente du
+    schema public. Sans lui, la suppression leve `ProgrammingError`, le
+    `except` l'avale, et les assets s'accumulent d'un run a l'autre — chacun
+    tirant derriere lui son Product « Recharge ... » et ses wallets, jamais
+    supprimes puisque la ligne suivante n'est plus atteinte.
+    / tenant_context is required: the Asset.delete() cascade reaches
+    BaseBillet.Product.asset, a TENANT_APPS table missing from the public
+    schema. Without it the delete raises, the except swallows it, and assets
+    pile up run after run.
+
+    Voir tests/PIEGES.md 11.9.
+    """
     yield
 
-    try:
-        wallets_de_test = Wallet.objects.filter(name__startswith=TEST_PREFIX)
-        assets_de_test = Asset.objects.filter(name__startswith=TEST_PREFIX)
+    from django_tenants.utils import tenant_context
 
-        Transaction.objects.filter(asset__in=assets_de_test).delete()
-        Token.objects.filter(wallet__in=wallets_de_test).delete()
-        # Aussi nettoyer les tokens lies aux assets de test (wallet_bar etc.)
-        # Also clean up tokens linked to test assets (wallet_bar etc.)
-        Token.objects.filter(asset__in=assets_de_test).delete()
-        assets_de_test.delete()
-        wallets_de_test.delete()
+    try:
+        tenant = Client.objects.get(schema_name='lespass')
+        with tenant_context(tenant):
+            wallets_de_test = Wallet.objects.filter(name__startswith=TEST_PREFIX)
+            assets_de_test = Asset.objects.filter(name__startswith=TEST_PREFIX)
+
+            Transaction.objects.filter(asset__in=assets_de_test).delete()
+            Token.objects.filter(wallet__in=wallets_de_test).delete()
+            # Aussi nettoyer les tokens lies aux assets de test (wallet_bar etc.)
+            # Also clean up tokens linked to test assets (wallet_bar etc.)
+            Token.objects.filter(asset__in=assets_de_test).delete()
+
+            # Les Products « Recharge ... » nes du signal post_save d'Asset
+            # doivent partir avec leurs assets : leur contrainte unique
+            # (categorie, nom) ferait echouer le run suivant (PIEGES 9.96).
+            # / The "Recharge ..." Products born from the Asset post_save signal
+            # must go with their assets, or their unique constraint breaks the
+            # next run.
+            from BaseBillet.models import Price, Product
+
+            for asset in assets_de_test:
+                Price.objects.filter(product__name=f'Recharge {asset.name}').delete()
+                Product.objects.filter(name=f'Recharge {asset.name}').delete()
+
+            assets_de_test.delete()
+            wallets_de_test.delete()
     except Exception:
         pass
 

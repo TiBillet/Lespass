@@ -5,6 +5,7 @@ LANCEMENT :
     docker exec lespass_django poetry run pytest tests/pytest/test_bank_transfer_service.py -v --api-key dummy
 """
 import pytest
+from django.test import override_settings
 
 from fedow_core.exceptions import MontantSuperieurDette
 
@@ -64,17 +65,28 @@ def wallet_pot_central(tenant_lespass_bt):
 
 @pytest.fixture(scope="module")
 def asset_fed_test(tenant_lespass_bt, wallet_pot_central):
-    """L'asset FED utilise pour les tests BankTransferService."""
+    """L'asset FED utilise pour les tests BankTransferService.
+
+    Asset.save() interdit les assets FED locaux (AssetFedLocalInterdit) : la
+    monnaie federee du reseau est servie par le Fedow distant. BankTransferService
+    est le pendant V2 de la remise en banque, qui tourne aujourd'hui cote legacy ;
+    ces tests couvrent son code pour l'apres-migration et levent donc la garde le
+    temps de fabriquer leur asset.
+    / Asset.save() forbids local FED assets. BankTransferService is the V2
+    counterpart of the bank deposit, which currently runs on the legacy side;
+    these tests cover it for the post-migration world and lift the guard.
+    """
     existing = Asset.objects.filter(category=Asset.FED).first()
     if existing is not None:
         return existing
-    return AssetService.creer_asset(
-        tenant=tenant_lespass_bt,
-        name=f'{BT_TEST_PREFIX} FED',
-        category=Asset.FED,
-        currency_code='EUR',
-        wallet_origin=wallet_pot_central,
-    )
+    with override_settings(FEDOW_AUTORISER_ASSET_FED_LOCAL=True):
+        return AssetService.creer_asset(
+            tenant=tenant_lespass_bt,
+            name=f'{BT_TEST_PREFIX} FED',
+            category=Asset.FED,
+            currency_code='EUR',
+            wallet_origin=wallet_pot_central,
+        )
 
 
 def test_bank_transfer_action_no_token_mutation(

@@ -37,6 +37,21 @@ FERNET_KEY = os.environ.get('FERNET_KEY')
 MAPTILER_KEY = os.environ.get('MAPTILER_KEY', '')
 
 FEDOW = True
+
+# Autorise ou non la creation d'un asset local de categorie FED (fedow_core).
+# La monnaie federee du reseau est servie par le Fedow distant : un asset FED
+# local serait debite par la cascade de paiement du point de vente et rendu en
+# billets par le remboursement en especes de la caisse, qui filtrent tous deux
+# sur la categorie sans distinguer les deux moteurs. La garde vit dans
+# Asset.save() (fedow_core/models.py) et leve AssetFedLocalInterdit.
+# Seuls les tests qui couvrent volontairement le code d'apres-migration
+# passent ce reglage a True, le temps de leur fixture.
+# / Whether a local FED asset (fedow_core) may be created. The network's
+# federated currency is served by the remote Fedow; a local one would be spent
+# by the POS payment cascade and refunded in cash by the register. Guard lives
+# in Asset.save() and raises AssetFedLocalInterdit.
+FEDOW_AUTORISER_ASSET_FED_LOCAL = False
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG') == '1'
 

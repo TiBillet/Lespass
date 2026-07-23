@@ -1,7 +1,6 @@
+import datetime
 import logging
 from decimal import Decimal, ROUND_HALF_UP
-
-import pytz
 
 from django.utils.translation import gettext_lazy as _
 from import_export import resources
@@ -37,9 +36,9 @@ class LigneArticleExportResource(resources.ModelResource):
     def before_export(self, queryset, *args, **kwargs):
         try:
             config = Configuration.get_solo()
-            self._cached_timezone = pytz.timezone(config.fuseau_horaire)
+            self._cached_timezone = config.get_tzinfo()
         except Exception as e:
-            self._cached_timezone = pytz.UTC
+            self._cached_timezone = datetime.timezone.utc
             logger.warning(f"Impossible to get timezone config: {e}")
 
     class Meta:

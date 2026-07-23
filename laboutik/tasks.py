@@ -690,9 +690,29 @@ def _generer_cloture_agregee(niveau, niveau_source, date_debut, date_fin):
     if not config_base.module_caisse:
         return
 
-    # Convertir dates en datetime aware / Convert dates to aware datetimes
-    dt_debut = tz.make_aware(dt_module.datetime.combine(date_debut, dt_module.time.min))
-    dt_fin = tz.make_aware(dt_module.datetime.combine(date_fin, dt_module.time.max))
+    # Convertir dates en datetime aware, ANCREES SUR L'HEURE DU LIEU.
+    # / Convert dates to aware datetimes, ANCHORED ON THE VENUE TIME.
+    #
+    # Le fuseau est passe EXPLICITEMENT : sans lui, make_aware() utilise le
+    # fuseau « courant », un etat thread-local que la fonction ne maitrise pas.
+    # Le resultat dependrait alors de qui a tourne avant dans le meme thread.
+    # / The timezone is passed EXPLICITLY: without it, make_aware() uses the
+    # "current" timezone, thread-local state this function does not control.
+    #
+    # Et c'est bien l'heure DU LIEU qui fait foi : une caisse clot sa journee
+    # a 23h, ce sont les 23h du bar, pas celles du serveur. A La Reunion
+    # (UTC+4), ancrer en UTC ferait basculer toute cloture passee entre minuit
+    # et 4h locales dans la journee precedente — elle sortirait de la fenetre
+    # d'agregation. Les appelants calculent deja leurs bornes en heure locale
+    # (voir cron_cloture_quotidienne) : on reste coherent avec eux.
+    # / Venue time is what counts: a bar closing at 23:00 means 23:00 at the
+    # bar, not on the server. In Reunion (UTC+4), anchoring in UTC would push
+    # any closure made between midnight and 4am local into the previous day,
+    # dropping it from the aggregation window. Callers already compute their
+    # bounds in local time: we stay consistent with them.
+    fuseau_du_lieu = config_base.get_tzinfo()
+    dt_debut = tz.make_aware(dt_module.datetime.combine(date_debut, dt_module.time.min), fuseau_du_lieu)
+    dt_fin = tz.make_aware(dt_module.datetime.combine(date_fin, dt_module.time.max), fuseau_du_lieu)
 
     # Pour chaque PV qui a des clotures source dans la periode
     # / For each POS with source closures in the period

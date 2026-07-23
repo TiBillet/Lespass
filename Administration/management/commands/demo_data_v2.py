@@ -2484,25 +2484,60 @@ class Command(BaseCommand):
                                     name="Tarif gratuit",
                                     defaults={'prix': 0}
                                 )
-                            # Activer la récompense au scan
-                            updated_fields = []
-                            if not price.reward_on_ticket_scanned:
-                                price.reward_on_ticket_scanned = True
-                                updated_fields.append('reward_on_ticket_scanned')
-                            # Utiliser l'asset de type TIME uniquement s'il est déclaré (ex: "MTemps")
-                            time_asset = assets_by_name.get('MTemps')
-                            if time_asset and price.fedow_reward_asset_id != getattr(time_asset, 'uuid', None):
-                                price.fedow_reward_asset = time_asset
-                                updated_fields.append('fedow_reward_asset')
-                            # Montant symbolique par scan (1 unité de temps)
-                            if price.fedow_reward_amount != 1:
-                                price.fedow_reward_amount = 1
-                                updated_fields.append('fedow_reward_amount')
-                            if updated_fields:
-                                try:
-                                    price.save(update_fields=updated_fields)
-                                except Exception:
-                                    price.save()
+                            # Activer la récompense au scan.
+                            #
+                            # La tâche qui verse la récompense
+                            # (BaseBillet/tasks.py, refill_..._from_ticket_scanned)
+                            # exige les TROIS champs ENSEMBLE :
+                            #     reward_on_ticket_scanned AND fedow_reward_asset
+                            #                              AND fedow_reward_amount
+                            # Poser le drapeau sans l'asset rend donc le mécanisme
+                            # INERTE, et rien ne le signale : ni erreur, ni log,
+                            # ni billet en anomalie. On cherche l'asset D'ABORD,
+                            # et on n'active rien si on ne le trouve pas.
+                            # / The reward task requires all THREE fields together.
+                            # Setting the flag without the asset makes the whole
+                            # mechanism silently inert. Resolve the asset FIRST.
+                            #
+                            # La recherche va en BASE puis dans les assets déclarés
+                            # par ce run — même ordre que la récompense d'adhésion
+                            # plus haut. Se fier au seul dict du run échoue dès que
+                            # l'appel Fedow qui le remplit n'a pas abouti : le dict
+                            # reste vide alors que l'asset existe bien en base.
+                            # / Look in the DB first, then in this run's declared
+                            # assets — same order as the membership reward above.
+                            nom_asset_recompense = 'MTemps'
+                            asset_de_recompense = (
+                                AssetFedowPublic.objects.filter(
+                                    name=nom_asset_recompense,
+                                ).first()
+                                or assets_by_name.get(nom_asset_recompense)
+                            )
+
+                            if not asset_de_recompense:
+                                logger.warning(
+                                    f"Asset '{nom_asset_recompense}' introuvable : "
+                                    f"la récompense au scan de "
+                                    f"'{child.get('name')}' n'est PAS activée. "
+                                    f"L'activer sans asset la rendrait inerte en silence."
+                                )
+                            else:
+                                updated_fields = []
+                                if not price.reward_on_ticket_scanned:
+                                    price.reward_on_ticket_scanned = True
+                                    updated_fields.append('reward_on_ticket_scanned')
+                                if price.fedow_reward_asset_id != asset_de_recompense.uuid:
+                                    price.fedow_reward_asset = asset_de_recompense
+                                    updated_fields.append('fedow_reward_asset')
+                                # Montant symbolique par scan (1 unité de temps)
+                                if price.fedow_reward_amount != 1:
+                                    price.fedow_reward_amount = 1
+                                    updated_fields.append('fedow_reward_amount')
+                                if updated_fields:
+                                    try:
+                                        price.save(update_fields=updated_fields)
+                                    except Exception:
+                                        price.save()
                         except Exception as e:
                             logger.warning(f"Impossible de configurer la récompense monnaie temps pour '{child.get('name')}' : {e}\n")
 

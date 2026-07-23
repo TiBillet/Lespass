@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bibliothèque de blocs — étude « collectif »</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="blocks.css">
+<style>
+  /* Habillage propre à cette page de démonstration — pas un bloc. */
+  .demo-label {
+    display: flex; align-items: baseline; gap: var(--spacer-sm);
+    margin: var(--spacer-2xl) 0 var(--spacer-md);
+    padding-top: var(--spacer-md);
+    border-top: 0.1rem solid var(--theme-border-strong);
+  }
+  .demo-label code { font-family: var(--ff-mono); font-size: var(--text-p4); }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ Sprite SVG ═══════════════
+     Un seul jeu d'icônes, trait 1,5 px, style contour. Aucun glyphe
+     typographique ni emoji : le rendu ne doit pas dépendre d'une police. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-arrow-up-right" viewBox="0 0 24 24"><path d="M7 17 17 7M8 7h9v9"/></symbol>
+  <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h10M18 18h2M14 4v4M8 10v4M14 16v4"/></symbol>
+  <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.6 6.8-4M8.6 13.4l6.8 4"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 14 9 5 9-5"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></symbol>
+  <symbol id="i-handshake" viewBox="0 0 24 24"><path d="M12 7 9.5 9.5a2 2 0 0 0 0 3l1 1a2 2 0 0 0 3 0L16 11"/><path d="M3 8h4l5-3 5 3h4"/><path d="M3 8v6l4 4M21 8v6l-4 4"/></symbol>
+  <symbol id="i-leaf" viewBox="0 0 24 24"><path d="M4 20c0-8 5-14 16-15 0 11-5 16-13 16H4z"/><path d="M8 18c2-4 5-7 9-9"/></symbol>
+</svg>
+
+<!-- ══════════════════════════ CHROME ══════════════════════════ -->
+<header class="l-container">
+  <nav class="c-nav" aria-label="Navigation principale">
+    <a class="c-nav__wordmark" href="#">Bibliothèque</a>
+    <input class="c-nav__check" type="checkbox" id="nav-toggle">
+    <label class="c-nav__toggle" for="nav-toggle">Menu</label>
+    <ul class="c-nav__list">
+      <li><a class="c-nav__link" href="#hero" aria-current="page">Hero</a></li>
+      <li><a class="c-nav__link" href="#contenu">Contenu</a></li>
+      <li><a class="c-nav__link" href="#listes">Listes</a></li>
+      <li><a class="c-nav__link" href="#actions">Actions</a></li>
+      <li><a class="c-nav__link" href="#detail">Détail</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main class="l-container">
+
+  <!-- ═══════════════ B01 · HERO ═══════════════ -->
+  <p class="demo-label" id="hero"><code>B01</code> <span class="t-c1">Hero — accueil</span></p>
+  <section class="b b-hero">
+    <div class="b-hero__grid">
+      <div>
+        <h1 class="t-d1 b-hero__headline"><span class="c-mark" aria-hidden="true"><svg class="c-icon"><use href="#i-leaf"/></svg></span>
+          Un titre qui tient en une phrase complète, pas en un slogan.</h1><a
+          class="c-btn" href="#">À propos</a>
+        <p class="b-hero__lede t-p1 t-muted">La phrase d’appui explique ce que fait le lieu.
+          Deux lignes, pas davantage.</p>
+      </div>
+
+      <!-- Illustration DÉTOURÉE : aplats plats, aucun cadre, aucun dégradé,
+           posée directement sur le fond uni de la page. -->
+      <div class="c-art c-art--bleed" role="img" aria-label="Illustration : un paysage de collines et de sapins sous un soleil">
+        <svg viewBox="0 0 400 320" xmlns="http://www.w3.org/2000/svg">
+          <!-- colline lointaine, pervenche -->
+          <path d="M60 200C60 118 128 52 210 52s150 66 150 148z" fill="var(--color-chetwode)"/>
+          <path d="M210 52c82 0 150 66 150 148H228z" fill="#9AB0EE"/>
+          <!-- soleil -->
+          <circle cx="252" cy="196" r="34" fill="#F26B2B"/>
+          <!-- colline verte, devant -->
+          <path d="M296 200c46 0 84 38 84 84v36H180c0-66 52-120 116-120z" fill="var(--color-emerald)"/>
+          <!-- colline sombre, premier plan -->
+          <path d="M20 320c0-62 50-112 112-112 44 0 82 25 100 62 18-22 45-36 76-36v86z" fill="var(--color-forest)"/>
+          <!-- sapins clairs sur la colline sombre -->
+          <path d="M96 300l-26 0 13-26zM96 282l-22 0 11-22zM82 300h6v14h-6z" fill="var(--color-emerald)"/>
+          <path d="M168 316l-26 0 13-26zM168 298l-22 0 11-22z" fill="var(--color-emerald)"/>
+          <!-- sapin sombre sur la colline verte -->
+          <path d="M330 296l-30 0 15-30zM330 274l-25 0 12.5-25z" fill="var(--color-forest)"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- B02 · le petit bloc « derniers évènements » posé sur le hero -->
+    <div class="b-hero-feed">
+      <a class="b-hero-feed__item" href="#">
+        <span class="b-hero-feed__thumb" aria-hidden="true"></span>
+        <span>
+          <span class="b-hero-feed__meta t-c2"><span>Évènement</span><span class="t-num">15 octobre</span></span>
+          <span class="t-h5" style="display:block;margin-top:.6rem">Rencontre publique d’automne</span>
+        </span>
+      </a>
+      <a class="b-hero-feed__item" href="#">
+        <span class="b-hero-feed__thumb" aria-hidden="true" style="background:var(--theme-surface-accent-alt)"></span>
+        <span>
+          <span class="b-hero-feed__meta t-c2"><span>Nouvelle</span><span class="t-num">2 octobre</span></span>
+          <span class="t-h5" style="display:block;margin-top:.6rem">Le programme de la saison est en ligne</span>
+        </span>
+      </a>
+    </div>
+  </section>
+
+  <p class="demo-label"><code>B01b</code> <span class="t-c1">Hero — rubrique</span></p>
+  <section class="b b-hero" data-theme="sun">
+    <a class="b-hero__crumb t-c2" href="#">
+      <svg class="c-icon" aria-hidden="true" style="width:1.4rem;height:1.4rem"><use href="#i-arrow-left"/></svg>
+      Rubrique parente</a>
+    <div class="b-hero__grid">
+      <div>
+        <h2 class="t-h1"><span class="c-mark" aria-hidden="true"><svg class="c-icon"><use href="#i-compass"/></svg></span>
+          Titre de la rubrique</h2>
+        <p class="t-c2 t-muted" style="margin-top:var(--spacer-sm)">Surtitre de classement</p>
+        <p class="b-hero__lede t-p2">Le résumé de la rubrique, en une ou deux phrases.</p>
+        <div class="b-hero__actions">
+          <a class="c-btn" href="#">En savoir plus
+            <span class="c-btn__icon" aria-hidden="true"><svg class="c-icon"><use href="#i-arrow-right"/></svg></span></a>
+        </div>
+      </div>
+      <div class="c-art c-art--framed" role="img" aria-label="Illustration de la rubrique"></div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ CONTENU ═══════════════ -->
+  <p class="demo-label" id="contenu"><code>B03</code> <span class="t-c1">Titre seul</span></p>
+  <section class="b b-heading">
+    <p class="t-c2 t-muted">Surtitre</p>
+    <h2 class="t-h2">Un titre de section, posé seul</h2>
+  </section>
+
+  <p class="demo-label"><code>B04</code> <span class="t-c1">Texte riche</span></p>
+  <section class="b b-text">
+    <p>Un paragraphe de texte courant. Le <strong>gras</strong> et les
+      <a href="#">liens</a> vivent ici. La mesure est bornée à 72 caractères
+      pour rester lisible, et l’interligne à 1,5.</p>
+    <ul>
+      <li>Un élément de liste</li>
+      <li>Un deuxième</li>
+      <li>Un troisième</li>
+    </ul>
+  </section>
+
+  <p class="demo-label"><code>B05</code> <span class="t-c1">Deux colonnes — titre / contenu</span></p>
+  <section class="b b-side">
+    <div class="b-side__head">
+      <p class="t-c2 t-muted">Pourquoi ?</p>
+      <h2 class="t-h2">Le titre tient à gauche, le texte à droite</h2>
+    </div>
+    <div class="b-side__body">
+      <p class="t-p3">C’est l’ossature de toutes les pages de contenu. On alterne
+        le sens d’une section à l’autre pour éviter la monotonie.</p>
+      <p><a class="c-btn" href="#">En savoir plus
+        <span class="c-btn__icon" aria-hidden="true"><svg class="c-icon"><use href="#i-arrow-right"/></svg></span></a></p>
+    </div>
+  </section>
+
+  <p class="demo-label"><code>B06</code> <span class="t-c1">Panneau de mises en avant</span></p>
+  <section class="b b-highlight" data-theme="sun">
+    <h2 class="b-highlight__title t-h2">Quatre engagements, sur un aplat coloré</h2>
+    <div class="b-highlight__grid">
+      <div class="b-highlight__item">
+        <span class="b-highlight__icon" aria-hidden="true"><svg class="c-icon c-icon--lg"><use href="#i-compass"/></svg></span>
+        <h3 class="t-h5">Premier engagement</h3>
+        <p class="t-p4 t-muted">Une phrase d’explication, courte.</p>
+      </div>
+      <div class="b-highlight__item">
+        <span class="b-highlight__icon" aria-hidden="true"><svg class="c-icon c-icon--lg"><use href="#i-share"/></svg></span>
+        <h3 class="t-h5">Deuxième engagement</h3>
+        <p class="t-p4 t-muted">Une phrase d’explication, courte.</p>
+      </div>
+      <div class="b-highlight__item">
+        <span class="b-highlight__icon" aria-hidden="true"><svg class="c-icon c-icon--lg"><use href="#i-layers"/></svg></span>
+        <h3 class="t-h5">Troisième engagement</h3>
+        <p class="t-p4 t-muted">Une phrase d’explication, courte.</p>
+      </div>
+      <div class="b-highlight__item">
+        <span class="b-highlight__icon" aria-hidden="true"><svg class="c-icon c-icon--lg"><use href="#i-eye"/></svg></span>
+        <h3 class="t-h5">Quatrième engagement</h3>
+        <p class="t-p4 t-muted">Une phrase d’explication, courte.</p>
+      </div>
+    </div>
+  </section>
+
+  <p class="demo-label"><code>B15</code> <span class="t-c1">Phrase-choc épinglée</span></p>
+  <section class="b b-catchphrase">
+    <div class="b-catchphrase__sticky">
+      <h2 class="t-h2">Le titre reste à l’écran pendant que la colonne défile</h2>
+    </div>
+    <div class="b-catchphrase__items">
+      <p class="t-p1">Premier temps du propos.</p>
+      <p class="t-p1">Deuxième temps, plus bas dans le défilement.</p>
+      <p class="t-p1">Troisième temps. Le titre, lui, n’a pas bougé.</p>
+    </div>
+  </section>
+
+  <p class="demo-label"><code>B10</code> <span class="t-c1">Citation</span></p>
+  <blockquote class="b b-quote">
+    <p class="t-h4">Une citation courte, attribuée. Elle emprunte une voix
+      extérieure sans en faire une preuve chiffrée.</p>
+    <footer class="b-quote__author">
+      <span class="b-quote__avatar" aria-hidden="true"></span>
+      <span>
+        <span class="t-h5" style="display:block">Prénom Nom</span>
+        <span class="t-c2 t-muted">Rôle · Organisation</span>
+      </span>
+    </footer>
+  </blockquote>
+
+  <!-- ═══════════════ LISTES ═══════════════ -->
+  <p class="demo-label" id="listes"><code>B07</code> <span class="t-c1">Liste de cartes — large</span></p>
+  <section class="b b-cards b-cards--large">
+    <div class="b-cards__head">
+      <h2 class="t-h2">Entête de liste</h2>
+      <p class="t-p3 t-muted">Une phrase qui qualifie ce que la liste rassemble.</p>
+    </div>
+    <div class="b-cards__list">
+      <article class="c-card">
+        <div>
+          <p class="c-card__eyebrow t-c2">Étiquette · Étiquette</p>
+          <h3 class="t-h3" style="margin-top:var(--spacer-md)">Une carte large</h3>
+        </div>
+        <div>
+          <p class="t-p3 t-muted">Le texte de la carte occupe la seconde colonne
+            à partir de 768 px, et passe dessous en dessous.</p>
+          <p class="c-card__foot"><a class="c-link-arrow" href="#" aria-label="Ouvrir : une carte large">
+            <svg class="c-icon" aria-hidden="true"><use href="#i-arrow-right"/></svg></a></p>
+        </div>
+      </article>
+      <article class="c-card">
+        <div>
+          <p class="c-card__eyebrow t-c2">Étiquette</p>
+          <h3 class="t-h3" style="margin-top:var(--spacer-md)">Une deuxième carte</h3>
+        </div>
+        <div>
+          <p class="t-p3 t-muted">Même gabarit, contenu différent.</p>
+          <p class="c-card__foot"><a class="c-link-arrow" href="#" aria-label="Ouvrir : une deuxième carte">
+            <svg class="c-icon" aria-hidden="true"><use href="#i-arrow-right"/></svg></a></p>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <p class="demo-label"><code>B07b</code> <span class="t-c1">Liste de cartes — moyenne</span></p>
+  <section class="b b-cards b-cards--medium">
+    <div class="b-cards__list">
+      <article class="c-card">
+        <p class="c-card__eyebrow t-c2">Étiquette</p>
+        <h3 class="t-h4">Carte moyenne</h3>
+        <p class="t-p3 t-muted">Trois par rangée en grand écran.</p>
+      </article>
+      <article class="c-card">
+        <p class="c-card__eyebrow t-c2">Étiquette</p>
+        <h3 class="t-h4">Carte moyenne</h3>
+        <p class="t-p3 t-muted">Trois par rangée en grand écran.</p>
+      </article>
+      <article class="c-card">
+        <p class="c-card__eyebrow t-c2">Étiquette</p>
+        <h3 class="t-h4">Carte moyenne</h3>
+        <p class="t-p3 t-muted">Trois par rangée en grand écran.</p>
+      </article>
+    </div>
+  </section>
+
+  <p class="demo-label"><code>B08</code> <span class="t-c1">Mosaïque — grille d’actualités</span></p>
+  <section class="b b-mosaic">
+    <div class="b-mosaic__bar">
+      <button class="c-btn" type="button">Filtres
+        <span class="c-btn__icon" aria-hidden="true"><svg class="c-icon"><use href="#i-sliders"/></svg></span></button>
+      <p class="t-c2 t-muted t-num">12 résultats</p>
+    </div>
+    <div class="b-mosaic__grid">
+      <a class="c-tile c-tile--feature" href="#" data-theme="emerald">
+        <span class="c-tile__meta"><span class="c-tile__badge t-c2">À la une</span><span class="t-c2 t-num">13 juillet</span></span>
+        <span class="c-tile__title t-h2">La carte mise en avant occupe quatre cases</span>
+      </a>
+      <a class="c-tile" href="#" data-theme="ink">
+        <span class="c-tile__meta"><span class="c-tile__badge t-c2">Appel</span><span class="t-c2 t-num">21 mai</span></span>
+        <span class="c-tile__title t-h5">Une carte simple</span>
+      </a>
+      <a class="c-tile" href="#" data-theme="sage">
+        <span class="c-tile__meta"><span class="c-tile__badge t-c2">Actualité</span><span class="t-c2 t-num">20 avril</span></span>
+        <span class="c-tile__title t-h5">Une autre carte</span>
+      </a>
+      <a class="c-tile" href="#" data-theme="chetwode">
+        <span class="c-tile__meta"><span class="c-tile__badge t-c2">Actualité</span><span class="t-c2 t-num">16 avril</span></span>
+        <span class="c-tile__title t-h5">Encore une</span>
+      </a>
+      <!-- flame = thème d'affichage : grands titres et badges seulement -->
+      <a class="c-tile" href="#" data-theme="flame">
+        <span class="c-tile__meta"><span class="c-tile__badge t-c2">Gouvernance</span><span class="t-c2 t-num">18 mars</span></span>
+        <span class="c-tile__title t-h5">Et une dernière</span>
+      </a>
+    </div>
+  </section>
+
+  <p class="demo-label"><code>B16</code> <span class="t-c1">Carrousel de contenu</span></p>
+  <section class="b b-carousel">
+    <div class="b-carousel__track" tabindex="0" role="region" aria-label="Carrousel de contenu">
+      <article class="c-card"><p class="t-c2 t-muted">Étiquette</p><h3 class="t-h4">Élément 1</h3><p class="t-p3 t-muted">Défilement natif avec accroche.</p></article>
+      <article class="c-card"><p class="t-c2 t-muted">Étiquette</p><h3 class="t-h4">Élément 2</h3><p class="t-p3 t-muted">Aucun JavaScript.</p></article>
+      <article class="c-card"><p class="t-c2 t-muted">Étiquette</p><h3 class="t-h4">Élément 3</h3><p class="t-p3 t-muted">Clavier et doigt suffisent.</p></article>
+      <article class="c-card"><p class="t-c2 t-muted">Étiquette</p><h3 class="t-h4">Élément 4</h3><p class="t-p3 t-muted">Une carte de plus.</p></article>
+    </div>
+  </section>
+
+  <p class="demo-label"><code>B14</code> <span class="t-c1">Trombinoscope</span></p>
+  <section class="b b-team">
+    <div class="b-team__grid">
+      <div class="b-team__person"><span class="b-team__portrait" aria-hidden="true"></span><h3 class="t-h5">Prénom Nom</h3><p class="t-c2 t-muted">Rôle</p></div>
+      <div class="b-team__person"><span class="b-team__portrait" aria-hidden="true"></span><h3 class="t-h5">Prénom Nom</h3><p class="t-c2 t-muted">Rôle</p></div>
+      <div class="b-team__person"><span class="b-team__portrait" aria-hidden="true"></span><h3 class="t-h5">Prénom Nom</h3><p class="t-c2 t-muted">Rôle</p></div>
+      <div class="b-team__person"><span class="b-team__portrait" aria-hidden="true"></span><h3 class="t-h5">Prénom Nom</h3><p class="t-c2 t-muted">Rôle</p></div>
+    </div>
+  </section>
+
+  <p class="demo-label"><code>B11</code> <span class="t-c1">Galerie</span></p>
+  <section class="b b-gallery">
+    <div class="b-gallery__grid">
+      <figure style="margin:0"><span class="b-gallery__item" aria-hidden="true"></span><figcaption class="b-gallery__caption t-p4">Légende</figcaption></figure>
+      <figure style="margin:0"><span class="b-gallery__item" aria-hidden="true" data-theme="chetwode"></span><figcaption class="b-gallery__caption t-p4">Légende</figcaption></figure>
+      <figure style="margin:0"><span class="b-gallery__item" aria-hidden="true" data-theme="emerald"></span><figcaption class="b-gallery__caption t-p4">Légende</figcaption></figure>
+    </div>
+  </section>
+
+  <p class="demo-label"><code>B18</code> <span class="t-c1">Image</span></p>
+  <section class="b b-image b-image--full">
+    <figure>
+      <span class="b-image__frame c-art" aria-hidden="true"></span>
+      <figcaption class="t-p4">Une légende sous l’image.</figcaption>
+    </figure>
+  </section>
+
+  <p class="demo-label"><code>B12</code> <span class="t-c1">Accordéon</span></p>
+  <section class="b b-accordions">
+    <details open>
+      <summary>Une première question</summary>
+      <p class="t-p3 t-muted">La réponse. Balise <code>&lt;details&gt;</code> native :
+        pas une ligne de JavaScript, accessible par défaut.</p>
+    </details>
+    <details>
+      <summary>Une deuxième question</summary>
+      <p class="t-p3 t-muted">Une deuxième réponse.</p>
+    </details>
+    <details>
+      <summary>Une troisième question</summary>
+      <p class="t-p3 t-muted">Une troisième réponse.</p>
+    </details>
+  </section>
+
+  <p class="demo-label"><code>B13</code> <span class="t-c1">Programme</span></p>
+  <section class="b b-schedules">
+    <div class="b-schedules__row">
+      <p class="b-schedules__time t-c1 t-num">8 h 30</p>
+      <div><h3 class="t-h5">Accueil</h3><p class="t-p4 t-muted">Hall d’entrée</p></div>
+      <p class="t-c2 t-muted t-num">30 min</p>
+    </div>
+    <div class="b-schedules__row">
+      <p class="b-schedules__time t-c1 t-num">9 h 00</p>
+      <div><h3 class="t-h5">Ouverture</h3><p class="t-p4 t-muted">Grande salle</p></div>
+      <p class="t-c2 t-muted t-num">1 h</p>
+    </div>
+    <div class="b-schedules__row">
+      <p class="b-schedules__time t-c1 t-num">10 h 30</p>
+      <div><h3 class="t-h5">Ateliers</h3><p class="t-p4 t-muted">Salles 1 à 4</p></div>
+      <p class="t-c2 t-muted t-num">2 h</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ ACTIONS ═══════════════ -->
+  <p class="demo-label" id="actions"><code>B09</code> <span class="t-c1">Appel à l’action</span></p>
+  <section class="b b-cta" data-theme="chetwode">
+    <div class="b-cta__body">
+      <p class="t-c2">Partenariat</p>
+      <h2 class="t-h3">Une phrase qui invite, et une seule action</h2>
+      <p><a class="c-btn" href="#">Nous écrire
+        <span class="c-btn__icon" aria-hidden="true"><svg class="c-icon"><use href="#i-arrow-right"/></svg></span></a></p>
+    </div>
+    <div class="b-cta__aside"><span class="c-art c-art--square" style="width:18rem" aria-hidden="true"></span></div>
+  </section>
+
+  <p class="demo-label"><code>B09b</code> <span class="t-c1">Grille d’actions</span></p>
+  <section class="b b-ctas-grid">
+    <a class="c-cta-card" href="#">
+      <span class="c-cta-card__icon" aria-hidden="true"><svg class="c-icon c-icon--lg"><use href="#i-handshake"/></svg></span>
+      <span class="t-h4">Travailler ensemble</span>
+      <span class="c-link-arrow" aria-hidden="true"><svg class="c-icon"><use href="#i-arrow-right"/></svg></span>
+    </a>
+    <div class="c-cta-card">
+      <span class="c-cta-card__icon" aria-hidden="true"><svg class="c-icon c-icon--lg"><use href="#i-mail"/></svg></span>
+      <div>
+        <h3 class="t-h4">S’inscrire à l’infolettre</h3>
+        <p class="t-p3 t-muted">Une lettre par mois, pas davantage.</p>
+      </div>
+      <form class="c-form">
+        <label class="t-c2" for="mail">Adresse courriel</label>
+        <div class="c-form__row">
+          <input id="mail" type="email" name="email" autocomplete="email" required
+                 aria-describedby="mail-aide" placeholder="prenom@exemple.org">
+          <button class="c-btn c-btn--bare" type="submit">S’inscrire</button>
+        </div>
+        <p id="mail-aide" class="t-p4 t-muted">Désinscription en un clic, à tout moment.</p>
+      </form>
+    </div>
+  </section>
+
+  <!-- ═══════════════ DÉTAIL ═══════════════ -->
+  <p class="demo-label" id="detail"><code>B17</code> <span class="t-c1">Page de détail — contenu + panneau collé</span></p>
+  <section class="b l-detail">
+    <div class="b-text">
+      <p>Le corps de la fiche. Le panneau de droite reste collé pendant le
+        défilement à partir de 1024 px, et repasse au-dessus en dessous.</p>
+      <p>C’est le gabarit d’une fiche évènement : la donnée structurée est
+        séparée du récit.</p>
+    </div>
+    <aside>
+      <dl class="b-meta">
+        <div class="b-meta__row"><dt class="t-c2">Date</dt><dd class="t-h5 t-num">15 octobre 2026</dd><dd class="t-p4 t-muted t-num">8 h 30 à 18 h</dd></div>
+        <div class="b-meta__row"><dt class="t-c2">Lieu</dt><dd class="t-p4">Nom du lieu, adresse</dd></div>
+        <div class="b-meta__row"><dt class="t-c2">Catégories</dt>
+          <dd class="b-meta__tags">
+            <span class="c-badge t-c2">Conversation</span>
+            <span class="c-badge t-c2">En personne</span>
+          </dd>
+        </div>
+        <div class="b-meta__row"><dt class="t-c2">Tarif</dt><dd class="t-p4">Prix libre, trois paliers</dd></div>
+      </dl>
+    </aside>
+  </section>
+
+  <p class="demo-label"><code>B19</code> <span class="t-c1">Espaceur · aplat pleine largeur · ruban</span></p>
+  <div class="b-spacer"></div>
+
+</main>
+
+<!-- L'aplat sort du conteneur pour peindre bord à bord. -->
+<section class="is-bleed" data-theme="sisal">
+  <div class="l-container">
+    <h2 class="t-h2">Un aplat pleine largeur</h2>
+    <p class="t-p3 t-muted" style="margin-top:var(--spacer-md)">Ce n’est pas un bloc :
+      c’est un habillage qu’un bloc peut porter.</p>
+  </div>
+</section>
+
+<div class="l-container"><div class="c-ribbon" aria-hidden="true"></div></div>
+
+<!-- ══════════════════════════ PIED ══════════════════════════ -->
+<footer class="c-footer">
+  <div class="l-container">
+    <div class="c-footer__inner">
+      <div class="c-footer__col">
+        <p class="c-nav__wordmark">Bibliothèque</p>
+        <p class="t-p3 t-muted">Une ligne qui redit ce que fait le lieu.</p>
+      </div>
+      <nav class="c-footer__col" aria-label="À propos">
+        <p class="t-c2 t-muted">À propos</p>
+        <a class="t-p3" href="#">Le lieu</a>
+        <a class="t-p3" href="#">L’équipe</a>
+        <a class="t-p3" href="#">Contact</a>
+      </nav>
+      <nav class="c-footer__col" aria-label="Agenda">
+        <p class="t-c2 t-muted">Agenda</p>
+        <a class="t-p3" href="#">Évènements</a>
+        <a class="t-p3" href="#">Nouvelles</a>
+      </nav>
+      <nav class="c-footer__col" aria-label="Légal">
+        <p class="t-c2 t-muted">Légal</p>
+        <a class="t-p3" href="#">Confidentialité</a>
+        <a class="t-p3" href="#">Mentions</a>
+      </nav>
+    </div>
+
+    <div class="c-partners">
+      <p class="t-c2">Partenaires</p>
+      <div class="c-partners__row">
+        <span class="t-h5">Partenaire</span>
+        <span class="t-h5">Partenaire</span>
+        <span class="t-h5">Partenaire</span>
+        <span class="t-h5">Partenaire</span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

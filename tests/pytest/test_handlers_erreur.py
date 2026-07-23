@@ -21,6 +21,34 @@ from django_tenants.utils import tenant_context
 pytestmark = pytest.mark.django_db
 
 
+@pytest.fixture(autouse=True, scope="module")
+def _connexion_sur_le_schema_public():
+    """
+    Pose la connexion sur `public` AVANT toute autre fixture de ce fichier.
+    / Puts the connection on `public` BEFORE any other fixture in this file.
+
+    Ce fichier verifie le comportement des handlers sur le schema PUBLIC, et
+    notamment qu'une 404 s'y rend sans aucune requete SQL. Or rien ne garantit
+    que la connexion y soit : le middleware django-tenants la colle sur un
+    tenant des qu'un test AILLEURS dans la suite passe par un client HTTP, et
+    personne ne la decolle. Le fichier passe alors seul et echoue en suite
+    complete, avec « Expected to perform 0 queries but 1 was done » — la garde
+    testee ne s'applique qu'au schema public.
+
+    EN SETUP, JAMAIS EN TEARDOWN : les finalizers des fixtures de portee
+    superieure s'executent apres ceux de portee test ; remettre `public` en
+    teardown les ferait tomber sur un schema sans les tables du tenant.
+    / SETUP only, never teardown — higher-scoped finalizers run afterwards.
+
+    Voir tests/PIEGES.md 12.5.bis.
+    """
+    from django.db import connection
+
+    connection.set_schema_to_public()
+
+    yield
+
+
 def _fabriquer_requete(chemin, avec_htmx=False):
     """
     Fabrique une requête GET équivalente à ce que voient les handlers en prod :

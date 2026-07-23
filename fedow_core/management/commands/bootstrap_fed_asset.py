@@ -14,10 +14,34 @@ Cree l'infrastructure minimale pour la recharge FED V2 :
 
 LOCALISATION : fedow_core/management/commands/bootstrap_fed_asset.py
 
+CHANTIER EN COURS — NE PAS LANCER AVANT LA MIGRATION.
+/ WORK IN PROGRESS — DO NOT RUN BEFORE THE MIGRATION.
+
+Cette commande prepare l'apres-migration, quand la monnaie federee du reseau
+sera servie par le moteur local. Aujourd'hui elle est servie par le Fedow
+distant, et un asset FED local serait pris pour elle par la cascade de paiement
+du point de vente et par le remboursement en especes de la caisse.
+
+Deux choses l'empechent de s'executer, et c'est voulu :
+
+- `Asset.save()` leve `AssetFedLocalInterdit` sur la categorie FED, sauf si le
+  reglage `FEDOW_AUTORISER_ASSET_FED_LOCAL` est actif ;
+- `Client.FED`, utilise plus bas pour la categorie du tenant, n'existe pas
+  encore dans `Customers.models.Client`.
+
+Aucun appel automatique n'existe : ni entrypoint, ni cron, ni migration. Le seul
+appel du depot, dans `create_test_pos_data.py`, est commente.
+
+/ This command prepares the post-migration world. Today the federated currency
+comes from the remote Fedow, and a local FED asset would be mistaken for it by
+the POS cascade and the cash refund. Two things stop it from running, on
+purpose: the guard in Asset.save(), and the missing Client.FED category. No
+automatic caller exists.
+
 Idempotent : peut etre lance plusieurs fois sans effet de bord.
 / Idempotent: can be run multiple times without side effects.
 
-Usage :
+Usage (apres migration seulement / after migration only) :
     docker exec lespass_django poetry run python manage.py bootstrap_fed_asset
 """
 

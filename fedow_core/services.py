@@ -632,7 +632,17 @@ class WalletService:
                     amount=total_fed,
                     payment_method=PaymentMethod.STRIPE_FED,
                     status=LigneArticle.VALID,
-                    sale_origin=SaleOrigin.ADMIN,
+                    # Origine CAISSE, et non ADMIN : le vidage de carte se
+                    # declenche depuis le point de vente, avec la carte du
+                    # caissier. Le rapport de caisse (ticket X et ticket Z) ne
+                    # lit que les lignes d'origine LABOUTIK ; etiquetees ADMIN,
+                    # ces deux lignes seraient invisibles alors que des especes
+                    # sortent reellement du tiroir.
+                    # / Register origin, not ADMIN: emptying a card happens at
+                    # the point of sale, with the cashier's card. The register
+                    # report only reads LABOUTIK lines; tagged ADMIN, these two
+                    # lines would be invisible while cash really leaves the till.
+                    sale_origin=SaleOrigin.LABOUTIK,
                     carte=carte,
                     wallet=wallet_carte,
                     asset=fed_asset.uuid,
@@ -645,7 +655,7 @@ class WalletService:
                 amount=-(total_tlf + total_fed),
                 payment_method=PaymentMethod.CASH,
                 status=LigneArticle.VALID,
-                sale_origin=SaleOrigin.ADMIN,
+                sale_origin=SaleOrigin.LABOUTIK,
                 carte=carte,
                 wallet=wallet_carte,
             )
@@ -1161,10 +1171,26 @@ class BankTransferService:
 class RefillService:
     """
     Service de recharge FED depuis un paiement bancaire externe.
-    Appele par les webhooks PSP (Stripe aujourd'hui, autres demain).
 
     / FED refill service from an external bank payment.
-    Called by PSP webhooks (Stripe today, others tomorrow).
+
+    CHANTIER EN COURS — AUCUN APPELANT, ET C'EST VOULU.
+    / WORK IN PROGRESS — NO CALLER, ON PURPOSE.
+
+    Ce service prepare l'apres-migration, quand la monnaie federee du reseau
+    sera servie par le moteur local. Aujourd'hui, la recharge en ligne passe
+    entierement par le Fedow distant : `MyAccount.refill_wallet` demande
+    l'adresse de paiement a `fedowAPI.wallet.get_federated_token_refill_checkout`,
+    et c'est le Fedow qui signe les metadonnees et encaisse.
+
+    Le seul asset que ce service manipule est le FED local, dont
+    `Asset.save()` interdit la creation (`AssetFedLocalInterdit`). Un appel
+    aujourd'hui leverait donc `Asset.DoesNotExist` des la premiere ligne.
+
+    / This service prepares the post-migration world. Today the online refill
+    goes entirely through the remote Fedow. The only asset it handles is the
+    local FED, whose creation Asset.save() forbids — a call today would raise
+    Asset.DoesNotExist on the first line.
 
     Contrat PSP-agnostique : fedow_core/PSP_INTERFACE.md
     """

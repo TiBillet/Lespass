@@ -51,6 +51,109 @@ def montant_ttc_centimes():
     )
 
 
+# Les origines de vente qui pesent sur le rapport de caisse (ticket X et Z).
+# / The sale origins that weigh on the register report (X and Z tickets).
+#
+# Le critere est : cet encaissement a-t-il eu lieu AU COMPTOIR, dans le perimetre
+# que le caissier cloture en fin de service ?
+#
+# - LABOUTIK : la caisse elle-meme. Y compris le remboursement d'une carte, qui
+#   sort des especes du tiroir (cf. WalletService.rembourser_en_especes).
+# - TIREUSE : les tireuses connectees. Une biere tiree est une vente du comptoir
+#   comme une autre ; elle porte un point de vente et decremente le stock.
+#   L'exclure amputerait le chiffre d'affaires et fausserait la marge, puisque le
+#   stock serait decompte sans recette en face.
+#
+# Ce qui reste dehors, volontairement :
+#
+# - QRCODE_MA et NFC_MA : les encaissements par QR code ou carte NFC. C'est un
+#   autre usage que la caisse au comptoir, et les lieux qui pratiquent l'un ne
+#   pratiquent pas l'autre. Les melanger dans un meme ticket Z n'aurait de sens
+#   pour personne. Un chantier a venir rattachera ces encaissements a un point de
+#   vente ; la question de leur place dans la cloture se reposera a ce moment-la.
+# - LESPASS, API, WEBHOOK : les ventes en ligne. Elles sont suivies par le
+#   service de comptabilite (comptabilite/services.py), qui exclut justement
+#   LABOUTIK — les deux perimetres sont complementaires.
+# - ADMIN : les operations administratives (avoirs, virements bancaires recus,
+#   adhesions saisies a la main). Elles ne passent pas par le tiroir-caisse.
+#
+# / The test is: did this collection happen AT THE COUNTER, within what the
+# cashier closes at the end of service? QR code and NFC collections are a
+# different practice — venues doing one do not do the other — and online sales
+# are covered by comptabilite/services.py, which excludes LABOUTIK.
+ORIGINES_ENCAISSEES_PAR_LE_LIEU = [
+    SaleOrigin.LABOUTIK,
+    SaleOrigin.TIREUSE,
+]
+
+
+def sections_de_detail_pour_export(rapport_json):
+    """
+    Traduit un rapport de cloture vers les sections attendues par les exports.
+    / Maps a closure report to the sections the exports expect.
+
+    LOCALISATION : laboutik/reports.py
+
+    Le PDF (`laboutik/pdf.py`) et le CSV (`laboutik/csv_export.py`) attendent
+    `par_produit`, `par_categorie` et `par_tva`. Le rapport, lui, produit
+    `detail_ventes` (groupe par categorie, avec le detail des articles) et `tva`.
+    Sans cette traduction, les deux exports lisent des cles absentes et rendent
+    des sections vides — sans lever la moindre erreur, puisqu'ils utilisent
+    `.get(cle, {})`.
+
+    / The PDF and CSV exports expect par_produit / par_categorie / par_tva, while
+    the report produces detail_ventes and tva. Without this mapping both exports
+    silently render empty sections, since they use .get(key, {}).
+
+    Les cloture ANCIENNES portent l'ancien format directement dans leur
+    `rapport_json` : on le renvoie tel quel plutot que de le reconstruire, pour
+    qu'une cloture archivee se reimprime a l'identique.
+    / OLD closures carry the old format directly: return it as-is so an archived
+    closure reprints identically.
+
+    :param rapport_json: dict stocke dans ClotureCaisse.rapport_json
+    :return: dict avec les cles par_produit, par_categorie, par_tva
+    """
+    rapport_json = rapport_json or {}
+
+    # Cloture d'avant le changement de format : elle porte deja les sections.
+    # / Pre-format-change closure: it already carries the sections.
+    if "par_produit" in rapport_json or "par_categorie" in rapport_json:
+        return {
+            "par_produit": rapport_json.get("par_produit", {}),
+            "par_categorie": rapport_json.get("par_categorie", {}),
+            "par_tva": rapport_json.get("par_tva", {}),
+        }
+
+    detail_ventes = rapport_json.get("detail_ventes", {})
+
+    # `detail_ventes` groupe par categorie ; les exports veulent une liste plate
+    # d'articles. Un meme produit peut apparaitre sous deux taux de TVA : on
+    # cumule alors ses montants et ses quantites sous un seul nom.
+    # / detail_ventes groups by category; the exports want a flat article list.
+    # A product may appear under two VAT rates: we sum its amounts under one name.
+    par_produit = {}
+    par_categorie = {}
+    for nom_categorie, donnees_categorie in detail_ventes.items():
+        par_categorie[nom_categorie] = donnees_categorie.get("total_ttc", 0)
+
+        for article in donnees_categorie.get("articles", []):
+            nom_article = article.get("nom")
+            if nom_article not in par_produit:
+                par_produit[nom_article] = {"total": 0, "qty": 0}
+            par_produit[nom_article]["total"] += article.get("total_ttc", 0)
+            par_produit[nom_article]["qty"] += article.get("qty_total", 0)
+
+    return {
+        "par_produit": par_produit,
+        "par_categorie": par_categorie,
+        # `tva` porte deja exactement la forme attendue : un dictionnaire indexe
+        # par libelle de taux, avec taux / total_ht / total_tva / total_ttc.
+        # / `tva` already has the expected shape.
+        "par_tva": rapport_json.get("tva", {}),
+    }
+
+
 class RapportComptableService:
     """
     Calcule les rapports comptables pour une periode et un point de vente donnes.
@@ -72,14 +175,10 @@ class RapportComptableService:
         self.debut = datetime_debut
         self.fin = datetime_fin
 
-        # Queryset de base : lignes valides de la caisse dans la periode.
-        # Le filtre exact sale_origin=SaleOrigin.LABOUTIK exclut automatiquement
-        # les lignes LABOUTIK_TEST (mode ecole, LNE exigence 5).
-        # / Base queryset: valid POS lines within the period.
-        # The exact sale_origin=SaleOrigin.LABOUTIK filter automatically excludes
-        # LABOUTIK_TEST lines (training mode, LNE req. 5).
+        # Queryset de base : lignes valides encaissees par le lieu dans la periode.
+        # / Base queryset: valid lines collected by the venue within the period.
         self.lignes = LigneArticle.objects.filter(
-            sale_origin=SaleOrigin.LABOUTIK,
+            sale_origin__in=ORIGINES_ENCAISSEES_PAR_LE_LIEU,
             datetime__gte=self.debut,
             datetime__lte=self.fin,
             status=LigneArticle.VALID,
@@ -583,7 +682,7 @@ class RapportComptableService:
         # We make a separate query.
         remboursements = (
             LigneArticle.objects.filter(
-                sale_origin=SaleOrigin.LABOUTIK,
+                sale_origin__in=ORIGINES_ENCAISSEES_PAR_LE_LIEU,
                 datetime__gte=self.debut,
                 datetime__lte=self.fin,
             )

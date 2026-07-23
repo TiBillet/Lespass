@@ -57,11 +57,16 @@ class TestMembershipFixSolidaire:
                 " print(str(price.uuid) if price else 'NOT_FOUND')"
             )
         except RuntimeError as exc:
-            pytest.skip(f"django_shell échoué lors de la recherche du tarif : {exc}")
+            pytest.fail(
+                "django_shell a echoue lors de la recherche du tarif : un shell "
+                f"Django injoignable rend ce test ROUGE, pas ignore.\n{exc}"
+            )
 
         if price_uuid == "NOT_FOUND" or not price_uuid:
-            pytest.skip(
-                "Tarif 'Solidaire' du produit 'validation sélective' introuvable en DB — test ignoré"
+            pytest.fail(
+                "Tarif 'Solidaire' du produit 'Adhésion à validation sélective' "
+                "introuvable en base : ce test n'a rien a activer. Reseeder : "
+                "docker exec lespass_django poetry run python manage.py demo_data_v2"
             )
 
         # --- Étape 2 : Connexion admin ---
@@ -86,13 +91,19 @@ class TestMembershipFixSolidaire:
         )
 
         # --- Étape 4 : Vérifier la présence du champ manual_validation ---
-        # Si le champ n'existe pas dans le formulaire, le test est ignoré.
-        # / Step 4: Verify the manual_validation field exists
-        # If the field is absent from the form, skip the test.
+        # Un champ absent du formulaire est une REGRESSION de l'admin : le
+        # gestionnaire ne peut plus activer la validation manuelle. C'est
+        # exactement ce que ce test surveille — donc ROUGE.
+        # / Step 4: A missing field is an admin REGRESSION: the manager can no
+        # longer enable manual validation. That is what this test watches — RED.
         checkbox = page.locator('input[name="manual_validation"]')
 
         if checkbox.count() == 0:
-            pytest.skip("Champ manual_validation absent du formulaire prix — test ignoré")
+            pytest.fail(
+                "Champ 'manual_validation' absent du formulaire de tarif dans "
+                f"l'admin ({price_edit_url}) : la validation manuelle n'est plus "
+                "activable par un gestionnaire."
+            )
 
         # --- Étape 5 : Activer la case si elle n'est pas encore cochée ---
         # / Step 5: Enable the checkbox if not already checked

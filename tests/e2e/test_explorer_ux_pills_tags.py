@@ -197,10 +197,10 @@ def test_clic_pill_event_affiche_cards_event(page):
     page.locator('[data-testid="explorer-pill-event"]').click()
     page.wait_for_timeout(500)
 
-    # Si aucun event futur publie : les 2 listes sont vides. On SKIP
-    # sans erreur (pas un bug, juste la base de test vide).
-    # / If no published future event: both lists are empty. SKIP
-    # without error (not a bug, just an empty test DB).
+    # Deux listes vides = la base n'a aucun event futur publie. Le test ne
+    # peut alors rien prouver : il doit etre ROUGE, pas ignore.
+    # / Two empty lists = no published future event. The test can prove
+    # nothing then: it must be RED, not skipped.
     cards_event = page.locator('[data-type="event"]')
     cards_lieu = page.locator('[data-type="lieu"]')
 
@@ -208,9 +208,10 @@ def test_clic_pill_event_affiche_cards_event(page):
     nb_event = cards_event.count()
 
     if nb_event == 0 and nb_lieu == 0:
-        pytest.skip(
-            "Aucun event futur publie dans la base de test — "
-            "seeder demo_data_v2 pour avoir des events."
+        pytest.fail(
+            "Aucune card affichee : la base n'a aucun event futur publie, "
+            "la pill Evenements n'a rien a filtrer. Reseeder : docker exec "
+            "lespass_django poetry run python manage.py demo_data_v2"
         )
 
     assert nb_lieu == 0, (
@@ -240,17 +241,19 @@ def test_clic_tag_chip_ajoute_tag_dans_url(page):
     Clic sur un tag chip ajoute ?tag=<slug> dans l'URL.
     / Clicking a tag chip adds ?tag=<slug> to the URL.
 
-    SKIP si aucun chip n'est affiche (pas d'events tagges dans la base de test).
-    / SKIP if no chip is displayed (no tagged events in the test DB).
+    Sans chip affiche, le test est ROUGE : il n'y a rien a cliquer, donc
+    rien de prouve. / With no chip displayed the test is RED: nothing to
+    click means nothing proven.
     """
     goto_explorer(page)
     page.wait_for_timeout(300)  # laisser updateChips() s'executer / let updateChips() run
 
     chips = page.locator(".explorer-tag-chip")
     if chips.count() == 0:
-        pytest.skip(
-            "Aucun tag chip affiche — pas d'events tagges dans la base de test. "
-            "Seeder demo_data_v2 pour avoir des events avec tags."
+        pytest.fail(
+            "Aucun tag chip affiche : la base n'a aucun event tagge, il n'y a "
+            "rien a cliquer. Reseeder : docker exec lespass_django poetry run "
+            "python manage.py demo_data_v2"
         )
 
     chip = chips.first
@@ -271,15 +274,19 @@ def test_clic_tag_chip_marque_chip_actif(page):
     Clic sur un tag chip applique la classe explorer-tag-chip--active sur ce chip.
     / Clicking a tag chip applies the explorer-tag-chip--active class to that chip.
 
-    SKIP si aucun chip n'est affiche.
-    / SKIP if no chip is displayed.
+    Sans chip affiche, le test est ROUGE : il n'y a rien a cliquer.
+    / With no chip displayed the test is RED: nothing to click.
     """
     goto_explorer(page)
     page.wait_for_timeout(300)
 
     chips = page.locator(".explorer-tag-chip")
     if chips.count() == 0:
-        pytest.skip("Aucun tag chip affiche — pas d'events tagges.")
+        pytest.fail(
+            "Aucun tag chip affiche : la base n'a aucun event tagge. "
+            "Reseeder : docker exec lespass_django poetry run python "
+            "manage.py demo_data_v2"
+        )
 
     chip = chips.first
     chip.click()

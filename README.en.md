@@ -21,8 +21,8 @@
   <img alt="License" src="https://img.shields.io/badge/licence-AGPLv3-blue">
   <img alt="Django" src="https://img.shields.io/badge/Django-4.2-green">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11-blue">
-  <img alt="Unit tests" src="https://img.shields.io/badge/pytest-618%20passed-brightgreen">
-  <img alt="E2E tests" src="https://img.shields.io/badge/E2E%20Playwright-117%20passed-brightgreen">
+  <img alt="Unit tests" src="https://img.shields.io/badge/tests-pytest-brightgreen">
+  <img alt="E2E tests" src="https://img.shields.io/badge/E2E-Playwright-brightgreen">
 </p>
 
 <!-- CAPTURE: screenshot_hero.png — The most striking capture of the project. I suggest the public agenda of a venue with events, or a montage of 2-3 screens (agenda + register + NFC card). Wide format, 1200px minimum. -->
@@ -141,23 +141,36 @@ For installation, configuration and production deployment details: [→ Full doc
 
 ## Tests
 
-**618 pytest tests + 117 E2E Playwright tests, 100% green.**
+Three ways to run the suite, from fastest to most complete.
 
 ```bash
-# Unit and integration tests (pytest DB-only, ~3 min)
-docker exec lespass_django poetry run pytest tests/pytest/ -v
+# 1. Backend only (~1 min 30) — models, views, API, validation. Stripe mocked.
+#    No prerequisites: no server, no browser.
+docker exec lespass_django poetry run pytest tests/pytest/ -q
 
-# End-to-End tests (Playwright Python, ~12 min)
-# Prerequisites: Django ASGI server via Traefik (alias `rsp` in the byobu pane,
-# runs `manage.py runserver` in daphne mode for WebSocket support).
-docker exec \
-  -e ADMIN_EMAIL=admin@admin.com \
-  -e E2E_TEST_TOKEN='<see .env>' \
-  lespass_django poetry run pytest tests/e2e/ -v
+# 2. Browser E2E (~9 min) — Playwright. Journeys awaiting a Stripe webhook are
+#    SKIPPED, and listed in red at the end of the run.
+docker exec lespass_django poetry run pytest tests/e2e/ -q
+
+# 3. Full E2E (~12 min) — adds the real payment journeys.
+#    Start `stripe listen` on the host FIRST, in another terminal.
+docker exec -e E2E_STRIPE_LISTEN=1 lespass_django poetry run pytest tests/e2e/ -q
 ```
 
+**Prerequisites for modes 2 and 3**: the Django server runs behind Traefik
+(alias `rsp` in the byobu pane — `manage.py runserver` in daphne mode, required
+for WebSockets), and Chromium is installed in the container:
+
+```bash
+docker exec -u root lespass_django /DjangoFiles/.venv/bin/playwright install-deps chromium
+docker exec lespass_django poetry run playwright install chromium
+```
+
+**Recommended order**: run E2E **before** pytest. E2E tests create real sales in
+the development tenant, which a broadly-counting pytest test may pick up.
+
 See `tests/README.md` for the full documentation (architecture, pitfalls,
-environment variables).
+environment variables) and `tests/PIEGES.md` for known traps.
 
 Test Stripe card: `4242 4242 4242 4242`, exp `12/42`, CVC `424`.
 

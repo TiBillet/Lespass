@@ -1,0 +1,806 @@
+/* =========================================================================
+   BLOCS — bibliotheque « collectif »
+   HTML/CSS pur, zero JS obligatoire, zero framework.
+
+   Regle du systeme : un bloc ne connait que des tokens --theme-*.
+   Poser data-theme="…" sur n'importe quel bloc le repeint entierement.
+   ========================================================================= */
+
+/* ---------------------------------------------------------------- 1. Base */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--theme-surface-light);
+  color: var(--theme-text-primary);
+  font-family: var(--ff-body);
+  font-size: var(--text-p3);
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: clip;             /* jamais `hidden` : casse position:sticky */
+}
+
+img, svg { max-width: 100%; height: auto; display: block; }
+
+a { color: inherit; }
+
+/* Anneau de focus : 3 px d'encre. Jamais anime — il doit apparaitre
+   instantanement. */
+:focus-visible {
+  outline: 0.3rem solid var(--focus-ring);
+  outline-offset: 0.2rem;
+  border-radius: var(--radius-sm);
+}
+
+/* Icones : SVG uniquement, une seule epaisseur de trait. */
+.c-icon {
+  width: 1.8rem;
+  height: 1.8rem;
+  flex: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+.c-icon--lg { width: 2.4rem; height: 2.4rem; }
+
+/* Chiffres qui changent (dates, heures, compteurs) : chasse fixe, sinon le
+   texte saute d'une valeur a l'autre. */
+.t-num { font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------------ 2. Roles de texte */
+
+.t-d1, .t-h1, .t-h2, .t-h3, .t-h4, .t-h5 { margin: 0; }
+
+/* `text-wrap: balance` evite le mot orphelin sur la derniere ligne — mais il
+   RETRECIT le bloc pour egaliser les lignes. Sur un titre de fold, ca donne
+   cinq lignes courtes au lieu de quatre pleines : le titre perd sa masse.
+   Donc : `pretty` sur le display (corrige l'orphelin sans retrecir),
+   `balance` sur les titres de section (2-3 lignes, ou l'egalisation aide). */
+.t-d1, .t-h1 { text-wrap: pretty; }
+.t-h2, .t-h3, .t-h4, .t-h5 { text-wrap: balance; }
+
+.t-d1 { font: 600 var(--text-d1)/var(--lh-tight) var(--ff-heading);
+        letter-spacing: -0.12rem; overflow-wrap: anywhere; }
+.t-h1 { font: 600 var(--text-h1)/var(--lh-tight) var(--ff-heading);
+        letter-spacing: -0.09rem; overflow-wrap: anywhere; }
+.t-h2 { font: 600 var(--text-h2)/var(--lh-tight) var(--ff-heading);
+        letter-spacing: -0.06rem; overflow-wrap: anywhere; }
+.t-h3 { font: 600 var(--text-h3)/var(--lh-snug) var(--ff-heading);
+        letter-spacing: -0.06rem; }
+.t-h4 { font: 600 var(--text-h4)/var(--lh-normal) var(--ff-heading); }
+.t-h5 { font: 600 var(--text-h5)/var(--lh-normal) var(--ff-heading); }
+
+.t-p1 { font-size: var(--text-p1); line-height: var(--lh-normal);
+        letter-spacing: -0.08rem; margin: 0; text-wrap: pretty; }
+.t-p2 { font-size: var(--text-p2); margin: 0; }
+.t-p3 { font-size: var(--text-p3); margin: 0; }
+/* 14 px : etiquettes et legendes seulement, jamais du texte de labeur. */
+.t-p4 { font-size: var(--text-p4); margin: 0; }
+
+/* Etiquettes mono. Tracking NEGATIF, poids 500, capitales. */
+.t-c1, .t-c2 {
+  font-family: var(--ff-mono);
+  font-weight: 500;
+  text-transform: uppercase;
+  margin: 0;
+}
+.t-c1 { font-size: var(--text-c1); line-height: 0.95; letter-spacing: -0.028rem; }
+.t-c2 { font-size: var(--text-c2); line-height: 1;    letter-spacing: -0.024rem; }
+
+.t-muted { color: var(--theme-text-secondary); }
+
+/* --------------------------------------------------------- 3. Mise en page */
+
+.l-container {
+  width: var(--container-width);
+  max-width: calc(100% - var(--container-gap) * 2);
+  margin-inline: auto;
+}
+
+.l-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--grid-columns), minmax(0, 1fr));
+  gap: var(--grid-gap);
+}
+
+/* Rythme vertical entre blocs. C'est le seul endroit qui pose la respiration. */
+.b + .b { margin-top: var(--spacer-2xl); }
+
+/* ------------------------------------------------------------ 4. Boutons */
+
+.c-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacer-xs);
+  min-height: 4.4rem;                         /* cible tactile */
+  padding: 0.9rem 1.141rem 0.9rem 2.442rem;   /* asymetrique : pastille a droite */
+  border: 0.1rem solid var(--theme-border-primary);
+  border-radius: var(--radius-pill);
+  background: var(--theme-surface-primary);
+  color: var(--theme-text-primary);
+  font: 600 var(--text-p4)/1 var(--ff-body);  /* Work Sans, casse mixte */
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--dur-base) var(--ease-out),
+              background-color var(--dur-base) var(--ease-out),
+              border-color var(--dur-base) var(--ease-out);
+}
+.c-btn__icon {
+  display: grid;
+  place-items: center;
+  width: 3.6rem;
+  height: 3.6rem;
+  border-radius: var(--radius-pill);
+  background: var(--theme-surface-invert);
+  color: var(--theme-text-invert);
+  font-size: 1.4rem;
+  transition: inherit;
+}
+.c-btn:hover,
+.c-btn:focus-visible {
+  background: var(--theme-surface-invert);
+  color: var(--theme-text-invert);
+  border-color: transparent;
+}
+.c-btn:hover .c-btn__icon,
+.c-btn:focus-visible .c-btn__icon {
+  background: var(--theme-surface-primary);
+  color: var(--theme-text-primary);
+}
+.c-btn:active { transform: translateY(0.1rem); }
+
+.c-btn--bare { padding: 0.9rem 1.141rem; }        /* sans libelle, juste la pastille */
+.c-btn--ghost { background: transparent; }
+
+/* Lien fleche : la CTA secondaire du systeme.
+   44 x 44 px minimum — la source est a 32 px, sous le seuil tactile. */
+.c-link-arrow {
+  display: inline-grid;
+  place-items: center;
+  width: 4.4rem;
+  height: 4.4rem;
+  border: 0.1rem solid var(--theme-border-secondary);
+  border-radius: var(--radius-pill);
+  color: var(--theme-text-primary);
+  text-decoration: none;
+  transition: background-color var(--dur-base) var(--ease-out),
+              color var(--dur-base) var(--ease-out);
+}
+.c-link-arrow:hover,
+.c-link-arrow:focus-visible {
+  background: var(--theme-surface-invert);
+  color: var(--theme-text-invert);
+}
+
+/* Pastille categorie / badge. */
+.c-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacer-2xs);
+  padding: 0.6rem 1.2rem;
+  border-radius: var(--radius-pill);
+  background: var(--theme-surface);
+  color: var(--theme-text-primary);
+}
+
+/* Marque ronde d'une rubrique (le petit rond colore devant les titres). */
+.c-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 0.9em;
+  height: 0.9em;
+  border-radius: var(--radius-pill);
+  background: var(--theme-surface-accent);
+  color: var(--theme-text-primary);
+  vertical-align: -0.06em;
+}
+.c-mark .c-icon { width: 55%; height: 55%; stroke-width: 2; }
+
+/* --------------------------------------------------------- 4b. Formulaire */
+
+.c-form { display: grid; gap: var(--spacer-2xs); }
+.c-form__row { display: flex; flex-wrap: wrap; gap: var(--spacer-xs); }
+.c-form input {
+  flex: 1 1 18rem;
+  min-width: 0;                         /* sinon l'input refuse de retrecir */
+  min-height: 4.4rem;                   /* cible tactile */
+  padding: 1.2rem 1.6rem;
+  border: 0.1rem solid var(--theme-border-primary);
+  border-radius: var(--radius-sm);
+  background: var(--theme-surface-primary);
+  color: var(--theme-text-primary);
+  font: inherit;
+  font-size: var(--text-p3);            /* 16px : evite le zoom auto iOS */
+}
+.c-form input::placeholder { color: var(--theme-text-tertiary); }
+.c-form input:focus-visible {
+  outline: 0.3rem solid var(--focus-ring);
+  outline-offset: 0.1rem;
+}
+.c-form input:user-invalid {
+  border-color: var(--color-error-2);
+}
+
+/* ------------------------------------------------------------- 5. Chrome */
+
+/* Nav : pilule blanche flottante, liens a droite, wordmark a gauche. */
+.c-nav {
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacer-md);
+  padding-block: var(--spacer-lg);
+}
+.c-nav__wordmark {
+  font: 700 1.8rem/1 var(--ff-heading);
+  letter-spacing: -0.05rem;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+.c-nav__list {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.6rem;
+  list-style: none;
+  background: var(--theme-surface-primary);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-card);
+}
+.c-nav__link {
+  display: flex;
+  align-items: center;
+  min-height: 4.4rem;                       /* cible tactile */
+  padding: 0.9rem 1.6rem;
+  border-radius: var(--radius-pill);
+  font: 600 var(--text-p4)/1 var(--ff-body);
+  text-decoration: none;
+  white-space: nowrap;                      /* jamais de lien sur deux lignes */
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.c-nav__link:hover,
+.c-nav__link[aria-current="page"] { background: var(--theme-surface); }
+
+.c-nav__toggle { display: none; }
+
+/* Sous 1024px : la pilule devient un panneau deplie par une case a cocher. */
+@media (max-width: 1023.98px) {
+  .c-nav__toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacer-2xs);
+    padding: 1rem 1.6rem;
+    border: 0.1rem solid var(--theme-border-primary);
+    border-radius: var(--radius-pill);
+    background: var(--theme-surface-primary);
+    font: 600 var(--text-p4)/1 var(--ff-body);
+    cursor: pointer;
+  }
+  .c-nav__list {
+    position: absolute;
+    inset-inline: 0;
+    top: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    padding: var(--spacer-sm);
+    border-radius: var(--radius-md);
+    display: none;
+  }
+  .c-nav__check:checked ~ .c-nav__list { display: flex; }
+  .c-nav { position: relative; }
+}
+.c-nav__check { position: absolute; opacity: 0; pointer-events: none; }
+
+/* Ruban decoratif : la signature du systeme. Un seul geste, repete.
+   Construit en CSS, pas une image — il se recolore avec le theme. */
+.c-ribbon {
+  height: 12rem;
+  margin-block: var(--spacer-2xl);
+  background:
+    radial-gradient(closest-side circle at 18% 50%,
+      transparent 3.6rem, var(--theme-surface) 3.6rem 4.4rem, transparent 4.5rem),
+    radial-gradient(closest-side circle at 26% 50%,
+      transparent 3.6rem, var(--theme-surface) 3.6rem 4.4rem, transparent 4.5rem),
+    linear-gradient(var(--theme-surface), var(--theme-surface))
+      center / 100% 0.8rem no-repeat;
+  background-repeat: no-repeat;
+}
+
+/* Pied de page. */
+.c-footer { padding-block: var(--spacer-2xl) var(--spacer-xl); }
+.c-footer__inner {
+  display: grid;
+  gap: var(--spacer-xl);
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 768px) {
+  .c-footer__inner { grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)); }
+}
+.c-footer__col { display: grid; gap: var(--spacer-xs); align-content: start; }
+.c-footer__col a { text-decoration: none; }
+.c-footer__col a:hover { text-decoration: underline; }
+
+.c-partners {
+  margin-top: var(--spacer-xl);
+  padding: var(--spacer-lg) var(--container-gap);
+  background: var(--theme-surface-invert);
+  color: var(--theme-text-invert);
+  border-radius: var(--radius-lg);
+}
+.c-partners__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacer-xl);
+  margin-top: var(--spacer-md);
+  opacity: 0.9;
+}
+
+/* =========================================================================
+   6. LES BLOCS
+   ========================================================================= */
+
+/* --- B01 · Hero -------------------------------------------------------- */
+/* Deux variantes : "accueil" (titre + illustration) et "rubrique" (fil
+   d'Ariane + marque + titre + surtitre + lede + action).                  */
+
+.b-hero { padding-block: var(--spacer-md) 0; }
+.b-hero__crumb {
+  display: inline-flex; gap: var(--spacer-2xs); align-items: center;
+  margin-bottom: var(--spacer-lg); text-decoration: none;
+}
+.b-hero__grid {
+  display: grid;
+  gap: var(--spacer-xl);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+@media (min-width: 1024px) {
+  .b-hero__grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  /* L'illustration se cale en bas : son bord inferieur lit alors comme un
+     horizon, et non comme une image coupee au milieu de l'aplat. */
+  .b-hero__grid > .c-art { align-self: end; }
+}
+.b-hero__lede { max-width: 46ch; margin-top: var(--spacer-lg); }
+.b-hero__actions { display: flex; flex-wrap: wrap; gap: var(--spacer-xs);
+                   margin-top: var(--spacer-lg); }
+
+/* Signature du fold : le bouton se pose SUR LA DERNIERE LIGNE du titre, pas
+   sur une rangee a lui. Le titre passe donc en `inline` pour que le bouton
+   suive le flux du texte. */
+.b-hero__headline { display: inline; }
+.b-hero__headline + .c-btn {
+  vertical-align: middle;
+  margin-left: var(--spacer-sm);
+  translate: 0 -0.15em;
+}
+
+/* Variante pleine hauteur — le fold est le bloc. */
+.b-hero--full { min-height: 100dvh; display: grid; align-content: start; }
+@media (max-width: 767.98px) {
+  .b-hero--full { min-height: auto; }   /* jamais 100dvh sur petit ecran */
+}
+
+/* --- B02 · Carte actualites posee sur le hero -------------------------- */
+/* C'est une LISTE, pas un type a part : meme donnee que la grille de
+   nouvelles, juste un affichage compact en surimpression.                 */
+
+.b-hero-feed {
+  display: grid;
+  gap: 0.2rem;
+  max-width: 42rem;
+  margin-top: var(--spacer-xl);
+  padding: var(--spacer-2xs);
+  background: var(--theme-surface-primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+@media (min-width: 1024px) {
+  /* En grand ecran la carte remonte dans la colonne du titre, a cote de
+     l'illustration — sans jamais chevaucher le texte du lede : on remonte
+     d'un cran d'espacement, pas de la hauteur d'un bloc. */
+  .b-hero-feed { margin-top: var(--spacer-md); position: relative; z-index: 2; }
+}
+.b-hero-feed__item {
+  display: grid;
+  grid-template-columns: 5.6rem minmax(0, 1fr);
+  gap: var(--spacer-sm);
+  align-items: center;
+  padding: var(--spacer-sm);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.b-hero-feed__item:hover { background: var(--theme-surface-light); }
+.b-hero-feed__thumb {
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  background: var(--theme-surface-accent);
+}
+.b-hero-feed__meta {
+  display: flex; justify-content: space-between; gap: var(--spacer-xs);
+  color: var(--theme-text-secondary);
+}
+
+/* --- B03 · Titre seul -------------------------------------------------- */
+.b-heading { display: grid; gap: var(--spacer-sm); }
+.b-heading--centered { justify-items: center; text-align: center; }
+
+/* --- B04 · Texte riche ------------------------------------------------- */
+.b-text { max-width: 72ch; display: grid; gap: var(--spacer-md); }
+.b-text :is(p, ul, ol) { margin: 0; font-size: var(--text-p3); }
+.b-text ul { padding-left: 2rem; display: grid; gap: var(--spacer-2xs); }
+.b-text a { text-underline-offset: 0.3rem; }
+.b-text strong { font-weight: 600; }
+
+/* --- B05 · Deux colonnes (titre / contenu) ----------------------------- */
+/* L'ossature de toutes les pages de contenu : surtitre + titre a gauche,
+   texte a droite. On alterne le sens d'une section a l'autre.             */
+.b-side {
+  display: grid;
+  gap: var(--spacer-lg);
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 768px) {
+  .b-side { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: var(--spacer-xl); }
+  .b-side--reverse > :first-child { order: 2; }
+}
+.b-side__head { display: grid; gap: var(--spacer-sm); align-content: start; }
+.b-side__body { display: grid; gap: var(--spacer-md); align-content: start; }
+
+/* --- B06 · Panneau de mises en avant ----------------------------------- */
+/* Aplat colore pleine largeur, 2 a 4 colonnes, une icone par colonne.     */
+.b-highlight {
+  padding: var(--spacer-xl);
+  border-radius: var(--radius-lg);
+  background: var(--theme-surface);
+  color: var(--theme-text-primary);
+}
+.b-highlight__title { max-width: 24ch; margin-bottom: var(--spacer-2xl); }
+.b-highlight__grid {
+  display: grid;
+  gap: var(--spacer-xl);
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 576px) { .b-highlight__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .b-highlight__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.b-highlight__item { display: grid; gap: var(--spacer-sm); align-content: start; }
+.b-highlight__icon {
+  width: 4.4rem; height: 4.4rem;
+  display: grid; place-items: center;
+  border: 0.2rem solid currentColor;
+  border-radius: var(--radius-sm);
+}
+
+/* --- B07 · Liste de cartes -------------------------------------------- */
+/* Trois tailles. La taille change la densite, pas la nature du contenu.   */
+.b-cards { display: grid; gap: var(--spacer-md); }
+.b-cards__head {
+  display: grid; gap: var(--spacer-sm);
+  margin-bottom: var(--spacer-lg);
+}
+@media (min-width: 768px) {
+  .b-cards__head { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                   align-items: end; }
+}
+.b-cards__list { display: grid; gap: var(--spacer-md); }
+/* min(...) borne la piste a la largeur disponible : sans lui, un minmax en
+   rem fige plus large que le viewport et fait deborder la page. */
+.b-cards--small  .b-cards__list { grid-template-columns: repeat(auto-fill, minmax(min(24rem, 100%), 1fr)); }
+.b-cards--medium .b-cards__list { grid-template-columns: repeat(auto-fill, minmax(min(34rem, 100%), 1fr)); }
+.b-cards--large  .b-cards__list { grid-template-columns: minmax(0, 1fr); }
+
+.c-card {
+  display: grid;
+  gap: var(--spacer-sm);
+  align-content: start;
+  padding: var(--spacer-lg);
+  background: var(--theme-surface-primary);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  transition: box-shadow var(--dur-base) var(--ease-out);
+}
+.c-card:hover { box-shadow: var(--shadow-card); }
+.c-card__eyebrow { color: var(--theme-text-secondary); }
+.c-card__foot { margin-top: var(--spacer-sm); }
+.b-cards--large .c-card { padding: var(--spacer-xl); }
+@media (min-width: 768px) {
+  .b-cards--large .c-card { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                            column-gap: var(--spacer-xl); }
+}
+
+/* --- B08 · Mosaique (grille de nouvelles) ------------------------------ */
+/* Cartes image pleine face, spans irreguliers, etiquette + date en haut,
+   titre en bas.                                                           */
+.b-mosaic__bar {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: var(--spacer-md); margin-bottom: var(--spacer-lg);
+}
+.b-mosaic__grid {
+  display: grid;
+  gap: var(--spacer-md);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (min-width: 1024px) { .b-mosaic__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.c-tile {
+  position: relative;
+  display: grid;
+  align-content: space-between;
+  gap: var(--spacer-2xl);
+  min-height: 24rem;
+  padding: var(--spacer-md);
+  border-radius: var(--radius-md);
+  background: var(--theme-surface);
+  color: var(--theme-text-primary);
+  text-decoration: none;
+  overflow: hidden;
+}
+.c-tile--wide { grid-column: span 2; }
+.c-tile--tall { grid-row: span 2; }
+@media (min-width: 1024px) {
+  .c-tile--feature { grid-column: span 2; grid-row: span 2; min-height: 48rem; }
+}
+.c-tile__meta {
+  display: flex; justify-content: space-between; align-items: start;
+  gap: var(--spacer-xs);
+}
+.c-tile__badge {
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--radius-sm);
+  background: var(--theme-surface-invert);
+  color: var(--theme-text-invert);
+}
+.c-tile__title { align-self: end; }
+.c-tile:hover .c-tile__title { text-decoration: underline; text-underline-offset: 0.4rem; }
+
+/* --- B09 · Appel a l'action ------------------------------------------- */
+.b-cta {
+  display: grid;
+  gap: var(--spacer-lg);
+  align-items: center;
+  padding: var(--spacer-xl);
+  border-radius: var(--radius-lg);
+  background: var(--theme-surface-base);
+}
+@media (min-width: 768px) {
+  .b-cta { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+}
+.b-cta__body { display: grid; gap: var(--spacer-md); align-content: start; }
+.b-cta__aside { display: grid; place-items: center; }
+
+/* Grille de CTA : deux ou trois cartes-actions cote a cote. */
+.b-ctas-grid { display: grid; gap: var(--spacer-md); }
+@media (min-width: 768px) { .b-ctas-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.c-cta-card {
+  display: grid;
+  gap: var(--spacer-md);
+  align-content: space-between;
+  min-height: 26rem;
+  padding: var(--spacer-lg);
+  background: var(--theme-surface-primary);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+}
+.c-cta-card__icon {
+  width: 4.4rem; height: 4.4rem;
+  display: grid; place-items: center;
+  border-radius: var(--radius-sm);
+  background: var(--theme-surface-accent);
+  color: var(--color-forest);
+}
+
+/* --- B10 · Citation ---------------------------------------------------- */
+.b-quote {
+  display: grid;
+  gap: var(--spacer-md);
+  max-width: 60ch;
+  padding-left: var(--spacer-md);
+  border-left: 0.4rem solid var(--theme-surface-accent);
+}
+.b-quote__author { display: flex; align-items: center; gap: var(--spacer-sm); }
+.b-quote__avatar {
+  width: 4.8rem; height: 4.8rem; border-radius: var(--radius-pill);
+  background: var(--theme-surface); flex: none;
+}
+
+/* --- B11 · Galerie ----------------------------------------------------- */
+.b-gallery__grid {
+  display: grid;
+  gap: var(--spacer-md);
+  grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr));
+}
+.b-gallery__item {
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius-md);
+  background: var(--theme-surface);
+  overflow: hidden;
+}
+/* Variante « carte » : une image + une legende dessous. */
+.b-gallery--card .b-gallery__item { aspect-ratio: 1; }
+.b-gallery__caption { margin-top: var(--spacer-xs); color: var(--theme-text-secondary); }
+
+/* --- B12 · Accordeon (question / reponse) ------------------------------ */
+/* <details>/<summary> natif : aucun JS, accessible par defaut.            */
+.b-accordions { display: grid; gap: var(--spacer-2xs); }
+.b-accordions details {
+  padding: var(--spacer-md) var(--spacer-lg);
+  background: var(--theme-surface-primary);
+  border-radius: var(--radius-md);
+}
+.b-accordions summary {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: var(--spacer-md);
+  min-height: 4.4rem;                       /* cible tactile */
+  cursor: pointer;
+  font: 600 var(--text-h4)/var(--lh-normal) var(--ff-heading);
+  list-style: none;
+}
+.b-accordions summary::-webkit-details-marker { display: none; }
+.b-accordions summary::after {
+  content: "+"; font-family: var(--ff-mono); font-size: 2.4rem; line-height: 1;
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.b-accordions details[open] summary::after { transform: rotate(45deg); }
+.b-accordions details > :not(summary) { margin-top: var(--spacer-md); }
+
+/* --- B13 · Programme (horaires) --------------------------------------- */
+/* Une ligne = un creneau. Heure a gauche en mono, contenu a droite.       */
+.b-schedules { display: grid; gap: 0; }
+.b-schedules__row {
+  display: grid;
+  gap: var(--spacer-sm);
+  grid-template-columns: minmax(0, 1fr);
+  padding-block: var(--spacer-md);
+  border-top: 0.1rem solid var(--theme-border-primary);
+}
+@media (min-width: 768px) {
+  .b-schedules__row { grid-template-columns: 12rem minmax(0, 1fr) auto;
+                      gap: var(--spacer-lg); align-items: baseline; }
+}
+.b-schedules__row:last-child { border-bottom: 0.1rem solid var(--theme-border-primary); }
+.b-schedules__time { color: var(--theme-text-secondary); }
+
+/* --- B14 · Trombinoscope ----------------------------------------------- */
+.b-team__grid {
+  display: grid;
+  gap: var(--spacer-lg);
+  grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr));
+}
+.b-team__person { display: grid; gap: var(--spacer-sm); }
+.b-team__portrait {
+  aspect-ratio: 1;
+  border-radius: var(--radius-md);
+  background: var(--theme-surface);
+}
+
+/* --- B15 · Phrase-choc epinglee ---------------------------------------- */
+/* Le titre reste a l'ecran pendant que la colonne de droite defile.       */
+.b-catchphrase { display: grid; gap: var(--spacer-xl); }
+@media (min-width: 1024px) {
+  .b-catchphrase { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .b-catchphrase__sticky { position: sticky; top: var(--spacer-2xl); align-self: start; }
+}
+.b-catchphrase__items { display: grid; gap: var(--spacer-2xl); }
+
+/* --- B16 · Carrousel de contenu ---------------------------------------- */
+/* Defilement natif avec accroche. Aucun JS : le clavier et le doigt
+   suffisent.                                                              */
+.b-carousel__track {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(28rem, 34rem);
+  gap: var(--spacer-md);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding-bottom: var(--spacer-md);
+  scrollbar-width: thin;
+}
+.b-carousel__track > * { scroll-snap-align: start; }
+
+/* --- B17 · Panneau d'informations (fiche evenement) -------------------- */
+.b-meta {
+  display: grid;
+  gap: var(--spacer-md);
+  padding: var(--spacer-lg);
+  background: var(--theme-surface-primary);
+  border-radius: var(--radius-md);
+  align-content: start;
+}
+@media (min-width: 1024px) { .b-meta { position: sticky; top: var(--spacer-xl); } }
+.b-meta__row { display: grid; gap: var(--spacer-2xs); }
+.b-meta__row dt { color: var(--theme-text-secondary); }
+.b-meta__row dd { margin: 0; }
+.b-meta__tags { display: flex; flex-wrap: wrap; gap: var(--spacer-2xs); }
+
+/* Gabarit d'une page de detail : contenu + panneau colle. */
+.l-detail { display: grid; gap: var(--spacer-xl); grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1024px) {
+  .l-detail { grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr); gap: var(--spacer-2xl); }
+}
+
+/* --- B18 · Image ------------------------------------------------------- */
+.b-image figure { margin: 0; display: grid; gap: var(--spacer-xs); }
+.b-image__frame {
+  border-radius: var(--radius-md);
+  background: var(--theme-surface);
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+}
+.b-image--full .b-image__frame { aspect-ratio: 21 / 9; }
+.b-image figcaption { color: var(--theme-text-secondary); }
+
+/* --- B19 · Espaceur ---------------------------------------------------- */
+.b-spacer { height: var(--spacer-2xl); }
+.b-spacer--sm { height: var(--spacer-lg); }
+
+/* Garde-fou : sur un aplat d'affichage (flame), le texte de labeur est
+   interdit — le contraste n'y suffit que pour un grand titre ou un badge. */
+[data-theme="flame"] :is(.t-p3, .t-p4, .b-text, .c-card__eyebrow) {
+  color: var(--color-forest);
+  font-weight: 600;
+}
+
+/* --- Aplat pleine largeur (habillage, pas un bloc) --------------------- */
+/* Sort le bloc du conteneur pour peindre le fond bord a bord. */
+.is-bleed {
+  padding-block: var(--spacer-2xl);
+  background: var(--theme-surface);
+  color: var(--theme-text-primary);
+}
+
+/* ------------------------------------------------- 7. Illustrations */
+/* REGLE DU SYSTEME : l'illustration est DETOUREE et posee directement sur
+   l'aplat uni. Pas de panneau, pas de coins arrondis, pas de degrade — le
+   fond de page reste une couleur pleine, et la forme flotte dessus.
+   C'est ce qui donne au site son air dessine plutot que son air de gabarit.
+
+   Le cadre existe, mais c'est une VARIANTE (.c-art--framed), reservee aux
+   dessins au trait sur fond blanc : eux ont besoin d'une limite. */
+.c-art {
+  width: 100%;
+  display: block;
+  /* volontairement : ni background, ni border-radius, ni border */
+}
+.c-art svg { width: 100%; height: auto; display: block; }
+
+/* Variante encadree — dessin au trait sur fond blanc. */
+.c-art--framed {
+  border: 0.2rem solid var(--theme-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--theme-surface-primary);
+  overflow: hidden;
+}
+
+/* Illustration de fold : massive, elle deborde sous la ligne de flottaison
+   au lieu de rentrer sagement dans sa colonne. */
+@media (min-width: 1024px) {
+  .c-art--bleed {
+    width: calc(100% + var(--container-gap));
+    margin-bottom: calc(var(--spacer-2xl) * -1);
+  }
+}
+
+/* ------------------------------------------------ 8. Mouvement reduit */
+/* La source ne le fait pas. C'est une correction volontaire. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 150ms !important;
+    scroll-behavior: auto !important;
+  }
+  .b-catchphrase__sticky,
+  .b-meta { position: static; }
+  .b-carousel__track { scroll-snap-type: none; }
+}

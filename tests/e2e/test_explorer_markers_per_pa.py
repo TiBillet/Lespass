@@ -162,10 +162,10 @@ def test_au_moins_1_marker_visible_si_carte_a_des_donnees(page):
     / If AGGREGATE_POINTS has at least 1 point, Leaflet must have rendered at
     least 1 marker or cluster (.leaflet-marker-icon / .leaflet-marker-cluster).
 
-    SKIP automatique si la base de test ne contient aucun point (refresh_seo_cache
-    a retourne un cache vide).
-    / Automatic SKIP if the test DB has no points (refresh_seo_cache returned
-    an empty cache).
+    Un cache SEO vide rend le test ROUGE : sans point, la carte n'a rien a
+    rendre et le test ne prouve rien. Un skip le ferait disparaitre du rapport.
+    / An empty SEO cache turns this test RED: with no point the map has nothing
+    to render, so the test proves nothing. A skip would hide it from the report.
     """
     import json
 
@@ -176,12 +176,12 @@ def test_au_moins_1_marker_visible_si_carte_a_des_donnees(page):
     raw_json = data_el.text_content()
     data = json.loads(raw_json)
 
-    # Si aucun point disponible : skip propre, pas un echec.
-    # / If no points available: clean skip, not a failure.
     if not data.get("points"):
-        pytest.skip(
-            "Aucun point dans AGGREGATE_POINTS — "
-            "lancer refresh_seo_cache avant les tests pour peupler le cache."
+        pytest.fail(
+            "Aucun point dans AGGREGATE_POINTS : la carte ne peut rien rendre. "
+            "Peupler le cache SEO : docker exec lespass_django poetry run "
+            "python manage.py shell -c "
+            "'from seo.tasks import refresh_seo_cache; refresh_seo_cache()'"
         )
 
     # Attendre que Leaflet rende les markers (cluster ou pin individuel).

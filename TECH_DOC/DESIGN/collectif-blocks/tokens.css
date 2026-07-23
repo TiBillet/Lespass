@@ -1,0 +1,197 @@
+/* =========================================================================
+   TOKENS — bibliotheque de blocs « collectif »
+   Reproduction HTML/CSS pure, etudiee depuis projetcollectif.ca.
+   Aucune dependance a TiBillet : ce fichier est autonome.
+
+   IMPORTANT — base rem
+   La source pose html{font-size:10px}. On reproduit avec 62.5% : 1rem = 10px
+   par defaut, MAIS la preference de taille de police de l'utilisateur reste
+   respectee (ce que font-size:10px casserait).
+   Toutes les valeurs rem ci-dessous sont donc directement comparables a celles
+   du bundle CSS de la source.
+   ========================================================================= */
+
+@import url("https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;600;700&family=Roboto+Mono:wght@400;500&display=swap");
+/* En production : auto-heberger ces deux familles en woff2.
+   Work Sans = SIL OFL 1.1 · Roboto Mono = Apache 2.0. Les deux sont libres. */
+
+html {
+  font-size: 62.5%;              /* 1rem = 10px */
+}
+
+:root {
+  /* ---------------------------------------------------------------------
+     COULEURS — palette de base
+     L'encre n'est jamais noire : c'est un vert forêt.
+     --------------------------------------------------------------------- */
+  --color-forest:        #0B3F2E;   /* oklch(32.9% 0.061 166) */
+  --color-forest-mid:    #3C6558;   /* oklch(47.2% 0.051 172) */
+  --color-sage:          #6D8C82;   /* oklch(61.3% 0.038 173) */
+  --color-sage-light:    #9DB2AB;   /* bordure / anneau de focus */
+
+  --color-karry-500:     #FFE8CF;   /* creme sature   */
+  --color-karry-300:     #FFF1E2;
+  --color-karry-200:     #FFF6EC;   /* creme le plus clair */
+  --color-karry-400:     #FFEDD9;
+  --color-sisal:         #DBD2C1;   /* beige greige   */
+  --color-sisal-100:     #F8F6F3;
+  --color-bone:          #F1EDE6;   /* filet clair    */
+
+  --color-emerald:       #59C280;
+  --color-emerald-300:   #9BDAB3;
+  --color-emerald-400:   #7ACE99;
+  --color-chetwode:      #B2C4F6;   /* pervenche      */
+  --color-chetwode-100:  #CFDCFF;
+
+  --color-white:         #FFFFFF;
+  --color-black:         #000000;
+
+  /* Etats */
+  --color-error:         #6D484A;
+  --color-error-2:       #E56B6F;
+  --color-error-3:       #F1AFB1;
+  --color-warning:       #986002;
+  --color-warning-2:     #E19005;
+  --color-warning-3:     #FFE2B0;
+  --color-success:       #40635A;
+  --color-success-2:     #2CA487;
+  --color-success-3:     #96D2C3;
+
+  /* ---------------------------------------------------------------------
+     THEME COURANT — indirection
+     C'est ce niveau-la que [data-theme] repeint. Les blocs ne doivent
+     JAMAIS reference une couleur de la palette directement : toujours un
+     --theme-*.
+     --------------------------------------------------------------------- */
+  --theme-surface:            var(--color-karry-500);  /* aplat colore     */
+  --theme-surface-base:       var(--color-karry-300);  /* aplat secondaire */
+  --theme-surface-light:      var(--color-karry-200);  /* fond de page     */
+  --theme-surface-primary:    var(--color-white);      /* cartes           */
+  --theme-surface-invert:     var(--color-forest);     /* bandeaux fonces  */
+  --theme-surface-accent:     var(--color-emerald);
+  --theme-surface-accent-alt: var(--color-chetwode);
+
+  --theme-text-primary:       var(--color-forest);
+  --theme-text-secondary:     var(--color-forest-mid); /* AA sur creme     */
+  --theme-text-tertiary:      var(--color-sage);       /* UI non textuelle */
+  --theme-text-invert:        var(--color-white);
+
+  --theme-border-primary:     var(--color-bone);
+  --theme-border-secondary:   var(--color-sage-light);
+  --theme-border-strong:      var(--color-forest);
+
+  /* ---------------------------------------------------------------------
+     THEMES — un bloc porte data-theme="…" et se repeint.
+     Chaque theme ne redefinit que 2 ou 3 tokens. C'est tout le systeme.
+     --------------------------------------------------------------------- */
+
+  /* Anneau de focus : l'encre, pas la bordure sauge.
+     La source utilise #9DB2AB, soit 2,09:1 sur creme — tres en dessous des
+     3:1 exiges pour un indicateur de focus. L'encre foret donne 11,13:1. */
+  --focus-ring: var(--color-forest);
+}
+
+[data-theme="karry"]    { --theme-surface: #FFE8CF; --theme-surface-base: #FFF1E2; }
+[data-theme="sisal"]    { --theme-surface: #DBD2C1; --theme-surface-base: #F8F6F3; }
+[data-theme="emerald"]  { --theme-surface: #59C280; --theme-surface-base: #9BDAB3; }
+[data-theme="sage"]     { --theme-surface: #9DB2AB; --theme-surface-base: #F1EDE6; }
+[data-theme="chetwode"] { --theme-surface: #B2C4F6; --theme-surface-base: #CFDCFF; }
+[data-theme="sun"]      { --theme-surface: #FFE32B; --theme-surface-base: #FFF29E; }
+[data-theme="crimson"]  { --theme-surface: #E50914; --theme-surface-base: #F1AFB1;
+                          --theme-text-invert: #FFFFFF; }
+[data-theme="ink"]      { --theme-surface: #000000; --theme-surface-base: #1A1A1A;
+                          --theme-text-invert: #FFFFFF; }
+
+/* FLAME — theme d'AFFICHAGE, pas de lecture.
+   L'orange de la source porte du blanc : 3,08:1, sous le seuil AA.
+   L'encre foret y monte a 3,87:1 — suffisant pour un grand titre ou un
+   badge, insuffisant pour du texte courant. On garde donc la couleur, et on
+   interdit le texte de labeur dessus (cf. .is-display-only plus bas). */
+[data-theme="flame"]    { --theme-surface: #FF5C30; --theme-surface-base: #FFD9CC; }
+
+/* Sur un aplat sombre, l'encre bascule.
+   On ne devine pas : chaque theme sombre le declare. */
+[data-theme="ink"],
+[data-theme="crimson"] {
+  --theme-text-primary:   var(--theme-text-invert);
+  --theme-text-secondary: color-mix(in oklab, var(--theme-text-invert) 78%, transparent);
+  --theme-border-primary: color-mix(in oklab, var(--theme-text-invert) 24%, transparent);
+}
+
+:root {
+  /* ---------------------------------------------------------------------
+     TYPOGRAPHIE
+     Deux familles. Le mono ne sert QUE aux micro-etiquettes.
+     Tracking des etiquettes : NEGATIF (-.28px / -.24px), poids 500.
+     --------------------------------------------------------------------- */
+  --ff-heading: "Work Sans", system-ui, -apple-system, sans-serif;
+  --ff-body:    "Work Sans", system-ui, -apple-system, sans-serif;
+  --ff-mono:    "Roboto Mono", ui-monospace, "SFMono-Regular", monospace;
+
+  /* Echelle fluide, calee sur les paliers reels de la source.
+     d1 : 40px @1024 → 80px @1440
+     h1 : 30 → 60 · h2 : 30 → 40 · p1 : 20 @420 → 24 @1440 */
+  --text-d1: clamp(4rem, calc(-5.846rem + 9.615vw), 8rem);
+  --text-h1: clamp(3rem, calc(-4.385rem + 7.212vw), 6rem);
+  --text-h2: clamp(3rem, calc(0.538rem + 2.404vw), 4rem);
+  --text-h3: 3rem;
+  --text-h4: clamp(2rem, calc(1.835rem + 0.392vw), 2.4rem);
+  --text-h5: 1.8rem;
+  --text-h6: 1.6rem;
+  --text-p1: clamp(2rem, calc(1.835rem + 0.392vw), 2.4rem);
+  --text-p2: 1.8rem;
+  --text-p3: 1.6rem;
+  --text-p4: 1.4rem;
+  --text-c1: 1.4rem;   /* etiquette mono grande */
+  --text-c2: 1.2rem;   /* etiquette mono        */
+
+  --lh-tight:  0.95;   /* display  */
+  --lh-snug:   1.05;
+  --lh-normal: 1.2;    /* chapo    */
+  /* Ecart assume : la source met le texte courant a 1,2. En dessous de 1,5
+     la lecture longue fatigue, et rien dans l'identite ne repose sur un
+     interligne serre du corps de texte. */
+  --lh-body:   1.5;
+
+  /* ---------------------------------------------------------------------
+     ESPACEMENT — pas de 5px (ce n'est PAS une echelle 4pt)
+     --------------------------------------------------------------------- */
+  --spacer-2xs: 0.5rem;
+  --spacer-xs:  1rem;
+  --spacer-sm:  1.5rem;
+  --spacer-md:  2rem;
+  --spacer-lg:  2.5rem;
+  --spacer-xl:  3rem;
+  --spacer-2xl: 6rem;
+
+  /* Grille et conteneur */
+  --grid-columns: 4;
+  --grid-gap: 2rem;
+  --container-width: 161rem;
+  --container-gap: 2rem;
+
+  /* Rayons — generalement genereux, pilule pour tout ce qui se clique */
+  --radius-sm:    0.5rem;
+  --radius-md:    1rem;
+  --radius-lg:    1.5rem;
+  --radius-pill:  999rem;
+
+  --shadow-card: 0 0.4rem 1.2rem 0 rgb(0 0 0 / 0.08);
+  --shadow-lift: 0 0 1.2rem 0 rgb(0 0 0 / 0.16);
+
+  /* ---------------------------------------------------------------------
+     MOUVEMENT
+     La source n'a que `ease` et aucun repli reduced-motion : on corrige.
+     --------------------------------------------------------------------- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+}
+
+/* Paliers : 420 / 576 / 768 / 1024 / 1440 */
+@media (min-width: 576px)  { :root { --grid-columns: 6; } }
+@media (min-width: 768px)  { :root { --grid-columns: 8;  --spacer-md: 2.5rem;
+                                     --spacer-lg: 3rem;  --spacer-xl: 6rem;
+                                     --radius-lg: 2rem; } }
+@media (min-width: 1024px) { :root { --grid-columns: 12; --grid-gap: 3rem;
+                                     --container-gap: 3rem; --spacer-2xl: 12rem; } }

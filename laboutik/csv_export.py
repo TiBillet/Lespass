@@ -33,6 +33,14 @@ def generer_csv_cloture(cloture: ClotureCaisse) -> str:
     activate(config.language)
 
     rapport = cloture.rapport_json
+
+    # Le rapport stocke groupe les ventes par categorie ; l'export attend des
+    # sections a plat. Cf. sections_de_detail_pour_export.
+    # / The stored report groups sales by category; the export expects flat
+    # sections.
+    from laboutik.reports import sections_de_detail_pour_export
+
+    sections_de_detail = sections_de_detail_pour_export(rapport)
     output = io.StringIO()
     writer = csv.writer(output, delimiter=";")
 
@@ -57,7 +65,7 @@ def generer_csv_cloture(cloture: ClotureCaisse) -> str:
     writer.writerow([])
 
     # --- Par produit / By product ---
-    par_produit = rapport.get("par_produit", {})
+    par_produit = sections_de_detail["par_produit"]
     if par_produit:
         writer.writerow([_("Détail par produit")])
         writer.writerow([_("Produit"), _("Quantité"), _("Total (EUR)")])
@@ -68,7 +76,7 @@ def generer_csv_cloture(cloture: ClotureCaisse) -> str:
         writer.writerow([])
 
     # --- Par categorie / By category ---
-    par_categorie = rapport.get("par_categorie", {})
+    par_categorie = sections_de_detail["par_categorie"]
     if par_categorie:
         writer.writerow([_("Détail par catégorie")])
         writer.writerow([_("Catégorie"), _("Total (EUR)")])
@@ -77,7 +85,7 @@ def generer_csv_cloture(cloture: ClotureCaisse) -> str:
         writer.writerow([])
 
     # --- Ventilation TVA / VAT breakdown ---
-    par_tva = rapport.get("par_tva", {})
+    par_tva = sections_de_detail["par_tva"]
     if par_tva:
         writer.writerow([_("Ventilation TVA")])
         writer.writerow([_("Taux"), _("HT (EUR)"), _("TVA (EUR)"), _("TTC (EUR)")])

@@ -2,7 +2,6 @@ from django.utils.translation import gettext_lazy as _
 from import_export import resources, fields
 from import_export.fields import Field
 from django import forms
-import pytz
 
 from BaseBillet.models import Ticket, Event, Configuration
 from unfold.contrib.import_export.forms import ExportForm
@@ -133,7 +132,7 @@ class TicketExportResource(resources.ModelResource):
         Format event_datetime in a human-readable format with the venue's timezone.
         """
         if ticket.reservation and ticket.reservation.event and ticket.reservation.event.datetime:
-            tzlocal = pytz.timezone(Configuration.get_solo().fuseau_horaire)
+            tzlocal = Configuration.get_solo().get_tzinfo()
             localized_datetime = ticket.reservation.event.datetime.astimezone(tzlocal)
             return localized_datetime.strftime('%d/%m/%Y %H:%M')
         return ""
@@ -143,7 +142,7 @@ class TicketExportResource(resources.ModelResource):
         Format reservation_datetime in a human-readable format with the venue's timezone.
         """
         if ticket.reservation and ticket.reservation.datetime:
-            tzlocal = pytz.timezone(Configuration.get_solo().fuseau_horaire)
+            tzlocal = Configuration.get_solo().get_tzinfo()
             localized_datetime = ticket.reservation.datetime.astimezone(tzlocal)
             return localized_datetime.strftime('%d/%m/%Y %H:%M')
         return ""

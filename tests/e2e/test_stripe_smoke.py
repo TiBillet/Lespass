@@ -40,7 +40,7 @@ class TestStripeSmokeCheckout:
     """Smoke tests Stripe : vrai checkout / Real Stripe checkout smoke tests."""
 
     def test_smoke_membership_stripe_checkout(
-        self, page, create_product, fill_stripe_card, admin_email
+        self, page, create_product, fill_stripe_card, soumettre_paiement_stripe, admin_email
     ):
         """1 adhesion payante → page liste → offcanvas → Stripe → retour → confirmation.
         / 1 paid membership → list page → offcanvas → Stripe → return → confirmation.
@@ -129,9 +129,10 @@ class TestStripeSmokeCheckout:
         fill_stripe_card(page, user_email)
 
         # 8. Cliquer payer / Click pay
-        submit_btn = page.locator('button[type="submit"]').first
-        expect(submit_btn).to_be_enabled(timeout=30_000)
-        submit_btn.click()
+        # Soumission robuste : un click() simple est parfois ignore par le
+        # front Stripe, sans erreur ni requete (PIEGES 12.14).
+        # / Robust submit: a plain click() is sometimes ignored, silently.
+        soumettre_paiement_stripe(page)
 
         # 9. Attendre le retour vers TiBillet / Wait for return to TiBillet
         page.wait_for_url(
@@ -148,7 +149,7 @@ class TestStripeSmokeCheckout:
         expect(success_msg).to_be_visible(timeout=30_000)
 
     def test_smoke_booking_stripe_checkout(
-        self, page, create_event, create_product, fill_stripe_card
+        self, page, create_event, create_product, fill_stripe_card, soumettre_paiement_stripe
     ):
         """1 reservation payante → vrai checkout.stripe.com → retour → confirmation.
         / 1 paid booking → real checkout.stripe.com → return → confirmation.
@@ -222,9 +223,9 @@ class TestStripeSmokeCheckout:
         # networkidle from resolving.
         page.wait_for_load_state("domcontentloaded")
         fill_stripe_card(page, user_email)
-        pay_btn = page.locator('button[type="submit"]').first
-        expect(pay_btn).to_be_enabled(timeout=30_000)
-        pay_btn.click()
+        # Soumission robuste : cf. PIEGES 12.14.
+        # / Robust submit: see PIEGES 12.14.
+        soumettre_paiement_stripe(page)
 
         # 8. Attendre le retour / Wait for return
         page.wait_for_url(

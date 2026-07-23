@@ -4195,15 +4195,19 @@ def _creer_lignes_articles(
         code_methode_paiement, PaymentMethod.UNKNOWN
     )
 
-    # Determiner l'origine de la vente selon le mode ecole (LNE exigence 5)
-    # En mode ecole, les ventes sont marquees LABOUTIK_TEST et exclues des rapports.
-    # / Determine sale origin based on training mode (LNE req. 5)
-    # In training mode, sales are marked LABOUTIK_TEST and excluded from reports.
-    laboutik_config_pour_mode = LaboutikConfiguration.get_solo()
-    if laboutik_config_pour_mode.mode_ecole:
-        sale_origin_pour_ligne = SaleOrigin.LABOUTIK_TEST
-    else:
-        sale_origin_pour_ligne = SaleOrigin.LABOUTIK
+    # MODE ECOLE DESACTIVE — toute vente est une vente reelle.
+    # / TRAINING MODE DISABLED — every sale is a real sale.
+    #
+    # Le mode ecole (LNE exigence 5) marquait ici les ventes d'une origine
+    # distincte, pour les exclure des rapports comptables. Cette origine n'existe
+    # pas dans `SaleOrigin` : l'activer levait une `AttributeError` et bloquait
+    # tout encaissement au point de vente.
+    # Le champ `mode_ecole` reste en base mais n'est plus propose dans l'admin.
+    # Voir CHANGELOG/2026-07-22-mode-ecole-desactive.md.
+    # / Training mode tagged sales with a separate origin to keep them out of the
+    # accounting reports. That origin does not exist in SaleOrigin: enabling the
+    # mode raised an AttributeError and blocked every sale at the register.
+    sale_origin_pour_ligne = SaleOrigin.LABOUTIK
 
     lignes_creees = []
 
@@ -4421,13 +4425,13 @@ def _creer_lignes_articles_cascade(
     :param point_de_vente: PointDeVente d'origine (ventilation CA par PV)
     :return: liste de toutes les LigneArticle créées
     """
-    # --- Déterminer le sale_origin (mode école LNE exigence 5) ---
-    # / Determine sale_origin (training mode LNE req. 5)
-    laboutik_config = LaboutikConfiguration.get_solo()
-    if laboutik_config.mode_ecole:
-        sale_origin_pour_ligne = SaleOrigin.LABOUTIK_TEST
-    else:
-        sale_origin_pour_ligne = SaleOrigin.LABOUTIK
+    # --- MODE ECOLE DESACTIVE : toute vente est une vente reelle ---
+    # / TRAINING MODE DISABLED: every sale is a real sale
+    # Meme raison qu'en amont dans ce fichier : l'origine que le mode ecole
+    # utilisait n'existe pas dans `SaleOrigin`.
+    # / Same reason as earlier in this file: the origin training mode used does
+    # not exist in SaleOrigin.
+    sale_origin_pour_ligne = SaleOrigin.LABOUTIK
 
     # ------------------------------------------------------------------ #
     # Étape 1 : Regrouper les lignes par article (clé = id(article_dict))

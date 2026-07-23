@@ -22,6 +22,7 @@ django.setup()
 import pytest  # noqa: E402
 from decimal import Decimal  # noqa: E402
 
+from django.test import override_settings  # noqa: E402
 from django_tenants.utils import schema_context  # noqa: E402
 
 from AuthBillet.models import Wallet  # noqa: E402
@@ -155,7 +156,13 @@ def test_creation_asset_tim_cree_product_temps(tenant, wallet_lieu):
 def test_creation_asset_fed_ne_cree_pas_product(tenant, wallet_lieu):
     """Creer un Asset FED → aucun Product ne doit etre cree.
     / Creating a FED Asset → no Product should be created."""
-    with schema_context(TENANT_SCHEMA):
+    # Asset.save() interdit les assets FED locaux (cf. AssetFedLocalInterdit) :
+    # la monnaie federee du reseau vient du Fedow distant. Ce test couvre le
+    # comportement du signal pour le jour ou le FED sera local, il leve donc la
+    # garde le temps de la creation.
+    # / Asset.save() forbids local FED assets. This test covers the signal's
+    # behaviour for the post-migration world, so it lifts the guard.
+    with override_settings(FEDOW_AUTORISER_ASSET_FED_LOCAL=True), schema_context(TENANT_SCHEMA):
         asset_fed = AssetService.creer_asset(
             tenant=tenant,
             name="[test_signal] Stripe Fed",

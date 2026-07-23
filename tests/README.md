@@ -40,10 +40,14 @@ fiable par le chargeur de skills. Relancer Claude Code après création du lien.
 
 ## 🗺️ Les deux suites / The two suites
 
-| Suite | Dossier | Outil | Tests | Durée | Rôle |
-|---|---|---|---|---|---|
-| **Backend DB-only** | `tests/pytest/` | pytest | ~246 | ~50 s | Modèles, vues, API, validations serveur, **Stripe mocké** |
-| **E2E navigateur** | `tests/e2e/` | Playwright **Python** | ~65 | ~6 min | Validations JS, HTMX, admin Unfold, parcours complets, **Stripe réel** (smoke + prix libre + validation manuelle) |
+| Suite | Dossier | Outil | Durée | Rôle |
+|---|---|---|---|---|
+| **Backend DB-only** | `tests/pytest/` | pytest | ~1 min 30 | Modèles, vues, API, validations serveur, **Stripe mocké** |
+| **E2E navigateur** | `tests/e2e/` | Playwright **Python** | ~9 à 12 min | Validations JS, HTMX, admin Unfold, parcours complets, **Stripe réel** et **Fedow réel** |
+
+> Pas de compteur de tests dans ce document : il change à chaque session et
+> devient faux plus vite qu'on ne le corrige. Pour le nombre du jour :
+> `pytest tests/pytest/ --collect-only -q | tail -1`.
 
 L'ancienne suite TypeScript (`tests/playwright/`) a été **entièrement migrée
 en Python puis supprimée le 2026-06-11** (42 specs → 0, dossier et outillage
@@ -58,36 +62,113 @@ Règle de décision / Decision rule:
 
 ## 🚀 Lancer les tests / Running the tests
 
-```bash
-# --- Suite ESSENTIELLE (smoke, ~10 s) : wallet, adhésion, billetterie ---
-docker exec lespass_django poetry run pytest \
-  tests/pytest/test_api_v2_wallet_refill.py \
-  tests/pytest/test_membership_create.py \
-  tests/pytest/test_membership_by_wallet.py \
-  tests/pytest/test_reservation_create.py \
-  tests/pytest/test_event_create.py \
-  tests/pytest/test_events_list.py \
-  -q
+Trois modes, du plus rapide au plus complet. Le choix se fait sur **ce qu'on
+accepte de ne pas vérifier**, pas seulement sur la durée.
 
-# --- Backend complet (~50 s) ---
+```bash
+# --- 1. BACKEND SEUL (~1 min 30) ---
+# Aucun prérequis : ni serveur, ni navigateur, ni Stripe. Stripe est mocké.
 docker exec lespass_django poetry run pytest tests/pytest/ -q
 
-# --- E2E Python (~1 min, serveur Django actif via Traefik requis) ---
+# --- 2. E2E SANS STRIPE (~9 min) ---
+# Les parcours qui attendent un webhook Stripe sont IGNORÉS — et nommés
+# en rouge en fin de run, impossible de les rater.
 docker exec lespass_django poetry run pytest tests/e2e/ -q
+
+# --- 3. E2E COMPLET (~12 min) ---
+# Lancer `stripe listen` sur l'hôte AVANT, dans un autre terminal.
+docker exec -e E2E_STRIPE_LISTEN=1 lespass_django poetry run pytest tests/e2e/ -q
 
 # --- Raccourcis utiles ---
 docker exec lespass_django poetry run pytest tests/ --last-failed   # seuls les échecs précédents
 docker exec lespass_django poetry run pytest tests/pytest/ -m integration  # API v2 seulement
 ```
 
+**L'écart entre les modes 2 et 3 n'est que de ~3 min.** Le mode 2 n'existe pas
+pour gagner du temps, mais pour pouvoir lancer les E2E **sans avoir à démarrer
+`stripe listen`**. Dès qu'on touche au paiement, au Fedow ou aux adhésions, c'est
+le mode 3 qui fait foi.
+
+**Ordre conseillé : les E2E AVANT pytest.** Les E2E créent de vraies ventes dans
+le tenant de développement ; un test pytest qui compte largement peut en être
+pollué. C'est déjà arrivé.
+
 ### Prérequis E2E / E2E prerequisites
 
 1. Le serveur Django tourne (Traefik, `https://lespass.tibillet.localhost/`).
-2. `.env` contient `ADMIN_EMAIL` et `E2E_TEST_TOKEN` (déjà le cas en dev).
-3. Chromium Playwright installé dans le container :
+   Diagnostic en 5 secondes s'il y a un doute — un `502` veut dire qu'il est mort
+   et que les échecs ne viennent pas de vous (cf. `PIEGES.md` 9.111) :
    ```bash
+   curl -sk -o /dev/null -w "%{http_code}\n" https://lespass.tibillet.localhost/
+   ```
+2. `.env` contient `ADMIN_EMAIL` et `E2E_TEST_TOKEN` (déjà le cas en dev).
+3. Chromium Playwright installé dans le container. `install-deps` exige **root**
+   (cf. `PIEGES.md` 9.40) :
+   ```bash
+   docker exec -u root lespass_django /DjangoFiles/.venv/bin/playwright install-deps chromium
    docker exec lespass_django poetry run playwright install chromium
    ```
+4. Celery tourne (`lespass_celery`) : les récompenses en monnaie partent par
+   `.delay()`. Sans worker, elles ne sont **jamais** versées — et rien ne le dit.
+
+### Le mode 3 en détail : `stripe listen`
+
+Le marqueur `stripe_listen` (déclaré dans `pytest.ini`, **pas** dans
+`pyproject.toml` — un marqueur déclaré là y est inerte) porte les parcours qui
+ne s'achèvent que sur un webhook Stripe : recharge en monnaie fédérée, validation
+manuelle d'adhésion, renouvellement d'abonnement.
+
+```bash
+# 1. sur l'hôte, dans un terminal qu'on laisse ouvert :
+stripe listen
+
+# 2. dans un autre :
+docker exec -e E2E_STRIPE_LISTEN=1 lespass_django poetry run pytest tests/e2e/ -q
+```
+
+Deux choses à savoir :
+
+- **`E2E_STRIPE_LISTEN=1` est déclaratif.** Il affirme que le CLI tourne, il ne
+  le vérifie pas : le conteneur ne voit pas les processus de l'hôte. Si le CLI
+  meurt en cours de session, les tests s'exécutent quand même et échouent pour
+  une raison sans rapport avec le code. Vérification :
+  ```bash
+  tmux list-panes -a -F "#{pane_current_command}" | grep stripe   # rien = CLI mort
+  ```
+- **Sans la variable, le skip est bruyant.** Un encadré rouge en fin de run nomme
+  chaque test non joué (hook `pytest_terminal_summary`, `tests/e2e/conftest.py`).
+  C'est délibéré : un run vert qui cache des parcours de paiement non vérifiés
+  donne une confiance qu'on n'a pas.
+
+### Faire passer un mois : les horloges de test Stripe
+
+`test_renouvellement_adhesion_recurrente.py` vérifie qu'une adhésion mensuelle
+reverse bien sa récompense **à chaque échéance**. Pour ne pas attendre un mois,
+le client Stripe est rattaché à une `TestClock` que le test avance de 32 jours :
+
+```python
+horloge = stripe.test_helpers.TestClock.create(frozen_time=int(time.time()), ...)
+client  = stripe.Customer.create(email=..., test_clock=horloge.id, ...)
+# ... puis, plus tard :
+stripe.test_helpers.TestClock.advance(horloge.id,
+                                      frozen_time=h.frozen_time + 32 * 24 * 3600, ...)
+```
+
+Stripe émet alors une **vraie** facture, prélève **vraiment** la carte de test et
+envoie un **vrai** `invoice.paid` — rien n'est simulé côté Lespass.
+
+Trois pièges, tous payés :
+
+1. **Un client sans moyen de paiement par défaut** fait échouer chaque échéance
+   (`invoice.payment_failed` en boucle, puis suppression de l'abonnement).
+   Attacher `pm_card_visa` **et** le désigner dans `invoice_settings`.
+2. **La première facture ne déclenche rien** : elle porte
+   `billing_reason='subscription_create'`, que le webhook ignore volontairement.
+   Seul le deuxième cycle est un renouvellement.
+3. **`advance` est asynchrone.** Attendre que l'horloge repasse `ready` avant de
+   conclure, sinon on conclut sur un cycle qui n'a pas encore eu lieu.
+
+Le teardown supprime l'horloge, ce qui emporte le client et l'abonnement.
 
 ### Carte Stripe de test / Stripe test card
 
@@ -118,15 +199,40 @@ Même politique que la V2 (`lespass-main`) :
 
 - **La logique de paiement se teste en pytest avec `mock_stripe`**
   (fixture du `tests/pytest/conftest.py`) : adhésions, réservations, crowds,
-  prix libre, validation manuelle, tokens SSA — 17 tests, zéro réseau.
-- **Deux smoke E2E réels** (`tests/e2e/test_stripe_smoke.py`) vérifient
-  qu'un vrai checkout.stripe.com aboutit : 1 adhésion + 1 réservation.
+  prix libre, validation manuelle, tokens SSA — zéro réseau.
+- **Quelques parcours E2E réels** vérifient qu'un vrai `checkout.stripe.com`
+  aboutit : les smoke (`test_stripe_smoke.py`), et les parcours marqués
+  `stripe_listen` qui vont jusqu'au webhook de confirmation.
 - On n'ajoute **pas** de nouveau parcours Stripe réel sans bonne raison :
   chaque checkout réel coûte ~30 s à chaque run.
+
+**Ce qu'un mock ne peut pas prouver.** Un service simulé accepte ce qu'on lui
+envoie ; il ne dit rien du contrat réel. C'est le Fedow **réel** qui a révélé
+qu'une recharge exige `ligne_article_uuid` dans ses métadonnées — un contrat que
+personne n'avait écrit ailleurs que dans le code d'un appelant. Même logique côté
+Stripe : les mocks couvrent la logique métier, les parcours réels couvrent le
+contrat.
 
 Flow mock en 3 étapes (voir PIEGES.md 9.19) :
 POST formulaire → vérifier `mock_stripe.mock_create.called` → simuler le
 retour avec `paiement.update_checkout_status()`.
+
+### Ce qui parle aux services RÉELS
+
+| Fichier | Service réel | Marqueur |
+|---|---|---|
+| `test_parcours_fedow_reel.py` | Fedow (+ Stripe pour la recharge fédérée) | partiel |
+| `test_recharge_pos_puis_qrcode.py` | Fedow | — |
+| `test_recompense_au_scan_puis_qrcode.py` | Fedow | — |
+| `test_adhesion_recompense_puis_qrcode.py` | Fedow | — |
+| `test_renouvellement_adhesion_recurrente.py` | Fedow + Stripe (horloge de test) | `stripe_listen` |
+| `test_stripe_smoke.py` | Stripe | — |
+| `test_membership_manual_validation_stripe.py` | Stripe (webhook) | `stripe_listen` |
+
+**Ces tests ne s'annulent pas.** Une vente débite un vrai portefeuille, une remise
+en banque vide celui du lieu, une récompense émet de la monnaie. Le Fedow n'a pas
+de marche arrière : à lancer sur un environnement de développement dont on accepte
+qu'il soit remué.
 
 ---
 
