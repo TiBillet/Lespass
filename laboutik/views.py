@@ -5512,6 +5512,7 @@ class PaiementViewSet(viewsets.ViewSet):
             point_de_vente = PointDeVente.objects.get(uuid=uuid_pv)
         except (PointDeVente.DoesNotExist, ValueError):
             context_erreur = {
+                "action": "initUrlAddition();",
                 "msg_type": "warning",
                 "msg_content": _("Point de vente introuvable"),
                 "selector_bt_retour": "#messages",
@@ -5543,6 +5544,7 @@ class PaiementViewSet(viewsets.ViewSet):
             articles_panier = _extraire_articles_du_panier(request.POST, point_de_vente)
         except ValueError as e:
             context_erreur = {
+                "action": "initUrlAddition();",
                 "msg_type": "warning",
                 "msg_content": str(e),
                 "selector_bt_retour": "#messages",
@@ -5618,6 +5620,7 @@ class PaiementViewSet(viewsets.ViewSet):
         # Moyen de paiement non reconnu → erreur
         # Unrecognized payment method → error
         context_erreur = {
+            "action": "initUrlAddition();",
             "msg_type": "warning",
             "msg_content": _("Il y a une erreur !"),
             "selector_bt_retour": "#messages",
@@ -5695,6 +5698,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 request,
                 "laboutik/partial/hx_messages.html",
                 {
+                    "action": "initUrlAddition();",
                     "msg_type": "warning",
                     "msg_content": _formater_erreurs_stock(erreurs_stock),
                 },
@@ -5881,6 +5885,7 @@ class PaiementViewSet(viewsets.ViewSet):
                     request,
                     "laboutik/partial/hx_messages.html",
                     {
+                        "action": "initUrlAddition();",
                         "msg_type": "warning",
                         "msg_content": _formater_erreurs_stock(erreurs_stock),
                     },
@@ -6051,6 +6056,7 @@ class PaiementViewSet(viewsets.ViewSet):
         # Free top-ups (RC/TM) are auto-credited and don't block NFC.
         if _panier_contient_recharges_payantes(articles_panier):
             context_erreur = {
+                "action": "initUrlAddition();",
                 "msg_type": "warning",
                 "msg_content": _(
                     "Les recharges ne peuvent pas être payées en cashless"
@@ -6069,6 +6075,7 @@ class PaiementViewSet(viewsets.ViewSet):
             carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
         except CarteCashless.DoesNotExist:
             context_erreur = {
+                "action": "initUrlAddition();",
                 "msg_type": "warning",
                 "msg_content": _("Carte inconnue"),
                 "selector_bt_retour": "#messages",
@@ -6152,6 +6159,7 @@ class PaiementViewSet(viewsets.ViewSet):
         # / Check that at least one fiduciary asset exists if we have cascade articles
         if articles_pour_cascade and not has_any_fiduciary_asset:
             context_erreur = {
+                "action": "initUrlAddition();",
                 "msg_type": "warning",
                 "msg_content": _("Monnaie locale non configurée"),
                 "selector_bt_retour": "#messages",
@@ -6378,6 +6386,7 @@ class PaiementViewSet(viewsets.ViewSet):
             except Exception as erreur_legacy:
                 logger.warning(f"Débit legacy échoué (rescan demandé) : {erreur_legacy}")
                 context_erreur = {
+                    "action": "initUrlAddition();",
                     "msg_type": "warning",
                     "msg_content": _("Le solde du réseau a changé, rescannez la carte"),
                     "selector_bt_retour": "#messages",
@@ -7091,6 +7100,7 @@ class PaiementViewSet(viewsets.ViewSet):
             point_de_vente = PointDeVente.objects.get(uuid=uuid_pv)
         except (PointDeVente.DoesNotExist, ValueError):
             context_erreur = {
+                "action": "initUrlAddition();",
                 "msg_type": "warning",
                 "msg_content": _("Point de vente introuvable"),
                 "selector_bt_retour": "#messages",
@@ -7103,6 +7113,7 @@ class PaiementViewSet(viewsets.ViewSet):
             articles_panier = _extraire_articles_du_panier(request.POST, point_de_vente)
         except ValueError as e:
             context_erreur = {
+                "action": "initUrlAddition();",
                 "msg_type": "warning",
                 "msg_content": str(e),
                 "selector_bt_retour": "#messages",
@@ -7129,6 +7140,7 @@ class PaiementViewSet(viewsets.ViewSet):
             carte1 = CarteCashless.objects.get(tag_id=tag_id_carte1)
         except CarteCashless.DoesNotExist:
             context_erreur = {
+                "action": "initUrlAddition();",
                 "msg_type": "warning",
                 "msg_content": _("Carte 1 inconnue"),
                 "selector_bt_retour": "#messages",
@@ -7234,6 +7246,7 @@ class PaiementViewSet(viewsets.ViewSet):
             # → payer normalement (rediriger vers payer avec moyen_paiement=nfc)
             # / Happy race condition: client now has enough → pay normally
             context_erreur = {
+                "action": "initUrlAddition();",
                 "msg_type": "info",
                 "msg_content": _(
                     "Le solde a changé, le paiement complet est possible. Réessayez."
@@ -7291,6 +7304,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 except Exception as erreur_legacy:
                     logger.warning(f"Débit legacy (complément) échoué : {erreur_legacy}")
                     context_erreur = {
+                        "action": "initUrlAddition();",
                         "msg_type": "warning",
                         "msg_content": _("Le solde du réseau a changé, rescannez la carte"),
                         "selector_bt_retour": "#messages",
@@ -7435,6 +7449,7 @@ class PaiementViewSet(viewsets.ViewSet):
                         f"montant_legacy={montant_legacy} : régularisation manuelle requise."
                     )
                 context_erreur = {
+                    "action": "initUrlAddition();",
                     "msg_type": "warning",
                     "msg_content": _(
                         "Solde insuffisant. Le solde a changé depuis la lecture."
@@ -7515,6 +7530,7 @@ class PaiementViewSet(viewsets.ViewSet):
 
             if not tag_id_carte2:
                 context_erreur = {
+                    "action": "initUrlAddition();",
                     "msg_type": "warning",
                     "msg_content": _("Carte non lue"),
                     "selector_bt_retour": "#messages",
@@ -7527,6 +7543,7 @@ class PaiementViewSet(viewsets.ViewSet):
             # / Check 2nd card != 1st card
             if tag_id_carte2 == tag_id_carte1:
                 context_erreur = {
+                    "action": "initUrlAddition();",
                     "msg_type": "warning",
                     "msg_content": _(
                         "La 2ème carte est la même que la 1ère. "
@@ -7542,6 +7559,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 carte2 = CarteCashless.objects.get(tag_id=tag_id_carte2)
             except CarteCashless.DoesNotExist:
                 context_erreur = {
+                    "action": "initUrlAddition();",
                     "msg_type": "warning",
                     "msg_content": _("Carte 2 inconnue"),
                     "selector_bt_retour": "#messages",
@@ -7668,6 +7686,7 @@ class PaiementViewSet(viewsets.ViewSet):
                         f"Débit legacy (2ème carte) échoué : {erreur_legacy_c2}"
                     )
                     context_erreur = {
+                        "action": "initUrlAddition();",
                         "msg_type": "warning",
                         "msg_content": _(
                             "Le solde du réseau a changé, rescannez la carte"
@@ -7732,6 +7751,7 @@ class PaiementViewSet(viewsets.ViewSet):
 
                 total_nfc_carte1_centimes = sum(debits_affichage_c1.values())
                 context_complement = {
+                    "action": "initUrlAddition();",
                     "tag_id_carte1": tag_id_carte1,
                     "detail_cascade": detail_cascade_affichage,
                     "cascade_carte1_json": cascade_json_rerender,
@@ -7765,6 +7785,7 @@ class PaiementViewSet(viewsets.ViewSet):
                         f"Débit legacy (carte1, complément NFC) échoué : {erreur_legacy_c1}"
                     )
                     context_erreur = {
+                        "action": "initUrlAddition();",
                         "msg_type": "warning",
                         "msg_content": _(
                             "Le solde du réseau a changé, rescannez la carte"
@@ -7938,6 +7959,7 @@ class PaiementViewSet(viewsets.ViewSet):
                         f"montant_legacy={montant_legacy_c2} : régularisation manuelle requise."
                     )
                 context_erreur = {
+                    "action": "initUrlAddition();",
                     "msg_type": "warning",
                     "msg_content": _(
                         "Solde insuffisant. Le solde a changé depuis la lecture."
@@ -8019,6 +8041,7 @@ class PaiementViewSet(viewsets.ViewSet):
         # Moyen de complément non reconnu
         # / Unrecognized complement method
         context_erreur = {
+            "action": "initUrlAddition();",
             "msg_type": "warning",
             "msg_content": _("Moyen de complément non reconnu"),
             "selector_bt_retour": "#messages",
