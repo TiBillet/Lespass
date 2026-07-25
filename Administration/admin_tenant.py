@@ -2268,8 +2268,31 @@ class EventArchiveFilter(admin.SimpleListFilter):
         return queryset
 
 
+
+
 # Import/Export Resource pour Event
 # Resource for CSV import/export of events in admin
+
+from import_export.widgets import ForeignKeyWidget
+
+
+class PostalAddressWidget(ForeignKeyWidget):
+    def clean(self, value, row=None, **kwargs):
+        if value is None:
+            return None
+
+        value = str(value).strip()
+
+        if not value:
+            return None
+
+        postal_address, created = PostalAddress.objects.get_or_create(
+            name__iexact=value,
+            defaults={"name": value},
+        )
+
+        return postal_address
+
 class EventResource(resources.ModelResource):
     """Ressource d'import/export pour les événements.
     Resource for import/export of events.
@@ -2291,7 +2314,7 @@ class EventResource(resources.ModelResource):
     postal_address = fields.Field(
         column_name='postal_address',
         attribute='postal_address',
-        widget=ForeignKeyWidget(PostalAddress, field='name'),
+        widget=PostalAddressWidget(PostalAddress, field='name'),
     )
 
     class Meta:
