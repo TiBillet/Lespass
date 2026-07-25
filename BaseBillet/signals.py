@@ -3,7 +3,7 @@ from datetime import timedelta
 
 import requests
 from django.conf import settings
-from django.db import connection
+from django.db import connection, transaction
 from django.utils.translation import gettext as _
 from django.db.models import Q
 from django.db.models.signals import pre_save, post_save, post_delete
@@ -470,7 +470,17 @@ def create_lignearticle_if_membership_created_on_admin(sender, instance: Members
 
     # On envoi un webhook. Si deadline, ça veut dire que l'adhésion est valide
     if membership.deadline:
-        webhook_membership.delay(membership.pk)
+        # on_commit est INDISPENSABLE : le worker Celery a sa propre connexion à la
+        # base et ne voit pas l'adhésion avant le COMMIT (DoesNotExist). Les vues
+        # changeform de l'admin sont atomic, et MembershipAddForm.save() est appelé
+        # avant la validation des inlines : un formset invalide annule la transaction,
+        # et on_commit jette alors le webhook au lieu de l'envoyer pour rien.
+        # / on_commit is REQUIRED: the Celery worker has its own DB connection and
+        #   would read the membership before COMMIT (DoesNotExist).
+        membership_pk_a_notifier = membership.pk
+        transaction.on_commit(
+            lambda: webhook_membership.delay(membership_pk_a_notifier)
+        )
 
 
 @receiver(post_save, sender=Event)

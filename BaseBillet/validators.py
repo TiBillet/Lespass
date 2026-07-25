@@ -873,18 +873,12 @@ class MembershipValidator(serializers.Serializer):
         if self.price.product.max_per_user_reached(user=self.user):
             raise serializers.ValidationError(_('This product is limited in quantity per person.'))
 
-        if self.price.max_per_user:
-            user_membership_count = Membership.objects.filter(
-                user=self.user,
-                price=self.price,
-                deadline__gt=timezone.localtime()
-            ).exclude(
-                status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED]
-            ).count()
-            
-            if user_membership_count >= self.price.max_per_user:
-                logger.info(f"Max per user reached for {self.user.email} on price {self.price.uuid}")
-                raise serializers.ValidationError(_('This product is limited in quantity per person.'))
+        # La règle de comptage vit dans Price.max_per_user_reached, comme celle du
+        # produit juste au-dessus : un seul endroit décide quelles adhésions comptent.
+        # / The counting rule lives in Price.max_per_user_reached, like the product one.
+        if self.price.max_per_user_reached(user=self.user):
+            logger.info(f"Max per user reached for {self.user.email} on price {self.price.uuid}")
+            raise serializers.ValidationError(_('This product is limited in quantity per person.'))
 
         # Création de la fiche membre / Membership record creation
         # On autorise plusieurs adhésions (ex: famille) / Multiple memberships allowed

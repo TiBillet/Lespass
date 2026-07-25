@@ -1081,15 +1081,18 @@ class Product(models.Model):
             return False  # Aucune limite
 
         if self.categorie_article == self.ADHESION:
-            # Adhésion: on compte uniquement les adhésions encore valides pour CE produit
-            # Exclut les adhesions annulees (CANCELED, ADMIN_CANCELED) du count.
-            # / Excludes canceled memberships from the count.
+            # Adhésion : comptent les adhésions encore valides pour CE produit ET
+            # celles déjà engagées mais pas encore payées, qui n'ont pas de deadline
+            # (cf. Membership.STATUTS_EN_COURS). Les annulées ne comptent jamais.
+            # / Counts still-valid memberships for THIS product AND committed but
+            #   unpaid ones, which have no deadline yet. Canceled never count.
             return (
-                    user.memberships.filter(
-                        deadline__gte=timezone.now(),
-                        price__product__pk=self.pk,
+                    user.memberships.filter(price__product__pk=self.pk)
+                    .filter(
+                        Q(deadline__gte=timezone.now())
+                        | Q(status__in=Membership.STATUTS_EN_COURS)
                     )
-                    .exclude(status__in=['C', 'AC'])
+                    .exclude(status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED])
                     .count()
                     >= self.max_per_user
             )
@@ -1349,12 +1352,18 @@ class Price(models.Model):
             return False  # Aucune limite
 
         if self.product.categorie_article == self.product.ADHESION:
-            # Adhésion: on compte uniquement les adhésions encore valides pour CE produit
+            # Adhésion : comptent les adhésions encore valides pour CE tarif ET celles
+            # déjà engagées mais pas encore payées, qui n'ont pas de deadline
+            # (cf. Membership.STATUTS_EN_COURS). Les annulées ne comptent jamais.
+            # / Counts still-valid memberships for THIS price AND committed but
+            #   unpaid ones, which have no deadline yet. Canceled never count.
             return user.memberships.filter(
-                deadline__gte=timezone.now(),
                 price__pk=self.pk,
+            ).filter(
+                Q(deadline__gte=timezone.now())
+                | Q(status__in=Membership.STATUTS_EN_COURS)
             ).exclude(
-                status__in=['C', 'AC'] # Membership.CANCELED, Membership.ADMIN_CANCELED
+                status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED]
             ).count() >= self.max_per_user
 
         # Billetterie / réservations gratuites: on compte tous les tickets de l'utilisateur (logique existante)
@@ -2925,15 +2934,17 @@ class Paiement_stripe(models.Model):
         else:
             self.status = Paiement_stripe.CANCELED
 
-        # Adhésion : le checkout a été soumis mais le débit n'est pas encore
-        # confirmé (cas SEPA, jusqu'à 14 jours). On bascule les adhésions liées
-        # de "validé par admin" vers "paiement soumis, en attente" pour que le
-        # lien de paiement ne génère plus de nouveau checkout. Cela ferme la
-        # fenêtre où un re-clic recréait une session et donc un 2e prélèvement.
-        # / Membership: checkout submitted but debit not confirmed yet (SEPA).
-        # Move linked memberships from "admin validated" to "payment pending" so
-        # the payment link stops creating new checkouts (duplicate debit fix).
-        if self.status == Paiement_stripe.PENDING:
+        # Le checkout est soumis mais le débit n'est pas encore confirmé (cas SEPA,
+        # jusqu'à 14 jours) : l'adhésion passe en "paiement soumis" pour que son lien
+        # de paiement ne génère plus de checkout, donc pas de 2e prélèvement.
+        # `status == "complete"` est INDISPENSABLE : cancel_url pointe sur la même URL
+        # que success_url (cf. BaseBillet.validators), donc un clic sur "retour" depuis
+        # Stripe passe ici avec une session "open", alors que rien n'a été payé. Le
+        # statut Paiement_stripe vaut PENDING dès la création du checkout : il ne
+        # distingue pas les deux cas.
+        # / SEPA: membership moves to "payment pending" so its link stops creating
+        #   checkouts. "complete" is REQUIRED — cancel_url equals success_url.
+        if self.status == Paiement_stripe.PENDING and checkout_session.status == "complete":
             for membership in self.membership.filter(status=Membership.ADMIN_VALID):
                 membership.status = Membership.PAYMENT_PENDING
                 membership.save(update_fields=['status'])
@@ -3217,6 +3228,22 @@ class Membership(models.Model):
     PAYMENT_PENDING = 'PP'
     ONCE, AUTO =  'A', 'O'
     CANCELED, ADMIN_CANCELED = 'C', 'AC'
+
+    # Adhésions engagées mais pas encore payées : elles n'ont PAS de deadline
+    # (posée par TRIGGER_A au paiement) et doivent quand même compter dans
+    # max_per_user, sinon la personne en relance une seconde et déclenche un 2e
+    # prélèvement.
+    # WAITING_PAYMENT est volontairement ABSENT : c'est l'état d'un checkout
+    # Stripe ouvert, et rien ne purge les paniers abandonnés. Le compter
+    # bloquerait à vie toute personne ayant fermé l'onglet Stripe. Le cas
+    # "validation manuelle" est déjà couvert par ADMIN_WAITING (cf.
+    # BaseBillet.validators : le statut est réécrit avant le premier save).
+    # / Committed but unpaid memberships have no deadline yet and must still
+    #   count towards max_per_user. WAITING_PAYMENT is excluded on purpose:
+    #   abandoned Stripe carts are never purged, counting it would lock the
+    #   person out forever.
+    STATUTS_EN_COURS = [ADMIN_WAITING, ADMIN_VALID, PAYMENT_PENDING]
+
     STATUS_CHOICES = [
         (WAITING_PAYMENT, _("En attente de paiement")),
 
