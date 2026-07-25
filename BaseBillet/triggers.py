@@ -54,11 +54,39 @@ def update_membership_state_after_stripe_paiement(ligne_article: LigneArticle):
             # On dit a stripe d'annuler les prochaines itérations
             if membership.max_iteration:
                 if membership.current_iteration == membership.max_iteration:
-                    subscription = stripe.Subscription.modify(
-                        f"{membership.stripe_id_subscription}",
-                        stripe_account=Configuration.get_solo().get_stripe_connect_account(),
-                        cancel_at_period_end=True
-                    )
+                    # L'appel reseau a Stripe ne doit JAMAIS empecher le membership.save()
+                    # plus bas. Sans cette protection, la moindre erreur ici fait perdre
+                    # toutes les mises a jour de la fiche (iteration, abonnement, date de
+                    # derniere cotisation) alors que la ligne comptable, elle, vient
+                    # d'etre creee. On se retrouve avec une vente enregistree et une fiche
+                    # adherent restee en arriere.
+                    # Cas concret : l'abonnement a deja ete annule cote Stripe, qui refuse
+                    # alors toute modification (InvalidRequestError).
+                    # / The network call to Stripe must NEVER prevent membership.save()
+                    # below. Without this guard, any error here loses every update to the
+                    # record while the accounting line has just been created.
+                    try:
+                        stripe.Subscription.modify(
+                            f"{membership.stripe_id_subscription}",
+                            stripe_account=Configuration.get_solo().get_stripe_connect_account(),
+                            cancel_at_period_end=True
+                        )
+                    except Exception as erreur_stripe:
+                        # Niveau ERROR volontaire : Sentry en fait une alerte, et un
+                        # gestionnaire doit aller verifier l'abonnement a la main dans
+                        # le tableau de bord Stripe.
+                        # / ERROR level on purpose: Sentry raises an alert, and a manager
+                        # must check the subscription by hand in the Stripe dashboard.
+                        logger.error(
+                            f"    Annulation Stripe impossible pour l'abonnement "
+                            f"{membership.stripe_id_subscription} "
+                            f"(adhesion {membership.uuid}, iteration "
+                            f"{membership.current_iteration}/{membership.max_iteration}) "
+                            f": {erreur_stripe}. La fiche adhesion est mise a jour malgre "
+                            f"tout, mais si cet abonnement est encore actif chez Stripe, "
+                            f"il continuera de prelever au-dela du nombre d'iterations "
+                            f"prevu. A annuler a la main dans le tableau de bord Stripe."
+                        )
 
     membership.save()
     logger.info(f"    update_membership_state_after_paiement : Mise à jour de la fiche membre OK")

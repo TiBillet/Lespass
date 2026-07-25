@@ -1,7 +1,7 @@
 # only for convenient :)
 
 alias mm="poetry run python /DjangoFiles/manage.py migrate"
-alias sp="poetry run python manage.py tenant_command shell_plus --print-sql"
+alias sp="poetry run python manage.py tenant_command shell_plus"
 
 alias rsp="poetry run python /DjangoFiles/manage.py runserver 0.0.0.0:8002 2>&1 | tee /DjangoFiles/runserver.log"
 
