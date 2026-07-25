@@ -31,6 +31,29 @@
   /   without interrupting the current reading.
 {% endcomment %}
 
+{# Le wizard est un tunnel de conversion (formulaire en 7 etapes), pas du     #}
+{# contenu editorial : aucune valeur en resultat de recherche. Il etait       #}
+{# indexable ET servi avec le <title> par defaut "TiBillet" (les             #}
+{# `{% block page_title %}` des steps ne s'accrochaient a rien avant le fix  #}
+{# de `seo/base.html`), ce qui le faisait remonter devant la home sur la     #}
+{# requete de marque. On le sort de l'index. `follow` et non `nofollow` :    #}
+{# les liens navbar/footer vers /lieux/, /evenements/ restent crawles.       #}
+{# Meme pattern que `seo/explorer.html`.                                     #}
+{# / The wizard is a conversion funnel (7-step form), not editorial content: #}
+{# zero value in search results. It was indexable AND served with the        #}
+{# default "TiBillet" <title> (the steps' `{% block page_title %}` hooked    #}
+{# onto nothing before the `seo/base.html` fix), which ranked it above the   #}
+{# home page on the brand query. We take it out of the index. `follow`, not  #}
+{# `nofollow`: navbar/footer links stay crawlable. Same pattern as           #}
+{# `seo/explorer.html`.                                                      #}
+{% block meta_robots %}noindex, follow{% endblock %}
+
+{# Description par defaut du wizard : sert aux apercus de lien (le magic     #}
+{# link de reprise est partage par email). Une step peut la surcharger.      #}
+{# / Wizard default description: used by link previews (the resume magic     #}
+{# link is shared by email). A step may override it.                         #}
+{% block page_description %}{% translate "Créez gratuitement votre espace TiBillet : billetterie, adhésions et caisse pour votre lieu culturel ou associatif." %}{% endblock %}
+
 {% block extra_head %}
 {# HTMX : utilise par les boutons resend (step 2), add/remove events (step 5), #}
 {# polling status (step 6), geocode (step 3). Charge ici car `seo/base.html` #}

@@ -15,6 +15,59 @@ x-logging: &default-logging
     max-file: "5"
 
 services:
+
+  #### FEDOW ####
+  fedow_memcached:
+    image: memcached:1.6
+    container_name: fedow_memcached
+    hostname: fedow_memcached
+    restart: always
+    logging: *default-logging
+    networks:
+      - backend
+
+  fedow_django:
+    image: tibillet/fedow:latest
+    container_name: fedow_django
+    hostname: fedow_django
+    restart: unless-stopped
+    env_file: .env
+    user: fedow
+    logging: *default-logging
+    links:
+      - fedow_memcached:memcached
+    volumes:
+      - fedow_database:/home/fedow/Fedow/database
+    networks:
+      - backend
+    command: "bash start.sh"
+
+  fedow_nginx:
+    image: nginx
+    restart: unless-stopped
+    container_name: fedow_nginx
+    hostname: fedow_nginx
+    logging: *default-logging
+    volumes:
+      - ./nginx/fedow_nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./logs:/logs
+    depends_on:
+      - fedow_django
+    links:
+      - fedow_django:fedow_django
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=frontend
+      - traefik.http.routers.fedow_nginx.entrypoints=websecure
+      - traefik.http.routers.fedow_nginx.tls=true
+      - traefik.http.routers.fedow_nginx.tls.certresolver=le-alpn
+      - traefik.http.routers.fedow_nginx.rule=Host(`fedow.${DOMAIN}`)
+      - traefik.http.routers.fedow_nginx.priority=100
+      - traefik.http.services.fedow_nginx.loadbalancer.server.port=80
+    networks:
+      - frontend
+      - backend
+
   #########
   # LESPASS
   #########

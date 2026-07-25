@@ -236,3 +236,54 @@ class TestMembershipSepaPaymentLink:
             # Le paiement reste en attente (pas encaissé).
             # / The payment stays pending (not captured).
             assert paiement.status == Paiement_stripe.PENDING
+
+    def test_retour_arriere_depuis_stripe_ne_marque_pas_l_adhesion_comme_payee(
+        self, api_client, auth_headers, mock_stripe, tenant
+    ):
+        """Retour arrière depuis la page Stripe : l'adhésion ADMIN_VALID ne bouge pas.
+        / Back button from the Stripe page: the ADMIN_VALID membership stays put.
+
+        cancel_url pointe sur la MEME url que success_url (BaseBillet.validators),
+        donc un clic sur "retour" appelle update_checkout_status() exactement comme
+        le ferait un vrai paiement. Le statut du Paiement_stripe vaut deja PENDING
+        depuis la creation du checkout : il ne distingue pas les deux cas.
+        Seul checkout_session.status le fait : "complete" = formulaire soumis,
+        "open" = session ouverte mais jamais soumise.
+        Sans cette distinction, un simple retour arriere basculerait l'adhesion en
+        PAYMENT_PENDING et son lien de paiement cesserait de fonctionner.
+        / cancel_url points to the SAME url as success_url, so hitting "back" calls
+        update_checkout_status() just like a real payment would. Only
+        checkout_session.status tells them apart: "complete" = submitted,
+        "open" = opened but never submitted.
+        """
+        from django_tenants.utils import tenant_context
+        from BaseBillet.models import Membership, Paiement_stripe
+        from BaseBillet.validators import MembershipValidator
+
+        email = f"test+sepaback{_random_id()}@mock.test"
+        _create_manual_membership(api_client, auth_headers, email)
+        membership = _force_status(tenant, email, Membership.ADMIN_VALID)
+
+        with tenant_context(tenant):
+            # Crée le checkout (LigneArticle + Paiement_stripe en PENDING).
+            # / Create the checkout (LigneArticle + PENDING Paiement_stripe).
+            MembershipValidator.get_checkout_stripe(membership)
+            paiement = Paiement_stripe.objects.filter(
+                checkout_session_id_stripe="cs_test_mock_session",
+            ).order_by("-datetime").first()
+            assert paiement is not None
+
+            # Simule le retour arrière : la session est encore ouverte, rien n'a
+            # été soumis, et elle n'est pas expirée.
+            # / Simulate the back button: session still open, nothing submitted,
+            # not expired yet.
+            mock_stripe.session.payment_status = "unpaid"
+            mock_stripe.session.status = "open"
+            mock_stripe.session.expires_at = 9999999999
+            paiement.update_checkout_status()
+
+            membership.refresh_from_db()
+            assert membership.status == Membership.ADMIN_VALID, (
+                f"Un retour arriere ne doit pas marquer l'adhesion comme payee. "
+                f"Statut attendu ADMIN_VALID, obtenu {membership.status}"
+            )
