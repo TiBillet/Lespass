@@ -1371,7 +1371,25 @@ class Webhook_stripe(APIView):
                                 logger.info((f'    facture déja créée et comptabilisée : {invoice}'))
 
                     except Membership.DoesNotExist:
-                        logger.info((f'    Nouvelle adhésion, facture pas encore comptabilisée : {invoice}'))
+                        # On releve volontairement l'exception : ce cas ne doit jamais
+                        # se produire en production. Sentry en fait une alerte, et le
+                        # message porte les trois identifiants necessaires au
+                        # diagnostic. Ne PAS logger la variable `invoice` ici : elle
+                        # n'est affectee qu'apres le get() ci-dessus, donc elle n'existe
+                        # pas quand ce handler s'execute. Le faire levait un
+                        # UnboundLocalError qui masquait la vraie cause dans Sentry.
+                        # / Deliberately re-raised: this must never happen in production.
+                        # Sentry turns it into an alert, and the message carries the
+                        # three ids needed to diagnose. Do NOT log `invoice` here: it is
+                        # only assigned after the get() above, so it does not exist when
+                        # this handler runs.
+                        logger.error(
+                            f"    Webhook invoice.paid : adhesion introuvable. "
+                            f"membership_uuid={membership_uuid} "
+                            f"subscription={stripe_id_subscription} "
+                            f"invoice={payload_object['id']}"
+                        )
+                        raise
                     except Client.DoesNotExist:
                         # Le tenant du metadata n'existe pas sur cette instance : ce
                         # webhook n'est pas pour nous (abonnement d'un autre
