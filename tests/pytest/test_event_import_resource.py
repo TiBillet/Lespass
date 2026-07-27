@@ -350,3 +350,93 @@ def test_import_evenement_img_url_invalide_remonte_erreur(tenant):
         # / by django-import-export) and nothing is created (zero delta).
         assert resultat.has_validation_errors()
         assert Event.objects.count() == nombre_evenements_avant
+
+
+# ---------------------------------------------------------------------------
+# Action admin "supprimer_evenements" (EventAdmin)
+# / "supprimer_evenements" admin bulk action (EventAdmin)
+# ---------------------------------------------------------------------------
+
+from Administration.admin.site import staff_admin_site
+from Administration.admin_tenant import EventAdmin
+from BaseBillet.models import Reservation
+
+
+def _construire_event_admin():
+    """Instance d'EventAdmin branchee sur le site admin du staff.
+    / EventAdmin instance bound to the staff admin site."""
+    return EventAdmin(Event, staff_admin_site)
+
+
+def test_action_suppression_evenement_sans_image(tenant):
+    """Un evenement sans image, sans reservation et sans enfant est supprime.
+    Ce test valide le contournement du bug stdimage post_delete
+    (TypeError: splitext(None)) : sans lui, l'ORM delete planterait.
+    / An event with no image, no booking and no child gets deleted.
+    Validates the stdimage post_delete bug workaround."""
+    suffixe = uuid4().hex[:8]
+    nom_evenement = f"Concert A Supprimer {suffixe}"
+
+    with tenant_context(tenant):
+        evenement = Event.objects.create(name=nom_evenement, datetime="2027-03-15 20:30:00")
+        uuid_evenement = evenement.pk
+
+        # Fausse requete : message_user a besoin d'un objet request, un mock
+        # suffit (les messages sont ignores).
+        # / Fake request: message_user needs a request object, a mock is enough.
+        fausse_requete = MagicMock()
+        event_admin = _construire_event_admin()
+        event_admin.supprimer_evenements(fausse_requete, Event.objects.filter(pk=uuid_evenement))
+
+        assert not Event.objects.filter(pk=uuid_evenement).exists()
+
+
+def test_action_suppression_ignore_evenement_avec_reservation(tenant, admin_user):
+    """Un evenement qui a une reservation (FK PROTECT) n'est PAS supprime :
+    il est ignore et signale, au lieu de lever ProtectedError.
+    / An event with a booking (PROTECT FK) is NOT deleted: skipped and
+    reported instead of raising ProtectedError."""
+    suffixe = uuid4().hex[:8]
+    nom_evenement = f"Concert Avec Reservation {suffixe}"
+
+    with tenant_context(tenant):
+        evenement = Event.objects.create(name=nom_evenement, datetime="2027-03-15 20:30:00")
+        reservation = Reservation.objects.create(user_commande=admin_user, event=evenement)
+        try:
+            fausse_requete = MagicMock()
+            event_admin = _construire_event_admin()
+            event_admin.supprimer_evenements(fausse_requete, Event.objects.filter(pk=evenement.pk))
+
+            assert Event.objects.filter(pk=evenement.pk).exists()
+        finally:
+            # Reservation n'a pas de champ image : delete() ORM classique.
+            # / Reservation has no image field: plain ORM delete.
+            reservation.delete()
+            _supprimer_en_sql_brut("BaseBillet_event", "uuid", [evenement.pk])
+
+
+def test_action_suppression_ignore_evenement_parent(tenant):
+    """Un evenement parent de sous-evenements (FK self CASCADE) n'est PAS
+    supprime : la cascade effacerait les enfants sans prevenir.
+    / A parent event with sub-events (self-FK CASCADE) is NOT deleted: the
+    cascade would silently erase the children."""
+    suffixe = uuid4().hex[:8]
+    nom_parent = f"Festival Parent {suffixe}"
+    nom_enfant = f"Concert Enfant {suffixe}"
+
+    with tenant_context(tenant):
+        parent = Event.objects.create(name=nom_parent, datetime="2027-03-15 20:30:00")
+        enfant = Event.objects.create(name=nom_enfant, datetime="2027-03-15 21:00:00", parent=parent)
+        try:
+            fausse_requete = MagicMock()
+            event_admin = _construire_event_admin()
+            event_admin.supprimer_evenements(fausse_requete, Event.objects.filter(pk=parent.pk))
+
+            # Le parent est conserve, l'enfant aussi.
+            # / Parent is kept, and so is the child.
+            assert Event.objects.filter(pk=parent.pk).exists()
+            assert Event.objects.filter(pk=enfant.pk).exists()
+        finally:
+            # Enfant d'abord (FK vers parent), puis le parent.
+            # / Child first (FK to parent), then the parent.
+            _supprimer_en_sql_brut("BaseBillet_event", "uuid", [enfant.pk, parent.pk])

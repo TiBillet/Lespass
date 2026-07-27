@@ -2551,7 +2551,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     ]
     list_filter_submit = True
 
-    actions = ["approuver_propositions"]
+    actions = ["approuver_propositions", "supprimer_evenements"]
 
     autocomplete_fields = [
         "tag",
@@ -2868,6 +2868,90 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
             _("%(n)s proposal(s) approved.") % {"n": nb_approuvees},
             messages.SUCCESS,
         )
+
+    @admin.action(description=_("Supprimer les évènements sélectionnés"))
+    def supprimer_evenements(self, request, queryset):
+        """
+        Action bulk : supprime les évènements sélectionnés, un par un.
+        / Bulk action: delete selected events, one by one.
+
+        Pourquoi has_delete_permission = False sur cet admin mais une action de
+        suppression ici : le delete Django standard passe par l'ORM et plante sur
+        un évènement sans image (bug stdimage post_delete, voir plus bas). Cette
+        action contourne le bug et ajoute des gardes-fous metier.
+        / Why a custom delete action while has_delete_permission is False: the
+        / standard Django delete crashes on image-less events (stdimage
+        / post_delete bug, see below). This action works around it and adds
+        / business guards.
+
+        Gardes-fous : un évènement n'est PAS supprimé (mais signalé) si :
+        - il a des réservations ou des ventes (FK PROTECT de Reservation et
+          ProductSold vers Event : la suppression leverait ProtectedError),
+        - il a des sous-évènements (FK self 'parent' en CASCADE : la
+          suppression effacerait les enfants sans prévenir).
+        / Guards: an event is NOT deleted (but reported) when it has bookings
+        / or sales (PROTECT FKs), or sub-events (self-FK CASCADE).
+
+        Contournement bug stdimage : le signal post_delete de django-stdimage
+        plante (TypeError: splitext(None)) quand le champ image n'a jamais été
+        rempli. On force une chaîne vide '' avant delete() : un FieldFile vide
+        est falsy et son delete() devient un no-op. Les fichiers image
+        existants (principal + variations) sont supprimés AVANT, tant que le
+        nom de fichier est connu.
+        / stdimage bug workaround: its post_delete signal crashes
+        / (TypeError: splitext(None)) when the image field was never set.
+        / Forcing '' makes the FieldFile falsy, so delete() is a no-op.
+        / Existing image files (main + variations) are removed BEFORE, while
+        / the file name is known.
+
+        On supprime par instance (delete()) et non en masse
+        (queryset.delete()... qui planterait de toute façon sur le même bug) :
+        delete() déclenche le signal post_delete de rafraîchissement du cache
+        SEO, l'évènement disparaît de la carte réseau en ~15s.
+        / Per-instance delete() (not bulk) so the SEO cache refresh signal
+        / fires and the event leaves the network map within seconds.
+        """
+        nb_supprimes = 0
+        nb_ignores = 0
+
+        for evenement in queryset:
+            a_des_ventes_ou_reservations = (
+                evenement.reservation.exists()
+                or ProductSold.objects.filter(event=evenement).exists()
+            )
+            a_des_enfants = evenement.children.exists()
+
+            if a_des_ventes_ou_reservations or a_des_enfants:
+                nb_ignores += 1
+                continue
+
+            # Fichiers image d'abord : principal + variations stdimage.
+            # / Image files first: main file + stdimage variations.
+            if evenement.img:
+                evenement.img.delete(save=False)
+            if evenement.sticker_img:
+                evenement.sticker_img.delete(save=False)
+
+            # Chaîne vide = FieldFile falsy = pas de crash stdimage au delete.
+            # / Empty string = falsy FieldFile = no stdimage crash on delete.
+            evenement.img = ''
+            evenement.sticker_img = ''
+            evenement.delete()
+            nb_supprimes += 1
+
+        if nb_supprimes:
+            self.message_user(
+                request,
+                _("%(n)s évènement(s) supprimé(s).") % {"n": nb_supprimes},
+                messages.SUCCESS,
+            )
+        if nb_ignores:
+            self.message_user(
+                request,
+                _("%(n)s évènement(s) NON supprimé(s) : réservations, ventes "
+                  "ou sous-évènements rattachés.") % {"n": nb_ignores},
+                messages.WARNING,
+            )
 
 
 class ReservationValidFilter(admin.SimpleListFilter):
