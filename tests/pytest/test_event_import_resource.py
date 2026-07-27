@@ -343,7 +343,10 @@ def test_import_evenement_img_url_invalide_remonte_erreur(tenant):
         with patch("Administration.admin_tenant.requests.get", return_value=fausse_reponse):
             resultat = ressource.import_data(donnees, dry_run=False, raise_errors=False)
 
-        # La ligne est en erreur et rien n'est cree en base (delta nul).
-        # / The row is in error and nothing is created (zero delta).
-        assert resultat.has_errors()
+        # La ligne est "invalide" (ValueError du widget converti en
+        # ValidationError par django-import-export) et rien n'est cree en
+        # base (delta nul).
+        # / The row is "invalid" (widget ValueError converted to ValidationError
+        # / by django-import-export) and nothing is created (zero delta).
+        assert resultat.has_validation_errors()
         assert Event.objects.count() == nombre_evenements_avant
