@@ -2273,7 +2273,8 @@ class EventArchiveFilter(admin.SimpleListFilter):
 # Import/Export Resource pour Event
 # Resource for CSV import/export of events in admin
 
-from import_export.widgets import ForeignKeyWidget
+from import_export.widgets import ForeignKeyWidget, Widget
+from django.core.files.base import ContentFile
 
 
 class PostalAddressWidget(ForeignKeyWidget):
@@ -2292,6 +2293,79 @@ class PostalAddressWidget(ForeignKeyWidget):
         )
 
         return postal_address
+
+
+class ImageUrlWidget(Widget):
+    """Widget d'import pour la colonne 'img' : telecharge l'image depuis une URL.
+
+    Un fichier xlsx ne peut pas contenir l'image elle-meme : la colonne 'img'
+    contient l'URL publique de l'affiche (ex : https://exemple.fr/affiche.jpg).
+    Le widget la telecharge et l'enregistre dans le champ image de l'evenement.
+    Cellule vide -> pas d'image, pas d'erreur.
+
+    Note : l'etape de confirmation de l'admin fait un dry-run, l'image est
+    donc telechargee deux fois (apercu puis import reel). C'est acceptable.
+
+    / Import widget for the 'img' column: downloads the image from a URL.
+    / An xlsx cannot hold the image itself; the cell holds the public URL.
+    / Empty cell -> no image, no error. The admin dry-run downloads twice.
+    """
+
+    # Gardes-fous : on ne telecharge pas n'importe quoi.
+    # / Safety guards: we don't download just anything.
+    TIMEOUT_SECONDES = 15
+    TAILLE_MAX_OCTETS = 10 * 1024 * 1024  # 10 Mo / 10 MB
+
+    def clean(self, value, row=None, **kwargs):
+        if value is None:
+            return None
+
+        url = str(value).strip()
+        if not url:
+            return None
+
+        if not url.startswith(("http://", "https://")):
+            raise ValueError(
+                f"Colonne img : '{url}' n'est pas une URL http(s) valide."
+            )
+
+        reponse = requests.get(url, timeout=self.TIMEOUT_SECONDES)
+        reponse.raise_for_status()
+
+        type_contenu = reponse.headers.get("Content-Type", "")
+        if "image" not in type_contenu:
+            raise ValueError(
+                f"Colonne img : l'URL '{url}' ne renvoie pas une image "
+                f"(Content-Type: {type_contenu})."
+            )
+
+        if len(reponse.content) > self.TAILLE_MAX_OCTETS:
+            raise ValueError(
+                f"Colonne img : l'image depasse 10 Mo ('{url}')."
+            )
+
+        # Nom de fichier = dernier morceau de l'URL, sans les parametres (?).
+        # Repli si l'URL n'a pas de nom de fichier exploitable.
+        # / Filename = last URL chunk, without query string, with fallback.
+        nom_fichier = url.split("?")[0].rstrip("/").split("/")[-1]
+        if "." not in nom_fichier:
+            nom_fichier = f"import-{uuid4().hex[:8]}.jpg"
+
+        # ContentFile est accepte par le champ image : il sera ecrit dans le
+        # storage (dossier images/) a la sauvegarde de l'evenement.
+        # / ContentFile is accepted by the image field: it is written to
+        # / storage (images/ dir) when the event is saved.
+        return ContentFile(reponse.content, name=nom_fichier)
+
+    def render(self, value, obj=None, **kwargs):
+        # Export : on ecrit l'URL relative de l'image, lisible par un humain.
+        # / Export: write the image's relative URL, human-readable.
+        if value and getattr(value, "name", None):
+            try:
+                return value.url
+            except ValueError:
+                return ""
+        return ""
 
 class EventResource(resources.ModelResource):
     """Ressource d'import/export pour les événements.
@@ -2317,6 +2391,16 @@ class EventResource(resources.ModelResource):
         widget=PostalAddressWidget(PostalAddress, field='name'),
     )
 
+    # img : a l'import, la cellule contient l'URL publique de l'affiche
+    # (telechargee par ImageUrlWidget) ; a l'export, on ecrit l'URL de l'image.
+    # / img: on import the cell holds the poster's public URL (downloaded by
+    # / ImageUrlWidget); on export we write the image URL.
+    img = fields.Field(
+        column_name='img',
+        attribute='img',
+        widget=ImageUrlWidget(),
+    )
+
     class Meta:
         model = Event
         import_id_fields = ('name', 'datetime')
@@ -2325,7 +2409,7 @@ class EventResource(resources.ModelResource):
             'short_description', 'long_description', 'published', 'archived',
             'private', 'show_time', 'show_gauge', 'slug', 'is_external',
             'full_url', 'postal_address', 'reservation_button_name',
-            'minimum_cashless_required',
+            'minimum_cashless_required', 'img',
         )
         # Ordre des colonnes dans le CSV exporté
         # Column order in the exported CSV

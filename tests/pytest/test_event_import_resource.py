@@ -29,10 +29,13 @@ Regles du projet respectees (voir tests/README.md et tests/PIEGES.md) :
 Lancez avec :
   docker exec lespass_django poetry run pytest tests/pytest/test_event_import_resource.py -q
 """
+import base64
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import tablib
 import pytest
+from django.core.files.storage import default_storage
 from django.db import connection
 from django_tenants.utils import tenant_context
 
@@ -247,3 +250,100 @@ def test_import_evenement_via_flux_xlsx(tenant):
             if uuid_evenement_importe is not None:
                 _supprimer_en_sql_brut("BaseBillet_event", "uuid", [uuid_evenement_importe])
             _supprimer_en_sql_brut("BaseBillet_postaladdress", "id", [adresse.pk])
+
+
+# Plus petit PNG valide (1 pixel) : sert de fausse affiche telechargee.
+# Les variations stdimage (thumbnails) sont generees a la sauvegarde, il faut
+# donc une vraie image lisible par Pillow, pas des octets aleatoires.
+# / Smallest valid PNG (1 pixel): used as a fake downloaded poster. stdimage
+# / variations are generated on save, so Pillow must be able to read it.
+PNG_1_PIXEL = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+)
+
+
+def test_import_evenement_avec_image_depuis_url(tenant):
+    """La colonne img contient une URL : l'image est telechargee et enregistree
+    dans le champ img de l'evenement. Le reseau est mocke (pas de vrai appel).
+    / The img column holds a URL: the image is downloaded into the event's
+    img field. Network is mocked (no real HTTP call)."""
+    suffixe = uuid4().hex[:8]
+    nom_evenement = f"Concert Affiche {suffixe}"
+
+    # Fausse reponse HTTP : un vrai PNG, un Content-Type image.
+    # / Fake HTTP response: a real PNG with an image Content-Type.
+    fausse_reponse = MagicMock()
+    fausse_reponse.content = PNG_1_PIXEL
+    fausse_reponse.headers = {"Content-Type": "image/png"}
+    fausse_reponse.raise_for_status = MagicMock()
+
+    with tenant_context(tenant):
+        uuid_evenement_importe = None
+        nom_fichier_image = None
+        try:
+            donnees = tablib.Dataset(
+                [nom_evenement, DATE_IMPORT, "https://exemple.fr/affiche-test.png"],
+                headers=["name", "datetime", "img"],
+            )
+
+            ressource = EventResource()
+            # On patche requests.get la ou le widget l'utilise.
+            # / Patch requests.get where the widget uses it.
+            with patch("Administration.admin_tenant.requests.get", return_value=fausse_reponse):
+                resultat = ressource.import_data(donnees, dry_run=False, raise_errors=True)
+
+            assert resultat.totals["new"] == 1
+            assert not resultat.has_errors()
+
+            evenement_importe = Event.objects.get(name=nom_evenement)
+            uuid_evenement_importe = evenement_importe.pk
+
+            # L'image est bien enregistree et le fichier existe dans le storage.
+            # / The image is saved and the file exists in storage.
+            assert evenement_importe.img, "L'evenement doit avoir une image."
+            nom_fichier_image = evenement_importe.img.name
+            assert default_storage.exists(nom_fichier_image)
+        finally:
+            if uuid_evenement_importe is not None:
+                # On supprime d'abord les fichiers image (principal +
+                # variations stdimage) tant que l'objet existe, puis la ligne
+                # en SQL brut (meme raison que les autres tests).
+                # / Delete the image files first (main + stdimage variations)
+                # / while the object exists, then the row via raw SQL.
+                evenement_a_nettoyer = Event.objects.get(pk=uuid_evenement_importe)
+                if evenement_a_nettoyer.img:
+                    evenement_a_nettoyer.img.delete(save=False)
+                _supprimer_en_sql_brut("BaseBillet_event", "uuid", [uuid_evenement_importe])
+
+
+def test_import_evenement_img_url_invalide_remonte_erreur(tenant):
+    """Une URL qui ne pointe pas vers une image doit produire une erreur de
+    ligne explicite, pas un crash ni un evenement cree sans prevenir.
+    / A URL that does not serve an image must produce an explicit row error,
+    not a crash nor a silently image-less event."""
+    suffixe = uuid4().hex[:8]
+    nom_evenement = f"Concert Mauvaise Url {suffixe}"
+
+    # Fausse reponse HTTP : du HTML, pas une image.
+    # / Fake HTTP response: HTML, not an image.
+    fausse_reponse = MagicMock()
+    fausse_reponse.content = b"<html>page</html>"
+    fausse_reponse.headers = {"Content-Type": "text/html"}
+    fausse_reponse.raise_for_status = MagicMock()
+
+    with tenant_context(tenant):
+        nombre_evenements_avant = Event.objects.count()
+
+        donnees = tablib.Dataset(
+            [nom_evenement, DATE_IMPORT, "https://exemple.fr/page.html"],
+            headers=["name", "datetime", "img"],
+        )
+
+        ressource = EventResource()
+        with patch("Administration.admin_tenant.requests.get", return_value=fausse_reponse):
+            resultat = ressource.import_data(donnees, dry_run=False, raise_errors=False)
+
+        # La ligne est en erreur et rien n'est cree en base (delta nul).
+        # / The row is in error and nothing is created (zero delta).
+        assert resultat.has_errors()
+        assert Event.objects.count() == nombre_evenements_avant
