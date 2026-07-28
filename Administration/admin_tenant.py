@@ -2278,6 +2278,17 @@ from django.core.files.base import ContentFile
 
 
 class PostalAddressWidget(ForeignKeyWidget):
+    # Colonnes Excel optionnelles lues sur la meme ligne que 'postal_address'
+    # pour peupler la fiche de l'adresse.
+    # / Optional Excel columns read from the same row as 'postal_address'
+    # / to fill the address record.
+    COLONNES_ADRESSE = {
+        "adresse de la rue": "street_address",
+        "localité": "address_locality",
+        "code postal": "postal_code",
+        "pays": "address_country",
+    }
+
     def clean(self, value, row=None, **kwargs):
         if value is None:
             return None
@@ -2287,10 +2298,38 @@ class PostalAddressWidget(ForeignKeyWidget):
         if not value:
             return None
 
+        # Valeurs des colonnes d'adresse presentes dans la ligne importee.
+        # Correspondance insensible a la casse et aux espaces en trop
+        # ('Adresse de la rue' == 'adresse de la rue').
+        # / Address column values found on the imported row. Header matching
+        # / is case/whitespace-insensitive.
+        details = {}
+        if row:
+            row_normalise = {
+                str(cle).strip().lower(): val for cle, val in row.items()
+            }
+            for colonne, champ in self.COLONNES_ADRESSE.items():
+                cellule = row_normalise.get(colonne)
+                if cellule is not None and str(cellule).strip():
+                    details[champ] = str(cellule).strip()
+
         postal_address, created = PostalAddress.objects.get_or_create(
             name__iexact=value,
-            defaults={"name": value},
+            defaults={"name": value, **details},
         )
+
+        # Adresse deja existante : on complete uniquement ses champs vides,
+        # jamais d'ecrasement d'une valeur existante.
+        # / Existing address: only fill its empty fields, never overwrite.
+        if not created and details:
+            champs_modifies = [
+                champ for champ, val in details.items()
+                if not getattr(postal_address, champ)
+            ]
+            for champ in champs_modifies:
+                setattr(postal_address, champ, details[champ])
+            if champs_modifies:
+                postal_address.save(update_fields=champs_modifies)
 
         return postal_address
 
