@@ -102,12 +102,8 @@ msgid "Image vignette"
 msgstr "Image vignette"
 
 #: BaseBillet/models.py
-msgid "Image library"
-msgstr "Images de bibliothèque"
-
-#: BaseBillet/models.py
-msgid "Library image"
-msgstr "Image de bibliothèque"
+msgid "Vignette image"
+msgstr "Image vignette"
 
 #: BaseBillet/models.py
 msgid "Unique name used to reference this image in import files (img column)."

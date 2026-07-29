@@ -220,8 +220,8 @@ class ImageBibliotheque(models.Model):
         return self.name
 
     class Meta:
-        verbose_name = _("Library image")
-        verbose_name_plural = _("Image library")
+        verbose_name = _("Vignette image")
+        verbose_name_plural = _("Image vignette")
 
 
 class OptionGenerale(models.Model):
