@@ -48,6 +48,7 @@ from unfold.contrib.filters.forms import RangeDateForm, RangeDateTimeForm
 from unfold.utils import parse_date_str, parse_datetime_str
 
 import requests
+import unicodedata
 import segno
 from django import forms
 from django.conf import settings
@@ -118,7 +119,7 @@ from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
     FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp, ProductFormField, \
-    PromotionalCode, Tva, MembershipProduct, FederationConfiguration, ProductSold
+    PromotionalCode, Tva, MembershipProduct, FederationConfiguration, ProductSold, ImageBibliotheque
 from BaseBillet.tasks import webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
     send_reservation_cancellation_user, send_sale_to_laboutik, forge_connexion_url
@@ -618,6 +619,46 @@ class CarrouselAdmin(ModelAdmin):
     @display(description=_("Included in events"))
     def events_names(self, instance: Carrousel):
         return ", ".join([event.name for event in instance.events.all()])
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
+@admin.register(ImageBibliotheque, site=staff_admin_site)
+class ImageBibliothequeAdmin(ModelAdmin):
+    compressed_fields = True
+    warn_unsaved_form = True
+
+    list_display = ["_vignette", "name", "_tags"]
+    search_fields = ["name"]
+    filter_horizontal = ("tags",)
+
+    def _vignette(self, obj):
+        if obj.img:
+            try:
+                return format_html(
+                    '<img src="{}" style="max-height:60px; border-radius:6px;" alt="">',
+                    obj.img.thumbnail.url,
+                )
+            except (ValueError, AttributeError):
+                pass
+        return "-"
+
+    _vignette.short_description = _("Image")
+
+    def _tags(self, obj):
+        return ", ".join(obj.tags.values_list("name", flat=True))
+
+    _tags.short_description = _("Tags")
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -2334,20 +2375,55 @@ class PostalAddressWidget(ForeignKeyWidget):
         return postal_address
 
 
+def _normaliser_genre(texte):
+    """Normalise une valeur de genre/tag pour la comparaison : minuscules,
+    sans accents, sans espaces en debut/fin ('Éclectique ' == 'eclectique').
+    / Normalize a genre/tag value for comparison: lowercase, accent-stripped,
+    / trimmed."""
+    if not texte:
+        return ""
+    nfkd = unicodedata.normalize("NFKD", str(texte))
+    sans_accents = "".join(c for c in nfkd if not unicodedata.combining(c))
+    return sans_accents.strip().lower()
+
+
+def image_bibliotheque_pour_genre(genre):
+    """Retourne l'objet ImageBibliotheque dont un tag correspond au genre
+    (comparaison insensible a la casse et aux accents), ou None.
+    La bibliotheque est petite : comparaison en Python apres prefetch.
+    / Return the ImageBibliotheque with a tag matching the genre
+    / (case/accent-insensitive), or None. Small library: compare in Python."""
+    cible = _normaliser_genre(genre)
+    if not cible:
+        return None
+
+    for image_bib in ImageBibliotheque.objects.prefetch_related('tags'):
+        for tag in image_bib.tags.all():
+            if _normaliser_genre(tag.name) == cible:
+                return image_bib
+    return None
+
+
 class ImageUrlWidget(Widget):
-    """Widget d'import pour la colonne 'img' : telecharge l'image depuis une URL.
+    """Widget d'import pour la colonne 'img'.
 
-    Un fichier xlsx ne peut pas contenir l'image elle-meme : la colonne 'img'
-    contient l'URL publique de l'affiche (ex : https://exemple.fr/affiche.jpg).
-    Le widget la telecharge et l'enregistre dans le champ image de l'evenement.
-    Cellule vide -> pas d'image, pas d'erreur.
+    Resolution, par ordre de priorite :
+    1. Cellule remplie avec le NOM d'une image de la bibliotheque
+       (ImageBibliotheque), insensible a la casse : l'image existante est
+       reutilisee, sans copie ni telechargement ;
+    2. Cellule remplie avec une URL publique http(s) : telechargee a l'import ;
+    3. Cellule VIDE : repli automatique via la colonne 'short_description'
+       (le genre/style, ex : "brazil") — on cherche une image de la
+       bibliotheque dont un tag porte ce nom (insensible a la casse) ;
+    4. Toujours rien -> pas d'image, pas d'erreur.
 
-    Note : l'etape de confirmation de l'admin fait un dry-run, l'image est
-    donc telechargee deux fois (apercu puis import reel). C'est acceptable.
+    Note : l'etape de confirmation de l'admin fait un dry-run, une image URL
+    est donc telechargee deux fois (apercu puis import reel). C'est acceptable.
 
-    / Import widget for the 'img' column: downloads the image from a URL.
-    / An xlsx cannot hold the image itself; the cell holds the public URL.
-    / Empty cell -> no image, no error. The admin dry-run downloads twice.
+    / Import widget for the 'img' column. Resolution order: 1) library image
+    / name (case-insensitive), 2) public http(s) URL (downloaded), 3) empty
+    / cell -> fallback: find a library image tagged with the row's
+    / 'short_description' value. No match -> no image, no error.
     """
 
     # Gardes-fous : on ne telecharge pas n'importe quoi.
@@ -2355,17 +2431,40 @@ class ImageUrlWidget(Widget):
     TIMEOUT_SECONDES = 15
     TAILLE_MAX_OCTETS = 10 * 1024 * 1024  # 10 Mo / 10 MB
 
+    def _image_via_tag(self, row):
+        """Repli quand la cellule img est vide : la valeur de la colonne
+        'short_description' (genre/style) est utilisee comme nom de tag pour
+        trouver une image de la bibliotheque taguee pareil.
+        / Fallback for empty img cells: the row's 'short_description' value
+        / is used as a tag name to find a matching library image."""
+        if not row:
+            return None
+
+        image_bib = image_bibliotheque_pour_genre(row.get('short_description'))
+        return image_bib.img if image_bib is not None else None
+
     def clean(self, value, row=None, **kwargs):
         if value is None:
             return None
 
         url = str(value).strip()
         if not url:
-            return None
+            # Cellule vide -> repli via le tag (short_description).
+            # / Empty cell -> tag-based fallback (short_description).
+            return self._image_via_tag(row)
 
+        # 1) Nom d'une image de la bibliotheque -> reutilisation directe.
+        # / 1) Library image name -> reuse the existing file as-is.
+        image_bib = ImageBibliotheque.objects.filter(name__iexact=url).first()
+        if image_bib is not None:
+            return image_bib.img
+
+        # 2) Sinon, c'est une URL a telecharger.
+        # / 2) Otherwise, treat the value as a URL to download.
         if not url.startswith(("http://", "https://")):
             raise ValueError(
-                f"Colonne img : '{url}' n'est pas une URL http(s) valide."
+                f"Colonne img : '{url}' n'est ni le nom d'une image de la "
+                f"bibliothèque, ni une URL http(s) valide."
             )
 
         reponse = requests.get(url, timeout=self.TIMEOUT_SECONDES)
@@ -2440,19 +2539,55 @@ class EventResource(resources.ModelResource):
         widget=ImageUrlWidget(),
     )
 
+    def before_import_row(self, row, **kwargs):
+        """Repli image par tag, meme si le fichier n'a pas de colonne 'img' :
+        quand la cellule img est vide ou absente, on cherche une image de la
+        bibliotheque dont un tag correspond a 'short_description' (le genre,
+        ex : "brazil") et on injecte son nom dans la ligne — le widget
+        ImageUrlWidget la resout ensuite comme un nom explicite.
+        / Tag-based image fallback even without an 'img' column: when the img
+        / cell is empty or missing, find a library image tagged with
+        / 'short_description' and inject its name into the row — the
+        / ImageUrlWidget then resolves it like an explicit name."""
+        img_cellule = str(row.get('img') or '').strip()
+        if not img_cellule:
+            image_bib = image_bibliotheque_pour_genre(row.get('short_description'))
+            if image_bib is not None:
+                row['img'] = image_bib.name
+        super().before_import_row(row, **kwargs)
+
+    def before_save_instance(self, instance, row, **kwargs):
+        """L'image importee sert aussi de sticker si l'evenement n'en a pas :
+        les cartes de l'agenda affichent get_sticker_img(), qui regarde
+        sticker_img, puis le sticker de l'adresse, puis le logo — jamais img.
+        / Reuse the imported image as sticker when none is set: agenda cards
+        / render get_sticker_img(), which never falls back to img before the
+        / logo."""
+        if instance.img and not instance.sticker_img:
+            instance.sticker_img = instance.img
+        super().before_save_instance(instance, row, **kwargs)
+
     class Meta:
         model = Event
         import_id_fields = ('name', 'datetime')
+        # 'img' en premiere colonne : l'apercu d'import affiche l'image
+        # a gauche du nom (l'ordre des colonnes suit Meta.fields).
+        # / 'img' first: the import preview shows the image left of the name.
         fields = (
+            'img',
             'name', 'datetime', 'end_datetime', 'jauge_max', 'max_per_user',
             'short_description', 'long_description', 'published', 'archived',
             'private', 'show_time', 'show_gauge', 'slug', 'is_external',
             'full_url', 'postal_address', 'reservation_button_name',
-            'minimum_cashless_required', 'img',
+            'minimum_cashless_required',
         )
         # Ordre des colonnes dans le CSV exporté
         # Column order in the exported CSV
         export_order = fields
+        # Donne acces a row.instance dans le template d'apercu d'import
+        # (utilise pour afficher la vignette de l'image).
+        # / Exposes row.instance in the import preview template (thumbnail).
+        store_instance = True
         widgets = {
             'datetime': {'format': '%Y-%m-%d %H:%M:%S'},
             'end_datetime': {'format': '%Y-%m-%d %H:%M:%S'},

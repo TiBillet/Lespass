@@ -176,6 +176,54 @@ class Tag(models.Model):
         verbose_name_plural = _("Tags")
 
 
+class ImageBibliotheque(models.Model):
+    """
+    Bibliotheque d'images mutualisee du tenant : permet de reutiliser une meme
+    image sur plusieurs objets (evenements, etc.) et d'y faire reference par
+    son nom lors des imports Excel/CSV (colonne img de EventResource).
+    / Shared image library: reuse one image on several objects and reference
+    / it by name in Excel/CSV imports (EventResource img column).
+    """
+    name = models.CharField(
+        max_length=200,
+        unique=True,
+        verbose_name=_("Image name"),
+        help_text=_("Unique name used to reference this image in import files (img column)."),
+    )
+    img = StdImageField(
+        upload_to='images/',
+        variations={
+            # Memes variations que Event.img : les fichiers sont reutilises
+            # tels quels par les evenements, il faut donc que toutes les
+            # variations attendues par les templates existent sur le disque.
+            # / Same variations as Event.img: events reuse these files as-is,
+            # / so every template-expected variation must exist on disk.
+            'fhd': (1920, 1920),
+            'hdr': (1280, 1280),
+            'med': (480, 480),
+            'thumbnail': (150, 90),
+            'crop_hdr': (960, 540, True),
+            'crop': (480, 270, True),
+            'social_card': (1200, 630, True),
+        },
+        delete_orphans=True,
+        verbose_name=_("Image"),
+    )
+    tags = models.ManyToManyField(
+        Tag,
+        blank=True,
+        verbose_name=_("Tags"),
+        help_text=_("Optional, to organise the library."),
+    )
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        verbose_name = _("Library image")
+        verbose_name_plural = _("Image library")
+
+
 class OptionGenerale(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
     name = models.CharField(max_length=30, unique=True)

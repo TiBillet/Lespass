@@ -208,6 +208,14 @@ def get_sidebar_navigation(request):
                         "permission": admin_permission,
                     },
                     {
+                        "title": _("Image vignette"),
+                        "icon": "photo_library",
+                        "link": _safe_rev(
+                            "staff_admin:BaseBillet_imagebibliotheque_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                    {
                         "title": _("Addresses"),
                         "icon": "signpost",
                         "link": _safe_rev(

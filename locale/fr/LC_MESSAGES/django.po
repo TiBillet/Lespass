@@ -97,6 +97,26 @@ msgstr "Tags"
 msgid "Addresses"
 msgstr "Adresses"
 
+#: Administration/admin/dashboard.py
+msgid "Image vignette"
+msgstr "Image vignette"
+
+#: BaseBillet/models.py
+msgid "Image library"
+msgstr "Images de bibliothèque"
+
+#: BaseBillet/models.py
+msgid "Library image"
+msgstr "Image de bibliothèque"
+
+#: BaseBillet/models.py
+msgid "Unique name used to reference this image in import files (img column)."
+msgstr "Nom unique utilisé pour référencer cette image dans les fichiers d'import (colonne img)."
+
+#: BaseBillet/models.py
+msgid "Optional, to organise the library."
+msgstr "Optionnel, pour organiser la bibliothèque."
+
 #: Administration/admin/dashboard.py:219 BaseBillet/models.py:2222
 #: BaseBillet/models.py:3828 MetaBillet/models.py:351
 msgid "Events"
