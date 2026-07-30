@@ -112,6 +112,7 @@ class ConfigurationSite(SingletonModel):
         choices=[
             ("reunion", "Réunion (thème par défaut)"),
             ("faire_festival", "Faire Festival (thème brutaliste)"),
+            ("bar", "Bar"),
         ],
         verbose_name=_("Thème graphique du site"),
         help_text=_("Sélectionnez le thème visuel à utiliser pour l'affichage du site web."),
