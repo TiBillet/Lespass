@@ -423,6 +423,7 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 'short_description',
                 'long_description',
                 'img',
+                'default_event_img',
                 'logo',
                 'postal_address',
                 # 'adress',

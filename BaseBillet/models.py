@@ -457,6 +457,19 @@ class Configuration(SingletonModel):
                         verbose_name=_('Background image'),
                         )
 
+    default_event_img = StdImageField(upload_to='images/',
+                                      blank=True, null=True,
+                                      variations={
+                                          'hdr': (720, 720),
+                                          'med': (480, 480),
+                                          'crop_hdr': (960, 540, True),
+                                          'thumbnail': (150, 90),
+                                      },
+                                      delete_orphans=True,
+                                      verbose_name=_('Default vignette image'),
+                                      help_text=_('Used whenever an event has no image of its own.'),
+                                      )
+
     @property
     def get_med_img(self):
         # Cache key based on instance ID and method name
@@ -1974,7 +1987,10 @@ class Event(models.Model):
             result = self.postal_address.sticker_img
         else:
             config = Configuration.get_solo()
-            if config.logo:
+            # Vignette par defaut du tenant (admin Configuration) avant le logo.
+            if config.default_event_img:
+                result = config.default_event_img
+            elif config.logo:
                 result = config.logo
             else:
                 # Au cas ou aucune image précédente, on prend les img classiques

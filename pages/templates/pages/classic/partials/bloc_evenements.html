@@ -1,4 +1,4 @@
-{% load i18n pages_tags %}
+{% load i18n pages_tags tibitags %}
 {% comment %}
     BLOC EVENEMENTS — skin classic. Liste DYNAMIQUE des prochains evenements
     publies (requete directe sur le modele Event via le tag evenements_a_venir).
@@ -20,11 +20,10 @@
     <div class="tb-grille" data-testid="bloc-evenements-liste">
         {% for event in evenements %}
             <article class="tb-bloc tb-bloc--carte">
-                {% if event.img %}
-                    <img class="tb-bloc__carte-image"
-                         src="{{ event.img.crop_hdr.url }}"
-                         alt="{{ event.name }}" loading="lazy">
-                {% endif %}
+                {# event.img vide -> randImg sert la vignette par defaut du tenant (admin). #}
+                <img class="tb-bloc__carte-image"
+                     src="{{ event.img.crop_hdr.url|randImg }}"
+                     alt="{{ event.name }}" loading="lazy">
                 <p class="tb-bloc__carte-surtitre">{{ event.datetime|date:"l j F · H\hi" }}</p>
                 <h3 class="tb-bloc__carte-titre">{{ event.name }}</h3>
                 {% if event.short_description %}

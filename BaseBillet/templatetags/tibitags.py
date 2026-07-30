@@ -3,6 +3,7 @@ from random import randint
 
 import requests
 from django import template
+from django.core.cache import cache
 from django.db import connection
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -138,9 +139,26 @@ def get30randimg():
 
 @register.filter
 def randImg(value):
-    if not value:
-        return f"/static/images/404-{randint(1, 20)}.jpg"
-    return value
+    if value:
+        return value
+    # Vignette par defaut du tenant (Configuration.default_event_img, editable
+    # en admin). Mise en cache 1h par schema tenant. / Per-tenant default
+    # fallback image, configurable from the admin.
+    cache_key = f'default_event_img_url_{connection.tenant.schema_name}'
+    url = cache.get(cache_key)
+    if url is None:
+        url = ""
+        try:
+            from BaseBillet.models import Configuration
+            config_img = Configuration.get_solo().default_event_img
+            if config_img:
+                url = config_img.med.url
+        except Exception:
+            url = ""
+        cache.set(cache_key, url, 3600)
+    if url:
+        return url
+    return f"/static/images/404-{randint(1, 20)}.jpg"
 
 
 @register.filter

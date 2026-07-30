@@ -19368,3 +19368,11 @@ msgstr "Pays"
 
 #~ msgid "Suscribe to access this rate."
 #~ msgstr "Abonnez-vous pour accéder à ce tarif."
+
+#: BaseBillet/models.py
+msgid "Default vignette image"
+msgstr "Image de vignette par défaut"
+
+#: BaseBillet/models.py
+msgid "Used whenever an event has no image of its own."
+msgstr "Utilisée lorsqu'un évènement n'a pas sa propre vignette."
