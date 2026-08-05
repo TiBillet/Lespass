@@ -1,0 +1,32 @@
+{% load i18n static %}{# Squelette headless du skin — déplacé depuis BaseBillet/templates (migration skins CHANTIER-01). Ce commentaire ne produit aucune sortie HTML. / Skin headless skeleton moved from BaseBillet/templates (skins migration). #}
+
+{# title gets picked up automatically by htmx when hx-target == body #}
+<title>{% block title %}{% translate 'Home' %}{% endblock %} | {{ config.organisation }}</title>
+
+{% include "pages/classic/partials/navbar.html" %}
+
+<div class="flex-fill d-flex flex-column">
+  {% block main %}{% endblock main %}
+</div>
+
+{% include "pages/classic/partials/footer.html" %}
+
+{% block offcanvas_globaux %}
+    {% comment %}
+    Chrome partagé : mêmes panneaux globaux qu'en page complète — nécessaires
+    aussi en réponse HTMX (hx-target="body" remplace tout le contenu).
+    / Shared chrome: same global panels as the full page — also needed in HTMX
+    responses (hx-target="body" replaces the whole content).
+    {% endcomment %}
+    {% include "commun/offcanvas/contact.html" %}
+    {% include "commun/offcanvas/connexion.html" %}
+{% endblock offcanvas_globaux %}
+
+{% block offcanvas %}{% endblock offcanvas %}
+
+{% include "commun/toasts.html" %}
+
+<!-- spinner -->
+{% include "commun/loading.html" %}
+
+{% block scripts %}{% endblock scripts %}

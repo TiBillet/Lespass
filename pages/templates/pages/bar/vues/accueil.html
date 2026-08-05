@@ -1,0 +1,85 @@
+{% extends base_template %}
+{% load tibitags i18n %}
+
+{% block title %}{% translate 'Home' %}{% endblock %}
+{% block meta_description %}{{ config.short_description|striptags|default:config.organisation }}{% endblock %}
+{% block og_title %}{{ config.organisation }}{% endblock %}
+{% block og_description %}{{ config.short_description|striptags|default:config.organisation }}{% endblock %}
+{% block og_image_alt %}{{ config.organisation }} - {% translate 'Home page' %}{% endblock %}
+{% block twitter_title %}{{ config.organisation }}{% endblock %}
+{% block twitter_description %}{{ config.short_description|striptags|default:config.organisation }}{% endblock %}
+{% block twitter_image_alt %}{{ config.organisation }} - {% translate 'Home page' %}{% endblock %}
+
+{% block main %}
+    <div class="home-bg py-5 flex-fill">
+        <div class="container-lg my-5">
+            <div class="bg-body rounded-5 px-5 py-3{% if config.img %} shadow{% endif %}">
+                <h1 class="display-1 mt-5 mb-3">{{ config.organisation }}</h1>
+                <p class="lead fs-4">{{ config.short_description | default:"" }}</p>
+                <p class="lead">{{ config.long_description | safe | default:"" }}</p>
+                <div class="row" data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
+                {% if config.module_billetterie %}
+                    <div class="col-md mb-3">
+                        <a class="btn btn-lg btn-primary d-block my-3"
+                           href="/event/" hx-get="/event/" hx-target="body" hx-push-url="true">
+                            <i class="bi bi-calendar-date"></i>
+                            {% if config.event_menu_name %}{{ config.event_menu_name }}{% else %}{% trans 'Calendar' %}{% endif %}
+                        </a>
+                    </div>
+                {% endif %}
+                {% if config.module_adhesion %}
+                    <div class="col-md">
+                        <a class="btn btn-lg btn-primary d-block my-3"
+                           href="/memberships/" hx-get="/memberships/" hx-target="body" hx-push-url="true">
+                            <i class="bi bi-person-badge"></i>{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% trans 'Subscriptions' %}{% endif %}
+                        </a>
+                    </div>
+                {% endif %}
+                    {% comment %} HIDE: page fédération
+                <div class="col-md">
+                    <a class="btn btn-lg btn-primary d-block my-3"
+                        href="/network/" hx-get="/network/" hx-target="body" hx-push-url="true">
+                        <i class="bi bi-arrow-repeat"></i>
+                        Les membres du réseau
+                    </a>
+                </div>
+                {% endcomment %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <style>
+        .home-bg {
+            background-image: url('{{ config.img.med.url }}');
+            background-size: cover;
+            background-position: center;
+        }
+
+        @media (min-width: 960px), (min-height: 540px) {
+            .home-bg {
+                background-image: url('{{ config.img.crop_hdr.url }}');
+            }
+        }
+
+        @media (min-width: 1280px), (min-height: 1280px) {
+            .home-bg {
+                background-image: url('{{ config.img.hdr.url }}');
+            }
+        }
+
+        @media (min-width: 1920px), (min-height: 1920px) {
+            .home-bg {
+                background-image: url('{{ config.img.fhd.url }}');
+            }
+        }
+
+        /* Custom background color for the bg-body div in home page */
+        [data-bs-theme="light"] .home-bg .bg-body {
+            background-color: #f8f9fa !important; /* Light gray for light mode */
+        }
+
+        [data-bs-theme="dark"] .home-bg .bg-body {
+            background-color: #2b3035 !important; /* Darker gray for dark mode */
+        }
+    </style>
+{% endblock %}
