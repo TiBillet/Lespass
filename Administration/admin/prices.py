@@ -12,7 +12,7 @@ from unfold.decorators import display
 
 from Administration.admin.site import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
-from BaseBillet.models import Product, Price, PromotionalCode
+from BaseBillet.models import Product, Price, PromotionalCode, MembershipProduct
 from Customers.models import Client
 from fedow_public.models import AssetFedowPublic as Asset, AssetFedowPublic
 
@@ -170,8 +170,7 @@ class PriceChangeForm(ModelForm):
                 ].widget = HiddenInput()  # caché sauf si bouton + en haut a droite
                 # Filtrage des produits : uniquement des produits adhésions.
                 # Possible facilement car Foreign Key (voir get_search_results dans ProductAdmin)
-                self.fields["adhesions_obligatoires"].queryset = Product.objects.filter(
-                    categorie_article=Product.ADHESION,
+                self.fields["adhesions_obligatoires"].queryset = MembershipProduct.objects.filter(
                     archive=False,
                 )
                 # Pas de bouton "+" pour creer un produit depuis ce champ
