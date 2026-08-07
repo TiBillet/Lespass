@@ -20,7 +20,7 @@
 
                     {% if event.carrousel.all %}
                         <div class="my-5">
-                            {% include 'pages/classic/partials/carrousel_evenements.html' with carousel=event.carrousel.all max_height='25vh' auto=false %}
+                            {% include 'pages/bar/partials/carrousel_evenements.html' with carousel=event.carrousel.all max_height='25vh' auto=false %}
                         </div>
                     {% endif %}
                 </div>
@@ -65,7 +65,7 @@
                     </li>
                 </ul>
                 {% if event.postal_address.latitude and event.postal_address.longitude %}
-                    {%  include "pages/classic/partials/evenement_geoloc.html" %}
+                    {%  include "pages/bar/partials/evenement_geoloc.html" %}
                 {% endif %}
 
                 <div></div>
@@ -73,6 +73,6 @@
         </div>
     </div>
     {% if event.children.exists %}
-        {% include 'pages/classic/partials/evenement_benevoles.html' %}
+        {% include 'pages/bar/partials/evenement_benevoles.html' %}
     {% endif %}
 </div>

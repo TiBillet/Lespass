@@ -2,7 +2,7 @@
 {% load static i18n tibitags %}
 
 {% comment %}
-LOCALISATION : pages/templates/pages/classic/vues/agenda.html
+LOCALISATION : pages/templates/pages/bar/vues/agenda.html
 Liste des évènements du tenant (agenda) + filtres par tags + bouton unique vers le
 wizard event unifié (cf. SESSIONS/EVENT_WIZARD/CHANTIER-03).
 / Tenant event list (agenda) + tag filters + single button to the unified event wizard.
@@ -36,7 +36,7 @@ wizard event unifié (cf. SESSIONS/EVENT_WIZARD/CHANTIER-03).
         <!-- slideshow -->
         {% if carrousel_event_list|length > 0 %}
             <header class="container-lg">
-                {% include "pages/classic/partials/carrousel_evenements.html" with carousel=carrousel_event_list %}
+                {% include "pages/bar/partials/carrousel_evenements.html" with carousel=carrousel_event_list %}
             </header>
         {% endif %}
         {% endblock agenda_carrousel %}
@@ -129,7 +129,7 @@ wizard event unifié (cf. SESSIONS/EVENT_WIZARD/CHANTIER-03).
     {% block agenda_liste %}
     <!-- event list -->
     <div class="container-lg" id="event_list">
-        {% include "pages/classic/vues/agenda_liste.html" %}
+        {% include "pages/bar/vues/agenda_liste.html" %}
     </div>
     {% endblock agenda_liste %}
 {% endblock %}

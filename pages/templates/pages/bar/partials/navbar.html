@@ -1,6 +1,6 @@
 {% load i18n %}
 
-<nav class="navbar navbar-expand-xl bg-body" data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
+<nav class="navbar navbar-expand-xl" data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
     <div class="container-lg justify-content-between">
       <a class="navbar-brand flex-grow-1" href="/" hx-get="/" hx-target="body" hx-push-url="true">
         {% if config.logo %}
@@ -102,7 +102,7 @@
 
   {% comment %}
   Les panneaux contact et connexion vivent désormais dans le squelette
-  (bloc offcanvas_globaux de pages/classic/shell.html et headless.html,
+  (bloc offcanvas_globaux de pages/bar/shell.html et headless.html,
   CHANTIER-02 lot C2). La navbar ne garde que les boutons déclencheurs.
   / The contact and login panels now live in the skeleton
   (offcanvas_globaux block). The navbar only keeps the trigger buttons.
@@ -112,7 +112,7 @@
   OUVERTURE AUTO DE L'OFFCANVAS DE CONNEXION
   / Auto-open the login offcanvas
 
-  LOCALISATION : BaseBillet/templates/pages/classic/partials/navbar.html
+  LOCALISATION : pages/templates/pages/bar/partials/navbar.html
 
   Quand une vue serveur redirige un visiteur anonyme avec le parametre
   `?login=1` (ex : tentative de proposer un evenement sans etre connecte,

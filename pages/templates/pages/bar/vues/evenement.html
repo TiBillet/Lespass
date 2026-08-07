@@ -124,7 +124,7 @@
                 {% translate "You have reached the maximum number of tickets for this event." %}
             </a>
         {% elif event.products.count %}
-            {% include 'pages/classic/partials/reservation_declencheur.html' %}
+            {% include 'pages/bar/partials/reservation_declencheur.html' %}
             {#        {% else %}#}
             {#            {% translate "Free admission" %}#}
         {% endif %}
@@ -144,7 +144,7 @@
             </p>
         {% endif %}
 
-        {% include 'pages/classic/partials/evenement_accordeon.html' %}
+        {% include 'pages/bar/partials/evenement_accordeon.html' %}
         {% endblock evenement_complements %}
 
     </div>

@@ -2,19 +2,21 @@
 CARTE ÉVÉNEMENT — une ligne de l'agenda (contrat de skin, nom FIGÉ)
 / Event card — one agenda row (skin contract, FROZEN name)
 
-LOCALISATION : pages/templates/pages/classic/partials/carte_evenement.html
+LOCALISATION : pages/templates/pages/bar/partials/carte_evenement.html
 
 Incluse par vues/agenda_liste.html et vues/agenda_liste_suite.html (boucle des
 événements). Un skin la surcharge en créant pages/<skin>/partials/carte_evenement.html.
 Contexte attendu : event (+ page, embed, loading_delay, search hérités).
+Style « carte de menu » assuré par bar.css (.bar-carte-evenement) : filet doré
+en bas, heure en accent doré serif.
 / Included by the agenda list partials. A skin overrides it by providing its own
 pages/<skin>/partials/carte_evenement.html. Expected context: event (+ page,
 embed, loading_delay, search inherited).
 {% endcomment %}
-<div class="row align-items-center mb-3">
+<div class="row align-items-center bar-carte-evenement">
     {% if event.show_time %}
     <div class="col-md-auto">
-        <h3 class="mb-0 mt-2 mt-md-0">{{ event.datetime|time:'H\hi' }}</h3>
+        <h3 class="bar-date mb-0 mt-2 mt-md-0">{{ event.datetime|time:'H\hi' }}</h3>
     </div>
     {% endif %}
     <div class="col-auto py-3" style="width: 140px">

@@ -11,16 +11,16 @@
 {% block twitter_image_alt %}{{ config.organisation }} - {% translate 'Home page' %}{% endblock %}
 
 {% block main %}
-    <div class="home-bg py-5 flex-fill">
+    <div class="home-bg py-5 flex-fill d-flex align-items-center">
         <div class="container-lg my-5">
             <div class="bg-body rounded-5 px-5 py-3{% if config.img %} shadow{% endif %}">
-                <h1 class="display-1 mt-5 mb-3">{{ config.organisation }}</h1>
-                <p class="lead fs-4">{{ config.short_description | default:"" }}</p>
+                <p class="bar-sur-titre mt-5 mb-2">{% translate 'Welcome' %}</p>
+                <h1 class="display-1 mb-3">{{ config.organisation }}</h1>
                 <p class="lead">{{ config.long_description | safe | default:"" }}</p>
                 <div class="row" data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
                 {% if config.module_billetterie %}
                     <div class="col-md mb-3">
-                        <a class="btn btn-lg btn-primary d-block my-3"
+                        <a class="btn btn-lg btn-outline-primary d-block my-3"
                            href="/event/" hx-get="/event/" hx-target="body" hx-push-url="true">
                             <i class="bi bi-calendar-date"></i>
                             {% if config.event_menu_name %}{{ config.event_menu_name }}{% else %}{% trans 'Calendar' %}{% endif %}
@@ -29,7 +29,7 @@
                 {% endif %}
                 {% if config.module_adhesion %}
                     <div class="col-md">
-                        <a class="btn btn-lg btn-primary d-block my-3"
+                        <a class="btn btn-lg btn-outline-primary d-block my-3"
                            href="/memberships/" hx-get="/memberships/" hx-target="body" hx-push-url="true">
                             <i class="bi bi-person-badge"></i>{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% trans 'Subscriptions' %}{% endif %}
                         </a>
@@ -73,13 +73,9 @@
             }
         }
 
-        /* Custom background color for the bg-body div in home page */
-        [data-bs-theme="light"] .home-bg .bg-body {
-            background-color: #f8f9fa !important; /* Light gray for light mode */
-        }
-
-        [data-bs-theme="dark"] .home-bg .bg-body {
-            background-color: #2b3035 !important; /* Darker gray for dark mode */
-        }
+        /* Le panneau central et les couleurs sont stylés par bar.css
+           (.skin-bar .home-bg .bg-body) — ici, uniquement le fond image,
+           qui dépend de config.img. / Panel and colors come from bar.css;
+           only the config-dependent background image stays here. */
     </style>
 {% endblock %}

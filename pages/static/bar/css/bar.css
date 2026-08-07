@@ -1,0 +1,178 @@
+/*
+ * Skin BAR — « sombre chic » (esprit speakeasy).
+ * / BAR skin — "dark & classy" (speakeasy spirit).
+ *
+ * LOCALISATION : pages/static/bar/css/bar.css
+ *
+ * TOUT est scopé sous .skin-bar : le wrapper est émis par shell.html (requête
+ * classique) et headless.html (fragment HTMX, hx-target="body"). Si le wrapper
+ * disparaît du fragment, ce fichier cesse de s'appliquer après un swap.
+ * / Everything is scoped under .skin-bar: the wrapper is emitted by shell.html
+ * (full request) and headless.html (HTMX fragment, hx-target="body"). If the
+ * wrapper goes missing from the fragment, this file stops applying after a swap.
+ *
+ * Typographie : pile système, aucune police téléchargée.
+ * / Typography: system stack only, no downloaded fonts.
+ */
+
+.skin-bar {
+    /* Palette / Palette */
+    --bar-fond: #14100c;          /* fond général / page background */
+    --bar-fond-2: #1c1712;        /* surfaces (navbar, footer, panneaux) */
+    --bar-texte: #f2e9dc;         /* crème / cream text */
+    --bar-texte-doux: #c8bca8;    /* texte secondaire / muted text */
+    --bar-or: #c9a15f;            /* accent doré / gold accent */
+    --bar-or-clair: #e3c98f;      /* doré au survol / gold on hover */
+    --bar-filet: rgba(201, 161, 95, .35); /* filets / hairlines */
+
+    /* Piles de polices système / System font stacks */
+    --bar-serif: Georgia, 'Times New Roman', Times, serif;
+
+    background-color: var(--bar-fond);
+    color: var(--bar-texte);
+    min-height: 100vh;
+}
+
+/* --- Titres : serif élégant / Headings: elegant serif --- */
+.skin-bar h1, .skin-bar h2, .skin-bar h3,
+.skin-bar .display-1, .skin-bar .display-2, .skin-bar .display-3 {
+    font-family: var(--bar-serif);
+    font-weight: 500;
+    letter-spacing: .01em;
+    color: var(--bar-texte);
+}
+
+/* Sur-titre en petites capitales espacées / Spaced small-caps kicker */
+.skin-bar .bar-sur-titre {
+    text-transform: uppercase;
+    letter-spacing: .35em;
+    font-size: .8rem;
+    color: var(--bar-or);
+    margin-bottom: .5rem;
+}
+
+/* --- Liens et boutons / Links and buttons --- */
+.skin-bar a {
+    color: var(--bar-or);
+    text-decoration-color: var(--bar-filet);
+}
+.skin-bar a:hover {
+    color: var(--bar-or-clair);
+}
+
+.skin-bar .btn-outline-primary {
+    --bs-btn-color: var(--bar-or);
+    --bs-btn-border-color: var(--bar-or);
+    --bs-btn-hover-color: var(--bar-fond);
+    --bs-btn-hover-bg: var(--bar-or);
+    --bs-btn-hover-border-color: var(--bar-or);
+    --bs-btn-active-color: var(--bar-fond);
+    --bs-btn-active-bg: var(--bar-or-clair);
+    --bs-btn-active-border-color: var(--bar-or-clair);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    font-size: .9rem;
+}
+
+.skin-bar .btn-primary {
+    --bs-btn-bg: var(--bar-or);
+    --bs-btn-border-color: var(--bar-or);
+    --bs-btn-color: var(--bar-fond);
+    --bs-btn-hover-bg: var(--bar-or-clair);
+    --bs-btn-hover-border-color: var(--bar-or-clair);
+    --bs-btn-hover-color: var(--bar-fond);
+}
+
+/* --- Surfaces Bootstrap redrapées en sombre / Bootstrap surfaces re-draped dark --- */
+.skin-bar .bg-body {
+    background-color: var(--bar-fond-2) !important;
+    color: var(--bar-texte);
+}
+.skin-bar .text-body {
+    color: var(--bar-texte) !important;
+}
+
+/* --- Navbar / Navbar --- */
+.skin-bar .navbar {
+    background-color: var(--bar-fond-2);
+    border-bottom: 1px solid var(--bar-filet);
+}
+.skin-bar .navbar .navbar-brand,
+.skin-bar .navbar .nav-link {
+    color: var(--bar-texte);
+}
+.skin-bar .navbar .nav-link:hover,
+.skin-bar .navbar .nav-link.active {
+    color: var(--bar-or);
+}
+.skin-bar .navbar .navbar-brand {
+    font-family: var(--bar-serif);
+    font-size: 1.35rem;
+    letter-spacing: .05em;
+}
+
+/* --- Hero d'accueil / Home hero --- */
+.skin-bar .home-bg {
+    display: flex;
+    align-items: center;
+}
+.skin-bar .home-bg .bg-body {
+    background-color: rgba(20, 16, 12, .82) !important;
+    backdrop-filter: blur(6px);
+    border: 1px solid var(--bar-filet);
+}
+.skin-bar .home-bg .lead {
+    color: var(--bar-texte-doux);
+}
+
+/* --- Cartes événement (agenda) / Event cards (agenda) --- */
+.skin-bar .bar-carte-evenement {
+    margin-bottom: 0;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--bar-filet);
+}
+.skin-bar .bar-date {
+    font-family: var(--bar-serif);
+    color: var(--bar-or);
+}
+/* Le <hr/> entre deux cartes devient superflu visuellement / <hr/> between cards
+   becomes visually redundant */
+.skin-bar #event_list hr {
+    border-color: var(--bar-filet);
+    opacity: 1;
+}
+
+/* --- Footer / Footer --- */
+.skin-bar .bar-footer {
+    background-color: var(--bar-fond-2);
+    border-top: 1px solid var(--bar-filet);
+    color: var(--bar-texte-doux);
+}
+.skin-bar .bar-footer h4 {
+    font-family: var(--bar-serif);
+    color: var(--bar-texte);
+}
+.skin-bar .bar-footer .nav-link {
+    color: var(--bar-texte-doux);
+}
+.skin-bar .bar-footer .nav-link:hover {
+    color: var(--bar-or);
+}
+
+/* --- Divers / Misc --- */
+.skin-bar ::selection {
+    background: var(--bar-or);
+    color: var(--bar-fond);
+}
+
+/* --- Bloc HERO des pages CMS (surcharge de tb-blocs.css) / CMS HERO block --- */
+.skin-bar .tb-bloc--hero .tb-bloc__titre {
+    font-family: var(--bar-serif);
+    color: var(--bar-texte);
+}
+.skin-bar .tb-bloc--hero .tb-bloc__sous-titre {
+    color: var(--bar-or);
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    font-size: .95rem;
+}

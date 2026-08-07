@@ -1,15 +1,28 @@
-{% load i18n static %}{# Squelette headless du skin — déplacé depuis BaseBillet/templates (migration skins CHANTIER-01). Ce commentaire ne produit aucune sortie HTML. / Skin headless skeleton moved from BaseBillet/templates (skins migration). #}
+{% load i18n static %}{# Squelette headless du skin bar — fragment pour les requêtes HTMX. / Headless skeleton of the bar skin — fragment for HTMX requests. #}
 
-{# title gets picked up automatically by htmx when hx-target == body #}
+{# title repris automatiquement par htmx quand hx-target == body #}
 <title>{% block title %}{% translate 'Home' %}{% endblock %} | {{ config.organisation }}</title>
 
-{% include "pages/classic/partials/navbar.html" %}
+{# IMPORTANT : navbar, main ET footer DANS .skin-bar, sinon le CSS du skin (scopé #}
+{# sous cette classe) ne s'applique plus après un swap HTMX (hx-target="body" #}
+{# remplace tout le body — ce fragment doit donc ré-émettre le wrapper). #}
+{# / Navbar, main and footer must stay INSIDE .skin-bar or the scoped skin CSS #}
+{# is lost after an HTMX body swap — this fragment must re-emit the wrapper. #}
+<div class="skin-bar d-flex flex-column flex-fill" data-bs-theme="dark">
+
+{% if not embed %}
+    {% include "pages/bar/partials/navbar.html" %}
+{% endif %}
 
 <div class="flex-fill d-flex flex-column">
   {% block main %}{% endblock main %}
 </div>
 
-{% include "pages/classic/partials/footer.html" %}
+{% if not embed %}
+    {% include "pages/bar/partials/footer.html" %}
+{% endif %}
+
+</div>{# /.skin-bar #}
 
 {% block offcanvas_globaux %}
     {% comment %}

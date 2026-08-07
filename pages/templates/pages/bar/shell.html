@@ -89,6 +89,8 @@
           href="{% static 'commun/css/bootstrap-icons.min.css' %}">
     <link rel="stylesheet" href="{% static 'commun/css/vars.css' %}">
     <link rel="stylesheet" href="{% static 'commun/css/tibillet.css' %}">
+    <!-- CSS du skin bar (sombre chic), entièrement scopé sous .skin-bar -->
+    <link rel="stylesheet" href="{% static 'bar/css/bar.css' %}">
     <link rel="stylesheet" href="{% static 'commun/css/swal.css' %}">
 
     <script src="{% static 'commun/js/bootstrap.bundle.min.5.3.3.js' %}"></script>
@@ -110,7 +112,7 @@
          * Erreurs 404/500 sous HTMX : afficher la page d'erreur au lieu de ne rien faire.
          * / 404/500 under HTMX: show the error page instead of doing nothing.
          *
-         * LOCALISATION : pages/templates/pages/classic/shell.html (idem skin faire_festival)
+         * LOCALISATION : pages/templates/pages/bar/shell.html (idem skin classic)
          *
          * Par defaut htmx IGNORE les reponses non-2xx : un clic qui tombe en
          * 404/500 ne produit RIEN a l'ecran (UX muette). Le serveur renvoie
@@ -157,8 +159,14 @@
 
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-ext="loading-states" class="min-vh-100 d-flex flex-column">
 
+{# IMPORTANT : navbar, main ET footer DANS .skin-bar, sinon le CSS du skin (scopé #}
+{# sous cette classe) ne s'applique plus. headless.html (fragments HTMX) ré-émet #}
+{# le même wrapper. / Navbar, main and footer must stay INSIDE .skin-bar or the #}
+{# scoped skin CSS is lost. headless.html re-emits the same wrapper for HTMX. #}
+<div class="skin-bar d-flex flex-column flex-fill" data-bs-theme="dark">
+
 {% if not embed %} <!-- Pas de navbar si embed -->
-    {% include "pages/classic/partials/navbar.html" %}
+    {% include "pages/bar/partials/navbar.html" %}
 {% endif %}
 
 <main class="flex-fill d-flex flex-column">
@@ -166,8 +174,10 @@
 </main>
 
 {% if not embed %} <!-- Pas de footer si embed -->
-    {% include "pages/classic/partials/footer.html" %}
+    {% include "pages/bar/partials/footer.html" %}
 {% endif %}
+
+</div>{# /.skin-bar #}
 
 {% if not embed %}
     {% block offcanvas_globaux %}

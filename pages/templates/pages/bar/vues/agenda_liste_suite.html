@@ -1,7 +1,7 @@
 {% load i18n %}
 {% load tibitags %}
 {% comment %}
-LOCALISATION : pages/templates/pages/classic/vues/agenda_liste_suite.html
+LOCALISATION : pages/templates/pages/bar/vues/agenda_liste_suite.html
 Suite de la liste d'événements (bouton « voir plus », HTMX outerHTML sur
 #paginator). Même contenu que agenda_liste.html SANS l'en-tête RSS.
 / Event list continuation ("load more" button, HTMX outerHTML on #paginator).
@@ -12,7 +12,7 @@ Same content as agenda_liste.html WITHOUT the RSS header.
         {{ date_key|date:'l j F'|capfirst }}
     </h2>
     {% for event in events %}
-        {% include 'pages/classic/partials/carte_evenement.html' %}
+        {% include 'pages/bar/partials/carte_evenement.html' %}
         {% if not forloop.last %}
             <hr/>{% endif %}
     {% endfor %}
