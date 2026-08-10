@@ -2568,6 +2568,29 @@ class EventResource(resources.ModelResource):
             instance.sticker_img = instance.img
         super().before_save_instance(instance, row, **kwargs)
 
+    def after_save_instance(self, instance, row, **kwargs):
+        """Le genre saisi dans 'short_description' devient aussi un tag de
+        l'evenement (M2M Event.tag) : les filtres par tag de la page agenda
+        sont construits depuis Event.tag, donc sans ce lien le tag n'y
+        apparait jamais. Reutilise le tag existant si un nom equivalent
+        existe deja (insensible a la casse et aux accents), sinon le cree.
+        / The 'short_description' genre also becomes an event tag (Event.tag
+        / M2M): agenda tag filters are built from Event.tag, so without this
+        / link the tag never shows up there. Reuses an existing tag with an
+        / equivalent name (case/accent-insensitive) or creates it."""
+        genre = str(row.get('short_description') or '').strip()
+        if genre:
+            cible = _normaliser_genre(genre)
+            tag = next(
+                (t for t in Tag.objects.all() if _normaliser_genre(t.name) == cible),
+                None,
+            )
+            if tag is None:
+                tag = Tag.objects.create(name=genre[:50])
+            if not instance.tag.filter(pk=tag.pk).exists():
+                instance.tag.add(tag)
+        super().after_save_instance(instance, row, **kwargs)
+
     class Meta:
         model = Event
         import_id_fields = ('name', 'datetime')
