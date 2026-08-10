@@ -91,7 +91,12 @@
         {# render standalone. Each block uses the current skin template (fallback classic). #}
         {% for groupe in groupes_blocs %}
             {% if groupe.type == "grille" %}
-                <div class="tb-grille">
+                {# Sur la page d'accueil, la grille de CARTE devient une mosaique #}
+                {# bento (bar.css .bar-bento) : tuiles photos plein cadre et tuiles #}
+                {# texte crème/doré, tailles variées. Ailleurs, grille classique. #}
+                {# / On the home page, the CARTE grid becomes a bento mosaic; #}
+                {# elsewhere, the classic grid. #}
+                <div class="tb-grille{% if page_courante.est_accueil %} bar-bento{% endif %}">
                     {% for bloc in groupe.blocs %}
                         {% templates_bloc bloc as gabarits_bloc %}
                         {% include gabarits_bloc %}

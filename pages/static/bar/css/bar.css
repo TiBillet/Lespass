@@ -176,3 +176,165 @@
     text-transform: uppercase;
     font-size: .95rem;
 }
+
+/* --- Cartes (grilles CMS : événements, sous-pages) / Cards (CMS grids) ---
+   Hauteurs égales : la grille étire déjà les cartes d'une même rangée ;
+   on pousse le bouton en bas pour qu'ils soient tous alignés, quelle que
+   soit la longueur du titre ou de la description.
+   / Equal heights: the grid already stretches cards in a row; push the
+   button to the bottom so they all align regardless of content length. */
+.skin-bar .tb-bloc--carte > .tb-bloc__bouton {
+    margin-top: auto;
+}
+/* Espace minimal au-dessus du bouton sur la carte la plus haute.
+   / Minimal gap above the button on the tallest card. */
+.skin-bar .tb-bloc--carte > .tb-bloc__carte-texte {
+    margin-bottom: 1rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * MOSAIQUE BENTO (page d'accueil) / BENTO MOSAIC (home page)
+ * Reproduction de la maquette : grille irrégulière alternant tuiles photos
+ * plein cadre et tuiles texte (crème, doré, sombre), tailles variées.
+ * Contenu : blocs CARTE existants de la page d'accueil — une carte AVEC image
+ * devient une tuile photo, une carte SANS image une tuile texte.
+ * / Reproduces the mockup: irregular grid mixing full-bleed photo tiles and
+ * text tiles (cream, gold, dark), varied sizes. Content: existing CARTE blocks
+ * of the home page — a card WITH an image becomes a photo tile, WITHOUT a
+ * text tile.
+ * ------------------------------------------------------------------------- */
+
+.skin-bar .bar-bento {
+    grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: 10rem;
+    grid-auto-flow: dense;
+}
+
+/* Tuile de base : pas de padding interne, contenu centré / Base tile */
+.skin-bar .bar-bento .tb-bloc--carte {
+    position: relative;
+    border: none;
+    border-radius: var(--tb-rayon, .5rem);
+    box-shadow: none;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    margin: 0;
+    padding: 1.5rem;
+    overflow: hidden;
+}
+.skin-bar .bar-bento .tb-bloc--carte:hover {
+    transform: none;
+    box-shadow: none;
+}
+.skin-bar .bar-bento .tb-bloc--carte > :not(.tb-bloc__carte-image) {
+    margin-inline: 0;
+}
+.skin-bar .bar-bento .tb-bloc--carte > .tb-bloc__carte-surtitre {
+    margin-top: 0;
+}
+.skin-bar .bar-bento .tb-bloc--carte > :last-child {
+    margin-bottom: 0;
+}
+
+/* Motif de tailles (cycle de 6) : pavage COMPLET d'une grille 4x4 —
+   1+2+4+1+4+4 = 16 cellules, aucun trou (flow dense : la 4e tuile, 1x1,
+   vient combler la case libre sous la 1re).
+   / Size pattern (6-cycle): FULL tiling of a 4x4 grid — 16 cells, no hole
+   (dense flow: the 4th, 1x1 tile, fills the free cell under the 1st). */
+.skin-bar .bar-bento .tb-bloc--carte:nth-child(6n+2) { grid-row: span 2; }
+.skin-bar .bar-bento .tb-bloc--carte:nth-child(6n+3) { grid-column: span 2; grid-row: span 2; }
+.skin-bar .bar-bento .tb-bloc--carte:nth-child(6n+5) { grid-column: span 2; grid-row: span 2; }
+.skin-bar .bar-bento .tb-bloc--carte:nth-child(6n+6) { grid-column: span 2; grid-row: span 2; }
+
+/* --- Tuile TEXTE (carte sans image) : fond crème, encre sombre ---
+   / TEXT tile (card without image): cream background, dark ink */
+.skin-bar .bar-bento .tb-bloc--carte:not(:has(.tb-bloc__carte-image)) {
+    background: var(--bar-texte);          /* crème / cream */
+    color: var(--bar-fond-2);
+}
+.skin-bar .bar-bento .tb-bloc--carte:not(:has(.tb-bloc__carte-image)) .tb-bloc__carte-titre {
+    font-family: var(--bar-serif);
+    color: var(--bar-fond-2);
+    font-size: clamp(1.2rem, 2vw, 1.6rem);
+}
+.skin-bar .bar-bento .tb-bloc--carte:not(:has(.tb-bloc__carte-image)) .tb-bloc__carte-texte {
+    color: #5a4f40;
+}
+/* Variante sombre : la 1re tuile du cycle (texte crème sur fond du skin)
+   / Dark variant: 1st tile of the cycle (cream text on skin background) */
+.skin-bar .bar-bento .tb-bloc--carte:nth-child(6n+1):not(:has(.tb-bloc__carte-image)) {
+    background: transparent;
+    color: var(--bar-texte);
+    text-align: start;
+    align-items: flex-start;
+}
+.skin-bar .bar-bento .tb-bloc--carte:nth-child(6n+1):not(:has(.tb-bloc__carte-image)) .tb-bloc__carte-titre {
+    color: var(--bar-texte);
+}
+.skin-bar .bar-bento .tb-bloc--carte:nth-child(6n+1):not(:has(.tb-bloc__carte-image)) .tb-bloc__carte-texte {
+    color: var(--bar-texte-doux);
+}
+/* Variante dorée : la 6e tuile du cycle / Gold variant: 6th tile of the cycle */
+.skin-bar .bar-bento .tb-bloc--carte:nth-child(6n+6):not(:has(.tb-bloc__carte-image)) {
+    background: var(--bar-or);
+    color: var(--bar-fond);
+}
+.skin-bar .bar-bento .tb-bloc--carte:nth-child(6n+6):not(:has(.tb-bloc__carte-image)) .tb-bloc__carte-titre {
+    color: var(--bar-fond);
+}
+.skin-bar .bar-bento .tb-bloc--carte:nth-child(6n+6):not(:has(.tb-bloc__carte-image)) .tb-bloc__carte-texte {
+    color: #3d2f1c;
+}
+
+/* --- Tuile PHOTO (carte avec image) : image plein cadre, légende en surimpression
+   / PHOTO tile (card with image): full-bleed image, overlay caption */
+.skin-bar .bar-bento .tb-bloc--carte:has(.tb-bloc__carte-image) {
+    padding: 0;
+    justify-content: flex-end;
+    align-items: stretch;
+    text-align: start;
+}
+.skin-bar .bar-bento .tb-bloc--carte:has(.tb-bloc__carte-image) .tb-bloc__carte-image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    object-fit: cover;
+}
+/* Légende en bas, sur dégradé lisible / Bottom caption on a readable gradient */
+.skin-bar .bar-bento .tb-bloc--carte:has(.tb-bloc__carte-image) .tb-bloc__carte-titre {
+    position: relative;
+    margin: 0;
+    padding: 2.5rem 1.25rem 1.25rem;
+    font-family: var(--bar-serif);
+    color: var(--bar-texte);
+    background: linear-gradient(transparent, rgba(20, 16, 12, .85));
+}
+.skin-bar .bar-bento .tb-bloc--carte:has(.tb-bloc__carte-image) .tb-bloc__carte-surtitre,
+.skin-bar .bar-bento .tb-bloc--carte:has(.tb-bloc__carte-image) .tb-bloc__carte-texte {
+    position: relative;
+    margin: 0;
+    padding-inline: 1.25rem;
+    color: var(--bar-texte);
+    background: rgba(20, 16, 12, .85);
+}
+.skin-bar .bar-bento .tb-bloc--carte:has(.tb-bloc__carte-image) .tb-bloc__carte-texte {
+    padding-bottom: 1.25rem;
+}
+
+/* Mobile : on empile simplement / Mobile: plain stacking */
+@media (max-width: 768px) {
+    .skin-bar .bar-bento {
+        grid-template-columns: 1fr;
+        grid-auto-rows: auto;
+    }
+    .skin-bar .bar-bento .tb-bloc--carte:nth-child(n) {
+        grid-column: auto;
+        grid-row: auto;
+    }
+    .skin-bar .bar-bento .tb-bloc--carte:has(.tb-bloc__carte-image) {
+        min-height: 14rem;
+    }
+}
