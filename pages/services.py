@@ -273,3 +273,56 @@ def construire_page_accueil(PageModel, BlocModel, config, description_longue=Non
         cta.save()
 
     return page
+
+
+def carte_laboutik_sections():
+    """
+    Sections de la page « a la carte » generees depuis l'admin LaBoutik :
+    une section par CategorieProduct (categorie POS) contenant au moins un
+    produit publie avec un prix publie. Creer une categorie dans l'admin
+    cree donc automatiquement le titre de la section, et ses produits le
+    contenu juste en dessous.
+    / "A la carte" page sections generated from the LaBoutik admin: one
+    section per CategorieProduct (POS category) holding at least one
+    published product with a published price. Creating a category in the
+    admin automatically creates the section title, and its products the
+    content right below.
+
+    Retour / Returns:
+        [{"name": <str>, "produits": [{"name", "description", "prix"}]}]
+        - produits tries par Product.poids, prix formates "3,50 €" (plusieurs
+          tarifs separes par " / ").
+        - categories sans produit affichable : ignorees (section absente).
+    """
+    # Import local : pages ne depend pas de BaseBillet au niveau module
+    # (gabarit_skin doit rester utilisable depuis les migrations).
+    # / Local import: pages does not depend on BaseBillet at module level.
+    from BaseBillet.models import CategorieProduct
+
+    def _formate_prix(montant):
+        return f"{montant:.2f}".replace(".", ",") + " €"
+
+    sections = []
+    categories = CategorieProduct.objects.prefetch_related(
+        "products_pos__prices"
+    ).order_by("poid_liste", "name")
+
+    for categorie in categories:
+        produits = []
+        for produit in sorted(
+            (p for p in categorie.products_pos.all() if p.publish and not p.archive),
+            key=lambda p: p.poids,
+        ):
+            tarifs = [t for t in produit.prices.all() if t.publish]
+            if not tarifs:
+                continue
+            tarifs.sort(key=lambda t: t.order)
+            produits.append({
+                "name": produit.name,
+                "description": tarifs[0].short_description or produit.short_description or "",
+                "prix": " / ".join(_formate_prix(t.prix) for t in tarifs),
+            })
+        if produits:
+            sections.append({"name": categorie.name, "produits": produits})
+
+    return sections

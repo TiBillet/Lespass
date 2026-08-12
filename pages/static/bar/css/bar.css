@@ -338,3 +338,162 @@
         min-height: 14rem;
     }
 }
+
+/* ============================================================
+   PAGE « A LA CARTE » — carte de bar encadree (maquette 2026-08-10)
+   / "A LA CARTE" page — framed bar menu (mockup 2026-08-10)
+
+   Cible la page via le crochet .tb-page--a-la-carte emis par page.html.
+   Contenu attendu : un bloc PARAGRAPHE (grand titre + intro centree)
+   suivi de blocs CARTE texte seuls (une section de la carte chacun :
+   « Nos bieres », « Nos vins »…). L'illustration de houblon en pied
+   est decorative (pseudo-element), pas un contenu editable.
+   / Targets the page via the .tb-page--a-la-carte hook from page.html.
+   Expected content: one PARAGRAPH block (big title + centered intro)
+   followed by text-only CARD blocks (one menu section each). The hop
+   illustration at the bottom is decorative, not editable content.
+   ============================================================ */
+.skin-bar .tb-page--a-la-carte {
+    align-self: center;
+    width: min(100% - 1.5rem, 34rem);
+    margin-block: clamp(1rem, 4vw, 3rem);
+    padding: clamp(1.75rem, 6vw, 3rem) clamp(1.25rem, 5vw, 2.5rem) 0;
+    background-color: var(--bar-fond-2);
+    /* Double filet beige / double beige hairline */
+    border: 1px solid var(--bar-filet);
+    outline: 1px solid var(--bar-filet);
+    outline-offset: 5px;
+}
+
+/* Le h1 de secours (« A la carte », libelle de la page) reste dans le DOM
+   pour le SEO et les lecteurs d'ecran, mais cede la vedette au titre du
+   bloc d'intro (technique visually-hidden).
+   / The fallback h1 stays in the DOM for SEO and screen readers but yields
+   the spotlight to the intro block's title (visually-hidden technique). */
+.skin-bar .tb-page--a-la-carte > .tb-page__titre {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Intro : grand titre serif creme centre + texte centre discret.
+   / Intro: big centered cream serif title + discreet centered text. */
+.skin-bar .tb-page--a-la-carte .tb-bloc--paragraphe {
+    padding-block: 0;
+    text-align: center;
+}
+.skin-bar .tb-page--a-la-carte .tb-bloc--paragraphe .tb-bloc__titre {
+    font-size: clamp(1.9rem, 7vw, 2.6rem);
+    line-height: 1.15;
+    margin-bottom: 1rem;
+}
+.skin-bar .tb-page--a-la-carte .tb-bloc--paragraphe .tb-bloc__texte {
+    color: var(--bar-texte-doux);
+    font-size: .95rem;
+    max-width: 26rem;
+    margin-inline: auto;
+}
+
+/* Sections de la carte : CARTE texte empilees, sans chrome de carte
+   (bordure, fond, ombre). / Menu sections: stacked text-only cards with
+   no card chrome (border, background, shadow). */
+.skin-bar .tb-page--a-la-carte .tb-grille {
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+    max-width: none;
+    padding-inline: 0;
+    padding-block: 2.5rem 0;
+}
+.skin-bar .tb-page--a-la-carte .tb-bloc--carte {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+    overflow: visible;
+}
+.skin-bar .tb-page--a-la-carte .tb-bloc--carte:hover {
+    transform: none;
+    box-shadow: none;
+}
+.skin-bar .tb-page--a-la-carte .tb-bloc__carte-titre {
+    display: flex;
+    align-items: baseline;
+    gap: .6rem;
+    font-size: 1.35rem;
+    margin-bottom: .35rem;
+}
+.skin-bar .tb-page--a-la-carte .tb-bloc__carte-titre::before {
+    content: "\274B"; /* ❋ */
+    font-size: 1.05rem;
+    color: var(--bar-texte);
+}
+.skin-bar .tb-page--a-la-carte .tb-bloc__carte-texte {
+    color: var(--bar-texte-doux);
+    font-size: .85rem;
+}
+
+/* Illustration houblon en pied de carte (decoratif).
+   / Hop illustration at the bottom of the menu (decorative). */
+.skin-bar .tb-page--a-la-carte::after {
+    content: "";
+    display: block;
+    height: clamp(90px, 22vw, 130px);
+    margin-top: 2.25rem;
+    margin-bottom: 2.25rem;
+    background: url("../img/houblon.svg") no-repeat center bottom / contain;
+    
+}
+
+/* Pas de « kicker » (filet d'accent au-dessus des h2) sur le grand titre de
+   la carte : la maquette le veut nu. / No kicker accent rule above the menu
+   title: the mockup wants it bare. */
+.skin-bar .tb-page--a-la-carte .tb-bloc--paragraphe .tb-bloc__titre::before {
+    content: none;
+}
+
+/* Lignes produit des sections dynamiques (admin LaBoutik) : nom a gauche,
+   prix dore a droite, pointilles de conduite, description discrete dessous.
+   / Product lines of the dynamic sections (LaBoutik admin): name left, gold
+   price right, dotted leader, discreet description below. */
+.skin-bar .tb-page--a-la-carte .bar-carte-produits {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: .55rem;
+}
+.skin-bar .tb-page--a-la-carte .bar-carte-produit {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .5rem;
+}
+.skin-bar .tb-page--a-la-carte .bar-carte-produit__nom {
+    font-size: .95rem;
+}
+.skin-bar .tb-page--a-la-carte .bar-carte-produit__pointilles {
+    flex: 1;
+    min-width: 1.5rem;
+    border-bottom: 1px dotted var(--bar-filet);
+    transform: translateY(-.25em);
+}
+.skin-bar .tb-page--a-la-carte .bar-carte-produit__prix {
+    font-family: var(--bar-serif);
+    color: var(--bar-or-clair);
+    white-space: nowrap;
+}
+.skin-bar .tb-page--a-la-carte .bar-carte-produit__description {
+    flex-basis: 100%;
+    color: var(--bar-texte-doux);
+    font-size: .8rem;
+}

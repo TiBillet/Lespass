@@ -47,7 +47,11 @@
     {# extra_meta never arrives on HTMX navigation (unstyled page). A <link> #}
     {# in the body is valid HTML5 and the browser dedupes it via its cache. #}
     <link rel="stylesheet" href="{% static 'pages/css/tb-blocs.css' %}">
-    <main class="tb-page" data-testid="page-{{ page_courante.slug }}">
+    {# Classe crochet par slug (tb-page--<slug>) : permet au CSS du skin un #}
+    {# traitement dédié à une page précise (ex : la mise en page « carte de #}
+    {# bar » de la page a-la-carte). / Slug hook class: lets the skin CSS give #}
+    {# a specific page a dedicated treatment (e.g. the bar-menu layout). #}
+    <main class="tb-page tb-page--{{ page_courante.slug }}" data-testid="page-{{ page_courante.slug }}">
         {# h1 de secours : le HERO (optionnel) est le porteur naturel du h1 ; #}
         {# sans lui, la page n'en aurait AUCUN (SEO + lecteurs d'écran). Les #}
         {# titres markdown sont démotés d'un niveau, pas de collision possible. #}
@@ -150,5 +154,12 @@
                 {% endwith %}
             {% endif %}
         {% endfor %}
+        {# Sections dynamiques de la carte (categories/produits LaBoutik), #}
+        {# uniquement si la vue a fourni carte_categories (page a-la-carte). #}
+        {# / Dynamic menu sections (LaBoutik categories/products), only when #}
+        {# the view provided carte_categories (a-la-carte page). #}
+        {% if carte_categories %}
+            {% include "pages/bar/partials/carte_produits.html" %}
+        {% endif %}
     </main>
 {% endblock %}

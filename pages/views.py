@@ -42,11 +42,19 @@ def rendre_page(request, page):
     # On range donc l'objet Page sous une autre cle.
     # / WARNING: get_context already sets context["page"] = pagination number.
     # So we store the Page object under another key.
-    from pages.services import grouper_blocs
+    from pages.services import carte_laboutik_sections, grouper_blocs
 
     blocs = page.blocs.all()
     context["page_courante"] = page
     context["blocs"] = blocs
+    # Page « a la carte » : les sections sont generees depuis les categories
+    # POS de l'admin LaBoutik (une categorie = un titre, ses produits = le
+    # contenu). Calcule uniquement pour ce slug (crochet tb-page--a-la-carte).
+    # / "A la carte" page: sections generated from the LaBoutik admin POS
+    # categories (a category = a title, its products = the content below).
+    # Computed only for this slug (tb-page--a-la-carte hook).
+    if page.slug == "a-la-carte":
+        context["carte_categories"] = carte_laboutik_sections()
     # Le <h1> d'une page CMS est porté par le bloc HERO. S'il n'y en a pas,
     # page.html affiche un h1 de secours avec le titre de la page (audit SEO
     # 2026-07-05 : 0 h1 sur toute page sans HERO — blog, pages simples).
