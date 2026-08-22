@@ -359,12 +359,6 @@ class BookingViewSet(viewsets.ViewSet):
             pk=pk,
         )
 
-        # Branchement selon le type de reservation de la ressource.
-        # / Branch according to the resource's booking type.
-        if resource.slot_type == Resource.DAY:
-            # TODO-FOR-DAY-BOOKING : Recheck
-            return self._render_resource_day_page(request, resource)
-
         slot_groups = annotate_slots_for_display(compute_slots(resource))
 
         # Marque les créneaux déjà présents dans le panier.
@@ -435,175 +429,6 @@ class BookingViewSet(viewsets.ViewSet):
         })
         return render(request, 'booking/views/resource.html', context)
 
-    def _render_resource_day_page(self, request, resource):
-        """
-        Affiche le detail d'une ressource journaliere avec un calendrier mensuel.
-        / Displays a day-resource detail with a monthly calendar.
-
-        LOCALISATION : booking/views.py
-
-        Acces : public.
-        / Access: public.
-        """
-        # TODO-FOR-DAY-BOOKING : Recheck
-        tz = timezone.get_current_timezone()
-        today = timezone.now().date()
-
-        # Determine le mois a afficher depuis le parametre ?month=YYYY-MM.
-        # / Determine the displayed month from the ?month=YYYY-MM query parameter.
-        month_param = request.GET.get('month', '')
-        if month_param:
-            try:
-                year, month = map(int, month_param.split('-'))
-                requested_month = datetime.date(year, month, 1)
-            except (ValueError, TypeError):
-                requested_month = datetime.date(today.year, today.month, 1)
-        else:
-            requested_month = datetime.date(today.year, today.month, 1)
-
-        # Calcule la fenetre sur le mois affiche.
-        # / Compute the window for the displayed month.
-        first_day_of_month = requested_month
-        last_day_of_month = datetime.date(
-            requested_month.year,
-            requested_month.month,
-            calendar.monthrange(requested_month.year, requested_month.month)[1],
-        )
-        window_start = timezone.make_aware(
-            datetime.datetime.combine(first_day_of_month, datetime.time.min),
-            tz,
-        )
-        window_end = timezone.make_aware(
-            datetime.datetime.combine(
-                last_day_of_month + datetime.timedelta(days=1),
-                datetime.time.min,
-            ),
-            tz,
-        )
-        window = Interval(start=window_start, end=window_end)
-
-        slot_groups = annotate_slots_for_display(compute_slots(resource, window))
-
-        # Marque les créneaux déjà présents dans le panier.
-        # / Mark slots already present in the cart.
-        from BaseBillet.services_panier import PanierSession
-        panier = PanierSession(request)
-        cart_resource_items = [
-            item for item in panier.resources()
-            if item.get('resource_uuid') == str(resource.pk)
-        ]
-        for group in slot_groups:
-            for slot in group.slots:
-                for item in cart_resource_items:
-                    item_start = parse_datetime(item['start_datetime'])
-                    item_end = item_start + datetime.timedelta(
-                        minutes=int(item['slot_duration_minutes']) * int(item['slot_count'])
-                    )
-                    if item_start <= slot.start < item_end:
-                        slot.in_cart = True
-                        break
-
-        month_weeks = self._build_month_calendar(
-            slot_groups=slot_groups,
-            year=requested_month.year,
-            month=requested_month.month,
-            today=today,
-        )
-
-        # Mois precedent et suivant pour la navigation.
-        # / Previous and next month for navigation.
-        prev_month = (requested_month.replace(day=1) - datetime.timedelta(days=1)).replace(day=1)
-        next_month = (requested_month.replace(day=1) + datetime.timedelta(days=32)).replace(day=1)
-
-        # Libelles courts des jours de la semaine pour l'en-tete du calendrier.
-        # / Short weekday labels for the calendar header.
-        weekday_labels = [
-            _('Mon'), _('Tue'), _('Wed'), _('Thu'), _('Fri'), _('Sat'), _('Sun')
-        ]
-
-        resource_choices = self._get_resource_choices(resource)
-
-        context = get_context(request)
-        context.update({
-            'resource':        resource,
-            'requested_month': requested_month,
-            'month_weeks':     month_weeks,
-            'prev_month':      prev_month,
-            'next_month':      next_month,
-            'today':           today,
-            'weekday_labels':  weekday_labels,
-            'resource_choices': resource_choices,
-        })
-        # En requete HTMX (navigation entre mois), on retourne uniquement le partial calendrier.
-        # / For HTMX requests (month navigation), return only the calendar partial.
-        if request.htmx:
-            return render(request, 'booking/partials/resource_day_calendar.html', context)
-        return render(request, 'booking/views/resource_day.html', context)
-
-    def _build_month_calendar(self, slot_groups, year, month, today):
-        """
-        Construit la grille mensuelle avec l'etat de chaque jour.
-        / Builds the monthly grid with the state of each day.
-
-        LOCALISATION : booking/views.py
-
-        Retourne une liste de semaines, chaque semaine contenant 7 jours.
-        Chaque jour contient : date, is_current_month, slot, group, state.
-        / Returns a list of weeks, each week containing 7 days.
-        Each day contains: date, is_current_month, slot, group, state.
-
-        :param slot_groups: list[DisplaySlotGroup]
-        :param year: annee du mois affiche (int)
-        :param month: mois affiche (int)
-        :param today: date du jour (date)
-        :return: list[list[dict]]
-        """
-        # TODO-FOR-DAY-BOOKING : Recheck
-
-        # Indexe les créneaux et leurs groupes par date de debut.
-        # / Index slots and their groups by start date.
-        slot_by_date = {}
-        group_by_date = {}
-        for group in slot_groups:
-            for slot in group.slots:
-                slot_date = slot.start.date()
-                slot_by_date[slot_date] = slot
-                group_by_date[slot_date] = group
-
-        weeks = []
-        for week_dates in calendar.Calendar(firstweekday=0).monthdatescalendar(year, month):
-            week_days = []
-            for day_date in week_dates:
-                slot = slot_by_date.get(day_date)
-                group = group_by_date.get(day_date)
-
-                # Un jour passe est non reservable, meme si un creneau existe
-                # en base (car la fenetre commence au debut du mois).
-                # / A past day is not bookable, even if a slot exists in the
-                # database (because the window starts at the beginning of the month).
-                if day_date < today:
-                    state = 'past'
-                elif slot:
-                    if slot.in_cart:
-                        state = 'cart'
-                    elif slot.remaining_capacity > 0:
-                        state = 'free'
-                    else:
-                        state = 'busy'
-                else:
-                    state = 'unavailable'
-
-                week_days.append({
-                    'date': day_date,
-                    'is_current_month': day_date.month == month,
-                    'slot': slot,
-                    'group': group,
-                    'state': state,
-                })
-            weeks.append(week_days)
-
-        return weeks
-
     # ── Formulaire et création de réservation ────────────────────────────────
 
     @action(detail=True, methods=['get','post'], url_path="book", url_name="book")
@@ -622,9 +447,9 @@ class BookingViewSet(viewsets.ViewSet):
         # Redirige les visiteurs non connectés vers la page de connexion.
         # / Redirect unauthenticated visitors to the login page.
         if not request.user.is_authenticated:
-            login_url   = reverse('connexion')
-            redirect_url = f'{login_url}?next={request.get_full_path()}'
-            return HttpResponseClientRedirect(redirect_url)
+            messages.add_message(request, messages.WARNING,
+                                 _("Please login to access this page."))
+            return HttpResponseClientRedirect('/')
 
         resource = get_object_or_404(
             Resource.objects.select_related('calendar', 'weekly_opening'),
@@ -688,22 +513,18 @@ class BookingViewSet(viewsets.ViewSet):
         requested_slot     = None
         max_slot_count     = 0
         consecutive_slots  = []
-        if resource.slot_type == Resource.HOUR:
-            for group in slot_groups:
-                for i, slot in enumerate(group.slots):
-                    if slot.start == start_datetime:
-                        requested_slot = slot
-                        for s in group.slots[i:]:
-                            if s.remaining_capacity <= 0:
-                                break
-                            max_slot_count += 1
-                        consecutive_slots = group.slots[i:i + max_slot_count]
-                        break
-                if requested_slot:
+        for group in slot_groups:
+            for i, slot in enumerate(group.slots):
+                if slot.start == start_datetime:
+                    requested_slot = slot
+                    for s in group.slots[i:]:
+                        if s.remaining_capacity <= 0:
+                            break
+                        max_slot_count += 1
+                    consecutive_slots = group.slots[i:i + max_slot_count]
                     break
-        elif resource.slot_type == Resource.DAY:
-            # TODO-FOR-DAY-BOOKING
-            pass
+            if requested_slot:
+                break
 
         # Créneau introuvable ou complet → redirige vers slot-unavailable.
         # / Slot not found or full → redirect to slot-unavailable.
@@ -741,11 +562,7 @@ class BookingViewSet(viewsets.ViewSet):
         # En requete HTMX (popup SweetAlert2), on retourne le partial.
         # / For HTMX requests (SweetAlert2 popup), return the partial.
         if request.htmx:
-            if resource.slot_type == Resource.HOUR:
-                return render(request, 'booking/partials/book_form.html', context)
-            elif resource.slot_type == Resource.DAY:
-                # TODO-FOR-DAY-BOOKING
-                pass
+            return render(request, 'booking/partials/book_form.html', context)
 
         return render(request, 'booking/views/book.html', context)
 
@@ -843,9 +660,6 @@ class BookingViewSet(viewsets.ViewSet):
                 error=validation_result.get('error', error_message),
             )
             if request.htmx:
-                if resource.slot_type == Resource.DAY:
-                    # TODO-FOR-DAY-BOOKING
-                    pass
                 return render(request, 'booking/partials/book_form.html', context, status=422)
             return render(request, 'booking/views/book.html', context)
 
@@ -903,12 +717,8 @@ class BookingViewSet(viewsets.ViewSet):
             ),
             tz,
         )
-        if resource.slot_type == Resource.DAY:
-            # TODO-FOR-DAY-BOOKING
-            pass
-        else:
-            window = Interval(start=start_datetime, end=horizon_end)
-            slot_groups = annotate_slots_for_display(compute_slots(resource, window))
+        window = Interval(start=start_datetime, end=horizon_end)
+        slot_groups = annotate_slots_for_display(compute_slots(resource, window))
 
         requested_slot = None
         max_slot_count = 0
@@ -941,9 +751,6 @@ class BookingViewSet(viewsets.ViewSet):
         # En requete HTMX, on retourne le partial avec les erreurs en 422.
         # / For HTMX requests, return the partial with errors and 422 status.
         if request.htmx:
-            if resource.slot_type == Resource.DAY:
-                # TODO-FOR-DAY-BOOKING
-                pass
             return render(request, 'booking/partials/book_form.html', context, status=422)
         return render(request, 'booking/views/book.html', context)
 

@@ -95,20 +95,20 @@ class Resource(models.Model):
         verbose_name=_('Booking horizon (days)'),
         help_text=_('How far ahead a member can book.'),
     )
-
-    HOUR, DAY = "H", "D"
-
-    STATUS_CHOICES = [
-        (HOUR, _("à l'heure")),
-        (DAY, _('à la journée')),
-    ]
-
-    slot_type = models.CharField(
-        max_length=1,
-        choices=STATUS_CHOICES,
-        default=HOUR,
-        verbose_name=_('Type de réservation'),
-    )
+    #
+    # HOUR, DAY = "H", "D"
+    #
+    # STATUS_CHOICES = [
+    #     (HOUR, _("à l'heure")),
+    #     (DAY, _('à la journée')),
+    # ]
+    #
+    # slot_type = models.CharField(
+    #     max_length=1,
+    #     choices=STATUS_CHOICES,
+    #     default=HOUR,
+    #     verbose_name=_('Type de réservation'),
+    # )
 
 
     class Meta:

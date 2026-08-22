@@ -309,7 +309,6 @@ class CommandeService:
 
                 price = Price.objects.get(uuid=item['price_uuid'])
 
-                # TODO-FOR-DAY-BOOKING : add logic for DAY based booking
 
                 # Code promo de cet item specifiquement (pas du panier global).
                 # / Promo code for this specific item (not cart-global).
