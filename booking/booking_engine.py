@@ -514,7 +514,6 @@ def validate_new_booking(resource,
              (False, str)    message d'erreur / error message
     """
     from booking.models import Booking
-    # TODO-FOR-DAY-BOOKING : add logic for DAY based booking
 
     # Refuse tout créneau dont le début est passé — sans ouvrir de transaction.
     # / Reject any past slot — without opening a transaction.
@@ -614,11 +613,7 @@ def validate_new_booking(resource,
                     raise serializers.ValidationError(_("Custom amount is required for free price."))
                 price_to_compute = custom_amount
 
-            if resource.slot_type == resource.HOUR:
-                amount = Decimal(slot_duration_minutes) / Decimal(60) * Decimal(slot_count) * Decimal(price_to_compute)
-            elif resource.slot_type == resource.DAY:
-                # TODO-FOR-DAY-BOOKING
-                amount = Decimal(slot_count) * Decimal(price_to_compute)
+            amount = Decimal(slot_duration_minutes) / Decimal(60) * Decimal(slot_count) * Decimal(price_to_compute)
 
             price_sold = get_or_create_price_sold(price=price, promo_code=promo_code, custom_amount=amount)
 

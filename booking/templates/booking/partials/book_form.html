@@ -108,7 +108,7 @@ DEPENDENCIES :
                         <label for="amount-{{ price.uuid }}" class="form-label">
                             <strong>{{ price.name }}</strong>
                             {% if not price.free_price and price.prix > 0 %}&nbsp;:
-                                <span class="js-order-price">{{ price.prix }}</span>&nbsp;€ {% if resource.slot_type == resource.HOUR %} /h {% endif %}
+                                <span class="js-order-price">{{ price.prix }}</span>&nbsp;€  /h
                             {% elif price.free_price %}
                                 <span class="js-order-price-alt d-none">{% trans 'at an open price' %}</span>
                             {% endif %}
@@ -150,7 +150,7 @@ DEPENDENCIES :
                                             {% if price.free_price %}
                                                 {{ price.name }}
                                             {% else %}
-                                                {{ price.name }} - {{ price.prix }}€ {% if resource.slot_type == resource.HOUR %} /h {% endif %}
+                                                {{ price.name }} - {{ price.prix }}€ /h
                                             {% endif %}
                                             {% if price.out_of_stock %}({% trans "Out of stock." %}){% endif %}
                                             {% if price|in_list:price_max_per_user_reached %}
@@ -191,7 +191,7 @@ DEPENDENCIES :
                                             {% if price.free_price %}
                                                 {{ price.name }}
                                             {% else %}
-                                                {{ price.name }} - {{ price.prix }}€ {% if resource.slot_type == resource.HOUR %} /h {% endif %}
+                                                {{ price.name }} - {{ price.prix }}€ /h
                                             {% endif %}
                                             {% if price.out_of_stock %}({% trans "Out of stock." %}){% endif %}
                                             {% if price|in_list:price_max_per_user_reached %}

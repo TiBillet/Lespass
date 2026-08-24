@@ -757,8 +757,6 @@ class PanierSession:
         from BaseBillet.models import Price, Product
         from booking.models import Resource
 
-        # TODO-FOR-DAY-BOOKING : add logic for DAY based booking
-
         # # Validation 1 : Price existe et publié
         # # Validation 1: Price exists and published
         try:
@@ -906,11 +904,7 @@ class PanierSession:
         if price.free_price:
             price_to_compute = custom_amount_dec
 
-        if resource.slot_type == resource.HOUR:
-            total_estimation = Decimal(slot_duration_minutes) / Decimal(60) * Decimal(slot_count) * Decimal(price_to_compute)
-        elif resource.slot_type == resource.DAY:
-            # TODO-FOR-DAY-BOOKING
-            total_estimation = Decimal(slot_count) * Decimal(price_to_compute)
+        total_estimation = Decimal(slot_duration_minutes) / Decimal(60) * Decimal(slot_count) * Decimal(price_to_compute)
 
 
         item = {

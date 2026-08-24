@@ -62,7 +62,6 @@ class Migration(migrations.Migration):
                 ('capacity', models.PositiveIntegerField(default=1, help_text='Maximum simultaneous bookings per slot. 1 = exclusive use.', verbose_name='Capacity')),
                 ('cancellation_deadline_hours', models.PositiveIntegerField(default=24, help_text='Hours before slot start within which cancellation is allowed.', verbose_name='Cancellation deadline (hours)')),
                 ('booking_horizon_days', models.PositiveIntegerField(default=28, help_text='How far ahead a member can book.', verbose_name='Booking horizon (days)')),
-                ('slot_type', models.CharField(choices=[('H', "à l'heure"), ('D', 'à la journée')], default='H', max_length=1, verbose_name='Type de réservation')),
                 ('calendar', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='resources', to='booking.calendar', verbose_name='Calendar')),
                 ('group', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='resources', to='booking.resourcegroup', verbose_name='Group')),
                 ('product', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='resources', to='BaseBillet.product', verbose_name='Produit')),
