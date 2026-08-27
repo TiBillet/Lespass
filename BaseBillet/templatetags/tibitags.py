@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from Administration.management.commands.demo_data import logger
+from BaseBillet.models import Membership
 from fedow_connect.utils import dround as utils_dround
 
 register = template.Library()
@@ -88,6 +89,7 @@ def is_membership(user, membership_product) -> bool:
         return user.memberships.filter(
             price__product__in=membership_product.all(),
             deadline__gte=timezone.now(),
+            status__in=[Membership.ONCE, Membership.AUTO, Membership.ADMIN]
         ).exists()
     return user.memberships.filter(price__product=membership_product, deadline__gte=timezone.now()).exists()
 
@@ -362,3 +364,24 @@ def custom_form_table(custom_form, obj=None):
         return {"headers": list(headers), "rows": rows}
     except Exception:
         return {"headers": [_("Field"), _("Answer")], "rows": []}
+
+
+@register.filter
+def in_cart(adhesions_queryset, cart_product_ids):
+    """
+    Template filter : True si au moins un des products d'adhesions_obligatoires
+    est dans la liste des UUIDs d'adhesions du panier.
+
+    / Template filter: True if at least one adhesions_obligatoires product is in
+    the cart's membership UUIDs list.
+
+    Usage :
+        {% if price.adhesions_obligatoires.all|in_cart:panier.adhesions_product_ids %}
+    """
+    if not cart_product_ids:
+        return False
+    cart_ids_str = {str(uid) for uid in cart_product_ids}
+    for product in adhesions_queryset:
+        if str(product.uuid) in cart_ids_str:
+            return True
+    return False

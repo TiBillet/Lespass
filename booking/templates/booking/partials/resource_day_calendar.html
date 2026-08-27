@@ -1,0 +1,172 @@
+{% load i18n l10n tibitags %}
+
+<!--
+Calendrier mensuel de reservation journaliere — partial HTMX.
+/ Monthly day-booking calendar — HTMX partial.
+
+LOCALISATION : booking/templates/booking/partials/resource_day_calendar.html
+
+Ce partial est inclus par resource_day.html et recharge par HTMX lors de la
+navigation entre les mois. Il ne contient ni <style> ni <script>, car ceux-ci
+sont dans la page complete.
+/ This partial is included by resource_day.html and reloaded by HTMX when
+navigating between months. It contains no <style> or <script>, as those are
+in the full page.
+
+DEPENDENCIES :
+  - booking/views/resource_day.html (styles + scripts)
+  - booking/views.py:_render_resource_day_page() (contexte)
+-->
+
+<div id="booking-calendar" class="booking-month-calendar" data-testid="booking-calendar"
+     data-resource-pk="{{ resource.pk }}"
+     data-book-url="{% url 'booking-book' pk=resource.pk %}">
+
+    <!--
+    Selecteur de ressource.
+    / Resource selector.
+    -->
+    <div class="mb-3" data-testid="booking-resource-selector">
+        <label for="resource-select" class="form-label">{% translate "Ressource" %}</label>
+        <select id="resource-select" class="form-select" data-testid="booking-resource-select">
+            {% for group in resource_choices %}
+                {% if group.group_name %}
+                    <optgroup label="{{ group.group_name }}">
+                        {% for resource in group.resources %}
+                            <option value="{{ resource.pk }}"
+                                    {% if resource.selected %}selected{% endif %}
+                                    data-testid="booking-resource-option-{{ resource.pk }}">
+                                {{ resource.name }}
+                            </option>
+                        {% endfor %}
+                    </optgroup>
+                {% else %}
+                    {% for resource in group.resources %}
+                        <option value="{{ resource.pk }}"
+                                {% if resource.selected %}selected{% endif %}
+                                data-testid="booking-resource-option-{{ resource.pk }}">
+                            {{ resource.name }}
+                        </option>
+                    {% endfor %}
+                {% endif %}
+            {% endfor %}
+        </select>
+    </div>
+
+    <!--
+    Navigation par mois avec HTMX.
+    / Month navigation with HTMX.
+    -->
+    <div class="month-nav" role="group" aria-label="{% translate 'Navigation par mois' %}"
+         data-testid="booking-month-nav">
+        <a href="?month={{ prev_month|date:'Y-m' }}"
+           class="btn btn-primary btn-sm"
+           aria-label="{% translate 'Mois précédent' %}"
+           data-testid="booking-month-prev"
+           hx-get="?month={{ prev_month|date:'Y-m' }}"
+           hx-target="#booking-calendar"
+           hx-swap="outerHTML"
+           hx-push-url="true">
+            <i class="bi bi-chevron-left" aria-hidden="true"></i>
+        </a>
+
+        <span class="month-label" data-testid="booking-month-label">
+            {{ requested_month|date:"F Y" }}
+        </span>
+
+        <a href="?month={{ next_month|date:'Y-m' }}"
+           class="btn btn-primary btn-sm"
+           aria-label="{% translate 'Mois suivant' %}"
+           data-testid="booking-month-next"
+           hx-get="?month={{ next_month|date:'Y-m' }}"
+           hx-target="#booking-calendar"
+           hx-swap="outerHTML"
+           hx-push-url="true">
+            <i class="bi bi-chevron-right" aria-hidden="true"></i>
+        </a>
+    </div>
+
+    <!--
+    Grille mensuelle.
+    / Monthly grid.
+    -->
+    <div class="month-grid" aria-live="polite" data-testid="booking-month-grid">
+        {% for weekday_label in weekday_labels %}
+            <div class="month-weekday-header" data-testid="booking-month-weekday-header">
+                {{ weekday_label }}
+            </div>
+        {% endfor %}
+
+        {% for week in month_weeks %}
+            {% for day in week %}
+                <div class="month-day
+                            {% if day.state == 'free' %}month-day-free{% elif day.state == 'busy' %}month-day-busy{% elif day.state == 'cart' %}month-day-cart{% elif day.state == 'past' %}month-day-past{% else %}month-day-unavailable{% endif %}
+                            {% if not day.is_current_month %}month-day-other-month{% endif %}
+                            {% if day.date == today %}month-day-today{% endif %}"
+                     {% if day.state == 'free' or day.state == 'cart' %}
+                         data-start-datetime="{{ day.slot.start|date:'Y-m-d\TH:i:s' }}"
+                         data-group-end="{{ day.group.end|date:'Y-m-d\TH:i:s' }}"
+                         data-remaining-capacity="{{ day.slot.remaining_capacity }}"
+                         role="button"
+                         tabindex="0"
+                     {% else %}
+                         role="none"
+                         tabindex="-1"
+                     {% endif %}
+                     data-testid="booking-month-day-{{ day.state }}"
+                     aria-label="{% if day.state == 'free' %}{% blocktrans with date=day.date|date:'l d F Y' %}Jour {{ date }}, libre{% endblocktrans %}{% elif day.state == 'busy' %}{% blocktrans with date=day.date|date:'l d F Y' %}Jour {{ date }}, complet{% endblocktrans %}{% elif day.state == 'cart' %}{% blocktrans with date=day.date|date:'l d F Y' %}Jour {{ date }}, dans le panier{% endblocktrans %}{% elif day.state == 'past' %}{% blocktrans with date=day.date|date:'l d F Y' %}Jour {{ date }}, passé{% endblocktrans %}{% else %}{% blocktrans with date=day.date|date:'l d F Y' %}Jour {{ date }}, non disponible{% endblocktrans %}{% endif %}"
+                >
+                    <span class="month-day-number">{{ day.date.day }}</span>
+
+                    {% if day.state == 'free' or day.state == 'cart' %}
+                        <span class="month-day-status">
+                            {% if day.state == 'free' %}
+                                {% translate "Libre" %}
+                            {% else %}
+                                {% translate "Panier" %}
+                            {% endif %}
+                        </span>
+                        {% if resource.capacity > 1 and day.state == 'free' %}
+                            <span class="month-day-capacity">
+                                {% blocktrans count n=day.slot.remaining_capacity %}{{ n }} place{% plural %}{{ n }} places{% endblocktrans %}
+                            </span>
+                        {% endif %}
+                    {% elif day.state == 'busy' %}
+                        <span class="month-day-status">{% translate "Complet" %}</span>
+                    {% elif day.state == 'past' %}
+                        <span class="month-day-status">{% translate "Passé" %}</span>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        {% endfor %}
+    </div>
+
+    <!--
+    Legende du calendrier.
+    / Calendar legend.
+    -->
+    <div class="calendar-legend" role="group" aria-label="{% translate 'Légende du calendrier' %}"
+         data-testid="booking-calendar-legend">
+        <span class="calendar-legend-item" data-testid="booking-legend-free">
+            <span class="calendar-legend-color calendar-legend-free"></span>
+            {% translate "Libre" %}
+        </span>
+        <span class="calendar-legend-item" data-testid="booking-legend-busy">
+            <span class="calendar-legend-color calendar-legend-busy"></span>
+            {% translate "Complet" %}
+        </span>
+        <span class="calendar-legend-item" data-testid="booking-legend-cart">
+            <span class="calendar-legend-color calendar-legend-cart"></span>
+            {% translate "Panier" %}
+        </span>
+        <span class="calendar-legend-item" data-testid="booking-legend-past">
+            <span class="calendar-legend-color calendar-legend-past"></span>
+            {% translate "Passé" %}
+        </span>
+        <span class="calendar-legend-item" data-testid="booking-legend-unavailable">
+            <span class="calendar-legend-color calendar-legend-unavailable"></span>
+            {% translate "Non disponible" %}
+        </span>
+    </div>
+
+</div>

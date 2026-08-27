@@ -646,25 +646,31 @@ def get_sidebar_navigation(request):
                 "collapsible": True,
                 "items": [
                     {
-                        "title": _("Resources"),
+                        "title": _("Produit ressources"),
+                        "icon": "chair",
+                        "link": reverse_lazy("staff_admin:BaseBillet_resourceproduct_changelist"),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("Ressources"),
                         "icon": "chair",
                         "link": _safe_rev("staff_admin:booking_resource_changelist"),
                         "permission": admin_permission,
                     },
                     {
-                        "title": _("Resource groups"),
+                        "title": _("Groupe de ressources"),
                         "icon": "stacks",
                         "link": _safe_rev("staff_admin:booking_resourcegroup_changelist"),
                         "permission": admin_permission,
                     },
                     {
-                        "title": _("Calendars"),
+                        "title": _("Calendriers"),
                         "icon": "calendar_month",
                         "link": _safe_rev("staff_admin:booking_calendar_changelist"),
                         "permission": admin_permission,
                     },
                     {
-                        "title": _("Weekly openings"),
+                        "title": _("Période d'ouverture"),
                         "icon": "schedule",
                         "link": _safe_rev("staff_admin:booking_weeklyopening_changelist"),
                         "permission": admin_permission,

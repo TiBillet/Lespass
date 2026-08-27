@@ -1,0 +1,1169 @@
+# Catalogue des cas de test — `booking` app
+
+**Référence spécification :** `booking/doc/tibillet-booking-spec.md` Section 3
+**Fichiers de test :** `booking/tests/`
+
+--------------------------------------------------------------------------------
+
+## Notation
+
+Ce document utilise une syntaxe pseudo-Haskell pour décrire les cas de
+test de façon concise et sans ambiguïté. Voici les règles nécessaires
+pour lire le document.
+
+**Type signatures**
+
+```
+f :: A → B → C
+```
+
+`f` prend un argument de type `A`, un de type `B`, et retourne `C`.
+`[X]` signifie une liste de `X`. Ce n'est pas du code exécutable —
+c'est une description de ce que la fonction accepte et retourne.
+
+**Application de fonction**
+
+```
+y = f x          -- f appliquée à x, résultat dans y
+z = f x (g w)    -- les parenthèses groupent les arguments
+```
+
+Pas de parenthèses ni de virgules autour des arguments — ils sont
+séparés par des espaces. Les parenthèses ne servent qu'à grouper.
+
+**Constructeurs de valeur**
+
+```
+cal = Calendar "nom" [ClosedPeriod "2026-06-01" "2026-06-03"]
+wop = WeeklyOpening "nom" [OpeningEntry MONDAY "09:00" 60 2]
+b1  = Booking user start="2026-06-01 09:00 +02:00" duration=60 count=1 status=confirmed
+```
+
+`Calendar`, `WeeklyOpening`, `Booking` sont des constructeurs — ils
+créent un objet avec les champs donnés. Les arguments nommés
+(`start=`, `duration=`) sont utilisés quand l'ordre serait ambigu.
+
+**Listes**
+
+```
+[x, y, z]   -- liste de trois éléments
+[]          -- liste vide
+xs ++ ys    -- concaténation de deux listes
+```
+
+**Dérivation en chaîne**
+
+Chaque test suit la chaîne :
+
+```
+cal → O → W → B → E → validate
+```
+
+où chaque étape est nommée et vérifiée avant d'être passée à la
+suivante. Les `assert` intermédiaires sont des points de contrôle
+lisibles — ils ne font pas partie du test exécutable mais montrent
+pourquoi le résultat final est ce qu'il est.
+
+Tous les tests utilisent des dates fixes. Les tests de
+`validate_new_booking` utilisent `reference_date = "2026-06-01"` comme
+date de référence (§13) : horizon 28 jours → jusqu'au `"2026-06-29"`.
+`monday = "2026-06-08"` (MONDAY_NEAR, +7j, min_days_ahead=2 et 3) ;
+`monday = "2026-06-15"` (MONDAY_FAR, +14j, min_days_ahead=14).
+
+--------------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Tests — open-day
+# open-day :: Interval → Calendar → [Interval]
+#
+# The timezone is derived from window.start.tzinfo — no separate tz argument.
+# All window bounds are tz-aware datetimes; the end is exclusive (half-open).
+# ---------------------------------------------------------------------------
+
+# test_get_closed_intervals_returns_interval_covering_closed_period
+# ClosedPeriod Jun 10–12 (3 days) → closed [Jun 10, Jun 13)
+# complement within [Jun 01, Jul 01) → two open intervals
+
+c      = Calendar "cal" [ClosedPeriod "2026-06-10" "2026-06-12"]
+window = Interval "2026-06-01 00:00 +02:00" "2026-07-01 00:00 +02:00"
+od     = open-day window c
+
+assert od == [
+    Interval "2026-06-01 00:00 +02:00" "2026-06-10 00:00 +02:00",
+    Interval "2026-06-13 00:00 +02:00" "2026-07-01 00:00 +02:00",
+]
+
+
+# test_get_closed_intervals_handles_single_day_period
+# ClosedPeriod Jun 15 only → closed [Jun 15, Jun 16)
+# complement → two open intervals
+
+c      = Calendar "cal" [ClosedPeriod "2026-06-15" "2026-06-15"]
+window = Interval "2026-06-01 00:00 +02:00" "2026-07-01 00:00 +02:00"
+od     = open-day window c
+
+assert od == [
+    Interval "2026-06-01 00:00 +02:00" "2026-06-15 00:00 +02:00",
+    Interval "2026-06-16 00:00 +02:00" "2026-07-01 00:00 +02:00",
+]
+
+
+# test_get_closed_intervals_handles_null_end_date
+# end_date=None → closed extends to window.end = Jun 26 00:00
+# complement → one open interval before the closure
+
+c      = Calendar "cal" [ClosedPeriod "2026-06-20" None]
+window = Interval "2026-06-18 00:00 +02:00" "2026-06-26 00:00 +02:00"
+od     = open-day window c
+
+assert od == [
+    Interval "2026-06-18 00:00 +02:00" "2026-06-20 00:00 +02:00",
+]
+
+
+# test_get_closed_intervals_handles_overlapping_closed_periods
+# two overlapping ClosedPeriods → merged [Jun 10, Jun 19)
+# complement within [Jun 01, Jul 01) → two open intervals
+
+c      = Calendar "cal" [ClosedPeriod "2026-06-10" "2026-06-15",
+                         ClosedPeriod "2026-06-13" "2026-06-18"]
+window = Interval "2026-06-01 00:00 +02:00" "2026-07-01 00:00 +02:00"
+od     = open-day window c
+
+assert od == [
+    Interval "2026-06-01 00:00 +02:00" "2026-06-10 00:00 +02:00",
+    Interval "2026-06-19 00:00 +02:00" "2026-07-01 00:00 +02:00",
+]
+
+
+# ---------------------------------------------------------------------------
+# Tests — theoretical-slots
+# theoretical-slots :: WeeklyOpening → [Interval] → Interval → [Interval]
+#
+# The same window is passed to both open-day and theoretical-slots.
+# open-day uses it to clip ClosedPeriods; theoretical-slots uses it
+# to bound the date iteration range.
+# ---------------------------------------------------------------------------
+
+# test_generate_theoretical_slots_from_weekday_template
+# 2026-06-01 is Monday; Europe/Paris in June = CEST = +02:00
+
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-02 00:00 +02:00"
+cal    = Calendar "cal" []
+O      = open-day window cal
+wop    = WeeklyOpening "wop" [OpeningEntry MONDAY "09:00" 60 2]
+
+W      = theoretical-slots wop O window
+
+assert W == [
+    Interval "2026-06-01 09:00 +02:00" "2026-06-01 10:00 +02:00",
+    Interval "2026-06-01 10:00 +02:00" "2026-06-01 11:00 +02:00",
+]
+
+
+# test_generate_theoretical_slots_excludes_closed_dates
+# two Mondays in window (Jun 1, Jun 8); Jun 1 closed → O starts Jun 2
+# Jun 1 slot [09:00, 10:00) ⊄ O → excluded; Jun 8 slot ⊆ O → kept
+
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-09 00:00 +02:00"
+cal    = Calendar "cal" [ClosedPeriod "2026-06-01" "2026-06-01"]
+O      = open-day window cal
+wop    = WeeklyOpening "wop" [OpeningEntry MONDAY "09:00" 60 1]
+
+W      = theoretical-slots wop O window
+
+assert W == [
+    Interval "2026-06-08 09:00 +02:00" "2026-06-08 10:00 +02:00",
+]
+
+
+# test_generate_theoretical_slots_respects_date_to_boundary
+# one Monday in window (Jun 1); next Monday Jun 8 is beyond end → excluded
+
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-08 00:00 +02:00"
+cal    = Calendar "cal" []
+O      = open-day window cal
+wop    = WeeklyOpening "wop" [OpeningEntry MONDAY "09:00" 60 1]
+
+W      = theoretical-slots wop O window
+
+assert W == [
+    Interval "2026-06-01 09:00 +02:00" "2026-06-01 10:00 +02:00",
+]
+
+
+# test_generate_theoretical_slots_start_on_closed_day_bleed_into_open_day_is_excluded
+# Mon 23:30–Tue 00:30; Mon closed → O = [Tue 00:00, Wed 00:00)
+# slot.start = Mon 23:30 ∉ O → excluded
+
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-03 00:00 +02:00"
+cal    = Calendar "cal" [ClosedPeriod "2026-06-01" "2026-06-01"]
+O      = open-day window cal
+wop    = WeeklyOpening "wop" [OpeningEntry MONDAY "23:30" 60 1]
+
+W      = theoretical-slots wop O window
+
+assert W == []
+
+
+# test_generate_theoretical_slots_last_slot_bleeds_onto_open_day_is_returned
+# slot[0] Mon 22:00–00:00 → start=Mon(closed) ⊄ O → excluded
+# slot[1] Tue 00:00–02:00 → start=Tue(open)   ⊆ O → kept
+
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-03 00:00 +02:00"
+cal    = Calendar "cal" [ClosedPeriod "2026-06-01" "2026-06-01"]
+O      = open-day window cal
+wop    = WeeklyOpening "wop" [OpeningEntry MONDAY "22:00" 120 2]
+
+W      = theoretical-slots wop O window
+
+assert W == [
+    Interval "2026-06-02 00:00 +02:00" "2026-06-02 02:00 +02:00",
+]
+
+
+# test_generate_theoretical_slots_multi_day_spanning_entry
+# slot[0] Mon 08:00–20:00  ⊆ O(Mon) → kept
+# slot[1] Mon 20:00–Tue 08:00  ⊄ O (crosses Tue=closed) → excluded
+# slot[2] Tue 08:00–20:00  ⊄ O (Tue closed) → excluded
+
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-03 00:00 +02:00"
+cal    = Calendar "cal" [ClosedPeriod "2026-06-02" "2026-06-02"]
+O      = open-day window cal
+wop    = WeeklyOpening "wop" [OpeningEntry MONDAY "08:00" 720 3]
+
+W      = theoretical-slots wop O window
+
+assert W == [
+    Interval "2026-06-01 08:00 +02:00" "2026-06-01 20:00 +02:00",
+]
+
+
+# test_generate_theoretical_slots_bleed_into_closed_day_start_date_is_open
+# Sun 23:30–Mon 00:30; Mon closed → O = [Sun 00:00, Mon 00:00)
+# slot.end = Mon 00:30 > O.end = Mon 00:00 → slot ⊄ O → excluded
+
+window = Interval "2026-06-07 00:00 +02:00" "2026-06-09 00:00 +02:00"
+cal    = Calendar "cal" [ClosedPeriod "2026-06-08" "2026-06-08"]
+O      = open-day window cal
+wop    = WeeklyOpening "wop" [OpeningEntry SUNDAY "23:30" 60 1]
+
+W      = theoretical-slots wop O window
+
+assert W == []
+
+
+# test_generate_theoretical_slots_multi_day_slot_all_open_days_is_returned
+# Thu 00:00–Sat 00:00 (2880 min); intersects Thu+Fri, both open → kept
+
+window = Interval "2026-06-04 00:00 +02:00" "2026-06-07 00:00 +02:00"
+cal    = Calendar "cal" []
+O      = open-day window cal
+wop    = WeeklyOpening "wop" [OpeningEntry THURSDAY "00:00" 2880 1]
+
+W      = theoretical-slots wop O window
+
+assert W == [
+    Interval "2026-06-04 00:00 +02:00" "2026-06-06 00:00 +02:00",
+]
+
+
+# test_generate_theoretical_slots_three_day_slot_with_closed_middle_day_is_excluded
+# Thu 00:00–Sun 00:00 (4320 min); intersects Thu+Fri+Sat; Fri closed → excluded
+
+window = Interval "2026-06-04 00:00 +02:00" "2026-06-08 00:00 +02:00"
+cal    = Calendar "cal" [ClosedPeriod "2026-06-05" "2026-06-05"]
+O      = open-day window cal
+wop    = WeeklyOpening "wop" [OpeningEntry THURSDAY "00:00" 4320 1]
+
+W      = theoretical-slots wop O window
+
+assert W == []
+
+
+# ---------------------------------------------------------------------------
+# Tests — bookable-intervals
+# bookable-intervals :: [Interval] → Int → [Interval] → [BookableInterval]
+# ---------------------------------------------------------------------------
+
+# test_compute_remaining_capacity_with_no_bookings_equals_capacity
+
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-02 00:00 +02:00"
+cal    = Calendar "cal" []
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-01 00:00 +02:00" "2026-06-02 00:00 +02:00",
+]
+
+wop = WeeklyOpening "wop" [OpeningEntry MONDAY "09:00" 60 1]
+W   = theoretical-slots wop O window
+assert W == [
+    Interval "2026-06-01 09:00 +02:00" "2026-06-01 10:00 +02:00",
+]
+
+E = bookable-intervals W capacity=3 []
+
+assert E == [
+    BookableInterval (Interval "2026-06-01 09:00 +02:00" "2026-06-01 10:00 +02:00") max=3 remaining=3,
+]
+
+
+# test_compute_remaining_capacity_decreases_with_overlapping_booking
+
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-02 00:00 +02:00"
+cal    = Calendar "cal" []
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-01 00:00 +02:00" "2026-06-02 00:00 +02:00",
+]
+
+wop = WeeklyOpening "wop" [OpeningEntry MONDAY "09:00" 60 1]
+W   = theoretical-slots wop O window
+assert W == [
+    Interval "2026-06-01 09:00 +02:00" "2026-06-01 10:00 +02:00",
+]
+
+b1 = Booking user start="2026-06-01 09:00 +02:00" duration=60 count=1 status=confirmed
+B  = expand b1
+assert B == [
+    Interval "2026-06-01 09:00 +02:00" "2026-06-01 10:00 +02:00",
+]
+
+E = bookable-intervals W capacity=3 B
+
+assert E == [
+    BookableInterval (Interval "2026-06-01 09:00 +02:00" "2026-06-01 10:00 +02:00") max=3 remaining=2,
+]
+
+
+# test_compute_remaining_capacity_zero_when_all_units_taken
+
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-02 00:00 +02:00"
+cal    = Calendar "cal" []
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-01 00:00 +02:00" "2026-06-02 00:00 +02:00",
+]
+
+wop = WeeklyOpening "wop" [OpeningEntry MONDAY "09:00" 60 1]
+W   = theoretical-slots wop O window
+assert W == [
+    Interval "2026-06-01 09:00 +02:00" "2026-06-01 10:00 +02:00",
+]
+
+b1 = Booking user start="2026-06-01 09:00 +02:00" duration=60 count=1 status=new
+b2 = Booking user start="2026-06-01 09:00 +02:00" duration=60 count=1 status=confirmed
+B  = expand b1 ++ expand b2
+assert B == [
+    Interval "2026-06-01 09:00 +02:00" "2026-06-01 10:00 +02:00",
+    Interval "2026-06-01 09:00 +02:00" "2026-06-01 10:00 +02:00",
+]
+
+E = bookable-intervals W capacity=2 B
+
+assert E == [
+    BookableInterval (Interval "2026-06-01 09:00 +02:00" "2026-06-01 10:00 +02:00") max=2 remaining=0,
+]
+
+
+# ---------------------------------------------------------------------------
+# Tests — compute_slots (end-to-end)
+# open-day            :: Interval → Calendar → [Interval]
+# theoretical-slots   :: WeeklyOpening → [Interval] → Interval → [Interval]
+# expand              :: Booking → [Interval]
+# bookable-intervals  :: [Interval] → Int → [Interval] → [BookableInterval]
+# ---------------------------------------------------------------------------
+
+# test_compute_slots_booking_count_gt_1_overlaps_multiple_slots
+# booking covers 09:00–11:00 (2×60 min); both slots consumed
+
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-02 00:00 +02:00"
+cal    = Calendar "cal" []
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-01 00:00 +02:00" "2026-06-02 00:00 +02:00",
+]
+
+wop = WeeklyOpening "wop" [OpeningEntry MONDAY "09:00" 60 2]
+W   = theoretical-slots wop O window
+assert W == [
+    Interval "2026-06-01 09:00 +02:00" "2026-06-01 10:00 +02:00",
+    Interval "2026-06-01 10:00 +02:00" "2026-06-01 11:00 +02:00",
+]
+
+b1  = Booking user start="2026-06-01 09:00 +02:00" duration=60 count=2 status=confirmed
+B   = expand b1
+assert B == [
+    Interval "2026-06-01 09:00 +02:00" "2026-06-01 10:00 +02:00",
+    Interval "2026-06-01 10:00 +02:00" "2026-06-01 11:00 +02:00",
+]
+
+E = bookable-intervals W capacity=1 B
+
+assert E == [
+    BookableInterval (Interval "2026-06-01 09:00 +02:00" "2026-06-01 10:00 +02:00") max=1 remaining=0,
+    BookableInterval (Interval "2026-06-01 10:00 +02:00" "2026-06-01 11:00 +02:00") max=1 remaining=0,
+]
+
+
+# test_compute_slots_booking_partial_overlap_counts_as_full_overlap
+# b1 covers 09:30–10:30 — partially overlaps slot 09:00–10:00 → remaining=0
+
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-02 00:00 +02:00"
+cal    = Calendar "cal" []
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-01 00:00 +02:00" "2026-06-02 00:00 +02:00",
+]
+
+wop = WeeklyOpening "wop" [OpeningEntry MONDAY "09:00" 60 1]
+W   = theoretical-slots wop O window
+assert W == [
+    Interval "2026-06-01 09:00 +02:00" "2026-06-01 10:00 +02:00",
+]
+
+b1 = Booking user start="2026-06-01 09:30 +02:00" duration=60 count=1 status=confirmed
+B  = expand b1
+assert B == [
+    Interval "2026-06-01 09:30 +02:00" "2026-06-01 10:30 +02:00",
+]
+
+E = bookable-intervals W capacity=1 B
+
+assert E == [
+    BookableInterval (Interval "2026-06-01 09:00 +02:00" "2026-06-01 10:00 +02:00") max=1 remaining=0,
+]
+
+
+# test_compute_slots_returns_empty_when_no_opening_entries
+
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-08 00:00 +02:00"
+cal    = Calendar "cal" []
+O      = open-day window cal
+
+wop = WeeklyOpening "wop" []
+W   = theoretical-slots wop O window
+assert W == []
+
+E = bookable-intervals W capacity=1 []
+
+assert E == []
+
+
+# test_compute_slots_end_to_end_with_fixture_coworking_resource
+# Coworking style: Mon–Fri, 8×60min from 09:00, capacity=3.
+# reference_date = "2026-06-01", monday = "2026-06-02".
+
+window = Interval "2026-06-02 00:00 +02:00" "2026-06-03 00:00 +02:00"
+cal    = Calendar "coworking_e2e" []
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-02 00:00 +02:00" "2026-06-03 00:00 +02:00",
+]
+
+wop = WeeklyOpening "coworking_e2e" [
+    OpeningEntry MONDAY    "09:00" 60 8,
+    OpeningEntry TUESDAY   "09:00" 60 8,
+    OpeningEntry WEDNESDAY "09:00" 60 8,
+    OpeningEntry THURSDAY  "09:00" 60 8,
+    OpeningEntry FRIDAY    "09:00" 60 8,
+]
+W   = theoretical-slots wop O window
+assert W == [
+    Interval "2026-06-02 09:00 +02:00" "2026-06-02 10:00 +02:00",
+    Interval "2026-06-02 10:00 +02:00" "2026-06-02 11:00 +02:00",
+    Interval "2026-06-02 11:00 +02:00" "2026-06-02 12:00 +02:00",
+    Interval "2026-06-02 12:00 +02:00" "2026-06-02 13:00 +02:00",
+    Interval "2026-06-02 13:00 +02:00" "2026-06-02 14:00 +02:00",
+    Interval "2026-06-02 14:00 +02:00" "2026-06-02 15:00 +02:00",
+    Interval "2026-06-02 15:00 +02:00" "2026-06-02 16:00 +02:00",
+    Interval "2026-06-02 16:00 +02:00" "2026-06-02 17:00 +02:00",
+]
+
+B = []   # aucune réservation / no bookings
+E = bookable-intervals W capacity=3 B
+
+assert len E == 8
+assert all (bi.max == 3)       for bi in E
+assert all (bi.remaining == 3) for bi in E
+
+
+# test_compute_slots_end_to_end_with_fixture_petite_salle
+# Petite salle style: Sat+Sun, 3×180min from 10:00, capacity=1.
+# reference_date = "2026-06-01", saturday = "2026-06-07".
+
+window = Interval "2026-06-07 00:00 +02:00" "2026-06-08 00:00 +02:00"
+cal    = Calendar "petite_salle_e2e" []
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-07 00:00 +02:00" "2026-06-08 00:00 +02:00",
+]
+
+wop = WeeklyOpening "petite_salle_e2e" [
+    OpeningEntry SATURDAY "10:00" 180 3,
+    OpeningEntry SUNDAY   "10:00" 180 3,
+]
+W   = theoretical-slots wop O window
+assert W == [
+    Interval "2026-06-07 10:00 +02:00" "2026-06-07 13:00 +02:00",
+    Interval "2026-06-07 13:00 +02:00" "2026-06-07 16:00 +02:00",
+    Interval "2026-06-07 16:00 +02:00" "2026-06-07 19:00 +02:00",
+]
+
+B = []   # aucune réservation / no bookings
+E = bookable-intervals W capacity=1 B
+
+assert len E == 3
+assert all (bi.max == 1)       for bi in E
+assert all (bi.remaining == 1) for bi in E
+
+
+# ---------------------------------------------------------------------------
+# Tests — theoretical-slots — full-week opening
+# Shared setup:
+#   window = Interval "2026-06-01 00:00 +02:00" "2026-06-08 00:00 +02:00"
+#   cal    = Calendar "cal" []
+#   wop    = WeeklyOpening "wop" [OpeningEntry d "00:00" 60 24 for d in MON..SUN]
+#   O      = open-day window cal
+# ---------------------------------------------------------------------------
+
+# test_full_week_opening_no_closed_day_returns_168_slots
+
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-08 00:00 +02:00"
+cal    = Calendar "cal" []
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-01 00:00 +02:00" "2026-06-08 00:00 +02:00",
+]
+
+wop = WeeklyOpening "wop" [OpeningEntry d "00:00" 60 24 for d in MON..SUN]
+W   = theoretical-slots wop O window
+
+assert len W == 168   # 7 days × 24 slots
+
+
+# test_full_week_opening_wednesday_closed_returns_144_slots
+# Tuesday's last slot 23:00–00:00 ends at Wed midnight (half-open) → not excluded
+# O splits into [Mon 00:00, Wed 00:00) and [Thu 00:00, Sun+1 00:00)
+
+cal = Calendar "cal" [ClosedPeriod "2026-06-03" "2026-06-03"]
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-08 00:00 +02:00"
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-01 00:00 +02:00" "2026-06-03 00:00 +02:00",
+    Interval "2026-06-04 00:00 +02:00" "2026-06-08 00:00 +02:00",
+]
+
+wop = WeeklyOpening "wop" [OpeningEntry d "00:00" 60 24 for d in MON..SUN]
+W   = theoretical-slots wop O window
+
+assert len W == 144   # 6 days × 24 slots
+assert all (s.start.date() != "2026-06-03") for s in W
+
+
+# test_full_week_opening_monday_closed_returns_144_slots
+
+cal = Calendar "cal" [ClosedPeriod "2026-06-01" "2026-06-01"]
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-08 00:00 +02:00"
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-02 00:00 +02:00" "2026-06-08 00:00 +02:00",
+]
+
+wop = WeeklyOpening "wop" [OpeningEntry d "00:00" 60 24 for d in MON..SUN]
+W   = theoretical-slots wop O window
+
+assert len W == 144
+assert all (s.start.date() != "2026-06-01") for s in W
+
+
+# test_full_week_opening_sunday_closed_returns_144_slots
+# Saturday's last slot 23:00–00:00 ends at Sun 00:00 = O[0].end → still ⊆ O
+
+cal = Calendar "cal" [ClosedPeriod "2026-06-07" "2026-06-07"]
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-08 00:00 +02:00"
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-01 00:00 +02:00" "2026-06-07 00:00 +02:00",
+]
+
+wop = WeeklyOpening "wop" [OpeningEntry d "00:00" 60 24 for d in MON..SUN]
+W   = theoretical-slots wop O window
+
+assert len W == 144
+assert all (s.start.date() != "2026-06-07") for s in W
+
+
+# test_full_week_opening_two_non_adjacent_days_closed_returns_120_slots
+
+cal = Calendar "cal" [ClosedPeriod "2026-06-02" "2026-06-02",
+                      ClosedPeriod "2026-06-05" "2026-06-05"]
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-08 00:00 +02:00"
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-01 00:00 +02:00" "2026-06-02 00:00 +02:00",
+    Interval "2026-06-03 00:00 +02:00" "2026-06-05 00:00 +02:00",
+    Interval "2026-06-06 00:00 +02:00" "2026-06-08 00:00 +02:00",
+]
+
+wop = WeeklyOpening "wop" [OpeningEntry d "00:00" 60 24 for d in MON..SUN]
+W   = theoretical-slots wop O window
+
+assert len W == 120   # 5 days × 24 slots
+assert all (s.start.date() != "2026-06-02") for s in W
+assert all (s.start.date() != "2026-06-05") for s in W
+
+
+# ---------------------------------------------------------------------------
+# Tests — theoretical-slots — 1 entry × 7 one-day slots
+# wop = WeeklyOpening [OpeningEntry MONDAY "00:00" 1440 7]
+# Each slot is one full day; slot[k].start = Mon + k days
+# ---------------------------------------------------------------------------
+
+# test_one_day_slots_opening_no_closed_day_returns_7_slots
+
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-08 00:00 +02:00"
+cal    = Calendar "cal" []
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-01 00:00 +02:00" "2026-06-08 00:00 +02:00",
+]
+
+wop = WeeklyOpening "wop" [OpeningEntry MONDAY "00:00" 1440 7]
+W   = theoretical-slots wop O window
+assert W == [
+    Interval "2026-06-01 00:00 +02:00" "2026-06-02 00:00 +02:00",
+    Interval "2026-06-02 00:00 +02:00" "2026-06-03 00:00 +02:00",
+    Interval "2026-06-03 00:00 +02:00" "2026-06-04 00:00 +02:00",
+    Interval "2026-06-04 00:00 +02:00" "2026-06-05 00:00 +02:00",
+    Interval "2026-06-05 00:00 +02:00" "2026-06-06 00:00 +02:00",
+    Interval "2026-06-06 00:00 +02:00" "2026-06-07 00:00 +02:00",
+    Interval "2026-06-07 00:00 +02:00" "2026-06-08 00:00 +02:00",
+]
+
+
+# test_one_day_slots_opening_wednesday_closed_returns_6_slots
+
+cal = Calendar "cal" [ClosedPeriod "2026-06-03" "2026-06-03"]
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-08 00:00 +02:00"
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-01 00:00 +02:00" "2026-06-03 00:00 +02:00",
+    Interval "2026-06-04 00:00 +02:00" "2026-06-08 00:00 +02:00",
+]
+
+wop = WeeklyOpening "wop" [OpeningEntry MONDAY "00:00" 1440 7]
+W   = theoretical-slots wop O window
+
+assert len W == 6
+assert all (s.start.date() != "2026-06-03") for s in W
+
+
+# test_one_day_slots_opening_monday_closed_returns_6_slots
+# slot[0] Jun 01–02 ⊄ O (O starts Jun 02) → excluded; slots[1..6] ⊆ O → kept
+
+cal = Calendar "cal" [ClosedPeriod "2026-06-01" "2026-06-01"]
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-08 00:00 +02:00"
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-02 00:00 +02:00" "2026-06-08 00:00 +02:00",
+]
+
+wop = WeeklyOpening "wop" [OpeningEntry MONDAY "00:00" 1440 7]
+W   = theoretical-slots wop O window
+
+assert len W == 6
+assert W[0] == Interval "2026-06-02 00:00 +02:00" "2026-06-03 00:00 +02:00"
+
+
+# test_one_day_slots_opening_sunday_closed_returns_6_slots
+# slot[6] Jun 07–08 ⊄ O (O ends Jun 07) → excluded; slots[0..5] ⊆ O → kept
+
+cal = Calendar "cal" [ClosedPeriod "2026-06-07" "2026-06-07"]
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-08 00:00 +02:00"
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-01 00:00 +02:00" "2026-06-07 00:00 +02:00",
+]
+
+wop = WeeklyOpening "wop" [OpeningEntry MONDAY "00:00" 1440 7]
+W   = theoretical-slots wop O window
+
+assert len W == 6
+assert W[-1] == Interval "2026-06-06 00:00 +02:00" "2026-06-07 00:00 +02:00"
+
+
+# test_one_day_slots_opening_two_non_adjacent_days_closed_returns_5_slots
+
+cal = Calendar "cal" [ClosedPeriod "2026-06-02" "2026-06-02",
+                      ClosedPeriod "2026-06-05" "2026-06-05"]
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-08 00:00 +02:00"
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-01 00:00 +02:00" "2026-06-02 00:00 +02:00",
+    Interval "2026-06-03 00:00 +02:00" "2026-06-05 00:00 +02:00",
+    Interval "2026-06-06 00:00 +02:00" "2026-06-08 00:00 +02:00",
+]
+
+wop = WeeklyOpening "wop" [OpeningEntry MONDAY "00:00" 1440 7]
+W   = theoretical-slots wop O window
+
+assert len W == 5
+assert all (s.start.date() != "2026-06-02") for s in W
+assert all (s.start.date() != "2026-06-05") for s in W
+
+
+# ---------------------------------------------------------------------------
+# Tests — theoretical-slots — 1 entry × 1 full-week slot
+# wop = WeeklyOpening [OpeningEntry MONDAY "00:00" 10080 1]
+# The single slot = Interval "2026-06-01 00:00 +02:00" "2026-06-08 00:00 +02:00"
+# Any closed day splits O → slot ⊄ any single o ∈ O → W = []
+# ---------------------------------------------------------------------------
+
+# test_one_week_slot_opening_no_closed_day_returns_1_slot
+
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-08 00:00 +02:00"
+cal    = Calendar "cal" []
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-01 00:00 +02:00" "2026-06-08 00:00 +02:00",
+]
+
+wop = WeeklyOpening "wop" [OpeningEntry MONDAY "00:00" 10080 1]
+W   = theoretical-slots wop O window
+assert W == [
+    Interval "2026-06-01 00:00 +02:00" "2026-06-08 00:00 +02:00",
+]
+
+
+# test_one_week_slot_opening_wednesday_closed_returns_0_slots
+# slot [Jun 01, Jun 08) ⊄ O[0]=[Jun 01, Jun 03) and ⊄ O[1]=[Jun 04, Jun 08)
+
+cal = Calendar "cal" [ClosedPeriod "2026-06-03" "2026-06-03"]
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-08 00:00 +02:00"
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-01 00:00 +02:00" "2026-06-03 00:00 +02:00",
+    Interval "2026-06-04 00:00 +02:00" "2026-06-08 00:00 +02:00",
+]
+
+wop = WeeklyOpening "wop" [OpeningEntry MONDAY "00:00" 10080 1]
+W   = theoretical-slots wop O window
+assert W == []
+
+
+# test_one_week_slot_opening_monday_closed_returns_0_slots
+# slot.start = Jun 01 < O.start = Jun 02 → slot ⊄ O
+
+cal = Calendar "cal" [ClosedPeriod "2026-06-01" "2026-06-01"]
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-08 00:00 +02:00"
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-02 00:00 +02:00" "2026-06-08 00:00 +02:00",
+]
+
+wop = WeeklyOpening "wop" [OpeningEntry MONDAY "00:00" 10080 1]
+W   = theoretical-slots wop O window
+assert W == []
+
+
+# test_one_week_slot_opening_sunday_closed_returns_0_slots
+# slot.end = Jun 08 > O.end = Jun 07 → slot ⊄ O
+
+cal = Calendar "cal" [ClosedPeriod "2026-06-07" "2026-06-07"]
+window = Interval "2026-06-01 00:00 +02:00" "2026-06-08 00:00 +02:00"
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-01 00:00 +02:00" "2026-06-07 00:00 +02:00",
+]
+
+wop = WeeklyOpening "wop" [OpeningEntry MONDAY "00:00" 10080 1]
+W   = theoretical-slots wop O window
+assert W == []
+
+
+# ---------------------------------------------------------------------------
+# Tests — validate_new_booking
+# Signature: validate_new_booking resource start duration count member
+#            reference_date reference_now → (is_valid: bool, error: str | None)
+# reference_date = "2026-06-01" dans tous les tests (§13).
+# reference_now  = datetime aware injecté pour les tests de garde temporelle.
+# ---------------------------------------------------------------------------
+
+# test_validate_booking_accepts_valid_slot
+# open slot, within horizon, no existing booking → accepted
+
+monday = "2026-06-08"   # MONDAY_NEAR — reference_date=2026-06-01
+window = Interval "2026-06-08 00:00 +02:00" "2026-06-09 00:00 +02:00"
+cal    = Calendar "cal" []
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-08 00:00 +02:00" "2026-06-09 00:00 +02:00",
+]
+
+wop    = WeeklyOpening "wop" [OpeningEntry MONDAY "10:00" 60 1]
+W      = theoretical-slots wop O window
+assert W == [
+    Interval "2026-06-08 10:00 +02:00" "2026-06-08 11:00 +02:00",
+]
+
+res          = Resource cal wop capacity=1 horizon=28
+start        = "2026-06-08 10:00 +02:00"
+(valid, err) = validate_new_booking res start duration=60 count=1 member
+             reference_date="2026-06-01"
+
+assert valid == True
+assert err   is None
+
+
+# test_validate_booking_rejects_slot_beyond_horizon
+# slot 14 days ahead; horizon=7 → W is empty for that date → rejected
+
+monday = "2026-06-15"   # MONDAY_FAR — reference_date=2026-06-01
+window = Interval "2026-06-15 00:00 +02:00" "2026-06-16 00:00 +02:00"
+cal    = Calendar "cal" []
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-15 00:00 +02:00" "2026-06-16 00:00 +02:00",
+]
+
+wop    = WeeklyOpening "wop" [OpeningEntry MONDAY "10:00" 60 1]
+W      = theoretical-slots wop O window
+assert W == [
+    Interval "2026-06-15 10:00 +02:00" "2026-06-15 11:00 +02:00",
+]
+
+# W est non vide mais horizon=7 jours depuis 2026-06-01 = 2026-06-08
+# → 2026-06-15 est hors horizon → validate_new_booking retourne W=[]
+# / W is non-empty but horizon=7 from 2026-06-01 = 2026-06-08
+# → 2026-06-15 is beyond horizon → validate_new_booking returns W=[]
+res          = Resource cal wop capacity=1 horizon=7
+start        = "2026-06-15 10:00 +02:00"
+(valid, err) = validate_new_booking res start duration=60 count=1 member
+             reference_date="2026-06-01"
+
+assert valid == False
+assert err   is not None
+
+
+# test_validate_booking_rejects_slot_in_closed_period
+# Monday declared closed → O excludes Monday → W = [] → rejected
+
+monday = "2026-06-08"   # MONDAY_NEAR — reference_date=2026-06-01
+window = Interval "2026-06-08 00:00 +02:00" "2026-06-09 00:00 +02:00"
+cal    = Calendar "cal" [ClosedPeriod "2026-06-08" "2026-06-08"]
+O      = open-day window cal
+assert O == []
+
+wop    = WeeklyOpening "wop" [OpeningEntry MONDAY "10:00" 60 1]
+W      = theoretical-slots wop O window
+assert W == []
+
+res          = Resource cal wop capacity=1 horizon=28
+start        = "2026-06-08 10:00 +02:00"
+(valid, err) = validate_new_booking res start duration=60 count=1 member
+             reference_date="2026-06-01"
+
+assert valid == False
+assert err   is not None
+
+
+# test_validate_booking_rejects_full_slot
+# capacity=1, one existing booking on same slot → remaining=0 → rejected
+
+monday = "2026-06-08"   # MONDAY_NEAR — reference_date=2026-06-01
+window = Interval "2026-06-08 00:00 +02:00" "2026-06-09 00:00 +02:00"
+cal    = Calendar "cal" []
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-08 00:00 +02:00" "2026-06-09 00:00 +02:00",
+]
+
+wop    = WeeklyOpening "wop" [OpeningEntry MONDAY "10:00" 60 1]
+W      = theoretical-slots wop O window
+assert W == [
+    Interval "2026-06-08 10:00 +02:00" "2026-06-08 11:00 +02:00",
+]
+
+b1     = Booking member start="2026-06-08 10:00 +02:00" duration=60 count=1 status=confirmed
+B      = expand b1
+assert B == [
+    Interval "2026-06-08 10:00 +02:00" "2026-06-08 11:00 +02:00",
+]
+
+E      = bookable-intervals W capacity=1 B
+assert E == [
+    BookableInterval (Interval "2026-06-08 10:00 +02:00" "2026-06-08 11:00 +02:00") max=1 remaining=0,
+]
+
+res          = Resource cal wop capacity=1 horizon=28
+start        = "2026-06-08 10:00 +02:00"
+(valid, err) = validate_new_booking res start duration=60 count=1 member
+             reference_date="2026-06-01"
+
+assert valid == False
+assert err   is not None
+
+
+# test_validate_booking_slot_count_gt_1_all_slots_must_be_available
+# 3 consecutive slots, no existing bookings → all remaining=1 → accepted
+
+monday = "2026-06-08"   # MONDAY_NEAR — reference_date=2026-06-01
+window = Interval "2026-06-08 00:00 +02:00" "2026-06-09 00:00 +02:00"
+cal    = Calendar "cal" []
+O      = open-day window cal
+assert O == [
+    Interval "2026-06-08 00:00 +02:00" "2026-06-09 00:00 +02:00",
+]
+
+wop    = WeeklyOpening "wop" [OpeningEntry MONDAY "10:00" 60 3]
+W      = theoretical-slots wop O window
+assert W == [
+    Interval "2026-06-08 10:00 +02:00" "2026-06-08 11:00 +02:00",
+    Interval "2026-06-08 11:00 +02:00" "2026-06-08 12:00 +02:00",
+    Interval "2026-06-08 12:00 +02:00" "2026-06-08 13:00 +02:00",
+]
+
+E      = bookable-intervals W capacity=1 []
+assert all (bi.remaining == 1) for bi in E
+
+res          = Resource cal wop capacity=1 horizon=28
+start        = "2026-06-08 10:00 +02:00"
+(valid, err) = validate_new_booking res start duration=60 count=3 member
+             reference_date="2026-06-01"
+
+assert valid == True
+assert err   is None
+
+
+# test_validate_booking_slot_count_gt_1_fails_if_one_slot_full
+# count=3 from 10:00; middle slot 11:00 already booked → remaining=0 → rejected
+
+monday = "2026-06-08"   # MONDAY_NEAR — reference_date=2026-06-01
+window = Interval "2026-06-08 00:00 +02:00" "2026-06-09 00:00 +02:00"
+cal    = Calendar "cal" []
+O      = open-day window cal
+wop    = WeeklyOpening "wop" [OpeningEntry MONDAY "10:00" 60 3]
+W      = theoretical-slots wop O window
+assert W == [
+    Interval "2026-06-08 10:00 +02:00" "2026-06-08 11:00 +02:00",
+    Interval "2026-06-08 11:00 +02:00" "2026-06-08 12:00 +02:00",
+    Interval "2026-06-08 12:00 +02:00" "2026-06-08 13:00 +02:00",
+]
+
+b1     = Booking member start="2026-06-08 11:00 +02:00" duration=60 count=1 status=confirmed
+B      = expand b1
+E      = bookable-intervals W capacity=1 B
+assert E == [
+    BookableInterval (Interval "2026-06-08 10:00 +02:00" "2026-06-08 11:00 +02:00") max=1 remaining=1,
+    BookableInterval (Interval "2026-06-08 11:00 +02:00" "2026-06-08 12:00 +02:00") max=1 remaining=0,
+    BookableInterval (Interval "2026-06-08 12:00 +02:00" "2026-06-08 13:00 +02:00") max=1 remaining=1,
+]
+
+res          = Resource cal wop capacity=1 horizon=28
+start        = "2026-06-08 10:00 +02:00"
+(valid, err) = validate_new_booking res start duration=60 count=3 member
+             reference_date="2026-06-01"
+
+assert valid == False
+assert err   is not None
+
+
+# test_validate_booking_slot_count_gt_1_fails_if_one_slot_in_closed_period
+# count=3 daily slots Mon→Wed; Tuesday closed → W missing Tuesday → rejected
+
+monday  = "2026-06-08"   # MONDAY_NEAR — reference_date=2026-06-01
+tuesday = "2026-06-09"
+window  = Interval "2026-06-08 00:00 +02:00" "2026-06-11 00:00 +02:00"
+cal     = Calendar "cal" [ClosedPeriod "2026-06-09" "2026-06-09"]
+O       = open-day window cal
+assert O == [
+    Interval "2026-06-08 00:00 +02:00" "2026-06-09 00:00 +02:00",
+    Interval "2026-06-10 00:00 +02:00" "2026-06-11 00:00 +02:00",
+]
+
+wop     = WeeklyOpening "wop" [OpeningEntry MONDAY "00:00" 1440 3]
+W       = theoretical-slots wop O window
+assert W == [
+    Interval "2026-06-08 00:00 +02:00" "2026-06-09 00:00 +02:00",
+    # Tuesday slot excluded — ⊄ O
+    Interval "2026-06-10 00:00 +02:00" "2026-06-11 00:00 +02:00",
+]
+
+res          = Resource cal wop capacity=1 horizon=28
+start        = "2026-06-08 00:00 +02:00"
+(valid, err) = validate_new_booking res start duration=1440 count=3 member
+             reference_date="2026-06-01"
+
+assert valid == False
+assert err   is not None
+
+
+# test_validate_booking_rejects_mismatched_slot_duration
+# opening defines 60-min slots; W has no 30-min slot → rejected
+
+monday = "2026-06-08"   # MONDAY_NEAR — reference_date=2026-06-01
+window = Interval "2026-06-08 00:00 +02:00" "2026-06-09 00:00 +02:00"
+cal    = Calendar "cal" []
+O      = open-day window cal
+wop    = WeeklyOpening "wop" [OpeningEntry MONDAY "10:00" 60 1]
+W      = theoretical-slots wop O window
+assert W == [
+    Interval "2026-06-08 10:00 +02:00" "2026-06-08 11:00 +02:00",
+]
+
+res          = Resource cal wop capacity=1 horizon=28
+start        = "2026-06-08 10:00 +02:00"
+(valid, err) = validate_new_booking res start duration=30 count=1 member
+             reference_date="2026-06-01"
+# duration=30 → no slot in W has length 30 min → lookup fails
+
+assert valid == False
+assert err   is not None
+
+
+# test_validate_booking_rejects_start_time_not_aligned_to_opening
+# opening starts at 10:00; request at 10:15 → no slot in W starts at 10:15 → rejected
+
+monday = "2026-06-08"   # MONDAY_NEAR — reference_date=2026-06-01
+window = Interval "2026-06-08 00:00 +02:00" "2026-06-09 00:00 +02:00"
+cal    = Calendar "cal" []
+O      = open-day window cal
+wop    = WeeklyOpening "wop" [OpeningEntry MONDAY "10:00" 60 1]
+W      = theoretical-slots wop O window
+assert W == [
+    Interval "2026-06-08 10:00 +02:00" "2026-06-08 11:00 +02:00",
+]
+
+res          = Resource cal wop capacity=1 horizon=28
+start        = "2026-06-08 10:15 +02:00"
+(valid, err) = validate_new_booking res start duration=60 count=1 member
+             reference_date="2026-06-01"
+
+assert valid == False
+assert err   is not None
+
+
+# test_validate_booking_slot_count_gt_1_rejects_if_series_exceeds_opening
+# opening defines count=2; request asks count=3 → 3rd slot absent from W → rejected
+
+monday = "2026-06-08"   # MONDAY_NEAR — reference_date=2026-06-01
+window = Interval "2026-06-08 00:00 +02:00" "2026-06-09 00:00 +02:00"
+cal    = Calendar "cal" []
+O      = open-day window cal
+wop    = WeeklyOpening "wop" [OpeningEntry MONDAY "10:00" 60 2]
+W      = theoretical-slots wop O window
+assert W == [
+    Interval "2026-06-08 10:00 +02:00" "2026-06-08 11:00 +02:00",
+    Interval "2026-06-08 11:00 +02:00" "2026-06-08 12:00 +02:00",
+]
+
+res          = Resource cal wop capacity=1 horizon=28
+start        = "2026-06-08 10:00 +02:00"
+(valid, err) = validate_new_booking res start duration=60 count=3 member
+             reference_date="2026-06-01"
+# 3rd slot [12:00, 13:00) absent from W → lookup fails
+
+assert valid == False
+assert err   is not None
+
+
+# test_validate_booking_accepts_slot_bleeding_into_next_open_day
+# slot Mon 23:00–Tue 01:00; O covers Mon+Tue → slot ⊆ O → accepted
+
+monday  = "2026-06-08"   # MONDAY_NEAR — reference_date=2026-06-01
+tuesday = "2026-06-09"
+window  = Interval "2026-06-08 00:00 +02:00" "2026-06-10 00:00 +02:00"
+cal     = Calendar "cal" []
+O       = open-day window cal
+assert O == [
+    Interval "2026-06-08 00:00 +02:00" "2026-06-10 00:00 +02:00",
+]
+
+wop     = WeeklyOpening "wop" [OpeningEntry MONDAY "23:00" 120 1]
+W       = theoretical-slots wop O window
+assert W == [
+    Interval "2026-06-08 23:00 +02:00" "2026-06-09 01:00 +02:00",
+]
+
+res          = Resource cal wop capacity=1 horizon=28
+start        = "2026-06-08 23:00 +02:00"
+(valid, err) = validate_new_booking res start duration=120 count=1 member
+             reference_date="2026-06-01"
+
+assert valid == True
+assert err   is None
+
+
+# test_validate_booking_rejects_slot_bleeding_into_closed_next_day
+# slot Mon 23:00–Tue 01:00; Tuesday closed → O ends Mon midnight → slot ⊄ O → rejected
+
+monday  = "2026-06-08"   # MONDAY_NEAR — reference_date=2026-06-01
+tuesday = "2026-06-09"
+window  = Interval "2026-06-08 00:00 +02:00" "2026-06-10 00:00 +02:00"
+cal     = Calendar "cal" [ClosedPeriod "2026-06-09" "2026-06-09"]
+O       = open-day window cal
+assert O == [
+    Interval "2026-06-08 00:00 +02:00" "2026-06-09 00:00 +02:00",
+]
+
+wop     = WeeklyOpening "wop" [OpeningEntry MONDAY "23:00" 120 1]
+W       = theoretical-slots wop O window
+assert W == []
+# slot.end = Tue 01:00 > O.end = Tue 00:00 → slot ⊄ O
+
+res          = Resource cal wop capacity=1 horizon=28
+start        = "2026-06-08 23:00 +02:00"
+(valid, err) = validate_new_booking res start duration=120 count=1 member
+             reference_date="2026-06-01"
+
+assert valid == False
+assert err   is not None
+
+
+# test_validate_booking_accepts_slot_starting_in_a_few_minutes
+# reference_now = 09:55; slot starts at 10:00 (5 min ahead) → accepted (§5 Availability)
+# No minimum advance notice: start_datetime strictly > now is sufficient.
+
+monday = "2026-06-08"   # MONDAY_NEAR — reference_date=2026-06-01
+window = Interval "2026-06-08 00:00 +02:00" "2026-06-09 00:00 +02:00"
+cal    = Calendar "cal" []
+O      = open-day window cal
+wop    = WeeklyOpening "wop" [OpeningEntry MONDAY "10:00" 60 1]
+W      = theoretical-slots wop O window
+assert W == [
+    Interval "2026-06-08 10:00 +02:00" "2026-06-08 11:00 +02:00",
+]
+
+res          = Resource cal wop capacity=1 horizon=28
+start        = "2026-06-08 10:00 +02:00"
+now          = "2026-06-08 09:55 +02:00"   # 5 minutes avant le début du créneau
+(valid, err) = validate_new_booking res start duration=60 count=1 member
+             reference_date="2026-06-01" reference_now=now
+
+assert valid == True
+assert err   is None
+
+
+# test_validate_booking_rejects_slot_that_has_already_started
+# reference_now = 10:05; slot started at 10:00 (5 min ago) → rejected (§5 Availability)
+
+monday = "2026-06-08"   # MONDAY_NEAR — reference_date=2026-06-01
+window = Interval "2026-06-08 00:00 +02:00" "2026-06-09 00:00 +02:00"
+cal    = Calendar "cal" []
+O      = open-day window cal
+wop    = WeeklyOpening "wop" [OpeningEntry MONDAY "10:00" 60 1]
+W      = theoretical-slots wop O window
+assert W == [
+    Interval "2026-06-08 10:00 +02:00" "2026-06-08 11:00 +02:00",
+]
+
+res          = Resource cal wop capacity=1 horizon=28
+start        = "2026-06-08 10:00 +02:00"
+now          = "2026-06-08 10:05 +02:00"   # 5 minutes après le début du créneau
+(valid, err) = validate_new_booking res start duration=60 count=1 member
+             reference_date="2026-06-01" reference_now=now
+# start_datetime <= now → refusé avant toute vérification de disponibilité
+
+assert valid == False
+assert err   is not None
