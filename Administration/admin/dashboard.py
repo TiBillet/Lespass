@@ -948,6 +948,11 @@ MODULE_FIELDS = {
         "description": _("Participatory funding and adaptive contributions"),
         "testid": "dashboard-card-crowdfunding",
     },
+    "module_booking": {
+        "name": _("Réservation de ressources"),
+        "description": _("Réservation de salles, machines ou autres."),
+        "testid": "dashboard-card-booking",
+    },
     "module_caisse": {
         "name": _("Caisse & Restaurant"),
         "description": _("Point of sale, orders, and cash register"),
