@@ -11,7 +11,7 @@
  * 
  * COMMUNICATION :
  * Reçoit : 'additionInsertArticle', 'additionReset', 'additionDisplayPaymentTypes', 'additionManageForm'
- * Émet : 'additionTotalChange' (vers #bt-valider), 'additionRemoveArticle' (vers #products)
+ * Émet : 'additionTotalChange' (vers #addition), 'additionRemoveArticle' (vers #products)
  * 
  * Voir tibilletUtils.js pour le système d'événements.
  */
@@ -56,8 +56,13 @@ function calculateTotal() {
 }
 
 /**
- * Met a jour l'en-tete du ticket : pastille de comptage + bouton VIDER
- * / Updates the ticket header: count pill + EMPTY button
+ * Met a jour l'en-tete et le bas du ticket
+ * / Updates the ticket header and footer
+ *
+ * En-tete : pastille de comptage + bouton VIDER.
+ * Bas : total affiche + bouton VALIDER actif ou non.
+ * / Header: count pill + EMPTY button. Footer: displayed total + VALIDATE
+ * button enabled or not.
  *
  * Le nombre affiche est la somme des quantites des lignes du panier, lue sur
  * les inputs repid-* du formulaire (meme source que calculateTotal).
@@ -96,6 +101,66 @@ function additionMajEntete() {
 		// / Empty cart = nothing left to confirm, disarm
 		if (nombreArticles === 0) { additionDesarmerVider() }
 	}
+
+	// Le total affiche, lui, est ecrit par additionMajTotal() (handler de
+	// l'evenement additionTotalChange) : un seul ecrivain par element.
+	// / The displayed total is written by additionMajTotal(), the
+	// additionTotalChange handler: one writer per element.
+	const eleValider = document.querySelector('#addition-bt-valider')
+	if (eleValider) {
+		eleValider.disabled = nombreArticles === 0
+	}
+}
+
+/**
+ * Met a jour une ligne du ticket : quantite affichee et total de la ligne
+ * / Updates a ticket row: displayed quantity and row total
+ *
+ * Le total de la ligne est recalcule depuis data-unit-price, qui porte deja le
+ * prix unitaire reel (prix libre et vente au poids compris).
+ * / The row total is recomputed from data-unit-price, which already carries the
+ * real unit price (free price and weight-based sales included).
+ *
+ * @param {String} lineId - Identifiant de la ligne panier
+ * @param {Number} quantity - Nouvelle quantite
+ */
+function additionMajLigne(lineId, quantity) {
+	const ligne = document.querySelector(`#addition-line-${lineId}`)
+	if (!ligne) { return }
+
+	ligne.dataset.quantity = quantity
+
+	const eleQuantite = document.querySelector(`#addition-quantity-${lineId}`)
+	if (eleQuantite) { eleQuantite.innerHTML = `&times; ${quantity}` }
+
+	const eleTotalLigne = document.querySelector(`#addition-price-${lineId}`)
+	if (eleTotalLigne) {
+		const prixUnitaire = Number(ligne.dataset.unitPrice) || 0
+		const monnaie = eleTotalLigne.dataset.currency || ''
+		eleTotalLigne.textContent = `${(prixUnitaire * quantity / 100).toFixed(2)}${monnaie}`
+	}
+}
+
+/**
+ * Ecrit le total dans le bas du ticket
+ * / Writes the total at the bottom of the ticket
+ *
+ * Handler de 'additionTotalChange' (table switches de tibilletUtils.js), emis
+ * par additionInsertArticle(), additionRemoveArticle() et additionReset().
+ * Reprend mot pour mot ce que faisait footer.js:updateSumOfValidateButton()
+ * sur #bt-valider-total, quand le footer pleine largeur existait encore.
+ * / Handler of 'additionTotalChange', emitted by the three cart functions.
+ * Does exactly what footer.js:updateSumOfValidateButton() used to do.
+ *
+ * @param {Event} event - event.detail.totalAddition, total en centimes
+ */
+function additionMajTotal(event) {
+	const eleTotal = document.querySelector('#addition-total-affiche')
+	if (!eleTotal) { return }
+
+	const totalCentimes = Number(event.detail.totalAddition) || 0
+	const monnaie = eleTotal.dataset.currency || ''
+	eleTotal.textContent = `${(totalCentimes / 100).toFixed(2)} ${monnaie}`.trim()
 }
 
 /**
@@ -164,6 +229,8 @@ function additionRetirerLigneAnimee(lineId) {
 
 	const eleQuantite = ligne.querySelector(`#addition-quantity-${lineId}`)
 	if (eleQuantite) { eleQuantite.removeAttribute('id') }
+	const eleTotalLigne = ligne.querySelector(`#addition-price-${lineId}`)
+	if (eleTotalLigne) { eleTotalLigne.removeAttribute('id') }
 	ligne.removeAttribute('id')
 
 	ligne.classList.add('is-removing')
@@ -287,6 +354,10 @@ function additionInsertArticle({ detail }) {
 			`)
 		}
 
+		// Ligne du ticket, composition de la maquette (.tk-line) :
+		// bouton moins | nom + prix unitaire | quantite + total de la ligne.
+		// / Ticket row, mockup composition (.tk-line):
+		// minus button | name + unit price | quantity + row total.
 		const additionLine = `
 			<div id="addition-line-${lineId}" data-quantity="${quantity}" data-price="${lineId}" data-unit-price="${prixAffiche}" class="addition-line-grid">
 				<div class="addition-col-bt">
@@ -296,16 +367,20 @@ function additionInsertArticle({ detail }) {
 				</div>
 				<div class="addition-col-info">
 					<div class="addition-col-name">${escapeHtml(name)}</div>
-					<div id="addition-quantity-${lineId}" class="addition-col-quantity-label">&times; ${quantity}</div>
+					<div class="addition-col-unit">${(prixAffiche / 100).toFixed(2)}${currency}</div>
 				</div>
-				<div class="addition-col-price">${(prixAffiche / 100).toFixed(2)}${currency}</div>
+				<div class="addition-col-right">
+					<span id="addition-quantity-${lineId}" class="addition-col-quantity">&times; ${quantity}</span>
+					<span id="addition-price-${lineId}" class="addition-col-price" data-currency="${currency}">${(prixAffiche * quantity / 100).toFixed(2)}${currency}</span>
+				</div>
 			</div>
 		`
 		document.querySelector('#addition-list').insertAdjacentHTML('beforeend', additionLine)
 	} else {
-		// Article existant : mise à jour quantité
+		// Article existant : mise à jour quantité (et total de la ligne)
+		// / Existing item: quantity update (and row total)
 		input.value = Number(quantity)
-		document.querySelector(`#addition-quantity-${lineId}`).innerHTML = `&times; ${quantity}`
+		additionMajLigne(lineId, quantity)
 	}
 
 	// Flash vert sur la ligne touchée — nouvelle comme mise à jour
@@ -352,7 +427,7 @@ function additionRemoveArticle(lineId) {
 	let quantity = Number(eleQuantity.textContent.replace('×', '').trim())
 	quantity--
 
-	eleQuantity.innerHTML = `&times; ${quantity}`
+	additionMajLigne(lineId, quantity)
 	document.querySelector(`#addition-form [name="repid-${lineId}"]`).value = Number(quantity)
 
 	if (quantity === 0) {
@@ -584,6 +659,7 @@ function additionManageForm(event) {
  */
 document.addEventListener('DOMContentLoaded', () => {
 	document.querySelector('#addition').addEventListener('additionInsertArticle', additionInsertArticle)
+	document.querySelector('#addition').addEventListener('additionMajTotal', additionMajTotal)
 	document.querySelector('#addition').addEventListener('additionReset', additionReset)
 	document.querySelector('#addition').addEventListener('additionDisplayPaymentTypes', additionDisplayPaymentTypes)
 	document.querySelector('#addition').addEventListener('additionManageForm', additionManageForm)

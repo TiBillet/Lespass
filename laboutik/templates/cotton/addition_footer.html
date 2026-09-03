@@ -1,0 +1,75 @@
+{% load i18n static %}
+<!--
+COMPOSANT ADDITION_FOOTER — Total + actions, au bas du panneau addition
+/ Addition footer component — total + actions, at the bottom of the cart panel
+
+LOCALISATION : laboutik/templates/cotton/addition_footer.html
+INCLUS PAR : cotton/addition.html, via le tag cotton "c-addition-footer"
+             (tirets dans le tag, underscores dans le nom de fichier).
+
+ATTENTION : ne jamais ecrire un tag cotton entre chevrons dans un commentaire,
+meme un commentaire HTML ou Django. Cotton compile la source brute avant que
+Django ne parse les commentaires : il essaierait de rendre le composant et
+lever "cannot unpack non-iterable NoneType object".
+/ WARNING: never write an angle-bracketed cotton tag inside a comment, HTML or
+Django alike. Cotton compiles the raw source before Django parses comments, so
+it would try to render the component and raise "cannot unpack non-iterable
+NoneType object".
+STYLE : laboutik/static/css/addition.css (section BAS DU TICKET)
+
+Portage des blocs `.tk-total` et `.acts` de la maquette
+(tibillet-laboutik-main/caisse/Laboutik.css) : dans la refonte, le total et les
+deux actions vivent dans le panneau ticket, pas dans une barre pleine largeur.
+
+Ces boutons ne dupliquent AUCUNE logique : ils rejouent exactement ce que font
+leurs originaux de cotton/footer.html.
+- CHECK CARTE : memes attributs HTMX que #bt-check-card (pas de JS).
+- VALIDER : appelle addition.js:additionValider(), qui emet exactement le
+  message que footer.js:displayPaymentTypes() emettait au clic sur #bt-valider.
+  Le footer pleine largeur n'etant plus rendu par common_user_interface.html,
+  footer.js n'est plus charge du tout — d'ou le rejeu du message plutot que
+  l'appel de sa fonction.
+- Le total est ecrit par addition.js:additionMajEntete(), qui lit la meme
+  source que le footer (#addition-total) a chaque changement du panier.
+
+Les id sont prefixes addition- : si le footer pleine largeur revient un jour,
+ses #bt-valider / #bt-check-card ne rentreront pas en collision.
+
+/ These buttons duplicate NO logic: they replay exactly what their counterparts
+in cotton/footer.html do — same HTMX attributes for the card check, the same
+displayPaymentTypes() function for the validate button. The total is written by
+addition.js:additionMajEntete() from the same source as the footer.
+Ids are prefixed with addition- so a returning footer would not collide.
+-->
+<div class="addition-total">
+	<span class="addition-total-label">{% translate "Total" %}</span>
+	<span id="addition-total-affiche"
+	      class="addition-total-value"
+	      data-currency="{{ currency_data.symbol }}"
+	      data-testid="addition-total-affiche">0.00 {{ currency_data.symbol }}</span>
+</div>
+
+<div class="addition-actions">
+	<button type="button"
+	        id="addition-bt-check-card"
+	        class="addition-act addition-act-card"
+	        hx-get="{% url 'laboutik-paiement-verifier_carte' %}"
+	        hx-target="#messages"
+	        hx-swap="innerHTML"
+	        data-loading-disable
+	        data-testid="addition-check-carte">
+		<i class="fas fa-money-check-alt" aria-hidden="true"></i>
+		<span>{% translate "CHECK" %} {% translate "CARTE" %}</span>
+	</button>
+
+	<button type="button"
+	        id="addition-bt-valider"
+	        class="addition-act addition-act-valid"
+{#	        onclick="additionValider()"#}
+	        data-testid="addition-valider"
+	        disabled>
+		<i class="fas fa-check-circle" aria-hidden="true"></i>
+		<span>{% translate "VALIDER" %}</span>
+	</button>
+</div>
+<script src="{% static 'js/footer.js' %}"></script>

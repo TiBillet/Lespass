@@ -202,8 +202,8 @@
 	color: var(--blanc01);
 }
 
-/* Bloc nom + quantite — `.tk-label` / `.tk-nom` / `.tk-unit`
-   / Name + quantity block */
+/* Bloc nom + prix unitaire — `.tk-label` / `.tk-nom` / `.tk-unit`
+   / Name + unit price block */
 .addition-col-info {
 	min-width: 0;
 	display: flex;
@@ -218,7 +218,9 @@
 	text-overflow: ellipsis;
 }
 
-.addition-col-quantity-label {
+/* Prix a l'unite, sous le nom — `.tk-unit`
+   / Unit price, under the name — `.tk-unit` */
+.addition-col-unit {
 	margin-top: 2px;
 	font-size: var(--fs-min);
 	font-weight: 500;
@@ -226,8 +228,26 @@
 	font-variant-numeric: tabular-nums;
 }
 
-/* Montant de la ligne — `.tk-sum` : largeur mini pour aligner la colonne
-   / Row amount — `.tk-sum`: min width so the column stays aligned */
+/* Colonne de droite — `.tk-right` : quantite prise puis total de la ligne
+   / Right column — `.tk-right`: quantity taken, then row total */
+.addition-col-right {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.addition-col-quantity {
+	min-width: 26px;
+	text-align: center;
+	font-size: 15px;
+	font-weight: 800;
+	color: var(--text);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+/* Total de la ligne — `.tk-sum` : largeur mini pour aligner la colonne
+   / Row total — `.tk-sum`: min width so the column stays aligned */
 .addition-col-price {
 	min-width: 62px;
 	text-align: right;
@@ -259,6 +279,109 @@
 	font-size: 15px;
 	font-weight: 700;
 	color: var(--text-dim);
+}
+
+/* --- BAS DU TICKET : TOTAL + ACTIONS --- */
+/* Portage de `.tk-total` et `.acts` (cotton/addition_footer.html).
+   / Port of `.tk-total` and `.acts`. */
+
+.addition-total {
+	flex: none;
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 12px 14px;
+	border-top: 1px solid var(--line-soft);
+}
+
+.addition-total-label {
+	font-size: var(--fs-min);
+	font-weight: 700;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+}
+
+.addition-total-value {
+	font-size: 30px;
+	font-weight: 800;
+	letter-spacing: -.025em;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.addition-actions {
+	flex: none;
+	display: flex;
+	gap: 8px;
+	padding: 8px;
+}
+
+.addition-act {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 9px;
+	height: 62px;
+	border: none;
+	border-radius: var(--r-ctrl);
+	font-family: "Luciole-regular", sans-serif;
+	font-weight: 800;
+	letter-spacing: -.01em;
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+	transition: transform .17s var(--ease), box-shadow .17s var(--ease), filter .17s var(--ease);
+}
+
+.addition-act:active {
+	transition-duration: 0s;
+	filter: brightness(1.08);
+	transform: scale(.98);
+}
+
+/* CHECK CARTE — action secondaire : cadre discret, pictogramme NFC bleute
+   / Card check — secondary action: quiet frame, blue-ish NFC glyph */
+.addition-act-card {
+	flex: none;
+	width: 88px;
+	padding: 0;
+	flex-direction: column;
+	gap: 3px;
+	background-color: var(--surface-2);
+	color: var(--text-dim);
+	box-shadow: inset 0 0 0 1px var(--line);
+	font-size: 10.5px;
+	letter-spacing: .04em;
+	text-align: center;
+}
+
+.addition-act-card i {
+	font-size: 22px;
+	color: var(--bleu01);
+}
+
+/* VALIDER — l'action principale, seule couleur pleine du panneau
+   / Validate — the primary action, the only solid color in the panel */
+.addition-act-valid {
+	flex: 1;
+	background-color: var(--valid);
+	color: var(--vert04);
+	font-size: 18px;
+	box-shadow: 0 4px 16px oklch(0.700 0.170 148 / .22);
+}
+
+.addition-act-valid i {
+	font-size: 20px;
+}
+
+.addition-act-valid:disabled {
+	background-color: var(--surface-2);
+	color: var(--text-faint);
+	box-shadow: inset 0 0 0 1px var(--line);
+	cursor: default;
+	transform: none;
+	filter: none;
 }
 
 #addition-form {

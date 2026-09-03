@@ -211,7 +211,7 @@ function askAdditionManageForm(actionType, selector, value) {
  * 
  * ROUTES DÉFINIES :
  * - articlesAdd → additionInsertArticle sur #addition (ajoute au panier)
- * - additionTotalChange → updateSumOfValidateButton sur #bt-valider (maj total)
+ * - additionTotalChange → additionMajTotal sur #addition (maj du total affiche)
  * - additionRemoveArticle → articlesRemove sur #products (maj quantité tuile)
  * - resetArticles → additionReset sur #addition + articlesReset sur #products (reset complet)
  * - additionDisplayPaymentTypes → additionDisplayPaymentTypes sur #addition (affiche paiements)
@@ -219,7 +219,13 @@ function askAdditionManageForm(actionType, selector, value) {
  */
 const switches = {
 	articlesAdd: [{ name: 'additionInsertArticle', selector: '#addition' }],
-	additionTotalChange: [{ name: 'updateSumOfValidateButton', selector: '#bt-valider' }],
+	// Le total s'affiche dans le bas du panneau addition (cotton/addition_footer.html).
+	// Avant : #bt-valider, dans le footer pleine largeur — qui n'est plus rendu,
+	// d'ou un "document.querySelector(...) is null" a chaque ajout au panier.
+	// / The total is displayed at the bottom of the cart panel. It used to target
+	// #bt-valider in the full-width footer, which is no longer rendered — hence a
+	// null querySelector on every add to cart.
+	additionTotalChange: [{ name: 'additionMajTotal', selector: '#addition' }],
 	additionRemoveArticle: [{ name: 'articlesRemove', selector: '#products' }],
 	resetArticles: [{ name: 'additionReset', selector: '#addition' }, { name: 'articlesReset', selector: '#products' }],
 	articlesDisplayCategory: [{ name: 'articlesDisplayCategory', selector: '#products' }],

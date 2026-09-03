@@ -118,9 +118,9 @@ function changeMethodOfValidateButton(event) {
 * 2. Custom event listener 'updateBtValider' on #bt-valider
 */
 document.addEventListener('DOMContentLoaded', () => {
-  document.querySelector('#bt-reset').addEventListener('click', manageReset)
-  document.querySelector('#bt-valider').addEventListener('updateSumOfValidateButton', updateSumOfValidateButton)
+  // document.querySelector('#bt-reset').addEventListener('click', manageReset)
+  document.querySelector('#addition-bt-valider').addEventListener('updateSumOfValidateButton', updateSumOfValidateButton)
   // manage bt validate
-  document.querySelector('#bt-valider').addEventListener('changeMethodOfValidateButton', changeMethodOfValidateButton)
-  document.querySelector('#bt-valider').addEventListener('click', displayPaymentTypes)
+  document.querySelector('#addition-bt-valider').addEventListener('changeMethodOfValidateButton', changeMethodOfValidateButton)
+  document.querySelector('#addition-bt-valider').addEventListener('click', displayPaymentTypes)
 })
