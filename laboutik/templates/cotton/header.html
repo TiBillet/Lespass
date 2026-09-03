@@ -66,6 +66,7 @@
 <div id="menu-burger-overlay" data-testid="menu-burger-overlay" aria-hidden="true"></div>
 <nav id="menu-burger-container" aria-label="{% translate 'Menu principal' %}" data-testid="menu-burger">
 	<div class="main-menu">
+		<span class="menu-panel-title menu-burger-item-content">{% translate "Menu" %}</span>
 		<div class="menu-burger-item menu-burger-item-content" onclick="showSubMenu(event, '.sub-menu-pvs')">
 			<i class="menu-burger-item-content fas fa-store"></i>
 			<div class="menu-burger-item-content">{% translate "POINTS DE VENTES" %}</div>
@@ -96,22 +97,32 @@
 	</div>
 	<!-- sub menu points de vente -->
 	<div class="sub-menu-pvs sub-menu hide">
-		{% for pv in card.pvs_list %}
+		<span class="menu-panel-title menu-burger-item-content">{% translate "Points de vente" %}</span>
+		{# La variable de boucle s'appelle pv_item et non pv : sinon elle masquerait #}
+		{# le pv du contexte, qui est le point de vente courant a surligner.         #}
+		{# / The loop variable is pv_item, not pv: it would otherwise shadow the      #}
+		{# context's pv, which is the current point of sale to highlight.             #}
+		{% for pv_item in card.pvs_list %}
 		{# Full reload (pas de hx-get) pour que les event listeners JS (articles.js, #}
 		{# addition.js, tarif.js) soient re-attaches au chargement de la page POS.    #}
 		{# Un swap HTMX body detruit ces listeners et le POS ne fonctionne plus.       #}
 		{# / Full reload (no hx-get) so JS event listeners are re-attached on POS load.#}
 		<a class="menu-burger-item menu-burger-item-content"
-			href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{pv.uuid}}&tag_id_cm={{card.tag_id}}&type_app={{type_app}}"
+			href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{pv_item.uuid}}&tag_id_cm={{card.tag_id}}&type_app={{type_app}}"
 			data-nav-spinner
-			style="text-decoration: none;">
-			<i class="menu-burger-item-content fas {{ pv.icon }}" aria-hidden="true"></i>
-			<div class="menu-burger-item-content">{{ pv.name }}</div>
+			{% if pv_item.uuid == pv.id %}aria-current="true" data-testid="menu-pv-courant"{% endif %}>
+			<i class="menu-burger-item-content fas {{ pv_item.icon }}" aria-hidden="true"></i>
+			<div class="menu-burger-item-content">{{ pv_item.name }}</div>
+			{% if pv_item.uuid == pv.id %}
+			<i class="menu-burger-item-content menu-row-check fas fa-check"
+			   aria-label="{% translate 'Point de vente actuel' %}"></i>
+			{% endif %}
 		</a>
 		{% endfor %}
 	</div>
 	<!-- dev sub menu paramètres -->
 	<div class="sub-menu-params sub-menu hide">
+		<span class="menu-panel-title menu-burger-item-content">{% translate "Paramètres" %}</span>
 		<div class="menu-burger-item menu-burger-item-content">
 			<i class="menu-burger-item-content fas fa-utensils"></i>
 			<div class="menu-burger-item-content">params 1</div>

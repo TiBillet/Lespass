@@ -26,7 +26,13 @@ La classe .article-touch couvre toute la tuile pour capter les clics.
      data-est-adhesion="false"
      data-tarifs='{{ article.tarifs_json }}'
      data-testid="billetterie-tuile-{{ article.id }}"
-     style="background-color:{{ article.couleur_backgr }}; color:{{ article.couleur_texte }};">
+     {% comment %}
+     Mêmes variables de couleur que les tuiles standard : articles.css en dérive le
+     dégradé et la tranche 3D, billet_tuile.css ne gère que la mise en page paysage.
+     / Same color variables as standard tiles: articles.css derives the gradient and
+     3D edge, billet_tuile.css only handles the landscape layout.
+     {% endcomment %}
+     style="{% if article.couleur_backgr %}--legacy:{{ article.couleur_backgr }};{% endif %}{% if article.couleur_texte %}--legacy-ink:{{ article.couleur_texte }};{% endif %}">
 
 	<!-- Zone gauche : icône ou image du produit
 	     / Left zone: product icon or image -->

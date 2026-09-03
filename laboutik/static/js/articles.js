@@ -22,6 +22,23 @@
  */
 
 /**
+ * Affiche le badge de quantite et relance son rebond
+ * / Shows the quantity badge and replays its pop
+ *
+ * La classe badge-visible est deja posee des le 2e ajout : sans retrait +
+ * reflow force, l'animation qty-pop (articles.css) ne rejouerait jamais.
+ * / badge-visible is already set from the 2nd add on: without removing it and
+ * forcing a reflow, the qty-pop animation (articles.css) would never replay.
+ *
+ * @param {HTMLElement} eleQuantity - Le <span class="badge"> de la tuile
+ */
+function afficherBadgeQuantite(eleQuantity) {
+	eleQuantity.classList.remove('badge-visible')
+	void eleQuantity.offsetWidth  // reflow force / forced reflow
+	eleQuantity.classList.add('badge-visible')
+}
+
+/**
  * Incrémente la quantité et émet l'événement d'ajout
  * / Increments quantity and emits add event
  * 
@@ -41,9 +58,9 @@ function addArticle(uuid, price, name, currency) {
 		quantity++
 		eleQuantity.innerText = quantity
 
-		// Rend le badge visible (transition CSS opacity 200ms)
-		// / Makes badge visible (CSS opacity transition 200ms)
-		eleQuantity.classList.add('badge-visible')
+		// Rend le badge visible et relance le rebond
+		// / Makes badge visible and replays the pop
+		afficherBadgeQuantite(eleQuantity)
 
 		// Envoie l'événement pour ajouter au panier
 		sendEventOrganizer({

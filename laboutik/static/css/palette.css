@@ -59,7 +59,29 @@
 	--valid: oklch(0.700 0.170 148);
 	--invalid: oklch(0.545 0.157 23.889);
 
+	/* Jetons de chrome de la refonte caisse (prototype Laboutik.css) : fonds,
+	   filets et niveaux de texte des panneaux et de l'en-tete.
+	   / Chrome tokens from the sales-screen redesign: surfaces, hairlines and
+	   text levels used by the panels and the header. */
+	--bg:          oklch(0.175 0.013 262);
 	--surface:     oklch(0.215 0.015 262);
+	--surface-2:   oklch(0.255 0.017 262);
+	--surface-3:   oklch(0.305 0.019 262);
+	--line:        oklch(0.335 0.020 262);
+	--line-soft:   oklch(0.275 0.017 262);
+
+	--text:        oklch(0.965 0.004 262);
+	--text-dim:    oklch(0.735 0.016 262);
+	--text-faint:  oklch(0.575 0.017 262);
+
+	/* Formes / Shapes */
+	--r-panel: 16px;
+	--r-ctrl: 12px;
+	--r-pill: 999px;
+
+	/* Plancher typographique : rien ne descend en dessous dans les panneaux.
+	   / Typographic floor: nothing goes below this in the panels. */
+	--fs-min: 14.5px;
 
 	--ease: cubic-bezier(.2, .75, .3, 1);
 
