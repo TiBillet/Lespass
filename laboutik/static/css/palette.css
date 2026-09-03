@@ -55,4 +55,13 @@
 	--warning: #b85521;
 
 	--orange01: #ce4d1a;
+
+	--valid: oklch(0.700 0.170 148);
+	--invalid: oklch(0.545 0.157 23.889);
+
+	--surface:     oklch(0.215 0.015 262);
+
+	--ease: cubic-bezier(.2, .75, .3, 1);
+
+
 }

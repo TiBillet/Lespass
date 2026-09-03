@@ -1,0 +1,56 @@
+{% load i18n %}
+<!--
+JAUGE BILLET OOB — mise a jour via WebSocket apres chaque vente/annulation
+/ Ticket gauge OOB — real-time update via WebSocket after each sale/refund
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_jauge_billet.html
+
+Ce partial est rendu par broadcast_jauge_event() (wsocket/broadcast.py)
+et envoye via WebSocket a toutes les caisses du tenant.
+
+Il contient :
+1. N blocs OOB pour les tuiles billet (1 par Price, cible par ID unique)
+2. 1 bloc OOB pour la mini-jauge sidebar (cible par classe event)
+
+Chaque tuile a sa propre jauge (Price.stock ou Event.jauge_max).
+Les PV qui n'affichent pas cet event n'ont pas ces IDs/classes dans leur DOM.
+HTMX ignore silencieusement le swap — pas d'erreur, pas d'effet.
+
+CONTEXT :
+- event.uuid, event.jauge_max, event.places_vendues, event.pourcentage, event.complet
+- tuiles[] : liste de dicts {id, jauge_max, places_vendues, pourcentage, complet}
+  ou id = "{event_uuid}__{price_uuid}" (meme format que article.id dans billet_tuile.html)
+-->
+
+{% for tuile in tuiles %}
+<!-- Jauge tuile billet — ID unique event__price
+     / Ticket tile gauge — unique event__price ID -->
+<div id="billet-jauge-{{ tuile.id }}" hx-swap-oob="innerHTML">
+	<div class="billet-jauge-bar" aria-hidden="true">
+		<div class="billet-jauge-fill{% if tuile.pourcentage > 80 and not tuile.complet %} billet-jauge-fill-warning{% endif %}{% if tuile.complet %} billet-jauge-fill-full{% endif %}"
+		     style="width:{{ tuile.pourcentage }}%;"></div>
+	</div>
+	{% if tuile.complet %}
+	<span class="billet-jauge-complet">{% translate "COMPLET" %}</span>
+	{% else %}
+	<span class="billet-jauge-text">{{ tuile.places_vendues }}/{{ tuile.jauge_max }}</span>
+	{% endif %}
+	<p class="visually-hidden">
+		{% blocktranslate with vendues=tuile.places_vendues max=tuile.jauge_max %}
+			{{ vendues }} places vendues sur {{ max }}
+		{% endblocktranslate %}
+	</p>
+</div>
+{% endfor %}
+
+<!-- Mini-jauge sidebar — une seule par event (jauge globale)
+     / Sidebar mini-gauge — one per event (global gauge) -->
+<div hx-swap-oob="innerHTML:.sidebar-jauge-event-{{ event.uuid }}">
+	<div class="category-event-jauge" aria-hidden="true">
+		<div class="category-event-jauge-fill{% if event.complet %} category-event-jauge-complet{% endif %}"
+		     style="width:{{ event.pourcentage }}%;"></div>
+	</div>
+	<div class="category-event-places{% if event.complet %} category-event-complet{% endif %}">
+		{% if event.complet %}{% translate "COMPLET" %}{% else %}{{ event.places_vendues }}/{{ event.jauge_max }}{% endif %}
+	</div>
+</div>

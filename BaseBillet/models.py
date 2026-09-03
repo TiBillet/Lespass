@@ -219,6 +219,13 @@ class Tag(models.Model):
         fg = self.contrast_fg
         return f"background-color:{bg};color:{fg};border:1px solid rgba(0,0,0,.1)"
 
+    @property
+    def border_style_attr(self) -> str:
+        """Inline style pour un badge coloré accessible."""
+        bg = self._clean_hex(self.color_bg, "#0dcaf0")
+        return f"border:1px solid {bg}"
+
+
     def save(self, *args, **kwargs):
         self.slug = slugify(self.name)
         self.color = self._clean_hex(self.color, "#0dcaf0")

@@ -8,8 +8,8 @@
 	--header-add-img-status-menu: calc(var(--header-add-img-status) + var(--header-menu-width));
 
 	/* nav category */
-	--cat-width: 80px;
-	--cat-icon-size: 2.5rem;
+	--cat-width: 120px;
+	--cat-icon-size: 2rem;
 	--cat-name-size: 1rem;
 
 	/* footer */

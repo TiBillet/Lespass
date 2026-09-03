@@ -19,7 +19,7 @@ main {
 	justify-content: start;
 	align-items: start;
 	width: 100%;
-	height: var(--main-container-height);
+	height: 100%;
 	margin: 0;
 	padding: 0;
 	overflow: hidden;

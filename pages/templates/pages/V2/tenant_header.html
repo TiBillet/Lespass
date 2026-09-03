@@ -1,0 +1,36 @@
+{% load i18n  %}
+
+<!-- EN-TÊTE DU LIEU — dans le contenu : défile et disparaît au scroll -->
+<div class="place-header">
+    <div class="place-header__card">
+        <div class="place-header__top">
+            <div class="place-id">
+                {% if config.logo %}
+                    <span class="place-id__mark">
+                                {% include 'commun/partials/picture.html' with img=config.logo alt=config.organisation style='max-width: 3.5rem' %}
+                            </span>
+                {% else %}
+                    <span class="place-id__mark">{{ config.organisation|slice:":1" }}</span>
+                {% endif %}
+                <span>
+                            <span class="place-id__name" style="display:block">{{ config.organisation }}</span>
+                            <span class="place-id__tagline">
+                                {% if config.postal_address %}
+                                    {{ config.postal_address }}
+                                {% elif config.city %}
+                                    {{ config.city }}
+                                {% endif %}
+                          </span>
+                        </span>
+            </div>
+            <a class="btn btn--primary" href="contribuer.html">Je veux contribuer</a> {# V2-HERE #}
+        </div>
+        <nav class="place-nav">
+            <a href="/" {% if request.path == "/" %} class="is-active" aria-current="page"{% endif %}>Accueil</a>
+            <a href="/event/" {% if request.path == "/event/" %} class="is-active" aria-current="page"{% endif %}>Agenda</a>
+            <a href="/memberships/" {% if request.path == "/memberships/" %} class="is-active" aria-current="page"{% endif %}>Adhésion &amp; services</a>
+            <a href="qui-sommes-nous.html" {% if request.path == item.name %} class="is-active" aria-current="page"{% endif %}>Qui sommes-nous ?</a>
+            <a href="/federation/" {% if request.path == "/federation/" %} class="is-active" aria-current="page"{% endif %}>Autour de nous</a>
+        </nav>
+    </div>
+</div>

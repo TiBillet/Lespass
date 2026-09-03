@@ -1,0 +1,47 @@
+{% extends "laboutik/base.html" %}
+{% load static %}
+{% load static i18n %}
+{% load laboutik_process %}
+
+{% block content %}
+<!-- header + nav -->
+<c-header title="{{ title }}" />
+<main>
+	<nav id="categories">
+		cat
+	</nav>
+	<div id="tables-container">
+		{% for table in tables %}
+		<a class="BF-col-haut table-bouton" data-nav-spinner
+			href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{pv.id}}&tag_id_cm={{card.tag_id}}&id_table={{table.id}}">
+			<div class="BF-col table-nom">{{table.name}}</div>
+			<div class="BF-ligne table-etat" style="background-color: var({{ table_status_colors|sel:table.statut }});">
+			</div>
+		</a>`
+		{% endfor %}
+	</div>
+</main>
+<footer>
+	<!-- bouton CHECK CARTE -->
+	<div id="bt-check-card" class="BF-ligne footer-bt fond-normal test-check-carte">
+		<i class="fas fa-money-check-alt md4px"></i>
+		<div class="BF-col-deb footer-bt-text mg4px">
+			<div>{% translate "CHECK" %}</div>
+			<div>{% translate "CARTE" %}</div>
+		</div>
+	</div>
+	<!-- bouton service direct -->
+	<a class="BF-ligne footer-bt fond-coul1 test-service-direct" data-nav-spinner href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{pv.id}}&tag_id_cm={{card.tag_id}}&force_service_direct=true">
+		<i class="fas fa-cash-register md4px"></i>
+		<div class="BF-col-deb footer-bt-text mg4px">
+			<div>{% translate "SERVICE DIRECT" %}</div>
+		</div>
+	</a>
+</footer>
+{% endblock content %}
+
+{% block script %}
+<script>
+
+</script>
+{% endblock script %}

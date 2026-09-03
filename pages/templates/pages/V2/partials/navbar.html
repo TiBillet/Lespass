@@ -1,0 +1,224 @@
+{% load i18n %}
+
+<header class="user-bar">
+    <div class="user-bar__inner">
+        <a class="me-anchor" href="mon-espace.html">
+            <span class="me-anchor__avatar">JS</span>
+            <span>Mon espace</span>
+        </a>
+        <div class="icon-group">
+            <button class="icon-btn icon-btn--notif" data-unread aria-label="Notifications" title="Notifications">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7"/><path d="M10.3 20a2 2 0 0 0 3.4 0"/></svg>
+            </button>
+            <button class="icon-btn" aria-label="Changer la langue" title="Changer la langue">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.8 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.8-3.8-9s1.3-6.3 3.8-9z"/></svg>
+            </button>
+            <button class="icon-btn" aria-label="Basculer le thème" title="Thème (bientôt disponible)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.7 15.6A9 9 0 1 1 8.4 3.3a7 7 0 0 0 12.3 12.3z"/></svg>
+            </button>
+            <button class="icon-btn" aria-label="Paramètres" title="Paramètres">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </button>
+        </div>
+    </div>
+</header>
+
+{# aria-label : la page compte plusieurs <nav> (menu principal, menu de la #}
+{# rubrique, fil d'Ariane, pages voisines). Sans nom, un lecteur d'ecran les #}
+{# annonce toutes « navigation » et l'auditeur ne peut pas les distinguer. #}
+{# / aria-label: the page holds several <nav> landmarks. Without a name, a #}
+{# screen reader announces them all as "navigation". #}
+<nav class="user-bar navbar navbar-expand-xl bg-body" aria-label="{% translate 'Menu principal' %}" data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
+    <div class="container-lg justify-content-between">
+      <a class="navbar-brand flex-grow-1" href="/" hx-get="/" hx-target="body" hx-push-url="true">
+        {% if config.logo %}
+        {% include 'commun/partials/picture.html' with img=config.logo alt=config.organisation style='max-width: 3.5rem' %}
+        {% else %}
+        {{ config.organisation }}
+        {% endif %}
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainMenu"
+        aria-controls="mainMenu" aria-expanded="false" aria-label="{% trans 'Toggle menu' %}">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="mainMenu">
+
+        <ul class="navbar-nav me-auto">
+          {% for item in main_nav %}
+          {% if item.children %}
+          {# Page avec sous-pages : menu deroulant. Le toggle ouvre le menu ; le 1er #}
+          {# item du menu mene a la page parente elle-meme (atteignable + crawlable). #}
+          {# / Page with sub-pages: dropdown. The toggle opens the menu; the 1st menu #}
+          {# item links to the parent page itself (reachable + crawlable). #}
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle{% if url_name == item.name %} active{% endif %}"
+                href="{{ item.url }}" id="dd-{{ item.name }}" role="button"
+                data-bs-toggle="dropdown" aria-expanded="false">
+              <i class="bi bi-{{ item.icon }}"></i>
+              {% translate item.label %}
+            </a>
+            <ul class="dropdown-menu" aria-labelledby="dd-{{ item.name }}">
+              <li><a class="dropdown-item" href="{{ item.url }}"
+                     hx-get="{{ item.url }}" hx-target="body" hx-push-url="true">{% translate item.label %}</a></li>
+              <li><hr class="dropdown-divider"></li>
+              {% for enfant in item.children %}
+              <li><a class="dropdown-item{% if url_name == enfant.name %} active{% endif %}"
+                     href="{{ enfant.url }}" hx-get="{{ enfant.url }}" hx-target="body" hx-push-url="true">{{ enfant.label }}</a></li>
+              {% endfor %}
+            </ul>
+          </li>
+          {% else %}
+          <li class="nav-item">
+            <a class="nav-link{% if url_name == item.name %} active" aria-current="page{% endif %}"
+                href="{{ item.url }}" hx-get="{{ item.url }}" hx-target="body" hx-push-url="true">
+              <i class="bi bi-{{ item.icon }}"></i>
+              {% translate item.label %}
+            </a>
+          </li>
+          {% endif %}
+          {% endfor %}
+
+          <li class="nav-item">
+            {# Un <button> : cet element ouvre un panneau, il ne mene nulle part. #}
+            {# / A <button>: this opens a panel, it navigates nowhere. #}
+            <button type="button" class="nav-link border-0 bg-transparent"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#contactPanel"
+                aria-controls="contactPanel">
+              <i class="bi bi-question-lg"></i>
+              {% translate 'Contact and support' %}
+            </button>
+          </li>
+        </ul>
+
+        <div class="navbar-nav d-flex mb-0">
+          <div class="nav-item dropdown">
+            <button class="nav-link border-0 bg-transparent dropdown-toggle" id="languageDropdown" data-bs-toggle="dropdown" aria-expanded="false" title="{% trans 'Switch language' %}" aria-label="{% trans 'Switch language' %}">
+              <i class="bi bi-translate"></i>
+              <span class="d-xl-none">{% trans "Language" %}</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="languageDropdown">
+              <li><button class="dropdown-item language-select-btn" data-lang="fr">{% trans "French" %}</button></li>
+              <li><button class="dropdown-item language-select-btn" data-lang="en">{% trans "English" %}</button></li>
+            </ul>
+          </div>
+        {% comment %}
+        {# Désactivé temporairement sur ce template, car le style est cassé #}
+          <div class="nav-item">
+            <button id="themeToggle" class="nav-link border-0 bg-transparent" title="{% trans 'Toggle theme' %}" aria-label="{% trans 'Toggle theme' %}">
+              <i class="bi bi-circle-half"></i>
+              <span class="d-xl-none">{% trans "Theme" %}</span>
+            </button>
+          </div>
+        {% endcomment %}
+            <div class="nav-item">
+                <a class="nav-link position-relative" href="/panier/"
+                   hx-get="/panier/" hx-target="body" hx-push-url="true"
+                   title="{% trans 'Your cart' %}"
+                   aria-label="{% blocktrans count n=panier.count %}Cart ({{ n }} item){% plural %}Cart ({{ n }} items){% endblocktrans %}">
+                    <i class="bi bi-bag " aria-hidden="true"></i>
+                    <span class="d-xl-none">{% trans "Cart" %}</span>
+                    {# Badge compteur — rendu direct en Django (pas de OOB ici). #}
+                    {# Les MAJ via HTMX utilisent le meme id, rendu par panier_badge.html avec hx-swap-oob. #}
+                    {# / Counter badge — direct Django render (no OOB here). #}
+                    {# HTMX updates target the same id, rendered by panier_badge.html with hx-swap-oob. #}
+                    <span id="panier-badge-nav">
+                {% if panier.count > 0 %}
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary">
+                    {{ panier.count }}
+                    <span class="visually-hidden">{% trans "items" %}</span>
+                  </span>
+                {% endif %}
+              </span>
+                </a>
+            </div>
+          <div class="nav-item">
+            {% if user.is_authenticated == False %}
+            <button
+                class="nav-link me-anchor"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#loginPanel"
+                aria-controls="loginPanel">
+                {% translate 'Log in' %}
+            </button>
+            {% else %}
+                <a class="me-anchor" href="/my_account" hx-get="/my_account/" hx-target="body" hx-push-url="true">
+{#                    <span class="me-anchor__avatar">JS</span>#}
+                    <i class="bi bi-person-circle fs-5"></i>
+                    <span>Mon espace</span>
+                </a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  {% comment %}
+  Les panneaux contact et connexion vivent désormais dans le squelette
+  (bloc offcanvas_globaux de pages/V2/shell.html et headless.html,
+  CHANTIER-02 lot C2). La navbar ne garde que les boutons déclencheurs.
+  / The contact and login panels now live in the skeleton
+  (offcanvas_globaux block). The navbar only keeps the trigger buttons.
+  {% endcomment %}
+
+  {% comment %}
+  OUVERTURE AUTO D'UN OFFCANVAS DEPUIS L'URL
+  / Auto-open an offcanvas from the URL
+
+  LOCALISATION : BaseBillet/templates/pages/V2/partials/navbar.html
+
+  Un parametre d'URL ouvre automatiquement le panneau correspondant, via l'API
+  Bootstrap deja chargee, puis l'URL est nettoyee (un rafraichissement ne le
+  rouvre pas) :
+    - `?login=1`   -> panneau de connexion #loginPanel (ex : vue serveur qui
+                      redirige un visiteur anonyme, cf.
+                      EventWizardPublic._require_login_or_redirect).
+    - `?contact=1` -> panneau « Contact et support » #contactPanel (ex : un bouton
+                      CTA d'une page qui pointe vers `?contact=1`).
+
+  / A URL param auto-opens the matching offcanvas via the already-loaded Bootstrap
+  API, then the URL is cleaned so a refresh won't reopen it.
+  {% endcomment %}
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      // Parametre d'URL -> id du panneau offcanvas a ouvrir.
+      // / URL param -> id of the offcanvas panel to open.
+      const panneauxParParametre = {
+        login: "loginPanel",
+        contact: "contactPanel",
+      };
+
+      const parametresUrl = new URLSearchParams(window.location.search);
+
+      // On cherche le premier parametre present et on ouvre son panneau.
+      // / Find the first present param and open its panel.
+      let parametreTrouve = null;
+      for (const [parametre, idPanneau] of Object.entries(panneauxParParametre)) {
+        if (parametresUrl.has(parametre)) {
+          const panneau = document.getElementById(idPanneau);
+          if (panneau) {
+            bootstrap.Offcanvas.getOrCreateInstance(panneau).show();
+          }
+          parametreTrouve = parametre;
+          break;
+        }
+      }
+
+      // Aucun parametre reconnu : rien a faire.
+      // / No recognized param: nothing to do.
+      if (!parametreTrouve) {
+        return;
+      }
+
+      // Retire le parametre de l'URL sans recharger la page.
+      // / Remove the param from the URL without reloading.
+      parametresUrl.delete(parametreTrouve);
+      const requete = parametresUrl.toString();
+      const nouvelleUrl =
+        window.location.pathname +
+        (requete ? "?" + requete : "") +
+        window.location.hash;
+      window.history.replaceState({}, "", nouvelleUrl);
+    });
+  </script>

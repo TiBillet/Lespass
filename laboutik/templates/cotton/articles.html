@@ -25,7 +25,8 @@
 		{% if article.prix_reference_label %}data-prix-reference="{{ article.prix_reference_label }}"{% endif %}
 		{% if article.stock_bloquant %}data-stock-bloquant="true"{% endif %}
 		class="article-container cat-{{ article.categorie.id}}{% if article.est_adhesion %} article-adhesion{% endif %}{% if article.stock_bloquant %} article-bloquant{% endif %}"
-		style="background-color:{{ article.couleur_backgr }};"
+{#         style="background-color:{{ article.couleur_backgr }};"#}
+         style="background-color:{{ article.categorie.couleur_backgr }};color:{{ article.categorie.couleur_texte }}"
 		data-testid="article-{{ article.id }}">
 		<!-- Icône catégorie — petit badge haut-gauche
 		     Deux systèmes : MS (<span>) ou FA (<i>)

@@ -12,30 +12,56 @@
    Articles automatically fill the available width. */
 #products {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(var(--bt-article-width), 1fr));
+	/*grid-template-columns: repeat(auto-fill, minmax(var(--bt-article-width), 1fr));*/
+	grid-template-columns: repeat(var(--article-per-col), 1fr);
 	gap: 8px;
 	padding: 8px;
 	align-content: start;
 }
 
 .article-container {
+	--h: 74;
+	--tile-edge: oklch(0.560 calc(0.155 * .92) var(--h));
+	--tile-light: oklch(0.980 calc(0.155 * .92 * .35) var(--h));
+
 	position: relative;
-	width: auto;
-	height: 0;
-	padding-bottom: 100%;  /* ratio 1:1 — aspect-ratio ne fonctionne pas en grid avec children absolute */
+	width: 100%;
+	height: 150px;
+	/*padding-bottom: 100%;  !* ratio 1:1 — aspect-ratio ne fonctionne pas en grid avec children absolute *!*/
+	padding: 10px 8px 30px;
 	box-sizing: border-box;
 	overflow: hidden;
 	margin: 0;
 	font-family: "Luciole-regular";
 	border-radius: 15px;
-	transition: transform 100ms ease-in-out;
 	/* Couleur par défaut pour articles sans catégorie (surchargé par l'inline style quand catégorie présente)
 	   / Default color for uncategorized articles (overridden by inline style when category exists) */
 	background-color: var(--gris01);
+
+	transition: transform .17s var(--ease), box-shadow .17s var(--ease), filter .17s var(--ease);
+	box-shadow:
+			inset 0 1.5px 0 oklch(1 0 0 / .42),
+			inset 1.5px 0 0 oklch(1 0 0 / .20),
+			inset 0 -1px 0 oklch(0 0 0 / .20),
+			0 4px 0 var(--tile-edge),
+			0 5px 9px oklch(0 0 0 / .38);
 }
 
+@keyframes flash-lumiere {
+	from { box-shadow: inset 0 0 0 3px color-mix(in oklab, var(--tile-light), transparent 55%); }
+	to   { box-shadow: inset 0 0 0 3px color-mix(in oklab, var(--tile-light), transparent 100%); }
+}
+.article-container.is-hit::after { animation: flash-lumiere .22s linear; }
+
+@keyframes flash-ombre {
+	from { box-shadow: inset 0 0 0 3px color-mix(in oklab, var(--tile-edge), transparent 15%); }
+	to   { box-shadow: inset 0 0 0 3px color-mix(in oklab, var(--tile-edge), transparent 100%); }
+}
+.article-container.is-hit::after { animation: flash-ombre .42s var(--ease); }
+
+
 .article-container:active {
-	transform: scale(0.95);
+	animation: flash-lumiere .22s linear;
 }
 
 /* Icône catégorie — petit badge haut-gauche sur la tuile
@@ -211,12 +237,14 @@
    / Mobile default (< 599px) */
 :root {
 	--bt-article-width: 130px;
+	--article-per-col: 2;
 }
 
 /* pour une largeur supérieure ou égale à 599 pixels */
 @media only screen and (width > 599px) {
 	:root {
 		--bt-article-width: 140px;
+		--article-per-col : 3;
 	}
 }
 
@@ -224,6 +252,7 @@
 @media only screen and (width > 1022px) {
 	:root {
 		--bt-article-width: 100px;
+		--article-per-col: 4;
 	}
 }
 
@@ -464,20 +493,20 @@
    La tuile s'assombrit et rétrécit légèrement.
    / Visual feedback during long press (600ms).
    Tile darkens and slightly shrinks. */
-.article-container.pressing {
-    transform: scale(0.97);
-    filter: brightness(0.85);
-    transition: transform 300ms ease, filter 300ms ease;
-    touch-action: none;  /* Empeche le scroll pendant le press sur mobile / Prevents scroll during press on mobile */
-}
+/*.article-container.pressing {*/
+/*    transform: scale(0.97);*/
+/*    filter: brightness(0.85);*/
+/*    transition: transform 300ms ease, filter 300ms ease;*/
+/*    touch-action: none;  !* Empeche le scroll pendant le press sur mobile / Prevents scroll during press on mobile *!*/
+/*}*/
 
-/* Désactiver le :active natif pendant le pressing
-   (sinon double effet scale)
-   / Disable native :active during pressing
-   (otherwise double scale effect) */
-.article-container.pressing:active {
-    transform: scale(0.97);
-}
+/*!* Désactiver le :active natif pendant le pressing*/
+/*   (sinon double effet scale)*/
+/*   / Disable native :active during pressing*/
+/*   (otherwise double scale effect) *!*/
+/*.article-container.pressing:active {*/
+/*    transform: scale(0.97);*/
+/*}*/
 
 
 /* --- PANEL CONTEXTUEL ARTICLE --- */

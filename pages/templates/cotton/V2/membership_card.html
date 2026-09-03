@@ -1,0 +1,95 @@
+{% load i18n %}
+
+<div class="col">
+    <div class="card h-100">
+        {% include 'commun/partials/picture.html' with img=product.img alt=product.name class='card-img-top' ratio='16x9' %}
+        <div class="card-body">
+            <h3 class="card-title">{{ product.name }}</h3>
+            {% if product.short_description %}
+                <p class="card-text">{{ product.short_description }}</p>
+            {% endif %}
+            {% if product.long_description %}
+                <p class="card-text">{{ product.long_description | safe }}</p>
+            {% endif %}
+        </div>
+        <div class="card-footer">
+            {% if product.price_min %}
+                <p> {% translate 'A partir de' %} <span class="offer-card__price">{{ product.price_min }}</span></p>
+            {% endif %}
+            {% if embed %}
+                <a class="btn btn--primary w-100 my-3 js-membership-form-btn"
+                   type="button"
+                   href="/memberships/?open={{ product.uuid }}" target="_blank">
+                    <i class="bi bi-plus"></i>
+                    {% if product.validate_button_text %}
+                        {{ product.validate_button_text }}{% else %}
+                        {% translate 'Subscribe' %}{% endif %}
+                </a>
+            {% else %}
+                <button
+                        class="btn btn--primary w-100 my-3 js-membership-form-btn"
+                        type="button"
+                        hx-get="/memberships/{{ product.uuid }}/" hx-swap="innerHTML"
+                        hx-target="#offcanvas-membership"
+
+                        data-bs-toggle="offcanvas"
+                        data-bs-target="#subscribePanel"
+                        aria-controls="subscribePanel"
+                        data-testid="membership-open-{{ product.uuid }}">
+                    <i class="bi bi-plus"></i>
+                    {% if product.validate_button_text %}
+                        {{ product.validate_button_text }}{% else %}
+                        {% translate 'Subscribe' %}{% endif %}
+                </button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% comment %}
+<article class="offer-card">
+    <div class="offer-card__cover">
+        {% include 'commun/partials/picture.html' with img=resa.event.img alt=resa.event.name class='rounded-start' %}
+    </div>
+    <div class="offer-card__content">
+        <h3 class="offer-card__title">{{ product.name }}</h3>
+        {% if product.long_description %}
+            <p class="offer-card__desc">{{ product.long_description | safe }}</p>
+        {% elif product.short_description %}
+            <p class="offer-card__desc">{{ product.short_description }}</p>
+        {% endif %}
+        {% if product.price_min %}
+            <div class="offer-card__price">{{ product.price_min }}</div>
+        {% endif %}
+        <div class="offer-card__footer">
+            {% if embed %}
+                <a class="btn btn-primary w-100 my-3 js-membership-form-btn"
+                   type="button"
+                   href="/memberships/?open={{ product.uuid }}" target="_blank">
+                    <i class="bi bi-plus"></i>
+                    {% if product.validate_button_text %}
+                        {{ product.validate_button_text }}{% else %}
+                        {% translate 'Subscribe' %}{% endif %}
+                </a>
+            {% else %}
+                <button
+                        class="btn btn--primary w-100 my-3 js-membership-form-btn"
+                        type="button"
+                        hx-get="/memberships/{{ product.uuid }}/" hx-swap="innerHTML"
+                        hx-target="#offcanvas-membership"
+
+                        data-bs-toggle="offcanvas"
+                        data-bs-target="#subscribePanel"
+                        aria-controls="subscribePanel"
+                        data-testid="membership-open-{{ product.uuid }}">
+                    <i class="bi bi-plus"></i>
+                    {% if product.validate_button_text %}
+                        {{ product.validate_button_text }}{% else %}
+                        {% translate 'Subscribe' %}{% endif %}
+                </button>
+            {% endif %}
+        </div>
+
+    </div>
+</article>
+{% endcomment %}

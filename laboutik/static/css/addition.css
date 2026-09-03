@@ -12,6 +12,7 @@
 	width: 100%;
 	height: 100%;
 	color: var(--blanc01);
+	background-color: var(--surface);
 }
 
 #addition-list {
@@ -144,6 +145,5 @@
 		display: flex;
 		flex-direction: column;
 		width: 29%;
-		background-color: var(--gris10);
 	}
 }

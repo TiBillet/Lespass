@@ -8,6 +8,7 @@
    to position correctly as absolute on top of the grid. */
 #products {
     position: relative;
+    background: oklch(0.115 0.010 262);
 }
 
 /* L'overlay couvre #products avec position absolute

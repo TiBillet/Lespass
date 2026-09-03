@@ -1009,7 +1009,19 @@ class MyAccount(viewsets.ViewSet):
             messages.add_message(request, messages.WARNING,
                                  _("Please validate your email to access all the features of your profile area."))
 
-        return render(request, "fonctionnel/compte/index.html", context=template_context)
+
+        # Résolution du gabarit par le resolver unifié.
+        # / Unified skin resolver.
+        from pages.services import gabarit_skin
+        template_path = gabarit_skin("vues/compte/index.html")
+        logger.error(template_path)
+
+        fedowAPI = FedowAPI()
+        cards = fedowAPI.NFCcard.retrieve_card_by_signature(request.user)
+        cards = ["A","B"]
+        template_context["cards"] = cards
+
+        return render(request, template_path, context=template_context)
 
     @action(detail=False, methods=['GET'])
     def balance(self, request: HttpRequest):
@@ -1018,7 +1030,12 @@ class MyAccount(viewsets.ViewSet):
         template_context['header'] = False
         template_context['account_tab'] = 'balance'
 
-        return render(request, "fonctionnel/compte/balance.html", context=template_context)
+        # Résolution du gabarit par le resolver unifié.
+        # / Unified skin resolver.
+        from pages.services import gabarit_skin
+        template_path = gabarit_skin("vues/compte/balance.html")
+
+        return render(request, template_path, context=template_context)
 
     @action(detail=False, methods=['GET'], url_path='tirelire_section')
     def tirelire_section(self, request: HttpRequest):
@@ -2010,6 +2027,99 @@ def index(request):
     from pages.services import gabarit_skin
     template_path = gabarit_skin("vues/accueil.html")
 
+    tenants = [
+        {
+            "tenant": place.tenant,
+            "tag_exclude": [tag.slug for tag in place.tag_exclude.all()],
+            "tag_filter": [tag.slug for tag in place.tag_filter.all()],
+        }
+        for place in FederatedPlace.objects.all().prefetch_related("tag_filter", "tag_exclude")
+    ]
+    # Le tenant actuel
+    this_tenant = connection.tenant
+    tenants.append(
+        {
+            "tenant": this_tenant,
+            "tag_filter": [],
+            "tag_exclude": [],
+        }
+    )
+
+    events_a_afficher = []
+    # Récupération de tous les évènements de la fédération
+    for tenant in tenants:
+        with ((tenant_context(tenant['tenant']))):
+            events = Event.objects.select_related(
+                'postal_address',
+            ).prefetch_related(
+                'tag', 'products', 'products__prices', 'artists', 'artists__artist',
+            ).filter(
+                published=True,
+                datetime__gte=timezone.localtime() - timedelta(days=1),  # On prend les évènement a partir d'hier
+                # Un event ARCHIVE est un event retiré de l'agenda. Il ne doit plus
+                # y apparaitre, meme s'il reste publié. Le cache SEO (carte,
+                # explorateur) applique déjà ce filtre partout : sans lui ici,
+                # l'agenda était le SEUL endroit où un event archivé restait visible.
+                # / An ARCHIVED event is one removed from the agenda. The SEO cache
+                # already filters it everywhere; without this, the agenda was the only
+                # place where an archived event stayed visible.
+                archived=False,
+            ).exclude(
+                categorie=Event.ACTION
+            )  # Les Actions sont affichés dans la page de l'evenement parent
+
+            if tenant['tenant'] != this_tenant:  # on est pas sur le tenant d'origine, on filtre le bool private
+                events = events.filter(
+                    private=False
+                )
+
+            # Les deux filtres de tags d'un lieu federe, dans le sens annonce par
+            # les libelles de l'admin (FederatedPlace.tag_filter / tag_exclude).
+            # Le matching se fait par SLUG : les objets Tag appartiennent au schema
+            # de CHAQUE tenant, comparer les pk ne marcherait pas.
+            # Un tag_filter non vide restreint : on ne garde QUE ces tags.
+            # / A tenant's two tag filters, matching the admin labels.
+            # / Slug-based matching: Tag objects live in each tenant's own schema.
+            if len(tenant['tag_filter']) > 0:
+                events = events.filter(
+                    tag__slug__in=tenant['tag_filter'])
+
+            # Un tag_exclude non vide retire : on jette les events portant ces tags.
+            # / A non-empty tag_exclude drops events carrying any of these tags.
+            if len(tenant['tag_exclude']) > 0:
+                events = events.exclude(
+                    tag__slug__in=tenant['tag_exclude'])
+
+
+            events_a_afficher += events
+
+
+
+
+
+    # Tri les évènements par datetime
+    events_a_afficher.sort(key=lambda event: event.datetime)
+
+    for event in events_a_afficher:
+        event_products = event.products.all()
+        products = list(event_products)
+        prices = [price for product in products for price in product.prices.all()]
+        tarifs = [price.prix for price in prices]
+        free_price = any(price.free_price for price in prices)
+        # Calcul des prix min et max
+        if tarifs:
+            event.price_min = _("A partir de %(price)s €") % {"price":min(tarifs)}
+        elif free_price:
+            event.price_min = _("Prix libre")
+        else:
+            event.price_min = _("Entré libre")
+
+        # event.price_min = _("Prix libre") if free_price else (min(tarifs) if tarifs else "Entré libre")
+        event.price_max = max(tarifs) if tarifs else None
+        # import ipdb;ipdb.set_trace()
+
+    template_context["events"] = events_a_afficher
+
     return render(request, template_path, context=template_context)
 
 
@@ -2020,6 +2130,141 @@ def index(request):
 # / Cleanup note: the infos_pratiques() and le_faire_festival() views were
 # REMOVED. Their routes were already gone from BaseBillet/urls.py: these
 # contents are pages-app CMS pages served by the /<slug>/ catch-all.
+
+
+def _distance_km_haversine(latitude_a, longitude_a, latitude_b, longitude_b):
+    """
+    Distance a vol d'oiseau entre deux points GPS, en kilometres.
+    / Straight-line distance between two GPS points, in kilometers.
+
+    LOCALISATION : BaseBillet/views.py
+
+    Formule de haversine : la terre est une sphere, on mesure l'arc entre
+    les deux points. Suffisant pour afficher "a X km" sur une carte de
+    lieux federes (l'erreur reste bien sous le kilometre a ces echelles).
+
+    :param latitude_a: latitude du point A (decimal ou float)
+    :param longitude_a: longitude du point A
+    :param latitude_b: latitude du point B
+    :param longitude_b: longitude du point B
+    :return: distance en kilometres (float)
+    """
+    from math import asin, cos, radians, sin, sqrt
+
+    rayon_de_la_terre_en_km = 6371.0
+
+    # La formule travaille en radians, pas en degres
+    # / The formula works in radians, not degrees
+    lat_a_en_radians = radians(float(latitude_a))
+    lng_a_en_radians = radians(float(longitude_a))
+    lat_b_en_radians = radians(float(latitude_b))
+    lng_b_en_radians = radians(float(longitude_b))
+
+    ecart_de_latitude = lat_b_en_radians - lat_a_en_radians
+    ecart_de_longitude = lng_b_en_radians - lng_a_en_radians
+
+    terme_central = (
+        sin(ecart_de_latitude / 2) ** 2
+        + cos(lat_a_en_radians) * cos(lat_b_en_radians) * sin(ecart_de_longitude / 2) ** 2
+    )
+    return rayon_de_la_terre_en_km * 2 * asin(sqrt(terme_central))
+
+
+def _enrichir_explorer_data_avec_type_et_distance(explorer_data, config):
+    """
+    Ajoute le type de lieu et la distance a chaque entree de explorer_data.
+    / Adds venue type and distance to each explorer_data entry.
+
+    LOCALISATION : BaseBillet/views.py — appelee par FederationViewset.list
+
+    - tenants[] : + "categorie" (code Client.categorie, ex "S")
+                  + "categorie_label" (label traduit, ex "Scene")
+    - points[]  : + "tenant_categorie" et "tenant_categorie_label" (idem)
+                  + "distance_km" (float arrondi a 0,1 km, ou None si le
+                    point n'a pas de coordonnees ou si le tenant courant
+                    n'a pas d'adresse geocodee)
+
+    Seule la page Reseau appelle cette fonction. Le JS de l'explorer ne rend
+    le badge de type et la distance QUE si ces cles existent : la page
+    publique /explorer/ n'est pas impactee.
+    / Only the Network page calls this. The explorer JS renders the type badge
+    and the distance ONLY when these keys exist: /explorer/ is unaffected.
+
+    :param explorer_data: dict {"points": [...], "tenants": [...]}
+    :param config: Configuration du tenant courant (adresse = origine des distances)
+    :return: le meme dict, enrichi en place
+    """
+    # Tous les UUIDs de tenants visibles (cartes + marqueurs)
+    # / All visible tenant UUIDs (cards + markers)
+    uuids_des_tenants_visibles = {t.get("tenant_id") for t in explorer_data.get("tenants", [])}
+    uuids_des_tenants_visibles |= {p.get("tenant_id") for p in explorer_data.get("points", [])}
+    uuids_des_tenants_visibles.discard(None)
+
+    # Garde : les donnees de cache peuvent contenir des identifiants qui ne
+    # sont pas des UUID valides (donnees corrompues, tests). Un UUIDField
+    # leverait une ValidationError a la requete : on ecarte ces valeurs.
+    # / Guard: cached data may contain non-UUID identifiers (corrupted data,
+    # tests). An UUIDField would raise ValidationError: filter them out.
+    import uuid as uuid_module
+    uuids_valides = []
+    for valeur in uuids_des_tenants_visibles:
+        try:
+            uuids_valides.append(uuid_module.UUID(str(valeur)))
+        except (ValueError, TypeError, AttributeError):
+            continue
+
+    # 1 seule requete. Client est en SHARED_APPS : la table vit dans le
+    # schema public, accessible depuis n'importe quel tenant.
+    # / A single query. Client is in SHARED_APPS: the table lives in the
+    # public schema, reachable from any tenant.
+    categories_par_uuid = {}
+    for client_du_reseau in Client.objects.filter(uuid__in=uuids_valides):
+        categories_par_uuid[str(client_du_reseau.uuid)] = (
+            client_du_reseau.categorie,
+            client_du_reseau.get_categorie_display(),
+        )
+
+    for tenant_data in explorer_data.get("tenants", []):
+        categorie_du_tenant = categories_par_uuid.get(tenant_data.get("tenant_id"))
+        if categorie_du_tenant:
+            tenant_data["categorie"], tenant_data["categorie_label"] = categorie_du_tenant
+
+    # Origine des distances : l'adresse principale du tenant courant.
+    # Si elle n'a pas de coordonnees GPS, aucune distance n'est calculee.
+    # / Distance origin: the current tenant's main address. Without GPS
+    # coordinates, no distance is computed.
+    adresse_du_tenant_courant = getattr(config, "postal_address", None)
+    origine_latitude = getattr(adresse_du_tenant_courant, "latitude", None)
+    origine_longitude = getattr(adresse_du_tenant_courant, "longitude", None)
+    origine_est_geocodee = origine_latitude is not None and origine_longitude is not None
+
+    for point_data in explorer_data.get("points", []):
+        categorie_du_point = categories_par_uuid.get(point_data.get("tenant_id"))
+        if categorie_du_point:
+            point_data["tenant_categorie"], point_data["tenant_categorie_label"] = categorie_du_point
+
+        # La cle "distance_km" n'existe QUE si l'origine est geocodee. Sans
+        # origine, la cle est absente : le JS n'affiche alors ni distance ni
+        # "sans lieu fixe" (sinon tous les lieux seraient marques "sans lieu
+        # fixe" a tort). / The "distance_km" key only exists when the origin
+        # is geocoded. Otherwise the key is absent: the JS shows neither the
+        # distance nor "no fixed venue".
+        if origine_est_geocodee:
+            latitude_du_point = point_data.get("latitude")
+            longitude_du_point = point_data.get("longitude")
+            point_est_geocode = latitude_du_point is not None and longitude_du_point is not None
+
+            if point_est_geocode:
+                point_data["distance_km"] = round(_distance_km_haversine(
+                    origine_latitude, origine_longitude,
+                    latitude_du_point, longitude_du_point,
+                ), 1)
+            else:
+                # Point sans coordonnees = lieu sans adresse fixe
+                # / Point without coordinates = venue with no fixed address
+                point_data["distance_km"] = None
+
+    return explorer_data
 
 
 class FederationViewset(viewsets.ViewSet):
@@ -2112,6 +2357,15 @@ class FederationViewset(viewsets.ViewSet):
             tri_des_lieux=config_federation.tri_des_lieux,
             afficher_lieux_sans_adresse=config_federation.afficher_lieux_sans_adresse,
         )
+
+        # Enrichissement pour la page Reseau (skin V2) : type de lieu
+        # (Client.categorie) et distance a vol d'oiseau depuis l'adresse du
+        # tenant courant. Le JS ne rend ces infos que si les cles existent :
+        # la page publique /explorer/ n'est pas impactee.
+        # / Enrichment for the Network page (V2 skin): venue type and
+        # straight-line distance. The JS renders them only when present:
+        # the public /explorer/ page is unaffected.
+        explorer_data = _enrichir_explorer_data_avec_type_et_distance(explorer_data, config)
 
         # Etat vide : a-t-on AUTRE chose que le tenant courant sur la carte ?
         # / Empty state: do we have something OTHER than the current tenant on the map?
@@ -2584,6 +2838,9 @@ class EventMVT(viewsets.ViewSet):
             search=search, tags=tags, thematique=thematique_slug
         )
 
+        # Get the total number of events
+        ctx['event_count'] = sum([len(events) for events in ctx['dated_events'].values()])
+
         # Résolution du gabarit par le resolver unifié (CHANTIER-03) :
         # pages/<skin>/vues/…, sinon fallback pages/classic/.
         # Si page > 1, on utilise le gabarit « suite » (sans header RSS).
@@ -2636,6 +2893,9 @@ class EventMVT(viewsets.ViewSet):
         context['dated_events'], context['paginated_info'], all_dates_list, all_tags_list, all_thematiques_list = self.federated_events_filter(
             tags=tags, search=search, page=page, thematique=thematique_slug, date_filter=date_filter
         )
+
+        # Get the total number of events
+        context['event_count'] = sum([len(events) for events in context['dated_events'].values()])
 
         # Toutes les dates disponibles pour le dropdown filtre (pas limité à la pagination)
         # / All available dates for filter dropdown (not limited to pagination)
@@ -3028,10 +3288,19 @@ class MembershipMVT(viewsets.ViewSet):
                 })
 
         template_context['federated_tenants'] = federated_tenant_dict
-        template_context['products'] = Product.objects.filter(categorie_article=Product.ADHESION,
+        products = Product.objects.filter(categorie_article=Product.ADHESION,
                                                               publish=True).prefetch_related('tag')
 
-        # Résolution du gabarit par le resolver unifié (CHANTIER-04).
+        for product in products:
+            prices = product.prices.all()
+            tarifs = [price.prix for price in prices]
+            # Calcul des prix min et max
+            product.price_min = f"{min(tarifs)} €"
+
+        template_context['products'] = products
+
+
+    # Résolution du gabarit par le resolver unifié (CHANTIER-04).
         # / Unified skin resolver (skins migration).
         from pages.services import gabarit_skin
         template_path = gabarit_skin("vues/adhesions.html")

@@ -9,25 +9,47 @@
 .header-background {
 	width: 100%;
 	height: var(--header-height);
-	background-color: var(--noir03);
+	background-color: var(--surface);
 	display: flex;
 	flex-direction: row;
-	justify-content: space-arround;
+	justify-content: space-between;
 	align-items: center;
 	color: var(--blanc01);
-	/* Accent vert, même couleur que VALIDER / Green accent, same color as VALIDER */
-	border-bottom: 3px solid var(--vert03);
+	position: relative;
+	border-bottom: 1px solid var(--noir03);
+}
+
+.header-background::after {
+	content: "";
+	position: absolute;
+	inset: auto 0 0 0;
+	height: 2px;
+	background: linear-gradient(90deg, transparent, var(--valid), transparent);
+	opacity: .55;
+}
+
+.flex-container{
+	display: flex;
+	flex-direction: row;
+	justify-content: space-around;
+	align-items: center;
+
 }
 
 .header-img {
-	width: var(--header-img-width);
 	height: 100%;
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
 	align-items: center;
 	cursor: pointer;
+	margin: 20px;
 }
+
+.header-img img{
+	height: 30px;
+}
+
 
 .header-status {
 	width: var(--header-status-width);
@@ -37,17 +59,16 @@
 	justify-content: flex-end;
 	align-items: center;
 	/* Masqué tant que non fonctionnel / Hidden until functional */
-	background-color: var(--noir03);
 }
 
 #header-title {
-	width: calc(100% - var(--header-add-img-status-menu));
+	/*width: calc(100% - var(--header-add-img-status-menu));*/
+	min-width: 200px;
 	height: 100%;
 	display: flex;
 	flex-direction: row;
-	justify-content: center;
 	align-items: center;
-	font-size: clamp(1rem, 3.5vw, 2.5rem);
+	font-size: clamp(1rem, 1.5vw, 2.5rem);
 	overflow-wrap: break-word;
 	font-weight: bold;
 	text-wrap: balance;
@@ -68,7 +89,6 @@
 	max-height: calc(var(--main-container-height) - 2px);
 	position: absolute;
 	top: calc(var(--header-height) + 2px);
-	right: 0;
 	background-color: var(--noir03);
 	z-index: 2;
 	overflow-y: auto;
@@ -77,6 +97,14 @@
 	opacity: 0;
 	visibility: hidden;
 	transition: transform 200ms ease-out, opacity 200ms ease-out, visibility 0ms 200ms;
+}
+
+#menu-burger-container.left{
+	left : 0;
+}
+
+#menu-burger-container.right{
+	right : 0;
 }
 
 /* État ouvert du menu burger / Open state of burger menu */
@@ -139,6 +167,6 @@
 /* pour une largeur supérieure 1199 pixels */
 @media only screen and (width > 1199px) {
 	:root {
-		--header-height: 66px;
+		--header-height: 58px;
 	}
 }

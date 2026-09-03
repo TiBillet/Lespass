@@ -1,0 +1,232 @@
+{% extends base_template %}
+{% load static i18n %}
+
+{# Page Reseau — skin V2, au style de la maquette pages/TEMP/autour-du-lieu.html. #}
+{# Le moteur reste l'explorer (seo/static/seo/explorer.js) : cette coquille #}
+{# conserve TOUS les ids et data-* qu'il attend (#explorer-root, #explorer-search, #}
+{# #explorer-pills, #explorer-tags, #explorer-counter, #explorer-list, #explorer-map, #}
+{# #explorer-map-loading, #explorer-fab, json_script explorer-data). Seule la #}
+{# presentation change (classes de la maquette : around-layout, search-bar, #}
+{# tag-pill, results-line, map-panel), habillee par la section PAGE RESEAU de V2.css. #}
+{# / Network page — V2 skin, styled after the TEMP/autour-du-lieu.html mockup. #}
+{# The engine stays the explorer (explorer.js): this shell keeps ALL the ids and #}
+{# data-* it expects. Only the presentation changes (mockup classes). #}
+
+{% block title %}{% translate 'Réseau local' %}{% endblock %}
+{% block meta_description %}{{ config.short_description|striptags|default:config.organisation }} - {% translate 'Réseau local' %}{% endblock %}
+
+{# Override des Open Graph + Twitter tags : par defaut le base.html retombe sur #}
+{# "Accueil | <tenant>" qui n'est pas adapte a cette page Reseau local. #}
+{# / Override Open Graph + Twitter tags: base.html defaults to "Home | <tenant>" #}
+{# which is not appropriate for this Local Network page. #}
+{% block og_title %}{% translate 'Réseau local' %} | {{ config.organisation }}{% endblock %}
+{% block og_description %}{% blocktranslate with tenant=config.organisation %}Découvrez le réseau coopératif de {{ tenant }} : lieux fédérés, événements partagés.{% endblocktranslate %}{% endblock %}
+{% block twitter_title %}{% translate 'Réseau local' %} | {{ config.organisation }}{% endblock %}
+{% block twitter_description %}{% blocktranslate with tenant=config.organisation %}Découvrez le réseau coopératif de {{ tenant }} : lieux fédérés, événements partagés.{% endblocktranslate %}{% endblock %}
+
+{% block extra_meta %}
+    {# JSON-LD federation : declare la structure du reseau pour Google et les LLMs. #}
+    {# Sans ce schema, les crawlers no-JS (GPTBot, ClaudeBot, PerplexityBot, CommonCrawl) #}
+    {# ne voient que le shell vide de la page rendue cote JS. #}
+    {# / Federation JSON-LD: declares the network structure for Google and LLMs. #}
+    {# Without this schema, no-JS crawlers see only the empty page shell. #}
+    {% if federation_json_ld %}
+    <script type="application/ld+json">{{ federation_json_ld|safe }}</script>
+    {% endif %}
+
+    {# Breadcrumb pour rich snippets Google : Accueil > Reseau local #}
+    {# / Breadcrumb for Google rich snippets: Home > Local network #}
+    {% if breadcrumb_json_ld %}
+    <script type="application/ld+json">{{ breadcrumb_json_ld|safe }}</script>
+    {% endif %}
+{% endblock %}
+
+{% block main %}
+    {# Feuilles de style Leaflet + explorer charges DANS le body. #}
+    {# Raison : la navbar utilise hx-target="body" + hx-swap="innerHTML" pour #}
+    {# naviguer entre les pages. HTMX ne remplace QUE le contenu du body, jamais #}
+    {# le head. Si on place ces <link> dans extra_meta (head), ils ne sont charges #}
+    {# qu'au full reload (F5 ou URL directe). Sur une navigation HTMX depuis une #}
+    {# autre page du tenant, les CSS manquent et la carte casse tout le layout. #}
+    {# Les <link> dans le body sont valides en HTML5 : le navigateur les parse et #}
+    {# applique les styles des qu'ils apparaissent dans le DOM swappé. #}
+    {# / Leaflet + explorer stylesheets loaded INSIDE the body. #}
+    {# Reason: the navbar uses hx-target="body" + hx-swap="innerHTML". HTMX only #}
+    {# replaces the body content, never the head. <link> tags in extra_meta would #}
+    {# only load on full reload. On HTMX navigation from another tenant page, the #}
+    {# CSS would be missing and the map would break the whole layout. #}
+    {# <link> inside <body> is valid HTML5: the browser parses and applies styles #}
+    {# as soon as they appear in the swapped DOM. #}
+    <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/leaflet.css' %}">
+    <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/MarkerCluster.css' %}">
+    <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/MarkerCluster.Default.css' %}">
+    <link rel="stylesheet" href="{% static 'seo/explorer.css' %}">
+
+    {# En-tete de page, au style de la maquette autour-du-lieu. #}
+    {# / Page header, mockup style. #}
+    <div class="page-header">
+        <div class="eyebrow">{% translate "Nos relations" %}</div>
+        <h1 class="page-title">{% blocktranslate with organisation=config.organisation %}Autour de {{ organisation }}{% endblocktranslate %}</h1>
+        {% if texte_introduction %}
+            {# Chapo editorial optionnel (FederationConfiguration.texte_introduction). #}
+            {# Rendu |safe car contenu admin sanitize cote save_model. #}
+            {# / Optional editorial intro, |safe because admin content sanitized on save. #}
+            <div class="page-intro" data-testid="federation-intro">{{ texte_introduction|safe }}</div>
+        {% else %}
+            <p class="page-intro">{% blocktranslate with organisation=config.organisation %}{{ organisation }} n'est pas seule : elle est reliée à d'autres lieux, collectifs et compagnies — chacun de ces liens s'incarne dans ce qu'on fait ensemble.{% endblocktranslate %}</p>
+        {% endif %}
+    </div>
+
+    {# Message d'etat vide : si le tenant n'a aucune autre place federee. #}
+    {# / Empty-state message: if the tenant has no other federated place. #}
+    {% if not has_other_federated_places %}
+    <div class="alert alert-info text-center my-3 mx-auto" style="max-width: 800px;"
+         role="status" data-testid="federation-empty-state">
+        <i class="bi bi-info-circle" aria-hidden="true"></i>
+        {% translate "Aucune autre place fédérée pour le moment." %}
+    </div>
+    {% endif %}
+
+    {# data-bs-theme="light" : l'explorer est TOUJOURS en clair, quel que soit le #}
+    {# theme choisi par le visiteur (ses CSS posent des fonds blancs en dur). #}
+    {# / data-bs-theme="light": the explorer is ALWAYS light (its CSS hardcodes #}
+    {# white backgrounds). #}
+    <div id="explorer-root"
+         class="explorer-root"
+         data-bs-theme="light"
+         data-current-tenant-uuid="{{ current_tenant_uuid|default:'' }}"
+         data-maptiler-key="{{ maptiler_key|default:'' }}"
+         data-i18n-empty="{% translate 'Aucun résultat trouvé.' %}"
+         data-i18n-visit="{% translate 'Visiter le lieu' %}"
+         data-i18n-lieu="{% translate 'Lieu' %}"
+         data-i18n-event="{% translate 'Événement' %}"
+         data-i18n-current="{% translate 'Vous êtes ici' %}"
+         data-i18n-lieu-singular="{% translate 'lieu' %}"
+         data-i18n-lieu-plural="{% translate 'lieux' %}"
+         data-i18n-event-singular="{% translate 'événement' %}"
+         data-i18n-event-plural="{% translate 'événements' %}"
+         data-i18n-next-events="{% translate 'Prochains événements :' %}"
+         data-i18n-more="{% translate 'autre(s)' %}"
+         data-i18n-list="{% translate 'Liste' %}"
+         data-i18n-map="{% translate 'Carte' %}"
+         data-i18n-clear-tag="{% translate 'Effacer le filtre' %}"
+         data-i18n-tag-empty="{% translate 'Aucun événement « {tag} » dans la zone visible.' %}"
+         data-i18n-more-tags="{% translate '+ {count} tags' %}"
+         data-i18n-tout="{% translate 'Tout' %}"
+         data-i18n-sans-lieu-fixe="{% translate 'Sans lieu fixe' %}">
+
+        {# around-layout : la grille 2 colonnes de la maquette (V2.css).        #}
+        {# explorer-container : la classe que explorer.js utilise pour le toggle #}
+        {# mobile liste/carte (explorer-view-map). Les deux cohabitent : les     #}
+        {# regles de layout explorer sont neutralisees par la section PAGE       #}
+        {# RESEAU de V2.css (prefixe #explorer-root, plus specifique).           #}
+        {# / around-layout: the mockup 2-column grid. explorer-container: the    #}
+        {# class explorer.js uses for the mobile list/map toggle. #}
+        <div class="around-layout explorer-container">
+
+            {# --- Colonne gauche : recherche + filtres + liste --------------- #}
+            <div class="reseau-liste">
+                <label class="search-bar">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+                    {# name="q" + value pre-rempli : la navbar globale peut soumettre #}
+                    {# vers /explorer/?q=... / Pre-filled value for global navbar submit #}
+                    <input type="search"
+                           class="explorer-search"
+                           id="explorer-search"
+                           name="q"
+                           value="{{ request.GET.q|default:'' }}"
+                           placeholder="{% translate 'Rechercher un lieu ou un événement...' %}"
+                           aria-label="{% translate 'Rechercher' %}"
+                           data-testid="explorer-search">
+                </label>
+
+                {# Pills Lieux / Evenements (classe explorer-pill = binding JS, #}
+                {# tag-pill = look maquette). / View pills: explorer-pill binds #}
+                {# the JS, tag-pill carries the mockup look. #}
+                <div class="filter-tabs explorer-pills" id="explorer-pills" role="tablist">
+                    <button class="tag-pill explorer-pill active" type="button" data-category="lieu" role="tab"
+                            data-testid="explorer-pill-lieu">{% translate "Lieux" %}</button>
+                    <button class="tag-pill explorer-pill" type="button" data-category="event" role="tab"
+                            data-testid="explorer-pill-event">{% translate "Événements" %}</button>
+                </div>
+
+                {# Pills de type de lieu (Scene, Festival...), rendues par #}
+                {# explorer.js a partir des categories presentes dans les #}
+                {# donnees. Masquees par defaut : affichees seulement en vue #}
+                {# Lieux et seulement si les donnees portent une categorie. #}
+                {# / Venue type pills, rendered by explorer.js from the data. #}
+                {# Hidden by default: shown only in Lieux view with category data. #}
+                <div class="filter-tabs filter-tabs--types" id="explorer-type-pills"
+                     role="group" aria-label="{% translate 'Filtrer par type de lieu' %}"
+                     data-testid="explorer-type-pills" hidden></div>
+
+                {# Chips de tags d'evenements : rendues par explorer.js #}
+                {# (fonctionnement actuel conserve, visibles dans les 2 vues). #}
+                {# / Event tag chips: rendered by explorer.js (current behavior #}
+                {# kept, visible in both views). #}
+                <div class="explorer-tags"
+                     id="explorer-tags"
+                     role="group"
+                     aria-label="{% translate 'Filtrer par tag' %}"
+                     data-testid="explorer-tags"
+                     hidden></div>
+
+                {# Compteur de resultats : rempli par explorer.js (updateCounters). #}
+                {# / Results counter: filled by explorer.js (updateCounters). #}
+                <div class="results-line explorer-counter" id="explorer-counter" aria-live="polite"></div>
+
+                {# Cartes lieux / evenements : rendues par explorer.js (renderList). #}
+                {# / Venue / event cards: rendered by explorer.js (renderList). #}
+                <div class="explorer-list"
+                     id="explorer-list"
+                     aria-live="polite"
+                     data-testid="explorer-list"></div>
+            </div>
+
+            {# --- Colonne droite : la carte ---------------------------------- #}
+            <div class="map-panel">
+                <div class="map-panel__toolbar">
+                    <a class="btn btn--secondary btn--sm" href="https://tibillet.coop/explorer/"
+                       target="_blank" rel="noopener" data-testid="reseau-lien-explorer-global">
+                        {% translate "Réseau TiBillet" %}
+                    </a>
+                </div>
+                <div class="explorer-map" id="explorer-map" data-testid="explorer-map">
+                    <div class="explorer-map-loading"
+                         id="explorer-map-loading"
+                         role="status"
+                         aria-live="polite">
+                        <div class="explorer-map-loading-spinner" aria-hidden="true"></div>
+                        <span class="visually-hidden">{% translate "Chargement de la carte…" %}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Donnees JSON pour le JS / JSON data for JS #}
+        {{ explorer_data|json_script:"explorer-data" }}
+
+        {# FAB toggle mobile (carte/liste). Conserve : explorer.js l'utilise #}
+        {# aussi pour basculer sur la carte au clic sur une card en mobile. #}
+        {# / Mobile FAB (map/list). Kept: explorer.js also uses it to switch #}
+        {# to the map when a card is clicked on mobile. #}
+        <button class="explorer-fab"
+                id="explorer-fab"
+                type="button"
+                aria-label="{% translate 'Basculer carte/liste' %}"
+                data-testid="explorer-fab">
+            &#128506; <span class="explorer-fab-label">{% translate "Carte" %}</span>
+        </button>
+
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script src="{% static 'seo/vendor/leaflet/leaflet.js' %}"></script>
+    <script src="{% static 'seo/vendor/leaflet/markercluster.js' %}"></script>
+    {# Fond de carte commun : AVANT explorer.js, qui appelle tbPoserFondDeCarte. #}
+    {# / Shared basemap: BEFORE explorer.js, which calls tbPoserFondDeCarte. #}
+    <script src="{% static 'cartes/tb_fond_de_carte.js' %}"></script>
+    <script src="{% static 'seo/explorer.js' %}"></script>
+{% endblock %}
