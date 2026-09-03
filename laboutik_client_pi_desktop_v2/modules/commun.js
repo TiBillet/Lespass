@@ -83,7 +83,6 @@ export async function testDiscoveryServer(url, timeoutMs = 5000) {
 
   try {
     await fetch(url, {
-      mode: 'no-cors',
       cache: 'no-store',
       signal: controller.signal
     });
@@ -106,7 +105,6 @@ export async function testNetworkStatus(timeoutMs = 5000) {
 
   try {
     await fetch('https://detectportal.firefox.com/canonical.html', {
-      mode: 'no-cors',
       cache: 'no-store',
       signal: controller.signal
     });
