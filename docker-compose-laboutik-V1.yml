@@ -57,11 +57,12 @@ services:
 #      - ../Fedow/database:/home/fedow/Fedow/database
     networks:
       - backend
-    command: "bash start.sh"
-#    command: "bash start_dev.sh"
+#    command: "bash start.sh"
+    command: "bash start_dev.sh"
     extra_hosts:
       - fedow.tibillet.localhost:172.17.0.1
       - lespass.tibillet.localhost:172.17.0.1
+      - chantefrein.tibillet.localhost:172.17.0.1
       - laboutik.tibillet.localhost:172.17.0.1
       - laboutik2.tibillet.localhost:172.17.0.1
 
@@ -147,6 +148,7 @@ services:
     extra_hosts:
       - fedow.tibillet.localhost:172.17.0.1
       - lespass.tibillet.localhost:172.17.0.1
+      - chantefrein.tibillet.localhost:172.17.0.1
       - laboutik.tibillet.localhost:172.17.0.1
       - laboutik2.tibillet.localhost:172.17.0.1
     command: 'bash start_dev.sh'
@@ -173,6 +175,7 @@ services:
     extra_hosts:
       - fedow.tibillet.localhost:172.17.0.1
       - lespass.tibillet.localhost:172.17.0.1
+      - chantefrein.tibillet.localhost:172.17.0.1
       - laboutik.tibillet.localhost:172.17.0.1
       - laboutik2.tibillet.localhost:172.17.0.1
     command: "poetry run celery -A TiBillet worker -l INFO -B --concurrency=6"
@@ -193,7 +196,7 @@ services:
       - traefik.enable=true
       - traefik.docker.network=frontend
       - traefik.http.routers.lespass_nginx.tls=true
-      - traefik.http.routers.lespass_nginx.rule=Host(`$DOMAIN`) || Host(`lespass.$DOMAIN`)
+      - traefik.http.routers.lespass_nginx.rule=Host(`$DOMAIN`) || Host(`lespass.$DOMAIN`) || Host(`chantefrein.$DOMAIN`)
       - traefik.http.services.lespass_nginx.loadbalancer.server.port=80
       - traefik.http.routers.lespass_nginx.priority=1 # plus c'est grand, plus c'est prioritaire
 
@@ -256,6 +259,7 @@ services:
     extra_hosts:
       - fedow.tibillet.localhost:172.17.0.1
       - lespass.tibillet.localhost:172.17.0.1
+      - chantefrein.tibillet.localhost:172.17.0.1
       - laboutik.tibillet.localhost:172.17.0.1
       - laboutik2.tibillet.localhost:172.17.0.1
     networks:
@@ -285,6 +289,7 @@ services:
     extra_hosts:
       - fedow.tibillet.localhost:172.17.0.1
       - lespass.tibillet.localhost:172.17.0.1
+      - chantefrein.tibillet.localhost:172.17.0.1
       - laboutik.tibillet.localhost:172.17.0.1
       - laboutik2.tibillet.localhost:172.17.0.1
     networks:
