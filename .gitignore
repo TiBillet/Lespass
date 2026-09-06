@@ -257,3 +257,7 @@ laboutik_client_android_v2/mobile-app/package-lock.json
 /.claude/
 INTEROP_REPO
 OLD_REPO
+
+# Artefacts de diagnostic des echecs E2E (captures + HTML), regeneres a chaque echec.
+# / E2E failure diagnostics (screenshots + HTML), regenerated on each failure.
+tests/e2e/artefacts/

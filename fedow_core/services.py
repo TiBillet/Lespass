@@ -21,7 +21,7 @@ REGLES / RULES:
 import logging
 from dataclasses import dataclass
 
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
 
@@ -30,6 +30,7 @@ from fedow_core.exceptions import (
     CarteIntrouvable,
     SoldeInsuffisant,
     UserADejaCarte,
+    WalletUserAbsent,
 )
 from fedow_core.models import Asset, Federation, Token, Transaction
 
@@ -370,12 +371,19 @@ class WalletService:
         # and don't have a wallet yet.
         user_a_deja_un_wallet = user.wallet is not None
         if not user_a_deja_un_wallet:
-            nouveau_wallet = Wallet.objects.create(
-                origin=tenant,
-                name=f"Wallet {user.email}",
-            )
-            user.wallet = nouveau_wallet
-            user.save(update_fields=["wallet"])
+            # GARDE : on REFUSE de fabriquer un wallet ici. Il aurait un uuid ALEATOIRE,
+            # donc inconnu de Fedow — et Fedow authentifie chaque requete signee via
+            # l'en-tete `Wallet: <uuid>`. Cet usager ne pourrait plus rien signer, son FED
+            # deviendrait invisible au point de vente, et la prochaine declaration
+            # echouerait sur « Wallet and member mismatch », a vie.
+            # Le wallet d'un USER se cree TOUJOURS chez Fedow d'abord, par l'appelant
+            # (`fedow_connect.services.declarer_wallet_user_a_fedow`). Ce moteur reste
+            # hermetique au reseau : aucun import de `fedow_connect` ici.
+            # / GUARD: refuse to make up a wallet. It would carry a RANDOM uuid unknown to
+            #   Fedow, which authenticates every signed request through the `Wallet: <uuid>`
+            #   header. A USER's wallet is ALWAYS created on Fedow first, by the caller.
+            #   This engine stays network-free: no fedow_connect import here.
+            raise WalletUserAbsent()
 
         wallet_cible = user.wallet
 
@@ -398,7 +406,13 @@ class WalletService:
         # / An ephemeral wallet can have multiple assets (TLF, TNF, TIM, FID...).
         # We transfer each asset separately, with a FUSION Transaction
         # for the audit trail.
-        tokens_avec_solde = Token.objects.filter(
+        # `select_for_update` : le montant doit etre lu sous le MEME verrou que celui du
+        # debit qui suit. Sans lui, un paiement NFC concurrent sur cette carte fait fondre
+        # le solde entre la lecture et l'ecriture, et `TransactionService.creer` leve
+        # `SoldeInsuffisant` en pleine vente.
+        # / Read the amount under the SAME lock as the debit that follows, otherwise a
+        #   concurrent NFC payment shrinks it in between and creer() raises SoldeInsuffisant.
+        tokens_avec_solde = Token.objects.select_for_update().filter(
             wallet=wallet_source,
             value__gt=0,
         )
@@ -1416,12 +1430,31 @@ class CarteService:
             # / Lock the card row WITHOUT select_related: PostgreSQL refuses FOR UPDATE
             # on the nullable side of an outer join. Related FKs are lazily loaded
             # when accessed below.
+            # `CarteCashless.uuid` est NULLABLE. Un `get(uuid=None)` ne leverait pas
+            # DoesNotExist : il matcherait TOUTES les cartes sans uuid (PostgreSQL autorise
+            # plusieurs NULL sous une contrainte unique). Selon le nombre de cartes
+            # concernees, on lierait la MAUVAISE carte, ou on planterait sur
+            # MultipleObjectsReturned. Une carte sans uuid n'est pas identifiable : on la
+            # traite comme introuvable.
+            # / CarteCashless.uuid is NULLABLE, and get(uuid=None) would match EVERY
+            #   uuid-less card instead of raising DoesNotExist — linking the WRONG card.
+            if not qrcode_uuid:
+                raise CarteIntrouvable()
+
             try:
                 carte = CarteCashless.objects.select_for_update().get(uuid=qrcode_uuid)
             except CarteCashless.DoesNotExist:
                 raise CarteIntrouvable()
 
-            tenant_origine = carte.detail.origine
+            # `detail` est nullable : une carte peut exister sans lot d'origine (cartes de
+            # test, imports partiels). On retombe alors sur le tenant courant, qui est le
+            # lieu ou se joue la liaison.
+            # / `detail` is nullable: fall back to the current tenant, which is the venue
+            #   where the linking happens.
+            if carte.detail is not None:
+                tenant_origine = carte.detail.origine
+            else:
+                tenant_origine = connection.tenant
 
             # --- Idempotence : carte deja liee a CE user ---
             # / Idempotency: card already linked to THIS user.

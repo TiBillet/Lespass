@@ -52,34 +52,49 @@ Règles générales :
 
 def aligner_wallet_user_sur_fedow(carte):
     """
-    Aligne le wallet du user d'une carte sur le wallet Fedow de cette carte (meme uuid).
-    Aligns a card user's wallet onto the card's Fedow wallet (same uuid).
+    Declare le user d'une carte aupres de Fedow, puis fait absorber par son wallet le
+    wallet ephemere que Fedow a cree pour cette carte.
+    / Declares a card's user to Fedow, then has their wallet absorb the ephemeral wallet
+    Fedow created for that card.
 
     LOCALISATION : Administration/management/commands/demo_data_v2.py
 
     POURQUOI : create_test_pos_data cree un Wallet LOCAL a uuid aleatoire pour les cartes
-    clientes liees a un user (CLIENT1/CLIENT2). Or Fedow est la source de verite du wallet
-    de carte (laboutik.views.obtenir_wallet_carte_depuis_fedow). Sans alignement, la carte
-    porte DEUX wallets (le local fantome + le wallet Fedow orphelin) et le scan utilise le
-    mauvais → la carte ne peut pas porter de FED. On corrige le doublon en FUSIONNANT le
-    wallet local dans le wallet Fedow (meme uuid), puis en supprimant le local.
-    / create_test_pos_data creates a random-uuid LOCAL wallet for user-linked client cards,
-    but Fedow is the source of truth for the card wallet. Without alignment the card holds
-    TWO wallets and the scan uses the wrong one. We MERGE the local wallet into the Fedow
-    wallet (same uuid) and delete the local one.
+    clientes liees a un user (CLIENT1/CLIENT2). Fedow, lui, ne connait ni ce user ni sa cle
+    publique : il n'a qu'un WALLET EPHEMERE anonyme, fabrique a la volee des qu'on lit la
+    carte. Sans declaration, la carte porte deux wallets etrangers l'un a l'autre, et le
+    scan utilise le mauvais.
+    / create_test_pos_data creates a random-uuid LOCAL wallet, while Fedow only knows an
+    anonymous EPHEMERAL wallet built on the fly when the card is read.
+
+    LE SENS DE LA FUSION EST CRITIQUE : c'est le wallet du USER qui absorbe le wallet
+    ephemere, jamais l'inverse. Un wallet ephemere n'a PAS de cle publique — cote Fedow,
+    `wallet_creator()` n'en stocke une que si on la lui passe, et `Card.get_wallet()` ne
+    lui en passe aucune. Donner son uuid au user produit un wallet que Fedow ne peut pas
+    authentifier : toute requete signee au nom de ce user casse sur `wallet.public_key()`
+    (AttributeError sur `public_pem` a None), et la carte ne peut porter aucun FED.
+    / MERGE DIRECTION IS CRITICAL: the USER wallet absorbs the ephemeral one, never the
+    other way round. An ephemeral wallet has NO public key, so Fedow cannot authenticate
+    anything signed on behalf of that user.
+
+    Trois etapes, dans cet ordre :
+      1. `wallet.get_or_create_wallet(user)` — Fedow cree le wallet du user AVEC sa cle
+         publique ; le miroir local prend le meme uuid.
+      2. `wallet.linkwallet_card_number(user, carte.number)` — Fedow fusionne le wallet
+         ephemere de la carte dans celui du user et pose `card.user`.
+      3. Migration locale du solde (Token) et de l'historique (Transaction, LigneArticle)
+         de l'ancien wallet local vers le nouveau, puis suppression du doublon.
 
     A appeler DANS le tenant_context du lieu (LigneArticle est en TENANT_APPS).
-    Idempotent : no-op si deja aligne, ou si Fedow ne connait pas la carte.
-    / Call INSIDE the venue tenant_context. Idempotent: no-op if already aligned or if Fedow
-    doesn't know the card.
+    Idempotent : no-op si le user porte deja son wallet Fedow, ou si Fedow n'est pas
+    configure sur ce lieu.
+    / Call INSIDE the venue tenant_context. Idempotent.
 
     :param carte: CarteCashless (doit avoir un user porteur d'un wallet)
     :return: bool — True si un alignement a eu lieu, False sinon.
     """
-    # Imports locaux : evite un import circulaire (laboutik.views importe des modeles)
-    # et garde le module de seed leger au chargement.
-    # / Local imports: avoid a circular import and keep the seed module light at load time.
-    from laboutik.views import obtenir_wallet_carte_depuis_fedow
+    # Imports locaux : evite un import circulaire et garde le module de seed leger au
+    # chargement. / Local imports: avoid a circular import, keep the seed module light.
     from fedow_core.models import Token, Transaction
     from BaseBillet.models import LigneArticle
 
@@ -87,33 +102,74 @@ def aligner_wallet_user_sur_fedow(carte):
     if user is None or user.wallet is None:
         return False
 
+    # Sans Fedow configure sur ce lieu, il n'y a pas de wallet distant a declarer.
+    # / Without Fedow on this venue there is no remote wallet to declare.
+    if not FedowConfig.get_solo().can_fedow():
+        return False
+
     wallet_local = user.wallet
     uuid_local = wallet_local.uuid
 
-    wallet_fedow = obtenir_wallet_carte_depuis_fedow(carte)
-    if wallet_fedow is None:
-        # Fedow ne connait pas la carte : on ne cree PAS de wallet, on ne touche a rien.
-        # / Fedow doesn't know the card: create nothing, touch nothing.
-        return False
+    fedowAPI = FedowAPI()
+
+    # ETAPE 1 — Fedow cree (ou retrouve) le wallet du user, avec sa cle publique.
+    # On DETACHE d'abord le wallet local : get_or_create_wallet compare l'uuid renvoye par
+    # Fedow a `user.wallet.uuid` et leve "Wallet and member mismatch" quand ils different —
+    # ce qui est toujours le cas ici, le wallet local ayant un uuid aleatoire.
+    # / STEP 1 — detach the local wallet first, otherwise get_or_create_wallet raises
+    #   "Wallet and member mismatch" on the differing uuid.
+    user.wallet = None
+    user.save(update_fields=["wallet"])
+    try:
+        wallet_fedow, _cree = fedowAPI.wallet.get_or_create_wallet(user)
+    except Exception:
+        # Fedow injoignable ou refus : on rend son wallet au user plutot que de le laisser
+        # sans wallet du tout. L'appelant journalise l'echec.
+        # / On failure, give the user their wallet back instead of leaving them with none.
+        user.wallet = wallet_local
+        user.save(update_fields=["wallet"])
+        raise
+
+    # ETAPE 2 — Fedow fusionne le wallet ephemere de la carte dans le wallet du user et
+    # pose `card.user`. Apres cet appel la carte n'est plus anonyme cote Fedow, et son
+    # wallet porte une cle publique.
+    # / STEP 2 — Fedow merges the card's ephemeral wallet into the user's wallet.
+    #
+    # L'ECHEC EST TOLERE, ET C'EST VOLONTAIRE. Fedow ne prend que des cartes libres
+    # (`Card.objects.filter(user__isnull=True)`, cote serializer) : relancer le seed sur une
+    # carte DEJA liee renvoie donc 400. Ce n'est pas une anomalie, c'est l'etat attendu au
+    # second passage. On journalise et on continue : l'ETAPE 3 doit s'executer dans tous les
+    # cas, sinon le user pointe son wallet Fedow pendant que son solde reste sur le wallet
+    # local orphelin — soit un solde a zero au point de vente, sans le moindre message.
+    # / FAILURE IS TOLERATED ON PURPOSE. Fedow only accepts unlinked cards, so re-running the
+    #   seed on an already-linked card returns 400 — the expected state on a second pass. We
+    #   log and carry on: STEP 3 must always run, otherwise the user points at their Fedow
+    #   wallet while the balance stays on the orphaned local one (zero balance at the POS,
+    #   silently).
+    try:
+        fedowAPI.NFCcard.linkwallet_card_number(user=user, card_number=carte.number)
+    except Exception as erreur_liaison:
+        logger.warning(
+            f"Liaison Fedow de la carte {carte.tag_id} au user {user.email} refusee "
+            f"(carte deja liee ? anti-vol ?) : {erreur_liaison}"
+        )
+
+    # Le user portait deja son wallet Fedow : la declaration ci-dessus suffisait, il n'y a
+    # aucun doublon local a resorber.
+    # / The user already held their Fedow wallet: no local duplicate to merge.
     if str(uuid_local) == str(wallet_fedow.uuid):
-        # Deja aligne (idempotence : un 2e passage du seed ne refait rien).
-        # / Already aligned (idempotence: a second seed pass does nothing).
         return False
 
-    # Fusion : on bascule le solde (Token) et l'historique (Transaction, LigneArticle) du
-    # wallet local vers le wallet Fedow. Token (wallet, asset) est unique mais le wallet
-    # Fedow est neuf (miroir get_or_create), donc aucun conflit d'unicite.
-    # / Merge: move balance (Token) and history (Transaction, LigneArticle) from the local
-    # wallet to the Fedow wallet. The Fedow wallet is brand new, so no Token uniqueness clash.
+    # ETAPE 3 — Migration locale : on bascule le solde (Token) et l'historique (Transaction,
+    # LigneArticle) de l'ancien wallet local vers le wallet Fedow, puis on supprime le
+    # doublon. Token (wallet, asset) est unique, mais le wallet Fedow vient d'etre miroite
+    # en local (get_or_create), donc aucun conflit d'unicite.
+    # / STEP 3 — move balance and history onto the Fedow wallet, then drop the duplicate.
     Token.objects.filter(wallet=wallet_local).update(wallet=wallet_fedow)
     Transaction.objects.filter(sender=wallet_local).update(sender=wallet_fedow)
     Transaction.objects.filter(receiver=wallet_local).update(receiver=wallet_fedow)
     LigneArticle.objects.filter(wallet=wallet_local).update(wallet=wallet_fedow)
 
-    # Reassigner le wallet du user, puis supprimer le wallet local (plus aucune FK PROTECT).
-    # / Reassign the user wallet, then delete the now-unreferenced local wallet.
-    user.wallet = wallet_fedow
-    user.save(update_fields=["wallet"])
     wallet_local.delete()
 
     logger.info(
@@ -647,6 +703,14 @@ class Command(BaseCommand):
         for tag_id in tags_simulateur:
             cartes.append({
                 "first_tag_id": tag_id,
+                # LA FORMULE DOIT RESTER IDENTIQUE a
+                # `laboutik/management/commands/create_test_pos_data.py::_qrcode_uuid_depuis_tag`,
+                # qui cree les CarteCashless LOCALES de ces memes cartes. Cet uuid est celui
+                # que porte l'URL `/qr/<uuid>/` et par lequel `CarteService.lier_a_user`
+                # retrouve la carte locale : deux formules divergentes, et les deux bases ne
+                # parlent plus de la meme carte.
+                # / THE FORMULA MUST STAY IDENTICAL to create_test_pos_data._qrcode_uuid_depuis_tag,
+                #   which creates the LOCAL CarteCashless for these same cards.
                 "qrcode_uuid": f"{tag_id.lower()}-0000-4000-8000-000000000000",
                 "number_printed": tag_id,
             })
@@ -1482,6 +1546,13 @@ class Command(BaseCommand):
             },
             {
                 "name": "Festival",
+                # Ce lieu est reserve a la caisse LaBoutik V1 (conteneur separe,
+                # dont la monnaie vit dans le Fedow distant). Le flag eteint la
+                # caisse V2 plus bas : deux caisses sur un meme lieu tiendraient
+                # deux soldes dans deux moteurs differents, sans reconciliation.
+                # / This venue is reserved for the V1 POS (separate container, money
+                #   in the remote Fedow). The flag keeps the V2 cash register off.
+                "caisse_v1_legacy": True,
                 "short_description": "Lieu de démo: un festival, ses scènes et ses ateliers.",
                 "long_description": (
                     "Bienvenue au Festival. Trois jours de concerts, d'ateliers et de rencontres. "
@@ -2147,21 +2218,39 @@ class Command(BaseCommand):
                     if addr_obj:
                         config.postal_address = addr_obj
 
-                    # Démo/dev : on active TOUS les modules du dashboard par défaut,
-                    # pour que l'admin ET les tests disposent de tout (POS V2,
-                    # monnaie locale, billetterie, adhésion, etc.). La caisse V2
-                    # (module_caisse) exige la monnaie locale : on active les deux.
-                    # / Demo/dev: enable ALL dashboard modules by default so the admin
-                    # / AND the tests get everything. module_caisse requires
-                    # / module_monnaie_locale, so both are enabled.
+                    # Démo/dev : on active par défaut les modules du dashboard qui
+                    # valent pour tous les lieux (billetterie, adhésion, financement
+                    # participatif, fédération, inventaire), pour que l'admin ET les
+                    # tests disposent de tout. Les modules de la caisse V2 dépendent
+                    # du lieu : ils sont traités juste en dessous.
+                    # / Demo/dev: enable by default the dashboard modules that apply to
+                    #   every venue, so the admin AND the tests get everything. The V2
+                    #   cash register modules depend on the venue: handled below.
                     config.module_billetterie = True
                     config.module_adhesion = True
                     config.module_crowdfunding = True
                     config.module_federation = True
-                    config.module_monnaie_locale = True
-                    config.module_caisse = True
                     config.module_inventaire = True
-                    config.module_kiosk = True
+
+                    # Un lieu marque "caisse_v1_legacy" dans les fixtures accueille une
+                    # caisse LaBoutik V1 (conteneur separe). Sa monnaie locale ne vit PAS
+                    # dans fedow_core mais dans le Fedow distant : on laisse donc la caisse
+                    # V2 eteinte. Trois raisons, toutes verifiables :
+                    #   1. deux caisses actives sur un meme lieu tiennent deux soldes
+                    #      distincts, et rien ne les reconcilie ;
+                    #   2. l'onboard LaBoutik V1 est refuse tant que module_caisse est actif
+                    #      (cf. ApiBillet.views.Onboard_laboutik) ;
+                    #   3. le handshake V1 pose une cle RSA cashless sur la place Fedow, ce
+                    #      qui retire a Lespass le droit d'appeler Fedow avec sa seule cle de
+                    #      place (Fedow exige alors une signature de place) : les appels du
+                    #      kiosk et de la caisse V2 tomberaient en 403.
+                    # / A venue flagged "caisse_v1_legacy" hosts a V1 POS: keep the V2 cash
+                    #   register off (two registers = two diverging balances, onboard refused,
+                    #   and Fedow then requires a place signature Lespass cannot produce).
+                    lieu_reserve_a_la_caisse_v1 = bool(fx.get('caisse_v1_legacy'))
+                    config.module_monnaie_locale = not lieu_reserve_a_la_caisse_v1
+                    config.module_caisse = not lieu_reserve_a_la_caisse_v1
+                    config.module_kiosk = not lieu_reserve_a_la_caisse_v1
 
                     config.save()
 

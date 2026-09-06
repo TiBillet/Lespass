@@ -32,6 +32,38 @@ from laboutik.models import CartePrimaire, PointDeVente, Printer, Terminal
 from QrcodeCashless.models import CarteCashless, Detail
 
 
+def _qrcode_uuid_depuis_tag(tag_id):
+    """
+    Fabrique l'uuid de qrcode d'une carte de test a partir de son tag NFC.
+    / Builds a test card's qrcode uuid from its NFC tag.
+
+    LOCALISATION : laboutik/management/commands/create_test_pos_data.py
+
+    `CarteCashless.uuid` EST le qrcode_uuid : c'est lui que porte l'URL `/qr/<uuid>/`, et
+    c'est par lui que `CarteService.lier_a_user` retrouve la carte quand un usager scanne
+    son QR code. Un uuid aleatoire ici rendrait la carte locale introuvable au moment de la
+    liaison, alors meme que Fedow, lui, l'aurait liee : la carte resterait « anonyme » pour
+    le point de vente, sans le moindre message.
+    / CarteCashless.uuid IS the qrcode uuid: the one carried by /qr/<uuid>/ and the one
+    CarteService.lier_a_user resolves the card by. A random uuid here would make the local
+    card unfindable at link time, while Fedow would have linked it.
+
+    LA FORMULE DOIT RESTER IDENTIQUE a celle de
+    `Administration/management/commands/demo_data_v2.py::_seed_cartes_nfc_fedow`, qui
+    declare ces memes cartes a Fedow. Les deux seeds doivent produire le meme uuid, sinon
+    les deux bases ne parlent plus de la meme carte.
+    / THE FORMULA MUST STAY IDENTICAL to the one in demo_data_v2._seed_cartes_nfc_fedow,
+    which declares those same cards to Fedow.
+
+    Le bloc "4xxx" garde un uuid version 4 valide.
+    / The "4xxx" block keeps a valid version-4 uuid.
+
+    :param tag_id: str, tag NFC 8 caracteres hexa
+    :return: str, uuid deterministe
+    """
+    return f"{tag_id.lower()}-0000-4000-8000-000000000000"
+
+
 class Command(BaseCommand):
     help = "Cree des donnees de test POS (categories, produits, prix, points de vente) pour le tenant courant."
 
@@ -1117,7 +1149,7 @@ class Command(BaseCommand):
             carte_cm, created_cm = CarteCashless.objects.get_or_create(
                 tag_id=tag_id_cm,
                 defaults={
-                    "uuid": uuid_module.uuid4(),
+                    "uuid": _qrcode_uuid_depuis_tag(tag_id_cm),
                     "number": tag_id_cm,
                     "detail": detail_test,
                 },
@@ -1155,7 +1187,7 @@ class Command(BaseCommand):
                 carte_client, created_client = CarteCashless.objects.get_or_create(
                     tag_id=tag_id_client,
                     defaults={
-                        "uuid": uuid_module.uuid4(),
+                        "uuid": _qrcode_uuid_depuis_tag(tag_id_client),
                         "number": tag_id_client,
                         "detail": detail_test,
                     },
@@ -1236,7 +1268,7 @@ class Command(BaseCommand):
             carte_client3, created_client3 = CarteCashless.objects.get_or_create(
                 tag_id=tag_id_client3,
                 defaults={
-                    "uuid": uuid_module.uuid4(),
+                    "uuid": _qrcode_uuid_depuis_tag(tag_id_client3),
                     "number": tag_id_client3,
                     "detail": detail_test,
                 },

@@ -552,7 +552,6 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [
     'BaseBillet/static',
     'MetaBillet/static',
-    'QrcodeCashless/static',
     BASE_DIR / "static",  # Fichiers statiques projet (widgets, etc.)
 ]
 

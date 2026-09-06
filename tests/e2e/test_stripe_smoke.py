@@ -21,6 +21,7 @@ Navigating directly to /memberships/<uuid>/ gives a page without HTMX
 and the form submits as native GET instead of HTMX POST.
 """
 
+import json
 import random
 import re
 import string
@@ -36,11 +37,43 @@ def _random_id():
     return "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
 
 
+def _lire_la_vente_en_base(django_shell, extrait_python):
+    """Interroge la base et rend le dict decrit par l'extrait fourni.
+    / Queries the database and returns the dict described by the given snippet.
+
+    POURQUOI CETTE VERIFICATION EXISTE : un ecran de confirmation ne prouve rien sur
+    l'argent. Le navigateur affiche « merci » des que le retour de paiement est rendu —
+    meme si la vente n'a jamais ete ecrite, meme si la ligne est restee bloquee a PAID
+    parce que le trigger a leve en chemin (ses erreurs sont avalees, cf.
+    `test_adhesion_recompense_puis_qrcode`). Un test qui s'arrete au texte de la page
+    valide donc un paiement qui n'a peut-etre pas eu lieu.
+    / WHY THIS CHECK EXISTS: a confirmation screen proves nothing about the money. The
+      browser shows "thanks" as soon as the return page renders — even if the sale was
+      never written, even if the line stayed at PAID because the trigger raised on the way
+      (its errors are swallowed). A test that stops at page text validates a payment that
+      may never have happened.
+
+    L'ATTENTE EST FAITE DANS LE SHELL, pas autour : le credit arrive par le webhook, donc
+    de facon asynchrone, et chaque appel a `django_shell` coute un demarrage complet de
+    Django (~5 s). Boucler ici couterait une minute par tentative.
+    / THE POLLING HAPPENS INSIDE THE SHELL: the credit arrives asynchronously via the
+      webhook, and each django_shell call costs a full Django boot (~5 s).
+    """
+    sortie = django_shell(extrait_python)
+    for ligne in sortie.splitlines():
+        if ligne.startswith("VENTE_JSON="):
+            return json.loads(ligne[len("VENTE_JSON="):])
+    raise AssertionError(
+        f"La lecture en base n'a rien rendu d'exploitable. Sortie : {sortie[:400]}"
+    )
+
+
 class TestStripeSmokeCheckout:
     """Smoke tests Stripe : vrai checkout / Real Stripe checkout smoke tests."""
 
     def test_smoke_membership_stripe_checkout(
-        self, page, create_product, fill_stripe_card, soumettre_paiement_stripe, admin_email
+        self, page, create_product, fill_stripe_card, soumettre_paiement_stripe,
+        admin_email, django_shell,
     ):
         """1 adhesion payante → page liste → offcanvas → Stripe → retour → confirmation.
         / 1 paid membership → list page → offcanvas → Stripe → return → confirmation.
@@ -148,8 +181,54 @@ class TestStripeSmokeCheckout:
         success_msg = page.locator("text=/merci|confirmée|succès|success/i").first
         expect(success_msg).to_be_visible(timeout=30_000)
 
+        # 11. Verifier que l'argent a REELLEMENT bouge, en base
+        # / Verify the money REALLY moved, in the database
+        vente = _lire_la_vente_en_base(
+            django_shell,
+            "import json, time\n"
+            "from BaseBillet.models import LigneArticle, Membership\n"
+            "lu = {'adhesion': None, 'statut_ligne': None, 'montant': None}\n"
+            "for _essai in range(8):\n"
+            f"    adhesion = Membership.objects.filter(user__email='{user_email}')"
+            ".order_by('-date_added').first()\n"
+            "    if adhesion is not None:\n"
+            "        lu['adhesion'] = str(adhesion.uuid)\n"
+            "        ligne = LigneArticle.objects.filter(membership=adhesion)"
+            ".order_by('-datetime').first()\n"
+            "        if ligne is not None:\n"
+            "            lu['statut_ligne'] = ligne.status\n"
+            "            lu['montant'] = int(ligne.amount)\n"
+            "            if ligne.status == LigneArticle.VALID:\n"
+            "                break\n"
+            "    time.sleep(2)\n"
+            "print('VENTE_JSON=' + json.dumps(lu))\n",
+        )
+
+        assert vente["adhesion"], (
+            f"Aucune adhesion en base pour {user_email} alors que la page affiche une "
+            f"confirmation : le paiement a ete encaisse sans rien creer."
+        )
+        assert vente["statut_ligne"] is not None, (
+            "L'adhesion existe mais aucune ligne de vente ne lui est rattachee : "
+            "la vente n'est pas comptabilisee."
+        )
+        # 'V' = confirmee. Une ligne restee a 'P' (payee mais non confirmee) est le
+        # symptome visible d'un trigger interrompu : l'argent est pris, la contrepartie
+        # n'est pas delivree.
+        # / 'V' = confirmed. A line stuck at 'P' is the visible symptom of an interrupted
+        #   trigger: the money is taken, the counterpart is not delivered.
+        assert vente["statut_ligne"] == "V", (
+            f"Ligne de vente au statut '{vente['statut_ligne']}' au lieu de 'V' "
+            f"(confirmee). Un statut 'P' signifie que le paiement est encaisse mais que "
+            f"le trigger n'est pas alle au bout."
+        )
+        assert vente["montant"] == 100, (
+            f"Montant en base : {vente['montant']} centimes, attendu 100 (1,00 €)."
+        )
+
     def test_smoke_booking_stripe_checkout(
-        self, page, create_event, create_product, fill_stripe_card, soumettre_paiement_stripe
+        self, page, create_event, create_product, fill_stripe_card,
+        soumettre_paiement_stripe, django_shell,
     ):
         """1 reservation payante → vrai checkout.stripe.com → retour → confirmation.
         / 1 paid booking → real checkout.stripe.com → return → confirmation.
@@ -239,3 +318,41 @@ class TestStripeSmokeCheckout:
             "merci", "confirmée", "succès", "success",
             "reservation ok", "valider votre email",
         ]), f"Page de confirmation non trouvée: {body_text[:200]}"
+
+        # 10. Verifier que la reservation existe REELLEMENT en base
+        # Le texte de la page ne prouve rien : il s'affiche des que le retour de paiement
+        # est rendu, meme si la reservation n'a jamais ete ecrite.
+        # / Verify the booking REALLY exists in the database. Page text proves nothing.
+        vente = _lire_la_vente_en_base(
+            django_shell,
+            "import json, time\n"
+            "from BaseBillet.models import LigneArticle, Reservation\n"
+            "lu = {'reservation': None, 'statut_ligne': None, 'billets': 0}\n"
+            "for _essai in range(8):\n"
+            f"    resa = Reservation.objects.filter(user_commande__email='{user_email}')"
+            ".order_by('-datetime').first()\n"
+            "    if resa is not None:\n"
+            "        lu['reservation'] = str(resa.uuid)\n"
+            "        lu['billets'] = resa.tickets.count()\n"
+            "        ligne = LigneArticle.objects.filter(reservation=resa)"
+            ".order_by('-datetime').first()\n"
+            "        if ligne is not None:\n"
+            "            lu['statut_ligne'] = ligne.status\n"
+            "            if ligne.status == LigneArticle.VALID:\n"
+            "                break\n"
+            "    time.sleep(2)\n"
+            "print('VENTE_JSON=' + json.dumps(lu))\n",
+        )
+
+        assert vente["reservation"], (
+            f"Aucune reservation en base pour {user_email} alors que la page affiche une "
+            f"confirmation : le paiement a ete encaisse sans rien creer."
+        )
+        assert vente["statut_ligne"] == "V", (
+            f"Ligne de vente au statut '{vente['statut_ligne']}' au lieu de 'V' "
+            f"(confirmee) : le paiement est encaisse mais la vente n'est pas confirmee."
+        )
+        assert vente["billets"] >= 1, (
+            f"Reservation sans billet ({vente['billets']}) : le client a paye et n'a "
+            f"rien recu."
+        )

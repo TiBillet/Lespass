@@ -43,7 +43,8 @@ from ApiBillet.permissions import TenantAdminPermission, CanInitiatePaymentPermi
 from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
 from AuthBillet.models import TibilletUser, Wallet, HumanUser
 from AuthBillet.serializers import MeSerializer
-from AuthBillet.utils import get_or_create_user
+from AuthBillet.utils import get_or_create_user, get_client_ip
+from fedow_core.exceptions import CarteIntrouvable
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, Product, Event, Tag, Paiement_stripe, Membership, Reservation, \
     FormbricksConfig, FormbricksForms, FederatedPlace, Carrousel, LigneArticle, PriceSold, \
@@ -698,6 +699,49 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
                                  _("Cette carte n'est pas reconnue. Elle n'est peut-être pas encore activée."))
             return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
+        # Lier la carte au user cote LESPASS aussi. Fedow vient de fusionner les wallets,
+        # mais `CarteCashless.user` reste vide sans cet appel : la carte demeure « anonyme »
+        # pour le point de vente V2, qui masque alors le solde federe
+        # (`if carte.user is not None` dans obtenir_solde_complet_carte) et ne sait pas
+        # identifier l'adherent au comptoir.
+        # `lier_a_user` est transactionnel et idempotent : il pose l'usager, fusionne le
+        # wallet ephemere LOCAL et rattrape les adhesions anonymes.
+        # Non bloquant : la fusion cote Fedow a reussi, une incoherence locale ne doit pas
+        # transformer un parcours abouti en message d'erreur.
+        # / Link the card on the LESPASS side too. Fedow just merged the wallets, but
+        #   CarteCashless.user stays empty without this call, leaving the card "anonymous"
+        #   for the V2 POS. Transactional and idempotent. Non-blocking.
+        try:
+            from fedow_core.services import CarteService
+
+            CarteService.lier_a_user(
+                qrcode_uuid=qrcode_uuid,
+                user=user,
+                ip=get_client_ip(request),
+            )
+        except CarteIntrouvable:
+            # ATTENDU : la carte existe chez Fedow mais pas dans cette base. C'est le cas
+            # d'un lieu V1 (dont les cartes vivent dans LaBoutik) ou d'une carte d'un autre
+            # reseau. Rien a reparer ici.
+            # / EXPECTED: the card exists on Fedow but not in this database (V1 venue, or a
+            #   card from another network). Nothing to fix here.
+            logger.warning(
+                f"Carte {qrcode_uuid} liee cote Fedow, absente de la base Lespass "
+                f"(lieu V1 ou carte hors reseau)."
+            )
+        except Exception as erreur_liaison_locale:
+            # INCOHERENCE : Fedow a accepte la liaison, la base locale la refuse
+            # (`CarteDejaLiee`, `UserADejaCarte`, ou autre). Les deux bases divergent sur le
+            # proprietaire de la carte, et c'est la version LOCALE que lit le point de vente.
+            # A remonter, pas seulement a journaliser.
+            # / INCONSISTENCY: Fedow accepted the link, the local database refuses it. The
+            #   two bases disagree on who owns the card, and the POS reads the LOCAL one.
+            logger.error(
+                f"Divergence Fedow/Lespass sur la carte {qrcode_uuid} : liee cote Fedow "
+                f"pour {user.email}, refusee cote Lespass ({erreur_liaison_locale}). "
+                f"Le point de vente utilisera le proprietaire LOCAL."
+            )
+
         # On retourne sur la page GET /qr/
         # Qui redirigera si besoin et affichera l'erreur
         logger.info(
@@ -1191,6 +1235,42 @@ class MyAccount(viewsets.ViewSet):
                 fedowAPI = FedowAPI()
                 lost_card_report = fedowAPI.NFCcard.lost_my_card_by_signature(request.user, number_printed=pk)
                 if lost_card_report:
+                    # Detacher la carte cote LESPASS aussi, pas seulement cote Fedow.
+                    # Sans cette ligne, `CarteCashless.user` reste pose : le point de vente
+                    # continue de resoudre la carte vers le wallet de son ancien porteur
+                    # (`_obtenir_ou_creer_wallet` rend `carte.user.wallet`) et signe la
+                    # cascade avec sa cle. Qui trouve la carte depense le portefeuille de
+                    # qui l'a perdue.
+                    # Non bloquant : Fedow a deja detache, l'usager ne doit pas voir
+                    # d'erreur si la carte est absente de la base locale.
+                    # / Detach the card on the LESPASS side too, not only on Fedow's.
+                    #   Without this, CarteCashless.user stays set and the POS keeps
+                    #   resolving the card to its former holder's wallet. Non-blocking:
+                    #   Fedow already detached, the user must not see an error.
+                    try:
+                        from fedow_core.services import CarteService
+
+                        CarteService.declarer_perdue(user=request.user, number_printed=pk)
+                    except CarteIntrouvable:
+                        # ATTENDU : la carte n'est pas dans cette base (lieu V1), ou elle
+                        # n'y est deja plus liee a cet usager. Rien a reparer.
+                        # / EXPECTED: the card is not in this database (V1 venue), or is
+                        #   already unlinked from this user. Nothing to fix.
+                        logger.warning(
+                            f"lost_my_card : carte {pk} detachee cote Fedow, absente de la "
+                            f"base Lespass pour {request.user.email}."
+                        )
+                    except Exception as erreur_detachement_local:
+                        # INCOHERENCE : Fedow a detache la carte, Lespass n'y arrive pas.
+                        # `CarteCashless.user` reste pose, donc le point de vente ouvrira
+                        # encore le portefeuille de l'ancien porteur. A remonter.
+                        # / INCONSISTENCY: Fedow detached the card, Lespass could not. The
+                        #   POS will keep opening the former holder's wallet.
+                        logger.error(
+                            f"Divergence Fedow/Lespass sur la carte {pk} : detachee cote "
+                            f"Fedow pour {request.user.email}, TOUJOURS liee cote Lespass "
+                            f"({erreur_detachement_local}). Carte perdue encore depensable."
+                        )
                     messages.add_message(request, messages.SUCCESS,
                                          _("Your wallet has been detached from this card. You can scan a new one to link it again."))
                 else:

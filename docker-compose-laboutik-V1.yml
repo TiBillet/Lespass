@@ -57,8 +57,8 @@ services:
 #      - ../Fedow/database:/home/fedow/Fedow/database
     networks:
       - backend
-    command: "bash start.sh"
-#    command: "bash start_dev.sh"
+#    command: "bash start.sh"
+    command: "bash start_dev.sh"
     extra_hosts:
       - fedow.tibillet.localhost:172.17.0.1
       - lespass.tibillet.localhost:172.17.0.1
@@ -312,9 +312,12 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=frontend
-      - traefik.http.routers.laboutik_nginx.tls.certresolver=myresolver
+      - traefik.http.routers.laboutik_nginx.tls=true
       - traefik.http.routers.laboutik_nginx.rule=Host(`laboutik.$DOMAIN`)
       - traefik.http.routers.laboutik_nginx.priority=100 # plus c'est grand, plus c'est prioritaire
+      - traefik.http.services.laboutik_nginx.loadbalancer.server.port=80
+
+
     networks:
       - frontend
       - backend
@@ -331,7 +334,7 @@ volumes:
   laboutik_postgres_data:
 
 # Pour test stripe :
-# stripe listen --forward-to https://fedow.tibillet.localhost/api/webhook_stripe/ --skip-verify
+# stripe listen --forward-to https://fedow.tibillet.localhost/webhook_stripe/ --skip-verify
 # stripe listen --forward-to https://tibillet.localhost/api/webhook_stripe/ --skip-verify
 
 # poetry shell

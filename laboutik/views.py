@@ -44,9 +44,19 @@ from django.db.models import (
 )
 from django.db.models.functions import Coalesce
 
-from fedow_core.exceptions import SoldeInsuffisant
+from fedow_core.exceptions import (
+    CarteDejaLiee,
+    CarteIntrouvable,
+    SoldeInsuffisant,
+    UserADejaCarte,
+)
 from fedow_core.models import Asset, Transaction
-from fedow_core.services import AssetService, TransactionService, WalletService
+from fedow_core.services import (
+    AssetService,
+    CarteService,
+    TransactionService,
+    WalletService,
+)
 
 # Interop reseau federe (FED) : lecture du solde FED sur le serveur Fedow distant.
 # / Federated network interop (FED): reads the FED balance from the remote Fedow server.
@@ -4779,7 +4789,261 @@ def _creer_ou_renouveler_adhesion(
     return nouvelle_adhesion
 
 
-def _creer_adhesions_depuis_panier(request, articles_panier, lignes_articles=None):
+def _fedow_a_deja_lie_la_carte(carte, user):
+    """
+    Demande a Fedow si cette carte appartient DEJA au wallet de ce membre.
+    / Asks Fedow whether this card ALREADY belongs to this member's wallet.
+
+    LOCALISATION : laboutik/views.py
+
+    POURQUOI CE CONTROLE EXISTE : Fedow refuse `linkwallet_card_number` pour toute carte
+    deja liee — y compris liee a CE membre (son serializer ne accepte que les cartes libres,
+    `Card.objects.filter(user__isnull=True)`). Consequence : si Fedow traite la liaison mais
+    que la reponse se perd (timeout), ou qu'une seconde caisse arrive apres, le refus
+    suivant est un 400 DEFINITIF. Sans ce controle, on conclurait « Fedow refuse » et on ne
+    fusionnerait jamais en local : Fedow dirait carte→membre, Lespass dirait carte anonyme,
+    pour toujours. C'est exactement le bug qu'on repare.
+    / Fedow rejects linkwallet_card_number for ANY already-linked card, including one linked
+      to THIS member. Without this check, a lost response or a race would leave Fedow and
+      Lespass permanently disagreeing.
+
+    :param carte: CarteCashless scannee
+    :param user: TibilletUser identifie (doit porter son wallet Fedow)
+    :return: bool — True si Fedow rattache deja cette carte au wallet du membre.
+    """
+    if user.wallet is None:
+        return False
+    try:
+        carte_chez_fedow = FedowAPI().NFCcard.card_tag_id_retrieve(carte.tag_id)
+    except Exception as erreur_lecture:
+        logger.warning(
+            f"Verification post-echec impossible pour la carte {carte.tag_id} : "
+            f"{erreur_lecture}"
+        )
+        return False
+
+    if not carte_chez_fedow:
+        return False
+    return f"{carte_chez_fedow.get('wallet_uuid')}" == f"{user.wallet.uuid}"
+
+
+def _identifier_adherent(request, articles_panier):
+    """
+    Identifie le membre d'une adhesion. AUCUN appel reseau, AUCUNE ecriture.
+    / Identifies the membership's member. NO network call, NO write.
+
+    LOCALISATION : laboutik/views.py
+
+    Separee de la declaration au reseau (`_declarer_adherent_au_reseau`) parce que les deux
+    ne se placent pas au meme endroit : ce controle-ci doit tomber AVANT le moindre debit,
+    pour ne pas prendre l'argent d'un client qu'on refusera d'inscrire ensuite. La
+    declaration, elle, doit tomber le PLUS TARD possible, juste avant la transaction : une
+    fois la carte liee sur le reseau, plus rien de faillible ne doit se produire.
+    / Split from the network declaration because they belong at different places: this check
+      must run BEFORE any debit, so we never take money from a customer we will then refuse
+      to enroll. The declaration must run as LATE as possible.
+
+    :param request: HttpRequest (pour lire le POST)
+    :param articles_panier: liste de dicts de _extraire_articles_du_panier()
+    :return: tuple (user, carte) — ou None si le panier ne contient pas d'adhesion
+    :raises ValueError: identification impossible ; le message est destine au caissier.
+    """
+    articles_adhesion = [
+        a for a in articles_panier if a["product"].categorie_article == Product.ADHESION
+    ]
+    if not articles_adhesion:
+        return None
+
+    user_adhesion = None
+    carte_client = None
+
+    # --- Identification 1 : la carte scannee ---
+    # Si la carte porte deja un membre, c'est LUI l'adherent — l'email saisi ne peut pas
+    # detourner une carte deja rattachee.
+    # / A card already carrying a member wins: a typed email cannot hijack it.
+    tag_id_client = request.POST.get("tag_id", "").upper().strip()
+    if tag_id_client:
+        try:
+            carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
+            user_adhesion = carte_client.user
+        except CarteCashless.DoesNotExist:
+            logger.warning(f"Carte NFC {tag_id_client} introuvable pour adhesion")
+
+    # --- Identification 2 : l'email saisi au comptoir ---
+    # / The email typed at the counter.
+    email_client = request.POST.get("email_adhesion", "").strip().lower()
+    if email_client and user_adhesion is None:
+        user_adhesion = get_or_create_user(email_client, send_mail=False)
+
+    if user_adhesion is None:
+        raise ValueError(_("Identification du membre obligatoire pour les adhesions"))
+
+    return user_adhesion, carte_client
+
+
+def _declarer_adherent_au_reseau(user_adhesion, carte_client, ip_du_client):
+    """
+    Declare le membre au reseau et lui rattache sa carte, AVANT le bloc atomic.
+    / Declares the member to the network and attaches their card, BEFORE the atomic.
+
+    LOCALISATION : laboutik/views.py
+
+    APPELEE HORS de toute transaction, et ce n'est pas negociable. Elle fait des appels
+    reseau : dans un bloc atomic, ils tiendraient un verrou DB pendant toute la latence, et
+    un rollback ferait disparaitre le user local pendant que Fedow garde deja sa cle RSA —
+    au retry, Fedow refuserait la nouvelle cle et cet email deviendrait indeclarable a vie.
+    / Called OUTSIDE any transaction: it makes network calls. Inside an atomic they would
+      hold a DB lock for the whole latency, and a rollback would drop a user whose RSA key
+      Fedow already keeps — making that email undeclarable forever.
+
+    A APPELER LE PLUS TARD POSSIBLE, juste avant la transaction : une fois la carte liee sur
+    le reseau, toute sortie par exception laisserait les deux cotes en desaccord.
+    / CALL AS LATE AS POSSIBLE: once the card is linked on the network, any exception would
+      leave both sides disagreeing.
+
+    :param user_adhesion: TibilletUser deja identifie par `_identifier_adherent`
+    :param carte_client: CarteCashless scannee, ou None
+    :param ip_du_client: str (adresse IP, pour l'audit)
+    :return: dict {user, carte, fusion_locale_autorisee, avertissements}
+    :raises ValueError: la vente doit etre refusee ; le message est destine au caissier.
+    """
+    from fedow_connect.services import declarer_wallet_user_a_fedow
+
+    # --- Fedow est une dependance dure ---
+    # Tous les lieux sont sur le reseau. Sans lui, on ne sait pas ou vit l'argent de la
+    # carte : on refuse la vente plutot que de fabriquer un wallet local que Fedow ne
+    # connaitra jamais.
+    # / Fedow is a hard dependency. Without it we refuse the sale rather than making up a
+    #   local wallet Fedow will never know.
+    if not FedowConfig.get_solo().can_fedow():
+        raise ValueError(_(
+            "Ce lieu n'est pas connecte au reseau TiBillet : l'adhesion ne peut pas etre "
+            "enregistree. Prevenez un administrateur."
+        ))
+
+    avertissements = []
+
+    # La carte n'est a lier que si elle est encore anonyme.
+    # / The card only needs linking if it is still anonymous.
+    carte_a_lier = None
+    if carte_client is not None and carte_client.user is None:
+        carte_a_lier = carte_client
+
+    # --- Anti-vol, en local, AVANT le reseau ---
+    # Fedow ne refuse une seconde carte que si le wallet cible porte deja des jetons : un
+    # membre au wallet vide passerait chez lui et serait refuse ici, et les deux cotes
+    # divergeraient. On tranche donc en local, avant d'avoir rien envoye.
+    # / Fedow only blocks a second card when the target wallet already holds tokens, so we
+    #   decide locally before sending anything.
+    if carte_a_lier is not None:
+        user_a_deja_une_autre_carte = user_adhesion.cartecashless_set.exclude(
+            pk=carte_a_lier.pk
+        ).exists()
+        if user_a_deja_une_autre_carte:
+            avertissements.append(_(
+                "Ce membre possede deja une carte : la carte scannee n'a pas ete rattachee. "
+                "L'adhesion est bien enregistree."
+            ))
+            carte_a_lier = None
+
+    # --- Declaration du membre au reseau ---
+    # Seul appel qui transmet sa cle publique. Repare au passage un wallet local divergent.
+    # / The only call carrying the member's public key; also repairs a diverging local wallet.
+    try:
+        declarer_wallet_user_a_fedow(
+            user_adhesion, tenant=connection.tenant, ip=ip_du_client
+        )
+    except Exception as erreur_declaration:
+        logger.error(
+            f"Adhesion POS : declaration de {user_adhesion.email} a Fedow impossible : "
+            f"{erreur_declaration}"
+        )
+        raise ValueError(_(
+            "Le reseau TiBillet ne repond pas : l'adhesion n'a pas ete enregistree. "
+            "Reessayez dans un instant."
+        ))
+
+    # --- Liaison de la carte chez Fedow ---
+    # C'est Fedow qui absorbe le wallet ephemere de la carte dans celui du membre.
+    # RIEN DE FAILLIBLE APRES CE POINT hors du bloc atomic : une fois la carte liee chez
+    # Fedow, toute sortie par exception laisserait les deux cotes en desaccord.
+    # / Fedow merges the card's ephemeral wallet into the member's. NOTHING FALLIBLE AFTER
+    #   THIS POINT outside the atomic block.
+    if carte_a_lier is not None:
+        try:
+            FedowAPI().NFCcard.linkwallet_card_number(
+                user=user_adhesion, card_number=carte_a_lier.number
+            )
+        except Exception as erreur_liaison:
+            if not _fedow_a_deja_lie_la_carte(carte_a_lier, user_adhesion):
+                # REFUS METIER, pas une panne : le reseau connait deja cette carte sous un
+                # autre proprietaire. On ne fusionne rien en local — sinon Lespass dirait
+                # une chose et le reseau une autre — mais l'adhesion reste due, et elle n'a
+                # pas besoin de portefeuille. Le solde de la carte ne bouge pas d'un centime
+                # et reste recuperable par le parcours /qr/.
+                # / BUSINESS REFUSAL, not an outage: the network already knows this card
+                #   under another owner. Merge nothing locally, but the membership is still
+                #   owed and needs no wallet. The card's balance stays untouched.
+                logger.warning(
+                    f"Adhesion POS : liaison de la carte {carte_a_lier.tag_id} refusee "
+                    f"par le reseau : {erreur_liaison}"
+                )
+                avertissements.append(_(
+                    "Le reseau a refuse de rattacher cette carte a ce membre. L'adhesion "
+                    "est bien enregistree, et le solde de la carte est intact."
+                ))
+                carte_a_lier = None
+            else:
+                # Le reseau avait DEJA lie la carte a ce membre (reponse perdue, ou seconde
+                # caisse) : le refus est un faux negatif, la fusion locale doit avoir lieu.
+                # / The network had ALREADY linked it to this member: false negative.
+                logger.info(
+                    f"Adhesion POS : carte {carte_a_lier.tag_id} deja liee a "
+                    f"{user_adhesion.email} sur le reseau, on poursuit la fusion locale."
+                )
+
+    return {
+        "user": user_adhesion,
+        "carte": carte_client,
+        "fusion_locale_autorisee": carte_a_lier is not None,
+        "avertissements": avertissements,
+    }
+
+
+def _resoudre_adherent_hors_atomic(request, articles_panier):
+    """
+    Identifie le membre PUIS le declare au reseau, en une fois, AVANT le bloc atomic.
+    / Identifies the member THEN declares them to the network, in one go, BEFORE the atomic.
+
+    LOCALISATION : laboutik/views.py
+
+    Utilisee par les paiements especes et CB, ou rien d'irreversible ne se produit entre les
+    deux etapes : on peut donc les enchainer. Le paiement NFC, lui, les appelle SEPAREMENT —
+    il debite le reseau (segment legacy) entre les deux, et ce debit ne se rembourse pas.
+    / Used by the cash and card flows, where nothing irreversible happens between the two
+      steps. The NFC flow calls them SEPARATELY: it debits the network in between, and that
+      debit cannot be refunded.
+
+    :param request: HttpRequest (pour lire le POST)
+    :param articles_panier: liste de dicts de _extraire_articles_du_panier()
+    :return: dict {user, carte, fusion_locale_autorisee, avertissements} ou None
+    :raises ValueError: la vente doit etre refusee ; le message est destine au caissier.
+    """
+    adherent_identifie = _identifier_adherent(request, articles_panier)
+    if adherent_identifie is None:
+        return None
+
+    user_adhesion, carte_client = adherent_identifie
+    return _declarer_adherent_au_reseau(
+        user_adhesion,
+        carte_client,
+        request.META.get("REMOTE_ADDR", "0.0.0.0"),
+    )
+
+
+def _creer_adhesions_depuis_panier(
+    request, articles_panier, lignes_articles=None, adherent=None
+):
     """
     Cree les Memberships pour les articles adhesion du panier (CB/especes).
     Rattache chaque Membership a sa LigneArticle correspondante (FK membership).
@@ -4788,13 +5052,21 @@ def _creer_adhesions_depuis_panier(request, articles_panier, lignes_articles=Non
 
     LOCALISATION : laboutik/views.py
 
-    Identification du client par :
-    1. Scan NFC (tag_id dans le POST) → carte.user
-    2. Formulaire email/nom/prenom (email_adhesion dans le POST) → get_or_create_user
+    Appelee DANS le bloc atomic des fonctions de paiement. Elle ne fait donc AUCUN appel
+    reseau : le membre a deja ete identifie et declare par
+    `_resoudre_adherent_hors_atomic`, qui tourne avant la transaction.
+    / Called INSIDE the atomic block, so it makes NO network call: the member was already
+      identified and declared by _resoudre_adherent_hors_atomic, which runs before it.
 
-    :param request: HttpRequest (pour lire le POST)
+    L'adhesion est creee MEME si la carte n'a pas pu etre rattachee : une Membership n'a
+    pas besoin de portefeuille. Le caissier est prevenu par un avertissement.
+    / The membership is created EVEN IF the card could not be linked: a Membership needs no
+      wallet. The cashier is warned instead.
+
+    :param request: HttpRequest (pour lire prenom/nom)
     :param articles_panier: liste de dicts retournee par _extraire_articles_du_panier()
     :param lignes_articles: liste de LigneArticle creees par _creer_lignes_articles() (pour rattacher membership)
+    :param adherent: dict rendu par _resoudre_adherent_hors_atomic()
     :return: liste de Membership creees
     """
     from decimal import Decimal
@@ -4805,39 +5077,45 @@ def _creer_adhesions_depuis_panier(request, articles_panier, lignes_articles=Non
     if not articles_adhesion:
         return []
 
-    user_adhesion = None
-    carte_client = None
-
-    # Option 1 : identification par scan NFC
-    # / Option 1: identification by NFC scan
-    tag_id_client = request.POST.get("tag_id", "").upper().strip()
-    if tag_id_client:
-        try:
-            carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
-            user_adhesion = carte_client.user
-        except CarteCashless.DoesNotExist:
-            logger.warning(f"Carte NFC {tag_id_client} introuvable pour adhesion")
-
-    # Option 2 : identification par formulaire email/nom/prenom
-    # / Option 2: identification by email/name form
-    email_client = request.POST.get("email_adhesion", "").strip().lower()
-    if email_client and user_adhesion is None:
-        user_adhesion = get_or_create_user(email_client, send_mail=False)
-
-    if user_adhesion is None:
-        # REFUS : pas d'identification → pas d'adhesion (validation serveur obligatoire)
-        # REJECT: no identification → no membership (mandatory server-side validation)
+    if adherent is None:
+        # Ne peut arriver que si un appelant a oublie de resoudre le membre avant l'atomic.
+        # / Only happens if a caller forgot to resolve the member before the atomic.
         raise ValueError(_("Identification du membre obligatoire pour les adhesions"))
 
-    # Fusion wallet ephemere → wallet user (si carte NFC scannee)
-    # / Merge ephemeral wallet → user wallet (if NFC card was scanned)
-    if tag_id_client and carte_client:
-        WalletService.fusionner_wallet_ephemere(
-            carte=carte_client,
-            user=user_adhesion,
-            tenant=connection.tenant,
-            ip=request.META.get("REMOTE_ADDR", "0.0.0.0"),
-        )
+    user_adhesion = adherent["user"]
+    carte_client = adherent["carte"]
+
+    # --- Fusion locale : la carte devient celle du membre ---
+    # On passe par `CarteService.lier_a_user`, le MEME service que le parcours web `/qr/` :
+    # un seul chemin de liaison dans tout le projet. Il verrouille la ligne carte
+    # (`select_for_update`), est idempotent, rattrape les adhesions anonymes de la carte,
+    # et delegue la fusion des Tokens a `WalletService`.
+    # / Same service as the web /qr/ path: one single linking path in the whole project.
+    if adherent["fusion_locale_autorisee"] and carte_client is not None:
+        try:
+            CarteService.lier_a_user(
+                qrcode_uuid=carte_client.uuid,
+                user=user_adhesion,
+                ip=request.META.get("REMOTE_ADDR", "0.0.0.0"),
+            )
+        except (
+            CarteIntrouvable,
+            CarteDejaLiee,
+            UserADejaCarte,
+            SoldeInsuffisant,
+        ) as erreur_liaison:
+            # Course entre deux caisses, ou solde qui bouge sous nos pieds. On ne fusionne
+            # pas, mais l'adhesion reste due : elle est creee, et le caissier est prevenu.
+            # / Race between two tills, or a balance moving under our feet. No merge, but
+            #   the membership is still owed: create it and warn the cashier.
+            logger.warning(
+                f"Adhesion POS : fusion locale de la carte {carte_client.tag_id} "
+                f"impossible : {erreur_liaison}"
+            )
+            adherent["avertissements"].append(_(
+                "La carte n'a pas pu etre rattachee au membre. L'adhesion est bien "
+                "enregistree, le solde de la carte est intact."
+            ))
 
     prenom = request.POST.get("prenom_adhesion", "").strip()
     nom = request.POST.get("nom_adhesion", "").strip()
@@ -5721,6 +5999,27 @@ class PaiementViewSet(viewsets.ViewSet):
             carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
             wallet_client = _obtenir_ou_creer_wallet(carte_client)
 
+        # Resolution du membre d'une adhesion AVANT le bloc atomic, pour la meme raison de
+        # latence — et une de plus, qui pese lourd : cette resolution DECLARE le membre a
+        # Fedow. Faite dans l'atomic, un rollback ferait disparaitre le user local pendant
+        # que Fedow garde deja sa cle RSA ; au retry Fedow refuserait la nouvelle cle, et
+        # cet email deviendrait indeclarable a vie.
+        # / Resolve the membership's member BEFORE the atomic, for the same latency reason
+        #   plus a heavier one: it DECLARES the member to Fedow. A rollback would drop the
+        #   local user while Fedow keeps their RSA key, making that email undeclarable.
+        try:
+            adherent = _resoudre_adherent_hors_atomic(request, articles_normaux)
+        except ValueError as erreur_adherent:
+            context_erreur = {
+                "action": "initUrlAddition();",
+                "msg_type": "warning",
+                "msg_content": f"{erreur_adherent}",
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
         produits_stock_negatif = []
         with db_transaction.atomic():
             # Articles normaux (ventes, adhesions) → LigneArticle
@@ -5734,24 +6033,14 @@ class PaiementViewSet(viewsets.ViewSet):
                     point_de_vente=point_de_vente,
                 )
 
-            # Adhesions → creer les Memberships et les rattacher aux LigneArticle
-            # Memberships → create Membership records and link them to LigneArticle
-            _creer_adhesions_depuis_panier(
-                request, articles_normaux, lignes_articles=lignes_normales
-            )
-
-            # Billets → creer Reservation + Tickets et rattacher aux LigneArticle
-            # Tickets → create Reservation + Tickets and link them to LigneArticle
-            reservations_billets = _creer_billets_depuis_panier(
-                request,
-                articles_normaux,
-                lignes_articles=lignes_normales,
-            )
-
-            # Recharges → TransactionService + LigneArticle avec carte et asset
-            # (wallet_client deja resolu hors atomic ci-dessus)
-            # Top-ups → TransactionService + LigneArticle with card and asset
-            # (wallet_client already resolved outside the atomic above)
+            # Recharges AVANT les adhesions, et l'ordre compte.
+            # `wallet_client` a ete resolu plus haut : pour une carte anonyme, c'est son
+            # wallet ephemere. Or la fusion d'adhesion DETACHE ce wallet de la carte. Recharger
+            # apres creditrait donc un wallet que plus rien ne reference — argent inaccessible.
+            # En rechargeant d'abord, la fusion ramasse le solde tout juste credite.
+            # / Top-ups BEFORE memberships, and the order matters: the membership merge
+            #   DETACHES the ephemeral wallet, so topping up after would credit a wallet
+            #   nothing references any more. Top up first, the merge then collects it.
             if articles_recharge:
                 _executer_recharges(
                     articles_recharge,
@@ -5761,6 +6050,23 @@ class PaiementViewSet(viewsets.ViewSet):
                     ip_client=ip_client,
                     point_de_vente=point_de_vente,
                 )
+
+            # Adhesions → creer les Memberships et les rattacher aux LigneArticle
+            # Memberships → create Membership records and link them to LigneArticle
+            _creer_adhesions_depuis_panier(
+                request,
+                articles_normaux,
+                lignes_articles=lignes_normales,
+                adherent=adherent,
+            )
+
+            # Billets → creer Reservation + Tickets et rattacher aux LigneArticle
+            # Tickets → create Reservation + Tickets and link them to LigneArticle
+            reservations_billets = _creer_billets_depuis_panier(
+                request,
+                articles_normaux,
+                lignes_articles=lignes_normales,
+            )
 
         # Apres le bloc atomic : envoyer les billets par email via Celery.
         # Ne pas appeler dans le bloc atomic (si rollback, le mail partirait quand meme).
@@ -5801,6 +6107,11 @@ class PaiementViewSet(viewsets.ViewSet):
             "uuid_transaction": str(uuid_transaction),
             "uuid_pv": str(point_de_vente.uuid),
             "produits_stock_negatif": produits_stock_negatif,
+            # Avertissements du rattachement de carte (adhesion) : le caissier
+            # doit savoir qu'une carte n'a pas ete rattachee, meme si la vente
+            # a abouti. / Card-linking warnings: the cashier must know a card
+            # was not attached, even though the sale went through.
+            "avertissements_adhesion": adherent["avertissements"] if adherent else [],
         }
         return render(
             request, "laboutik/partial/hx_return_payment_success.html", context
@@ -5908,6 +6219,29 @@ class PaiementViewSet(viewsets.ViewSet):
                 carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
                 wallet_client = _obtenir_ou_creer_wallet(carte_client)
 
+            # Resolution du membre d'une adhesion AVANT le bloc atomic, pour la meme raison
+            # de latence — et une de plus, qui pese lourd : cette resolution DECLARE le
+            # membre a Fedow. Faite dans l'atomic, un rollback ferait disparaitre le user
+            # local pendant que Fedow garde deja sa cle RSA ; au retry Fedow refuserait la
+            # nouvelle cle, et cet email deviendrait indeclarable a vie.
+            # / Resolve the membership's member BEFORE the atomic: it DECLARES the member to
+            #   Fedow, and a rollback would drop the local user while Fedow keeps their key.
+            try:
+                adherent = _resoudre_adherent_hors_atomic(request, articles_normaux)
+            except ValueError as erreur_adherent:
+                context_erreur = {
+                    "action": "initUrlAddition();",
+                    "msg_type": "warning",
+                    "msg_content": f"{erreur_adherent}",
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=400,
+                )
+
             produits_stock_negatif = []
             # Créer les lignes articles en base (atomique)
             # Create article lines in DB (atomic)
@@ -5923,24 +6257,14 @@ class PaiementViewSet(viewsets.ViewSet):
                         point_de_vente=point_de_vente,
                     )
 
-                # Adhesions → creer les Memberships et les rattacher aux LigneArticle
-                # Memberships → create Membership records and link them to LigneArticle
-                _creer_adhesions_depuis_panier(
-                    request, articles_normaux, lignes_articles=lignes_normales
-                )
-
-                # Billets → creer Reservation + Tickets et rattacher aux LigneArticle
-                # Tickets → create Reservation + Tickets and link them to LigneArticle
-                reservations_billets = _creer_billets_depuis_panier(
-                    request,
-                    articles_normaux,
-                    lignes_articles=lignes_normales,
-                )
-
-                # Recharges → TransactionService + LigneArticle avec carte et asset
-                # (wallet_client deja resolu hors atomic ci-dessus)
-                # Top-ups → TransactionService + LigneArticle with card and asset
-                # (wallet_client already resolved outside the atomic above)
+                # Recharges AVANT les adhesions, et l'ordre compte.
+                # `wallet_client` a ete resolu plus haut : pour une carte anonyme, c'est son
+                # wallet ephemere. Or la fusion d'adhesion DETACHE ce wallet de la carte.
+                # Recharger apres creditrait donc un wallet que plus rien ne reference —
+                # argent inaccessible. En rechargeant d'abord, la fusion ramasse le solde
+                # tout juste credite.
+                # / Top-ups BEFORE memberships: the membership merge DETACHES the ephemeral
+                #   wallet, so topping up after would credit an unreferenced wallet.
                 if articles_recharge:
                     _executer_recharges(
                         articles_recharge,
@@ -5950,6 +6274,23 @@ class PaiementViewSet(viewsets.ViewSet):
                         ip_client=ip_client,
                         point_de_vente=point_de_vente,
                     )
+
+                # Adhesions → creer les Memberships et les rattacher aux LigneArticle
+                # Memberships → create Membership records and link them to LigneArticle
+                _creer_adhesions_depuis_panier(
+                    request,
+                    articles_normaux,
+                    lignes_articles=lignes_normales,
+                    adherent=adherent,
+                )
+
+                # Billets → creer Reservation + Tickets et rattacher aux LigneArticle
+                # Tickets → create Reservation + Tickets and link them to LigneArticle
+                reservations_billets = _creer_billets_depuis_panier(
+                    request,
+                    articles_normaux,
+                    lignes_articles=lignes_normales,
+                )
 
             # Apres le bloc atomic : envoyer les billets par email via Celery
             # / After the atomic block: send tickets by email via Celery
@@ -5996,6 +6337,11 @@ class PaiementViewSet(viewsets.ViewSet):
                 "uuid_transaction": str(uuid_transaction),
                 "uuid_pv": str(point_de_vente.uuid),
                 "produits_stock_negatif": produits_stock_negatif,
+                # Avertissements du rattachement de carte (adhesion) : le caissier
+                # doit savoir qu'une carte n'a pas ete rattachee, meme si la vente
+                # a abouti. / Card-linking warnings: the cashier must know a card
+                # was not attached, even though the sale went through.
+                "avertissements_adhesion": adherent["avertissements"] if adherent else [],
             }
             return render(
                 request, "laboutik/partial/hx_return_payment_success.html", context
@@ -6085,6 +6431,31 @@ class PaiementViewSet(viewsets.ViewSet):
         # Déterminer le wallet client (get or create éphémère si besoin)
         # / Determine client wallet (get or create ephemeral if needed)
         wallet_client = _obtenir_ou_creer_wallet(carte_client)
+
+        # GARDE ADHESION, LE PLUS TOT POSSIBLE : si le panier contient une adhesion, on
+        # verifie DES MAINTENANT qu'on sait qui est le membre — avant le moindre debit.
+        # Sans cette garde, une carte anonyme payait l'adhesion, le wallet etait debite, la
+        # LigneArticle creee… et aucune Membership n'etait enregistree : le client payait
+        # une adhesion qui n'existait pas, en silence.
+        # Cette etape ne fait AUCUN appel reseau et n'ecrit rien d'irreversible : on peut
+        # donc encore refuser proprement. La declaration au reseau, elle, attendra la
+        # derniere seconde avant la transaction (voir plus bas).
+        # / MEMBERSHIP GUARD, AS EARLY AS POSSIBLE: before any debit, check we know who the
+        #   member is. Without it, an anonymous card paid for a membership, the wallet was
+        #   debited, the sale line created… and no Membership recorded — the customer paid
+        #   for a membership that never existed, silently.
+        try:
+            adherent_identifie = _identifier_adherent(request, articles_panier)
+        except ValueError as erreur_adherent:
+            context_erreur = {
+                "action": "initUrlAddition();",
+                "msg_type": "warning",
+                "msg_content": f"{erreur_adherent}",
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
 
         # ================================================================ #
         #  PHASE 1 : Préparer les soldes cascade fiduciaire disponibles     #
@@ -6402,6 +6773,38 @@ class PaiementViewSet(viewsets.ViewSet):
             # / The complement parts are now covered by legacy: drop them from lignes_nfc.
             lignes_nfc = [t for t in lignes_nfc if t[1] is not None]
 
+        # DECLARATION DU MEMBRE AU RESEAU — le plus tard possible, et hors transaction.
+        # Hors transaction : un appel reseau sous verrou DB le tient pendant toute la
+        # latence, et un rollback ferait disparaitre le membre local pendant que le reseau
+        # garde deja sa cle RSA — cet email deviendrait indeclarable a vie.
+        # Le plus tard possible : le debit du segment legacy, juste au-dessus, part sur le
+        # reseau et NE SE REMBOURSE PAS. Declarer avant lui exposerait a un etat ou la carte
+        # est liee sur le reseau alors que la vente s'arrete sur un solde insuffisant.
+        # / DECLARE THE MEMBER TO THE NETWORK — as late as possible, outside the transaction.
+        #   Outside: a network call under a DB lock holds it for the whole latency, and a
+        #   rollback would drop the local member while the network keeps their RSA key.
+        #   As late as possible: the legacy debit just above CANNOT be refunded.
+        adherent = None
+        if adherent_identifie is not None:
+            user_adhesion, carte_adhesion = adherent_identifie
+            try:
+                adherent = _declarer_adherent_au_reseau(
+                    user_adhesion, carte_adhesion, ip_client
+                )
+            except ValueError as erreur_adherent:
+                context_erreur = {
+                    "action": "initUrlAddition();",
+                    "msg_type": "warning",
+                    "msg_content": f"{erreur_adherent}",
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=400,
+                )
+
         try:
             with db_transaction.atomic():
                 # ----- 7a) Crédits recharges gratuites AVANT les débits -----
@@ -6488,9 +6891,44 @@ class PaiementViewSet(viewsets.ViewSet):
                         if product_uuid_str not in lignes_par_product:
                             lignes_par_product[product_uuid_str] = ligne_creee
 
+                    # Le membre vient de la resolution faite hors transaction, PAS de
+                    # `carte_client.user` : une carte anonyme y valait None, et
+                    # `_creer_ou_renouveler_adhesion(None)` rendait None — le wallet etait
+                    # debite et la ligne creee, mais aucune adhesion n'existait.
+                    # / The member comes from the resolution done outside the transaction,
+                    #   NOT from carte_client.user, which was None for an anonymous card.
+                    membre_adhesion = adherent["user"]
+
+                    # La fusion locale du wallet ephemere passe APRES les debits (7b/7c) :
+                    # ceux-ci s'appuient sur `wallet_client`, qui EST le wallet ephemere de
+                    # la carte. Fusionner avant les detacherait de leur source.
+                    # / The local merge runs AFTER the debits, which rely on wallet_client —
+                    #   the card's ephemeral wallet. Merging first would detach their source.
+                    if adherent["fusion_locale_autorisee"] and carte_client is not None:
+                        try:
+                            CarteService.lier_a_user(
+                                qrcode_uuid=carte_client.uuid,
+                                user=membre_adhesion,
+                                ip=ip_client,
+                            )
+                        except (
+                            CarteIntrouvable,
+                            CarteDejaLiee,
+                            UserADejaCarte,
+                            SoldeInsuffisant,
+                        ) as erreur_liaison:
+                            logger.warning(
+                                f"Adhesion POS NFC : fusion locale de la carte "
+                                f"{carte_client.tag_id} impossible : {erreur_liaison}"
+                            )
+                            adherent["avertissements"].append(_(
+                                "La carte n'a pas pu etre rattachee au membre. L'adhesion "
+                                "est bien enregistree, le solde de la carte est intact."
+                            ))
+
                     for article_ad in articles_adhesion:
                         membership = _creer_ou_renouveler_adhesion(
-                            carte_client.user,
+                            membre_adhesion,
                             article_ad["product"],
                             article_ad["price"],
                         )
@@ -6586,6 +7024,10 @@ class PaiementViewSet(viewsets.ViewSet):
             # / Multi-asset: list of balances after payment
             "soldes_apres_paiement": soldes_apres_paiement,
             "produits_stock_negatif": produits_stock_negatif,
+            # Avertissements du rattachement de carte (adhesion) : le caissier doit savoir
+            # qu'une carte n'a pas ete rattachee, meme si la vente a abouti.
+            # / Card-linking warnings: the cashier must know a card was not attached.
+            "avertissements_adhesion": adherent["avertissements"] if adherent else [],
         }
         return render(
             request, "laboutik/partial/hx_return_payment_success.html", context

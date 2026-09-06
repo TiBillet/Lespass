@@ -88,14 +88,44 @@ def carte_vierge(db, detail_cartes):
 @pytest.fixture
 def user_tout_neuf(db, tenant_origine):
     """
-    Un user sans wallet ni carte (cas du nouvel inscrit).
+    Un user sans carte, mais AVEC son wallet (cas du nouvel inscrit deja declare).
+    / A user without a card, but WITH their wallet (a fresh sign-up already declared).
+
+    LE WALLET EST OBLIGATOIRE, et ce n'est pas une commodite de test : `lier_a_user` refuse
+    desormais un user sans wallet (`WalletUserAbsent`). Le moteur ne fabrique plus de Wallet
+    a uuid aleatoire, car le reseau ne le connaitrait pas — le porteur ne pourrait plus rien
+    signer et son solde federe deviendrait invisible. Le wallet d'un USER se cree TOUJOURS
+    aupres du reseau d'abord, par l'appelant
+    (`fedow_connect.services.declarer_wallet_user_a_fedow`).
+    Ici on simule cet appelant : on pose le wallet avant de lier.
+    / THE WALLET IS MANDATORY: lier_a_user now refuses a wallet-less user. The engine no
+      longer makes up random-uuid wallets, which the network would not know. A USER's wallet
+      is ALWAYS created on the network first, by the caller. Here we stand in for that caller.
+
     create_user() lit connection.tenant pour client_source — il faut etre dans un tenant_context.
-    / A user without wallet or card (fresh sign-up).
-    create_user() reads connection.tenant for client_source — must be inside a tenant_context.
+    / create_user() reads connection.tenant for client_source — must be inside a tenant_context.
+    """
+    with tenant_context(tenant_origine):
+        user = User.objects.create_user(
+            email=f"user-{uuid.uuid4().hex[:6]}@test.local",
+            password="testpass123",
+        )
+        user.wallet = Wallet.objects.create(
+            origin=tenant_origine, name=f"Wallet {user.email}"
+        )
+        user.save(update_fields=["wallet"])
+        return user
+
+
+@pytest.fixture
+def user_sans_wallet(db, tenant_origine):
+    """
+    Un user QUI N'A PAS de wallet — l'etat que le moteur doit refuser.
+    / A user WITHOUT a wallet — the state the engine must refuse.
     """
     with tenant_context(tenant_origine):
         return User.objects.create_user(
-            email=f"user-{uuid.uuid4().hex[:6]}@test.local",
+            email=f"sans-wallet-{uuid.uuid4().hex[:6]}@test.local",
             password="testpass123",
         )
 
@@ -201,15 +231,63 @@ def test_lier_carte_nouveau_user_sans_tokens(
         user=user_tout_neuf,
     )
 
+    wallet_avant_liaison = user_tout_neuf.wallet
+
     carte_vierge.refresh_from_db()
     user_tout_neuf.refresh_from_db()
     assert carte_vierge.user == user_tout_neuf
     assert carte_vierge.wallet_ephemere is None
-    assert user_tout_neuf.wallet is not None
+    # Le wallet du user est celui qu'il avait deja : la liaison n'en fabrique pas un.
+    # Un wallet fabrique ici aurait un uuid aleatoire, inconnu du reseau.
+    # / The user keeps the wallet they already had: linking never makes one up, since a
+    #   made-up wallet would carry a random uuid the network does not know.
+    assert user_tout_neuf.wallet == wallet_avant_liaison
     assert (
         Transaction.objects.filter(action=Transaction.FUSION, card=carte_vierge).count()
         == 0
     )
+
+
+def test_lier_carte_refuse_un_user_sans_wallet(
+    carte_vierge, tenant_origine, user_sans_wallet
+):
+    """
+    LA GARDE : lier une carte a un user sans wallet est REFUSE, rien n'est fabrique.
+    / THE GUARD: linking a card to a wallet-less user is REFUSED, nothing is made up.
+
+    Avant, le moteur creait discretement un Wallet local a uuid ALEATOIRE. Le reseau ne le
+    connaissant pas, le porteur ne pouvait plus rien signer : son solde federe devenait
+    invisible au comptoir, et la prochaine declaration echouait sur « Wallet and member
+    mismatch », a vie. Le moteur refuse donc, et laisse l'appelant declarer le membre au
+    reseau d'abord.
+    / The engine used to quietly create a RANDOM-uuid local Wallet the network could not
+      authenticate, permanently cutting the holder off. It now refuses instead.
+    """
+    from fedow_core.exceptions import WalletUserAbsent
+    from fedow_core.services import CarteService
+
+    CarteService.scanner_carte(carte_vierge, tenant_origine)
+    carte_vierge.refresh_from_db()
+
+    nombre_de_wallets_avant = Wallet.objects.count()
+
+    with pytest.raises(WalletUserAbsent):
+        CarteService.lier_a_user(
+            qrcode_uuid=carte_vierge.uuid,
+            user=user_sans_wallet,
+        )
+
+    # Rien n'a ete fabrique, rien n'a bouge.
+    # / Nothing was made up, nothing moved.
+    assert Wallet.objects.count() == nombre_de_wallets_avant, (
+        "Un Wallet a ete cree malgre le refus : il porterait un uuid aleatoire que le "
+        "reseau ne connaitrait pas."
+    )
+    user_sans_wallet.refresh_from_db()
+    assert user_sans_wallet.wallet is None
+    carte_vierge.refresh_from_db()
+    assert carte_vierge.user is None
+    assert carte_vierge.wallet_ephemere is not None
 
 
 def test_lier_carte_avec_tokens_cree_transaction_fusion(

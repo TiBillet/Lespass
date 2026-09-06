@@ -43,7 +43,7 @@ Ce chemin n'avait aucun test, et il echoue en silence a trois niveaux :
 
 - `TRIGGER_LigneArticlePaid_ActionByCategorie.__init__` (`triggers.py`) enveloppe
   l'appel du trigger dans `except Exception` + `logger.error` ;
-- `trigger_A` fait de meme autour de `fedowAPI.membership.create` ;
+- `trigger_A` avale de meme les erreurs de ses etapes ;
 - la tache (`tasks.py`) finit par `except Exception` + `logger.error`.
 
 Un versement rate laisse donc une adhesion **d'apparence normale**, et un adherent

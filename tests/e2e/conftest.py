@@ -74,20 +74,87 @@ def browser(playwright_instance):
 
 
 @pytest.fixture(scope="function")
-def page(browser):
+def page(browser, request):
     """Crée un nouvel onglet (context + page) pour chaque test.
     ignore_https_errors=True car les certificats Traefik sont auto-signés en dev.
     / Create a new tab (context + page) for each test.
     ignore_https_errors=True because Traefik certs are self-signed in dev.
+
+    SUR ECHEC : capture l'ecran et le HTML de la page dans `tests/e2e/artefacts/`.
+    Sans ca, un echec E2E ne laisse AUCUNE trace : un `TimeoutError` sur un locator dit
+    seulement « je n'ai pas trouve », jamais ce que la page affichait. Un echec qui ne se
+    reproduit pas devient alors indiagnosticable, et on en est reduit aux hypotheses.
+    / ON FAILURE: dump a screenshot and the page HTML. Without this an E2E failure leaves NO
+      trace — a locator TimeoutError only says "not found", never what the page showed.
     """
     context = browser.new_context(
         base_url=BASE_URL,
         ignore_https_errors=True,
     )
     page = context.new_page()
+
     yield page
+
+    # `rep_call` est pose par le hook `pytest_runtest_makereport` plus bas.
+    # On le lit defensivement : si le test a echoue AVANT sa phase d'appel (erreur de
+    # fixture), l'attribut n'existe pas.
+    # / rep_call is set by the pytest_runtest_makereport hook below. Read it defensively.
+    rapport_du_test = getattr(request.node, "rep_call", None)
+    if rapport_du_test is not None and rapport_du_test.failed:
+        _capturer_la_page_en_echec(page, request.node.nodeid)
+
     page.close()
     context.close()
+
+
+# Dossier des artefacts d'echec. Volontairement dans l'arborescence des tests pour qu'on le
+# trouve sans le chercher. / Failure artifacts directory, kept next to the tests.
+DOSSIER_ARTEFACTS = os.path.join(os.path.dirname(__file__), "artefacts")
+
+
+def _nom_de_fichier_sur(nodeid):
+    """Transforme un nodeid pytest en nom de fichier utilisable.
+    / Turns a pytest nodeid into a usable file name."""
+    caracteres_surs = []
+    for caractere in nodeid:
+        if caractere.isalnum() or caractere in "-_":
+            caracteres_surs.append(caractere)
+        else:
+            caracteres_surs.append("_")
+    # Les nodeid sont longs (chemin + classe + methode) : on garde la fin, la plus parlante.
+    # / Node ids are long; keep the tail, which is the telling part.
+    return "".join(caracteres_surs)[-120:]
+
+
+def _capturer_la_page_en_echec(page, nodeid):
+    """Ecrit une capture d'ecran et le HTML de la page dans `tests/e2e/artefacts/`.
+    / Writes a screenshot and the page HTML into tests/e2e/artefacts/.
+
+    Ne leve jamais : un probleme de capture ne doit pas masquer l'echec du test, qui est
+    l'information importante.
+    / Never raises: a capture problem must not mask the test failure itself.
+    """
+    try:
+        os.makedirs(DOSSIER_ARTEFACTS, exist_ok=True)
+        base = os.path.join(DOSSIER_ARTEFACTS, _nom_de_fichier_sur(nodeid))
+        page.screenshot(path=f"{base}.png", full_page=True)
+        with open(f"{base}.html", "w", encoding="utf-8") as fichier_html:
+            fichier_html.write(page.content())
+        print(f"\n[E2E] Echec capture : {base}.png et {base}.html")
+    except Exception as erreur_de_capture:
+        print(f"\n[E2E] Capture impossible ({erreur_de_capture})")
+
+
+@pytest.hookimpl(hookwrapper=True, tryfirst=True)
+def pytest_runtest_makereport(item, call):
+    """Expose le rapport de chaque phase sur l'item, pour que les fixtures sachent si le
+    test a echoue au moment de leur teardown.
+    / Exposes each phase report on the item so fixtures know, at teardown, whether the test
+      failed. This is the documented pytest recipe for failure artifacts.
+    """
+    outcome = yield
+    rapport = outcome.get_result()
+    setattr(item, f"rep_{rapport.when}", rapport)
 
 
 # --- Fixtures d'authentification / Authentication fixtures ---
@@ -1133,6 +1200,14 @@ def soumettre_paiement_stripe():
     Mesuré sur `test_recharge_federee_par_carte_bancaire` : le fichier passe de
     ~2 min (quatre attentes vaines de 45 s) à ~47 s. Voir `PIEGES.md` 12.14.
 
+    ATTENTION AU SÉLECTEUR PAR DÉFAUT : son repli `button[type="submit"]` est très large.
+    Il n'est acceptable QUE parce que cette fonction refuse d'agir dès que la page a quitté
+    `checkout.stripe.com` — sans cette garde, il attrape le premier bouton de formulaire de
+    la page d'arrivée (souvent invisible) et fait échouer un paiement pourtant réussi.
+    / MIND THE DEFAULT SELECTOR: its `button[type="submit"]` fallback is very broad. It is
+      only acceptable because this function refuses to act once the page has left the
+      checkout — otherwise it grabs the destination page's first form button.
+
     :param page: la page Playwright, arrivée sur checkout.stripe.com
     :param selecteur: le bouton à actionner. Par défaut celui du checkout hébergé.
     :param tentatives: nombre de couples (click, dispatch) avant d'abandonner.
@@ -1141,22 +1216,67 @@ def soumettre_paiement_stripe():
         le message d'erreur métier).
     """
 
+    def _est_encore_sur_stripe(page):
+        """La page est-elle toujours sur le checkout ? / Still on the checkout page?"""
+        return "checkout.stripe.com" in page.url
+
+    def _attendre_la_sortie_du_checkout(page, delai_ms):
+        """Attend que la page quitte Stripe. Rend True si elle l'a quittee.
+        / Waits for the page to leave Stripe. Returns True if it did.
+
+        On attend un EVENEMENT (le changement d'URL), pas une duree fixe. Le retour de
+        paiement est une chaine de redirections — Stripe, puis le retour construit par
+        Fedow, puis `return_refill_wallet`, puis `/my_account/`. Une pause fixe trop courte
+        conclut « toujours sur Stripe » alors que la navigation est en vol.
+        / Wait for an EVENT (the URL change), not a fixed delay: the payment return is a
+          redirect chain, and a too-short fixed pause concludes "still on Stripe" while the
+          navigation is in flight.
+        """
+        try:
+            page.wait_for_url(
+                lambda url: "checkout.stripe.com" not in url, timeout=delai_ms
+            )
+            return True
+        except Exception:
+            return False
+
     def _soumettre(
         page,
         selecteur='[data-testid="hosted-payment-submit-button"], button[type="submit"]',
         tentatives=6,
     ):
+        # GARDE D'ENTREE : si la page a deja quitte le checkout, il n'y a rien a soumettre.
+        # Sans elle, le selecteur est evalue sur la page d'ARRIVEE, ou son repli
+        # `button[type="submit"]` — tres large — attrape n'importe quel bouton de
+        # formulaire, souvent invisible. On attend alors 30 s sur un bouton sans rapport,
+        # et l'echec accuse le paiement alors qu'il a reussi.
+        # / ENTRY GUARD: if the page already left the checkout there is nothing to submit.
+        #   Without it the selector is evaluated on the DESTINATION page, where the broad
+        #   `button[type="submit"]` fallback grabs an unrelated, often invisible button.
+        if not _est_encore_sur_stripe(page):
+            return True
+
         bouton = page.locator(selecteur).first
         bouton.wait_for(state="visible", timeout=30_000)
 
         for _tentative in range(tentatives):
-            bouton.click()
-            page.wait_for_timeout(4_000)
-            if "checkout.stripe.com" not in page.url:
+            # Meme garde AVANT chaque action : le clic precedent a pu partir et la
+            # navigation se terminer entre-temps. Cliquer maintenant viserait la page
+            # d'arrivee.
+            # / Same guard BEFORE each action: the previous click may have fired and the
+            #   navigation completed since. Clicking now would target the destination page.
+            if not _est_encore_sur_stripe(page):
                 return True
+
+            bouton.click()
+            if _attendre_la_sortie_du_checkout(page, 8_000):
+                return True
+
+            if not _est_encore_sur_stripe(page):
+                return True
+
             bouton.dispatch_event("click")
-            page.wait_for_timeout(4_000)
-            if "checkout.stripe.com" not in page.url:
+            if _attendre_la_sortie_du_checkout(page, 8_000):
                 return True
         return False
 
