@@ -51,7 +51,7 @@
    / Mobile: more compact sidebar and footer */
 @media only screen and (max-width: 599px) {
 	:root {
-		--cat-width: 56px;
+		--cat-width: 64px;
 		--cat-icon-size: 1.8rem;
 		--cat-name-size: 0.7rem;
 		--footer-container-height: 64px;

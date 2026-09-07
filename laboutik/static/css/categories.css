@@ -13,6 +13,7 @@
 	padding: 8px 6px;
 	overflow-y: auto;
 	overflow-x: hidden;
+	border-right: 1px solid var(--line);
 
 	/* Scrollbar fine et discrete — coherente avec le theme sombre POS
 	   / Thin discreet scrollbar — consistent with dark POS theme */
@@ -139,11 +140,19 @@
 /* Mobile : sidebar plus étroite pour maximiser l'espace articles
    / Mobile: narrower sidebar to maximize articles space */
 @media only screen and (max-width: 599px) {
-	.category-item {
-		height: 52px;
-	}
+	/*.category-item {*/
+	/*	height: 52px;*/
+	/*}*/
 }
 
+@media only screen and (max-width : 1022px) {
+	#categories{
+		height: calc(100% - 200px);
+	}
+	.category-icon {
+		font-size: calc(var(--cat-icon-size) - 5px);
+	}
+}
 /* --- PSEUDO-CATÉGORIES EVENT (PV BILLETTERIE) ---
    Les events apparaissent dans la sidebar avec date + mini-jauge.
    Le data-sel="cat-{event_uuid}" permet le filtre JS existant.

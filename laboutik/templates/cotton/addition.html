@@ -6,35 +6,57 @@
 	{# acces aux tags de traduction Django.                                     #}
 	{# / Ticket header (mockup: .tk-head) — title + count pill. Singular and    #}
 	{# plural labels travel in data-* since addition.js cannot translate.       #}
-	<div class="addition-head">
-		<span class="addition-title">{% translate "Ticket" %}</span>
-		<span id="addition-count"
-		      class="addition-count"
-		      data-label-un="{% translate 'article' %}"
-		      data-label-plusieurs="{% translate 'articles' %}"
-		      data-testid="addition-count">&mdash;</span>
-		{# Bouton VIDER (maquette : .tk-reset) — confirmation en deux temps,      #}
-		{# gere par additionArmerVider() dans addition.js. Desactive panier vide. #}
-		{# / EMPTY button (mockup: .tk-reset) — two-step confirmation handled by  #}
-		{# additionArmerVider() in addition.js. Disabled while the cart is empty. #}
-		<button type="button"
-		        id="addition-vider"
-		        class="addition-vider"
-		        onclick="additionArmerVider()"
-		        data-label-vider="{% translate 'Vider' %}"
-		        data-label-confirmer="{% translate 'Confirmer' %}"
+	<div class="addition-head addition-head-responsive">
+		<div style="display:flex;align-items: center;">
+            <span class="addition-count"
+                  data-label-un="{% translate 'article' %}"
+                  data-label-plusieurs="{% translate 'articles' %}"
+                  data-testid="addition-count">&mdash;</span>
+{#            <span class="last-added-item"> {% translate 'Dernier ajout : ' %}</span>#}
+        </div>
+
+		<span type="button"
+              class="addition-title"
+		        onclick="toggleAdditionResponsive()"
 		        data-testid="addition-vider"
 		        disabled>
-			<i class="fas fa-trash" aria-hidden="true"></i>
-			<span class="addition-vider-label">{% translate "Vider" %}</span>
-		</button>
+			{% translate 'Ticket' %}
+            <i class="fas fa-chevron-up addition-chevron"></i>
+		</span>
 	</div>
-	<div id="addition-list" data-empty-text="{% translate 'Panier vide' %}" aria-live="polite">
-		<div id="addition-empty" class="BF-col addition-placeholder" data-testid="addition-empty-placeholder">
+    <div id="addition-responsive-wrapper">
+        <div class="addition-head">
+            <span class="addition-title">{% translate "Ticket" %}</span>
+            <span id="addition-count"
+                  class="addition-count"
+                  data-label-un="{% translate 'article' %}"
+                  data-label-plusieurs="{% translate 'articles' %}"
+                  data-testid="addition-count">&mdash;</span>
+            {# Bouton VIDER (maquette : .tk-reset) — confirmation en deux temps,      #}
+            {# gere par additionArmerVider() dans addition.js. Desactive panier vide. #}
+            {# / EMPTY button (mockup: .tk-reset) — two-step confirmation handled by  #}
+            {# additionArmerVider() in addition.js. Disabled while the cart is empty. #}
+            <button type="button"
+                    id="addition-vider"
+                    class="addition-vider"
+                    onclick="additionArmerVider()"
+                    data-label-vider="{% translate 'Vider' %}"
+                    data-label-confirmer="{% translate 'Confirmer' %}"
+                    data-testid="addition-vider"
+                    disabled>
+                <i class="fas fa-trash" aria-hidden="true"></i>
+                <span class="addition-vider-label">{% translate "Vider" %}</span>
+            </button>
+        </div>
+
+        <div id="addition-list" data-empty-text="{% translate 'Panier vide' %}" aria-live="polite">
+
+        <div id="addition-empty" class="BF-col addition-placeholder" data-testid="addition-empty-placeholder">
 			<i class="fas fa-shopping-basket" aria-hidden="true"></i>
 			<span>{% translate "Panier vide" %}</span>
 		</div>
 	</div>
+    </div>
 	{# Bas du ticket : total + CHECK CARTE + VALIDER (maquette : .tk-total et .acts) #}
 	{# / Ticket bottom: total + card check + validate (mockup: .tk-total, .acts)      #}
 	{# Tag en tirets, fichier en underscores : convention django-cotton, comme  #}
@@ -69,6 +91,57 @@
 		<input type="text" id="addition-moyen-complement" name="moyen_complement" value="" />
 	</form>
 </div>
+
+{#<div id="addition-small">#}
+{#    <section class="sheet" id="sheet" data-open="false">#}
+{#        <button class="sheet-bar" id="sheetBar">#}
+{#            <span class="sheet-count" id="sheetCount">0</span>#}
+{#            <span class="sheet-last" id="sheetLast">Ticket vide</span>#}
+{#            <span class="sheet-chev">Ticket</span>#}
+{#        </button>#}
+{##}
+{#        <div class="sheet-body">#}
+{#            <div class="addition-head">#}
+{#                <span class="addition-title">{% translate "Ticket" %}</span>#}
+{#                <span id="addition-count"#}
+{#                      class="addition-count"#}
+{#                      data-label-un="{% translate 'article' %}"#}
+{#                      data-label-plusieurs="{% translate 'articles' %}"#}
+{#                      data-testid="addition-count">&mdash;</span>#}
+                {# Bouton VIDER (maquette : .tk-reset) — confirmation en deux temps,      #}
+                {# gere par additionArmerVider() dans addition.js. Desactive panier vide. #}
+                {# / EMPTY button (mockup: .tk-reset) — two-step confirmation handled by  #}
+                {# additionArmerVider() in addition.js. Disabled while the cart is empty. #}
+{#                <button type="button"#}
+{#                        id="addition-vider"#}
+{#                        class="addition-vider"#}
+{#                        onclick="additionArmerVider()"#}
+{#                        data-label-vider="{% translate 'Vider' %}"#}
+{#                        data-label-confirmer="{% translate 'Confirmer' %}"#}
+{#                        data-testid="addition-vider"#}
+{#                        disabled>#}
+{#                    <i class="fas fa-trash" aria-hidden="true"></i>#}
+{#                    <span class="addition-vider-label">{% translate "Vider" %}</span>#}
+{#                </button>#}
+{#            </div>#}
+{#            <div id="addition-list" data-empty-text="{% translate 'Panier vide' %}" aria-live="polite">#}
+{#                <div id="addition-empty" class="BF-col addition-placeholder" data-testid="addition-empty-placeholder">#}
+{#                    <i class="fas fa-shopping-basket" aria-hidden="true"></i>#}
+{#                    <span>{% translate "Panier vide" %}</span>#}
+{#                </div>#}
+{#            </div>#}
+{#            ##tkLines #}
+{##}
+{#        </div>#}
+{##}
+{#        <div class="tk-total">#}
+{#            <span class="tk-total-lbl">Total</span>#}
+{#            <span class="tk-total-val" id="tkTotal">0,00 €</span>#}
+{#        </div>#}
+{#    </section>#}
+{##}
+{#</div>#}
+
 
 <script src="{% static 'js/addition.js' %}"></script>
 

@@ -142,6 +142,17 @@ footer {
 	}
 }
 
+
+@media only screen and (width > 1022px) {
+	#products {
+		width: 71%;
+	}
+}
+@media only screen and (max-width : 1022px) {
+	#products-container {
+		height: calc(100% - 200px);
+	}
+}
 /* Mobile : footer texte plus petit pour gagner de la place
    / Mobile: smaller footer text to save space */
 @media only screen and (max-width: 599px) {
