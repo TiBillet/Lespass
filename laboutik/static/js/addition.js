@@ -84,14 +84,16 @@ function additionMajEntete() {
 		}
 	})
 
-	const eleCompteur = document.querySelector('#addition-count')
-	if (eleCompteur) {
+	const eleCompteurs = document.querySelectorAll('.addition-count')
+	if (eleCompteurs) {
 		// Libelles traduits poses par le template (cotton/addition.html)
 		// / Translated labels set by the template
-		const libelleUn = eleCompteur.dataset.labelUn || 'article'
-		const libellePlusieurs = eleCompteur.dataset.labelPlusieurs || 'articles'
-		const libelle = nombreArticles > 1 ? libellePlusieurs : libelleUn
-		eleCompteur.textContent = nombreArticles > 0 ? `${nombreArticles} ${libelle}` : '\u2014'
+		eleCompteurs.forEach(elem=>{
+			const libelleUn = elem.dataset.labelUn || 'article'
+			const libellePlusieurs = elem.dataset.labelPlusieurs || 'articles'
+			const libelle = nombreArticles > 1 ? libellePlusieurs : libelleUn
+			elem.textContent = nombreArticles > 0 ? `${nombreArticles} ${libelle}` : '\u2014'
+		})
 	}
 
 	const eleVider = document.querySelector('#addition-vider')
@@ -271,6 +273,21 @@ function additionArmerVider() {
 		msg: 'resetArticles',
 		data: {}
 	})
+}
+
+/**
+ * Affiche ou cache le détail des articles dans le panier quand on est en mode responsive
+ */
+function toggleAdditionResponsive(force_close=false){
+	let addition = document.querySelector('#addition')
+	let chevron = document.querySelector(".addition-chevron")
+	if (force_close===true || addition.classList.contains("opened")){
+		addition.classList.remove("opened")
+		chevron.classList.remove("reverse")
+	}else{
+		addition.classList.add("opened")
+		chevron.classList.add("reverse")
+	}
 }
 
 /**
