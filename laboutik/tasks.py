@@ -496,6 +496,7 @@ def generer_cloture_journaliere_auto():
                         total_especes=totaux['especes'],
                         total_carte_bancaire=totaux['carte_bancaire'],
                         total_cashless=totaux['cashless'],
+                        total_cheque=totaux['cheque'],
                         total_general=totaux['total'],
                         nombre_transactions=nb_transactions,
                         rapport_json=rapport,
@@ -755,6 +756,7 @@ def _generer_cloture_agregee(niveau, niveau_source, date_debut, date_fin):
             total_especes=Sum('total_especes'),
             total_carte_bancaire=Sum('total_carte_bancaire'),
             total_cashless=Sum('total_cashless'),
+            total_cheque=Sum('total_cheque'),
             total_general=Sum('total_general'),
             nombre_transactions=Sum('nombre_transactions'),
             premiere_ouverture=Min('datetime_ouverture'),
@@ -781,6 +783,7 @@ def _generer_cloture_agregee(niveau, niveau_source, date_debut, date_fin):
                 total_especes=aggregats['total_especes'] or 0,
                 total_carte_bancaire=aggregats['total_carte_bancaire'] or 0,
                 total_cashless=aggregats['total_cashless'] or 0,
+                total_cheque=aggregats['total_cheque'] or 0,
                 total_general=aggregats['total_general'] or 0,
                 nombre_transactions=aggregats['nombre_transactions'] or 0,
                 rapport_json={

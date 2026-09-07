@@ -104,7 +104,6 @@ from laboutik.serializers import (
     EnvoyerRapportSerializer,
 )
 from laboutik.reports import RapportComptableService
-from laboutik.utils import method as payment_method
 from inventaire.models import Stock, TypeMouvement
 from inventaire.serializers import MouvementRapideSerializer
 from inventaire.services import StockService
@@ -146,10 +145,6 @@ LABELS_MOYENS_PAIEMENT_DB = {
     PaymentMethod.LOCAL_GIFT: _("Cadeau"),
     PaymentMethod.FREE: _("Offert"),
 }
-
-# UUID de l'article "consigne" — déclenche un flux de remboursement spécial
-# UUID of the "deposit" article — triggers a special refund flow
-UUID_ARTICLE_CONSIGNE = "8f08b90d-d3f0-49da-9dbd-8be795f689ef"
 
 # Catégorie par défaut quand un produit n'a pas de categorie_pos
 # Default category when a product has no categorie_pos
@@ -1500,6 +1495,100 @@ def _panier_contient_recharges_payantes(articles_panier):
     return False
 
 
+def _panier_contient_retour_consigne(articles_panier):
+    """
+    Vérifie si le panier contient au moins un retour de consigne (CR).
+    / Checks if the cart contains at least one deposit return (CR).
+
+    LOCALISATION : laboutik/views.py
+
+    Un retour de consigne rend de l'argent au client : son prix est NEGATIF.
+    C'est la seule opération du comptoir qui va dans ce sens, et elle change le
+    comportement de tout l'écran de paiement (moyens proposés, total en valeur
+    absolue, libellés). D'où ce test, fait une fois et partagé.
+    / A deposit return gives money back: its price is NEGATIVE. It changes the whole
+      payment screen, hence this shared test.
+
+    :param articles_panier: liste de dicts retournée par _extraire_articles_du_panier()
+    :return: True si au moins un retour de consigne, False sinon
+    """
+    for article in articles_panier:
+        if article["product"].methode_caisse == Product.RETOUR_CONSIGNE:
+            return True
+    return False
+
+
+def _panier_est_uniquement_retour_consigne(articles_panier):
+    """
+    Vérifie que TOUS les articles du panier sont des retours de consigne.
+    / Checks that EVERY article in the cart is a deposit return.
+
+    LOCALISATION : laboutik/views.py
+
+    Sert à refuser les paniers mélangés. Le total d'un panier qui porte une consigne
+    est affiché en valeur absolue : sur un panier mélangé (une bière à 3 € et un
+    retour à -1 €), le total vaut 2 € et l'écran annoncerait « à rembourser 2 € »
+    alors que le client DOIT 2 €. La valeur absolue n'a de sens que si le panier est
+    entièrement négatif.
+    / Used to refuse mixed carts: abs() on the total only makes sense when the whole
+      cart is negative.
+
+    :param articles_panier: liste de dicts retournée par _extraire_articles_du_panier()
+    :return: True si le panier est non vide et entièrement composé de retours (CR)
+    """
+    if not articles_panier:
+        return False
+    for article in articles_panier:
+        if article["product"].methode_caisse != Product.RETOUR_CONSIGNE:
+            return False
+    return True
+
+
+def _asset_de_retour_consigne(articles_panier):
+    """
+    Détermine la monnaie à créditer pour un panier de retours de consigne.
+    / Determines the currency to credit for a cart of deposit returns.
+
+    LOCALISATION : laboutik/views.py
+
+    Un seul endroit décide, et deux appelants s'en servent : l'écran qui propose (ou
+    non) le bouton CASHLESS, et le paiement qui refuse. Les séparer les ferait diverger,
+    et le caissier verrait un bouton menant à un refus certain.
+    / One place decides, two callers use it: the screen that offers the CASHLESS button
+      and the payment that refuses. Splitting them would let them drift apart.
+
+    Trois raisons de ne pas pouvoir créditer :
+    - le produit ne désigne aucune monnaie (`Product.asset` vide) ;
+    - cette monnaie n'est pas locale : un asset cadeau rendrait au client une monnaie
+      offerte par le lieu, à la place de la somme qu'il avait avancée ;
+    - le panier porte plusieurs monnaies : le crédit vise un seul asset pour le total.
+
+    :param articles_panier: liste de dicts, tous des retours de consigne
+    :return: tuple (asset ou None, message d'erreur traduit ou None)
+    """
+    if not articles_panier:
+        return None, _("Panier vide.")
+
+    asset_a_crediter = articles_panier[0]["product"].asset
+
+    if asset_a_crediter is None:
+        return None, _(
+            "Ce retour de consigne n'a pas de monnaie associée. Prévenez le gestionnaire."
+        )
+
+    if asset_a_crediter.category != Asset.TLF:
+        return None, _("Un retour de consigne se rembourse en monnaie locale.")
+
+    for article in articles_panier:
+        if article["product"].asset_id != asset_a_crediter.uuid:
+            return None, _(
+                "Ces retours de consigne portent sur des monnaies différentes. "
+                "Rendez-les séparément."
+            )
+
+    return asset_a_crediter, None
+
+
 def _panier_contient_uniquement_recharges_gratuites(articles_panier):
     """
     Vérifie si le panier ne contient QUE des recharges gratuites (RC/TM).
@@ -1994,6 +2083,7 @@ class CaisseViewSet(viewsets.ViewSet):
         total_especes = totaux["especes"]
         total_carte_bancaire = totaux["carte_bancaire"]
         total_cashless = totaux["cashless"]
+        total_cheque = totaux["cheque"]
         total_general = totaux["total"]
         nombre_transactions = service.lignes.count()
 
@@ -2046,6 +2136,7 @@ class CaisseViewSet(viewsets.ViewSet):
                 total_especes=total_especes,
                 total_carte_bancaire=total_carte_bancaire,
                 total_cashless=total_cashless,
+                total_cheque=total_cheque,
                 total_general=total_general,
                 nombre_transactions=nombre_transactions,
                 rapport_json=rapport,
@@ -2115,6 +2206,7 @@ class CaisseViewSet(viewsets.ViewSet):
             "total_especes_euros": total_especes / 100,
             "total_cb_euros": total_carte_bancaire / 100,
             "total_nfc_euros": total_cashless / 100,
+            "total_cheque_euros": total_cheque / 100,
             "total_general_euros": total_general / 100,
             "nombre_transactions": nombre_transactions,
             "currency_data": CURRENCY_DATA,
@@ -4092,6 +4184,24 @@ def _determiner_moyens_paiement(point_de_vente, articles_panier=None):
     if point_de_vente.accepte_especes:
         moyens.append("espece")
 
+    # Un retour de consigne rend de l'argent : on ne le rend qu'en especes ou sur la
+    # carte du client. Ni carte bancaire ni cheque, quelle que soit la configuration du
+    # point de vente — on ne rembourse pas un euro sur un terminal de paiement, et on ne
+    # fait pas un cheque pour une consigne. Meme regle qu'en V1
+    # (`LaBoutik/webview/static/webview/js/points_ventes.js` : 'espece|nfc').
+    # / A deposit return gives money back: cash or the customer's card only. Never card
+    #   terminal nor check, whatever the POS accepts. Same rule as V1.
+    if articles_panier and _panier_contient_retour_consigne(articles_panier):
+        # Le cashless n'est propose que si la monnaie a crediter est utilisable. Sinon
+        # le paiement echouerait a coup sur, apres que le client a presente sa carte :
+        # un bouton qui mene a un refus certain n'a pas a s'afficher.
+        # / CASHLESS is offered only if the currency to credit is usable: otherwise the
+        #   payment would fail for certain, after the customer tapped their card.
+        asset_a_crediter, _raison_du_refus = _asset_de_retour_consigne(articles_panier)
+        if asset_a_crediter is None and "nfc" in moyens:
+            moyens.remove("nfc")
+        return moyens
+
     if point_de_vente.accepte_carte_bancaire:
         moyens.append("carte_bancaire")
 
@@ -4118,6 +4228,14 @@ def _valider_stock_panier(articles_panier):
     erreurs = []
     for article in articles_panier:
         produit = article["product"]
+
+        # Un retour de consigne n'est jamais bloqué par le stock : le client en
+        # RAPPORTE un. Lui refuser sa consigne parce qu'il ne reste plus de gobelets
+        # reviendrait à garder son argent.
+        # / A deposit return is never blocked by stock: the customer is bringing one IN.
+        if produit.methode_caisse == Product.RETOUR_CONSIGNE:
+            continue
+
         try:
             stock = produit.stock_inventaire
         except Stock.DoesNotExist:
@@ -4289,6 +4407,13 @@ def _creer_lignes_articles(
         except Stock.DoesNotExist:
             # Pas de gestion de stock pour ce produit — comportement normal
             # / No stock management for this product — normal behavior
+            stock_du_produit = None
+
+        # Un retour de consigne ne sort rien du stock : le gobelet REVIENT. Décrémenter
+        # ici retirerait un gobelet de l'inventaire au moment même où le client en
+        # rapporte un.
+        # / A deposit return takes nothing out of stock: the cup COMES BACK.
+        if produit.methode_caisse == Product.RETOUR_CONSIGNE:
             stock_du_produit = None
 
         if stock_du_produit is not None:
@@ -5696,12 +5821,14 @@ class PaiementViewSet(viewsets.ViewSet):
         # Manager mode: enabled if primary card is in edit mode
         est_mode_gerant = False
 
-        # Une consigne dans le panier déclenche un flux de remboursement
-        # A deposit in the basket triggers a refund flow
-        uuids_articles_selectionnes = payment_method.extraire_uuids_articles(
-            request.POST
-        )
-        consigne_dans_panier = UUID_ARTICLE_CONSIGNE in uuids_articles_selectionnes
+        # Le flux de remboursement ne s'affiche que si le panier est ENTIEREMENT
+        # composé de retours. Sur un panier mélangé, le total passé en valeur absolue
+        # annoncerait « à rembourser » un montant que le client doit : le caissier
+        # lirait l'inverse de la vérité. Le POST d'un tel panier est refusé par
+        # `payer()`, mais cet écran vient avant.
+        # / The refund screen only shows on a cart made ONLY of returns: on a mixed cart
+        #   the absolute total would announce a refund for money the customer owes.
+        consigne_dans_panier = _panier_est_uniquement_retour_consigne(articles_panier)
         if consigne_dans_panier:
             total_en_euros = abs(total_en_euros)
 
@@ -5833,15 +5960,81 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # --- Calculer le total en centimes ---
         # --- Calculate total in centimes ---
-        uuids_articles_selectionnes = payment_method.extraire_uuids_articles(
-            request.POST
-        )
-        consigne_dans_panier = UUID_ARTICLE_CONSIGNE in uuids_articles_selectionnes
+        consigne_dans_panier = _panier_contient_retour_consigne(articles_panier)
         total_centimes = _calculer_total_panier_centimes(articles_panier)
         total_en_euros = total_centimes / 100
         if consigne_dans_panier:
             total_en_euros = abs(total_en_euros)
             total_centimes = abs(total_centimes)
+
+        # --- Les deux gardes du retour de consigne ---
+        # Elles tombent AVANT l'aiguillage, donc avant toute écriture en base.
+        # / The two deposit-return guards, before any routing and any DB write.
+        moyen_paiement_code = donnees_paiement.get("moyen_paiement", "")
+
+        if consigne_dans_panier:
+            # 1. Le panier mélangé est refusé.
+            # Le total ci-dessus vient d'être passé en valeur absolue. Sur un panier
+            # mixte (une bière à 3 € et un retour à -1 €), il vaut 2 € et l'écran
+            # annoncerait « à rembourser 2 € » alors que le client DOIT 2 €. Un retour
+            # de consigne est une opération isolée, comme au comptoir.
+            # / Mixed carts refused: abs() above only makes sense on a wholly negative
+            #   cart, otherwise the screen tells the cashier the opposite of the truth.
+            if not _panier_est_uniquement_retour_consigne(articles_panier):
+                context_erreur = {
+                    "action": "initUrlAddition();",
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Un retour de consigne se règle seul, sans autre article "
+                        "dans le panier."
+                    ),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=400,
+                )
+
+            # 2. On ne rembourse qu'en espèces ou sur la carte du client.
+            # Le filtrage des boutons est un confort d'affichage : `payer()` ne
+            # confronte jamais le moyen reçu à la liste proposée, donc un POST forgé
+            # passerait outre sans cette garde.
+            # / Cash or the customer's card only. Button filtering is cosmetic: payer()
+            #   never checks the posted method against the offered list.
+            if moyen_paiement_code in ("carte_bancaire", "CH"):
+                context_erreur = {
+                    "action": "initUrlAddition();",
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Un retour de consigne se rembourse en espèces ou sur la "
+                        "carte du client."
+                    ),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=400,
+                )
+
+            # 3. Sur la carte du client, rendre de l'argent est une RECHARGE.
+            # La cascade de débit de `_payer_par_nfc` cherche de quoi prélever : sur un
+            # montant négatif elle s'arrête sans rien écrire, tout en affichant un
+            # succès. Le remboursement a donc son propre flux.
+            # / On the customer's card, giving money back is a TOP-UP. The debit cascade
+            #   would stop without writing anything on a negative amount.
+            if moyen_paiement_code == "nfc":
+                return self._rembourser_consigne_par_nfc(
+                    request,
+                    state,
+                    donnees_paiement,
+                    articles_panier,
+                    total_en_euros,
+                    point_de_vente,
+                )
 
         # --- Transaction précédente (complément après fonds insuffisants) ---
         # --- Previous transaction (top-up after insufficient funds) ---
@@ -5851,7 +6044,8 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # --- Aiguillage vers le bon flux de paiement ---
         # --- Route to the correct payment flow ---
-        moyen_paiement_code = donnees_paiement.get("moyen_paiement", "")
+        # `moyen_paiement_code` a été lu plus haut, avec les gardes du retour de consigne.
+        # / Already read above, alongside the deposit-return guards.
         logger.info(
             f"payer: moyen={moyen_paiement_code}, total={total_centimes}cts, articles={len(articles_panier)}"
         )
@@ -6355,6 +6549,153 @@ class PaiementViewSet(viewsets.ViewSet):
             "selector_bt_retour": "#messages",
         }
         return render(request, "laboutik/partial/hx_messages.html", context_erreur)
+
+    # ------------------------------------------------------------------ #
+    #  Flux de paiement : retour de consigne sur la carte du client        #
+    #  Payment flow: deposit return onto the customer's card               #
+    # ------------------------------------------------------------------ #
+
+    def _rembourser_consigne_par_nfc(
+        self,
+        request,
+        state,
+        donnees_paiement,
+        articles_panier,
+        total_en_euros,
+        point_de_vente,
+    ):
+        """
+        Rembourse une consigne sur la carte du client : une RECHARGE, pas un débit.
+        / Refunds a deposit onto the customer's card: a TOP-UP, not a debit.
+
+        LOCALISATION : laboutik/views.py
+
+        POURQUOI UN FLUX A PART / WHY A SEPARATE FLOW :
+        `_payer_par_nfc` cherche de quoi PRELEVER, en descendant une cascade d'assets.
+        Un montant négatif n'a pas de sens pour elle : sa boucle s'arrête au premier
+        tour (`reste_article <= 0`) et n'écrit rien du tout — ni débit, ni ligne, tout
+        en affichant un écran de succès. Rendre de l'argent est l'opération inverse, et
+        elle mérite son propre chemin, court et lisible.
+        La V1 fait le même choix (`LaBoutik/webview/views.py`, `methode_CR` :
+        `refill_wallet(abs(total))`).
+
+        FLUX :
+        1. Retrouver la carte présentée et son portefeuille (hors transaction : la
+           résolution du portefeuille peut interroger Fedow par le réseau)
+        2. Vérifier que la monnaie à créditer est désignée et qu'elle est locale
+        3. Dans UNE transaction : créditer le portefeuille, puis écrire la ligne
+           comptable au montant négatif
+
+        Le crédit et la ligne sont dans la MÊME transaction, et ce n'est pas un détail :
+        `TransactionService.creer_recharge` est une écriture en base, pas un appel
+        réseau. Les séparer laisserait passer le cas « le client est crédité, la ligne
+        comptable échoue » — de la monnaie créée sans trace.
+        / The credit and the line share ONE transaction: creer_recharge is a local DB
+          write, not a network call. Splitting them would allow credited money with no
+          accounting trace.
+
+        :param articles_panier: articles du panier, tous des retours de consigne
+        :param total_en_euros: total déjà passé en valeur absolue par payer()
+        :return: la réponse HTTP du POS
+        """
+        # --- 1. La carte présentée ---
+        # / The tapped card.
+        tag_id_client = request.POST.get("tag_id", "").upper().strip()
+        if not tag_id_client:
+            return self._refuser_le_retour_de_consigne(
+                request, _("Carte du client requise pour rembourser une consigne.")
+            )
+
+        try:
+            carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
+        except CarteCashless.DoesNotExist:
+            return self._refuser_le_retour_de_consigne(
+                request, _("Carte inconnue.")
+            )
+
+        # Hors transaction : cette résolution peut interroger Fedow par le réseau.
+        # / Outside the transaction: this may query Fedow over the network.
+        wallet_client = _obtenir_ou_creer_wallet(carte_client)
+
+        # --- 2. La monnaie à créditer ---
+        # La règle vit dans `_asset_de_retour_consigne`, partagée avec l'écran qui
+        # propose le bouton CASHLESS : les deux doivent dire la même chose, sinon le
+        # caissier voit un bouton menant à un refus certain.
+        # / The rule lives in _asset_de_retour_consigne, shared with the screen that
+        #   offers the CASHLESS button: both must agree.
+        asset_a_crediter, raison_du_refus = _asset_de_retour_consigne(articles_panier)
+        if asset_a_crediter is None:
+            return self._refuser_le_retour_de_consigne(request, raison_du_refus)
+
+        # --- 3. Créditer, puis écrire la ligne — dans la même transaction ---
+        # / Credit, then write the line — in the same transaction.
+        ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
+        uuid_transaction = uuid_module.uuid4()
+        montant_a_rendre_centimes = abs(_calculer_total_panier_centimes(articles_panier))
+
+        with db_transaction.atomic():
+            TransactionService.creer_recharge(
+                sender_wallet=asset_a_crediter.wallet_origin,
+                receiver_wallet=wallet_client,
+                asset=asset_a_crediter,
+                montant_en_centimes=montant_a_rendre_centimes,
+                tenant=connection.tenant,
+                ip=ip_client,
+            )
+            # Le montant de la ligne reste NEGATIF (il vient du prix de l'article).
+            # C'est ce signe qui fait baisser le chiffre d'affaires cashless dans tous
+            # les rapports, sans une ligne de code de plus.
+            # / The line amount stays NEGATIVE: that sign is what lowers cashless
+            #   revenue in every report.
+            _creer_lignes_articles(
+                articles_panier,
+                "nfc",
+                asset_uuid=asset_a_crediter.uuid,
+                carte=carte_client,
+                wallet=wallet_client,
+                uuid_transaction=uuid_transaction,
+                point_de_vente=point_de_vente,
+            )
+
+        context = {
+            "currency_data": CURRENCY_DATA,
+            "payment": donnees_paiement,
+            "monnaie_name": state["place"]["monnaie_name"],
+            "moyen_paiement": PAYMENT_METHOD_TRANSLATIONS.get("nfc", ""),
+            "deposit_is_present": True,
+            "total": total_en_euros,
+            "state": state,
+            "original_payment": None,
+            "uuid_transaction": str(uuid_transaction),
+            "uuid_pv": str(point_de_vente.uuid),
+            "produits_stock_negatif": [],
+            "avertissements_adhesion": [],
+        }
+        return render(
+            request, "laboutik/partial/hx_return_payment_success.html", context
+        )
+
+    def _refuser_le_retour_de_consigne(self, request, message):
+        """
+        Refuse un retour de consigne en 400, sans rien écrire en base.
+        / Refuses a deposit return with 400, writing nothing.
+
+        LOCALISATION : laboutik/views.py
+
+        Tous les refus de ce flux passent par ici : le caissier doit toujours recevoir
+        un message lisible plutôt qu'une erreur technique, et l'appelant doit rendre la
+        main immédiatement.
+        / Every refusal of this flow goes through here.
+        """
+        context_erreur = {
+            "action": "initUrlAddition();",
+            "msg_type": "warning",
+            "msg_content": message,
+            "selector_bt_retour": "#messages",
+        }
+        return render(
+            request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+        )
 
     # ------------------------------------------------------------------ #
     #  Flux de paiement : NFC / cashless                                  #
@@ -9667,6 +10008,31 @@ class CommandeViewSet(viewsets.ViewSet):
                     "quantite": article_cmd.qty,
                     "prix_centimes": prix_centimes,
                 }
+            )
+
+        # Un retour de consigne ne se règle pas depuis une commande de table.
+        # Ce chemin construit son propre panier et appelle directement les flux de
+        # paiement : les gardes de `payer()` ne s'y appliquent pas. Or la cascade de
+        # débit NFC s'arrête sans rien écrire sur un montant négatif — le caissier
+        # verrait un écran de succès sans qu'aucune ligne ni aucun crédit n'existe — et
+        # un règlement en carte ou en chèque produirait une ligne négative estampillée
+        # d'un moyen qu'on ne rembourse pas.
+        # / A deposit return is not settled from a table order: this path builds its own
+        #   cart and bypasses payer()'s guards, where the NFC cascade would show success
+        #   without writing anything.
+        if _panier_contient_retour_consigne(articles_panier):
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _(
+                    "Un retour de consigne se règle au comptoir, pas depuis une commande."
+                ),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                context_erreur,
+                status=400,
             )
 
         if not articles_panier:

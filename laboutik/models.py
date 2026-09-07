@@ -1299,10 +1299,22 @@ class ClotureCaisse(models.Model):
         verbose_name=_("Cashless total (cents)"),
         help_text=_("Total cashless/NFC amount in cents."),
     )
+    # Le cheque a sa colonne au meme titre que les trois autres moyens : sans elle, les
+    # lecteurs qui n'ont que les colonnes (export CSV, PDF de cloture, et surtout
+    # l'archive fiscale LNE) ne peuvent pas le voir, et la somme des moyens ne
+    # recompose plus le total general.
+    # / Checks get their own column like the three other methods: without it, the
+    #   readers that only have the columns (CSV, closure PDF, and above all the LNE tax
+    #   archive) cannot see them, and the methods no longer sum to the grand total.
+    total_cheque = models.IntegerField(
+        default=0,
+        verbose_name=_("Check total (cents)"),
+        help_text=_("Total check amount in cents."),
+    )
     total_general = models.IntegerField(
         default=0,
         verbose_name=_("Grand total (cents)"),
-        help_text=_("Grand total in cents (cash + card + cashless)."),
+        help_text=_("Grand total in cents (cash + card + cashless + check)."),
     )
 
     nombre_transactions = models.IntegerField(
