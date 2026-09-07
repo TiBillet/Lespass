@@ -537,6 +537,19 @@ def formatter_ticket_cloture(cloture):
                 "total": cloture.total_cashless,
             }
         )
+    # Le cheque figure au meme titre que les autres moyens : sans lui, le total imprime
+    # ne correspond pas aux lignes imprimees, sur un justificatif papier.
+    # / Checks appear like the other methods: without them the printed total does not
+    #   match the printed lines, on a paper receipt.
+    if cloture.total_cheque:
+        articles.append(
+            {
+                "name": _("Chèque"),
+                "qty": 1,
+                "price": cloture.total_cheque,
+                "total": cloture.total_cheque,
+            }
+        )
 
     pv_name = cloture.point_de_vente.name if cloture.point_de_vente else ""
 

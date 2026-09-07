@@ -60,7 +60,16 @@ def test_cocher_une_adresse_principale_decoche_les_autres(tenant):
             # / A got unticked, B is the only main one.
             assert adresse_a.is_main is False
             assert adresse_b.is_main is True
-            assert PostalAddress.objects.filter(is_main=True).count() == 1
+            # On compte dans le PERIMETRE DU TEST, pas dans tout le lieu : le tenant
+            # porte deja l'adresse principale posee par le seed de demo. Compter toutes
+            # les adresses principales du lieu ferait echouer ce test au premier flush,
+            # pour une raison etrangere a ce qu'il verifie.
+            # / Count within the TEST's scope, not the whole venue: the tenant already
+            #   holds the seed's main address. Counting them all would break this test at
+            #   the first flush, for a reason unrelated to what it checks.
+            assert PostalAddress.objects.filter(
+                is_main=True, name__startswith="TEST is_main"
+            ).count() == 1
         finally:
             PostalAddress.objects.filter(name__startswith="TEST is_main").delete()
 
@@ -96,6 +105,15 @@ def test_enregistrer_sans_cocher_ne_touche_pas_les_autres(tenant):
             # L'adresse principale reste principale.
             # / The main address stays main.
             assert principale.is_main is True
-            assert PostalAddress.objects.filter(is_main=True).count() == 1
+            # On compte dans le PERIMETRE DU TEST, pas dans tout le lieu : le tenant
+            # porte deja l'adresse principale posee par le seed de demo. Compter toutes
+            # les adresses principales du lieu ferait echouer ce test au premier flush,
+            # pour une raison etrangere a ce qu'il verifie.
+            # / Count within the TEST's scope, not the whole venue: the tenant already
+            #   holds the seed's main address. Counting them all would break this test at
+            #   the first flush, for a reason unrelated to what it checks.
+            assert PostalAddress.objects.filter(
+                is_main=True, name__startswith="TEST is_main"
+            ).count() == 1
         finally:
             PostalAddress.objects.filter(name__startswith="TEST is_main").delete()

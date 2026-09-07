@@ -108,6 +108,10 @@ Inline styles (WeasyPrint does not reliably load external CSS).
         <td>{% translate "Cashless" %}</td>
         <td class="text-right">{{ total_nfc_euros|floatformat:2 }} €</td>
       </tr>
+      <tr>
+        <td>{% translate "Chèque" %}</td>
+        <td class="text-right">{{ total_cheque_euros|floatformat:2 }} €</td>
+      </tr>
       <tr class="total-row">
         <td>{% translate "Total général" %}</td>
         <td class="text-right">{{ total_general_euros|floatformat:2 }} €</td>

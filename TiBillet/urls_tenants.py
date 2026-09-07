@@ -73,7 +73,6 @@ urlpatterns = [
     # TenantAdminPermission. Called with HTMX from the admin panel.
     re_path(r'^newsletter/', include('newsletter.urls')),
 
-    # re_path(r'qr/', include('QrcodeCashless.urls')),
     # Flux RSS des evenements : /rss/latest/feed/. La deconnexion, elle, vit
     # dans BaseBillet/urls.py ('deconnexion/' et son alias 'logout/').
     # / Events RSS feed. Logging out lives in BaseBillet/urls.py.
@@ -116,8 +115,6 @@ urlpatterns = [
     # / Connected beer taps (controlvanne) — Pi API + kiosk + calibration
     path('controlvanne/', include('controlvanne.urls')),
 
-    # pour carte GEN1 Bisik
-    # re_path(r'(?P<numero_carte>^[qsdf974]{5}$)', include('QrcodeCashless.urls')),
 
     path('', include('BaseBillet.urls')),
 

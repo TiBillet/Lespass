@@ -231,10 +231,6 @@ def _extraire_clotures(debut, fin):
 
     resultats = []
     for cloture in qs.iterator():
-        # Le modele n'a pas de champ total_cheque — on met 0
-        # / Model has no total_cheque field — default to 0
-        total_cheque = '0'
-
         pdv = ''
         if cloture.point_de_vente:
             pdv = cloture.point_de_vente.name
@@ -252,7 +248,7 @@ def _extraire_clotures(debut, fin):
             'total_especes': str(cloture.total_especes),
             'total_carte_bancaire': str(cloture.total_carte_bancaire),
             'total_cashless': str(cloture.total_cashless),
-            'total_cheque': total_cheque,
+            'total_cheque': str(cloture.total_cheque),
             'total_general': str(cloture.total_general),
             'nombre_transactions': str(cloture.nombre_transactions),
             'total_perpetuel': str(cloture.total_perpetuel),

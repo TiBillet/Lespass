@@ -56,6 +56,7 @@ def generer_pdf_cloture(cloture: ClotureCaisse) -> bytes:
         "total_especes_euros": cloture.total_especes / 100,
         "total_cb_euros": cloture.total_carte_bancaire / 100,
         "total_nfc_euros": cloture.total_cashless / 100,
+        "total_cheque_euros": cloture.total_cheque / 100,
         "total_general_euros": cloture.total_general / 100,
         "nombre_transactions": cloture.nombre_transactions,
         # Sections du rapport JSON converties en euros

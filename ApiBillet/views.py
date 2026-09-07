@@ -987,8 +987,55 @@ class Get_user_pub_pem(APIView):
 @permission_classes([permissions.AllowAny])
 class Onboard_laboutik(APIView):
     def post(self, request):
-        # Si laboutik est déja configuré sur ce tenant, on envoi bouler
         config = Configuration.get_solo()
+
+        # VERROU V1/V2 : une caisse LaBoutik V1 (conteneur separe) ne peut PAS
+        # s'appairer sur un lieu ou la caisse V2 tourne deja. Les deux tiennent la
+        # monnaie dans un moteur different — la V2 dans fedow_core (base locale), la
+        # V1 dans le Fedow distant — et rien ne reconcilie les deux soldes.
+        # Ce verrou n'est JAMAIS desarme en DEBUG, contrairement au garde juste en
+        # dessous : c'est en developpement qu'on monte le banc V1/V2, donc c'est la
+        # qu'il doit proteger. Pour brancher une caisse V1 sur un lieu, eteindre
+        # d'abord son module "Caisse & restauration".
+        # / V1/V2 LOCK: a V1 POS cannot pair with a venue already running the V2 cash
+        #   register — each keeps the money in a different engine, with nothing
+        #   reconciling the two balances. Never disabled in DEBUG: the V1/V2 bench
+        #   lives in development, so that is where the lock must hold.
+        # Trois modules, pas seulement la caisse : le handshake V1 pose une cle RSA cashless
+        # sur la place Fedow, ce qui retire a Lespass le droit d'appeler Fedow avec sa seule
+        # cle de place (Fedow exige alors une signature de place que Lespass ne sait pas
+        # produire). Le kiosk et la monnaie locale tombent donc en 403 tout autant que la
+        # caisse. Les refuser tous les trois, c'est appliquer la regle a ce qu'elle protege
+        # vraiment.
+        # / Three modules, not just the POS: the V1 handshake sets a cashless RSA key on the
+        #   Fedow place, revoking Lespass' key-only access. Kiosk and local currency break
+        #   just as much as the cash register.
+        modules_v2_actifs = [
+            nom for nom, actif in (
+                ("module_caisse", config.module_caisse),
+                ("module_kiosk", config.module_kiosk),
+                ("module_monnaie_locale", config.module_monnaie_locale),
+            ) if actif
+        ]
+        if modules_v2_actifs:
+            logger.warning(
+                f"Onboard LaBoutik V1 refuse sur le tenant "
+                f"{connection.tenant.schema_name} : modules V2 actifs "
+                f"({', '.join(modules_v2_actifs)})."
+            )
+            return Response(
+                {
+                    "detail": _("Des fonctions LaBoutik V2 sont actives sur ce lieu. "
+                                "Désactivez les modules « Caisse & restauration », "
+                                "« Borne kiosk » et « Monnaie locale & cashless » "
+                                "avant de connecter une caisse LaBoutik V1."),
+                    "code": "modules_v2_actifs",
+                    "modules": modules_v2_actifs,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Si laboutik est déja configuré sur ce tenant, on envoi bouler
         if config.server_cashless or config.key_cashless:
             if not settings.DEBUG:
                 return Response(status=status.HTTP_409_CONFLICT)

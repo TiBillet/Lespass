@@ -9,8 +9,9 @@ from BaseBillet.models import LigneArticle, Product, Membership, Price, Configur
 from BaseBillet.tasks import send_to_ghost, send_membership_invoice_to_email, send_sale_to_laboutik, webhook_membership, \
     send_to_brevo, refill_from_lespass_to_user_wallet_from_price_solded
 from BaseBillet.templatetags.tibitags import dround
+# NOTE : plus aucun appel Fedow dans ce module depuis le retrait du push d'adhesion.
+# / NOTE: no Fedow call left in this module since the membership push was removed.
 from booking.models import Booking
-from fedow_connect.fedow_api import FedowAPI
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -237,15 +238,18 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
             send_to_ghost.delay(membership.pk)
             send_to_brevo.delay(membership.pk)
 
-        logger.info(f"    TRIGGER_A ADHESION PAID -> envoi à Fedow")
-        # L'adhésion possède désormais une transaction fedow associé
-        # Attention, réalise membership.save()
-        # Un échec Fedow ne doit jamais bloquer la validation de l'adhésion
-        try:
-            fedowAPI = FedowAPI()
-            serialized_transaction = fedowAPI.membership.create(membership=membership)
-        except Exception as exc:
-            logger.error(f"TRIGGER_A Fedow membership.create ERREUR (non bloquant) : {exc}")
+        # L'adhésion n'est PLUS poussée vers Fedow.
+        # Ce push existait pour que LaBoutik V1 lise l'adhésion sous forme de jeton SUB dans
+        # le wallet Fedow du porteur. LaBoutik interroge désormais Lespass directement
+        # (`/api/v2/memberships/by-wallet/`), qui est la source de vérité : c'est lui qui
+        # porte la deadline et donc la VALIDITÉ, que Fedow n'a jamais connue.
+        # L'asset d'adhésion, lui, reste déclaré à Fedow
+        # (`BaseBillet.signals.send_membership_and_badge_product_to_fedow`) : c'est par lui
+        # qu'un comptoir V1 peut encore VENDRE une adhésion.
+        # / The membership is NO LONGER pushed to Fedow. That push existed so LaBoutik V1
+        #   could read it as a SUB token; LaBoutik now queries Lespass directly, which is
+        #   the source of truth (it holds the deadline, hence validity). The membership
+        #   ASSET stays declared to Fedow: a V1 counter still needs it to SELL memberships.
 
         # Optional Fedow reward to user wallet (price setting)
         refill_from_lespass_to_user_wallet_from_price_solded.delay(ligne_article.pk)

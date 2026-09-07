@@ -1,12 +1,19 @@
-export async function proxyDiscoveryClaim(req, res, body, headers, options) {
+import { readConfigFile } from './commun.js'
+
+export async function proxyDiscoveryClaim(req, res, body, headers) {
   try {
-    const response = await fetch(options.urlProxy, {
+    const urlProxy = readConfigFile().server_pin_code + '/api/discovery/claim/'
+    console.log('urlProxy =', urlProxy)
+
+    const response = await fetch(urlProxy, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body
     })
+
+
     const data = await response.json()
     headers["Content-Type"] = "application/json"
     res.writeHead(response.status, headers)

@@ -154,3 +154,32 @@ class UserADejaCarte(Exception):
             "Vous avez deja une carte TiBillet liee a votre compte. "
             "Declarez-la perdue avant d'en associer une nouvelle."
         ))
+
+
+class WalletUserAbsent(Exception):
+    """
+    Le user n'a pas de wallet, et le moteur refuse d'en fabriquer un.
+    / The user has no wallet, and the engine refuses to make one up.
+
+    LOCALISATION : fedow_core/exceptions.py
+    Levee par : WalletService.fusionner_wallet_ephemere() quand user.wallet is None
+
+    POURQUOI CETTE GARDE : un Wallet fabrique ici aurait un uuid ALEATOIRE, donc inconnu de
+    Fedow. Or Fedow authentifie chaque requete signee via l'en-tete `Wallet: <uuid>` : cet
+    usager ne pourrait plus rien signer, son FED deviendrait invisible au point de vente, et
+    la prochaine declaration echouerait sur « Wallet and member mismatch », a vie.
+    Le wallet d'un USER se cree TOUJOURS chez Fedow d'abord
+    (`fedow_connect.services.declarer_wallet_user_a_fedow`). Les wallets locaux a uuid
+    aleatoire sont reserves aux ephemeres de carte et au wallet du lieu.
+    Ce moteur reste hermetique au reseau : c'est a l'appelant de resoudre le wallet.
+    / A wallet made up here would carry a RANDOM uuid, unknown to Fedow, which authenticates
+      every signed request through the `Wallet: <uuid>` header. A USER's wallet is ALWAYS
+      created on Fedow first. This engine stays network-free: resolving the wallet is the
+      caller's job.
+    """
+
+    def __init__(self, message=None):
+        super().__init__(message or _(
+            "Ce membre n'a pas encore de portefeuille declare. "
+            "Il doit etre declare aupres du reseau avant toute fusion."
+        ))

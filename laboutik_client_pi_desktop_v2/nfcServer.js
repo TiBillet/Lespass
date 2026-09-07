@@ -246,7 +246,7 @@ try {
   })
 
   // routes
-  app.addRoute('/api/discovery/claim/', proxyDiscoveryClaim, { urlProxy: env.server_pin_code + '/api/discovery/claim/' }) // proxy
+  app.addRoute('/api/discovery/claim/', proxyDiscoveryClaim) // proxy
   app.addRoute('/read_config_file', readConfFile)
   app.addRoute('/write_config_file', writeConfFile)
   app.addRoute('/', renderIndexHtml)

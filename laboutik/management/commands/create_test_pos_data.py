@@ -32,6 +32,38 @@ from laboutik.models import CartePrimaire, PointDeVente, Printer, Terminal
 from QrcodeCashless.models import CarteCashless, Detail
 
 
+def _qrcode_uuid_depuis_tag(tag_id):
+    """
+    Fabrique l'uuid de qrcode d'une carte de test a partir de son tag NFC.
+    / Builds a test card's qrcode uuid from its NFC tag.
+
+    LOCALISATION : laboutik/management/commands/create_test_pos_data.py
+
+    `CarteCashless.uuid` EST le qrcode_uuid : c'est lui que porte l'URL `/qr/<uuid>/`, et
+    c'est par lui que `CarteService.lier_a_user` retrouve la carte quand un usager scanne
+    son QR code. Un uuid aleatoire ici rendrait la carte locale introuvable au moment de la
+    liaison, alors meme que Fedow, lui, l'aurait liee : la carte resterait « anonyme » pour
+    le point de vente, sans le moindre message.
+    / CarteCashless.uuid IS the qrcode uuid: the one carried by /qr/<uuid>/ and the one
+    CarteService.lier_a_user resolves the card by. A random uuid here would make the local
+    card unfindable at link time, while Fedow would have linked it.
+
+    LA FORMULE DOIT RESTER IDENTIQUE a celle de
+    `Administration/management/commands/demo_data_v2.py::_seed_cartes_nfc_fedow`, qui
+    declare ces memes cartes a Fedow. Les deux seeds doivent produire le meme uuid, sinon
+    les deux bases ne parlent plus de la meme carte.
+    / THE FORMULA MUST STAY IDENTICAL to the one in demo_data_v2._seed_cartes_nfc_fedow,
+    which declares those same cards to Fedow.
+
+    Le bloc "4xxx" garde un uuid version 4 valide.
+    / The "4xxx" block keeps a valid version-4 uuid.
+
+    :param tag_id: str, tag NFC 8 caracteres hexa
+    :return: str, uuid deterministe
+    """
+    return f"{tag_id.lower()}-0000-4000-8000-000000000000"
+
+
 class Command(BaseCommand):
     help = "Cree des donnees de test POS (categories, produits, prix, points de vente) pour le tenant courant."
 
@@ -654,6 +686,69 @@ class Command(BaseCommand):
                 f"  Produit Vider Carte enrichi (PV Cashless) : {produit_vider_carte.name}"
             )
 
+            # --- La consigne : deux produits, un pour chaque sens ---
+            # On encaisse la consigne comme une vente ordinaire, et on la rend avec un
+            # produit dont le prix est NEGATIF et la methode `RETOUR_CONSIGNE`.
+            # / Two products, one per direction: the deposit is collected as an ordinary
+            #   sale, and returned by a NEGATIVE-priced RETOUR_CONSIGNE product.
+            #
+            # L'asset se pose sur le PRODUIT, jamais sur le prix : `_extraire_articles_du_panier`
+            # ne retient que les Price sans asset, un prix porteur d'asset serait ignore
+            # en silence. Il designe la monnaie a crediter quand le client rend sa
+            # consigne sur sa carte.
+            # / The asset belongs to the PRODUCT: a Price carrying an asset is silently
+            #   skipped by the cart. It names the currency credited on a cashless return.
+            asset_local = FedowAsset.objects.filter(
+                tenant_origin=tenant_client, category=FedowAsset.TLF, active=True
+            ).first()
+
+            produit_consigne, consigne_creee = Product.objects.get_or_create(
+                name="Consigne",
+                defaults={
+                    "methode_caisse": Product.VENTE,
+                    "categorie_pos": categorie_bar,
+                    "couleur_fond_pos": "#0EA5E9",
+                    "couleur_texte_pos": "#FFFFFF",
+                    "icon_pos": "fa-recycle",
+                },
+            )
+            if consigne_creee:
+                Price.objects.create(
+                    product=produit_consigne,
+                    name="Gobelet",
+                    prix=Decimal("1.00"),
+                    order=1,
+                )
+                self.stdout.write("  Produit cree : Consigne (1,00 EUR)")
+            else:
+                self.stdout.write("  Produit existant : Consigne")
+
+            produit_retour_consigne, retour_cree = Product.objects.get_or_create(
+                name="Retour Consigne",
+                defaults={
+                    "methode_caisse": Product.RETOUR_CONSIGNE,
+                    "categorie_pos": categorie_bar,
+                    "asset": asset_local,
+                    "couleur_fond_pos": "#0284C7",
+                    "couleur_texte_pos": "#FFFFFF",
+                    "icon_pos": "fa-rotate-left",
+                },
+            )
+            if retour_cree:
+                # Prix NEGATIF : le lieu rend cet argent. C'est ce signe qui fait
+                # baisser le chiffre d'affaires et le tiroir-caisse dans les rapports.
+                # / NEGATIVE price: the venue gives this money back, and that sign is
+                #   what lowers revenue and the cash drawer in the reports.
+                Price.objects.create(
+                    product=produit_retour_consigne,
+                    name="Gobelet",
+                    prix=Decimal("-1.00"),
+                    order=1,
+                )
+                self.stdout.write("  Produit cree : Retour Consigne (-1,00 EUR)")
+            else:
+                self.stdout.write("  Produit existant : Retour Consigne")
+
             # --- Produits avec tarifs non-fiduciaires (TIM, FID) ---
             # / Products with non-fiduciary prices (TIM, FID)
             asset_tim = FedowAsset.objects.filter(
@@ -1117,7 +1212,7 @@ class Command(BaseCommand):
             carte_cm, created_cm = CarteCashless.objects.get_or_create(
                 tag_id=tag_id_cm,
                 defaults={
-                    "uuid": uuid_module.uuid4(),
+                    "uuid": _qrcode_uuid_depuis_tag(tag_id_cm),
                     "number": tag_id_cm,
                     "detail": detail_test,
                 },
@@ -1155,7 +1250,7 @@ class Command(BaseCommand):
                 carte_client, created_client = CarteCashless.objects.get_or_create(
                     tag_id=tag_id_client,
                     defaults={
-                        "uuid": uuid_module.uuid4(),
+                        "uuid": _qrcode_uuid_depuis_tag(tag_id_client),
                         "number": tag_id_client,
                         "detail": detail_test,
                     },
@@ -1236,7 +1331,7 @@ class Command(BaseCommand):
             carte_client3, created_client3 = CarteCashless.objects.get_or_create(
                 tag_id=tag_id_client3,
                 defaults={
-                    "uuid": uuid_module.uuid4(),
+                    "uuid": _qrcode_uuid_depuis_tag(tag_id_client3),
                     "number": tag_id_client3,
                     "detail": detail_test,
                 },
@@ -1612,7 +1707,17 @@ class Command(BaseCommand):
                     if ligne.payment_method
                     in [PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT]
                 )
-                total_general = total_especes + total_cb + total_cashless
+                # Le cheque est compte comme les autres moyens : aucune ligne de
+                # demo n'en porte aujourd'hui, mais le total doit rester juste si
+                # quelqu'un en ajoute une.
+                # / Checks counted like the rest: no demo line uses one today, but the
+                #   total must stay correct if someone adds one.
+                total_cheque = sum(
+                    ligne.amount
+                    for ligne in lignes_demo
+                    if ligne.payment_method == PaymentMethod.CHEQUE
+                )
+                total_general = total_especes + total_cb + total_cashless + total_cheque
 
                 from AuthBillet.models import TibilletUser
 
@@ -1627,6 +1732,7 @@ class Command(BaseCommand):
                     total_especes=total_especes,
                     total_carte_bancaire=total_cb,
                     total_cashless=total_cashless,
+                    total_cheque=total_cheque,
                     total_general=total_general,
                     nombre_transactions=len(lignes_demo),
                 )

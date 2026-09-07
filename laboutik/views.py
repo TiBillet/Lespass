@@ -44,9 +44,19 @@ from django.db.models import (
 )
 from django.db.models.functions import Coalesce
 
-from fedow_core.exceptions import SoldeInsuffisant
+from fedow_core.exceptions import (
+    CarteDejaLiee,
+    CarteIntrouvable,
+    SoldeInsuffisant,
+    UserADejaCarte,
+)
 from fedow_core.models import Asset, Transaction
-from fedow_core.services import AssetService, TransactionService, WalletService
+from fedow_core.services import (
+    AssetService,
+    CarteService,
+    TransactionService,
+    WalletService,
+)
 
 # Interop reseau federe (FED) : lecture du solde FED sur le serveur Fedow distant.
 # / Federated network interop (FED): reads the FED balance from the remote Fedow server.
@@ -94,7 +104,6 @@ from laboutik.serializers import (
     EnvoyerRapportSerializer,
 )
 from laboutik.reports import RapportComptableService
-from laboutik.utils import method as payment_method
 from inventaire.models import Stock, TypeMouvement
 from inventaire.serializers import MouvementRapideSerializer
 from inventaire.services import StockService
@@ -136,10 +145,6 @@ LABELS_MOYENS_PAIEMENT_DB = {
     PaymentMethod.LOCAL_GIFT: _("Cadeau"),
     PaymentMethod.FREE: _("Offert"),
 }
-
-# UUID de l'article "consigne" — déclenche un flux de remboursement spécial
-# UUID of the "deposit" article — triggers a special refund flow
-UUID_ARTICLE_CONSIGNE = "8f08b90d-d3f0-49da-9dbd-8be795f689ef"
 
 # Catégorie par défaut quand un produit n'a pas de categorie_pos
 # Default category when a product has no categorie_pos
@@ -1490,6 +1495,100 @@ def _panier_contient_recharges_payantes(articles_panier):
     return False
 
 
+def _panier_contient_retour_consigne(articles_panier):
+    """
+    Vérifie si le panier contient au moins un retour de consigne (CR).
+    / Checks if the cart contains at least one deposit return (CR).
+
+    LOCALISATION : laboutik/views.py
+
+    Un retour de consigne rend de l'argent au client : son prix est NEGATIF.
+    C'est la seule opération du comptoir qui va dans ce sens, et elle change le
+    comportement de tout l'écran de paiement (moyens proposés, total en valeur
+    absolue, libellés). D'où ce test, fait une fois et partagé.
+    / A deposit return gives money back: its price is NEGATIVE. It changes the whole
+      payment screen, hence this shared test.
+
+    :param articles_panier: liste de dicts retournée par _extraire_articles_du_panier()
+    :return: True si au moins un retour de consigne, False sinon
+    """
+    for article in articles_panier:
+        if article["product"].methode_caisse == Product.RETOUR_CONSIGNE:
+            return True
+    return False
+
+
+def _panier_est_uniquement_retour_consigne(articles_panier):
+    """
+    Vérifie que TOUS les articles du panier sont des retours de consigne.
+    / Checks that EVERY article in the cart is a deposit return.
+
+    LOCALISATION : laboutik/views.py
+
+    Sert à refuser les paniers mélangés. Le total d'un panier qui porte une consigne
+    est affiché en valeur absolue : sur un panier mélangé (une bière à 3 € et un
+    retour à -1 €), le total vaut 2 € et l'écran annoncerait « à rembourser 2 € »
+    alors que le client DOIT 2 €. La valeur absolue n'a de sens que si le panier est
+    entièrement négatif.
+    / Used to refuse mixed carts: abs() on the total only makes sense when the whole
+      cart is negative.
+
+    :param articles_panier: liste de dicts retournée par _extraire_articles_du_panier()
+    :return: True si le panier est non vide et entièrement composé de retours (CR)
+    """
+    if not articles_panier:
+        return False
+    for article in articles_panier:
+        if article["product"].methode_caisse != Product.RETOUR_CONSIGNE:
+            return False
+    return True
+
+
+def _asset_de_retour_consigne(articles_panier):
+    """
+    Détermine la monnaie à créditer pour un panier de retours de consigne.
+    / Determines the currency to credit for a cart of deposit returns.
+
+    LOCALISATION : laboutik/views.py
+
+    Un seul endroit décide, et deux appelants s'en servent : l'écran qui propose (ou
+    non) le bouton CASHLESS, et le paiement qui refuse. Les séparer les ferait diverger,
+    et le caissier verrait un bouton menant à un refus certain.
+    / One place decides, two callers use it: the screen that offers the CASHLESS button
+      and the payment that refuses. Splitting them would let them drift apart.
+
+    Trois raisons de ne pas pouvoir créditer :
+    - le produit ne désigne aucune monnaie (`Product.asset` vide) ;
+    - cette monnaie n'est pas locale : un asset cadeau rendrait au client une monnaie
+      offerte par le lieu, à la place de la somme qu'il avait avancée ;
+    - le panier porte plusieurs monnaies : le crédit vise un seul asset pour le total.
+
+    :param articles_panier: liste de dicts, tous des retours de consigne
+    :return: tuple (asset ou None, message d'erreur traduit ou None)
+    """
+    if not articles_panier:
+        return None, _("Panier vide.")
+
+    asset_a_crediter = articles_panier[0]["product"].asset
+
+    if asset_a_crediter is None:
+        return None, _(
+            "Ce retour de consigne n'a pas de monnaie associée. Prévenez le gestionnaire."
+        )
+
+    if asset_a_crediter.category != Asset.TLF:
+        return None, _("Un retour de consigne se rembourse en monnaie locale.")
+
+    for article in articles_panier:
+        if article["product"].asset_id != asset_a_crediter.uuid:
+            return None, _(
+                "Ces retours de consigne portent sur des monnaies différentes. "
+                "Rendez-les séparément."
+            )
+
+    return asset_a_crediter, None
+
+
 def _panier_contient_uniquement_recharges_gratuites(articles_panier):
     """
     Vérifie si le panier ne contient QUE des recharges gratuites (RC/TM).
@@ -1984,6 +2083,7 @@ class CaisseViewSet(viewsets.ViewSet):
         total_especes = totaux["especes"]
         total_carte_bancaire = totaux["carte_bancaire"]
         total_cashless = totaux["cashless"]
+        total_cheque = totaux["cheque"]
         total_general = totaux["total"]
         nombre_transactions = service.lignes.count()
 
@@ -2036,6 +2136,7 @@ class CaisseViewSet(viewsets.ViewSet):
                 total_especes=total_especes,
                 total_carte_bancaire=total_carte_bancaire,
                 total_cashless=total_cashless,
+                total_cheque=total_cheque,
                 total_general=total_general,
                 nombre_transactions=nombre_transactions,
                 rapport_json=rapport,
@@ -2105,6 +2206,7 @@ class CaisseViewSet(viewsets.ViewSet):
             "total_especes_euros": total_especes / 100,
             "total_cb_euros": total_carte_bancaire / 100,
             "total_nfc_euros": total_cashless / 100,
+            "total_cheque_euros": total_cheque / 100,
             "total_general_euros": total_general / 100,
             "nombre_transactions": nombre_transactions,
             "currency_data": CURRENCY_DATA,
@@ -4082,6 +4184,24 @@ def _determiner_moyens_paiement(point_de_vente, articles_panier=None):
     if point_de_vente.accepte_especes:
         moyens.append("espece")
 
+    # Un retour de consigne rend de l'argent : on ne le rend qu'en especes ou sur la
+    # carte du client. Ni carte bancaire ni cheque, quelle que soit la configuration du
+    # point de vente — on ne rembourse pas un euro sur un terminal de paiement, et on ne
+    # fait pas un cheque pour une consigne. Meme regle qu'en V1
+    # (`LaBoutik/webview/static/webview/js/points_ventes.js` : 'espece|nfc').
+    # / A deposit return gives money back: cash or the customer's card only. Never card
+    #   terminal nor check, whatever the POS accepts. Same rule as V1.
+    if articles_panier and _panier_contient_retour_consigne(articles_panier):
+        # Le cashless n'est propose que si la monnaie a crediter est utilisable. Sinon
+        # le paiement echouerait a coup sur, apres que le client a presente sa carte :
+        # un bouton qui mene a un refus certain n'a pas a s'afficher.
+        # / CASHLESS is offered only if the currency to credit is usable: otherwise the
+        #   payment would fail for certain, after the customer tapped their card.
+        asset_a_crediter, _raison_du_refus = _asset_de_retour_consigne(articles_panier)
+        if asset_a_crediter is None and "nfc" in moyens:
+            moyens.remove("nfc")
+        return moyens
+
     if point_de_vente.accepte_carte_bancaire:
         moyens.append("carte_bancaire")
 
@@ -4108,6 +4228,14 @@ def _valider_stock_panier(articles_panier):
     erreurs = []
     for article in articles_panier:
         produit = article["product"]
+
+        # Un retour de consigne n'est jamais bloqué par le stock : le client en
+        # RAPPORTE un. Lui refuser sa consigne parce qu'il ne reste plus de gobelets
+        # reviendrait à garder son argent.
+        # / A deposit return is never blocked by stock: the customer is bringing one IN.
+        if produit.methode_caisse == Product.RETOUR_CONSIGNE:
+            continue
+
         try:
             stock = produit.stock_inventaire
         except Stock.DoesNotExist:
@@ -4279,6 +4407,13 @@ def _creer_lignes_articles(
         except Stock.DoesNotExist:
             # Pas de gestion de stock pour ce produit — comportement normal
             # / No stock management for this product — normal behavior
+            stock_du_produit = None
+
+        # Un retour de consigne ne sort rien du stock : le gobelet REVIENT. Décrémenter
+        # ici retirerait un gobelet de l'inventaire au moment même où le client en
+        # rapporte un.
+        # / A deposit return takes nothing out of stock: the cup COMES BACK.
+        if produit.methode_caisse == Product.RETOUR_CONSIGNE:
             stock_du_produit = None
 
         if stock_du_produit is not None:
@@ -4779,7 +4914,261 @@ def _creer_ou_renouveler_adhesion(
     return nouvelle_adhesion
 
 
-def _creer_adhesions_depuis_panier(request, articles_panier, lignes_articles=None):
+def _fedow_a_deja_lie_la_carte(carte, user):
+    """
+    Demande a Fedow si cette carte appartient DEJA au wallet de ce membre.
+    / Asks Fedow whether this card ALREADY belongs to this member's wallet.
+
+    LOCALISATION : laboutik/views.py
+
+    POURQUOI CE CONTROLE EXISTE : Fedow refuse `linkwallet_card_number` pour toute carte
+    deja liee — y compris liee a CE membre (son serializer ne accepte que les cartes libres,
+    `Card.objects.filter(user__isnull=True)`). Consequence : si Fedow traite la liaison mais
+    que la reponse se perd (timeout), ou qu'une seconde caisse arrive apres, le refus
+    suivant est un 400 DEFINITIF. Sans ce controle, on conclurait « Fedow refuse » et on ne
+    fusionnerait jamais en local : Fedow dirait carte→membre, Lespass dirait carte anonyme,
+    pour toujours. C'est exactement le bug qu'on repare.
+    / Fedow rejects linkwallet_card_number for ANY already-linked card, including one linked
+      to THIS member. Without this check, a lost response or a race would leave Fedow and
+      Lespass permanently disagreeing.
+
+    :param carte: CarteCashless scannee
+    :param user: TibilletUser identifie (doit porter son wallet Fedow)
+    :return: bool — True si Fedow rattache deja cette carte au wallet du membre.
+    """
+    if user.wallet is None:
+        return False
+    try:
+        carte_chez_fedow = FedowAPI().NFCcard.card_tag_id_retrieve(carte.tag_id)
+    except Exception as erreur_lecture:
+        logger.warning(
+            f"Verification post-echec impossible pour la carte {carte.tag_id} : "
+            f"{erreur_lecture}"
+        )
+        return False
+
+    if not carte_chez_fedow:
+        return False
+    return f"{carte_chez_fedow.get('wallet_uuid')}" == f"{user.wallet.uuid}"
+
+
+def _identifier_adherent(request, articles_panier):
+    """
+    Identifie le membre d'une adhesion. AUCUN appel reseau, AUCUNE ecriture.
+    / Identifies the membership's member. NO network call, NO write.
+
+    LOCALISATION : laboutik/views.py
+
+    Separee de la declaration au reseau (`_declarer_adherent_au_reseau`) parce que les deux
+    ne se placent pas au meme endroit : ce controle-ci doit tomber AVANT le moindre debit,
+    pour ne pas prendre l'argent d'un client qu'on refusera d'inscrire ensuite. La
+    declaration, elle, doit tomber le PLUS TARD possible, juste avant la transaction : une
+    fois la carte liee sur le reseau, plus rien de faillible ne doit se produire.
+    / Split from the network declaration because they belong at different places: this check
+      must run BEFORE any debit, so we never take money from a customer we will then refuse
+      to enroll. The declaration must run as LATE as possible.
+
+    :param request: HttpRequest (pour lire le POST)
+    :param articles_panier: liste de dicts de _extraire_articles_du_panier()
+    :return: tuple (user, carte) — ou None si le panier ne contient pas d'adhesion
+    :raises ValueError: identification impossible ; le message est destine au caissier.
+    """
+    articles_adhesion = [
+        a for a in articles_panier if a["product"].categorie_article == Product.ADHESION
+    ]
+    if not articles_adhesion:
+        return None
+
+    user_adhesion = None
+    carte_client = None
+
+    # --- Identification 1 : la carte scannee ---
+    # Si la carte porte deja un membre, c'est LUI l'adherent — l'email saisi ne peut pas
+    # detourner une carte deja rattachee.
+    # / A card already carrying a member wins: a typed email cannot hijack it.
+    tag_id_client = request.POST.get("tag_id", "").upper().strip()
+    if tag_id_client:
+        try:
+            carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
+            user_adhesion = carte_client.user
+        except CarteCashless.DoesNotExist:
+            logger.warning(f"Carte NFC {tag_id_client} introuvable pour adhesion")
+
+    # --- Identification 2 : l'email saisi au comptoir ---
+    # / The email typed at the counter.
+    email_client = request.POST.get("email_adhesion", "").strip().lower()
+    if email_client and user_adhesion is None:
+        user_adhesion = get_or_create_user(email_client, send_mail=False)
+
+    if user_adhesion is None:
+        raise ValueError(_("Identification du membre obligatoire pour les adhesions"))
+
+    return user_adhesion, carte_client
+
+
+def _declarer_adherent_au_reseau(user_adhesion, carte_client, ip_du_client):
+    """
+    Declare le membre au reseau et lui rattache sa carte, AVANT le bloc atomic.
+    / Declares the member to the network and attaches their card, BEFORE the atomic.
+
+    LOCALISATION : laboutik/views.py
+
+    APPELEE HORS de toute transaction, et ce n'est pas negociable. Elle fait des appels
+    reseau : dans un bloc atomic, ils tiendraient un verrou DB pendant toute la latence, et
+    un rollback ferait disparaitre le user local pendant que Fedow garde deja sa cle RSA —
+    au retry, Fedow refuserait la nouvelle cle et cet email deviendrait indeclarable a vie.
+    / Called OUTSIDE any transaction: it makes network calls. Inside an atomic they would
+      hold a DB lock for the whole latency, and a rollback would drop a user whose RSA key
+      Fedow already keeps — making that email undeclarable forever.
+
+    A APPELER LE PLUS TARD POSSIBLE, juste avant la transaction : une fois la carte liee sur
+    le reseau, toute sortie par exception laisserait les deux cotes en desaccord.
+    / CALL AS LATE AS POSSIBLE: once the card is linked on the network, any exception would
+      leave both sides disagreeing.
+
+    :param user_adhesion: TibilletUser deja identifie par `_identifier_adherent`
+    :param carte_client: CarteCashless scannee, ou None
+    :param ip_du_client: str (adresse IP, pour l'audit)
+    :return: dict {user, carte, fusion_locale_autorisee, avertissements}
+    :raises ValueError: la vente doit etre refusee ; le message est destine au caissier.
+    """
+    from fedow_connect.services import declarer_wallet_user_a_fedow
+
+    # --- Fedow est une dependance dure ---
+    # Tous les lieux sont sur le reseau. Sans lui, on ne sait pas ou vit l'argent de la
+    # carte : on refuse la vente plutot que de fabriquer un wallet local que Fedow ne
+    # connaitra jamais.
+    # / Fedow is a hard dependency. Without it we refuse the sale rather than making up a
+    #   local wallet Fedow will never know.
+    if not FedowConfig.get_solo().can_fedow():
+        raise ValueError(_(
+            "Ce lieu n'est pas connecte au reseau TiBillet : l'adhesion ne peut pas etre "
+            "enregistree. Prevenez un administrateur."
+        ))
+
+    avertissements = []
+
+    # La carte n'est a lier que si elle est encore anonyme.
+    # / The card only needs linking if it is still anonymous.
+    carte_a_lier = None
+    if carte_client is not None and carte_client.user is None:
+        carte_a_lier = carte_client
+
+    # --- Anti-vol, en local, AVANT le reseau ---
+    # Fedow ne refuse une seconde carte que si le wallet cible porte deja des jetons : un
+    # membre au wallet vide passerait chez lui et serait refuse ici, et les deux cotes
+    # divergeraient. On tranche donc en local, avant d'avoir rien envoye.
+    # / Fedow only blocks a second card when the target wallet already holds tokens, so we
+    #   decide locally before sending anything.
+    if carte_a_lier is not None:
+        user_a_deja_une_autre_carte = user_adhesion.cartecashless_set.exclude(
+            pk=carte_a_lier.pk
+        ).exists()
+        if user_a_deja_une_autre_carte:
+            avertissements.append(_(
+                "Ce membre possede deja une carte : la carte scannee n'a pas ete rattachee. "
+                "L'adhesion est bien enregistree."
+            ))
+            carte_a_lier = None
+
+    # --- Declaration du membre au reseau ---
+    # Seul appel qui transmet sa cle publique. Repare au passage un wallet local divergent.
+    # / The only call carrying the member's public key; also repairs a diverging local wallet.
+    try:
+        declarer_wallet_user_a_fedow(
+            user_adhesion, tenant=connection.tenant, ip=ip_du_client
+        )
+    except Exception as erreur_declaration:
+        logger.error(
+            f"Adhesion POS : declaration de {user_adhesion.email} a Fedow impossible : "
+            f"{erreur_declaration}"
+        )
+        raise ValueError(_(
+            "Le reseau TiBillet ne repond pas : l'adhesion n'a pas ete enregistree. "
+            "Reessayez dans un instant."
+        ))
+
+    # --- Liaison de la carte chez Fedow ---
+    # C'est Fedow qui absorbe le wallet ephemere de la carte dans celui du membre.
+    # RIEN DE FAILLIBLE APRES CE POINT hors du bloc atomic : une fois la carte liee chez
+    # Fedow, toute sortie par exception laisserait les deux cotes en desaccord.
+    # / Fedow merges the card's ephemeral wallet into the member's. NOTHING FALLIBLE AFTER
+    #   THIS POINT outside the atomic block.
+    if carte_a_lier is not None:
+        try:
+            FedowAPI().NFCcard.linkwallet_card_number(
+                user=user_adhesion, card_number=carte_a_lier.number
+            )
+        except Exception as erreur_liaison:
+            if not _fedow_a_deja_lie_la_carte(carte_a_lier, user_adhesion):
+                # REFUS METIER, pas une panne : le reseau connait deja cette carte sous un
+                # autre proprietaire. On ne fusionne rien en local — sinon Lespass dirait
+                # une chose et le reseau une autre — mais l'adhesion reste due, et elle n'a
+                # pas besoin de portefeuille. Le solde de la carte ne bouge pas d'un centime
+                # et reste recuperable par le parcours /qr/.
+                # / BUSINESS REFUSAL, not an outage: the network already knows this card
+                #   under another owner. Merge nothing locally, but the membership is still
+                #   owed and needs no wallet. The card's balance stays untouched.
+                logger.warning(
+                    f"Adhesion POS : liaison de la carte {carte_a_lier.tag_id} refusee "
+                    f"par le reseau : {erreur_liaison}"
+                )
+                avertissements.append(_(
+                    "Le reseau a refuse de rattacher cette carte a ce membre. L'adhesion "
+                    "est bien enregistree, et le solde de la carte est intact."
+                ))
+                carte_a_lier = None
+            else:
+                # Le reseau avait DEJA lie la carte a ce membre (reponse perdue, ou seconde
+                # caisse) : le refus est un faux negatif, la fusion locale doit avoir lieu.
+                # / The network had ALREADY linked it to this member: false negative.
+                logger.info(
+                    f"Adhesion POS : carte {carte_a_lier.tag_id} deja liee a "
+                    f"{user_adhesion.email} sur le reseau, on poursuit la fusion locale."
+                )
+
+    return {
+        "user": user_adhesion,
+        "carte": carte_client,
+        "fusion_locale_autorisee": carte_a_lier is not None,
+        "avertissements": avertissements,
+    }
+
+
+def _resoudre_adherent_hors_atomic(request, articles_panier):
+    """
+    Identifie le membre PUIS le declare au reseau, en une fois, AVANT le bloc atomic.
+    / Identifies the member THEN declares them to the network, in one go, BEFORE the atomic.
+
+    LOCALISATION : laboutik/views.py
+
+    Utilisee par les paiements especes et CB, ou rien d'irreversible ne se produit entre les
+    deux etapes : on peut donc les enchainer. Le paiement NFC, lui, les appelle SEPAREMENT —
+    il debite le reseau (segment legacy) entre les deux, et ce debit ne se rembourse pas.
+    / Used by the cash and card flows, where nothing irreversible happens between the two
+      steps. The NFC flow calls them SEPARATELY: it debits the network in between, and that
+      debit cannot be refunded.
+
+    :param request: HttpRequest (pour lire le POST)
+    :param articles_panier: liste de dicts de _extraire_articles_du_panier()
+    :return: dict {user, carte, fusion_locale_autorisee, avertissements} ou None
+    :raises ValueError: la vente doit etre refusee ; le message est destine au caissier.
+    """
+    adherent_identifie = _identifier_adherent(request, articles_panier)
+    if adherent_identifie is None:
+        return None
+
+    user_adhesion, carte_client = adherent_identifie
+    return _declarer_adherent_au_reseau(
+        user_adhesion,
+        carte_client,
+        request.META.get("REMOTE_ADDR", "0.0.0.0"),
+    )
+
+
+def _creer_adhesions_depuis_panier(
+    request, articles_panier, lignes_articles=None, adherent=None
+):
     """
     Cree les Memberships pour les articles adhesion du panier (CB/especes).
     Rattache chaque Membership a sa LigneArticle correspondante (FK membership).
@@ -4788,13 +5177,21 @@ def _creer_adhesions_depuis_panier(request, articles_panier, lignes_articles=Non
 
     LOCALISATION : laboutik/views.py
 
-    Identification du client par :
-    1. Scan NFC (tag_id dans le POST) → carte.user
-    2. Formulaire email/nom/prenom (email_adhesion dans le POST) → get_or_create_user
+    Appelee DANS le bloc atomic des fonctions de paiement. Elle ne fait donc AUCUN appel
+    reseau : le membre a deja ete identifie et declare par
+    `_resoudre_adherent_hors_atomic`, qui tourne avant la transaction.
+    / Called INSIDE the atomic block, so it makes NO network call: the member was already
+      identified and declared by _resoudre_adherent_hors_atomic, which runs before it.
 
-    :param request: HttpRequest (pour lire le POST)
+    L'adhesion est creee MEME si la carte n'a pas pu etre rattachee : une Membership n'a
+    pas besoin de portefeuille. Le caissier est prevenu par un avertissement.
+    / The membership is created EVEN IF the card could not be linked: a Membership needs no
+      wallet. The cashier is warned instead.
+
+    :param request: HttpRequest (pour lire prenom/nom)
     :param articles_panier: liste de dicts retournee par _extraire_articles_du_panier()
     :param lignes_articles: liste de LigneArticle creees par _creer_lignes_articles() (pour rattacher membership)
+    :param adherent: dict rendu par _resoudre_adherent_hors_atomic()
     :return: liste de Membership creees
     """
     from decimal import Decimal
@@ -4805,39 +5202,45 @@ def _creer_adhesions_depuis_panier(request, articles_panier, lignes_articles=Non
     if not articles_adhesion:
         return []
 
-    user_adhesion = None
-    carte_client = None
-
-    # Option 1 : identification par scan NFC
-    # / Option 1: identification by NFC scan
-    tag_id_client = request.POST.get("tag_id", "").upper().strip()
-    if tag_id_client:
-        try:
-            carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
-            user_adhesion = carte_client.user
-        except CarteCashless.DoesNotExist:
-            logger.warning(f"Carte NFC {tag_id_client} introuvable pour adhesion")
-
-    # Option 2 : identification par formulaire email/nom/prenom
-    # / Option 2: identification by email/name form
-    email_client = request.POST.get("email_adhesion", "").strip().lower()
-    if email_client and user_adhesion is None:
-        user_adhesion = get_or_create_user(email_client, send_mail=False)
-
-    if user_adhesion is None:
-        # REFUS : pas d'identification → pas d'adhesion (validation serveur obligatoire)
-        # REJECT: no identification → no membership (mandatory server-side validation)
+    if adherent is None:
+        # Ne peut arriver que si un appelant a oublie de resoudre le membre avant l'atomic.
+        # / Only happens if a caller forgot to resolve the member before the atomic.
         raise ValueError(_("Identification du membre obligatoire pour les adhesions"))
 
-    # Fusion wallet ephemere → wallet user (si carte NFC scannee)
-    # / Merge ephemeral wallet → user wallet (if NFC card was scanned)
-    if tag_id_client and carte_client:
-        WalletService.fusionner_wallet_ephemere(
-            carte=carte_client,
-            user=user_adhesion,
-            tenant=connection.tenant,
-            ip=request.META.get("REMOTE_ADDR", "0.0.0.0"),
-        )
+    user_adhesion = adherent["user"]
+    carte_client = adherent["carte"]
+
+    # --- Fusion locale : la carte devient celle du membre ---
+    # On passe par `CarteService.lier_a_user`, le MEME service que le parcours web `/qr/` :
+    # un seul chemin de liaison dans tout le projet. Il verrouille la ligne carte
+    # (`select_for_update`), est idempotent, rattrape les adhesions anonymes de la carte,
+    # et delegue la fusion des Tokens a `WalletService`.
+    # / Same service as the web /qr/ path: one single linking path in the whole project.
+    if adherent["fusion_locale_autorisee"] and carte_client is not None:
+        try:
+            CarteService.lier_a_user(
+                qrcode_uuid=carte_client.uuid,
+                user=user_adhesion,
+                ip=request.META.get("REMOTE_ADDR", "0.0.0.0"),
+            )
+        except (
+            CarteIntrouvable,
+            CarteDejaLiee,
+            UserADejaCarte,
+            SoldeInsuffisant,
+        ) as erreur_liaison:
+            # Course entre deux caisses, ou solde qui bouge sous nos pieds. On ne fusionne
+            # pas, mais l'adhesion reste due : elle est creee, et le caissier est prevenu.
+            # / Race between two tills, or a balance moving under our feet. No merge, but
+            #   the membership is still owed: create it and warn the cashier.
+            logger.warning(
+                f"Adhesion POS : fusion locale de la carte {carte_client.tag_id} "
+                f"impossible : {erreur_liaison}"
+            )
+            adherent["avertissements"].append(_(
+                "La carte n'a pas pu etre rattachee au membre. L'adhesion est bien "
+                "enregistree, le solde de la carte est intact."
+            ))
 
     prenom = request.POST.get("prenom_adhesion", "").strip()
     nom = request.POST.get("nom_adhesion", "").strip()
@@ -5418,12 +5821,14 @@ class PaiementViewSet(viewsets.ViewSet):
         # Manager mode: enabled if primary card is in edit mode
         est_mode_gerant = False
 
-        # Une consigne dans le panier déclenche un flux de remboursement
-        # A deposit in the basket triggers a refund flow
-        uuids_articles_selectionnes = payment_method.extraire_uuids_articles(
-            request.POST
-        )
-        consigne_dans_panier = UUID_ARTICLE_CONSIGNE in uuids_articles_selectionnes
+        # Le flux de remboursement ne s'affiche que si le panier est ENTIEREMENT
+        # composé de retours. Sur un panier mélangé, le total passé en valeur absolue
+        # annoncerait « à rembourser » un montant que le client doit : le caissier
+        # lirait l'inverse de la vérité. Le POST d'un tel panier est refusé par
+        # `payer()`, mais cet écran vient avant.
+        # / The refund screen only shows on a cart made ONLY of returns: on a mixed cart
+        #   the absolute total would announce a refund for money the customer owes.
+        consigne_dans_panier = _panier_est_uniquement_retour_consigne(articles_panier)
         if consigne_dans_panier:
             total_en_euros = abs(total_en_euros)
 
@@ -5555,15 +5960,81 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # --- Calculer le total en centimes ---
         # --- Calculate total in centimes ---
-        uuids_articles_selectionnes = payment_method.extraire_uuids_articles(
-            request.POST
-        )
-        consigne_dans_panier = UUID_ARTICLE_CONSIGNE in uuids_articles_selectionnes
+        consigne_dans_panier = _panier_contient_retour_consigne(articles_panier)
         total_centimes = _calculer_total_panier_centimes(articles_panier)
         total_en_euros = total_centimes / 100
         if consigne_dans_panier:
             total_en_euros = abs(total_en_euros)
             total_centimes = abs(total_centimes)
+
+        # --- Les deux gardes du retour de consigne ---
+        # Elles tombent AVANT l'aiguillage, donc avant toute écriture en base.
+        # / The two deposit-return guards, before any routing and any DB write.
+        moyen_paiement_code = donnees_paiement.get("moyen_paiement", "")
+
+        if consigne_dans_panier:
+            # 1. Le panier mélangé est refusé.
+            # Le total ci-dessus vient d'être passé en valeur absolue. Sur un panier
+            # mixte (une bière à 3 € et un retour à -1 €), il vaut 2 € et l'écran
+            # annoncerait « à rembourser 2 € » alors que le client DOIT 2 €. Un retour
+            # de consigne est une opération isolée, comme au comptoir.
+            # / Mixed carts refused: abs() above only makes sense on a wholly negative
+            #   cart, otherwise the screen tells the cashier the opposite of the truth.
+            if not _panier_est_uniquement_retour_consigne(articles_panier):
+                context_erreur = {
+                    "action": "initUrlAddition();",
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Un retour de consigne se règle seul, sans autre article "
+                        "dans le panier."
+                    ),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=400,
+                )
+
+            # 2. On ne rembourse qu'en espèces ou sur la carte du client.
+            # Le filtrage des boutons est un confort d'affichage : `payer()` ne
+            # confronte jamais le moyen reçu à la liste proposée, donc un POST forgé
+            # passerait outre sans cette garde.
+            # / Cash or the customer's card only. Button filtering is cosmetic: payer()
+            #   never checks the posted method against the offered list.
+            if moyen_paiement_code in ("carte_bancaire", "CH"):
+                context_erreur = {
+                    "action": "initUrlAddition();",
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Un retour de consigne se rembourse en espèces ou sur la "
+                        "carte du client."
+                    ),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=400,
+                )
+
+            # 3. Sur la carte du client, rendre de l'argent est une RECHARGE.
+            # La cascade de débit de `_payer_par_nfc` cherche de quoi prélever : sur un
+            # montant négatif elle s'arrête sans rien écrire, tout en affichant un
+            # succès. Le remboursement a donc son propre flux.
+            # / On the customer's card, giving money back is a TOP-UP. The debit cascade
+            #   would stop without writing anything on a negative amount.
+            if moyen_paiement_code == "nfc":
+                return self._rembourser_consigne_par_nfc(
+                    request,
+                    state,
+                    donnees_paiement,
+                    articles_panier,
+                    total_en_euros,
+                    point_de_vente,
+                )
 
         # --- Transaction précédente (complément après fonds insuffisants) ---
         # --- Previous transaction (top-up after insufficient funds) ---
@@ -5573,7 +6044,8 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # --- Aiguillage vers le bon flux de paiement ---
         # --- Route to the correct payment flow ---
-        moyen_paiement_code = donnees_paiement.get("moyen_paiement", "")
+        # `moyen_paiement_code` a été lu plus haut, avec les gardes du retour de consigne.
+        # / Already read above, alongside the deposit-return guards.
         logger.info(
             f"payer: moyen={moyen_paiement_code}, total={total_centimes}cts, articles={len(articles_panier)}"
         )
@@ -5721,6 +6193,27 @@ class PaiementViewSet(viewsets.ViewSet):
             carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
             wallet_client = _obtenir_ou_creer_wallet(carte_client)
 
+        # Resolution du membre d'une adhesion AVANT le bloc atomic, pour la meme raison de
+        # latence — et une de plus, qui pese lourd : cette resolution DECLARE le membre a
+        # Fedow. Faite dans l'atomic, un rollback ferait disparaitre le user local pendant
+        # que Fedow garde deja sa cle RSA ; au retry Fedow refuserait la nouvelle cle, et
+        # cet email deviendrait indeclarable a vie.
+        # / Resolve the membership's member BEFORE the atomic, for the same latency reason
+        #   plus a heavier one: it DECLARES the member to Fedow. A rollback would drop the
+        #   local user while Fedow keeps their RSA key, making that email undeclarable.
+        try:
+            adherent = _resoudre_adherent_hors_atomic(request, articles_normaux)
+        except ValueError as erreur_adherent:
+            context_erreur = {
+                "action": "initUrlAddition();",
+                "msg_type": "warning",
+                "msg_content": f"{erreur_adherent}",
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
         produits_stock_negatif = []
         with db_transaction.atomic():
             # Articles normaux (ventes, adhesions) → LigneArticle
@@ -5734,24 +6227,14 @@ class PaiementViewSet(viewsets.ViewSet):
                     point_de_vente=point_de_vente,
                 )
 
-            # Adhesions → creer les Memberships et les rattacher aux LigneArticle
-            # Memberships → create Membership records and link them to LigneArticle
-            _creer_adhesions_depuis_panier(
-                request, articles_normaux, lignes_articles=lignes_normales
-            )
-
-            # Billets → creer Reservation + Tickets et rattacher aux LigneArticle
-            # Tickets → create Reservation + Tickets and link them to LigneArticle
-            reservations_billets = _creer_billets_depuis_panier(
-                request,
-                articles_normaux,
-                lignes_articles=lignes_normales,
-            )
-
-            # Recharges → TransactionService + LigneArticle avec carte et asset
-            # (wallet_client deja resolu hors atomic ci-dessus)
-            # Top-ups → TransactionService + LigneArticle with card and asset
-            # (wallet_client already resolved outside the atomic above)
+            # Recharges AVANT les adhesions, et l'ordre compte.
+            # `wallet_client` a ete resolu plus haut : pour une carte anonyme, c'est son
+            # wallet ephemere. Or la fusion d'adhesion DETACHE ce wallet de la carte. Recharger
+            # apres creditrait donc un wallet que plus rien ne reference — argent inaccessible.
+            # En rechargeant d'abord, la fusion ramasse le solde tout juste credite.
+            # / Top-ups BEFORE memberships, and the order matters: the membership merge
+            #   DETACHES the ephemeral wallet, so topping up after would credit a wallet
+            #   nothing references any more. Top up first, the merge then collects it.
             if articles_recharge:
                 _executer_recharges(
                     articles_recharge,
@@ -5761,6 +6244,23 @@ class PaiementViewSet(viewsets.ViewSet):
                     ip_client=ip_client,
                     point_de_vente=point_de_vente,
                 )
+
+            # Adhesions → creer les Memberships et les rattacher aux LigneArticle
+            # Memberships → create Membership records and link them to LigneArticle
+            _creer_adhesions_depuis_panier(
+                request,
+                articles_normaux,
+                lignes_articles=lignes_normales,
+                adherent=adherent,
+            )
+
+            # Billets → creer Reservation + Tickets et rattacher aux LigneArticle
+            # Tickets → create Reservation + Tickets and link them to LigneArticle
+            reservations_billets = _creer_billets_depuis_panier(
+                request,
+                articles_normaux,
+                lignes_articles=lignes_normales,
+            )
 
         # Apres le bloc atomic : envoyer les billets par email via Celery.
         # Ne pas appeler dans le bloc atomic (si rollback, le mail partirait quand meme).
@@ -5801,6 +6301,11 @@ class PaiementViewSet(viewsets.ViewSet):
             "uuid_transaction": str(uuid_transaction),
             "uuid_pv": str(point_de_vente.uuid),
             "produits_stock_negatif": produits_stock_negatif,
+            # Avertissements du rattachement de carte (adhesion) : le caissier
+            # doit savoir qu'une carte n'a pas ete rattachee, meme si la vente
+            # a abouti. / Card-linking warnings: the cashier must know a card
+            # was not attached, even though the sale went through.
+            "avertissements_adhesion": adherent["avertissements"] if adherent else [],
         }
         return render(
             request, "laboutik/partial/hx_return_payment_success.html", context
@@ -5908,6 +6413,29 @@ class PaiementViewSet(viewsets.ViewSet):
                 carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
                 wallet_client = _obtenir_ou_creer_wallet(carte_client)
 
+            # Resolution du membre d'une adhesion AVANT le bloc atomic, pour la meme raison
+            # de latence — et une de plus, qui pese lourd : cette resolution DECLARE le
+            # membre a Fedow. Faite dans l'atomic, un rollback ferait disparaitre le user
+            # local pendant que Fedow garde deja sa cle RSA ; au retry Fedow refuserait la
+            # nouvelle cle, et cet email deviendrait indeclarable a vie.
+            # / Resolve the membership's member BEFORE the atomic: it DECLARES the member to
+            #   Fedow, and a rollback would drop the local user while Fedow keeps their key.
+            try:
+                adherent = _resoudre_adherent_hors_atomic(request, articles_normaux)
+            except ValueError as erreur_adherent:
+                context_erreur = {
+                    "action": "initUrlAddition();",
+                    "msg_type": "warning",
+                    "msg_content": f"{erreur_adherent}",
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=400,
+                )
+
             produits_stock_negatif = []
             # Créer les lignes articles en base (atomique)
             # Create article lines in DB (atomic)
@@ -5923,24 +6451,14 @@ class PaiementViewSet(viewsets.ViewSet):
                         point_de_vente=point_de_vente,
                     )
 
-                # Adhesions → creer les Memberships et les rattacher aux LigneArticle
-                # Memberships → create Membership records and link them to LigneArticle
-                _creer_adhesions_depuis_panier(
-                    request, articles_normaux, lignes_articles=lignes_normales
-                )
-
-                # Billets → creer Reservation + Tickets et rattacher aux LigneArticle
-                # Tickets → create Reservation + Tickets and link them to LigneArticle
-                reservations_billets = _creer_billets_depuis_panier(
-                    request,
-                    articles_normaux,
-                    lignes_articles=lignes_normales,
-                )
-
-                # Recharges → TransactionService + LigneArticle avec carte et asset
-                # (wallet_client deja resolu hors atomic ci-dessus)
-                # Top-ups → TransactionService + LigneArticle with card and asset
-                # (wallet_client already resolved outside the atomic above)
+                # Recharges AVANT les adhesions, et l'ordre compte.
+                # `wallet_client` a ete resolu plus haut : pour une carte anonyme, c'est son
+                # wallet ephemere. Or la fusion d'adhesion DETACHE ce wallet de la carte.
+                # Recharger apres creditrait donc un wallet que plus rien ne reference —
+                # argent inaccessible. En rechargeant d'abord, la fusion ramasse le solde
+                # tout juste credite.
+                # / Top-ups BEFORE memberships: the membership merge DETACHES the ephemeral
+                #   wallet, so topping up after would credit an unreferenced wallet.
                 if articles_recharge:
                     _executer_recharges(
                         articles_recharge,
@@ -5950,6 +6468,23 @@ class PaiementViewSet(viewsets.ViewSet):
                         ip_client=ip_client,
                         point_de_vente=point_de_vente,
                     )
+
+                # Adhesions → creer les Memberships et les rattacher aux LigneArticle
+                # Memberships → create Membership records and link them to LigneArticle
+                _creer_adhesions_depuis_panier(
+                    request,
+                    articles_normaux,
+                    lignes_articles=lignes_normales,
+                    adherent=adherent,
+                )
+
+                # Billets → creer Reservation + Tickets et rattacher aux LigneArticle
+                # Tickets → create Reservation + Tickets and link them to LigneArticle
+                reservations_billets = _creer_billets_depuis_panier(
+                    request,
+                    articles_normaux,
+                    lignes_articles=lignes_normales,
+                )
 
             # Apres le bloc atomic : envoyer les billets par email via Celery
             # / After the atomic block: send tickets by email via Celery
@@ -5996,6 +6531,11 @@ class PaiementViewSet(viewsets.ViewSet):
                 "uuid_transaction": str(uuid_transaction),
                 "uuid_pv": str(point_de_vente.uuid),
                 "produits_stock_negatif": produits_stock_negatif,
+                # Avertissements du rattachement de carte (adhesion) : le caissier
+                # doit savoir qu'une carte n'a pas ete rattachee, meme si la vente
+                # a abouti. / Card-linking warnings: the cashier must know a card
+                # was not attached, even though the sale went through.
+                "avertissements_adhesion": adherent["avertissements"] if adherent else [],
             }
             return render(
                 request, "laboutik/partial/hx_return_payment_success.html", context
@@ -6009,6 +6549,153 @@ class PaiementViewSet(viewsets.ViewSet):
             "selector_bt_retour": "#messages",
         }
         return render(request, "laboutik/partial/hx_messages.html", context_erreur)
+
+    # ------------------------------------------------------------------ #
+    #  Flux de paiement : retour de consigne sur la carte du client        #
+    #  Payment flow: deposit return onto the customer's card               #
+    # ------------------------------------------------------------------ #
+
+    def _rembourser_consigne_par_nfc(
+        self,
+        request,
+        state,
+        donnees_paiement,
+        articles_panier,
+        total_en_euros,
+        point_de_vente,
+    ):
+        """
+        Rembourse une consigne sur la carte du client : une RECHARGE, pas un débit.
+        / Refunds a deposit onto the customer's card: a TOP-UP, not a debit.
+
+        LOCALISATION : laboutik/views.py
+
+        POURQUOI UN FLUX A PART / WHY A SEPARATE FLOW :
+        `_payer_par_nfc` cherche de quoi PRELEVER, en descendant une cascade d'assets.
+        Un montant négatif n'a pas de sens pour elle : sa boucle s'arrête au premier
+        tour (`reste_article <= 0`) et n'écrit rien du tout — ni débit, ni ligne, tout
+        en affichant un écran de succès. Rendre de l'argent est l'opération inverse, et
+        elle mérite son propre chemin, court et lisible.
+        La V1 fait le même choix (`LaBoutik/webview/views.py`, `methode_CR` :
+        `refill_wallet(abs(total))`).
+
+        FLUX :
+        1. Retrouver la carte présentée et son portefeuille (hors transaction : la
+           résolution du portefeuille peut interroger Fedow par le réseau)
+        2. Vérifier que la monnaie à créditer est désignée et qu'elle est locale
+        3. Dans UNE transaction : créditer le portefeuille, puis écrire la ligne
+           comptable au montant négatif
+
+        Le crédit et la ligne sont dans la MÊME transaction, et ce n'est pas un détail :
+        `TransactionService.creer_recharge` est une écriture en base, pas un appel
+        réseau. Les séparer laisserait passer le cas « le client est crédité, la ligne
+        comptable échoue » — de la monnaie créée sans trace.
+        / The credit and the line share ONE transaction: creer_recharge is a local DB
+          write, not a network call. Splitting them would allow credited money with no
+          accounting trace.
+
+        :param articles_panier: articles du panier, tous des retours de consigne
+        :param total_en_euros: total déjà passé en valeur absolue par payer()
+        :return: la réponse HTTP du POS
+        """
+        # --- 1. La carte présentée ---
+        # / The tapped card.
+        tag_id_client = request.POST.get("tag_id", "").upper().strip()
+        if not tag_id_client:
+            return self._refuser_le_retour_de_consigne(
+                request, _("Carte du client requise pour rembourser une consigne.")
+            )
+
+        try:
+            carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
+        except CarteCashless.DoesNotExist:
+            return self._refuser_le_retour_de_consigne(
+                request, _("Carte inconnue.")
+            )
+
+        # Hors transaction : cette résolution peut interroger Fedow par le réseau.
+        # / Outside the transaction: this may query Fedow over the network.
+        wallet_client = _obtenir_ou_creer_wallet(carte_client)
+
+        # --- 2. La monnaie à créditer ---
+        # La règle vit dans `_asset_de_retour_consigne`, partagée avec l'écran qui
+        # propose le bouton CASHLESS : les deux doivent dire la même chose, sinon le
+        # caissier voit un bouton menant à un refus certain.
+        # / The rule lives in _asset_de_retour_consigne, shared with the screen that
+        #   offers the CASHLESS button: both must agree.
+        asset_a_crediter, raison_du_refus = _asset_de_retour_consigne(articles_panier)
+        if asset_a_crediter is None:
+            return self._refuser_le_retour_de_consigne(request, raison_du_refus)
+
+        # --- 3. Créditer, puis écrire la ligne — dans la même transaction ---
+        # / Credit, then write the line — in the same transaction.
+        ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
+        uuid_transaction = uuid_module.uuid4()
+        montant_a_rendre_centimes = abs(_calculer_total_panier_centimes(articles_panier))
+
+        with db_transaction.atomic():
+            TransactionService.creer_recharge(
+                sender_wallet=asset_a_crediter.wallet_origin,
+                receiver_wallet=wallet_client,
+                asset=asset_a_crediter,
+                montant_en_centimes=montant_a_rendre_centimes,
+                tenant=connection.tenant,
+                ip=ip_client,
+            )
+            # Le montant de la ligne reste NEGATIF (il vient du prix de l'article).
+            # C'est ce signe qui fait baisser le chiffre d'affaires cashless dans tous
+            # les rapports, sans une ligne de code de plus.
+            # / The line amount stays NEGATIVE: that sign is what lowers cashless
+            #   revenue in every report.
+            _creer_lignes_articles(
+                articles_panier,
+                "nfc",
+                asset_uuid=asset_a_crediter.uuid,
+                carte=carte_client,
+                wallet=wallet_client,
+                uuid_transaction=uuid_transaction,
+                point_de_vente=point_de_vente,
+            )
+
+        context = {
+            "currency_data": CURRENCY_DATA,
+            "payment": donnees_paiement,
+            "monnaie_name": state["place"]["monnaie_name"],
+            "moyen_paiement": PAYMENT_METHOD_TRANSLATIONS.get("nfc", ""),
+            "deposit_is_present": True,
+            "total": total_en_euros,
+            "state": state,
+            "original_payment": None,
+            "uuid_transaction": str(uuid_transaction),
+            "uuid_pv": str(point_de_vente.uuid),
+            "produits_stock_negatif": [],
+            "avertissements_adhesion": [],
+        }
+        return render(
+            request, "laboutik/partial/hx_return_payment_success.html", context
+        )
+
+    def _refuser_le_retour_de_consigne(self, request, message):
+        """
+        Refuse un retour de consigne en 400, sans rien écrire en base.
+        / Refuses a deposit return with 400, writing nothing.
+
+        LOCALISATION : laboutik/views.py
+
+        Tous les refus de ce flux passent par ici : le caissier doit toujours recevoir
+        un message lisible plutôt qu'une erreur technique, et l'appelant doit rendre la
+        main immédiatement.
+        / Every refusal of this flow goes through here.
+        """
+        context_erreur = {
+            "action": "initUrlAddition();",
+            "msg_type": "warning",
+            "msg_content": message,
+            "selector_bt_retour": "#messages",
+        }
+        return render(
+            request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+        )
 
     # ------------------------------------------------------------------ #
     #  Flux de paiement : NFC / cashless                                  #
@@ -6085,6 +6772,31 @@ class PaiementViewSet(viewsets.ViewSet):
         # Déterminer le wallet client (get or create éphémère si besoin)
         # / Determine client wallet (get or create ephemeral if needed)
         wallet_client = _obtenir_ou_creer_wallet(carte_client)
+
+        # GARDE ADHESION, LE PLUS TOT POSSIBLE : si le panier contient une adhesion, on
+        # verifie DES MAINTENANT qu'on sait qui est le membre — avant le moindre debit.
+        # Sans cette garde, une carte anonyme payait l'adhesion, le wallet etait debite, la
+        # LigneArticle creee… et aucune Membership n'etait enregistree : le client payait
+        # une adhesion qui n'existait pas, en silence.
+        # Cette etape ne fait AUCUN appel reseau et n'ecrit rien d'irreversible : on peut
+        # donc encore refuser proprement. La declaration au reseau, elle, attendra la
+        # derniere seconde avant la transaction (voir plus bas).
+        # / MEMBERSHIP GUARD, AS EARLY AS POSSIBLE: before any debit, check we know who the
+        #   member is. Without it, an anonymous card paid for a membership, the wallet was
+        #   debited, the sale line created… and no Membership recorded — the customer paid
+        #   for a membership that never existed, silently.
+        try:
+            adherent_identifie = _identifier_adherent(request, articles_panier)
+        except ValueError as erreur_adherent:
+            context_erreur = {
+                "action": "initUrlAddition();",
+                "msg_type": "warning",
+                "msg_content": f"{erreur_adherent}",
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
 
         # ================================================================ #
         #  PHASE 1 : Préparer les soldes cascade fiduciaire disponibles     #
@@ -6402,6 +7114,38 @@ class PaiementViewSet(viewsets.ViewSet):
             # / The complement parts are now covered by legacy: drop them from lignes_nfc.
             lignes_nfc = [t for t in lignes_nfc if t[1] is not None]
 
+        # DECLARATION DU MEMBRE AU RESEAU — le plus tard possible, et hors transaction.
+        # Hors transaction : un appel reseau sous verrou DB le tient pendant toute la
+        # latence, et un rollback ferait disparaitre le membre local pendant que le reseau
+        # garde deja sa cle RSA — cet email deviendrait indeclarable a vie.
+        # Le plus tard possible : le debit du segment legacy, juste au-dessus, part sur le
+        # reseau et NE SE REMBOURSE PAS. Declarer avant lui exposerait a un etat ou la carte
+        # est liee sur le reseau alors que la vente s'arrete sur un solde insuffisant.
+        # / DECLARE THE MEMBER TO THE NETWORK — as late as possible, outside the transaction.
+        #   Outside: a network call under a DB lock holds it for the whole latency, and a
+        #   rollback would drop the local member while the network keeps their RSA key.
+        #   As late as possible: the legacy debit just above CANNOT be refunded.
+        adherent = None
+        if adherent_identifie is not None:
+            user_adhesion, carte_adhesion = adherent_identifie
+            try:
+                adherent = _declarer_adherent_au_reseau(
+                    user_adhesion, carte_adhesion, ip_client
+                )
+            except ValueError as erreur_adherent:
+                context_erreur = {
+                    "action": "initUrlAddition();",
+                    "msg_type": "warning",
+                    "msg_content": f"{erreur_adherent}",
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=400,
+                )
+
         try:
             with db_transaction.atomic():
                 # ----- 7a) Crédits recharges gratuites AVANT les débits -----
@@ -6488,9 +7232,44 @@ class PaiementViewSet(viewsets.ViewSet):
                         if product_uuid_str not in lignes_par_product:
                             lignes_par_product[product_uuid_str] = ligne_creee
 
+                    # Le membre vient de la resolution faite hors transaction, PAS de
+                    # `carte_client.user` : une carte anonyme y valait None, et
+                    # `_creer_ou_renouveler_adhesion(None)` rendait None — le wallet etait
+                    # debite et la ligne creee, mais aucune adhesion n'existait.
+                    # / The member comes from the resolution done outside the transaction,
+                    #   NOT from carte_client.user, which was None for an anonymous card.
+                    membre_adhesion = adherent["user"]
+
+                    # La fusion locale du wallet ephemere passe APRES les debits (7b/7c) :
+                    # ceux-ci s'appuient sur `wallet_client`, qui EST le wallet ephemere de
+                    # la carte. Fusionner avant les detacherait de leur source.
+                    # / The local merge runs AFTER the debits, which rely on wallet_client —
+                    #   the card's ephemeral wallet. Merging first would detach their source.
+                    if adherent["fusion_locale_autorisee"] and carte_client is not None:
+                        try:
+                            CarteService.lier_a_user(
+                                qrcode_uuid=carte_client.uuid,
+                                user=membre_adhesion,
+                                ip=ip_client,
+                            )
+                        except (
+                            CarteIntrouvable,
+                            CarteDejaLiee,
+                            UserADejaCarte,
+                            SoldeInsuffisant,
+                        ) as erreur_liaison:
+                            logger.warning(
+                                f"Adhesion POS NFC : fusion locale de la carte "
+                                f"{carte_client.tag_id} impossible : {erreur_liaison}"
+                            )
+                            adherent["avertissements"].append(_(
+                                "La carte n'a pas pu etre rattachee au membre. L'adhesion "
+                                "est bien enregistree, le solde de la carte est intact."
+                            ))
+
                     for article_ad in articles_adhesion:
                         membership = _creer_ou_renouveler_adhesion(
-                            carte_client.user,
+                            membre_adhesion,
                             article_ad["product"],
                             article_ad["price"],
                         )
@@ -6586,6 +7365,10 @@ class PaiementViewSet(viewsets.ViewSet):
             # / Multi-asset: list of balances after payment
             "soldes_apres_paiement": soldes_apres_paiement,
             "produits_stock_negatif": produits_stock_negatif,
+            # Avertissements du rattachement de carte (adhesion) : le caissier doit savoir
+            # qu'une carte n'a pas ete rattachee, meme si la vente a abouti.
+            # / Card-linking warnings: the cashier must know a card was not attached.
+            "avertissements_adhesion": adherent["avertissements"] if adherent else [],
         }
         return render(
             request, "laboutik/partial/hx_return_payment_success.html", context
@@ -9225,6 +10008,31 @@ class CommandeViewSet(viewsets.ViewSet):
                     "quantite": article_cmd.qty,
                     "prix_centimes": prix_centimes,
                 }
+            )
+
+        # Un retour de consigne ne se règle pas depuis une commande de table.
+        # Ce chemin construit son propre panier et appelle directement les flux de
+        # paiement : les gardes de `payer()` ne s'y appliquent pas. Or la cascade de
+        # débit NFC s'arrête sans rien écrire sur un montant négatif — le caissier
+        # verrait un écran de succès sans qu'aucune ligne ni aucun crédit n'existe — et
+        # un règlement en carte ou en chèque produirait une ligne négative estampillée
+        # d'un moyen qu'on ne rembourse pas.
+        # / A deposit return is not settled from a table order: this path builds its own
+        #   cart and bypasses payer()'s guards, where the NFC cascade would show success
+        #   without writing anything.
+        if _panier_contient_retour_consigne(articles_panier):
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _(
+                    "Un retour de consigne se règle au comptoir, pas depuis une commande."
+                ),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                context_erreur,
+                status=400,
             )
 
         if not articles_panier:

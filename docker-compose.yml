@@ -51,14 +51,8 @@ services:
   #
   #   TLS_CERT_NAME='dev'     # -> certs/dev.pem + certs/dev-key.pem
   #
-  # ETAPE 4 — `docker compose up -d traefik`. C'est tout, la conf est ci-dessous.
-  #
-  # SI TU SAUTES CES ETAPES : `docker compose up` REFUSE de demarrer et affiche
-  # un message renvoyant vers ce tuto (garde-fou `${TLS_CERT_NAME:?...}` dans le
-  # bloc `configs:` en bas de fichier). C'est volontaire : sans certificat,
-  # Traefik ne sert plus aucun certificat du tout et le HTTPS tombe — mieux vaut
-  # un echec net et explicite qu'une stack a moitie cassee.
-  #
+
+
   # NE JAMAIS COMMITER certs/ : il contient une cle privee. Chaque dev genere sa
   # propre CA avec sa propre cle (cf. .gitignore).
   #
@@ -321,7 +315,7 @@ configs:
 
 
 # Pour test stripe :
-# stripe listen --forward-to https://fedow.tibillet.localhost/api/webhook_stripe/ --skip-verify
+# stripe listen --forward-to https://fedow.tibillet.localhost/webhook_stripe/ --skip-verify
 # stripe listen --forward-to https://tibillet.localhost/api/webhook_stripe/ --skip-verify
 
 # poetry shell

@@ -306,88 +306,17 @@ class BadgeFedow():
             raise Exception(f"badge_in transaction_serialized ERRORS : {transaction_serialized.errors}")
 
 
-class MembershipFedow():
-    def __init__(self, fedow_config: FedowConfig or None = None):
-        self.fedow_config: FedowConfig = fedow_config
-        if not fedow_config:
-            self.fedow_config = FedowConfig.get_solo()
-
-    def create(self, membership: Membership = None):
-        # Si Wallet est None, alors nous en créons ou allons chercher un wallet avec l'email
-        membership.refresh_from_db()
-        user = membership.user
-
-        # TODO: le faire dans le get_or_create user et ajouter dans les test
-        if user.wallet:
-            receiver = user.wallet.uuid
-        else:
-            logger.info(f"Wallet not found for {user.email}")
-            wallet_fedow = WalletFedow(self.fedow_config)
-            wallet, created = wallet_fedow.get_or_create_wallet(membership.user)
-            receiver = wallet.uuid
-
-        # Vérification de l'uuid membership présent coté Fedow
-        if not membership.asset_fedow and membership.price:
-            fedow_asset = AssetFedow(fedow_config=self.fedow_config)
-            serialized_asset, created = fedow_asset.get_or_create_membership_asset(membership.price.product)
-            asset_fedow = f"{serialized_asset['uuid']}"
-            membership.asset_fedow = asset_fedow
-        if not membership.asset_fedow:
-            raise Exception("no asset_fedow nor price provided on membership")
-
-        amount = membership.contribution_value
-        sender = self.fedow_config.fedow_place_wallet_uuid
-        subscription_start_datetime = membership.last_contribution
-
-        subscription_data = {
-            "amount": int(amount * 100),
-            "sender": f"{sender}",
-            "receiver": f"{receiver}",
-            "asset": f"{membership.asset_fedow}",
-            "subscription_start_datetime": subscription_start_datetime.isoformat(),
-        }
-
-        if membership.stripe_paiement.exists():
-            subscription_data["metadata"] = {'checkout_session_id_stripe': membership.stripe_paiement.latest(
-                'last_action').checkout_session_id_stripe}
-
-        # TODO: Tester lorsqu'on a l'info de la carte
-        # if user_card_firstTagId:
-        #     subscription['user_card_firstTagId'] = f"{user_card_firstTagId}"
-        # if primary_card_fisrtTagId:
-        #     subscription['primary_card_fisrtTagId'] = f"{primary_card_fisrtTagId}"
-
-        response_subscription = _post(
-            fedow_config=self.fedow_config,
-            user=user,
-            data=subscription_data,
-            path='transaction/create_membership',
-        )
-
-        if response_subscription.status_code == 201:
-            serialized_transaction = TransactionValidator(data=response_subscription.json())
-            if serialized_transaction.is_valid():
-                fedow_transaction = serialized_transaction.fedow_transaction
-                membership.fedow_transactions.add(fedow_transaction)
-                membership.save()  # sauvegarde au cas ou membership.asset_fedow
-                if membership.stripe_paiement.exists():
-                    membership.stripe_paiement.latest('last_action').fedow_transactions.add(fedow_transaction)
-                return serialized_transaction.validated_data
-
-            logger.error(serialized_transaction.errors)
-            return serialized_transaction.errors
-
-        else:
-            logger.error(response_subscription.json())
-            return response_subscription.status_code
-
-    # def retrieve(self, wallet: uuid4 = None):
-    #     response_sub = _get(self.config, ['subscription', f"{UUID(wallet)}"])
-    #     if response_sub.status_code == 200:
-    #         return response_sub
-    #
-    #     raise Exception(f"{response_sub.status_code}")
-
+# La classe MembershipFedow a ete retiree : Lespass ne pousse plus les adhesions vers
+# Fedow. Ce push existait pour que LaBoutik V1 lise l'adhesion sous forme de jeton SUB
+# dans le wallet Fedow du porteur ; LaBoutik interroge desormais Lespass directement
+# (`/api/v2/memberships/by-wallet/`), qui est la source de verite — c'est lui qui porte
+# la deadline, donc la VALIDITE, que Fedow n'a jamais connue.
+# L'asset d'adhesion, lui, reste declare a Fedow (AssetFedow.get_or_create_membership_asset,
+# appele par BaseBillet.signals) : c'est par lui qu'un comptoir V1 peut encore VENDRE une
+# adhesion, et que Fedow peut notifier Lespass d'une vente au comptoir (fedow_connect/views.py).
+# / MembershipFedow was removed: Lespass no longer pushes memberships to Fedow. LaBoutik
+#   now queries Lespass directly, which holds the deadline and therefore validity. The
+#   membership ASSET is still declared to Fedow so a V1 counter can still SELL memberships.
 
 class WalletFedow():
     def __init__(self, fedow_config):
@@ -1253,7 +1182,6 @@ class FedowAPI():
 
         self.wallet = WalletFedow(fedow_config=self.fedow_config)
         self.place = PlaceFedow(fedow_config=self.fedow_config, admin=admin)
-        self.membership = MembershipFedow(fedow_config=self.fedow_config)
         self.asset = AssetFedow(fedow_config=self.fedow_config)
         self.transaction = TransactionFedow(fedow_config=self.fedow_config)
         self.NFCcard = NFCcardFedow(fedow_config=self.fedow_config)

@@ -61,6 +61,7 @@ def generer_csv_cloture(cloture: ClotureCaisse) -> str:
     writer.writerow([_("Espèces"), f"{cloture.total_especes / 100:.2f}"])
     writer.writerow([_("Carte bancaire"), f"{cloture.total_carte_bancaire / 100:.2f}"])
     writer.writerow([_("Cashless"), f"{cloture.total_cashless / 100:.2f}"])
+    writer.writerow([_("Chèque"), f"{cloture.total_cheque / 100:.2f}"])
     writer.writerow([_("Total général"), f"{cloture.total_general / 100:.2f}"])
     writer.writerow([])
 

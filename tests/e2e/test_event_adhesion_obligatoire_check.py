@@ -16,6 +16,7 @@ import os
 import random
 import shutil
 import string
+import time
 
 import pytest
 import requests as http_requests
@@ -163,6 +164,33 @@ def _create_membership_api(api_key, price_uuid, email, first_name="Test", last_n
     }
 
 
+def _attendre_le_bouton_reservation(page, etape):
+    """Attend le bouton d'ouverture du panneau de reservation, en mesurant le temps reel.
+    / Waits for the booking panel button, measuring how long it actually took.
+
+    POURQUOI MESURER : ce test a echoue une fois en suite complete sur un `wait_for` de 10 s,
+    sans laisser de trace. Or la page evenement est servie en ~50 ms cote serveur (mesure
+    directe). Un echec ne peut donc PAS venir d'une lenteur serveur : soit le bouton est
+    absent (l'evenement est complet, l'usager a atteint son quota, ou l'evenement n'a aucun
+    produit — voir `pages/classic/vues/evenement.html`), soit il porte un autre libelle.
+    En journalisant la duree reelle, la prochaine occurrence dira laquelle des deux.
+    / WHY MEASURE: the event page is served in ~50 ms server-side, so a failure cannot come
+      from server slowness — the button is either absent or labelled differently.
+
+    On cible `data-testid`, pas le texte : le libelle est traduit ET surchargeable par
+    evenement (`Event.reservation_button_name`), alors que le testid est stable et present
+    dans les deux skins.
+    / Target data-testid, not text: the label is translated AND overridable per event, while
+      the testid is stable across both skins.
+    """
+    bouton = page.locator('[data-testid="booking-open-panel"]')
+    depart = time.monotonic()
+    bouton.wait_for(state="visible", timeout=20_000)
+    duree = time.monotonic() - depart
+    print(f"[diag] bouton de reservation visible en {duree:.2f}s ({etape})")
+    return bouton
+
+
 class TestAdhesionObligatoireCheck:
     """Adhesion obligatoire sur event / Mandatory membership on event booking."""
 
@@ -289,12 +317,7 @@ class TestAdhesionObligatoireCheck:
 
         # Ouvrir le panneau de reservation (bouton "book" ou "reserver").
         # / Open the booking panel ("book" or "reserver" button).
-        reserve_button = page.locator(
-            'button:has-text("book"), button:has-text("Reserver"), '
-            'button:has-text("réserver"), button:has-text("Reserver"), '
-            'button:has-text("one or more seats")'
-        ).first
-        reserve_button.wait_for(state="visible", timeout=10000)
+        reserve_button = _attendre_le_bouton_reservation(page, "avant adhesion")
         reserve_button.click()
 
         # Attendre l'ouverture du panneau (offcanvas ou bookingPanel).
@@ -362,12 +385,7 @@ class TestAdhesionObligatoireCheck:
 
         # Ré-ouvrir le panneau de reservation.
         # / Re-open the booking panel.
-        reserve_button_after = page.locator(
-            'button:has-text("book"), button:has-text("Reserver"), '
-            'button:has-text("réserver"), button:has-text("Reserver"), '
-            'button:has-text("one or more seats")'
-        ).first
-        reserve_button_after.wait_for(state="visible", timeout=10000)
+        reserve_button_after = _attendre_le_bouton_reservation(page, "apres adhesion")
         reserve_button_after.click()
 
         page.wait_for_selector(

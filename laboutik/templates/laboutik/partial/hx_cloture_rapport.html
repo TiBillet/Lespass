@@ -23,6 +23,9 @@ Displays the closure summary with totals by payment method.
     <div class="payment-msg1" data-testid="cloture-total-nfc">
       {% translate "Cashless" %} : {{ total_nfc_euros }} {{ currency_data.symbol }}
     </div>
+    <div class="payment-msg1" data-testid="cloture-total-cheque">
+      {% translate "Chèque" %} : {{ total_cheque_euros }} {{ currency_data.symbol }}
+    </div>
     <hr style="border-color: rgba(255,255,255,0.3); margin: 0.5rem 2rem;">
     <div class="payment-title1" data-testid="cloture-total-general">
       {% translate "Total" %} : {{ total_general_euros }} {{ currency_data.symbol }}

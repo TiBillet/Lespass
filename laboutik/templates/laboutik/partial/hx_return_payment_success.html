@@ -93,6 +93,32 @@ FLUX :
         <p class="stock-negatif-hint">{% translate "Vous pouvez bloquer la vente via le menu clic long sur cet article." %}</p>
       </div>
     {% endif %}
+    <!--
+    AVERTISSEMENTS DE RATTACHEMENT DE CARTE (ADHESION)
+    / Card-linking warnings (membership)
+
+    La vente a abouti et l'adhesion est enregistree, mais la carte scannee n'a PAS pu etre
+    rattachee au membre. Le caissier doit le savoir : le solde de la carte est intact, mais
+    il reste sur la carte, et l'adherent devra passer par le parcours web pour le recuperer.
+    / The sale went through and the membership is recorded, but the scanned card could NOT
+      be attached to the member. The balance is intact but stays on the card.
+    -->
+    {% if avertissements_adhesion %}
+      <div class="stock-negatif-box"
+           data-testid="alerte-adhesion-carte"
+           role="alert"
+           aria-live="polite">
+        <div class="stock-negatif-titre">
+          <i class="fas fa-id-card stock-negatif-icone" aria-hidden="true"></i>
+          <span>{% translate "Carte non rattachée" %}</span>
+        </div>
+        <ul class="stock-negatif-liste">
+          {% for avertissement in avertissements_adhesion %}
+            <li data-testid="avertissement-adhesion">{{ avertissement }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
     <!-- Bouton imprimer le ticket de vente / Print receipt button -->
     {% if uuid_transaction and uuid_pv %}
       <div class="bt-basic-container bt-imprimer-ticket"
