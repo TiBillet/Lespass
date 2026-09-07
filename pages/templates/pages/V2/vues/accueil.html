@@ -1,0 +1,432 @@
+{% extends base_template %}
+{% load tibitags i18n static l10n %}
+
+{% block title %}{% translate 'Accueil' %}{% endblock %}
+{% block meta_description %}{{ config.short_description|striptags|default:config.organisation }}{% endblock %}
+{% block og_title %}{{ config.organisation }}{% endblock %}
+{% block og_description %}{{ config.short_description|striptags|default:config.organisation }}{% endblock %}
+{% block og_image_alt %}{{ config.organisation }} - {% translate 'Home page' %}{% endblock %}
+{% block twitter_title %}{{ config.organisation }}{% endblock %}
+{% block twitter_description %}{{ config.short_description|striptags|default:config.organisation }}{% endblock %}
+{% block twitter_image_alt %}{{ config.organisation }} - {% translate 'Home page' %}{% endblock %}
+
+{% block main %}
+    <!-- LE CADRE D'IDENTITÉ — ce qu'est le lieu, et où il est.
+         Un seul bloc : le texte et les praticités à gauche, la carte à droite. -->
+    <section class="section">
+        <div class="venue-brief">
+            <div>
+                <p class="venue-brief__text">
+                    {{ config.short_description }}
+                </p>
+
+                <div class="venue-facts">
+                    {% if config.postal_address %}
+                        <div class="venue-fact">
+                            <div class="venue-fact__label">Adresse</div>
+                            <div class="venue-fact__value">
+                                {{ config.postal_address.street_address }}, <br>
+                                {{ config.postal_address.address_locality }} <br>
+                                <a class="link" href="/federation">{% translate 'Voir sur la carte' %}</a>
+                            </div>
+                        </div>
+                    {% endif %}
+                    <div class="venue-fact"> {# V2-HERE #}
+                        <div class="venue-fact__label">Horaires</div>
+                        <div class="venue-fact__value">
+                            Café asso' : mar–jeu 14h–18h, ven 14h–17h<br>
+                            FabLab : mar &amp; jeu 17h–19h, mer 10h–18h
+                        </div>
+                    </div>
+                    <div class="venue-fact">
+                        <div class="venue-fact__label">{% translate 'Contact' %}</div>
+                        <div class="venue-fact__value">
+                            <a class="link" href="mailto:{{ config.email}}">{{ config.email}}</a><br>
+                            {% if config.phone %}
+                                {{ config.phone }}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="map-panel">
+                <div class="map-panel__toolbar">
+                    <span class="map-panel__label">{% translate "Où l'on est" %}</span>
+                </div>
+
+                {% if config.postal_address.latitude and config.postal_address.longitude %}
+                    <!--
+                    CARTE LEAFLET DU LIEU
+                    / Leaflet map of the venue
+
+                    LOCALISATION : pages/templates/pages/V2/vues/accueil.html
+
+                    Une seule carte, un seul marqueur : l'adresse du lieu
+                    (config.postal_address). Pattern repris de
+                    pages/V2/partials/bloc_lieu.html.
+
+                    Les coordonnees et la cle MapTiler vivent dans les data-* :
+                    le script les lit au moment de l'initialisation. Pas de
+                    window.xxx, pas de JSON injecte (le JS ne porte pas de
+                    logique metier).
+
+                    HTMX : ce script inline est dans le block main, donc il est
+                    evalue par htmx a chaque swap hx-target="body". Deux gardes :
+                    - `c._leaflet_id` : ne jamais re-initialiser une carte deja posee
+                    - ids `leaflet-css` / `leaflet-js` : assets dedoublonnes si la
+                      page porte deja une carte (bloc LIEU, page evenement...)
+                    -->
+                    {# unlocalize : OBLIGATOIRE. USE_L10N=True + locale fr rendent #}
+                    {# les Decimal avec une virgule ("45,77") ; parseFloat("45,77") #}
+                    {# tronquerait silencieusement a 45. unlocalize force le point. #}
+                    {# Les autres cartes du projet sont protegees autrement : #}
+                    {# json_script (bloc LIEU, explorer) serialise en JSON, qui #}
+                    {# exige le point ; evenement_geoloc.html passe par |safe, qui #}
+                    {# convertit en chaine AVANT l'etape de localisation. #}
+                    {# / unlocalize is MANDATORY: French locale renders Decimals with #}
+                    {# a comma, which would silently truncate parseFloat. #}
+                    <div id="carte-accueil" class="map-panel__carte"
+                         data-maptiler-key="{{ maptiler_key|default:'' }}"
+                         data-lat="{{ config.postal_address.latitude|unlocalize }}"
+                         data-lng="{{ config.postal_address.longitude|unlocalize }}"
+                         data-label="{{ config.organisation }}"
+                         role="application"
+                         aria-label="{% translate 'Carte interactive du lieu' %}"
+                         data-testid="accueil-carte-lieu"></div>
+
+                    {# Fond de carte commun (MapTiler + repli OSM sans cle). #}
+                    {# Script bloquant : tbPoserFondDeCarte est defini avant le #}
+                    {# script inline ci-dessous. / Shared basemap, blocking script. #}
+                    <script src="{% static 'cartes/tb_fond_de_carte.js' %}"></script>
+                    <script>
+                    /**
+                     * Initialise la carte Leaflet de l'accueil (skin V2).
+                     * / Initializes the V2 home Leaflet map.
+                     *
+                     * LOCALISATION : pages/templates/pages/V2/vues/accueil.html
+                     *
+                     * FLUX :
+                     * 1. charger() injecte leaflet.css + leaflet.js dans le <head>
+                     *    (une seule fois, ids dedoublonnes)
+                     * 2. initCarteAccueil() lit data-lat / data-lng / data-maptiler-key
+                     * 3. Cree la carte centree sur le lieu, pose le fond commun,
+                     *    ajoute le marqueur avec sa popup
+                     */
+                    (function () {
+                        function initCarteAccueil() {
+                            var c = document.getElementById('carte-accueil');
+                            // Garde : une carte deja initialisee n'est jamais
+                            // re-creee (swaps HTMX, historique navigateur).
+                            // / Guard: never re-init an existing map.
+                            if (!c || c._leaflet_id) { return; }
+                            var lat = parseFloat(c.dataset.lat);
+                            var lng = parseFloat(c.dataset.lng);
+                            if (isNaN(lat) || isNaN(lng)) { return; }
+                            // Icones de marqueur servies en local (Leaflet vendorise).
+                            // / Marker icons served locally (vendored Leaflet).
+                            L.Icon.Default.imagePath = '{% static "pages/vendor/leaflet/images/" %}';
+                            // scrollWheelZoom desactive : la carte vit dans une page
+                            // scrollable, la molette doit continuer a faire defiler.
+                            // / scrollWheelZoom off: the map lives in a scrollable page.
+                            var carte = L.map('carte-accueil', {
+                                scrollWheelZoom: false,
+                            }).setView([lat, lng], 15);
+                            tbPoserFondDeCarte(carte, c.dataset.maptilerKey);
+                            var marqueur = L.marker([lat, lng], { alt: c.dataset.label }).addTo(carte);
+                            if (c.dataset.label) {
+                                // textContent (pas innerHTML) : le nom du lieu est du
+                                // TEXTE, jamais du HTML -> pas d'injection XSS.
+                                // / textContent (not innerHTML): no XSS injection.
+                                var etiquette = document.createElement('span');
+                                etiquette.textContent = c.dataset.label;
+                                marqueur.bindPopup(etiquette);
+                            }
+                        }
+                        function charger(cb) {
+                            if (typeof L !== 'undefined') { cb(); return; }
+                            if (!document.getElementById('leaflet-css')) {
+                                var css = document.createElement('link');
+                                css.id = 'leaflet-css'; css.rel = 'stylesheet';
+                                css.href = '{% static "pages/vendor/leaflet/leaflet.css" %}';
+                                document.head.appendChild(css);
+                            }
+                            var js = document.getElementById('leaflet-js');
+                            if (js) { js.addEventListener('load', cb); return; }
+                            js = document.createElement('script');
+                            js.id = 'leaflet-js'; js.src = '{% static "pages/vendor/leaflet/leaflet.js" %}';
+                            js.onload = cb; document.head.appendChild(js);
+                        }
+                        charger(initCarteAccueil);
+                    })();
+                    </script>
+                {% else %}
+                    <!--
+                    PLACEHOLDER SANS COORDONNEES GPS
+                    / Placeholder when no GPS coordinates
+
+                    Le tenant n'a pas renseigne latitude/longitude sur son adresse :
+                    on garde le panneau decoratif d'origine (fond quadrille + pin).
+                    -->
+                    <div class="map-pin map-pin--main" style="left:50%; top:52%;">
+                        <div class="map-pin__icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><circle cx="12" cy="12" r="6"/></svg></div>
+                        <div class="map-pin__label">{{ config.organisation }}</div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+
+    <!-- LES ÉVÉNEMENTS À VENIR -->
+    <section class="section">
+        <div class="section-head">
+            <div class="section__title">
+                {% translate 'Ce qui arrive' %}
+                <span class="section__meta">· {{ events|length }} {% translate 'événements à venir' %}</span>
+            </div>
+            <a class="link" href="/event/">Tout l'agenda →</a>
+        </div>
+
+        <div class="grid grid--3" style="margin-top: var(--space-5);">
+            {% for event in events|slice:":3" %}
+                <c-V2.event_card event=event />
+
+{#                <article class="event-card">#}
+{#                    <div class="event-card__cover bg-green">#}
+{#                        {% include 'commun/partials/picture.html' with img=resa.event.img alt=resa.event.name class='rounded-start' %}#}
+{#                    </div>#}
+{#                    <div class="event-card__body">#}
+{#                        <div class="event-card__top">#}
+{#                            <div class="event-date-box">#}
+{#                                <div class="dow">{{ event.datetime.date|date:"l"|slice:":3" }}</div>#}
+{#                                <div class="day">{{ event.datetime.date.day }}</div>#}
+{#                                <div class="mon">{{ event.datetime.date|date:"F"|slice:":3" }}</div>#}
+{#                            </div>#}
+{#                            <div>#}
+{#                                <div class="event-card__title">{{ event.name }}</div>#}
+{#                                <div class="event-card__time">#}
+{#                                    {{ event.datetime|time:"G:i" }}#}
+{#                                    {% if event.end_datetime %}#}
+{#                                        – {{ event.end_datetime|time:"G:i" }}#}
+{#                                    {% endif %}#}
+{#                                </div>#}
+{#                            </div>#}
+{#                        </div>#}
+{#                        <div class="event-card__loc">{{ event.postal_address }}</div>#}
+{#                        <div class="event-card__tags">#}
+{#                            {% for tag in event.tag.all %}#}
+{#                                <span class="badge" style="{{ tag.style_attr }}">{{ tag.name }}</span>#}
+{#                            {% endfor %}#}
+{#                        </div>#}
+{##}
+{#                        {% with event_domain=event.full_url|cut:"https://"|cut:"http://"|cut:"/event/"|cut:event.slug|cut:"/" %}#}
+{#                        {% with current_domain=request.build_absolute_uri|cut:"https://"|cut:"http://"|cut:"/event/"|cut:"/" %}#}
+{#                            {% if event_domain != current_domain %}#}
+{#                                <div class="event-card__meta">via <a href="https://{{ event_domain }}" target="_blank">{{ event_domain }}</a></div>#}
+{#                            {% else %}#}
+{#                                <div class="event-card__meta">par <a href="/">{{ config.organisation }}</a></div>#}
+{#                            {% endif %}#}
+{#                        {% endwith %}#}
+{#                        {% endwith %}#}
+{##}
+{#                        <div class="event-card__footer">#}
+{#                            <a class="link" href="{{ event.full_url }}" target="_blank">#}
+{#                                En savoir plus#}
+{#                            </a>#}
+{##}
+{#                            <span class="event-card__price">{{ event.price_min }}</span>#}
+{#                        </div>#}
+{#                    </div>#}
+{#                </article>#}
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- LES INITIATIVES EN COURS -->
+    <section class="section"> {# V2-HERE #}
+        <div class="section-head">
+            <div class="section__title">Ce qui se prépare <span class="section__meta">· 3 initiatives en cours</span></div>
+            <a class="link" href="contribuer.html">Contribuer au lieu →</a>
+        </div>
+
+        <div class="grid grid--3" style="margin-top: var(--space-5);">
+            <article class="initiative-card">
+                <div class="initiative-card__cover bg-green"></div>
+                <div class="initiative-card__body">
+                    <h3 class="initiative-card__title">Jardin partagé sur la cour</h3>
+                    <p class="initiative-card__desc">Transformer la cour bitumée en jardin nourricier ouvert au quartier.</p>
+                    <div>
+                        <div class="progress-label"><span>Phase plantation</span><strong>60%</strong></div>
+                        <div class="progress-track"><div class="progress-fill" style="width:60%;"></div></div>
+                    </div>
+                    <div class="initiative-card__foot">
+                        <span class="tasks-open">4 tâches ouvertes</span>
+                        <a class="btn btn--primary btn--sm" href="contribuer.html">Ça m'intéresse</a>
+                    </div>
+                </div>
+            </article>
+
+            <article class="initiative-card">
+                <div class="initiative-card__cover bg-gold"></div>
+                <div class="initiative-card__body">
+                    <h3 class="initiative-card__title">Festival des communs 2025</h3>
+                    <p class="initiative-card__desc">Trois jours de rencontres, ateliers et concerts autour des biens communs.</p>
+                    <div>
+                        <div class="progress-label"><span>Préparation</span><strong>35%</strong></div>
+                        <div class="progress-track"><div class="progress-fill" style="width:35%;"></div></div>
+                    </div>
+                    <div class="initiative-card__foot">
+                        <span class="tasks-open">7 tâches ouvertes</span>
+                        <a class="btn btn--primary btn--sm" href="contribuer.html">Ça m'intéresse</a>
+                    </div>
+                </div>
+            </article>
+
+            <article class="initiative-card">
+                <div class="initiative-card__cover bg-slate"></div>
+                <div class="initiative-card__body">
+                    <h3 class="initiative-card__title">Refonte de l'espace numérique</h3>
+                    <p class="initiative-card__desc">Remettre à plat les postes en libre accès et l'accompagnement au numérique.</p>
+                    <div>
+                        <div class="progress-label"><span>Diagnostic</span><strong>20%</strong></div>
+                        <div class="progress-track"><div class="progress-fill" style="width:20%;"></div></div>
+                    </div>
+                    <div class="initiative-card__foot">
+                        <span class="tasks-open">2 tâches ouvertes</span>
+                        <a class="btn btn--primary btn--sm" href="contribuer.html">Ça m'intéresse</a>
+                    </div>
+                </div>
+            </article>
+        </div>
+    </section>
+
+    <!-- LES SERVICES -->
+    <section class="section" style="padding-bottom: var(--space-8);"> {# V2-HERE #}
+        <div class="section-head">
+            <div class="section__title">Adhésion &amp; services</div>
+            <a class="link" href="adhesion-services.html">Tous les services →</a>
+        </div>
+
+        <div class="grid grid--3" style="margin-top: var(--space-5);">
+            <article class="service-card">
+                <div class="service-card__head">
+                    <span class="service-card__logo solid-green"></span>
+                    <span>
+        <span class="service-card__title" style="display:block">Adhésion annuelle</span>
+        <span class="service-card__place">Individuel·le ou structure</span>
+      </span>
+                </div>
+                <div><span class="badge badge--green">À partir de 15 €</span></div>
+                <div class="service-card__foot">
+                    <span class="service-card__due">Ouvre l'accès à tout le lieu</span>
+                    <a class="link" href="adhesion-services.html">Adhérer</a>
+                </div>
+            </article>
+
+            <article class="service-card">
+                <div class="service-card__head">
+                    <span class="service-card__logo solid-mauve"></span>
+                    <span>
+        <span class="service-card__title" style="display:block">Accès FabLab</span>
+        <span class="service-card__place">Machines et accompagnement</span>
+      </span>
+                </div>
+                <div><span class="badge badge--neutral">Mensuel · 12 €</span></div>
+                <div class="service-card__foot">
+                    <span class="service-card__due">Formation incluse au démarrage</span>
+                    <a class="link" href="adhesion-services.html">En savoir plus</a>
+                </div>
+            </article>
+
+            <article class="service-card">
+                <div class="service-card__head">
+                    <span class="service-card__logo solid-gold"></span>
+                    <span>
+        <span class="service-card__title" style="display:block">Location de salle</span>
+        <span class="service-card__place">Réunions, ateliers, répétitions</span>
+      </span>
+                </div>
+                <div><span class="badge badge--neutral">Tarif selon usage</span></div>
+                <div class="service-card__foot">
+                    <span class="service-card__due">Gratuit pour les adhérent·es</span>
+                    <a class="link" href="adhesion-services.html">Demander</a>
+                </div>
+            </article>
+        </div>
+    </section>
+
+{% endblock %}
+
+{% block main_old %}
+    <div class="home-bg py-5 flex-fill">
+        <div class="container-lg my-5">
+            <div class="bg-body rounded-5 px-5 py-3{% if config.img %} shadow{% endif %}">
+                <h1 class="display-1 mt-5 mb-3">{{ config.organisation }}</h1>
+                <p class="lead fs-4">{{ config.short_description | default:"" }}</p>
+                <p class="lead">{{ config.long_description | safe | default:"" }}</p>
+                <div class="row" data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
+                {% if config.module_billetterie %}
+                    <div class="col-md mb-3">
+                        <a class="btn btn-lg btn-primary d-block my-3"
+                           href="/event/" hx-get="/event/" hx-target="body" hx-push-url="true">
+                            <i class="bi bi-calendar-date"></i>
+                            {% if config.event_menu_name %}{{ config.event_menu_name }}{% else %}{% trans 'Calendar' %}{% endif %}
+                        </a>
+                    </div>
+                {% endif %}
+                {% if config.module_adhesion %}
+                    <div class="col-md">
+                        <a class="btn btn-lg btn-primary d-block my-3"
+                           href="/memberships/" hx-get="/memberships/" hx-target="body" hx-push-url="true">
+                            <i class="bi bi-person-badge"></i>{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% trans 'Subscriptions' %}{% endif %}
+                        </a>
+                    </div>
+                {% endif %}
+                    {% comment %} HIDE: page fédération
+                <div class="col-md">
+                    <a class="btn btn-lg btn-primary d-block my-3"
+                        href="/network/" hx-get="/network/" hx-target="body" hx-push-url="true">
+                        <i class="bi bi-arrow-repeat"></i>
+                        Les membres du réseau
+                    </a>
+                </div>
+                {% endcomment %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <style>
+        .home-bg {
+            background-image: url('{{ config.img.med.url }}');
+            background-size: cover;
+            background-position: center;
+        }
+
+        @media (min-width: 960px), (min-height: 540px) {
+            .home-bg {
+                background-image: url('{{ config.img.crop_hdr.url }}');
+            }
+        }
+
+        @media (min-width: 1280px), (min-height: 1280px) {
+            .home-bg {
+                background-image: url('{{ config.img.hdr.url }}');
+            }
+        }
+
+        @media (min-width: 1920px), (min-height: 1920px) {
+            .home-bg {
+                background-image: url('{{ config.img.fhd.url }}');
+            }
+        }
+
+        /* Custom background color for the bg-body div in home page */
+        [data-bs-theme="light"] .home-bg .bg-body {
+            background-color: #f8f9fa !important; /* Light gray for light mode */
+        }
+
+        [data-bs-theme="dark"] .home-bg .bg-body {
+            background-color: #2b3035 !important; /* Darker gray for dark mode */
+        }
+    </style>
+{% endblock %}

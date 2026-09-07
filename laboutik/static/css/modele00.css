@@ -9,7 +9,8 @@
 }
 
 * {
-  font-family: "Luciole-regular";
+  /*font-family: "Luciole-regular";*/
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 @layer base, htmx;
@@ -169,22 +170,82 @@
     font-size: 2.5rem;
   }
 
-  /* button basic */
+  /* button basic — le bouton d'action partage par TOUTES les popups
+     (cotton/bt/paiement.html, cotton/bt/return.html).
+
+     height -> min-height : avec 120 px fermes, l'ecran des moyens de paiement
+     empilait 6 boutons = 720 px dans les ~670 px utiles d'un SUNMI V2s, et le
+     dernier bouton restait hors d'atteinte. La hauteur suit desormais le
+     contenu, avec le meme plancher tactile.
+     width -> min() : plus de debordement horizontal sous 320 px.
+     / The action button shared by EVERY popup. min-height instead of a firm
+     120px: the payment screen used to stack 6 buttons = 720px into the ~670px
+     a SUNMI V2s actually has, leaving the last one unreachable. */
   .bt-basic-container {
-    width: var(--bt-basic-width);
-    height: var(--bt-basic-height);
+    width: min(var(--bt-basic-width), 100%);
+    min-height: var(--bt-basic-height);
     display: flex;
     flex-direction: row;
+    align-items: stretch;
+    border-radius: var(--r-ctrl);
     color: var(--blanc01);
+    font-family: var(--font-ui);
     cursor: pointer;
     overflow: hidden;
     font-size: 1.8rem;
     margin-top: 16px;
+    -webkit-tap-highlight-color: transparent;
+    transition: filter var(--dur-fast) var(--ease-out),
+                transform var(--dur-fast) var(--ease-out),
+                box-shadow var(--dur-fast) var(--ease-out);
+  }
+
+  /* Les huit etats. Ces boutons sont des <div onclick> : le focus n'est
+     atteignable que si le template leur pose role/tabindex — les regles sont
+     ecrites pour le jour ou ce sera fait, elles ne genent pas d'ici la.
+     / The eight states. These buttons are <div onclick>, so focus is only
+     reachable once the template adds role/tabindex; the rules are written for
+     that day and harm nothing meanwhile. */
+  .bt-basic-container:hover {
+    filter: brightness(1.06);
+  }
+
+  .bt-basic-container:focus-visible {
+    outline: 3px solid var(--text);
+    outline-offset: 2px;
+  }
+
+  .bt-basic-container:active {
+    transform: translateY(2px);
+    filter: brightness(1.1);
+  }
+
+  .bt-basic-container[disabled],
+  .bt-basic-container[aria-disabled="true"],
+  .bt-basic-container.is-disabled {
+    opacity: .4;
+    pointer-events: none;
+    filter: grayscale(60%);
+  }
+
+  /* Chargement : data-loading-disable est deja pose par plusieurs de ces
+     boutons, l'extension htmx loading-states ajoute l'attribut disabled.
+     / Loading: several of these buttons already carry data-loading-disable. */
+  .bt-basic-container[disabled] {
+    cursor: progress;
+  }
+
+  .bt-basic-container.is-error {
+    box-shadow: inset 0 0 0 2px var(--danger-edge);
+  }
+
+  .bt-basic-container.is-success {
+    box-shadow: inset 0 0 0 2px var(--valid-edge);
   }
 
   .bt-basic-icon {
     width: var(--bt-basic-icon-width);
-    height: 100%;
+    align-self: stretch;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -199,7 +260,8 @@
 
   .bt-basic-text {
     width: var(--bt-basic-text-width);
-    height: 100%;
+    align-self: stretch;
+    padding: 8px 4px;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -212,19 +274,21 @@
     align-items: center;
   }
 
-  /* pour une largeur supérieure à 600 pixels  */
-	@media only screen and (width > 600px) {
-		.bt-basic-container {
-			width: calc(var(--bt-basic-width) * 1.42);
-			height: calc(var(--bt-basic-height) * 1.34);
-		}
-	}
+  /* Seuil aligne sur le reste de la refonte (599 px), et hauteur toujours
+     elastique : on agrandit le plancher, on ne ferme pas la boite.
+     / Breakpoint aligned with the rest of the redesign; the height stays
+     elastic — we raise the floor, we do not close the box. */
+  @media only screen and (width > 599px) {
+    .bt-basic-container {
+      width: min(calc(var(--bt-basic-width) * 1.42), 100%);
+      min-height: calc(var(--bt-basic-height) * 1.34);
+    }
+  }
 
   /* pour une largeur supérieure à 1022 pixels */
   @media only screen and (width > 1022px) {
     .bt-basic-container {
-      width: calc(var(--bt-basic-width) * 1.4);
-      /* height: calc(var(--bt-basic-height) * 1.34); */
+      width: min(calc(var(--bt-basic-width) * 1.4), 100%);
     }
   }
 

@@ -1,0 +1,47 @@
+{% load tibitags %}
+{% load humanize i18n %}
+
+<h2 class="pt-3">{% trans "Transaction history" %}</h2>
+<div class="table-responsive">
+    <table class="table">
+        <thead>
+        <th>{% trans "Value" %}</th>
+        <th>{% trans "Action" %}</th>
+        <th>{% trans "Date" %}</th>
+        <th>{% trans "Path" %}</th>
+        </thead>
+        <tbody>
+
+        {% for tr in transactions %}
+            <tr class="test-return-{{ tr.serialized_asset.name | slugify }}-{{ tr.amount | dround | slugify }}-content">
+                <td>
+                    {% if tr.action != "FUS" %}
+                        <strong>{{ tr.amount | dround }}</strong>
+                        {% if tr.serialized_asset.is_stripe_primary %}
+                            TiBillets
+
+                        {% else %}
+                            {{ tr.serialized_asset.name }}
+                        {% endif %}
+                    {% endif %}
+                </td>
+                <td>{{ tr.action|get_choice_string:actions_choices }}</td>
+                <td>{{ tr.datetime }} : {{ tr.datetime|naturaltime }}</td>
+                <td>
+                    {% if tr.action != "FUS" %}
+
+                        {% if tr.serialized_sender.uuid == user.wallet.uuid %}
+                            {% translate "Wallet" %}
+                        {% elif tr.serialized_sender.get_name == 'Primary Wallet' %}
+                            {% trans 'TiBillet platform' %}
+                        {% else %}
+                            {% trans 'LaBoutik register' %}
+                            {#{ tr.serialized_sender.get_name }#}
+                        {% endif %}
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>

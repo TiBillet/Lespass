@@ -1,0 +1,56 @@
+{% load i18n static %}
+
+<!-- PIED DE PAGE — niveau plateforme. Aucun lien de lieu ici. -->
+<footer class="site-footer">
+    <div class="site-footer__inner">
+
+        <div class="footer-col">
+            <div class="footer-col__title">{{ config.organisation }}</div>
+            <nav>
+                <a href="/">{% translate 'Accueil' %}</a> {# V2-HERE #}
+                <a href="#">{% translate 'Le réseau des lieux' %}</a>
+                <a href="#">{% translate 'Journal' %}</a>
+                <a href="#">{% translate 'A propos' %}</a>
+                <hr class="footer-col__sep">
+                <a href="/my_account/">{% translate 'Mon espace' %}</a>
+                <a type="button"
+                        data-bs-toggle="offcanvas"
+                        data-bs-target="#contactPanel"
+                        aria-controls="contactPanel">
+                    {% translate 'Contact and support' %}
+                </a>
+            </nav>
+        </div>
+
+        <div class="footer-brand">
+            <div class="footer-brand__mark">TiBillet</div> {# V2-HERE #}
+            <p class="footer-brand__tagline">Billetterie, adhésion et tirelires locales pour vos publics.</p>
+            <p class="footer-brand__desc">TiBillet est un bien commun numérique : billetterie en ligne, caisse enregistreuse, adhésions et abonnements, fédération entre collectifs. Libre, open-source, et gouverné par une coopérative — il appartient aux lieux qui le font vivre.</p>
+
+            <div class="footer-cta">
+                <a class="btn btn--grad btn--grad-magenta" href="#">{% translate 'Faire un don à TiBillet' %}</a> {# V2-HERE #}
+                <a href="/onboard/" class="btn btn--grad btn--grad-cool">
+                    <i class="bi bi-stars"> </i>{% translate "Create a TiBillet space for your collective" %}
+                </a>
+                <a href="https://codecommun.tibillet.coop/crowd/" class="btn btn--grad btn--grad-warm">
+                    <i class="bi bi-tools"> </i>{% translate "Venez contribuer à TiBillet" %}
+                </a>
+            </div>
+        </div>
+
+        <div class="footer-col">
+            <div class="footer-col__title">{% translate 'Nous trouver' %}</div>
+            <nav class="nav">
+                    {% include "seo/partials/tibillet_community_links.html" %}
+            </nav>
+        </div>
+
+    </div>
+
+    <div class="site-footer__legal">
+        <div class="site-footer__legal-inner">
+            <p style="margin:0; max-width: 62ch;">Opération soutenue par l'État dans le cadre du dispositif « Solutions de billetteries innovantes » de France 2030, opéré par la Caisse des Dépôts.</p>
+            <span class="legal-badge">FRANCE 2030</span>
+        </div>
+    </div>
+</footer>

@@ -1,0 +1,538 @@
+{% extends 'fonctionnel/account_base.html' %}
+{% load static i18n tibitags %}
+
+{% block title %}{% translate 'My account' %}{% endblock %}
+
+
+{% block account_page %}
+    <!-- EN-TÊTE DE L'ESPACE PERSONNEL — l'identité en tête, puis les blocs
+     qui composent l'espace : la carte, puis les accès aux lieux. -->
+    <div class="place-header place-header--me">
+        <div class="place-header__card">
+
+            <div class="me-id">
+                <span class="place-id__name">{% translate 'Bonjour' %} {{ request.user.first_name }}</span>
+                <span class="place-id__tagline">{{ request.user.email }}</span>
+            </div>
+            {% if cards %}
+                <div class="me-block">
+                {% if cards|length > 1 %}
+                    <div class="me-block__title">Mes cartes</div>
+                {% else %}
+                    <div class="me-block__title">Ma carte</div>
+                {% endif %}
+                {% for card in cards %}
+                        <div class="me-card">
+                            <div class="me-card__visual">
+                                <div class="talisman talisman--sm">
+                                    <!-- viewBox resserrée : la constellation occupe davantage la carte -->
+                                    <svg class="talisman__sky" viewBox="0 0 76 48" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                                        <g stroke="rgba(255,255,255,.30)" stroke-width="1.1" fill="none">
+                                            <path d="M8 37 L26 27 L45 33 L60 16 L71 25"/>
+                                            <path d="M26 27 L32 11 L45 33"/>
+                                        </g>
+                                        <g fill="rgba(255,255,255,.75)">
+                                            <circle cx="32" cy="11" r="1.9"/><circle cx="45" cy="33" r="1.9"/>
+                                            <circle cx="60" cy="16" r="1.9"/><circle cx="71" cy="25" r="1.9"/>
+                                            <circle cx="8" cy="37" r="1.9"/>
+                                        </g>
+                                        <circle cx="26" cy="27" r="3.6" fill="#fff"/>
+                                    </svg>
+                                    <div class="talisman__head">
+                                        <span class="talisman__brand">TiBillet</span>
+                                        <svg class="talisman__nfc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                                            <path d="M6.5 8.5a5 5 0 0 1 0 7"/>
+                                            <path d="M10 5.5a9.5 9.5 0 0 1 0 13"/>
+                                            <path d="M13.5 2.5a14 14 0 0 1 0 19"/>
+                                        </svg>
+                                    </div>
+                                    <div class="talisman__foot">
+                                        <div class="talisman__number">{{ card.number_printed }}</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="me-card__info">
+                                <div class="balance__label">Solde</div>
+                                <div class="me-card__amount">24,50 €</div>
+                                <a class="btn btn--primary btn--sm" href="{% url "my_account-refill-wallet" %}">Recharger</a>
+                                <p class="me-card__links">
+                                    <a class="link" href="#">Historique</a> ·
+                                    <a class="link" href="{% url "my_account-refund-online" %}">Se faire rembourser</a> ·
+{#                                    <a class="link" href="{% url 'my_account-lost-my-card' pk=card.number_printed %}">J'ai perdu ma carte</a> ·#}
+                                    <span class="callout__text d-inline">Obtenue à {{ card.origin.place.name }}</span>
+                                </p>
+                            </div>
+                        </div>
+                {% endfor %}
+            {% else %}
+                <p>Pas de cartes liées pour l'instant</p>
+            {% endif %}
+            </div>
+
+            <div class="me-block">
+                <div class="me-block__title">Y retourner</div>
+                <div class="place-shortcuts">
+                    <a class="shortcut" href="accueil.html">
+                        <span class="shortcut__logo solid-green"></span>
+                        <span class="shortcut__text">
+            <span class="shortcut__name">La MIETE</span>
+            <span class="shortcut__meta">Membre</span>
+          </span>
+                    </a>
+                    <a class="shortcut" href="#">
+                        <span class="shortcut__logo solid-mauve"></span>
+                        <span class="shortcut__text">
+            <span class="shortcut__name">LOWCAL</span>
+            <span class="shortcut__meta">Abonné·e</span>
+          </span>
+                    </a>
+                    <a class="shortcut" href="#">
+                        <span class="shortcut__logo solid-teal"></span>
+                        <span class="shortcut__text">
+            <span class="shortcut__name">Les Incroyables Comestibles</span>
+            <span class="shortcut__meta">Bénévole</span>
+          </span>
+                    </a>
+                    <a class="shortcut" href="#">
+                        <span class="shortcut__logo solid-slate"></span>
+                        <span class="shortcut__text">
+            <span class="shortcut__name">Le Rize</span>
+            <span class="shortcut__meta">Vous suivez</span>
+          </span>
+                    </a>
+                    <a class="shortcut" href="#">
+                        <span class="shortcut__logo solid-terracotta"></span>
+                        <span class="shortcut__text">
+            <span class="shortcut__name">Cie du Loup</span>
+            <span class="shortcut__meta">Place réservée</span>
+          </span>
+                    </a>
+                </div>
+                <p class="place-shortcuts__more"><a class="link" href="#lieux">Découvrir d'autres lieux →</a></p>
+            </div>
+
+        </div>
+    </div>
+
+    <main class="container">
+        <!-- MODULES — une rubrique par type d'activité. Repliables, et
+             réordonnables en attrapant la poignée à gauche du titre. -->
+        <section class="section" style="padding-bottom: 0;">
+            <div data-modules>
+
+                <article class="module is-open" draggable="true" data-module>
+                    <div class="module__head" data-module-toggle>
+          <span class="module__grip" data-module-grip title="Glisser pour réordonner">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+          </span>
+                        <span class="module__title">Mon agenda <span class="module__count">· 4 à venir</span></span>
+                        <svg class="module__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                    </div>
+                    <div class="module__body">
+                        <div class="module__content">
+                            <div class="grid grid--3">
+
+                                <article class="event-card">
+                                    <div class="event-card__cover bg-green"></div>
+                                    <div class="event-card__body">
+                                        <div class="event-card__top">
+                                            <div class="event-date-box"><div class="dow">Jeu</div><div class="day">28</div><div class="mon">Aoû</div></div>
+                                            <div><div class="event-card__title">Scène ouverte</div><div class="event-card__time">20h30</div></div>
+                                        </div>
+                                        <div class="event-card__loc">📍 Café associatif</div>
+                                        <div class="event-card__tags">
+                                            <span class="badge badge--green">Scène ouverte</span>
+                                            <span class="badge badge--neutral">Entrée libre</span>
+                                        </div>
+                                        <div class="event-card__meta">par <strong>La MIETE</strong></div>
+                                        <div class="event-card__footer"><a class="link" href="#">Voir le billet</a><span class="event-card__price">Inscrit·e</span></div>
+                                    </div>
+                                </article>
+
+                                <article class="event-card">
+                                    <div class="event-card__cover bg-teal"></div>
+                                    <div class="event-card__body">
+                                        <div class="event-card__top">
+                                            <div class="event-date-box"><div class="dow">Sam</div><div class="day">30</div><div class="mon">Aoû</div></div>
+                                            <div><div class="event-card__title">Chantier jardin</div><div class="event-card__time">10h – 13h</div></div>
+                                        </div>
+                                        <div class="event-card__loc">📍 Cour du quartier</div>
+                                        <div class="event-card__tags">
+                                            <span class="badge badge--teal">Chantier</span>
+                                            <span class="badge badge--neutral">Gratuit</span>
+                                        </div>
+                                        <div class="event-card__meta">par <strong>Les Incroyables Comestibles</strong></div>
+                                        <div class="event-card__footer"><a class="link" href="#">En savoir plus</a><span class="event-card__price">Inscrit·e</span></div>
+                                    </div>
+                                </article>
+
+                                <article class="event-card">
+                                    <div class="event-card__cover bg-mauve"></div>
+                                    <div class="event-card__body">
+                                        <div class="event-card__top">
+                                            <div class="event-date-box"><div class="dow">Mar</div><div class="day">02</div><div class="mon">Sep</div></div>
+                                            <div><div class="event-card__title">Atelier réparation vélo</div><div class="event-card__time">18h – 20h</div></div>
+                                        </div>
+                                        <div class="event-card__loc">📍 Grand atelier</div>
+                                        <div class="event-card__tags">
+                                            <span class="badge badge--mauve">Atelier</span>
+                                            <span class="badge badge--neutral">Prix libre</span>
+                                        </div>
+                                        <div class="event-card__meta">par <strong>LOWCAL</strong></div>
+                                        <div class="event-card__footer"><a class="link" href="#">Voir le billet</a><span class="event-card__price">Prix libre</span></div>
+                                    </div>
+                                </article>
+
+                                <article class="event-card">
+                                    <div class="event-card__cover bg-terracotta"></div>
+                                    <div class="event-card__body">
+                                        <div class="event-card__top">
+                                            <div class="event-date-box"><div class="dow">Ven</div><div class="day">12</div><div class="mon">Sep</div></div>
+                                            <div><div class="event-card__title">Le Fil rouge</div><div class="event-card__time">21h00</div></div>
+                                        </div>
+                                        <div class="event-card__loc">📍 Théâtre de la Croix-Rousse</div>
+                                        <div class="event-card__tags">
+                                            <span class="badge badge--terracotta">Spectacle</span>
+                                            <span class="badge badge--neutral">Place réservée</span>
+                                        </div>
+                                        <div class="event-card__meta">par <strong>Cie du Loup</strong></div>
+                                        <div class="event-card__footer"><a class="link" href="#">Voir le billet</a><span class="event-card__price">18,00 €</span></div>
+                                    </div>
+                                </article>
+
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="module is-open" draggable="true" data-module>
+                    <div class="module__head" data-module-toggle>
+          <span class="module__grip" data-module-grip title="Glisser pour réordonner">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+          </span>
+                        <span class="module__title">Mes contributions <span class="module__count">· 4</span></span>
+                        <svg class="module__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                    </div>
+                    <div class="module__body">
+                        <div class="module__content">
+                            <div class="grid grid--3">
+
+                                <article class="help-card">
+                                    <div class="help-card__badges"><span class="badge badge--green">Initiative</span><span class="badge badge--neutral">En cours</span></div>
+                                    <h3 class="help-card__title">Jardin partagé sur la cour</h3>
+                                    <p class="help-card__desc">Vous tenez la phase plantation avec deux autres membres.</p>
+                                    <div>
+                                        <div class="progress-label"><span>Phase plantation</span><strong>60%</strong></div>
+                                        <div class="progress-track"><div class="progress-fill" style="width:60%;"></div></div>
+                                    </div>
+                                    <div class="help-card__foot">
+                                        <span class="person">La MIETE</span>
+                                        <a class="link" href="#">Ouvrir</a>
+                                    </div>
+                                </article>
+
+                                <article class="help-card">
+                                    <div class="help-card__badges"><span class="badge badge--gold">Responsabilité</span><span class="badge badge--neutral">Candidature envoyée</span></div>
+                                    <h3 class="help-card__title">Référent·e FabLab</h3>
+                                    <p class="help-card__desc">Accompagner les utilisateur·ices des machines. Un entretien est à caler.</p>
+                                    <div class="help-card__foot">
+                                        <span class="person">La MIETE</span>
+                                        <a class="link" href="#">Suivre</a>
+                                    </div>
+                                </article>
+
+                                <article class="help-card">
+                                    <div class="help-card__badges"><span class="badge badge--gold">Entraide</span><span class="badge badge--neutral">2 réponses</span></div>
+                                    <h3 class="help-card__title">Réparation vélo</h3>
+                                    <p class="help-card__desc">Vous proposez un coup de main mécanique, deux personnes ont répondu.</p>
+                                    <div class="help-card__foot">
+                                        <span class="person">LOWCAL</span>
+                                        <a class="link" href="#">Répondre</a>
+                                    </div>
+                                </article>
+
+                                <article class="help-card">
+                                    <div class="help-card__badges"><span class="badge badge--slate">Coup de main</span><span class="badge badge--neutral">Terminé</span></div>
+                                    <h3 class="help-card__title">Accueil public · festival</h3>
+                                    <p class="help-card__desc">8 heures sur l'édition 2025, à l'entrée et au vestiaire.</p>
+                                    <div class="help-card__foot">
+                                        <span class="person">Les Nuits Sonores</span>
+                                        <a class="link" href="#">Voir</a>
+                                    </div>
+                                </article>
+
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="module is-open" draggable="true" data-module>
+                    <div class="module__head" data-module-toggle>
+          <span class="module__grip" data-module-grip title="Glisser pour réordonner">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+          </span>
+                        <span class="module__title">Mes services <span class="module__count">· 3</span></span>
+                        <svg class="module__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                    </div>
+                    <div class="module__body">
+                        <div class="module__content">
+                            <div class="grid grid--3">
+
+                                <article class="service-card">
+                                    <div class="service-card__head">
+                                        <span class="service-card__logo solid-green"></span>
+                                        <span>
+                    <span class="service-card__title" style="display:block">Adhésion membre</span>
+                    <span class="service-card__place">La MIETE</span>
+                  </span>
+                                    </div>
+                                    <div><span class="badge badge--green">Active</span></div>
+                                    <div class="service-card__foot">
+                                        <span class="service-card__due">À renouveler le 7 mars</span>
+                                        <a class="link" href="adhesion-services.html">Gérer</a>
+                                    </div>
+                                </article>
+
+                                <article class="service-card">
+                                    <div class="service-card__head">
+                                        <span class="service-card__logo solid-mauve"></span>
+                                        <span>
+                    <span class="service-card__title" style="display:block">Accès atelier</span>
+                    <span class="service-card__place">LOWCAL</span>
+                  </span>
+                                    </div>
+                                    <div><span class="badge badge--neutral">Mensuel · 12,00 €</span></div>
+                                    <div class="service-card__foot">
+                                        <span class="service-card__due">Prochain prélèvement le 2 sept.</span>
+                                        <a class="link" href="#">Gérer</a>
+                                    </div>
+                                </article>
+
+                                <article class="service-card">
+                                    <div class="service-card__head">
+                                        <span class="service-card__logo solid-terracotta"></span>
+                                        <span>
+                    <span class="service-card__title" style="display:block">Carte spectacles</span>
+                    <span class="service-card__place">Cie du Loup</span>
+                  </span>
+                                    </div>
+                                    <div><span class="badge badge--terracotta">3 places restantes</span></div>
+                                    <div class="service-card__foot">
+                                        <span class="service-card__due">Valable jusqu'au 30 juin</span>
+                                        <a class="link" href="#">Gérer</a>
+                                    </div>
+                                </article>
+
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+            </div>
+        </section>
+
+        <!-- 2 · LES LIEUX PARCOURUS -->
+        <section class="section" id="lieux">
+            <div class="section__title">Mes lieux <span class="section__meta">· 6 épinglés</span></div>
+
+            <div class="filter-tabs" data-tabs="favoris" style="margin: var(--space-5) 0 var(--space-5);">
+                <button class="tag-pill is-active" data-value="tout">Tout</button>
+                <button class="tag-pill" data-value="lieu">Lieu</button>
+                <button class="tag-pill" data-value="tiers-lieu">Tiers-lieu</button>
+                <button class="tag-pill" data-value="association">Association</button>
+                <button class="tag-pill" data-value="compagnie">Compagnie</button>
+                <button class="tag-pill" data-value="collectif">Collectif</button>
+                <button class="tag-pill" data-value="festival">Festival</button>
+                <button class="tag-pill" data-value="cooperative">Coopérative</button>
+                <button class="tag-pill" data-value="atelier">Atelier</button>
+                <button class="tag-pill" data-value="media">Média</button>
+                <button class="tag-pill" data-value="institution">Institution</button>
+            </div>
+
+            <div class="grid grid--3" data-cards="favoris">
+                <article class="favorite-card" data-card data-type="tiers-lieu" data-search="la miete membre événements">
+                    <div class="favorite-card__cover bg-green">
+                        <button class="pin-btn is-on" data-pin aria-pressed="true"><svg width="14" height="14" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l-1 5 3.5 3.5H6.5L10 9z"/><path d="M12 12.5V20"/></svg><span class="pin-btn__label">Épinglé</span></button>
+                    </div>
+                    <div class="favorite-card__body">
+                        <div class="favorite-card__title-row"><span class="favorite-card__title">La MIETE</span><span class="badge badge--dark">Tiers-lieu</span></div>
+                        <ul class="favorite-card__list"><li>Vous y êtes membre</li><li>3 événements à venir</li></ul>
+                        <a class="link" href="accueil.html">Y aller →</a>
+                    </div>
+                </article>
+
+                <article class="favorite-card" data-card data-type="compagnie" data-search="cie du loup spectacles">
+                    <div class="favorite-card__cover bg-terracotta">
+                        <button class="pin-btn is-on" data-pin aria-pressed="true"><svg width="14" height="14" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l-1 5 3.5 3.5H6.5L10 9z"/><path d="M12 12.5V20"/></svg><span class="pin-btn__label">Épinglé</span></button>
+                    </div>
+                    <div class="favorite-card__body">
+                        <div class="favorite-card__title-row"><span class="favorite-card__title">Cie du Loup</span><span class="badge badge--dark">Compagnie</span></div>
+                        <ul class="favorite-card__list"><li>Vu 2 spectacles</li></ul>
+                        <a class="link" href="#">Y aller →</a>
+                    </div>
+                </article>
+
+                <article class="favorite-card" data-card data-type="institution" data-search="le rize conférence">
+                    <div class="favorite-card__cover bg-gold">
+                        <button class="pin-btn is-on" data-pin aria-pressed="true"><svg width="14" height="14" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l-1 5 3.5 3.5H6.5L10 9z"/><path d="M12 12.5V20"/></svg><span class="pin-btn__label">Épinglé</span></button>
+                    </div>
+                    <div class="favorite-card__body">
+                        <div class="favorite-card__title-row"><span class="favorite-card__title">Le Rize</span><span class="badge badge--dark">Institution</span></div>
+                        <ul class="favorite-card__list"><li>1 conférence suivie</li></ul>
+                        <a class="link" href="#">Y aller →</a>
+                    </div>
+                </article>
+
+                <article class="favorite-card" data-card data-type="tiers-lieu" data-search="lowcal abonnement">
+                    <div class="favorite-card__cover bg-mauve">
+                        <button class="pin-btn is-on" data-pin aria-pressed="true"><svg width="14" height="14" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l-1 5 3.5 3.5H6.5L10 9z"/><path d="M12 12.5V20"/></svg><span class="pin-btn__label">Épinglé</span></button>
+                    </div>
+                    <div class="favorite-card__body">
+                        <div class="favorite-card__title-row"><span class="favorite-card__title">LOWCAL</span><span class="badge badge--dark">Tiers-lieu</span></div>
+                        <ul class="favorite-card__list"><li>Vous y avez un abonnement</li><li>1 événement à venir</li></ul>
+                        <a class="link" href="#">Y aller →</a>
+                    </div>
+                </article>
+
+                <article class="favorite-card" data-card data-type="collectif" data-search="incroyables comestibles chantier jardin">
+                    <div class="favorite-card__cover bg-teal">
+                        <button class="pin-btn is-on" data-pin aria-pressed="true"><svg width="14" height="14" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l-1 5 3.5 3.5H6.5L10 9z"/><path d="M12 12.5V20"/></svg><span class="pin-btn__label">Épinglé</span></button>
+                    </div>
+                    <div class="favorite-card__body">
+                        <div class="favorite-card__title-row"><span class="favorite-card__title">Les Incroyables Comestibles</span><span class="badge badge--dark">Collectif</span></div>
+                        <ul class="favorite-card__list"><li>Rencontré au chantier jardin</li></ul>
+                        <a class="link" href="#">Y aller →</a>
+                    </div>
+                </article>
+
+                <article class="favorite-card" data-card data-type="festival" data-search="les nuits sonores édition soirées">
+                    <div class="favorite-card__cover bg-indigo">
+                        <button class="pin-btn is-on" data-pin aria-pressed="true"><svg width="14" height="14" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l-1 5 3.5 3.5H6.5L10 9z"/><path d="M12 12.5V20"/></svg><span class="pin-btn__label">Épinglé</span></button>
+                    </div>
+                    <div class="favorite-card__body">
+                        <div class="favorite-card__title-row"><span class="favorite-card__title">Les Nuits Sonores</span><span class="badge badge--dark">Festival</span></div>
+                        <ul class="favorite-card__list"><li>Édition 2025 · 2 soirées</li></ul>
+                        <a class="link" href="#">Y aller →</a>
+                    </div>
+                </article>
+            </div>
+
+        </section>
+
+    </main>
+{% endblock %}
+
+{% block account_page_old %}
+{% if tenants_admin %}
+<style>
+    .btn-admin-tenant {
+        border: 2px solid #dc3545;
+        border-radius: 8px;
+        color: #dc3545;
+        transition: all 200ms ease;
+    }
+    .btn-admin-tenant:hover,
+    .btn-admin-tenant:focus {
+        background-color: #dc3545;
+        color: #fff;
+        box-shadow:
+            0px 0px 0px 1px rgba(220, 53, 69, 0.15),
+            0px 2px 8px 0px rgba(220, 53, 69, 0.20);
+    }
+    .btn-admin-tenant:hover .admin-tenant-domain,
+    .btn-admin-tenant:focus .admin-tenant-domain {
+        color: rgba(255, 255, 255, 0.75) !important;
+    }
+</style>
+<div class="text-center mb-3">
+    <div style="display: flex; align-items: center; gap: 12px; justify-content: center;">
+        <hr style="flex: 1; border-color: #dc3545; opacity: 0.4;">
+        <h5 class="text-danger mb-0" style="white-space: nowrap; font-weight: 600; text-wrap: balance;">
+            <i class="bi bi-key-fill me-1" aria-hidden="true"></i>{% trans 'Administration' %}
+        </h5>
+        <hr style="flex: 1; border-color: #dc3545; opacity: 0.4;">
+    </div>
+</div>
+<div class="row row-cols-1 {% if tenants_admin|length > 1 %}row-cols-md-2{% endif %} g-3 text-center mb-3 justify-content-center">
+    {% for tenant in tenants_admin %}
+    <div class="col{% if tenants_admin|length == 1 %} col-md-6{% endif %}">
+        <a class="w-100 btn btn-lg btn-admin-tenant d-flex flex-column align-items-center py-3"
+           href="https://{{ tenant.get_primary_domain.domain }}/admin/"
+           target="_blank"
+           data-testid="btn-admin-{{ tenant.name|slugify }}">
+            <i class="bi bi-key-fill fs-1" aria-hidden="true"></i>
+            <span class="d-block fw-semibold">{{ tenant.name }}</span>
+            <small class="d-block admin-tenant-domain" style="color: #888; font-size: 0.8em;">{{ tenant.get_primary_domain.domain }}</small>
+        </a>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if tenants_admin %}
+<div class="text-center mt-2 mb-3">
+    <div style="display: flex; align-items: center; gap: 12px; justify-content: center;">
+        <hr style="flex: 1; opacity: 0.15;">
+        <h5 class="text-secondary mb-0" style="white-space: nowrap; font-weight: 600; text-wrap: balance;">
+            <i class="bi bi-person-fill me-1" aria-hidden="true"></i>{% trans 'My account' %}
+        </h5>
+        <hr style="flex: 1; opacity: 0.15;">
+    </div>
+</div>
+{% endif %}
+
+<div class="row row-cols-1 row-cols-md-2 g-3 text-center mb-3">
+    <div class="col">
+        <a class="w-100 btn btn-lg btn-outline-primary{% if account_tab == 'balance' %} active" aria-current="page{% endif %}"
+            href="/my_account/balance/">
+            <i class="bi bi-piggy-bank-fill fs-1"></i>
+            <span class="d-block">{% trans 'My wallet' %}</span>
+        </a>
+    </div>
+    <div class="col">
+        <a class="w-100 btn btn-lg btn-outline-secondary{% if account_tab == 'memberships' %} active" aria-current="page{% endif %}"
+            href="/my_account/membership/">
+            <i class="bi bi-person-badge-fill fs-1"></i>
+            <span class="d-block">{% trans 'My subscriptions' %}</span>
+        </a>
+    </div>
+    <div class="col">
+        <a class="w-100 btn btn-lg btn-outline-secondary{% if account_tab == 'reservations' %} active" aria-current="page{% endif %}"
+            href="/my_account/my_reservations/">
+            <i class="bi bi-ticket-perforated-fill fs-1"></i>
+            <span class="d-block">{% trans 'My bookings' %}</span>
+        </a>
+    </div>
+    {% if config.module_booking %}
+    <div class="col">
+        <a class="w-100 btn btn-lg btn-outline-secondary{% if account_tab == 'my_resources' %} active" aria-current="page{% endif %}"
+            href="/my_account/my_bookings/"
+            data-testid="btn-my-resources">
+            <i class="bi bi-building fs-1" aria-hidden="true"></i>
+            <span class="d-block">{% trans 'Mes ressources' %}</span>
+        </a>
+    </div>
+    {% endif %}
+    <div class="col">
+        <a class="w-100 btn btn-lg btn-outline-secondary{% if account_tab == 'card' %} active" aria-current="page{% endif %}"
+            href="/my_account/card/">
+            <i class="bi bi-postcard-fill fs-1"></i>
+            <span class="d-block">{% trans 'My Pass card' %}</span>
+        </a>
+    </div>
+    <div class="col">
+        <a class="w-100 btn btn-lg btn-outline-secondary{% if account_tab == 'profile' %} active" aria-current="page{% endif %}"
+            href="/my_account/profile/">
+            <i class="bi bi-gear-fill fs-1"></i>
+            <span class="d-block">{% trans 'My settings' %}</span>
+        </a>
+    </div>
+    <div class="col">
+        <a class="w-100 btn btn-lg btn-outline-secondary" href="/deconnexion/">
+            <i class="bi bi-box-arrow-right fs-1"></i>
+            <span class="d-block">{% trans 'Log out' %}</span>
+        </a>
+    </div>
+</div>
+{% endblock %}

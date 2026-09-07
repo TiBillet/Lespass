@@ -1,0 +1,116 @@
+{% load static i18n %}
+{% load laboutik_process %}
+<!--
+ECRAN SUCCES DE PAIEMENT
+Affiche le resultat du paiement : icone animee, montant, monnaie a rendre.
+Le caissier doit voir en 1 seconde si tout est OK et combien rendre.
+/ Payment success screen — animated icon, amount, change to give back.
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_return_payment_success.html
+
+FLUX :
+1. Le serveur traite le paiement (laboutik-paiement-payer)
+2. Renvoie ce partial avec les details du paiement
+3. Le caissier lit le resultat et clique RETOUR pour revenir a l'addition
+-->
+<div id="messages">
+  <div class="BF-col" data-testid="paiement-succes" aria-live="polite">
+    {% if deposit_is_present %}
+      <!-- consigne / deposit -->
+      <i class="fas fa-check-circle success-icon" aria-hidden="true"></i>
+      <div class="payment-title1 test-return-title-content">{% translate "Retour de consigne ok" %}</div>
+      {% if payment.moyen_paiement == 'nfc' %}
+        <div class="payment-msg1">{% translate "Votre carte est crédité de" %} {{ total }} {{ state.place.monnaie_name }}</div>
+      {% endif %}
+      {% if payment.moyen_paiement == 'espece' %}
+        <div class="payment-msg1">{% translate "A rembourser" %} : {{ total }} {{ currency_data.symbol }}</div>
+      {% endif %}
+    {% else %}
+      <!-- pas de consigne / no deposit -->
+      <i class="fas fa-check-circle success-icon" aria-hidden="true"></i>
+      <div class="payment-title1 test-return-title-content">{% translate "Paiement réussi" %}</div>
+      <!-- complement pour fonds insuffisants / complement for insufficient funds -->
+      {% if original_payment %}
+        <div class="payment-detail test-return-total-achats">
+          {% translate "Total" %} ({{ original_moyen_paiement }}/{{ moyen_paiement }}) : {{ payment.total|divide_by:100 }} {{ currency_data.symbol }}
+        </div>
+      {% else %}
+        <div class="payment-detail test-return-total-achats">
+          {% translate "Payé en" %} {{ moyen_paiement }} : {{ payment.total|divide_by:100 }} {{ currency_data.symbol }}
+        </div>
+      {% endif %}
+      <!-- Soldes multi-asset apres paiement NFC / Multi-asset balances after NFC payment -->
+      {% if soldes_apres_paiement %}
+        <div class="cascade-badges-list"
+             data-testid="soldes-multi-asset"
+             aria-live="polite">
+          {% for solde in soldes_apres_paiement %}
+            <span class="cascade-badge" data-testid="solde-asset-{{ forloop.counter }}">
+              {{ solde.name }} : {{ solde.solde_euros }}€
+            </span>
+          {% endfor %}
+        </div>
+      {% elif nouveau_solde is not None %}
+        <!-- Fallback mono-solde / Single balance fallback -->
+        <div class="payment-msg1" data-testid="paiement-nfc-succes">
+          {% translate "Nouveau solde" %} {{ card_name }} :
+          <span data-testid="paiement-nfc-solde">{{ nouveau_solde }}</span> {{ monnaie_name }}
+        </div>
+      {% endif %}
+      <!-- monnaie a rendre / change to give back -->
+      {% if payment.give_back > 0 %}
+        <div class="payment-msg-discret">
+          {% translate "Somme donnée" %} : {{ payment.given_sum|divide_by:100 }} {{ currency_data.symbol }}
+        </div>
+        <div class="give-back-box" data-testid="paiement-monnaie-a-rendre">
+          <i class="fas fa-hand-holding-usd" aria-hidden="true"></i>
+          {% translate "Monnaie à rendre" %} : {{ payment.give_back }} {{ currency_data.symbol }}
+        </div>
+      {% endif %}
+    {% endif %}
+    <!--
+  Alerte stock négatif : un ou plusieurs produits ont un stock < 0 après cette vente.
+  N'apparaît QUE si autoriser_vente_hors_stock=True. Sinon la vente aurait
+  été bloquée en amont (cf. _valider_stock_panier dans laboutik/views.py).
+  / Negative stock alert: one or more products have stock < 0 after this sale.
+  Only appears if autoriser_vente_hors_stock=True. Otherwise the sale would have
+  been blocked upstream (see _valider_stock_panier in laboutik/views.py).
+  -->
+    {% if produits_stock_negatif %}
+      <div class="stock-negatif-box"
+           data-testid="alerte-stock-negatif"
+           role="alert">
+        <div class="stock-negatif-titre">
+          <i class="fas fa-exclamation-triangle stock-negatif-icone"
+             aria-hidden="true"></i>
+          <span>{% translate "Stock négatif" %}</span>
+        </div>
+        <ul class="stock-negatif-liste">
+          {% for produit in produits_stock_negatif %}
+            <li data-testid="produit-stock-negatif">{{ produit.name }} ({{ produit.quantite }} {{ produit.unite }})</li>
+          {% endfor %}
+        </ul>
+        <p class="stock-negatif-hint">{% translate "Vous pouvez bloquer la vente via le menu clic long sur cet article." %}</p>
+      </div>
+    {% endif %}
+    <!-- Bouton imprimer le ticket de vente / Print receipt button -->
+    {% if uuid_transaction and uuid_pv %}
+      <div class="bt-basic-container bt-imprimer-ticket"
+           data-testid="btn-imprimer-ticket"
+           hx-post="{% url 'laboutik-paiement-imprimer_ticket' %}"
+           hx-vals='{"uuid_transaction": "{{ uuid_transaction }}", "uuid_pv": "{{ uuid_pv }}"}'
+           hx-target="#print-feedback"
+           hx-swap="innerHTML"
+           data-loading-disable>
+        <div class="bt-basic-icon">
+          <i class="fas fa-print" aria-hidden="true"></i>
+        </div>
+        <div class="bt-basic-text">
+          <div>{% translate "Imprimer" %}</div>
+        </div>
+      </div>
+      <div id="print-feedback" aria-live="polite"></div>
+    {% endif %}
+    <c-bt.return selector="#messages" layer="1" action="manageReset()" />
+  </div>
+</div>

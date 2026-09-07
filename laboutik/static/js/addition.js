@@ -11,7 +11,7 @@
  * 
  * COMMUNICATION :
  * Reçoit : 'additionInsertArticle', 'additionReset', 'additionDisplayPaymentTypes', 'additionManageForm'
- * Émet : 'additionTotalChange' (vers #bt-valider), 'additionRemoveArticle' (vers #products)
+ * Émet : 'additionTotalChange' (vers #addition), 'additionRemoveArticle' (vers #products)
  * 
  * Voir tibilletUtils.js pour le système d'événements.
  */
@@ -53,6 +53,236 @@ function calculateTotal() {
 		}
 	})
 	return total
+}
+
+/**
+ * Met a jour l'en-tete et le bas du ticket
+ * / Updates the ticket header and footer
+ *
+ * En-tete : pastille de comptage + bouton VIDER.
+ * Bas : total affiche + bouton VALIDER actif ou non.
+ * / Header: count pill + EMPTY button. Footer: displayed total + VALIDATE
+ * button enabled or not.
+ *
+ * Le nombre affiche est la somme des quantites des lignes du panier, lue sur
+ * les inputs repid-* du formulaire (meme source que calculateTotal).
+ * Panier vide : la pastille retombe sur "—" et le bouton VIDER est desactive.
+ *
+ * Gardes null partout : l'en-tete n'existe que sur l'interface de vente, pas
+ * sur les vues ou #addition est absent (ventes, tables...).
+ *
+ * / The displayed number is the sum of the cart line quantities, read from the
+ * form's repid-* inputs (same source as calculateTotal).
+ * Empty cart: the pill falls back to "—" and the EMPTY button is disabled.
+ * Null-guarded: the header only exists on the sales interface.
+ */
+function additionMajEntete() {
+	let nombreArticles = 0
+	document.querySelectorAll('#addition-form input').forEach(input => {
+		if (input.name.startsWith('repid-')) {
+			nombreArticles += Number(input.value) || 0
+		}
+	})
+
+	const eleCompteur = document.querySelector('#addition-count')
+	if (eleCompteur) {
+		// Libelles traduits poses par le template (cotton/addition.html)
+		// / Translated labels set by the template
+		const libelleUn = eleCompteur.dataset.labelUn || 'article'
+		const libellePlusieurs = eleCompteur.dataset.labelPlusieurs || 'articles'
+		const libelle = nombreArticles > 1 ? libellePlusieurs : libelleUn
+		eleCompteur.textContent = nombreArticles > 0 ? `${nombreArticles} ${libelle}` : '\u2014'
+	}
+
+	const eleVider = document.querySelector('#addition-vider')
+	if (eleVider) {
+		eleVider.disabled = nombreArticles === 0
+		// Panier vide = plus rien a confirmer, on desarme
+		// / Empty cart = nothing left to confirm, disarm
+		if (nombreArticles === 0) { additionDesarmerVider() }
+	}
+
+	// Le total affiche, lui, est ecrit par additionMajTotal() (handler de
+	// l'evenement additionTotalChange) : un seul ecrivain par element.
+	// / The displayed total is written by additionMajTotal(), the
+	// additionTotalChange handler: one writer per element.
+	const eleValider = document.querySelector('#addition-bt-valider')
+	if (eleValider) {
+		eleValider.disabled = nombreArticles === 0
+	}
+}
+
+/**
+ * Met a jour une ligne du ticket : quantite affichee et total de la ligne
+ * / Updates a ticket row: displayed quantity and row total
+ *
+ * Le total de la ligne est recalcule depuis data-unit-price, qui porte deja le
+ * prix unitaire reel (prix libre et vente au poids compris).
+ * / The row total is recomputed from data-unit-price, which already carries the
+ * real unit price (free price and weight-based sales included).
+ *
+ * @param {String} lineId - Identifiant de la ligne panier
+ * @param {Number} quantity - Nouvelle quantite
+ */
+function additionMajLigne(lineId, quantity) {
+	const ligne = document.querySelector(`#addition-line-${lineId}`)
+	if (!ligne) { return }
+
+	ligne.dataset.quantity = quantity
+
+	const eleQuantite = document.querySelector(`#addition-quantity-${lineId}`)
+	if (eleQuantite) { eleQuantite.innerHTML = `&times; ${quantity}` }
+
+	const eleTotalLigne = document.querySelector(`#addition-price-${lineId}`)
+	if (eleTotalLigne) {
+		const prixUnitaire = Number(ligne.dataset.unitPrice) || 0
+		const monnaie = eleTotalLigne.dataset.currency || ''
+		eleTotalLigne.textContent = `${(prixUnitaire * quantity / 100).toFixed(2)}${monnaie}`
+	}
+}
+
+/**
+ * Ecrit le total dans le bas du ticket
+ * / Writes the total at the bottom of the ticket
+ *
+ * Handler de 'additionTotalChange' (table switches de tibilletUtils.js), emis
+ * par additionInsertArticle(), additionRemoveArticle() et additionReset().
+ * Reprend mot pour mot ce que faisait footer.js:updateSumOfValidateButton()
+ * sur #bt-valider-total, quand le footer pleine largeur existait encore.
+ * / Handler of 'additionTotalChange', emitted by the three cart functions.
+ * Does exactly what footer.js:updateSumOfValidateButton() used to do.
+ *
+ * @param {Event} event - event.detail.totalAddition, total en centimes
+ */
+function additionMajTotal(event) {
+	const eleTotal = document.querySelector('#addition-total-affiche')
+	if (!eleTotal) { return }
+
+	const totalCentimes = Number(event.detail.totalAddition) || 0
+	const monnaie = eleTotal.dataset.currency || ''
+	eleTotal.textContent = `${(totalCentimes / 100).toFixed(2)} ${monnaie}`.trim()
+}
+
+/**
+ * Rejoue une classe d'animation sur un element
+ * / Replays an animation class on an element
+ *
+ * Le retrait + reflow force est indispensable : sans lui, une classe deja
+ * posee ne relancerait pas son animation. La classe est retiree a la fin.
+ * / The remove + forced reflow is required: an already-present class would not
+ * restart its animation. The class is removed once the animation ends.
+ *
+ * @param {HTMLElement} element - Element a animer
+ * @param {String} classe - Classe d'animation (is-new, is-removed...)
+ */
+function additionRejouerAnimation(element, classe) {
+	element.classList.remove(classe)
+	void element.offsetWidth  // reflow force / forced reflow
+	element.classList.add(classe)
+	element.addEventListener('animationend', () => element.classList.remove(classe), { once: true })
+}
+
+/**
+ * Flash vert sur la ligne qui vient d'etre ajoutee ou incrementee
+ * / Green flash on the line that was just added or incremented
+ *
+ * @param {String} lineId - Identifiant de la ligne panier
+ */
+function additionFlashAjout(lineId) {
+	const ligne = document.querySelector(`#addition-line-${lineId}`)
+	if (ligne) { additionRejouerAnimation(ligne, 'is-new') }
+}
+
+/**
+ * Flash rouge sur la ligne qui vient d'etre decrementee
+ * / Red flash on the line that was just decremented
+ *
+ * @param {String} lineId - Identifiant de la ligne panier
+ */
+function additionFlashRetrait(lineId) {
+	const ligne = document.querySelector(`#addition-line-${lineId}`)
+	if (ligne) { additionRejouerAnimation(ligne, 'is-removed') }
+}
+
+/**
+ * Fait disparaitre une ligne dont la quantite est tombee a zero
+ * / Fades out a line whose quantity dropped to zero
+ *
+ * La ligne reste a l'ecran le temps de l'animation rouge, mais ses id sont
+ * retires immediatement : si le meme article est re-ajoute dans la foulee, les
+ * selecteurs ne doivent plus tomber sur la ligne en train de disparaitre.
+ * Le pointer-events:none du CSS empeche un second clic sur son bouton moins.
+ * Le setTimeout est un filet de securite si animationend ne part pas
+ * (animations desactivees par le systeme).
+ *
+ * / The row stays on screen for the length of the red animation, but its ids
+ * are stripped at once: if the same article is re-added right away, selectors
+ * must not find the vanishing row. The CSS pointer-events:none blocks a second
+ * click on its minus button. The setTimeout is a safety net in case
+ * animationend never fires (system-disabled animations).
+ *
+ * @param {String} lineId - Identifiant de la ligne panier
+ */
+function additionRetirerLigneAnimee(lineId) {
+	const ligne = document.querySelector(`#addition-line-${lineId}`)
+	if (!ligne) { return }
+
+	const eleQuantite = ligne.querySelector(`#addition-quantity-${lineId}`)
+	if (eleQuantite) { eleQuantite.removeAttribute('id') }
+	const eleTotalLigne = ligne.querySelector(`#addition-price-${lineId}`)
+	if (eleTotalLigne) { eleTotalLigne.removeAttribute('id') }
+	ligne.removeAttribute('id')
+
+	ligne.classList.add('is-removing')
+	ligne.addEventListener('animationend', () => ligne.remove(), { once: true })
+	setTimeout(() => ligne.remove(), 600)
+}
+
+/**
+ * Bouton VIDER du ticket — confirmation en deux temps
+ * / Ticket EMPTY button — two-step confirmation
+ *
+ * Premier appui : le bouton s'arme (rouge, libelle "Confirmer") et se desarme
+ * tout seul apres 2,6 s. Deuxieme appui : emet 'resetArticles', le meme
+ * evenement que le bouton RESET du footer (footer.js:manageReset), qui vide a
+ * la fois l'addition et les quantites des tuiles.
+ * / First tap arms the button (red, "Confirm" label), auto-disarming after
+ * 2.6s. Second tap emits 'resetArticles' — the same event as the footer RESET
+ * button — which clears both the cart and the tile quantities.
+ *
+ * Appele par l'attribut onclick du bouton (cotton/addition.html).
+ */
+let additionViderTimer = null
+
+function additionArmerVider() {
+	const bouton = document.querySelector('#addition-vider')
+	if (!bouton || bouton.disabled) { return }
+
+	if (!bouton.classList.contains('is-armed')) {
+		bouton.classList.add('is-armed')
+		bouton.querySelector('.addition-vider-label').textContent = bouton.dataset.labelConfirmer
+		additionViderTimer = setTimeout(additionDesarmerVider, 2600)
+		return
+	}
+
+	additionDesarmerVider()
+	sendEvent('organizerMsg', '#event-organizer', {
+		src: { file: 'addition.js', method: 'additionArmerVider' },
+		msg: 'resetArticles',
+		data: {}
+	})
+}
+
+/**
+ * Remet le bouton VIDER dans son etat de repos
+ * / Puts the EMPTY button back to its resting state
+ */
+function additionDesarmerVider() {
+	clearTimeout(additionViderTimer)
+	const bouton = document.querySelector('#addition-vider')
+	if (!bouton) { return }
+	bouton.classList.remove('is-armed')
+	bouton.querySelector('.addition-vider-label').textContent = bouton.dataset.labelVider
 }
 
 /**
@@ -124,6 +354,10 @@ function additionInsertArticle({ detail }) {
 			`)
 		}
 
+		// Ligne du ticket, composition de la maquette (.tk-line) :
+		// bouton moins | nom + prix unitaire | quantite + total de la ligne.
+		// / Ticket row, mockup composition (.tk-line):
+		// minus button | name + unit price | quantity + row total.
 		const additionLine = `
 			<div id="addition-line-${lineId}" data-quantity="${quantity}" data-price="${lineId}" data-unit-price="${prixAffiche}" class="addition-line-grid">
 				<div class="addition-col-bt">
@@ -133,17 +367,25 @@ function additionInsertArticle({ detail }) {
 				</div>
 				<div class="addition-col-info">
 					<div class="addition-col-name">${escapeHtml(name)}</div>
-					<div id="addition-quantity-${lineId}" class="addition-col-quantity-label">&times; ${quantity}</div>
+					<div class="addition-col-unit">${(prixAffiche / 100).toFixed(2)}${currency}</div>
 				</div>
-				<div class="addition-col-price">${(prixAffiche / 100).toFixed(2)}${currency}</div>
+				<div class="addition-col-right">
+					<span id="addition-quantity-${lineId}" class="addition-col-quantity">&times; ${quantity}</span>
+					<span id="addition-price-${lineId}" class="addition-col-price" data-currency="${currency}">${(prixAffiche * quantity / 100).toFixed(2)}${currency}</span>
+				</div>
 			</div>
 		`
 		document.querySelector('#addition-list').insertAdjacentHTML('beforeend', additionLine)
 	} else {
-		// Article existant : mise à jour quantité
+		// Article existant : mise à jour quantité (et total de la ligne)
+		// / Existing item: quantity update (and row total)
 		input.value = Number(quantity)
-		document.querySelector(`#addition-quantity-${lineId}`).innerHTML = `&times; ${quantity}`
+		additionMajLigne(lineId, quantity)
 	}
+
+	// Flash vert sur la ligne touchée — nouvelle comme mise à jour
+	// / Green flash on the touched line — new or updated
+	additionFlashAjout(lineId)
 
 	const totalAddition = calculateTotal()
 
@@ -155,6 +397,7 @@ function additionInsertArticle({ detail }) {
 	})
 
 	document.querySelector('#addition-total').value = totalAddition
+	additionMajEntete()
 }
 
 /**
@@ -172,20 +415,36 @@ function additionRemoveArticle(lineId) {
 	// / lineId can be "uuid" (single-rate) or "uuid--priceUuid" (multi-rate)
 	const productUuid = lineId.split('--')[0]
 
+	// Ligne deja en train de disparaitre (ses id ont ete retires) : on ignore.
+	// Le pointer-events:none de .is-removing bloque deja le clic, ceci couvre
+	// le cas ou le CSS n'aurait pas ete applique.
+	// / Row already vanishing (its ids were stripped): ignore. The CSS
+	// pointer-events:none already blocks the click; this covers the case where
+	// the stylesheet did not apply.
 	const eleQuantity = document.querySelector(`#addition-quantity-${lineId}`)
+	if (!eleQuantity) { return }
+
 	let quantity = Number(eleQuantity.textContent.replace('×', '').trim())
 	quantity--
 
-	eleQuantity.innerHTML = `&times; ${quantity}`
+	additionMajLigne(lineId, quantity)
 	document.querySelector(`#addition-form [name="repid-${lineId}"]`).value = Number(quantity)
 
 	if (quantity === 0) {
-		document.querySelector(`#addition-line-${lineId}`).remove()
+		// La ligne part en fondu rouge ; les inputs, eux, disparaissent tout de
+		// suite pour que le total et le compteur soient justes immediatement.
+		// / The row fades out in red; the inputs are removed at once so the
+		// total and the counter are correct straight away.
+		additionRetirerLigneAnimee(lineId)
 		document.querySelector(`#addition-form [name="repid-${lineId}"]`).remove()
 		// Supprimer aussi l'input custom si présent (prix libre)
 		// / Also remove custom input if present (free price)
 		const customInput = document.querySelector(`#addition-form [name="custom-${lineId}"]`)
 		if (customInput) { customInput.remove() }
+	} else {
+		// Flash rouge sur la ligne décrémentée
+		// / Red flash on the decremented line
+		additionFlashRetrait(lineId)
 	}
 
 	// Met à jour la tuile article (utilise le productUuid pour trouver la tuile)
@@ -205,6 +464,7 @@ function additionRemoveArticle(lineId) {
 	})
 
 	document.querySelector('#addition-total').value = totalAddition
+	additionMajEntete()
 }
 
 /**
@@ -268,6 +528,7 @@ function additionReset() {
 	})
 
 	document.querySelector('#addition-total').value = totalAddition
+	additionMajEntete()
 }
 
 /**
@@ -398,6 +659,7 @@ function additionManageForm(event) {
  */
 document.addEventListener('DOMContentLoaded', () => {
 	document.querySelector('#addition').addEventListener('additionInsertArticle', additionInsertArticle)
+	document.querySelector('#addition').addEventListener('additionMajTotal', additionMajTotal)
 	document.querySelector('#addition').addEventListener('additionReset', additionReset)
 	document.querySelector('#addition').addEventListener('additionDisplayPaymentTypes', additionDisplayPaymentTypes)
 	document.querySelector('#addition').addEventListener('additionManageForm', additionManageForm)

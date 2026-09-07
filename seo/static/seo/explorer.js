@@ -58,6 +58,10 @@
             clearTag: 'Effacer le filtre',
             tagEmpty: 'Aucun événement « {tag} » dans la zone visible.',
             moreTags: '+ {count} tags',
+            // Filtre par type de lieu (page Reseau V2 uniquement)
+            // / Venue type filter (V2 Network page only)
+            tout: 'Tout',
+            sansLieuFixe: 'Sans lieu fixe',
         },
     };
 
@@ -72,13 +76,23 @@
     // ============================================================
     const state = {
         data: null,
-        filters: { text: '', view: 'lieu', tag: null },
+        // typeLieu : code Client.categorie actif (ex "S" pour Scene), null = tous.
+        // Renseigne seulement sur les pages dont les donnees portent une
+        // categorie (page Reseau tenant). / Venue category code filter.
+        filters: { text: '', view: 'lieu', tag: null, typeLieu: null },
         map: null,
         markers: {},
         markerCluster: null,
         currentView: 'list',
         mapInitialized: false,
     };
+
+    // Types de lieu disponibles, calcules au init depuis les donnees.
+    // Vide si les donnees ne portent pas de categorie (ex : /explorer/ public)
+    // -> la rangee de pills de type n'est alors jamais affichee.
+    // / Available venue types, computed at init. Empty when data carries no
+    // category (e.g. public /explorer/) -> the type pills row stays hidden.
+    let categoriesDisponibles = [];
 
     // ============================================================
     // DOM — references mises en cache au init
@@ -94,6 +108,7 @@
         counter: null,
         fab: null,
         tags: null,   // conteneur chips tags / tag chips container
+        typePills: null,   // conteneur pills type de lieu / venue type pills container
     };
 
     // ============================================================
@@ -146,6 +161,8 @@
         if (ds.i18nClearTag) config.i18n.clearTag = ds.i18nClearTag;
         if (ds.i18nTagEmpty) config.i18n.tagEmpty = ds.i18nTagEmpty;
         if (ds.i18nMoreTags) config.i18n.moreTags = ds.i18nMoreTags;
+        if (ds.i18nTout) config.i18n.tout = ds.i18nTout;
+        if (ds.i18nSansLieuFixe) config.i18n.sansLieuFixe = ds.i18nSansLieuFixe;
     }
 
     // ============================================================
@@ -164,6 +181,10 @@
         dom.counter = document.getElementById('explorer-counter');
         dom.fab = document.getElementById('explorer-fab');
         dom.tags = document.getElementById('explorer-tags');
+        // Pills de type de lieu : conteneur present seulement sur la page
+        // Reseau V2. Absent ailleurs -> toute la mecanique de type s'eteint.
+        // / Venue type pills: container only exists on the V2 Network page.
+        dom.typePills = document.getElementById('explorer-type-pills');
 
         // Garde-fou : si les elements essentiels manquent, abandonner
         // / Guard: if essential elements are missing, abort
@@ -181,6 +202,15 @@
 
         bootFromURL();   // pré-remplit state.filters depuis l'URL / pre-fills state.filters from URL
 
+        // Page Reseau V2 : les chips de tags ne s'affichent qu'en vue "event". Un tag venant de
+        // l'URL (?tag=xxx) avec la vue "lieu" par defaut serait un filtre invisible -> reset.
+        // / V2 page: tag chips only show in "event" view — reset a URL-provided tag
+        // when the initial view is "lieu".
+        if (dom.typePills && state.filters.view === 'lieu') {
+            state.filters.tag = null;
+        }
+
+        renderTypePills();   // pills de type de lieu (si donnees enrichies) / venue type pills
         bindControls();
         applyFilters();
 
@@ -274,11 +304,24 @@
         return false;
     }
 
+    function paMatchesTypeLieu(point) {
+        // Filtre par type de lieu (Client.categorie). Sans filtre actif, tout
+        // passe. Si le point ne porte pas de categorie (donnees non enrichies),
+        // il ne passe PAS quand un filtre de type est actif.
+        // / Venue type filter (Client.categorie). Without an active filter,
+        // everything passes. A point with no category does NOT pass when a
+        // type filter is active.
+        if (!state.filters.typeLieu) return true;
+        return point.tenant_categorie === state.filters.typeLieu;
+    }
+
     function filterPAsByTextAndTag(points) {
+        // Malgre son nom historique, filtre aussi par type de lieu.
+        // / Despite its historical name, also filters by venue type.
         const result = [];
         for (let i = 0; i < points.length; i++) {
             const point = points[i];
-            if (paMatchesText(point) && paMatchesTag(point)) {
+            if (paMatchesText(point) && paMatchesTag(point) && paMatchesTypeLieu(point)) {
                 result.push(point);
             }
         }
@@ -337,6 +380,29 @@
         return events;
     }
 
+    function distanceMinDesPAs(pas) {
+        // Distance affichee sur la card lieu : la plus petite parmi les
+        // adresses du lieu. Renvoie :
+        //   - undefined si AUCUNE pa ne porte la cle distance_km (donnees non
+        //     enrichies, ex : /explorer/ public) -> rien n'est affiche
+        //   - null si enrichi mais aucune adresse geocodee -> "Sans lieu fixe"
+        //   - un nombre (km) sinon
+        // / Distance shown on a venue card: the smallest among the venue's
+        // addresses. undefined = data not enriched (render nothing),
+        // null = enriched but no geocoded address, number otherwise.
+        let clePresente = false;
+        let distanceMin = null;
+        for (let i = 0; i < pas.length; i++) {
+            if (!('distance_km' in pas[i])) continue;
+            clePresente = true;
+            const distance = pas[i].distance_km;
+            if (distance === null || distance === undefined) continue;
+            if (distanceMin === null || distance < distanceMin) distanceMin = distance;
+        }
+        if (!clePresente) return undefined;
+        return distanceMin;
+    }
+
     function buildLieuCardsFromPAs(paVisibles) {
         // Regroupe les PA visibles par tenant_id. Renvoie liste de "lieu cards"
         // au meme format que state.data.tenants, mais enrichi avec eventsAggregated.
@@ -389,6 +455,25 @@
                 logo_url: t.logo_url,
                 image_url: t.image_url || '',
                 events: eventsUniques,
+                // Type de lieu + distance : presents seulement si la vue a
+                // enrichi les donnees (page Reseau tenant).
+                // / Venue type + distance: present only when the view enriched
+                // the data (tenant Network page).
+                categorie: t.categorie || '',
+                categorie_label: t.categorie_label || '',
+                distance_km: distanceMinDesPAs(parTenant[tid].pas),
+            });
+        }
+        // Le lieu courant ("Vous etes ici") est affiche en premier. Le tri est stable (garanti
+        // depuis ES2019) : l'ordre des autres cartes n'est pas perturbe. No-op sur la page publique
+        // /explorer/ (currentTenantUuid vide, aucune carte ne matche).
+        // / The current venue ("You are here") is shown first. The sort is stable: other cards keep
+        // their order. No-op on the public page (empty currentTenantUuid).
+        if (config.currentTenantUuid) {
+            cards.sort(function (a, b) {
+                const aEstLeLieuCourant = (a.tenant_id === config.currentTenantUuid) ? 0 : 1;
+                const bEstLeLieuCourant = (b.tenant_id === config.currentTenantUuid) ? 0 : 1;
+                return aEstLeLieuCourant - bEstLeLieuCourant;
             });
         }
         return cards;
@@ -411,8 +496,16 @@
             eventCards = collectVisibleEvents(paVisibles);
         }
 
+        // Nombre de lieux affiche dans le compteur :
+        // - vue "lieu" : nombre de cartes lieux construites.
+        // - vue "event" : lieuxCards n'est pas construit ([]) -> on compte les PA visibles, c-a-d les
+        //   lieux ayant au moins 1 event visible apres filtres, coherent avec les marqueurs de la carte.
+        // / Venue count for the counter: in "event" view, visible PAs = venues with at least one
+        // visible event, consistent with the map markers.
+        const nombreDeLieux = (state.filters.view === 'lieu') ? lieuxCards.length : paVisibles.length;
+
         renderList(lieuxCards, eventCards);
-        updateCounters(lieuxCards.length, eventCards.length || countEventsInPAs(paVisibles));
+        updateCounters(nombreDeLieux, eventCards.length || countEventsInPAs(paVisibles));
 
         // 3. Markers visibles : la source depend du mode.
         //    - Mode "lieu" : 1 marker par PA visible (filtre text+tag).
@@ -443,6 +536,10 @@
         if (typeof updateChips === 'function') {
             updateChips(paVisibles);
         }
+
+        // 4bis. Visibilite de la rangee de pills de type : seulement en vue
+        // "lieu". / Type pills row visibility: only in "lieu" view.
+        updateTypePillsVisibility();
 
         // 5. Synchroniser l'URL (Task 9 ajoutera syncURL).
         // / Sync URL (Task 9 will add syncURL).
@@ -479,6 +576,7 @@
         bindFAB();
         bindListDelegation();
         bindTagChips();
+        bindTypePills();
     }
 
     function bindSearch() {
@@ -520,6 +618,26 @@
             allPills.forEach(function (p) { p.classList.remove('active'); });
             pill.classList.add('active');
             state.filters.view = pill.getAttribute('data-category') || 'lieu';
+            // Le filtre par type de lieu n'a de sens qu'en vue "lieu" : en
+            // passant en vue "event", on le reinitialise pour ne pas
+            // restreindre les evenements affiches par surprise.
+            // / The venue type filter only makes sense in "lieu" view: reset
+            // it when switching to "event" view to avoid silently restricting
+            // the displayed events.
+            if (state.filters.view !== 'lieu') {
+                state.filters.typeLieu = null;
+                syncTypePillsActives();
+            }
+            // Symetrique (page Reseau V2 uniquement) : les chips de tags ne
+            // s'affichent qu'en vue "event". En repassant en vue "lieu", on
+            // reinitialise le tag actif pour ne pas filtrer les lieux avec
+            // un critere devenu invisible.
+            // / Symmetric (V2 Network page only): tag chips only show in
+            // "event" view. When switching back to "lieu" view, reset the
+            // active tag so venues are not filtered by an invisible criterion.
+            if (dom.typePills && state.filters.view === 'lieu') {
+                state.filters.tag = null;
+            }
             applyFilters();
         });
     }
@@ -554,6 +672,108 @@
             }
             applyFilters();
         });
+    }
+
+    // ============================================================
+    // TYPE DE LIEU — pills generees depuis les categories presentes
+    // / VENUE TYPE — pills generated from the categories in the data
+    // ============================================================
+    //
+    // Les categories (Client.categorie : Scene, Festival...) sont injectees
+    // cote serveur UNIQUEMENT par la page Reseau du tenant (FederationViewset,
+    // BaseBillet/views.py). Si les donnees n'en portent pas (page publique
+    // /explorer/), categoriesDisponibles reste vide et rien n'est affiche.
+    // / Categories are injected server-side ONLY by the tenant Network page.
+    // Without them (public /explorer/), nothing is rendered.
+
+    function renderTypePills() {
+        // Construit la rangee de pills une seule fois au init.
+        // / Builds the pills row once at init.
+        if (!dom.typePills) return;
+
+        // Categories distinctes presentes dans les tenants, triees par label.
+        // / Distinct categories present in tenants, sorted by label.
+        const labelsParCode = {};
+        const tenants = (state.data && state.data.tenants) || [];
+        for (let i = 0; i < tenants.length; i++) {
+            const tenant = tenants[i];
+            if (tenant.categorie && tenant.categorie_label && !labelsParCode[tenant.categorie]) {
+                labelsParCode[tenant.categorie] = tenant.categorie_label;
+            }
+        }
+        categoriesDisponibles = Object.keys(labelsParCode).map(function (code) {
+            return { code: code, label: labelsParCode[code] };
+        });
+        categoriesDisponibles.sort(function (a, b) {
+            return a.label.localeCompare(b.label);
+        });
+
+        // Aucune categorie dans les donnees : la rangee reste cachee a jamais.
+        // / No category in the data: the row stays hidden forever.
+        if (categoriesDisponibles.length === 0) {
+            dom.typePills.hidden = true;
+            return;
+        }
+
+        // data-categorie="" sur "Tout" = pas de filtre.
+        // / data-categorie="" on "All" = no filter.
+        let html = '<button type="button" class="tag-pill explorer-type-pill is-active"'
+            + ' data-categorie="" data-testid="explorer-type-pill-tout">'
+            + escapeHtml(config.i18n.tout) + '</button>';
+        for (let i = 0; i < categoriesDisponibles.length; i++) {
+            const categorie = categoriesDisponibles[i];
+            html += '<button type="button" class="tag-pill explorer-type-pill"'
+                + ' data-categorie="' + escapeHtml(categorie.code) + '"'
+                + ' data-testid="explorer-type-pill-' + escapeHtml(categorie.code) + '">'
+                + escapeHtml(categorie.label) + '</button>';
+        }
+        dom.typePills.innerHTML = html;
+    }
+
+    function bindTypePills() {
+        if (!dom.typePills) return;
+        dom.typePills.addEventListener('click', function (ev) {
+            const pill = ev.target.closest('.explorer-type-pill');
+            if (!pill) return;
+            // Chaine vide ("Tout") -> null = pas de filtre.
+            // / Empty string ("All") -> null = no filter.
+            state.filters.typeLieu = pill.getAttribute('data-categorie') || null;
+            syncTypePillsActives();
+            applyFilters();
+        });
+    }
+
+    function syncTypePillsActives() {
+        // Met a jour la classe is-active des pills de type pour refleter
+        // state.filters.typeLieu. / Sync the is-active class with the state.
+        if (!dom.typePills) return;
+        const pills = dom.typePills.querySelectorAll('.explorer-type-pill');
+        for (let i = 0; i < pills.length; i++) {
+            const code = pills[i].getAttribute('data-categorie') || null;
+            pills[i].classList.toggle('is-active', code === state.filters.typeLieu);
+        }
+    }
+
+    function updateTypePillsVisibility() {
+        // La rangee n'est visible qu'en vue "lieu" ET si des categories
+        // existent dans les donnees. / Visible only in "lieu" view AND when
+        // categories exist in the data.
+        if (!dom.typePills) return;
+        const aDesPills = categoriesDisponibles.length > 0;
+        dom.typePills.hidden = !(aDesPills && state.filters.view === 'lieu');
+    }
+
+    // ============================================================
+    // DISTANCE — formatage "a vol d'oiseau" (page Reseau V2)
+    // / DISTANCE — straight-line formatting (V2 Network page)
+    // ============================================================
+
+    function formatDistanceKm(distance_km) {
+        // 12.34 -> "12,3 km" en francais, "12.3 km" en anglais : on suit la
+        // langue du document. / Follows the document language.
+        const langue = document.documentElement.lang || 'fr';
+        const arrondi = Math.round(distance_km * 10) / 10;
+        return arrondi.toLocaleString(langue) + ' km';
     }
 
     /**
@@ -683,6 +903,29 @@
             ? ' <span class="explorer-badge explorer-badge--current">' + escapeHtml(config.i18n.current) + '</span>'
             : '';
 
+        // Badge de type de lieu (Scene, Festival...) : remplace le badge
+        // generique "Lieu" quand la donnee existe (page Reseau enrichie).
+        // / Venue type badge: replaces the generic "Venue" badge when the
+        // data exists (enriched Network page).
+        const badgeType = lieu.categorie_label
+            ? '<span class="explorer-badge explorer-badge--type">' + escapeHtml(lieu.categorie_label) + '</span>'
+            : '<span class="explorer-badge lieu">' + escapeHtml(config.i18n.lieu) + '</span>';
+
+        // Distance a vol d'oiseau : affichee seulement si la vue a calcule
+        // des distances (cle presente). null -> "Sans lieu fixe".
+        // / Straight-line distance: shown only when the view computed
+        // distances (key present). null -> "No fixed venue".
+        let distanceHtml = '';
+        if (typeof lieu.distance_km !== 'undefined') {
+            if (lieu.distance_km === null) {
+                distanceHtml = '<span class="explorer-card-dist explorer-card-dist--sans-lieu">\u{1F4CD} '
+                    + escapeHtml(config.i18n.sansLieuFixe) + '</span>';
+            } else {
+                distanceHtml = '<span class="explorer-card-dist">\u{1F4CD} '
+                    + escapeHtml(formatDistanceKm(lieu.distance_km)) + '</span>';
+            }
+        }
+
         return ''
             + '<div class="explorer-card explorer-card--lieu' + (isCurrent ? ' explorer-card--current' : '') + '"'
             + ' data-lieu-id="' + tenantId + '" data-type="lieu"'
@@ -692,8 +935,9 @@
                     + '<div class="explorer-card-body">'
                         + '<div class="explorer-card-header">'
                             + '<h3 class="explorer-card-title">' + escapeHtml(lieu.name) + '</h3>'
-                            + '<span class="explorer-badge lieu">' + escapeHtml(config.i18n.lieu) + '</span>'
+                            + badgeType
                             + currentBadge
+                            + distanceHtml
                         + '</div>'
                         + meta
                         + desc
@@ -841,6 +1085,21 @@
 
     function updateChips(paVisibles) {
         if (!dom.tags) return;
+
+        // Page Reseau V2 (presence de #explorer-type-pills) : les chips de
+        // tags ne s'affichent qu'en vue "event" — symetrique avec les pills
+        // de type de lieu, visibles seulement en vue "lieu". Ailleurs (page
+        // publique /explorer/, skin classic), comportement historique
+        // conserve : chips visibles dans les 2 vues.
+        // / V2 Network page only (has #explorer-type-pills): tag chips only
+        // show in "event" view — symmetric with venue type pills. Everywhere
+        // else, keep the historical behavior (chips in both views).
+        if (dom.typePills && state.filters.view !== 'event') {
+            dom.tags.innerHTML = '';
+            dom.tags.hidden = true;
+            return;
+        }
+
         const grouped = computeVisibleTagsTop10(paVisibles);
         const activeSlug = state.filters.tag;
 

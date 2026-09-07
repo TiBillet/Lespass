@@ -290,6 +290,7 @@ TENANT_APPS = (
     'tibrss',
     'fedow_connect',
     'crowds',
+    'booking',
     'comptabilite',
     'laboutik',
     'kiosk',
@@ -407,6 +408,7 @@ TEMPLATES = [
                 # TiBillet/seo_indexing.py et SESSIONS/SEO/CHANTIER-01.
                 # / Expose `noindex_seo: bool` to base templates.
                 'TiBillet.seo_indexing.noindex_context',
+                'BaseBillet.context_processors.panier_context',
                 # Expose `maptiler_key: str` a tous les gabarits qui rendent une
                 # carte (blocs, geoloc, explorer, widget d'adresse). Voir
                 # TiBillet/maptiler.py et static/cartes/tb_fond_de_carte.js.

@@ -1,0 +1,45 @@
+{% load i18n %}
+<!--
+GROUPE +/- POUR UNE COUPURE — partial inclus dans hx_sortie_de_caisse.html
+/ +/- GROUP FOR ONE DENOMINATION — partial included in hx_sortie_de_caisse.html
+
+LOCALISATION : laboutik/templates/laboutik/partial/_sortie_coupure_input.html
+
+Recu par contexte : coupure (dict avec centimes, label, cle_post)
+/ Received via context: coupure (dict with centimes, label, cle_post)
+-->
+<div class="sortie-pm-groupe">
+    <button type="button"
+            class="sortie-btn-pm sortie-btn-moins"
+            onclick="
+                var inp = document.getElementById('inp-{{ coupure.centimes }}');
+                var val = parseInt(inp.value) || 0;
+                if (val > 0) { inp.value = val - 1; }
+                recalculerTotalSortie();
+            "
+            aria-label="{% translate 'Diminuer' %}"
+            data-testid="sortie-btn-moins-{{ coupure.centimes }}">
+        &minus;
+    </button>
+
+    <input type="number" name="{{ coupure.cle_post }}"
+           id="inp-{{ coupure.centimes }}"
+           min="0" value="0"
+           data-centimes="{{ coupure.centimes }}"
+           oninput="recalculerTotalSortie()"
+           class="sortie-pm-input"
+           data-testid="sortie-input-{{ coupure.centimes }}">
+
+    <button type="button"
+            class="sortie-btn-pm sortie-btn-plus"
+            onclick="
+                var inp = document.getElementById('inp-{{ coupure.centimes }}');
+                var val = parseInt(inp.value) || 0;
+                inp.value = val + 1;
+                recalculerTotalSortie();
+            "
+            aria-label="{% translate 'Augmenter' %}"
+            data-testid="sortie-btn-plus-{{ coupure.centimes }}">
+        &plus;
+    </button>
+</div>

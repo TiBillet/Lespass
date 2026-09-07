@@ -263,6 +263,30 @@
     margin-left: 4px;
 }
 
+/* Badge de type de lieu (Scene, Festival...) : rendu seulement quand la vue  */
+/* a enrichi les donnees avec Client.categorie (page Reseau du tenant).        */
+/* / Venue type badge: rendered only when the view enriched the data with      */
+/* Client.categorie (tenant Network page).                                     */
+.explorer-badge--type {
+    background: #eef2f7;
+    color: #33415c;
+    margin-left: 4px;
+}
+
+/* Distance a vol d'oiseau, dans l'en-tete de la card lieu. */
+/* / Straight-line distance, in the venue card header. */
+.explorer-card-dist {
+    font-size: 12px;
+    color: #888;
+    margin-left: auto;
+    white-space: nowrap;
+    align-self: center;
+}
+
+.explorer-card-dist--sans-lieu {
+    color: #bbb;
+}
+
 .explorer-card--current {
     border-color: var(--bs-primary, #0d6efd) !important;
 }

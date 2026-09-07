@@ -1,10 +1,33 @@
 {% load static i18n %}
 
 <div id="addition">
-	<div class="addition-legend-grid">
-		<div></div>
-		<div>{% translate "PRODUIT" %}</div>
-		<div>{% translate "PRIX" %}</div>
+	{# En-tete du ticket (maquette : .tk-head) — titre + pastille de comptage.  #}
+	{# Les libelles singulier/pluriel passent par des data-* : le JS n'a pas    #}
+	{# acces aux tags de traduction Django.                                     #}
+	{# / Ticket header (mockup: .tk-head) — title + count pill. Singular and    #}
+	{# plural labels travel in data-* since addition.js cannot translate.       #}
+	<div class="addition-head">
+		<span class="addition-title">{% translate "Ticket" %}</span>
+		<span id="addition-count"
+		      class="addition-count"
+		      data-label-un="{% translate 'article' %}"
+		      data-label-plusieurs="{% translate 'articles' %}"
+		      data-testid="addition-count">&mdash;</span>
+		{# Bouton VIDER (maquette : .tk-reset) — confirmation en deux temps,      #}
+		{# gere par additionArmerVider() dans addition.js. Desactive panier vide. #}
+		{# / EMPTY button (mockup: .tk-reset) — two-step confirmation handled by  #}
+		{# additionArmerVider() in addition.js. Disabled while the cart is empty. #}
+		<button type="button"
+		        id="addition-vider"
+		        class="addition-vider"
+		        onclick="additionArmerVider()"
+		        data-label-vider="{% translate 'Vider' %}"
+		        data-label-confirmer="{% translate 'Confirmer' %}"
+		        data-testid="addition-vider"
+		        disabled>
+			<i class="fas fa-trash" aria-hidden="true"></i>
+			<span class="addition-vider-label">{% translate "Vider" %}</span>
+		</button>
 	</div>
 	<div id="addition-list" data-empty-text="{% translate 'Panier vide' %}" aria-live="polite">
 		<div id="addition-empty" class="BF-col addition-placeholder" data-testid="addition-empty-placeholder">
@@ -12,6 +35,13 @@
 			<span>{% translate "Panier vide" %}</span>
 		</div>
 	</div>
+	{# Bas du ticket : total + CHECK CARTE + VALIDER (maquette : .tk-total et .acts) #}
+	{# / Ticket bottom: total + card check + validate (mockup: .tk-total, .acts)      #}
+	{# Tag en tirets, fichier en underscores : convention django-cotton, comme  #}
+	{# le tag c-read-nfc qui pointe sur cotton/read_nfc.html.                    #}
+	{# / Hyphenated tag, underscored file name: django-cotton's convention.      #}
+	<c-addition-footer />
+
 	<!-- NOTE : le listener 'tarifSelection' est sur #articles-zone (tarif.js),
 	pas sur #messages. Les partials HTMX continuent d'utiliser innerHTML
 	sur #messages pour d'autres raisons (preservation des listeners HTMX).

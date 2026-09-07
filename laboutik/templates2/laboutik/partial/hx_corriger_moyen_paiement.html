@@ -1,0 +1,85 @@
+{% load static i18n %}
+<!--
+FORMULAIRE DE CORRECTION DE MOYEN DE PAIEMENT
+/ Payment method correction form
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_corriger_moyen_paiement.html
+
+Affiche le moyen actuel, des boutons radio avec les moyens corrigeables (ESP/CB/CHQ),
+un champ raison optionnel, et les boutons Annuler / Corriger.
+
+FLUX :
+1. Bouton "Corriger" dans hx_detail_vente.html → hx-get → cette page
+2. Utilisateur choisit nouveau moyen + saisit raison (optionnelle)
+3. Clic CORRIGER → hx-post → PaiementViewSet.corriger_moyen_paiement()
+4. Retour : hx_correction_succes.html (detail mis a jour)
+
+Note : la selection visuelle du radio est gere par CSS :has(input:checked),
+plus de JS inline onchange/onmouseover.
+/ Note: radio visual selection handled by CSS :has(input:checked),
+no more inline JS.
+-->
+<div class="correction-form-box" data-testid="correction-form">
+
+    <!-- En-tete : icone + titre + moyen actuel -->
+    <!-- / Header: icon + title + current method -->
+    <div class="correction-header">
+        <span class="correction-header-icon">
+            <i class="fas fa-exchange-alt" aria-hidden="true"></i>
+        </span>
+        <div>
+            <div class="correction-header-title">
+                {% translate "Corriger le moyen de paiement" %}
+            </div>
+            <div class="correction-header-subtitle">
+                {{ nom_article|default:"-" }} — {{ montant_euros }} €
+                <span class="correction-header-current-method">{{ moyen_actuel_label }}</span>
+            </div>
+        </div>
+    </div>
+
+    <form hx-post="{% url 'laboutik-paiement-corriger_moyen_paiement' %}"
+          hx-target="#correction-zone-{{ ligne.uuid }}"
+          hx-swap="innerHTML"
+          aria-label="{% translate 'Correction moyen de paiement' %}">
+        {% csrf_token %}
+        <input type="hidden" name="ligne_uuid" value="{{ ligne.uuid }}">
+
+        <!-- Boutons radio pour le nouveau moyen — selection visuelle CSS :has(input:checked) -->
+        <!-- / Radio buttons for new method — CSS :has() handles visual selection -->
+        <div class="correction-radio-group" data-testid="correction-select-moyen">
+            {% for moyen in moyens_corrigeables %}
+            <label class="correction-radio-label">
+                <input type="radio" name="nouveau_moyen" value="{{ moyen.code }}"
+                       {% if forloop.first %}checked{% endif %}>
+                <span>{{ moyen.label }}</span>
+            </label>
+            {% endfor %}
+        </div>
+
+        <!-- Raison (optionnelle) -->
+        <!-- / Reason (optional) -->
+        <textarea name="raison" rows="2"
+                  class="correction-textarea"
+                  placeholder="{% translate 'Raison (optionnelle)' %}"
+                  data-testid="correction-textarea-raison"></textarea>
+
+        <!-- Boutons : Annuler + Corriger -->
+        <!-- / Buttons: Cancel + Correct -->
+        <div class="correction-actions-row">
+            <button type="button"
+                    class="correction-btn-annuler"
+                    onclick="this.closest('[id^=correction-zone-]').innerHTML=''"
+                    data-testid="correction-btn-annuler">
+                {% translate "Annuler" %}
+            </button>
+            <button type="submit"
+                    class="correction-btn-valider"
+                    data-loading-disable
+                    data-testid="correction-btn-valider">
+                <i class="fas fa-check" aria-hidden="true"></i>
+                {% translate "Corriger" %}
+            </button>
+        </div>
+    </form>
+</div>

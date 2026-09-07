@@ -13,13 +13,34 @@
    (common_user_interface.html + tables.html)
    ============================================================ */
 
+/* Coquille de page : en-tete, contenu, footer eventuel — sans debordement.
+   main avait height:100%, soit 100vh (body), alors qu'il vit SOUS l'en-tete :
+   la page depassait d'une hauteur d'en-tete et le bas du panneau addition
+   (total + actions) sortait de l'ecran. On empile en flex et on laisse main
+   prendre ce qui reste.
+   / Page shell: header, content, optional footer — no overflow.
+   main used to be height:100% (= 100vh) although it sits BELOW the header, so
+   the page was one header taller than the viewport and the bottom of the cart
+   panel fell off screen. Now the body stacks in flex and main takes the rest. */
+body {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+body > header,
+body > footer {
+	flex: none;
+}
+
 main {
 	display: flex;
 	flex-direction: row;
 	justify-content: start;
 	align-items: start;
 	width: 100%;
-	height: var(--main-container-height);
+	flex: 1;
+	min-height: 0;
 	margin: 0;
 	padding: 0;
 	overflow: hidden;

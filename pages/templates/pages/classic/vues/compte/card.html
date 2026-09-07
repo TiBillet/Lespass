@@ -1,0 +1,26 @@
+{% extends 'fonctionnel/account_base.html' %}
+{% load static %}
+{% load tibitags %}
+{% load humanize i18n %}
+
+{% block title %}{% trans 'My Pass card' %}{% endblock %}
+
+{% block account_page %}
+<section class="card pt-3">
+    <div class="card-body">
+        <h1 class="card-title">{% trans 'My Pass card' %}</h1>
+        <p class="lead">
+            {% trans 'Here I can find my Pass card information and signal a lost card.' %}
+        </p>
+
+        <div hx-get="/my_account/my_cards/" hx-trigger="revealed" class="mt-4">
+            <span>{% translate "Loading Pass card info" %}</span>
+            <div class="d-flex justify-content-center align-items-center ">
+                <div class="spinner-border text-info"
+                     role="status"
+                ></div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

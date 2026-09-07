@@ -1,0 +1,82 @@
+{% extends base_template %}
+{% load tibitags static %}
+{% load i18n %}
+
+{% block title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Subscriptions' %}{% endif %}{% endblock %}
+{% block meta_description %}{% translate 'Join our community by subscribing to one of our membership options' %} - {{ config.organisation }}{% endblock %}
+{% block og_title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Subscriptions' %}{% endif %} | {{ config.organisation }}{% endblock %}
+{% block og_description %}{% translate 'Join our community by subscribing to one of our membership options' %} - {{ config.organisation }}{% endblock %}
+{% block og_image %}{% if products.0.img %}https://{{ request.get_host }}{{ products.0.img.social_card.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block og_image_alt %}{% if products.0.name %}{{ products.0.name }} - {% endif %}{% translate 'Memberships' %} - {{ config.organisation }}{% endblock %}
+{% block twitter_title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Subscriptions' %}{% endif %} | {{ config.organisation }}{% endblock %}
+{% block twitter_description %}{% translate 'Join our community by subscribing to one of our membership options' %} - {{ config.organisation }}{% endblock %}
+{% block twitter_image %}{% if products.0.img %}https://{{ request.get_host }}{{ products.0.img.social_card.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block twitter_image_alt %}{% if products.0.name %}{{ products.0.name }} - {% endif %}{% translate 'Memberships' %} - {{ config.organisation }}{% endblock %}
+
+{% block main %}
+    {% comment %}
+    CONTRAT DE SKIN (blocs FIGÉS, ne jamais renommer — décision 2) :
+    adhesions_entete / adhesions_tunnel (chrome commun, non skinnable) /
+    adhesions_grille / adhesions_federees.
+    / SKIN CONTRACT (FROZEN block names). The membership tunnel is shared
+    chrome; a skin only re-skins the page around it.
+    {% endcomment %}
+    <div class="container-lg py-5">
+        {% block adhesions_entete %}
+        {% if config.description_membership_page %}
+            <div>{{ config.description_membership_page | safe }}</div>
+        {% else %}
+            <h1>{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}
+                {% trans 'Subscriptions' %}{% endif %}</h1>
+        {% endif %}
+        {% endblock adhesions_entete %}
+
+        {% block adhesions_tunnel %}
+        <!-- Tunnel d'adhésion (chrome partagé, extrait vers commun/ au CHANTIER-02).
+             La largeur responsive vient de .offcanvas-tunnel (tibillet.css). -->
+        {% include 'commun/offcanvas/adhesion_tunnel.html' %}
+        {% endblock adhesions_tunnel %}
+
+        {% block adhesions_grille %}
+
+        <div class="grid grid--3">
+
+            {% for product in products %}
+                {% if product.publish %}
+                    <c-V2.membership_card product=product />
+                {% endif %}
+            {% endfor %}
+        </div>
+        {% endblock adhesions_grille %}
+
+    {% block adhesions_federees %}
+    {% if federated_tenants %}
+        <h4>{% trans "Découvrez les adhésions des espaces fédérés :" %}</h4>
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-3 mb-5">
+            {% for tenant in federated_tenants %}
+                <div class="col">
+                    <div class="card h-100">
+                        {% if tenant.img_url %}
+                            <img src="{{ tenant.img_url }}" class="card-img-top" alt="{{ tenant.name }}" style="aspect-ratio: 16/9; object-fit: cover;">
+                        {% endif %}
+                        <div class="card-body">
+                            <h3 class="card-title">{{ tenant.name }}</h3>
+                            {% if tenant.short_description %}
+                                <p class="card-text">{{ tenant.short_description }}</p>
+                            {% endif %}
+                        </div>
+                        <div class="card-footer">
+                            <a href="https://{{ tenant.domain }}/memberships/" class="btn btn--primary w-100 my-3" target="_blank">
+                                <i class="bi bi-arrow-right"></i>
+                                Voir les adhésions
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+    {% endblock adhesions_federees %}
+
+    </div>
+{% endblock main %}

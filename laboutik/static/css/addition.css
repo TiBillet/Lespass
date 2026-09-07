@@ -3,7 +3,22 @@
    / Cart / addition for POS checkout
 
    LOCALISATION : laboutik/static/css/addition.css
-   SOURCE : cotton/addition.html
+   SOURCE : cotton/addition.html (+ lignes generees par static/js/addition.js)
+
+   Portage du panneau `.ticket` de la refonte de l'ecran de vente
+   (tibillet-laboutik-main/caisse/Laboutik.css, section TICKET) : colonne
+   `--surface` separee de la grille par un filet, en-tete discret, lignes a
+   plat separees par un simple trait, bouton « moins » carre arrondi.
+
+   Le markup des lignes est produit par addition.js : les noms de classes
+   (.addition-line-grid, .addition-col-*) sont donc conserves tels quels, seul
+   leur style change.
+
+   / Port of the `.ticket` panel from the sales-screen redesign: `--surface`
+   column separated from the grid by a hairline, quiet header, flat rows with a
+   single separator line, square-rounded "minus" button.
+   Row markup comes from addition.js, so the class names are left untouched —
+   only their styling changes.
    ============================================================ */
 
 #addition {
@@ -11,54 +26,156 @@
 	flex-direction: column;
 	width: 100%;
 	height: 100%;
+	min-height: 0;
+	color: var(--text);
+	background-color: var(--surface);
+	border-left: 1px solid var(--line-soft);
+}
+
+/* En-tete du ticket — `.tk-head` : titre efface, pastille de comptage
+   / Ticket header — `.tk-head`: quiet title, count pill */
+.addition-head {
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	height: 56px;
+	padding: 0 12px;
+	border-bottom: 1px solid var(--line-soft);
+}
+
+.addition-title {
+	font-size: var(--fs-min);
+	font-weight: 700;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+}
+
+.addition-count {
+	padding: 3px 10px;
+	border-radius: var(--r-pill);
+	background-color: var(--surface-3);
+	color: var(--text-dim);
+	font-size: 12px;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Bouton VIDER — `.tk-reset` : discret a droite de l'en-tete, rouge une fois
+   arme (confirmation en deux temps geree par addition.js), efface quand le
+   panier est vide.
+   / EMPTY button — `.tk-reset`: quiet on the right of the header, red once
+   armed (two-step confirmation handled by addition.js), faded when the cart is
+   empty. */
+.addition-vider {
+	margin-left: auto;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 42px;
+	padding: 8px 14px;
+	border: none;
+	border-radius: var(--r-ctrl);
+	background-color: transparent;
+	color: var(--text-faint);
+	font-family: var(--font-ui);
+	font-size: var(--fs-min);
+	font-weight: 700;
+	cursor: pointer;
+	white-space: nowrap;
+	-webkit-tap-highlight-color: transparent;
+	transition: color .12s var(--ease), background-color .12s var(--ease);
+}
+
+.addition-vider i {
+	font-size: 18px;
+}
+
+.addition-vider:disabled {
+	opacity: .3;
+	cursor: default;
+}
+
+.addition-vider:not(:disabled):active {
+	background-color: var(--surface-2);
+}
+
+.addition-vider.is-armed {
+	background-color: var(--invalid);
 	color: var(--blanc01);
 }
 
+/* Liste des lignes — `.tk-lines` : prend toute la hauteur restante
+   / Rows list — `.tk-lines`: takes all the remaining height */
 #addition-list {
+	flex: 1;
+	min-height: 0;
 	width: 100%;
-	height: calc(100% - var(--addition-legend-heigh));
+	padding: 6px;
 	overflow-y: auto;
-	scrollbar-width: none
+	overscroll-behavior: contain;
+	scrollbar-width: thin;
+	scrollbar-color: var(--surface-3) transparent;
 }
 
-/* En-tête du panier / Cart header */
-.addition-legend-grid {
-	width: 100%;
-	height: 28px;
-	display: grid;
-	grid-template-columns: 48px 1fr auto;
-	align-items: center;
-	padding: 0 12px 0 8px;
-	font-size: 11px;
-	font-weight: 700;
-	text-transform: uppercase;
-	letter-spacing: 0.05em;
-	color: var(--gris07);
-	border-bottom: 1px solid var(--gris02);
-}
-
-/* Ligne article du panier — carte avec fond subtil
-   / Cart item line — card with subtle background */
+/* Ligne article — `.tk-line` : plus de carte a fond gris, un simple filet
+   entre deux lignes.
+   / Cart row — `.tk-line`: no grey card any more, just a hairline between rows. */
 .addition-line-grid {
 	display: grid;
-	grid-template-columns: 48px 1fr auto;
+	grid-template-columns: 40px 1fr auto;
 	align-items: center;
-	min-height: 52px;
-	margin: 4px 6px;
-	padding: 6px 10px 6px 0;
+	gap: 10px;
+	padding: 7px 6px 7px 0;
 	border-radius: 10px;
-	background-color: rgba(255, 255, 255, 0.04);
-	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-	color: var(--blanc01);
-	transition: background-color 150ms ease;
+	color: var(--text);
 }
 
-.addition-line-grid:active {
-	background-color: rgba(255, 255, 255, 0.08);
+.addition-line-grid + .addition-line-grid {
+	box-shadow: inset 0 1px 0 var(--line-soft);
 }
 
-/* Bouton supprimer — cercle tactile 40px
-   / Remove button — 40px touch circle */
+/* Retours visuels sur la ligne touchee — classes posees par addition.js.
+   Vert (`.tk-line.is-new` de la maquette) a l'ajout, rouge au retrait, et
+   fondu rouge quand la quantite tombe a zero : la ligne s'efface d'elle-meme,
+   l'operateur voit ce qui vient de partir.
+   / Visual feedback on the touched row — classes set by addition.js. Green
+   (the mockup's `.tk-line.is-new`) on add, red on decrement, and a red fade
+   when the quantity reaches zero, so the operator sees what just left. */
+@keyframes addition-line-in {
+	from { background-color: oklch(0.700 0.170 148 / .22); }
+}
+
+.addition-line-grid.is-new {
+	animation: addition-line-in .7s var(--ease);
+}
+
+@keyframes addition-line-out {
+	from { background-color: oklch(0.545 0.157 23.889 / .28); }
+}
+
+.addition-line-grid.is-removed {
+	animation: addition-line-out .4s var(--ease);
+}
+
+/* Disparition : plus court que le flash, l'operateur enchaine.
+   pointer-events:none — le bouton moins ne doit plus repondre pendant le fondu.
+   / Vanishing: shorter than the flash, the operator moves on.
+   pointer-events:none — the minus button must not respond during the fade. */
+@keyframes addition-line-vanish {
+	0% { background-color: oklch(0.545 0.157 23.889 / .28); }
+	55% { background-color: oklch(0.545 0.157 23.889 / .20); opacity: 1; }
+	100% { background-color: oklch(0.545 0.157 23.889 / 0); opacity: 0; transform: translateX(10px); }
+}
+
+.addition-line-grid.is-removing {
+	animation: addition-line-vanish .2s var(--ease) forwards;
+	pointer-events: none;
+}
+
+/* Bouton « moins » — `.tk-minus` : carre arrondi neutre, rouge a l'appui
+   / "Minus" button — `.tk-minus`: neutral rounded square, red while pressed */
 .addition-col-bt {
 	display: flex;
 	align-items: center;
@@ -66,68 +183,205 @@
 }
 
 .addition-col-bt .addition-remove-btn {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 36px;
-	height: 36px;
-	border-radius: 50%;
-	background-color: var(--rouge07);
-	color: var(--blanc01);
-	font-size: 1.1rem;
-	cursor: pointer;
-	transition: background-color 150ms ease, transform 100ms ease;
+	width: 40px;
+	height: 40px;
+	display: grid;
+	place-items: center;
 	border: none;
+	border-radius: 10px;
+	background-color: var(--surface-2);
+	color: var(--text-dim);
+	font-size: 17px;
+	cursor: pointer;
 	-webkit-tap-highlight-color: transparent;
+	transition: background-color .12s var(--ease), color .12s var(--ease);
 }
 
 .addition-col-bt .addition-remove-btn:active {
-	background-color: var(--rouge03);
-	transform: scale(0.9);
+	background-color: var(--invalid);
+	color: var(--blanc01);
 }
 
-/* Bloc nom + quantité / Name + quantity block */
+/* Bloc nom + prix unitaire — `.tk-label` / `.tk-nom` / `.tk-unit`
+   / Name + unit price block */
 .addition-col-info {
+	min-width: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 2px;
-	overflow: hidden;
-	padding-left: 4px;
 }
 
 .addition-col-name {
-	font-size: 15px;
-	font-weight: 600;
+	font-size: var(--fs-min);
+	font-weight: 650;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
 
-.addition-col-quantity-label {
-	font-size: 12px;
-	color: var(--gris07);
+/* Prix a l'unite, sous le nom — `.tk-unit`
+   / Unit price, under the name — `.tk-unit` */
+.addition-col-unit {
+	margin-top: 2px;
+	font-size: var(--fs-min);
+	font-weight: 500;
+	color: var(--text-faint);
 	font-variant-numeric: tabular-nums;
 }
 
-/* Prix à droite / Price on the right */
+/* Colonne de droite — `.tk-right` : quantite prise puis total de la ligne
+   / Right column — `.tk-right`: quantity taken, then row total */
+.addition-col-right {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.addition-col-quantity {
+	min-width: 26px;
+	text-align: center;
+	font-size: 15px;
+	font-weight: 800;
+	color: var(--text);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+/* Total de la ligne — `.tk-sum` : largeur mini pour aligner la colonne
+   / Row total — `.tk-sum`: min width so the column stays aligned */
 .addition-col-price {
-	font-size: 16px;
+	min-width: 62px;
+	text-align: right;
+	font-size: 15px;
 	font-weight: 700;
 	font-variant-numeric: tabular-nums;
 	white-space: nowrap;
-	padding-left: 8px;
 }
 
+/* Panier vide — `.tk-empty` : centre, sobre, sans opacite globale
+   / Empty cart — `.tk-empty`: centered, quiet, no global opacity */
 .addition-placeholder {
 	height: 100%;
-	opacity: 0.4;
-	color: var(--gris03);
-	font-size: 1.2rem;
-	gap: 12px;
+	display: grid;
+	place-content: center;
+	justify-items: center;
+	gap: 8px;
+	padding: 20px;
+	text-align: center;
+	color: var(--text-faint);
 }
 
 .addition-placeholder i {
-	font-size: 2.5rem;
+	font-size: 28px;
+	opacity: .55;
+}
+
+.addition-placeholder span {
+	font-size: 15px;
+	font-weight: 700;
+	color: var(--text-dim);
+}
+
+/* --- BAS DU TICKET : TOTAL + ACTIONS --- */
+/* Portage de `.tk-total` et `.acts` (cotton/addition_footer.html).
+   / Port of `.tk-total` and `.acts`. */
+
+.addition-total {
+	flex: none;
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 12px 14px;
+	border-top: 1px solid var(--line-soft);
+}
+
+.addition-total-label {
+	font-size: var(--fs-min);
+	font-weight: 700;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+}
+
+.addition-total-value {
+	font-size: 30px;
+	font-weight: 800;
+	letter-spacing: -.025em;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.addition-actions {
+	flex: none;
+	display: flex;
+	gap: 8px;
+	padding: 8px;
+}
+
+.addition-act {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 9px;
+	height: 62px;
+	border: none;
+	border-radius: var(--r-ctrl);
+	font-family: var(--font-ui);
+	font-weight: 800;
+	letter-spacing: -.01em;
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+	transition: transform .17s var(--ease), box-shadow .17s var(--ease), filter .17s var(--ease);
+}
+
+.addition-act:active {
+	transition-duration: 0s;
+	filter: brightness(1.08);
+	transform: scale(.98);
+}
+
+/* CHECK CARTE — action secondaire : cadre discret, pictogramme NFC bleute
+   / Card check — secondary action: quiet frame, blue-ish NFC glyph */
+.addition-act-card {
+	flex: none;
+	width: 88px;
+	padding: 0;
+	flex-direction: column;
+	gap: 3px;
+	background-color: var(--surface-2);
+	color: var(--text-dim);
+	box-shadow: inset 0 0 0 1px var(--line);
+	font-size: 10.5px;
+	letter-spacing: .04em;
+	text-align: center;
+}
+
+.addition-act-card i {
+	font-size: 22px;
+	color: var(--bleu01);
+}
+
+/* VALIDER — l'action principale, seule couleur pleine du panneau
+   / Validate — the primary action, the only solid color in the panel */
+.addition-act-valid {
+	flex: 1;
+	background-color: var(--valid);
+	color: var(--vert04);
+	font-size: 18px;
+	box-shadow: 0 4px 16px oklch(0.700 0.170 148 / .22);
+}
+
+.addition-act-valid i {
+	font-size: 20px;
+}
+
+.addition-act-valid:disabled {
+	background-color: var(--surface-2);
+	color: var(--text-faint);
+	box-shadow: inset 0 0 0 1px var(--line);
+	cursor: default;
+	transform: none;
+	filter: none;
 }
 
 #addition-form {
@@ -144,6 +398,5 @@
 		display: flex;
 		flex-direction: column;
 		width: 29%;
-		background-color: var(--gris10);
 	}
 }

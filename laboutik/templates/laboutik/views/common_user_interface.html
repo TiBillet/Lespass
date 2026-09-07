@@ -3,7 +3,7 @@
 {% load static i18n %}
 {# ARCHITECTURE DE LABOUTIK - INTERFACE CAISSE / CASHLESS #}
 {# ========================================================== #}
-{# 
+{% comment %}
 # LaBoutik est une application de caisse/cashless pour points de vente.
 # Cette page est l'interface principale utilisée par les vendeurs pour :
 # - Sélectionner des articles/produits
@@ -47,7 +47,7 @@
 # - Découplage : les composants ne se connaissent pas directement
 # - Testabilité : facile de simuler des événements
 # - Maintenabilité : un seul endroit pour modifier le routage (switches)
-#}
+{% endcomment %}
 {% block content %}
   <!-- 
 HEADER - BARRE DE NAVIGATION
@@ -115,7 +115,7 @@ Structure en 3 colonnes sur desktop :
     </main>
     <div id="article-panel"></div>
     <div id="article-panel-backdrop"></div>
-    <c-footer />
+
     <script src="{% static 'js/longpress.js' %}"></script>
     <script>
 			// ajoute dans state les data du fichier de conf stoké dans localStorage

@@ -1,0 +1,53 @@
+<article class="event-card">
+    <div class="event-card__cover bg-green">
+        {% include 'commun/partials/picture.html' with img=resa.event.img alt=resa.event.name class='rounded-start' %}
+    </div>
+    <div class="event-card__body">
+        <div class="event-card__top">
+            <div class="event-date-box">
+                <div class="dow">{{ event.datetime.date|date:"l"|slice:":3" }}</div>
+                <div class="day">{{ event.datetime.date.day }}</div>
+                <div class="mon">{{ event.datetime.date|date:"F"|slice:":3" }}</div>
+            </div>
+            <div>
+                <div class="event-card__title">{{ event.name }}</div>
+                <div class="event-card__time">
+                    {{ event.datetime|time:"G:i" }}
+                    {% if event.end_datetime %}
+                        – {{ event.end_datetime|time:"G:i" }}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="event-card__loc">{{ event.postal_address }}</div>
+        <div class="event-card__tags">
+            {% for tag in event.tag.all %}
+                <a href="/event?tag={{ tag.slug }}" hx-boost="true" class="badge"
+                   style="{{ tag.style_attr }}">
+                    {{ tag.name }}
+                </a>
+{#                <span class="badge" style="{{ tag.style_attr }}">{{ tag.name }}</span>#}
+            {% endfor %}
+        </div>
+
+        {% with event_domain=event.full_url|cut:"https://"|cut:"http://"|cut:"/event/"|cut:event.slug|cut:"/" %}
+            {% with current_domain=request.build_absolute_uri|cut:"https://"|cut:"http://"|cut:"/event/"|cut:"/" %}
+                {% if event_domain != current_domain %}
+                    <div class="event-card__meta">via <a href="https://{{ event_domain }}" target="_blank">{{ event_domain }}</a></div>
+                {% else %}
+                    <div class="event-card__meta">par <a href="/">{{ config.organisation }}</a></div>
+                {% endif %}
+            {% endwith %}
+        {% endwith %}
+
+        <div class="event-card__footer">
+            <a class="link" href="{{ event.full_url }}" target="_blank">
+                En savoir plus
+            </a>
+
+            {% if event.price_min %}
+                <span class="event-card__price">{{ event.price_min }}</span>
+            {% endif %}
+        </div>
+    </div>
+</article>

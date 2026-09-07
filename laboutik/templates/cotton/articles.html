@@ -25,7 +25,17 @@
 		{% if article.prix_reference_label %}data-prix-reference="{{ article.prix_reference_label }}"{% endif %}
 		{% if article.stock_bloquant %}data-stock-bloquant="true"{% endif %}
 		class="article-container cat-{{ article.categorie.id}}{% if article.est_adhesion %} article-adhesion{% endif %}{% if article.stock_bloquant %} article-bloquant{% endif %}"
-		style="background-color:{{ article.couleur_backgr }};"
+		{% comment %}
+		Couleurs de la tuile exposées en variables CSS : articles.css en dérive le
+		dégradé et la tranche 3D. article.couleur_backgr applique déjà l'override
+		produit avant la couleur de catégorie (laboutik/views.py).
+		Les gardes conditionnelles sont indispensables : une custom property vide
+		casserait le var(--legacy, …) de repli.
+		/ Tile colors exposed as CSS variables: articles.css derives the gradient and
+		the 3D edge from them. The guards are required: an empty custom property
+		would break the var(--legacy, …) fallback.
+		{% endcomment %}
+		style="{% if article.couleur_backgr %}--legacy:{{ article.couleur_backgr }};{% endif %}{% if article.couleur_texte %}--legacy-ink:{{ article.couleur_texte }};{% endif %}"
 		data-testid="article-{{ article.id }}">
 		<!-- Icône catégorie — petit badge haut-gauche
 		     Deux systèmes : MS (<span>) ou FA (<i>)
@@ -33,12 +43,10 @@
 		     Two systems: MS (<span>) or FA (<i>) -->
 		{% if article.categorie.icone_type == "ms" %}
 		<span class="material-symbols-outlined article-cat-icon"
-		      aria-hidden="true"
-		      style="color:{{ article.couleur_texte }};">{{ article.categorie.icon }}</span>
+		      aria-hidden="true">{{ article.categorie.icon }}</span>
 		{% elif article.categorie.icone_type == "fa" %}
 		<i class="fas {{ article.categorie.icon }} article-cat-icon"
-		   aria-hidden="true"
-		   style="color:{{ article.couleur_texte }};"></i>
+		   aria-hidden="true"></i>
 		{% endif %}
 
 		{% comment %}
@@ -74,21 +82,16 @@
 			     onerror="this.style.display='none'">
 			{% elif article.icone_type == "ms" %}
 			<span class="material-symbols-outlined article-visual-icon"
-			      aria-hidden="true"
-			      style="color:{{ article.couleur_texte }};">{{ article.icone }}</span>
+			      aria-hidden="true">{{ article.icone }}</span>
 			{% elif article.icone_type == "fa" %}
 			<i class="fas {{ article.icone }} article-visual-icon"
-			   aria-hidden="true"
-			   style="color:{{ article.couleur_texte }};"></i>
+			   aria-hidden="true"></i>
 			{% endif %}
 		</div>
 		<!-- Nom de l'article — zone entre le visuel et le footer
 		     / Article name — zone between visual zone and footer -->
 		<div class="article-name-layer">
-			<span class="article-name-text"
-			      style="color:{{article.couleur_texte}};text-shadow:1px 1px 4px {{article.couleur_backgr}}80;">
-				{{article.name}}
-			</span>
+			<span class="article-name-text">{{article.name}}</span>
 		</div>
 		<!-- footer : pills + badge — PAS de width:100% ici (conflit avec left/right absolus)
 		     / footer: pills + badge — NO width:100% here (conflicts with absolute left/right) -->

@@ -12,11 +12,13 @@
    ============================================================ */
 
 /* Override de .article-container pour les tuiles billet.
-   .article-container a height:0 + padding-bottom:100% (ratio 1:1 carre).
-   .billet-tuile.article-container a une specificite plus haute → annule le carre.
+   .article-container est une colonne flex centree de hauteur fixe
+   (--article-height) : la specificite plus haute de .billet-tuile.article-container
+   la repasse en ligne, hauteur libre.
    PAS de !important sur display — sinon le filtre JS (display:none) ne marche plus.
    / Override .article-container for ticket tiles.
-   Higher specificity cancels the 1:1 square ratio.
+   .article-container is a centered flex column with a fixed height; the higher
+   specificity here switches it back to a free-height row.
    NO !important on display — JS filter (display:none) must still work. */
 .billet-tuile.article-container {
 	grid-column: span 2;
@@ -25,13 +27,17 @@
 	align-items: stretch;
 	height: auto;
 	padding-bottom: 0;
-	min-height: 160px;
+	min-height: 180px;
 	overflow: hidden;
 	cursor: pointer;
 }
 
+/* Même relief « touche » que les tuiles standard : la tuile descend de 4 px,
+   pas de mise à l'échelle qui contredirait la tranche colorée.
+   / Same "key" relief as standard tiles: the tile goes down 4px, no scaling
+   that would contradict the colored edge. */
 .billet-tuile.article-container:active {
-	transform: scale(0.97);
+	transform: translateY(4px);
 }
 
 /* Zone gauche : icone ou image du produit

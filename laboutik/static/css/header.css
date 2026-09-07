@@ -9,25 +9,47 @@
 .header-background {
 	width: 100%;
 	height: var(--header-height);
-	background-color: var(--noir03);
+	background-color: var(--surface);
 	display: flex;
 	flex-direction: row;
-	justify-content: space-arround;
+	justify-content: space-between;
 	align-items: center;
 	color: var(--blanc01);
-	/* Accent vert, même couleur que VALIDER / Green accent, same color as VALIDER */
-	border-bottom: 3px solid var(--vert03);
+	position: relative;
+	border-bottom: 1px solid var(--noir03);
+}
+
+.header-background::after {
+	content: "";
+	position: absolute;
+	inset: auto 0 0 0;
+	height: 2px;
+	background: linear-gradient(90deg, transparent, var(--valid), transparent);
+	opacity: .55;
+}
+
+.flex-container{
+	display: flex;
+	flex-direction: row;
+	justify-content: space-around;
+	align-items: center;
+	/*width: 100%;*/
 }
 
 .header-img {
-	width: var(--header-img-width);
 	height: 100%;
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
 	align-items: center;
 	cursor: pointer;
+	margin: 0 20px;
 }
+
+.header-img img{
+	height: 30px;
+}
+
 
 .header-status {
 	width: var(--header-status-width);
@@ -37,17 +59,16 @@
 	justify-content: flex-end;
 	align-items: center;
 	/* Masqué tant que non fonctionnel / Hidden until functional */
-	background-color: var(--noir03);
 }
 
 #header-title {
-	width: calc(100% - var(--header-add-img-status-menu));
+	/*width: calc(100% - var(--header-add-img-status-menu));*/
+	min-width: 200px;
 	height: 100%;
 	display: flex;
 	flex-direction: row;
-	justify-content: center;
 	align-items: center;
-	font-size: clamp(1rem, 3.5vw, 2.5rem);
+	font-size: clamp(1rem, 1.5vw, 2.5rem);
 	overflow-wrap: break-word;
 	font-weight: bold;
 	text-wrap: balance;
@@ -64,27 +85,78 @@
 	cursor: pointer;
 }
 
+/* --- MENU OUVRANT --- */
+/* Panneau flottant repris de `.panel` / `.panel--left` du prototype
+   (tibillet-laboutik-main/caisse/Laboutik.css) : carte arrondie détachée sous
+   l'en-tête, filet de 1 px, ombre portée profonde, et des lignes `.menu-row`
+   à la place des grosses barres pleine largeur.
+   / Floating panel ported from the prototype's `.panel` / `.panel--left`:
+   detached rounded card under the header, 1px hairline, deep drop shadow, and
+   `.menu-row`-style rows instead of full-width bars. */
 #menu-burger-container {
-	max-height: calc(var(--main-container-height) - 2px);
 	position: absolute;
-	top: calc(var(--header-height) + 2px);
-	right: 0;
-	background-color: var(--noir03);
+	top: calc(var(--header-height) + 8px);
 	z-index: 2;
+	width: 300px;
+	max-height: calc(var(--main-container-height) - 16px);
+	padding: 11px;
+	display: grid;
+	gap: 10px;
+	align-content: start;
 	overflow-y: auto;
+	border-radius: 14px;
+	background-color: var(--noir03);
+	background-color: oklch(0.205 0.014 262 / .97);
+	box-shadow: 0 0 0 1px var(--line), 0 18px 44px rgba(0, 0, 0, 0.6);
+	scrollbar-width: thin;
+	scrollbar-color: var(--surface-3) transparent;
+
 	/* Fermé par défaut — animé via .menu-open / Closed by default — animated via .menu-open */
-	transform: translateY(-8px);
+	transform: scale(.94);
+	transform-origin: top left;
 	opacity: 0;
 	visibility: hidden;
-	transition: transform 200ms ease-out, opacity 200ms ease-out, visibility 0ms 200ms;
+	transition: transform 130ms var(--ease), opacity 130ms var(--ease), visibility 0ms 130ms;
+}
+
+#menu-burger-container.left {
+	left: 8px;
+}
+
+#menu-burger-container.right {
+	right: 8px;
+	transform-origin: top right;
 }
 
 /* État ouvert du menu burger / Open state of burger menu */
 #menu-burger-container.menu-open {
-	transform: translateY(0);
+	transform: scale(1);
 	opacity: 1;
 	visibility: visible;
-	transition: transform 200ms ease-out, opacity 200ms ease-out, visibility 0ms 0ms;
+	transition: transform 130ms var(--ease), opacity 130ms var(--ease), visibility 0ms 0ms;
+}
+
+/* Les groupes (menu principal, sous-menus) empilent leurs lignes.
+   :not(.hide) est indispensable — sans lui, ce selecteur (0,1,1,0) l'emporterait
+   sur le .hide de modele00.css (0,0,1,0) et les sous-menus caches s'afficheraient.
+   / Groups (main menu, sub-menus) stack their rows.
+   :not(.hide) is required — without it this selector would beat modele00.css's
+   .hide and the hidden sub-menus would show up. */
+#menu-burger-container .main-menu:not(.hide),
+#menu-burger-container .sub-menu:not(.hide) {
+	display: grid;
+	gap: 4px;
+}
+
+/* Titre de section — même graisse et même interlettrage que `.panel-title`
+   / Section title — same weight and tracking as `.panel-title` */
+.menu-panel-title {
+	padding: 2px 6px 0;
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: .09em;
+	text-transform: uppercase;
+	color: var(--text-faint);
 }
 
 /* Fond sombre derrière le menu burger / Dark backdrop behind burger menu */
@@ -107,38 +179,140 @@
 	transition: opacity 200ms ease-out, visibility 0ms 0ms;
 }
 
+/* Ligne de menu — portage de `.menu-row` : plus de barre pleine largeur ni de
+   filet séparateur, un simple bloc arrondi qui s'allume au doigt.
+   / Menu row — port of `.menu-row`: no full-width bar, no separator hairline,
+   just a rounded block that lights up under the finger. */
 .menu-burger-item {
-	min-width: 300px;
-	height: 60px;
 	display: flex;
 	flex-direction: row;
-	justify-content: flex-start;
 	align-items: center;
-	line-height: 60px;
-	text-transform: uppercase;
-	font-size: 1.4rem;
-	border-bottom: 1px solid var(--gris01);
-	color: var(--blanc01);
+	gap: 12px;
+	min-height: 46px;
+	padding: 8px 10px;
+	border-radius: 10px;
+	color: var(--text-dim);
+	font-size: var(--fs-min);
+	font-weight: 650;
+	line-height: 1.2;
+	text-align: left;
+	text-decoration: none;
 	cursor: pointer;
 	overflow: hidden;
-	padding-left: 10px;
-	padding-right: 10px;
+	transition: background-color 120ms var(--ease), color 120ms var(--ease);
+}
+
+.menu-burger-item:active {
+	background-color: var(--surface-2);
+	color: var(--text);
 }
 
 .menu-burger-item i {
-	padding-right: 6px;
+	flex: none;
+	width: 19px;
+	font-size: 19px;
+	text-align: center;
+	color: var(--text-faint);
 }
 
-/* Mobile : menu burger pleine largeur / Mobile: full-width burger menu */
+/* Ligne courante — le point de vente ouvert. Reprise de
+   `.menu-row[aria-current="true"]` : fond allumé, texte plein, icône en vert,
+   et une coche poussée à droite.
+   / Current row — the open point of sale. Port of
+   `.menu-row[aria-current="true"]`: lit background, full-strength text, green
+   icon, and a check pushed to the right. */
+.menu-burger-item[aria-current="true"] {
+	background-color: var(--surface-2);
+	color: var(--text);
+}
+
+.menu-burger-item[aria-current="true"] i {
+	color: var(--valid);
+}
+
+.menu-row-check {
+	margin-left: auto;
+	font-size: 15px;
+	color: var(--valid);
+}
+
+/* Chevron à coté des point de ventes */
+.pos-chevron {
+	flex: none;
+	width: 10px;
+	height: 10px;
+	margin: -3px 15px 0;
+	border-right: 2px solid var(--blanc01);
+	border-bottom: 2px solid var(--blanc01);
+	color: var(--text-faint);
+	opacity: .7;
+	transform: rotate(45deg);
+	transition: transform .18s cubic-bezier(.2, .75, .3, 1);
+}
+#header-title.menu-burger-active .pos-chevron { margin-top: 3px; transform: rotate(225deg); }
+
+/*
+Connection indicator - Indicateur de connection
+ */
+.net { display: flex; align-items: center; gap: 7px; color: var(--text-dim); font-weight: 600; white-space: nowrap; }
+.net-dot { width: 9px; height: 9px; border-radius: 50%;  }
+.net.ws-connected .net-dot {background-color: var(--valid); box-shadow: 0 0 0 3px oklch(0.700 0.170 148 / .18);}
+.net.ws-disconnected .net-dot {background-color: var(--invalid); box-shadow: 0 0 0 3px oklch(0.545 0.157 23.889 / 0.18);}
+
+/* "Nouvelle" affichage du menu, quand on est sur grand écran il y a les boutons directement dans le menu,
+	et sur petit écran, on a un menu burger  */
+.hdr-nav { display: flex; align-items: center; gap: 6px; }
+.hdr-nav-btn {
+	background: none;
+	border:none;
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 9px 14px;
+	border-radius: 999px;
+	color: var(--gris03);
+	font-weight: 700;
+	font-size: 13px;
+	white-space: nowrap;
+}
+.hdr-nav-btn .ico { font-size: 16px; }
+.hdr-nav-btn:active { background: var(--noir03); color: var(--blanc02); }
+
+
+
+
+/* Sur un écran inférieur à 1199pixels, on affiche le menu burger à la place des boutons*/
+#menu-small{
+	display: flex;
+	padding: 10px;
+	font-size: 22px;
+}
+#menu-large{
+	display: none;
+}
+
+
+
+/* Mobile : le panneau reste flottant, mais prend la largeur disponible
+   / Mobile: the panel stays floating but takes the available width */
 @media only screen and (max-width: 599px) {
 	#menu-burger-container {
-		min-width: 100%;
+		width: calc(100% - 16px);
+	}
+	.ws-indicator-text{
+		display: none;
 	}
 }
 
 /* pour une largeur supérieure 1199 pixels */
 @media only screen and (width > 1199px) {
 	:root {
-		--header-height: 66px;
+		--header-height: 58px;
+	}
+	#menu-small{
+		display: none;
+	}
+	#menu-large{
+		display: flex;
 	}
 }

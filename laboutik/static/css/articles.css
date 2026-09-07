@@ -4,7 +4,62 @@
 
    LOCALISATION : laboutik/static/css/articles.css
    SOURCE : cotton/articles.html
+
+   Le style des tuiles est le portage du composant `.tile` de la refonte
+   de l'écran de vente (prototype tibillet-laboutik-main/caisse/Laboutik.css) :
+   composition centrée (visuel + nom), pastille prix en bas-gauche, badge
+   quantité en bas-droite, dégradé 135° et relief « touche » — la tuile a une
+   tranche de 4 px dans sa propre teinte, assombrie, et descend exactement de
+   4 px à l'appui (descente instantanée, remontée à 170 ms).
+
+   La couleur de chaque tuile arrive du template en variables CSS
+   (--legacy = fond, --legacy-ink = encre) : c'est ce qui permet d'en dériver
+   le dégradé et la tranche. Voir cotton/articles.html.
+
+   / Tile styling is the port of the `.tile` component from the sales-screen
+   redesign prototype: centered composition, price chip bottom-left, quantity
+   badge bottom-right, 135° gradient and "key" relief — a 4px darker edge in
+   the tile's own hue, pressed down by exactly 4px on touch.
+   Each tile's color comes from the template as CSS variables
+   (--legacy / --legacy-ink), which is what makes the gradient and edge
+   derivable in CSS.
    ============================================================ */
+
+/* Jetons de tuile — mobile par défaut (2 colonnes), puis élargissement.
+   Les valeurs suivent les deux formats du prototype : « poche » (SUNMI V2s,
+   360 px) et « d3mini » (SUNMI D3 Mini, 1280 px).
+   / Tile tokens — mobile first (2 columns), then wider breakpoints.
+   Values follow the prototype's two formats: "poche" (V2s) and "d3mini". */
+:root {
+	--r-tile: 15px;
+
+	--article-per-col: 2;
+	--article-height: 117px;
+	--article-visual-size: 30px;
+	--article-name-size: 13.5px;
+	--article-gap: 8px;
+}
+
+/* pour une largeur supérieure ou égale à 599 pixels */
+@media only screen and (width > 599px) {
+	:root {
+		--article-per-col: 3;
+		--article-height: 128px;
+		--article-visual-size: 34px;
+		--article-name-size: 15px;
+		--article-gap: 10px;
+	}
+}
+
+/* pour une largeur supérieure ou égale à 1022 pixels — cible SUNMI D3 Mini */
+@media only screen and (width > 1022px) {
+	:root {
+		--article-per-col: 4;
+		--article-height: 136px;
+		--article-visual-size: 40px;
+		--article-name-size: 16px;
+	}
+}
 
 /* Surcharge du flex de common_user_interface.html par CSS Grid auto-fill
    Les articles remplissent automatiquement la largeur disponible.
@@ -12,30 +67,85 @@
    Articles automatically fill the available width. */
 #products {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(var(--bt-article-width), 1fr));
-	gap: 8px;
-	padding: 8px;
+	grid-template-columns: repeat(var(--article-per-col), 1fr);
+	gap: var(--article-gap);
+	padding: var(--article-gap);
 	align-content: start;
 }
 
+/* --- LA TUILE --- */
+/* Portage de `.tile` + relief « touche ». Tout est écrit en rgba() : seule la
+   tranche colorée a besoin de color-mix(), isolée dans un @supports plus bas.
+   Sur une WebView Android ancienne, la tuile garde donc son dégradé et son
+   relief, avec une tranche noire translucide au lieu de sa propre teinte.
+   / Port of `.tile` + "key" relief. Everything is written in rgba(): only the
+   colored edge needs color-mix(), isolated in an @supports block below. On an
+   old Android WebView the tile keeps its gradient and relief, with a
+   translucent black edge instead of its own hue. */
 .article-container {
+	/* Couleurs fournies par le template ; repli si la catégorie n'en a pas.
+	   / Colors provided by the template; fallback when the category has none. */
+	--tile-bg: var(--legacy, var(--tile-fallback, var(--gris01)));
+	--tile-ink: var(--legacy-ink, var(--blanc01));
+	/* tranche 3D : repli neutre, teintée par le @supports ci-dessous
+	   / 3D edge: neutral fallback, tinted by the @supports block below */
+	--tile-edge: rgba(0, 0, 0, 0.36);
+	--tile-chip: rgba(0, 0, 0, 0.45);
+
 	position: relative;
-	width: auto;
-	height: 0;
-	padding-bottom: 100%;  /* ratio 1:1 — aspect-ratio ne fonctionne pas en grid avec children absolute */
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	width: 100%;
+	height: var(--article-height);
+	/* le bas est réservé au footer en position absolue
+	   / bottom space is reserved for the absolutely positioned footer */
+	padding: 10px 8px 30px;
 	box-sizing: border-box;
-	overflow: hidden;
 	margin: 0;
-	font-family: "Luciole-regular";
-	border-radius: 15px;
-	transition: transform 100ms ease-in-out;
-	/* Couleur par défaut pour articles sans catégorie (surchargé par l'inline style quand catégorie présente)
-	   / Default color for uncategorized articles (overridden by inline style when category exists) */
-	background-color: var(--gris01);
+	overflow: hidden;
+	border-radius: var(--r-tile);
+	font-family: var(--font-ui);
+	color: var(--tile-ink);
+
+	background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(0, 0, 0, 0.16)), var(--tile-bg);
+
+	box-shadow:
+			inset 0 1.5px 0 rgba(255, 255, 255, 0.42),
+			inset 1.5px 0 0 rgba(255, 255, 255, 0.20),
+			inset 0 -1px 0 rgba(0, 0, 0, 0.20),
+			0 4px 0 var(--tile-edge),
+			0 5px 9px rgba(0, 0, 0, 0.38);
+
+	transition: transform .17s var(--ease), box-shadow .17s var(--ease), filter .17s var(--ease);
 }
 
+/* La touche descend de 4 px, instantanément. Remontée à 170 ms par la
+   transition ci-dessus. Aucune animation au relâchement.
+   / The key goes down 4px, instantly. It comes back up in 170ms via the
+   transition above. No release animation. */
 .article-container:active {
-	transform: scale(0.95);
+	transition-duration: 0s;
+	transform: translateY(4px);
+	filter: brightness(1.05);
+	box-shadow:
+			inset 0 1.5px 0 rgba(255, 255, 255, 0.30),
+			0 0 0 var(--tile-edge),
+			0 1px 3px rgba(0, 0, 0, 0.40);
+}
+
+/* La tranche prend la teinte de la tuile, assombrie de 36 %. Isolé dans un
+   @supports : si color-mix() n'est pas supporté, --tile-edge garde son repli
+   noir translucide au lieu d'invalider tout le box-shadow.
+   / The edge takes the tile's own hue, darkened by 36%. Isolated in @supports:
+   without color-mix() support, --tile-edge keeps its translucent black
+   fallback instead of invalidating the whole box-shadow. */
+@supports (color: color-mix(in oklab, #000, #fff)) {
+	.article-container {
+		--tile-edge: color-mix(in oklab, var(--tile-bg), #000 36%);
+	}
 }
 
 /* Icône catégorie — petit badge haut-gauche sur la tuile
@@ -44,89 +154,108 @@
 	position: absolute;
 	top: 5px;
 	left: 6px;
-	font-size: 1.4rem;
-	opacity: 0.75;
+	font-size: 1.2rem;
+	opacity: 0.55;
 	line-height: 1;
 	user-select: none;
 	pointer-events: none;
 	z-index: 1;
 }
 
-/* Zone visuelle produit : centrée, occupe l'espace entre le haut et le nom
-   / Product visual zone: centered, fills space between top and name */
-.article-visual-layer {
+/* Conteneur de la pastille stock — cible du swap HTMX OOB (hx_stock_badge.html).
+   Sorti du flux : sans ça, ses nœuds texte (les espaces du template) en font un
+   item flex de la hauteur d'une ligne, qui décentre le groupe visuel + nom.
+   La pastille qu'il contient reste positionnée en haut-droite de la tuile.
+   / Stock badge wrapper — target of the HTMX OOB swap. Taken out of flow:
+   otherwise its whitespace text nodes make it a one-line-tall flex item that
+   pushes the centered visual + name group off-center. */
+.article-container > [id^="stock-badge-"] {
 	position: absolute;
-	top: 4px;
-	left: 4px;
-	right: 4px;
-	bottom: 46px;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	pointer-events: none;
+}
+
+/* Zone visuelle produit : icône OU image, au-dessus du nom.
+   line-height:0 — sans ça, les espaces du template donnent une hauteur à la
+   zone quand l'article n'a ni image ni icône, et le groupe visuel + nom n'est
+   plus centré.
+   / Product visual zone: icon OR image, above the name.
+   line-height:0 — without it, the template's whitespace gives the zone a
+   height when the article has neither image nor icon, pushing the centered
+   visual + name group off-center. */
+.article-visual-layer {
+	flex: none;
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	max-height: var(--article-visual-size);
+	line-height: 0;
 	overflow: hidden;
 }
 
 /* Icône produit — grande, centrée dans la tuile
    / Product icon — large, centered in tile */
 .article-visual-icon {
-	font-size: calc(var(--bt-article-width) * 0.38);
-	opacity: 0.88;
-	user-select: none;
+	font-size: var(--article-visual-size);
 	line-height: 1;
+	opacity: 0.9;
+	user-select: none;
 }
 
-/* Image produit : contenue dans la zone visuelle, centrée
-   / Product image: contained within visual zone, centered */
+/* Image produit : bornée en pixels — surtout pas en pourcentage, non résoluble
+   dans un item flex à hauteur automatique.
+   / Product image: bounded in pixels — never in percent, which cannot be
+   resolved inside an auto-height flex item. */
 .article-visual-img {
-	max-width: 82%;
-	max-height: 82%;
+	max-width: 100%;
+	max-height: var(--article-visual-size);
 	object-fit: contain;
 	border-radius: 6px;
-	opacity: 0.88;
 }
 
-/* Nom de l'article : juste au-dessus du footer
-   / Article name: just above the footer */
+/* Nom de l'article — sous le visuel, centré
+   / Article name — under the visual, centered */
 .article-name-layer {
-	position: absolute;
-	left: 4px;
-	right: 4px;
-	bottom: 26px;
-	display: flex;
-	align-items: flex-end;
+	width: 100%;
+	min-width: 0;
 }
 
-/* Texte du nom : clamp 2 lignes, aligné à gauche
-   / Name text: 2-line clamp, left-aligned */
+/* Texte du nom : clamp 2 lignes, centré. --article-font-size est injecté par
+   Django (laboutik_config.taille_police_articles) et reste prioritaire.
+   / Name text: 2-line clamp, centered. --article-font-size is injected by
+   Django and keeps priority. */
 .article-name-text {
 	display: -webkit-box;
 	-webkit-line-clamp: 2;
 	-webkit-box-orient: vertical;
 	overflow: hidden;
-	font-weight: bold;
-	font-size: var(--article-font-size, 14px);
-	line-height: 1.2;
-	text-align: left;
-	min-width: 0;
+	font-size: var(--article-font-size, var(--article-name-size));
+	font-weight: 700;
+	line-height: 1.12;
+	letter-spacing: -.01em;
+	text-align: center;
 	width: 100%;
 }
 
-/* Footer : pills + badge quantité, en ligne
-   Position absolute avec left+right — PAS de width:100% (écraserait right:5px)
-   / Footer: pills + quantity badge, row layout
-   Absolute with left+right — NO width:100% (would override right:5px) */
+/* Footer : pastilles tarifs à gauche, badge quantité à droite
+   Position absolue avec left+right — PAS de width:100%
+   / Footer: rate pills left, quantity badge right
+   Absolute with left+right — NO width:100% */
 .article-footer-layer {
 	position: absolute;
-	left: 5px;
-	right: 5px;
-	bottom: 5px;
-	color: var(--blanc01);
+	left: 8px;
+	right: 8px;
+	bottom: 8px;
 	display: flex;
 	flex-direction: row;
 	align-items: center;
+	gap: 6px;
 }
 
-/* Conteneur des pills de tarifs : une seule ligne, overflow caché
+/* Conteneur des pastilles de tarifs : une seule ligne, overflow caché
    Le caissier voit tout dans l'overlay au clic (tarif.js)
    / Rate pills container: single row, overflow hidden
    Caissier sees all rates in the overlay on click (tarif.js) */
@@ -135,64 +264,78 @@
 	min-width: 0;
 	display: flex;
 	flex-wrap: nowrap;
-	gap: 3px;
+	gap: 4px;
 	align-items: center;
 	overflow: hidden;
 }
 
-/* Pill individuel pour chaque tarif (prix unique ET multi-tarif)
-   box-shadow pour détacher le pill du fond, surtout sur tuiles claires.
-   / Individual pill — box-shadow lifts pill off background, especially on light tiles */
+/* Pastille prix — reprise de `.tile-price`. Fond noir translucide : lisible
+   aussi bien sur une tuile claire que sombre.
+   / Price chip — from `.tile-price`. Translucent black background: readable on
+   both light and dark tiles. */
 .article-tarif-pill {
 	display: inline-block;
-	padding: 2px 6px;
-	border-radius: 9px;
-	background-color: rgba(0, 0, 0, 0.55);
+	padding: 4px 9px;
+	border-radius: 8px;
+	background-color: var(--tile-chip);
 	color: #ffffff;
-	font-size: 0.95rem;
+	font-size: 14px;
 	font-variant-numeric: tabular-nums;
-	font-weight: 600;
+	font-weight: 700;
 	white-space: nowrap;
-	line-height: 1.4;
+	line-height: 1.2;
 	text-shadow: none;
-	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
 	flex-shrink: 0;
 }
 
-/* Pill prix libre : fond indigo plus opaque pour se distinguer des tarifs fixes
+/* Pastille prix libre : fond indigo plus opaque pour se distinguer des tarifs fixes
    / Free price pill: more opaque indigo to stand out from fixed rates */
 .article-tarif-pill-libre {
 	background-color: rgba(99, 102, 241, 0.85);
 }
 
-/* Badge quantité en largeur fixe — ne vole plus l'espace aux pills
-   / Fixed-width quantity badge — no longer stealing space from pills */
+/* Badge quantité — reprise de `.tile-qty`
+   / Quantity badge — from `.tile-qty` */
 .article-quantity {
-	width: 28px;
-	flex-shrink: 0;
-	text-align: right;
+	flex: none;
 }
 
 .badge {
-	color: #212529;
-	background-color: #f8f9fa;
-	display: inline-block;
-	padding: .25em .4em;
-	font-weight: bold;
+	display: grid;
+	place-items: center;
+	min-width: 28px;
+	height: 28px;
+	padding: 0 7px;
+	border-radius: 9px;
+	background-color: var(--noir03);
+	color: var(--blanc01);
+	font-size: 15px;
+	font-weight: 800;
 	line-height: 1;
-	text-align: center;
 	white-space: nowrap;
-	vertical-align: baseline;
-	border-radius: .25rem;
 	font-variant-numeric: tabular-nums;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 	opacity: 0;
-	transition: opacity 200ms ease-in-out, color .15s ease-in-out, background-color .15s ease-in-out;
+	transition: opacity 200ms var(--ease-in-out);
+}
+
+/* Le rebond joue à l'apparition du badge (classe posée par articles.js/tarif.js)
+   / The pop plays when the badge appears (class set by articles.js/tarif.js) */
+@keyframes qty-pop {
+	0%   { transform: scale(1.45); }
+	62%  { transform: scale(.95); }
+	100% { transform: scale(1); }
 }
 
 .badge-visible {
 	opacity: 1;
+	animation: qty-pop .26s var(--ease);
 }
 
+/* Zone tactile — couvre toute la tuile. articles.js:manageKey() remonte d'un
+   seul cran (event.target.parentNode) : elle doit rester enfant direct.
+   / Touch zone — covers the whole tile. articles.js:manageKey() walks up a
+   single level, so it must stay a direct child. */
 .article-touch {
 	position: absolute;
 	left: 0;
@@ -201,207 +344,10 @@
 	height: 100%;
 }
 
-/* Articles adhesion : catégorie par défaut indigo si pas de categorie_pos
-   / Membership articles: default indigo category if no categorie_pos */
+/* Articles adhesion : teinte de repli indigo si Django ne fournit pas de couleur
+   / Membership articles: indigo fallback tint when Django provides no color */
 .article-adhesion {
-	background-color: #6366F1;
-}
-
-/* Mobile par défaut (< 599px)
-   / Mobile default (< 599px) */
-:root {
-	--bt-article-width: 130px;
-}
-
-/* pour une largeur supérieure ou égale à 599 pixels */
-@media only screen and (width > 599px) {
-	:root {
-		--bt-article-width: 140px;
-	}
-}
-
-/* pour une largeur supérieure ou égale à 1022 pixels */
-@media only screen and (width > 1022px) {
-	:root {
-		--bt-article-width: 100px;
-	}
-}
-
-/* --- OVERLAY SÉLECTION DE TARIF --- */
-/* / Rate selection overlay */
-.tarif-overlay {
-	position: fixed;
-	top: 0;
-	left: 0;
-	width: 100%;
-	height: 100%;
-	background-color: rgba(0, 0, 0, 0.85);
-	z-index: 1000;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	animation: tarif-fade-in 200ms ease;
-}
-
-@keyframes tarif-fade-in {
-	from { opacity: 0; }
-}
-
-.tarif-overlay-content {
-	background-color: var(--gris00, #1a1a2e);
-	border-radius: 20px;
-	padding: 32px 24px;
-	width: 90%;
-	max-width: 480px;
-	max-height: 85vh;
-	overflow-y: auto;
-	text-align: center;
-	color: var(--blanc01, #fff);
-}
-
-.tarif-overlay-title {
-	font-size: 1.8rem;
-	font-weight: bold;
-	margin: 0 0 4px 0;
-	text-wrap: balance;
-}
-
-.tarif-overlay-subtitle {
-	font-size: 1.1rem;
-	opacity: 0.7;
-	margin-bottom: 24px;
-}
-
-.tarif-list {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-	margin-bottom: 24px;
-}
-
-.tarif-btn {
-	display: block;
-	width: 100%;
-	padding: 18px 20px;
-	border: none;
-	border-radius: 12px;
-	background-color: var(--bleu03, #0345ea);
-	color: #fff;
-	font-size: 1.2rem;
-	font-family: "Luciole-regular", sans-serif;
-	cursor: pointer;
-	text-align: center;
-	transition: transform 100ms ease, background-color 150ms ease;
-}
-
-.tarif-btn:active {
-	transform: scale(0.97);
-}
-
-.tarif-btn-label {
-	font-weight: bold;
-	font-size: 1.3rem;
-}
-
-.tarif-btn-price {
-	font-variant-numeric: tabular-nums;
-	font-size: 1.1rem;
-	margin-top: 4px;
-	opacity: 0.9;
-}
-
-.tarif-btn-sublabel {
-	font-size: 0.95rem;
-	opacity: 0.7;
-	margin-top: 2px;
-}
-
-/* Prix libre : input + bouton OK dans le bouton tarif */
-/* / Free price: input + OK button inside the rate button */
-.tarif-btn-free {
-	background-color: var(--bleu05, #012584);
-	padding: 18px 20px 14px;
-}
-
-.tarif-free-input-container {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	gap: 8px;
-	margin-top: 12px;
-}
-
-.tarif-free-input {
-	width: 120px;
-	height: 56px;
-	font-size: 1.5rem;
-	text-align: center;
-	border: 2px solid rgba(255, 255, 255, 0.3);
-	border-radius: 8px;
-	background-color: rgba(255, 255, 255, 0.1);
-	color: #fff;
-	font-variant-numeric: tabular-nums;
-	font-family: "Luciole-regular", sans-serif;
-}
-
-.tarif-free-input:focus {
-	outline: none;
-	border-color: var(--vert01, #00e676);
-}
-
-.tarif-free-input::placeholder {
-	color: rgba(255, 255, 255, 0.4);
-}
-
-.tarif-input-error {
-	border-color: var(--rouge01, #e53935) !important;
-}
-
-.tarif-free-currency {
-	font-size: 1.5rem;
-	font-weight: bold;
-}
-
-.tarif-free-validate {
-	height: 56px;
-	padding: 0 20px;
-	border: none;
-	border-radius: 8px;
-	background-color: var(--vert03, #339448);
-	color: #fff;
-	font-size: 1.2rem;
-	font-weight: bold;
-	font-family: "Luciole-regular", sans-serif;
-	cursor: pointer;
-	transition: transform 100ms ease;
-}
-
-.tarif-free-validate:active {
-	transform: scale(0.95);
-}
-
-.tarif-free-error {
-	color: var(--rouge01, #e53935);
-	font-size: 0.95rem;
-	margin-top: 6px;
-	min-height: 1.2em;
-}
-
-.tarif-btn-retour {
-	display: inline-block;
-	padding: 14px 32px;
-	border: 2px solid rgba(255, 255, 255, 0.3);
-	border-radius: 10px;
-	background-color: transparent;
-	color: #fff;
-	font-size: 1.1rem;
-	font-family: "Luciole-regular", sans-serif;
-	cursor: pointer;
-	transition: background-color 150ms ease;
-}
-
-.tarif-btn-retour:active {
-	background-color: rgba(255, 255, 255, 0.1);
+	--tile-fallback: #6366F1;
 }
 
 /* --- PASTILLE STOCK --- */
@@ -412,13 +358,13 @@
 
 .article-stock-badge {
     position: absolute;
-    top: 5px;
-    right: 5px;
+    top: 6px;
+    right: 6px;
     padding: 2px 7px;
     border-radius: 8px;
-    font-size: 0.78rem;
+    font-size: 11px;
     font-weight: 700;
-    line-height: 1.3;
+    line-height: 1.4;
     white-space: nowrap;
     z-index: 2;
     pointer-events: none;
@@ -445,41 +391,6 @@
     filter: grayscale(60%);
 }
 
-/* sunmi d3mini -- pour une largeur supérieure ou égale à 1278 pixels
-   FIX : width/height sur :root supprimés — ils contraignaient <html> à 160px
-   au lieu de 100%, ce qui casse le layout sur Android WebView (Sunmi).
-   On ne garde que les variables CSS custom.
-   / FIX: removed width/height on :root — they constrained <html> to 160px
-   instead of 100%, breaking layout on Android WebView (Sunmi).
-   Only CSS custom properties are kept. */
-@media only screen and (width > 1278px) {
-	:root {
-		--bt-article-width: 160px;
-	}
-}
-
-
-/* --- LONG PRESS FEEDBACK --- */
-/* Retour visuel pendant l'appui long (600ms).
-   La tuile s'assombrit et rétrécit légèrement.
-   / Visual feedback during long press (600ms).
-   Tile darkens and slightly shrinks. */
-.article-container.pressing {
-    transform: scale(0.97);
-    filter: brightness(0.85);
-    transition: transform 300ms ease, filter 300ms ease;
-    touch-action: none;  /* Empeche le scroll pendant le press sur mobile / Prevents scroll during press on mobile */
-}
-
-/* Désactiver le :active natif pendant le pressing
-   (sinon double effet scale)
-   / Disable native :active during pressing
-   (otherwise double scale effect) */
-.article-container.pressing:active {
-    transform: scale(0.97);
-}
-
-
 /* --- PANEL CONTEXTUEL ARTICLE --- */
 /* Panel lateral droit — meme fond que la sidebar categories (--noir04).
    Vide = display:none. Non-vide = slide-in anime.
@@ -492,19 +403,19 @@
     width: 40%;
     height: 100vh;
     z-index: 1001;
-    background-color: var(--noir04);
-    color: var(--blanc01);
-    border-left: 1px solid var(--gris01);
+    background-color: var(--surface);
+    color: var(--text);
+    border-left: 1px solid var(--line);
     overflow-y: auto;
-    font-family: "Luciole-regular", sans-serif;
+    font-family: var(--font-ui);
     display: none;
     scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+    scrollbar-color: var(--wash-3) transparent;
 }
 
 #article-panel:not(:empty) {
     display: block;
-    animation: panel-slide-in 300ms ease;
+    animation: panel-slide-in 300ms var(--ease-out);
 }
 
 @keyframes panel-slide-in {
@@ -520,7 +431,7 @@
     width: 100vw;
     height: 100vh;
     z-index: 1000;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--overlay-veil);
 }
 
 #article-panel:not(:empty) ~ #article-panel-backdrop {
@@ -539,7 +450,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 12px 16px;
-    border-bottom: 1px solid var(--noir02);
+    border-bottom: 1px solid var(--line-soft);
 }
 
 .panel-title {
@@ -560,12 +471,12 @@
     justify-content: center;
     border: none;
     border-radius: 50%;
-    background: var(--rouge07);
-    color: var(--blanc01);
+    background: var(--danger);
+    color: var(--text);
     font-size: 1.1rem;
     cursor: pointer;
     flex-shrink: 0;
-    transition: background-color 150ms ease, transform 100ms ease;
+    transition: background-color 150ms var(--ease-out), transform 100ms var(--ease-out);
 }
 
 .panel-close-btn:active {
@@ -589,18 +500,26 @@
     padding: 12px 14px;
     border: none;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.04);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    color: var(--blanc01);
+    background: var(--wash-1);
+    border-bottom: 1px solid var(--wash-1);
+    color: var(--text);
     font-size: 1.05rem;
-    font-family: "Luciole-regular", sans-serif;
+    font-family: var(--font-ui);
     cursor: pointer;
     text-align: left;
-    transition: background-color 150ms ease, transform 100ms ease;
+    transition: background-color 150ms var(--ease-out), transform 100ms var(--ease-out);
+}
+
+.panel-menu-btn:focus-visible,
+.panel-close-btn:focus-visible,
+.stock-action-btn:focus-visible,
+.panel-back-btn:focus-visible {
+    outline: 3px solid var(--text);
+    outline-offset: 2px;
 }
 
 .panel-menu-btn:active {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--wash-2);
     transform: scale(0.98);
 }
 
@@ -625,8 +544,8 @@
     font-size: 0.75rem;
     padding: 2px 8px;
     border-radius: 9px;
-    background: rgba(255, 255, 255, 0.06);
-    color: var(--gris07);
+    background: var(--wash-1);
+    color: var(--text-faint);
 }
 
 /* Bouton retour / Back button */
@@ -637,15 +556,15 @@
     padding: 0;
     border: none;
     background: transparent;
-    color: var(--gris07);
+    color: var(--text-faint);
     font-size: 1rem;
-    font-family: "Luciole-regular", sans-serif;
+    font-family: var(--font-ui);
     cursor: pointer;
-    transition: color 150ms ease;
+    transition: color 150ms var(--ease-out);
 }
 
 .panel-back-btn:active {
-    color: var(--blanc01);
+    color: var(--text);
 }
 
 
@@ -654,8 +573,8 @@
 .stock-info-card {
     padding: 12px 14px;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.04);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background: var(--wash-1);
+    border-bottom: 1px solid var(--wash-1);
 }
 
 .stock-info-row {
@@ -667,7 +586,7 @@
 
 .stock-info-label {
     font-size: 0.9rem;
-    color: var(--gris07);
+    color: var(--text-faint);
 }
 
 .stock-info-value {
@@ -676,13 +595,13 @@
     font-variant-numeric: tabular-nums;
 }
 
-.stock-badge-ok      { color: var(--vert03); }
-.stock-badge-alerte  { color: var(--warning); }
-.stock-badge-rupture { color: var(--rouge03); }
+.stock-badge-ok      { color: var(--valid); }
+.stock-badge-alerte  { color: var(--warn); }
+.stock-badge-rupture { color: var(--danger); }
 
 .stock-separator {
     height: 1px;
-    background: var(--noir02);
+    background: var(--line-soft);
     margin: 10px 0;
 }
 
@@ -695,7 +614,7 @@
 
 .stock-form-label {
     font-size: 0.85rem;
-    color: var(--gris07);
+    color: var(--text-faint);
 }
 
 .stock-form-input-row {
@@ -709,23 +628,23 @@
     width: 100px;
     font-size: 1.3rem;
     text-align: center;
-    border: 1px solid var(--gris01);
+    border: 1px solid var(--line);
     border-radius: 10px;
-    background: var(--noir03);
-    color: var(--blanc01);
+    background: var(--bg);
+    color: var(--text);
     font-variant-numeric: tabular-nums;
-    font-family: "Luciole-regular", sans-serif;
+    font-family: var(--font-ui);
 }
 
 .stock-form-input:focus {
     outline: none;
-    border-color: var(--vert03);
+    border-color: var(--valid);
 }
 
 .stock-form-unit {
     font-size: 1rem;
     font-weight: 600;
-    color: var(--gris07);
+    color: var(--text-faint);
 }
 
 .stock-form-motif {
@@ -733,20 +652,20 @@
     width: 100%;
     padding: 0 12px;
     font-size: 0.95rem;
-    border: 1px solid var(--gris01);
+    border: 1px solid var(--line);
     border-radius: 10px;
-    background: var(--noir03);
-    color: var(--blanc01);
-    font-family: "Luciole-regular", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
 }
 
 .stock-form-motif:focus {
     outline: none;
-    border-color: var(--gris04);
+    border-color: var(--text-dim);
 }
 
 .stock-form-motif::placeholder {
-    color: var(--gris05);
+    color: var(--text-faint);
 }
 
 /* Boutons d'action stock — meme hauteur que les boutons footer POS
@@ -768,18 +687,18 @@
     border-radius: 10px;
     font-size: 1.05rem;
     font-weight: 600;
-    font-family: "Luciole-regular", sans-serif;
+    font-family: var(--font-ui);
     cursor: pointer;
-    color: var(--blanc01);
-    transition: transform 100ms ease;
+    color: var(--text);
+    transition: transform 100ms var(--ease-out);
 }
 
 .stock-action-btn:active {
     transform: scale(0.97);
 }
 
-.stock-action-btn-reception { background: var(--vert03); }
-.stock-action-btn-perte     { background: var(--rouge07); }
+.stock-action-btn-reception { background: var(--valid); }
+.stock-action-btn-perte     { background: var(--danger); }
 
 /* Lien admin / Admin link */
 .stock-admin-link {
@@ -789,13 +708,13 @@
     gap: 6px;
     padding: 8px;
     font-size: 0.85rem;
-    color: var(--gris07);
+    color: var(--text-faint);
     text-decoration: none;
-    transition: color 150ms ease;
+    transition: color 150ms var(--ease-out);
 }
 
 .stock-admin-link:active {
-    color: var(--blanc01);
+    color: var(--text);
 }
 
 /* Feedback apres action / Feedback after action */
@@ -805,15 +724,15 @@
     font-size: 0.9rem;
     font-weight: 600;
     text-align: center;
-    animation: overlay-fade-up 300ms ease;
+    animation: overlay-fade-up 300ms var(--ease-out);
 }
 
 .stock-feedback-success {
-    background: var(--vert04);
-    color: var(--vert02);
+    background: var(--valid-wash);
+    color: var(--text);
 }
 
 .stock-feedback-error {
-    background: var(--rouge07);
-    color: var(--rouge05);
+    background: var(--danger);
+    color: var(--danger-ink);
 }

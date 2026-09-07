@@ -11,6 +11,7 @@ from BaseBillet.tasks import send_to_ghost, send_membership_invoice_to_email, se
 from BaseBillet.templatetags.tibitags import dround
 # NOTE : plus aucun appel Fedow dans ce module depuis le retrait du push d'adhesion.
 # / NOTE: no Fedow call left in this module since the membership push was removed.
+from booking.models import Booking
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -20,9 +21,9 @@ def update_membership_state_after_stripe_paiement(ligne_article: LigneArticle):
 
     paiement_stripe: Paiement_stripe = ligne_article.paiement_stripe
 
-    membership: Membership = paiement_stripe.membership.first()
+    membership = ligne_article.membership
     if not membership:
-        membership = ligne_article.membership
+        membership: Membership = paiement_stripe.membership.first()
 
     price: Price = ligne_article.pricesold.price
     membership.contribution_value = ligne_article.pricesold.prix
@@ -153,6 +154,31 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
         # self.ligne_article = update_sale_if_free_price(self.ligne_article)
         # self.ligne_article.status = LigneArticle.VALID
         # logger.info(f"TRIGGER DON")
+
+    # Catégorie reservation de ressource
+    def trigger_C(self):
+        ligne_article: LigneArticle = self.ligne_article
+        logger.info(f"    START TRIGGER_C BOOKING PAID ligne_article.uuid : {ligne_article.uuid}")
+
+        # On va chercher l'article vendu et la réservation associée
+        booking = ligne_article.booking
+        user = booking.user
+
+        if not user.first_name or not user.last_name:
+            user.first_name = booking.first_name if not user.first_name else user.first_name
+            user.last_name = booking.last_name if not user.last_name else user.last_name
+            user.save()
+
+
+        booking.status = Booking.PAID_BY_USER
+        booking.save()
+
+
+        logger.info(f"        TRIGGER_C BOOKING PAID -> set ligne_article VALID (no save)")
+        self.ligne_article.status = LigneArticle.VALID
+
+        logger.info(f"    END TRIGGER_C BOOKING PAID\n")
+
 
     # Category BILLET
     def trigger_B(self):

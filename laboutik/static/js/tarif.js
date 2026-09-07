@@ -463,7 +463,9 @@ function addArticleWithPrice(productUuid, priceUuid, prixCentimes, displayName, 
 			let tileQty = Number(eleQuantity.innerText)
 			tileQty++
 			eleQuantity.innerText = tileQty
-			eleQuantity.classList.add('badge-visible')
+			// afficherBadgeQuantite() vit dans articles.js, charge sur la meme page
+			// / afficherBadgeQuantite() lives in articles.js, loaded on the same page
+			afficherBadgeQuantite(eleQuantity)
 		}
 	} catch (error) {
 		console.log('-> tarif.js - addArticleWithPrice, tile update error:', error)

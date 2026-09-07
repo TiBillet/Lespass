@@ -22,14 +22,14 @@
 }
 
 /* Vert = connecté / Green = connected */
-.ws-connected {
-  color: #198754;
-}
+/*.ws-connected {*/
+/*  color: #198754;*/
+/*}*/
 
 /* Rouge = déconnecté / Red = disconnected */
-.ws-disconnected {
-  color: #dc3545;
-}
+/*.ws-disconnected {*/
+/*  color: #dc3545;*/
+/*}*/
 
 /* Animation flash au ping (retour du pong)
    / Flash animation on ping (pong response) */
