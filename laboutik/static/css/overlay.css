@@ -1,4 +1,12 @@
-/* ============================================================
+/* Hallmark · app-scope: caisse-popups · genre: utilitaire (base modern-minimal)
+ * theme: systeme deja verrouille — portage du prototype Laboutik.css.
+ *        Diversification suspendue : ce lot fait CONVERGER les popups vers le
+ *        systeme des tuiles, du menu et du ticket, il n'en invente pas un autre.
+ * etats: repos · survol · focus · appui · desactive · chargement · erreur · succes
+ * pre-emit critique: P5 H4 E4 S5 R4 V3   (V bas et assume : converger, pas varier)
+ * contraste: pass (40-41) · jetons: pass (48) · mobile: pass (34, 49, 51)
+ *
+ * ============================================================
    OVERLAY.CSS — Styles pour les couches superposees #messages et #confirm
    / Styles for overlay layers #messages and #confirm
 
@@ -6,10 +14,32 @@
 
    #messages (layer 1) : check carte, types de paiement, adhesion, cloture.
    #confirm  (layer 2) : confirmation NFC, lecture carte paiement.
+
+   TROIS CHOSES A SAVOIR AVANT D'Y TOUCHER :
+   1. Les couleurs et les polices ne s'ecrivent jamais en dur ici. Tout passe
+      par les jetons de palette.css. Si une valeur manque, on l'ajoute la-bas.
+   2. Toute regle qui pose un `display` sur #messages / #confirm s'ecrit
+      `:not(.hide)` — sinon elle bat le `.hide` de modele00.css et la popup ne
+      se ferme plus.
+   3. Le scroll de ces couches vit dans la regle noyau ci-dessous. Ne pas le
+      retirer : sans lui, le bas des popups est hors d'atteinte sur un terminal
+      de poche.
+   / THREE THINGS TO KNOW: no hard-coded colours or fonts (tokens only, in
+   palette.css); every `display` rule on the layers needs `:not(.hide)` or the
+   popup stops closing; the layers' scroll lives in the core rule below and
+   must not be removed.
    ============================================================ */
 
 /* --- Positionnement noyau des overlays --- */
 /* / Core overlay positioning */
+/* La couche couvre tout l'ecran (parti pris assume : sur un terminal tenu a
+   bout de bras, la surface tactile prime sur la modale centree).
+   Le scroll est ici, et nulle part ailleurs : sans lui, une popup plus haute
+   que l'ecran laisse son dernier bouton hors d'atteinte — c'est le cas des
+   moyens de paiement sur SUNMI V2s (6 boutons dans 670 px utiles).
+   / The layer covers the whole screen. The scroll lives here and nowhere else:
+   without it, a popup taller than the viewport leaves its last button
+   unreachable — which is what happens on the payment screen on a SUNMI V2s. */
 #messages, #confirm {
 	position: absolute;
 	left: 0;
@@ -17,7 +47,13 @@
 	width: 100%;
 	height: 100%;
 	z-index: 800;
-	color: var(--blanc01);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	scrollbar-width: thin;
+	scrollbar-color: var(--surface-3) transparent;
+	background-color: var(--overlay-veil);
+	color: var(--text);
+	font-family: var(--font-ui);
 	font-size: 1.5rem;
 	text-align: center;
 }
@@ -39,10 +75,20 @@
    lui-meme mais des enfants — ils ont besoin de width/height 100%.
    / The direct child of #messages must fill the parent's space
    so the flex layout works correctly. Partials injected via innerHTML
-   are children, not the element itself — they need width/height 100%. */
-#messages > :first-child {
+   are children, not the element itself — they need width/height 100%.
+
+   min-height et non height : avec une hauteur ferme, un contenu plus haut que
+   l'ecran est simplement coupe (le parent scrollait dans le vide). Avec
+   min-height, il reste centre quand il est court — les racines des partials
+   sont des .BF-col, donc deja en colonne flex centree — et il grandit quand il
+   deborde, ce que le scroll du parent rattrape.
+   / min-height, not height: with a firm height, content taller than the screen
+   was simply cut off. With min-height it stays centred when short and grows
+   when it overflows, which the parent's scroll then picks up. */
+#messages > :first-child,
+#confirm > :first-child {
 	width: 100%;
-	height: 100%;
+	/*min-height: 100%;*/
 }
 
 
@@ -75,6 +121,22 @@
 	0% { transform: scale(0); opacity: 0; }
 	70% { transform: scale(1.15); }
 	100% { transform: scale(1); opacity: 1; }
+}
+
+/* Mouvement reduit : les entrees se replient sur un fondu court, rien ne
+   se deplace. Les animations d'etat (erreur, succes) restent lisibles.
+   / Reduced motion: entrances collapse to a short fade, nothing travels. */
+@media (prefers-reduced-motion: reduce) {
+	#messages *,
+	#confirm * {
+		animation-duration: 120ms !important;
+		animation-delay: 0ms !important;
+		transition-duration: 120ms !important;
+	}
+
+	@keyframes overlay-fade-up { from { opacity: 0; } }
+	@keyframes scale-in { from { opacity: 0; } to { opacity: 1; } }
+	@keyframes adhesion-scale-in { from { opacity: 0; } to { opacity: 1; } }
 }
 
 
@@ -112,13 +174,24 @@
    hx_display_type_payment.html — choix du moyen de paiement
    / Payment method selection
    ============================================================ */
+/* Libelle de section — meme micro-etiquette que l'en-tete du ticket et les
+   titres de panneau : capitales, interlettrage, encre effacee. Le libelle
+   situe, il ne crie pas ; ce qui crie, c'est le montant.
+   / Section label — the same micro-label as the ticket header and the panel
+   titles. The label locates, it does not shout; the amount shouts. */
 .message-title {
-	font-size: 1.5rem;
-	font-weight: bold;
+	font-size: var(--fs-min);
+	font-weight: 700;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	color: var(--text-faint);
 }
 
 .paiement-bt-total {
 	font-size: 1.5rem;
+	font-weight: 800;
+	letter-spacing: -.02em;
+	font-variant-numeric: tabular-nums;
 }
 
 
@@ -128,8 +201,10 @@
    ============================================================ */
 .fi-title1 {
 	font-size: clamp(1.5rem, 4vw, 2.5rem);
-	font-weight: bold;
+	font-weight: 800;
+	letter-spacing: -.02em;
 	text-align: center;
+	text-wrap: balance;
 }
 
 .fi-msg1 {
@@ -166,9 +241,14 @@
 	margin-top: 2rem;
 }
 
+/* Montants — recette .payment-total-val du prototype : graisse 800,
+   interlettrage negatif, chiffres a chasse fixe pour que le total ne danse pas
+   d'un centime a l'autre.
+   / Amounts — the prototype's .payment-total-val recipe. */
 .confirm-total {
 	font-size: 2.5rem;
-	font-weight: bold;
+	font-weight: 800;
+	letter-spacing: -.02em;
 	font-variant-numeric: tabular-nums;
 	margin-bottom: 1rem;
 }
@@ -213,7 +293,7 @@
 }
 
 /* Sur mobile : boutons empiles verticalement / Mobile: stack buttons vertically */
-@media (max-width: 600px) {
+@media (max-width: 599px) {
 	#confirm-action-container {
 		flex-direction: column;
 		gap: 0.5rem;
@@ -230,8 +310,10 @@
    ============================================================ */
 .payment-title1 {
 	font-size: 2.5rem;
-	font-weight: bold;
+	font-weight: 800;
+	letter-spacing: -.02em;
 	text-align: center;
+	text-wrap: balance;
 }
 
 .payment-detail {
@@ -268,21 +350,24 @@
    ============================================================ */
 .success-icon {
 	font-size: 4rem;
-	animation: scale-in 300ms ease both;
+	animation: scale-in 300ms var(--ease-out) both;
 }
 
-/* Zone monnaie a rendre — fond rouge + bordure doree pour attirer l'attention
-   / Change to give back — red background + gold border to draw attention */
+/* Zone monnaie a rendre — la seule chose que le caissier doit lire sur cet
+   ecran. Boite de la famille (voile + filet ambre), montant en graisse 800.
+   / Change to give back — the one thing the operator must read on this screen:
+   a family box (wash + amber hairline) with an 800-weight amount. */
 .give-back-box {
 	font-size: 2.5rem;
-	font-weight: bold;
+	font-weight: 800;
+	letter-spacing: -.02em;
 	font-variant-numeric: tabular-nums;
 	text-align: center;
 	padding: 1rem 2rem;
 	margin-top: 0.5rem;
-	background-color: var(--rouge07);
-	border: 3px solid var(--warning00);
-	border-radius: 12px;
+	background-color: var(--warn-wash);
+	border: 2px solid var(--warn-edge);
+	border-radius: var(--r-panel);
 }
 
 .give-back-box i {
@@ -333,7 +418,7 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	background-color: var(--gris02);
-	color: #fff;
+	color: var(--text);
 	padding: 4px 8px;
 	border-radius: 4px;
 }
@@ -375,9 +460,9 @@
 .btn-export {
 	display: inline-block;
 	padding: 0.5rem 1.2rem;
-	background-color: rgba(255,255,255,0.2);
-	color: var(--blanc01, #fff);
-	border: 1px solid rgba(255,255,255,0.5);
+	background-color: var(--wash-3);
+	color: var(--blanc01);
+	border: 1px solid var(--text-faint);
 	border-radius: 6px;
 	font-size: 1.1rem;
 	text-decoration: none;
@@ -386,7 +471,7 @@
 }
 
 .btn-export:hover {
-	background-color: rgba(255,255,255,0.35);
+	background-color: var(--wash-4);
 }
 
 
@@ -395,13 +480,14 @@
    / Identification method selection
    ============================================================ */
 .choose-id-stagger {
-	animation: overlay-fade-up 0.4s ease both;
+	animation: overlay-fade-up 0.4s var(--ease-out) both;
 	animation-delay: calc(80ms * var(--ordre, 0));
 }
 
 .choose-id-title {
 	font-size: 1.5rem;
-	font-weight: bold;
+	font-weight: 800;
+	letter-spacing: -.01em;
 	margin-bottom: 1.5rem;
 	text-wrap: balance;
 }
@@ -419,27 +505,27 @@
 	margin: 0 auto;
 	padding: 16px 24px;
 	min-height: 56px;
-	background-color: rgba(255, 255, 255, 0.1);
+	background-color: var(--wash-2);
 	border: none;
 	border-radius: 16px;
 	box-shadow:
-		0 0 0 1px rgba(255, 255, 255, 0.15),
-		0 1px 2px -1px rgba(0, 0, 0, 0.1),
-		0 2px 4px 0 rgba(0, 0, 0, 0.06);
+		0 0 0 1px var(--wash-3),
+		0 1px 2px -1px var(--shade-1),
+		0 2px 4px 0 var(--shade-1);
 	color: var(--blanc01);
 	font-size: 1.2rem;
-	font-family: "Luciole-regular", sans-serif;
+	font-family: var(--font-ui);
 	cursor: pointer;
-	transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+	transition: background-color 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out), transform 0.1s var(--ease-out);
 }
 
 .choose-id-btn:hover,
 .choose-id-btn:focus-visible {
-	background-color: rgba(255, 255, 255, 0.18);
+	background-color: var(--wash-3);
 	box-shadow:
-		0 0 0 1px rgba(255, 255, 255, 0.3),
-		0 1px 2px -1px rgba(0, 0, 0, 0.12),
-		0 2px 6px 0 rgba(0, 0, 0, 0.08);
+		0 0 0 1px var(--wash-4),
+		0 1px 2px -1px var(--shade-1),
+		0 2px 6px 0 var(--shade-1);
 }
 
 .choose-id-btn:active {
@@ -491,7 +577,7 @@
    / Membership confirmation
    ============================================================ */
 .adhesion-stagger {
-	animation: overlay-fade-up 0.4s ease both;
+	animation: overlay-fade-up 0.4s var(--ease-out) both;
 	animation-delay: calc(100ms * var(--ordre, 0));
 }
 
@@ -505,8 +591,8 @@
 
 .adhesion-confirm-check {
 	font-size: 3rem;
-	color: var(--vert01, #00e676);
-	animation: adhesion-scale-in 0.3s ease-out 0.15s both;
+	color: var(--vert01);
+	animation: adhesion-scale-in 0.3s var(--ease-out) 0.15s both;
 }
 
 .adhesion-confirm-title {
@@ -521,13 +607,13 @@
 	max-width: 380px;
 	margin: 0 auto 1.5rem;
 	padding: 20px 24px;
-	background-color: rgba(255, 255, 255, 0.06);
+	background-color: var(--wash-1);
 	border-radius: 16px;
 	box-shadow:
-		0 0 0 1px rgba(255, 255, 255, 0.06),
-		0 1px 3px rgba(0, 0, 0, 0.12),
-		0 4px 12px rgba(0, 0, 0, 0.08),
-		0 8px 24px rgba(0, 0, 0, 0.06);
+		0 0 0 1px var(--wash-1),
+		0 1px 3px var(--shade-1),
+		0 4px 12px var(--shade-1),
+		0 8px 24px var(--shade-1);
 	text-align: left;
 }
 
@@ -627,7 +713,7 @@
 	padding: 0.3rem 0;
 	font-size: 0.95rem;
 	opacity: 0.9;
-	border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+	border-bottom: 1px solid var(--wash-2);
 }
 
 .recapitulatif-article-desc {
@@ -669,7 +755,7 @@
 	align-items: baseline;
 	padding: 0.5rem 0 0.3rem;
 	margin-top: 0.3rem;
-	border-top: 2px solid rgba(255, 255, 255, 0.2);
+	border-top: 2px solid var(--wash-3);
 	font-size: 1.1rem;
 	font-weight: 700;
 }
@@ -679,7 +765,7 @@
    / Member identification form
    ============================================================ */
 .adhesion-form-stagger {
-	animation: overlay-fade-up 0.4s ease both;
+	animation: overlay-fade-up 0.4s var(--ease-out) both;
 	animation-delay: calc(100ms * var(--ordre, 0));
 }
 
@@ -720,12 +806,12 @@
 	height: 56px;
 	padding: 20px 14px 6px;
 	font-size: 1.1rem;
-	font-family: "Luciole-regular", sans-serif;
-	border: 2px solid rgba(255, 255, 255, 0.25);
+	font-family: var(--font-ui);
+	border: 2px solid var(--wash-4);
 	border-radius: 12px;
-	background-color: rgba(255, 255, 255, 0.08);
-	color: #fff;
-	transition: border-color 0.2s ease;
+	background-color: var(--wash-2);
+	color: var(--text);
+	transition: border-color 0.2s var(--ease-out);
 	box-sizing: border-box;
 }
 
@@ -739,10 +825,12 @@
 	top: 50%;
 	transform: translateY(-50%);
 	font-size: 1rem;
-	color: rgba(255, 255, 255, 0.5);
+	color: var(--text-faint);
 	pointer-events: none;
-	transition: all 0.2s ease;
-	font-family: "Luciole-regular", sans-serif;
+	transition: background-color var(--dur-base) var(--ease-out),
+	            box-shadow var(--dur-base) var(--ease-out),
+	            transform var(--dur-fast) var(--ease-out);
+	font-family: var(--font-ui);
 }
 
 /* Label flottant : monte quand l'input a du contenu ou est focus
@@ -752,21 +840,21 @@
 	top: 10px;
 	transform: translateY(0);
 	font-size: 0.75rem;
-	color: rgba(255, 255, 255, 0.7);
+	color: var(--text-dim);
 }
 
 .adhesion-input:focus {
 	outline: none;
-	border-color: var(--vert01, #00e676);
+	border-color: var(--vert01);
 }
 
 /* Validation visuelle / Visual validation */
 .adhesion-input:invalid:not(:placeholder-shown):not(:focus) {
-	border-color: var(--rouge01, #ff5252);
+	border-color: var(--rouge01);
 }
 
 .adhesion-input:valid:not(:placeholder-shown) {
-	border-color: var(--vert01, #00e676);
+	border-color: var(--vert01);
 }
 
 /* Bouton VALIDER adhesion / Membership VALIDATE button */
@@ -782,19 +870,19 @@
 	height: 56px;
 	font-size: 1.3rem;
 	font-weight: bold;
-	font-family: "Luciole-regular", sans-serif;
+	font-family: var(--font-ui);
 	color: var(--blanc01);
-	background-color: var(--vert03, #2e7d32);
+	background-color: var(--vert03);
 	border: none;
 	border-radius: 14px;
 	cursor: pointer;
-	transition: background-color 0.15s ease, transform 0.1s ease;
+	transition: background-color 0.15s var(--ease-out), transform 0.1s var(--ease-out);
 }
 
 .adhesion-submit-btn:hover,
 .adhesion-submit-btn:focus-visible {
-	background-color: var(--vert01, #00e676);
-	color: var(--noir01, #111);
+	background-color: var(--vert01);
+	color: var(--noir01);
 }
 
 .adhesion-submit-btn:active {
@@ -802,7 +890,7 @@
 }
 
 .adhesion-error {
-	color: var(--warning, #ff9800);
+	color: var(--warning);
 	font-size: 1rem;
 	margin-bottom: 0.5rem;
 }
@@ -868,7 +956,7 @@
 	padding: 16px 12px;
 	margin: 12px 0;
 	border-radius: 12px;
-	background-color: rgba(255, 255, 255, 0.08);
+	background-color: var(--wash-2);
 }
 
 .cf-total-label {
@@ -891,8 +979,8 @@
 	padding: 8px 12px;
 	margin: 4px 0;
 	border-radius: 10px;
-	background-color: rgba(255, 255, 255, 0.04);
-	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+	background-color: var(--wash-1);
+	border-bottom: 1px solid var(--wash-1);
 }
 
 .cf-token-empty {
@@ -906,7 +994,7 @@
 	width: 32px;
 	height: 32px;
 	border-radius: 50%;
-	background-color: rgba(255, 255, 255, 0.1);
+	background-color: var(--wash-2);
 	font-size: 0.9rem;
 }
 
@@ -935,7 +1023,7 @@
 	letter-spacing: 0.05em;
 	color: var(--gris07);
 	padding: 16px 12px 6px;
-	border-top: 1px solid rgba(255, 255, 255, 0.08);
+	border-top: 1px solid var(--wash-2);
 	margin-top: 8px;
 }
 
@@ -948,7 +1036,7 @@
 	padding: 8px 12px;
 	margin: 4px 0;
 	border-radius: 10px;
-	background-color: rgba(255, 255, 255, 0.04);
+	background-color: var(--wash-1);
 }
 
 .cf-adhesion-icon {
@@ -989,102 +1077,136 @@
    Only one partial visible at a time → no conflict.
    ============================================================ */
 
+/* TROIS REGLES D'ECRITURE POUR CE BLOC :
+
+   1. `:not(.hide)` sur toute regle qui pose un `display`. Sans lui, la regle
+      (specificite 1,1,0) l'emporte sur `.hide` (0,1,0) de modele00.css et la
+      popup ne se ferme plus. Ca fonctionnait jusqu'ici par chance : le listener
+      htmx:afterSwap de base.html retire `.hide` avant que le contenu n'arrive.
+   2. Chaque teinte est derivee des jetons par color-mix, jamais ecrite en dur.
+      Le codage couleur par flux est conserve — le caissier reconnait l'ecran a
+      sa teinte, c'est un signal de travail, pas une decoration — mais les
+      teintes appartiennent desormais a une seule famille.
+   3. Repli avant color-mix : sur une WebView Android sans support, la seconde
+      declaration est ignoree et la couche garde un fond lisible au lieu de
+      devenir transparente.
+
+   / THREE RULES FOR THIS BLOCK: `:not(.hide)` on every display-setting rule,
+   tints derived from tokens via color-mix (per-flow colour coding is kept — it
+   is a working signal, not decoration — but all tints now share one family),
+   and a plain fallback before each color-mix so old WebViews stay readable. */
+
 /* hx_display_type_payment.html — choix du moyen de paiement */
-#messages:has([data-testid="paiement-moyens"]) {
-	background-color: var(--bleu09);
+#messages:not(.hide):has([data-testid="paiement-moyens"]) {
+	background-color: var(--surface);
+	background-color: color-mix(in oklab, var(--surface), var(--info) 10%);
 }
 
 /* hx_formulaire_identification_client.html — formulaire d'identification client */
-#messages:has([data-testid="client-form"]) {
-	background-color: var(--noir03, #1a1a2e);
+#messages:not(.hide):has([data-testid="client-form"]) {
+	background-color: var(--bg);
 }
 
 /* hx_recapitulatif_client.html — recapitulatif client + boutons paiement */
-#messages:has([data-testid="client-recapitulatif"]) {
-	background-color: var(--noir03, #1a1a2e);
+#messages:not(.hide):has([data-testid="client-recapitulatif"]) {
+	background-color: var(--bg);
 }
 
 /* hx_card_feedback.html — retour carte NFC */
-#messages:has(.cf-wrapper) {
+#messages:not(.hide):has(.cf-wrapper) {
 	display: flex;
 	flex-direction: column;
-	background-color: var(--noir03);
+	background-color: var(--bg);
 }
 
-/* hx_check_card.html — attente lecture carte (Cotton nfc-container dans #messages) */
-#messages:has(.nfc-container) {
+/* hx_check_card.html — attente lecture carte (Cotton nfc-container dans #messages)
+   Fond le plus sombre de la famille, legerement teinte du bleu sans contact :
+   c'est le moment ou le regard doit aller au lecteur, pas a l'ecran.
+   / Darkest ground of the family, faintly tinted with the contactless blue:
+   this is the moment the eye should go to the reader, not the screen. */
+#messages:not(.hide):has(.nfc-container) {
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
 	align-items: center;
-	background-color: var(--noir01);
+	background-color: var(--bg);
+	background-color: color-mix(in oklab, var(--bg), var(--nfc) 6%);
 }
 
-/* hx_return_payment_success.html — succes de paiement */
-#messages:has([data-testid="paiement-succes"]) {
-	background-color: var(--success);
+/* hx_return_payment_success.html — succes de paiement
+   Le vert plein est garde : c'est le seul ecran qui dit « c'est vendu ».
+   / The solid green stays: it is the one screen that says "sold". */
+#messages:not(.hide):has([data-testid="paiement-succes"]) {
+	background-color: var(--valid-deep);
+	color: var(--valid-ink);
 }
 
 /* hx_funds_insufficient.html — fonds insuffisants */
-#messages:has([data-testid="paiement-nfc-insuffisant"]) {
-	background-color: var(--rouge07);
+#messages:not(.hide):has([data-testid="paiement-nfc-insuffisant"]) {
+	background-color: var(--surface);
+	background-color: color-mix(in oklab, var(--surface), var(--danger) 30%);
 }
 
 /* hx_complement_paiement.html — complément de paiement NFC fractionné
-   / NFC split payment complement screen */
-#messages:has([data-testid="complement-paiement"]) {
+   Meme famille que « fonds insuffisants » — c'est la suite du meme incident —
+   mais un cran plus clair : on est deja dans la resolution.
+   / Same family as "insufficient funds" — it is the sequel to the same
+   incident — one step lighter: we are already in the resolution. */
+#messages:not(.hide):has([data-testid="complement-paiement"]) {
 	display: flex;
 	flex-direction: column;
-	background-color: var(--rouge07);
+	background-color: var(--surface);
+	background-color: color-mix(in oklab, var(--surface), var(--danger) 20%);
 }
 
 /* hx_vider_carte_confirm.html — confirmation avant remboursement carte
    / Empty card confirmation before refund (warning, action irréversible) */
-#messages:has([data-testid="vider-carte-confirm"]) {
+#messages:not(.hide):has([data-testid="vider-carte-confirm"]) {
 	display: flex;
 	flex-direction: column;
-	background-color: var(--warning00);
-	color: var(--noir01);
+	background-color: var(--surface);
+	background-color: color-mix(in oklab, var(--surface), var(--warn) 32%);
+	color: var(--text);
 }
 
-/* Override .give-back-box pour cet ecran : texte blanc lisible sur le fond
-   rouge07 (marron sombre) interne, et bordure sombre visible sur le fond
-   warning00 orange du parent.
-   / Override .give-back-box on this screen: white text on dark inner bg,
-   dark border visible on warning00 orange parent bg. */
-#messages:has([data-testid="vider-carte-confirm"]) .give-back-box {
-	color: var(--blanc01);
-	border-color: var(--noir01);
+/* Override .give-back-box pour cet ecran : le fond du parent est desormais
+   sombre, l'encre claire et le filet ambre suffisent.
+   / Override .give-back-box: the parent ground is now dark, so light ink and
+   an amber hairline are enough. */
+#messages:not(.hide):has([data-testid="vider-carte-confirm"]) .give-back-box {
+	color: var(--text);
+	border-color: var(--warn);
 }
-
-/* Le tableau et autre texte secondaire restent en noir (lisible sur orange) */
-/* / Table and secondary text stay in black (readable on orange) */
 
 /* hx_vider_carte_success.html — remboursement effectué (cohérent paiement-succes)
    / Refund executed — consistent with paiement-succes */
-#messages:has([data-testid="vider-carte-success"]) {
+#messages:not(.hide):has([data-testid="vider-carte-success"]) {
 	display: flex;
 	flex-direction: column;
-	background-color: var(--success);
+	background-color: var(--valid-deep);
+	color: var(--valid-ink);
 }
 
 /* hx_cloture_rapport.html — rapport de cloture */
-#messages:has([data-testid="cloture-rapport"]) {
-	background-color: var(--info, #17a2b8);
+#messages:not(.hide):has([data-testid="cloture-rapport"]) {
+	background-color: var(--surface);
+	background-color: color-mix(in oklab, var(--surface), var(--info) 18%);
 }
 
 /* hx_confirm_payment.html — confirmation de paiement (outerHTML → data-testid sur #confirm) */
-#confirm[data-testid="paiement-confirmation"] {
-	background-color: var(--bleu09);
+#confirm:not(.hide)[data-testid="paiement-confirmation"] {
+	background-color: var(--surface);
+	background-color: color-mix(in oklab, var(--surface), var(--info) 10%);
 }
 
 /* hx_read_nfc.html + hx_lire_nfc_client.html — attente NFC paiement/identification */
-#confirm:has(.nfc-container) {
+#confirm:not(.hide):has(.nfc-container) {
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
 	align-items: center;
-	background-color: var(--noir01);
+	background-color: var(--bg);
+	background-color: color-mix(in oklab, var(--bg), var(--nfc) 6%);
 }
 
 
@@ -1109,7 +1231,7 @@
 .cascade-tokens-table th,
 .cascade-tokens-table td {
 	padding: 0.4rem 0.6rem;
-	border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+	border-bottom: 1px solid var(--wash-3);
 }
 
 .cascade-tokens-table th {
@@ -1164,8 +1286,8 @@
    main action label. */
 .vider-carte-user-email {
 	font-size: 0.85em;
-	font-style: italic;
-	opacity: 0.9;
+	font-weight: 500;
+	opacity: 0.75;
 	max-width: 100%;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -1212,11 +1334,11 @@
 	gap: 0.5rem;
 	padding: 0.7rem 1.25rem;
 	border-radius: 8px;
-	font-family: 'Luciole-regular', sans-serif;
+	font-family: var(--font-ui);
 	font-size: 0.95rem;
 	background: transparent;
 	cursor: pointer;
-	transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+	transition: background 150ms var(--ease-out), border-color 150ms var(--ease-out), color 150ms var(--ease-out);
 }
 
 .recap-action-btn:disabled {
@@ -1226,77 +1348,77 @@
 
 /* --- Variante indigo : fond de caisse --- */
 .recap-action-btn--indigo {
-	background: rgba(99, 102, 241, 0.12);
-	border: 1px solid rgba(99, 102, 241, 0.3);
-	color: #a5b4fc;
+	background: var(--info-wash);
+	border: 1px solid var(--info-edge);
+	color: var(--info-ink);
 }
 .recap-action-btn--indigo:hover,
 .recap-action-btn--indigo:focus-visible {
-	background: rgba(99, 102, 241, 0.25);
-	border-color: #818cf8;
+	background: var(--info-edge);
+	border-color: var(--info-ink);
 }
 
 /* --- Variante rouge : sortie de caisse, confirmer cloture --- */
 .recap-action-btn--rouge {
-	background: rgba(239, 68, 68, 0.12);
-	border: 1px solid rgba(239, 68, 68, 0.3);
-	color: #fca5a5;
+	background: var(--danger-wash);
+	border: 1px solid var(--danger-edge);
+	color: var(--danger);
 }
 .recap-action-btn--rouge:hover,
 .recap-action-btn--rouge:focus-visible {
-	background: rgba(239, 68, 68, 0.25);
-	border-color: #f87171;
+	background: var(--danger-edge);
+	border-color: var(--danger);
 }
 
 /* --- Variante rouge "fort" : confirmer cloture (border 2px + bold) --- */
 .recap-action-btn--rouge-strong {
-	background: rgba(239, 68, 68, 0.2);
-	border: 2px solid rgba(239, 68, 68, 0.5);
-	color: #fca5a5;
+	background: var(--danger-wash);
+	border: 2px solid var(--danger-edge);
+	color: var(--danger);
 	font-weight: 600;
 }
 .recap-action-btn--rouge-strong:hover,
 .recap-action-btn--rouge-strong:focus-visible {
-	background: rgba(239, 68, 68, 0.3);
-	border-color: #f87171;
+	background: var(--danger-edge);
+	border-color: var(--danger);
 }
 
 /* --- Variante vert : imprimer Ticket X --- */
 .recap-action-btn--vert {
-	background: rgba(74, 222, 128, 0.12);
-	border: 1px solid rgba(74, 222, 128, 0.3);
-	color: #86efac;
+	background: var(--valid-wash);
+	border: 1px solid var(--valid-edge);
+	color: var(--valid);
 }
 .recap-action-btn--vert:hover,
 .recap-action-btn--vert:focus-visible {
-	background: rgba(74, 222, 128, 0.25);
-	border-color: #4ade80;
+	background: var(--valid-edge);
+	border-color: var(--valid);
 }
 
 /* --- Variante orange : cloturer toutes les caisses --- */
 .recap-action-btn--orange {
-	background: rgba(251, 146, 60, 0.12);
-	border: 1px solid rgba(251, 146, 60, 0.3);
-	color: #fdba74;
+	background: var(--warn-wash);
+	border: 1px solid var(--warn-edge);
+	color: var(--warn);
 }
 .recap-action-btn--orange:hover,
 .recap-action-btn--orange:focus-visible {
-	background: rgba(251, 146, 60, 0.25);
-	border-color: #fb923c;
+	background: var(--warn-edge);
+	border-color: var(--warn);
 }
 
 /* --- Variante ghost : annuler, transparent --- */
 .recap-action-btn--ghost {
 	background: transparent;
-	border: 1px solid rgba(255, 255, 255, 0.12);
-	color: #9ca3af;
+	border: 1px solid var(--wash-2);
+	color: var(--text-faint);
 	flex: 0 0 auto;
 	min-width: auto;
 }
 .recap-action-btn--ghost:hover,
 .recap-action-btn--ghost:focus-visible {
-	border-color: rgba(255, 255, 255, 0.3);
-	color: #d1d5db;
+	border-color: var(--wash-4);
+	color: var(--text-dim);
 }
 
 /* Ligne d'actions horizontale (boutons recap)
@@ -1317,25 +1439,25 @@
 	align-items: center;
 	gap: 0.4rem;
 	background: transparent;
-	border: 1px solid rgba(255, 255, 255, 0.12);
-	color: #a0a0a0;
+	border: 1px solid var(--wash-2);
+	color: var(--text-faint);
 	padding: 0.4rem 1rem;
 	border-radius: 6px;
-	font-family: 'Luciole-regular', sans-serif;
+	font-family: var(--font-ui);
 	font-size: 0.85rem;
 	cursor: pointer;
-	transition: color 150ms ease, border-color 150ms ease;
+	transition: color 150ms var(--ease-out), border-color 150ms var(--ease-out);
 }
 .btn-retour-recap:hover,
 .btn-retour-recap:focus-visible {
-	border-color: rgba(255, 255, 255, 0.3);
-	color: #d1d5db;
+	border-color: var(--wash-4);
+	color: var(--text-dim);
 }
 
 /* Cellule de tableau en rouge (sorties d'especes)
    / Red table cell (cash outflows) */
 .recap-cell-rouge {
-	color: #f87171;
+	color: var(--danger);
 }
 
 /* Zone de confirmation cloture — affichee apres clic sur bouton "Cloturer"
@@ -1344,13 +1466,13 @@
 	margin-top: 1rem;
 	padding: 1rem;
 	border-radius: 10px;
-	border: 2px solid rgba(251, 146, 60, 0.5);
-	background: rgba(251, 146, 60, 0.08);
-	font-family: 'Luciole-regular', sans-serif;
+	border: 2px solid var(--warn-edge);
+	background: var(--warn-wash);
+	font-family: var(--font-ui);
 }
 
 .cloture-text-warning {
-	color: #fdba74;
+	color: var(--warn);
 	font-size: 0.95rem;
 	margin: 0 0 0.75rem 0;
 	line-height: 1.5;
@@ -1360,7 +1482,7 @@
 }
 
 .cloture-text-discret {
-	color: #a0a0a0;
+	color: var(--text-faint);
 	font-size: 0.85rem;
 	margin: 0 0 1rem 0;
 }
@@ -1371,10 +1493,10 @@
 	padding: 0.7rem 1rem;
 	border-radius: 8px;
 	margin-bottom: 1rem;
-	background: rgba(16, 185, 129, 0.15);
-	border: 1px solid rgba(16, 185, 129, 0.3);
-	color: #6ee7b7;
-	font-family: 'Luciole-regular', sans-serif;
+	background: var(--valid-wash);
+	border: 1px solid var(--valid-edge);
+	color: var(--valid);
+	font-family: var(--font-ui);
 	font-size: 0.9rem;
 	animation: correction-slide-in 400ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
 }
@@ -1391,18 +1513,18 @@
 /* Champs du formulaire fond de caisse
    / Cash float form fields */
 .fond-info-text {
-	color: #a0a0a0;
+	color: var(--text-faint);
 	margin-bottom: 1rem;
-	font-family: 'Luciole-regular', sans-serif;
+	font-family: var(--font-ui);
 }
 .fond-info-text strong {
-	color: #e0e0e0;
+	color: var(--text-dim);
 	font-size: 1.2rem;
 }
 
 .fond-input-label {
-	color: #c0c0c0;
-	font-family: 'Luciole-regular', sans-serif;
+	color: var(--text-dim);
+	font-family: var(--font-ui);
 	display: block;
 	margin-bottom: 0.4rem;
 	font-size: 0.85rem;
@@ -1411,72 +1533,72 @@
 .fond-input {
 	padding: 0.6rem 0.75rem;
 	font-size: 1.1rem;
-	font-family: 'Luciole-regular', sans-serif;
+	font-family: var(--font-ui);
 	border-radius: 8px;
-	border: 1px solid rgba(99, 102, 241, 0.3);
-	background: rgba(0, 0, 0, 0.2);
-	color: #e0e0e0;
+	border: 1px solid var(--info-edge);
+	background: var(--shade-2);
+	color: var(--text-dim);
 	width: 180px;
-	transition: border-color 150ms ease;
+	transition: border-color 150ms var(--ease-out);
 }
 .fond-input:focus {
 	outline: none;
-	border-color: rgba(99, 102, 241, 0.6);
+	border-color: var(--info-edge);
 }
 
 .fond-btn-submit {
-	background: linear-gradient(135deg, #6366f1, #4f46e5);
+	background: linear-gradient(135deg, var(--info-ink), var(--info-ink));
 	color: white;
 	padding: 0.6rem 1.5rem;
 	border: none;
 	border-radius: 8px;
 	font-size: 0.95rem;
 	font-weight: 600;
-	font-family: 'Luciole-regular', sans-serif;
+	font-family: var(--font-ui);
 	cursor: pointer;
-	box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
-	transition: box-shadow 150ms ease, transform 150ms ease;
+	box-shadow: 0 2px 8px var(--info-edge);
+	transition: box-shadow 150ms var(--ease-out), transform 150ms var(--ease-out);
 }
 .fond-btn-submit:hover,
 .fond-btn-submit:focus-visible {
-	box-shadow: 0 4px 12px rgba(99, 102, 241, 0.45);
+	box-shadow: 0 4px 12px var(--info-edge);
 	transform: translateY(-1px);
 }
 
 /* Boutons inline dans la zone d'alerte sortie de caisse
    / Inline buttons in cash withdrawal alert zone */
 .sortie-alerte-btn-confirm {
-	background: rgba(251, 191, 36, 0.15);
-	color: #fde68a;
-	border: 2px solid rgba(251, 191, 36, 0.4);
+	background: var(--warn-wash);
+	color: var(--warn);
+	border: 2px solid var(--warn-edge);
 	padding: 0.5rem 1.2rem;
 	border-radius: 8px;
-	font-family: 'Luciole-regular', sans-serif;
+	font-family: var(--font-ui);
 	font-size: 0.9rem;
 	font-weight: 600;
 	cursor: pointer;
-	transition: background 150ms ease;
+	transition: background 150ms var(--ease-out);
 }
 .sortie-alerte-btn-confirm:hover,
 .sortie-alerte-btn-confirm:focus-visible {
-	background: rgba(251, 191, 36, 0.25);
+	background: var(--warn-edge);
 }
 
 .sortie-alerte-btn-cancel {
 	background: transparent;
-	color: #9ca3af;
-	border: 1px solid rgba(255, 255, 255, 0.12);
+	color: var(--text-faint);
+	border: 1px solid var(--wash-2);
 	padding: 0.5rem 1.2rem;
 	border-radius: 8px;
-	font-family: 'Luciole-regular', sans-serif;
+	font-family: var(--font-ui);
 	font-size: 0.9rem;
 	cursor: pointer;
-	transition: color 150ms ease, border-color 150ms ease;
+	transition: color 150ms var(--ease-out), border-color 150ms var(--ease-out);
 }
 .sortie-alerte-btn-cancel:hover,
 .sortie-alerte-btn-cancel:focus-visible {
-	color: #d1d5db;
-	border-color: rgba(255, 255, 255, 0.3);
+	color: var(--text-dim);
+	border-color: var(--wash-4);
 }
 
 
@@ -1496,10 +1618,10 @@
 	margin-top: 0.75rem;
 	padding: 1.25rem;
 	border-radius: 10px;
-	background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(79, 70, 229, 0.04) 100%);
-	border: 1px solid rgba(99, 102, 241, 0.2);
+	background: linear-gradient(135deg, var(--info-wash) 0%, var(--info-wash) 100%);
+	border: 1px solid var(--info-wash);
 	animation: correction-form-in 350ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
-	font-family: 'Luciole-regular', sans-serif;
+	font-family: var(--font-ui);
 }
 
 @keyframes correction-form-in {
@@ -1522,20 +1644,20 @@
 	width: 32px;
 	height: 32px;
 	border-radius: 8px;
-	background: rgba(99, 102, 241, 0.2);
-	color: #a5b4fc;
+	background: var(--info-wash);
+	color: var(--info-ink);
 	font-size: 0.95rem;
 }
 
 .correction-header-title {
-	color: #e0e7ff;
+	color: var(--text);
 	font-size: 1rem;
 	font-weight: 600;
 	text-wrap: balance;
 }
 
 .correction-header-subtitle {
-	color: rgba(165, 180, 252, 0.6);
+	color: var(--info-ink);
 	font-size: 0.8rem;
 	margin-top: 2px;
 }
@@ -1544,10 +1666,10 @@
 	display: inline-block;
 	padding: 1px 6px;
 	border-radius: 4px;
-	background: rgba(255, 255, 255, 0.08);
+	background: var(--wash-2);
 	margin-left: 4px;
 	font-size: 0.75rem;
-	color: rgba(255, 255, 255, 0.5);
+	color: var(--text-faint);
 }
 
 /* Groupe de radio buttons (4 moyens de paiement)
@@ -1568,25 +1690,25 @@
 	padding: 0.6rem 1rem;
 	border-radius: 8px;
 	cursor: pointer;
-	border: 1.5px solid rgba(99, 102, 241, 0.25);
-	background: rgba(99, 102, 241, 0.06);
-	color: #c7d2fe;
+	border: 1.5px solid var(--info-edge);
+	background: var(--info-wash);
+	color: var(--info-ink);
 	font-size: 0.95rem;
-	transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+	transition: background 150ms var(--ease-out), border-color 150ms var(--ease-out), color 150ms var(--ease-out);
 }
 
 .correction-radio-label:hover,
 .correction-radio-label:focus-within {
-	border-color: rgba(99, 102, 241, 0.5);
-	background: rgba(99, 102, 241, 0.15);
+	border-color: var(--info-edge);
+	background: var(--info-wash);
 }
 
 /* Etat selectionne : detecte automatiquement via :has(input:checked)
    / Selected state: auto-detected via :has(input:checked) */
 .correction-radio-label:has(input:checked) {
-	border-color: #818cf8;
-	background: rgba(99, 102, 241, 0.25);
-	color: #e0e7ff;
+	border-color: var(--info-ink);
+	background: var(--info-edge);
+	color: var(--text);
 }
 
 /* L'input radio est masque visuellement, le label le represente
@@ -1599,20 +1721,20 @@
 	width: 100%;
 	padding: 0.6rem 0.75rem;
 	font-size: 0.9rem;
-	font-family: 'Luciole-regular', sans-serif;
+	font-family: var(--font-ui);
 	border-radius: 8px;
-	border: 1px solid rgba(99, 102, 241, 0.2);
-	background: rgba(0, 0, 0, 0.2);
-	color: #e0e7ff;
+	border: 1px solid var(--info-wash);
+	background: var(--shade-2);
+	color: var(--text);
 	resize: vertical;
-	transition: border-color 150ms ease;
+	transition: border-color 150ms var(--ease-out);
 	margin-bottom: 1rem;
 	display: block;
 }
 
 .correction-textarea:focus {
 	outline: none;
-	border-color: rgba(99, 102, 241, 0.5);
+	border-color: var(--info-edge);
 }
 
 /* Ligne d'actions Annuler / Valider (alignee a droite)
@@ -1625,39 +1747,39 @@
 
 .correction-btn-annuler {
 	background: transparent;
-	color: rgba(165, 180, 252, 0.6);
+	color: var(--info-ink);
 	padding: 0.5rem 1.25rem;
-	border: 1px solid rgba(99, 102, 241, 0.15);
+	border: 1px solid var(--info-wash);
 	border-radius: 8px;
 	font-size: 0.9rem;
-	font-family: 'Luciole-regular', sans-serif;
+	font-family: var(--font-ui);
 	cursor: pointer;
-	transition: border-color 150ms ease, color 150ms ease;
+	transition: border-color 150ms var(--ease-out), color 150ms var(--ease-out);
 }
 
 .correction-btn-annuler:hover,
 .correction-btn-annuler:focus-visible {
-	border-color: rgba(99, 102, 241, 0.3);
-	color: #c7d2fe;
+	border-color: var(--info-edge);
+	color: var(--info-ink);
 }
 
 .correction-btn-valider {
-	background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+	background: linear-gradient(135deg, var(--info-ink) 0%, var(--info-ink) 100%);
 	color: white;
 	padding: 0.5rem 1.5rem;
 	border: none;
 	border-radius: 8px;
 	font-size: 0.9rem;
 	font-weight: 600;
-	font-family: 'Luciole-regular', sans-serif;
+	font-family: var(--font-ui);
 	cursor: pointer;
-	box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
-	transition: box-shadow 150ms ease, transform 150ms ease;
+	box-shadow: 0 2px 8px var(--info-edge);
+	transition: box-shadow 150ms var(--ease-out), transform 150ms var(--ease-out);
 }
 
 .correction-btn-valider:hover,
 .correction-btn-valider:focus-visible {
-	box-shadow: 0 4px 12px rgba(99, 102, 241, 0.45);
+	box-shadow: 0 4px 12px var(--info-edge);
 	transform: translateY(-1px);
 }
 
@@ -1671,11 +1793,11 @@
 .correction-succes-box {
 	padding: 1rem 1.25rem;
 	border-radius: 10px;
-	background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.08) 100%);
-	border: 1px solid rgba(16, 185, 129, 0.3);
+	background: linear-gradient(135deg, var(--valid-wash) 0%, var(--valid-wash) 100%);
+	border: 1px solid var(--valid-edge);
 	margin-top: 0.75rem;
 	animation: correction-slide-in 400ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
-	font-family: 'Luciole-regular', sans-serif;
+	font-family: var(--font-ui);
 }
 
 .correction-succes-header {
@@ -1692,31 +1814,31 @@
 	width: 28px;
 	height: 28px;
 	border-radius: 50%;
-	background: rgba(16, 185, 129, 0.25);
-	color: #10b981;
+	background: var(--valid-edge);
+	color: var(--valid);
 	font-size: 1rem;
 }
 
 .correction-succes-title {
-	color: #d1fae5;
+	color: var(--text);
 	font-size: 1.05rem;
 	font-weight: 600;
 }
 
 .correction-succes-detail {
-	color: rgba(209, 250, 229, 0.7);
+	color: var(--valid-edge);
 	font-size: 0.9rem;
 	margin: 0 0 0 2.5rem;
 	line-height: 1.5;
 }
 
 .correction-succes-arrow {
-	color: #6ee7b7;
+	color: var(--valid);
 	margin: 0 0.25rem;
 }
 
 .correction-succes-new-method {
-	color: #d1fae5;
+	color: var(--text);
 }
 
 
@@ -1746,7 +1868,7 @@
 
 /* Sunmi V2s portrait — ecran le plus contraint
    / Sunmi V2s portrait — most constrained screen */
-@media (max-width: 540px) {
+@media (max-width: 599px) {
 	.give-back-box {
 		font-size: 1.6rem;
 		padding: 0.5rem 0.75rem;
@@ -1768,17 +1890,23 @@
    / Generic alert for warning / info / success / error server messages.
    ========================================================================== */
 
+/* Encre claire et non noire : le fond de cet ecran vient du serveur
+   (var(--{{msg_type}}) dans hx_messages.html, soit --success, --info, --error
+   ou --warning), toutes des couleurs saturees moyennes a sombres. Le noir y
+   tombait a ~2:1 sur --info.
+   / Light ink, not black: the ground is server-provided and always a mid-to-dark
+   saturated colour, where black fell to ~2:1 on --info. */
 .alerte-messages {
 	gap: 1.25rem;
 	padding: 2.5rem 1.5rem;
 	text-align: center;
-	color: var(--noir01);
+	color: var(--text);
 }
 
 .alerte-messages-icone {
 	font-size: 3.5rem;
 	line-height: 1;
-	color: var(--noir01);
+	color: var(--text);
 }
 
 .alerte-messages-texte {
@@ -1878,7 +2006,7 @@
 }
 
 /* Sunmi V2s portrait : tasser un peu / Squeeze on V2s portrait */
-@media (max-width: 540px) {
+@media (max-width: 599px) {
 	.alerte-messages {
 		padding: 2rem 1rem;
 		gap: 1rem;
@@ -1901,4 +2029,102 @@
 	.stock-negatif-hint {
 		font-size: 0.85rem;
 	}
+}
+
+
+/* ============================================================
+   PLANCHER PETIT ECRAN — SUNMI V2s (360 x 720)
+   / Small-screen floor — SUNMI V2s
+
+   Le terminal de poche est le cas le plus contraint : une popup y dispose de
+   ~670 px de haut une fois l'en-tete deduit. Trois choses suffisent a le
+   rendre utilisable : de la place rendue par les marges, des titres qui
+   cessent de manger la hauteur, et un contenu qui peut couper ses mots.
+   / The pocket terminal is the tightest case: ~670px of height once the header
+   is deducted. Three things make it usable: margins giving space back,
+   headings that stop eating height, and content allowed to break words.
+   ============================================================ */
+@media only screen and (max-width: 599px) {
+	#messages,
+	#confirm {
+		font-size: 1.2rem;
+		padding: 8px;
+	}
+
+	/* Aucun titre ne depasse deux lignes sur un ecran de poche
+	   / No heading spills past two lines on a pocket screen */
+	.payment-title1,
+	.fi-title1 {
+		font-size: 1.5rem;
+	}
+
+	.confirm-total,
+	.give-back-box {
+		font-size: 1.8rem;
+	}
+
+	.give-back-box {
+		padding: .75rem 1rem;
+	}
+
+	/* Les mots longs (noms de produit, references) cassent au lieu de pousser
+	   une barre de defilement horizontale.
+	   / Long words break instead of pushing a horizontal scrollbar. */
+	#messages,
+	#confirm {
+		overflow-wrap: anywhere;
+	}
+}
+
+/* Pas de defilement horizontal, jamais. `clip` et non `hidden` : `hidden`
+   creerait un conteneur de defilement et casserait le position:sticky eventuel.
+   / No horizontal scrolling, ever. `clip`, not `hidden`. */
+#messages,
+#confirm {
+	overflow-x: clip;
+}
+
+
+/* ============================================================
+   ETATS UNIVERSELS DU PERIMETRE POPUP
+   / Universal states across the popup perimeter
+
+   Le filet de mise au point est pose une fois pour tout ce qui est cliquable
+   dans une couche, plutot qu'oublie composant par composant — ce fichier en
+   compte une trentaine. Il apparait instantanement : une bague qui se fond
+   n'aide personne au clavier.
+   / The focus ring is declared once for everything clickable inside a layer
+   rather than forgotten component by component — this file holds about thirty.
+   It appears instantly: a ring that fades in helps nobody on a keyboard.
+   ============================================================ */
+#messages :is(button, a, [role="button"], input, select, textarea):focus-visible,
+#confirm :is(button, a, [role="button"], input, select, textarea):focus-visible {
+	outline: 3px solid var(--text);
+	outline-offset: 2px;
+	transition: none;
+}
+
+/* Desactive : trois canaux, jamais l'opacite seule.
+   / Disabled: three channels, never opacity alone. */
+#messages :is(button, input, select, textarea)[disabled],
+#confirm :is(button, input, select, textarea)[disabled],
+#messages [aria-disabled="true"],
+#confirm [aria-disabled="true"] {
+	opacity: .55;
+	cursor: not-allowed;
+	pointer-events: none;
+}
+
+/* Les titres cassent dans les mots longs plutot que de pousser une barre de
+   defilement horizontale — noms de produit, references, adresses e-mail.
+   / Headings break inside long words rather than pushing a horizontal
+   scrollbar — product names, references, e-mail addresses. */
+.message-title,
+.payment-title1,
+.fi-title1,
+.choose-id-title,
+.cf-section-title,
+.alerte-messages-texte {
+	overflow-wrap: anywhere;
+	min-width: 0;
 }

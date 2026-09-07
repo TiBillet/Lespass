@@ -79,7 +79,7 @@
 	border-radius: var(--r-ctrl);
 	background-color: transparent;
 	color: var(--text-faint);
-	font-family: "Luciole-regular", sans-serif;
+	font-family: var(--font-ui);
 	font-size: var(--fs-min);
 	font-weight: 700;
 	cursor: pointer;
@@ -326,7 +326,7 @@
 	height: 62px;
 	border: none;
 	border-radius: var(--r-ctrl);
-	font-family: "Luciole-regular", sans-serif;
+	font-family: var(--font-ui);
 	font-weight: 800;
 	letter-spacing: -.01em;
 	cursor: pointer;

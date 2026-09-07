@@ -87,7 +87,7 @@
   height: var(--mc-row3);
   display: flex;
   flex-direction: row;
-  background-color: aquamarine;
+  background-color: var(--surface-2);
 }
 
 .mc-actions-bt {

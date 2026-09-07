@@ -107,7 +107,7 @@
 	margin: 0;
 	overflow: hidden;
 	border-radius: var(--r-tile);
-	font-family: "Luciole-regular", sans-serif;
+	font-family: var(--font-ui);
 	color: var(--tile-ink);
 
 	background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(0, 0, 0, 0.16)), var(--tile-bg);
@@ -316,7 +316,7 @@
 	font-variant-numeric: tabular-nums;
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 	opacity: 0;
-	transition: opacity 200ms ease-in-out;
+	transition: opacity 200ms var(--ease-in-out);
 }
 
 /* Le rebond joue à l'apparition du badge (classe posée par articles.js/tarif.js)
@@ -348,183 +348,6 @@
    / Membership articles: indigo fallback tint when Django provides no color */
 .article-adhesion {
 	--tile-fallback: #6366F1;
-}
-
-/* --- OVERLAY SÉLECTION DE TARIF --- */
-/* / Rate selection overlay */
-.tarif-overlay {
-	position: fixed;
-	top: 0;
-	left: 0;
-	width: 100%;
-	height: 100%;
-	background-color: rgba(0, 0, 0, 0.85);
-	z-index: 1000;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	animation: tarif-fade-in 200ms ease;
-}
-
-@keyframes tarif-fade-in {
-	from { opacity: 0; }
-}
-
-.tarif-overlay-content {
-	background-color: var(--gris00, #1a1a2e);
-	border-radius: 20px;
-	padding: 32px 24px;
-	width: 90%;
-	max-width: 480px;
-	max-height: 85vh;
-	overflow-y: auto;
-	text-align: center;
-	color: var(--blanc01, #fff);
-}
-
-.tarif-overlay-title {
-	font-size: 1.8rem;
-	font-weight: bold;
-	margin: 0 0 4px 0;
-	text-wrap: balance;
-}
-
-.tarif-overlay-subtitle {
-	font-size: 1.1rem;
-	opacity: 0.7;
-	margin-bottom: 24px;
-}
-
-.tarif-list {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-	margin-bottom: 24px;
-}
-
-.tarif-btn {
-	display: block;
-	width: 100%;
-	padding: 18px 20px;
-	border: none;
-	border-radius: 12px;
-	background-color: var(--bleu03, #0345ea);
-	color: #fff;
-	font-size: 1.2rem;
-	font-family: "Luciole-regular", sans-serif;
-	cursor: pointer;
-	text-align: center;
-	transition: transform 100ms ease, background-color 150ms ease;
-}
-
-.tarif-btn:active {
-	transform: scale(0.97);
-}
-
-.tarif-btn-label {
-	font-weight: bold;
-	font-size: 1.3rem;
-}
-
-.tarif-btn-price {
-	font-variant-numeric: tabular-nums;
-	font-size: 1.1rem;
-	margin-top: 4px;
-	opacity: 0.9;
-}
-
-.tarif-btn-sublabel {
-	font-size: 0.95rem;
-	opacity: 0.7;
-	margin-top: 2px;
-}
-
-/* Prix libre : input + bouton OK dans le bouton tarif */
-/* / Free price: input + OK button inside the rate button */
-.tarif-btn-free {
-	background-color: var(--bleu05, #012584);
-	padding: 18px 20px 14px;
-}
-
-.tarif-free-input-container {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	gap: 8px;
-	margin-top: 12px;
-}
-
-.tarif-free-input {
-	width: 120px;
-	height: 56px;
-	font-size: 1.5rem;
-	text-align: center;
-	border: 2px solid rgba(255, 255, 255, 0.3);
-	border-radius: 8px;
-	background-color: rgba(255, 255, 255, 0.1);
-	color: #fff;
-	font-variant-numeric: tabular-nums;
-	font-family: "Luciole-regular", sans-serif;
-}
-
-.tarif-free-input:focus {
-	outline: none;
-	border-color: var(--vert01, #00e676);
-}
-
-.tarif-free-input::placeholder {
-	color: rgba(255, 255, 255, 0.4);
-}
-
-.tarif-input-error {
-	border-color: var(--rouge01, #e53935) !important;
-}
-
-.tarif-free-currency {
-	font-size: 1.5rem;
-	font-weight: bold;
-}
-
-.tarif-free-validate {
-	height: 56px;
-	padding: 0 20px;
-	border: none;
-	border-radius: 8px;
-	background-color: var(--vert03, #339448);
-	color: #fff;
-	font-size: 1.2rem;
-	font-weight: bold;
-	font-family: "Luciole-regular", sans-serif;
-	cursor: pointer;
-	transition: transform 100ms ease;
-}
-
-.tarif-free-validate:active {
-	transform: scale(0.95);
-}
-
-.tarif-free-error {
-	color: var(--rouge01, #e53935);
-	font-size: 0.95rem;
-	margin-top: 6px;
-	min-height: 1.2em;
-}
-
-.tarif-btn-retour {
-	display: inline-block;
-	padding: 14px 32px;
-	border: 2px solid rgba(255, 255, 255, 0.3);
-	border-radius: 10px;
-	background-color: transparent;
-	color: #fff;
-	font-size: 1.1rem;
-	font-family: "Luciole-regular", sans-serif;
-	cursor: pointer;
-	transition: background-color 150ms ease;
-}
-
-.tarif-btn-retour:active {
-	background-color: rgba(255, 255, 255, 0.1);
 }
 
 /* --- PASTILLE STOCK --- */
@@ -580,19 +403,19 @@
     width: 40%;
     height: 100vh;
     z-index: 1001;
-    background-color: var(--noir04);
-    color: var(--blanc01);
-    border-left: 1px solid var(--gris01);
+    background-color: var(--surface);
+    color: var(--text);
+    border-left: 1px solid var(--line);
     overflow-y: auto;
-    font-family: "Luciole-regular", sans-serif;
+    font-family: var(--font-ui);
     display: none;
     scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+    scrollbar-color: var(--wash-3) transparent;
 }
 
 #article-panel:not(:empty) {
     display: block;
-    animation: panel-slide-in 300ms ease;
+    animation: panel-slide-in 300ms var(--ease-out);
 }
 
 @keyframes panel-slide-in {
@@ -608,7 +431,7 @@
     width: 100vw;
     height: 100vh;
     z-index: 1000;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--overlay-veil);
 }
 
 #article-panel:not(:empty) ~ #article-panel-backdrop {
@@ -627,7 +450,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 12px 16px;
-    border-bottom: 1px solid var(--noir02);
+    border-bottom: 1px solid var(--line-soft);
 }
 
 .panel-title {
@@ -648,12 +471,12 @@
     justify-content: center;
     border: none;
     border-radius: 50%;
-    background: var(--rouge07);
-    color: var(--blanc01);
+    background: var(--danger);
+    color: var(--text);
     font-size: 1.1rem;
     cursor: pointer;
     flex-shrink: 0;
-    transition: background-color 150ms ease, transform 100ms ease;
+    transition: background-color 150ms var(--ease-out), transform 100ms var(--ease-out);
 }
 
 .panel-close-btn:active {
@@ -677,18 +500,26 @@
     padding: 12px 14px;
     border: none;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.04);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    color: var(--blanc01);
+    background: var(--wash-1);
+    border-bottom: 1px solid var(--wash-1);
+    color: var(--text);
     font-size: 1.05rem;
-    font-family: "Luciole-regular", sans-serif;
+    font-family: var(--font-ui);
     cursor: pointer;
     text-align: left;
-    transition: background-color 150ms ease, transform 100ms ease;
+    transition: background-color 150ms var(--ease-out), transform 100ms var(--ease-out);
+}
+
+.panel-menu-btn:focus-visible,
+.panel-close-btn:focus-visible,
+.stock-action-btn:focus-visible,
+.panel-back-btn:focus-visible {
+    outline: 3px solid var(--text);
+    outline-offset: 2px;
 }
 
 .panel-menu-btn:active {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--wash-2);
     transform: scale(0.98);
 }
 
@@ -713,8 +544,8 @@
     font-size: 0.75rem;
     padding: 2px 8px;
     border-radius: 9px;
-    background: rgba(255, 255, 255, 0.06);
-    color: var(--gris07);
+    background: var(--wash-1);
+    color: var(--text-faint);
 }
 
 /* Bouton retour / Back button */
@@ -725,15 +556,15 @@
     padding: 0;
     border: none;
     background: transparent;
-    color: var(--gris07);
+    color: var(--text-faint);
     font-size: 1rem;
-    font-family: "Luciole-regular", sans-serif;
+    font-family: var(--font-ui);
     cursor: pointer;
-    transition: color 150ms ease;
+    transition: color 150ms var(--ease-out);
 }
 
 .panel-back-btn:active {
-    color: var(--blanc01);
+    color: var(--text);
 }
 
 
@@ -742,8 +573,8 @@
 .stock-info-card {
     padding: 12px 14px;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.04);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background: var(--wash-1);
+    border-bottom: 1px solid var(--wash-1);
 }
 
 .stock-info-row {
@@ -755,7 +586,7 @@
 
 .stock-info-label {
     font-size: 0.9rem;
-    color: var(--gris07);
+    color: var(--text-faint);
 }
 
 .stock-info-value {
@@ -764,13 +595,13 @@
     font-variant-numeric: tabular-nums;
 }
 
-.stock-badge-ok      { color: var(--vert03); }
-.stock-badge-alerte  { color: var(--warning); }
-.stock-badge-rupture { color: var(--rouge03); }
+.stock-badge-ok      { color: var(--valid); }
+.stock-badge-alerte  { color: var(--warn); }
+.stock-badge-rupture { color: var(--danger); }
 
 .stock-separator {
     height: 1px;
-    background: var(--noir02);
+    background: var(--line-soft);
     margin: 10px 0;
 }
 
@@ -783,7 +614,7 @@
 
 .stock-form-label {
     font-size: 0.85rem;
-    color: var(--gris07);
+    color: var(--text-faint);
 }
 
 .stock-form-input-row {
@@ -797,23 +628,23 @@
     width: 100px;
     font-size: 1.3rem;
     text-align: center;
-    border: 1px solid var(--gris01);
+    border: 1px solid var(--line);
     border-radius: 10px;
-    background: var(--noir03);
-    color: var(--blanc01);
+    background: var(--bg);
+    color: var(--text);
     font-variant-numeric: tabular-nums;
-    font-family: "Luciole-regular", sans-serif;
+    font-family: var(--font-ui);
 }
 
 .stock-form-input:focus {
     outline: none;
-    border-color: var(--vert03);
+    border-color: var(--valid);
 }
 
 .stock-form-unit {
     font-size: 1rem;
     font-weight: 600;
-    color: var(--gris07);
+    color: var(--text-faint);
 }
 
 .stock-form-motif {
@@ -821,20 +652,20 @@
     width: 100%;
     padding: 0 12px;
     font-size: 0.95rem;
-    border: 1px solid var(--gris01);
+    border: 1px solid var(--line);
     border-radius: 10px;
-    background: var(--noir03);
-    color: var(--blanc01);
-    font-family: "Luciole-regular", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
 }
 
 .stock-form-motif:focus {
     outline: none;
-    border-color: var(--gris04);
+    border-color: var(--text-dim);
 }
 
 .stock-form-motif::placeholder {
-    color: var(--gris05);
+    color: var(--text-faint);
 }
 
 /* Boutons d'action stock — meme hauteur que les boutons footer POS
@@ -856,18 +687,18 @@
     border-radius: 10px;
     font-size: 1.05rem;
     font-weight: 600;
-    font-family: "Luciole-regular", sans-serif;
+    font-family: var(--font-ui);
     cursor: pointer;
-    color: var(--blanc01);
-    transition: transform 100ms ease;
+    color: var(--text);
+    transition: transform 100ms var(--ease-out);
 }
 
 .stock-action-btn:active {
     transform: scale(0.97);
 }
 
-.stock-action-btn-reception { background: var(--vert03); }
-.stock-action-btn-perte     { background: var(--rouge07); }
+.stock-action-btn-reception { background: var(--valid); }
+.stock-action-btn-perte     { background: var(--danger); }
 
 /* Lien admin / Admin link */
 .stock-admin-link {
@@ -877,13 +708,13 @@
     gap: 6px;
     padding: 8px;
     font-size: 0.85rem;
-    color: var(--gris07);
+    color: var(--text-faint);
     text-decoration: none;
-    transition: color 150ms ease;
+    transition: color 150ms var(--ease-out);
 }
 
 .stock-admin-link:active {
-    color: var(--blanc01);
+    color: var(--text);
 }
 
 /* Feedback apres action / Feedback after action */
@@ -893,15 +724,15 @@
     font-size: 0.9rem;
     font-weight: 600;
     text-align: center;
-    animation: overlay-fade-up 300ms ease;
+    animation: overlay-fade-up 300ms var(--ease-out);
 }
 
 .stock-feedback-success {
-    background: var(--vert04);
-    color: var(--vert02);
+    background: var(--valid-wash);
+    color: var(--text);
 }
 
 .stock-feedback-error {
-    background: var(--rouge07);
-    color: var(--rouge05);
+    background: var(--danger);
+    color: var(--danger-ink);
 }

@@ -42,15 +42,15 @@
         -->
 
         <div class="net ws-indicator ws-disconnected"  id="ws-indicator" onclick="wsPing()" title="{% translate 'Cliquer pour tester la latence' %}">
-            <i class="net-dot"></i><span>En ligne</span>
+            <i class="net-dot"></i><span class="ws-indicator-text">En ligne</span>
         </div>
+{#        <div class="header-status">#}
+{#            <div id="header-status-info1"></div>#}
+{#            <div id="header-status-info2"></div>#}
+{#        </div>#}
     </div>
-	<div class="header-status">
-		<div id="header-status-info1"></div>
-		<div id="header-status-info2"></div>
-	</div>
 
-    <nav class="hdr-nav" aria-label="Menu">
+    <nav id="menu-large" class="hdr-nav" aria-label="Menu">
         <button class="hdr-nav-btn" data-dest="preparations"><i class="fas fa-solid fa-clipboard" aria-hidden="true"></i>Préparations</button>
         <button class="hdr-nav-btn" data-dest="tables"><i class="fas fa-solid fa-chair" aria-hidden="true"></i>Tables</button>
         <button class="hdr-nav-btn" data-dest="ventes"
@@ -62,13 +62,18 @@
         </button>
         <button class="hdr-nav-btn" data-dest="parametres" aria-label="Paramètres"><i class="fas fa-solid fa-cog"></i></button>
     </nav>
+    <nav id="menu-small" class="hdr-nav">
+            <i class="menu-burger-icon fas fa-bars curseur-action" onclick="toggleMenuBurger(event)"
+               role="button" aria-label="{% translate 'Menu' %}" data-testid="burger-icon"></i>
+    </nav>
+
 </header>
 <div id="menu-burger-overlay" data-testid="menu-burger-overlay" aria-hidden="true"></div>
 <nav id="menu-burger-container" aria-label="{% translate 'Menu principal' %}" data-testid="menu-burger">
 	<div class="main-menu">
 		<span class="menu-panel-title menu-burger-item-content">{% translate "Menu" %}</span>
 		<div class="menu-burger-item menu-burger-item-content" onclick="showSubMenu(event, '.sub-menu-pvs')">
-			<i class="menu-burger-item-content fas fa-store"></i>
+			<i class="menu-burger-item-content fas fa-solid fa-clipboard"></i>
 			<div class="menu-burger-item-content">{% translate "POINTS DE VENTES" %}</div>
 		</div>
 		<div class="menu-burger-item menu-burger-item-content">
@@ -76,7 +81,7 @@
 			<div class="menu-burger-item-content">{% translate "PREPARATIONS" %}</div>
 		</div>
 		<div class="menu-burger-item menu-burger-item-content">
-			<i class="menu-burger-item-content fas fa-utensils"></i>
+			<i class="menu-burger-item-content fas fa-solid fa-chair"></i>
 			<div class="menu-burger-item-content">{% translate "TABLES" %}</div>
 		</div>
 		<div class="menu-burger-item menu-burger-item-content"
@@ -87,7 +92,7 @@
 			onclick="hideMenuBurger()"
 			data-loading-disable
 			data-testid="menu-ventes">
-			<i class="menu-burger-item-content fas fa-cash-register" aria-hidden="true"></i>
+			<i class="menu-burger-item-content fas fa-solid fa-signal" aria-hidden="true"></i>
 			<div class="menu-burger-item-content">{% translate "VENTES" %}</div>
 		</div>
 		<div class="menu-burger-item menu-burger-item-content" onclick="showSubMenu(event, '.sub-menu-params')">

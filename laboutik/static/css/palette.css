@@ -83,7 +83,74 @@
 	   / Typographic floor: nothing goes below this in the panels. */
 	--fs-min: 14.5px;
 
+	/* Jetons semantiques de la refonte — etats et retours.
+	   Les couleurs heritees ci-dessus (--vert03, --rouge01...) restent en place :
+	   elles sont passees depuis le serveur dans des style= inline
+	   (hx_messages.html, cotton/bt/paiement.html), on ne peut pas les retirer.
+	   / Semantic tokens — states and feedback. The legacy colours above stay:
+	   the server passes their names in inline style attributes. */
+	--valid-deep: oklch(0.600 0.160 148);
+	--valid-ink:  oklch(0.200 0.060 148);
+	--danger:     oklch(0.630 0.190 25);
+	--danger-ink: oklch(0.980 0.020 25);
+	--warn:       oklch(0.700 0.160 60);
+	--warn-ink:   oklch(0.220 0.060 60);
+	--nfc:        oklch(0.700 0.135 245);
+
+	/* Voile des couches pleine page (#messages, #confirm)
+	   / Full-page overlay veil */
+	--overlay-veil: oklch(0.130 0.010 262 / .92);
+
+	/* Voiles neutres — surfaces et filets poses SUR un fond quelconque.
+	   En alpha et non en opaque : ces boites vivent aussi bien sur le fond
+	   sombre des popups que sur le vert plein de l'ecran de succes, et doivent
+	   prendre la teinte de leur parent.
+	   / Neutral washes — surfaces and hairlines laid ON an arbitrary ground.
+	   Alpha rather than opaque: these boxes sit both on the dark popup ground
+	   and on the solid green of the success screen, and must take their
+	   parent's tint. */
+	--wash-1: oklch(1 0 0 / .06);
+	--wash-2: oklch(1 0 0 / .10);
+	--wash-3: oklch(1 0 0 / .18);
+	--wash-4: oklch(1 0 0 / .30);
+	--shade-1: oklch(0 0 0 / .10);
+	--shade-2: oklch(0 0 0 / .25);
+
+	/* Trois intensites par famille semantique : le fond de la boite (wash),
+	   son filet (edge), et l'encre du texte pose dessus (ink).
+	   Elles remplacent la palette Tailwind importee telle quelle dans les
+	   ecrans Ventes et correction (#6366f1, #ef4444, #10b981, #fb923c...).
+	   / Three intensities per semantic family: box fill, hairline, and the ink
+	   laid on it. They replace the Tailwind palette imported as-is into the
+	   Sales and correction screens. */
+	--info-wash: oklch(0.55 0.18 275 / .16);
+	--info-edge: oklch(0.55 0.18 275 / .38);
+	--info-ink:  oklch(0.82 0.09 275);
+
+	--valid-wash: oklch(0.72 0.16 160 / .16);
+	--valid-edge: oklch(0.72 0.16 160 / .38);
+
+	--danger-wash: oklch(0.63 0.19 25 / .16);
+	--danger-edge: oklch(0.63 0.19 25 / .38);
+
+	--warn-wash: oklch(0.75 0.15 70 / .16);
+	--warn-edge: oklch(0.75 0.15 70 / .38);
+
+	/* Police d'interface — Luciole est deja appliquee a * par modele00.css.
+	   Le jeton existe pour que les feuilles n'aient plus a la reecrire en dur.
+	   / UI typeface — Luciole is already applied to * by modele00.css. The token
+	   exists so stylesheets stop hard-coding it. */
+	--font-ui: "Luciole-regular", sans-serif;
+
+	/* Courbes et durees. --ease reste l'alias historique (header.css,
+	   articles.css, addition.css le consomment deja).
+	   / Easings and durations. --ease stays as the historical alias. */
 	--ease: cubic-bezier(.2, .75, .3, 1);
+	--ease-out: cubic-bezier(.2, .75, .3, 1);
+	--ease-in: cubic-bezier(.7, .1, .9, .4);
+	--ease-in-out: cubic-bezier(.5, .05, .25, 1);
 
-
+	--dur-fast: 120ms;
+	--dur-base: 170ms;
+	--dur-slow: 300ms;
 }
