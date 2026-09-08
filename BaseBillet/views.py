@@ -1111,14 +1111,15 @@ class MyAccount(viewsets.ViewSet):
                                  _("Please validate your email to access all the features of your profile area."))
 
 
-        fedowAPI = FedowAPI()
-        card = fedowAPI.NFCcard.retrieve_card_by_signature(request.user)
-        # card = {"number_printed":"hiii"}
-        tokens = get_distant_fedow_tokens(request, template_context["config"])
-        template_context.update({
-            "card":card,
-            "tokens":tokens
-        })
+        if get_skin_courant() == "V2":
+            fedowAPI = FedowAPI()
+            card = fedowAPI.NFCcard.retrieve_card_by_signature(request.user)
+            # card = {"number_printed":"hiii"}
+            tokens = get_distant_fedow_tokens(request, template_context["config"])
+            template_context.update({
+                "card":card,
+                "tokens":tokens
+            })
 
         # Résolution du gabarit par le resolver unifié.
         # / Unified skin resolver.
