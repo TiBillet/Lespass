@@ -983,6 +983,63 @@ def _agreger_tokens_locaux(tokens, user, config):
         })
     return tokens
 
+def get_distant_fedow_tokens(request, config):
+
+    # Lecture des tokens DISTANTS (Fedow). Encadree : si le Fedow distant est
+    # indisponible ou lent, on n'echoue pas — on affichera au moins les tokens
+    # locaux (fedow_core) plus bas, au lieu de bloquer ou casser la page.
+    # / Remote tokens (Fedow), wrapped: if the remote Fedow is down/slow, we
+    # still show the local tokens below instead of breaking the page.
+    tokens = []
+    try:
+        fedowAPI = FedowAPI()
+        wallet = fedowAPI.wallet.cached_retrieve_by_signature(request.user).validated_data
+        # On retire les adhésions, on les affiche dans l'autre table
+        tokens = [token for token in wallet.get('tokens', []) if token.get('asset_category') not in ['SUB', 'BDG']]
+    except Exception as erreur_fedow_distant:
+        logger.error(f"tokens_table : Fedow distant indisponible : {erreur_fedow_distant}")
+
+    for token in tokens:
+        names_of_place_federated = []
+        # Recherche du logo du lieu d'origin de l'asset
+        if token['asset']['place_origin']:
+            # L'asset fédéré n'a pas d'origin
+            place_uuid_origin = token['asset']['place_origin']['uuid']
+            place_info = self.get_place_cached_info(place_uuid_origin)
+            token['asset']['logo'] = place_info.get('logo')
+            names_of_place_federated.append(place_info.get('organisation'))
+        # Recherche des noms des lieux fédérés
+
+        for place_federated in token['asset']['place_uuid_federated_with']:
+            place = self.get_place_cached_info(place_federated)
+            if place:
+                names_of_place_federated.append(place.get('organisation'))
+        token['asset']['names_of_place_federated'] = names_of_place_federated
+
+        # Recherche de la dernière action du token fédéré
+        # if token['asset']['category'] == 'FED':
+        #     last_federated_transaction: datetime = token['last_transaction']['datetime']
+
+        # Agrege les tokens LOCAUX (fedow_core) si tenant V2 (cf. helper module).
+        # Lecture pure (pas d'ecriture, vue GET, pas d'atomic) : encadree pour que,
+        # si la base locale plante, on continue avec les tokens distants deja recuperes
+        # plutot que de casser la page.
+        # / Aggregate local tokens (fedow_core) for V2 tenants. Pure read (no write,
+        # GET view, no atomic): wrapped so that if the local DB fails we keep the
+        # already-fetched remote tokens instead of breaking the page.
+    try:
+        tokens = _agreger_tokens_locaux(tokens, request.user, config)
+    except Exception as erreur_tokens_locaux:
+        logger.error(
+            f"tokens_table : agregation tokens locaux (fedow_core) indisponible "
+            f"pour {request.user} : {erreur_tokens_locaux}"
+        )
+
+    # Tri les tokens pour avoir le Primary asset en premier
+    tokens.sort(key=lambda token: token['asset']['is_stripe_primary'], reverse=True)
+
+    return tokens
+
 
 class MyAccount(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
@@ -1054,16 +1111,19 @@ class MyAccount(viewsets.ViewSet):
                                  _("Please validate your email to access all the features of your profile area."))
 
 
+        fedowAPI = FedowAPI()
+        card = fedowAPI.NFCcard.retrieve_card_by_signature(request.user)
+        # card = {"number_printed":"hiii"}
+        tokens = get_distant_fedow_tokens(request, template_context["config"])
+        template_context.update({
+            "card":card,
+            "tokens":tokens
+        })
+
         # Résolution du gabarit par le resolver unifié.
         # / Unified skin resolver.
         from pages.services import gabarit_skin
         template_path = gabarit_skin("vues/compte/index.html")
-        logger.error(template_path)
-
-        fedowAPI = FedowAPI()
-        cards = fedowAPI.NFCcard.retrieve_card_by_signature(request.user)
-        cards = ["A","B"]
-        template_context["cards"] = cards
 
         return render(request, template_path, context=template_context)
 
@@ -1108,7 +1168,13 @@ class MyAccount(viewsets.ViewSet):
         context = {
             'cards': cards
         }
-        return render(request, "fonctionnel/compte/partials/card_table.html", context=context)
+
+        # Résolution du gabarit par le resolver unifié.
+        # / Unified skin resolver.
+        from pages.services import gabarit_skin
+        template_path = gabarit_skin("vues/compte/partials/card_table.html")
+
+        return render(request, template_path, context=context)
 
     @action(detail=True, methods=['GET'], permission_classes=[TenantAdminPermission])
     def admin_my_cards(self, request, pk):
@@ -1195,7 +1261,12 @@ class MyAccount(viewsets.ViewSet):
         context['reservations'] = reservations
         context['account_tab'] = 'reservations'
 
-        return render(request, "fonctionnel/compte/reservations.html", context=context)
+        # Résolution du gabarit par le resolver unifié.
+        # / Unified skin resolver.
+        from pages.services import gabarit_skin
+        template_path = gabarit_skin("vues/compte/reservations.html")
+
+        return render(request, template_path, context=context)
 
     @action(detail=False, methods=['GET'])
     def my_bookings(self, request):
@@ -1439,55 +1510,7 @@ class MyAccount(viewsets.ViewSet):
     def tokens_table(self, request):
         config = Configuration.get_solo()
 
-        # Lecture des tokens DISTANTS (Fedow). Encadree : si le Fedow distant est
-        # indisponible ou lent, on n'echoue pas — on affichera au moins les tokens
-        # locaux (fedow_core) plus bas, au lieu de bloquer ou casser la page.
-        # / Remote tokens (Fedow), wrapped: if the remote Fedow is down/slow, we
-        # still show the local tokens below instead of breaking the page.
-        tokens = []
-        try:
-            fedowAPI = FedowAPI()
-            wallet = fedowAPI.wallet.cached_retrieve_by_signature(request.user).validated_data
-            # On retire les adhésions, on les affiche dans l'autre table
-            tokens = [token for token in wallet.get('tokens', []) if token.get('asset_category') not in ['SUB', 'BDG']]
-        except Exception as erreur_fedow_distant:
-            logger.error(f"tokens_table : Fedow distant indisponible : {erreur_fedow_distant}")
-
-        for token in tokens:
-            names_of_place_federated = []
-            # Recherche du logo du lieu d'origin de l'asset
-            if token['asset']['place_origin']:
-                # L'asset fédéré n'a pas d'origin
-                place_uuid_origin = token['asset']['place_origin']['uuid']
-                place_info = self.get_place_cached_info(place_uuid_origin)
-                token['asset']['logo'] = place_info.get('logo')
-                names_of_place_federated.append(place_info.get('organisation'))
-            # Recherche des noms des lieux fédérés
-
-            for place_federated in token['asset']['place_uuid_federated_with']:
-                place = self.get_place_cached_info(place_federated)
-                if place:
-                    names_of_place_federated.append(place.get('organisation'))
-            token['asset']['names_of_place_federated'] = names_of_place_federated
-
-            # Recherche de la dernière action du token fédéré
-            # if token['asset']['category'] == 'FED':
-            #     last_federated_transaction: datetime = token['last_transaction']['datetime']
-
-        # Agrege les tokens LOCAUX (fedow_core) si tenant V2 (cf. helper module).
-        # Lecture pure (pas d'ecriture, vue GET, pas d'atomic) : encadree pour que,
-        # si la base locale plante, on continue avec les tokens distants deja recuperes
-        # plutot que de casser la page.
-        # / Aggregate local tokens (fedow_core) for V2 tenants. Pure read (no write,
-        # GET view, no atomic): wrapped so that if the local DB fails we keep the
-        # already-fetched remote tokens instead of breaking the page.
-        try:
-            tokens = _agreger_tokens_locaux(tokens, request.user, config)
-        except Exception as erreur_tokens_locaux:
-            logger.error(
-                f"tokens_table : agregation tokens locaux (fedow_core) indisponible "
-                f"pour {request.user} : {erreur_tokens_locaux}"
-            )
+        tokens = get_distant_fedow_tokens(request, config)
 
         # On fait la liste des lieux fédérés pour les pastilles dans le tableau html
         context = {
@@ -1495,11 +1518,17 @@ class MyAccount(viewsets.ViewSet):
             'tokens': tokens,
         }
 
-        return render(request, "fonctionnel/compte/partials/token_table.html", context=context)
+        # Résolution du gabarit par le resolver unifié.
+        # / Unified skin resolver.
+        from pages.services import gabarit_skin
+        template_path = gabarit_skin("vues/compte/partials/token_table.html")
+
+        return render(request, template_path, context=context)
 
     @action(detail=False, methods=['GET'])
     def transactions_table(self, request):
-        config = Configuration.get_solo()
+        context = get_context(request)
+
         fedowAPI = FedowAPI()
         # On utilise ici .data plutot que validated_data pour executer les to_representation (celui du WalletSerializer)
         # et les serializer.methodtruc
@@ -1510,14 +1539,19 @@ class MyAccount(viewsets.ViewSet):
         next_url = paginated_list_by_wallet_signature.get('next')
         previous_url = paginated_list_by_wallet_signature.get('previous')
 
-        context = {
+        context.update({
             'actions_choices': TransactionSimpleValidator.TYPE_ACTION,
-            'config': config,
             'transactions': transactions,
             'next_url': next_url,
             'previous_url': previous_url,
-        }
-        return render(request, "fonctionnel/compte/partials/transaction_history.html", context=context)
+        })
+
+        # Résolution du gabarit par le resolver unifié.
+        # / Unified skin resolver.
+        from pages.services import gabarit_skin
+        template_path = gabarit_skin("vues/compte/partials/transaction_history.html")
+
+        return render(request, template_path, context=context)
 
     ### ONGLET ADHESION
     @action(detail=False, methods=['GET'])
@@ -1551,19 +1585,38 @@ class MyAccount(viewsets.ViewSet):
                         memberships_dict[False].append(membership)
 
         context['memberships_dict'] = memberships_dict
-        return render(request, "fonctionnel/compte/membership/memberships.html", context=context)
+
+        # Résolution du gabarit par le resolver unifié.
+        # / Unified skin resolver.
+        from pages.services import gabarit_skin
+        template_path = gabarit_skin("vues/compte/membership/memberships.html")
+
+        return render(request, template_path, context=context)
 
     @action(detail=False, methods=['GET'])
     def card(self, request: HttpRequest) -> HttpResponse:
         context = get_context(request)
         context['account_tab'] = 'card'
-        return render(request, "fonctionnel/compte/card.html", context=context)
+
+        # Résolution du gabarit par le resolver unifié.
+        # / Unified skin resolver.
+        from pages.services import gabarit_skin
+        template_path = gabarit_skin("vues/compte/card.html")
+
+        return render(request, template_path, context=context)
 
     @action(detail=False, methods=['GET'])
     def profile(self, request: HttpRequest) -> HttpResponse:
         context = get_context(request)
         context['account_tab'] = 'profile'
-        return render(request, "fonctionnel/compte/preferences.html", context=context)
+
+
+        # Résolution du gabarit par le resolver unifié.
+        # / Unified skin resolver.
+        from pages.services import gabarit_skin
+        template_path = gabarit_skin("vues/compte/preferences.html")
+
+        return render(request, template_path, context=context)
 
     #### REFILL STRIPE PRIMARY ####
 
@@ -3269,7 +3322,14 @@ class Badge(viewsets.ViewSet):
         template_context = get_context(request)
         template_context["badges"] = Product.objects.filter(categorie_article=Product.BADGE, publish=True)
         template_context["account_tab"] = "punchclock"
-        return render(request, "fonctionnel/compte/punchclock.html", context=template_context)
+
+
+        # Résolution du gabarit par le resolver unifié.
+        # / Unified skin resolver.
+        from pages.services import gabarit_skin
+        template_path = gabarit_skin("vues/compte/punchclock.html")
+
+        return render(request, template_path, context=template_context)
 
     @action(detail=True, methods=['GET'])
     def badge_in(self, request: HttpRequest, pk):
@@ -3280,7 +3340,12 @@ class Badge(viewsets.ViewSet):
 
         messages.add_message(request, messages.SUCCESS, _("Check in registered!"))
 
-        return render(request, "fonctionnel/compte/partials/badge_switch.html", context={})
+        # Résolution du gabarit par le resolver unifié.
+        # / Unified skin resolver.
+        from pages.services import gabarit_skin
+        template_path = gabarit_skin("vues/compte/partials/badge_switch.html")
+
+        return render(request, template_path, context={})
 
     @action(detail=False, methods=['GET'])
     def check_out(self, request: HttpRequest):

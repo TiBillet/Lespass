@@ -5,6 +5,67 @@
 
 
 {% block account_page %}
+
+    {% if config.show_refill_button %}
+        <!-- Si pas possible de recharger, alors pas possible de se faire rembourser -->
+        <!-- refund panel -->
+        <div class="offcanvas-start offcanvas" tabindex="-1" id="refundPanel" aria-labelledby="refundPanelLabel">
+            <div class="offcanvas-header">
+                <h5 class="offcanvas-title" id="refundPanelLabel">{% trans "Request a refund" %}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas"
+                        aria-label="{% trans 'Close' %}"></button>
+            </div>
+            <div class="offcanvas-body">
+                <div class="d-flex flex-column justify-content-between h-100">
+                    <div>
+                        <div class="alert  alert-primary" role="alert">
+                            <h4>{% trans "Don't panic! You've got time left…" %}</h4>
+                            <p>
+                                {% translate 'TiBillet works on a <a href="https://tibillet.github.io/documentation_v3/">melting funds</a> principle.' %}
+                                {% translate "You can get your leftover balance back for 14 months after your last Pass card use." %}
+                                {% translate "We send a reminder a month before expiration." %}
+                            </p>
+                            <p>
+                                {% translate "You will also soon be able to donate the leftover balance to the collective that issued this card." %}
+                            </p>
+                            <p>
+                                {% translate "Your Pass card itself and your account are yours for life and can be used with every TiBillet collective!" %}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="p-3">
+                        <div class="alert  alert-warning" role="alert">
+                            <p>{% translate "You can only obtain online refunds for amounts topped up online or via card payment terminal named ‘TiBillet’. For amounts topped up in cash, please contact the collective or return to their next event!" %}</p>
+                        </div>
+                        <p class="lead">
+                            {# TODO: montant remboursement #}
+                            {% trans "Confirm the refund request?" %}
+                        </p>
+
+                        <button type="button" class="btn btn-primary d-block w-100 mb-3"
+                                data-bs-dismiss="offcanvas" aria-label="{% trans 'Close' %}"
+                                hx-get="/my_account/refund_online/" hx-indicator="#tibillet-spinner">
+                            {% trans "Send request" %}</button>
+
+                        {#                            <button disabled type="button" class="btn btn-secondary d-block w-100 mb-3"#}
+                        {#                                {% trans "Gift my leftover balance to" %} {{ config.organisation }}#}
+                        {#                            </button>#}
+                        {#                            <p class="alert alert-warning">#}
+                        {#                                {% trans "The collective donation feature is being developed, coming soon!" %}#}
+                        {#                            </p>#}
+
+                        <button type="button" class="btn btn-danger d-block w-100" data-bs-dismiss="offcanvas"
+                                aria-label="{% trans 'Close' %}">
+                            {% trans "Cancel" %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    {% endif %}
+
     <!-- EN-TÊTE DE L'ESPACE PERSONNEL — l'identité en tête, puis les blocs
      qui composent l'espace : la carte, puis les accès aux lieux. -->
     <div class="place-header place-header--me">
@@ -14,61 +75,80 @@
                 <span class="place-id__name">{% translate 'Bonjour' %} {{ request.user.first_name }}</span>
                 <span class="place-id__tagline">{{ request.user.email }}</span>
             </div>
-            {% if cards %}
+            {% if card %}
                 <div class="me-block">
-                {% if cards|length > 1 %}
-                    <div class="me-block__title">Mes cartes</div>
-                {% else %}
                     <div class="me-block__title">Ma carte</div>
-                {% endif %}
-                {% for card in cards %}
-                        <div class="me-card">
-                            <div class="me-card__visual">
-                                <div class="talisman talisman--sm">
-                                    <!-- viewBox resserrée : la constellation occupe davantage la carte -->
-                                    <svg class="talisman__sky" viewBox="0 0 76 48" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-                                        <g stroke="rgba(255,255,255,.30)" stroke-width="1.1" fill="none">
-                                            <path d="M8 37 L26 27 L45 33 L60 16 L71 25"/>
-                                            <path d="M26 27 L32 11 L45 33"/>
-                                        </g>
-                                        <g fill="rgba(255,255,255,.75)">
-                                            <circle cx="32" cy="11" r="1.9"/><circle cx="45" cy="33" r="1.9"/>
-                                            <circle cx="60" cy="16" r="1.9"/><circle cx="71" cy="25" r="1.9"/>
-                                            <circle cx="8" cy="37" r="1.9"/>
-                                        </g>
-                                        <circle cx="26" cy="27" r="3.6" fill="#fff"/>
+                    <div class="me-card">
+                        <div class="me-card__visual">
+                            <div class="talisman talisman--sm">
+                                <!-- viewBox resserrée : la constellation occupe davantage la carte -->
+                                <svg class="talisman__sky" viewBox="0 0 76 48" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                                    <g stroke="rgba(255,255,255,.30)" stroke-width="1.1" fill="none">
+                                        <path d="M8 37 L26 27 L45 33 L60 16 L71 25"/>
+                                        <path d="M26 27 L32 11 L45 33"/>
+                                    </g>
+                                    <g fill="rgba(255,255,255,.75)">
+                                        <circle cx="32" cy="11" r="1.9"/><circle cx="45" cy="33" r="1.9"/>
+                                        <circle cx="60" cy="16" r="1.9"/><circle cx="71" cy="25" r="1.9"/>
+                                        <circle cx="8" cy="37" r="1.9"/>
+                                    </g>
+                                    <circle cx="26" cy="27" r="3.6" fill="#fff"/>
+                                </svg>
+                                <div class="talisman__head">
+                                    <span class="talisman__brand">TiBillet</span>
+                                    <svg class="talisman__nfc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                                        <path d="M6.5 8.5a5 5 0 0 1 0 7"/>
+                                        <path d="M10 5.5a9.5 9.5 0 0 1 0 13"/>
+                                        <path d="M13.5 2.5a14 14 0 0 1 0 19"/>
                                     </svg>
-                                    <div class="talisman__head">
-                                        <span class="talisman__brand">TiBillet</span>
-                                        <svg class="talisman__nfc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
-                                            <path d="M6.5 8.5a5 5 0 0 1 0 7"/>
-                                            <path d="M10 5.5a9.5 9.5 0 0 1 0 13"/>
-                                            <path d="M13.5 2.5a14 14 0 0 1 0 19"/>
-                                        </svg>
-                                    </div>
-                                    <div class="talisman__foot">
-                                        <div class="talisman__number">{{ card.number_printed }}</div>
-                                    </div>
+                                </div>
+                                <div class="talisman__foot">
+                                    <div class="talisman__number">{{ card.number_printed }}</div>
                                 </div>
                             </div>
-
-                            <div class="me-card__info">
-                                <div class="balance__label">Solde</div>
-                                <div class="me-card__amount">24,50 €</div>
-                                <a class="btn btn--primary btn--sm" href="{% url "my_account-refill-wallet" %}">Recharger</a>
-                                <p class="me-card__links">
-                                    <a class="link" href="#">Historique</a> ·
-                                    <a class="link" href="{% url "my_account-refund-online" %}">Se faire rembourser</a> ·
-{#                                    <a class="link" href="{% url 'my_account-lost-my-card' pk=card.number_printed %}">J'ai perdu ma carte</a> ·#}
-                                    <span class="callout__text d-inline">Obtenue à {{ card.origin.place.name }}</span>
-                                </p>
-                            </div>
                         </div>
-                {% endfor %}
+
+                        <div class="me-card__info">
+                            <div class="balance__label">Solde</div>
+                            <div class="me-card__amount">{{ tokens.0.value | dround}} € </div>
+                            {% if config.show_refill_button %} <!-- Si pas possible de recharger -->
+
+                                <a href="#" hx-get="{% url "my_account-refill-wallet" %}" hx-indicator="#tibillet-spinner"
+                                   class="btn btn--primary btn--sm">
+                                    {% trans "Recharger" %}
+                                </a>
+                            {% endif %}
+
+                            <p class="me-card__links">
+                                <a class="link" href="#">Historique</a> ·
+                                {% if config.show_refill_button %} <!-- Si pas possible de recharger -->
+                                    <button class="link"
+                                            id="button-filters"
+                                            data-bs-toggle="offcanvas"
+                                            data-bs-target="#refundPanel"
+                                            aria-controls="refundPanel">
+                                        {% trans "Se faire rembourser" %}
+                                    </button>
+                                {% endif %}
+                                {% if user.email_valid and user.is_active %}
+                                        <button type="submit" class="link"
+                                                role="button"
+                                                aria-label="{% trans 'I lost my card' %}"
+                                                hx-get="{% url 'my_account-lost-my-card' pk=card.number_printed %}"
+                                                hx-indicator="#tibillet-spinner">
+                                            {% translate "J'ai perdu ma carte" %}
+                                        </button>
+                                {% else %}
+                                    {% trans "Please confirm your email to declare a lost card." %}
+                                {% endif %}
+                                <span class="callout__text d-inline">Obtenue à {{ card.origin.place.name }}</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
             {% else %}
                 <p>Pas de cartes liées pour l'instant</p>
             {% endif %}
-            </div>
 
             <div class="me-block">
                 <div class="me-block__title">Y retourner</div>
@@ -76,23 +156,23 @@
                     <a class="shortcut" href="accueil.html">
                         <span class="shortcut__logo solid-green"></span>
                         <span class="shortcut__text">
-            <span class="shortcut__name">La MIETE</span>
-            <span class="shortcut__meta">Membre</span>
-          </span>
+                            <span class="shortcut__name">La MIETE</span>
+                            <span class="shortcut__meta">Membre</span>
+                        </span>
                     </a>
                     <a class="shortcut" href="#">
                         <span class="shortcut__logo solid-mauve"></span>
                         <span class="shortcut__text">
-            <span class="shortcut__name">LOWCAL</span>
-            <span class="shortcut__meta">Abonné·e</span>
-          </span>
+                            <span class="shortcut__name">LOWCAL</span>
+                            <span class="shortcut__meta">Abonné·e</span>
+                          </span>
                     </a>
                     <a class="shortcut" href="#">
                         <span class="shortcut__logo solid-teal"></span>
                         <span class="shortcut__text">
-            <span class="shortcut__name">Les Incroyables Comestibles</span>
-            <span class="shortcut__meta">Bénévole</span>
-          </span>
+                            <span class="shortcut__name">Les Incroyables Comestibles</span>
+                            <span class="shortcut__meta">Bénévole</span>
+                        </span>
                     </a>
                     <a class="shortcut" href="#">
                         <span class="shortcut__logo solid-slate"></span>

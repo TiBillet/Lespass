@@ -96,7 +96,6 @@
 #menu-burger-container {
 	position: absolute;
 	top: calc(var(--header-height) + 8px);
-	z-index: 2;
 	width: 300px;
 	max-height: calc(var(--main-container-height) - 16px);
 	padding: 11px;
@@ -105,11 +104,11 @@
 	align-content: start;
 	overflow-y: auto;
 	border-radius: 14px;
-	background-color: var(--noir03);
 	background-color: oklch(0.205 0.014 262 / .97);
 	box-shadow: 0 0 0 1px var(--line), 0 18px 44px rgba(0, 0, 0, 0.6);
 	scrollbar-width: thin;
 	scrollbar-color: var(--surface-3) transparent;
+	z-index: 2;
 
 	/* Fermé par défaut — animé via .menu-open / Closed by default — animated via .menu-open */
 	transform: scale(.94);

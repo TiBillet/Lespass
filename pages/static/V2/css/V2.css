@@ -997,6 +997,8 @@ img { max-width: 100%; display: block; }
   font-size: 13.5px;
   text-decoration: underline;
   text-underline-offset: 2px;
+  border:none;
+  background: none;
 }
 .link:hover { color: var(--color-primary-hover); }
 

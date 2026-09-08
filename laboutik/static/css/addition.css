@@ -94,6 +94,7 @@
 	letter-spacing: .06em;
 	text-transform: uppercase;
 	color: var(--text-faint);
+	padding: 15px 10px;
 }
 
 .addition-count {
