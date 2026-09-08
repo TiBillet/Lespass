@@ -1004,9 +1004,30 @@ class Configuration(SingletonModel):
         verbose_name_plural = _('Settings')
 
     def __str__(self):
+        """
+        Libelle du lieu, tel qu'il apparait dans l'admin.
+        / The venue's label, as shown in the admin.
+
+        POURQUOI LES str() EXPLICITES : gettext_lazy ne renvoie pas une
+        chaine mais un objet paresseux (__proxy__). Or Django appelle
+        str(objet) pour fabriquer le sous-titre de la page de modification
+        (django/contrib/admin/options.py), et Python exige alors une VRAIE
+        chaine : sans str(), on obtient
+        « TypeError: __str__ returned non-string (type __proxy__) »
+        et la page /admin/BaseBillet/configuration/ renvoie une 500.
+
+        Le bug ne se voyait que sur les lieux dont le nom est vide, puisque
+        la concatenation de la premiere branche resolvait deja le proxy.
+        / gettext_lazy returns a proxy, not a str, and Django calls str(obj)
+          for the page subtitle. Without str(), the settings page 500s. Only
+          visible when `organisation` is empty: the other branch's string
+          concatenation already resolved the proxy.
+
+        :return: le libelle du lieu (str)
+        """
         if self.organisation:
-            return _("Settings for ") + self.organisation
-        return _('Settings')
+            return str(_("Settings for ")) + self.organisation
+        return str(_("Settings"))
 
 class Tva(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
