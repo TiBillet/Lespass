@@ -980,6 +980,91 @@ def _construire_sections_modules(request):
     return navigation
 
 
+def _chemin_correspond(lien, chemin):
+    """
+    Le chemin courant est-il celui de ce lien, ou une page en dessous ?
+    / Is the current path this link, or a page below it?
+
+    LOCALISATION : Administration/admin/dashboard.py
+
+    Meme regle qu'Unfold (_get_is_active, unfold/sites.py) : on compare les
+    CHEMINS, sans la query-string, et un lien vaut pour tout ce qui est en
+    dessous de lui. C'est ce qui fait que /admin/BaseBillet/event/12/change/
+    et /admin/BaseBillet/event/add/ designent bien la meme page d'admin.
+    / Same rule as Unfold: compare paths without the query string, a link
+      covering everything below it.
+
+    Unfold ecrit « lien in chemin » ; on ecrit « chemin.startswith(lien) »,
+    qui est strictement plus sur pour un resultat identique sur toutes nos
+    URLs (elles finissent toutes par « / », donc le prefixe ne peut pas
+    deborder : /admin/BaseBillet/product/ ne matche PAS productsold).
+    / Tightened to a real prefix; same result, no accidental substring match.
+
+    :param lien: l'URL du lien (str, ou proxy paresseux de _safe_rev)
+    :param chemin: request.path
+    :return: True si le lien designe la page courante
+    """
+    from urllib.parse import urlparse
+
+    lien = urlparse(str(lien or "")).path
+    # « # » est le repli de _safe_rev quand l'admin vise n'existe pas, et un
+    # lien vide ne designe rien. Ni l'un ni l'autre ne doit matcher.
+    # / "#" is _safe_rev's fallback for a missing admin; never match it.
+    if not lien.startswith("/"):
+        return False
+    return chemin.startswith(lien)
+
+
+def _module_du_chemin(chemin, sections, inclure_page_du_module=True):
+    """
+    A quel module appartient la page que l'on regarde ?
+    / Which module does the page being viewed belong to?
+
+    LOCALISATION : Administration/admin/dashboard.py
+
+    C'est la brique commune aux deux moities de la revision 11 :
+      - le rail s'en sert pour surligner le module courant ;
+      - le fil d'Ariane s'en sert pour nommer le bon parent.
+
+    Verifie sur les lieux lespass / festival / meta : AUCUNE page n'appartient
+    a deux modules. Si un rangement futur creait l'ambiguite, on retient la
+    correspondance la plus LONGUE — le module le plus specifique gagne — pour
+    que le resultat reste deterministe plutot que dependant de l'ordre.
+    / No page belongs to two modules today; on a tie the longest match wins.
+
+    :param chemin: request.path
+    :param sections: sections telles que produites par _construire_sections_modules
+    :param inclure_page_du_module: si True, /admin/module/<slug>/ compte comme
+        une correspondance. Le rail en a besoin (on EST dans le module) ; le
+        fil d'Ariane non (le module serait alors son propre parent).
+    :return: la section correspondante, ou None
+    """
+    if not chemin:
+        return None
+
+    meilleure, longueur_max = None, 0
+    for section in sections:
+        # Seules les sections rangees dans un domaine sont des modules. Les
+        # entrees autonomes (Parametres, Ventes & comptabilite, Configuration
+        # racine) gardent leurs pages dans le rail : Unfold les surligne deja
+        # tout seul, et leur fil d'Ariane n'a pas de module a nommer.
+        # / Only domain-bound sections are modules; standalone entries are
+        #   already handled by Unfold.
+        if not section.get("_domaine"):
+            continue
+
+        liens = [str(page.get("link") or "") for page in section.get("items") or []]
+        if inclure_page_du_module and section.get("_slug"):
+            liens.append(
+                str(_safe_rev("staff_admin:page_de_module", args=[section["_slug"]]))
+            )
+
+        for lien in liens:
+            if _chemin_correspond(lien, chemin) and len(lien) > longueur_max:
+                meilleure, longueur_max = section, len(lien)
+
+    return meilleure
+
 def get_sidebar_navigation(request):
     """
     Sidebar dynamique, rangee par domaine.
@@ -1035,6 +1120,13 @@ def _regrouper_sections_par_domaine(sections, chemin_courant=""):
     autonomes = [s for s in sections if not s.get("_domaine")]
     dans_un_domaine = [s for s in sections if s.get("_domaine")]
 
+    # Quel module regarde-t-on ? Calcule UNE fois, pas une fois par module.
+    # On compare ensuite par identite (« is ») plutot que par slug : une
+    # section rangee dans un domaine mais sans slug reste ainsi gerable.
+    # / Which module are we in? Computed once; compared by identity so that a
+    #   domain-bound section without a slug still works.
+    section_courante = _module_du_chemin(chemin_courant, sections)
+
     # --- Un groupe par domaine, dans l'ordre de DOMAINES ---
     # / One group per domain, in DOMAINES order.
     groupes_domaines = []
@@ -1046,7 +1138,7 @@ def _regrouper_sections_par_domaine(sections, chemin_courant=""):
 
         liens_des_modules = []
         for section in modules_du_domaine:
-            lien = _module_en_lien(section)
+            lien = _module_en_lien(section, est_courant=section is section_courante)
             if lien:
                 liens_des_modules.append(lien)
 
@@ -1743,7 +1835,7 @@ def _page_d_accueil_du_module(pages):
     return pages[0]
 
 
-def _module_en_lien(section):
+def _module_en_lien(section, est_courant=False):
     """
     Reduit une section-module a UN seul lien de sidebar.
     / Collapses a module section into a single sidebar link.
@@ -1760,6 +1852,8 @@ def _module_en_lien(section):
     / A badge set on one of the module's pages bubbles up to the module link.
 
     :param section: une section telle que construite dans get_sidebar_navigation
+    :param est_courant: True si la page affichee appartient a ce module —
+        calcule par _module_du_chemin() dans _regrouper_sections_par_domaine
     :return: un dict de lien Unfold, ou None si le module n'a aucune page
     """
     pages = section.get("items") or []
@@ -1788,6 +1882,27 @@ def _module_en_lien(section):
         "icon": section.get("_icone", "widgets"),
         "link": destination,
         "permission": page_d_accueil.get("permission"),
+        # Sans cette cle, une changelist n'allume RIEN dans le rail : les
+        # pages d'un module ont quitte la sidebar (revision 3), donc la
+        # comparaison d'URL d'Unfold ne trouve plus rien a rapprocher de
+        # request.path. On lui donne donc la reponse : sites.py:377 respecte
+        # un « active » deja pose et ne recalcule que s'il est absent.
+        # / A changelist highlights nothing without this: a module's pages
+        #   left the sidebar, so Unfold's URL comparison finds no match.
+        #
+        # ATTENTION : poser la cle DESACTIVE le calcul d'Unfold pour ce lien.
+        # La valeur doit donc aussi couvrir le cas qui marchait deja — etre
+        # SUR /admin/module/<slug>/ — d'ou le « inclure_page_du_module » de
+        # _module_du_chemin(). L'oublier serait une regression.
+        # / Setting the key DISABLES Unfold's own computation: our value must
+        #   also cover being on the module page itself.
+        #
+        # Le depliage du domaine suit tout seul : notre surcharge de
+        # unfold/helpers/app_list.html ouvre un groupe des qu'un de ses liens
+        # est actif ({% has_nav_item_active %}), et la classe est posee cote
+        # serveur — donc aucune animation au chargement (revision 10).
+        # / The domain group expands on its own via has_nav_item_active.
+        "active": est_courant,
     }
 
     # On remonte le premier badge non vide trouve sur les pages du module.
