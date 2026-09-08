@@ -1,0 +1,416 @@
+/*
+ * Peau TiBillet pour l'admin Django Unfold
+ * / TiBillet skin for the Django Unfold admin
+ *
+ * LOCALISATION : static/css/tibillet-admin.css
+ * Chargee par UNFOLD["STYLES"] (TiBillet/settings.py).
+ *
+ * A QUOI SERT CE FICHIER
+ * Les COULEURS sont deja reglees ailleurs, dans UNFOLD["COLORS"].
+ * Ce fichier ne s'occupe QUE de la forme : fonds, densite, arrondis,
+ * bordures, survols. Il ne redefinit jamais une variable --color-*.
+ * / Colors live in UNFOLD["COLORS"]. This file only handles shape.
+ *
+ * DEUX REGLES A NE PAS OUBLIER EN MODIFIANT CE FICHIER
+ *
+ * 1. Ne jamais envelopper ces regles dans un @layer.
+ *    Le CSS d'Unfold est du Tailwind v4 : ses 250 Ko d'utilitaires sont
+ *    dans des @layer. Une regle SANS layer gagne toujours sur une regle
+ *    DANS un layer. C'est ce qui permet de tout redessiner sans
+ *    !important et sans toucher un seul template.
+ *    / Never wrap these rules in a @layer: unlayered beats layered.
+ *
+ * 2. Toujours commencer un selecteur par « html » ou par un « #id ».
+ *    Unfold garde 78 Ko de CSS HORS layer (fin de son styles.css :
+ *    tr.selected, select, .selector, .datetimeshortcuts...). Contre
+ *    celui-la on est a egalite, et c'est lui qui est charge en dernier.
+ *    Un « html » ou un « #id » devant suffit a passer devant.
+ *    / Always prefix with `html` or an `#id`: Unfold keeps 78 KB of
+ *      unlayered CSS that loads after us.
+ *
+ * MODE SOMBRE : Alpine pose la classe « dark » sur <html>.
+ * Chaque regle qui pose un fond clair doit avoir son pendant html.dark.
+ * / Dark mode: Alpine sets the `dark` class on <html>.
+ */
+
+/* ==========================================================================
+   1. JETONS DE FORME
+   Prefixe --tb- pour ne jamais entrer en collision avec les --color-*
+   d'Unfold, qui sont ecrits plus tard dans le <body> et gagneraient.
+   / Shape tokens, --tb- namespaced to avoid clashing with Unfold's.
+   ========================================================================== */
+
+html {
+  /* Rappels de la maquette, exprimes a partir des couleurs deja posees
+     par UNFOLD["COLORS"] : une seule source de verite pour la palette.
+     / Mockup shapes, built on the palette already set in COLORS. */
+  --tb-paper: var(--color-base-50);
+  --tb-line: var(--color-base-200);
+  --tb-line-soft: var(--color-base-100);
+  --tb-brand-soft: var(--color-primary-50);
+  --tb-brand-txt: var(--color-primary-800);
+
+  /* Degrade signature de la maquette : vert -> vert clair -> orange.
+     A n'utiliser qu'a deux ou trois endroits, sinon c'est du bruit.
+     / Signature gradient; use sparingly. */
+  --tb-grad: linear-gradient(135deg, #1d9e75 0%, #63c77a 48%, #ef9f27 100%);
+}
+
+/* ==========================================================================
+   2. CHASSIS — l'inversion des fonds
+   C'est LA regle la plus importante du fichier.
+   Unfold met le papier sur la sidebar et le blanc sur le contenu.
+   La maquette veut l'inverse : rail blanc, contenu sur papier.
+   Sans ca, tout le reste parait a l'envers.
+   / Swap Unfold's backgrounds: white rail, warm paper content.
+   ========================================================================== */
+
+#main {
+  background-color: var(--tb-paper);
+}
+
+#nav-sidebar,
+#nav-sidebar-inner {
+  background-color: #fff;
+}
+
+html.dark #main {
+  background-color: var(--color-base-900);
+}
+
+html.dark #nav-sidebar,
+html.dark #nav-sidebar-inner {
+  background-color: var(--color-base-950);
+}
+
+/* ==========================================================================
+   3. SIDEBAR
+   ========================================================================== */
+
+/* Titre de section : micro-capitales, comme .nav-sec dans la maquette.
+   / Section heading: uppercase micro-caps. */
+#nav-sidebar-apps h2 {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--color-base-400);
+}
+
+/* Lien de navigation : plus compact que le 38px d'Unfold.
+   / Nav link: tighter than Unfold's 38px. */
+#nav-sidebar-apps li a {
+  height: auto;
+  min-height: 36px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  font-size: 13.5px;
+  border-radius: 8px;
+}
+
+#nav-sidebar-apps li a:hover {
+  background-color: var(--tb-line-soft);
+}
+
+/* Lien actif : pastille vert pale + texte vert fonce.
+   Unfold pose une classe « active » en dur : point d'accroche stable.
+   / Active link: Unfold emits a literal `active` class. */
+#nav-sidebar-apps li a.active {
+  background-color: var(--tb-brand-soft);
+  color: var(--tb-brand-txt);
+}
+
+#nav-sidebar-apps li a .material-symbols-outlined {
+  color: var(--color-base-400);
+}
+
+#nav-sidebar-apps li a.active .material-symbols-outlined {
+  color: var(--tb-brand-txt);
+}
+
+html.dark #nav-sidebar-apps li a:hover {
+  background-color: rgb(255 255 255 / 0.05);
+}
+
+html.dark #nav-sidebar-apps li a.active {
+  background-color: rgb(255 255 255 / 0.08);
+  color: var(--color-primary-400);
+}
+
+/* Champ de recherche de la sidebar : rempli papier plutot que blanc,
+   puisque le rail est desormais blanc.
+   / Sidebar search: paper-filled now that the rail is white. */
+#nav-sidebar-inner div:has(> #nav-filter) {
+  background-color: var(--tb-paper);
+  box-shadow: none;
+}
+
+html.dark #nav-sidebar-inner div:has(> #nav-filter) {
+  background-color: rgb(255 255 255 / 0.04);
+}
+
+/* ==========================================================================
+   4. TABLEAU DE LISTE (changelist)
+   ATTENTION : sous 1024px, Unfold transforme le tableau en cartes
+   (before:content-[attr(data-label)]). Toute regle de GEOMETRIE est donc
+   enfermee dans un @media (min-width: 1024px). Les COULEURS, elles,
+   valent dans les deux affichages.
+   / Below 1024px Unfold turns the table into cards: geometry rules are
+     scoped to the desktop breakpoint, colors apply to both.
+   ========================================================================== */
+
+/* Unfold zebre les lignes (un <tbody> par ligne). La maquette n'a pas de
+   zebrures : un simple survol suffit et se lit mieux.
+   / Unfold zebra-stripes rows; the mockup uses hover instead. */
+#result_list tbody {
+  background-color: transparent;
+}
+
+#result_list tbody:hover td,
+#result_list tbody:hover th {
+  background-color: var(--tb-line-soft);
+}
+
+html.dark #result_list tbody:hover td,
+html.dark #result_list tbody:hover th {
+  background-color: rgb(255 255 255 / 0.03);
+}
+
+/* Separateurs de lignes plus discrets que la bordure standard.
+   / Softer row separators. */
+#result_list tbody td,
+#result_list tbody th {
+  border-top-color: var(--tb-line-soft);
+}
+
+/* Ligne selectionnee : Unfold impose un jaune pale code en dur, dans son
+   CSS hors layer (`table tr.selected td`). L'#id nous fait passer devant.
+   / Selected row: beats Unfold's unlayered hard-coded pale yellow. */
+#result_list tr.selected td,
+#result_list tr.selected th {
+  background-color: var(--tb-brand-soft);
+}
+
+html.dark #result_list tr.selected td,
+html.dark #result_list tr.selected th {
+  background-color: rgb(29 158 117 / 0.15);
+}
+
+@media (min-width: 1024px) {
+  /* En-tete de colonnes : petites capitales sur fond papier.
+     / Column headers: small caps on paper. */
+  #result_list thead th {
+    background-color: var(--tb-paper);
+    border-bottom: 1px solid var(--tb-line);
+    padding-top: 11px;
+    padding-bottom: 11px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-base-400);
+  }
+
+  html.dark #result_list thead th {
+    background-color: var(--color-base-950);
+    border-bottom-color: var(--color-base-800);
+  }
+
+  /* Lignes un peu plus aerees que le 45px d'Unfold.
+     / Slightly airier rows than Unfold's 45px. */
+  #result_list tbody td,
+  #result_list tbody th {
+    height: auto;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    font-size: 13.5px;
+  }
+
+  /* Premiere colonne mise en avant, comme .cel-name dans la maquette.
+     / First column emphasised, like the mockup's .cel-name. */
+  #result_list tbody th a,
+  #result_list tbody td:first-child a {
+    font-weight: 600;
+  }
+}
+
+/* ==========================================================================
+   5. BOUTONS
+   Les boutons d'Unfold n'ont pas de classe stable : ce sont des chaines
+   d'utilitaires Tailwind. On les cible donc par leur conteneur, ce qui
+   est plus sur que de viser une classe utilitaire.
+   / Unfold buttons carry no stable class; we target them by container.
+   ========================================================================== */
+
+#submit-row button,
+#submit-row a[href] {
+  padding: 8px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* Survol du bouton secondaire : Unfold vire au gris (hover:bg-base-100/80).
+   La maquette vire au vert. Il faut REMPLACER, pas seulement recolorer.
+   / Secondary hover: Unfold greys out, the mockup goes green. */
+#submit-row a[href].bg-white:hover,
+#submit-row button.bg-white:hover {
+  background-color: var(--tb-brand-soft);
+  border-color: var(--color-primary-600);
+  color: var(--tb-brand-txt);
+}
+
+/* Bouton « Ajouter » : pastille ronde de 38px chez Unfold. On garde la
+   forme (il ne contient qu'une icone, sans libelle) et on lui donne le
+   degrade de marque de la maquette.
+   / "Add" button: keep Unfold's round shape, apply the brand gradient. */
+#content-main a.addlink,
+#changelist a.addlink {
+  background-image: var(--tb-grad);
+  box-shadow: 0 2px 8px rgb(29 158 117 / 0.3);
+}
+
+#content-main a.addlink:hover,
+#changelist a.addlink:hover {
+  opacity: 0.9;
+}
+
+/* ==========================================================================
+   6. ONGLETS
+   Unfold dessine un selecteur segmente (pastille blanche sur fond gris).
+   La maquette veut un soulignement. Alpine ajoute/retire « active » a
+   l'execution : c'est une classe simple, le CSS suit sans probleme.
+   / Unfold draws a segmented control; the mockup wants an underline.
+   ========================================================================== */
+
+#tabs-items {
+  background-color: transparent;
+  border-bottom: 1px solid var(--tb-line);
+  border-radius: 0;
+  padding: 0;
+  gap: 2px;
+}
+
+#tabs-items a {
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 10px 16px;
+  font-size: 13px;
+}
+
+#tabs-items a.active {
+  background-color: transparent;
+  box-shadow: none;
+  border-bottom-color: var(--color-primary-600);
+  color: var(--tb-brand-txt);
+}
+
+html.dark #tabs-items {
+  background-color: transparent;
+  border-bottom-color: var(--color-base-800);
+}
+
+html.dark #tabs-items a.active {
+  background-color: transparent;
+  color: var(--color-primary-400);
+}
+
+/* ==========================================================================
+   7. FORMULAIRES
+   Unfold laisse le <fieldset> nu. On en fait une carte, comme .u-form
+   dans la maquette : c'est un ajout, donc sans risque de regression.
+   / Unfold leaves the fieldset bare; we turn it into a card.
+   ========================================================================== */
+
+#content-main fieldset.module {
+  background-color: #fff;
+  border: 1px solid var(--tb-line);
+  border-radius: 12px;
+  /*padding: 2px 18px;*/
+  margin-bottom: 18px;
+}
+
+html.dark #content-main fieldset.module {
+  background-color: var(--color-base-900);
+  border-color: var(--color-base-800);
+}
+
+/* Barre d'enregistrement : opaque, pour que le tableau ne transparaisse
+   pas dessous lorsqu'elle est collee en bas.
+   / Submit bar: opaque so content doesn't show through when stuck. */
+#submit-row {
+  background-color: #fff;
+}
+
+html.dark #submit-row {
+  background-color: var(--color-base-900);
+}
+
+/* ==========================================================================
+   8. FILTRES ET NAVIGATION PAR DATE
+   ========================================================================== */
+
+/* date_hierarchy : petites etapes arrondies, comme .u-datehier-step.
+   / date_hierarchy: small rounded steps. */
+html ul.toplinks li a {
+  display: inline-block;
+  background-color: var(--tb-line-soft);
+  border-radius: 7px;
+  padding: 4px 11px;
+  font-size: 12px;
+}
+
+html ul.toplinks li a:hover {
+  background-color: var(--tb-brand-soft);
+  color: var(--tb-brand-txt);
+}
+
+html.dark ul.toplinks li a {
+  background-color: rgb(255 255 255 / 0.05);
+}
+
+/* Titre de chaque groupe de filtres. / Filter group heading. */
+#changelist-filter h3 {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-base-400);
+}
+
+/* ==========================================================================
+   9. RETOUCHES SUR LE CSS HORS LAYER D'UNFOLD
+   Ces regles-la sont a egalite de specificite avec les notres, et Unfold
+   est charge apres. Le « html » devant est donc OBLIGATOIRE.
+   / These target Unfold's unlayered CSS: the `html` prefix is required.
+   ========================================================================== */
+
+/* Le chevron des <select> est un SVG au gris froid #6B7280 code en dur.
+   On le repasse au gris chaud de la maquette (--ink-mut, #9a9891).
+   / The select chevron is a hard-coded cool grey; warm it up. */
+html select:not([class*="bg-none"]):not([multiple]) {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239a9891' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+}
+
+/* ==========================================================================
+   10. ACCESSIBILITE
+   On ne touche PAS a l'anneau de focus d'Unfold (focus:outline-primary-600) :
+   il est correct et suit deja la palette. On se contente de garantir qu'il
+   reste visible sur les elements qu'on a redessines ci-dessus.
+   / We keep Unfold's focus ring; just make sure it stays visible.
+   ========================================================================== */
+
+#nav-sidebar-apps li a:focus-visible,
+#tabs-items a:focus-visible {
+  outline: 2px solid var(--color-primary-600);
+  outline-offset: 2px;
+}
+
+/* Respect du reglage systeme « moins d'animations ».
+   / Honour the reduced-motion system setting. */
+@media (prefers-reduced-motion: reduce) {
+  #nav-sidebar-apps li a,
+  #tabs-items a,
+  #result_list tbody {
+    transition: none;
+  }
+}

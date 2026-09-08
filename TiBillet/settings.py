@@ -737,6 +737,123 @@ UNFOLD = {
         "show_all_applications": False, # Dropdown with all applications and models
         "navigation": "Administration.admin_tenant.get_sidebar_navigation",
     },
+    # --- Peau TiBillet : palette de l'admin Unfold ---------------------------
+    # Jetons repris de la maquette (TEMP-tibillet-admin-main/style.css),
+    # convertis en OKLCH puis etales sur les 11 paliers attendus par Unfold.
+    # Unfold injecte chaque entree en variable CSS --color-{nom}-{poids}
+    # (voir unfold/templates/unfold/layouts/skeleton.html).
+    # / TiBillet admin skin: warm paper + brand green, from the mockup tokens.
+    "COLORS": {
+        # Neutres chauds (teinte 93) : remplacent le gris-bleu froid d'Unfold.
+        # base-50 sert de fond de page, base-200 de couleur de bordure globale.
+        # / Warm neutrals (hue 93) replacing Unfold's cool blue-grey.
+        "base": {
+            "50": "oklch(96.5% 0.008 93)",  # #f5f3ee  papier / paper
+            "100": "oklch(94.9% 0.010 93)",  # #f0eee7  --line-soft
+            "200": "oklch(91.9% 0.012 93)",  # #e7e4db  --line
+            "300": "oklch(86.5% 0.012 93)",  # #d5d3ca
+            "400": "oklch(67.9% 0.010 93)",  # #9a9891  --ink-mut
+            "500": "oklch(56.0% 0.008 93)",  # #76746f
+            "600": "oklch(48.2% 0.006 93)",  # #5f5e5a  --ink-soft
+            "700": "oklch(38.0% 0.008 93)",  # #44423e
+            "800": "oklch(30.0% 0.010 93)",  # #2f2e28
+            "900": "oklch(21.0% 0.012 93)",  # #1a1812  fond du mode sombre
+            "950": "oklch(16.0% 0.012 93)",  # #0f0d08
+        },
+        # Vert de marque (teinte 166), ancre sur #1D9E75 au palier 600.
+        # Pilote les boutons, les liens, le lien de sidebar actif, le focus.
+        # / Brand green anchored on #1D9E75 at step 600.
+        "primary": {
+            "50": "oklch(95.2% 0.021 166)",  # #e3f4ec  --brand-soft
+            "100": "oklch(91.5% 0.040 166)",  # #cbecdd
+            "200": "oklch(85.5% 0.065 166)",  # #a7dec6
+            "300": "oklch(78.0% 0.090 166)",  # #7dcaaa
+            "400": "oklch(70.5% 0.108 166)",  # #54b590
+            "500": "oklch(66.0% 0.118 166)",  # #37a981
+            "600": "oklch(62.3% 0.123 165.5)",  # #1d9e75  --brand
+            "700": "oklch(54.0% 0.107 170)",  # #008265
+            "800": "oklch(48.1% 0.091 170)",  # #0f6e56  --brand-txt
+            "900": "oklch(40.0% 0.075 170)",  # #0b5441
+            "950": "oklch(27.0% 0.050 170)",  # #042e23
+        },
+        # Les trois tons d'encre de la maquette, montes sur les jetons Unfold.
+        # Les variantes sombres restent des renvois a la rampe base : le mode
+        # sombre herite de la chaleur sans travail supplementaire.
+        # / The mockup's three ink tones mapped onto Unfold's font tokens.
+        "font": {
+            "subtle-light": "oklch(67.9% 0.010 93)",  # #9a9891  --ink-mut
+            "subtle-dark": "var(--color-base-400)",
+            "default-light": "oklch(48.2% 0.006 93)",  # #5f5e5a  --ink-soft
+            "default-dark": "var(--color-base-300)",
+            "important-light": "oklch(26.3% 0.011 99.3)",  # #26251f  --ink
+            "important-dark": "var(--color-base-100)",
+        },
+        # --- Rampes semantiques ---
+        # Unfold ne les met PAS dans COLORS par defaut : elles ne vivent que
+        # dans son @layer theme. Les declarer ici les fait passer par le bloc
+        # <style> du <body>, qui gagne sur le layer. C'est ce qui recolore
+        # d'un coup tous les badges @display(label=...), les messages, les
+        # booleens et l'interrupteur, sans une seule ligne de CSS.
+        # / Declaring these recolors every badge, message, boolean and switch.
+        "green": {  # succes / success  ->  --brand-soft / --brand-txt
+            "100": "#e3f4ec",
+            "400": "#4bbc93",
+            "500": "#1D9E75",
+            "600": "#1a8a66",
+            "700": "#0f6e56",
+        },
+        "orange": {  # avertissement / warning  ->  --warm-soft / --warm-txt
+            "100": "#fbeed7",
+            "400": "#f0b45c",
+            "500": "#EF9F27",
+            "600": "#d98a17",
+            "700": "#8a5310",
+        },
+        "blue": {  # information / info  ->  --blue-soft / --blue-txt
+            "100": "#e6f1fb",
+            "400": "#6aa9e6",
+            "500": "#378ADD",
+            "600": "#2a72bd",
+            "700": "#185fa5",
+        },
+        "red": {  # danger  ->  ton .u-danger de la maquette
+            "100": "#fbe4e0",
+            "400": "#e88b7d",
+            "500": "#e0483d",
+            "600": "#c4432f",
+            "700": "#9c3524",
+        },
+        # Unfold ne definit que yellow-200 et yellow-500. Or
+        # Administration/templates/admin/dashboard.html:46 utilise
+        # bg-yellow-100 / text-yellow-800 / dark:bg-yellow-900 : le badge
+        # « V1 » s'affiche donc aujourd'hui SANS couleur. Declarer la rampe
+        # complete corrige ce bug preexistant au passage.
+        # / Fixes a pre-existing bug: the V1 badge uses undefined yellow steps.
+        "yellow": {
+            "100": "#fbeed7",
+            "200": "#f6dcae",
+            "400": "#f0b45c",
+            "500": "#EF9F27",
+            "600": "#d98a17",
+            "800": "#8a5310",
+            "900": "#5c3709",
+        },
+    },
+    # Arrondis de la maquette : controles 8-10px, cartes 10-14px. 10px est le
+    # meilleur compromis unique. Alimente la classe `rounded-default` utilisee
+    # par tous les widgets Unfold (voir unfold/widgets.py).
+    # / Mockup radius; feeds Unfold's `rounded-default` class.
+    "BORDER_RADIUS": "10px",
+    # Feuille de finition de la peau TiBillet.
+    # Unfold l'insere dans le <head> AVANT son propre styles.css. L'ordre
+    # source jouerait donc contre nous, mais le CSS d'Unfold est du Tailwind
+    # v4 range dans des @layer : une regle SANS layer gagne toujours. Voir
+    # l'en-tete du fichier CSS pour les deux regles d'ecriture a respecter.
+    # / Skin finishing sheet. Unfold injects it before its own styles.css,
+    #   but unlayered CSS always beats Unfold's layered Tailwind.
+    "STYLES": [
+        lambda request: static("css/tibillet-admin.css"),
+    ],
     "SCRIPTS": [
         lambda request: static("js/autofocus_select2.js"),
     ],
