@@ -37,6 +37,36 @@ class StaffAdminSite(UnfoldAdminSite):
     def has_permission(self, request):
         return TenantAdminPermissionWithRequest(request)
 
+    def get_urls(self):
+        """
+        Ajoute la route des pages de module au scope /admin/.
+        / Adds the module landing pages to the /admin/ scope.
+
+        LOCALISATION : Administration/admin/site.py
+
+        La sidebar est rangee par domaine et n'affiche qu'UN lien par module.
+        Ce lien mene ici : une page qui liste les admins du module, rangees
+        sous les onglets Gerer / Configurer / Analyser.
+        / The sidebar shows one link per module; it points here.
+
+        L'import est fait dans la methode et non en tete de fichier : au
+        moment ou ce module est charge, l'admin n'est pas encore prete et un
+        import global provoquerait un import circulaire.
+        / Local import: a module-level one would be circular.
+        """
+        from django.urls import path
+
+        from Administration.admin.dashboard import page_de_module
+
+        routes_des_modules = [
+            path(
+                "module/<slug:slug>/",
+                self.admin_view(page_de_module),
+                name="page_de_module",
+            ),
+        ]
+        return routes_des_modules + super().get_urls()
+
     # FROM V2 : TO ADD ONE DAY
     # def get_urls(self):
     #     """

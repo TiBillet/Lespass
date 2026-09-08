@@ -277,22 +277,22 @@ class TestSidebar:
         Brevo. Elle vit maintenant dans le module « Newsletter ».
 
         Depuis le passage aux domaines, les pages d'un module ne sont plus dans la
-        sidebar : elles sont devenues ses ONGLETS. On verifie donc les deux choses
-        qui comptent vraiment :
+        sidebar : elles sont listees par la PAGE DU MODULE, sous ses onglets. On
+        verifie donc les deux choses qui comptent vraiment :
           1. plus aucune entree « Ghost » ne traine dans la sidebar ;
-          2. « Serveur Ghost » reste atteignable, via les onglets du module.
-        / A module's pages are now its tabs: check Ghost left the sidebar and is
-          still reachable through the module's tabs.
+          2. « Serveur Ghost » reste atteignable, depuis la page du module.
+        / A module's pages are now listed by its landing page: check Ghost left the
+          sidebar and is still reachable from the module page.
         """
-        from Administration.admin.dashboard import get_sidebar_navigation, get_tabs
+        from Administration.admin import dashboard
 
         client = _client_http(tenant, _superadmin(tenant))
         requete = client.get("/admin/").wsgi_request
 
         with tenant_context(tenant):
             _poser_letat_du_module(True)
-            navigation = get_sidebar_navigation(requete)
-            onglets = get_tabs(requete)
+            navigation = dashboard.get_sidebar_navigation(requete)
+            sections = dashboard._construire_sections_modules(requete)
 
         # 1. L'ancienne entree "Ghost" de "Outils externes" a disparu.
         libelles_de_la_sidebar = [
@@ -300,12 +300,23 @@ class TestSidebar:
         ]
         assert "Ghost" not in libelles_de_la_sidebar
 
-        # 2. "Serveur Ghost" est atteignable par les onglets d'un module.
-        #    C'est le point critique : sans les onglets, la page serait perdue.
-        #    / Critical: without the tabs, the page would be unreachable.
-        libelles_des_onglets = [
-            str(item["title"]) for barre in onglets for item in barre["items"]
+        # 2. "Serveur Ghost" est listee par la page du module Newsletter.
+        #    C'est le point critique : sans elle, la page serait perdue.
+        #    / Critical: without the module page, this page would be unreachable.
+        carte = dashboard._carte_des_liens_vers_modeles()
+        section_newsletter = [
+            section for section in sections if section.get("_slug") == "newsletter"
         ]
-        assert str(_("Serveur Ghost")) in libelles_des_onglets, (
-            "Serveur Ghost n'est atteignable ni par la sidebar ni par les onglets."
+        assert section_newsletter, "Le module Newsletter est introuvable."
+
+        par_categorie = dashboard._categoriser_les_pages(
+            section_newsletter[0]["items"], carte
+        )
+        pages_listees = [
+            str(page["title"])
+            for pages in par_categorie.values()
+            for page in pages
+        ]
+        assert str(_("Serveur Ghost")) in pages_listees, (
+            "Serveur Ghost n'est atteignable ni par la sidebar ni par la page du module."
         )

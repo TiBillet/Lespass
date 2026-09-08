@@ -291,10 +291,18 @@ html.dark #result_list tr.selected th {
 }
 
 #tabs-items a {
+  /* display:inline-flex est indispensable : dans la barre d'Unfold les liens
+     recoivent des utilitaires flex, mais PAS sur notre page de module, dont
+     le <nav> est ecrit a la main. Sans cela, la pastille de couleur ne
+     s'alignerait pas avec le libelle.
+     / Needed because our hand-written module-page nav has no flex utilities. */
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   border-bottom: 2px solid transparent;
   border-radius: 0;
-  padding: 10px 16px;
-  font-size: 13px;
+  padding: 10px 18px;
+  font-size: 13.5px;
 }
 
 #tabs-items a.active {
@@ -312,6 +320,219 @@ html.dark #tabs-items {
 html.dark #tabs-items a.active {
   background-color: transparent;
   color: var(--color-primary-400);
+}
+
+/* --- Onglets de categorie : une couleur par famille -----------------------
+   Reprend .tab.g / .tab.c / .tab.a de la maquette :
+   Gerer = vert de marque, Configurer = orange, Analyser = bleu.
+   Chaque onglet porte une pastille de sa couleur ; quand il est ouvert, le
+   soulignement et le texte prennent cette couleur.
+   / One colour per category, as in the mockup.
+
+   ON S'ACCROCHE AU LIEN, PAS A UNE CLASSE.
+   Le lien « ?onglet=... » est fabrique par notre code (get_tabs et
+   page_de_module) : il est donc stable. Surtout, la regle vaut alors AUSSI
+   sur les changelists, ou c'est Unfold qui dessine la barre et ou il ne rend
+   que le libelle — aucun attribut auquel se raccrocher autrement.
+   / Hooking on the href works on both our module page and Unfold's own bar.
+
+   Les barres historiques (Parametres / Cles API / Webhooks) n'ont pas
+   « onglet= » dans leurs liens : elles ne sont pas touchees.
+   / The legacy tab bars have no "onglet=" in their links: untouched.
+   -------------------------------------------------------------------------- */
+
+/* La pastille, en pseudo-element : aucun balisage a ajouter, et donc valable
+   partout, y compris dans la barre dessinee par Unfold.
+   / The dot as a pseudo-element: no markup needed, so it works everywhere. */
+#tabs-items a[href*="onglet="]::before {
+  content: "";
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: currentColor;
+  opacity: 0.85;
+}
+
+/* Gerer : le vert de marque. / "Gerer": brand green. */
+#tabs-items a[href*="onglet=gerer"].active {
+  border-bottom-color: var(--color-primary-600);
+  color: var(--color-primary-800);
+}
+
+/* Configurer : l'orange chaud. / "Configurer": warm orange. */
+#tabs-items a[href*="onglet=configurer"].active {
+  border-bottom-color: var(--color-orange-500);
+  color: var(--color-orange-700);
+}
+
+/* Analyser : le bleu. / "Analyser": blue. */
+#tabs-items a[href*="onglet=analyser"].active {
+  border-bottom-color: var(--color-blue-500);
+  color: var(--color-blue-700);
+}
+
+/* Au repos, seule la pastille est coloree : le libelle reste sobre, comme
+   dans la maquette. La couleur du texte n'arrive qu'a l'ouverture.
+   / At rest only the dot is coloured; the label stays neutral. */
+#tabs-items a[href*="onglet="]:not(.active) {
+  color: var(--color-base-600);
+}
+
+#tabs-items a[href*="onglet=gerer"]:not(.active)::before {
+  background-color: var(--color-primary-600);
+}
+
+#tabs-items a[href*="onglet=configurer"]:not(.active)::before {
+  background-color: var(--color-orange-500);
+}
+
+#tabs-items a[href*="onglet=analyser"]:not(.active)::before {
+  background-color: var(--color-blue-500);
+}
+
+/* En mode sombre, on remonte d'un cran vers le clair pour garder le contraste.
+   / In dark mode, step one rung lighter to keep contrast. */
+html.dark #tabs-items a[href*="onglet="]:not(.active) {
+  color: var(--color-base-300);
+}
+
+html.dark #tabs-items a[href*="onglet=gerer"].active {
+  color: var(--color-primary-400);
+}
+
+html.dark #tabs-items a[href*="onglet=configurer"].active {
+  color: var(--color-orange-400);
+}
+
+html.dark #tabs-items a[href*="onglet=analyser"].active {
+  color: var(--color-blue-400);
+}
+
+/* Le compteur prend la couleur de son onglet quand celui-ci est ouvert.
+   On nomme chaque couleur : `currentColor` en background-color se resout sur
+   l'element lui-meme, donc sur le blanc qu'on lui donne juste apres.
+   / Name each colour: currentColor in background-color resolves against the
+     element's own colour, which we set to white on the very next line. */
+#tabs-items a[href*="onglet=gerer"].active .tb-onglet-nombre {
+  background-color: var(--color-primary-600);
+  color: #fff;
+}
+
+#tabs-items a[href*="onglet=configurer"].active .tb-onglet-nombre {
+  background-color: var(--color-orange-500);
+  color: #fff;
+}
+
+#tabs-items a[href*="onglet=analyser"].active .tb-onglet-nombre {
+  background-color: var(--color-blue-500);
+  color: #fff;
+}
+
+/* --- Page d'un module : onglets et liste des admins -----------------------
+   Rendue par Administration/templates/admin/module_page.html. La liste est
+   propre au projet : elle n'a AUCUNE classe Tailwind d'Unfold, tout son
+   style est ici. Les onglets, eux, reutilisent #tabs-items ci-dessus.
+   / The module page's list is project-specific and carries no Unfold classes.
+   -------------------------------------------------------------------------- */
+
+/* Le petit compteur de pages dans chaque onglet. / Per-tab page count. */
+.tb-onglet-nombre {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 20px;
+  background-color: var(--tb-line-soft);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--color-base-400);
+}
+
+/* La liste : une carte bordee, une ligne par page d'admin.
+   / The list: a bordered card, one row per admin page. */
+.tb-pagelist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--tb-line);
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: #fff;
+}
+
+.tb-pagelist a {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--tb-line-soft);
+  color: var(--color-base-600);
+}
+
+.tb-pagelist li:first-child a {
+  border-top: none;
+}
+
+.tb-pagelist a:hover {
+  background-color: var(--tb-line-soft);
+}
+
+.tb-pagelist a:focus-visible {
+  outline: 2px solid var(--color-primary-600);
+  outline-offset: -2px;
+}
+
+/* La pastille d'icone en tete de ligne. / The row's leading icon tile. */
+.tb-prow-icone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background-color: var(--tb-brand-soft);
+  color: var(--tb-brand-txt);
+}
+
+.tb-prow-nom {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-font-important-light);
+}
+
+.tb-prow-fleche {
+  flex-shrink: 0;
+  color: var(--color-base-400);
+}
+
+html.dark .tb-onglet-nombre {
+  background-color: rgb(255 255 255 / 0.08);
+}
+
+html.dark .tb-pagelist {
+  background-color: var(--color-base-900);
+  border-color: var(--color-base-800);
+}
+
+html.dark .tb-pagelist a {
+  border-top-color: var(--color-base-800);
+  color: var(--color-base-300);
+}
+
+html.dark .tb-pagelist a:hover {
+  background-color: rgb(255 255 255 / 0.04);
+}
+
+html.dark .tb-prow-icone {
+  background-color: rgb(29 158 117 / 0.18);
+  color: var(--color-primary-400);
+}
+
+html.dark .tb-prow-nom {
+  color: var(--color-font-important-dark);
 }
 
 /* ==========================================================================

@@ -169,6 +169,7 @@ def _construire_sections_modules(request):
                 "_order": 0.0,  # rang dans le domaine / rank inside domain
                 "_domaine": "lespass",
                 "_icone": "web",
+                "_slug": "site-web",  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -203,6 +204,7 @@ def _construire_sections_modules(request):
                 "_order": 2.0,  # rang dans le domaine / rank inside domain
                 "_domaine": "lespass",
                 "_icone": "card_membership",
+                "_slug": "adhesion",  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -236,6 +238,7 @@ def _construire_sections_modules(request):
                 "_order": 1.0,  # rang dans le domaine / rank inside domain
                 "_domaine": "lespass",
                 "_icone": "event",
+                "_slug": "agenda",  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -334,6 +337,7 @@ def _construire_sections_modules(request):
                 "_order": 0.0,  # rang dans le domaine / rank inside domain
                 "_domaine": "lerezo",
                 "_icone": "hub",
+                "_slug": "federation",  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -376,6 +380,7 @@ def _construire_sections_modules(request):
                 "_order": 0.0,  # rang dans le domaine / rank inside domain
                 "_domaine": "laboutik",
                 "_icone": "point_of_sale",
+                "_slug": "caisse",  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -478,6 +483,7 @@ def _construire_sections_modules(request):
                 "_order": 2.0,  # rang dans le domaine / rank inside domain
                 "_domaine": "lemachines",
                 "_icone": "tablet",
+                "_slug": "terminaux",  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -518,6 +524,7 @@ def _construire_sections_modules(request):
                 "_order": 1.0,  # rang dans le domaine / rank inside domain
                 "_domaine": "lerezo",
                 "_icone": "toll",
+                "_slug": "monnaies",  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -566,6 +573,7 @@ def _construire_sections_modules(request):
                 "_order": 1.0,  # rang dans le domaine / rank inside domain
                 "_domaine": "laboutik",
                 "_icone": "inventory_2",
+                "_slug": "inventaire",  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -596,6 +604,7 @@ def _construire_sections_modules(request):
                 "_order": 1.0,  # rang dans le domaine / rank inside domain
                 "_domaine": "lemachines",
                 "_icone": "sports_bar",
+                "_slug": "tireuses",  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -703,6 +712,7 @@ def _construire_sections_modules(request):
                 "_order": 0.0,  # rang dans le domaine / rank inside domain
                 "_domaine": "lemachines",
                 "_icone": "smart_display",
+                "_slug": "kiosk",  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -727,6 +737,7 @@ def _construire_sections_modules(request):
                 "_order": 3.0,  # rang dans le domaine / rank inside domain
                 "_domaine": "lespass",
                 "_icone": "meeting_room",
+                "_slug": "ressources",  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -832,6 +843,7 @@ def _construire_sections_modules(request):
                 "_order": 0.0,  # rang dans le domaine / rank inside domain
                 "_domaine": "lekontrib",
                 "_icone": "volunteer_activism",
+                "_slug": "financement",  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -873,6 +885,7 @@ def _construire_sections_modules(request):
                 "_order": 4.0,  # rang dans le domaine / rank inside domain
                 "_domaine": "lespass",
                 "_icone": "mail",
+                "_slug": "newsletter",  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -1059,6 +1072,181 @@ def _regrouper_sections_par_domaine(sections):
     return navigation
 
 
+# --------------------------------------------------------------------------- #
+# LES TROIS CATEGORIES D'ONGLETS                                                #
+# --------------------------------------------------------------------------- #
+# Reprises de la maquette : chaque module range ses pages en trois familles.
+# L'ordre de ce dictionnaire est l'ordre des onglets.
+# / The mockup's three tab categories. Dict order = tab order.
+CATEGORIES = {
+    "gerer": _("Gérer"),          # le quotidien   / day-to-day objects
+    "configurer": _("Configurer"),  # les reglages / settings
+    "analyser": _("Analyser"),      # les bilans   / reports and history
+}
+
+# Rangement de chaque page d'admin dans sa categorie.
+#
+# La cle est le modele ("BaseBillet.event"), ou l'URL brute pour les pages qui
+# ne sont pas des changelists. Une page absente de ce tableau tombe dans
+# « Gérer » : c'est le defaut le plus sur, une page oubliee reste visible.
+# / Key = model string, or raw URL for non-changelist pages. Unlisted pages
+#   fall back to "gerer" so a forgotten page stays visible.
+CATEGORIE_DES_PAGES = {
+    # --- Site web personnalise ---
+    "pages.page": "gerer",
+    "pages.configurationsite": "configurer",
+    # --- Adhesion, abonnement et pass ---
+    "BaseBillet.membership": "gerer",
+    "BaseBillet.membershipproduct": "configurer",
+    # --- Agenda et Billetterie ---
+    "BaseBillet.event": "gerer",
+    "BaseBillet.reservation": "gerer",
+    "BaseBillet.ticket": "gerer",
+    "BaseBillet.ticketproduct": "configurer",
+    "BaseBillet.promotionalcode": "configurer",
+    "BaseBillet.carrousel": "configurer",
+    "BaseBillet.tag": "configurer",
+    "BaseBillet.postaladdress": "configurer",
+    "BaseBillet.scanapp": "configurer",
+    # --- Federation et agenda participatif ---
+    "BaseBillet.federatedplace": "gerer",
+    "fedow_public.assetfedowpublic": "gerer",
+    "BaseBillet.federationconfiguration": "configurer",
+    # --- Caisse & Restaurant ---
+    "laboutik.pointdevente": "gerer",
+    "laboutik.carteprimaire": "gerer",
+    "BaseBillet.posproduct": "configurer",
+    "BaseBillet.categorieproduct": "configurer",
+    "laboutik.laboutikconfiguration": "configurer",
+    "laboutik.cloturecaisse": "analyser",
+    "laboutik.historiquefonddecaisse": "analyser",
+    # --- Terminaux materiels ---
+    "laboutik.terminal": "gerer",
+    "laboutik.printer": "gerer",
+    "laboutik.tpebancaire": "gerer",
+    # --- Monnaies locales, temps et cashless ---
+    "fedow_core.asset": "gerer",
+    "QrcodeCashless.cartecashless": "gerer",
+    "fedow_core.federation": "configurer",
+    "fedow_core.transaction": "analyser",
+    # --- Inventaire ---
+    "inventaire.stock": "gerer",
+    "inventaire.mouvementstock": "analyser",
+    # --- Tireuses connectees ---
+    "controlvanne.tireusebec": "gerer",
+    "controlvanne.cartemaintenance": "gerer",
+    "BaseBillet.futproduct": "configurer",
+    "controlvanne.debimetre": "configurer",
+    "controlvanne.configurationtireuse": "configurer",
+    "controlvanne.sessioncalibration": "configurer",
+    "controlvanne.rfidsession": "analyser",
+    "controlvanne.historiquetireuse": "analyser",
+    "controlvanne.historiquecarte": "analyser",
+    "controlvanne.historiquemaintenance": "analyser",
+    "/controlvanne/kiosk/": "analyser",
+    # --- Kiosk : borne libre-service ---
+    "kiosk.paymentsintent": "gerer",
+    # --- Ressources ---
+    "booking.booking": "gerer",
+    "BaseBillet.resourceproduct": "configurer",
+    "booking.resource": "configurer",
+    "booking.resourcegroup": "configurer",
+    "booking.calendar": "configurer",
+    "booking.weeklyopening": "configurer",
+    # --- Financement participatif ---
+    "crowds.initiative": "gerer",
+    "crowds.crowdconfig": "configurer",
+    # --- Newsletter ---
+    "BaseBillet.ghostconfig": "configurer",
+    "BaseBillet.brevoconfig": "configurer",
+}
+
+
+def _sections_par_slug(request):
+    """
+    Range les modules par identifiant, pour les retrouver depuis une URL.
+    / Indexes modules by slug so a URL can find them.
+
+    :param request: objet Request Django
+    :return: dict {slug: section}
+    """
+    return {
+        section["_slug"]: section
+        for section in _construire_sections_modules(request)
+        if section.get("_slug")
+    }
+
+
+def page_de_module(request, slug):
+    """
+    Page d'accueil d'un module : ses onglets et la liste de ses pages d'admin.
+    / A module's landing page: its category tabs and the list of its admin pages.
+
+    LOCALISATION : Administration/admin/dashboard.py
+    Routee par StaffAdminSite.get_urls() sur /admin/module/<slug>/.
+
+    C'est la page decrite par la maquette : on choisit un module dans la
+    sidebar, on arrive ici, et on voit ses pages rangees sous les onglets
+    Gerer / Configurer / Analyser. Chaque ligne mene a l'admin correspondante.
+    / The mockup's module page: pick a module in the sidebar, land here, see
+      its pages grouped under the three tabs.
+
+    FLUX :
+    1. La sidebar pointe vers cette vue (voir _module_en_lien).
+    2. On reconstruit les sections pour retrouver le module par son slug.
+    3. On range ses pages en categories (_categoriser_les_pages).
+    4. L'onglet ouvert vient de ?onglet=..., sinon c'est le premier.
+
+    :param request: objet Request Django
+    :param slug: identifiant du module (ex. « agenda »)
+    :return: HttpResponse
+    """
+    from django.http import Http404
+    from django.shortcuts import render
+
+    from Administration.admin.site import staff_admin_site
+
+    section = _sections_par_slug(request).get(slug)
+    if section is None:
+        # Module inconnu, ou desactive dans la Configuration du lieu.
+        # / Unknown module, or disabled in the venue's Configuration.
+        raise Http404(f"Module inconnu : {slug}")
+
+    pages = section.get("items") or []
+    par_categorie = _categoriser_les_pages(pages, _carte_des_liens_vers_modeles())
+
+    # L'onglet demande, s'il existe et s'il contient quelque chose.
+    # / The requested tab, if it exists and holds anything.
+    onglet_demande = request.GET.get("onglet")
+    if onglet_demande not in par_categorie:
+        onglet_demande = next(iter(par_categorie), None)
+
+    onglets = [
+        {
+            "cle": cle,
+            "titre": CATEGORIES[cle],
+            "lien": f"{request.path}?onglet={cle}",
+            "actif": cle == onglet_demande,
+            "nombre": len(pages_de_la_categorie),
+        }
+        for cle, pages_de_la_categorie in par_categorie.items()
+    ]
+
+    domaine = DOMAINES.get(section.get("_domaine")) or {}
+
+    contexte = {
+        **staff_admin_site.each_context(request),
+        "title": section["title"],
+        "titre_du_module": section["title"],
+        "icone_du_module": section.get("_icone"),
+        "titre_du_domaine": domaine.get("titre"),
+        "sous_titre_du_domaine": domaine.get("sous_titre"),
+        "onglets": onglets,
+        "pages_de_l_onglet": par_categorie.get(onglet_demande, []),
+    }
+    return render(request, "admin/module_page.html", contexte)
+
+
 def _carte_des_liens_vers_modeles():
     """
     Associe l'URL d'une changelist au modele qu'elle affiche.
@@ -1153,43 +1341,100 @@ def _onglets_hors_modules():
     ]
 
 
+def _categoriser_les_pages(pages, lien_vers_modele):
+    """
+    Range les pages d'un module dans les trois categories de la maquette.
+    / Sorts a module's pages into the mockup's three categories.
+
+    LOCALISATION : Administration/admin/dashboard.py
+
+    Une page inconnue de CATEGORIE_DES_PAGES tombe dans « Gérer ». C'est
+    volontaire : une page oubliee reste visible plutot que de disparaitre.
+    / An unlisted page falls back to "gerer" so it never disappears.
+
+    :param pages: liste des pages du module
+    :param lien_vers_modele: dict {url: "app.modele"}
+    :return: dict {cle_de_categorie: [pages]}, dans l'ordre de CATEGORIES
+    """
+    par_categorie = {cle: [] for cle in CATEGORIES}
+
+    for page in pages:
+        lien = str(page.get("link") or "")
+        # On cherche d'abord par modele, puis par URL brute pour les pages
+        # qui ne sont pas des changelists.
+        # / Look up by model first, then by raw URL for non-changelist pages.
+        cle_de_recherche = lien_vers_modele.get(lien, lien)
+        categorie = CATEGORIE_DES_PAGES.get(cle_de_recherche, "gerer")
+        par_categorie[categorie].append(page)
+
+    # On retire les categories vides : un module sans reglages n'a pas
+    # besoin d'un onglet « Configurer » vide.
+    # / Drop empty categories.
+    return {cle: liste for cle, liste in par_categorie.items() if liste}
+
+
+def _categorie_active(par_categorie, chemin_courant):
+    """
+    Devine quelle categorie contient la page affichee.
+    / Guesses which category holds the page being displayed.
+
+    LOCALISATION : Administration/admin/dashboard.py
+
+    On compare le debut du chemin courant au lien de chaque page : sur une
+    fiche (« /admin/BaseBillet/event/12/change/ ») le chemin est plus long
+    que le lien de la changelist (« /admin/BaseBillet/event/ »), mais il
+    commence pareil.
+    / Prefix match, so a change form still resolves to its changelist's tab.
+
+    :param par_categorie: dict {cle_de_categorie: [pages]}
+    :param chemin_courant: request.path
+    :return: la cle de la categorie active
+    """
+    for cle, pages in par_categorie.items():
+        for page in pages:
+            lien = str(page.get("link") or "")
+            if lien and chemin_courant.startswith(lien):
+                return cle
+
+    # Aucune correspondance : on ouvre sur la premiere categorie.
+    # / No match: fall back to the first category.
+    return next(iter(par_categorie))
+
+
 def get_tabs(request):
     """
-    Construit la barre d'onglets de chaque module.
-    / Builds each module's tab bar.
+    Construit la barre d'onglets d'un module, affichee sur ses pages d'admin.
+    / Builds a module's tab bar, shown on its admin pages.
 
     LOCALISATION : Administration/admin/dashboard.py
     Appelee par Unfold via UNFOLD["TABS"].
 
-    POURQUOI CETTE FONCTION EXISTE : depuis le passage aux domaines, la
-    sidebar n'affiche plus qu'UN lien par module. Sans ces onglets, les
-    autres pages du module ne seraient plus atteignables du tout.
-    C'est donc une piece indispensable, pas un confort.
-    / Since the sidebar shows only one link per module, these tabs are the
-      only way to reach the module's other pages. Not optional.
+    UNE seule rangee, comme la maquette : Gerer / Configurer / Analyser.
+    Chaque onglet ramene a la page du module, sur la bonne categorie. Depuis
+    une changelist, on peut donc sauter d'une categorie a l'autre sans
+    repasser par la sidebar.
+    / One row only. Each tab goes back to the module page on that category.
 
-    On ne fabrique une barre que pour les modules ranges dans un domaine :
-    les entrees autonomes (Configuration generale, Ventes & comptabilite,
-    Configuration racine) gardent tous leurs liens dans la sidebar et n'ont
-    donc besoin de rien.
-    / Only domain-bound modules need tabs.
+    L'etat actif est calcule ICI, et non par Unfold : ses liens pointent vers
+    la page de module, jamais vers la changelist affichee, donc sa comparaison
+    d'URL ne trouverait jamais rien. Unfold respecte notre valeur — il ne
+    recalcule `active` que si la cle est absente (voir sites.py).
+    / We compute `active` ourselves: Unfold only computes it when missing.
 
     :param request: objet Request Django
     :return: liste de groupes d'onglets au format attendu par Unfold
     """
     onglets = _onglets_hors_modules()
     lien_vers_modele = _carte_des_liens_vers_modeles()
+    chemin_courant = request.path
 
     for section in _construire_sections_modules(request):
-        # Les entrees autonomes gardent leurs liens dans la sidebar.
-        # / Standalone entries keep their links in the sidebar.
-        if not section.get("_domaine"):
+        # Les entrees autonomes gardent tous leurs liens dans la sidebar.
+        # / Standalone entries keep all their links in the sidebar.
+        if not section.get("_domaine") or not section.get("_slug"):
             continue
 
         pages = section.get("items") or []
-
-        # Une barre d'onglets n'a de sens qu'a partir de deux pages.
-        # / A tab bar only makes sense from two pages up.
         if len(pages) < 2:
             continue
 
@@ -1204,21 +1449,61 @@ def get_tabs(request):
         if not modeles:
             continue
 
+        par_categorie = _categoriser_les_pages(pages, lien_vers_modele)
+        categorie_ouverte = _categorie_active(par_categorie, chemin_courant)
+        adresse_du_module = _safe_rev(
+            "staff_admin:page_de_module", args=[section["_slug"]]
+        )
+
         onglets.append(
             {
                 "models": modeles,
                 "items": [
                     {
-                        "title": page["title"],
-                        "link": page.get("link"),
-                        "permission": page.get("permission"),
+                        "title": CATEGORIES[cle],
+                        "link": f"{adresse_du_module}?onglet={cle}",
+                        "permission": pages_de_la_categorie[0].get("permission"),
+                        "active": cle == categorie_ouverte,
                     }
-                    for page in pages
+                    for cle, pages_de_la_categorie in par_categorie.items()
                 ],
             }
         )
 
     return onglets
+
+
+def _page_d_accueil_du_module(pages):
+    """
+    Choisit la page sur laquelle ouvre le lien du module.
+    / Picks the page a module link opens on.
+
+    LOCALISATION : Administration/admin/dashboard.py
+
+    POURQUOI CETTE FONCTION EXISTE : prendre bêtement la premiere page de la
+    liste ne marche pas. Le module « Tireuses connectees » commence par un
+    lien vers /controlvanne/kiosk/, qui est une page du site public : cliquer
+    sur le module faisait donc SORTIR de l'admin, et l'admin des tireuses
+    devenait inatteignable.
+    / Naively taking the first page fails: the "Tireuses" module starts with a
+      link to the public site, which kicked the user out of the admin.
+
+    On prefere donc la premiere page qui est une vraie page d'admin (elle
+    commence par /admin/). Si le module n'en a aucune, on retombe sur la
+    premiere page de la liste, faute de mieux.
+    / Prefer the first real admin page; fall back to the first page.
+
+    :param pages: liste des pages du module (dicts avec une cle "link")
+    :return: la page choisie (dict)
+    """
+    for page in pages:
+        lien = str(page.get("link") or "")
+        if lien.startswith("/admin/"):
+            return page
+
+    # Aucune page d'admin : on ne peut pas faire mieux que la premiere.
+    # / No admin page at all: the first one is the best we can do.
+    return pages[0]
 
 
 def _module_en_lien(section):
@@ -1228,9 +1513,9 @@ def _module_en_lien(section):
 
     LOCALISATION : Administration/admin/dashboard.py
 
-    Le lien pointe vers la premiere page du module, qui joue le role de page
-    d'accueil. Les autres pages restent atteignables par les onglets
-    construits dans get_tabs().
+    Le lien pointe vers la page d'accueil du module, choisie par
+    _page_d_accueil_du_module(). Les autres pages restent atteignables par
+    les onglets construits dans get_tabs().
 
     Si un badge etait pose sur une page du module (par exemple le compteur
     d'adhesions recentes), on le fait remonter sur le lien du module : sinon
@@ -1244,12 +1529,27 @@ def _module_en_lien(section):
     if not pages:
         return None
 
-    page_d_accueil = pages[0]
+    page_d_accueil = _page_d_accueil_du_module(pages)
+
+    # Un module identifie mene a SA page : la liste de ses admins, rangee
+    # sous les onglets Gerer / Configurer / Analyser.
+    #
+    # Sauf s'il n'a qu'UNE page : lui faire traverser une page intermediaire
+    # qui ne montre qu'une seule ligne serait de la friction pure. On va
+    # alors droit au but.
+    # / A one-page module links straight to that page: an intermediate page
+    #   showing a single row would be pure friction.
+    if section.get("_slug") and len(pages) > 1:
+        destination = _safe_rev(
+            "staff_admin:page_de_module", args=[section["_slug"]]
+        )
+    else:
+        destination = page_d_accueil.get("link")
 
     lien = {
         "title": section["title"],
         "icon": section.get("_icone", "widgets"),
-        "link": page_d_accueil.get("link"),
+        "link": destination,
         "permission": page_d_accueil.get("permission"),
     }
 
