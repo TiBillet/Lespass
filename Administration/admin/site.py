@@ -27,6 +27,11 @@ def sanitize_textfields(instance: models.Model) -> None:
 
 
 class StaffAdminSite(UnfoldAdminSite):
+    # Titre de la page d'accueil de l'admin. Sans lui, Django affiche
+    # « Site d'administration », qui ne dit rien de ce qu'on y trouve.
+    # / Without this, Django shows its generic "Site administration".
+    index_title = _("Tableau de bord")
+
     def login(self, request, extra_context=None):
         """
         Redirect admin login to the root URL for better security.

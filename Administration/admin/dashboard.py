@@ -118,8 +118,27 @@ def _construire_sections_modules(request):
     admin_permission = "ApiBillet.permissions.TenantAdminPermissionWithRequest"
     root_permission = "ApiBillet.permissions.RootPermissionWithRequest"
 
-    # --- Toujours visible : Configuration générale ---
+    # --- Le tableau de bord, seul en tete ---
+    # Un groupe SANS titre ne rend que ses liens : c'est ainsi qu'Unfold
+    # permet une entree autonome, sans en-tete ni chevron. La maquette met
+    # « Tableau de bord » tout en haut du rail, hors de tout groupe.
+    # / A group with no title renders only its links: that is how Unfold
+    #   allows a standalone entry, as the mockup has it.
     navigation = [
+        {
+            "_order": -1.0,  # tout en haut / very top
+            "_domaine": None,
+            "separator": False,
+            "collapsible": False,
+            "items": [
+                {
+                    "title": _("Tableau de bord"),
+                    "icon": "dashboard",
+                    "link": _safe_rev("admin:index"),
+                    "permission": admin_permission,
+                },
+            ],
+        },
         {
             "title": _("Configuration générale"),
             "_order": 0.0,  # rang dans le domaine / rank inside domain
@@ -127,12 +146,6 @@ def _construire_sections_modules(request):
             "separator": True,
             "collapsible": False,
             "items": [
-                {
-                    "title": _("Dashboard"),
-                    "icon": "dashboard",
-                    "link": _safe_rev("admin:index"),
-                    "permission": admin_permission,
-                },
                 {
                     "title": _("Settings"),
                     "icon": "manufacturing",
@@ -1113,6 +1126,88 @@ CATEGORIES = {
 # « Gérer » : c'est le defaut le plus sur, une page oubliee reste visible.
 # / Key = model string, or raw URL for non-changelist pages. Unlisted pages
 #   fall back to "gerer" so a forgotten page stays visible.
+# Une phrase sous le nom de chaque page, dans la liste d'un module.
+#
+# Reprises de la maquette (TEMP-tibillet-admin-main/data.js) la ou elle en
+# proposait, redigees pour les autres. Meme cle que CATEGORIE_DES_PAGES :
+# le modele, ou l'URL brute pour les pages qui n'en sont pas.
+#
+# Une page absente de ce tableau s'affiche SANS description. On n'invente
+# pas de texte pour combler un trou : mieux vaut une ligne sobre qu'une
+# phrase approximative.
+# / One sentence under each page name. A page missing from this table simply
+#   shows no description: we never invent filler text.
+DESCRIPTION_DES_PAGES = {
+    # --- Site web personnalise ---
+    "pages.page": _("Composez votre site, bloc par bloc."),
+    "pages.configurationsite": _("Domaine, apparence, page d'accueil."),
+    # --- Adhesion, abonnement et pass ---
+    "BaseBillet.membership": _("Celles et ceux qui vous suivent."),
+    "BaseBillet.membershipproduct": _("Les formules d'adhésion proposées."),
+    # --- Agenda et Billetterie ---
+    "BaseBillet.event": _("Ce que le lieu programme."),
+    "BaseBillet.reservation": _("Les demandes entrantes."),
+    "BaseBillet.ticket": _("Les billets émis."),
+    "BaseBillet.ticketproduct": _("Les types de billets proposés."),
+    "BaseBillet.promotionalcode": _("Les réductions ponctuelles."),
+    "BaseBillet.carrousel": _("Les visuels mis en avant sur l'agenda."),
+    "BaseBillet.tag": _("Les étiquettes de classement."),
+    "BaseBillet.postaladdress": _("Les lieux où se passent vos évènements."),
+    "BaseBillet.scanapp": _("Le contrôle des billets à l'entrée."),
+    # --- Federation et agenda participatif ---
+    "BaseBillet.federatedplace": _("Les lieux avec qui vous faites réseau."),
+    "fedow_public.assetfedowpublic": _("Les monnaies qui circulent dans le réseau."),
+    "BaseBillet.federationconfiguration": _("Ce que vous partagez, et avec qui."),
+    # --- Caisse & Restaurant ---
+    "laboutik.pointdevente": _("Vos comptoirs et leurs écrans."),
+    "laboutik.carteprimaire": _("Les cartes du personnel."),
+    "BaseBillet.posproduct": _("Ce que vous vendez au comptoir."),
+    "BaseBillet.categorieproduct": _("Le rangement des produits à l'écran."),
+    "laboutik.laboutikconfiguration": _("Les réglages du point de vente."),
+    "laboutik.cloturecaisse": _("Le bilan de chaque journée."),
+    "laboutik.historiquefonddecaisse": _("Les mouvements du fond de caisse."),
+    # --- Terminaux materiels ---
+    "laboutik.terminal": _("Les appareils appairés au lieu."),
+    "laboutik.printer": _("Les imprimantes à tickets."),
+    "laboutik.tpebancaire": _("Les terminaux de paiement bancaire."),
+    # --- Monnaies locales, temps et cashless ---
+    "fedow_core.asset": _("Vos monnaies et vos jetons."),
+    "QrcodeCashless.cartecashless": _("Les cartes remises au public."),
+    "fedow_core.federation": _("Les réseaux de monnaie auxquels vous participez."),
+    "fedow_core.transaction": _("Tout ce qui a circulé."),
+    # --- Inventaire ---
+    "inventaire.stock": _("Ce qu'il vous reste."),
+    "inventaire.mouvementstock": _("Ce qui est entré et sorti."),
+    # --- Tireuses connectees ---
+    "controlvanne.tireusebec": _("Vos becs et ce qu'ils servent."),
+    "controlvanne.cartemaintenance": _("Les cartes qui ouvrent les vannes."),
+    "BaseBillet.futproduct": _("Ce qui est en fût."),
+    "controlvanne.debimetre": _("Les compteurs de volume."),
+    "controlvanne.configurationtireuse": _("Les réglages du serveur de tirage."),
+    "controlvanne.sessioncalibration": _("L'étalonnage des débitmètres."),
+    "controlvanne.rfidsession": _("Les sessions de tirage."),
+    "controlvanne.historiquetireuse": _("Ce qui a coulé, bec par bec."),
+    "controlvanne.historiquecarte": _("Ce que chaque carte a consommé."),
+    "controlvanne.historiquemaintenance": _("Les interventions sur le matériel."),
+    "/controlvanne/kiosk/": _("L'écran public des tireuses."),
+    # --- Kiosk : borne libre-service ---
+    "kiosk.paymentsintent": _("Les paiements passés en autonomie."),
+    # --- Ressources ---
+    "booking.booking": _("Les réservations de salles et de matériel."),
+    "BaseBillet.resourceproduct": _("Les ressources mises à la réservation."),
+    "booking.resource": _("Ce qui peut être réservé."),
+    "booking.resourcegroup": _("Le rangement des ressources."),
+    "booking.calendar": _("Les calendriers de disponibilité."),
+    "booking.weeklyopening": _("Les horaires d'ouverture habituels."),
+    # --- Financement participatif ---
+    "crowds.initiative": _("Les projets soumis au financement."),
+    "crowds.crowdconfig": _("Les mots et les règles de vos campagnes."),
+    # --- Newsletter ---
+    "BaseBillet.ghostconfig": _("Votre serveur Ghost."),
+    "BaseBillet.brevoconfig": _("Votre compte Brevo."),
+}
+
+
 CATEGORIE_DES_PAGES = {
     # --- Site web personnalise ---
     "pages.page": "gerer",
@@ -1256,14 +1351,33 @@ def page_de_module(request, slug):
 
     domaine = DOMAINES.get(section.get("_domaine")) or {}
 
+    # La barre haute d'Unfold et le contenu ne doivent PAS dire la meme chose.
+    # `title` alimente {% header_title %}, qui est en realite un fil d'Ariane :
+    # on lui donne donc le PARENT (le domaine), et le contenu porte le titre
+    # de la page. Sans cela, « Agenda » s'affichait deux fois, et la page avait
+    # deux <h1>.
+    # / Unfold's header is a breadcrumb: give it the parent, keep the page
+    #   title in the content. Otherwise the name shows twice, in two <h1>.
     contexte = {
         **staff_admin_site.each_context(request),
-        "title": section["title"],
+        "title": domaine.get("titre") or section["title"],
         "titre_du_module": section["title"],
         "icone_du_module": section.get("_icone"),
         "titre_du_domaine": domaine.get("titre"),
         "sous_titre_du_domaine": domaine.get("sous_titre"),
+        # Le chemin de retour vers le domaine. La maquette a un « ← Lespass »
+        # en haut de la page ; sans lui, le seul retour est la sidebar.
+        # / The way back to the domain; without it the sidebar is the only way.
+        "lien_du_domaine": (
+            _safe_rev("staff_admin:page_de_domaine", args=[section["_domaine"]])
+            if section.get("_domaine")
+            else None
+        ),
         "onglets": onglets,
+        # La categorie ouverte : le gabarit la pose sur la liste pour colorer
+        # les pastilles, comme la maquette (vert / orange / bleu).
+        # / The open category, used to colour the list's icon tiles.
+        "categorie_ouverte": onglet_demande,
         "pages_de_l_onglet": par_categorie.get(onglet_demande, []),
     }
     return render(request, "admin/module_page.html", contexte)
@@ -1320,9 +1434,11 @@ def page_de_domaine(request, cle):
     # / Same rule as the dashboard: link only when the module has a page.
     _poser_les_liens_des_modules(request, [groupe])
 
+    # Meme regle que sur la page de module : la barre haute porte le parent.
+    # / Same rule as the module page: the header carries the parent.
     contexte = {
         **staff_admin_site.each_context(request),
-        "title": domaine["titre"],
+        "title": _("Tableau de bord"),
         "cle_du_domaine": cle,
         "titre_du_domaine": domaine["titre"],
         "icone_du_domaine": domaine["icone"],
@@ -1482,6 +1598,10 @@ def _categoriser_les_pages(pages, lien_vers_modele):
         # / Look up by model first, then by raw URL for non-changelist pages.
         cle_de_recherche = lien_vers_modele.get(lien, lien)
         categorie = CATEGORIE_DES_PAGES.get(cle_de_recherche, "gerer")
+        # Une page sans description s'affiche sans description : on n'invente
+        # pas de texte pour combler.
+        # / A page with no description shows none: we invent nothing.
+        page["description"] = DESCRIPTION_DES_PAGES.get(cle_de_recherche)
         par_categorie[categorie].append(page)
 
     # On retire les categories vides : un module sans reglages n'a pas
@@ -1681,6 +1801,41 @@ def _module_en_lien(section):
     return lien
 
 
+def nom_du_lieu(request):
+    """
+    Le nom du lieu, affiche en haut du rail.
+    / The venue name, shown at the top of the sidebar.
+
+    LOCALISATION : Administration/admin/dashboard.py
+    Appelee par Unfold via UNFOLD["SITE_HEADER"].
+
+    La maquette met le nom du lieu en haut de la colonne de gauche. C'est
+    utile des qu'on gere plusieurs lieux : on sait tout de suite ou l'on est.
+    / The mockup puts the venue name at the top of the rail: with several
+      venues, you immediately know where you are.
+
+    Deux gardes :
+      - un lieu peut ne pas avoir de nom (le champ « organisation » est
+        vide) : on retombe alors sur « TiBillet » plutot que d'afficher un
+        rail sans titre ;
+      - la lecture peut echouer hors contexte de lieu (schema public) : on
+        ne fait pas planter l'admin pour un titre.
+    / Falls back to "TiBillet" when the venue has no name, and never crashes
+      the admin over a heading.
+
+    :param request: objet Request Django
+    :return: le nom a afficher (str)
+    """
+    try:
+        organisation = Configuration.get_solo().organisation
+    except Exception:
+        # Hors contexte de lieu : pas de Configuration a lire.
+        # / Outside a tenant context: no Configuration to read.
+        return "TiBillet"
+
+    return organisation or "TiBillet"
+
+
 def environment_callback(request):
     if settings.DEBUG:
         return [_("Development"), "primary"]
@@ -1801,8 +1956,10 @@ MODULE_FIELDS = {
             "Connected beer tap management: RFID authorization, flow metering, kiosk display."
         ),
         "testid": "dashboard-card-tireuse",
-        "link_url": "/controlvanne/kiosk/",
-        "link_label": _("Open kiosk"),
+        "lien_externe": "/controlvanne/kiosk/",
+        "libelle_externe": _("Open kiosk"),
+        "testid_externe" : "dashboard-controlvanne-link",
+        "externe_nouvel_onglet" : True,
         "link_icon": "fa-display",
         "domaine": "lemachines",  # groupe du tableau de bord / dashboard group
         "icone": "sports_bar",
@@ -1977,6 +2134,7 @@ def _build_modules_context(configuration):
             carte_pos["allume"] = carte_pos["state"] == "v2_active"
             carte_pos["url_modale"] = carte_pos["toggle_modal_url"]
             carte_pos["testid_interrupteur"] = "dashboard-card-pos-switch"
+            _poser_le_lien_d_ouverture(carte_pos, info)
             cartes.append(carte_pos)
             continue
 
@@ -2008,14 +2166,66 @@ def _build_modules_context(configuration):
                     "staff_admin:configuration-module-modal",
                     args=[nom_du_champ],
                 ),
-                "link_url": info.get("link_url"),
-                "link_label": info.get("link_label"),
-                "link_icon": info.get("link_icon"),
+                "lien_externe": info.get("lien_externe"),
+                "libelle_externe": info.get("libelle_externe"),
+                "testid_externe": info.get("testid_externe"),
+                "externe_nouvel_onglet": info.get("externe_nouvel_onglet"),
             }
         )
 
     cartes.extend(_build_cartes_a_venir())
     return cartes
+
+
+def _poser_le_lien_d_ouverture(carte, info):
+    """
+    Donne a la carte de la caisse son lien vers l'interface LaBoutik.
+    / Gives the POS card its link to the LaBoutik interface.
+
+    LOCALISATION : Administration/admin/dashboard.py
+
+    POURQUOI CETTE FONCTION EXISTE : la carte de la caisse portait ce lien,
+    et il a disparu quand la carte est devenue generique. Sans lui, on
+    n'accede plus a la caisse depuis l'admin — ni a LaBoutik V1 pour un lieu
+    reste en V1.
+    / The POS card used to carry this link; it vanished when the card became
+      generic, leaving no way into LaBoutik from the admin.
+
+    Rien n'est affiche quand la caisse est eteinte : la permission de la
+    caisse (HasLaBoutikTerminalAccess) refuse toute route POS dans ce cas,
+    le lien menerait droit a un 403.
+    / Nothing when the POS is off: its permission denies every POS route
+      then, so the link would lead straight to a 403.
+
+    La decision se prend ICI et non dans le gabarit : celui-ci se contente
+    d'afficher `lien_externe` s'il existe.
+    / Decided here, not in the template, which merely displays the result.
+
+    :param carte: la carte POS, modifiee sur place
+    :param info: son entree de MODULE_FIELDS
+    :return: None
+    """
+    if carte["state"] == "v2_active":
+        # Caisse V2 en service : on ouvre l'interface.
+        # / V2 POS running: open the interface.
+        carte["lien_externe"] = info.get("link_url")
+        carte["libelle_externe"] = info.get("link_label")
+        carte["testid_externe"] = "dashboard-card-pos-open-link"
+        carte["externe_nouvel_onglet"] = False
+
+    elif carte["state"] == "v1_active":
+        # LaBoutik V1 : le serveur est ailleurs, on ouvre dans un onglet.
+        # / LaBoutik V1 lives on another server: open in a new tab.
+        carte["lien_externe"] = carte.get("v1_url")
+        carte["libelle_externe"] = _("Open LaBoutik V1")
+        carte["testid_externe"] = "dashboard-card-pos-v1-link"
+        carte["externe_nouvel_onglet"] = True
+
+    else:
+        carte["lien_externe"] = None
+        carte["libelle_externe"] = None
+        carte["testid_externe"] = None
+        carte["externe_nouvel_onglet"] = False
 
 
 def _build_cartes_a_venir():

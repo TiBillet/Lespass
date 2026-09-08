@@ -4,7 +4,7 @@ SURCHARGE — le titre d'un domaine devient un lien
 / Override: a domain title becomes a link
 
 LOCALISATION : Administration/templates/unfold/helpers/app_list.html
-Copie de unfold/templates/unfold/helpers/app_list.html, avec DEUX differences.
+Copie de unfold/templates/unfold/helpers/app_list.html, avec TROIS differences.
 
 POURQUOI CETTE SURCHARGE
 La maquette veut qu'on clique « Lespass » dans le rail pour ouvrir la page du
@@ -21,7 +21,12 @@ CE QUI CHANGE, ET RIEN D'AUTRE
    d'un domaine avec son sous-menu ferme, sans voir ou l'on se trouve. La
    cle « ouvert » corrige cela.
 
-Les deux cles sont posees par _regrouper_sections_par_domaine (dashboard.py).
+3. Le depliage : le sous-menu est enveloppe dans un conteneur qui anime sa
+   hauteur (voir le commentaire sur place). `x-show` est retire, car il
+   bascule `display`, qui ne s'anime pas.
+
+Les deux premieres cles sont posees par _regrouper_sections_par_domaine
+(dashboard.py).
 Un groupe qui n'en porte aucune s'affiche exactement comme avant.
 / 1. the title becomes a link; 2. the group opens when you are on its page.
   Groups carrying neither key render exactly as before.
@@ -72,7 +77,26 @@ cette surcharge. Seul _regrouper_sections_par_domaine serait a changer.
                         </h2>
                     {% endif %}
 
-                    <ol class="flex flex-col gap-0.5 px-6" {% if group.collapsible %}x-show="navigationOpen"{% endif %}>
+                    {# Le sous-menu se deplie en douceur, au lieu d'apparaitre d'un   #}
+                    {# coup. On n'utilise PAS x-show : il bascule `display`, et        #}
+                    {# `display` ne s'anime pas. Le conteneur passe donc de            #}
+                    {# grid-template-rows 0fr a 1fr — la seule facon d'animer une      #}
+                    {# hauteur inconnue sans JavaScript. Le plugin Alpine `collapse`   #}
+                    {# n'est pas charge par Unfold.                                    #}
+                    {# / Not x-show: it toggles `display`, which cannot animate. The    #}
+                    {#   wrapper animates grid-template-rows instead.                   #}
+                    {#                                                                  #}
+                    {# La classe ouverte est posee ICI, cote serveur, avec la meme      #}
+                    {# condition que navigationOpen : sinon Alpine la poserait apres    #}
+                    {# le premier rendu et le rail s'animerait a CHAQUE chargement.     #}
+                    {# / Set server-side, or the rail would animate on every page load. #}
+                    {#                                                                  #}
+                    {# Les groupes non repliables n'ont pas de x-data, donc pas de      #}
+                    {# variable navigationOpen : on ne leur met aucune liaison.         #}
+                    {# / Non-collapsible groups have no navigationOpen variable.        #}
+                    <div class="tb-sousmenu{% if not group.collapsible or has_active or group.ouvert %} tb-sousmenu-ouvert{% endif %}"
+                         {% if group.collapsible %}x-bind:class="navigationOpen && 'tb-sousmenu-ouvert'"{% endif %}>
+                    <ol class="flex flex-col gap-0.5 px-6">
                         {% for item in group.items %}
                             {% if item.has_permission %}
                                 <li>
@@ -91,6 +115,7 @@ cette surcharge. Seul _regrouper_sections_par_domaine serait a changer.
                             {% endif %}
                         {% endfor %}
                     </ol>
+                    </div>
                 </div>
             {% endif %}
         {% endfor %}

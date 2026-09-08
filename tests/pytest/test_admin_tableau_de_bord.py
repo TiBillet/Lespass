@@ -434,3 +434,580 @@ def test_le_sous_menu_du_domaine_est_deplie_sur_sa_page(navigateur):
     assert _le_groupe_lespass_est_ouvert("/admin/domaine/lespass/"), (
         "Le sous-menu devrait être déplié sur la page du domaine."
     )
+
+
+# --------------------------------------------------------------------------- #
+# Ecarts corriges apres relecture de la maquette                               #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.django_db
+def test_une_seule_balise_h1_par_page(navigateur):
+    """
+    Une page ne doit avoir qu'UN titre de niveau 1.
+
+    Mes pages de domaine et de module en avaient deux : celui de la barre
+    haute d'Unfold, et celui que mon gabarit ajoutait dans le contenu. Deux
+    <h1>, c'est faux pour un lecteur d'ecran.
+    / Two <h1> on one page is wrong for a screen reader.
+    """
+    import re
+
+    for adresse in ["/admin/", "/admin/domaine/lespass/", "/admin/module/agenda/"]:
+        contenu = navigateur.get(adresse).content.decode()
+        titres = re.findall(r"<h1[^>]*>", contenu)
+        assert len(titres) == 1, f"{adresse} a {len(titres)} <h1> au lieu d'un seul."
+
+
+@pytest.mark.django_db
+def test_la_barre_haute_et_le_contenu_ne_disent_pas_la_meme_chose(navigateur):
+    """
+    La barre haute d'Unfold sert de fil d'Ariane : elle porte le PARENT.
+    Le contenu porte le titre de la page. Sinon le nom s'affiche deux fois.
+    / Unfold's header carries the parent; the content carries the page title.
+    """
+    import re
+
+    contenu = navigateur.get("/admin/module/agenda/").content.decode()
+    barre_haute = re.search(r"<h1[^>]*>(.*?)</h1>", contenu, re.S).group(1)
+    titre_du_contenu = re.search(
+        r'<h2 class="tb-entete-titre"[^>]*>(.*?)</h2>', contenu, re.S
+    ).group(1)
+
+    def _texte(html):
+        return " ".join(re.sub(r"<[^>]+>", " ", html).split())
+
+    assert _texte(barre_haute) != _texte(titre_du_contenu)
+
+
+@pytest.mark.django_db
+def test_le_nom_du_lieu_apparait_sur_tous_les_types_de_page(navigateur):
+    """
+    Le haut du rail etait VIDE sur le tableau de bord, la page de domaine et
+    la page de module, alors qu'une changelist affichait bien le nom.
+    Le rail changeait donc d'aspect selon la page.
+
+    Cause : ces trois gabarits etendaient base_simple.html, qui ne definit
+    pas le bloc `branding`.
+    / The three pages extended base_simple.html, which has no branding block.
+    """
+    for adresse in [
+        "/admin/",
+        "/admin/domaine/lespass/",
+        "/admin/module/agenda/",
+        "/admin/BaseBillet/event/",
+    ]:
+        contenu = navigateur.get(adresse).content.decode()
+        assert 'id="site-name"' in contenu, f"{adresse} n'affiche pas le nom du lieu."
+
+
+@pytest.mark.django_db
+def test_le_nom_affiche_suit_le_nom_du_lieu(lieu_et_superadmin):
+    """
+    Le rail affiche le nom du lieu, et « TiBillet » quand ce nom est vide.
+
+    On NE MUTE PAS la configuration ici : django-solo relit la base a chaque
+    `get_solo()`, une modification en memoire serait donc ignoree — c'est le
+    piege deja documente dans test_module_newsletter_activation.py. On lit
+    donc les lieux tels qu'ils sont, et on verifie la regle sur chacun.
+    / No mutation: django-solo re-reads the DB on every get_solo(), so an
+      in-memory change would be ignored.
+    """
+    from Administration.admin.dashboard import nom_du_lieu
+
+    lieux_verifies = 0
+    for tenant in Client.objects.exclude(schema_name="public"):
+        with tenant_context(tenant):
+            organisation = Configuration.get_solo().organisation
+            affiche = nom_du_lieu(None)
+
+        attendu = organisation or "TiBillet"
+        assert affiche == attendu, (
+            f"Le lieu « {tenant.schema_name} » affiche {affiche!r} "
+            f"alors qu'on attend {attendu!r}."
+        )
+        assert affiche, "Le rail ne doit jamais afficher un nom vide."
+        lieux_verifies += 1
+
+    assert lieux_verifies, "Aucun lieu à vérifier."
+
+
+@pytest.mark.django_db
+def test_le_nom_du_lieu_ne_fait_jamais_planter_l_admin(db):
+    """
+    La lecture peut echouer hors contexte de lieu (schema public). On ne
+    fait pas tomber tout l'admin pour un titre de colonne.
+    / Reading may fail outside a tenant context; never crash over a heading.
+    """
+    from unittest.mock import patch
+
+    from Administration.admin import dashboard
+
+    with patch.object(
+        dashboard.Configuration, "get_solo", side_effect=RuntimeError("hors contexte")
+    ):
+        assert dashboard.nom_du_lieu(None) == "TiBillet"
+
+
+@pytest.mark.django_db
+def test_la_page_de_module_ramene_a_son_domaine(navigateur):
+    """
+    Sans lien de retour, on ne remonte d'un module que par la sidebar.
+    / Without a back link, only the sidebar goes up a level.
+    """
+    contenu = navigateur.get("/admin/module/agenda/").content.decode()
+    assert 'data-testid="module-page-retour"' in contenu
+    assert "/admin/domaine/lespass/" in contenu
+
+
+@pytest.mark.django_db
+def test_la_liste_porte_la_categorie_ouverte(navigateur):
+    """
+    La categorie est posee sur la LISTE : c'est elle qui donne leur couleur
+    aux pastilles d'icone, comme dans la maquette (vert / orange / bleu).
+    / The category sits on the list and colours its icon tiles.
+    """
+    import re
+
+    for categorie in ["gerer", "configurer"]:
+        contenu = navigateur.get(
+            f"/admin/module/agenda/?onglet={categorie}"
+        ).content.decode()
+        posees = re.findall(r'data-categorie="(\w+)"', contenu)
+        assert posees == [categorie], f"attendu {categorie}, obtenu {posees}"
+
+
+@pytest.mark.django_db
+def test_chaque_page_listee_a_une_description_ou_rien(lieu_et_superadmin):
+    """
+    Une page absente du tableau des descriptions s'affiche SANS description.
+    On n'invente pas de texte pour combler un trou.
+    / A page missing from the table simply shows none: no filler text.
+    """
+    from django.test import RequestFactory
+
+    from Administration.admin import dashboard
+
+    tenant, _domaine, _utilisateur = lieu_et_superadmin
+    requete = RequestFactory().get("/admin/")
+    with tenant_context(tenant):
+        sections = dashboard._construire_sections_modules(requete)
+    carte = dashboard._carte_des_liens_vers_modeles()
+
+    for section in sections:
+        if not section.get("_slug"):
+            continue
+        par_categorie = dashboard._categoriser_les_pages(section["items"], carte)
+        for pages in par_categorie.values():
+            for page in pages:
+                description = page.get("description")
+                assert description is None or str(description).strip(), (
+                    f"{page['title']} a une description vide : "
+                    "mieux vaut aucune description qu'une chaîne vide."
+                )
+
+
+@pytest.mark.django_db
+def test_toutes_les_pages_connues_ont_une_description(lieu_et_superadmin):
+    """
+    Le tableau des descriptions doit couvrir exactement celui des categories :
+    ni page oubliee, ni description orpheline pour une page supprimee.
+    / The description table must cover exactly the category table.
+    """
+    from Administration.admin.dashboard import (
+        CATEGORIE_DES_PAGES,
+        DESCRIPTION_DES_PAGES,
+    )
+
+    oubliees = sorted(set(CATEGORIE_DES_PAGES) - set(DESCRIPTION_DES_PAGES))
+    orphelines = sorted(set(DESCRIPTION_DES_PAGES) - set(CATEGORIE_DES_PAGES))
+
+    assert not oubliees, f"Pages sans description : {oubliees}"
+    assert not orphelines, f"Descriptions sans page : {orphelines}"
+
+
+@pytest.mark.django_db
+def test_le_tableau_de_bord_a_son_propre_titre(navigateur):
+    """
+    Django appelait cette page « Site d'administration », ce qui ne dit rien
+    de ce qu'on y trouve.
+    / Django called it "Site administration", which says nothing.
+    """
+    contenu = navigateur.get("/admin/").content.decode()
+    assert "Tableau de bord" in contenu
+    assert 'data-testid="dashboard-header"' in contenu
+
+
+@pytest.mark.django_db
+def test_le_tableau_de_bord_est_une_entree_autonome_du_rail(lieu_et_superadmin):
+    """
+    La maquette met « Tableau de bord » tout en haut du rail, hors de tout
+    groupe. Un groupe Unfold SANS titre ne rend que ses liens : c'est ainsi
+    qu'on obtient une entree autonome.
+    / A group with no title renders only its links.
+    """
+    from django.test import RequestFactory
+
+    from Administration.admin.dashboard import get_sidebar_navigation
+
+    tenant, _domaine, _utilisateur = lieu_et_superadmin
+    requete = RequestFactory().get("/admin/")
+    with tenant_context(tenant):
+        navigation = get_sidebar_navigation(requete)
+
+    premier = navigation[0]
+    assert not premier.get("title"), "Le premier groupe devrait être sans titre."
+    assert len(premier["items"]) == 1
+    assert str(premier["items"][0]["title"]) == "Tableau de bord"
+
+
+def _liens_du_menu_du_lieu(navigateur, adresse):
+    """
+    Les liens du menu qui s'ouvre sous le nom du lieu, dans l'ordre.
+    / The links of the menu that opens under the venue name, in order.
+
+    On se limite au bloc du menu : la classe des libelles sert aussi
+    ailleurs dans la page, un comptage global donnerait n'importe quoi.
+    / Scoped to the menu block: its label class is used elsewhere too.
+    """
+    import re
+
+    contenu = navigateur.get(adresse).content.decode()
+    debut = contenu.find('x-show="openDropdown"')
+    assert debut > 0, f"Le menu du lieu est introuvable sur {adresse}."
+    return re.findall(r'<a href="([^"]+)"', contenu[debut:debut + 1800])
+
+
+@pytest.mark.django_db
+def test_le_menu_du_lieu_ramene_a_son_site_public(navigateur, lieu_et_superadmin):
+    """
+    Le menu qui s'ouvre sous le nom du lieu doit d'abord proposer de revenir
+    sur le site public du lieu. Il n'y avait qu'un lien vers tibillet.coop.
+
+    Le lien est relatif (« / ») : le site public d'un lieu est la racine de
+    SON domaine, donc c'est juste pour tous les lieux, sans fabriquer d'URL
+    absolue.
+    / The venue menu must first offer a way back to the venue's public site.
+    """
+    liens = _liens_du_menu_du_lieu(navigateur, "/admin/")
+    assert liens, "Le menu du lieu est vide."
+    assert liens[0] == "/", (
+        f"Le premier lien du menu devrait ramener au site du lieu, pas {liens[0]!r}."
+    )
+
+    # Et ce lien doit vraiment mener quelque part.
+    # / And that link must actually lead somewhere.
+    _tenant, domaine, _utilisateur = lieu_et_superadmin
+    assert HttpClient(HTTP_HOST=domaine).get("/").status_code == 200
+
+
+@pytest.mark.django_db
+def test_le_menu_du_lieu_mene_a_sa_page_d_identite(navigateur):
+    """
+    La maquette epingle un crayon au nom du lieu pour aller droit a sa
+    configuration. On a renonce a forker le gabarit d'Unfold pour cela :
+    l'entree vit dans le menu qui s'ouvre deja sous le nom.
+    / We declined to fork Unfold's header for this; the entry lives in the
+      menu that already opens under the venue name.
+
+    Les deux entrees qui concernent LE LIEU sont groupees, le lien externe
+    reste en dernier.
+    / The two venue-related entries are grouped; the external link stays last.
+    """
+    from django.urls import reverse
+
+    adresse_identite = reverse("staff_admin:BaseBillet_configuration_changelist")
+    liens = _liens_du_menu_du_lieu(navigateur, "/admin/")
+
+    assert liens == ["/", adresse_identite, "https://tibillet.coop"], (
+        f"L'ordre du menu a changé : {liens}"
+    )
+
+    # Un lien mort passerait un simple test de presence.
+    # / A dead link would pass a mere presence check.
+    assert navigateur.get(adresse_identite).status_code == 200
+
+
+@pytest.mark.django_db
+def test_le_menu_du_lieu_est_le_meme_partout(navigateur):
+    """
+    Le menu doit etre identique sur les quatre types de page. C'est le defaut
+    deja corrige une fois pour le nom du lieu, absent de trois ecrans : il ne
+    doit pas revenir par une autre porte.
+    / The menu must be identical on all four page types: the same defect was
+      already fixed once for the venue name.
+    """
+    reference = None
+    for adresse in [
+        "/admin/",
+        "/admin/domaine/lespass/",
+        "/admin/module/agenda/",
+        "/admin/BaseBillet/event/",
+    ]:
+        liens = _liens_du_menu_du_lieu(navigateur, adresse)
+        if reference is None:
+            reference = liens
+        assert liens == reference, f"Le menu diffère sur {adresse} : {liens}"
+
+
+# --------------------------------------------------------------------------- #
+# La carte de la caisse : ses liens d'ouverture                                #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def lieu_avec_admin(db):
+    """
+    Un lieu qui a un ADMIN DU LIEU, et un client HTTP connecte comme lui.
+    / A venue that has a venue admin, and a client logged in as them.
+
+    On ne reutilise PAS la fixture du superadmin : elle rend le premier lieu
+    qui a un superadmin, ce qui n'est pas forcement un lieu qui a un admin.
+    Le premier essai le faisait, et les deux tests de cette regression se
+    contentaient de passer en « skip » sans rien verifier.
+    / Do not reuse the superadmin fixture: it returns the first venue with a
+      superuser, which need not have a venue admin — the first attempt did,
+      and both regression tests silently skipped.
+
+    Le superadmin ne suffit pas non plus pour la caisse : elle exige un admin
+    DU LIEU (ou un terminal appaire). Un superadmin qui n'administre pas ce
+    lieu recoit un 403 — c'est voulu, pas un bug.
+    / A superuser is not enough either: the POS wants a venue admin.
+    """
+    for tenant in Client.objects.exclude(schema_name="public"):
+        domaine = tenant.domains.first()
+        if not domaine:
+            continue
+        with tenant_context(tenant):
+            admins = [
+                utilisateur
+                for utilisateur in TibilletUser.objects.all()[:200]
+                if utilisateur.is_tenant_admin(tenant)
+            ]
+        if admins:
+            client = HttpClient(HTTP_HOST=domaine.domain)
+            client.force_login(admins[0])
+            return tenant, client
+    pytest.skip("Aucun lieu avec un admin de lieu.")
+
+
+def _carte_de_la_caisse(tenant, **forcages):
+    """
+    La carte de la caisse, pour un etat donne.
+    / The POS card, for a given state.
+
+    On force la configuration EN MEMOIRE et on la sert via un patch : la
+    base de dev est partagee, on n'y ecrit pas pour un test d'affichage.
+    / The config is forced in memory and served through a patch: the dev DB
+      is shared, we do not write to it for a display test.
+    """
+    from Administration.admin import dashboard
+
+    with tenant_context(tenant):
+        configuration = Configuration.get_solo()
+        for champ, valeur in forcages.items():
+            setattr(configuration, champ, valeur)
+        with patch.object(
+            dashboard.Configuration, "get_solo", staticmethod(lambda: configuration)
+        ):
+            cartes = dashboard._build_modules_context(configuration)
+
+    return next(carte for carte in cartes if carte["type"] == "pos")
+
+
+@pytest.mark.django_db
+def test_la_caisse_active_affiche_son_lien_d_ouverture(lieu_avec_admin):
+    """
+    LE test de cette regression.
+
+    La carte de la caisse portait un lien « Open POS ». Il a disparu quand la
+    carte est devenue generique : plus aucun acces a la caisse depuis l'admin.
+    / The POS card carried an "Open POS" link. It vanished when the card
+      became generic, leaving no way into the POS from the admin.
+    """
+    tenant, navigateur_admin = lieu_avec_admin
+    with tenant_context(tenant):
+        if not Configuration.get_solo().module_caisse:
+            pytest.skip("La caisse n'est pas active sur ce lieu.")
+
+    import re
+
+    contenu = navigateur_admin.get("/admin/").content.decode()
+    assert 'data-testid="dashboard-card-pos-open-link"' in contenu, (
+        "Le lien d'ouverture de la caisse a disparu du tableau de bord."
+    )
+
+    # Un lien mort passerait un simple test de presence.
+    # / A dead link would pass a mere presence check.
+    liens = re.findall(r'<a class="tb-carte-ouvrir"\s+href="([^"]+)"', contenu)
+    assert liens, "Le lien est annoncé mais n'a pas d'adresse."
+    assert navigateur_admin.get(liens[0]).status_code == 200, (
+        f"Le lien mène à {liens[0]}, qui ne répond pas."
+    )
+
+
+@pytest.mark.django_db
+def test_le_lien_de_la_caisse_est_aussi_sur_la_page_du_domaine(lieu_avec_admin):
+    """
+    La carte est la meme sur les deux ecrans : le lien doit suivre.
+    / The card is shared by both screens: the link must follow.
+    """
+    tenant, navigateur_admin = lieu_avec_admin
+    with tenant_context(tenant):
+        if not Configuration.get_solo().module_caisse:
+            pytest.skip("La caisse n'est pas active sur ce lieu.")
+
+    contenu = navigateur_admin.get("/admin/domaine/laboutik/").content.decode()
+    assert 'data-testid="dashboard-card-pos-open-link"' in contenu
+
+
+@pytest.mark.django_db
+def test_les_trois_etats_de_la_caisse_ont_le_bon_lien(lieu_et_superadmin):
+    """
+    Trois etats, trois comportements :
+      - V2 active  -> l'interface de caisse, dans le meme onglet ;
+      - V1 active  -> le serveur V1, dans un nouvel onglet (il est ailleurs) ;
+      - eteinte    -> AUCUN lien. La permission de la caisse refuse toute
+        route POS module eteint : un lien menerait droit a un 403.
+    / Three states, three behaviours; none when the POS is off, because its
+      permission denies every POS route then.
+    """
+    tenant, _domaine, _utilisateur = lieu_et_superadmin
+
+    active = _carte_de_la_caisse(tenant, module_caisse=True, server_cashless="")
+    assert active["state"] == "v2_active"
+    assert active["lien_externe"], "La caisse V2 doit pouvoir s'ouvrir."
+    assert active["externe_nouvel_onglet"] is False
+
+    v1 = _carte_de_la_caisse(
+        tenant, module_caisse=False, server_cashless="https://v1.exemple.test"
+    )
+    assert v1["state"] == "v1_active"
+    assert v1["lien_externe"] == "https://v1.exemple.test"
+    assert v1["externe_nouvel_onglet"] is True
+
+    eteinte = _carte_de_la_caisse(tenant, module_caisse=False, server_cashless="")
+    assert eteinte["state"] == "inactive"
+    assert not eteinte["lien_externe"], (
+        "Caisse éteinte : un lien mènerait à un 403."
+    )
+
+
+@pytest.mark.django_db
+def test_un_lieu_en_v1_garde_un_acces_a_laboutik(lieu_et_superadmin):
+    """
+    Meme regression, autre etat : un lieu reste en V1 n'avait plus aucun
+    acces a son interface depuis l'admin.
+    / Same regression, other state: a venue still on V1 had lost every way in.
+    """
+    tenant, _domaine, _utilisateur = lieu_et_superadmin
+    v1 = _carte_de_la_caisse(
+        tenant, module_caisse=False, server_cashless="https://v1.exemple.test"
+    )
+    assert v1["testid_externe"] == "dashboard-card-pos-v1-link"
+    assert str(v1["libelle_externe"])
+
+
+# --------------------------------------------------------------------------- #
+# Le depliage anime d'un groupe du rail                                        #
+# --------------------------------------------------------------------------- #
+
+
+def _conteneurs_de_sous_menu(navigateur, adresse):
+    """
+    Les conteneurs de sous-menu du rail, avec leur etat initial.
+    / The sidebar's submenu wrappers, with their initial state.
+
+    :return: liste de (ouvert_au_chargement, lie_a_alpine)
+    """
+    import re
+
+    contenu = navigateur.get(adresse).content.decode()
+    debut = contenu.find('id="nav-sidebar-apps"')
+    assert debut > 0, f"Le rail est introuvable sur {adresse}."
+    bloc = contenu[debut:contenu.find("navigation_user", debut)]
+
+    return [
+        (bool(ouvert), "x-bind" in attributs)
+        for ouvert, attributs in re.findall(
+            r'<div class="tb-sousmenu( tb-sousmenu-ouvert)?"([^>]*)>', bloc
+        )
+    ]
+
+
+@pytest.mark.django_db
+def test_le_sous_menu_n_utilise_plus_x_show(navigateur):
+    """
+    `x-show` bascule `display`, et `display` ne s'anime pas : c'est pour cela
+    que le sous-menu surgissait d'un coup. Le conteneur anime sa hauteur a la
+    place.
+    / x-show toggles `display`, which cannot animate; hence the pop.
+    """
+    contenu = navigateur.get("/admin/").content.decode()
+    assert 'x-show="navigationOpen"' not in contenu, (
+        "x-show est de retour sur le sous-menu : l'animation ne jouera plus."
+    )
+    assert 'class="tb-sousmenu' in contenu
+
+
+@pytest.mark.django_db
+def test_les_liens_du_sous_menu_sont_toujours_rendus(navigateur, lieu_et_superadmin):
+    """
+    L'enveloppe ne doit rien avaler : tous les liens de modules restent la.
+    / The wrapper must not swallow anything: every module link stays.
+    """
+    from django.test import RequestFactory
+
+    from Administration.admin.dashboard import get_sidebar_navigation
+
+    tenant, _domaine, _utilisateur = lieu_et_superadmin
+    with tenant_context(tenant):
+        navigation = get_sidebar_navigation(RequestFactory().get("/admin/"))
+
+    contenu = navigateur.get("/admin/").content.decode()
+    for groupe in navigation:
+        for item in groupe["items"]:
+            assert str(item["title"]) in contenu, (
+                f"Le lien « {item['title']} » a disparu du rail."
+            )
+
+
+@pytest.mark.django_db
+def test_les_groupes_non_repliables_restent_ouverts_sans_alpine(navigateur):
+    """
+    Les groupes non repliables n'ont PAS de x-data, donc pas de variable
+    `navigationOpen`. Y poser une liaison Alpine leverait une erreur dans la
+    console a chaque page.
+    / Non-collapsible groups have no navigationOpen variable: binding to it
+      would raise an Alpine error on every page.
+    """
+    conteneurs = _conteneurs_de_sous_menu(navigateur, "/admin/")
+    sans_liaison = [(ouvert, lie) for ouvert, lie in conteneurs if not lie]
+
+    assert sans_liaison, "Aucun groupe non repliable : test à revoir."
+    for ouvert, _lie in sans_liaison:
+        assert ouvert, "Un groupe non repliable doit être ouvert."
+
+
+@pytest.mark.django_db
+def test_le_rail_ne_s_anime_pas_au_chargement(navigateur):
+    """
+    Le groupe du module courant s'ouvre tout seul. Si la classe etait posee
+    par Alpine APRES le premier rendu, le rail s'animerait a CHAQUE
+    chargement de page — insupportable. Elle est donc posee cote serveur.
+    / If Alpine set the class after first paint, the rail would animate on
+      every page load. It is set server-side instead.
+    """
+    # Sur la page d'un module, le groupe de son domaine doit deja etre
+    # ouvert dans le HTML rendu, sans attendre Alpine.
+    # / On a module page, its domain group must already be open in the HTML.
+    conteneurs = _conteneurs_de_sous_menu(navigateur, "/admin/module/agenda/")
+    ouverts_et_lies = [ouvert for ouvert, lie in conteneurs if lie and ouvert]
+    assert len(ouverts_et_lies) == 1, (
+        "Le groupe du module courant devrait être déplié dans le HTML rendu."
+    )
+
+    # Sur le tableau de bord, aucun domaine n'est courant : tout est replie.
+    # / On the dashboard no domain is current: everything is folded.
+    conteneurs = _conteneurs_de_sous_menu(navigateur, "/admin/")
+    assert not [ouvert for ouvert, lie in conteneurs if lie and ouvert]

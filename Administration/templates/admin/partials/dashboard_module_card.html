@@ -54,6 +54,23 @@ FLUX DU CLIC SUR L'INTERRUPTEUR :
 
     <span class="tb-carte-etat">
 
+        {# Le lien vers l'interface du module (la caisse, aujourd'hui).      #}
+        {# Il vit ICI et pas dans le corps de la carte : le corps est deja   #}
+        {# un <a> vers la page du module, et on n'imbrique pas deux liens.   #}
+        {# / The link into the module's own interface. It lives here because #}
+        {#   the card body is already a link, and links do not nest.         #}
+        {% if carte.lien_externe %}
+            <a class="tb-carte-ouvrir"
+               href="{{ carte.lien_externe }}"
+               {% if carte.externe_nouvel_onglet %}target="_blank" rel="noopener noreferrer"{% endif %}
+               data-testid="{{ carte.testid_externe }}">
+                {{ carte.libelle_externe }}
+                <span class="material-symbols-outlined" aria-hidden="true">
+                    {% if carte.externe_nouvel_onglet %}open_in_new{% else %}arrow_forward{% endif %}
+                </span>
+            </a>
+        {% endif %}
+
         {% if carte.type == "coming_soon" %}
             <span class="tb-etiquette" data-testid="{{ carte.testid }}-soon-badge">
                 {{ carte.coming_soon_label }}
@@ -87,6 +104,14 @@ FLUX DU CLIC SUR L'INTERRUPTEUR :
             </span>
         {% endif %}
     </span>
+
+    {# Un lieu reste en V1 ne peut pas basculer seul : on le dit.          #}
+    {# / A venue still on V1 cannot migrate alone: say so.                  #}
+    {% if carte.state == "v1_active" %}
+        <span class="tb-carte-note">
+            {% translate "To migrate to LaBoutik V2, please contact the TiBillet team." %}
+        </span>
+    {% endif %}
 
     {% if carte.beta %}
         {# L'encart BETA occupe toute la largeur, SOUS le reste. Sans ce      #}

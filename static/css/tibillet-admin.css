@@ -137,6 +137,46 @@ html.dark #nav-sidebar-apps li a.active {
   color: var(--color-primary-400);
 }
 
+/* --- Le depliage d'un groupe du rail --------------------------------------
+   Le chevron s'animait deja (Unfold lui met transition-transform), mais le
+   sous-menu surgissait d'un coup : `x-show` bascule `display`, qui ne
+   s'anime pas. On anime donc la hauteur du conteneur, de 0fr a 1fr — la
+   seule facon d'animer une hauteur inconnue sans JavaScript.
+   / The chevron already animated; the submenu popped. We animate the
+     wrapper's height instead, since `display` cannot transition.
+   -------------------------------------------------------------------------- */
+
+.tb-sousmenu {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tb-sousmenu-ouvert {
+  grid-template-rows: 1fr;
+}
+
+.tb-sousmenu > ol {
+  /* min-height:0 est indispensable : sans lui, le contenu d'une piste de
+     grille refuse de descendre sous sa hauteur naturelle et rien ne se replie.
+     / Without min-height:0 a grid item refuses to shrink and nothing folds. */
+  min-height: 0;
+  overflow: hidden;
+
+  /* visibility n'est PAS cosmetique : sans elle, les liens d'un groupe replie
+     restent atteignables au clavier dans un conteneur de hauteur nulle. Elle
+     se transitionne de facon discrete — visible des le debut de l'ouverture,
+     hidden seulement a la fin de la fermeture.
+     / Without it, a collapsed group's links stay keyboard-reachable inside a
+       zero-height box. It transitions discretely, which is what we want. */
+  visibility: hidden;
+  transition: visibility 0.26s;
+}
+
+.tb-sousmenu-ouvert > ol {
+  visibility: visible;
+}
+
 /* Champ de recherche de la sidebar : rempli papier plutot que blanc,
    puisque le rail est desormais blanc.
    / Sidebar search: paper-filled now that the rail is white. */
@@ -427,6 +467,101 @@ html.dark #tabs-items a[href*="onglet=analyser"].active {
 #tabs-items a[href*="onglet=analyser"].active .tb-onglet-nombre {
   background-color: var(--color-blue-500);
   color: #fff;
+}
+
+/* --- Le chemin de retour, en haut d'une page de module ---------------------
+   La maquette a un « ← Lespass ». Sans lui, on ne remonte d'un module que
+   par la sidebar.
+   / The mockup's back link; without it only the sidebar goes up a level.
+   -------------------------------------------------------------------------- */
+
+.tb-retour {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+  font-size: 12.5px;
+  color: var(--color-base-600);
+}
+
+.tb-retour:hover {
+  color: var(--tb-brand-txt);
+}
+
+.tb-retour .material-symbols-outlined {
+  font-size: 17px;
+}
+
+.tb-retour:focus-visible {
+  outline: 2px solid var(--color-primary-600);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+html.dark .tb-retour {
+  color: var(--color-base-300);
+}
+
+html.dark .tb-retour:hover {
+  color: var(--color-primary-400);
+}
+
+/* --- La description sous le nom d'une page -------------------------------- */
+
+.tb-prow-texte {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.tb-prow-desc {
+  margin-top: 1px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--color-base-400);
+}
+
+/* --- Les pastilles d'icone prennent la couleur de leur categorie ----------
+   Comme la maquette : une ligne de « Gérer » est verte, une de
+   « Configurer » orange, une d'« Analyser » bleue. La categorie est posee
+   sur la LISTE (data-categorie), pas sur chaque ligne : toutes les lignes
+   affichees appartiennent au meme onglet.
+   / One colour per category, as in the mockup. The category sits on the
+     list, not on each row: every visible row belongs to the same tab.
+   -------------------------------------------------------------------------- */
+
+.tb-pagelist[data-categorie="configurer"] .tb-prow-icone {
+  background-color: var(--color-orange-100);
+  color: var(--color-orange-700);
+}
+
+.tb-pagelist[data-categorie="analyser"] .tb-prow-icone {
+  background-color: var(--color-blue-100);
+  color: var(--color-blue-700);
+}
+
+html.dark .tb-pagelist[data-categorie="configurer"] .tb-prow-icone {
+  background-color: rgb(239 159 39 / 0.18);
+  color: var(--color-orange-400);
+}
+
+html.dark .tb-pagelist[data-categorie="analyser"] .tb-prow-icone {
+  background-color: rgb(55 138 221 / 0.18);
+  color: var(--color-blue-400);
+}
+
+/* --- La pastille de marque, en haut du rail -------------------------------
+   Unfold la dessine en aplat `primary-600` ; la maquette lui donne le
+   degrade de marque. On ne cible que la pastille SANS logo : si un jour un
+   SITE_ICON est fourni, l'image reste intacte.
+   / Unfold paints the tile flat; the mockup uses the brand gradient. Only
+     the no-logo tile is targeted, so a real SITE_ICON stays untouched.
+   -------------------------------------------------------------------------- */
+
+#nav-sidebar-inner .bg-primary-600:has(> .material-symbols-outlined) {
+  background-image: var(--tb-grad);
+  box-shadow: 0 1px 4px rgb(29 158 117 / 0.35);
 }
 
 /* --- Page d'un module : onglets et liste des admins -----------------------
@@ -1014,6 +1149,59 @@ html.dark .tb-beta-texte {
   color: var(--color-base-300);
 }
 
+/* Le lien vers l'interface d'un module (la caisse). Il voisine avec
+   l'interrupteur : il doit s'en distinguer sans lui voler la vedette.
+   / The link into a module's own interface, sitting next to the toggle. */
+.tb-carte-ouvrir {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  border: 1px solid var(--tb-line);
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-base-600);
+  white-space: nowrap;
+}
+
+.tb-carte-ouvrir:hover {
+  border-color: var(--color-primary-600);
+  background-color: var(--tb-brand-soft);
+  color: var(--tb-brand-txt);
+}
+
+.tb-carte-ouvrir:focus-visible {
+  outline: 2px solid var(--color-primary-600);
+  outline-offset: 2px;
+}
+
+.tb-carte-ouvrir .material-symbols-outlined {
+  font-size: 15px;
+}
+
+/* La note sous une carte : elle prend toute la largeur, comme l'encart BETA.
+   / A note under a card: full width, like the BETA notice. */
+.tb-carte-note {
+  flex-basis: 100%;
+  width: 100%;
+  order: 98;
+  margin-top: 8px;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--color-base-400);
+}
+
+html.dark .tb-carte-ouvrir {
+  color: var(--color-base-300);
+  border-color: var(--color-base-800);
+}
+
+html.dark .tb-carte-ouvrir:hover {
+  background-color: rgb(29 158 117 / 0.15);
+  color: var(--color-primary-400);
+}
+
 /* --- Etiquettes et pastille d'etat ---------------------------------------- */
 
 .tb-etiquette {
@@ -1234,7 +1422,9 @@ html.dark .tb-interrupteur-on {
 @media (prefers-reduced-motion: reduce) {
   .tb-interrupteur,
   .tb-interrupteur-bouton,
-  .tb-carte {
+  .tb-carte,
+  .tb-sousmenu,
+  .tb-sousmenu > ol {
     transition-duration: 0.001s;
   }
 }

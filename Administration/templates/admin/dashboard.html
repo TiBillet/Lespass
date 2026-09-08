@@ -28,6 +28,22 @@ plus de modules » les revele. Deux details repris de la maquette :
 
 <div id="dashboard-modules" x-data="{ montrerEteints: false }">
 
+    {# En-tete de la page, comme sur les pages de domaine et de module.      #}
+    {# <h2> et non <h1> : la barre haute d'Unfold porte deja le seul <h1>.   #}
+    {# / Page header, matching the domain and module pages.                  #}
+    <div class="tb-entete-domaine" data-testid="dashboard-header">
+        <h2 class="tb-entete-titre">
+            <span class="material-symbols-outlined" aria-hidden="true">dashboard</span>
+            {% translate "Tableau de bord" %}
+        </h2>
+        <p class="tb-entete-sous-titre">
+            {% blocktranslate trimmed %}
+                Vue d'ensemble de l'état de vos modules, domaine par domaine.
+                Activez, désactivez, ou entrez dans un module.
+            {% endblocktranslate %}
+        </p>
+    </div>
+
     {# Appel a idees. Le bouton mene a la meme adresse que « Contacter #}
     {# l'equipe » de l'encart d'aide.                                    #}
     {# / Ideas call-out, pointing at the same address as the help block. #}

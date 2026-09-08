@@ -1,0 +1,67 @@
+{% extends 'unfold/layouts/base.html' %}
+{% load i18n %}
+
+{% comment %}
+PAGE D'ACCUEIL D'UN DOMAINE
+/ A domain's landing page
+
+LOCALISATION : Administration/templates/admin/domaine_page.html
+Rendue par Administration.admin.dashboard.page_de_domaine().
+
+C'est l'ecran de la maquette : on clique « Lespass » dans le rail, on arrive
+ici, et on voit ses modules en liste, avec leur interrupteur.
+/ The mockup's domain screen.
+
+Les cartes sont les MEMES que sur le tableau de bord — meme partial, meme
+interrupteur, meme modale. Seule la mise en page change : une liste plutot
+qu'une grille, donnee par la classe .tb-domaine-liste.
+/ Same cards as the dashboard; only the layout differs.
+{% endcomment %}
+
+{% comment %}
+`title` du contexte porte « Tableau de bord », pour que la barre haute
+d'Unfold serve de fil d'Ariane. L'onglet du navigateur porte le domaine.
+/ The context `title` carries the parent; the browser tab carries the domain.
+{% endcomment %}
+{% block title %}{{ titre_du_domaine }} | {{ site_title }}{% endblock %}
+
+{% block content %}
+
+    <div class="tb-entete-domaine" data-testid="domaine-page-header">
+        {# <h2> et non <h1> : la barre haute d'Unfold porte deja le seul  #}
+        {# <h1> de la page, sur tous les ecrans de l'admin. Deux <h1> sur #}
+        {# une meme page, c'est faux pour un lecteur d'ecran. Le niveau   #}
+        {# de titre ne dicte pas la taille : celle-ci vient du CSS.       #}
+        {# / Unfold's header already carries the page's only <h1>.        #}
+        <h2 class="tb-entete-titre">
+            <span class="material-symbols-outlined" aria-hidden="true">{{ icone_du_domaine }}</span>
+            {{ titre_du_domaine }}
+        </h2>
+        <p class="tb-entete-sous-titre">{{ sous_titre_du_domaine }}</p>
+    </div>
+
+    <p class="tb-entete-eyebrow">
+        {% translate "Modules de ce domaine" %}
+        <span class="tb-domaine-compteur" data-testid="domaine-page-compteur">
+            {{ actifs }}/{{ total }}
+        </span>
+    </p>
+
+    {% if cartes %}
+        <div class="tb-domaine-liste" data-testid="domaine-page-liste">
+            {% for carte in cartes %}
+                {% include "admin/partials/dashboard_module_card.html" %}
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="tb-entete-sous-titre">
+            {% translate "Aucun module dans ce domaine." %}
+        </p>
+    {% endif %}
+
+    {# Point de montage de la modale : sans lui, l'interrupteur des cartes #}
+    {# n'aurait nulle part ou deposer sa confirmation.                     #}
+    {# / Modal mount point: without it the card toggles have no target.    #}
+    <div id="module-modal-container"></div>
+
+{% endblock %}

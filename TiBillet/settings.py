@@ -678,8 +678,48 @@ UNFOLD = {
     "DASHBOARD_CALLBACK": "Administration.admin_tenant.dashboard_callback",
     "SHOW_HISTORY": False,  # show/hide "History" button, default: True
     "SITE_TITLE": "TiBillet",
-    "SITE_HEADER": _("TiBillet / Lèspass admin panel"),
+    # En haut du rail : le nom du lieu, puis une ligne de contexte.
+    # SITE_HEADER accepte un chemin pointe vers un callable, comme
+    # SIDEBAR.navigation — c'est ce qui permet d'afficher le nom du lieu
+    # courant plutot qu'une chaine fixe. Utile des qu'on gere plusieurs lieux.
+    # / SITE_HEADER accepts a dotted path to a callable, so the sidebar can
+    #   show the current venue's name instead of a fixed string.
+    "SITE_HEADER": "Administration.admin_tenant.nom_du_lieu",
+    "SITE_SUBHEADER": _("Votre espace TiBillet"),
+    # Le glyphe de la pastille, quand aucun logo n'est fourni.
+    # / The tile glyph, when no logo is configured.
+    "SITE_SYMBOL": "confirmation_number",
+    # Le menu qui s'ouvre sous le nom du lieu, en haut du rail.
+    # / The menu that opens under the venue name, at the top of the rail.
     "SITE_DROPDOWN": [
+        {
+            # Retour au site public du lieu. C'est la racine de SON domaine :
+            # un lien relatif suffit, et il reste juste pour tous les lieux
+            # sans avoir a fabriquer d'URL absolue.
+            # / Back to the venue's public site: the root of its own domain,
+            #   so a relative link is correct for every tenant.
+            "icon": "home",
+            "title": _("Voir mon site"),
+            "link": "/",
+        },
+        {
+            # Raccourci vers la page de configuration du lieu. La maquette en
+            # fait un crayon epingle au nom ; le mettre ici evite de forker
+            # unfold/helpers/navigation_header.html, qui n'offre aucun point
+            # d'insertion (element_classes n'injecte que des classes).
+            # / Shortcut to the venue's settings page. The mockup pins a pencil
+            #   next to the name; putting it here avoids forking Unfold's
+            #   navigation header, which offers no insertion point.
+            #
+            # reverse_lazy plutot qu'un chemin ecrit a la main : si ce
+            # ModelAdmin est un jour desenregistre, on le saura au demarrage
+            # plutot que par un lien mort.
+            # / reverse_lazy rather than a hand-written path: a missing admin
+            #   fails at startup instead of leaving a dead link.
+            "icon": "edit",
+            "title": _("Modifier l'identité de mon lieu"),
+            "link": reverse_lazy("staff_admin:BaseBillet_configuration_changelist"),
+        },
         {
             "icon": "diamond",
             "title": _("TiBillet"),
