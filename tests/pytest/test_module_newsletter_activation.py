@@ -15,8 +15,14 @@ une invitation a contacter l'equipe TiBillet (qui peut heberger l'instance).
 Regles :
 1. Le module est **desactive par defaut**.
 2. Tout gestionnaire du tenant peut l'activer (modale de confirmation normale + POST accepte).
-3. La section « Newsletter » de la sidebar n'apparait que module actif, et la config Ghost y
-   vit (elle a demenage hors de « Outils externes »).
+3. L'entree « Newsletter » de la sidebar n'apparait que module actif, et la config Ghost
+   est atteignable depuis ce module (elle a demenage hors de « Outils externes »).
+
+   Depuis le passage aux domaines, la sidebar affiche UN lien par module : « Newsletter »
+   est donc un lien du domaine « Lespass », et non plus un groupe. Ses pages (Serveur
+   Ghost, Brevo) sont devenues les onglets du module, construits par get_tabs().
+   / Since the move to domains, the sidebar shows one link per module: "Newsletter" is a
+     link inside the "Lespass" domain, and its pages are the module's tabs.
 
 Tests d'integration sur la base de DEV. Ils remettent le module dans son etat initial a la
 fin de chaque test (fixture `remettre_le_module_comme_avant`).
@@ -204,37 +210,47 @@ class TestSidebar:
     ):
         """
         Inutile de montrer une config Ghost a un lieu qui n'a pas de serveur Ghost.
-        Le menu « Newsletter » (et donc « Serveur Ghost ») n'existe que module actif.
+        Le lien « Newsletter » n'existe dans la sidebar que module actif.
+
+        Depuis le passage aux domaines, « Newsletter » est un LIEN du domaine
+        « Lespass », et non plus un groupe : on cherche donc parmi les libelles
+        d'items, tous groupes confondus.
+        / "Newsletter" is now a link inside the "Lespass" domain, not a group.
         """
         from Administration.admin.dashboard import get_sidebar_navigation
 
         client = _client_http(tenant, _superadmin(tenant))
 
-        def _titres_de_la_sidebar():
-            """Rend la sidebar via une vraie requete admin, et liste ses groupes."""
+        def _liens_de_la_sidebar():
+            """Rend la sidebar via une vraie requete admin, et liste ses liens."""
             requete = client.get("/admin/").wsgi_request
             with tenant_context(tenant):
                 navigation = get_sidebar_navigation(requete)
-            return [str(groupe["title"]) for groupe in navigation]
+            return [
+                str(item["title"])
+                for groupe in navigation
+                for item in groupe["items"]
+            ]
 
-        # --- Module DESACTIVE : pas de groupe Newsletter ---
+        # --- Module DESACTIVE : pas de lien Newsletter ---
         with tenant_context(tenant):
             _poser_letat_du_module(False)
-        assert "Newsletter" not in _titres_de_la_sidebar()
+        assert str(_("Newsletter")) not in _liens_de_la_sidebar()
 
-        # --- Module ACTIF : le groupe apparait ---
+        # --- Module ACTIF : le lien apparait ---
         with tenant_context(tenant):
             _poser_letat_du_module(True)
-        assert "Newsletter" in _titres_de_la_sidebar()
+        assert str(_("Newsletter")) in _liens_de_la_sidebar()
 
-    def test_ghost_a_bien_demenage_hors_de_outils_externes(
+    def test_newsletter_est_rangee_dans_le_domaine_lespass(
         self, tenant, remettre_le_module_comme_avant
     ):
         """
-        La config Ghost etait perdue au milieu de « Outils externes », entre Webhook et
-        Brevo. Elle vit maintenant dans le groupe « Newsletter ».
+        La sidebar est rangee par domaine. Newsletter parle au public : elle
+        appartient donc a « Lespass », comme l'agenda et l'adhesion.
+        / The sidebar is grouped by domain; Newsletter belongs to "Lespass".
         """
-        from Administration.admin.dashboard import get_sidebar_navigation
+        from Administration.admin.dashboard import DOMAINES, get_sidebar_navigation
 
         client = _client_http(tenant, _superadmin(tenant))
         requete = client.get("/admin/").wsgi_request
@@ -243,22 +259,53 @@ class TestSidebar:
             _poser_letat_du_module(True)
             navigation = get_sidebar_navigation(requete)
 
-        # Les titres de la sidebar sont TRADUITS ("External tools" -> "Outils externes") :
-        # on ne peut pas les chercher par leur cle anglaise. On collecte donc TOUS les
-        # libelles d'items, tous groupes confondus, et on verifie ou vit Ghost.
-        # / Sidebar titles are TRANSLATED: collect every item label instead.
-        tous_les_items = []
-        for groupe in navigation:
-            for item in groupe["items"]:
-                tous_les_items.append((str(groupe["title"]), str(item["title"])))
-
-        libelles = [libelle for _titre_du_groupe, libelle in tous_les_items]
-
-        # L'ancienne entree "Ghost" de "Outils externes" a disparu...
-        assert "Ghost" not in libelles
-        # ...et "Serveur Ghost" existe, dans le groupe "Newsletter".
-        groupe_de_ghost = [
-            titre for titre, libelle in tous_les_items if libelle == "Serveur Ghost"
+        groupes_contenant_newsletter = [
+            str(groupe["title"])
+            for groupe in navigation
+            for item in groupe["items"]
+            if str(item["title"]) == str(_("Newsletter"))
         ]
-        assert groupe_de_ghost, "Serveur Ghost est introuvable dans la sidebar."
-        assert groupe_de_ghost[0] == str(_("Newsletter"))
+
+        assert groupes_contenant_newsletter, "Le lien Newsletter est introuvable."
+        assert groupes_contenant_newsletter[0] == str(DOMAINES["lespass"]["titre"])
+
+    def test_ghost_a_bien_demenage_hors_de_outils_externes(
+        self, tenant, remettre_le_module_comme_avant
+    ):
+        """
+        La config Ghost etait perdue au milieu de « Outils externes », entre Webhook et
+        Brevo. Elle vit maintenant dans le module « Newsletter ».
+
+        Depuis le passage aux domaines, les pages d'un module ne sont plus dans la
+        sidebar : elles sont devenues ses ONGLETS. On verifie donc les deux choses
+        qui comptent vraiment :
+          1. plus aucune entree « Ghost » ne traine dans la sidebar ;
+          2. « Serveur Ghost » reste atteignable, via les onglets du module.
+        / A module's pages are now its tabs: check Ghost left the sidebar and is
+          still reachable through the module's tabs.
+        """
+        from Administration.admin.dashboard import get_sidebar_navigation, get_tabs
+
+        client = _client_http(tenant, _superadmin(tenant))
+        requete = client.get("/admin/").wsgi_request
+
+        with tenant_context(tenant):
+            _poser_letat_du_module(True)
+            navigation = get_sidebar_navigation(requete)
+            onglets = get_tabs(requete)
+
+        # 1. L'ancienne entree "Ghost" de "Outils externes" a disparu.
+        libelles_de_la_sidebar = [
+            str(item["title"]) for groupe in navigation for item in groupe["items"]
+        ]
+        assert "Ghost" not in libelles_de_la_sidebar
+
+        # 2. "Serveur Ghost" est atteignable par les onglets d'un module.
+        #    C'est le point critique : sans les onglets, la page serait perdue.
+        #    / Critical: without the tabs, the page would be unreachable.
+        libelles_des_onglets = [
+            str(item["title"]) for barre in onglets for item in barre["items"]
+        ]
+        assert str(_("Serveur Ghost")) in libelles_des_onglets, (
+            "Serveur Ghost n'est atteignable ni par la sidebar ni par les onglets."
+        )

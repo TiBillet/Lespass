@@ -1,5 +1,6 @@
 from Administration.admin.dashboard import (  # noqa: F401
     dashboard_callback, environment_callback, get_sidebar_navigation,
+    get_tabs,
     MODULE_FIELDS, BETA_NOTICE, _build_modules_context, adhesion_badge_callback,
 )
 

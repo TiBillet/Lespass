@@ -686,52 +686,20 @@ UNFOLD = {
             "link": "https://tibillet.coop",
         },
     ],
-    "TABS": [
-        {
-            # Déclare dans quel affichage les tabs s'activent
-            "models": ["BaseBillet.formbricksconfig", "BaseBillet.formbricksforms"],
-            "items": [
-                {
-                    "title": _("Forms"),
-                    # "icon": "sports_motorsports",
-                    "link": reverse_lazy("staff_admin:BaseBillet_formbricksforms_changelist"),
-                },
-                {
-                    "title": _("Settings"),
-                    # "icon": "precision_manufacturing",
-                    "link": reverse_lazy("staff_admin:BaseBillet_formbricksconfig_changelist"),
-                },
-            ],
-        },
-        {
-            # Onglets de la page « Paramètres » : la Configuration du lieu, les clés
-            # API et les webhooks partagent la meme barre d'onglets. Ces trois modeles
-            # n'ont pas de lien de base de donnees entre eux : ce ne sont donc PAS des
-            # inlines, mais des onglets de navigation (fonctionnalite Unfold "TABS").
-            # / "Settings" page tabs: venue Configuration, API keys and webhooks share
-            # one tab bar. No DB relation between them, so these are Unfold navigation
-            # tabs (not inlines).
-            "models": [
-                "BaseBillet.configuration",
-                "BaseBillet.externalapikey",
-                "BaseBillet.webhook",
-            ],
-            "items": [
-                {
-                    "title": _("Paramètres"),
-                    "link": reverse_lazy("staff_admin:BaseBillet_configuration_changelist"),
-                },
-                {
-                    "title": _("Clés API"),
-                    "link": reverse_lazy("staff_admin:BaseBillet_externalapikey_changelist"),
-                },
-                {
-                    "title": _("Webhooks"),
-                    "link": reverse_lazy("staff_admin:BaseBillet_webhook_changelist"),
-                },
-            ],
-        },
-    ],
+    # Barres d'onglets, construites depuis la meme source que la sidebar.
+    #
+    # POURQUOI UN CALLABLE : depuis le passage aux domaines, la sidebar
+    # n'affiche plus qu'UN lien par module. Les autres pages du module ne
+    # sont atteignables QUE par ces onglets — ils ne sont donc pas un
+    # confort, mais la seconde moitie de la navigation.
+    # get_tabs() les derive des memes sections que get_sidebar_navigation(),
+    # ce qui garantit qu'une page ajoutee a un module apparait aux deux
+    # endroits sans double saisie. Les deux barres historiques (Formbricks,
+    # Parametres/Cles API/Webhooks) y sont conservees telles quelles.
+    # / Tabs are derived from the same sections as the sidebar. Since the
+    #   sidebar now shows one link per module, these tabs are the only way
+    #   to reach a module's other pages.
+    "TABS": "Administration.admin_tenant.get_tabs",
     "SIDEBAR": {
         "show_search": True, #  Search in applications and models names
         "show_all_applications": False, # Dropdown with all applications and models

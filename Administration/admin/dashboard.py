@@ -47,9 +47,71 @@ def event_proposals_badge_callback(request):
     return f"+ {count}" if count else None
 
 
-def get_sidebar_navigation(request):
-    """Sidebar dynamique : masque les sections liees aux modules inactifs.
-    Appelee par Unfold via SIDEBAR.navigation (string importable)."""
+# --------------------------------------------------------------------------- #
+# LES CINQ DOMAINES                                                             #
+# --------------------------------------------------------------------------- #
+# Reprend l'arborescence de la maquette (TEMP-tibillet-admin-main).
+# L'ordre de ce dictionnaire est l'ordre d'affichage dans la sidebar.
+#
+# Un DOMAINE regroupe des MODULES. Un module, c'est une section construite
+# dans get_sidebar_navigation : elle porte la cle "_domaine" qui dit a quel
+# domaine elle appartient.
+#
+# Les icones sont des Material Symbols (le jeu embarque par Unfold), choisies
+# comme equivalents des icones Tabler de la maquette.
+# / The five domains from the mockup. Dict order = sidebar order.
+DOMAINES = {
+    "lespass": {
+        "titre": _("Lespass"),
+        "icone": "calendar_month",  # maquette : ti-calendar-star
+        "sous_titre": _("La vitrine du lieu et tout ce qui parle à votre public."),
+    },
+    "laboutik": {
+        "titre": _("Laboutik"),
+        "icone": "storefront",  # maquette : ti-basket
+        "sous_titre": _("Le nerf de la guerre : vendre, encaisser, suivre."),
+    },
+    "lerezo": {
+        "titre": _("Lerézo"),
+        "icone": "hub",  # maquette : ti-affiliate
+        "sous_titre": _("Vous n'êtes pas seuls : tissez le réseau."),
+    },
+    "lekontrib": {
+        "titre": _("Lékontrib"),
+        "icone": "volunteer_activism",  # maquette : ti-heart-handshake
+        "sous_titre": _("Faites financer et décider par celles et ceux qui suivent."),
+    },
+    "lemachines": {
+        "titre": _("Lémachines"),
+        "icone": "devices",  # maquette : ti-device-desktop
+        "sous_titre": _("Le materiel qui fait tourner le lieu."),
+    },
+}
+
+
+def _construire_sections_modules(request):
+    """
+    Construit la liste brute des sections, une par MODULE.
+    / Builds the raw list of sections, one per module.
+
+    LOCALISATION : Administration/admin/dashboard.py
+
+    Une section = un module (Agenda, Caisse, Inventaire...) avec toutes ses
+    pages. Les modules desactives dans la Configuration du lieu sont absents.
+
+    Chaque section porte trois cles privees, lues plus loin :
+      - "_domaine" : cle du domaine, ou None pour une entree autonome
+      - "_order"   : rang du module dans son domaine
+      - "_icone"   : icone du module dans la sidebar
+
+    Deux fonctions consomment cette liste :
+      - get_sidebar_navigation() la replie en groupes-domaines
+      - get_tabs() en tire la barre d'onglets de chaque module
+    / Consumed by get_sidebar_navigation() and get_tabs().
+
+    :param request: objet Request Django
+    :return: liste de sections (dicts), cles privees incluses
+    """
 
     configuration = Configuration.get_solo()
 
@@ -60,9 +122,10 @@ def get_sidebar_navigation(request):
     navigation = [
         {
             "title": _("Configuration générale"),
-            "_order": 0.0,  # Famille 0 : pilotage / Family 0: control
+            "_order": 0.0,  # rang dans le domaine / rank inside domain
+            "_domaine": None,  # entree autonome / standalone entry
             "separator": True,
-            "collapsible": True,
+            "collapsible": False,
             "items": [
                 {
                     "title": _("Dashboard"),
@@ -103,7 +166,9 @@ def get_sidebar_navigation(request):
         navigation.append(
             {
                 "title": _("Site web personnalisé"),
-                "_order": 1.0,  # Famille 1 : vitrine & communication
+                "_order": 0.0,  # rang dans le domaine / rank inside domain
+                "_domaine": "lespass",
+                "_icone": "web",
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -135,7 +200,9 @@ def get_sidebar_navigation(request):
         navigation.append(
             {
                 "title": _("Adhésion, abonnement et pass"),
-                "_order": 2.1,  # Famille 2 : billetterie & adhesions
+                "_order": 2.0,  # rang dans le domaine / rank inside domain
+                "_domaine": "lespass",
+                "_icone": "card_membership",
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -166,7 +233,9 @@ def get_sidebar_navigation(request):
         navigation.append(
             {
                 "title": _("Agenda et Billetterie"),
-                "_order": 2.0,  # Famille 2 : billetterie & adhesions
+                "_order": 1.0,  # rang dans le domaine / rank inside domain
+                "_domaine": "lespass",
+                "_icone": "event",
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -262,7 +331,9 @@ def get_sidebar_navigation(request):
         navigation.append(
             {
                 "title": _("Fédération et agenda participatif"),
-                "_order": 1.1,  # Famille 1 : vitrine & communication
+                "_order": 0.0,  # rang dans le domaine / rank inside domain
+                "_domaine": "lerezo",
+                "_icone": "hub",
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -302,7 +373,9 @@ def get_sidebar_navigation(request):
         navigation.append(
             {
                 "title": _("Caisse & Restaurant"),
-                "_order": 3.0,  # Famille 3 : point de vente
+                "_order": 0.0,  # rang dans le domaine / rank inside domain
+                "_domaine": "laboutik",
+                "_icone": "point_of_sale",
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -402,7 +475,9 @@ def get_sidebar_navigation(request):
         navigation.append(
             {
                 "title": _("Terminaux matériels"),
-                "_order": 3.5,  # Famille 3 : point de vente (materiel)
+                "_order": 2.0,  # rang dans le domaine / rank inside domain
+                "_domaine": "lemachines",
+                "_icone": "tablet",
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -440,7 +515,9 @@ def get_sidebar_navigation(request):
         navigation.append(
             {
                 "title": _("Monnaies locales, temps et cashless"),
-                "_order": 3.2,  # Famille 3 : point de vente
+                "_order": 1.0,  # rang dans le domaine / rank inside domain
+                "_domaine": "lerezo",
+                "_icone": "toll",
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -486,7 +563,9 @@ def get_sidebar_navigation(request):
         navigation.append(
             {
                 "title": _("Inventaire"),
-                "_order": 3.1,  # Famille 3 : point de vente
+                "_order": 1.0,  # rang dans le domaine / rank inside domain
+                "_domaine": "laboutik",
+                "_icone": "inventory_2",
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -514,7 +593,9 @@ def get_sidebar_navigation(request):
         navigation.append(
             {
                 "title": _("Tireuses connectées"),
-                "_order": 3.4,  # Famille 3 : point de vente
+                "_order": 1.0,  # rang dans le domaine / rank inside domain
+                "_domaine": "lemachines",
+                "_icone": "sports_bar",
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -619,7 +700,9 @@ def get_sidebar_navigation(request):
         navigation.append(
             {
                 "title": _("Kiosk : borne libre-service"),
-                "_order": 3.3,  # Famille 3 : point de vente
+                "_order": 0.0,  # rang dans le domaine / rank inside domain
+                "_domaine": "lemachines",
+                "_icone": "smart_display",
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -641,7 +724,9 @@ def get_sidebar_navigation(request):
         navigation.append(
             {
                 "title": _("Ressources"),
-                "_order": 2.3,  # Famille 2 : billetterie, adhesions & reservations
+                "_order": 3.0,  # rang dans le domaine / rank inside domain
+                "_domaine": "lespass",
+                "_icone": "meeting_room",
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -690,7 +775,8 @@ def get_sidebar_navigation(request):
     navigation.append(
         {
             "title": _("Sales & accounting"),
-            "_order": 4.0,  # Famille 4 : comptabilite / Family 4: accounting
+            "_order": 9.0,  # rang dans le domaine / rank inside domain
+            "_domaine": None,  # entree autonome / standalone entry
             "separator": True,
             "collapsible": True,
             "items": [
@@ -743,7 +829,9 @@ def get_sidebar_navigation(request):
         navigation.append(
             {
                 "title": _("Financement participatif & budgets contributifs"),
-                "_order": 2.2,  # Famille 2 : billetterie & adhesions
+                "_order": 0.0,  # rang dans le domaine / rank inside domain
+                "_domaine": "lekontrib",
+                "_icone": "volunteer_activism",
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -782,7 +870,9 @@ def get_sidebar_navigation(request):
         navigation.append(
             {
                 "title": _("Newsletter"),
-                "_order": 1.2,  # Famille 1 : vitrine & communication
+                "_order": 4.0,  # rang dans le domaine / rank inside domain
+                "_domaine": "lespass",
+                "_icone": "mail",
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -821,7 +911,8 @@ def get_sidebar_navigation(request):
     navigation.append(
         {
             "title": _("Root Configuration"),
-            "_order": 5.0,  # Famille 5 : reseau (root) / Family 5: network (root)
+            "_order": 9.1,  # rang dans le domaine / rank inside domain
+            "_domaine": None,  # entree autonome / standalone entry
             "separator": True,
             "collapsible": True,
             "items": [
@@ -860,31 +951,317 @@ def get_sidebar_navigation(request):
         }
     )
 
-    # ------------------------------------------------------------------ #
-    # Rangement des sections en FAMILLES (approche « ordre + separateurs ») #
-    # ------------------------------------------------------------------ #
-    # Chaque section porte un champ "_order" = X.Y :
-    #   - X (partie entiere) = la famille (0 = pilotage, 1 = vitrine & com,
-    #     2 = billetterie & adhesions, 3 = point de vente, 4 = comptabilite,
-    #     5 = reseau).
-    #   - Y (partie decimale) = la position DANS la famille.
-    # On trie les sections par "_order", puis on n'affiche le filet separateur
-    # QU'AU DEBUT de chaque famille : les sections d'une meme famille apparaissent
-    # collees (regroupees), et un filet marque le passage a la famille suivante.
-    # Le tri gere aussi les sections absentes (module inactif) sans trou visuel.
-    # Pour changer un regroupement : il suffit d'ajuster les "_order" ci-dessus,
-    # nul besoin de deplacer le code.
-    # / Group sections into families: sort by "_order", show the separator only at
-    # / each family boundary so same-family sections read as one block.
-    navigation.sort(key=lambda section: section.get("_order", 999))
-    famille_precedente = None
-    for section in navigation:
-        famille_courante = int(section.get("_order", 999))
-        section["separator"] = famille_courante != famille_precedente
-        famille_precedente = famille_courante
-        section.pop("_order", None)
+    return navigation
+
+
+def get_sidebar_navigation(request):
+    """
+    Sidebar dynamique, rangee par domaine.
+    / Dynamic sidebar, grouped by domain.
+
+    LOCALISATION : Administration/admin/dashboard.py
+    Appelee par Unfold via UNFOLD["SIDEBAR"]["navigation"].
+
+    Chaque section construite par _construire_sections_modules() est un
+    MODULE (Agenda, Caisse, Inventaire...). La maquette veut les ranger
+    sous 5 DOMAINES.
+
+    La sidebar d'Unfold n'a que DEUX niveaux : un groupe, et ses liens.
+    On choisit donc : groupe = DOMAINE, lien = MODULE. Les pages d'un
+    module ne sont plus dans la sidebar : elles deviennent les onglets de
+    ce module, construits par get_tabs().
+    / Unfold's sidebar has only two levels, so: group = domain, link =
+      module. A module's pages become its tabs (see get_tabs).
+
+    :param request: objet Request Django
+    :return: liste de groupes au format attendu par Unfold
+    """
+    return _regrouper_sections_par_domaine(_construire_sections_modules(request))
+
+
+def _regrouper_sections_par_domaine(sections):
+    """
+    Transforme une liste de sections-modules en groupes-domaines.
+    / Turns a list of module sections into domain groups.
+
+    LOCALISATION : Administration/admin/dashboard.py
+
+    Chaque section porte trois cles privees posees plus haut :
+      - "_domaine" : la cle du domaine, ou None pour une entree autonome
+        (Configuration generale, Ventes & comptabilite, Root Configuration).
+      - "_order"   : le rang du module DANS son domaine.
+      - "_icone"   : l'icone du module dans la sidebar.
+
+    Les entrees autonomes gardent leur forme actuelle : elles restent des
+    groupes depliants avec leurs liens. Leur "_order" les place avant le
+    bloc des domaines (moins de 1) ou apres (9 et plus).
+
+    :param sections: liste de sections telles que construites plus haut
+    :return: liste de groupes au format attendu par Unfold
+    """
+    # On separe les sections qui appartiennent a un domaine des autres.
+    # / Split domain-bound sections from standalone ones.
+    autonomes = [s for s in sections if not s.get("_domaine")]
+    dans_un_domaine = [s for s in sections if s.get("_domaine")]
+
+    # --- Un groupe par domaine, dans l'ordre de DOMAINES ---
+    # / One group per domain, in DOMAINES order.
+    groupes_domaines = []
+    for cle_domaine, domaine in DOMAINES.items():
+        modules_du_domaine = [
+            s for s in dans_un_domaine if s["_domaine"] == cle_domaine
+        ]
+        modules_du_domaine.sort(key=lambda s: s.get("_order", 999))
+
+        liens_des_modules = []
+        for section in modules_du_domaine:
+            lien = _module_en_lien(section)
+            if lien:
+                liens_des_modules.append(lien)
+
+        # Un domaine dont aucun module n'est actif n'a rien a montrer.
+        # Unfold masque de toute facon les groupes sans liens.
+        # / Skip domains with no active module; Unfold hides empty groups.
+        if not liens_des_modules:
+            continue
+
+        groupes_domaines.append(
+            {
+                "title": domaine["titre"],
+                "separator": True,
+                "collapsible": True,
+                "items": liens_des_modules,
+            }
+        )
+
+    # --- Assemblage : entrees de tete, domaines, entrees de pied ---
+    # / Assembly: head entries, domains, tail entries.
+    tete = sorted(
+        [s for s in autonomes if s.get("_order", 0) < 1],
+        key=lambda s: s.get("_order", 0),
+    )
+    pied = sorted(
+        [s for s in autonomes if s.get("_order", 0) >= 1],
+        key=lambda s: s.get("_order", 0),
+    )
+
+    navigation = tete + groupes_domaines + pied
+
+    # Un filet separateur au-dessus de chaque groupe, sauf le premier.
+    # On retire au passage les cles privees, qu'Unfold ne connait pas.
+    # / One separator above each group but the first; drop private keys.
+    for rang, groupe in enumerate(navigation):
+        groupe["separator"] = rang > 0
+        groupe.pop("_order", None)
+        groupe.pop("_domaine", None)
+        groupe.pop("_icone", None)
 
     return navigation
+
+
+def _carte_des_liens_vers_modeles():
+    """
+    Associe l'URL d'une changelist au modele qu'elle affiche.
+    / Maps a changelist URL to the model it lists.
+
+    LOCALISATION : Administration/admin/dashboard.py
+
+    POURQUOI : les sections de la sidebar stockent une URL deja calculee
+    (« /admin/BaseBillet/event/ »), alors que les onglets d'Unfold attendent
+    un nom de modele (« BaseBillet.event »). On reconstruit donc la
+    correspondance a partir des modeles reellement enregistres dans l'admin.
+
+    Une page qui n'est pas une changelist (un tableau de bord maison, un
+    rapport) n'apparait pas dans cette carte : c'est voulu, elle ne
+    declenchera simplement pas de barre d'onglets.
+    / Pages that are not changelists are absent on purpose.
+
+    :return: dict {url: "app_label.modelname"}
+    """
+    from django.urls import NoReverseMatch, reverse
+
+    from Administration.admin.site import staff_admin_site
+
+    carte = {}
+    for modele in staff_admin_site._registry:
+        options = modele._meta
+        nom_url = (
+            f"staff_admin:{options.app_label}_{options.model_name}_changelist"
+        )
+        try:
+            carte[reverse(nom_url)] = f"{options.app_label}.{options.model_name}"
+        except NoReverseMatch:
+            # Modele enregistre mais sans changelist accessible : on l'ignore.
+            # / Registered model with no reachable changelist: skip it.
+            continue
+    return carte
+
+
+# Onglets qui ne decoulent pas d'un module. Ils existaient avant le passage
+# aux domaines et sont conserves tels quels.
+# / Tabs that do not come from a module; kept as they were.
+def _onglets_hors_modules():
+    """
+    Les deux barres d'onglets historiques du projet.
+    / The project's two pre-existing tab bars.
+
+    LOCALISATION : Administration/admin/dashboard.py
+
+    - Formbricks : formulaires et reglages.
+    - Parametres : la Configuration du lieu, les cles API et les webhooks.
+      Ces trois modeles n'ont aucun lien de base de donnees entre eux : ce ne
+      sont donc PAS des inlines, mais bien des onglets de navigation.
+    / No DB relation between these models: they are navigation tabs.
+
+    :return: liste de groupes d'onglets au format Unfold
+    """
+    return [
+        {
+            "models": ["BaseBillet.formbricksconfig", "BaseBillet.formbricksforms"],
+            "items": [
+                {
+                    "title": _("Formulaires"),
+                    "link": _safe_rev("staff_admin:BaseBillet_formbricksforms_changelist"),
+                },
+                {
+                    "title": _("Réglages"),
+                    "link": _safe_rev("staff_admin:BaseBillet_formbricksconfig_changelist"),
+                },
+            ],
+        },
+        {
+            "models": [
+                "BaseBillet.configuration",
+                "BaseBillet.externalapikey",
+                "BaseBillet.webhook",
+            ],
+            "items": [
+                {
+                    "title": _("Paramètres"),
+                    "link": _safe_rev("staff_admin:BaseBillet_configuration_changelist"),
+                },
+                {
+                    "title": _("Clés API"),
+                    "link": _safe_rev("staff_admin:BaseBillet_externalapikey_changelist"),
+                },
+                {
+                    "title": _("Webhooks"),
+                    "link": _safe_rev("staff_admin:BaseBillet_webhook_changelist"),
+                },
+            ],
+        },
+    ]
+
+
+def get_tabs(request):
+    """
+    Construit la barre d'onglets de chaque module.
+    / Builds each module's tab bar.
+
+    LOCALISATION : Administration/admin/dashboard.py
+    Appelee par Unfold via UNFOLD["TABS"].
+
+    POURQUOI CETTE FONCTION EXISTE : depuis le passage aux domaines, la
+    sidebar n'affiche plus qu'UN lien par module. Sans ces onglets, les
+    autres pages du module ne seraient plus atteignables du tout.
+    C'est donc une piece indispensable, pas un confort.
+    / Since the sidebar shows only one link per module, these tabs are the
+      only way to reach the module's other pages. Not optional.
+
+    On ne fabrique une barre que pour les modules ranges dans un domaine :
+    les entrees autonomes (Configuration generale, Ventes & comptabilite,
+    Configuration racine) gardent tous leurs liens dans la sidebar et n'ont
+    donc besoin de rien.
+    / Only domain-bound modules need tabs.
+
+    :param request: objet Request Django
+    :return: liste de groupes d'onglets au format attendu par Unfold
+    """
+    onglets = _onglets_hors_modules()
+    lien_vers_modele = _carte_des_liens_vers_modeles()
+
+    for section in _construire_sections_modules(request):
+        # Les entrees autonomes gardent leurs liens dans la sidebar.
+        # / Standalone entries keep their links in the sidebar.
+        if not section.get("_domaine"):
+            continue
+
+        pages = section.get("items") or []
+
+        # Une barre d'onglets n'a de sens qu'a partir de deux pages.
+        # / A tab bar only makes sense from two pages up.
+        if len(pages) < 2:
+            continue
+
+        # Les modeles sur lesquels la barre doit apparaitre.
+        # / The models the tab bar should show up on.
+        modeles = []
+        for page in pages:
+            modele = lien_vers_modele.get(str(page.get("link", "")))
+            if modele and modele not in modeles:
+                modeles.append(modele)
+
+        if not modeles:
+            continue
+
+        onglets.append(
+            {
+                "models": modeles,
+                "items": [
+                    {
+                        "title": page["title"],
+                        "link": page.get("link"),
+                        "permission": page.get("permission"),
+                    }
+                    for page in pages
+                ],
+            }
+        )
+
+    return onglets
+
+
+def _module_en_lien(section):
+    """
+    Reduit une section-module a UN seul lien de sidebar.
+    / Collapses a module section into a single sidebar link.
+
+    LOCALISATION : Administration/admin/dashboard.py
+
+    Le lien pointe vers la premiere page du module, qui joue le role de page
+    d'accueil. Les autres pages restent atteignables par les onglets
+    construits dans get_tabs().
+
+    Si un badge etait pose sur une page du module (par exemple le compteur
+    d'adhesions recentes), on le fait remonter sur le lien du module : sinon
+    il disparaitrait de la sidebar en meme temps que la page qui le portait.
+    / A badge set on one of the module's pages bubbles up to the module link.
+
+    :param section: une section telle que construite dans get_sidebar_navigation
+    :return: un dict de lien Unfold, ou None si le module n'a aucune page
+    """
+    pages = section.get("items") or []
+    if not pages:
+        return None
+
+    page_d_accueil = pages[0]
+
+    lien = {
+        "title": section["title"],
+        "icon": section.get("_icone", "widgets"),
+        "link": page_d_accueil.get("link"),
+        "permission": page_d_accueil.get("permission"),
+    }
+
+    # On remonte le premier badge non vide trouve sur les pages du module.
+    # / Bubble up the first non-empty badge found on the module's pages.
+    for page in pages:
+        badge = page.get("badge")
+        if badge:
+            lien["badge"] = badge
+            break
+
+    return lien
 
 
 def environment_callback(request):
