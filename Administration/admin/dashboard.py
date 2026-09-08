@@ -989,10 +989,13 @@ def get_sidebar_navigation(request):
     :param request: objet Request Django
     :return: liste de groupes au format attendu par Unfold
     """
-    return _regrouper_sections_par_domaine(_construire_sections_modules(request))
+    return _regrouper_sections_par_domaine(
+        _construire_sections_modules(request),
+        chemin_courant=request.path,
+    )
 
 
-def _regrouper_sections_par_domaine(sections):
+def _regrouper_sections_par_domaine(sections, chemin_courant=""):
     """
     Transforme une liste de sections-modules en groupes-domaines.
     / Turns a list of module sections into domain groups.
@@ -1010,6 +1013,8 @@ def _regrouper_sections_par_domaine(sections):
     bloc des domaines (moins de 1) ou apres (9 et plus).
 
     :param sections: liste de sections telles que construites plus haut
+    :param chemin_courant: request.path, pour savoir si on est deja sur la
+        page d'un domaine — auquel cas son groupe s'affiche deplie
     :return: liste de groupes au format attendu par Unfold
     """
     # On separe les sections qui appartiennent a un domaine des autres.
@@ -1038,11 +1043,28 @@ def _regrouper_sections_par_domaine(sections):
         if not liens_des_modules:
             continue
 
+        lien_du_domaine = _safe_rev("staff_admin:page_de_domaine", args=[cle_domaine])
+
         groupes_domaines.append(
             {
                 "title": domaine["titre"],
                 "separator": True,
                 "collapsible": True,
+                # « link » n'est PAS une cle d'Unfold : c'est nous qui la
+                # lisons, dans notre surcharge de unfold/helpers/app_list.html.
+                # Elle rend le titre du domaine cliquable, comme la maquette.
+                # / Not an Unfold key: read by our app_list.html override to
+                #   make the domain title a link, as in the mockup.
+                "link": lien_du_domaine,
+                # Quand on est SUR la page d'un domaine, son sous-menu doit
+                # deja etre deplie : sinon on arrive sur la page sans voir ou
+                # on se trouve dans le rail. Unfold ne deplie un groupe que si
+                # l'un de ses liens est actif, et le lien du domaine n'en est
+                # pas un — c'est notre surcharge d'app_list.html qui lit cette
+                # cle.
+                # / Unfold only opens a group when one of its items is active;
+                #   the domain link is not one, hence this key.
+                "ouvert": bool(chemin_courant) and chemin_courant == str(lien_du_domaine),
                 "items": liens_des_modules,
             }
         )
@@ -1245,6 +1267,101 @@ def page_de_module(request, slug):
         "pages_de_l_onglet": par_categorie.get(onglet_demande, []),
     }
     return render(request, "admin/module_page.html", contexte)
+
+
+def page_de_domaine(request, cle):
+    """
+    Page d'accueil d'un domaine : la liste de ses modules.
+    / A domain's landing page: the list of its modules.
+
+    LOCALISATION : Administration/admin/dashboard.py
+    Routee par StaffAdminSite.get_urls() sur /admin/domaine/<cle>/.
+
+    C'est l'ecran de la maquette : on clique « Lespass » dans le rail, on
+    arrive ici, et on voit ses modules avec leur interrupteur. Cliquer un
+    module allume ouvre sa page ; cliquer un module eteint ne fait rien.
+    / The mockup's domain screen: click a domain in the rail, land here.
+
+    L'interrupteur est exactement celui du tableau de bord : meme modale,
+    meme POST. Ce POST repond « HX-Refresh », donc il recharge la page ou
+    qu'on soit — il n'y a rien a adapter pour cet ecran.
+    / The toggle is the dashboard's, unchanged: its POST answers HX-Refresh,
+      so it reloads whatever page you are on.
+
+    :param request: objet Request Django
+    :param cle: identifiant du domaine (ex. « lespass »)
+    :return: HttpResponse
+    """
+    from django.http import Http404
+    from django.shortcuts import render
+
+    from Administration.admin.site import staff_admin_site
+
+    domaine = DOMAINES.get(cle)
+    if domaine is None:
+        raise Http404(f"Domaine inconnu : {cle}")
+
+    configuration = Configuration.get_solo()
+    groupes = _grouper_les_cartes_par_domaine(_build_modules_context(configuration))
+
+    groupe = next((g for g in groupes if g["cle"] == cle), None)
+    if groupe is None:
+        # Domaine connu mais sans aucune carte : on affiche la page vide
+        # plutot qu'une 404, l'utilisateur a bien clique sur quelque chose.
+        # / Known domain with no card: show an empty page, not a 404.
+        groupe = {
+            "cartes": [],
+            "total": 0,
+            "actifs": 0,
+        }
+
+    # Meme regle que sur le tableau de bord : un lien seulement si le module
+    # a vraiment une page.
+    # / Same rule as the dashboard: link only when the module has a page.
+    _poser_les_liens_des_modules(request, [groupe])
+
+    contexte = {
+        **staff_admin_site.each_context(request),
+        "title": domaine["titre"],
+        "cle_du_domaine": cle,
+        "titre_du_domaine": domaine["titre"],
+        "icone_du_domaine": domaine["icone"],
+        "sous_titre_du_domaine": domaine["sous_titre"],
+        "cartes": groupe["cartes"],
+        "total": groupe["total"],
+        "actifs": groupe["actifs"],
+    }
+    return render(request, "admin/domaine_page.html", contexte)
+
+
+def _poser_les_liens_des_modules(request, groupes):
+    """
+    Donne a chaque carte allumee l'adresse de la page de son module.
+    / Gives each lit card the URL of its module page.
+
+    LOCALISATION : Administration/admin/dashboard.py
+
+    On ne pose un lien que si le module a VRAIMENT une entree dans la
+    sidebar. Un module eteint n'en a pas, et la caisse en V1 non plus : sa
+    carte affiche « V1 active » mais aucune page d'admin V2 n'existe. Poser
+    un lien mort ferait une carte cliquable qui tombe sur une 404.
+    / Only link when the module really has a sidebar section: a switched-off
+      module has none, and neither does a V1 POS.
+
+    :param request: objet Request Django
+    :param groupes: liste de groupes de domaine, modifiee sur place
+    :return: None
+    """
+    slugs_existants = set(_sections_par_slug(request))
+
+    for groupe in groupes:
+        for carte in groupe["cartes"]:
+            slug = carte.get("slug")
+            carte["lien_du_module"] = (
+                _safe_rev("staff_admin:page_de_module", args=[slug])
+                if slug in slugs_existants
+                else None
+            )
 
 
 def _carte_des_liens_vers_modeles():
@@ -1600,16 +1717,25 @@ MODULE_FIELDS = {
             "d'accueil du site."
         ),
         "testid": "dashboard-card-pages",
+        "domaine": "lespass",  # groupe du tableau de bord / dashboard group
+        "icone": "web",
+        "slug": "site-web",  # module correspondant dans la sidebar
     },
     "module_billetterie": {
         "name": _("Agenda et Billetterie"),
         "description": _("Events, reservations, and ticket sales"),
         "testid": "dashboard-card-billetterie",
+        "domaine": "lespass",  # groupe du tableau de bord / dashboard group
+        "icone": "event",
+        "slug": "agenda",  # module correspondant dans la sidebar
     },
     "module_adhesion": {
         "name": _("Adhésion, abonnement et pass"),
         "description": _("Memberships and subscriptions"),
         "testid": "dashboard-card-adhesion",
+        "domaine": "lespass",  # groupe du tableau de bord / dashboard group
+        "icone": "card_membership",
+        "slug": "adhesion",  # module correspondant dans la sidebar
     },
     "module_federation": {
         "name": _("Fédération et agenda participatif"),
@@ -1619,16 +1745,25 @@ MODULE_FIELDS = {
             "c'est l'agenda participatif. Tout se règle dans « Options de fédération »."
         ),
         "testid": "dashboard-card-federation",
+        "domaine": "lerezo",  # groupe du tableau de bord / dashboard group
+        "icone": "hub",
+        "slug": "federation",  # module correspondant dans la sidebar
     },
     "module_crowdfunding": {
         "name": _("Financement participatif & budgets contributifs"),
         "description": _("Participatory funding and adaptive contributions"),
         "testid": "dashboard-card-crowdfunding",
+        "domaine": "lekontrib",  # groupe du tableau de bord / dashboard group
+        "icone": "volunteer_activism",
+        "slug": "financement",  # module correspondant dans la sidebar
     },
     "module_booking": {
         "name": _("Réservation de ressources"),
         "description": _("Réservation de salles, machines ou autres."),
         "testid": "dashboard-card-booking",
+        "domaine": "lespass",  # groupe du tableau de bord / dashboard group
+        "icone": "meeting_room",
+        "slug": "ressources",  # module correspondant dans la sidebar
     },
     "module_caisse": {
         "name": _("Caisse & Restaurant"),
@@ -1638,11 +1773,17 @@ MODULE_FIELDS = {
         "link_url": "/laboutik/caisse/",
         "link_label": _("Open POS"),
         "link_icon": "fa-cash-register",
+        "domaine": "laboutik",  # groupe du tableau de bord / dashboard group
+        "icone": "point_of_sale",
+        "slug": "caisse",  # module correspondant dans la sidebar
     },
     "module_monnaie_locale": {
         "name": _("Monnaies locales, temps et cashless"),
         "description": _("Local currency tokens, federated wallet"),
         "testid": "dashboard-card-monnaie-locale",
+        "domaine": "lerezo",  # groupe du tableau de bord / dashboard group
+        "icone": "toll",
+        "slug": "monnaies",  # module correspondant dans la sidebar
     },
     "module_kiosk": {
         "name": _("Kiosk : borne libre-service"),
@@ -1650,7 +1791,9 @@ MODULE_FIELDS = {
             "Bornes de paiement en autonomie : recharge cashless, Stripe Terminal."
         ),
         "testid": "dashboard-card-kiosk",
-        "icon": "storefront",
+        "domaine": "lemachines",  # groupe du tableau de bord / dashboard group
+        "icone": "smart_display",
+        "slug": "kiosk",  # module correspondant dans la sidebar
     },
     "module_tireuse": {
         "name": _("Tireuses connectées"),
@@ -1661,6 +1804,9 @@ MODULE_FIELDS = {
         "link_url": "/controlvanne/kiosk/",
         "link_label": _("Open kiosk"),
         "link_icon": "fa-display",
+        "domaine": "lemachines",  # groupe du tableau de bord / dashboard group
+        "icone": "sports_bar",
+        "slug": "tireuses",  # module correspondant dans la sidebar
     },
     # Newsletter : hors grille principale, affichee dans la section « Outils externes ».
     # Pilotee par un serveur Ghost ou Brevo. En acces anticipe (BETA).
@@ -1674,99 +1820,229 @@ MODULE_FIELDS = {
         ),
         "testid": "dashboard-card-newsletter",
         "beta": True,
+        "domaine": "lespass",  # groupe du tableau de bord / dashboard group
+        "icone": "mail",
+        "slug": "newsletter",  # module correspondant dans la sidebar
     },
 }
 
 
+def _grouper_les_cartes_par_domaine(cartes):
+    """
+    Range les cartes de module sous leur domaine, pour le tableau de bord.
+    / Groups module cards under their domain, for the dashboard.
+
+    LOCALISATION : Administration/admin/dashboard.py
+
+    Reprend l'arborescence de la maquette : un bloc par domaine, avec son
+    icone, son sous-titre et un compteur « actifs / total ».
+
+    Une carte sans domaine connu est rangee dans le dernier groupe plutot que
+    d'etre jetee : mieux vaut une carte mal rangee qu'une carte disparue.
+    / A card with no known domain lands in the last group rather than vanishing.
+
+    :param cartes: liste de cartes (dicts avec au moins "domaine" et "active")
+    :return: liste de groupes, dans l'ordre de DOMAINES
+    """
+    par_domaine = {cle: [] for cle in DOMAINES}
+
+    for carte in cartes:
+        cle = carte.get("domaine")
+        if cle not in par_domaine:
+            # Domaine inconnu : on ne perd pas la carte.
+            # / Unknown domain: do not lose the card.
+            cle = list(par_domaine)[-1]
+        par_domaine[cle].append(carte)
+
+    groupes = []
+    for cle, cartes_du_domaine in par_domaine.items():
+        if not cartes_du_domaine:
+            continue
+
+        domaine = DOMAINES[cle]
+        groupes.append(
+            {
+                "cle": cle,
+                "titre": domaine["titre"],
+                "icone": domaine["icone"],
+                "sous_titre": domaine["sous_titre"],
+                "lien": _safe_rev("staff_admin:page_de_domaine", args=[cle]),
+                "cartes": cartes_du_domaine,
+                # Le compteur ne parle que des modules REELS. Une carte
+                # « bientot disponible » n'a pas d'interrupteur : l'inclure
+                # ferait afficher « 4/6 » alors que seuls 5 modules existent,
+                # et laisserait croire qu'il reste deux choses a activer.
+                # / The counter only covers real modules: a "coming soon" card
+                #   has no toggle, so counting it would promise a switch that
+                #   does not exist.
+                "total": _compter_les_cartes_reelles(cartes_du_domaine),
+                "actifs": _compter_les_cartes_actives(cartes_du_domaine),
+            }
+        )
+    return groupes
+
+
+def _compter_les_cartes_reelles(cartes):
+    """
+    Compte les modules qui existent vraiment, interrupteur ou non.
+    / Counts modules that actually exist, toggleable or not.
+
+    LOCALISATION : Administration/admin/dashboard.py
+
+    Exclut les cartes « bientot disponible », qui annoncent un module a venir
+    mais n'en sont pas un.
+    / Excludes "coming soon" cards, which announce a module rather than being one.
+
+    :param cartes: liste de cartes
+    :return: nombre de modules reels (int)
+    """
+    return sum(1 for carte in cartes if carte.get("type") != "coming_soon")
+
+
+def _compter_les_cartes_actives(cartes):
+    """
+    Compte les cartes allumees d'un groupe.
+    / Counts the lit cards of a group.
+
+    LOCALISATION : Administration/admin/dashboard.py
+
+    La carte POS ne porte pas de booleen "active" mais un "state" a trois
+    valeurs : elle compte comme allumee des que la V1 ou la V2 tourne.
+    / The POS card has a three-valued "state" instead of a boolean.
+
+    :param cartes: liste de cartes
+    :return: nombre de cartes allumees (int)
+    """
+    nombre = 0
+    for carte in cartes:
+        if carte.get("type") == "pos":
+            if carte.get("state") in ("v1_active", "v2_active"):
+                nombre += 1
+        elif carte.get("active"):
+            nombre += 1
+    return nombre
+
+
+def _compter_les_cartes_eteintes(groupes):
+    """
+    Compte les modules eteints, tous domaines confondus.
+    / Counts the switched-off modules across all domains.
+
+    Sert la pastille de « Decouvrir plus de modules » : elle annonce combien
+    de modules restent a decouvrir.
+    / Feeds the "discover more modules" pill.
+
+    :param groupes: liste de groupes de domaine
+    :return: nombre de cartes eteintes (int)
+    """
+    return sum(
+        groupe["total"] - groupe["actifs"] for groupe in groupes
+    )
+
+
 def _build_modules_context(configuration):
-    """Construit la liste ordonnee des cartes de la grille principale « Modules ».
-    Utilise par dashboard_callback et par le toggle HTMX.
+    """
+    Construit la liste des cartes de module, dans l'ordre de MODULE_FIELDS.
+    / Builds the list of module cards, in MODULE_FIELDS order.
 
-    Chaque carte porte un champ "type" que le gabarit lit pour choisir son rendu :
-      - "pos"     : la carte POS unifiee (LaBoutik V1/V2 + activation), inseree
-                    a la position de module_caisse dans l'ordre de MODULE_FIELDS.
-      - "generic" : une carte a interrupteur simple (les autres modules).
+    LOCALISATION : Administration/admin/dashboard.py
 
-    La newsletter est EXCLUE ici : elle a sa propre carte dans la section
-    « Outils externes » (cf. _build_external_cards_context).
-    / Ordered list of the main "Modules" grid cards. Each card has a "type" the
-    / template reads. The POS card is inserted at module_caisse's rank; the
-    / newsletter is excluded (it belongs to the "External tools" section)."""
-    modules = []
-    for field_name, info in MODULE_FIELDS.items():
-        # La newsletter est rendue a part, dans « Outils externes ».
-        # / Newsletter is rendered apart, in "External tools".
-        if field_name == "module_newsletter":
+    Chaque carte porte un "type" que le gabarit lit pour choisir son rendu :
+      - "pos"         : la carte LaBoutik unifiee, a trois etats (V1 / V2 /
+                        eteinte), inseree au rang de module_caisse ;
+      - "generic"     : une carte a interrupteur simple ;
+      - "coming_soon" : une carte informative, grisee, sans interrupteur.
+
+    Chaque carte porte aussi son "domaine" : c'est ce qui permet au tableau
+    de bord de les ranger par domaine, comme dans la maquette.
+    / Each card carries its domain, which is what lets the dashboard group them.
+
+    :param configuration: la Configuration du lieu
+    :return: liste de cartes (dicts)
+    """
+    cartes = []
+    for nom_du_champ, info in MODULE_FIELDS.items():
+        # La caisse a sa carte a part : trois etats, pas un interrupteur.
+        # / The POS has its own three-state card.
+        if nom_du_champ == "module_caisse":
+            carte_pos = _build_pos_card_context(configuration)
+            carte_pos["type"] = "pos"
+            carte_pos["domaine"] = info["domaine"]
+            carte_pos["icone"] = info["icone"]
+            carte_pos["slug"] = info["slug"]
+            # En V1, la caisse ne se desactive pas depuis le tableau de bord :
+            # on montre son etat, pas un interrupteur qui mentirait.
+            # / In V1 the POS cannot be switched off from here.
+            carte_pos["montre_interrupteur"] = carte_pos["state"] != "v1_active"
+            carte_pos["allume"] = carte_pos["state"] == "v2_active"
+            carte_pos["url_modale"] = carte_pos["toggle_modal_url"]
+            carte_pos["testid_interrupteur"] = "dashboard-card-pos-switch"
+            cartes.append(carte_pos)
             continue
 
-        # La caisse est rendue par la carte POS unifiee, a son rang dans l'ordre.
-        # / The cash register is rendered by the unified POS card, at its rank.
-        if field_name == "module_caisse":
-            pos_card = _build_pos_card_context(configuration)
-            pos_card["type"] = "pos"
-            modules.append(pos_card)
-            continue
-
-        modules.append(
+        cartes.append(
             {
                 "type": "generic",
-                "field": field_name,
+                "field": nom_du_champ,
                 "name": info["name"],
                 "description": info["description"],
                 "testid": info["testid"],
-                "active": getattr(configuration, field_name),
-                # Acces anticipe : la carte affiche l'encart BETA et la modal
-                # d'activation demande une confirmation « J'ai compris et je teste ! ».
-                # / Early access: card shows the BETA notice, modal asks to confirm.
+                "domaine": info["domaine"],
+                "icone": info["icone"],
+                "slug": info["slug"],
+                "active": getattr(configuration, nom_du_champ),
                 "beta": info.get("beta", False),
                 "beta_notice": BETA_NOTICE,
+                # Ce que le gabarit a besoin de savoir, decide ICI plutot que
+                # dans des conditions de template : un module generique a
+                # toujours un interrupteur, et il est allume si le module l'est.
+                # / Decided here rather than in template conditions.
+                "montre_interrupteur": True,
+                "allume": getattr(configuration, nom_du_champ),
+                "url_modale": reverse(
+                    "staff_admin:configuration-module-modal",
+                    args=[nom_du_champ],
+                ),
+                "testid_interrupteur": f"{info['testid']}-switch",
                 "modal_url": reverse(
                     "staff_admin:configuration-module-modal",
-                    args=[field_name],
+                    args=[nom_du_champ],
                 ),
                 "link_url": info.get("link_url"),
                 "link_label": info.get("link_label"),
                 "link_icon": info.get("link_icon"),
             }
         )
-    return modules
+
+    cartes.extend(_build_cartes_a_venir())
+    return cartes
 
 
-def _build_external_cards_context(configuration):
-    """Cartes de la section « Outils externes » du dashboard.
-    / Cards of the dashboard "External tools" section.
+def _build_cartes_a_venir():
+    """
+    Les modules annonces mais pas encore livres.
+    / Modules announced but not shipped yet.
 
-    Deux cartes :
-      - Newsletter : interrupteur du module (Ghost ou Brevo), en acces anticipe (BETA).
-      - Reseaux sociaux : Postiz, pas encore disponible. Carte informative grisee,
-        sans interrupteur (type "coming_soon")."""
-    newsletter_info = MODULE_FIELDS["module_newsletter"]
+    LOCALISATION : Administration/admin/dashboard.py
+
+    Ils n'ont pas de champ dans la Configuration : pas d'interrupteur, juste
+    une carte grisee qui dit que ca arrive.
+    / No Configuration field, hence no toggle: just a greyed-out card.
+
+    :return: liste de cartes (dicts)
+    """
     return [
         {
-            "type": "generic",
-            "field": "module_newsletter",
-            "name": newsletter_info["name"],
-            "description": newsletter_info["description"],
-            "testid": newsletter_info["testid"],
-            "active": configuration.module_newsletter,
-            "beta": newsletter_info.get("beta", False),
-            "beta_notice": BETA_NOTICE,
-            "modal_url": reverse(
-                "staff_admin:configuration-module-modal",
-                args=["module_newsletter"],
-            ),
-            "link_url": None,
-            "link_label": None,
-            "link_icon": None,
-        },
-        {
             # Postiz : integration reseaux sociaux, pas encore livree.
-            # Carte informative uniquement (grisee, sans interrupteur).
-            # / Postiz: social networks integration, not shipped yet. Info-only card.
+            # / Postiz: social-network integration, not shipped yet.
             "type": "coming_soon",
             "name": _("Réseaux sociaux"),
             "description": _("Postiz"),
             "testid": "dashboard-card-postiz",
+            "domaine": "lespass",
+            "icone": "share",
+            "montre_interrupteur": False,
+            "allume": False,
             "coming_soon_label": _("En cours de développement"),
         },
     ]
@@ -1995,19 +2271,34 @@ def dashboard_callback(request, context):
 
     configuration = Configuration.get_solo()
 
+    groupes_de_domaines = _grouper_les_cartes_par_domaine(
+        _build_modules_context(configuration)
+    )
+    _poser_les_liens_des_modules(request, groupes_de_domaines)
+
     context.update(
         {
             # Encart « Ce qu'il reste a faire » : informations manquantes qui
             # penalisent le referencement. Affiche tout en haut du dashboard.
             # / "What's left to do" notice: missing settings hurting SEO.
             "taches_referencement": _build_taches_referencement_context(configuration),
-            # Grille principale « Modules » : liste ordonnee, la carte POS unifiee
-            # y est inseree a son rang (type "pos").
-            # / Main "Modules" grid: ordered list, POS card inserted at its rank.
-            "modules": _build_modules_context(configuration),
-            # Section « Outils externes » : newsletter (Ghost/Brevo) + reseaux sociaux.
-            # / "External tools" section: newsletter (Ghost/Brevo) + social networks.
-            "external_cards": _build_external_cards_context(configuration),
+            # Les cartes de module, rangees par domaine — c'est la structure de
+            # la maquette : un bloc par domaine, avec son compteur.
+            # La section « Outils externes » a disparu : la newsletter et les
+            # reseaux sociaux sont de la communication publique, ils vivent
+            # donc dans le domaine Lespass comme le reste.
+            # / Module cards grouped by domain, as in the mockup. The "external
+            #   tools" section is gone: newsletter and social networks are public
+            #   communication, so they live in the Lespass domain.
+            "groupes_de_domaines": groupes_de_domaines,
+            # Combien de modules restent eteints : c'est la pastille de la ligne
+            # « Decouvrir plus de modules ».
+            # / How many modules are still off: the "discover more" pill.
+            "modules_eteints": _compter_les_cartes_eteintes(groupes_de_domaines),
+            # Adresse de contact du bouton « Proposer une idee ». La meme que
+            # celle du bouton « Contacter l'equipe » de admin/service.html.
+            # / Contact address for the "suggest an idea" button.
+            "lien_contact": "mailto:contact@tibillet.re",
         }
     )
 

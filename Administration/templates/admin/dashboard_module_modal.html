@@ -36,9 +36,17 @@
             </button>
 
             <button type="button"
+                    {# Pas de hx-target ni de hx-swap, et c'est VOLONTAIRE.     #}
+                    {# La vue repond « HX-Refresh: true » avec un corps vide :   #}
+                    {# rien n'est jamais echange, la page est simplement         #}
+                    {# rechargee. Declarer une cible ne servait donc a rien —    #}
+                    {# et cassait la modale partout ou cette cible n'existe pas  #}
+                    {# (htmx verifie la cible AVANT d'envoyer la requete, et     #}
+                    {# levait htmx:targetError sur la page d'un domaine).        #}
+                    {# / No hx-target on purpose: the view answers HX-Refresh    #}
+                    {#   with an empty body, so nothing is ever swapped. A target #}
+                    {#   only broke the modal on pages that lacked it.           #}
                     hx-post="{{ toggle_url }}"
-                    hx-target="#dashboard-modules"
-                    hx-swap="outerHTML"
                     hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
                     style="padding:.5rem 1rem;font-size:.875rem;font-weight:500;border-radius:.375rem;background:var(--color-primary-600,#7c3aed);color:#fff;border:none;cursor:pointer">
                 {% if is_beta and not is_active %}

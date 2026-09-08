@@ -56,13 +56,18 @@ class StaffAdminSite(UnfoldAdminSite):
         """
         from django.urls import path
 
-        from Administration.admin.dashboard import page_de_module
+        from Administration.admin.dashboard import page_de_domaine, page_de_module
 
         routes_des_modules = [
             path(
                 "module/<slug:slug>/",
                 self.admin_view(page_de_module),
                 name="page_de_module",
+            ),
+            path(
+                "domaine/<slug:cle>/",
+                self.admin_view(page_de_domaine),
+                name="page_de_domaine",
             ),
         ]
         return routes_des_modules + super().get_urls()
