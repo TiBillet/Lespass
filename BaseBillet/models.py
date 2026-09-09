@@ -991,11 +991,16 @@ class Configuration(SingletonModel):
                     f"SEPA debit not active on Stripe for {self.organisation}, disabling stripe_accept_sepa"
                 )
                 self.stripe_accept_sepa = False
+
+                # Sauvegarde avant le raise, sinon toute les modifications sont perdues.
+                # Comme le flag "stripe_accept_sepa" est remis à faux juste avant, pas d'erreur possible sur le SEPA
+                super().save(*args, **kwargs)
                 raise ValidationError(
-                    _("SEPA Direct Debit is not activated on your Stripe account. "
-                      "Please enable it at https://dashboard.stripe.com/settings/payment_methods "
-                      "then try again.")
+                    _("SEPA Direct Debit n'est pas activé sur votre compte Stripe. Veuillez "
+                      "l'activer sur https://dashboard.stripe.com/settings/payment_methods puis "
+                      "réessayer. Les autres changements ont bien été sauvegardés.")
                 )
+                #SEPA Direct Debit is not activated on your Stripe account. Please enable it at https://dashboard.stripe.com/settings/payment_methods then try again.
 
         super().save(*args, **kwargs)
 
@@ -2408,12 +2413,27 @@ class Event(models.Model):
     @property
     def children_pricesold_for_sections(self):
         from django.db.models import F, Count, Window
-        # Render only when there are children; otherwise return empty queryset
-        try:
-            if not self.children.exists():
+        # Render only when there are children; otherwise return empty queryset.
+        #
+        # On lit d'abord l'annotation « section_children_count », posee par
+        # EventAdmin.get_queryset(). Sans elle, ce exists() partait UNE FOIS PAR
+        # LIGNE de la changelist — et il repartait ici meme apres l'optimisation
+        # de ChildActionsSummaryTable.render(), qui ne couvrait que le cas « pas
+        # d'enfant ». La N+1 n'etait donc corrigee qu'a moitie.
+        # / Read the annotation first; without it this exists() ran once per row,
+        #   even after the section-level fix, which only covered the childless case.
+        nombre_d_enfants = getattr(self, "section_children_count", None)
+        if nombre_d_enfants is not None:
+            if not nombre_d_enfants:
                 return Ticket.objects.none()
-        except Exception:
-            return Ticket.objects.none()
+        else:
+            # Hors changelist annotee (fiche, appel direct) : ancien comportement.
+            # / Outside the annotated changelist: previous behaviour.
+            try:
+                if not self.children.exists():
+                    return Ticket.objects.none()
+            except Exception:
+                return Ticket.objects.none()
 
         valid_statuses = [Ticket.NOT_SCANNED, Ticket.SCANNED]
         return (
@@ -4139,7 +4159,11 @@ class ExternalApiKey(models.Model):
         help_text=_("API key works with any IP unless specified.")
     )
 
-    created = models.DateTimeField(auto_now=True, verbose_name=_("Créée le"))
+    # auto_now : ce champ se reecrit a CHAQUE save(), ce n'est pas une date de
+    # creation. Il est affiche en list_display et en readonly : le libeller
+    # « Creee le » affirmait quelque chose de faux a l'ecran.
+    # / auto_now rewrites on every save; this is not a creation date.
+    created = models.DateTimeField(auto_now=True, verbose_name=_("Dernière modification"))
 
     # read = models.BooleanField(default=True, verbose_name=_("Lecture"))
 

@@ -220,7 +220,11 @@ class WaitingConfiguration(models.Model):
     # / LEGACY — orphan flag from `/tenant/new/`. Stripe is now configured
     # post-creation, this flag is never set anymore.
     onboard_stripe_finished = models.BooleanField(default=False)
-    created = models.BooleanField(default=False, verbose_name=_("Créée le"))
+    # Drapeau « le tenant a-t-il ete cree ? », pose par onboard/tasks.py.
+    # PAS une date : le libelle « Creee le » etait faux et s'affichait a cote
+    # d'une vraie colonne de date dans OnboardInvitationAdmin.
+    # / A flag, not a date; the previous label claimed otherwise.
+    created = models.BooleanField(default=False, verbose_name=_("Instance créée"))
     tenant = models.ForeignKey(Client, on_delete=models.CASCADE, verbose_name=_('Tenant'), related_name='waiting_config', blank=True, null=True)
 
     # === Wizard d'onboarding (extension) ===

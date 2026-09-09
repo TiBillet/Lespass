@@ -34,6 +34,11 @@ def adhesion_badge_callback(request):
 
 # Badge "+ N" sur le menu Events si des propositions publiques attendent moderation
 # / "+ N" badge on Events menu if public proposals are pending moderation
+# Sentinelle pour distinguer « pas encore calcule » de « calcule, et vaut None ».
+# / Sentinel: "not computed yet" is not the same as "computed, and it is None".
+_PAS_ENCORE_CALCULE = object()
+
+
 def event_proposals_badge_callback(request):
     """
     Compte des propositions d'event en attente de validation.
@@ -41,10 +46,41 @@ def event_proposals_badge_callback(request):
 
     Affiche un badge "+ N" sur le menu "Events" si des propositions
     publiques attendent moderation (is_proposal=True, published=False).
+
+    POURQUOI CE COMPTAGE EST MEMORISE SUR LA REQUETE.
+    _construire_sections_modules() est executee QUATRE fois par page d'admin :
+    une fois par get_sidebar_navigation(), DEUX fois par get_tabs() (Unfold lit
+    UNFOLD["TABS"] a deux endroits, sites.py:351 et :431) et une fois par le
+    templatetag du fil d'Ariane. Sans memorisation, ce COUNT partait donc
+    quatre fois pour afficher un seul badge.
+    / Built four times per admin page; without memoisation this COUNT ran four
+      times to render a single badge.
+
+    On ne memorise QUE ce comptage, pas les sections entieres : un cache sur les
+    sections rendrait get_sidebar_navigation() dependante de l'ORDRE des appels
+    et casserait les tests qui basculent un module puis reconstruisent le rail.
+    C'est l'erreur commise en revision 12, puis corrigee.
+    / Only the count is cached, not the sections: caching those would make the
+      sidebar depend on call order.
+
+    :param request: objet Request Django
+    :return: la chaine du badge, ou None s'il n'y a rien a signaler
     """
+    memorise = getattr(request, "_tb_badge_propositions", _PAS_ENCORE_CALCULE)
+    if memorise is not _PAS_ENCORE_CALCULE:
+        return memorise
+
     from BaseBillet.models import Event
     count = Event.objects.filter(is_proposal=True, published=False).count()
-    return f"+ {count}" if count else None
+    badge = f"+ {count}" if count else None
+
+    try:
+        request._tb_badge_propositions = badge
+    except AttributeError:
+        # Objet request exotique qui refuse les attributs : on recalculera.
+        # / Exotic request object refusing attributes: recompute next time.
+        pass
+    return badge
 
 
 # --------------------------------------------------------------------------- #
@@ -1803,11 +1839,34 @@ def get_tabs(request):
 
         # Les modeles sur lesquels la barre doit apparaitre.
         # / The models the tab bar should show up on.
+        #
+        # CHAQUE MODELE EST CITE DEUX FOIS, et ce n'est pas une coquille.
+        # _get_tabs_list (unfold/templatetags/unfold.py) ne fait correspondre une
+        # entree ECRITE EN CHAINE que si la page est une changelist :
+        #
+        #     if isinstance(tab_model, str):
+        #         if str(opts) == tab_model and page == "changelist":
+        #
+        # Pour qu'une barre s'affiche sur un FORMULAIRE, il faut une entree dict
+        # portant « detail »: True. Or les singletons django-solo
+        # (ConfigurationSite, CrowdConfig, LaboutikConfiguration...) rendent un
+        # formulaire A L'URL DE LISTE : sans le dict, leur barre disparaissait et
+        # on ne pouvait plus revenir vers les autres pages du module autrement
+        # que par le rail. Le meme correctif est applique dans
+        # _onglets_hors_modules().
+        # / A string entry only matches changelists; django-solo singletons render
+        #   a form at their list URL, so they need the dict form too.
         modeles = []
         for page in pages:
             modele = lien_vers_modele.get(str(page.get("link", "")))
             if modele and modele not in modeles:
                 modeles.append(modele)
+
+        # On double la liste APRES coup : le dedoublonnage ci-dessus travaille sur
+        # des chaines, et melanger les deux formes dans la meme boucle le
+        # casserait. / Doubled afterwards: the de-duplication above works on
+        # strings and would break if both forms were mixed in.
+        modeles = [{"name": nom, "detail": True} for nom in modeles] + modeles
 
         if not modeles:
             continue

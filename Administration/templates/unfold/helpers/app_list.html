@@ -94,8 +94,24 @@ cette surcharge. Seul _regrouper_sections_par_domaine serait a changer.
                     {# Les groupes non repliables n'ont pas de x-data, donc pas de      #}
                     {# variable navigationOpen : on ne leur met aucune liaison.         #}
                     {# / Non-collapsible groups have no navigationOpen variable.        #}
+                    {#                                                                  #}
+                    {# LA LIAISON EST EN FORME OBJET, ET C'EST OBLIGATOIRE ICI.         #}
+                    {# Alpine traite les deux formes par des chemins differents :        #}
+                    {#   chaine -> Ar() : n'ajoute que les classes ABSENTES, et sa       #}
+                    {#             fonction d'annulation ne retire que ce qu'elle a      #}
+                    {#             ajoute — donc RIEN quand le serveur a deja pose la    #}
+                    {#             classe. Le groupe courant restait deplie a jamais.    #}
+                    {#   objet  -> qn() : retire explicitement les classes dont la       #}
+                    {#             valeur est fausse, meme posees par le serveur.        #}
+                    {# / String form only adds absent classes and can only undo what it  #}
+                    {#   added; the object form actively removes falsy ones.             #}
+                    {#                                                                  #}
+                    {# Et la forme objet preserve gratuitement l'absence d'animation au  #}
+                    {# chargement : la classe etant deja la et navigationOpen vrai,      #}
+                    {# Alpine ne touche a rien au premier rendu.                         #}
+                    {# / No animation on load: Alpine touches nothing on first pass.     #}
                     <div class="tb-sousmenu{% if not group.collapsible or has_active or group.ouvert %} tb-sousmenu-ouvert{% endif %}"
-                         {% if group.collapsible %}x-bind:class="navigationOpen && 'tb-sousmenu-ouvert'"{% endif %}>
+                         {% if group.collapsible %}x-bind:class="{'tb-sousmenu-ouvert': navigationOpen}"{% endif %}>
                     <ol class="flex flex-col gap-0.5 px-6">
                         {% for item in group.items %}
                             {% if item.has_permission %}

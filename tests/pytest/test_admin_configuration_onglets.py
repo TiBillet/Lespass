@@ -217,7 +217,7 @@ def test_la_page_des_parametres_mene_a_ses_pages_voisines(navigateur):
 
 
 @pytest.mark.django_db
-def test_aucun_onglet_declare_n_est_inatteignable(navigateur):
+def test_aucun_onglet_declare_n_est_inatteignable(navigateur, lieu_et_superadmin):
     """
     Le garde-fou generique, et le plus important du fichier.
 
@@ -228,13 +228,33 @@ def test_aucun_onglet_declare_n_est_inatteignable(navigateur):
     Ce test attrape la classe entiere du bug — y compris sur un groupe ajoute
     demain, et y compris si quelqu'un ajoute un singleton en oubliant l'entree
     « detail »: True.
+
+    Il balaie _onglets_hors_modules() ET get_tabs(). La premiere version ne
+    regardait que la premiere : le meme defaut vivait dans la seconde, sur les
+    pages de configuration des modules (ConfigurationSite, CrowdConfig...), et
+    est passe entre les mailles.
     / The generic guard: every model listed in a tab group must render the bar
       on its own page, or it becomes a dead end.
     """
-    from Administration.admin.dashboard import _onglets_hors_modules
+    from django.test import RequestFactory
+
+    from Administration.admin.dashboard import _onglets_hors_modules, get_tabs
+
+    # On balaie les DEUX sources de barres d'onglets. Ne regarder que
+    # _onglets_hors_modules() etait l'angle mort : le meme defaut existait dans
+    # get_tabs(), qui construit les barres de TOUS les modules, et il a survecu
+    # a la premiere correction.
+    # / Both sources are swept: looking only at the first one was the blind spot
+    #   that let the same defect survive in get_tabs().
+    tenant, _domaine, utilisateur = lieu_et_superadmin
+    requete = RequestFactory().get("/admin/")
+    requete.user = utilisateur
+    with tenant_context(tenant):
+        groupes = list(_onglets_hors_modules()) + list(get_tabs(requete))
 
     culs_de_sac = []
-    for groupe in _onglets_hors_modules():
+    en_erreur = []
+    for groupe in groupes:
         for modele in groupe.get("models", []):
             nom = modele["name"] if isinstance(modele, dict) else modele
             app_label, model_name = nom.split(".")
@@ -242,8 +262,23 @@ def test_aucun_onglet_declare_n_est_inatteignable(navigateur):
                 url = reverse(f"staff_admin:{app_label}_{model_name}_changelist")
             except NoReverseMatch:
                 continue
-            reponse = navigateur.get(url)
+            # raise_request_exception=False : une page d'admin qui plante pour
+            # une raison etrangere aux onglets ne doit pas faire echouer CE
+            # test, qui n'a qu'un seul travail. On les recense a part.
+            # Cas connu : AssetAdmin.get_queryset() fait un appel reseau a
+            # Fedow (admin_tenant.py:4264) et peut lever hors ligne.
+            # / An admin failing for unrelated reasons must not fail this test.
+            navigateur.raise_request_exception = False
+            try:
+                reponse = navigateur.get(url)
+            except Exception:
+                en_erreur.append(nom)
+                continue
+            finally:
+                navigateur.raise_request_exception = True
+
             if reponse.status_code != 200:
+                en_erreur.append(f"{nom} ({reponse.status_code})")
                 continue
             if "tabs-wrapper" not in reponse.content.decode():
                 culs_de_sac.append(nom)
@@ -253,3 +288,15 @@ def test_aucun_onglet_declare_n_est_inatteignable(navigateur):
         "Un singleton django-solo rend un FORMULAIRE a l'URL de liste : il lui "
         'faut une entree {"name": ..., "detail": True} dans le groupe.'
     )
+
+    # On ne fait pas echouer le test la-dessus — ce n'est pas son sujet — mais
+    # on le rend visible plutot que de l'avaler en silence.
+    # / Reported, not asserted: it is not this test's job.
+    if en_erreur:
+        import warnings
+
+        warnings.warn(
+            "Pages d'onglets injoignables pour une raison etrangere aux onglets "
+            f"(a instruire separement) : {sorted(set(en_erreur))}",
+            stacklevel=2,
+        )

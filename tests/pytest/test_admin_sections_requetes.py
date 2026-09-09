@@ -137,6 +137,82 @@ def test_le_cout_restant_par_ligne_est_celui_qu_on_a_choisi(navigateur):
     )
 
 
+@pytest.fixture
+def evenement_avec_enfants(lieu_avec_evenements):
+    """
+    Un evenement portant DEUX evenements enfants.
+
+    POURQUOI CETTE FIXTURE EXISTE. Sans enfant, la section se masque avant toute
+    requete et l'assertion de cout devient une borne a zero : le test passait
+    sans rien prouver. C'est precisement le chemin « avec enfants » qui gardait
+    une requete par ligne.
+    / Without children the section short-circuits and the assertion becomes a
+      bound of zero: the test proved nothing about the path that still queried.
+
+    `django_db` annule la transaction en fin de test : rien ne subsiste.
+    """
+    from BaseBillet.models import Event
+
+    tenant, _domaine, utilisateur = lieu_avec_evenements
+    with tenant_context(tenant):
+        parent = (
+            Event.objects.exclude(categorie=Event.ACTION)
+            .filter(parent__isnull=True)
+            .first()
+        )
+        assert parent is not None, "Aucun evenement racine sur ce lieu."
+        for rang in range(2):
+            Event.objects.create(
+                name=f"Enfant {rang} (test)",
+                datetime=parent.datetime,
+                parent=parent,
+                categorie=Event.ACTION,
+            )
+        yield tenant, utilisateur, parent
+
+
+@pytest.mark.django_db
+def test_un_evenement_AVEC_enfants_ne_coute_plus_de_requete_de_decision(
+    evenement_avec_enfants,
+):
+    """
+    Le chemin qui restait N+1. `children_pricesold_for_sections` refaisait son
+    PROPRE `children.exists()`, apres celui qu'on venait d'eviter dans
+    `render()` : la correction ne couvrait que les evenements sans enfant.
+    / The path that stayed N+1: the property re-ran its own exists().
+    """
+    from Administration.admin_tenant import ChildActionsSummaryTable, EventAdmin
+    from BaseBillet.models import Event
+
+    tenant, utilisateur, parent = evenement_avec_enfants
+    requete = RequestFactory().get("/admin/BaseBillet/event/")
+    requete.user = utilisateur
+
+    with tenant_context(tenant):
+        from Administration.admin.site import staff_admin_site
+
+        annote = (
+            EventAdmin(Event, staff_admin_site)
+            .get_queryset(requete)
+            .get(pk=parent.pk)
+        )
+        assert annote.section_children_count == 2, "L'annotation ne voit pas les enfants."
+
+        with CaptureQueriesContext(connection) as requetes:
+            html = ChildActionsSummaryTable(requete, annote).render()
+
+    # Une seule requete : celle qui recupere les billets a afficher. La requete
+    # de DECISION (« y a-t-il des enfants ? ») doit avoir disparu, des deux
+    # endroits ou elle se trouvait.
+    # / One query only: fetching the tickets. Both decision queries must be gone.
+    assert len(requetes) <= 1, (
+        f"{len(requetes)} requetes pour UN evenement avec enfants : "
+        "une requete de decision est revenue.\n"
+        + "\n".join(q["sql"][:120] for q in requetes)
+    )
+    assert html, "La section devrait rendre quelque chose pour un event avec enfants."
+
+
 @pytest.mark.django_db
 def test_la_section_des_actions_ne_requete_plus_par_ligne(lieu_avec_evenements):
     """
@@ -163,15 +239,21 @@ def test_la_section_des_actions_ne_requete_plus_par_ligne(lieu_avec_evenements):
             for evenement in evenements:
                 ChildActionsSummaryTable(requete, evenement).render()
 
-    # Les evenements SANS enfant se masquent sans aucune requete. Ceux qui en
-    # ont rendent leur tableau — on tolere donc jusqu'a une requete par
-    # evenement rendu, mais pas la requete de decision qui, elle, etait
-    # systematique.
-    # / Childless events must now cost zero query.
+    # Ce test ne couvre que le chemin SANS enfant : la section se masque, et
+    # cela doit coûter ZERO requete. Le chemin avec enfants est couvert par
+    # test_un_evenement_AVEC_enfants_ne_coute_plus_de_requete_de_decision —
+    # separer les deux est ce qui manquait, l'assertion melangee etant
+    # satisfaite par une borne a zero des que la fixture n'avait pas d'enfant.
+    # / This only covers the childless path; the other one has its own test.
     sans_enfant = [
         e for e in evenements if getattr(e, "section_children_count", 0) == 0
     ]
-    assert len(requetes) <= len(evenements) - len(sans_enfant), (
+    assert sans_enfant, (
+        "Aucun evenement sans enfant : ce test ne prouverait rien. "
+        "Il lui faut precisement le cas qui doit se masquer sans requete."
+    )
+    avec_enfant = len(evenements) - len(sans_enfant)
+    assert len(requetes) <= avec_enfant, (
         f"{len(requetes)} requetes pour {len(evenements)} evenements dont "
         f"{len(sans_enfant)} sans enfant : la requete de decision est revenue."
     )
