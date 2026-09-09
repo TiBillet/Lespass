@@ -54,6 +54,31 @@ html {
      A n'utiliser qu'a deux ou trois endroits, sinon c'est du bruit.
      / Signature gradient; use sparingly. */
   --tb-grad: linear-gradient(135deg, #1d9e75 0%, #63c77a 48%, #ef9f27 100%);
+
+  /* Jetons pour les FRAGMENTS d'admin (rapports comptables, panneaux
+     d'action...). Ces gabarits doivent poser leurs couleurs en style inline —
+     les classes Tailwind personnalisees ne sont pas dans le bundle d'Unfold et
+     rendraient du blanc sur blanc. La regle du projet l'impose, mais autorise
+     explicitement les variables CSS (.claude/skills/djc/SKILL.md).
+     / Admin fragments must use inline styles; the rule allows CSS variables.
+
+     CES QUATRE-LA SONT REDEFINIS PLUS BAS POUR LE MODE SOMBRE, et c'est tout
+     l'interet : un `var(--color-base-200)` ecrit en dur dans un style inline
+     donnerait une bordure claire sur fond sombre. Passer par un jeton est la
+     seule facon d'obtenir le mode sombre depuis un attribut style.
+     / Redefined for dark mode below — that is the whole point: a raw
+       var(--color-base-200) inline would stay light on a dark background. */
+  --tb-tableau-bordure: var(--color-base-200);
+  --tb-tableau-entete: var(--color-base-100);
+  --tb-texte-fort: var(--color-base-800);
+  --tb-texte-doux: var(--color-base-600);
+}
+
+html.dark {
+  --tb-tableau-bordure: var(--color-base-700);
+  --tb-tableau-entete: var(--color-base-800);
+  --tb-texte-fort: var(--color-base-100);
+  --tb-texte-doux: var(--color-base-400);
 }
 
 /* ==========================================================================
@@ -1290,6 +1315,44 @@ html.dark .tb-carte-ouvrir:hover {
   display: none;
 }
 
+/* L'apparition en cascade des cartes eteintes.
+
+   Point qui n'est pas evident : une animation CSS SE DECLENCHE quand un
+   element passe de `display: none` a affiche. On garde donc le masquage
+   ci-dessus tel quel — la grille ne saute pas, la gouttiere de defilement est
+   deja reservee — et on se contente d'animer l'etat revele.
+   / A CSS animation does fire when an element goes from display:none to shown.
+
+   Et surtout : AUCUNE animation au chargement, gratuitement. Au chargement les
+   cartes eteintes sont en `display: none`, donc rien ne part. C'est le piege
+   de la revision 10 (le rail qui s'animait a chaque navigation), regle ici par
+   construction plutot que par une condition.
+   / No animation on page load: hidden cards simply never start one.
+
+   Le decalage vient de --tb-delai, pose sur chaque carte par le gabarit
+   depuis une valeur calculee en Python. Le repli 0ms couvre le cas ou la
+   variable manquerait. / The stagger comes from --tb-delai, set server-side.
+
+   La SORTIE n'est pas animee, et c'est un choix : il faudrait un etat
+   intermediaire et une temporisation dans Alpine pour retarder le retrait du
+   flux. On ferme un repli, on ne le regarde pas.
+   / The exit is deliberately not animated. */
+@keyframes tb-carte-entre {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.tb-domaines.tb-montre-eteints .tb-carte-off {
+  animation: tb-carte-entre 0.38s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+  animation-delay: var(--tb-delai, 0ms);
+}
+
 /* --- La page d'un domaine --------------------------------------------------- */
 
 .tb-entete-domaine {
@@ -1426,5 +1489,13 @@ html.dark .tb-interrupteur-on {
   .tb-sousmenu,
   .tb-sousmenu > ol {
     transition-duration: 0.001s;
+  }
+
+  /* Les cartes apparaissent d'un coup, sans cascade ni delai. On coupe
+     l'animation ET le delai : garder le delai ferait attendre l'utilisateur
+     devant des cartes vides. / Cut both the animation and the delay. */
+  .tb-domaines.tb-montre-eteints .tb-carte-off {
+    animation: none;
+    animation-delay: 0ms;
   }
 }

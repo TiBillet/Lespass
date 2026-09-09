@@ -23,6 +23,7 @@ Meme pattern que les autres tests d'admin : base de dev vivante.
 / Same pattern as the other admin tests: live dev DB.
 """
 
+import re
 from unittest.mock import patch
 
 import pytest
@@ -1011,3 +1012,85 @@ def test_le_rail_ne_s_anime_pas_au_chargement(navigateur):
     # / On the dashboard no domain is current: everything is folded.
     conteneurs = _conteneurs_de_sous_menu(navigateur, "/admin/")
     assert not [ouvert for ouvert, lie in conteneurs if lie and ouvert]
+
+
+# --------------------------------------------------------------------------- #
+# L'apparition en cascade des cartes eteintes (revision 12)                    #
+# --------------------------------------------------------------------------- #
+#
+# Une transition CSS ne se teste pas en Python. Ce qui se teste, et ce qui
+# casserait en silence, c'est le CALCUL des delais : il est fait cote serveur
+# (_grouper_les_cartes_par_domaine) precisement pour qu'il soit verifiable ici
+# plutot que noye dans du JavaScript.
+# / The CSS transition is untestable in Python; the delay computation is not,
+#   and it lives server-side precisely so it can be checked here.
+
+
+@pytest.mark.django_db
+def test_le_delai_de_cascade_repart_a_zero_a_chaque_domaine(lieu_et_superadmin):
+    """
+    Les domaines demarrent en parallele, comme dans la maquette.
+
+    Sans remise a zero, la derniere carte du dernier domaine attendrait le
+    cumul de toutes les precedentes — pres d'une seconde avant d'apparaitre.
+    / Domains start in parallel; without the reset the last card would wait
+      for the sum of all the others.
+    """
+    tenant, _domaine, _utilisateur = lieu_et_superadmin
+    contexte = _contexte_du_tableau_de_bord(tenant)
+
+    groupes = contexte["groupes_de_domaines"]
+    assert groupes, "Aucun domaine : le test ne prouverait rien."
+
+    au_moins_un_groupe_avec_des_eteintes = False
+    for groupe in groupes:
+        eteintes = [c for c in groupe["cartes"] if not c.get("active")]
+        if not eteintes:
+            continue
+        au_moins_un_groupe_avec_des_eteintes = True
+        # Le premier module eteint de CHAQUE domaine part sans attendre.
+        # / The first off card of every domain starts immediately.
+        assert eteintes[0]["delai_ms"] == 0, (
+            f"Le domaine « {groupe['titre']} » ne repart pas de zero."
+        )
+        # Et les suivants s'echelonnent regulierement.
+        attendus = [rang * dashboard.PAS_DE_LA_CASCADE_MS for rang in range(len(eteintes))]
+        assert [c["delai_ms"] for c in eteintes] == attendus
+
+    if not au_moins_un_groupe_avec_des_eteintes:
+        pytest.skip("Tous les modules sont actifs sur ce lieu.")
+
+
+@pytest.mark.django_db
+def test_une_carte_allumee_ne_porte_aucun_delai(lieu_et_superadmin):
+    """
+    Une carte allumee est visible en permanence : elle n'entre jamais. Lui
+    donner un delai la ferait clignoter a chaque ouverture du repli.
+    / An active card is always visible and must never animate in.
+    """
+    tenant, _domaine, _utilisateur = lieu_et_superadmin
+    contexte = _contexte_du_tableau_de_bord(tenant)
+
+    allumees = [
+        carte
+        for groupe in contexte["groupes_de_domaines"]
+        for carte in groupe["cartes"]
+        if carte.get("active")
+    ]
+    assert allumees, "Aucun module actif : le test ne prouverait rien."
+    for carte in allumees:
+        assert carte["delai_ms"] == 0, carte["nom"]
+
+
+@pytest.mark.django_db
+def test_le_delai_est_ecrit_sur_la_carte_dans_le_html(navigateur):
+    """
+    Le calcul ne sert a rien s'il n'atteint pas le CSS. La variable doit etre
+    posee sur chaque carte, en style inline.
+    / The computation is useless unless it reaches the CSS.
+    """
+    html = navigateur.get("/admin/").content.decode()
+    delais = re.findall(r"--tb-delai: (\d+)ms", html)
+    assert delais, "Aucune carte ne porte --tb-delai."
+    # Toutes les cartes en portent une, allumees comprises (a 0).
+    assert html.count('class="tb-carte ') == len(delais)

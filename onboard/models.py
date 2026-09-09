@@ -95,7 +95,7 @@ class OnboardInvitation(models.Model):
         default=_default_expires_at,
         verbose_name=_("Expires at"),
     )
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Créée le"))
 
     class Meta:
         verbose_name = _("Onboard invitation")

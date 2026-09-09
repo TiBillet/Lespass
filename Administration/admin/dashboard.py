@@ -1626,11 +1626,40 @@ def _onglets_hors_modules():
       sont donc PAS des inlines, mais bien des onglets de navigation.
     / No DB relation between these models: they are navigation tabs.
 
+    POURQUOI CERTAINS MODELES SONT CITES DEUX FOIS (chaine + dict).
+    Unfold (_get_tabs_list, unfold/templatetags/unfold.py) ne fait
+    correspondre une entree ECRITE EN CHAINE que si la page est une
+    changelist :
+
+        if isinstance(tab_model, str):
+            if str(opts) == tab_model and page == "changelist":
+
+    Pour qu'une barre s'affiche sur un FORMULAIRE, il faut une entree dict
+    portant « detail »: True.
+
+    Or Configuration et FormbricksConfig sont des singletons django-solo :
+    ils rendent un formulaire A L'URL DE LISTE. Avec la seule chaine, leur
+    barre ne s'affichait donc JAMAIS — et comme « Parametres » est la seule
+    page du groupe presente dans le rail, « Cles API » et « Webhooks »
+    n'etaient atteignables que par la recherche. Un cul-de-sac.
+    / Unfold matches a string entry only on changelists; a form needs a dict
+      with "detail": True. Both singletons render a form at their list URL,
+      so their tab bar never appeared and the sibling pages were unreachable.
+
+    On cite donc ces deux modeles DEUX fois : la chaine (inoffensive) et le
+    dict qui fait le travail.
+
     :return: liste de groupes d'onglets au format Unfold
     """
     return [
         {
-            "models": ["BaseBillet.formbricksconfig", "BaseBillet.formbricksforms"],
+            "models": [
+                # FormbricksConfig est un singleton : voir le commentaire
+                # ci-dessus. / Singleton, see the docstring above.
+                {"name": "BaseBillet.formbricksconfig", "detail": True},
+                "BaseBillet.formbricksconfig",
+                "BaseBillet.formbricksforms",
+            ],
             "items": [
                 {
                     "title": _("Formulaires"),
@@ -1644,6 +1673,11 @@ def _onglets_hors_modules():
         },
         {
             "models": [
+                # Configuration est un singleton : sans cette entree dict, la
+                # barre ne s'affiche pas sur sa page et « Cles API » devient
+                # inatteignable. / Singleton: without this dict entry the bar
+                # never renders and the sibling tabs become unreachable.
+                {"name": "BaseBillet.configuration", "detail": True},
                 "BaseBillet.configuration",
                 "BaseBillet.externalapikey",
                 "BaseBillet.webhook",
@@ -2099,6 +2133,12 @@ MODULE_FIELDS = {
 }
 
 
+# Ecart entre l'entree de deux cartes eteintes successives, en millisecondes.
+# Valeur de la maquette (TEMP-tibillet-admin-main/script.js) : 40 ms.
+# / Stagger between two successive off-card entrances; the mockup's value.
+PAS_DE_LA_CASCADE_MS = 40
+
+
 def _grouper_les_cartes_par_domaine(cartes):
     """
     Range les cartes de module sous leur domaine, pour le tableau de bord.
@@ -2132,6 +2172,31 @@ def _grouper_les_cartes_par_domaine(cartes):
             continue
 
         domaine = DOMAINES[cle]
+
+        # Delai d'entree de chaque carte ETEINTE, pour l'apparition en cascade
+        # quand on ouvre « Decouvrir plus de modules ».
+        #
+        # Le calcul est fait ICI, en Python, et pas en JavaScript comme la
+        # maquette : nos cartes sont rendues cote serveur et leur ordre est
+        # deja connu. La maquette avait besoin de JS parce qu'elle construit
+        # son DOM a l'execution.
+        # / Computed here rather than in JS: our cards are server-rendered and
+        #   their order is already known.
+        #
+        # Le compteur repart de ZERO a chaque domaine, comme la maquette : les
+        # domaines demarrent en parallele. Sinon la derniere carte du dernier
+        # domaine attendrait pres d'une seconde avant d'apparaitre.
+        # / Reset per domain, as in the mockup: domains start in parallel.
+        rang = 0
+        for carte in cartes_du_domaine:
+            if carte.get("active"):
+                # Une carte allumee est visible en permanence : elle n'entre
+                # jamais, donc aucun delai. / Always visible: never animates.
+                carte["delai_ms"] = 0
+                continue
+            carte["delai_ms"] = rang * PAS_DE_LA_CASCADE_MS
+            rang += 1
+
         groupes.append(
             {
                 "cle": cle,

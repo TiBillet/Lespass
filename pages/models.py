@@ -433,6 +433,32 @@ class Page(models.Model):
         statut = _("publiee") if self.publie else _("brouillon")
         return f"{self.titre} ({statut})"
 
+    @property
+    def enfants_pour_section(self):
+        """
+        Les sous-pages, avec leur nombre de blocs deja compte.
+        / Sub-pages, with their block count already computed.
+
+        LOCALISATION : pages/models.py
+
+        POURQUOI CETTE PROPERTY EXISTE. SousPagesSection (pages/admin.py) est
+        rendue par Unfold SOUS CHAQUE LIGNE de la liste des pages, a chaque
+        affichage, meme si personne ne deplie. Elle affichait le nombre de
+        blocs avec un `instance.blocs.count()` par sous-page : une N+1
+        IMBRIQUEE (une requete par sous-page, de chaque page). Invisible tant
+        qu'un lieu n'a que deux pages, insoutenable ensuite.
+
+        On compte donc en UNE requete, cote base.
+        / Unfold renders this section for every row on every load; the block
+          count was one query per sub-page. Counted in a single query instead.
+
+        Le nom de l'annotation est celui du champ attendu par la section, ce
+        qui la rend lisible sans aller-retour.
+        """
+        from django.db.models import Count
+
+        return self.enfants.annotate(nb_blocs_annote=Count("blocs"))
+
     def get_absolute_url(self):
         """
         Adresse publique de la page.

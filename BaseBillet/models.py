@@ -414,7 +414,7 @@ class Configuration(SingletonModel):
     short_description = models.CharField(max_length=250, verbose_name=_("Short description"), blank=True, null=True)
     long_description = models.TextField(blank=True, null=True, verbose_name=_("Long description"))
 
-    postal_address = models.ForeignKey(PostalAddress, on_delete=SET_NULL, blank=True, null=True)
+    postal_address = models.ForeignKey(PostalAddress, on_delete=SET_NULL, blank=True, null=True, verbose_name=_("Adresse postale"))
 
     adress = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Address"))
     postal_code = models.IntegerField(blank=True, null=True, verbose_name=_("Zip code"))
@@ -423,9 +423,9 @@ class Configuration(SingletonModel):
     siren = models.CharField(max_length=20, blank=True, null=True, verbose_name=_("SIREN number"))
 
     phone = models.CharField(max_length=20, verbose_name=_("Phone number"), blank=True, null=True)
-    email = models.EmailField()
+    email = models.EmailField(verbose_name=_("Adresse e-mail"))
 
-    site_web = models.URLField(blank=True, null=True)
+    site_web = models.URLField(blank=True, null=True, verbose_name=_("Site web"))
     legal_documents = models.URLField(blank=True, null=True, verbose_name=_('Terms and conditions document'))
 
     twitter = models.URLField(blank=True, null=True)
@@ -555,7 +555,7 @@ class Configuration(SingletonModel):
         (FRENCH, _('French')),
         (ENGLISH, _('English')),
     ]
-    language = models.CharField(max_length=2, choices=LANGUAGE_CHOICES, default=FRENCH)
+    language = models.CharField(max_length=2, choices=LANGUAGE_CHOICES, default=FRENCH, verbose_name=_("Langue"))
 
     # noinspection PyUnresolvedReferences
     def img_variations(self):
@@ -734,7 +734,7 @@ class Configuration(SingletonModel):
         help_text=_("Active les bornes de paiement en libre-service (Stripe Terminal)."),
     )
     # NEW V2 END
-    currency_code = models.CharField(max_length=3, default="EUR")
+    currency_code = models.CharField(max_length=3, default="EUR", verbose_name=_("Code devise"))
 
     additional_text_in_membership_mail = models.TextField(
         blank=True,
@@ -2028,7 +2028,7 @@ class Event(models.Model):
                                                     help_text=_("The same email can be used for multiple tickets."),
                                                     null=True, blank=True)
 
-    postal_address = models.ForeignKey(PostalAddress, on_delete=SET_NULL, blank=True, null=True)
+    postal_address = models.ForeignKey(PostalAddress, on_delete=SET_NULL, blank=True, null=True, verbose_name=_("Adresse postale"))
 
     short_description = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Short description"))
     long_description = models.TextField(blank=True, null=True, verbose_name=_("Long description"))
@@ -2723,15 +2723,15 @@ class PriceSold(models.Model):
 
 class Reservation(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
-    datetime = models.DateTimeField(auto_now=True)
+    datetime = models.DateTimeField(auto_now=True, verbose_name=_("Date et heure"))
 
     user_commande: AuthBillet.models.TibilletUser = models.ForeignKey(settings.AUTH_USER_MODEL,
                                                                       on_delete=models.PROTECT,
-                                                                      related_name='reservations')
+                                                                      related_name='reservations',
+                                                                      verbose_name=_("Personne qui réserve"))
 
     event = models.ForeignKey(
-        Event, on_delete=models.PROTECT, related_name="reservation"
-    )
+        Event, on_delete=models.PROTECT, related_name="reservation", verbose_name=_("Évènement"))
 
     # FK optionnelle vers la commande qui regroupe cette reservation avec d'autres
     # (billets d'autres events + adhésions). Nullable pour que les flows directs
@@ -3098,16 +3098,16 @@ class ScanApp(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     # Ajout du unique=True pour éviter des problèmes au moment de l'appareillage (voir issue #454 sur le github)
-    name = models.CharField(max_length=30, unique=True)
+    name = models.CharField(max_length=30, unique=True, verbose_name=_("Nom de l'application"))
     key = models.OneToOneField(ScannerAPIKey,
                                on_delete=models.CASCADE,
                                blank=True, null=True,
                                related_name="scan_app",
                                )
 
-    archive = models.BooleanField(default=False)
+    archive = models.BooleanField(default=False, verbose_name=_("Archivée"))
     qrcode = models.CharField(max_length=255, null=True, blank=True)
-    claimed = models.BooleanField(default=False)
+    claimed = models.BooleanField(default=False, verbose_name=_("Appairée"))
 
     def __str__(self):
         return self.name
@@ -3273,7 +3273,7 @@ class Paiement_stripe(models.Model):
     order_date = models.DateTimeField(auto_now_add=True, verbose_name="Order date")
     last_action = models.DateTimeField(auto_now=True)
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, blank=True, null=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, blank=True, null=True, verbose_name=_("Utilisateur·ice"))
 
     NON, OPEN, PENDING, EXPIRE, FAILED, PAID, VALID, NOTSYNC, CANCELED, REFUNDED, PARTIALLY_REFUNDED = 'N', 'O', 'W', 'E', 'F', 'P', 'V', 'S', 'C', 'R', 'H'
     STATUS_CHOICES = (
@@ -3514,7 +3514,7 @@ class Paiement_stripe(models.Model):
 
 class LigneArticle(models.Model):
     uuid = models.UUIDField(primary_key=True, db_index=True, default=uuid.uuid4)
-    datetime = models.DateTimeField(auto_now_add=True)
+    datetime = models.DateTimeField(auto_now_add=True, verbose_name=_("Date et heure"))
 
     # L'objet price sold. Contient l'id Stripe
     pricesold = models.ForeignKey(PriceSold, on_delete=models.CASCADE, verbose_name=_("Product sold"))
@@ -3813,7 +3813,7 @@ class Membership(models.Model):
 
 
     asset_fedow = models.UUIDField(null=True, blank=True)
-    card_number = models.CharField(max_length=16, null=True, blank=True)
+    card_number = models.CharField(max_length=16, null=True, blank=True, verbose_name=_("Numéro de carte"))
 
     date_added = models.DateTimeField(auto_now_add=True, verbose_name=_('Date added'))
 
@@ -4120,20 +4120,18 @@ class Membership(models.Model):
 #### MODEL POUR INTEROP ####
 
 class ExternalApiKey(models.Model):
-    name = models.CharField(max_length=30, unique=True)
+    name = models.CharField(max_length=30, unique=True, verbose_name=_("Nom de la clé"))
     user = models.ForeignKey(settings.AUTH_USER_MODEL,
                              on_delete=models.CASCADE,
                              blank=True, null=True,
-                             help_text=_("User who created this key.")
-                             )
+                             help_text=_("User who created this key."), verbose_name=_("Utilisateur·ice"))
 
     key = models.OneToOneField(APIKey,
                                on_delete=models.CASCADE,
                                blank=True, null=True,
                                related_name="api_key",
                                help_text=_(
-                                   "Confirm to generate key. It will not appear before.")
-                               )
+                                   "Confirm to generate key. It will not appear before."), verbose_name=_("Clé"))
 
     ip = models.GenericIPAddressField(
         blank=True, null=True,
@@ -4141,7 +4139,7 @@ class ExternalApiKey(models.Model):
         help_text=_("API key works with any IP unless specified.")
     )
 
-    created = models.DateTimeField(auto_now=True)
+    created = models.DateTimeField(auto_now=True, verbose_name=_("Créée le"))
 
     # read = models.BooleanField(default=True, verbose_name=_("Lecture"))
 
@@ -4217,12 +4215,11 @@ class ExternalApiKey(models.Model):
 
 
 class Webhook(models.Model):
-    active = models.BooleanField(default=False)
+    active = models.BooleanField(default=False, verbose_name=_("Actif"))
     url = models.URLField(
         help_text=_(
             "Astuce Dev' : pour tester un webhook, lancez un petit serveur HTTP qui affiche le contenu de la requete : https://gist.github.com/mdonkers/63e115cc0c79b4f6b8b3a6b797e485c7"
-        )
-    )
+        ), verbose_name=_("URL de destination"))
 
     RESERVATION_V, MEMBERSHIP_V = "RV", "MV"
     EVENT_CHOICES = [
@@ -4232,7 +4229,7 @@ class Webhook(models.Model):
 
     event = models.CharField(max_length=2, choices=EVENT_CHOICES, default=RESERVATION_V,
                              verbose_name=_("Event"))
-    last_response = models.TextField(null=True, blank=True)
+    last_response = models.TextField(null=True, blank=True, verbose_name=_("Dernière réponse"))
 
 ### Fédérations
 
@@ -4374,7 +4371,7 @@ class FederationConfiguration(SingletonModel):
 
 
 class FederatedPlace(models.Model):
-    tenant = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="Collective")
+    tenant = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="Collective", verbose_name=_("Lieu"))
     tag_filter = models.ManyToManyField(Tag, blank=True, related_name="filtred", verbose_name=_("Tag filters"),
                                         help_text=_("Show only these tags."))
 
@@ -4423,7 +4420,7 @@ class GhostConfig(SingletonModel):
 
     ghost_url = models.URLField(blank=True, null=True, verbose_name="Ghost API URL")
     ghost_key = models.CharField(max_length=400, blank=True, null=True, verbose_name="Ghost Admin API key")
-    ghost_last_log = models.TextField(blank=True, null=True)
+    ghost_last_log = models.TextField(blank=True, null=True, verbose_name=_("Dernier journal Ghost"))
 
     def get_api_key(self):
         return fernet_decrypt(self.ghost_key) if self.ghost_key else None
@@ -4444,10 +4441,10 @@ class GhostConfig(SingletonModel):
 
 class FormbricksForms(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    environmentId = models.CharField(max_length=30, help_text="Formbricks environment ID")
+    environmentId = models.CharField(max_length=30, help_text="Formbricks environment ID", verbose_name=_("Identifiant d'environnement"))
     trigger_name = models.CharField(max_length=30, help_text="Form trigger name")
     # Formulaire à l'achat d'une adhésion ou d'un billet d'evènement
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="formbricksform")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="formbricksform", verbose_name=_("Produit"))
 
     class Meta:
         verbose_name = _('Formbricks form')
@@ -4480,7 +4477,7 @@ class FormbricksConfig(SingletonModel):
 
 class BrevoConfig(SingletonModel):
     api_key = models.CharField(max_length=400, blank=True, null=True)
-    last_log = models.TextField(blank=True, null=True)
+    last_log = models.TextField(blank=True, null=True, verbose_name=_("Dernier journal"))
 
     def get_api_key(self):
         return fernet_decrypt(self.api_key) if self.api_key else None

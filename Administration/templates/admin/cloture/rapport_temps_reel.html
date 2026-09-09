@@ -174,7 +174,7 @@
                 {% for asset in section.cashless_detail %}
                 <tr>
                     <td class="indent">&darr; {{ asset.nom }} ({{ asset.code }})</td>
-                    <td class="text-right" style="color: #666;">{{ asset.montant|euros }}</td>
+                    <td class="text-right" style="color: var(--tb-texte-doux);">{{ asset.montant|euros }}</td>
                 </tr>
                 {% endfor %}
                 {% endif %}

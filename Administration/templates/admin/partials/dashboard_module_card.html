@@ -30,7 +30,13 @@ FLUX DU CLIC SUR L'INTERRUPTEUR :
 / Toggle opens a confirmation modal; confirming reloads the page.
 {% endcomment %}
 
+{# --tb-delai : le decalage d'entree de cette carte dans la cascade, quand on  #}
+{# ouvre « Decouvrir plus de modules ». Il est CALCULE EN PYTHON               #}
+{# (_grouper_les_cartes_par_domaine) et remis a zero a chaque domaine.         #}
+{# Une carte allumee porte 0 : elle est visible en permanence, elle n'entre    #}
+{# jamais. / Entrance delay, computed in Python, reset per domain.             #}
 <div class="tb-carte {% if carte.lien_du_module %}tb-carte-on{% else %}tb-carte-off{% endif %}{% if carte.type == 'coming_soon' %} tb-carte-bientot{% endif %}"
+     style="--tb-delai: {{ carte.delai_ms|default:0 }}ms"
      data-testid="{{ carte.testid }}">
 
     {# Le corps de la carte : cliquable seulement si le module a une page. #}

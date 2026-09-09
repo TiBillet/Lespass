@@ -11,7 +11,11 @@ from django.shortcuts import redirect, get_object_or_404
 from django.template.loader import render_to_string
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
-from unfold.admin import ModelAdmin, StackedInline, TabularInline
+# ModelAdmin vient de Administration/admin/base.py : c'est le ModelAdmin
+# d'Unfold plus le placeholder de recherche tire de search_fields.
+# / Project ModelAdmin: Unfold's, plus the search placeholder.
+from Administration.admin.base import ModelAdmin
+from unfold.admin import StackedInline, TabularInline
 from unfold.components import register_component, BaseComponent
 from unfold.contrib.forms.widgets import WysiwygWidget
 from unfold.decorators import action

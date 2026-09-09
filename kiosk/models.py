@@ -25,7 +25,7 @@ class PaymentsIntent(models.Model):
     Le champ `pos` de LaBoutik est supprimé (inutile au flux Fedow, cf. SPEC).
     """
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
-    amount = models.PositiveIntegerField()  # centimes / cents
+    amount = models.PositiveIntegerField(verbose_name=_("Montant"))  # centimes / cents
     payment_intent_stripe_id = models.CharField(max_length=30, blank=True, null=True,
                                                 verbose_name=_("Paiement intent stripe id"))
 
@@ -54,7 +54,7 @@ class PaymentsIntent(models.Model):
         verbose_name=_("Lecteur utilisé (Stripe)"),
     )
 
-    datetime = models.DateTimeField(auto_now_add=True)
+    datetime = models.DateTimeField(auto_now_add=True, verbose_name=_("Date et heure"))
     card = models.ForeignKey("QrcodeCashless.CarteCashless", on_delete=models.PROTECT,
                              verbose_name=_("Carte cashless"), related_name="payments_intents",
                              blank=True, null=True)

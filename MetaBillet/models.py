@@ -32,7 +32,7 @@ class ProductDirectory(models.Model):
 
 class WaitingConfiguration(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=False)
-    email = models.EmailField()
+    email = models.EmailField(verbose_name=_("Adresse e-mail"))
     organisation = models.CharField(db_index=True, max_length=50, verbose_name=_("Collective name"))
 
     # LEGACY 2026-05-16 — champ orphelin du flow `/tenant/new/` supprime.
@@ -52,9 +52,9 @@ class WaitingConfiguration(models.Model):
     # Le wizard onboard ne demande pas ces choix — l'activation des modules
     # se fait dans le dashboard Unfold post-creation (cf. Configuration.module_*).
     # / LEGACY — orphan flags from the removed `/tenant/new/` form.
-    laboutik_wanted = models.BooleanField(default=False)
-    payment_wanted = models.BooleanField(default=False)
-    email_confirmed = models.BooleanField(default=False)
+    laboutik_wanted = models.BooleanField(default=False, verbose_name=_("LaBoutik souhaité"))
+    payment_wanted = models.BooleanField(default=False, verbose_name=_("Paiement souhaité"))
+    email_confirmed = models.BooleanField(default=False, verbose_name=_("Adresse e-mail confirmée"))
 
     dns_choice = models.CharField(max_length=200, blank=True, null=True, verbose_name=_("Domain name choice"))
 
@@ -79,7 +79,7 @@ class WaitingConfiguration(models.Model):
     # son admin Unfold (`Configuration.site_web` etc.).
     # / LEGACY — orphan URL fields from `/tenant/new/`. Onboard wizard doesn't
     # collect these; admin fills them later in Unfold Configuration.
-    site_web = models.URLField(blank=True, null=True)
+    site_web = models.URLField(blank=True, null=True, verbose_name=_("Site web"))
     legal_documents = models.URLField(blank=True, null=True, verbose_name='By-laws')
 
     twitter = models.URLField(blank=True, null=True)
@@ -211,7 +211,7 @@ class WaitingConfiguration(models.Model):
     categorie = models.CharField(max_length=3, choices=CATEGORIE_CHOICES, default=SALLE_SPECTACLE,
                                          verbose_name=_("Category"))
 
-    datetime = models.DateTimeField(auto_now_add=True)
+    datetime = models.DateTimeField(auto_now_add=True, verbose_name=_("Date et heure"))
     # LEGACY 2026-05-16 — flag orphelin du flow `/tenant/new/`. Etait
     # passe a True par `Tenant.onboard_stripe_return` apres validation
     # Stripe Connect. Aujourd'hui Stripe se configure post-creation (cf.
@@ -220,7 +220,7 @@ class WaitingConfiguration(models.Model):
     # / LEGACY — orphan flag from `/tenant/new/`. Stripe is now configured
     # post-creation, this flag is never set anymore.
     onboard_stripe_finished = models.BooleanField(default=False)
-    created = models.BooleanField(default=False)
+    created = models.BooleanField(default=False, verbose_name=_("Créée le"))
     tenant = models.ForeignKey(Client, on_delete=models.CASCADE, verbose_name=_('Tenant'), related_name='waiting_config', blank=True, null=True)
 
     # === Wizard d'onboarding (extension) ===
