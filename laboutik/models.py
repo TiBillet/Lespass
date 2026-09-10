@@ -452,11 +452,13 @@ class Terminal(models.Model):
     """
     id = models.UUIDField(primary_key=True, default=uuid_module.uuid4, editable=False)
 
+    # !! Ajout du unique=True pour éviter des problèmes au moment de l'appareillage (voir issue #454 sur le github) !!
     # Nom lisible de l'appareil, saisi par le gestionnaire a la creation.
     # Il est recopie sur le PairingDevice quand on fabrique le code PIN.
     # / Human-readable device name, entered by the manager. Copied onto the PairingDevice.
     name = models.CharField(
         max_length=200, blank=True, null=True,
+        unique=True,
         verbose_name=_("Nom"),
         help_text=_("Nom de l'appareil, par exemple « Caisse bar 1 »."),
     )

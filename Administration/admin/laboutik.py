@@ -15,7 +15,11 @@ from django.utils.html import format_html
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from solo.admin import SingletonModelAdmin
-from unfold.admin import ModelAdmin, TabularInline
+# ModelAdmin vient de Administration/admin/base.py : c'est le ModelAdmin
+# d'Unfold plus le placeholder de recherche tire de search_fields.
+# / Project ModelAdmin: Unfold's, plus the search placeholder.
+from Administration.admin.base import ModelAdmin
+from unfold.admin import TabularInline
 
 from Administration.admin.products import ICON_POS, IconPickerWidget
 from Administration.admin.site import staff_admin_site

@@ -1163,8 +1163,8 @@ class Command(BaseCommand):
                # / Accept SEPA direct debit (manual-validation memberships).
                # Requires the SEPA capability to be active on the connected account.
                "stripe_accept_sepa": True,
-               "site_web": "https://tibillet.org",
-               "legal_documents": "https://tibillet.org/cgucgv",
+               "site_web": "https://tibillet.coop",
+               "legal_documents": "https://tibillet.coop/cgucgv",
                "adresse": {
                     "name": "En bas de chez moi",
                     "street_address": "",

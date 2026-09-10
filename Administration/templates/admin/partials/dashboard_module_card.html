@@ -1,47 +1,133 @@
 {% load i18n %}
-{# ---------------------------------------------------------------------- #}
-{# CARTE MODULE GENERIQUE (interrupteur simple)                           #}
-{# / Generic module card (simple toggle)                                  #}
-{#                                                                        #}
-{# LOCALISATION : Administration/templates/admin/partials/dashboard_module_card.html #}
-{#                                                                        #}
-{# Reutilisee dans la grille « Modules » ET dans « Outils externes ».     #}
-{# Recoit `module` : name, description, testid, active, beta, beta_notice,#}
-{# modal_url.                                                             #}
-{#                                                                        #}
-{# FLUX DU CLIC SUR L'INTERRUPTEUR :                                       #}
-{#   1. hx-get vers modal_url -> remplit #module-modal-container          #}
-{#   2. la modal confirme, puis hx-post vers le toggle (HX-Refresh)       #}
-{# / Reused in both grids. Toggle opens the confirmation modal.           #}
-{# ---------------------------------------------------------------------- #}
-<div data-testid="{{ module.testid }}"
-     class="bg-white flex flex-col p-6 rounded-default shadow-xs border border-base-200 dark:bg-base-900 dark:border-base-800">
+{% comment %}
+CARTE D'UN MODULE
+/ A module card
 
-    <div class="flex items-center justify-between mb-3">
-        <h3 class="font-semibold text-important">
-            {{ module.name }}
-        </h3>
+LOCALISATION : Administration/templates/admin/partials/dashboard_module_card.html
 
-        <button type="button"
-                role="switch"
-                aria-checked="{{ module.active|yesno:'true,false' }}"
-                aria-label="{{ module.name }}"
-                data-testid="{{ module.testid }}-switch"
-                style="position:relative;display:inline-flex;width:2.75rem;height:1.5rem;flex-shrink:0;cursor:pointer;border-radius:9999px;border:2px solid transparent;transition:background-color .2s;{% if module.active %}background-color:var(--color-primary-600,#7c3aed){% else %}background-color:#d1d5db{% endif %}"
-                hx-get="{{ module.modal_url }}"
-                hx-target="#module-modal-container"
-                hx-swap="innerHTML">
-            <span style="pointer-events:none;display:inline-block;width:1.25rem;height:1.25rem;border-radius:9999px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .2s;{% if module.active %}transform:translateX(1.25rem){% else %}transform:translateX(0){% endif %}"></span>
-        </button>
-    </div>
+Utilisee par les DEUX ecrans : le tableau de bord (en grille) et la page d'un
+domaine (en liste). Le gabarit est le meme ; c'est la classe du conteneur qui
+change la taille, pas ce fichier.
+/ Used by both the dashboard grid and the domain page list.
 
-    <p class="text-sm text-base-500 dark:text-base-400 mb-4 grow">
-        {{ module.description }}
-    </p>
+Recoit `carte`, deja entierement decidee par dashboard.py :
+  name, description, testid, icone
+  lien_du_module ....... adresse de la page du module, ou vide si elle n'existe pas
+  montre_interrupteur .. faux pour un module a venir, et pour une caisse en V1
+  allume ............... etat de l'interrupteur
+  url_modale ........... la modale de confirmation
+  testid_interrupteur .. identifiant de test de l'interrupteur
+  beta, beta_notice, coming_soon_label, v1_online
 
-    {# Encart BETA affiche uniquement pour les modules en acces anticipe. #}
-    {# / BETA notice, only for early-access modules. #}
-    {% if module.beta %}
-        {% include "admin/partials/dashboard_beta_notice.html" with notice=module.beta_notice testid=module.testid %}
+AUCUNE DECISION ICI. Tout est calcule dans dashboard.py : le gabarit se
+contente d'afficher. C'est la regle du projet — la logique vit en Python.
+/ No decision here: everything is computed in dashboard.py.
+
+FLUX DU CLIC SUR L'INTERRUPTEUR :
+  1. hx-get vers url_modale -> remplit #module-modal-container
+  2. la modale confirme, puis hx-post vers le toggle, qui repond HX-Refresh
+     et recharge la page — d'ou qu'on vienne.
+/ Toggle opens a confirmation modal; confirming reloads the page.
+{% endcomment %}
+
+{# --tb-delai : le decalage d'entree de cette carte dans la cascade, quand on  #}
+{# ouvre « Decouvrir plus de modules ». Il est CALCULE EN PYTHON               #}
+{# (_grouper_les_cartes_par_domaine) et remis a zero a chaque domaine.         #}
+{# Une carte allumee porte 0 : elle est visible en permanence, elle n'entre    #}
+{# jamais. / Entrance delay, computed in Python, reset per domain.             #}
+<div class="tb-carte {% if carte.lien_du_module %}tb-carte-on{% else %}tb-carte-off{% endif %}{% if carte.type == 'coming_soon' %} tb-carte-bientot{% endif %}"
+     style="--tb-delai: {{ carte.delai_ms|default:0 }}ms"
+     data-testid="{{ carte.testid }}">
+
+    {# Le corps de la carte : cliquable seulement si le module a une page. #}
+    {# / The card body: clickable only when the module has a page. #}
+    {% if carte.lien_du_module %}
+        <a class="tb-carte-lien" href="{{ carte.lien_du_module }}">
+    {% else %}
+        <span class="tb-carte-lien">
+    {% endif %}
+
+        <span class="tb-carte-icone" aria-hidden="true">
+            <span class="material-symbols-outlined">{{ carte.icone }}</span>
+        </span>
+
+        <span class="tb-carte-texte">
+            <span class="tb-carte-nom">{{ carte.name }}</span>
+            <span class="tb-carte-desc">{{ carte.description }}</span>
+        </span>
+
+    {% if carte.lien_du_module %}</a>{% else %}</span>{% endif %}
+
+    <span class="tb-carte-etat">
+
+        {# Le lien vers l'interface du module (la caisse, aujourd'hui).      #}
+        {# Il vit ICI et pas dans le corps de la carte : le corps est deja   #}
+        {# un <a> vers la page du module, et on n'imbrique pas deux liens.   #}
+        {# / The link into the module's own interface. It lives here because #}
+        {#   the card body is already a link, and links do not nest.         #}
+        {% if carte.lien_externe %}
+            <a class="tb-carte-ouvrir"
+               href="{{ carte.lien_externe }}"
+               {% if carte.externe_nouvel_onglet %}target="_blank" rel="noopener noreferrer"{% endif %}
+               data-testid="{{ carte.testid_externe }}">
+                {{ carte.libelle_externe }}
+                <span class="material-symbols-outlined" aria-hidden="true">
+                    {% if carte.externe_nouvel_onglet %}open_in_new{% else %}arrow_forward{% endif %}
+                </span>
+            </a>
+        {% endif %}
+
+        {% if carte.type == "coming_soon" %}
+            <span class="tb-etiquette" data-testid="{{ carte.testid }}-soon-badge">
+                {{ carte.coming_soon_label }}
+            </span>
+
+        {% elif carte.montre_interrupteur %}
+            <button type="button"
+                    role="switch"
+                    aria-checked="{{ carte.allume|yesno:'true,false' }}"
+                    aria-label="{% blocktranslate with nom=carte.name %}Activer ou désactiver {{ nom }}{% endblocktranslate %}"
+                    data-testid="{{ carte.testid_interrupteur }}"
+                    class="tb-interrupteur{% if carte.allume %} tb-interrupteur-on{% endif %}"
+                    hx-get="{{ carte.url_modale }}"
+                    hx-target="#module-modal-container"
+                    hx-swap="innerHTML">
+                <span class="tb-interrupteur-bouton" aria-hidden="true"></span>
+            </button>
+
+        {% else %}
+            {# Caisse en V1 : pas d'interrupteur, mais on dit enfin si le #}
+            {# serveur repond. L'info etait deja calculee, jamais montree. #}
+            {# / V1 POS: no toggle, but we finally show whether it answers. #}
+            <span class="tb-etiquette tb-etiquette-v1"
+                  data-testid="dashboard-card-pos-v1-badge">
+                {% translate "V1 active" %}
+            </span>
+            <span class="tb-pastille {% if carte.v1_online %}tb-pastille-en-ligne{% else %}tb-pastille-hors-ligne{% endif %}"
+                  data-testid="dashboard-card-pos-v1-status">
+                <span class="tb-pastille-point" aria-hidden="true"></span>
+                {% if carte.v1_online %}{% translate "En ligne" %}{% else %}{% translate "Hors ligne" %}{% endif %}
+            </span>
+        {% endif %}
+    </span>
+
+    {# Un lieu reste en V1 ne peut pas basculer seul : on le dit.          #}
+    {# / A venue still on V1 cannot migrate alone: say so.                  #}
+    {% if carte.state == "v1_active" %}
+        <span class="tb-carte-note">
+            {% translate "To migrate to LaBoutik V2, please contact the TiBillet team." %}
+        </span>
+    {% endif %}
+
+    {% if carte.beta %}
+        {# L'encart BETA occupe toute la largeur, SOUS le reste. Sans ce      #}
+        {# conteneur il se rangeait a cote du texte des que la carte etait    #}
+        {# assez large — visible sur la page d'un domaine, ou les cartes      #}
+        {# occupent toute la largeur de l'ecran.                             #}
+        {# / Full-width, below everything: without this wrapper it sat beside #}
+        {#   the text as soon as the card was wide enough.                    #}
+        <span class="tb-carte-beta">
+            {% include "admin/partials/dashboard_beta_notice.html" with notice=carte.beta_notice testid=carte.testid %}
+        </span>
     {% endif %}
 </div>

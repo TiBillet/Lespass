@@ -13,7 +13,10 @@ with change_form_before_template (visual report) and in S4 with exports.
 from django.contrib import admin
 from django.utils.translation import gettext_lazy as _
 
-from unfold.admin import ModelAdmin
+# ModelAdmin vient de Administration/admin/base.py : c'est le ModelAdmin
+# d'Unfold plus le placeholder de recherche tire de search_fields.
+# / Project ModelAdmin: Unfold's, plus the search placeholder.
+from Administration.admin.base import ModelAdmin
 
 from Administration.admin.site import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest

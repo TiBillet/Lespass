@@ -8,8 +8,8 @@ import uuid
 class Client(TenantMixin):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
-    name = models.CharField(max_length=100, unique=True, db_index=True)
-    created_on = models.DateField(auto_now_add=True)
+    name = models.CharField(max_length=100, unique=True, db_index=True, verbose_name=_("Nom du lieu"))
+    created_on = models.DateField(auto_now_add=True, verbose_name=_("Créé le"))
 
     paid_until =  models.DateField(default=timezone.now)
     on_trial = models.BooleanField(default=False)

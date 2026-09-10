@@ -124,9 +124,9 @@ class TibilletUser(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
 
     username = models.CharField(max_length=200, unique=True)  # same as email bu defaut
-    email = models.EmailField(unique=True)  # changes email to unique and blank to false
+    email = models.EmailField(unique=True, verbose_name=_("Adresse e-mail"))  # changes email to unique and blank to false
     email_error = models.BooleanField(default=False, help_text=_("Confirmation email delivery failed if true"))
-    email_valid = models.BooleanField(default=False, help_text=_("Email confirmed"))
+    email_valid = models.BooleanField(default=False, help_text=_("Email confirmed"), verbose_name=_("Adresse e-mail confirmée"))
 
     rsa_key = models.OneToOneField(RsaKey, on_delete=models.SET_NULL, null=True, related_name='user')
     wallet = models.OneToOneField(Wallet, on_delete=models.SET_NULL, null=True, related_name='user')

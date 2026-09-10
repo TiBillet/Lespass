@@ -48,7 +48,11 @@ from django.urls import reverse
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from solo.admin import SingletonModelAdmin
-from unfold.admin import ModelAdmin, TabularInline
+# ModelAdmin vient de Administration/admin/base.py : c'est le ModelAdmin
+# d'Unfold plus le placeholder de recherche tire de search_fields.
+# / Project ModelAdmin: Unfold's, plus the search placeholder.
+from Administration.admin.base import ModelAdmin
+from unfold.admin import TabularInline
 from unfold.contrib.filters.admin import (
     AutocompleteSelectFilter,
     ChoicesDropdownFilter,
@@ -313,7 +317,11 @@ class SousPagesSection(TableSection):
     / Sub-pages of a page, expanded under its row in the list (chevron).
     """
 
-    related_name = "enfants"
+    # On vise la property annotee du modele, pas la relation brute : sinon
+    # nb_blocs declenche un count() PAR SOUS-PAGE, a chaque affichage de la
+    # liste, pour un panneau que personne n'ouvre.
+    # / Point at the annotated property, not the raw relation.
+    related_name = "enfants_pour_section"
     verbose_name = _("Sous-pages")
     fields = ["titre", "publie", "nb_blocs"]
 
@@ -323,6 +331,13 @@ class SousPagesSection(TableSection):
     titre.short_description = _("Titre")
 
     def nb_blocs(self, instance):
+        # L'annotation vient de Page.enfants_pour_section. Le repli garde la
+        # section juste si elle est un jour utilisee hors de cette property.
+        # / Annotation from Page.enfants_pour_section; fallback keeps it
+        #   correct if the section is ever used elsewhere.
+        nombre = getattr(instance, "nb_blocs_annote", None)
+        if nombre is not None:
+            return nombre
         return instance.blocs.count()
 
     nb_blocs.short_description = _("Blocs")

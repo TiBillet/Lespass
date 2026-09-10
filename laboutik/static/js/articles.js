@@ -100,7 +100,7 @@ function manageKey(event) {
 			// on ignore le clic — l'article est grisé visuellement.
 			// / If stock is blocking (out of stock + sales not allowed),
 			// ignore the click — the article is visually greyed out.
-			if (ele.dataset.stockBloquant === 'true') {
+			if (ele.dataset.stock_bloquant === 'true') {
 				return
 			}
 
@@ -292,12 +292,12 @@ function syncStockBloquantApresWebSocket() {
 
 			// Propager l'état bloquant du badge vers le container
 			// / Propagate blocking state from badge to container
-			if (badgeDiv.dataset.stockBloquant === 'true') {
+			if (badgeDiv.dataset.stock_bloquant === 'true') {
 				articleContainer.classList.add('article-bloquant')
-				articleContainer.dataset.stockBloquant = 'true'
+				articleContainer.dataset.stock_bloquant = 'true'
 			} else {
 				articleContainer.classList.remove('article-bloquant')
-				delete articleContainer.dataset.stockBloquant
+				delete articleContainer.dataset.stock_bloquant
 			}
 		}
 	} catch (error) {

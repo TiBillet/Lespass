@@ -59,7 +59,8 @@
 		{% endcomment %}
 		<div id="stock-badge-{{ article.id }}"
 		     aria-live="polite"
-		     data-testid="stock-badge-{{ article.id }}">
+		     data-testid="stock-badge-{{ article.id }}"
+            {% if article.stock_en_rupture %}data-stock_bloquant="true"{% endif %}>
 			{% if article.stock_en_alerte %}
 			<span class="article-stock-badge article-stock-badge-alerte"
 			      data-testid="stock-badge-alerte">{{ article.stock_quantite_lisible }}</span>

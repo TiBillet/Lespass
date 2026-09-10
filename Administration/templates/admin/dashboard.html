@@ -1,175 +1,133 @@
 {% load i18n %}
+{% comment %}
+TABLEAU DE BORD — les modules, ranges par domaine
+/ Dashboard: modules grouped by domain
 
-{# Encart « Ce qu'il reste a faire » : volontairement HORS du test sur       #}
-{# `modules`, sinon il disparaitrait sur un tenant neuf sans aucun module    #}
-{# active — c'est-a-dire exactement le cas ou il est le plus utile.          #}
-{# / Deliberately OUTSIDE the `modules` test: otherwise it would vanish on a #}
-{# brand-new tenant with no module enabled, exactly when it matters most.    #}
+LOCALISATION : Administration/templates/admin/dashboard.html
+Contexte fourni par Administration.admin.dashboard.dashboard_callback().
+
+C'est l'ecran de la maquette : un bloc par domaine, avec son compteur, et
+une grille de cartes de module.
+
+LE REPLI DES MODULES ETEINTS
+Les modules eteints sont masques par defaut ; l'interrupteur « Decouvrir
+plus de modules » les revele. Deux details repris de la maquette :
+  - toutes les cartes restent dans le DOM, seule une classe change. C'est ce
+    qui empeche la grille de sauter quand on ouvre le repli ;
+  - l'etat vit dans Alpine, deja charge par Unfold. Aucun JS maison, aucun
+    aller-retour serveur : c'est une preference d'affichage, pas une donnee.
+/ Off modules are hidden by default; all cards stay in the DOM so the grid
+  never jumps. State lives in Alpine, already loaded by Unfold.
+{% endcomment %}
+
+{# L'encart « Ce qu'il reste a faire » est VOLONTAIREMENT hors de tout test #}
+{# sur les modules : sur un lieu neuf sans aucun module actif, c'est        #}
+{# justement la qu'il est le plus utile.                                    #}
+{# / Deliberately outside any module test: most useful on a brand-new venue. #}
 {% include "admin/partials/dashboard_taches.html" %}
 
-{% if modules or external_cards %}
-<div id="dashboard-modules" class="flex flex-col gap-4 mb-8">
+<div id="dashboard-modules" x-data="{ montrerEteints: false }">
 
-    {# ================================================================= #}
-    {# GRILLE PRINCIPALE : « Modules »                                    #}
-    {# La liste `modules` est deja ordonnee cote Python. Chaque carte     #}
-    {# porte un `type` : "pos" (carte POS unifiee, rendue ici) ou         #}
-    {# "generic" (carte a interrupteur, rendue par le partial).           #}
-    {# / Main "Modules" grid. `modules` is pre-ordered server-side; each   #}
-    {# card has a `type`: "pos" (rendered here) or "generic" (partial).   #}
-    {# ================================================================= #}
-    <h2 class="font-semibold text-lg text-important">
-        {% translate "Modules" %}
-    </h2>
+    {# En-tete de la page, comme sur les pages de domaine et de module.      #}
+    {# <h2> et non <h1> : la barre haute d'Unfold porte deja le seul <h1>.   #}
+    {# / Page header, matching the domain and module pages.                  #}
+    <div class="tb-entete-domaine" data-testid="dashboard-header">
+        <h2 class="tb-entete-titre">
+            <span class="material-symbols-outlined" aria-hidden="true">dashboard</span>
+            {% translate "Tableau de bord" %}
+        </h2>
+        <p class="tb-entete-sous-titre">
+            {% blocktranslate trimmed %}
+                Vue d'ensemble de l'état de vos modules, domaine par domaine.
+                Activez, désactivez, ou entrez dans un module.
+            {% endblocktranslate %}
+        </p>
+    </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {% for module in modules %}
-            {% if module.type == "pos" %}
-            {# ----------------------------------------------------------------- #}
-            {# Carte POS unifiee : fusionne LaBoutik V1, LaBoutik V2 et le toggle #}
-            {# du module caisse en une seule carte a 3 etats exclusifs.          #}
-            {# / Unified POS card: merges LaBoutik V1, V2 and the cash register   #}
-            {# toggle into a single 3-state card.                                 #}
-            {# ----------------------------------------------------------------- #}
-            <div data-testid="{{ module.testid }}"
-                 class="bg-white flex flex-col p-6 rounded-default shadow-xs border border-base-200 dark:bg-base-900 dark:border-base-800 {% if module.state == 'v1_active' %}opacity-90{% endif %}">
+    {# Appel a idees. Le bouton mene a la meme adresse que « Contacter #}
+    {# l'equipe » de l'encart d'aide.                                    #}
+    {# / Ideas call-out, pointing at the same address as the help block. #}
+    <div class="tb-cta" data-testid="dashboard-cta">
+        <span class="tb-cta-icone" aria-hidden="true">
+            <span class="material-symbols-outlined">lightbulb</span>
+        </span>
+        <span class="tb-cta-texte">
+            <span class="tb-cta-titre">{% translate "Une idée de module ?" %}</span>
+            <span class="tb-cta-desc">
+                {% blocktranslate trimmed %}
+                    TiBillet est un commun numérique en construction. Si vous imaginez
+                    un module qui manque, dites-le-nous — on vous écoute.
+                {% endblocktranslate %}
+            </span>
+        </span>
+        <a class="tb-cta-bouton" href="{{ lien_contact }}" data-testid="dashboard-cta-lien">
+            {% translate "Proposer une idée" %}
+            <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
+        </a>
+    </div>
 
-                <div class="flex items-center justify-between mb-3">
-                    <h3 class="font-semibold text-important">
-                        {{ module.name }}
-                    </h3>
+    {# Le repli. Libelle, pastille et interrupteur forment UN seul bouton :  #}
+    {# une seule zone cliquable, et c'est atteignable au clavier.            #}
+    {# / Label, pill and switch are one button: one hit area, keyboard-reachable. #}
+    <div class="tb-decouvrir">
+        <button type="button"
+                role="switch"
+                x-bind:aria-checked="montrerEteints ? 'true' : 'false'"
+                x-on:click="montrerEteints = !montrerEteints"
+                class="tb-decouvrir-bouton"
+                data-testid="dashboard-decouvrir">
+            <span class="tb-decouvrir-libelle">{% translate "Découvrir plus de modules" %}</span>
+            {% if modules_eteints %}
+                <span class="tb-decouvrir-nombre">{{ modules_eteints }}</span>
+            {% endif %}
+            <span class="tb-interrupteur" x-bind:class="montrerEteints && 'tb-interrupteur-on'">
+                <span class="tb-interrupteur-bouton" aria-hidden="true"></span>
+            </span>
+        </button>
+    </div>
 
-                    {% if module.state == "v1_active" %}
-                        {# V1 en service : etat fige, desactivation impossible. #}
-                        {# V1 online: locked state, cannot be disabled. #}
-                        <span data-testid="dashboard-card-pos-v1-badge"
-                              class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
-                            {% translate "V1 active" %}
-                        </span>
-                    {% else %}
-                        {# Etats V2 (inactif ou actif) : switch d'activation via modal. #}
-                        {# V2 states (inactive/active): activation switch via modal. #}
-                        <button type="button"
-                                role="switch"
-                                aria-checked="{% if module.state == 'v2_active' %}true{% else %}false{% endif %}"
-                                aria-label="{{ module.name }}"
-                                data-testid="dashboard-card-pos-switch"
-                                style="position:relative;display:inline-flex;width:2.75rem;height:1.5rem;flex-shrink:0;cursor:pointer;border-radius:9999px;border:2px solid transparent;transition:background-color .2s;{% if module.state == 'v2_active' %}background-color:var(--color-primary-600,#7c3aed){% else %}background-color:#d1d5db{% endif %}"
-                                hx-get="{{ module.toggle_modal_url }}"
-                                hx-target="#module-modal-container"
-                                hx-swap="innerHTML">
-                            <span style="pointer-events:none;display:inline-block;width:1.25rem;height:1.25rem;border-radius:9999px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .2s;{% if module.state == 'v2_active' %}transform:translateX(1.25rem){% else %}transform:translateX(0){% endif %}"></span>
-                        </button>
-                    {% endif %}
-                </div>
+    {# Un bloc par domaine. #}
+    {# / One block per domain. #}
+    <div class="tb-domaines" x-bind:class="montrerEteints && 'tb-montre-eteints'">
+        {% for groupe in groupes_de_domaines %}
+            <section class="tb-domaine{% if not groupe.actifs %} tb-domaine-vide{% endif %}"
+                     data-testid="dashboard-domaine-{{ groupe.cle }}">
 
-                <p class="text-sm text-base-500 dark:text-base-400 mb-3 grow">
-                    {{ module.description }}
-                </p>
-
-                {# Encart BETA (acces anticipe) commun a toutes les cartes beta. #}
-                {# / BETA notice, shared by all early-access cards. #}
-                {% if module.beta %}
-                    {% include "admin/partials/dashboard_beta_notice.html" with notice=module.beta_notice testid=module.testid %}
-                {% endif %}
-
-                {% if module.state == "v1_active" %}
-                    {# Migration V2 a demander a l'equipe (pas de bascule en self-service). #}
-                    {# V2 migration must be requested from the team (no self-service switch). #}
-                    <p class="text-xs text-yellow-600 dark:text-yellow-400 mb-3">
-                        {% translate "To migrate to LaBoutik V2, please contact the TiBillet team." %}
-                    </p>
-                    {% if module.v1_url %}
-                    <a href="{{ module.v1_url }}"
-                       target="_blank"
-                       rel="noopener noreferrer"
-                       data-testid="dashboard-card-pos-v1-link"
-                       class="text-sm font-medium"
-                       style="color:var(--color-primary-600,#7c3aed);text-decoration:none">
-                        {% translate "Open LaBoutik V1" %}
-                        <span aria-hidden="true">&rarr;</span>
+                <h2 class="tb-domaine-titre">
+                    <span class="material-symbols-outlined" aria-hidden="true">{{ groupe.icone }}</span>
+                    <a href="{{ groupe.lien }}" data-testid="dashboard-domaine-lien-{{ groupe.cle }}">
+                        {{ groupe.titre }}
                     </a>
-                    {% endif %}
-
-                {% elif module.state == "v2_active" %}
-                    {# V2 active : lien direct vers l'ouverture de la caisse. #}
-                    {# V2 active: direct link to open the cash register. #}
-                    <div class="flex items-center gap-2">
-                        {% if module.v2_open_url %}
-                        <a href="{{ module.v2_open_url }}"
-                           data-testid="dashboard-card-pos-open-link"
-                           class="text-sm font-medium"
-                           style="color:var(--color-primary-600,#7c3aed);text-decoration:none">
-                            {% translate "Open POS" %}
-                            <span aria-hidden="true">&rarr;</span>
-                        </a>
-                        {% endif %}
-                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200">
-                            {% translate "BETA" %}
-                        </span>
-                    </div>
-
-                {% else %}
-                    {# Inactif : on invite a activer la V2 (badge BETA, switch ci-dessus). #}
-                    {# Inactive: invite to enable V2 (BETA badge, switch above). #}
-                    <span data-testid="dashboard-card-pos-beta-badge"
-                          class="inline-flex items-center self-start rounded-full px-2 py-0.5 text-xs font-semibold bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200">
-                        {% translate "Enable LaBoutik V2 — BETA" %}
+                    <span class="tb-domaine-compteur"
+                          data-testid="dashboard-domaine-compteur-{{ groupe.cle }}">
+                        {{ groupe.actifs }}/{{ groupe.total }}
                     </span>
-                {% endif %}
-            </div>
+                </h2>
 
-            {% else %}
-            {# ----- Carte module generique (interrupteur simple) ----- #}
-            {# / Generic module card (simple toggle) #}
-            {% include "admin/partials/dashboard_module_card.html" %}
-            {% endif %}
-        {% endfor %}
-    </div>
+                <p class="tb-domaine-sous-titre">{{ groupe.sous_titre }}</p>
 
-    {# ================================================================= #}
-    {# SECTION : « Outils externes »                                      #}
-    {# Newsletter (Ghost/Brevo, carte generique) + Reseaux sociaux        #}
-    {# (Postiz, carte informative grisee, type "coming_soon").            #}
-    {# / "External tools" section: newsletter + social networks (Postiz). #}
-    {# ================================================================= #}
-    {% if external_cards %}
-    <h2 class="font-semibold text-lg text-important mt-4">
-        {% translate "Outils externes" %}
-    </h2>
+                <div class="tb-domaine-grille">
+                    {% for carte in groupe.cartes %}
+                        {% include "admin/partials/dashboard_module_card.html" %}
+                    {% endfor %}
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {% for module in external_cards %}
-            {% if module.type == "coming_soon" %}
-            {# ----- Carte informative grisee : integration pas encore livree ----- #}
-            {# / Info-only greyed card: integration not shipped yet #}
-            <div data-testid="{{ module.testid }}"
-                 class="bg-white flex flex-col p-6 rounded-default shadow-xs border border-base-200 dark:bg-base-900 dark:border-base-800"
-                 style="opacity:.55">
-
-                <div class="flex items-center justify-between mb-3 gap-2">
-                    <h3 class="font-semibold text-important">
-                        {{ module.name }}
-                    </h3>
-                    <span data-testid="{{ module.testid }}-soon-badge"
-                          class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
-                          style="background:#e5e7eb;color:#6b7280;white-space:nowrap">
-                        {{ module.coming_soon_label }}
-                    </span>
+                    {# Cellule affichee quand le domaine n'a aucun module actif. #}
+                    {# C'est une cellule de la grille, donc de la largeur d'une  #}
+                    {# carte : le bloc ne saute pas au clic.                     #}
+                    {# / A grid cell, so it is exactly one card wide.            #}
+                    <p class="tb-domaine-aucun">
+                        {% translate "Aucun module activé ici." %}
+                        <button type="button" class="tb-domaine-aucun-lien"
+                                x-on:click="montrerEteints = true">
+                            {% translate "Découvrir les modules disponibles" %}
+                        </button>
+                    </p>
                 </div>
-
-                <p class="text-sm text-base-500 dark:text-base-400 grow">
-                    {{ module.description }}
-                </p>
-            </div>
-
-            {% else %}
-            {% include "admin/partials/dashboard_module_card.html" %}
-            {% endif %}
+            </section>
         {% endfor %}
     </div>
-    {% endif %}
 
+    {# Point de montage de la modale de confirmation (HTMX). #}
+    {# / Mount point for the confirmation modal. #}
     <div id="module-modal-container"></div>
 </div>
-{% endif %}

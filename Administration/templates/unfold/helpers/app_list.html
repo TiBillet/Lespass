@@ -1,0 +1,182 @@
+{% load i18n unfold %}
+{% comment %}
+SURCHARGE — le titre d'un domaine devient un lien
+/ Override: a domain title becomes a link
+
+LOCALISATION : Administration/templates/unfold/helpers/app_list.html
+Copie de unfold/templates/unfold/helpers/app_list.html, avec TROIS differences.
+
+POURQUOI CETTE SURCHARGE
+La maquette veut qu'on clique « Lespass » dans le rail pour ouvrir la page du
+domaine. Unfold rend un titre de groupe en <h2> et ne connait aucune cle
+« link ». Il n'y a pas d'autre moyen de rendre ce titre cliquable.
+/ Unfold renders a group title as an <h2> and supports no "link" key.
+
+CE QUI CHANGE, ET RIEN D'AUTRE
+
+1. Le <h2> du titre : si le groupe porte un « link », le libelle devient un
+   <a>. Le chevron reste dedie au repli.
+2. L'etat deplie : Unfold n'ouvre un groupe que si l'un de ses LIENS est
+   actif. Le lien du domaine n'en est pas un — on arrivait donc sur la page
+   d'un domaine avec son sous-menu ferme, sans voir ou l'on se trouve. La
+   cle « ouvert » corrige cela.
+
+3. Le depliage : le sous-menu est enveloppe dans un conteneur qui anime sa
+   hauteur (voir le commentaire sur place). `x-show` est retire, car il
+   bascule `display`, qui ne s'anime pas.
+
+Les deux premieres cles sont posees par _regrouper_sections_par_domaine
+(dashboard.py).
+Un groupe qui n'en porte aucune s'affiche exactement comme avant.
+/ 1. the title becomes a link; 2. the group opens when you are on its page.
+  Groups carrying neither key render exactly as before.
+
+A RELIRE A CHAQUE MONTEE DE VERSION D'UNFOLD.
+Si ce fichier devient penible a maintenir, le repli est note dans le plan :
+ajouter une entree « Vue d'ensemble » en tete de chaque groupe et supprimer
+cette surcharge. Seul _regrouper_sections_par_domaine serait a changer.
+/ If this becomes a maintenance burden, the fallback is documented in the plan.
+{% endcomment %}
+
+{% if sidebar_navigation %}
+    <div id="nav-sidebar-apps" class="h-0 grow overflow-auto" data-simplebar>
+        {% for group in sidebar_navigation %}
+            {% if group.items %}
+                {% has_nav_item_active group.items as has_active %}
+
+                <div class="hidden mb-1.5 has-[ol]:has-[li]:block" {% if group.collapsible %}x-data="{navigationOpen: {% if has_active or group.ouvert %}true{% else %}false{% endif %}}"{% endif %}>
+                    {% if group.separator %}
+                        <hr class="border-t border-base-200 mx-6 my-2 dark:border-base-800" />
+                    {% endif %}
+
+                    {% if group.title %}
+                        <h2 class="font-semibold flex flex-row group items-center mb-1 mx-3 py-1.5 px-3 select-none text-font-important-light text-sm dark:text-font-important-dark {% if group.collapsible %}cursor-pointer hover:text-primary-600 dark:hover:text-primary-500{% endif %}" {% if group.collapsible %}x-on:click="navigationOpen = !navigationOpen"{% endif %}>
+                            {% if group.link %}
+                                {# Le titre est un lien vers la page du domaine.  #}
+                                {# stopPropagation : cliquer le mot ne doit PAS   #}
+                                {# replier le groupe au passage.                  #}
+                                {# / Click the word to open the domain page; do   #}
+                                {#   not collapse the group on the way.           #}
+                                <a href="{{ group.link }}"
+                                   x-on:click.stop
+                                   class="hover:text-primary-600 dark:hover:text-primary-500"
+                                   data-testid="sidebar-domaine-lien">
+                                    {{ group.title }}
+                                </a>
+                            {% else %}
+                                {{ group.title }}
+                            {% endif %}
+
+                            {% include "unfold/helpers/app_list_badge.html" with item=group %}
+
+                            {% if group.collapsible %}
+                                <span class="material-symbols-outlined ml-auto transition-transform group-hover:text-primary-600 dark:group-hover:text-primary-500" x-bind:class="{'rotate-90': navigationOpen}">
+                                    chevron_right
+                                </span>
+                            {% endif %}
+                        </h2>
+                    {% endif %}
+
+                    {# Le sous-menu se deplie en douceur, au lieu d'apparaitre d'un   #}
+                    {# coup. On n'utilise PAS x-show : il bascule `display`, et        #}
+                    {# `display` ne s'anime pas. Le conteneur passe donc de            #}
+                    {# grid-template-rows 0fr a 1fr — la seule facon d'animer une      #}
+                    {# hauteur inconnue sans JavaScript. Le plugin Alpine `collapse`   #}
+                    {# n'est pas charge par Unfold.                                    #}
+                    {# / Not x-show: it toggles `display`, which cannot animate. The    #}
+                    {#   wrapper animates grid-template-rows instead.                   #}
+                    {#                                                                  #}
+                    {# La classe ouverte est posee ICI, cote serveur, avec la meme      #}
+                    {# condition que navigationOpen : sinon Alpine la poserait apres    #}
+                    {# le premier rendu et le rail s'animerait a CHAQUE chargement.     #}
+                    {# / Set server-side, or the rail would animate on every page load. #}
+                    {#                                                                  #}
+                    {# Les groupes non repliables n'ont pas de x-data, donc pas de      #}
+                    {# variable navigationOpen : on ne leur met aucune liaison.         #}
+                    {# / Non-collapsible groups have no navigationOpen variable.        #}
+                    {#                                                                  #}
+                    {# LA LIAISON EST EN FORME OBJET, ET C'EST OBLIGATOIRE ICI.         #}
+                    {# Alpine traite les deux formes par des chemins differents :        #}
+                    {#   chaine -> Ar() : n'ajoute que les classes ABSENTES, et sa       #}
+                    {#             fonction d'annulation ne retire que ce qu'elle a      #}
+                    {#             ajoute — donc RIEN quand le serveur a deja pose la    #}
+                    {#             classe. Le groupe courant restait deplie a jamais.    #}
+                    {#   objet  -> qn() : retire explicitement les classes dont la       #}
+                    {#             valeur est fausse, meme posees par le serveur.        #}
+                    {# / String form only adds absent classes and can only undo what it  #}
+                    {#   added; the object form actively removes falsy ones.             #}
+                    {#                                                                  #}
+                    {# Et la forme objet preserve gratuitement l'absence d'animation au  #}
+                    {# chargement : la classe etant deja la et navigationOpen vrai,      #}
+                    {# Alpine ne touche a rien au premier rendu.                         #}
+                    {# / No animation on load: Alpine touches nothing on first pass.     #}
+                    <div class="tb-sousmenu{% if not group.collapsible or has_active or group.ouvert %} tb-sousmenu-ouvert{% endif %}"
+                         {% if group.collapsible %}x-bind:class="{'tb-sousmenu-ouvert': navigationOpen}"{% endif %}>
+                    <ol class="flex flex-col gap-0.5 px-6">
+                        {% for item in group.items %}
+                            {% if item.has_permission %}
+                                <li>
+                                    <a href="{% if item.link_callback %}{{ item.link_callback }}{% else %}{{ item.link }}{% endif %}" class="flex h-[38px] items-center -mx-3 px-3 rounded-default hover:text-primary-600 dark:hover:text-primary-500 {% if item.active %}bg-base-100 font-semibold text-primary-600 dark:bg-white/[.06] dark:text-primary-500 active{% endif %}">
+                                        {% if item.icon %}
+                                            <span class="material-symbols-outlined md-18 mr-3 w-[18px]">
+                                                {{ item.icon }}
+                                            </span>
+                                        {% endif %}
+
+                                        <span>{{ item.title|safe }}</span>
+
+                                        {% include "unfold/helpers/app_list_badge.html" with item=item %}
+                                    </a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                    </ol>
+                    </div>
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+
+    {% if sidebar_show_all_applications and app_list|length > 0 %}
+        <div class="mt-auto" x-data="{ openAllApplications: false }">
+            <a class="cursor-pointer flex items-center h-[64px] px-6 py-3 text-sm dark:text-font-default-dark hover:text-primary-600 dark:hover:text-primary-500" x-on:click="openAllApplications = !openAllApplications">
+                <span class="material-symbols-outlined md-18 mr-3">
+                    apps
+                </span>
+
+                <span>
+                    {% trans "All applications" %}
+                </span>
+            </a>
+
+            <div class="absolute bottom-0 left-0 right-0 top-0 z-50 md:left-72" x-cloak x-show="openAllApplications">
+                <div class="absolute bg-base-900/80 backdrop-blur-xs bottom-0 left-0 right-0 top-0 z-10 w-screen"></div>
+
+                <div class="bg-white flex flex-col h-full overflow-x-hidden overflow-y-auto py-5 px-8 relative text-sm w-80 z-20 dark:bg-base-900 dark:border-r dark:border-base-800" x-on:click.outside="openAllApplications = false" x-on:keydown.escape.window="openAllApplications = false" data-simplebar>
+                    {% for app in app_list %}
+                        <div class="mb-6 last:mb-0">
+                            <h2 class="mb-4 font-semibold text-font-important-light truncate dark:text-font-important-dark">
+                                {{ app.name }}
+                            </h2>
+
+                            <ul>
+                                {% for model in app.models %}
+                                    <li class="block mb-4 last:mb-0">
+                                        <a href="{{ model.admin_url }}" class="block truncate hover:text-primary-600 dark:hover:text-primary-500">
+                                            {{ model.name }}
+                                        </a>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+{% else %}
+    <p>
+        {% trans "You don’t have permission to view or edit anything." as error_message %}
+        {% include "unfold/helpers/messages/error.html" with error=error_message %}
+    </p>
+{% endif %}

@@ -1,0 +1,50 @@
+{% load unfold tb_admin %}
+{% comment %}
+SURCHARGE — le fil d'Ariane nomme le MODULE, pas l'application Django
+/ Override: the breadcrumb names the module, not the Django app
+
+LOCALISATION : Administration/templates/unfold/helpers/header_title.html
+Copie de unfold/templates/unfold/helpers/header_title.html, avec UNE
+difference : la ligne « fil_ariane_par_module » ci-dessous.
+
+POURQUOI CETTE SURCHARGE
+Sur une changelist, Unfold ouvre le fil d'Ariane par l'application Django :
+« Billetterie > Evenements ». « Billetterie » est le verbose_name de l'app
+BaseBillet ; il ressemble a un nom de module sans en etre un, et son lien
+mene a /admin/BaseBillet/, une page qui n'a aucun sens dans une navigation
+Domaines -> Modules. On veut « Agenda et Billetterie > Evenements ».
+
+Or header_title (unfold/templatetags/unfold.py) construit cette liste en
+Python, et il n'existe NI reglage UNFOLD, NI bloc de gabarit pour l'inflechir
+— verifie. Il n'y a pas d'autre point d'accroche que ce fichier.
+/ header_title builds the list in Python; no UNFOLD setting and no template
+  block can alter it. This file is the only hook.
+
+CE QUI CHANGE, ET RIEN D'AUTRE
+Une ligne, qui delegue a notre balise. Aucune logique n'est ecrite ici : tout
+est dans Administration/templatetags/tb_admin.py, ou c'est testable. La
+balise remplace AU PLUS une entree, n'en retire ni n'en ajoute jamais, et
+rend « parts » intact des qu'elle a le moindre doute — une changelist qui
+n'appartient a aucun module garde donc le fil d'Ariane d'Unfold.
+/ One line, delegating to our tag. It replaces at most one entry and returns
+  parts untouched at the slightest doubt.
+
+A RELIRE A CHAQUE MONTEE DE VERSION D'UNFOLD.
+C'est le deuxieme gabarit d'Unfold surcharge, apres
+unfold/helpers/app_list.html. Le corps ci-dessous doit rester mot pour mot
+celui d'Unfold : au moindre ecart constate, recopier le sien et re-ajouter
+les deux lignes du haut.
+/ Second Unfold template overridden. Keep the body identical to Unfold's.
+{% endcomment %}
+{% fil_ariane_par_module parts as parts %}
+{% spaceless %}
+    {% for part in parts %}
+        <{% if part.link %}a href="{{ part.link }}"{% else %}span{% endif %} class="align-middle inline-block leading-5 tracking-tight">
+        {{ part.title|capfirst }}
+        </{% if part.link %}a{% else %}span{% endif %} >
+
+        {% if not forloop.last %}
+            <span class="material-symbols-outlined inline-block align-middle leading-5 mx-2 text-base-400 dark:text-base-500">chevron_right</span>
+        {% endif %}
+    {% endfor %}
+{% endspaceless %}

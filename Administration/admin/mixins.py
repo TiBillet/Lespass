@@ -1,6 +1,9 @@
 import logging
 
-from unfold.admin import ModelAdmin
+# ModelAdmin vient de Administration/admin/base.py : c'est le ModelAdmin
+# d'Unfold plus le placeholder de recherche tire de search_fields.
+# / Project ModelAdmin: Unfold's, plus the search placeholder.
+from Administration.admin.base import ModelAdmin
 
 logger = logging.getLogger(__name__)
 

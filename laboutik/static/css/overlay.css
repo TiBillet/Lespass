@@ -91,6 +91,10 @@
 	/*min-height: 100%;*/
 }
 
+#messages > :first-child{
+	min-height: 100%;
+}
+
 
 /* ============================================================
    ANIMATIONS COMMUNES
@@ -653,6 +657,7 @@
 	align-items: center;
 	gap: 0.75rem;
 	margin-top: 1rem;
+	width : 80%
 }
 
 /* Boutons compacts pour la pile verticale du recapitulatif client.

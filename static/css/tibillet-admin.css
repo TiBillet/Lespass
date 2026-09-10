@@ -1,0 +1,1501 @@
+/*
+ * Peau TiBillet pour l'admin Django Unfold
+ * / TiBillet skin for the Django Unfold admin
+ *
+ * LOCALISATION : static/css/tibillet-admin.css
+ * Chargee par UNFOLD["STYLES"] (TiBillet/settings.py).
+ *
+ * A QUOI SERT CE FICHIER
+ * Les COULEURS sont deja reglees ailleurs, dans UNFOLD["COLORS"].
+ * Ce fichier ne s'occupe QUE de la forme : fonds, densite, arrondis,
+ * bordures, survols. Il ne redefinit jamais une variable --color-*.
+ * / Colors live in UNFOLD["COLORS"]. This file only handles shape.
+ *
+ * DEUX REGLES A NE PAS OUBLIER EN MODIFIANT CE FICHIER
+ *
+ * 1. Ne jamais envelopper ces regles dans un @layer.
+ *    Le CSS d'Unfold est du Tailwind v4 : ses 250 Ko d'utilitaires sont
+ *    dans des @layer. Une regle SANS layer gagne toujours sur une regle
+ *    DANS un layer. C'est ce qui permet de tout redessiner sans
+ *    !important et sans toucher un seul template.
+ *    / Never wrap these rules in a @layer: unlayered beats layered.
+ *
+ * 2. Toujours commencer un selecteur par « html » ou par un « #id ».
+ *    Unfold garde 78 Ko de CSS HORS layer (fin de son styles.css :
+ *    tr.selected, select, .selector, .datetimeshortcuts...). Contre
+ *    celui-la on est a egalite, et c'est lui qui est charge en dernier.
+ *    Un « html » ou un « #id » devant suffit a passer devant.
+ *    / Always prefix with `html` or an `#id`: Unfold keeps 78 KB of
+ *      unlayered CSS that loads after us.
+ *
+ * MODE SOMBRE : Alpine pose la classe « dark » sur <html>.
+ * Chaque regle qui pose un fond clair doit avoir son pendant html.dark.
+ * / Dark mode: Alpine sets the `dark` class on <html>.
+ */
+
+/* ==========================================================================
+   1. JETONS DE FORME
+   Prefixe --tb- pour ne jamais entrer en collision avec les --color-*
+   d'Unfold, qui sont ecrits plus tard dans le <body> et gagneraient.
+   / Shape tokens, --tb- namespaced to avoid clashing with Unfold's.
+   ========================================================================== */
+
+html {
+  /* Rappels de la maquette, exprimes a partir des couleurs deja posees
+     par UNFOLD["COLORS"] : une seule source de verite pour la palette.
+     / Mockup shapes, built on the palette already set in COLORS. */
+  --tb-paper: var(--color-base-50);
+  --tb-line: var(--color-base-200);
+  --tb-line-soft: var(--color-base-100);
+  --tb-brand-soft: var(--color-primary-50);
+  --tb-brand-txt: var(--color-primary-800);
+
+  /* Degrade signature de la maquette : vert -> vert clair -> orange.
+     A n'utiliser qu'a deux ou trois endroits, sinon c'est du bruit.
+     / Signature gradient; use sparingly. */
+  --tb-grad: linear-gradient(135deg, #1d9e75 0%, #63c77a 48%, #ef9f27 100%);
+
+  /* Jetons pour les FRAGMENTS d'admin (rapports comptables, panneaux
+     d'action...). Ces gabarits doivent poser leurs couleurs en style inline —
+     les classes Tailwind personnalisees ne sont pas dans le bundle d'Unfold et
+     rendraient du blanc sur blanc. La regle du projet l'impose, mais autorise
+     explicitement les variables CSS (.claude/skills/djc/SKILL.md).
+     / Admin fragments must use inline styles; the rule allows CSS variables.
+
+     CES QUATRE-LA SONT REDEFINIS PLUS BAS POUR LE MODE SOMBRE, et c'est tout
+     l'interet : un `var(--color-base-200)` ecrit en dur dans un style inline
+     donnerait une bordure claire sur fond sombre. Passer par un jeton est la
+     seule facon d'obtenir le mode sombre depuis un attribut style.
+     / Redefined for dark mode below — that is the whole point: a raw
+       var(--color-base-200) inline would stay light on a dark background. */
+  --tb-tableau-bordure: var(--color-base-200);
+  --tb-tableau-entete: var(--color-base-100);
+  --tb-texte-fort: var(--color-base-800);
+  --tb-texte-doux: var(--color-base-600);
+}
+
+html.dark {
+  --tb-tableau-bordure: var(--color-base-700);
+  --tb-tableau-entete: var(--color-base-800);
+  --tb-texte-fort: var(--color-base-100);
+  --tb-texte-doux: var(--color-base-400);
+}
+
+/* ==========================================================================
+   2. CHASSIS — l'inversion des fonds
+   C'est LA regle la plus importante du fichier.
+   Unfold met le papier sur la sidebar et le blanc sur le contenu.
+   La maquette veut l'inverse : rail blanc, contenu sur papier.
+   Sans ca, tout le reste parait a l'envers.
+   / Swap Unfold's backgrounds: white rail, warm paper content.
+   ========================================================================== */
+
+#main {
+  background-color: var(--tb-paper);
+}
+
+#nav-sidebar,
+#nav-sidebar-inner {
+  background-color: #fff;
+}
+
+html.dark #main {
+  background-color: var(--color-base-900);
+}
+
+html.dark #nav-sidebar,
+html.dark #nav-sidebar-inner {
+  background-color: var(--color-base-950);
+}
+
+/* ==========================================================================
+   3. SIDEBAR
+   ========================================================================== */
+
+/* Titre de section : micro-capitales, comme .nav-sec dans la maquette.
+   / Section heading: uppercase micro-caps. */
+#nav-sidebar-apps h2 {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--color-base-400);
+}
+
+/* Lien de navigation : plus compact que le 38px d'Unfold.
+   / Nav link: tighter than Unfold's 38px. */
+#nav-sidebar-apps li a {
+  height: auto;
+  min-height: 36px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  font-size: 13.5px;
+  border-radius: 8px;
+}
+
+#nav-sidebar-apps li a:hover {
+  background-color: var(--tb-line-soft);
+}
+
+/* Lien actif : pastille vert pale + texte vert fonce.
+   Unfold pose une classe « active » en dur : point d'accroche stable.
+   / Active link: Unfold emits a literal `active` class. */
+#nav-sidebar-apps li a.active {
+  background-color: var(--tb-brand-soft);
+  color: var(--tb-brand-txt);
+}
+
+#nav-sidebar-apps li a .material-symbols-outlined {
+  color: var(--color-base-400);
+}
+
+#nav-sidebar-apps li a.active .material-symbols-outlined {
+  color: var(--tb-brand-txt);
+}
+
+html.dark #nav-sidebar-apps li a:hover {
+  background-color: rgb(255 255 255 / 0.05);
+}
+
+html.dark #nav-sidebar-apps li a.active {
+  background-color: rgb(255 255 255 / 0.08);
+  color: var(--color-primary-400);
+}
+
+/* --- Le depliage d'un groupe du rail --------------------------------------
+   Le chevron s'animait deja (Unfold lui met transition-transform), mais le
+   sous-menu surgissait d'un coup : `x-show` bascule `display`, qui ne
+   s'anime pas. On anime donc la hauteur du conteneur, de 0fr a 1fr — la
+   seule facon d'animer une hauteur inconnue sans JavaScript.
+   / The chevron already animated; the submenu popped. We animate the
+     wrapper's height instead, since `display` cannot transition.
+   -------------------------------------------------------------------------- */
+
+.tb-sousmenu {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tb-sousmenu-ouvert {
+  grid-template-rows: 1fr;
+}
+
+.tb-sousmenu > ol {
+  /* min-height:0 est indispensable : sans lui, le contenu d'une piste de
+     grille refuse de descendre sous sa hauteur naturelle et rien ne se replie.
+     / Without min-height:0 a grid item refuses to shrink and nothing folds. */
+  min-height: 0;
+  overflow: hidden;
+
+  /* visibility n'est PAS cosmetique : sans elle, les liens d'un groupe replie
+     restent atteignables au clavier dans un conteneur de hauteur nulle. Elle
+     se transitionne de facon discrete — visible des le debut de l'ouverture,
+     hidden seulement a la fin de la fermeture.
+     / Without it, a collapsed group's links stay keyboard-reachable inside a
+       zero-height box. It transitions discretely, which is what we want. */
+  visibility: hidden;
+  transition: visibility 0.26s;
+}
+
+.tb-sousmenu-ouvert > ol {
+  visibility: visible;
+}
+
+/* Champ de recherche de la sidebar : rempli papier plutot que blanc,
+   puisque le rail est desormais blanc.
+   / Sidebar search: paper-filled now that the rail is white. */
+#nav-sidebar-inner div:has(> #nav-filter) {
+  background-color: var(--tb-paper);
+  box-shadow: none;
+}
+
+html.dark #nav-sidebar-inner div:has(> #nav-filter) {
+  background-color: rgb(255 255 255 / 0.04);
+}
+
+/* ==========================================================================
+   4. TABLEAU DE LISTE (changelist)
+   ATTENTION : sous 1024px, Unfold transforme le tableau en cartes
+   (before:content-[attr(data-label)]). Toute regle de GEOMETRIE est donc
+   enfermee dans un @media (min-width: 1024px). Les COULEURS, elles,
+   valent dans les deux affichages.
+   / Below 1024px Unfold turns the table into cards: geometry rules are
+     scoped to the desktop breakpoint, colors apply to both.
+   ========================================================================== */
+
+/* Unfold zebre les lignes (un <tbody> par ligne). La maquette n'a pas de
+   zebrures : un simple survol suffit et se lit mieux.
+   / Unfold zebra-stripes rows; the mockup uses hover instead. */
+#result_list tbody {
+  background-color: transparent;
+}
+
+#result_list tbody:hover td,
+#result_list tbody:hover th {
+  background-color: var(--tb-line-soft);
+}
+
+html.dark #result_list tbody:hover td,
+html.dark #result_list tbody:hover th {
+  background-color: rgb(255 255 255 / 0.03);
+}
+
+/* Separateurs de lignes plus discrets que la bordure standard.
+   / Softer row separators. */
+#result_list tbody td,
+#result_list tbody th {
+  border-top-color: var(--tb-line-soft);
+}
+
+/* Ligne selectionnee : Unfold impose un jaune pale code en dur, dans son
+   CSS hors layer (`table tr.selected td`). L'#id nous fait passer devant.
+   / Selected row: beats Unfold's unlayered hard-coded pale yellow. */
+#result_list tr.selected td,
+#result_list tr.selected th {
+  background-color: var(--tb-brand-soft);
+}
+
+html.dark #result_list tr.selected td,
+html.dark #result_list tr.selected th {
+  background-color: rgb(29 158 117 / 0.15);
+}
+
+@media (min-width: 1024px) {
+  /* En-tete de colonnes : petites capitales sur fond papier.
+     / Column headers: small caps on paper. */
+  #result_list thead th {
+    background-color: var(--tb-paper);
+    border-bottom: 1px solid var(--tb-line);
+    padding-top: 11px;
+    padding-bottom: 11px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-base-400);
+  }
+
+  html.dark #result_list thead th {
+    background-color: var(--color-base-950);
+    border-bottom-color: var(--color-base-800);
+  }
+
+  /* Lignes un peu plus aerees que le 45px d'Unfold.
+     / Slightly airier rows than Unfold's 45px. */
+  #result_list tbody td,
+  #result_list tbody th {
+    height: auto;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    font-size: 13.5px;
+  }
+
+  /* Premiere colonne mise en avant, comme .cel-name dans la maquette.
+     / First column emphasised, like the mockup's .cel-name. */
+  #result_list tbody th a,
+  #result_list tbody td:first-child a {
+    font-weight: 600;
+  }
+}
+
+/* ==========================================================================
+   5. BOUTONS
+   Les boutons d'Unfold n'ont pas de classe stable : ce sont des chaines
+   d'utilitaires Tailwind. On les cible donc par leur conteneur, ce qui
+   est plus sur que de viser une classe utilitaire.
+   / Unfold buttons carry no stable class; we target them by container.
+   ========================================================================== */
+
+#submit-row button,
+#submit-row a[href] {
+  padding: 8px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* Survol du bouton secondaire : Unfold vire au gris (hover:bg-base-100/80).
+   La maquette vire au vert. Il faut REMPLACER, pas seulement recolorer.
+   / Secondary hover: Unfold greys out, the mockup goes green. */
+#submit-row a[href].bg-white:hover,
+#submit-row button.bg-white:hover {
+  background-color: var(--tb-brand-soft);
+  border-color: var(--color-primary-600);
+  color: var(--tb-brand-txt);
+}
+
+/* Bouton « Ajouter » : pastille ronde de 38px chez Unfold. On garde la
+   forme (il ne contient qu'une icone, sans libelle) et on lui donne le
+   degrade de marque de la maquette.
+   / "Add" button: keep Unfold's round shape, apply the brand gradient. */
+#content-main a.addlink,
+#changelist a.addlink {
+  background-image: var(--tb-grad);
+  box-shadow: 0 2px 8px rgb(29 158 117 / 0.3);
+}
+
+#content-main a.addlink:hover,
+#changelist a.addlink:hover {
+  opacity: 0.9;
+}
+
+/* ==========================================================================
+   6. ONGLETS
+   Unfold dessine un selecteur segmente (pastille blanche sur fond gris).
+   La maquette veut un soulignement. Alpine ajoute/retire « active » a
+   l'execution : c'est une classe simple, le CSS suit sans probleme.
+   / Unfold draws a segmented control; the mockup wants an underline.
+   ========================================================================== */
+
+#tabs-items {
+  background-color: transparent;
+  border-bottom: 1px solid var(--tb-line);
+  border-radius: 0;
+  padding: 0;
+  gap: 2px;
+}
+
+#tabs-items a {
+  /* display:inline-flex est indispensable : dans la barre d'Unfold les liens
+     recoivent des utilitaires flex, mais PAS sur notre page de module, dont
+     le <nav> est ecrit a la main. Sans cela, la pastille de couleur ne
+     s'alignerait pas avec le libelle.
+     / Needed because our hand-written module-page nav has no flex utilities. */
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 10px 18px;
+  font-size: 13.5px;
+}
+
+#tabs-items a.active {
+  background-color: transparent;
+  box-shadow: none;
+  border-bottom-color: var(--color-primary-600);
+  color: var(--tb-brand-txt);
+}
+
+html.dark #tabs-items {
+  background-color: transparent;
+  border-bottom-color: var(--color-base-800);
+}
+
+html.dark #tabs-items a.active {
+  background-color: transparent;
+  color: var(--color-primary-400);
+}
+
+/* --- Onglets de categorie : une couleur par famille -----------------------
+   Reprend .tab.g / .tab.c / .tab.a de la maquette :
+   Gerer = vert de marque, Configurer = orange, Analyser = bleu.
+   Chaque onglet porte une pastille de sa couleur ; quand il est ouvert, le
+   soulignement et le texte prennent cette couleur.
+   / One colour per category, as in the mockup.
+
+   ON S'ACCROCHE AU LIEN, PAS A UNE CLASSE.
+   Le lien « ?onglet=... » est fabrique par notre code (get_tabs et
+   page_de_module) : il est donc stable. Surtout, la regle vaut alors AUSSI
+   sur les changelists, ou c'est Unfold qui dessine la barre et ou il ne rend
+   que le libelle — aucun attribut auquel se raccrocher autrement.
+   / Hooking on the href works on both our module page and Unfold's own bar.
+
+   Les barres historiques (Parametres / Cles API / Webhooks) n'ont pas
+   « onglet= » dans leurs liens : elles ne sont pas touchees.
+   / The legacy tab bars have no "onglet=" in their links: untouched.
+   -------------------------------------------------------------------------- */
+
+/* La pastille, en pseudo-element : aucun balisage a ajouter, et donc valable
+   partout, y compris dans la barre dessinee par Unfold.
+   / The dot as a pseudo-element: no markup needed, so it works everywhere. */
+#tabs-items a[href*="onglet="]::before {
+  content: "";
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: currentColor;
+  opacity: 0.85;
+}
+
+/* Gerer : le vert de marque. / "Gerer": brand green. */
+#tabs-items a[href*="onglet=gerer"].active {
+  border-bottom-color: var(--color-primary-600);
+  color: var(--color-primary-800);
+}
+
+/* Configurer : l'orange chaud. / "Configurer": warm orange. */
+#tabs-items a[href*="onglet=configurer"].active {
+  border-bottom-color: var(--color-orange-500);
+  color: var(--color-orange-700);
+}
+
+/* Analyser : le bleu. / "Analyser": blue. */
+#tabs-items a[href*="onglet=analyser"].active {
+  border-bottom-color: var(--color-blue-500);
+  color: var(--color-blue-700);
+}
+
+/* Au repos, seule la pastille est coloree : le libelle reste sobre, comme
+   dans la maquette. La couleur du texte n'arrive qu'a l'ouverture.
+   / At rest only the dot is coloured; the label stays neutral. */
+#tabs-items a[href*="onglet="]:not(.active) {
+  color: var(--color-base-600);
+}
+
+#tabs-items a[href*="onglet=gerer"]:not(.active)::before {
+  background-color: var(--color-primary-600);
+}
+
+#tabs-items a[href*="onglet=configurer"]:not(.active)::before {
+  background-color: var(--color-orange-500);
+}
+
+#tabs-items a[href*="onglet=analyser"]:not(.active)::before {
+  background-color: var(--color-blue-500);
+}
+
+/* En mode sombre, on remonte d'un cran vers le clair pour garder le contraste.
+   / In dark mode, step one rung lighter to keep contrast. */
+html.dark #tabs-items a[href*="onglet="]:not(.active) {
+  color: var(--color-base-300);
+}
+
+html.dark #tabs-items a[href*="onglet=gerer"].active {
+  color: var(--color-primary-400);
+}
+
+html.dark #tabs-items a[href*="onglet=configurer"].active {
+  color: var(--color-orange-400);
+}
+
+html.dark #tabs-items a[href*="onglet=analyser"].active {
+  color: var(--color-blue-400);
+}
+
+/* Le compteur prend la couleur de son onglet quand celui-ci est ouvert.
+   On nomme chaque couleur : `currentColor` en background-color se resout sur
+   l'element lui-meme, donc sur le blanc qu'on lui donne juste apres.
+   / Name each colour: currentColor in background-color resolves against the
+     element's own colour, which we set to white on the very next line. */
+#tabs-items a[href*="onglet=gerer"].active .tb-onglet-nombre {
+  background-color: var(--color-primary-600);
+  color: #fff;
+}
+
+#tabs-items a[href*="onglet=configurer"].active .tb-onglet-nombre {
+  background-color: var(--color-orange-500);
+  color: #fff;
+}
+
+#tabs-items a[href*="onglet=analyser"].active .tb-onglet-nombre {
+  background-color: var(--color-blue-500);
+  color: #fff;
+}
+
+/* --- Le chemin de retour, en haut d'une page de module ---------------------
+   La maquette a un « ← Lespass ». Sans lui, on ne remonte d'un module que
+   par la sidebar.
+   / The mockup's back link; without it only the sidebar goes up a level.
+   -------------------------------------------------------------------------- */
+
+.tb-retour {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+  font-size: 12.5px;
+  color: var(--color-base-600);
+}
+
+.tb-retour:hover {
+  color: var(--tb-brand-txt);
+}
+
+.tb-retour .material-symbols-outlined {
+  font-size: 17px;
+}
+
+.tb-retour:focus-visible {
+  outline: 2px solid var(--color-primary-600);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+html.dark .tb-retour {
+  color: var(--color-base-300);
+}
+
+html.dark .tb-retour:hover {
+  color: var(--color-primary-400);
+}
+
+/* --- La description sous le nom d'une page -------------------------------- */
+
+.tb-prow-texte {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.tb-prow-desc {
+  margin-top: 1px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--color-base-400);
+}
+
+/* --- Les pastilles d'icone prennent la couleur de leur categorie ----------
+   Comme la maquette : une ligne de « Gérer » est verte, une de
+   « Configurer » orange, une d'« Analyser » bleue. La categorie est posee
+   sur la LISTE (data-categorie), pas sur chaque ligne : toutes les lignes
+   affichees appartiennent au meme onglet.
+   / One colour per category, as in the mockup. The category sits on the
+     list, not on each row: every visible row belongs to the same tab.
+   -------------------------------------------------------------------------- */
+
+.tb-pagelist[data-categorie="configurer"] .tb-prow-icone {
+  background-color: var(--color-orange-100);
+  color: var(--color-orange-700);
+}
+
+.tb-pagelist[data-categorie="analyser"] .tb-prow-icone {
+  background-color: var(--color-blue-100);
+  color: var(--color-blue-700);
+}
+
+html.dark .tb-pagelist[data-categorie="configurer"] .tb-prow-icone {
+  background-color: rgb(239 159 39 / 0.18);
+  color: var(--color-orange-400);
+}
+
+html.dark .tb-pagelist[data-categorie="analyser"] .tb-prow-icone {
+  background-color: rgb(55 138 221 / 0.18);
+  color: var(--color-blue-400);
+}
+
+/* --- La pastille de marque, en haut du rail -------------------------------
+   Unfold la dessine en aplat `primary-600` ; la maquette lui donne le
+   degrade de marque. On ne cible que la pastille SANS logo : si un jour un
+   SITE_ICON est fourni, l'image reste intacte.
+   / Unfold paints the tile flat; the mockup uses the brand gradient. Only
+     the no-logo tile is targeted, so a real SITE_ICON stays untouched.
+   -------------------------------------------------------------------------- */
+
+#nav-sidebar-inner .bg-primary-600:has(> .material-symbols-outlined) {
+  background-image: var(--tb-grad);
+  box-shadow: 0 1px 4px rgb(29 158 117 / 0.35);
+}
+
+/* --- Page d'un module : onglets et liste des admins -----------------------
+   Rendue par Administration/templates/admin/module_page.html. La liste est
+   propre au projet : elle n'a AUCUNE classe Tailwind d'Unfold, tout son
+   style est ici. Les onglets, eux, reutilisent #tabs-items ci-dessus.
+   / The module page's list is project-specific and carries no Unfold classes.
+   -------------------------------------------------------------------------- */
+
+/* Le petit compteur de pages dans chaque onglet. / Per-tab page count. */
+.tb-onglet-nombre {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 20px;
+  background-color: var(--tb-line-soft);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--color-base-400);
+}
+
+/* La liste : une carte bordee, une ligne par page d'admin.
+   / The list: a bordered card, one row per admin page. */
+.tb-pagelist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--tb-line);
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: #fff;
+}
+
+.tb-pagelist a {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--tb-line-soft);
+  color: var(--color-base-600);
+}
+
+.tb-pagelist li:first-child a {
+  border-top: none;
+}
+
+.tb-pagelist a:hover {
+  background-color: var(--tb-line-soft);
+}
+
+.tb-pagelist a:focus-visible {
+  outline: 2px solid var(--color-primary-600);
+  outline-offset: -2px;
+}
+
+/* La pastille d'icone en tete de ligne. / The row's leading icon tile. */
+.tb-prow-icone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background-color: var(--tb-brand-soft);
+  color: var(--tb-brand-txt);
+}
+
+.tb-prow-nom {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-font-important-light);
+}
+
+.tb-prow-fleche {
+  flex-shrink: 0;
+  color: var(--color-base-400);
+}
+
+html.dark .tb-onglet-nombre {
+  background-color: rgb(255 255 255 / 0.08);
+}
+
+html.dark .tb-pagelist {
+  background-color: var(--color-base-900);
+  border-color: var(--color-base-800);
+}
+
+html.dark .tb-pagelist a {
+  border-top-color: var(--color-base-800);
+  color: var(--color-base-300);
+}
+
+html.dark .tb-pagelist a:hover {
+  background-color: rgb(255 255 255 / 0.04);
+}
+
+html.dark .tb-prow-icone {
+  background-color: rgb(29 158 117 / 0.18);
+  color: var(--color-primary-400);
+}
+
+html.dark .tb-prow-nom {
+  color: var(--color-font-important-dark);
+}
+
+/* ==========================================================================
+   7. FORMULAIRES
+   Unfold laisse le <fieldset> nu. On en fait une carte, comme .u-form
+   dans la maquette : c'est un ajout, donc sans risque de regression.
+   / Unfold leaves the fieldset bare; we turn it into a card.
+   ========================================================================== */
+
+#content-main fieldset.module {
+  background-color: #fff;
+  border: 1px solid var(--tb-line);
+  border-radius: 12px;
+  /*padding: 2px 18px;*/
+  margin-bottom: 18px;
+}
+
+html.dark #content-main fieldset.module {
+  background-color: var(--color-base-900);
+  border-color: var(--color-base-800);
+}
+
+/* Barre d'enregistrement : opaque, pour que le tableau ne transparaisse
+   pas dessous lorsqu'elle est collee en bas.
+   / Submit bar: opaque so content doesn't show through when stuck. */
+#submit-row {
+  background-color: #fff;
+}
+
+html.dark #submit-row {
+  background-color: var(--color-base-900);
+}
+
+/* ==========================================================================
+   8. FILTRES ET NAVIGATION PAR DATE
+   ========================================================================== */
+
+/* date_hierarchy : petites etapes arrondies, comme .u-datehier-step.
+   / date_hierarchy: small rounded steps. */
+html ul.toplinks li a {
+  display: inline-block;
+  background-color: var(--tb-line-soft);
+  border-radius: 7px;
+  padding: 4px 11px;
+  font-size: 12px;
+}
+
+html ul.toplinks li a:hover {
+  background-color: var(--tb-brand-soft);
+  color: var(--tb-brand-txt);
+}
+
+html.dark ul.toplinks li a {
+  background-color: rgb(255 255 255 / 0.05);
+}
+
+/* Titre de chaque groupe de filtres. / Filter group heading. */
+#changelist-filter h3 {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-base-400);
+}
+
+/* ==========================================================================
+   9. RETOUCHES SUR LE CSS HORS LAYER D'UNFOLD
+   Ces regles-la sont a egalite de specificite avec les notres, et Unfold
+   est charge apres. Le « html » devant est donc OBLIGATOIRE.
+   / These target Unfold's unlayered CSS: the `html` prefix is required.
+   ========================================================================== */
+
+/* Le chevron des <select> est un SVG au gris froid #6B7280 code en dur.
+   On le repasse au gris chaud de la maquette (--ink-mut, #9a9891).
+   / The select chevron is a hard-coded cool grey; warm it up. */
+html select:not([class*="bg-none"]):not([multiple]) {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239a9891' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+}
+
+/* ==========================================================================
+   10. ACCESSIBILITE
+   On ne touche PAS a l'anneau de focus d'Unfold (focus:outline-primary-600) :
+   il est correct et suit deja la palette. On se contente de garantir qu'il
+   reste visible sur les elements qu'on a redessines ci-dessus.
+   / We keep Unfold's focus ring; just make sure it stays visible.
+   ========================================================================== */
+
+#nav-sidebar-apps li a:focus-visible,
+#tabs-items a:focus-visible {
+  outline: 2px solid var(--color-primary-600);
+  outline-offset: 2px;
+}
+
+/* Respect du reglage systeme « moins d'animations ».
+   / Honour the reduced-motion system setting. */
+@media (prefers-reduced-motion: reduce) {
+  #nav-sidebar-apps li a,
+  #tabs-items a,
+  #result_list tbody {
+    transition: none;
+  }
+}
+
+/* ==========================================================================
+   11. TABLEAU DE BORD ET PAGE DE DOMAINE
+   Ces deux ecrans sont ecrits par le projet (admin/dashboard.html et
+   admin/domaine_page.html) : leur balisage n'a AUCUNE classe Tailwind
+   d'Unfold, tout leur style est ici.
+   / Both screens are project-written and carry no Unfold classes.
+   ========================================================================== */
+
+/* Reserve la gouttiere de la barre de defilement : sans cela, ouvrir le repli
+   « Decouvrir plus de modules » ferait sauter toute la page d'un cran.
+   / Reserve the scrollbar gutter, so opening the fold never shifts the page. */
+html {
+  scrollbar-gutter: stable;
+}
+
+/* --- L'appel a idees ------------------------------------------------------ */
+
+.tb-cta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding: 16px 18px;
+  border: 1px solid var(--tb-brand-soft);
+  border-radius: 14px;
+  background: linear-gradient(90deg, var(--tb-brand-soft), #fff);
+}
+
+.tb-cta-icone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 11px;
+  background: var(--tb-grad);
+  color: #fff;
+}
+
+.tb-cta-texte {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.tb-cta-titre {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--color-font-important-light);
+}
+
+.tb-cta-desc {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--color-base-600);
+}
+
+.tb-cta-bouton {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  padding: 9px 16px;
+  border-radius: 9px;
+  background-color: var(--color-primary-600);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tb-cta-bouton:hover {
+  background-color: var(--color-primary-800);
+  color: #fff;
+}
+
+/* --- La ligne « Decouvrir plus de modules » -------------------------------- */
+
+.tb-decouvrir {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.tb-decouvrir-bouton {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 6px 9px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tb-decouvrir-bouton:hover {
+  background-color: var(--tb-line-soft);
+}
+
+.tb-decouvrir-bouton:focus-visible {
+  outline: 2px solid var(--color-primary-600);
+  outline-offset: 2px;
+}
+
+.tb-decouvrir-libelle {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-base-600);
+}
+
+.tb-decouvrir-nombre {
+  padding: 2px 8px;
+  border-radius: 20px;
+  background-color: var(--tb-brand-soft);
+  color: var(--tb-brand-txt);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* --- L'interrupteur, partage par les cartes et le repli -------------------- */
+
+.tb-interrupteur {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  width: 42px;
+  height: 23px;
+  border: none;
+  border-radius: 20px;
+  background-color: var(--color-base-300);
+  cursor: pointer;
+  transition: background-color 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tb-interrupteur-on {
+  background-color: var(--color-primary-600);
+}
+
+.tb-interrupteur:hover {
+  box-shadow: 0 0 0 4px rgb(29 158 117 / 0.1);
+}
+
+.tb-interrupteur:focus-visible {
+  outline: 2px solid var(--color-primary-600);
+  outline-offset: 2px;
+}
+
+.tb-interrupteur-bouton {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background-color: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
+  /* Le bouton glisse en transform, pas en left : c'est plus fluide, et ca ne
+     declenche pas de recalcul de mise en page.
+     / Slide with transform, not left: smoother and no layout recalculation. */
+  transition: transform 0.3s cubic-bezier(0.34, 1.4, 0.5, 1), width 0.16s ease;
+}
+
+.tb-interrupteur-on .tb-interrupteur-bouton {
+  transform: translateX(19px);
+}
+
+/* Le bouton s'etire pendant l'appui : le geste a du repondant.
+   / The knob stretches while pressed, so the gesture answers back. */
+.tb-interrupteur:active .tb-interrupteur-bouton {
+  width: 23px;
+}
+
+.tb-interrupteur-on:active .tb-interrupteur-bouton {
+  transform: translateX(15px);
+}
+
+/* --- Les blocs de domaine -------------------------------------------------- */
+
+.tb-domaines {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.tb-domaine-titre {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 3px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-font-important-light);
+}
+
+.tb-domaine-titre .material-symbols-outlined {
+  font-size: 17px;
+  color: var(--color-primary-600);
+}
+
+.tb-domaine-titre a {
+  color: inherit;
+}
+
+.tb-domaine-titre a:hover {
+  color: var(--tb-brand-txt);
+}
+
+.tb-domaine-compteur {
+  margin-left: auto;
+  padding: 2px 9px;
+  border-radius: 20px;
+  background-color: var(--tb-line-soft);
+  color: var(--color-base-400);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.tb-domaine-sous-titre {
+  margin-bottom: 11px;
+  font-size: 12px;
+  color: var(--color-base-400);
+}
+
+.tb-domaine-grille {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
+  gap: 12px;
+}
+
+/* --- La carte d'un module -------------------------------------------------- */
+
+.tb-carte {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  flex-wrap: wrap;
+  padding: 15px 17px;
+  border: 1px solid var(--tb-line);
+  border-radius: 12px;
+  background-color: #fff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.18s ease;
+}
+
+.tb-carte-lien {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  flex: 1;
+  min-width: 0;
+  color: inherit;
+}
+
+.tb-carte-on:hover {
+  border-color: var(--color-primary-600);
+  box-shadow: 0 2px 10px rgb(29 158 117 / 0.09);
+}
+
+.tb-carte-lien:focus-visible {
+  outline: 2px solid var(--color-primary-600);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
+/* Un module eteint : fond papier, bordure pointillee, tout en retrait.
+   / A switched-off module: paper background, dashed border, muted. */
+.tb-carte-off {
+  background-color: var(--tb-paper);
+  border-style: dashed;
+}
+
+.tb-carte-icone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background-color: var(--tb-brand-soft);
+  color: var(--tb-brand-txt);
+}
+
+.tb-carte-icone .material-symbols-outlined {
+  font-size: 17px;
+}
+
+.tb-carte-off .tb-carte-icone {
+  background-color: var(--tb-line-soft);
+  color: var(--color-base-400);
+}
+
+.tb-carte-texte {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.tb-carte-nom {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-font-important-light);
+}
+
+.tb-carte-off .tb-carte-nom {
+  color: var(--color-base-400);
+}
+
+.tb-carte-desc {
+  margin-top: 1px;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--color-base-400);
+}
+
+.tb-carte-etat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  padding-top: 3px;
+}
+
+/* L'encart BETA prend toute la largeur et passe en dernier, quelle que soit
+   la largeur de la carte. `order` le met apres l'interrupteur meme s'il le
+   precede dans le HTML, ou il doit rester pour la lecture a l'oral.
+   / Full width and always last, whatever the card width. `order` puts it after
+     the toggle even though it comes before in the HTML, where it belongs for
+     screen readers. */
+.tb-carte-beta {
+  flex-basis: 100%;
+  width: 100%;
+  order: 99;
+  margin-top: 10px;
+}
+
+/* L'encart « acces anticipe », sur la carte comme dans la modale.
+   / The early-access notice, on the card and in the modal. */
+.tb-beta {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-primary-200);
+  border-radius: 8px;
+  background-color: var(--tb-brand-soft);
+}
+
+.tb-beta-icone {
+  flex-shrink: 0;
+  font-size: 18px;
+  color: var(--tb-brand-txt);
+}
+
+.tb-beta-texte {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--color-base-600);
+}
+
+html.dark .tb-beta {
+  background-color: rgb(29 158 117 / 0.12);
+  border-color: var(--color-base-800);
+}
+
+html.dark .tb-beta-icone {
+  color: var(--color-primary-400);
+}
+
+html.dark .tb-beta-texte {
+  color: var(--color-base-300);
+}
+
+/* Le lien vers l'interface d'un module (la caisse). Il voisine avec
+   l'interrupteur : il doit s'en distinguer sans lui voler la vedette.
+   / The link into a module's own interface, sitting next to the toggle. */
+.tb-carte-ouvrir {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  border: 1px solid var(--tb-line);
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-base-600);
+  white-space: nowrap;
+}
+
+.tb-carte-ouvrir:hover {
+  border-color: var(--color-primary-600);
+  background-color: var(--tb-brand-soft);
+  color: var(--tb-brand-txt);
+}
+
+.tb-carte-ouvrir:focus-visible {
+  outline: 2px solid var(--color-primary-600);
+  outline-offset: 2px;
+}
+
+.tb-carte-ouvrir .material-symbols-outlined {
+  font-size: 15px;
+}
+
+/* La note sous une carte : elle prend toute la largeur, comme l'encart BETA.
+   / A note under a card: full width, like the BETA notice. */
+.tb-carte-note {
+  flex-basis: 100%;
+  width: 100%;
+  order: 98;
+  margin-top: 8px;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--color-base-400);
+}
+
+html.dark .tb-carte-ouvrir {
+  color: var(--color-base-300);
+  border-color: var(--color-base-800);
+}
+
+html.dark .tb-carte-ouvrir:hover {
+  background-color: rgb(29 158 117 / 0.15);
+  color: var(--color-primary-400);
+}
+
+/* --- Etiquettes et pastille d'etat ---------------------------------------- */
+
+.tb-etiquette {
+  padding: 2px 9px;
+  border-radius: 20px;
+  background-color: var(--tb-line-soft);
+  color: var(--color-base-600);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tb-etiquette-v1 {
+  background-color: var(--color-yellow-100);
+  color: var(--color-yellow-800);
+}
+
+/* En ligne / hors ligne du serveur LaBoutik V1. L'information etait deja
+   calculee a chaque chargement mais n'etait affichee nulle part.
+   / LaBoutik V1 health, computed on every load but never shown until now. */
+.tb-pastille {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tb-pastille-point {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
+.tb-pastille-en-ligne {
+  color: var(--color-green-700);
+}
+
+.tb-pastille-hors-ligne {
+  color: var(--color-base-400);
+}
+
+/* --- Le domaine sans aucun module actif ------------------------------------ */
+
+/* La cellule « aucun module » est une cellule de la grille : elle fait donc
+   exactement la largeur d'une carte, et le bloc ne saute pas au clic.
+   / A grid cell, so exactly one card wide: the block never jumps. */
+.tb-domaine-aucun {
+  display: none;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px dashed var(--tb-line);
+  border-radius: 11px;
+  background-color: var(--tb-paper);
+  font-size: 13px;
+  color: var(--color-base-400);
+}
+
+.tb-domaines:not(.tb-montre-eteints) .tb-domaine-vide .tb-domaine-aucun {
+  display: flex;
+}
+
+.tb-domaine-aucun-lien {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tb-brand-txt);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* --- Le repli des modules eteints ------------------------------------------ */
+
+/* Les cartes eteintes restent TOUJOURS dans le DOM : on ne fait que les
+   masquer. C'est ce qui garde a la grille le meme nombre de colonnes et la
+   meme largeur de carte, ouvert comme ferme.
+   / Off cards always stay in the DOM; hiding them keeps the grid identical. */
+.tb-domaines:not(.tb-montre-eteints) .tb-carte-off {
+  display: none;
+}
+
+/* L'apparition en cascade des cartes eteintes.
+
+   Point qui n'est pas evident : une animation CSS SE DECLENCHE quand un
+   element passe de `display: none` a affiche. On garde donc le masquage
+   ci-dessus tel quel — la grille ne saute pas, la gouttiere de defilement est
+   deja reservee — et on se contente d'animer l'etat revele.
+   / A CSS animation does fire when an element goes from display:none to shown.
+
+   Et surtout : AUCUNE animation au chargement, gratuitement. Au chargement les
+   cartes eteintes sont en `display: none`, donc rien ne part. C'est le piege
+   de la revision 10 (le rail qui s'animait a chaque navigation), regle ici par
+   construction plutot que par une condition.
+   / No animation on page load: hidden cards simply never start one.
+
+   Le decalage vient de --tb-delai, pose sur chaque carte par le gabarit
+   depuis une valeur calculee en Python. Le repli 0ms couvre le cas ou la
+   variable manquerait. / The stagger comes from --tb-delai, set server-side.
+
+   La SORTIE n'est pas animee, et c'est un choix : il faudrait un etat
+   intermediaire et une temporisation dans Alpine pour retarder le retrait du
+   flux. On ferme un repli, on ne le regarde pas.
+   / The exit is deliberately not animated. */
+@keyframes tb-carte-entre {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.tb-domaines.tb-montre-eteints .tb-carte-off {
+  animation: tb-carte-entre 0.38s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+  animation-delay: var(--tb-delai, 0ms);
+}
+
+/* --- La page d'un domaine --------------------------------------------------- */
+
+.tb-entete-domaine {
+  margin-bottom: 22px;
+}
+
+.tb-entete-titre {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-font-important-light);
+}
+
+.tb-entete-titre .material-symbols-outlined {
+  font-size: 24px;
+  color: var(--color-primary-600);
+}
+
+.tb-entete-sous-titre {
+  margin-top: 4px;
+  max-width: 640px;
+  font-size: 13.5px;
+  color: var(--color-base-400);
+}
+
+.tb-entete-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 22px 0 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-base-400);
+}
+
+.tb-entete-eyebrow .tb-domaine-compteur {
+  margin-left: 0;
+}
+
+/* En liste, les cartes respirent : icone et texte plus grands qu'en grille.
+   / In list form the cards breathe: bigger icon and text than in the grid. */
+.tb-domaine-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tb-domaine-liste .tb-carte {
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  border-radius: 13px;
+}
+
+.tb-domaine-liste .tb-carte-lien {
+  align-items: center;
+  gap: 16px;
+}
+
+.tb-domaine-liste .tb-carte-icone {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+}
+
+.tb-domaine-liste .tb-carte-icone .material-symbols-outlined {
+  font-size: 22px;
+}
+
+.tb-domaine-liste .tb-carte-nom {
+  font-size: 15px;
+}
+
+.tb-domaine-liste .tb-carte-desc {
+  font-size: 12.5px;
+}
+
+/* --- Mode sombre ------------------------------------------------------------ */
+
+html.dark .tb-cta {
+  background: linear-gradient(90deg, rgb(29 158 117 / 0.12), transparent);
+  border-color: var(--color-base-800);
+}
+
+html.dark .tb-carte {
+  background-color: var(--color-base-900);
+  border-color: var(--color-base-800);
+}
+
+html.dark .tb-carte-off {
+  background-color: rgb(255 255 255 / 0.02);
+}
+
+html.dark .tb-carte-icone {
+  background-color: rgb(29 158 117 / 0.18);
+  color: var(--color-primary-400);
+}
+
+html.dark .tb-carte-off .tb-carte-icone,
+html.dark .tb-etiquette,
+html.dark .tb-domaine-compteur,
+html.dark .tb-decouvrir-nombre {
+  background-color: rgb(255 255 255 / 0.08);
+}
+
+html.dark .tb-domaine-aucun {
+  background-color: rgb(255 255 255 / 0.02);
+  border-color: var(--color-base-800);
+}
+
+html.dark .tb-decouvrir-bouton:hover {
+  background-color: rgb(255 255 255 / 0.05);
+}
+
+html.dark .tb-interrupteur {
+  background-color: var(--color-base-700);
+}
+
+html.dark .tb-interrupteur-on {
+  background-color: var(--color-primary-600);
+}
+
+/* --- Moins d'animations ------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .tb-interrupteur,
+  .tb-interrupteur-bouton,
+  .tb-carte,
+  .tb-sousmenu,
+  .tb-sousmenu > ol {
+    transition-duration: 0.001s;
+  }
+
+  /* Les cartes apparaissent d'un coup, sans cascade ni delai. On coupe
+     l'animation ET le delai : garder le delai ferait attendre l'utilisateur
+     devant des cartes vides. / Cut both the animation and the delay. */
+  .tb-domaines.tb-montre-eteints .tb-carte-off {
+    animation: none;
+    animation-delay: 0ms;
+  }
+}

@@ -1,5 +1,6 @@
 from Administration.admin.dashboard import (  # noqa: F401
     dashboard_callback, environment_callback, get_sidebar_navigation,
+    get_tabs, nom_du_lieu,
     MODULE_FIELDS, BETA_NOTICE, _build_modules_context, adhesion_badge_callback,
 )
 
@@ -92,7 +93,11 @@ from rest_framework_api_key.models import APIKey
 from solo.admin import SingletonModelAdmin
 from django.core.cache import cache
 from root_billet.models import RootConfiguration
-from unfold.admin import ModelAdmin, TabularInline
+# ModelAdmin vient de Administration/admin/base.py : c'est le ModelAdmin
+# d'Unfold plus le placeholder de recherche tire de search_fields.
+# / Project ModelAdmin: Unfold's, plus the search placeholder.
+from Administration.admin.base import ModelAdmin
+from unfold.admin import TabularInline
 from unfold.components import register_component, BaseComponent
 from unfold.contrib.filters.admin import (
     # AutocompleteSelectMultipleFilter,
@@ -419,8 +424,22 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
             # 'option_generale_checkbox'
         )
 
+    # Les quatre sections deviennent quatre ONGLETS. Unfold ne transforme un
+    # fieldset en onglet que s'il porte « classes: ["tab"] » ET UN NOM
+    # (unfold/templatetags/unfold.py, filtre `tabs`) : la premiere section,
+    # anonyme jusqu'ici, en recoit donc un. Sans nom elle se rendrait au-dessus
+    # de la barre d'onglets, ce qui n'est pas ce qu'on veut.
+    # / A fieldset becomes a tab only with classes:["tab"] AND a name; the
+    #   first section was anonymous and now has one.
+    #
+    # AUCUN CHAMP N'EST AJOUTE NI RETIRE. 45 champs de Configuration restent
+    # invisibles (cles d'API, modules, champs legaux) : les exposer est une
+    # decision distincte, deliberement hors de ce lot. Ce changement est
+    # PUREMENT une mise en forme.
+    # / No field added or removed: this is purely a layout change.
     fieldsets = (
-        (None, {
+        (_("Identité du lieu"), {
+            'classes': ["tab"],
             'fields': (
                 'organisation',
                 'short_description',
@@ -436,7 +455,8 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 # / 'skin' moved to pages.ConfigurationSite (« Site web » admin).
             )
         }),
-        ('Options générales', {
+        (_("Réglages"), {
+            'classes': ["tab"],
             'fields': (
                 'fuseau_horaire',
                 'language',
@@ -445,7 +465,8 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 'currency_code',
             ),
         }),
-        ('Personnalisation', {
+        (_("Personnalisation"), {
+            'classes': ["tab"],
             'fields': (
                 'event_menu_name',
                 'membership_menu_name',
@@ -456,7 +477,8 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 'additional_text_in_membership_mail',
             ),
         }),
-        ('Stripe', {
+        (_("Paiement (Stripe)"), {
+            'classes': ["tab"],
             'fields': (
                 # 'vat_taxe',
                 'onboard_stripe',
@@ -472,7 +494,11 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
     )
 
     readonly_fields = ['onboard_stripe', ]
-    autocomplete_fields = ['federated_with', ]
+    # « federated_with » n'est dans AUCUN fieldset : cet autocomplete ne
+    # s'appliquait a rien. On le retire plutot que de le laisser mentir sur
+    # ce que fait la page. Le jour ou le champ sera expose, il se remettra.
+    # / The field is in no fieldset, so this autocomplete applied to nothing.
+    # autocomplete_fields = ['federated_with', ]
 
     formfield_overrides = {
         models.TextField: {
@@ -2268,6 +2294,19 @@ class ChildActionsSummaryTable(TableSection):
 
     # Hide the section entirely if the event has no children
     def render(self):
+        # On lit d'abord l'annotation posee par EventAdmin.get_queryset() :
+        # c'est ce qui evite une requete par ligne de la changelist.
+        # Le repli sur exists() garde la section correcte hors changelist
+        # (fiche, appel direct), ou l'annotation n'existe pas — meme motif
+        # defensif que EventPricesSummaryTable juste au-dessus.
+        # / Read the annotation first (no query); fall back to exists() when
+        #   the section is used outside the annotated changelist.
+        nombre_d_enfants = getattr(self.instance, "section_children_count", None)
+        if nombre_d_enfants is not None:
+            if not nombre_d_enfants:
+                return ""
+            return super().render()
+
         try:
             if not self.instance.children.exists():
                 return ""
@@ -2512,7 +2551,15 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
                     'reservation__tickets',
                     filter=Q(reservation__tickets__status__in=[Ticket.SCANNED, Ticket.NOT_SCANNED]),
                     distinct=True,
-                )
+                ),
+                # Nombre d'evenements enfants, precharge ICI plutot que
+                # redemande ligne par ligne par ChildActionsSummaryTable.
+                # Unfold rend TOUTES les sections de TOUTES les lignes a chaque
+                # affichage — meme si personne ne deplie — donc un exists() par
+                # ligne etait une N+1 payee a chaque chargement.
+                # / Preloaded here instead of one exists() per row: Unfold
+                #   renders every section of every row on every page load.
+                section_children_count=Count('children', distinct=True),
             )
         )
 
@@ -4884,7 +4931,7 @@ class InitiativeAdmin(ModelAdmin):
 # / Minimal registration: the dashboard references 'termuser_changelist'.
 # Alignement complet via Administration/admin/users.py prevu au chantier modulaire.
 from AuthBillet.models import TermUser as _TermUserProxy
-from unfold.admin import ModelAdmin as _UnfoldModelAdmin
+from Administration.admin.base import ModelAdmin as _UnfoldModelAdmin
 
 
 @admin.register(_TermUserProxy, site=staff_admin_site)

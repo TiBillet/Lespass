@@ -678,65 +678,190 @@ UNFOLD = {
     "DASHBOARD_CALLBACK": "Administration.admin_tenant.dashboard_callback",
     "SHOW_HISTORY": False,  # show/hide "History" button, default: True
     "SITE_TITLE": "TiBillet",
-    "SITE_HEADER": _("TiBillet / Lèspass admin panel"),
+    # En haut du rail : le nom du lieu, puis une ligne de contexte.
+    # SITE_HEADER accepte un chemin pointe vers un callable, comme
+    # SIDEBAR.navigation — c'est ce qui permet d'afficher le nom du lieu
+    # courant plutot qu'une chaine fixe. Utile des qu'on gere plusieurs lieux.
+    # / SITE_HEADER accepts a dotted path to a callable, so the sidebar can
+    #   show the current venue's name instead of a fixed string.
+    "SITE_HEADER": "Administration.admin_tenant.nom_du_lieu",
+    "SITE_SUBHEADER": _("Votre espace TiBillet"),
+    # Le glyphe de la pastille, quand aucun logo n'est fourni.
+    # / The tile glyph, when no logo is configured.
+    "SITE_SYMBOL": "confirmation_number",
+    # Le menu qui s'ouvre sous le nom du lieu, en haut du rail.
+    # / The menu that opens under the venue name, at the top of the rail.
     "SITE_DROPDOWN": [
+        {
+            # Retour au site public du lieu. C'est la racine de SON domaine :
+            # un lien relatif suffit, et il reste juste pour tous les lieux
+            # sans avoir a fabriquer d'URL absolue.
+            # / Back to the venue's public site: the root of its own domain,
+            #   so a relative link is correct for every tenant.
+            "icon": "home",
+            "title": _("Voir mon site"),
+            "link": "/",
+        },
+        {
+            # Raccourci vers la page de configuration du lieu. La maquette en
+            # fait un crayon epingle au nom ; le mettre ici evite de forker
+            # unfold/helpers/navigation_header.html, qui n'offre aucun point
+            # d'insertion (element_classes n'injecte que des classes).
+            # / Shortcut to the venue's settings page. The mockup pins a pencil
+            #   next to the name; putting it here avoids forking Unfold's
+            #   navigation header, which offers no insertion point.
+            #
+            # reverse_lazy plutot qu'un chemin ecrit a la main : si ce
+            # ModelAdmin est un jour desenregistre, on le saura au demarrage
+            # plutot que par un lien mort.
+            # / reverse_lazy rather than a hand-written path: a missing admin
+            #   fails at startup instead of leaving a dead link.
+            "icon": "edit",
+            "title": _("Modifier l'identité de mon lieu"),
+            "link": reverse_lazy("staff_admin:BaseBillet_configuration_changelist"),
+        },
         {
             "icon": "diamond",
             "title": _("TiBillet"),
             "link": "https://tibillet.coop",
         },
     ],
-    "TABS": [
-        {
-            # Déclare dans quel affichage les tabs s'activent
-            "models": ["BaseBillet.formbricksconfig", "BaseBillet.formbricksforms"],
-            "items": [
-                {
-                    "title": _("Forms"),
-                    # "icon": "sports_motorsports",
-                    "link": reverse_lazy("staff_admin:BaseBillet_formbricksforms_changelist"),
-                },
-                {
-                    "title": _("Settings"),
-                    # "icon": "precision_manufacturing",
-                    "link": reverse_lazy("staff_admin:BaseBillet_formbricksconfig_changelist"),
-                },
-            ],
-        },
-        {
-            # Onglets de la page « Paramètres » : la Configuration du lieu, les clés
-            # API et les webhooks partagent la meme barre d'onglets. Ces trois modeles
-            # n'ont pas de lien de base de donnees entre eux : ce ne sont donc PAS des
-            # inlines, mais des onglets de navigation (fonctionnalite Unfold "TABS").
-            # / "Settings" page tabs: venue Configuration, API keys and webhooks share
-            # one tab bar. No DB relation between them, so these are Unfold navigation
-            # tabs (not inlines).
-            "models": [
-                "BaseBillet.configuration",
-                "BaseBillet.externalapikey",
-                "BaseBillet.webhook",
-            ],
-            "items": [
-                {
-                    "title": _("Paramètres"),
-                    "link": reverse_lazy("staff_admin:BaseBillet_configuration_changelist"),
-                },
-                {
-                    "title": _("Clés API"),
-                    "link": reverse_lazy("staff_admin:BaseBillet_externalapikey_changelist"),
-                },
-                {
-                    "title": _("Webhooks"),
-                    "link": reverse_lazy("staff_admin:BaseBillet_webhook_changelist"),
-                },
-            ],
-        },
-    ],
+    # Barres d'onglets, construites depuis la meme source que la sidebar.
+    #
+    # POURQUOI UN CALLABLE : depuis le passage aux domaines, la sidebar
+    # n'affiche plus qu'UN lien par module. Les autres pages du module ne
+    # sont atteignables QUE par ces onglets — ils ne sont donc pas un
+    # confort, mais la seconde moitie de la navigation.
+    # get_tabs() les derive des memes sections que get_sidebar_navigation(),
+    # ce qui garantit qu'une page ajoutee a un module apparait aux deux
+    # endroits sans double saisie. Les deux barres historiques (Formbricks,
+    # Parametres/Cles API/Webhooks) y sont conservees telles quelles.
+    # / Tabs are derived from the same sections as the sidebar. Since the
+    #   sidebar now shows one link per module, these tabs are the only way
+    #   to reach a module's other pages.
+    "TABS": "Administration.admin_tenant.get_tabs",
     "SIDEBAR": {
         "show_search": True, #  Search in applications and models names
         "show_all_applications": False, # Dropdown with all applications and models
         "navigation": "Administration.admin_tenant.get_sidebar_navigation",
     },
+    # --- Peau TiBillet : palette de l'admin Unfold ---------------------------
+    # Jetons repris de la maquette (TEMP-tibillet-admin-main/style.css),
+    # convertis en OKLCH puis etales sur les 11 paliers attendus par Unfold.
+    # Unfold injecte chaque entree en variable CSS --color-{nom}-{poids}
+    # (voir unfold/templates/unfold/layouts/skeleton.html).
+    # / TiBillet admin skin: warm paper + brand green, from the mockup tokens.
+    "COLORS": {
+        # Neutres chauds (teinte 93) : remplacent le gris-bleu froid d'Unfold.
+        # base-50 sert de fond de page, base-200 de couleur de bordure globale.
+        # / Warm neutrals (hue 93) replacing Unfold's cool blue-grey.
+        "base": {
+            "50": "oklch(96.5% 0.008 93)",  # #f5f3ee  papier / paper
+            "100": "oklch(94.9% 0.010 93)",  # #f0eee7  --line-soft
+            "200": "oklch(91.9% 0.012 93)",  # #e7e4db  --line
+            "300": "oklch(86.5% 0.012 93)",  # #d5d3ca
+            "400": "oklch(67.9% 0.010 93)",  # #9a9891  --ink-mut
+            "500": "oklch(56.0% 0.008 93)",  # #76746f
+            "600": "oklch(48.2% 0.006 93)",  # #5f5e5a  --ink-soft
+            "700": "oklch(38.0% 0.008 93)",  # #44423e
+            "800": "oklch(30.0% 0.010 93)",  # #2f2e28
+            "900": "oklch(21.0% 0.012 93)",  # #1a1812  fond du mode sombre
+            "950": "oklch(16.0% 0.012 93)",  # #0f0d08
+        },
+        # Vert de marque (teinte 166), ancre sur #1D9E75 au palier 600.
+        # Pilote les boutons, les liens, le lien de sidebar actif, le focus.
+        # / Brand green anchored on #1D9E75 at step 600.
+        "primary": {
+            "50": "oklch(95.2% 0.021 166)",  # #e3f4ec  --brand-soft
+            "100": "oklch(91.5% 0.040 166)",  # #cbecdd
+            "200": "oklch(85.5% 0.065 166)",  # #a7dec6
+            "300": "oklch(78.0% 0.090 166)",  # #7dcaaa
+            "400": "oklch(70.5% 0.108 166)",  # #54b590
+            "500": "oklch(66.0% 0.118 166)",  # #37a981
+            "600": "oklch(62.3% 0.123 165.5)",  # #1d9e75  --brand
+            "700": "oklch(54.0% 0.107 170)",  # #008265
+            "800": "oklch(48.1% 0.091 170)",  # #0f6e56  --brand-txt
+            "900": "oklch(40.0% 0.075 170)",  # #0b5441
+            "950": "oklch(27.0% 0.050 170)",  # #042e23
+        },
+        # Les trois tons d'encre de la maquette, montes sur les jetons Unfold.
+        # Les variantes sombres restent des renvois a la rampe base : le mode
+        # sombre herite de la chaleur sans travail supplementaire.
+        # / The mockup's three ink tones mapped onto Unfold's font tokens.
+        "font": {
+            "subtle-light": "oklch(67.9% 0.010 93)",  # #9a9891  --ink-mut
+            "subtle-dark": "var(--color-base-400)",
+            "default-light": "oklch(48.2% 0.006 93)",  # #5f5e5a  --ink-soft
+            "default-dark": "var(--color-base-300)",
+            "important-light": "oklch(26.3% 0.011 99.3)",  # #26251f  --ink
+            "important-dark": "var(--color-base-100)",
+        },
+        # --- Rampes semantiques ---
+        # Unfold ne les met PAS dans COLORS par defaut : elles ne vivent que
+        # dans son @layer theme. Les declarer ici les fait passer par le bloc
+        # <style> du <body>, qui gagne sur le layer. C'est ce qui recolore
+        # d'un coup tous les badges @display(label=...), les messages, les
+        # booleens et l'interrupteur, sans une seule ligne de CSS.
+        # / Declaring these recolors every badge, message, boolean and switch.
+        "green": {  # succes / success  ->  --brand-soft / --brand-txt
+            "100": "#e3f4ec",
+            "400": "#4bbc93",
+            "500": "#1D9E75",
+            "600": "#1a8a66",
+            "700": "#0f6e56",
+        },
+        "orange": {  # avertissement / warning  ->  --warm-soft / --warm-txt
+            "100": "#fbeed7",
+            "400": "#f0b45c",
+            "500": "#EF9F27",
+            "600": "#d98a17",
+            "700": "#8a5310",
+        },
+        "blue": {  # information / info  ->  --blue-soft / --blue-txt
+            "100": "#e6f1fb",
+            "400": "#6aa9e6",
+            "500": "#378ADD",
+            "600": "#2a72bd",
+            "700": "#185fa5",
+        },
+        "red": {  # danger  ->  ton .u-danger de la maquette
+            "100": "#fbe4e0",
+            "400": "#e88b7d",
+            "500": "#e0483d",
+            "600": "#c4432f",
+            "700": "#9c3524",
+        },
+        # Unfold ne definit que yellow-200 et yellow-500. Or
+        # Administration/templates/admin/dashboard.html:46 utilise
+        # bg-yellow-100 / text-yellow-800 / dark:bg-yellow-900 : le badge
+        # « V1 » s'affiche donc aujourd'hui SANS couleur. Declarer la rampe
+        # complete corrige ce bug preexistant au passage.
+        # / Fixes a pre-existing bug: the V1 badge uses undefined yellow steps.
+        "yellow": {
+            "100": "#fbeed7",
+            "200": "#f6dcae",
+            "400": "#f0b45c",
+            "500": "#EF9F27",
+            "600": "#d98a17",
+            "800": "#8a5310",
+            "900": "#5c3709",
+        },
+    },
+    # Arrondis de la maquette : controles 8-10px, cartes 10-14px. 10px est le
+    # meilleur compromis unique. Alimente la classe `rounded-default` utilisee
+    # par tous les widgets Unfold (voir unfold/widgets.py).
+    # / Mockup radius; feeds Unfold's `rounded-default` class.
+    "BORDER_RADIUS": "10px",
+    # Feuille de finition de la peau TiBillet.
+    # Unfold l'insere dans le <head> AVANT son propre styles.css. L'ordre
+    # source jouerait donc contre nous, mais le CSS d'Unfold est du Tailwind
+    # v4 range dans des @layer : une regle SANS layer gagne toujours. Voir
+    # l'en-tete du fichier CSS pour les deux regles d'ecriture a respecter.
+    # / Skin finishing sheet. Unfold injects it before its own styles.css,
+    #   but unlayered CSS always beats Unfold's layered Tailwind.
+    "STYLES": [
+        lambda request: static("css/tibillet-admin.css"),
+    ],
     "SCRIPTS": [
         lambda request: static("js/autofocus_select2.js"),
     ],

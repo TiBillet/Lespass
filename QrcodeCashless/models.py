@@ -32,7 +32,7 @@ class Detail(models.Model):
     base_url = models.CharField(max_length=60, null=True, blank=True)
     origine = models.ForeignKey(Customers_Client, on_delete=models.PROTECT, null=True, blank=True,
                                 related_name='origine')
-    generation = models.SmallIntegerField()
+    generation = models.SmallIntegerField(verbose_name=_("Génération"))
     slug = models.SlugField(max_length=50, unique=True, blank=True, null=True)
 
     def __str__(self):
@@ -50,8 +50,7 @@ class CarteCashless(models.Model):
         db_index=True,
         max_length=8,
         unique=True,
-        editable=False
-    )
+        editable=False, verbose_name=_("Identifiant NFC"))
 
     uuid = models.UUIDField(
         blank=True, null=True,
@@ -65,13 +64,12 @@ class CarteCashless(models.Model):
         db_index=True,
         max_length=8,
         unique=True,
-        editable=False
-    )
+        editable=False, verbose_name=_("Numéro"))
 
     # Details communes des cartes cashless
     detail = models.ForeignKey(Detail, on_delete=models.CASCADE, null=True, blank=True)
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, verbose_name=_("Utilisateur·ice"))
 
     # Wallet temporaire pour carte anonyme (avant identification user) — Phase 0 fedow_core
     # Temporary wallet for anonymous card (before user identification)

@@ -1,0 +1,115 @@
+{% extends 'unfold/layouts/base.html' %}
+{% load i18n %}
+
+{% comment %}
+PAGE D'ACCUEIL D'UN MODULE
+/ A module's landing page
+
+LOCALISATION : Administration/templates/admin/module_page.html
+Rendue par Administration.admin.dashboard.page_de_module().
+
+C'est la page decrite par la maquette : on choisit un module dans la sidebar
+(Lespass > Agenda), on arrive ici, et on voit ses pages d'admin rangees sous
+les onglets Gerer / Configurer / Analyser.
+/ The mockup's module page: one row of category tabs, then the list of the
+  open category's admin pages.
+
+Le changement d'onglet se fait par ?onglet=... : c'est le serveur qui decide
+quelles lignes afficher. Pas de JavaScript, donc rien a casser.
+/ Tab switching is server-side via ?onglet=..., so no JavaScript at all.
+{% endcomment %}
+
+{% comment %}
+`title` du contexte porte le DOMAINE, pour que la barre haute d'Unfold serve
+de fil d'Ariane. L'onglet du navigateur, lui, doit porter le nom du module.
+/ The context `title` carries the domain so Unfold's header reads as a
+  breadcrumb; the browser tab must carry the module name.
+{% endcomment %}
+{% block title %}{{ titre_du_module }} | {{ titre_du_domaine }} | {{ site_title }}{% endblock %}
+
+{% block content %}
+
+    {# En-tete : le domaine, puis le nom du module. #}
+    {# / Header: the domain, then the module name. #}
+    <div class="tb-entete-domaine" data-testid="module-page-header">
+        {# Le chemin de retour vers le domaine. Sans lui, on ne remonte    #}
+        {# d'un module que par la sidebar.                                  #}
+        {# / The way back: without it, only the sidebar goes up a level.    #}
+        {% if lien_du_domaine %}
+            <a class="tb-retour" href="{{ lien_du_domaine }}" data-testid="module-page-retour">
+                <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+                {{ titre_du_domaine }}
+            </a>
+        {% endif %}
+
+        {# <h2> et non <h1> : la barre haute d'Unfold porte deja le seul  #}
+        {# <h1> de la page, sur tous les ecrans de l'admin. Deux <h1> sur #}
+        {# une meme page, c'est faux pour un lecteur d'ecran. Le niveau   #}
+        {# de titre ne dicte pas la taille : celle-ci vient du CSS.       #}
+        {# / Unfold's header already carries the page's only <h1>.        #}
+        <h2 class="tb-entete-titre">
+            {% if icone_du_module %}
+                <span class="material-symbols-outlined" aria-hidden="true">{{ icone_du_module }}</span>
+            {% endif %}
+            {{ titre_du_module }}
+        </h2>
+
+        {% if sous_titre_du_domaine %}
+            <p class="tb-entete-sous-titre">{{ sous_titre_du_domaine }}</p>
+        {% endif %}
+    </div>
+
+    {# UNE seule rangee d'onglets : Gerer / Configurer / Analyser. #}
+    {# / A single row of tabs. #}
+    {% if onglets %}
+        <nav id="tabs-items"
+             class="mb-5"
+             aria-label="{% translate 'Catégories du module' %}"
+             data-testid="module-tab-categories">
+            {% for onglet in onglets %}
+                <a href="{{ onglet.lien }}"
+                   class="{% if onglet.actif %}active{% endif %}"
+                   {% if onglet.actif %}aria-current="page"{% endif %}
+                   data-testid="module-tab-{{ onglet.cle }}">
+                    {{ onglet.titre }}
+                    <span class="tb-onglet-nombre">{{ onglet.nombre }}</span>
+                </a>
+            {% endfor %}
+        </nav>
+    {% endif %}
+
+    {# La liste des admins de l'onglet ouvert : une ligne par page. #}
+    {# / The open tab's admin pages: one row each. #}
+    {% if pages_de_l_onglet %}
+        {# La categorie ouverte est posee sur la LISTE : c'est elle qui   #}
+        {# donne sa couleur aux pastilles, comme dans la maquette ou une   #}
+        {# ligne de « Configurer » est orange et une de « Analyser » bleue.#}
+        {# / The open category colours the whole list's icon tiles.        #}
+        <ul class="tb-pagelist"
+            data-categorie="{{ categorie_ouverte }}"
+            aria-live="polite"
+            data-testid="module-page-list">
+            {% for page in pages_de_l_onglet %}
+                <li>
+                    <a href="{{ page.link }}" data-testid="module-page-row">
+                        <span class="tb-prow-icone" aria-hidden="true">
+                            <span class="material-symbols-outlined">{{ page.icon|default:"list" }}</span>
+                        </span>
+                        <span class="tb-prow-texte">
+                            <span class="tb-prow-nom">{{ page.title }}</span>
+                            {% if page.description %}
+                                <span class="tb-prow-desc">{{ page.description }}</span>
+                            {% endif %}
+                        </span>
+                        <span class="material-symbols-outlined tb-prow-fleche" aria-hidden="true">chevron_right</span>
+                    </a>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p class="text-font-subtle-light dark:text-font-subtle-dark text-sm">
+            {% translate "Aucune page dans cette catégorie." %}
+        </p>
+    {% endif %}
+
+{% endblock %}

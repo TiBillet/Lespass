@@ -12,14 +12,14 @@ class AssetFedowPublic(models.Model):
     """
 
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
-    name = models.CharField(max_length=100, db_index=True)
-    currency_code = models.CharField(max_length=3)
-    created_at = models.DateTimeField(auto_now_add=True)
+    name = models.CharField(max_length=100, db_index=True, verbose_name=_("Nom de l'asset"))
+    currency_code = models.CharField(max_length=3, verbose_name=_("Code devise"))
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Créé le"))
     updated_at = models.DateTimeField(auto_now=True)
 
-    wallet_origin = models.ForeignKey('AuthBillet.Wallet', on_delete=models.PROTECT, related_name='assets_fedow_public')
+    wallet_origin = models.ForeignKey('AuthBillet.Wallet', on_delete=models.PROTECT, related_name='assets_fedow_public', verbose_name=_("Portefeuille d'origine"))
     origin = models.ForeignKey('Customers.Client', on_delete=models.CASCADE,
-                               related_name="assets_fedow_public")  # La bonne relation a utiliser au lieu des deux précédents, relicats de la migration
+                               related_name="assets_fedow_public", verbose_name=_("Origine"))  # La bonne relation a utiliser au lieu des deux précédents, relicats de la migration
     archive = models.BooleanField(default=False)
 
     STRIPE_FED_FIAT = 'FED'
@@ -58,8 +58,7 @@ class AssetFedowPublic(models.Model):
 
     category = models.CharField(
         max_length=3,
-        choices=CATEGORIES
-    )
+        choices=CATEGORIES, verbose_name=_("Catégorie"))
 
     pending_invitations = models.ManyToManyField('Customers.Client', related_name="pending_invitations_fedow_public",
                                                  blank=True,
