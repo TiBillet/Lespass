@@ -3117,8 +3117,7 @@ class LaBoutikAPIKey(AbstractAPIKey):
 class ScanApp(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
-    # Ajout du unique=True pour éviter des problèmes au moment de l'appareillage (voir issue #454 sur le github)
-    name = models.CharField(max_length=30, unique=True, verbose_name=_("Nom de l'application"))
+    name = models.CharField(max_length=30, verbose_name=_("Nom de l'application"))
     key = models.OneToOneField(ScannerAPIKey,
                                on_delete=models.CASCADE,
                                blank=True, null=True,
