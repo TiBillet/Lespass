@@ -215,7 +215,7 @@ def _construire_sections_modules(request):
         navigation.append(
             {
                 "title": _("Site web personnalisé"),
-                "_order": 0.0,  # rang dans le domaine / rank inside domain
+                "_order": 2.0,  # rang dans le domaine / rank inside domain
                 "_domaine": "lespass",
                 "_icone": "web",
                 "_slug": "site-web",  # identifiant de la page de module
@@ -291,13 +291,6 @@ def _construire_sections_modules(request):
                 "separator": True,
                 "collapsible": True,
                 "items": [
-                    # FROM V2 : PAGES TO IMPLEMENT
-                    # {
-                    #     "title": _("Dashboard"),
-                    #     "icon": "monitoring",
-                    #     "link": _safe_rev("staff_admin:BaseBillet_event_dashboard"),
-                    #     "permission": admin_permission,
-                    # },
                     {
                         "title": _("Ticket products"),
                         "icon": "storefront",
@@ -419,7 +412,6 @@ def _construire_sections_modules(request):
         )
 
 
-    # FROM V2 : TO ADD LATER
     # --- module_caisse : Caisse LaBoutik ---
     # --- module_caisse: POS LaBoutik ---
     if configuration.module_caisse:
