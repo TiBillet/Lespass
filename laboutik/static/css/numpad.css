@@ -1,0 +1,27 @@
+.numpad-content {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  column-gap: 6px;
+  row-gap: 6px;
+}
+
+.numpad-touch {
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  cursor: pointer;
+  border-radius: var(--r-ctrl);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.numpad-size {
+  width: var(--key-width);
+  height: var(--key-height);
+}
