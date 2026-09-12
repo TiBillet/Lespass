@@ -1637,8 +1637,18 @@ h2.tb-bloc__titre::before {
         grid-column: 4 / -1;
     }
     /* Replie a nouveau : sur cette largeur le sommaire precede l'article.
-       / Folded again: at this width the ToC precedes the article. */
-    .tb-sommaire::details-content { content-visibility: hidden; }
+       UNIQUEMENT en trois colonnes, comme les trois regles ci-dessus : c'est le
+       menu ET le sommaire ensemble qui etranglent le texte. Sans menu lateral, le
+       sommaire est seul dans sa marge, le texte garde une largeur confortable et
+       il n'y a rien a sacrifier — or cette regle n'etait pas conditionnee, et la
+       colonne du sommaire n'affichait plus que son etiquette entre 62rem et
+       75rem. Le defaut valait pour TOUS les skins (le sommaire est pose en
+       colonne sans condition de menu, cf. plus haut).
+       / Folded again, but ONLY in three-column mode, like the three rules above:
+       it is menu AND ToC together that cramp the text. With no side menu there is
+       nothing to sacrifice — and this rule was not scoped, so the ToC column
+       showed only its label between 62rem and 75rem, in every skin. */
+    .tb-flux:has(> .tb-menu-lateral) > .tb-sommaire::details-content { content-visibility: hidden; }
 }
 
 /* Sur petit ecran, le menu passe au-dessus du contenu, replie en tiroir.

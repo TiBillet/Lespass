@@ -63,6 +63,7 @@ class Command(BaseCommand):
             Page.objects.filter(slug__in=ANCIENNES_PAGES).delete()
             self._construire_landing()
             self._construire_sous_menu()
+            self._construire_qui_sommes_nous()
             self._construire_blog()
             # En dernier : ce bloc pointe vers une page construite juste au-dessus.
             # / Last: this block points at a page built just above.
@@ -70,7 +71,8 @@ class Command(BaseCommand):
             if options["skin"]:
                 self._forcer_skin()
         self.stdout.write(
-            f"Landing page + sous-menu + blog de démo chargés sur '{schema}'."
+            f"Landing page + sous-menu + « Qui sommes-nous ? » + blog de démo "
+            f"chargés sur '{schema}'."
         )
 
     # ------------------------------------------------------------------
@@ -212,6 +214,218 @@ class Command(BaseCommand):
             texte="<p>Quelques images de la vie quotidienne du lieu.</p>",
         )
         self._poser_fichier(b, "video", VIDEO)
+
+    # ------------------------------------------------------------------
+    # « Qui sommes-nous ? » : la page de présentation du lieu, reprise de la
+    # maquette DA v1 (qui-sommes-nous.html). Elle met en scène les trois
+    # affichages SECTION nés avec cette maquette — EQUIPE, FRISE, RESSOURCES —
+    # et le bloc LIEU pour les infos pratiques.
+    #
+    # POURQUOI LES INTERTITRES SONT DES BLOCS TEXTE. Le sommaire de la page
+    # (`table_des_matieres`) ne lit QUE les titres Markdown (`##`) contenus
+    # dans les blocs TEXTE : ni le champ `titre` d'un bloc TEXTE, ni celui
+    # d'un bloc SECTION n'y entrent. Chaque section est donc introduite par un
+    # bloc TEXTE qui porte son `## Titre`, et les blocs EQUIPE / FRISE /
+    # RESSOURCES gardent un `titre` vide — sinon l'intertitre s'afficherait
+    # deux fois. C'est ce qui donne la table des matières à cinq entrées de la
+    # maquette.
+    # / Section headings live in TEXTE blocks because the ToC only reads
+    # Markdown `##` headings inside TEXTE blocks — neither a TEXTE block's
+    # `titre` field nor a SECTION's enters it. The EQUIPE/FRISE/RESSOURCES
+    # blocks keep an empty `titre` so the heading is not shown twice.
+    # ------------------------------------------------------------------
+    def _construire_qui_sommes_nous(self):
+        from pages.models import Bloc
+
+        page = self._creer_page(
+            "qui-sommes-nous", "Qui sommes-nous ?", 3,
+            "Qui sommes-nous ? — Lespass",
+            "Le lieu, le collectif, l'histoire et le projet de Lespass : "
+            "faites connaissance avec la coopérative, son équipe et ses espaces.",
+            image_partage="404-11.jpg",
+        )
+
+        etat = {"n": 0}
+
+        def suivant():
+            etat["n"] += 1
+            return etat["n"]
+
+        def bloc(**kwargs):
+            return Bloc.objects.create(page=page, position=suivant(), **kwargs)
+
+        # === 1. Intro — pas de titre Markdown : le <h1> est déjà rendu par le
+        # gabarit de page, et l'intro n'est pas une section du sommaire. ===
+        # / Intro: no heading, the <h1> comes from the page template.
+        bloc(
+            type_bloc=Bloc.TEXTE,
+            texte=(
+                "Lespass, c'est un lieu, des gens, une histoire et un projet. "
+                "Prenez le temps de faire connaissance — voici ce qui fait cet "
+                "endroit.\n"
+            ),
+        )
+
+        # === 2-3. Le lieu : l'intertitre, puis les infos pratiques et la carte ===
+        bloc(
+            type_bloc=Bloc.TEXTE,
+            texte=(
+                "## Le lieu\n\n"
+                "Où l'on est, quand c'est ouvert, comment nous joindre.\n"
+            ),
+        )
+        # UN SEUL bloc LIEU porte les deux colonnes : `contenu` remplit celle de
+        # gauche, `badge` + `points_gps` la carte de droite.
+        # / A single LIEU block carries both columns.
+        bloc(
+            type_bloc=Bloc.LIEU,
+            badge="LESPASS — 12 RUE DE LA COOPÉRATIVE, 69100 VILLEURBANNE",
+            points_gps=[{"lat": 45.7719, "lng": 4.8902, "label": "Lespass"}],
+            contenu=[
+                {"type": "badge", "texte": "Adresse"},
+                {"type": "adresse",
+                 "texte": "Lespass\n12 rue de la Coopérative\n69100 Villeurbanne"},
+                {"type": "badge", "texte": "Horaires"},
+                {"type": "horaire", "texte": "CAFÉ ASSOCIATIF — MERCREDI → SAMEDI 14h → 23h"},
+                {"type": "horaire", "texte": "ATELIERS PARTAGÉS — MARDI & JEUDI 17h → 19h"},
+                {"type": "badge", "texte": "Nous joindre"},
+                # Pas d'adresse e-mail inventée dans une démo : on renvoie vers
+                # le panneau de contact du site, qui existe sur tous les skins.
+                # / No made-up e-mail in a demo: we point at the site's contact panel.
+                {"type": "para",
+                 "texte": "Écrivez-nous depuis le bouton « Contact » du pied de page."},
+                {"type": "accessibilite",
+                 "texte": "Lieu accessible aux personnes à mobilité réduite."},
+                {"type": "transport", "titre": "MÉTRO / TRAM", "lignes": [
+                    "Métro A — arrêt République (5 min à pied)",
+                    "Tram T3 — arrêt Reconnaissance Balzac (8 min à pied)",
+                ]},
+                {"type": "transport", "titre": "VÉLO", "lignes": [
+                    "Station Vélo'v devant le lieu",
+                    "Arceaux de stationnement dans la cour",
+                ]},
+            ],
+        )
+
+        # === 4-5. Le collectif : l'intertitre et les ordres de grandeur, puis
+        # les personnes en affichage EQUIPE ===
+        bloc(
+            type_bloc=Bloc.TEXTE,
+            texte=(
+                "## Le collectif\n\n"
+                "Un bien commun géré par un collectif d'associations et de "
+                "personnes. L'équipe salariée accompagne, mais ce sont les "
+                "membres qui font le lieu au quotidien.\n\n"
+                "- Une quarantaine de structures adhérentes\n"
+                "- Près de 250 membres individuel·les\n"
+                "- Des collectifs résidents et un conseil d'administration\n"
+            ),
+        )
+        # `contenu` = des DONNÉES texte : titre = le nom, texte = le rôle,
+        # badge = une précision courte. L'initiale du nom sert d'avatar (V2).
+        # / `contenu` is text DATA: titre = name, texte = role, badge = detail.
+        bloc(
+            type_bloc=Bloc.SECTION, affichage=Bloc.EQUIPE,
+            contenu=[
+                {"titre": "Awa Diallo", "texte": "Coordination", "badge": "Salariée"},
+                {"titre": "Naïm Berger", "texte": "Animation du café associatif",
+                 "badge": "Salarié"},
+                {"titre": "Sofia Le Goff", "texte": "Ateliers et numérique",
+                 "badge": "Bénévole"},
+                {"titre": "Théo Marchand", "texte": "Vie associative", "badge": "Bénévole"},
+            ],
+        )
+
+        # === 6-7. L'histoire : l'intertitre, puis la frise chronologique ===
+        bloc(
+            type_bloc=Bloc.TEXTE,
+            texte=(
+                "## L'histoire\n\n"
+                "D'où vient le lieu, comment il a grandi.\n"
+            ),
+        )
+        # Liste ORDONNÉE côté gabarit : l'ordre des étapes a un sens.
+        # / Ordered list in the template: the order of the steps carries meaning.
+        bloc(
+            type_bloc=Bloc.SECTION, affichage=Bloc.FRISE,
+            contenu=[
+                {"titre": "2016",
+                 "texte": "Naissance de l'association, autour de l'échange et de "
+                          "l'initiative citoyenne."},
+                {"titre": "2019",
+                 "texte": "Installation dans les 900 m² d'une ancienne quincaillerie "
+                          "du quartier."},
+                {"titre": "2020–2023",
+                 "texte": "La coopérative se structure : salle de concert, ateliers "
+                          "partagés, café associatif."},
+                {"titre": "Aujourd'hui",
+                 "texte": "Un tiers-lieu culturel qui réunit la scène, les ateliers "
+                          "et le coworking."},
+            ],
+        )
+
+        # === 8. Le projet : deux paragraphes, la raison d'être ===
+        bloc(
+            type_bloc=Bloc.TEXTE,
+            texte=(
+                "## Le projet\n\n"
+                "Donner à chacune et chacun les moyens de se rencontrer et de "
+                "partager, pour faire émerger des idées nouvelles au service de "
+                "l'épanouissement et de l'émancipation de toutes et tous.\n\n"
+                "Un espace autogéré et inclusif, où l'on expérimente d'autres "
+                "manières de faire ensemble — au-delà du seul rapport marchand. "
+                "Une personne, une voix : chaque adhérent·e peut prendre part aux "
+                "assemblées et aux commissions.\n"
+            ),
+        )
+
+        # === 9-10. Les ressources : l'intertitre, puis les espaces et documents ===
+        bloc(
+            type_bloc=Bloc.TEXTE,
+            texte=(
+                "## Les ressources\n\n"
+                "Les espaces et les équipements accessibles au lieu.\n"
+            ),
+        )
+        # `url` est optionnelle, et le gabarit ne pose un lien que si l'adresse
+        # commence par « http » ou « / ». Les deux cas sont représentés ici :
+        # des espaces sans lien, et le journal du lieu en lien interne.
+        # / `url` is optional and only linked when it starts with http or /.
+        # Both cases appear here: spaces without a link, and an internal one.
+        bloc(
+            type_bloc=Bloc.SECTION, affichage=Bloc.RESSOURCES,
+            contenu=[
+                {"titre": "Café associatif", "badge": "Espace",
+                 "texte": "Un lieu convivial pour se poser, boire un café, jouer, "
+                          "se rencontrer."},
+                {"titre": "Espaces de coworking", "badge": "Espace",
+                 "texte": "Bureaux partagés et salles de réunion pour travailler "
+                          "et se réunir."},
+                {"titre": "Ateliers partagés", "badge": "Atelier",
+                 "texte": "Bois, sérigraphie, couture, électronique : machines et "
+                          "outils pour créer, avec accompagnement."},
+                {"titre": "Espace numérique", "badge": "Accompagnement",
+                 "texte": "Accès et aide aux démarches en ligne, ouvert à toutes "
+                          "et tous."},
+                {"titre": "Les statuts de l'association", "badge": "PDF",
+                 "texte": "À demander à l'accueil : la ressource n'a pas de lien, "
+                          "le gabarit n'en pose donc aucun."},
+                {"titre": "Le journal du lieu", "badge": "Page",
+                 "texte": "Récits d'ateliers, coulisses et annonces, publiés au "
+                          "fil de l'eau.",
+                 "url": "/journal/"},
+            ],
+        )
+
+        # === 11. CTA final — la page se termine sur son invitation ===
+        bloc(
+            type_bloc=Bloc.SECTION, affichage=Bloc.APPEL_ACTION,
+            titre="Envie de faire partie du lieu ?",
+            sous_titre="L'adhésion est à prix libre et ouvre les portes de la "
+                       "coopérative.",
+            bouton_label="Adhérer", bouton_url="/memberships/",
+            bouton2_label="Voir l'agenda", bouton2_url="/event/",
+        )
 
     # ------------------------------------------------------------------
     # Journal de démo : une page index portant un bloc LISTE sur ses

@@ -30,8 +30,26 @@ construit sur la 1re version de la maquette (27/08, Lora/Inter, vert).
   on a appliqué le diff de la maquette avec `git merge-file` (2 conflits,
   résolus à la main). Les ajouts V2 (carte Leaflet, page Réseau) sont conservés.
 - **Pont Bootstrap** en tête de `V2.css` : les variables `--bs-*` et `--tb-*`
-  pointent sur les jetons de la DA. Panneaux latéraux, accordéons et blocs CMS
-  prennent le style sans être réécrits.
+  pointent sur les jetons de la DA. Panneaux latéraux et accordéons prennent le
+  style sans être réécrits.
+- **LE PIÈGE À CONNAÎTRE — un jeton du socle se surcharge sur `.tb-page`, jamais
+  sur `:root`.** Le pont ci-dessus ne portait **rien** pour les pages CMS, et
+  c'est structurel : `tb-blocs.css` déclare ses jetons sur `.tb-page, .tb-jetons`
+  (bloc lignes 37-97), donc sur l'élément lui-même. Or une propriété
+  personnalisée se résout **élément par élément** : l'ancêtre le plus proche qui
+  la déclare gagne, quelles que soient la spécificité et l'ordre de chargement
+  des feuilles — l'héritage depuis `:root` ne sert qu'aux éléments sans
+  déclaration plus proche. Une surcharge sur `:root` est donc toujours perdante
+  pour `.tb-page` et ses descendants. Conséquences trouvées en production :
+  **sept** sélecteurs s'affichaient en serif système (étiquettes du sommaire et
+  du menu, questions de FAQ, titres de cartes et de sous-cartes, liens
+  précédent/suivant, citation) et l'accent des blocs valait `var(--bs-primary)`,
+  le bleu `#0d6efd` de Bootstrap, au lieu du letchi. Toutes les surcharges de
+  jetons du socle sont désormais regroupées dans un seul bloc `.tb-page` de la
+  section « PAGE CMS », avec cette explication. C'est aussi pourquoi
+  `--tb-sticky-top` y fonctionnait, lui, dès le départ.
+  / A base token must be overridden on `.tb-page`, never on `:root`: custom
+  properties resolve per element, so the nearest declaring ancestor wins.
 - **Un seul composant carte** `cotton/V2/event_card.html`, deux modes :
   `mode="event"` (agenda, accueil) et `mode="resa"` (Mon agenda).
 - **Modules de Mon espace** en `<details>` natifs : repliables sans JS, au
@@ -49,7 +67,8 @@ construit sur la 1re version de la maquette (27/08, Lora/Inter, vert).
 ### Fichiers modifies / Modified files
 | Fichier / File | Changement / Change |
 |---|---|
-| `pages/static/V2/css/V2.css` | Fusion DA v1, pont Bootstrap/tb-blocs, ajouts (barre utilisateur, menu du lieu, cartes, page événement, compte, Pages CMS, nouveaux blocs) |
+| `pages/static/V2/css/V2.css` | Fusion DA v1, pont Bootstrap/tb-blocs, ajouts (barre utilisateur, menu du lieu, cartes, page événement, compte, Pages CMS, nouveaux blocs) ; **correctif** `--tb-sticky-top: 5rem` (le sommaire passait sous la barre utilisateur) ; sommaire de page déplacé à gauche comme la maquette ; sections et entrées du sommaire numérotées par compteurs CSS ; **correctif de cadrage** `--tb-gouttiere: 0px` + `--tb-largeur-max: 100%` (la page CMS était 128 px plus étroite que le bandeau du lieu et décalée de 64 px) ; **correctif des jetons** `--tb-police-titre` / `--tb-accent` / `--tb-accent-contraste` déplacés de `:root` vers `.tb-page` ; étiquette du sommaire alignée sur `.toc__label` |
+| `pages/static/pages/css/tb-blocs.css` | **Correctif du socle** : la règle qui replie le sommaire entre 62rem et 75rem n'était pas conditionnée au mode trois colonnes, contrairement aux trois règles voisines — une page à sommaire sans menu latéral n'affichait plus que l'étiquette « SOMMAIRE » au-dessus d'une colonne vide. Corrigé pour **tous les skins** (le défaut existait aussi en classic) |
 | `pages/static/V2/fonts/` (nouveau) | Luciole (4 woff2, CC BY 4.0) + Unbounded variable latin (SIL OFL) + licences |
 | `pages/static/pages/css/tb-blocs.css` | Styles classic des affichages EQUIPE / FRISE / RESSOURCES |
 | `pages/templates/pages/V2/partials/navbar.html` | Barre utilisateur unique (Mon espace / connexion, langue, contact, panier) |
@@ -67,6 +86,7 @@ construit sur la 1re version de la maquette (27/08, Lora/Inter, vert).
 | `pages/templates/pages/V2/vues/compte/index.html` | Mon espace : carte, solde, `btn--signature`, raccourcis, modules (responsabilités, agenda, services, ressources) |
 | `pages/templates/pages/V2/vues/compte/*.html`, `membership/*`, `partials/*` | Sous-pages du compte au style DA |
 | `pages/templates/pages/{V2,classic}/partials/bloc_section_{equipe,frise,ressources}.html` (nouveaux) | Nouveaux affichages SECTION |
+| `pages/management/commands/charger_site_lespass.py` | Page « Qui sommes-nous ? » de démo (`_construire_qui_sommes_nous`) : les 3 nouveaux affichages + bloc LIEU, intertitres en blocs TEXTE pour alimenter le sommaire |
 | `pages/templates/pages/classic/vues/compte/membership/memberships.html` | Correctif : chemin d'include (slash manquant, le gabarit plantait) |
 | `pages/models.py` | Constantes + choix EQUIPE / FRISE / RESSOURCES |
 | `pages/blocs_catalogue.py` | Affichages permis et champs rendus des 3 nouveaux affichages |
@@ -123,11 +143,56 @@ horizontal, boutons et badges sur une seule ligne.
    confirmation SweetAlert, affichage du billet), carte, préférences, pointeuse.
 
 ### Test 6 — Page « Qui sommes-nous » (Pages CMS)
-1. Appliquer la migration, puis créer une Page avec des blocs SECTION en
-   affichage EQUIPE, FRISE et RESSOURCES. `contenu`, par exemple :
-   `[{"titre": "2019", "texte": "Premières réunions"}, {"titre": "2022", "texte": "Ouverture du lieu"}]`
-2. Cocher « afficher le sommaire » : le sommaire prend le style de la maquette,
-   l'entrée active suit la lecture.
+1. Appliquer la migration, puis charger la page de démo :
+   `docker exec lespass_django poetry run python manage.py charger_site_lespass --no-skin`
+   (sans `--no-skin`, la commande repasse le tenant en skin classic). La page est
+   servie sur `/qui-sommes-nous/` et figure dans le menu du lieu. Elle enchaîne :
+   intro, « Le lieu » (bloc LIEU), « Le collectif » (EQUIPE), « L'histoire »
+   (FRISE), « Le projet », « Les ressources » (RESSOURCES), appel à l'action.
+2. Le sommaire affiche les cinq entrées de la maquette, et l'entrée active suit
+   la lecture. Les intertitres sont des titres Markdown (`##`) portés par des
+   blocs TEXTE : `table_des_matieres` ne lit QUE ceux-là — le champ `titre` d'un
+   bloc SECTION n'entre pas dans le sommaire (c'est pourquoi les blocs EQUIPE /
+   FRISE / RESSOURCES ont un `titre` vide, sans quoi l'intertitre sortirait deux fois).
+   Au-dessus de 62rem, le sommaire est la **colonne de gauche** (la maquette le
+   met à gauche, le socle `tb-blocs.css` à droite) ; en dessous, il repasse dans
+   le flux, replié, sous le titre.
+   **Défiler jusqu'en bas : le haut du sommaire ne doit JAMAIS passer sous la
+   barre utilisateur** (régression corrigée par `--tb-sticky-top: 5rem` ; le
+   socle déclare 1,5rem et documente qu'un skin à entête fixe doit le relever,
+   ce que V2 ne faisait pas — `faire_festival.css` le fait, lui, à 6,5rem).
+   Les sections et les entrées du sommaire sont numérotées `01`→`05` et les deux
+   numérotations **concordent** : même compteur sur les mêmes titres `##`
+   (rendus en `<h3>`, le moteur démotant d'un niveau). Les numéros viennent de
+   compteurs CSS, pas des données : réordonner un bloc dans l'admin les
+   renumérote sans rien casser, et `sommaire_actif.js` continue de relier les
+   entrées aux titres par leur ancre. Ils n'apparaissent que sur les pages qui
+   affichent un sommaire.
+3. **Alignement** (critère principal) : à 1280 px et plus, le bord gauche du fil
+   d'Ariane, du titre, du texte et des cartes tombe sur la **même verticale** que
+   la carte du bandeau du lieu. Comparer avec `/` et `/event/`. La colonne passe
+   de 1088 à 1216 px. Un bloc bannière touche les deux bords de l'écran, sans
+   bande de papier ni ascenseur horizontal. En mobile, la marge latérale passe de
+   36 à 16 px : c'est voulu, elle rejoint celle de l'agenda et du bandeau.
+4. **Polices** : l'étiquette du sommaire, celle du menu latéral, les questions de
+   FAQ, les titres de cartes et de sous-cartes, les liens précédent/suivant et la
+   citation de témoignage passent **du serif système à Luciole**. Seuls le titre
+   de page et les titres de blocs restent en Unbounded (deux polices, pas trois).
+   Vérifier dans l'inspecteur (« Rendered fonts ») que la fonte rendue est bien
+   *Luciole*, et que `Luciole-Bold.woff2` répond 200 après `collectstatic`.
+5. **Accent** : filets au-dessus des titres, badges du bloc LIEU, bordure des
+   sous-cartes, bande du bloc CTA et bordures des boutons de bloc passent **du
+   bleu Bootstrap `#0d6efd` au letchi**.
+6. **Sommaire entre 992 et 1200 px** : réduire la fenêtre lentement de 1400 à
+   900 px ; la liste reste visible tant que l'étiquette est là, et à aucune
+   largeur une colonne ne montre l'étiquette seule. Vérifier **aussi** une page
+   qui a un menu latéral **et** un sommaire (là, le sommaire doit bien repasser
+   replié dans le flux : garde-fou du socle, conservé) et **une page CMS en skin
+   classic**, puisque le correctif touche `tb-blocs.css`, partagé par tous les
+   skins.
+7. **Grille de cartes** (`.tb-grille`) : le nombre de colonnes peut passer de 3 à
+   4 avec l'élargissement — attendu. Cinq colonnes signaleraient un
+   `--tb-largeur-boite` mal résolu.
 3. RESSOURCES avec `"url": "javascript:alert(1)"` → **aucun** lien posé.
 4. Même page en skin classic : les trois blocs s'affichent (repli classic).
 

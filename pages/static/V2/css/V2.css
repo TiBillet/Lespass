@@ -144,7 +144,21 @@
   --bs-border-radius-lg: var(--radius-m);
 
   /* Blocs CMS : titres en Luciole, action principale en letchi avec
-     texte encre (même règle de contraste que .btn--primary). */
+     texte encre (même règle de contraste que .btn--primary).
+
+     ATTENTION — CES TROIS LIGNES NE PORTENT RIEN POUR LES PAGES CMS, et c'est
+     normal : tb-blocs.css déclare ces mêmes jetons sur `.tb-page` lui-même
+     (bloc lignes 37-97), et une propriété personnalisée se résout élément par
+     élément — l'ancêtre le plus proche qui la déclare gagne, quelles que soient
+     la spécificité et l'ordre de chargement. Les surcharges qui agissent
+     réellement sont donc posées sur `.tb-page`, dans la section « PAGE CMS » en
+     fin de fichier. Ces trois-ci ne servent qu'aux composants hors `.tb-page`.
+     Ne pas les croire suffisantes : c'est exactement le piège qui laissait sept
+     titres en serif système et l'accent des blocs en bleu Bootstrap.
+     / WARNING — these three do NOTHING for CMS pages: the base declares the
+     same tokens on `.tb-page` itself, and custom properties resolve per element,
+     so the effective overrides live on `.tb-page` (see the CMS section at the
+     end of this file). These only serve components outside `.tb-page`. */
   --tb-police-titre: var(--font-text);
   --tb-accent: var(--color-primary);
   --tb-accent-contraste: var(--color-text);
@@ -2087,13 +2101,21 @@ details.module + details.module { margin-top: var(--space-4); }
    entrée active sur fond blanc). Les classes lues par
    pages/static/pages/js/sommaire_actif.js ne changent pas. */
 .tb-page .tb-sommaire { background: transparent; border: none; box-shadow: none; padding: 0; }
+/* Étiquette du sommaire : exactement .toc__label de la maquette.
+   PAS de font-family ici, volontairement : la maquette n'en pose pas non plus
+   (elle hérite de body), et --tb-police-titre est désormais recâblé sur .tb-page
+   ci-dessus. Forcer la police ICI aurait réparé cette seule étiquette et laissé
+   les six autres titres du socle en serif, en masquant la vraie panne.
+   / Exactly the mockup's .toc__label. No font-family on purpose: the mockup has
+   none either, and the token is now rewired on .tb-page — forcing the font here
+   would have fixed this one label while hiding the real breakage. */
 .tb-page .tb-sommaire__titre {
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--color-text-faint);
-  margin-bottom: var(--space-2);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-3);
 }
 .tb-page .tb-sommaire__liste { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 2px; }
 .tb-page .tb-sommaire__entree a {
@@ -2104,6 +2126,8 @@ details.module + details.module { margin-top: var(--space-4); }
   font-size: 14.5px;
   color: var(--color-text);
   text-decoration: none;
+  justify-content: space-between;
+  display: flex;
 }
 .tb-page .tb-sommaire__entree a:hover { background: rgba(32, 31, 28, 0.04); }
 .tb-page .tb-sommaire__entree--active a {
@@ -2163,3 +2187,200 @@ details.module + details.module { margin-top: var(--space-4); }
 .equipe-grille__badge { margin-top: var(--space-2); }
 .tb-bloc--frise .timeline { list-style: none; margin: var(--space-5) 0 0; }
 .ressources-grille__lien { font-size: inherit; }
+
+/* =================================================================
+   PAGE CMS : SOMMAIRE À GAUCHE, SECTIONS NUMÉROTÉES
+   Maquette : qui-sommes-nous.html (.layout-with-sidebar, .toc, .section__title)
+   / CMS page: ToC on the left, numbered sections.
+   ================================================================= */
+
+/* LE SOMMAIRE PASSAIT SOUS LA BARRE UTILISATEUR — ce n'était pas un problème
+   de z-index. tb-blocs.css colle le sommaire à `top: var(--tb-sticky-top)` et
+   déclare cette variable à 1.5rem, en prévenant qu'« un skin dont l'entête
+   reste fixe la surcharge, sinon le haut du sommaire disparaît dessous au
+   défilement ». V2 a une .user-bar collante (top: 0) et ne la surchargeait
+   pas : le point d'extension existait, il n'était pas utilisé.
+   faire_festival.css fait de même (6.5rem, entête plus haut).
+   MESURE : .user-bar__inner = 38px (.icon-btn) + 2 × 12px (--space-3) + 1px de
+   filet ≈ 63px. 5rem (80px) la dégage avec une respiration, et coïncide avec le
+   `scroll-margin-top: 5rem` que le socle pose sur les titres — une ancre visée
+   depuis le sommaire se cale donc au même endroit que le sommaire lui-même.
+   / The ToC slid under the sticky user bar. Not a z-index issue: tb-blocs.css
+   pins it at --tb-sticky-top (1.5rem) and documents that a skin with a fixed
+   header must override it. V2 never did. */
+/* TOUS LES JETONS DU SOCLE SURCHARGÉS PAR V2 VIVENT ICI, ET PAS SUR :root.
+   La raison est la même pour les cinq, et c'est le piège central de ce fichier :
+   tb-blocs.css déclare ses jetons sur `.tb-page, .tb-jetons` (bloc lignes 37-97),
+   donc sur l'élément lui-même. Or une propriété personnalisée se résout ÉLÉMENT
+   PAR ÉLÉMENT : l'ancêtre le plus proche qui la déclare gagne, quelles que soient
+   la spécificité et l'ordre de chargement des feuilles — l'héritage depuis :root
+   ne sert qu'aux éléments qui n'ont aucune déclaration plus proche. Une
+   surcharge posée sur :root est donc TOUJOURS perdante pour `.tb-page` et ses
+   descendants : ce n'est pas une question de cascade, les deux déclarations ne
+   visent pas le même élément (html d'un côté, div.tb-page de l'autre).
+   `.tb-page` est un point d'accroche sûr : un seul élément le porte dans tout le
+   skin (pages/templates/pages/V2/page.html).
+   / EVERY base token V2 overrides lives HERE, not on :root: the base declares
+   them on `.tb-page` itself, and a custom property resolves per element — the
+   nearest declaring ancestor always wins, whatever the specificity or sheet
+   order. A :root override can never reach .tb-page. */
+.tb-page {
+  --tb-sticky-top: 5rem;
+
+  /* CADRAGE : main.container (shell.html) cadre DÉJÀ la page à 1216 px
+     (1280 − 2 × 32), et le bandeau du lieu (.place-header) épouse exactement
+     cette boîte, n'ayant aucun padding propre. Le socle posait un SECOND
+     cadrage par-dessus : sa gouttière plafonnée à 64 px, plus une largeur-max
+     de 72rem, ramenaient la colonne à 1088 px démarrant à 96 px du bord du
+     <main> au lieu de 32 — « trop étroit, pas aligné ». On neutralise donc le
+     cadrage interne : la page CMS prend la même colonne que toutes les autres
+     vues V2, qui s'appuient directement sur main.container.
+
+     LES DEUX JETONS SONT NÉCESSAIRES, la gouttière étant le PLANCHER du max() :
+     largeur-max seule → max(64px, 0) = 64px, rien ne change ; gouttière seule
+     → max(0, (1216−1152)/2) = 32px, toujours désaligné.
+
+     `0px` et NON `0` : le jeton est substitué dans max()/calc(), où un zéro sans
+     unité rend la valeur invalide au calcul — le padding retomberait à sa valeur
+     initiale, en silence.
+     `100%` et NON une longueur fixe : le même jeton sert de largeur de référence
+     aux blocs pleine largeur, où il est comparé à 100vw (marge négative puis
+     padding symétrique). À 100 % le bloc touche pile les bords de l'écran et son
+     contenu revient pile sur le bord du bandeau ; à 1280px il s'arrêterait 32 px
+     avant, laissant deux bandes de papier.
+     La largeur de LECTURE ne change pas : .tb-markdown reste capé à 72ch.
+     / main.container already frames the page at 1216px and .place-header hugs
+     that box; the base added a SECOND framing on top. Both tokens are needed
+     (the gutter is the max()'s floor). `0px` not `0` (a unitless zero is invalid
+     inside max()/calc()); `100%` not a fixed length (full-bleed blocks compare
+     this token to 100vw). Reading width unchanged. */
+  --tb-gouttiere: 0px;
+  --tb-largeur-max: 100%;
+
+  /* POLICE DES TITRES DE BLOCS. Le socle pose ici une serif système (ligne 88) ;
+     le pont de :root qui la recâblait vers Luciole ne pouvait pas l'atteindre,
+     pour la raison expliquée en tête de ce bloc. Sept sélecteurs s'affichaient
+     donc en Georgia : étiquette du sommaire et du menu latéral, questions de
+     FAQ, titres de cartes et de sous-cartes, liens précédent/suivant, citation
+     de témoignage. Seuls .tb-page__titre et .tb-bloc__titre y échappaient, parce
+     que V2 leur impose explicitement --font-display plus bas.
+     / The base sets a system serif here; the :root bridge could not reach it, so
+     seven selectors were rendering in Georgia. */
+  --tb-police-titre: var(--font-text);
+
+  /* Même cause : l'accent des blocs CMS lisait var(--bs-primary) = #0d6efd, posé
+     par bootstrap.min.5.3.3.css. Filets au-dessus des titres, badges du bloc
+     LIEU, bordure des sous-cartes, bande du bloc CTA et bordures des boutons
+     étaient en bleu Bootstrap au lieu du letchi. Texte encre sur le letchi,
+     même règle de contraste que .btn--primary.
+     / Same cause: the CMS accent was reading Bootstrap blue instead of letchi. */
+  --tb-accent: var(--color-primary);
+  --tb-accent-contraste: var(--color-text);
+}
+
+/* SOMMAIRE À GAUCHE. Le socle le place à DROITE (grid-column: 10 / -1), en
+   vis-à-vis du menu de rubrique ; la DA v1 le veut à gauche, comme
+   .layout-with-sidebar de la maquette (220px + contenu). On échange donc les
+   colonnes, sans toucher à l'ordre du DOM : le placement est explicite des deux
+   côtés, donc un lecteur d'écran continue d'annoncer le sommaire après le titre.
+
+   DEUX PRÉCAUTIONS, dictées par le socle :
+   — la surcharge vit dans `min-width: 62.001rem`, EXCLUSIVE du `max-width:
+     62rem` où le socle remet tout sur une colonne. Les deux ne s'appliquent
+     jamais ensemble, donc aucune guerre de spécificité avec la version mobile
+     — le socle prévient lui-même qu'« une media query ne l'emporte pas sur la
+     spécificité » et que ses règles mobiles reprennent celles du desktop ;
+   — le cas « menu latéral + sommaire » est EXCLU : le menu occupe déjà la
+     colonne de gauche, et le socle gère déjà ces trois colonnes (y compris son
+     repli en tablette). Deux colonnes de gauche se recouvriraient.
+   / ToC on the LEFT (the base puts it right), scoped to the desktop query,
+   which is mutually exclusive with the base's mobile reset — hence no
+   specificity fight. The menu+ToC three-column case is excluded. */
+@media (min-width: 62.001rem) {
+  .tb-page.tb-flux:has(> .tb-sommaire):not(:has(> .tb-menu-lateral)) > .tb-sommaire {
+    grid-column: 1 / span 3;
+  }
+  .tb-page.tb-flux:has(> .tb-sommaire):not(:has(> .tb-menu-lateral))
+    > *:not(.tb-sommaire):not(.tb-colonnes-4):not(.tb-colonnes-6) {
+    grid-column: 4 / -1;
+  }
+}
+
+/* Le sommaire prend l'allure de .toc : étiquette en petites capitales, liens en
+   pastilles, entrée active sur fond blanc cerné (déjà posé plus haut).
+   LES NUMÉROS VIENNENT D'UN COMPTEUR CSS, jamais des données : ni `Bloc` ni
+   `table_des_matieres` ne portent de numéro, et sommaire_actif.js relie chaque
+   entrée à son titre PAR L'ANCRE — un numéro écrit dans le texte changerait le
+   libellé et l'ancre, donc casserait cette correspondance. Un compteur laisse
+   le DOM intact : le script continue de marquer l'entrée lue.
+   / Numbers come from a CSS COUNTER, never from the data: sommaire_actif.js
+   matches entries to headings by anchor, so a number written into the text
+   would break that. A counter leaves the DOM untouched. */
+.tb-page .tb-sommaire__liste { counter-reset: tb-sommaire; }
+.tb-page .tb-sommaire__entree--niveau-1 { counter-increment: tb-sommaire; }
+.tb-page .tb-sommaire__entree--niveau-1 > a::before {
+  content: counter(tb-sommaire, decimal-leading-zero);
+  margin-right: var(--space-2);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--color-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* TITRES DE SECTION NUMÉROTÉS, comme .section__title de la maquette : le numéro
+   en Luciole devant le titre en Unbounded, puis un filet fin.
+
+   LA BALISE EST `h3` ET NON `h2` : le moteur démote les titres nativement
+   (`baselevel = NIVEAU_DE_BASE_DES_TITRES = 2`, cf. pages_tags.py), donc un
+   `##` écrit dans un bloc TEXTE sort en `<h3>`. Viser `h2` ne numéroterait
+   rien, en silence.
+
+   LE COMPTEUR PORTE SUR CES MÊMES TITRES `##`, qui sont exactement ceux que
+   `table_des_matieres` liste : les deux numérotations ne peuvent donc pas se
+   contredire, même si un bloc est réordonné dans l'admin.
+
+   PORTÉE : seulement les pages qui AFFICHENT un sommaire. Ailleurs les numéros
+   n'auraient aucun repère en face et ne diraient rien.
+   / Target `h3`, not `h2`: the engine demotes headings natively (baselevel 2),
+   so a `##` renders as <h3> — targeting h2 would silently number nothing. The
+   counter runs on the very headings the ToC lists, so both agree. Scoped to
+   pages that actually show a ToC. */
+.tb-page.tb-flux:has(> .tb-sommaire) { counter-reset: tb-section; }
+.tb-page.tb-flux:has(> .tb-sommaire) .tb-markdown > h3 {
+  counter-increment: tb-section;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-size: 22px;
+}
+/* Repasse en Luciole : sinon le numéro hériterait de l'Unbounded du titre. */
+/* / Back to Luciole: the number would otherwise inherit the title's Unbounded. */
+.tb-page.tb-flux:has(> .tb-sommaire) .tb-markdown > h3::before {
+  content: counter(tb-section, decimal-leading-zero);
+  flex-shrink: 0;
+  font-family: var(--font-text);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Le filet de .section__rule. La maquette le pose SOUS la phrase de situation
+   quand il y en a une, sinon sous le titre : on distingue donc les deux cas
+   plutôt que de supposer qu'un paragraphe suit toujours — sur une page de
+   journal, un titre peut être suivi d'une liste ou d'une image.
+   / The .section__rule hairline: under the description line when there is one,
+   otherwise under the title — rather than assuming a paragraph always follows. */
+.tb-page.tb-flux:has(> .tb-sommaire) .tb-markdown > h3:not(:has(+ p)) {
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+.tb-page.tb-flux:has(> .tb-sommaire) .tb-markdown > h3 + p {
+  color: var(--color-text-muted);
+  font-size: 14.5px;
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
