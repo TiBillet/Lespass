@@ -1,36 +1,95 @@
-{% load i18n  %}
+{% load i18n %}
+{% comment %}
+EN-TÊTE DU LIEU — skin V2 (DA v1)
+/ Venue header — V2 skin (DA v1)
 
-<!-- EN-TÊTE DU LIEU — dans le contenu : défile et disparaît au scroll -->
-<div class="place-header">
+LOCALISATION : pages/templates/pages/V2/tenant_header.html
+Inclus par : pages/V2/shell.html et headless.html (sauf sur /my_account/).
+
+Il fait partie du CONTENU : il défile et disparaît au scroll.
+Il porte l'identité du lieu (logo ou initiale, nom, adresse, site web)
+et le menu du lieu.
+
+Le menu vient de `main_nav`, construit dans BaseBillet/views.py get_context() :
+les Pages CMS publiées (ex : « Qui sommes-nous ? »), puis réseau, ressources,
+agenda, adhésions. « Accueil » est ajouté ici, en premier.
+Une Page avec des sous-pages s'affiche en menu déroulant Bootstrap.
+/ The menu comes from `main_nav` (get_context). "Home" is added here, first.
+
+Mobile : le menu défile horizontalement (voir V2.css, .place-nav).
+Les menus déroulants passent en position fixe (Popper strategy "fixed")
+pour ne pas être coupés par ce défilement.
+/ Mobile: horizontal scroll. Dropdowns use a fixed strategy to avoid clipping.
+{% endcomment %}
+<div class="place-header" data-testid="tenant-header">
     <div class="place-header__card">
         <div class="place-header__top">
             <div class="place-id">
                 {% if config.logo %}
-                    <span class="place-id__mark">
-                                {% include 'commun/partials/picture.html' with img=config.logo alt=config.organisation style='max-width: 3.5rem' %}
-                            </span>
+                    <span class="place-id__mark place-id__mark--logo">
+                        {% include 'commun/partials/picture.html' with img=config.logo alt=config.organisation %}
+                    </span>
                 {% else %}
-                    <span class="place-id__mark">{{ config.organisation|slice:":1" }}</span>
+                    <span class="place-id__mark" aria-hidden="true"><span class="ink-center-fix">{{ config.organisation|slice:":1"|upper }}</span></span>
                 {% endif %}
                 <span>
-                            <span class="place-id__name" style="display:block">{{ config.organisation }}</span>
-                            <span class="place-id__tagline">
-                                {% if config.postal_address %}
-                                    {{ config.postal_address }}
-                                {% elif config.city %}
-                                    {{ config.city }}
-                                {% endif %}
-                          </span>
-                        </span>
+                    <a class="place-id__name place-id__name--lien" href="/"
+                       hx-get="/" hx-target="body" hx-push-url="true">{{ config.organisation }}</a>
+                    <span class="place-id__tagline">
+                        {% if config.postal_address %}
+                            {{ config.postal_address }}
+                        {% elif config.city %}
+                            {{ config.city }}
+                        {% endif %}
+                        {% if config.site_web %}
+                            {% if config.postal_address or config.city %}·{% endif %}
+                            <a class="place-id__site" href="{{ config.site_web }}" target="_blank" rel="noopener"
+                               data-testid="tenant-header-site-web">{{ config.site_web|cut:"https://"|cut:"http://" }} <span aria-hidden="true">↗</span><span class="visually-hidden">{% translate '(nouvel onglet)' %}</span></a>
+                        {% endif %}
+                    </span>
+                </span>
             </div>
-            <a class="btn btn--primary" href="contribuer.html">Je veux contribuer</a> {# V2-HERE #}
+            {% comment %} V2-HERE
+            Bouton « Je veux contribuer » de la maquette : la page Contribuer n'existe
+            pas encore en V2 (crowds rend des chemins de gabarit fixes, voir
+            CHANGELOG/a traiter/v2-da-v1-points-laisses-de-cote.md, point R12).
+            / "I want to contribute" button: no V2 Contribute page yet.
+            <a class="btn btn--primary" href="/contrib/">{% translate 'Je veux contribuer' %}</a>
+            {% endcomment %}
         </div>
-        <nav class="place-nav">
-            <a href="/" {% if request.path == "/" %} class="is-active" aria-current="page"{% endif %}>Accueil</a>
-            <a href="/event/" {% if request.path == "/event/" %} class="is-active" aria-current="page"{% endif %}>Agenda</a>
-            <a href="/memberships/" {% if request.path == "/memberships/" %} class="is-active" aria-current="page"{% endif %}>Adhésion &amp; services</a>
-            <a href="qui-sommes-nous.html" {% if request.path == item.name %} class="is-active" aria-current="page"{% endif %}>Qui sommes-nous ?</a>
-            <a href="/federation/" {% if request.path == "/federation/" %} class="is-active" aria-current="page"{% endif %}>Autour de nous</a>
+
+        <nav class="place-nav" aria-label="{% translate 'Menu principal' %}"
+             data-loading-target="#tibillet-spinner"
+             data-loading-delay="{{ loading_delay|default:'400' }}"
+             data-testid="tenant-header-menu">
+            <a href="/" hx-get="/" hx-target="body" hx-push-url="true"
+               {% if request.path == "/" %}class="is-active" aria-current="page"{% endif %}>{% translate 'Accueil' %}</a>
+
+            {% for item in main_nav %}
+                {% if item.children %}
+                    {# Page avec sous-pages : menu déroulant. Le 1er item mène à la #}
+                    {# page parente elle-même (atteignable + crawlable). #}
+                    {# / Page with sub-pages: dropdown; 1st item links to the parent. #}
+                    <div class="dropdown place-nav__dropdown">
+                        <a class="dropdown-toggle{% if url_name == item.name or request.path == item.url %} is-active{% endif %}"
+                           href="{{ item.url }}" id="dd-{{ item.name }}" role="button"
+                           data-bs-toggle="dropdown" aria-expanded="false"
+                           data-bs-popper-config='{"strategy":"fixed"}'>{% translate item.label %}</a>
+                        <ul class="dropdown-menu" aria-labelledby="dd-{{ item.name }}">
+                            <li><a class="dropdown-item" href="{{ item.url }}"
+                                   hx-get="{{ item.url }}" hx-target="body" hx-push-url="true">{% translate item.label %}</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% for enfant in item.children %}
+                                <li><a class="dropdown-item{% if url_name == enfant.name or request.path == enfant.url %} active{% endif %}"
+                                       href="{{ enfant.url }}" hx-get="{{ enfant.url }}" hx-target="body" hx-push-url="true">{{ enfant.label }}</a></li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% else %}
+                    <a href="{{ item.url }}" hx-get="{{ item.url }}" hx-target="body" hx-push-url="true"
+                       {% if url_name == item.name or request.path == item.url %}class="is-active" aria-current="page"{% endif %}>{% translate item.label %}</a>
+                {% endif %}
+            {% endfor %}
         </nav>
     </div>
 </div>

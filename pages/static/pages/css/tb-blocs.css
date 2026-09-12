@@ -1726,3 +1726,46 @@ h2.tb-bloc__titre::before {
     font-weight: 600;
     color: var(--tb-texte);
 }
+
+/* =================================================================
+   NOUVEAUX AFFICHAGES SECTION : EQUIPE, FRISE, RESSOURCES (socle classic)
+   / New SECTION displays: EQUIPE, FRISE, RESSOURCES (classic base)
+
+   Gabarits : pages/templates/pages/classic/partials/bloc_section_{equipe,frise,ressources}.html
+   Le skin V2 a ses propres gabarits et styles (pages/static/V2/css/V2.css).
+   Styles volontairement sobres, uniquement avec les jetons --tb-*.
+   ================================================================= */
+.tb-equipe {
+    list-style: none;
+    padding: 0;
+    margin: 1.25rem 0 0;
+    display: grid;
+    gap: var(--tb-grille-gap, 1.25rem);
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+}
+.tb-equipe__membre {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+    padding: 1rem;
+    border: 1px solid var(--tb-bordure);
+    border-radius: var(--tb-rayon);
+    background: var(--tb-surface);
+}
+.tb-equipe__nom { font-weight: 700; }
+.tb-equipe__role { color: var(--tb-texte-doux); }
+
+.tb-frise {
+    list-style: none;
+    margin: 1.25rem 0 0;
+    padding: 0 0 0 1.25rem;
+    border-left: 2px solid var(--tb-bordure);
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+.tb-frise__etape { display: flex; flex-direction: column; gap: .25rem; }
+.tb-frise__date { font-weight: 700; }
+.tb-frise__texte { color: var(--tb-texte-doux); }
+
+.tb-ressources { list-style: none; padding: 0; }

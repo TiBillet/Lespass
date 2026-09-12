@@ -1,77 +1,75 @@
-{% extends 'fonctionnel/account_base.html' %}
+{% extends 'pages/V2/vues/compte/account_base.html' %}
 {% load static %}
 {% load tibitags %}
 {% load humanize i18n %}
 
+{% comment %}
+MES PRÉFÉRENCES — skin V2 (DA v1)
+/ My settings — V2 skin (DA v1)
+
+LOCALISATION : pages/templates/pages/V2/vues/compte/preferences.html
+Vue : BaseBillet/views.py MyAccount.profile (/my_account/profile/)
+
+A CONSERVER : #languageSelect (lu par LanguageSwitcher, shell.html),
+#first_name, #last_name, #recoveryEmail.
+{% endcomment %}
+
 {% block title %}{% translate 'My settings' %}{% endblock %}
+{% block compte_titre %}{% translate 'My settings' %}{% endblock %}
 
 {% block account_page %}
     {# TODO: vue et route pour les préférences #}
-    <section class="card pt-3">
-        <div class="card-body">
-            <h1 class="card-title">{% trans "My settings" %}</h1>
-            <p class="lead">
-                {% trans "Here I can personalize my settings, download or update my personal data and delete my account." %}
-            </p>
+    <p class="page-intro">
+        {% translate "Here I can personalize my settings, download or update my personal data and delete my account." %}
+    </p>
+
+    <section class="section compte-section">
+        <h2 class="section__title">{% translate "Personalization" %}</h2>
+
+        {% comment %} V2-HERE
+        Interrupteur « Thème sombre » (#darkThemeCheck, lu par ThemeSwitcher) :
+        la DA v1 n'a pas de mode sombre. L'activer passerait les composants
+        Bootstrap en sombre sur le papier clair du skin V2. Masqué, comme le
+        bouton #themeToggle de la barre du haut.
+        / Dark theme switch hidden: the DA v1 has no dark mode.
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" role="switch" id="darkThemeCheck">
+            <label class="form-check-label" for="darkThemeCheck">{% translate "Dark theme" %}</label>
+        </div>
+        {% endcomment %}
+
+        <div class="compte-champ">
+            <label for="languageSelect" class="form-label">{% translate "Language" %}</label>
+            <select class="form-select" id="languageSelect">
+                <option value="fr" {% if LANGUAGE_CODE == 'fr' %}selected{% endif %}>{% translate "French" %}</option>
+                <option value="en" {% if LANGUAGE_CODE == 'en' %}selected{% endif %}>{% translate "English" %}</option>
+            </select>
+            <p class="compte-champ__aide">{% translate "This setting is synced with the button in the navigation bar." %}</p>
         </div>
     </section>
 
-    <h2 class="pt-3">{% trans "Personalization" %}</h2>
+    <section class="section compte-section">
+        <h2 class="section__title">{% translate "Data" %}</h2>
 
-    <div class="mb-3">
-        <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" role="switch" id="darkThemeCheck">
-            <label class="form-check-label" for="darkThemeCheck">
-                {% trans "Dark theme" %}
-            </label>
-            <p class="text-muted small">{% trans "This setting is synced with the button in the navigation bar." %}</p>
-        </div>
-    </div>
-
-    <div class="mb-3">
-        <label for="languageSelect" class="form-label">{% trans "Language" %}</label>
-        <select class="form-select" id="languageSelect">
-            <option value="fr" {% if LANGUAGE_CODE == 'fr' %}selected{% endif %}>{% trans "French" %}</option>
-            <option value="en" {% if LANGUAGE_CODE == 'en' %}selected{% endif %}>{% trans "English" %}</option>
-        </select>
-        <p class="text-muted small">{% trans "This setting is synced with the button in the navigation bar." %}</p>
-    </div>
-
-    <h2 class="pt-3">{% trans "Data" %}</h2>
-
-    <div class="mb-3">
-        <label for="first_name" class="form-label">{% trans "First name" %}</label>
-        <div class="input-group mb-3">
+        <div class="compte-champ">
+            <label for="first_name" class="form-label">{% translate "First name" %}</label>
             <input type="text" class="form-control" id="first_name" value="{{ user.first_name|default:"" }}" disabled/>
-{#            <button class="btn btn-secondary" type="button" id="button-addon2">{% trans "Update" %}</button>#}
         </div>
-    </div>
 
-    <div class="mb-3">
-        <label for="last_name" class="form-label">{% trans "Last name" %}</label>
-        <div class="input-group mb-3">
+        <div class="compte-champ">
+            <label for="last_name" class="form-label">{% translate "Last name" %}</label>
             <input type="text" class="form-control" id="last_name" value="{{ user.last_name|default:"" }}" disabled/>
-{#            <button class="btn btn-secondary" type="button" id="button-addon2">{% trans "Update" %}</button>#}
         </div>
-    </div>
-    
-    <div class="mb-3">
-        <label for="recoveryEmail" class="form-label">{% trans "Email address" %}</label>
-        <div class="input-group mb-3">
+
+        <div class="compte-champ">
+            <label for="recoveryEmail" class="form-label">{% translate "Email address" %}</label>
             <input type="email" class="form-control" id="recoveryEmail" placeholder="nom@exemple.fr"
                    value="{{ user.email }}" disabled/>
-{#            <button class="btn btn-secondary" type="button" id="button-addon2">{% trans "Update" %}</button>#}
         </div>
-    </div>
+    </section>
 
     {% comment %} HIDE: voir la loi pour les données à télécharger, pas grave si c'est un json crade par ex
-    <div class="row mt-5">
-        <div class="col-md">
-            <a href="#" class="btn btn-secondary d-block mb-4">Télécharger mes données</a>
-        </div>
-        <div class="col-md">
-            <a href="#" class="btn btn-danger d-block">Supprimer mon compte</a>
-        </div>
-    </div>
+    <a href="#" class="btn btn--secondary">Télécharger mes données</a>
+    <a href="#" class="btn btn--outline">Supprimer mon compte</a>
     {% endcomment %}
 {% endblock %}

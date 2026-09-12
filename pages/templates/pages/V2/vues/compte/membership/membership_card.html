@@ -1,125 +1,132 @@
 {% load humanize i18n %}
 {% load tibitags %}
+{% comment %}
+CARTE D'UNE ADHÉSION (espace personnel) — skin V2 (DA v1)
+/ One membership card (personal space) — V2 skin (DA v1)
 
-{#  Partial: renders a single membership card (and the expired notice card if not valid)#}
-{#  Required context:#}
-{#    - membership: Membership instance#}
-{#    - user: request.user (for fallback name)#}
-{#    - message_success (optional): text to display as success alert#}
-{#    - message_error (optional): text to display as error alert#}
+LOCALISATION : pages/templates/pages/V2/vues/compte/membership/membership_card.html
+Inclus par : vues/compte/membership/memberships.html
 
-<div id="membership-card-{{ membership.uuid }}" class="col{% if not membership.is_valid %} d-flex flex-column justify-content-between{% endif %}" data-testid="membership-card-{{ membership.uuid }}">
-  <div class="card{% if membership.is_valid %} h-100{% else %} opacity-50 flex-grow-1{% endif %}">
-    {% include 'commun/partials/picture.html' with img=membership.product_img alt=membership.name class='card-img-top' ratio='16x9' %}
-    <div class="card-body" id="{{ membership.price.product.uuid }}">
-      {% if message_success %}
-      <div class="alert alert-success" role="alert">
-        {{ message_success }}
-      </div>
-      {% endif %}
-      {% if message_error %}
-      <div class="alert alert-danger" role="alert">
-        {{ message_error }}
-      </div>
-      {% endif %}
+Contexte attendu :
+- membership : instance Membership
+- user : request.user (nom de repli)
+- message_success / message_error (optionnels) : message à afficher
 
-      <h3 class="card-title">
-        {{ membership.price.product.name }} {{ membership.price.name|lower }}
-      </h3>
-      <h4>
-        {% trans 'for' %}
-        {% if membership.first_name %}{{ membership.first_name }}{% else %}{{ user.first_name|default:"Inconnu" }}{% endif %}
-        {% if membership.last_name %}{{ membership.last_name }}{% else %}{{ user.last_name|default:"Inconnu" }}{% endif %}
-      </h4>
+FLUX D'ARRÊT DU PRÉLÈVEMENT AUTOMATIQUE :
+hx-post /api/cancel_sub/ -> la réponse remplace la carte entière
+(#membership-card-<uuid>, hx-swap outerHTML).
+Attention : ApiBillet CancelSubscription rend aujourd'hui le gabarit CLASSIC
+(voir CHANGELOG/a traiter/v2-da-v1-points-laisses-de-cote.md).
 
-      {% if membership.price.recurring_payment %}
-      <p>
-        {% if membership.status == 'A' %}
-            <span class="badge text-bg-success">{% trans 'Recurring payment' %}</span>
-        {% elif membership.status == 'C' %}
-            <span class="badge text-bg-warning">{% trans 'Recurring payment canceled' %}</span>
-        {% endif %}
-      </p>
-      {% endif %}
-
-      <ul class="list-group list-group-flush my-3">
-        <li class="list-group-item px-0">
-          du {{ membership.last_contribution|date }}
-          au {{ membership.get_deadline|date }}
-        </li>
-        <li class="list-group-item px-0">
-          {% trans 'Issued by' %} <strong>{{ membership.origin }}</strong>
-        </li>
-          <li class="list-group-item px-0">
-          {% trans 'Contribution' %} : <strong>{{ membership.contribution_value }}</strong> €
-        </li>
-        <li class="list-group-item px-0">
-          {% for option in membership.option_generale.all %}
-          <span class="badge text-bg-info p-2 me-1 mb-1 fs-6 fw-medium">
-            {{ option.name }}
-          </span>
-          {% endfor %}
-        </li>
-      </ul>
-      <p class="card-text">{{ membership.price.product.short_description }}</p>
-      {% if membership.price.product.long_description %}
-      <p class="card-text">{{ membership.price.product.long_description|safe }}</p>
-      {% endif %}
-    </div>
-
-    {% if membership.is_valid %}
-    <div class="card-footer">
-      {# Infos de renouvellement / expiration en FALC #}
-      {% if membership.price.recurring_payment %}
-      <p class="mt-3">
-        Se renouvelle dans {{ membership.get_deadline|naturaltime }}
-      </p>
-      {% if membership.price.commitment %}
-      <p class="mb-0">
-        {# L'engagement se calcule depuis first_contribution sur "iteration" périodes #}
-        Engagement jusqu'au {{ membership.get_iteration_end_date|date }}
-        {% if membership.first_contribution and membership.get_iteration_end_date %}
-          (durée: {{ membership.first_contribution|timesince:membership.get_iteration_end_date }})
-        {% endif %}
-      </p>
-      {% endif %}
-      {% else %}
-      <p class="mt-3">
-        {% trans 'Expires' %} {{ membership.get_deadline|naturaltime }}
-      </p>
-      {% endif %}
-
-      {# Show cancel auto debit button only when auto-renewing with Stripe sub id #}
-      {% if membership.status == 'A' and membership.stripe_id_subscription and not membership.price.commitment %}
-      <form
-          method="post"
-          action="/api/cancel_sub/"
-          class="d-grid gap-2"
-          hx-post="/api/cancel_sub/"
-          hx-target="#membership-card-{{ membership.uuid }}"
-          hx-swap="outerHTML"
-      >
-        {% csrf_token %}
-        <input type="hidden" name="uuid_membership" value="{{ membership.uuid }}" />
-        <button type="submit" class="btn btn-outline-danger" data-testid="membership-cancel-auto-{{ membership.uuid }}">
-          {% trans 'Cancel automatic debit' %}
-        </button>
-      </form>
-      {% endif %}
-    </div>
+A CONSERVER : id="membership-card-<uuid>", data-testid="membership-card-<uuid>",
+data-testid="membership-cancel-auto-<uuid>".
+{% endcomment %}
+<article id="membership-card-{{ membership.uuid }}"
+         class="offer-card compte-adhesion{% if not membership.is_valid %} compte-adhesion--expiree{% endif %}"
+         data-testid="membership-card-{{ membership.uuid }}">
+    {% if membership.product_img %}
+        <div class="offer-card__cover">
+            {% include 'commun/partials/picture.html' with img=membership.product_img alt="" %}
+        </div>
     {% endif %}
-  </div>
+    <div class="offer-card__content" id="{{ membership.price.product.uuid }}">
+        {% if message_success %}
+            <div class="callout" role="status"><p class="callout__text">{{ message_success }}</p></div>
+        {% endif %}
+        {% if message_error %}
+            <div class="callout callout--erreur" role="alert"><p class="callout__text">{{ message_error }}</p></div>
+        {% endif %}
 
-  {% if not membership.is_valid %}
-  <div class="card mt-3 border-warning">
-    <div class="card-footer">
-      <p class="mt-3">
-        {% trans 'Expired' %} {{ membership.get_deadline|naturaltime }}
-      </p>
-      <a href="/memberships/" class="btn btn-primary d-block mb-3">
-        {% trans "Renew" %}
-      </a>
+        <h3 class="offer-card__title">
+            {{ membership.price.product.name }} {{ membership.price.name|lower }}
+        </h3>
+        <p class="offer-card__desc">
+            {% translate 'for' %}
+            {% if membership.first_name %}{{ membership.first_name }}{% else %}{{ user.first_name|default:"Inconnu" }}{% endif %}
+            {% if membership.last_name %}{{ membership.last_name }}{% else %}{{ user.last_name|default:"Inconnu" }}{% endif %}
+        </p>
+
+        <div class="event-card__tags">
+            {% if membership.is_valid %}
+                <span class="badge badge--green">{% translate 'Active' %}</span>
+            {% else %}
+                <span class="badge badge--neutral">{% translate 'Expired' %}</span>
+            {% endif %}
+            {% if membership.price.recurring_payment %}
+                {% if membership.status == 'A' %}
+                    <span class="badge badge--neutral">{% translate 'Recurring payment' %}</span>
+                {% elif membership.status == 'C' %}
+                    <span class="badge badge--neutral">{% translate 'Recurring payment canceled' %}</span>
+                {% endif %}
+            {% endif %}
+            {% for option in membership.option_generale.all %}
+                <span class="badge badge--neutral">{{ option.name }}</span>
+            {% endfor %}
+        </div>
+
+        <dl class="compte-adhesion__infos">
+            <div>
+                <dt>{% translate 'Période' %}</dt>
+                <dd>{% translate 'du' %} {{ membership.last_contribution|date }} {% translate 'au' %} {{ membership.get_deadline|date }}</dd>
+            </div>
+            <div>
+                <dt>{% translate 'Issued by' %}</dt>
+                <dd>{{ membership.origin }}</dd>
+            </div>
+            <div>
+                <dt>{% translate 'Contribution' %}</dt>
+                <dd>{{ membership.contribution_value }} €</dd>
+            </div>
+        </dl>
+
+        {% if membership.price.product.short_description %}
+            <p class="offer-card__desc">{{ membership.price.product.short_description }}</p>
+        {% endif %}
+        {% if membership.price.product.long_description %}
+            <div class="offer-card__desc">{{ membership.price.product.long_description|safe }}</div>
+        {% endif %}
+
+        <div class="offer-card__footer compte-adhesion__pied">
+            {% if membership.is_valid %}
+                {# Infos de renouvellement / expiration en FALC #}
+                {% if membership.price.recurring_payment %}
+                    <p class="compte-champ__aide">Se renouvelle dans {{ membership.get_deadline|naturaltime }}</p>
+                    {% if membership.price.commitment %}
+                        {# L'engagement se calcule depuis first_contribution sur "iteration" périodes #}
+                        <p class="compte-champ__aide">
+                            Engagement jusqu'au {{ membership.get_iteration_end_date|date }}
+                            {% if membership.first_contribution and membership.get_iteration_end_date %}
+                                (durée: {{ membership.first_contribution|timesince:membership.get_iteration_end_date }})
+                            {% endif %}
+                        </p>
+                    {% endif %}
+                {% else %}
+                    <p class="compte-champ__aide">{% translate 'Expires' %} {{ membership.get_deadline|naturaltime }}</p>
+                {% endif %}
+
+                {# Bouton d'arrêt du prélèvement : seulement si renouvellement auto Stripe, sans engagement. #}
+                {# / Cancel auto debit: only when auto-renewing with Stripe, no commitment. #}
+                {% if membership.status == 'A' and membership.stripe_id_subscription and not membership.price.commitment %}
+                    <form
+                        method="post"
+                        action="/api/cancel_sub/"
+                        hx-post="/api/cancel_sub/"
+                        hx-target="#membership-card-{{ membership.uuid }}"
+                        hx-swap="outerHTML"
+                    >
+                        {% csrf_token %}
+                        <input type="hidden" name="uuid_membership" value="{{ membership.uuid }}" />
+                        <button type="submit" class="btn btn--outline btn--sm" data-testid="membership-cancel-auto-{{ membership.uuid }}">
+                            {% translate 'Cancel automatic debit' %}
+                        </button>
+                    </form>
+                {% endif %}
+            {% else %}
+                <p class="compte-champ__aide">{% translate 'Expired' %} {{ membership.get_deadline|naturaltime }}</p>
+                <a href="/memberships/" class="btn btn--primary btn--sm" hx-get="/memberships/" hx-target="body" hx-push-url="true">
+                    {% translate "Renew" %}
+                </a>
+            {% endif %}
+        </div>
     </div>
-  </div>
-  {% endif %}
-</div>
+</article>

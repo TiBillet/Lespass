@@ -1,0 +1,24 @@
+{% load i18n %}
+{% comment %}
+LISTE D'ÉVÉNEMENTS (page 1, rendu partiel) — skin V2
+/ Event list (page 1, partial render) — V2 skin
+
+LOCALISATION : pages/templates/pages/V2/vues/agenda_liste.html
+Vue : BaseBillet/views.py EventMVT.partial_list, quand page == 1.
+
+Rendu partiel destiné à remplacer le CONTENU de la grille #event_list
+(vues/agenda.html). On ne renvoie donc que les cartes + le bouton
+« Voir plus », sans conteneur : la grille existe déjà dans la page.
+Avant ce fichier, le skin V2 retombait sur la version classic (autre carte).
+/ Partial meant to replace the CONTENT of the #event_list grid: cards +
+"Load more" button only. Previously V2 fell back to the classic version.
+{% endcomment %}
+{% for date_key, events in dated_events.items %}
+    {% for event in events %}
+        <c-V2.event_card :event="event" />
+    {% endfor %}
+{% empty %}
+    <p class="agenda-vide">{% translate 'No results for this search.' %}</p>
+{% endfor %}
+
+{% include 'pages/V2/vues/partials/agenda_voir_plus.html' %}

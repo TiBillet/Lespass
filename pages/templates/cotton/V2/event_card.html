@@ -1,53 +1,120 @@
-<article class="event-card">
-    <div class="event-card__cover bg-green">
-        {% include 'commun/partials/picture.html' with img=resa.event.img alt=resa.event.name class='rounded-start' %}
+{% load i18n %}
+<c-vars mode="event" reservation="" />
+{% comment %}
+CARTE ÉVÉNEMENT — composant Cotton du skin V2 (DA v1)
+/ Event card — V2 skin Cotton component (DA v1)
+
+LOCALISATION : pages/templates/cotton/V2/event_card.html
+
+UN SEUL composant pour toutes les cartes événement ET réservation.
+Deux modes d'affichage, choisis par l'attribut `mode` :
+
+    <c-V2.event_card :event="event" />
+        -> mode "event" (défaut) : maquette agenda.html / accueil.html.
+           Pied de carte : « En savoir plus » + prix.
+
+    <c-V2.event_card mode="resa" :event="reservation.event" :reservation="reservation" />
+        -> mode "resa" : maquette mon-espace.html, module « Mon agenda ».
+           Pied de carte : « Voir le billet » + montant payé, ou « Inscrit·e ».
+
+Utilisé par : pages/V2/vues/accueil.html, agenda.html, agenda_liste.html,
+agenda_liste_suite.html (mode event) et vues/compte/index.html (mode resa).
+
+Structure (DA v1) : la pastille de date est posée à cheval sur la couture
+entre la couverture et le texte. Un événement sur plusieurs jours affiche
+deux pastilles reliées par une flèche. Le titre prend toute la largeur dessous.
+/ Date badge overlaps the cover seam; multi-day events show two badges.
+{% endcomment %}
+{% with event_domain=event.full_url|cut:"https://"|cut:"http://"|cut:"/event/"|cut:event.slug|cut:"/" current_domain=request.build_absolute_uri|cut:"https://"|cut:"http://"|cut:"/event/"|cut:"/" %}
+<article class="event-card event-card--{{ mode }}" data-testid="event-card-{{ mode }}">
+
+    {# Couverture : l'image de l'événement, sinon un aplat neutre. #}
+    {# / Cover: event image, else a neutral block. #}
+    <div class="event-card__cover{% if not event.img %} bg-slate{% endif %}">
+        {% if event.img %}
+            {% include 'commun/partials/picture.html' with img=event.img alt="" %}
+        {% endif %}
     </div>
+
     <div class="event-card__body">
-        <div class="event-card__top">
+        <div class="event-card__dates">
             <div class="event-date-box">
-                <div class="dow">{{ event.datetime.date|date:"l"|slice:":3" }}</div>
-                <div class="day">{{ event.datetime.date.day }}</div>
-                <div class="mon">{{ event.datetime.date|date:"F"|slice:":3" }}</div>
+                <div class="dow">{{ event.datetime|date:"l"|slice:":3" }}</div>
+                <div class="day">{{ event.datetime|date:"d" }}</div>
+                <div class="mon">{{ event.datetime|date:"F"|slice:":3" }}</div>
             </div>
-            <div>
-                <div class="event-card__title">{{ event.name }}</div>
-                <div class="event-card__time">
-                    {{ event.datetime|time:"G:i" }}
-                    {% if event.end_datetime %}
-                        – {{ event.end_datetime|time:"G:i" }}
-                    {% endif %}
+            {# Plusieurs jours : deuxième pastille pour la date de fin. #}
+            {# / Multi-day: second badge for the end date. #}
+            {% if event.end_datetime and event.end_datetime.date != event.datetime.date %}
+                <span class="event-card__dates-arrow" aria-hidden="true">→</span>
+                <div class="event-date-box">
+                    <div class="dow">{{ event.end_datetime|date:"l"|slice:":3" }}</div>
+                    <div class="day">{{ event.end_datetime|date:"d" }}</div>
+                    <div class="mon">{{ event.end_datetime|date:"F"|slice:":3" }}</div>
                 </div>
-            </div>
-        </div>
-        <div class="event-card__loc">{{ event.postal_address }}</div>
-        <div class="event-card__tags">
-            {% for tag in event.tag.all %}
-                <a href="/event?tag={{ tag.slug }}" hx-boost="true" class="badge"
-                   style="{{ tag.style_attr }}">
-                    {{ tag.name }}
-                </a>
-{#                <span class="badge" style="{{ tag.style_attr }}">{{ tag.name }}</span>#}
-            {% endfor %}
+                <span class="visually-hidden">{% blocktrans with debut=event.datetime|date:"j F" fin=event.end_datetime|date:"j F" %}Du {{ debut }} au {{ fin }}{% endblocktrans %}</span>
+            {% endif %}
         </div>
 
-        {% with event_domain=event.full_url|cut:"https://"|cut:"http://"|cut:"/event/"|cut:event.slug|cut:"/" %}
-            {% with current_domain=request.build_absolute_uri|cut:"https://"|cut:"http://"|cut:"/event/"|cut:"/" %}
-                {% if event_domain != current_domain %}
-                    <div class="event-card__meta">via <a href="https://{{ event_domain }}" target="_blank">{{ event_domain }}</a></div>
-                {% else %}
-                    <div class="event-card__meta">par <a href="/">{{ config.organisation }}</a></div>
-                {% endif %}
-            {% endwith %}
-        {% endwith %}
+        <h3 class="event-card__title">{{ event.name }}</h3>
+        <div class="event-card__time">
+            {{ event.datetime|time:"G:i" }}{% if event.end_datetime and event.end_datetime.date == event.datetime.date %} – {{ event.end_datetime|time:"G:i" }}{% endif %}
+        </div>
+
+        {% if event.postal_address %}
+            <div class="event-card__loc">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+                <span>{{ event.postal_address }}</span>
+            </div>
+        {% endif %}
+
+        {% if event.tag.all %}
+            {# Les tags sont le contenu du lieu : badges neutres (DA v1). #}
+            {# La couleur choisie par le lieu (style_attr) reste prioritaire. #}
+            {# / Tags are venue content: neutral badges, venue colour wins. #}
+            <div class="event-card__tags" aria-label="{% translate 'Tags' %}">
+                {% for tag in event.tag.all %}
+                    <a href="/event/?tag={{ tag.slug }}" hx-boost="true" class="badge badge--neutral"
+                       style="{{ tag.style_attr }}">{{ tag.name }}</a>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        {% if event_domain != current_domain %}
+            <div class="event-card__meta">{% translate 'via' %} <a href="https://{{ event_domain }}" target="_blank" rel="noopener">{{ event_domain }}</a></div>
+        {% else %}
+            <div class="event-card__meta">{% translate 'par' %} <strong>{{ config.organisation }}</strong></div>
+        {% endif %}
 
         <div class="event-card__footer">
-            <a class="link" href="{{ event.full_url }}" target="_blank">
-                En savoir plus
-            </a>
-
-            {% if event.price_min %}
-                <span class="event-card__price">{{ event.price_min }}</span>
+            {% if mode == "resa" %}
+                {# Mode réservation : lien vers mes billets + montant payé. #}
+                {# / Booking mode: link to my tickets + amount paid. #}
+                <a class="link" href="/my_account/my_reservations/"
+                   hx-get="/my_account/my_reservations/" hx-target="body" hx-push-url="true"
+                   data-testid="event-card-voir-billet">{% translate 'Voir le billet' %}</a>
+                {% with montant_paye=reservation.total_paid %}
+                    <span class="event-card__price">{% if montant_paye > 0 %}{{ montant_paye }} €{% else %}{% translate 'Inscrit·e' %}{% endif %}</span>
+                {% endwith %}
+            {% else %}
+                {# Mode événement : fiche de l'événement. Un événement d'un autre #}
+                {# lieu (fédéré) s'ouvre dans un nouvel onglet. #}
+                {# / Event mode: event page; a federated event opens a new tab. #}
+                {% if event_domain != current_domain %}
+                    <a class="link" href="{{ event.full_url }}" target="_blank" rel="noopener">{% translate 'En savoir plus' %}<span class="visually-hidden"> : {{ event.name }}</span></a>
+                {% else %}
+                    <a class="link" href="{{ event.full_url }}"
+                       hx-get="{{ event.full_url }}" hx-target="body" hx-push-url="true">{% translate 'En savoir plus' %}<span class="visually-hidden"> : {{ event.name }}</span></a>
+                {% endif %}
+                {# V2-HERE : event.price_min n'est pas un champ du modèle : il est calculé #}
+                {# par la vue. index() et EventMVT.retrieve le posent, mais pas #}
+                {# EventMVT.list ni partial_list : pas de prix sur l'agenda (point R1). #}
+                {# / price_min is computed by the view; missing on the agenda lists. #}
+                {% if event.price_min %}
+                    <span class="event-card__price">{{ event.price_min }}</span>
+                {% endif %}
             {% endif %}
         </div>
     </div>
 </article>
+{% endwith %}

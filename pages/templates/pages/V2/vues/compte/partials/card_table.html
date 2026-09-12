@@ -1,51 +1,48 @@
 {% load tibitags %}
 {% load humanize i18n %}
+{% comment %}
+TABLEAU DES CARTES PASS — skin V2 (DA v1)
+/ Pass cards table — V2 skin (DA v1)
 
+LOCALISATION : pages/templates/pages/V2/vues/compte/partials/card_table.html
+Vue : BaseBillet/views.py MyAccount.my_cards (/my_account/my_cards/)
+Chargé en HTMX par vues/compte/card.html (hx-trigger="revealed").
+{% endcomment %}
 {% for card in cards %}
-    <table class="table">
-        <thead>
-        <tr>
-            <th>{% trans "Card number" %}</th>
-            <th>{% trans "Provider" %}</th>
-            <th>{% trans "Gen" %}</th>
-        </tr>
-        </thead>
-        <tbody>
-        <tr>
-            <td>{{ card.number_printed }}</td>
-            <td>{{ card.origin.place.name }}</td>
-            <td>{{ card.origin.generation }}</td>
-        </tr>
-        </tbody>
-    </table>
+    <div class="table-responsive">
+        <table class="table compte-table">
+            <thead>
+            <tr>
+                <th scope="col">{% translate "Card number" %}</th>
+                <th scope="col">{% translate "Provider" %}</th>
+                <th scope="col">{% translate "Gen" %}</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>{{ card.number_printed }}</td>
+                <td>{{ card.origin.place.name }}</td>
+                <td>{{ card.origin.generation }}</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
     {% if user.email_valid and user.is_active %}
-
-        <div class="row">
-        <div class="col-md">
-            <button type="submit" class="btn btn-primary w-100 mb-3 mb-md-0"
-                    role="button"
-                    aria-label="{% trans 'I lost my card' %}"
-                    hx-get="/my_account/{{ card.number_printed }}/lost_my_card/"
-                    hx-indicator="#tibillet-spinner">
-                {% translate "I lost my card number" %} {{ card.number_printed }}
-            </button>
-        </div>
+        <button type="button" class="btn btn--outline btn--sm"
+                aria-label="{% translate 'I lost my card' %}"
+                hx-get="/my_account/{{ card.number_printed }}/lost_my_card/"
+                hx-indicator="#tibillet-spinner">
+            {% translate "I lost my card number" %} {{ card.number_printed }}
+        </button>
     {% else %}
-        {% trans "Please confirm your email to declare a lost card." %}
+        <p class="compte-champ__aide">{% translate "Please confirm your email to declare a lost card." %}</p>
     {% endif %}
 
-{% comment %} HIDE: dissociation de carte
-    <div class="col-md">
-        {# TODO: route dissociation par carte ? #}
-        <a href="#" class="btn btn-danger d-block">
-            Dissocier la carte
-        </a>
-        <p>La carte redeviendra éphémère, non liée à une adresse mail </p>
-    </div>
-{% endcomment %}
-</div>
+    {% comment %} HIDE: dissociation de carte
+    {# TODO: route dissociation par carte ? #}
+    <a href="#" class="btn btn--outline">Dissocier la carte</a>
+    <p>La carte redeviendra éphémère, non liée à une adresse mail </p>
+    {% endcomment %}
 {% empty %}
-    <div class="alert alert-info" role="alert">
-        {% trans "You don't have any cards associated with your account yet." %}
-    </div>
+    <p class="compte-champ__aide">{% translate "You don't have any cards associated with your account yet." %}</p>
 {% endfor %}

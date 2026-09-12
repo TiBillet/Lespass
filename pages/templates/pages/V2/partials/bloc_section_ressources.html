@@ -1,0 +1,45 @@
+{% load i18n %}
+{% comment %}
+BLOC SECTION / affichage RESSOURCES — skin V2 (DA v1)
+/ SECTION block / RESSOURCES display — V2 skin (DA v1)
+
+LOCALISATION : pages/templates/pages/V2/partials/bloc_section_ressources.html
+Maquette : TEMP-tibillet-lespass-main/qui-sommes-nous.html, section « Ressources »
+
+Les ressources viennent de `bloc.contenu`, une liste d'items TEXTE :
+    [{"titre": "Statuts de l'association", "texte": "PDF, 4 pages",
+      "badge": "PDF", "url": "https://…"}, …]
+`url` est optionnelle. SÉCURITÉ : le lien n'est posé que si l'adresse commence
+par « http » ou « / » (jamais « javascript: » ni autre schéma dangereux,
+`contenu` étant saisi librement dans l'admin ou par l'API).
+/ `url` is optional and only rendered when it starts with "http" or "/".
+{% endcomment %}
+<section class="tb-bloc tb-bloc--ressources" data-testid="bloc-section-ressources">
+    <div class="tb-bloc__contenu">
+        {% if bloc.titre %}<h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>{% endif %}
+        {% if bloc.texte %}<div class="tb-bloc__texte">{{ bloc.texte|safe }}</div>{% endif %}
+
+        {% if bloc.contenu %}
+            <ul class="ressources-grille" role="list">
+                {% for ressource in bloc.contenu %}
+                    <li class="card resource-card">
+                        <span class="resource-card__icon" aria-hidden="true">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>
+                        </span>
+                        <div>
+                            <div class="resource-card__title">
+                                {% if ressource.url|slice:":4" == "http" or ressource.url|slice:":1" == "/" %}
+                                    <a class="link ressources-grille__lien" href="{{ ressource.url }}" target="_blank" rel="noopener">{{ ressource.titre }} <span aria-hidden="true">↗</span><span class="visually-hidden">{% translate '(nouvel onglet)' %}</span></a>
+                                {% else %}
+                                    {{ ressource.titre }}
+                                {% endif %}
+                            </div>
+                            {% if ressource.texte %}<div class="resource-card__desc">{{ ressource.texte|linebreaksbr }}</div>{% endif %}
+                            {% if ressource.badge %}<span class="badge badge--neutral equipe-grille__badge">{{ ressource.badge }}</span>{% endif %}
+                        </div>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    </div>
+</section>

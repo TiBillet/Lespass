@@ -125,6 +125,12 @@ AFFICHAGES_PAR_TYPE = {
         "CARTE",
         "APPEL_ACTION",
         "CITATION",
+        # Rendus de la page « Qui sommes-nous » (DA v1, skin V2). Ils lisent
+        # tous `contenu`, comme MEDIA_ET_CARTES : une liste d'items TEXTE.
+        # / "About us" page renderings. All read `contenu` like MEDIA_ET_CARTES.
+        "EQUIPE",
+        "FRISE",
+        "RESSOURCES",
     ),
     "IMAGES": ("PLEINE_LARGEUR", "VIGNETTE_TITRE", "GRILLE", "BANDE_LOGOS"),
     "INTEGRATION": ("VIDEO", "WIDGET", "NEWSLETTER"),
@@ -173,6 +179,15 @@ CHAMPS_PAR_AFFICHAGE = {
             "bouton_label", "bouton_url", "bouton2_label", "bouton2_url",
         ],
         "CITATION": ["texte", "auteur_nom", "auteur_role", "auteur_photo"],
+        # contenu = [{"titre": nom, "texte": rôle, "badge": …}, …]
+        # / contenu = [{"titre": name, "texte": role, "badge": …}, …]
+        "EQUIPE": ["titre", "texte", "contenu"],
+        # contenu = [{"titre": année, "texte": récit}, …]
+        # / contenu = [{"titre": year, "texte": story}, …]
+        "FRISE": ["titre", "texte", "contenu"],
+        # contenu = [{"titre": …, "texte": …, "badge": …, "url": lien optionnel}, …]
+        # / contenu = [{"titre", "texte", "badge", "url" (optional link)}, …]
+        "RESSOURCES": ["titre", "texte", "contenu"],
     },
     "IMAGES": {
         # Une seule image : le champ `image` du bloc.

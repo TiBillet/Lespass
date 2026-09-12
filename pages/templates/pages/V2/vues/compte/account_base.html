@@ -1,0 +1,58 @@
+{% extends base_template %}
+{% load static i18n tibitags %}
+{% comment %}
+BASE DES PAGES « MON ESPACE » — skin V2 (DA v1)
+/ Base of the "My space" pages — V2 skin (DA v1)
+
+LOCALISATION : pages/templates/pages/V2/vues/compte/account_base.html
+
+Remplace, pour le skin V2 seulement, BaseBillet/templates/fonctionnel/account_base.html
+(qui reste utilisé par les autres skins). Deux différences :
+- pas de <main> ici : pages/V2/shell.html en pose déjà un (évite deux <main>) ;
+- mise en page de la DA v1 (en-tête de page, encadré d'alerte).
+
+Sur l'accueil du compte (account_tab == 'index'), la page dessine elle-même
+son en-tête (carte, solde) : on n'affiche donc pas l'en-tête de sous-page.
+Sur les sous-pages, on affiche « ← Mon espace » et le titre de la page,
+fourni par le bloc {% block compte_titre %}.
+/ On sub-pages: back link + page title from the compte_titre block.
+{% endcomment %}
+
+{% block main %}
+    <div class="compte" data-testid="compte">
+
+        {% if account_tab != 'index' %}
+            <div class="page-header compte__entete">
+                <p class="eyebrow" data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
+                    <a class="link" href="/my_account/" hx-get="/my_account/" hx-target="body" hx-push-url="true"
+                       data-testid="compte-retour">
+                        <span aria-hidden="true">←</span> {% translate 'Back to my account' %}
+                    </a>
+                </p>
+                <h1 class="page-title">{% block compte_titre %}{% translate 'My account' %}{% endblock %}</h1>
+                <p class="page-intro">
+                    {% translate 'Linked email:' %} {{ user.email }}
+                    {% if profile.admin_this_tenant %}· <strong>{% translate 'Administrator' %}</strong>{% endif %}
+                </p>
+            </div>
+        {% endif %}
+
+        {% if not user.email_valid %}
+            {# Email non confirmé : certaines fonctions restent bloquées. #}
+            {# / Unconfirmed email: some features stay locked. #}
+            <div class="callout compte__alerte" role="alert" data-testid="compte-email-non-valide">
+                <p class="callout__text">
+                    {% translate "Please confirm your email address to access advanced features." %}
+                    <button type="button" class="link"
+                            aria-label="{% translate 'Resend validation email' %}"
+                            hx-get="/my_account/resend_activation_email/">
+                        {% translate "Resend validation email" %}
+                    </button>
+                </p>
+            </div>
+        {% endif %}
+
+        {% block account_page %}{% endblock %}
+
+    </div>
+{% endblock %}

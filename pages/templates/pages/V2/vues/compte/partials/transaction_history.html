@@ -1,14 +1,16 @@
 {% load tibitags %}
 {% load humanize i18n %}
 
-<h2 class="pt-3">{% trans "Transaction history" %}</h2>
-<div class="table-responsive">
-    <table class="table">
+<h2 class="section__title">{% trans "Transaction history" %}</h2>
+<div class="table-responsive compte-section__contenu">
+    <table class="table compte-table">
         <thead>
-        <th>{% trans "Value" %}</th>
-        <th>{% trans "Action" %}</th>
-        <th>{% trans "Date" %}</th>
-        <th>{% trans "Path" %}</th>
+        <tr>
+        <th scope="col">{% trans "Value" %}</th>
+        <th scope="col">{% trans "Action" %}</th>
+        <th scope="col">{% trans "Date" %}</th>
+        <th scope="col">{% trans "Path" %}</th>
+        </tr>
         </thead>
         <tbody>
 

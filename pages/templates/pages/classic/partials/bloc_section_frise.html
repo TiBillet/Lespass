@@ -1,0 +1,31 @@
+{% load i18n %}
+{% comment %}
+BLOC SECTION / affichage FRISE — skin classic
+/ SECTION block / FRISE (timeline) display — classic skin
+
+LOCALISATION : pages/templates/pages/classic/partials/bloc_section_frise.html
+
+Version socle, OBLIGATOIRE (repli classic de templates_bloc, voir
+bloc_section_equipe.html). Le skin V2 a sa version.
+Styles : section « Nouveaux affichages SECTION » de tb-blocs.css.
+
+`bloc.contenu` = [{"titre": année, "texte": récit}, …]
+/ Base version, REQUIRED as the classic fallback of templates_bloc.
+{% endcomment %}
+<section class="tb-bloc tb-bloc--frise" data-testid="bloc-section-frise">
+    <div class="tb-bloc__contenu">
+        {% if bloc.titre %}<h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>{% endif %}
+        {% if bloc.texte %}<div class="tb-bloc__texte">{{ bloc.texte|safe }}</div>{% endif %}
+
+        {% if bloc.contenu %}
+            <ol class="tb-frise">
+                {% for etape in bloc.contenu %}
+                    <li class="tb-frise__etape">
+                        <span class="tb-frise__date">{{ etape.titre }}</span>
+                        {% if etape.texte %}<span class="tb-frise__texte">{{ etape.texte|linebreaksbr }}</span>{% endif %}
+                    </li>
+                {% endfor %}
+            </ol>
+        {% endif %}
+    </div>
+</section>

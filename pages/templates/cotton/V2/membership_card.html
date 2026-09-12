@@ -1,95 +1,61 @@
 {% load i18n %}
-
-<div class="col">
-    <div class="card h-100">
-        {% include 'commun/partials/picture.html' with img=product.img alt=product.name class='card-img-top' ratio='16x9' %}
-        <div class="card-body">
-            <h3 class="card-title">{{ product.name }}</h3>
-            {% if product.short_description %}
-                <p class="card-text">{{ product.short_description }}</p>
-            {% endif %}
-            {% if product.long_description %}
-                <p class="card-text">{{ product.long_description | safe }}</p>
-            {% endif %}
-        </div>
-        <div class="card-footer">
-            {% if product.price_min %}
-                <p> {% translate 'A partir de' %} <span class="offer-card__price">{{ product.price_min }}</span></p>
-            {% endif %}
-            {% if embed %}
-                <a class="btn btn--primary w-100 my-3 js-membership-form-btn"
-                   type="button"
-                   href="/memberships/?open={{ product.uuid }}" target="_blank">
-                    <i class="bi bi-plus"></i>
-                    {% if product.validate_button_text %}
-                        {{ product.validate_button_text }}{% else %}
-                        {% translate 'Subscribe' %}{% endif %}
-                </a>
-            {% else %}
-                <button
-                        class="btn btn--primary w-100 my-3 js-membership-form-btn"
-                        type="button"
-                        hx-get="/memberships/{{ product.uuid }}/" hx-swap="innerHTML"
-                        hx-target="#offcanvas-membership"
-
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#subscribePanel"
-                        aria-controls="subscribePanel"
-                        data-testid="membership-open-{{ product.uuid }}">
-                    <i class="bi bi-plus"></i>
-                    {% if product.validate_button_text %}
-                        {{ product.validate_button_text }}{% else %}
-                        {% translate 'Subscribe' %}{% endif %}
-                </button>
-            {% endif %}
-        </div>
-    </div>
-</div>
-
 {% comment %}
-<article class="offer-card">
-    <div class="offer-card__cover">
-        {% include 'commun/partials/picture.html' with img=resa.event.img alt=resa.event.name class='rounded-start' %}
-    </div>
+CARTE D'OFFRE (adhésion) — composant Cotton du skin V2 (DA v1)
+/ Offer card (membership) — V2 skin Cotton component (DA v1)
+
+LOCALISATION : pages/templates/cotton/V2/membership_card.html
+Utilisé par : pages/V2/vues/adhesions.html
+
+    <c-V2.membership_card :product="product" />
+
+Maquette : .offer-card de adhesion-services.html.
+
+FLUX DU CLIC SUR « ADHÉRER » (hors embed) :
+1. Le bouton ouvre le panneau latéral #subscribePanel (Bootstrap).
+2. En même temps, HTMX charge /memberships/<uuid>/ dans #offcanvas-membership.
+   Ces deux ids sont définis par commun/offcanvas/adhesion_tunnel.html.
+3. .js-membership-form-btn est lu par le module MembershipForm (shell.html).
+En embed (iframe), c'est un simple lien vers /memberships/?open=<uuid>.
+
+A CONSERVER : data-testid="membership-open-<uuid>" (tests E2E adhésions).
+/ Keep the membership-open testid (membership E2E tests).
+{% endcomment %}
+<article class="offer-card" data-testid="membership-card-{{ product.uuid }}">
+    {% if product.img %}
+        <div class="offer-card__cover">
+            {% include 'commun/partials/picture.html' with img=product.img alt="" %}
+        </div>
+    {% endif %}
     <div class="offer-card__content">
         <h3 class="offer-card__title">{{ product.name }}</h3>
         {% if product.long_description %}
-            <p class="offer-card__desc">{{ product.long_description | safe }}</p>
+            <div class="offer-card__desc">{{ product.long_description|safe }}</div>
         {% elif product.short_description %}
             <p class="offer-card__desc">{{ product.short_description }}</p>
         {% endif %}
+
         {% if product.price_min %}
-            <div class="offer-card__price">{{ product.price_min }}</div>
+            <div class="offer-card__price">{% translate 'A partir de' %} {{ product.price_min }}</div>
         {% endif %}
+
         <div class="offer-card__footer">
             {% if embed %}
-                <a class="btn btn-primary w-100 my-3 js-membership-form-btn"
-                   type="button"
-                   href="/memberships/?open={{ product.uuid }}" target="_blank">
-                    <i class="bi bi-plus"></i>
-                    {% if product.validate_button_text %}
-                        {{ product.validate_button_text }}{% else %}
-                        {% translate 'Subscribe' %}{% endif %}
+                <a class="btn btn--primary btn--sm js-membership-form-btn"
+                   href="/memberships/?open={{ product.uuid }}" target="_blank" rel="noopener">
+                    {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}{% translate 'Subscribe' %}{% endif %}
                 </a>
             {% else %}
-                <button
-                        class="btn btn--primary w-100 my-3 js-membership-form-btn"
+                <button class="btn btn--primary btn--sm js-membership-form-btn"
                         type="button"
                         hx-get="/memberships/{{ product.uuid }}/" hx-swap="innerHTML"
                         hx-target="#offcanvas-membership"
-
                         data-bs-toggle="offcanvas"
                         data-bs-target="#subscribePanel"
                         aria-controls="subscribePanel"
                         data-testid="membership-open-{{ product.uuid }}">
-                    <i class="bi bi-plus"></i>
-                    {% if product.validate_button_text %}
-                        {{ product.validate_button_text }}{% else %}
-                        {% translate 'Subscribe' %}{% endif %}
+                    {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}{% translate 'Subscribe' %}{% endif %}
                 </button>
             {% endif %}
         </div>
-
     </div>
 </article>
-{% endcomment %}

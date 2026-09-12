@@ -1,80 +1,96 @@
-{% extends 'fonctionnel/account_base.html' %}
+{% extends 'pages/V2/vues/compte/account_base.html' %}
 {% load static %}
 {% load tibitags %}
 {% load humanize i18n %}
 
+{% comment %}
+MES RÉSERVATIONS — skin V2 (DA v1)
+/ My bookings — V2 skin (DA v1)
+
+LOCALISATION : pages/templates/pages/V2/vues/compte/reservations.html
+Vue : BaseBillet/views.py MyAccount.my_reservations (/my_account/my_reservations/)
+
+Une carte par réservation, avec ses billets en accordéon (ticket_accordion.html).
+
+FLUX D'ANNULATION :
+1. Clic sur « J'annule » : hx-confirm pose une question.
+2. Le script ci-dessous remplace la boîte de confirmation du navigateur par
+   une fenêtre SweetAlert (événement htmx:confirm).
+3. Si confirmé : hx-post .../cancel_reservation/, puis la carte entière est
+   supprimée de la page (hx-target="closest .reservation-card", hx-swap="delete").
+
+A CONSERVER : la classe .reservation-card (cible HTMX), #ticketPanel,
+#ticketPanelLabel, #ticketPanelBody, data-testid="reservation-cancel-<uuid>".
+{% endcomment %}
+
 {% block title %}{% translate 'My bookings' %}{% endblock %}
+{% block compte_titre %}{% translate 'My bookings' %}{% endblock %}
 
 {% block account_page %}
-<section class="card pt-3">
-    <div class="card-body">
-        <h1 class="card-title">{% trans 'My bookings' %}</h1>
-        <p class="lead">
-            {% trans 'Here I can list my bookings, detail ticket information and display tickets for scanning.' %}
-        </p>
-    </div>
-</section>
+    <p class="page-intro">
+        {% translate 'Here I can list my bookings, detail ticket information and display tickets for scanning.' %}
+    </p>
 
-<div class="offcanvas offcanvas-start text-bg-light" tabindex="-1"
-    id="ticketPanel" aria-labelledby="ticketPanelLabel" data-bs-theme="light">
-    <div class="offcanvas-header justify-content-between">
-      <h5 class="offcanvas-title" id="ticketPanelLabel">{% trans 'Ticket' %}</h5>
-      <button type="button" class="btn" data-bs-dismiss="offcanvas" aria-label="{% trans 'Close' %}">
-        <i class="bi bi-x-lg"></i>
-    </button>
-    </div>
-    <div id="ticketPanelBody" class="offcanvas-body"></div>
-</div>
-
-<script src="{% static 'mvt_htmx/js/sweetalert2@11.js' %}"></script>
-<script>
-  document.addEventListener("htmx:confirm", function(e) {
-    if (!e.detail.question) return;
-    e.preventDefault();
-    Swal.fire({
-      title: "Confirmer ?",
-      text: e.detail.question,
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonText: "Oui",
-      cancelButtonText: "Non"
-    }).then(function(result) {
-      if (result.isConfirmed) {
-        e.detail.issueRequest(true);
-      }
-    });
-  });
-</script>
-
-{% for resa in reservations %}
-<div class="card my-5 reservation-card">
-    <div class="row g-0">
-        <div class="col-md-4">
-            {% include 'commun/partials/picture.html' with img=resa.event.img alt=resa.event.name class='rounded-start' %}
+    {# Panneau latéral d'affichage d'un billet (QR code), rempli par HTMX. #}
+    {# / Side panel showing a ticket (QR code), filled by HTMX. #}
+    <div class="offcanvas offcanvas-start" tabindex="-1"
+         id="ticketPanel" aria-labelledby="ticketPanelLabel" data-bs-theme="light">
+        <div class="offcanvas-header">
+            <h2 class="offcanvas-title h5" id="ticketPanelLabel">{% translate 'Ticket' %}</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% translate 'Close' %}"></button>
         </div>
-        <div class="col-md-8">
-            <div class="card-body">
-                <h3 class="card-title">
-                    <small>
-                        {{ resa.event.datetime|date:'l j F'|capfirst }} <br />
-                        {{ resa.event.datetime|time:'H\hi' }} <br />
-                    </small>
-                    {{ resa.event.name }}
-                    <a href="{{ resa.event.full_url }}" target="_blank">
-                        <i class="bi bi-box-arrow-up-right"></i>
-                        <span class="visually-hidden">{% trans 'Event page' %}</span>
-                    </a>
-                </h3>
-                <div class="card-text hstack gap-3 mb-3">
-                    <div class="p-2">{{ resa.tickets.all|length }} {% trans 'seats' %}</div>
-                    <div class="vr"></div>
-                    <div class="p-2">{{ resa.total_paid }} €</div>
-                    <div class="vr"></div>
-                    <div class="p-2">{{ resa.get_status_display }}</div>
-                    <div class="vr"></div>
-                    <div class="p-2">
+        <div id="ticketPanelBody" class="offcanvas-body"></div>
+    </div>
+
+    <script src="{% static 'mvt_htmx/js/sweetalert2@11.js' %}"></script>
+    <script>
+      // Remplace la confirmation native par une fenêtre SweetAlert.
+      // / Replace the native confirm with a SweetAlert dialog.
+      document.addEventListener("htmx:confirm", function(e) {
+        if (!e.detail.question) return;
+        e.preventDefault();
+        Swal.fire({
+          title: "Confirmer ?",
+          text: e.detail.question,
+          icon: "warning",
+          showCancelButton: true,
+          confirmButtonText: "Oui",
+          cancelButtonText: "Non"
+        }).then(function(result) {
+          if (result.isConfirmed) {
+            e.detail.issueRequest(true);
+          }
+        });
+      });
+    </script>
+
+    <div class="compte-section__contenu">
+        {% for resa in reservations %}
+            <article class="card reservation-card" data-testid="reservation-card-{{ resa.uuid }}">
+                <div class="reservation-card__cover{% if not resa.event.img %} bg-slate{% endif %}">
+                    {% if resa.event.img %}
+                        {% include 'commun/partials/picture.html' with img=resa.event.img alt="" %}
+                    {% endif %}
+                </div>
+                <div class="reservation-card__body">
+                    <div class="eyebrow">
+                        {{ resa.event.datetime|date:'l j F'|capfirst }} · {{ resa.event.datetime|time:'H\hi' }}
+                    </div>
+                    <h2 class="reservation-card__title">
+                        <a class="reservation-card__lien" href="{{ resa.event.full_url }}" target="_blank" rel="noopener">
+                            {{ resa.event.name }}
+                            <span aria-hidden="true">↗</span>
+                            <span class="visually-hidden">{% translate 'Event page' %} {% translate '(nouvel onglet)' %}</span>
+                        </a>
+                    </h2>
+
+                    <div class="reservation-card__meta">
+                        <span>{{ resa.tickets.all|length }} {% translate 'seats' %}</span>
+                        <span class="event-card__price">{{ resa.total_paid }} €</span>
+                        <span class="badge badge--neutral">{{ resa.get_status_display }}</span>
                         <button
-                            class="btn btn-outline-danger btn-sm"
+                            type="button"
+                            class="btn btn--outline btn--sm"
                             hx-post="/my_account/{{ resa.uuid }}/cancel_reservation/"
                             hx-confirm="{% if resa.total_paid > 0 %}{{ resa.cancel_text }}{% else %}J'annule ma reservation{% endif %}"
                             hx-target="closest .reservation-card"
@@ -83,28 +99,29 @@
                             J'annule ma reservation
                         </button>
                     </div>
-                </div>
-                {% if resa.options.all|length > 0 %}
-                <p>
-                    {% for option in resa.options.all %}
-                    <span class="badge text-bg-info p-2 me-1 mb-1 fs-6 fw-medium">
-                        {{ option.name }}
-                    </span>
-                    {% if not forloop.last %}
-                    <span class="visually-hidden">/</span>
+
+                    {% if resa.options.all|length > 0 %}
+                        <p class="event-card__tags" aria-label="{% translate 'Options' %}">
+                            {% for option in resa.options.all %}
+                                <span class="badge badge--neutral">{{ option.name }}</span>
+                            {% endfor %}
+                        </p>
                     {% endif %}
-                    {% endfor %}
-                </p>
-                {% endif %}
-                {% if resa.custom_form %}
-                {% include 'fonctionnel/compte/partials/custom_form_accordion.html' %}
-                {% endif %}
-                <div class="card-footer p-0">
-                    {% include 'fonctionnel/compte/partials/ticket_accordion.html' %}
+
+                    {% if resa.custom_form %}
+                        {% include 'pages/V2/vues/compte/partials/custom_form_accordion.html' %}
+                    {% endif %}
+
+                    <div class="reservation-card__billets">
+                        {% include 'pages/V2/vues/compte/partials/ticket_accordion.html' %}
+                    </div>
                 </div>
+            </article>
+        {% empty %}
+            <div class="module__invite">
+                <p>{% translate "Aucune réservation pour l'instant." %}</p>
+                <a class="btn btn--primary btn--sm" href="/event/" hx-get="/event/" hx-target="body" hx-push-url="true">{% translate "Parcourir l'agenda" %}</a>
             </div>
-        </div>
+        {% endfor %}
     </div>
-</div>
-{% endfor %}
 {% endblock %}

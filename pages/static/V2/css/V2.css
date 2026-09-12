@@ -1,40 +1,97 @@
 /* =================================================================
-   LA MIETE — Design system
-   Maquettes HTML/CSS reconstituées à partir des PNG fournis.
-   Police de titres : Lora (serif chaleureuse, la plus proche visuellement
-   de celle des maquettes — la police exacte de la charte n'a pas été
-   communiquée). Police d'interface : Inter.
+   TIBILLET — Design system du skin V2
+   / TiBillet — V2 skin design system
+
+   LOCALISATION : pages/static/V2/css/V2.css
+   Source : maquette TEMP-tibillet-lespass-main/style.css
+   (commit 49d31d0 « Direction artistique v1 »), fusionnée avec les
+   ajouts propres au V2 (carte Leaflet, page Réseau, pont Bootstrap).
+
+   Règle centrale de la DA : la couleur n'apparaît que sur les gestes
+   qui appartiennent à TiBillet (carte, solde, recharge, action
+   principale). Jamais sur le contenu d'un lieu (ses événements, ses
+   catégories, son identité) : ce contenu reste en encre et papier.
+   / Colour only on TiBillet gestures, never on a venue's content.
+
+   Polices auto-hébergées dans pages/static/V2/fonts/ (aucun appel à
+   Google, conforme RGPD, fonctionne hors ligne) :
+   - Unbounded (SIL OFL) : gros titres uniquement.
+   - Luciole (CC BY 4.0, conçue pour les personnes malvoyantes) :
+     tout le reste.
+   Chemins relatifs (../fonts/) : ils suivent le fichier CSS après
+   collectstatic. / Self-hosted fonts, relative paths.
    ================================================================= */
 
-@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@400;500;600;700&display=swap');
+@font-face { font-family: 'Unbounded'; src: url('../fonts/Unbounded-Variable-latin.woff2') format('woff2'); font-weight: 300 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Luciole'; src: url('../fonts/Luciole-Regular.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Luciole'; src: url('../fonts/Luciole-Regular-Italic.woff2') format('woff2'); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: 'Luciole'; src: url('../fonts/Luciole-Bold.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Luciole'; src: url('../fonts/Luciole-Bold-Italic.woff2') format('woff2'); font-weight: 700; font-style: italic; font-display: swap; }
 
 :root {
-  /* Couleurs de base */
-  --color-bg: #f6f5f1;
-  --color-surface: #ffffff;
-  --color-surface-tint: #e2ebe5;
-  --color-primary: #1f4d3a;
-  --color-primary-hover: #163a2b;
-  --color-primary-soft: #e2ebe5;
-  --color-text: #201f1c;
-  --color-text-muted: #6b6b62;
-  --color-text-faint: #9a988e;
-  --color-border: #e4e1d6;
-  --color-border-strong: #d7d3c5;
+  /* --- Palette de marque (charte Tibillet) ---
+     Valeurs canoniques : réservées aux fonds pleins, dégradés et
+     grands aplats. Ne jamais les employer comme couleur de TEXTE sur
+     un fond clair — mesuré : 3,0 à 3,9:1 selon la teinte, sous le
+     seuil d'accessibilité de 4,5:1 (cf. --letchi-text / --loseyan-text
+     / --chouchou-text, assombries pour rester lisibles en texte). */
+  --letchi:      #e93363;  /* action principale, dominante */
+  --letchi-text: #d22e59;  /* letchi utilisée comme texte (4,6:1 sur papier) */
+  --zanana:      #e9b322;  /* alerte, accent chaud — fonds/dégradés uniquement */
+  --chouchou:      #259d49;  /* succès, validation */
+  --chouchou-text: #1e7e3a;  /* chouchou utilisée comme texte (4,8:1 sur papier) */
+  --loseyan:      #4296cc;  /* info, liens — fonds/dégradés */
+  --loseyan-text: #3578a3;  /* couleur des liens (4,5:1 sur papier) */
+  --violet:      #8b5fb0;  /* liaison bleu↔rose en dégradé — jamais seule */
 
-  /* Familles de catégories (dégradés d'illustration + variantes badges) */
-  --cat-green-from: #305546;   --cat-green-to: #5c896f;   --cat-green-tint: #e2ebe5;   --cat-green-solid: #3f6754;
-  --cat-slate-from: #3e4e68;   --cat-slate-to: #6a81a2;   --cat-slate-tint: #e4e4e6;   --cat-slate-solid: #4d607c;
-  --cat-mauve-from: #5e4e68;   --cat-mauve-to: #9380a2;   --cat-mauve-tint: #e7e4e8;   --cat-mauve-solid: #71607c;
-  --cat-gold-from: #685a3e;    --cat-gold-to: #a28f6a;    --cat-gold-tint: #e8e6df;    --cat-gold-solid: #7c6d4d;
-  --cat-terracotta-from: #774343; --cat-terracotta-to: #ad7272; --cat-terracotta-tint: #ece1e0; --cat-terracotta-solid: #8a5353;
-  --cat-teal-from: #346060;    --cat-teal-to: #689e9e;    --cat-teal-tint: #e3e8e7;    --cat-teal-solid: #467676;
-  --cat-olive-from: #4f5f31;   --cat-olive-to: #8ba26a;   --cat-olive-tint: #e5e8e0;   --cat-olive-solid: #647645;
-  --cat-indigo-from: #424468;  --cat-indigo-to: #777aa3;  --cat-indigo-tint: #e4e4e9;  --cat-indigo-solid: #55577d;
+  /* --- Rôles fonctionnels --- */
+  --color-primary: var(--letchi);
+  --color-primary-hover: var(--letchi);   /* + filter: brightness() au survol, voir .btn--primary:hover */
+  --color-link: var(--loseyan-text);
+
+  /* --- Neutres --- */
+  --color-bg: #faf8f5;            /* papier : jamais de blanc pur en fond de page */
+  --color-surface: #ffffff;       /* blanc réservé aux cartes posées sur le papier */
+  --color-surface-tint: #f1eee8;
+  --color-primary-soft: #fce4eb;  /* tinte très claire de letchi, fonds discrets */
+  --color-text: #17141a;          /* encre */
+  --color-text-muted: #63515e;    /* piton */
+  --color-text-faint: #808080;    /* gris50 */
+  --color-border: #ece7e1;        /* brume */
+  --color-border-strong: #ded7cd;
+  --color-footer-bg: #e2e3e5;     /* fond du footer : plus froid que le papier, signale le territoire plateforme */
+
+  /* --- Compositions de dégradés (voisines uniquement — deux couleurs
+     opposées sur la roue produisent une zone boueuse au centre) --- */
+  --grad-chaud: linear-gradient(135deg, #e93363 0%, #e9b322 100%);  /* signature : letchi → zanana */
+  --grad-frais: linear-gradient(135deg, #e9b322 0%, #259d49 100%);  /* zanana → chouchou */
+  --grad-calme: linear-gradient(135deg, #4296cc 0%, #259d49 100%);  /* loséyan → chouchou */
+  --grad-nuit:  linear-gradient(160deg, #4296cc 0%, #8b5fb0 50%, #e93363 100%); /* loséyan → violet → letchi — décoratif seul, jamais sous du texte de bouton (le point violet retombe à 3,8:1) */
+  --grad-ruban: linear-gradient(90deg, #e93363 0%, #e9b322 25%, #259d49 50%, #4296cc 72%, #8b5fb0 88%, #e93363 100%);
+
+  /* --- Catégories : neutralisées ---
+     Le contenu d'un lieu (type d'événement, badge de catégorie, marque
+     d'un autre lieu) ne porte plus les couleurs de Tibillet — c'est la
+     règle centrale de la DA. Chaque famille garde une variation de
+     ton pour rester scannable dans une grille, mais reste dans le
+     registre neutre (papier/brume/piton), jamais dans la palette de
+     marque. */
+  /* Approfondies : les premières valeurs (58%/36% de luminosité) étaient
+     trop proches du gris de bordure (--color-border) et du papier —
+     1,25:1 de contraste seulement, d'où le liseré pâle et sale autour
+     des cartes. Mesuré maintenant à 2,2-2,8:1 contre la bordure. */
+  --cat-green-from: #87a190;   --cat-green-to: #516758;   --cat-green-tint: #ebefec;   --cat-green-solid: #456851;
+  --cat-slate-from: #8b919c;   --cat-slate-to: #545963;   --cat-slate-tint: #ecedef;   --cat-slate-solid: #495265;
+  --cat-mauve-from: #9f8997;   --cat-mauve-to: #65535f;   --cat-mauve-tint: #efebee;   --cat-mauve-solid: #66475c;
+  --cat-gold-from: #a59b83;    --cat-gold-to: #6a624d;    --cat-gold-tint: #f0eeea;    --cat-gold-solid: #6c5f42;
+  --cat-terracotta-from: #a38d85; --cat-terracotta-to: #69564f; --cat-terracotta-tint: #f0eceb; --cat-terracotta-solid: #6a4e44;
+  --cat-teal-from: #899f9f;    --cat-teal-to: #536565;    --cat-teal-tint: #ebefef;    --cat-teal-solid: #476666;
+  --cat-olive-from: #9aa187;   --cat-olive-to: #616751;   --cat-olive-tint: #eeefeb;   --cat-olive-solid: #5f6845;
+  --cat-indigo-from: #8b899f;  --cat-indigo-to: #545365;  --cat-indigo-tint: #ecebef;  --cat-indigo-solid: #4a4766;
 
   /* Typo */
-  --font-serif: 'Lora', 'Iowan Old Style', 'Georgia', serif;
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Unbounded', system-ui, sans-serif;                                  /* gros titres uniquement */
+  --font-text: 'Luciole', system-ui, sans-serif;              /* tout le reste */
 
   /* Échelle d'espacement */
   --space-1: 4px;
@@ -57,19 +114,55 @@
   --container-max: 1280px;
 }
 
+/* =================================================================
+   PONT BOOTSTRAP ET BLOCS CMS
+   / Bootstrap and CMS blocks bridge
+
+   Bootstrap 5.3 reste chargé par pages/V2/shell.html : les panneaux
+   latéraux (connexion, contact, réservation, adhésion), les menus
+   déroulants et les accordéons du compte en dépendent.
+   pages/static/pages/css/tb-blocs.css (blocs des Pages CMS) lit aussi
+   ces variables --bs-*. En les rebranchant ici sur les tokens de la
+   DA, ces composants prennent le style V2 sans être réécrits.
+   Les classes Bootstrap compilées (.btn-primary…) ne lisent pas ces
+   variables : elles sont migrées page par page vers .btn--*.
+   / Bootstrap vars remapped on the DA tokens: offcanvas, dropdowns,
+   accordions and CMS blocks follow the V2 style.
+   ================================================================= */
+:root {
+  --bs-body-font-family: var(--font-text);
+  --bs-body-bg: var(--color-bg);
+  --bs-body-color: var(--color-text);
+  --bs-secondary-color: var(--color-text-muted);
+  --bs-tertiary-bg: var(--color-surface-tint);
+  --bs-border-color: var(--color-border);
+  --bs-link-color: var(--color-link);
+  --bs-link-color-rgb: 53, 120, 163;
+  --bs-link-hover-color: var(--color-text);
+  --bs-link-hover-color-rgb: 23, 20, 26;
+  --bs-border-radius: var(--radius-s);
+  --bs-border-radius-lg: var(--radius-m);
+
+  /* Blocs CMS : titres en Luciole, action principale en letchi avec
+     texte encre (même règle de contraste que .btn--primary). */
+  --tb-police-titre: var(--font-text);
+  --tb-accent: var(--color-primary);
+  --tb-accent-contraste: var(--color-text);
+}
+
 /* ---------- Reset / base ---------- */
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
-  font-family: var(--font-sans);
+  font-family: var(--font-text);
   color: var(--color-text);
   background: var(--color-bg);
-  line-height: 1.5;
+  line-height: 1.6; /* Luciole veut de l'espacement large — lisibilité, pas esthétique */
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
 }
-h1, h2, h3, h4 { font-family: var(--font-serif); font-weight: 600; margin: 0; color: var(--color-text); }
+h1, h2, h3, h4 { font-family: var(--font-text); font-weight: 700; margin: 0; color: var(--color-text); }
 p { margin: 0; }
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; }
@@ -102,6 +195,16 @@ img { max-width: 100%; display: block; }
   top: 0;
   z-index: 50;
 }
+/* Le ruban signature (DA §04) : un filet fin et long, jamais un aplat.
+   Sur la barre utilisateur — la seule surface strictement invariante,
+   identique dans tous les lieux — pas sur le contenu d'un lieu. */
+.user-bar::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--grad-ruban);
+}
 .user-bar__inner {
   max-width: var(--container-max);
   margin: 0 auto;
@@ -120,24 +223,37 @@ img { max-width: 100%; display: block; }
   border-radius: var(--radius-pill);
   background: var(--color-bg);
   font-size: 14.5px;
-  font-weight: 600;
+  line-height: 15px;
+  font-weight: 700;
   color: var(--color-text);
   white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 .me-anchor:hover { background: #f2f0ea; border-color: var(--color-border-strong); }
 .me-anchor.is-active {
-  background: var(--color-surface-tint);
-  border-color: #d3e1d8;
-  color: var(--color-primary);
+  background: var(--color-primary-soft);
+  border-color: #f3c7d5;
+  color: var(--letchi-text);
 }
+/* Correction d'encre : mesuré via Canvas, pas deviné. Pour des
+   initiales en capitales (sans jambage), l'encre réelle occupe la zone
+   ascendante de la police mais laisse vide toute la zone descendante
+   réservée — la boîte de ligne, elle, reste symétrique. Centrer la
+   BOÎTE (ce que fait align-items:center) n'centre donc jamais l'ENCRE :
+   aucune valeur de line-height ne peut corriger ça, l'écart est
+   structurel à la police. D'où ce décalage direct, indépendant du
+   line-height, calculé pour Luciole Bold à chaque taille utilisée. */
+.ink-center-fix { display: inline-block; transform: translateY(2px); }
+
 .me-anchor__avatar {
   width: 30px;
   height: 30px;
   border-radius: 50%;
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-text);
   font-size: 12px;
   font-weight: 700;
+  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -204,8 +320,10 @@ img { max-width: 100%; display: block; }
    passé la maquette à défaire.
    ================================================================= */
 .site-footer {
-  background: var(--color-surface);
-  border-top: 1px solid var(--color-border);
+  /* Plus froid que le papier du reste du site : signale sans un mot
+     qu'on change de territoire, de celui du lieu à celui de Tibillet. */
+  background: var(--color-footer-bg);
+  border-top: 1px solid var(--color-border-strong);
   margin-top: var(--space-8);
 }
 .site-footer__inner {
@@ -217,13 +335,14 @@ img { max-width: 100%; display: block; }
   gap: var(--space-8);
 }
 .footer-col__title {
-  font-family: var(--font-serif);
+  font-family: var(--font-text);
   font-size: 18px;
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: var(--space-4);
 }
 .footer-col nav { display: flex; flex-direction: column; gap: var(--space-3); }
-.footer-col a {
+.footer-col a,
+.footer-col__bouton {
   font-size: 14.5px;
   color: var(--color-text-muted);
   display: flex;
@@ -231,7 +350,8 @@ img { max-width: 100%; display: block; }
   gap: var(--space-3);
   padding:0;
 }
-.footer-col a:hover { color: var(--color-text); }
+.footer-col a:hover,
+.footer-col__bouton:hover { color: var(--color-text); }
 .footer-col a svg { flex-shrink: 0; opacity: 0.7; }
 .footer-col__sep {
   border: none;
@@ -240,14 +360,14 @@ img { max-width: 100%; display: block; }
 }
 
 .footer-brand__mark {
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 .footer-brand__tagline {
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
   margin-top: var(--space-2);
   padding-bottom: var(--space-4);
   border-bottom: 1px solid var(--color-border);
@@ -260,22 +380,26 @@ img { max-width: 100%; display: block; }
 }
 
 /* Appels à l'action du pied de page — même gabarit pour les trois,
-   dégradés repris du logo, orientés d'angle à angle (haut-gauche →
-   bas-droite). */
+   compositions voisines de la DA (jamais grad-nuit ici : le point
+   violet retombe sous le seuil de lisibilité pour un texte de bouton).
+   Texte encre : mesuré à 4,4-9,5:1 selon la teinte, le blanc plafonne
+   plus bas et zanana en particulier devient illisible en blanc. */
 .footer-cta { display: flex; flex-direction: column; gap: var(--space-3); }
 .btn--grad {
   display: flex;
   width: 100%;
   padding: 15px 20px;
   font-size: 16px;
-  color: #fff;
+  font-weight: 700;
+  color: var(--color-text);
   border-radius: var(--radius-m);
   border: none;
+  transition: filter 0.15s ease;
 }
 .btn--grad:hover { filter: brightness(1.06); }
-.btn--grad-warm  { background: linear-gradient(135deg, #E9701F 0%, #EFC02F 100%); }
-.btn--grad-cool  { background: linear-gradient(135deg, #2E9E52 0%, #2F6FB3 100%); }
-.btn--grad-magenta { background: linear-gradient(135deg, #A8459E 0%, #E43C78 100%); }
+.btn--grad-chaud { background: var(--grad-chaud); }   /* Faire un don — la signature */
+.btn--grad-calme { background: var(--grad-calme); }   /* Créer un espace */
+.btn--grad-frais { background: var(--grad-frais); }   /* Contribuer au projet */
 
 .site-footer__legal {
   border-top: 1px solid var(--color-border);
@@ -318,7 +442,7 @@ img { max-width: 100%; display: block; }
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #c4453c;
+  background: var(--letchi);
   border: 2px solid var(--color-surface);
 }
 
@@ -328,8 +452,12 @@ img { max-width: 100%; display: block; }
    s'injecte uniquement par --place / --place-tint.
    ----------------------------------------------------------------- */
 .place-header {
-  --place: var(--color-primary);
-  --place-tint: var(--color-primary-soft);
+  /* Neutre par défaut : la couleur d'un lieu lui appartient, elle ne
+     doit jamais hériter de la couleur d'action de Tibillet. Le jour où
+     un lieu a son propre thème, c'est cette variable qu'il redéfinit —
+     jamais --color-primary. */
+  --place: var(--color-text);
+  --place-tint: var(--color-surface-tint);
   max-width: var(--container-max);
   margin: var(--space-6) auto;
   /*padding: 0 var(--space-6);*/
@@ -358,23 +486,28 @@ img { max-width: 100%; display: block; }
   border-radius: var(--radius-m);
   background: var(--place);
   color: #fff;
-  font-family: var(--font-serif);
-  font-weight: 600;
+  font-family: var(--font-text);
+  font-weight: 700;
   font-size: 24px;
+  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 .place-id__name {
-  font-family: var(--font-serif);
-  font-weight: 600;
+  font-family: var(--font-text);
+  font-weight: 700;
   font-size: 28px;
   line-height: 1.1;
 }
 .place-id__tagline {
   font-size: 13.5px;
   color: var(--color-text-muted);
+}
+.place-id__site {
+  color: var(--color-link);
+  font-weight: 700;
 }
 .place-nav {
   display: flex;
@@ -384,16 +517,20 @@ img { max-width: 100%; display: block; }
   padding-top: var(--space-4);
   border-top: 1px solid rgba(32,31,28,0.10);
 }
-.place-nav a {
+.place-nav > a,
+.place-nav__dropdown > .dropdown-toggle {
   font-size: 14.5px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--color-text-muted);
   padding-bottom: 2px;
+  transition: color 0.15s ease;
 }
-.place-nav a:hover { color: var(--color-text); }
-.place-nav a.is-active {
+.place-nav > a:hover,
+.place-nav__dropdown > .dropdown-toggle:hover { color: var(--color-text); }
+.place-nav > a.is-active,
+.place-nav__dropdown > .dropdown-toggle.is-active {
   color: var(--place);
-  font-weight: 600;
+  font-weight: 700;
   border-bottom: 2px solid var(--place);
 }
 
@@ -436,11 +573,19 @@ img { max-width: 100%; display: block; }
   padding: var(--space-5);
   margin: var(--space-2) 0;
 }
+/* Traitement signature des chiffres (DA §typo, point 3) : le solde est
+   le geste-Tibillet par excellence — dégradé chaud en clip-text,
+   systématique, reconnaissable. */
 .me-card__amount {
-  font-family: var(--font-serif);
+  font-family: var(--font-text);
+  font-weight: 700;
   font-size: 30px;
   line-height: 1;
   margin: var(--space-2) 0 var(--space-3);
+  background: var(--grad-chaud);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 .me-card__links {
   font-size: 12.5px;
@@ -455,9 +600,9 @@ img { max-width: 100%; display: block; }
   border-top: 1px solid rgba(32, 31, 28, 0.10);
 }
 .me-block__title {
-  font-family: var(--font-serif);
+  font-family: var(--font-text);
   font-size: 18px;
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: var(--space-4);
 }
 
@@ -502,6 +647,7 @@ img { max-width: 100%; display: block; }
   border: 1px solid var(--color-border);
   background: var(--color-surface);
   min-width: 0;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 .shortcut:hover { border-color: var(--color-border-strong); background: #fbfaf7; }
 .shortcut__logo {
@@ -514,7 +660,7 @@ img { max-width: 100%; display: block; }
 .shortcut__name {
   display: block;
   font-size: 13.5px;
-  font-weight: 600;
+  font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -558,9 +704,9 @@ img { max-width: 100%; display: block; }
 }
 .module__grip:active { cursor: grabbing; }
 .module__title {
-  font-family: var(--font-serif);
+  font-family: var(--font-text);
   font-size: 19px;
-  font-weight: 600;
+  font-weight: 700;
 }
 .module__count { color: var(--color-text-faint); font-size: 13.5px; font-weight: 400; }
 .module__chevron {
@@ -595,12 +741,14 @@ img { max-width: 100%; display: block; }
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.1em;
+  line-height: 1.4;
   color: rgba(255,255,255,0.45);
   margin-right: var(--space-2);
 }
 .mockup-switch a {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
+  line-height: 1;
   color: rgba(255,255,255,0.65);
   padding: 7px var(--space-4);
   border-radius: var(--radius-pill);
@@ -647,18 +795,22 @@ img { max-width: 100%; display: block; }
   flex-shrink: 0;
 }
 .service-card__place { font-size: 13px; color: var(--color-text-muted); }
-.service-card__title { font-family: var(--font-serif); font-size: 17px; font-weight: 600; }
+.service-card__title { font-family: var(--font-text); font-size: 17px; font-weight: 700; }
 .service-card__foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+  flex-wrap: wrap;
   border-top: 1px solid var(--color-border);
   padding-top: var(--space-3);
   margin-top: auto;
   font-size: 13.5px;
 }
-.service-card__due { color: var(--color-text-muted); }
+/* Le lien ne casse jamais en deux lignes : c'est la mention d'échéance,
+   plus longue et moins critique à lire d'un bloc, qui cède la place. */
+.service-card__due { color: var(--color-text-muted); min-width: 0; }
+.service-card__foot .link { white-space: nowrap; flex-shrink: 0; }
 
 /* Barre de progression réduite, pour les contributions en cours */
 .help-card .progress-track { margin-top: var(--space-2); }
@@ -671,7 +823,9 @@ img { max-width: 100%; display: block; }
   width: 100%;
   aspect-ratio: 1.586 / 1;
   border-radius: var(--radius-l);
-  background: linear-gradient(150deg, #24402f 0%, #0e1c15 100%);
+  /* grad-nuit : la seule surface de marque à texte blanc plutôt
+     qu'encre — traitement décoratif du talisman, pas un bouton lu. */
+  background: linear-gradient(150deg, #4296cc 0%, #8b5fb0 55%, #e93363 100%);
   color: #fff;
   padding: var(--space-5);
   display: flex;
@@ -689,7 +843,7 @@ img { max-width: 100%; display: block; }
   justify-content: space-between;
 }
 .talisman__brand {
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 17px;
   font-weight: 600;
 }
@@ -712,7 +866,7 @@ img { max-width: 100%; display: block; }
 
 .balance__label {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-text-faint);
@@ -730,7 +884,10 @@ img { max-width: 100%; display: block; }
 }
 .ledger__row {
   display: grid;
-  grid-template-columns: 88px 1fr 160px 100px;
+  /* Dernière colonne en auto, pas 100px fixe : « Tout public » ou tout
+     badge plus long que « Concert » n'y tenait plus et cassait en deux
+     lignes. */
+  grid-template-columns: 88px 1fr 160px auto;
   gap: var(--space-4);
   align-items: center;
   padding: var(--space-4) var(--space-5);
@@ -742,58 +899,10 @@ img { max-width: 100%; display: block; }
 .ledger__place { color: var(--color-text-muted); font-size: 13.5px; }
 .ledger__amount {
   text-align: right;
-  font-weight: 600;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .ledger__amount--in { color: var(--color-primary); }
-
-/* =================================================================
-   L'ARCHIPEL — le zoom arrière. Vient en dernier : d'abord on règle
-   ce qu'on est venu régler, ensuite le monde s'ouvre.
-   ================================================================= */
-.archipel {
-  background: linear-gradient(150deg, #24402f 0%, #0e1c15 100%);
-  border-radius: var(--radius-l);
-  padding: var(--space-7) var(--space-6);
-  color: #fff;
-  position: relative;
-  overflow: hidden;
-}
-.archipel__sky { position: absolute; inset: 0; }
-.archipel__inner { position: relative; }
-.archipel__title {
-  font-family: var(--font-serif);
-  color: #fff;
-  font-size: 30px;
-  line-height: 1.15;
-  max-width: 22ch;
-}
-.archipel__desc {
-  color: rgba(255, 255, 255, 0.72);
-  max-width: 56ch;
-  margin-top: var(--space-3);
-  line-height: 1.6;
-}
-.archipel__new {
-  display: flex;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  margin: var(--space-5) 0;
-}
-.archipel__chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-pill);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
-  font-size: 14px;
-}
-.archipel__chip .badge { background: rgba(255,255,255,.14); color: rgba(255,255,255,.75); }
-.btn--onDark { background: #fff; color: #14261d; }
-.btn--onDark:hover { background: #eae7dd; }
 
 @media (max-width: 900px) {
   .talisman-layout { grid-template-columns: 1fr; }
@@ -809,19 +918,39 @@ img { max-width: 100%; display: block; }
   padding: 10px 18px;
   border-radius: var(--radius-pill);
   font-size: 14.5px;
-  font-weight: 600;
+  font-weight: 700;
+  line-height: 15px;
   border: 1px solid transparent;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease, filter 0.15s ease, color 0.15s ease;
 }
-.btn--primary { background: var(--color-primary); color: #fff; }
-.btn--primary:hover { background: var(--color-primary-hover); color: #fff; }
+/* Texte encre, pas blanc : mesuré, le blanc sur letchi plafonne à 4,10:1
+   (sous le seuil de 4,5), l'encre y grimpe à 4,45:1.
+   La couleur est répétée au survol : sinon le :hover de Bootstrap
+   (.btn:hover) la remplace. / Colour repeated on hover, else Bootstrap wins. */
+.btn--primary { background: var(--color-primary); color: var(--color-text); }
+.btn--primary:hover { filter: brightness(1.08); color: var(--color-text); }
 .btn--secondary { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border-strong); }
 .btn--secondary:hover { background: #f2f0ea; }
 .btn--outline { background: transparent; color: var(--color-text); border-color: var(--color-border-strong); }
 .btn--outline:hover { background: rgba(32,31,28,0.04); }
-.btn--sm { padding: 7px 14px; font-size: 13.5px; }
+/* line-height en entier (14px), pas 13.5px : une hauteur de ligne
+   fractionnaire force le navigateur à arrondir la répartition de
+   l'espace, et l'arrondi ne tombe pas toujours au milieu — mesuré à
+   1,5px d'écart constant sur « Réserver », « Demander », etc. */
+.btn--sm { padding: 7px 14px; font-size: 13.5px; line-height: 14px; }
+/* Le dégradé signature, réservé au geste-Tibillet le plus net : recharger
+   son solde. Pas un aplat générique parmi d'autres — un CTA de plus qui
+   passerait en dégradé remettrait de la couleur partout, ce que la DA
+   proscrit justement. grad-nuit par choix esthétique : le point violet
+   central, avec du texte encre, retombe à 3,79:1 (sous les 4,5:1 visés
+   ailleurs, au-dessus du minimum 3:1) — accepté sciemment, pas oublié. */
+/* Texte blanc : plus faible que l'encre au point bleu du dégradé
+   (3,25:1, contre 3,79:1 au point violet avec l'encre) — l'ombre portée
+   aide à l'œil mais ne remplace pas un vrai calcul de contraste. */
+.btn--signature { background: var(--grad-nuit); color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.35); }
+.btn--signature:hover { filter: brightness(1.08); }
 .btn:disabled { opacity: 0.5; cursor: default; }
 
 .icon-btn {
@@ -835,6 +964,7 @@ img { max-width: 100%; display: block; }
   justify-content: center;
   cursor: pointer;
   color: var(--color-text);
+  transition: background 0.15s ease;
   flex-shrink: 0;
 }
 .icon-btn:hover { background: #f2f0ea; }
@@ -852,7 +982,16 @@ img { max-width: 100%; display: block; }
   color: var(--color-text-muted);
   margin-bottom: var(--space-2);
 }
-.page-title { font-size: 34px; margin-bottom: var(--space-3); }
+/* Le vrai gros titre de page (l'équivalent du h1 hero de la DA) :
+   Unbounded, pas Luciole — contrairement aux titres de carte, bien
+   plus petits, qui restent en Luciole Bold. */
+.page-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  font-size: 34px;
+  margin-bottom: var(--space-3);
+}
 .page-intro { color: var(--color-text-muted); font-size: 16px; max-width: 62ch; line-height: 1.55; }
 
 /* =================================================================
@@ -884,12 +1023,12 @@ img { max-width: 100%; display: block; }
   border-radius: var(--radius-s);
   font-size: 14.5px;
   color: var(--color-text);
-  font-weight: 500;
+  font-weight: 400;
 }
 .toc__link:hover { background: rgba(32,31,28,0.04); }
-.toc__link.is-active { background: var(--color-surface); border: 1px solid var(--color-border); font-weight: 600; }
+.toc__link.is-active { background: var(--color-surface); border: 1px solid var(--color-border); font-weight: 700; }
 .toc__count { color: var(--color-text-faint); font-size: 12.5px; }
-.toc__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-primary); }
+.toc__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-text); }
 .toc__note {
   margin-top: var(--space-4);
   font-size: 12.5px;
@@ -906,19 +1045,24 @@ img { max-width: 100%; display: block; }
 .section { padding: var(--space-6) 0; }
 .section__head { margin-bottom: var(--space-4); }
 .section__title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.01em;
   font-size: 22px;
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
 }
 .section__title .num {
-  font-family: var(--font-sans);
+  font-family: var(--font-text);
   font-size: 13px;
   font-weight: 700;
   color: var(--color-text-faint);
 }
-.section__title-marker { color: var(--color-primary); font-size: 15px; }
-.section__meta { font-size: 13.5px; color: var(--color-text-faint); font-weight: 500; margin-left: var(--space-1); }
+/* Chiffre : traitement signature (DA §typo, point 3). */
+.section__title-marker { color: var(--letchi-text); font-size: 15px; }
+/* Repasse en Luciole : sinon héritée en Unbounded du parent .section__title. */
+.section__meta { font-family: var(--font-text); font-size: 13.5px; color: var(--color-text-faint); font-weight: 400; margin-left: var(--space-1); }
 .section__desc { color: var(--color-text-muted); font-size: 14.5px; margin-top: 4px; }
 .section__rule { border: none; border-top: 1px solid var(--color-border); margin: var(--space-4) 0 var(--space-5); }
 
@@ -953,11 +1097,11 @@ img { max-width: 100%; display: block; }
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--color-primary);
+  color: var(--color-text-muted);
   margin-bottom: var(--space-2);
 }
 .feature-card__title { font-size: 22px; margin-bottom: var(--space-2); }
-.feature-card__text { color: #3c4a42; font-size: 14.5px; max-width: 65ch; line-height: 1.55; }
+.feature-card__text { color: var(--color-text-muted); font-size: 14.5px; max-width: 65ch; line-height: 1.55; }
 .feature-card__side { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; }
 .feature-card__price { font-size: 15px; }
 .feature-card__price strong { font-size: 17px; }
@@ -980,7 +1124,7 @@ img { max-width: 100%; display: block; }
 .offer-card__content{
   padding: var(--space-5);
 }
-.offer-card__title { font-size: 17.5px; font-family: var(--font-serif); font-weight: 600; }
+.offer-card__title { font-size: 17.5px; font-family: var(--font-text); font-weight: 700; }
 .offer-card__desc { color: var(--color-text-muted); font-size: 14px; line-height: 1.5; flex-grow: 1; }
 .offer-card__price { font-size: 14.5px; font-weight: 700; }
 .offer-card__price .unit { font-weight: 400; color: var(--color-text-muted); font-size: 13px; }
@@ -991,27 +1135,35 @@ img { max-width: 100%; display: block; }
   padding-top: var(--space-3);
   border-top: 1px solid var(--color-border);
 }
+/* Loséyan pour les liens (rôle « info · liens » de la DA) — jamais
+   letchi, qui reste réservé à l'action principale. */
 .link {
-  color: var(--color-primary);
-  font-weight: 600;
+  color: var(--color-link);
+  font-weight: 700;
   font-size: 13.5px;
   text-decoration: underline;
   text-underline-offset: 2px;
-  border:none;
+  transition: color 0.15s ease;
+  /* .link peut aussi être posé sur un <button> : on retire son cadre. */
+  /* / .link may also sit on a <button>: remove its frame. */
+  border: none;
   background: none;
 }
-.link:hover { color: var(--color-primary-hover); }
+.link:hover { color: var(--color-text); }
 
 /* =================================================================
    BADGES / CHIPS
    ================================================================= */
+/* Un badge qui casse en deux lignes est toujours un bug, jamais voulu. */
 .badge {
   display: inline-flex;
   align-items: center;
   padding: 4px 12px;
   border-radius: var(--radius-pill);
   font-size: 12.5px;
-  font-weight: 600;
+  font-weight: 700;
+  line-height: 13px;
+  white-space: nowrap;
   border: 1px solid transparent;
 }
 .badge--neutral { background: var(--color-bg); border-color: var(--color-border-strong); color: var(--color-text); }
@@ -1032,15 +1184,19 @@ img { max-width: 100%; display: block; }
   padding: 9px 20px;
   border-radius: var(--radius-pill);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 400;
+  line-height: 1;
   border: 1px solid var(--color-border-strong);
   background: var(--color-surface);
   color: var(--color-text);
   cursor: pointer;
   white-space: nowrap;
+  transition: background 0.15s ease;
 }
 .tag-pill:hover { background: #f2f0ea; }
-.tag-pill.is-active { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+/* Neutre, pas letchi : un filtre de catégorie appartient au contenu du
+   lieu (type d'événement, type de lieu), pas à un geste Tibillet. */
+.tag-pill.is-active { background: var(--color-text); border-color: var(--color-text); color: #fff; }
 
 /* =================================================================
    ÉVÉNEMENTS (agenda)
@@ -1054,16 +1210,19 @@ img { max-width: 100%; display: block; }
   margin-bottom: var(--space-4);
   flex-wrap: wrap;
 }
+/* Neutre, comme les puces qu'il ouvre : filtrer un agenda est un
+   geste sur le contenu du lieu, pas un geste Tibillet. */
 .filters-btn {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  background: var(--color-primary);
+  background: var(--color-text);
   color: #fff;
   border: none;
   border-radius: var(--radius-pill);
   padding: 10px 18px;
-  font-weight: 600;
+  font-weight: 700;
+  line-height: 15px;
   font-size: 14.5px;
   cursor: pointer;
 }
@@ -1071,6 +1230,7 @@ img { max-width: 100%; display: block; }
   background: rgba(255,255,255,0.22);
   border-radius: var(--radius-pill);
   font-size: 12px;
+  line-height: 1.6;
   padding: 1px 8px;
 }
 .search-input {
@@ -1133,16 +1293,20 @@ img { max-width: 100%; display: block; }
 .filter-group__label .hint { text-transform: none; font-weight: 400; letter-spacing: 0; color: var(--color-text-faint); }
 .filter-group__options { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .filter-pill {
+  display: inline-flex;
+  align-items: center;
   padding: 8px 16px;
   border-radius: var(--radius-pill);
   border: 1px solid var(--color-border-strong);
   background: var(--color-surface);
   font-size: 14px;
+  line-height: 1;
   color: var(--color-text);
   cursor: pointer;
+  transition: background 0.15s ease;
 }
 .filter-pill:hover { background: #f2f0ea; }
-.filter-pill.is-active { background: var(--color-primary); border-color: var(--color-primary); color: #fff; font-weight: 600; }
+.filter-pill.is-active { background: var(--color-text); border-color: var(--color-text); color: #fff; font-weight: 700; }
 
 .filter-panel__full { grid-column: 1 / -1; }
 .checkbox-row { display: flex; flex-direction: column; gap: var(--space-3); }
@@ -1163,7 +1327,7 @@ img { max-width: 100%; display: block; }
   margin-top: 1px;
   background: var(--color-surface);
 }
-.checkbox-line input:checked + .box { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+.checkbox-line input:checked + .box { background: var(--color-text); border-color: var(--color-text); color: #fff; }
 .checkbox-line .checkbox-text { color: var(--color-text); }
 .checkbox-line .checkbox-text .muted { color: var(--color-text-faint); font-weight: 400; }
 
@@ -1183,7 +1347,26 @@ img { max-width: 100%; display: block; }
 }
 .event-card__cover { height: 108px; }
 .event-card__body { padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); flex-grow: 1; }
-.event-card__top { display: flex; gap: var(--space-3); align-items: flex-start; }
+/* La ou les pastilles de date sont posées à cheval sur la couture entre
+   la photo et le bloc d'informations — le titre récupère toute la
+   largeur de la carte en dessous, il n'a plus à partager la ligne avec
+   la date. C'est ce qui permet une deuxième pastille (multi-jours)
+   sans agrandir la carte. */
+.event-card__dates {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  /* Pas de marge horizontale : elle hérite du padding du corps de carte,
+     pile ce qu'il faut pour tomber sous le titre au pixel près — une
+     marge ici la décale par rapport au texte en dessous. */
+  margin: -48px 0 0;
+  position: relative;
+  z-index: 2;
+}
+.event-card__dates .event-date-box { background: var(--color-surface); box-shadow: var(--shadow-card); }
+/* Décalée sous le centre de la pastille (~75% de sa hauteur) : au centre
+   pile, elle se confond avec la couture photo/infos et devient illisible. */
+.event-card__dates-arrow { color: var(--color-text-faint); font-size: 13px; position: relative; top: 16px; }
 .event-date-box {
   width: 52px;
   text-align: center;
@@ -1192,18 +1375,38 @@ img { max-width: 100%; display: block; }
   padding: 5px 0 6px;
   flex-shrink: 0;
 }
-.event-date-box .dow { font-size: 10px; font-weight: 700; letter-spacing: 0.03em; color: var(--color-primary); text-transform: uppercase; }
+.event-date-box .dow { font-size: 10px; font-weight: 700; letter-spacing: 0.03em; color: var(--color-text-muted); text-transform: uppercase; }
 .event-date-box .day { font-size: 20px; font-weight: 700; line-height: 1.1; }
 .event-date-box .mon { font-size: 10px; color: var(--color-text-faint); text-transform: uppercase; }
-.event-card__title { font-family: var(--font-serif); font-size: 16.5px; font-weight: 600; line-height: 1.3; }
+
+/* Page événement : bandeau d'ouverture. Même carte que .event-card,
+   en grand format. */
+.event-hero {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-l);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+.event-hero__cover {
+  height: 220px;
+  display: flex;
+  align-items: flex-end;
+  padding: var(--space-5);
+}
+.event-hero__badge { display: flex; gap: 6px; }
+.event-hero__body { padding: var(--space-6); }
+.event-card__title { font-family: var(--font-text); font-size: 16.5px; font-weight: 700; line-height: 1.3; }
 .event-card__time { font-size: 13.5px; color: var(--color-text-muted); margin-top: 2px; }
 .event-card__loc { display: flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--color-text-muted); }
 .event-card__tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .event-card__meta { font-size: 13px; color: var(--color-text-faint); padding-top: var(--space-3); border-top: 1px solid var(--color-border); }
-.event-card__meta strong { color: var(--color-text); font-weight: 600; }
-.event-card__meta a { color: var(--color-primary); font-weight: 600; }
+.event-card__meta strong { color: var(--color-text); font-weight: 700; }
+.event-card__meta a { color: var(--color-link); font-weight: 700; }
 .event-card__footer { display: flex; align-items: center; justify-content: space-between; }
-.event-card__price { font-size: 13.5px; color: var(--color-text-faint); }
+/* Traitement signature des chiffres, en discret : un prix est un geste
+   de billetterie même niché dans le contenu d'un lieu. */
+.event-card__price { font-size: 13.5px; font-weight: 700; color: var(--letchi-text); }
 
 /* Gradients par catégorie */
 .bg-green { background: linear-gradient(135deg, var(--cat-green-from), var(--cat-green-to)); }
@@ -1252,7 +1455,7 @@ img { max-width: 100%; display: block; }
 .place-card__logo { width: 64px; height: 64px; border-radius: var(--radius-m); flex-shrink: 0; }
 .place-card__body { flex-grow: 1; min-width: 0; }
 .place-card__head { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-2); flex-wrap: wrap; }
-.place-card__name { font-family: var(--font-serif); font-size: 18px; font-weight: 600; }
+.place-card__name { font-family: var(--font-text); font-size: 18px; font-weight: 700; }
 .place-card__dist { display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--color-text-faint); margin-left: auto; }
 .place-card__desc { font-size: 14.5px; color: var(--color-text-muted); margin-bottom: var(--space-3); line-height: 1.5; }
 .place-card__foot { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; }
@@ -1343,7 +1546,8 @@ img { max-width: 100%; display: block; }
 /* state to .active (explorer.js toggles .active, tag-pill uses .is-active).*/
 #explorer-root .explorer-pill { border: 1px solid var(--color-border-strong); box-shadow: none; padding: 9px 20px; font-size: 14px; }
 #explorer-root .explorer-pill:hover { background: #f2f0ea; }
-#explorer-root .explorer-pill.active { background: var(--color-primary); border-color: var(--color-primary); color: #fff; font-weight: 500; box-shadow: none; }
+/* Neutre, pas letchi : filtrer la liste est un geste sur le contenu. */
+#explorer-root .explorer-pill.active { background: var(--color-text); border-color: var(--color-text); color: #fff; font-weight: 700; box-shadow: none; }
 
 /* Compteur de resultats : la classe .results-line (maquette) porte le     */
 /* style ; on annule juste la marge haute d'explorer.css. / The mockup     */
@@ -1360,7 +1564,7 @@ img { max-width: 100%; display: block; }
 #explorer-root .explorer-card:hover { border-color: var(--color-border-strong); transform: none; }
 #explorer-root .explorer-card-focus { padding: var(--space-5); gap: var(--space-4); }
 #explorer-root .explorer-card-icon { width: 64px; height: 64px; border-radius: var(--radius-m); }
-#explorer-root .explorer-card-title { font-family: var(--font-serif); font-size: 18px; font-weight: 600; }
+#explorer-root .explorer-card-title { font-family: var(--font-text); font-size: 18px; font-weight: 700; }
 #explorer-root .explorer-card-meta { color: var(--color-text-faint); }
 #explorer-root .explorer-card-desc { color: var(--color-text-muted); font-size: 14.5px; line-height: 1.5; }
 #explorer-root .explorer-card-footer { border-top-color: var(--color-border); }
@@ -1375,28 +1579,30 @@ img { max-width: 100%; display: block; }
 /* / "Visit the venue" link: mockup btn--primary btn--sm look. */
 #explorer-root .explorer-card-link {
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-text);
+  font-weight: 700;
   padding: 7px 14px;
   font-size: 13.5px;
   border-radius: var(--radius-pill);
   text-decoration: none;
 }
-#explorer-root .explorer-card-link:hover { background: var(--color-primary-hover); color: #fff; }
+#explorer-root .explorer-card-link:hover { filter: brightness(1.08); color: var(--color-text); }
 
 /* Carte du lieu courant ("Vous etes ici") : bordure + badge aux couleurs  */
 /* du skin, au lieu du bleu Bootstrap (--bs-primary) pose par explorer.css.  */
 /* Le !important est necessaire : explorer.css pose deja border-color avec   */
 /* !important sur .explorer-card--current. / Current venue card: border +    */
 /* badge in skin colours instead of Bootstrap blue.                          */
-#explorer-root .explorer-card--current { border-color: var(--color-primary) !important; }
-#explorer-root .explorer-badge--current { background: var(--color-primary); }
+/* DA v1 : « Vous êtes ici » désigne un lieu, donc encre et non letchi. */
+#explorer-root .explorer-card--current { border-color: var(--color-text) !important; }
+#explorer-root .explorer-badge--current { background: var(--color-text); color: #fff; }
 
 .map-pin { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 4px; transform: translate(-50%, -100%); }
 .map-pin__icon { width: 26px; height: 26px; border-radius: 50% 50% 50% 0; transform: rotate(45deg); display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
 .map-pin__icon svg { transform: rotate(-45deg); }
-.map-pin--main .map-pin__icon { background: var(--color-primary); width: 32px; height: 32px; }
+.map-pin--main .map-pin__icon { background: var(--color-text); width: 32px; height: 32px; }
 .map-pin--place .map-pin__icon { background: #5b708f; }
-.map-pin__label { background: var(--color-surface); border: 1px solid var(--color-border); padding: 3px 10px; border-radius: var(--radius-pill); font-size: 12.5px; font-weight: 600; white-space: nowrap; box-shadow: var(--shadow-card); }
+.map-pin__label { background: var(--color-surface); border: 1px solid var(--color-border); padding: 3px 10px; border-radius: var(--radius-pill); font-size: 12.5px; font-weight: 700; line-height: 1.4; white-space: nowrap; box-shadow: var(--shadow-card); }
 
 /* =================================================================
    CONTRIBUER
@@ -1410,14 +1616,14 @@ img { max-width: 100%; display: block; }
 }
 .initiative-card__cover { height: 128px; }
 .initiative-card__body { padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-4); }
-.initiative-card__title { font-family: var(--font-serif); font-size: 18px; font-weight: 600; }
+.initiative-card__title { font-family: var(--font-text); font-size: 18px; font-weight: 700; }
 .initiative-card__desc { font-size: 14.5px; color: var(--color-text-muted); line-height: 1.5; }
 .progress-label { display: flex; justify-content: space-between; font-size: 13.5px; color: var(--color-text-muted); margin-bottom: 6px; }
 .progress-label strong { color: var(--color-text); font-weight: 700; }
 .progress-track { height: 6px; border-radius: var(--radius-pill); background: var(--color-border); overflow: hidden; }
-.progress-fill { height: 100%; background: var(--color-primary); border-radius: var(--radius-pill); }
+.progress-fill { height: 100%; background: var(--color-text); border-radius: var(--radius-pill); }
 .initiative-card__foot { display: flex; align-items: center; justify-content: space-between; }
-.tasks-open { font-size: 13px; font-weight: 600; color: var(--cat-gold-solid); background: var(--cat-gold-tint); padding: 4px 12px; border-radius: var(--radius-pill); }
+.tasks-open { font-size: 13px; font-weight: 700; line-height: 1.4; color: var(--cat-gold-solid); background: var(--cat-gold-tint); padding: 4px 12px; border-radius: var(--radius-pill); }
 
 .callout {
   display: flex;
@@ -1440,22 +1646,22 @@ img { max-width: 100%; display: block; }
   padding: var(--space-5) var(--space-6);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-left: 4px solid var(--color-primary);
+  border-left: 4px solid var(--color-text);
   border-radius: var(--radius-m);
   box-shadow: var(--shadow-card);
 }
 .role-card + .role-card { margin-top: var(--space-4); }
 .role-card__icon {
   width: 44px; height: 44px; border-radius: var(--radius-s);
-  background: var(--color-surface-tint); color: var(--color-primary);
+  background: var(--color-surface-tint); color: var(--color-text);
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
 .role-card__body { flex-grow: 1; }
 .role-card__title { display: flex; align-items: center; gap: var(--space-3); font-size: 16.5px; font-weight: 700; margin-bottom: 4px; }
 .role-card__desc { font-size: 14.5px; color: var(--color-text-muted); line-height: 1.5; }
 .pill-tag {
-  font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
-  background: var(--cat-green-tint); color: var(--color-primary);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1.4;
+  background: var(--cat-green-tint); color: var(--cat-green-solid);
   padding: 3px 10px; border-radius: var(--radius-pill);
 }
 
@@ -1471,18 +1677,19 @@ img { max-width: 100%; display: block; }
 }
 .help-card__badges { display: flex; gap: 6px; }
 .help-card__badges .badge { text-transform: uppercase; letter-spacing: 0.03em; font-size: 11.5px; }
-.help-card__title { font-family: var(--font-serif); font-size: 16.5px; font-weight: 600; }
+.help-card__title { font-family: var(--font-text); font-size: 16.5px; font-weight: 700; }
 .help-card__desc { font-size: 14px; color: var(--color-text-muted); line-height: 1.5; flex-grow: 1; }
 .help-card__foot { display: flex; align-items: center; justify-content: space-between; padding-top: var(--space-3); border-top: 1px solid var(--color-border); }
-.person { display: flex; align-items: center; gap: var(--space-2); font-size: 14px; font-weight: 600; }
+.person { display: flex; align-items: center; gap: var(--space-2); font-size: 14px; font-weight: 700; }
 
 .avatar {
   border-radius: 50%;
   background: #e4e1d6;
   display: flex; align-items: center; justify-content: center;
   color: var(--color-text-faint);
-  font-family: var(--font-serif);
-  font-weight: 600;
+  font-family: var(--font-text);
+  font-weight: 700;
+  line-height: 1;
   flex-shrink: 0;
 }
 .avatar--sm { width: 28px; height: 28px; font-size: 12px; }
@@ -1519,7 +1726,7 @@ img { max-width: 100%; display: block; }
   padding: 0 var(--space-3);
   background: rgba(255,255,255,0.92);
   display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12.5px; font-weight: 600;
+  font-size: 12.5px; font-weight: 700; line-height: 13px;
   color: var(--color-text-muted);
   cursor: pointer;
   border: none;
@@ -1527,18 +1734,18 @@ img { max-width: 100%; display: block; }
 .pin-btn svg { fill: none; stroke: currentColor; stroke-width: 1.8; }
 .pin-btn__label { display: none; }
 .pin-btn:hover .pin-btn__label { display: inline; }
-.pin-btn.is-on { background: var(--color-primary); color: #fff; }
+.pin-btn.is-on { background: var(--color-primary); color: var(--color-text); }
 .pin-btn.is-on .pin-btn__label { display: inline; }
 .favorite-card__body { padding: var(--space-4); }
 .favorite-card__title-row { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
-.favorite-card__title { font-family: var(--font-serif); font-size: 17px; font-weight: 600; }
+.favorite-card__title { font-family: var(--font-text); font-size: 17px; font-weight: 700; }
 .favorite-card__list { font-size: 13.5px; color: var(--color-text-muted); border-top: 1px solid var(--color-border); padding-top: var(--space-3); margin-bottom: var(--space-3); }
 .favorite-card__list li { position: relative; padding-left: 14px; }
 .favorite-card__list li::before { content: '•'; position: absolute; left: 0; color: var(--color-text-faint); }
 .favorite-card__list li + li { margin-top: 4px; }
 
 .footer-links { display: flex; gap: var(--space-6); padding: var(--space-6) 0; border-top: 1px solid var(--color-border); margin-top: var(--space-4); flex-wrap: wrap; }
-.footer-links a { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--color-text-muted); }
+.footer-links a { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: var(--color-text-muted); }
 .footer-links a:hover { color: var(--color-text); }
 
 /* =================================================================
@@ -1553,7 +1760,7 @@ img { max-width: 100%; display: block; }
 }
 .info-card__label { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-muted); margin-bottom: var(--space-3); }
 .info-card__text { font-size: 14.5px; line-height: 1.6; }
-.info-card__text a { color: var(--color-primary); font-weight: 600; }
+.info-card__text a { color: var(--color-link); font-weight: 700; }
 
 .team-card {
   display: flex; align-items: center; gap: var(--space-3);
@@ -1568,7 +1775,7 @@ img { max-width: 100%; display: block; }
   display: inline-flex; align-items: center;
   padding: 8px 16px; border-radius: var(--radius-pill);
   border: 1px solid var(--color-border-strong);
-  font-size: 14px; font-weight: 500; background: var(--color-surface);
+  font-size: 14px; font-weight: 400; line-height: 1; background: var(--color-surface);
 }
 
 .timeline { position: relative; padding-left: var(--space-6); }
@@ -1578,7 +1785,7 @@ img { max-width: 100%; display: block; }
 .timeline-item::before {
   content: ''; position: absolute; left: -25px; top: 5px;
   width: 12px; height: 12px; border-radius: 50%;
-  background: var(--color-primary); border: 2px solid var(--color-bg);
+  background: var(--color-text); border: 2px solid var(--color-bg);
 }
 .timeline-item__year { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
 .timeline-item__text { font-size: 14.5px; color: var(--color-text-muted); line-height: 1.55; }
@@ -1586,7 +1793,7 @@ img { max-width: 100%; display: block; }
 .resource-card { display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-4); }
 .resource-card__icon {
   width: 40px; height: 40px; border-radius: var(--radius-s); flex-shrink: 0;
-  background: var(--color-surface-tint); color: var(--color-primary);
+  background: var(--color-surface-tint); color: var(--color-text);
   display: flex; align-items: center; justify-content: center;
 }
 .resource-card__title { font-weight: 700; font-size: 15px; margin-bottom: 3px; }
@@ -1619,3 +1826,340 @@ img { max-width: 100%; display: block; }
   .filter-panel { grid-template-columns: 1fr; }
   .container { padding: 0 var(--space-4); }
 }
+
+
+/* =================================================================
+   AJOUTS DU SKIN V2 — intégration Django de la maquette
+   / V2 skin additions — Django integration of the mockup
+
+   Ce que la maquette statique n'avait pas à gérer : utilisateur
+   anonyme, panier, logo du lieu, menu dynamique (main_nav), images
+   réelles, pagination HTMX, focus clavier.
+   ================================================================= */
+
+/* Focus clavier visible partout (accessibilité). Loséyan : 4,5:1. */
+/* / Visible keyboard focus everywhere. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 2px;
+}
+
+/* --- Barre utilisateur --------------------------------------------- */
+/* Anonyme : « Se connecter » est un <button> (il ouvre un panneau). */
+.me-anchor--login { cursor: pointer; font-family: inherit; }
+.user-bar .dropdown-menu { font-size: 14px; }
+
+/* Panier : le badge (rendu aussi par htmx/components/panier_badge.html)
+   utilise les classes Bootstrap de position. On le recolore :
+   un panier est un geste TiBillet, donc letchi avec texte encre. */
+.icon-btn--panier { position: relative; }
+.icon-btn--panier .badge {
+  padding: 3px 6px;
+  font-size: 11px;
+  line-height: 1;
+  border: 2px solid var(--color-surface);
+  background: var(--color-primary) !important;
+  color: var(--color-text);
+}
+.icon-btn--panier .badge.bg-secondary { background: var(--color-text-faint) !important; color: #fff; }
+
+/* --- En-tête du lieu ----------------------------------------------- */
+/* Logo réel : fond clair, image contenue (pas recadrée). */
+.place-id__mark--logo {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+  padding: 4px;
+}
+.place-id__mark--logo img { object-fit: contain !important; }
+.place-id__name--lien { display: block; color: inherit; }
+.place-id__name--lien:hover { text-decoration: underline; text-underline-offset: 3px; }
+.place-nav__dropdown .dropdown-menu { font-size: 14px; }
+
+/* Mobile : le menu du lieu défile à l'horizontale plutôt que de
+   s'empiler sur plusieurs lignes. / Mobile: horizontal scrolling menu. */
+@media (max-width: 720px) {
+  .place-header__card { padding: var(--space-5); }
+  .place-id__name { font-size: 22px; }
+  .place-nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: var(--space-4);
+    padding-bottom: var(--space-2);
+    -webkit-overflow-scrolling: touch;
+  }
+  .place-nav > a,
+  .place-nav__dropdown > .dropdown-toggle { white-space: nowrap; }
+}
+
+/* --- Pied de page -------------------------------------------------- */
+.footer-col__bouton {
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+.site-footer__legal-texte { margin: 0; max-width: 62ch; }
+
+/* --- Cartes événement et offre ------------------------------------- */
+.event-card__cover { overflow: hidden; }
+.event-card__loc svg { flex-shrink: 0; }
+.event-card__tags a.badge:hover { border-color: var(--color-text-muted); }
+.offer-card__cover picture { height: 100%; }
+.offer-card__desc p { margin: 0 0 var(--space-2); }
+
+/* --- Agenda -------------------------------------------------------- */
+.page-header__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.search-input input {
+  border: none;
+  outline: none;
+  background: none;
+  width: 100%;
+  font-size: 14.5px;
+  color: var(--color-text);
+}
+.search-input:focus-within { outline: 2px solid var(--color-link); outline-offset: 2px; }
+/* « Voir plus d'événements » : dernière case de la grille, sur toute
+   la largeur. La page suivante vient la remplacer (hx-swap outerHTML).
+   / "Load more": last grid cell, full width, replaced by the next page. */
+.agenda-suite { grid-column: 1 / -1; text-align: center; padding: var(--space-4) 0 var(--space-6); }
+.agenda-vide { grid-column: 1 / -1; color: var(--color-text-muted); }
+
+/* --- Page événement ------------------------------------------------ */
+/* / Event page */
+.event-retour { margin: var(--space-2) 0 var(--space-4); }
+/* La couverture reçoit une vraie image : l'image remplit le bandeau,
+   les tags restent posés dessus. / Real image fills the cover. */
+.event-hero__cover { position: relative; overflow: hidden; }
+.event-hero__cover picture { position: absolute; inset: 0; }
+.event-hero__badge { position: relative; z-index: 1; flex-wrap: wrap; }
+.event-hero__badge .badge { background: var(--color-surface); }
+.event-hero__actions {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-5);
+}
+.event-hero__etat { white-space: normal; }
+.reservation-declencheur { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); }
+.reservation-declencheur__note { font-size: 13.5px; color: var(--color-text-muted); }
+/* Texte long saisi par le lieu (HTML riche) : largeur de lecture. */
+/* / Long rich text from the venue: reading width. */
+.event-prose { max-width: 70ch; color: var(--color-text); line-height: 1.65; margin-top: var(--space-4); }
+.event-prose p { margin: 0 0 var(--space-3); }
+.event-prose img { border-radius: var(--radius-m); }
+.event-carrousel, .event-carte { margin-top: var(--space-5); }
+.info-card address { font-style: normal; margin: 0; }
+.event-hote { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; margin-top: var(--space-4); }
+
+/* Bénévoles : accordéon Bootstrap, habillé par le pont --bs-* plus ces règles. */
+/* / Volunteers: Bootstrap accordion styled by the --bs-* bridge. */
+.benevoles.accordion-item { border: 1px solid var(--color-border); border-radius: var(--radius-m); overflow: hidden; background: var(--color-surface); }
+.benevoles .accordion-button { font-weight: 700; background: var(--color-surface); color: var(--color-text); box-shadow: none; }
+.benevoles .accordion-button:not(.collapsed) { background: var(--color-surface-tint); }
+.benevoles__missions { border: none; padding: 0; margin: 0 0 var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
+.benevoles__mission { display: flex; align-items: center; gap: var(--space-3); }
+.benevoles__mission .muted { color: var(--color-text-faint); font-size: 13px; }
+.benevoles__mission--complete { color: var(--color-text-muted); }
+.benevoles__rappel { margin-top: var(--space-5); }
+
+@media (max-width: 720px) {
+  .event-hero__cover { height: 160px; }
+  .event-hero__body { padding: var(--space-5); }
+  .page-title { font-size: 26px; }
+}
+
+/* --- Mon espace : modules repliables en <details> natifs ------------ */
+/* / My space: collapsible modules as native <details> */
+/* La maquette ouvrait/fermait les modules en JS (classe .is-open).
+   <details> fait la même chose sans JS, au clavier et au lecteur d'écran. */
+details.module > summary { list-style: none; cursor: pointer; }
+details.module > summary::-webkit-details-marker { display: none; }
+details.module[open] > .module__body { display: block; }
+details.module[open] .module__chevron { transform: rotate(180deg); }
+details.module + details.module { margin-top: var(--space-4); }
+
+/* --- Mon espace : en-tête, raccourcis, alertes --------------------- */
+.compte__entete { margin-bottom: var(--space-5); }
+.compte__alerte { margin: 0 0 var(--space-5); }
+.compte__modules { padding-bottom: 0; }
+.compte__raccourcis .shortcut { justify-content: center; text-align: center; }
+.compte__raccourcis .shortcut__name { white-space: normal; }
+.me-id .place-id__name { margin: 0; }
+.me-block__title { margin-top: 0; }
+.compte__remboursement { display: flex; flex-direction: column; gap: var(--space-3); }
+.compte__remboursement .callout { flex-direction: column; }
+.callout__text p { margin: 0 0 var(--space-2); }
+/* .link posé sur un <button> garde la taille du texte voisin. */
+.me-card__links .link { font-size: inherit; padding: 0; cursor: pointer; }
+
+/* --- Sous-pages du compte ------------------------------------------ */
+/* / Account sub-pages */
+.compte-section { padding-top: var(--space-4); }
+.compte-section__contenu { margin-top: var(--space-4); }
+.compte__chargement { display: flex; align-items: center; gap: var(--space-2); color: var(--color-text-muted); font-size: 14px; }
+.compte .spinner-border { color: var(--color-text-muted); }
+.compte-champ { max-width: 32rem; margin-bottom: var(--space-4); }
+.compte-champ__aide { font-size: 13px; color: var(--color-text-muted); margin-top: var(--space-1); }
+/* Formulaires Bootstrap au style de la DA. / Bootstrap forms, DA style. */
+.compte .form-label { font-weight: 700; font-size: 14px; }
+.compte .form-control,
+.compte .form-select { border-color: var(--color-border-strong); border-radius: var(--radius-s); font-family: inherit; }
+.compte .form-check-input:checked { background-color: var(--color-text); border-color: var(--color-text); }
+/* Tableaux : lignes fines, en-têtes discrets. / Tables: thin rows, quiet headers. */
+.compte-table { --bs-table-bg: transparent; font-size: 14.5px; margin-bottom: var(--space-4); }
+.compte-table th { font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-muted); }
+.compte-table td, .compte-table th { border-color: var(--color-border); padding: var(--space-3) var(--space-2); }
+.compte-carte { display: flex; flex-direction: column; gap: var(--space-3); }
+.compte-carte__pied { margin-top: auto; padding-top: var(--space-3); border-top: 1px solid var(--color-border); }
+.callout--erreur { border-color: var(--letchi-text); }
+
+/* Réservation : image à gauche, détail à droite ; empilé sur mobile. */
+/* / Booking card: image left, details right; stacked on mobile. */
+.reservation-card { display: grid; grid-template-columns: 220px minmax(0, 1fr); overflow: hidden; margin-bottom: var(--space-5); }
+.reservation-card__cover { position: relative; min-height: 160px; }
+.reservation-card__cover picture { position: absolute; inset: 0; }
+.reservation-card__body { padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.reservation-card__title { font-size: 19px; margin: 0; }
+.reservation-card__lien { color: inherit; }
+.reservation-card__lien:hover { text-decoration: underline; text-underline-offset: 3px; }
+.reservation-card__meta { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); font-size: 14px; color: var(--color-text-muted); }
+.reservation-card__billets .accordion-item { background: transparent; border-color: var(--color-border); }
+.reservation-card__billets .accordion-button { font-weight: 700; font-size: 14px; background: var(--color-surface); box-shadow: none; }
+.compte-billet__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
+
+/* Adhésion dans l'espace perso. / Membership in the personal space. */
+.compte-adhesion--expiree { opacity: 0.7; }
+.compte-adhesion__infos { margin: 0; display: flex; flex-direction: column; gap: var(--space-2); font-size: 14px; }
+.compte-adhesion__infos dt { font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-faint); }
+.compte-adhesion__infos dd { margin: 0; }
+.compte-adhesion__pied { flex-direction: column; align-items: flex-start; gap: var(--space-2); }
+
+@media (max-width: 720px) {
+  .reservation-card { grid-template-columns: 1fr; }
+  .reservation-card__cover { min-height: 140px; }
+}
+
+/* --- Pages CMS (pages/V2/page.html + blocs) ------------------------ */
+/* / CMS pages (pages/V2/page.html + blocks)
+   tb-blocs.css garde la grille (.tb-flux) et la mise en page des blocs.
+   Ici, on habille seulement : titres, fil d'Ariane, sommaire, bloc lieu,
+   sous-cartes. V2.css est chargé APRÈS tb-blocs.css (shell.html), donc à
+   spécificité égale, ces règles gagnent.
+   / tb-blocs.css keeps the grid; here we only re-dress to the DA v1. */
+
+/* Titre de la page : le vrai gros titre, en Unbounded (comme .page-title). */
+.tb-page .tb-page__titre {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  font-size: 34px;
+  line-height: 1.15;
+}
+/* Titres des blocs : comme .section__title de la maquette. */
+.tb-page .tb-bloc__titre {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-size: 22px;
+}
+/* Fil d'Ariane au style « eyebrow » (petites capitales discrètes). */
+.tb-page .tb-fil-ariane {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.tb-page .tb-fil-ariane a { color: var(--color-link); }
+.tb-page .tb-markdown { font-size: 16px; }
+
+/* Sommaire : même allure que .toc de la maquette (liste de liens,
+   entrée active sur fond blanc). Les classes lues par
+   pages/static/pages/js/sommaire_actif.js ne changent pas. */
+.tb-page .tb-sommaire { background: transparent; border: none; box-shadow: none; padding: 0; }
+.tb-page .tb-sommaire__titre {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+  margin-bottom: var(--space-2);
+}
+.tb-page .tb-sommaire__liste { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 2px; }
+.tb-page .tb-sommaire__entree a {
+  display: block;
+  padding: 7px var(--space-3);
+  border-radius: var(--radius-s);
+  border: 1px solid transparent;
+  font-size: 14.5px;
+  color: var(--color-text);
+  text-decoration: none;
+}
+.tb-page .tb-sommaire__entree a:hover { background: rgba(32, 31, 28, 0.04); }
+.tb-page .tb-sommaire__entree--active a {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  font-weight: 700;
+}
+
+/* Bloc LIEU : les infos pratiques prennent l'allure d'une .info-card. */
+.tb-page .tb-bloc__infos {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-card);
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+.tb-page .tb-bloc__infos-badge {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.tb-page .tb-bloc__infos address { font-style: normal; }
+.tb-page .tb-bloc__infos-transport h3 { font-size: 15px; font-weight: 700; margin: var(--space-3) 0 var(--space-1); }
+
+/* Sous-cartes (MEDIA_ET_CARTES) : allure de .resource-card. */
+.tb-page .tb-sous-carte {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-card);
+}
+.tb-page .tb-sous-carte__titre { font-weight: 700; }
+.tb-page .tb-bloc__carte-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  border-radius: var(--radius-pill);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text);
+}
+
+/* Nouveaux affichages SECTION : EQUIPE, FRISE, RESSOURCES (maquette qui-sommes-nous). */
+.equipe-grille,
+.ressources-grille {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-5) 0 0;
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+}
+.team-card__name, .team-card__role { display: block; }
+.equipe-grille__badge { margin-top: var(--space-2); }
+.tb-bloc--frise .timeline { list-style: none; margin: var(--space-5) 0 0; }
+.ressources-grille__lien { font-size: inherit; }

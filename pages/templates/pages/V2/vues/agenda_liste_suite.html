@@ -1,35 +1,23 @@
 {% load i18n %}
-{% load tibitags %}
 {% comment %}
+SUITE DE LA LISTE D'ÉVÉNEMENTS — skin V2
+/ Event list continuation — V2 skin
+
 LOCALISATION : pages/templates/pages/V2/vues/agenda_liste_suite.html
-Suite de la liste d'événements (bouton « voir plus », HTMX outerHTML sur
-#paginator). Même contenu que agenda_liste.html SANS l'en-tête RSS.
-/ Event list continuation ("load more" button, HTMX outerHTML on #paginator).
-Same content as agenda_liste.html WITHOUT the RSS header.
+Vue : BaseBillet/views.py EventMVT.partial_list, quand page > 1.
+
+Appelé par le bouton « Voir plus » (partials/agenda_voir_plus.html).
+Ce rendu REMPLACE le bouton #paginator (hx-swap outerHTML), qui est la
+dernière case de la grille #event_list : les cartes arrivent donc dans la
+grille, suivies d'un nouveau bouton s'il reste des pages.
+/ Replaces the #paginator cell (outerHTML): cards land inside the grid.
 {% endcomment %}
 {% for date_key, events in dated_events.items %}
-    <h2 class="fs-5 p-3 text-dark" style="background: var(--mayaj-pons);">
-        {{ date_key|date:'l j F'|capfirst }}
-    </h2>
     {% for event in events %}
-        {% include 'pages/V2/partials/carte_evenement.html' %}
-        {% if not forloop.last %}
-            <hr/>{% endif %}
+        <c-V2.event_card :event="event" />
     {% endfor %}
 {% empty %}
-    {% trans 'No results for this search.' %}
+    <p class="agenda-vide">{% translate 'No results for this search.' %}</p>
 {% endfor %}
 
-{% if paginated_info.has_next %}
-    <div id="paginator">
-        <p class="py-3 mb-5 text-center">
-            <a class="btn btn-outline-primary d-block d-sm-inline"
-               hx-boost="true" hx-post="/event/partial_list/?page={{ paginated_info.page | add:1 }}"
-               hx-include="#search_form" hx-target="#paginator" hx-swap="outerHTML">
-                {% translate "Load more events" %}
-            </a>
-        </p>
-    </div>
-{% else %}
-    <div class="mb-5"></div>
-{% endif %}
+{% include 'pages/V2/vues/partials/agenda_voir_plus.html' %}

@@ -1,0 +1,36 @@
+{% load i18n %}
+{% comment %}
+BLOC SECTION / affichage EQUIPE — skin V2 (DA v1)
+/ SECTION block / EQUIPE display — V2 skin (DA v1)
+
+LOCALISATION : pages/templates/pages/V2/partials/bloc_section_equipe.html
+Maquette : TEMP-tibillet-lespass-main/qui-sommes-nous.html, section « Le collectif »
+
+Les personnes viennent de `bloc.contenu`, une liste d'items TEXTE :
+    [{"titre": "Camille R.", "texte": "Coordination", "badge": "Bénévole"}, …]
+titre = le nom, texte = le rôle, badge = une précision courte (optionnelle).
+Ce sont des DONNÉES, pas des blocs. Le HTML et les classes vivent ici.
+Pas de photo : l'initiale du nom sert d'avatar (comme la maquette).
+/ People come from `bloc.contenu`: titre = name, texte = role, badge optional.
+{% endcomment %}
+<section class="tb-bloc tb-bloc--equipe" data-testid="bloc-section-equipe">
+    <div class="tb-bloc__contenu">
+        {% if bloc.titre %}<h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>{% endif %}
+        {% if bloc.texte %}<div class="tb-bloc__texte">{{ bloc.texte|safe }}</div>{% endif %}
+
+        {% if bloc.contenu %}
+            <ul class="equipe-grille" role="list">
+                {% for membre in bloc.contenu %}
+                    <li class="team-card">
+                        <span class="avatar avatar--md" aria-hidden="true"><span class="ink-center-fix">{{ membre.titre|slice:":1"|upper }}</span></span>
+                        <span>
+                            <span class="team-card__name">{{ membre.titre }}</span>
+                            {% if membre.texte %}<span class="team-card__role">{{ membre.texte }}</span>{% endif %}
+                            {% if membre.badge %}<span class="badge badge--neutral equipe-grille__badge">{{ membre.badge }}</span>{% endif %}
+                        </span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    </div>
+</section>

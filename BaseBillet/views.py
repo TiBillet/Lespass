@@ -1005,13 +1005,13 @@ def get_distant_fedow_tokens(request, config):
         if token['asset']['place_origin']:
             # L'asset fédéré n'a pas d'origin
             place_uuid_origin = token['asset']['place_origin']['uuid']
-            place_info = self.get_place_cached_info(place_uuid_origin)
+            place_info = MyAccount.get_place_cached_info(place_uuid_origin)
             token['asset']['logo'] = place_info.get('logo')
             names_of_place_federated.append(place_info.get('organisation'))
         # Recherche des noms des lieux fédérés
 
         for place_federated in token['asset']['place_uuid_federated_with']:
-            place = self.get_place_cached_info(place_federated)
+            place = MyAccount.get_place_cached_info(place_federated)
             if place:
                 names_of_place_federated.append(place.get('organisation'))
         token['asset']['names_of_place_federated'] = names_of_place_federated
@@ -1112,14 +1112,71 @@ class MyAccount(viewsets.ViewSet):
 
 
         if get_skin_courant() == "V2":
+
+            # Get fedow info
             fedowAPI = FedowAPI()
             card = fedowAPI.NFCcard.retrieve_card_by_signature(request.user)
+            # If we found a card get it (because `retrieve_card_by_signature` return an array)
+            if card:
+                card = card[0]
             # card = {"number_printed":"hiii"}
             tokens = get_distant_fedow_tokens(request, template_context["config"])
+
+            now = timezone.now()
+
+            # Get reservations info
+            reservations = Reservation.objects.filter(
+                user_commande=request.user,
+                status__in=[
+                    Reservation.FREERES,
+                    Reservation.FREERES_USERACTIV,
+                    Reservation.PAID,
+                    Reservation.PAID_ERROR,
+                    Reservation.PAID_NOMAIL,
+                    Reservation.VALID,
+                ]
+            )
+
+            # Adhesions de l'utilisateur dans tous les lieux ou il a achete.
+            # On lit chaque lieu dans son propre schema (tenant_context).
+            # On note le nom du lieu d'origine sur chaque adhesion pour l'afficher.
+            # / User memberships across all venues where they bought something.
+            memberships = []
+            for tenant in user.client_achat.exclude(schema_name='public'):
+                with tenant_context(tenant):
+                    memberships_all = Membership.objects.filter(
+                        last_contribution__isnull=False,
+                        user=user,
+                    ).select_related('price', 'price__product').prefetch_related("option_generale").order_by('deadline')
+
+                    # Le nom du lieu est lu une seule fois par lieu, pas a chaque adhesion.
+                    # / Venue name read once per venue, not once per membership.
+                    nom_du_lieu_d_origine = Configuration.get_solo().organisation
+
+                    # La boucle doit tourner DANS le tenant_context :
+                    # c'est elle qui execute la requete sur le bon schema.
+                    # / The loop must run INSIDE tenant_context: it executes the query.
+                    for membership in memberships_all:
+                        membership.origin = nom_du_lieu_d_origine
+                        memberships.append(membership)
+
+
+            # Get booking info (only upcoming, more detail on booking specific page)
+            bookings = (
+                Booking.objects
+                .filter(user=request.user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.FREERES_USERACTIV], end_datetime__gt=now)
+                .select_related('resource')
+                .order_by('start_datetime')
+            )
+
             template_context.update({
                 "card":card,
-                "tokens":tokens
+                "tokens":tokens,
+                "memberships": memberships,
+                "reservations": reservations,
+                "bookings" : bookings
             })
+
 
         # Résolution du gabarit par le resolver unifié.
         # / Unified skin resolver.

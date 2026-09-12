@@ -1,0 +1,39 @@
+{% load i18n %}
+{% comment %}
+BLOC SECTION / affichage RESSOURCES — skin classic
+/ SECTION block / RESSOURCES display — classic skin
+
+LOCALISATION : pages/templates/pages/classic/partials/bloc_section_ressources.html
+
+Version socle, OBLIGATOIRE (repli classic de templates_bloc, voir
+bloc_section_equipe.html). Le skin V2 a sa version.
+Styles : section « Nouveaux affichages SECTION » de tb-blocs.css.
+
+`bloc.contenu` = [{"titre", "texte", "badge", "url" (optionnelle)}, …]
+SÉCURITÉ : lien posé seulement si l'URL commence par « http » ou « / ».
+/ Base version, REQUIRED as the classic fallback. Link only for http(s) or /.
+{% endcomment %}
+<section class="tb-bloc tb-bloc--ressources" data-testid="bloc-section-ressources">
+    <div class="tb-bloc__contenu">
+        {% if bloc.titre %}<h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>{% endif %}
+        {% if bloc.texte %}<div class="tb-bloc__texte">{{ bloc.texte|safe }}</div>{% endif %}
+
+        {% if bloc.contenu %}
+            <ul class="tb-sous-cartes tb-ressources" role="list">
+                {% for ressource in bloc.contenu %}
+                    <li class="tb-sous-carte">
+                        <p class="tb-sous-carte__titre">
+                            {% if ressource.url|slice:":4" == "http" or ressource.url|slice:":1" == "/" %}
+                                <a href="{{ ressource.url }}" target="_blank" rel="noopener">{{ ressource.titre }} <span aria-hidden="true">↗</span><span class="visually-hidden">{% translate '(nouvel onglet)' %}</span></a>
+                            {% else %}
+                                {{ ressource.titre }}
+                            {% endif %}
+                            {% if ressource.badge %}<span class="tb-bloc__carte-badge">{{ ressource.badge }}</span>{% endif %}
+                        </p>
+                        {% if ressource.texte %}<div class="tb-sous-carte__texte">{{ ressource.texte|linebreaksbr }}</div>{% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    </div>
+</section>

@@ -1,6 +1,34 @@
 {% extends base_template %}
 {% load tibitags i18n static pages_tags %}
 
+{% comment %}
+PAGE ÉVÉNEMENT — skin V2 (DA v1)
+/ Event page — V2 skin (DA v1)
+
+LOCALISATION : pages/templates/pages/V2/vues/evenement.html
+Vue : BaseBillet/views.py EventMVT.retrieve (/event/<slug>/)
+Maquette : TEMP-tibillet-lespass-main/evenement.html
+
+Structure :
+1. Lien retour vers l'agenda.
+2. Bandeau .event-hero : couverture + tags, date, titre, résumé, fiches
+   pratiques (Quand / Où / Organisé par), bouton de réservation.
+3. « À propos » : la description longue + le carrousel d'images.
+4. « Infos pratiques » : adresse, accès, carte.
+5. Bénévoles (si l'événement a des actions enfants).
+6. L'hôte : le lieu qui organise.
+
+Event.children = les ACTIONS BÉNÉVOLES (evenement_benevoles.html), pas un
+programme de sous-événements. Le programme de la maquette (.ledger) n'a donc
+pas de donnée : masqué (V2-HERE, point R13), comme « D'autres événements »
+(R5), les partenaires (R6) et « Ajouter à mon agenda » (R7).
+/ Event.children are volunteer actions, not a programme.
+
+A CONSERVER : #bookingPanel (ouvert par ?openbookingPanel), #volunteerButton,
+#get-involved, #infoAccordion (data-bs-parent des bénévoles),
+data-testid="booking-open-panel" (dans reservation_declencheur.html).
+{% endcomment %}
+
 {% block title %}{{ event.name }}{% endblock %}
 {% block meta_description %}{% if event.short_description %}{{ event.short_description|striptags }}
 {% elif event.long_description %}{{ event.long_description|striptags|truncatechars:150 }}{% else %}{{ event.name }}
@@ -34,15 +62,17 @@
 
 {% block scripts %}
     <script>
-        // auto-scroll for volunteer accordion section
+        // Défilement vers la section bénévoles au clic sur « Bénévoles recherchés ».
+        // / Auto-scroll to the volunteer section.
         document
             .getElementById("volunteerButton")
             ?.addEventListener("click", ({target}) => {
                 document.getElementById("get-involved").scrollIntoView()
             })
 
-        // Check if openbookingPanel parameter exists in URL and open booking panel if it does
-        // Example URL: https://example.com/event/123/?openbookingPanel=true
+        // Si l'URL contient ?openbookingPanel, on ouvre le panneau de réservation.
+        // Exemple : https://example.com/event/123/?openbookingPanel=true
+        // / Open the booking panel when ?openbookingPanel is in the URL.
         document.addEventListener('DOMContentLoaded', function () {
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.has('openbookingPanel')) {
@@ -61,10 +91,7 @@
         gabarit : un JSON écrit à la main ne peut garantir ni l'échappement des
         retours à la ligne, ni l'absence de virgule traînante, ni le point décimal
         dans geo — et un JSON-LD invalide est ignoré EN SILENCE par les moteurs.
-        / Event JSON-LD built in Python (json.dumps), never hand-written in the
-        template: hand-made JSON cannot guarantee newline escaping, the absence of a
-        trailing comma, nor a decimal point in geo — and invalid JSON-LD is silently
-        ignored by crawlers.
+        / Event JSON-LD built in Python (json.dumps), never hand-written.
     {% endcomment %}
     {% jsonld_event event %}
 {% endblock %}
@@ -74,83 +101,210 @@
     CONTRAT DE SKIN (blocs FIGÉS, ne jamais renommer — décision 2) :
     evenement_entete (média + titre) / evenement_tags / evenement_description /
     evenement_reservation (déclencheur du tunnel — le tunnel lui-même est du
-    chrome commun) / evenement_complements (bénévoles + accordéon).
+    chrome commun) / evenement_complements (bénévoles + infos).
     / SKIN CONTRACT (FROZEN block names). The booking tunnel itself is shared
     chrome; a skin only re-skins the trigger area.
     {% endcomment %}
-    <div class="container-lg pb-5">
-        {% block evenement_entete %}
-        <header class="mb-3">
-            {% include 'commun/partials/picture.html' with img=event.img alt=event.name style='max-height: 33vh' %}
-            <h1 class="mt-3">
-                <small>
-                    {{ event.datetime|date:'l j F'|capfirst }} <br/>
 
-                    {% if event.show_time %}
-                        {{ event.datetime|time:'H\hi' }} <br/>
+    <p class="event-retour" data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
+        <a class="link" href="{% url 'event-list' %}" hx-get="{% url 'event-list' %}" hx-target="body" hx-push-url="true">
+            <span aria-hidden="true">←</span> {% translate "Retour à l'agenda" %}
+        </a>
+    </p>
+
+    {% block evenement_entete %}
+    <article class="event-hero" data-testid="evenement-hero">
+        <div class="event-hero__cover{% if not event.img %} bg-slate{% endif %}">
+            {% if event.img %}
+                {% include 'commun/partials/picture.html' with img=event.img alt="" %}
+            {% endif %}
+
+            {% block evenement_tags %}
+            {% if event.tag.all %}
+                {# Tags : contenu du lieu, badges neutres ; la couleur du lieu reste prioritaire. #}
+                {# / Tags: venue content, neutral badges; venue colour wins. #}
+                <div class="event-hero__badge" aria-label="{% translate 'Tags' %}"
+                     data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
+                    {% for tag in event.tag.all %}
+                        <a class="badge badge--neutral"
+                           style="{{ tag.style_attr }}"
+                           href="{% url 'event-list' %}?tag={{ tag.slug }}{% if search %}&search={{ search|urlencode }}{% endif %}"
+                           hx-get="{% url 'event-list' %}?tag={{ tag.slug }}{% if search %}&search={{ search|urlencode }}{% endif %}"
+                           hx-target="body"
+                           hx-swap="innerHTML"
+                           hx-push-url="true">{{ tag.name }}</a>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            {% endblock evenement_tags %}
+        </div>
+
+        <div class="event-hero__body">
+            <div class="eyebrow">
+                {% if event.end_datetime and event.end_datetime.date != event.datetime.date %}
+                    {% blocktrans with debut=event.datetime|date:"l j F" fin=event.end_datetime|date:"l j F" %}Du {{ debut }} au {{ fin }}{% endblocktrans %}
+                {% else %}
+                    {{ event.datetime|date:'l j F'|capfirst }}
+                {% endif %}
+            </div>
+            <h1 class="page-title">{{ event.name }}</h1>
+
+            {% block evenement_description %}
+            {% if event.short_description %}
+                <p class="page-intro">{{ event.short_description }}</p>
+            {% endif %}
+            {% endblock evenement_description %}
+
+            <div class="venue-facts">
+                <div class="venue-fact">
+                    <div class="venue-fact__label">{% translate 'Quand' %}</div>
+                    <div class="venue-fact__value">
+                        {{ event.datetime|date:'j F Y' }}{% if event.show_time %}, {{ event.datetime|time:'H\hi' }}{% endif %}
+                        {% if event.end_datetime %}
+                            <br>{% translate "jusqu'au" %} {{ event.end_datetime|date:'j F Y' }}{% if event.show_time %}, {{ event.end_datetime|time:'H\hi' }}{% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+                {% if event.postal_address %}
+                    <div class="venue-fact">
+                        <div class="venue-fact__label">{% translate 'Où' %}</div>
+                        <div class="venue-fact__value">
+                            {% if event.postal_address.name %}{{ event.postal_address.name }}<br>{% endif %}
+                            {{ event.postal_address.street_address }}<br>
+                            {{ event.postal_address.postal_code }} {{ event.postal_address.address_locality }}
+                        </div>
+                    </div>
+                {% endif %}
+                <div class="venue-fact">
+                    <div class="venue-fact__label">{% translate 'Organisé par' %}</div>
+                    <div class="venue-fact__value">{{ config.organisation }}</div>
+                </div>
+            </div>
+
+            <div class="event-hero__actions">
+                {% block evenement_reservation %}
+                {% if event.complet %}
+                    <span class="badge badge--dark event-hero__etat" role="status">
+                        {% translate "Full capacity: The event is sold out." %}
+                    </span>
+                {% elif event_max_per_user_reached %}
+                    <span class="badge badge--dark event-hero__etat" role="status">
+                        {% translate "You have reached the maximum number of tickets for this event." %}
+                    </span>
+                {% elif event.products.count %}
+                    {% include 'pages/V2/partials/reservation_declencheur.html' %}
+                {% endif %}
+                {% endblock evenement_reservation %}
+
+                {% comment %} V2-HERE
+                Bouton « Ajouter à mon agenda » de la maquette : pas d'export .ics
+                par événement (point R7).
+                <a class="btn btn--outline" href="…">{% translate 'Ajouter à mon agenda' %}</a>
+                {% endcomment %}
+            </div>
+        </div>
+    </article>
+    {% endblock evenement_entete %}
+
+    {% block evenement_complements %}
+
+    {% if event.long_description or event.carrousel.all %}
+        <section class="section" id="schedule" data-testid="evenement-description">
+            <h2 class="section__title">{% translate 'À propos' %}</h2>
+            {% if event.long_description %}
+                <div class="event-prose">{{ event.long_description | safe }}</div>
+            {% endif %}
+            {% if event.carrousel.all %}
+                <div class="event-carrousel">
+                    {% include 'pages/V2/partials/carrousel_evenements.html' with carousel=event.carrousel.all max_height='25vh' auto=false %}
+                </div>
+            {% endif %}
+        </section>
+    {% endif %}
+
+    {% comment %} V2-HERE
+    « Le programme » de la maquette (.ledger jour par jour) : aucune donnée de
+    sous-événements (Event.children = actions bénévoles). Point R13.
+    {% endcomment %}
+
+    {% if event.postal_address %}
+        <section class="section" id="timeAndPlace" data-testid="evenement-infos-pratiques">
+            <h2 class="section__title">{% translate 'Infos pratiques' %}</h2>
+            <div class="grid grid--3" style="margin-top: var(--space-4);">
+                <div class="card info-card">
+                    <div class="info-card__label">{% translate 'Adresse' %}</div>
+                    <address class="info-card__text" itemscope itemtype="https://schema.org/PostalAddress">
+                        {% if event.postal_address.name %}<span itemprop="name">{{ event.postal_address.name }}</span><br/>{% endif %}
+                        <span itemprop="streetAddress">{{ event.postal_address.street_address }}</span><br/>
+                        <span itemprop="postalCode">{{ event.postal_address.postal_code }}</span> <span itemprop="addressLocality">{{ event.postal_address.address_locality }}</span>
+                    </address>
+                </div>
+                {% if event.postal_address.comment %}
+                    <div class="card info-card">
+                        <div class="info-card__label">{% translate "S'y rendre" %}</div>
+                        <p class="info-card__text">{{ event.postal_address.comment }}</p>
+                    </div>
+                {% endif %}
+            </div>
+            {% if event.postal_address.latitude and event.postal_address.longitude %}
+                <div class="event-carte">
+                    {% include "pages/V2/partials/evenement_geoloc.html" %}
+                </div>
+            {% endif %}
+        </section>
+    {% endif %}
+
+    {% if event.children.exists %}
+        <section class="section" data-testid="evenement-benevoles">
+            <h2 class="section__title">{% translate "Looking for volunteers" %}</h2>
+            {% if action_total_jauge %}
+                <p class="section__desc">
+                    <a id="volunteerButton"
+                       class="link"
+                       href="#get-involved"
+                       data-bs-toggle="collapse"
+                       data-bs-target="#get-involved"
+                       aria-expanded="false"
+                       aria-controls="get-involved">{% translate "Voir les missions" %}</a>
+                    · {{ inscrits }}/{{ action_total_jauge }} {% translate "open slots" %}
+                </p>
+            {% endif %}
+            {# #infoAccordion : parent Bootstrap attendu par evenement_benevoles.html. #}
+            {# / #infoAccordion: Bootstrap parent expected by the volunteers partial. #}
+            <div class="accordion accordion-flush" id="infoAccordion">
+                {% include 'pages/V2/partials/evenement_benevoles.html' %}
+            </div>
+        </section>
+    {% endif %}
+
+    {# L'hôte : même carte que l'en-tête d'un lieu (maquette). / The host venue. #}
+    <section class="section" data-testid="evenement-hote">
+        <h2 class="section__title">{% translate "Le lieu qui accueille" %}</h2>
+        <div class="place-header__card event-hote">
+            <div class="place-id">
+                {% if config.logo %}
+                    <span class="place-id__mark place-id__mark--logo">
+                        {% include 'commun/partials/picture.html' with img=config.logo alt="" %}
+                    </span>
+                {% else %}
+                    <span class="place-id__mark" aria-hidden="true"><span class="ink-center-fix">{{ config.organisation|slice:":1"|upper }}</span></span>
+                {% endif %}
+                <span>
+                    <span class="place-id__name">{{ config.organisation }}</span>
+                    {% if config.short_description %}
+                        <span class="place-id__tagline">{{ config.short_description }}</span>
                     {% endif %}
-                </small>
-                {{ event.name }}
-            </h1>
-        </header>
-        {% endblock evenement_entete %}
+                </span>
+            </div>
+            <a class="btn btn--secondary btn--sm" href="/" hx-get="/" hx-target="body" hx-push-url="true">{% translate 'Découvrir le lieu' %}</a>
+        </div>
+    </section>
 
-        {% block evenement_tags %}
-        <!-- tags -->
-        <p>
-            {% for tag in event.tag.all %}
-                <a class="btn btn-sm mb-1"
-                    style="{{ tag.style_attr }}"
-                    href="{% url 'event-list' %}?tag={{ tag.slug }}{% if search %}&search={{ search|urlencode }}{% endif %}"
-                    hx-get="{% url 'event-list' %}?tag={{ tag.slug }}{% if search %}&search={{ search|urlencode }}{% endif %}"
-                    hx-target="body"
-                    hx-swap="innerHTML"
-                    hx-push-url="true"
-                    data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
-                    {{ tag.name }}
-                </a>
-            {% endfor %}
-        </p>
-        {% endblock evenement_tags %}
+    {% comment %} V2-HERE
+    Partenaires (.place-card) et « D'autres événements » (3 cartes) de la
+    maquette : aucun modèle de partenaire (R6), pas de liste d'événements
+    dans le contexte de EventMVT.retrieve (R5).
+    {% endcomment %}
 
-        {% block evenement_description %}
-        {% if event.short_description %}
-            <p class="lead">{{ event.short_description | default:"" }}</p>
-        {% endif %}
-        {% endblock evenement_description %}
-
-        {% block evenement_reservation %}
-        {% if event.complet %}
-            <a href="#" class="btn btn-lg btn-danger d-block mt-3 disabled" role="button" aria-disabled="true">
-                {% translate "Full capacity: The event is sold out." %}
-            </a>
-        {% elif event_max_per_user_reached %}
-            <a href="#" class="btn btn-lg btn-danger d-block mt-3 disabled" role="button" aria-disabled="true">
-                {% translate "You have reached the maximum number of tickets for this event." %}
-            </a>
-        {% elif event.products.count %}
-            {% include 'pages/V2/partials/reservation_declencheur.html' %}
-            {#        {% else %}#}
-            {#            {% translate "Free admission" %}#}
-        {% endif %}
-        {% endblock evenement_reservation %}
-
-        {% block evenement_complements %}
-        {% if action_total_jauge %}
-            <p class="mt-2 mb-5 text-center">
-                <a id="volunteerButton"
-                   href="#get-involved"
-                   data-bs-toggle="collapse"
-                   data-bs-target="#get-involved"
-                   aria-expanded="true"
-                   aria-controls="get-involved">
-                    {% translate "Looking for volunteers" %}</a>&nbsp;:
-                <span> ({{ inscrits }}/{{ action_total_jauge }} {% translate "open slots" %})</span>
-            </p>
-        {% endif %}
-
-        {% include 'pages/V2/partials/evenement_accordeon.html' %}
-        {% endblock evenement_complements %}
-
-    </div>
+    {% endblock evenement_complements %}
 {% endblock %}
