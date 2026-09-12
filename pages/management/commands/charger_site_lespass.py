@@ -274,11 +274,18 @@ class Command(BaseCommand):
                 "Où l'on est, quand c'est ouvert, comment nous joindre.\n"
             ),
         )
-        # UN SEUL bloc LIEU porte les deux colonnes : `contenu` remplit celle de
-        # gauche, `badge` + `points_gps` la carte de droite.
-        # / A single LIEU block carries both columns.
+        # UN SEUL bloc LIEU porte les infos pratiques ET la carte : ce qui se lit
+        # comme un ensemble s'edite comme un ensemble.
+        # Affichage HORIZONTAL (maquette DA v1, section #le-lieu) : la carte
+        # passe en bandeau pleine largeur et les infos se rangent en une rangee
+        # de cartes dessous. Les items `badge` de `contenu` servent d'intitules a
+        # ces cartes — « Adresse », « Horaires », « Nous joindre » ci-dessous en
+        # ouvrent donc une chacun (cf. le tag `cartes_infos_pratiques`).
+        # / One LIEU block carries both the practical info and the map. The
+        # HORIZONTAL layout turns the map into a full-width banner with the info
+        # in a row of cards below, each opened by a `badge` item.
         bloc(
-            type_bloc=Bloc.LIEU,
+            type_bloc=Bloc.LIEU, affichage=Bloc.HORIZONTAL,
             badge="LESPASS — 12 RUE DE LA COOPÉRATIVE, 69100 VILLEURBANNE",
             points_gps=[{"lat": 45.7719, "lng": 4.8902, "label": "Lespass"}],
             contenu=[

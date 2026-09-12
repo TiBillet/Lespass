@@ -92,7 +92,18 @@ CHAMPS_PAR_TYPE = {
     # tienne.
     # / LIEU: the GPS map AND the practical info beside it, in ONE block. Both
     # halves read as a single unit on screen.
-    "LIEU": ["titre", "badge", "image", "image_secondaire", "points_gps", "contenu"],
+    # `affichage` choisit la DISPOSITION des deux moities, pas leur contenu :
+    # VERTICAL (infos a gauche, carte a droite) ou HORIZONTAL (carte en bandeau,
+    # infos en rangee dessous). Les deux rendus consomment EXACTEMENT les memes
+    # champs — c'est pourquoi LIEU n'a volontairement pas d'entree dans
+    # CHAMPS_PAR_AFFICHAGE : il n'y a rien a resserrer, et `image` /
+    # `image_secondaire` doivent rester proposees puisque le skin
+    # faire_festival les rend (logo du lieu et badge de dates).
+    # / `affichage` picks the LAYOUT of the two halves, not their content. Both
+    # renderings consume exactly the same fields, hence no CHAMPS_PAR_AFFICHAGE
+    # entry for LIEU: nothing to narrow, and the two image fields must stay
+    # offered because the faire_festival skin renders them.
+    "LIEU": ["affichage", "titre", "badge", "image", "image_secondaire", "points_gps", "contenu"],
 
     "FAQ": ["titre", "texte"],
 
@@ -134,7 +145,14 @@ AFFICHAGES_PAR_TYPE = {
     ),
     "IMAGES": ("PLEINE_LARGEUR", "VIGNETTE_TITRE", "GRILLE", "BANDE_LOGOS"),
     "INTEGRATION": ("VIDEO", "WIDGET", "NEWSLETTER"),
-    "LIEU": (),
+    # VERTICAL n'a PAS de gabarit a son nom, et c'est voulu : le rendu cherche
+    # `bloc_lieu_vertical.html` puis retombe sur `bloc_lieu.html`, le rendu
+    # historique. Les blocs deja en base (affichage vide) suivent le meme repli
+    # et restent donc identiques, sans migration de donnees.
+    # / VERTICAL has no template of its own on purpose: rendering falls back to
+    # `bloc_lieu.html`, the historical layout. Blocks already stored (empty
+    # affichage) take the same fallback, so no data migration is needed.
+    "LIEU": ("VERTICAL", "HORIZONTAL"),
     "FAQ": (),
     "LISTE": (),
 }
@@ -219,6 +237,10 @@ AFFICHAGE_PAR_DEFAUT = {
     "SECTION": "BANNIERE",
     "IMAGES": "PLEINE_LARGEUR",
     "INTEGRATION": "VIDEO",
+    # Le rendu historique : un bloc LIEU enregistre sans choix explicite garde
+    # l'aspect qu'il a toujours eu. / The historical layout: a LIEU block saved
+    # without an explicit choice keeps the look it always had.
+    "LIEU": "VERTICAL",
 }
 
 # Types dont les images sont portees par ImageGalerie (relation multi-images).

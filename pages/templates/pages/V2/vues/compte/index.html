@@ -173,9 +173,12 @@ modules (R11).
                  data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
                 <h2 class="me-block__title">{% translate 'Mon compte' %}</h2>
                 <div class="place-shortcuts compte__raccourcis">
-                    <a class="shortcut" href="/my_account/balance/" hx-get="/my_account/balance/" hx-target="body" hx-push-url="true">
-                        <span class="shortcut__text"><span class="shortcut__name">{% translate 'My wallet' %}</span></span>
-                    </a>
+                    {# Raccourci « Mon porte-monnaie » retiré de cette liste (décision #}
+                    {# du mainteneur : cinq entrées). La page reste atteignable par #}
+                    {# son adresse ET par « Historique » dans la carte ci-dessus — #}
+                    {# on n'a retiré QUE l'entrée du menu. #}
+                    {# / "My wallet" shortcut removed from this list only; the page #}
+                    {# stays reachable by URL and from "Historique" in the card above. #}
                     <a class="shortcut" href="/my_account/membership/" hx-get="/my_account/membership/" hx-target="body" hx-push-url="true">
                         <span class="shortcut__text"><span class="shortcut__name">{% translate 'My subscriptions' %}</span></span>
                     </a>
@@ -187,9 +190,11 @@ modules (R11).
                             <span class="shortcut__text"><span class="shortcut__name">{% translate 'Mes ressources' %}</span></span>
                         </a>
                     {% endif %}
-                    <a class="shortcut" href="/my_account/card/" hx-get="/my_account/card/" hx-target="body" hx-push-url="true">
-                        <span class="shortcut__text"><span class="shortcut__name">{% translate 'My Pass card' %}</span></span>
-                    </a>
+                    {# Raccourci « Ma carte Pass » retiré de cette liste (décision du #}
+                    {# mainteneur : cinq entrées). La page reste atteignable par son #}
+                    {# adresse ET par « Lier une carte » quand aucune carte n'est liée. #}
+                    {# / "My Pass card" shortcut removed from this list only; the page #}
+                    {# stays reachable by URL and from "Lier une carte" when unlinked. #}
                     <a class="shortcut" href="/my_account/profile/" hx-get="/my_account/profile/" hx-target="body" hx-push-url="true">
                         <span class="shortcut__text"><span class="shortcut__name">{% translate 'My settings' %}</span></span>
                     </a>

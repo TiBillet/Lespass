@@ -665,6 +665,15 @@ class Bloc(models.Model):
     VIDEO = "VIDEO"
     WIDGET = "WIDGET"
     NEWSLETTER = "NEWSLETTER"
+    # LIEU : deux dispositions du MEME contenu (infos pratiques + carte).
+    # VERTICAL est le rendu historique (infos a gauche, carte a droite) ; il n'a
+    # pas de gabarit a son nom et retombe volontairement sur `bloc_lieu.html`,
+    # ce qui laisse les blocs deja enregistres (affichage vide) inchanges.
+    # / LIEU: two layouts of the SAME content. VERTICAL is the historical
+    # rendering and deliberately has no template of its own, falling back to
+    # `bloc_lieu.html` — so blocks already stored (empty affichage) are untouched.
+    VERTICAL = "VERTICAL"
+    HORIZONTAL = "HORIZONTAL"
 
     AFFICHAGE_CHOICES = [
         # SECTION
@@ -688,6 +697,9 @@ class Bloc(models.Model):
         (VIDEO, _("Vidéo en ligne (YouTube / Vimeo / PeerTube)")),
         (WIDGET, _("Formulaire ou widget (hôte autorisé par le ROOT)")),
         (NEWSLETTER, _("Inscription newsletter (Ghost)")),
+        # LIEU
+        (VERTICAL, _("Lieu, infos à gauche, carte à droite (deux colonnes)")),
+        (HORIZONTAL, _("Lieu, carte en bandeau, infos en rangée dessous")),
     ]
 
     # --- Source de donnees du bloc LISTE ---

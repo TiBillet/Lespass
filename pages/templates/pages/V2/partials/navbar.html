@@ -28,16 +28,49 @@ A CONSERVER (utilisés par du JS, du HTMX ou des tests) :
          data-loading-delay="{{ loading_delay|default:'400' }}">
 
         {% if user.is_authenticated %}
-            {# Initiales : prénom + nom, sinon première lettre de l'email. #}
-            {# / Initials: first + last name, else the email's first letter. #}
-            <a class="me-anchor{% if request.path == '/my_account/' %} is-active{% endif %}"
-               href="/my_account/"
-               hx-get="/my_account/" hx-target="body" hx-push-url="true"
-               {% if request.path == '/my_account/' %}aria-current="page"{% endif %}
-               data-testid="user-bar-mon-espace">
-                <span class="me-anchor__avatar" aria-hidden="true"><span class="ink-center-fix">{% if user.first_name %}{{ user.first_name|slice:":1"|upper }}{{ user.last_name|slice:":1"|upper }}{% else %}{{ user.email|slice:":1"|upper }}{% endif %}</span></span>
-                <span>{% translate 'Mon espace' %}</span>
-            </a>
+            {# Bloc de gauche : qui je suis, et — dans mon espace seulement — par où #}
+            {# revenir au lieu. Regroupés dans un conteneur pour que #}
+            {# .user-bar__inner garde DEUX enfants (son space-between). #}
+            {# / Left block: who I am and, in my account only, the way back to the #}
+            {# venue. Grouped so .user-bar__inner keeps two children. #}
+            <div class="user-bar__gauche">
+                {# Initiales : prénom + nom, sinon première lettre de l'email. #}
+                {# / Initials: first + last name, else the email's first letter. #}
+                <a class="me-anchor{% if request.path == '/my_account/' %} is-active{% endif %}"
+                   href="/my_account/"
+                   hx-get="/my_account/" hx-target="body" hx-push-url="true"
+                   {% if request.path == '/my_account/' %}aria-current="page"{% endif %}
+                   data-testid="user-bar-mon-espace">
+                    <span class="me-anchor__avatar" aria-hidden="true"><span class="ink-center-fix">{% if user.first_name %}{{ user.first_name|slice:":1"|upper }}{{ user.last_name|slice:":1"|upper }}{% else %}{{ user.email|slice:":1"|upper }}{% endif %}</span></span>
+                    <span>{% translate 'Mon espace' %}</span>
+                </a>
+
+                {% comment %}
+RETOUR VERS LE LIEU — uniquement sur /my_account/, et c'est voulu.
+
+Ce test est le MIROIR EXACT de celui qui masque l'en-tête du lieu dans
+pages/V2/shell.html et pages/V2/headless.html : cette page est la SEULE où le
+bandeau du lieu — donc son lien « Accueil » — n'existe pas. Sans ce retour, on y
+est en cul-de-sac. Les sous-pages du compte gardent le bandeau ET le
+« ← Mon espace » de account_base.html : rien à ajouter chez elles, un troisième
+chemin de retour n'y serait que du bruit.
+Écrit à l'identique des deux autres pour que les trois ne divergent pas : si la
+condition change là-bas, elle doit changer ici.
+
+Le libellé est le nom du lieu, donc une DONNÉE : aucune nouvelle chaîne à
+traduire, et le lien dit où il mène plutôt qu'un « retour » abstrait.
+/ Mirror of the guard hiding the venue header in shell.html and headless.html:
+this is the only page without the venue's "Accueil" link. Sub-pages keep both the
+header and "← Mon espace". The label is data, so no new msgid.
+{% endcomment %}
+                {% if request.path == '/my_account/' %}
+                    <a class="link" href="/"
+                       hx-get="/" hx-target="body" hx-push-url="true"
+                       data-testid="user-bar-retour-lieu">
+                        <span aria-hidden="true">←</span> {{ config.organisation }}
+                    </a>
+                {% endif %}
+            </div>
         {% else %}
             {# Un <button> : il ouvre un panneau, il ne mène nulle part. #}
             {# / A <button>: it opens a panel, it navigates nowhere. #}
@@ -91,7 +124,14 @@ A CONSERVER (utilisés par du JS, du HTMX ou des tests) :
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 7h12l-1 13H7L6 7z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg>
                 <span id="panier-badge-nav">
                     {% if panier.count > 0 %}
-                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary">
+                        {# `bg-primary` retirée : sa déclaration Bootstrap est en #}
+                        {# !important, donc aucune règle de classe ne pouvait la #}
+                        {# battre — il fallait ôter la classe. `.badge--compteur` #}
+                        {# (V2.css) pose le letchi de la charte. #}
+                        {# / `bg-primary` removed: its Bootstrap declaration is #}
+                        {# !important, so the class had to go rather than be #}
+                        {# overridden. `.badge--compteur` carries the brand letchi. #}
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill badge--compteur">
                             {{ panier.count }}
                             <span class="visually-hidden">{% translate "items" %}</span>
                         </span>

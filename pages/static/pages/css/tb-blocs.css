@@ -871,6 +871,15 @@ h2.tb-bloc__titre::before {
 .tb-bloc__faq-reponse { font-size: 0.98rem; line-height: 1.65; color: var(--tb-texte-doux); }
 .tb-bloc__faq-reponse > :first-child { margin-top: 0; }
 .tb-bloc__faq-reponse > :last-child { margin-bottom: 0; }
+/* Un lien dans une reponse de FAQ : meme traitement que dans un bloc TEXTE
+   (.tb-bloc__texte a, plus haut). Sans cette regle il n'avait NI couleur NI
+   soulignement propre : il heritait du gris du paragraphe, donc rien ne le
+   distinguait du texte courant — invisible en tant que lien, et pas seulement
+   discret. Le defaut etait dans le socle, donc dans TOUS les skins.
+   / A link inside a FAQ answer: same treatment as in a TEXT block. Without this
+   rule it had neither colour nor underline of its own, inheriting the
+   paragraph's grey — invisible as a link, in every skin. */
+.tb-bloc__faq-reponse a { color: var(--tb-accent); text-underline-offset: 0.15em; }
 @media (max-width: 768px) {
     .tb-faq-colonnes { column-count: 1; }
 }

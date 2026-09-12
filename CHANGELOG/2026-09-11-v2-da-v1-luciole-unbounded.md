@@ -86,10 +86,13 @@ construit sur la 1re version de la maquette (27/08, Lora/Inter, vert).
 | `pages/templates/pages/V2/vues/compte/index.html` | Mon espace : carte, solde, `btn--signature`, raccourcis, modules (responsabilités, agenda, services, ressources) |
 | `pages/templates/pages/V2/vues/compte/*.html`, `membership/*`, `partials/*` | Sous-pages du compte au style DA |
 | `pages/templates/pages/{V2,classic}/partials/bloc_section_{equipe,frise,ressources}.html` (nouveaux) | Nouveaux affichages SECTION |
-| `pages/management/commands/charger_site_lespass.py` | Page « Qui sommes-nous ? » de démo (`_construire_qui_sommes_nous`) : les 3 nouveaux affichages + bloc LIEU, intertitres en blocs TEXTE pour alimenter le sommaire |
 | `pages/templates/pages/classic/vues/compte/membership/memberships.html` | Correctif : chemin d'include (slash manquant, le gabarit plantait) |
-| `pages/models.py` | Constantes + choix EQUIPE / FRISE / RESSOURCES |
-| `pages/blocs_catalogue.py` | Affichages permis et champs rendus des 3 nouveaux affichages |
+| `pages/models.py` | Constantes + choix EQUIPE / FRISE / RESSOURCES ; constantes + choix `VERTICAL` / `HORIZONTAL` du bloc LIEU |
+| `pages/blocs_catalogue.py` | Affichages permis et champs rendus des 3 nouveaux affichages ; **bloc LIEU** : `affichage` ajouté à ses champs, `AFFICHAGES_PAR_TYPE["LIEU"] = ("VERTICAL", "HORIZONTAL")`, défaut `VERTICAL`. **Volontairement aucune entrée dans `CHAMPS_PAR_AFFICHAGE`** : les deux dispositions consomment les mêmes champs, et `image`/`image_secondaire` doivent rester proposées puisque le skin faire_festival les rend |
+| `pages/migrations/0004_alter_bloc_affichage.py` (nouveau) | `AlterField` des choix de `Bloc.affichage` (changement de CHOICES seulement). **Aucune migration de données** : les blocs LIEU existants gardent un `affichage` vide et retombent sur `bloc_lieu.html`, donc leur aspect ne change pas |
+| `pages/templates/pages/V2/partials/bloc_lieu_horizontal.html` (nouveau) | Affichage HORIZONTAL du bloc LIEU : carte Leaflet en bandeau `.about-banner` pleine largeur, infos pratiques en rangée de `.info-card` (`.grid--3`). Les trois `data-testid` de l'affichage vertical sont conservés |
+| `pages/templatetags/pages_tags.py` | Tag `cartes_infos_pratiques` : découpe la liste plate de `contenu` en cartes étiquetées (un item `badge` ouvre une carte). En Python parce que le langage de gabarit ne sait pas accumuler une liste |
+| `pages/management/commands/charger_site_lespass.py` | Page « Qui sommes-nous ? » de démo (`_construire_qui_sommes_nous`) : les 3 nouveaux affichages + bloc LIEU en affichage **HORIZONTAL**, intertitres en blocs TEXTE pour alimenter le sommaire |
 | `pages/migrations/0003_alter_bloc_affichage.py` (nouveau) | `AlterField` des choix de `Bloc.affichage` |
 | `BaseBillet/views.py` | `MyAccount.list` : la boucle des adhésions portait sur la liste vide (« Mes services » toujours vide) ; `logger.error` de debug retiré |
 
@@ -193,6 +196,24 @@ horizontal, boutons et badges sur une seule ligne.
 7. **Grille de cartes** (`.tb-grille`) : le nombre de colonnes peut passer de 3 à
    4 avec l'élargissement — attendu. Cinq colonnes signaleraient un
    `--tb-largeur-boite` mal résolu.
+8. **Bloc LIEU en affichage HORIZONTAL** (après `migrate_schemas`, la migration
+   `0004` ajoutant les deux choix) : la section « Le lieu » montre un bandeau
+   pleine largeur portant une **vraie carte Leaflet** — là où la maquette n'a
+   qu'un dégradé, qui sert ici de fond d'attente le temps que les tuiles
+   arrivent — puis **trois cartes d'infos en rangée**. Les items `badge` de
+   `contenu` en sont les intitulés : « Adresse », « Horaires » et « Nous
+   joindre » ouvrent donc une carte chacun. Vérifier que la carte est bien
+   découpée par les coins arrondis du bandeau (c'est le rôle de
+   l'`overflow: hidden` ajouté) et que la rangée passe à 2 colonnes sous
+   1100 px, puis à 1 sous 720 px.
+   **Bascule** : repasser le bloc en affichage « Infos à gauche, carte à droite »
+   dans l'admin doit rendre exactement la disposition historique. Et le bloc LIEU
+   de la page d'accueil, lui, n'a pas été touché : il garde un `affichage` vide
+   et s'affiche comme avant — c'est la preuve qu'aucune migration de données
+   n'était nécessaire.
+   **Skin classic** : un bloc en HORIZONTAL y retombe sur la disposition
+   verticale (aucun gabarit classic n'a été écrit pour cet affichage). Pas de
+   page cassée, mais le choix y est sans effet.
 3. RESSOURCES avec `"url": "javascript:alert(1)"` → **aucun** lien posé.
 4. Même page en skin classic : les trois blocs s'affichent (repli classic).
 

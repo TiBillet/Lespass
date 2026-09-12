@@ -142,6 +142,18 @@
   --bs-link-hover-color-rgb: 23, 20, 26;
   --bs-border-radius: var(--radius-s);
   --bs-border-radius-lg: var(--radius-m);
+  /* La couleur principale de Bootstrap, pour tout ce qui la LIT : .bg-primary,
+     .text-primary, les anneaux de focus. Le triplet est nécessaire en plus de la
+     couleur, parce que Bootstrap écrit `rgba(var(--bs-primary-rgb), …)` et que
+     color-mix() ne produit pas un triplet. 233, 51, 99 = letchi (--letchi).
+     Attention : ça ne suffit PAS pour .btn-primary, dont le Sass compile la
+     couleur en littéral — voir le patch des --bs-btn-* plus bas.
+     / Bootstrap's primary for everything that READS it. The triplet is needed
+     because Bootstrap writes rgba(var(--bs-primary-rgb), …) and color-mix()
+     cannot produce one. Not enough for .btn-primary, whose Sass hardcodes the
+     colour — see the --bs-btn-* patch below. */
+  --bs-primary: var(--color-primary);
+  --bs-primary-rgb: 233, 51, 99;
 
   /* Blocs CMS : titres en Luciole, action principale en letchi avec
      texte encre (même règle de contraste que .btn--primary).
@@ -219,6 +231,15 @@ img { max-width: 100%; display: block; }
   height: 3px;
   background: var(--grad-ruban);
 }
+/* Le bloc de GAUCHE de la barre : l'ancre « Mon espace » et, dans l'espace perso
+   uniquement, le retour vers le lieu. Les regrouper dans un seul conteneur garde
+   .user-bar__inner à DEUX enfants, donc son `justify-content: space-between`
+   intact — sans ça le retour se serait inséré comme un troisième enfant et aurait
+   poussé le groupe d'icônes au milieu.
+   / The bar's LEFT block: grouping them keeps .user-bar__inner at two children,
+   so its space-between still works; otherwise the back link would have become a
+   third child and shoved the icon group to the middle. */
+.user-bar__gauche { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
 .user-bar__inner {
   max-width: var(--container-max);
   margin: 0 auto;
@@ -949,6 +970,75 @@ img { max-width: 100%; display: block; }
 .btn--secondary:hover { background: #f2f0ea; }
 .btn--outline { background: transparent; color: var(--color-text); border-color: var(--color-border-strong); }
 .btn--outline:hover { background: rgba(32,31,28,0.04); }
+/* Bordure letchi sur papier. ÉCART ASSUMÉ à la règle centrale en tête de ce
+   fichier, qui proscrit la couleur sur le contenu d'un lieu : « Ajouter » et
+   « Proposer un évènement » ne SONT pas du contenu, ce sont des gestes qui
+   ouvrent le wizard TiBillet — même famille que « Recharger ». En
+   .btn--secondary ils se confondaient avec le papier, à côté du titre de page.
+   Le TEXTE est en --letchi-text (4,6:1 sur papier) et jamais --color-primary
+   brut (4,10:1, sous le seuil de 4,5). La BORDURE est un élément non textuel :
+   3:1 suffit, --color-primary passe. Au survol le fond se remplit et le libellé
+   repasse en encre — exactement la règle de .btn--primary ci-dessus.
+   NE PAS CONFONDRE avec .btn-outline-primary (un seul tiret), la classe
+   Bootstrap corrigée plus bas.
+   / Letchi border on paper. DELIBERATE DEPARTURE from the central rule above:
+   these are gestures opening the TiBillet wizard, not venue content, and
+   .btn--secondary made them invisible. Text uses --letchi-text; the border is
+   non-text (3:1 suffices). Fills on hover. Not to be confused with Bootstrap's
+   single-dash .btn-outline-primary, patched below. */
+.btn--outline-primary { background: transparent; color: var(--letchi-text); border-color: var(--color-primary); }
+.btn--outline-primary:hover { background: var(--color-primary); color: var(--color-text); }
+
+/* =================================================================
+   BOUTONS BOOTSTRAP DU CHROME PARTAGÉ — remis à la marque
+   / Shared-chrome Bootstrap buttons, brought back to the brand
+   =================================================================
+   Le pont en tête de fichier remappe les --bs-* que Bootstrap LIT. Mais son Sass
+   COMPILE sa couleur en littéral dans .btn-primary : il n'y a aucune variable à
+   remapper, il faut réécrire ses --bs-btn-*. C'est la technique de
+   BaseBillet/static/commun/css/marque.css, que le skin V2 ne charge pas
+   (shell.html l.129 : V2 a sa propre palette).
+
+   POURQUOI ICI ET PAS DANS LES GABARITS : ces classes viennent du chrome
+   PARTAGÉ, rendu à l'identique par TOUS les skins — panneau de connexion,
+   panneau contact, tunnel de réservation, tunnel d'adhésion, page solde, 404,
+   500. Les convertir en .btn--primary casserait classic et faire_festival, où
+   cette classe N'EXISTE PAS (elle est définie dans ce seul fichier) : ils
+   auraient un .btn nu, sans fond. Et comme V2.css n'est chargé que par
+   pages/V2/shell.html, la correction est limitée à V2 par construction.
+   / The bridge remaps what Bootstrap READS, but its Sass hardcodes the colour in
+   .btn-primary, so its --bs-btn-* must be rewritten. These classes come from the
+   SHARED chrome rendered by every skin; porting them to .btn--primary would
+   break the others, where that class does not exist. V2.css is loaded only by
+   the V2 shell, so this patch is V2-scoped by construction. */
+.btn-primary {
+  --bs-btn-color: var(--color-text);
+  --bs-btn-bg: var(--color-primary);
+  --bs-btn-border-color: var(--color-primary);
+  --bs-btn-hover-color: var(--color-text);
+  --bs-btn-hover-bg: color-mix(in srgb, var(--color-primary) 88%, black);
+  --bs-btn-hover-border-color: color-mix(in srgb, var(--color-primary) 88%, black);
+  --bs-btn-active-color: var(--color-text);
+  --bs-btn-active-bg: color-mix(in srgb, var(--color-primary) 78%, black);
+  --bs-btn-active-border-color: color-mix(in srgb, var(--color-primary) 78%, black);
+  --bs-btn-disabled-color: var(--color-text);
+  --bs-btn-disabled-bg: var(--color-primary);
+  --bs-btn-disabled-border-color: var(--color-primary);
+  --bs-btn-focus-shadow-rgb: 233, 51, 99;
+}
+.btn-outline-primary {
+  --bs-btn-color: var(--letchi-text);
+  --bs-btn-border-color: var(--color-primary);
+  --bs-btn-hover-color: var(--color-text);
+  --bs-btn-hover-bg: var(--color-primary);
+  --bs-btn-hover-border-color: var(--color-primary);
+  --bs-btn-active-color: var(--color-text);
+  --bs-btn-active-bg: var(--color-primary);
+  --bs-btn-active-border-color: var(--color-primary);
+  --bs-btn-disabled-color: var(--letchi-text);
+  --bs-btn-disabled-border-color: var(--color-primary);
+  --bs-btn-focus-shadow-rgb: 233, 51, 99;
+}
 /* line-height en entier (14px), pas 13.5px : une hauteur de ligne
    fractionnaire force le navigateur à arrondir la répartition de
    l'espace, et l'arrondi ne tombe pas toujours au milieu — mesuré à
@@ -1191,6 +1281,16 @@ img { max-width: 100%; display: block; }
 .badge--olive { background: var(--cat-olive-tint); color: var(--cat-olive-solid); }
 .badge--indigo { background: var(--cat-indigo-tint); color: var(--cat-indigo-solid); }
 .badge--dark { background: var(--color-text); color: #fff; }
+/* Compteur du panier dans la barre utilisateur. Il portait la classe Bootstrap
+   `.bg-primary`, dont la déclaration est en `!important` : aucune règle de classe
+   ne pouvait la battre, il fallait donc retirer la classe et non la surcharger.
+   Letchi assumé : ce qu'on emporte est un geste TiBillet, pas le contenu d'un
+   lieu — la règle centrale est respectée. Ce n'est pas le `.badge` large de la
+   DA, qui est une étiquette : ici c'est une pastille chiffrée.
+   / Cart counter: it carried Bootstrap's `.bg-primary`, declared `!important`, so
+   the class had to go rather than be overridden. Letchi is on-rule here: what you
+   carry is a TiBillet gesture, not venue content. */
+.badge--compteur { background: var(--color-primary); color: var(--color-text); padding: 2px 7px; font-size: 11px; }
 
 .tag-pill {
   display: inline-flex;
@@ -1818,7 +1918,25 @@ img { max-width: 100%; display: block; }
   border-radius: var(--radius-l);
   background: linear-gradient(135deg, var(--cat-green-from), var(--cat-green-to));
   margin-bottom: var(--space-5);
+  /* Le bandeau accueille une VRAIE carte Leaflet, posée en absolu (bloc LIEU en
+     affichage HORIZONTAL). Deux déclarations indispensables, et pour deux
+     raisons différentes : sans `relative`, la carte se caderait sur le premier
+     ancêtre positionné, donc ailleurs dans la page ; sans `overflow: hidden`,
+     les tuiles carrées dépasseraient des coins arrondis. Même patron que
+     `.map-panel`, qui porte déjà les deux. Le dégradé sert alors de fond
+     d'attente avant l'arrivée des tuiles — la maquette, elle, n'a jamais eu
+     que ce dégradé.
+     / The banner hosts a REAL Leaflet map, absolutely positioned: without
+     `relative` it would anchor to the wrong ancestor, and without
+     `overflow: hidden` the square tiles would escape the rounded corners.
+     Same pattern as `.map-panel`. The gradient then acts as a loading
+     backdrop — the mockup only ever had the gradient. */
+  position: relative;
+  overflow: hidden;
 }
+/* La carte remplit le bandeau. Même rôle que `.map-panel__carte`.
+   / The map fills the banner, like `.map-panel__carte`. */
+.about-banner__carte { position: absolute; inset: 0; }
 
 /* =================================================================
    RESPONSIVE (adaptation raisonnable ; les maquettes sont desktop)
@@ -2268,8 +2386,10 @@ details.module + details.module { margin-top: var(--space-4); }
      seven selectors were rendering in Georgia. */
   --tb-police-titre: var(--font-text);
 
-  /* Même cause : l'accent des blocs CMS lisait var(--bs-primary) = #0d6efd, posé
-     par bootstrap.min.5.3.3.css. Filets au-dessus des titres, badges du bloc
+  /* Même cause : l'accent des blocs CMS lisait var(--bs-primary), c'est-à-dire le
+     bleu par défaut posé par bootstrap.min.5.3.3.css (la valeur n'est pas écrite
+     ici : tests/pytest/test_marque.py refuse ce littéral dans le CSS du dépôt).
+     Filets au-dessus des titres, badges du bloc
      LIEU, bordure des sous-cartes, bande du bloc CTA et bordures des boutons
      étaient en bleu Bootstrap au lieu du letchi. Texte encre sur le letchi,
      même règle de contraste que .btn--primary.
