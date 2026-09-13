@@ -65,7 +65,7 @@
   --color-primary-soft: #fce4eb;  /* tinte très claire de letchi, fonds discrets */
   --color-text: #17141a;          /* encre */
   --color-text-muted: #63515e;    /* piton */
-  --color-text-faint: #808080;    /* gris50 */
+  --color-text-faint: #6b6b6b;    /* gris discret — assombri depuis #808080 (3,7:1) : 5,0:1 sur papier, 4,6:1 sur la teinte. Sous 4,5 sur le fond du footer : y employer --color-text-muted */
   --color-border: #ece7e1;        /* brume */
   --color-border-strong: #ded7cd;
   --color-footer-bg: #e2e3e5;     /* fond du footer : plus froid que le papier, signale le territoire plateforme */
@@ -156,6 +156,15 @@
   --shadow-pin: 0 2px 4px rgba(0, 0, 0, 0.2);
 
   --container-max: 1280px;
+
+  /* Mouvement : deux durées, deux courbes. Jamais le `ease` par défaut du
+     navigateur, jamais de rebond sur un état d'interface. On anime la
+     couleur, l'opacité et `transform`, jamais la mise en page.
+     / Motion: two durations, two curves; no browser `ease`, no bounce. */
+  --dur-fast: 150ms;   /* survol, changement de couleur */
+  --dur-base: 200ms;   /* rotation d'un chevron, bascule d'état */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* =================================================================
@@ -319,7 +328,7 @@ img { max-width: 100%; display: block; }
   font-weight: 700;
   color: var(--color-text);
   white-space: nowrap;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
 .me-anchor:hover { background: var(--color-hover); border-color: var(--color-border-strong); }
 .me-anchor.is-active {
@@ -336,6 +345,14 @@ img { max-width: 100%; display: block; }
    structurel à la police. D'où ce décalage direct, indépendant du
    line-height, calculé pour Luciole Bold à chaque taille utilisée. */
 .ink-center-fix { display: inline-block; transform: translateY(2px); }
+/* Là où le navigateur sait rogner la boîte de ligne sur la hauteur des
+   capitales, plus besoin du décalage mesuré à la main : l'encre est centrée
+   par construction, à toutes les tailles et au zoom texte. Le translateY reste
+   le repli des navigateurs sans `text-box`.
+   / Where supported, text-box trims to cap height: ink centred by design. */
+@supports (text-box: trim-both cap alphabetic) {
+  .ink-center-fix { transform: none; text-box: trim-both cap alphabetic; }
+}
 
 .me-anchor__avatar {
   width: 30px;
@@ -352,6 +369,15 @@ img { max-width: 100%; display: block; }
   flex-shrink: 0;
 }
 .user-bar .icon-btn { width: 36px; height: 36px; border-radius: 50%; }
+/* Sur écran tactile, 44px minimum pour un bouton d'icône (WCAG 2.5.5, et
+   recommandation Apple/Google). À la souris, la barre garde sa densité.
+   La barre passe alors à ~69px de haut : toujours sous le --tb-sticky-top de
+   5rem (80px) du sommaire des pages CMS.
+   / Touch screens: 44px icon buttons; mouse keeps the dense bar. */
+@media (pointer: coarse) {
+  .icon-btn,
+  .user-bar .icon-btn { width: 44px; height: 44px; }
+}
 
 /* -----------------------------------------------------------------
    ACCUEIL D'UN LIEU — le cadre d'identité : ce qu'est le lieu à
@@ -388,6 +414,11 @@ img { max-width: 100%; display: block; }
 }
 .venue-fact__value { font-size: var(--text-md); line-height: 1.5; }
 .venue-brief .map-panel { height: 100%; min-height: 260px; margin: 0; }
+/* Une seule couche de contenant : la carte Leaflet est déjà posée dans le cadre
+   blanc de .venue-brief, son propre filet doublait celui du cadre. Les coins
+   arrondis restent (ils découpent les tuiles).
+   / One containment layer: the map already sits in the brief's frame. */
+.venue-brief .map-panel { border: none; border-radius: var(--radius-m); }
 
 /* En-tête de rubrique sur l'accueil : le titre, et l'accès à la
    rubrique complète sur la même ligne. */
@@ -473,23 +504,57 @@ img { max-width: 100%; display: block; }
    compositions voisines de la DA (jamais grad-nuit ici : le point
    violet retombe sous le seuil de lisibilité pour un texte de bouton).
    Texte encre : mesuré à 4,6-9,5:1 selon la teinte, le blanc plafonne
-   plus bas et zanana en particulier devient illisible en blanc. */
+   plus bas et zanana en particulier devient illisible en blanc.
+
+   UN SEUL DÉGRADÉ PLEIN PAR SURFACE. Trois aplats en dégradé empilés
+   contredisaient la règle du .btn--signature (« un CTA de plus en dégradé
+   remettrait de la couleur partout ») : le don garde l'aplat chaud, les deux
+   autres passent en bouton blanc cerné, leur composition réduite à une
+   pastille devant le libellé. La couleur reste un repère, plus un vacarme.
+   Libellés autorisés sur deux lignes : les boutons font toute la largeur de la
+   colonne et leurs textes traduits (« Create a TiBillet space for your
+   collective ») débordaient d'un écran de 320px en `nowrap`.
+   / One full gradient per surface: donation keeps it, the other two become
+   white buttons with a gradient dot. Labels may wrap (full-width, long
+   translated texts overflowed at 320px). */
 .footer-cta { display: flex; flex-direction: column; gap: var(--space-3); }
 .btn--grad {
   display: flex;
+  justify-content: flex-start;
   width: 100%;
   padding: 15px 20px;
   font-size: var(--text-base);
   font-weight: 700;
+  line-height: 1.3;
+  text-align: left;
+  white-space: normal;
   color: var(--color-text);
   border-radius: var(--radius-m);
-  border: none;
-  transition: filter 0.15s ease;
+  border: 1px solid transparent;
+  transition: filter var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), transform 100ms var(--ease-out);
 }
 .btn--grad:hover { filter: brightness(1.06); }
-.btn--grad-chaud { background: var(--grad-chaud); }   /* Faire un don — la signature */
-.btn--grad-calme { background: var(--grad-calme); }   /* Créer un espace */
-.btn--grad-frais { background: var(--grad-frais); }   /* Contribuer au projet */
+.btn--grad-chaud { background: var(--grad-chaud); }   /* Faire un don — le seul aplat */
+.btn--grad-calme { --grad-pastille: var(--grad-calme); }   /* Créer un espace */
+.btn--grad-frais { --grad-pastille: var(--grad-frais); }   /* Contribuer au projet */
+.btn--grad-calme,
+.btn--grad-frais {
+  background: var(--color-surface);
+  border-color: var(--color-border-strong);
+  gap: var(--space-3);
+}
+.btn--grad-calme:hover,
+.btn--grad-frais:hover { filter: none; background: var(--color-hover); color: var(--color-text); }
+.btn--grad-calme::before,
+.btn--grad-frais::before {
+  content: '';
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  margin-top: 0.2em;
+  border-radius: 50%;
+  background: var(--grad-pastille);
+}
 
 .site-footer__legal {
   border-top: 1px solid var(--color-border);
@@ -513,7 +578,7 @@ img { max-width: 100%; display: block; }
   font-size: var(--text-2xs);
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: var(--color-text-faint);
+  color: var(--color-text-muted); /* et non faint : posé sur le fond du footer, plus sombre que le papier */
   flex-shrink: 0;
 }
 
@@ -598,7 +663,7 @@ img { max-width: 100%; display: block; }
   font-weight: 400;
   color: var(--color-text-muted);
   padding-bottom: 2px;
-  transition: color 0.15s ease;
+  transition: color var(--dur-fast) var(--ease-out);
 }
 .place-nav > a:hover,
 .place-nav__dropdown > .dropdown-toggle:hover { color: var(--color-text); }
@@ -688,6 +753,11 @@ img { max-width: 100%; display: block; }
 }
 
 .me-card { align-items: stretch; }
+/* Dans l'en-tête « moi », la carte est déjà dans le cadre teinté : on garde son
+   fond blanc (il détache l'objet-carte) mais pas son filet, qui faisait un
+   deuxième cadre dans le premier. / Inside the tinted header: white fill kept,
+   second border dropped. */
+.place-header__card .me-card { border: none; }
 /* L'enveloppe est l'élément flex : étirée, elle a une hauteur définie.
    La carte peut alors faire height:100% et laisser l'aspect-ratio
    calculer sa largeur — impossible directement sur un élément flex,
@@ -732,7 +802,7 @@ img { max-width: 100%; display: block; }
   border: 1px solid var(--color-border);
   background: var(--color-surface);
   min-width: 0;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
 }
 .shortcut:hover { border-color: var(--color-border-strong); background: var(--color-hover-soft); }
 .shortcut__logo {
@@ -790,7 +860,7 @@ img { max-width: 100%; display: block; }
 .module__chevron {
   margin-left: auto;
   color: var(--color-text-muted);
-  transition: transform 0.18s ease;
+  transition: transform var(--dur-base) var(--ease-out);
   flex-shrink: 0;
 }
 .module__body { display: none; border-top: 1px solid var(--color-border); }
@@ -850,6 +920,21 @@ img { max-width: 100%; display: block; }
    plus longue et moins critique à lire d'un bloc, qui cède la place. */
 .service-card__due { color: var(--color-text-muted); min-width: 0; }
 .service-card__foot .link { white-space: nowrap; flex-shrink: 0; }
+/* Dans un module de Mon espace, le module EST le cadre : les services n'y sont
+   plus des cartes bordées posées dans une carte, mais des entrées ouvertes par un
+   filet en tête, alignées sur la grille. Hors module (adhésions des lieux voisins),
+   la carte garde son cadre.
+   Les cartes événement de « Mon agenda » gardent le leur : leur photo de
+   couverture a besoin d'un bord pour ne pas flotter.
+   / Inside a module, the module is the frame: services become open entries with
+   a top rule. Event cards keep their frame (their cover image needs an edge). */
+.module__content .service-card {
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--color-border-strong);
+  border-radius: 0;
+  padding: var(--space-4) 0 0;
+}
 
 .talisman {
   position: relative;
@@ -919,7 +1004,7 @@ img { max-width: 100%; display: block; }
   border: 1px solid transparent;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease, filter 0.15s ease, color 0.15s ease;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out), filter var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform 100ms var(--ease-out);
 }
 /* Texte encre, pas blanc : mesuré, le blanc sur letchi plafonne à 4,10:1
    (sous le seuil de 4,5), l'encre y grimpe à 4,45:1.
@@ -1022,6 +1107,12 @@ img { max-width: 100%; display: block; }
 .btn--signature { background: var(--grad-chaud); color: var(--color-text); }
 .btn--signature:hover { filter: brightness(1.08); }
 .btn:disabled { opacity: 0.5; cursor: default; }
+/* Appui : le bouton s'enfonce d'un pixel. Un seul signal, pas de rebond ni de
+   changement d'échelle. Exclu quand le bouton est désactivé.
+   / Press: sinks one pixel. One signal, no bounce, no scale. */
+.btn:active:not(:disabled),
+.icon-btn:active,
+.tag-pill:active { transform: translateY(1px); }
 
 .icon-btn {
   width: 38px;
@@ -1034,7 +1125,7 @@ img { max-width: 100%; display: block; }
   justify-content: center;
   cursor: pointer;
   color: var(--color-text);
-  transition: background 0.15s ease;
+  transition: background var(--dur-fast) var(--ease-out), transform 100ms var(--ease-out);
   flex-shrink: 0;
 }
 .icon-btn:hover { background: var(--color-hover); }
@@ -1114,6 +1205,10 @@ img { max-width: 100%; display: block; }
 .grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+/* Grille qui suit un titre de section. Remplace les style="margin-top: …"
+   des gabarits. / Grid following a section title; replaces inline styles. */
+.grid--sous-titre { margin-top: var(--space-5); }
+.grid--sous-titre-serre { margin-top: var(--space-4); }
 
 /* Carte offre (Abonnements / Formations / Réservations / Accès / Programmes) */
 .offer-card {
@@ -1151,7 +1246,7 @@ img { max-width: 100%; display: block; }
   font-size: var(--text-md);
   text-decoration: underline;
   text-underline-offset: 2px;
-  transition: color 0.15s ease;
+  transition: color var(--dur-fast) var(--ease-out);
   /* .link peut aussi être posé sur un <button> : on retire son cadre. */
   /* / .link may also sit on a <button>: remove its frame. */
   border: none;
@@ -1209,7 +1304,7 @@ img { max-width: 100%; display: block; }
   color: var(--color-text);
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s ease;
+  transition: background var(--dur-fast) var(--ease-out), transform 100ms var(--ease-out);
 }
 .tag-pill:hover { background: var(--color-hover); }
 /* Neutre, pas letchi : un filtre de catégorie appartient au contenu du
@@ -1536,11 +1631,14 @@ img { max-width: 100%; display: block; }
 
 /* Carte du lieu courant ("Vous etes ici") : bordure + badge aux couleurs  */
 /* du skin, au lieu du bleu Bootstrap (--bs-primary) pose par explorer.css.  */
-/* Le !important est necessaire : explorer.css pose deja border-color avec   */
-/* !important sur .explorer-card--current. / Current venue card: border +    */
-/* badge in skin colours instead of Bootstrap blue.                          */
+/* SANS !important : explorer.css écrit `border-color: var(--bs-primary)    */
+/* !important`. On ne surenchérit pas, on redéfinit --bs-primary SUR la     */
+/* carte elle-même — la variable se résout élément par élément, donc sa     */
+/* règle lit notre valeur. Portée limitée à cette carte.                    */
+/* / No !important: explorer.css reads var(--bs-primary) with !important;  */
+/* redefining the variable on the card itself makes that rule use our ink. */
 /* DA v1 : « Vous êtes ici » désigne un lieu, donc encre et non letchi. */
-#explorer-root .explorer-card--current { border-color: var(--color-text) !important; }
+#explorer-root .explorer-card--current { --bs-primary: var(--color-text); }
 #explorer-root .explorer-badge--current { background: var(--color-text); color: var(--color-text-inverse); }
 
 .map-pin { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 4px; transform: translate(-50%, -100%); }
@@ -1702,6 +1800,26 @@ img { max-width: 100%; display: block; }
   outline-offset: 2px;
 }
 
+/* Mouvement réduit : les personnes qui l'ont demandé à leur système n'ont plus
+   de translation ni de rotation animée, seulement des changements immédiats.
+   Couvre les transitions de tout le skin, y compris Bootstrap (panneaux,
+   accordéons). Les ANIMATIONS ne sont pas touchées : les seules du skin sont
+   les spinners de chargement de Bootstrap, qu'il ralentit déjà lui-même en
+   mouvement réduit — les figer ferait disparaître l'indication de chargement.
+   `!important` assumé : c'est une préférence d'accessibilité, elle doit
+   l'emporter sur toute transition déclarée ailleurs.
+   / Reduced motion: transitions only (Bootstrap spinners already slow down
+   themselves; freezing them would hide the loading cue). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .btn:active:not(:disabled),
+  .icon-btn:active,
+  .tag-pill:active { transform: none; }
+}
+
 /* --- Barre utilisateur --------------------------------------------- */
 /* Anonyme : « Se connecter » est un <button> (il ouvre un panneau). */
 .me-anchor--login { cursor: pointer; font-family: inherit; }
@@ -1709,17 +1827,25 @@ img { max-width: 100%; display: block; }
 
 /* Panier : le badge (rendu aussi par htmx/components/panier_badge.html)
    utilise les classes Bootstrap de position. On le recolore :
-   un panier est un geste TiBillet, donc letchi avec texte encre. */
+   un panier est un geste TiBillet, donc letchi avec texte encre.
+   SANS !important : après une mise à jour HTMX, panier_badge.html (partagé par
+   tous les skins) pose `.bg-primary` ou `.bg-secondary`, dont Bootstrap écrit le
+   fond en `!important`. Plutôt que de surenchérir, on règle les TRIPLETS que ces
+   utilitaires lisent : --bs-primary-rgb vaut déjà --letchi-fond (pont en tête de
+   fichier), et --bs-secondary-rgb est posé ici sur le gris --color-text-faint
+   (#6b6b6b), limité au badge du panier.
+   / No !important: the shared partial uses .bg-primary/.bg-secondary, whose
+   Bootstrap background is !important. We set the rgb triplets they read instead. */
 .icon-btn--panier { position: relative; }
 .icon-btn--panier .badge {
+  --bs-secondary-rgb: 107, 107, 107;
   padding: 3px 6px;
   font-size: var(--text-2xs);
   line-height: 1;
   border: 2px solid var(--color-surface);
-  background: var(--color-primary) !important;
   color: var(--color-text);
 }
-.icon-btn--panier .badge.bg-secondary { background: var(--color-text-faint) !important; color: var(--color-text-inverse); }
+.icon-btn--panier .badge.bg-secondary { color: var(--color-text-inverse); }
 
 /* --- En-tête du lieu ----------------------------------------------- */
 /* Logo réel : fond clair, image contenue (pas recadrée). */
@@ -1729,6 +1855,12 @@ img { max-width: 100%; display: block; }
   overflow: hidden;
   padding: 4px;
 }
+/* Seul !important restant du skin (hors mouvement réduit), et il est subi :
+   l'include partagé commun/partials/picture.html pose toujours `.object-fit-cover`
+   sur l'image, un utilitaire Bootstrap écrit en !important, sans variable à
+   régler. L'enlever demanderait de modifier cet include commun à tous les skins.
+   / The only forced !important: the shared picture include always adds
+   Bootstrap's !important `.object-fit-cover`, with no variable to set. */
 .place-id__mark--logo img { object-fit: contain !important; }
 .place-id__name--lien { display: block; color: inherit; }
 .place-id__name--lien:hover { text-decoration: underline; text-underline-offset: 3px; }

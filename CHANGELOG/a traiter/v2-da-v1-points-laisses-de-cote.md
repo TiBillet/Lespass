@@ -42,6 +42,9 @@ Dans les gabarits, chaque point est repéré par un marqueur `V2-HERE`
 - **Mode sombre** : la DA v1 n'en a pas. `#themeToggle` (barre du haut) et
   `#darkThemeCheck` (préférences) sont masqués en V2. Le test E2E
   `tests/e2e/test_theme_language.py` échouerait si le skin V2 passait en E2E.
+  **2026-09-13** : le shell V2 fixe désormais `data-bs-theme="light"` et ne charge
+  plus `theme-switcher.mjs` (un thème sombre choisi sur un autre skin fuyait sur le V2).
+  La décision « mode sombre ou pas » reste ouverte. Voir `2026-09-13-v2-style-relecture-hallmark.md`.
 - **Boutons notifications et paramètres** de la maquette : aucune fonction
   derrière, masqués.
 - **Filtres avancés de l'agenda** (accès, présence, genre, moment, « voir autour
