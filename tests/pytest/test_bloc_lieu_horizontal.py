@@ -151,7 +151,15 @@ def test_le_vertical_retombe_sur_le_gabarit_historique():
         "pages/classic/partials/bloc_lieu_vertical.html",
         "pages/classic/partials/bloc_lieu.html",
     ])
-    assert gabarit.template.name.endswith(("bloc_lieu_vertical.html", "bloc_lieu.html"))
+    # Le nom EXACT, et non un `endswith` sur les deux candidats : `select_template`
+    # n'en renvoie qu'UN, donc accepter les deux rendait l'assertion vraie quel que
+    # soit le gabarit choisi. Elle ne prouvait que l'absence de
+    # TemplateDoesNotExist, pas le repli — qui est precisement ce qu'elle documente,
+    # puisque c'est lui qui rend toute migration de donnees inutile.
+    # / The EXACT name, not an `endswith` over both candidates: select_template
+    # returns only ONE, so accepting both made the assertion true whichever was
+    # picked. It proved no TemplateDoesNotExist, not the fallback it documents.
+    assert gabarit.template.name == "pages/classic/partials/bloc_lieu.html"
 
     # L'horizontal, lui, a bien son gabarit propre en V2.
     # / The horizontal layout does have its own V2 template.
