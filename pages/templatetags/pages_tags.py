@@ -812,6 +812,64 @@ def evenements_a_venir(nombre_max=6):
     )
 
 
+@register.simple_tag
+def cartes_infos_pratiques(contenu):
+    """
+    Regroupe les items d'un bloc LIEU en cartes etiquetees.
+    / Groups a LIEU block's items into labelled cards.
+
+    LOCALISATION : pages/templatetags/pages_tags.py
+
+    POURQUOI EN PYTHON ET PAS DANS LE GABARIT. L'affichage HORIZONTAL du bloc
+    LIEU range les infos pratiques en rangee de cartes (maquette DA v1, section
+    « Le lieu »). Or `contenu` est une liste PLATE d'items types, ou un item
+    `badge` sert d'intitule a ceux qui le suivent. Regrouper demande donc
+    d'ACCUMULER, ce que le langage de gabarit ne sait pas faire : il n'a ni
+    variable mutable ni liste en construction. Le simuler avec des tests sur
+    `forloop` donnerait un gabarit illisible, et faux des qu'un badge manque.
+    / WHY IN PYTHON: the HORIZONTAL layout lays the practical info out as a row
+    of cards, but `contenu` is a FLAT list where a `badge` item labels those
+    that follow. Grouping needs accumulation, which the template language
+    cannot do.
+
+    LA REGLE, en une phrase : un item `badge` OUVRE une carte dont il devient
+    l'intitule, et tous les items suivants la remplissent jusqu'au badge
+    suivant. Les items poses AVANT le premier badge forment une carte sans
+    intitule — ils ne sont pas perdus en silence. Une carte ouverte par un badge
+    mais jamais remplie n'est pas rendue : elle n'aurait rien a montrer.
+    / THE RULE: a `badge` opens a card and becomes its label; following items
+    fill it until the next badge. Items before the first badge form an
+    unlabelled card (nothing is silently dropped); a card opened but never
+    filled is not returned.
+
+    `contenu` est un JSONField saisi librement (admin ou API v2) : on ne suppose
+    ni qu'il est une liste, ni que ses elements sont des dictionnaires. Un
+    contenu malforme rend une liste vide, et le gabarit n'affiche alors rien —
+    jamais une erreur 500 sur la page publique.
+    / `contenu` is a freely-typed JSONField: we assume neither a list nor dicts.
+    Malformed content yields an empty list, never a 500 on the public page.
+
+    Utilisation : {% cartes_infos_pratiques bloc.contenu as cartes %}
+
+    :return: liste de dicts {"intitule": str, "items": list}.
+    """
+    if not isinstance(contenu, (list, tuple)):
+        return []
+
+    cartes = []
+    for item in contenu:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") == "badge":
+            cartes.append({"intitule": item.get("texte") or "", "items": []})
+            continue
+        if not cartes:
+            cartes.append({"intitule": "", "items": []})
+        cartes[-1]["items"].append(item)
+
+    return [carte for carte in cartes if carte["items"]]
+
+
 @register.simple_tag(takes_context=True)
 def templates_bloc(context, bloc):
     """
