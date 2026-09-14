@@ -113,6 +113,7 @@ class ConfigurationSite(SingletonModel):
             ("reunion", "Réunion (thème par défaut)"),
             ("faire_festival", "Faire Festival (thème brutaliste)"),
             ("bar", "Bar"),
+            ("caisse_alimentaire", "Caisse alimentaire (épicerie / coopérative, thème clair)"),
         ],
         verbose_name=_("Thème graphique du site"),
         help_text=_("Sélectionnez le thème visuel à utiliser pour l'affichage du site web."),

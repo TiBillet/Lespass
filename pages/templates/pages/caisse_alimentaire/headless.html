@@ -1,0 +1,36 @@
+{% load i18n static %}{# Squelette headless du skin caisse alimentaire — fragment pour les requêtes HTMX. / Headless skeleton of the caisse alimentaire skin — fragment for HTMX requests. #}
+
+{# title repris automatiquement par htmx quand hx-target == body #}
+<title>{% block title %}{% translate 'Home' %}{% endblock %} | {{ config.organisation }}</title>
+
+{# Navbar, main et footer DANS .skin-caisse, sinon le CSS scopé est perdu après un swap HTMX. #}
+{# / Navbar, main and footer INSIDE .skin-caisse or the scoped CSS is lost after an HTMX swap. #}
+<div class="skin-caisse d-flex flex-column flex-fill" data-bs-theme="light">
+
+{% if not embed %}
+    {% include "pages/caisse_alimentaire/partials/navbar.html" %}
+{% endif %}
+
+<div class="flex-fill d-flex flex-column">
+  {% block main %}{% endblock main %}
+</div>
+
+{% if not embed %}
+    {% include "pages/caisse_alimentaire/partials/footer.html" %}
+{% endif %}
+
+</div>{# /.skin-caisse #}
+
+{% block offcanvas_globaux %}
+    {% include "commun/offcanvas/contact.html" %}
+    {% include "commun/offcanvas/connexion.html" %}
+{% endblock offcanvas_globaux %}
+
+{% block offcanvas %}{% endblock offcanvas %}
+
+{% include "commun/toasts.html" %}
+
+<!-- spinner -->
+{% include "commun/loading.html" %}
+
+{% block scripts %}{% endblock scripts %}

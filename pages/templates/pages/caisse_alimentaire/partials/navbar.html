@@ -1,0 +1,131 @@
+{% load i18n %}
+
+<nav class="navbar navbar-expand-xl caisse-navbar" data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
+    <div class="container-lg justify-content-between">
+      <a class="navbar-brand flex-grow-1" href="/" hx-get="/" hx-target="body" hx-push-url="true">
+        {% if config.logo %}
+        {% include 'commun/partials/picture.html' with img=config.logo alt=config.organisation style='max-width: 3.5rem' %}
+        {% else %}
+        <span class="caisse-navbar__marque">{{ config.organisation }}</span>
+        {% endif %}
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainMenu"
+        aria-controls="mainMenu" aria-expanded="false" aria-label="{% trans 'Toggle menu' %}">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="mainMenu">
+
+        <ul class="navbar-nav me-auto">
+          {% for item in main_nav %}
+          {% if item.children %}
+          {# Page avec sous-pages : menu deroulant ; le 1er item mene a la page parente. #}
+          {# / Page with sub-pages: dropdown; the 1st item links to the parent page. #}
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle{% if url_name == item.name %} active{% endif %}"
+                href="{{ item.url }}" id="dd-{{ item.name }}" role="button"
+                data-bs-toggle="dropdown" aria-expanded="false">
+              <i class="bi bi-{{ item.icon }}"></i>
+              {% translate item.label %}
+            </a>
+            <ul class="dropdown-menu" aria-labelledby="dd-{{ item.name }}">
+              <li><a class="dropdown-item" href="{{ item.url }}"
+                     hx-get="{{ item.url }}" hx-target="body" hx-push-url="true">{% translate item.label %}</a></li>
+              <li><hr class="dropdown-divider"></li>
+              {% for enfant in item.children %}
+              <li><a class="dropdown-item{% if url_name == enfant.name %} active{% endif %}"
+                     href="{{ enfant.url }}" hx-get="{{ enfant.url }}" hx-target="body" hx-push-url="true">{{ enfant.label }}</a></li>
+              {% endfor %}
+            </ul>
+          </li>
+          {% else %}
+          <li class="nav-item">
+            <a class="nav-link{% if url_name == item.name %} active" aria-current="page{% endif %}"
+                href="{{ item.url }}" hx-get="{{ item.url }}" hx-target="body" hx-push-url="true">
+              <i class="bi bi-{{ item.icon }}"></i>
+              {% translate item.label %}
+            </a>
+          </li>
+          {% endif %}
+          {% endfor %}
+
+          <li class="nav-item">
+            <a class="nav-link"
+                href=""
+                data-bs-toggle="offcanvas"
+                data-bs-target="#contactPanel"
+                aria-controls="contactPanel">
+              <i class="bi bi-question-lg"></i>
+              {% translate 'Contact and support' %}
+            </a>
+          </li>
+        </ul>
+
+        <div class="navbar-nav d-flex mb-0">
+          <div class="nav-item dropdown">
+            <button class="nav-link border-0 bg-transparent dropdown-toggle" id="languageDropdown" data-bs-toggle="dropdown" aria-expanded="false" title="{% trans 'Switch language' %}">
+              <i class="bi bi-translate"></i>
+              <span class="d-xl-none">{% trans "Language" %}</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="languageDropdown">
+              <li><button class="dropdown-item language-select-btn" data-lang="fr">{% trans "French" %}</button></li>
+              <li><button class="dropdown-item language-select-btn" data-lang="en">{% trans "English" %}</button></li>
+            </ul>
+          </div>
+          <div class="nav-item">
+            <button id="themeToggle" class="nav-link border-0 bg-transparent" title="{% trans 'Toggle theme' %}">
+              <i class="bi bi-circle-half"></i>
+              <span class="d-xl-none">{% trans "Theme" %}</span>
+            </button>
+          </div>
+          <div class="nav-item">
+            {% if user.is_authenticated == False %}
+            <button
+                class="nav-link"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#loginPanel"
+                aria-controls="loginPanel">
+                {% translate 'Log in' %}
+            </button>
+            {% else %}
+              <a class="nav-link" href="/my_account/" hx-get="/my_account/" hx-target="body" hx-push-url="true">
+                <i class="bi bi-person-circle"></i>
+                {% translate 'My account' %}
+              </a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  {% comment %}
+  Les panneaux contact et connexion vivent dans le squelette
+  (bloc offcanvas_globaux de pages/caisse_alimentaire/shell.html et headless.html).
+  La navbar ne garde que les boutons déclencheurs.
+  / The contact and login panels live in the skeleton (offcanvas_globaux block).
+  The navbar only keeps the trigger buttons.
+  {% endcomment %}
+
+  {% comment %}
+  OUVERTURE AUTO DE L'OFFCANVAS DE CONNEXION (même mécanisme que les autres skins)
+  / Auto-open the login offcanvas (same mechanism as the other skins)
+  {% endcomment %}
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const parametresUrl = new URLSearchParams(window.location.search);
+      if (!parametresUrl.has("login")) {
+        return;
+      }
+      const panneauConnexion = document.getElementById("loginPanel");
+      if (panneauConnexion) {
+        bootstrap.Offcanvas.getOrCreateInstance(panneauConnexion).show();
+      }
+      parametresUrl.delete("login");
+      const requete = parametresUrl.toString();
+      const nouvelleUrl =
+        window.location.pathname +
+        (requete ? "?" + requete : "") +
+        window.location.hash;
+      window.history.replaceState({}, "", nouvelleUrl);
+    });
+  </script>

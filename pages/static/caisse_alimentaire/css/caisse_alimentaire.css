@@ -1,0 +1,214 @@
+/* ==========================================================================
+   Skin « caisse alimentaire » (épicerie / coopérative alimentaire)
+   / "caisse alimentaire" skin (grocery / food co-op)
+
+   LOCALISATION : pages/static/caisse_alimentaire/css/caisse_alimentaire.css
+
+   Design : thème CLAIR « papier & ardoise ».
+   - Fond crème papier kraft léger, texte encre brun-vert foncé.
+   - Primaire : vert feuille (le magasin). Accent : terracotta (le marché).
+   - Titres serif (esprit tableau d'épicerie), corps sans-serif lisible.
+   - Panneaux « papier » à coins doux, ombres légères, bordures fines.
+   - Footer « ardoise » vert très foncé, texte crème.
+
+   TOUT est scopé sous .skin-caisse pour ne jamais fuiter sur le chrome
+   partagé (offcanvas, toasts…).
+   ========================================================================== */
+
+/* --- Palette / Palette ---------------------------------------------------- */
+
+.skin-caisse {
+    --caisse-papier: #f7f2e7;        /* fond crème papier */
+    --caisse-papier-clair: #fdfaf3;  /* panneaux */
+    --caisse-encre: #2f3a2e;         /* texte principal */
+    --caisse-vert: #3e7c4f;          /* primaire : vert feuille */
+    --caisse-vert-fonce: #274b32;    /* ardoise / hover */
+    --caisse-terracotta: #c96f4a;    /* accent marché */
+    --caisse-sable: #e8dfc9;         /* bordures / fonds doux */
+
+    color: var(--caisse-encre);
+    background-color: var(--caisse-papier);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+    /* Recoloration Bootstrap minimale à l'échelle du skin */
+    --bs-primary: var(--caisse-vert);
+    --bs-link-color: var(--caisse-vert);
+    --bs-link-hover-color: var(--caisse-vert-fonce);
+    --bs-body-bg: var(--caisse-papier);
+    --bs-body-color: var(--caisse-encre);
+}
+
+/* --- Typographie / Typography --------------------------------------------- */
+
+.skin-caisse h1,
+.skin-caisse h2,
+.skin-caisse h3,
+.skin-caisse .caisse-titre,
+.skin-caisse .caisse-footer__titre {
+    font-family: Georgia, "Times New Roman", serif;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--caisse-vert-fonce);
+}
+
+.skin-caisse .caisse-sur-titre {
+    display: inline-block;
+    padding: 0.2rem 0.9rem;
+    border: 1px solid var(--caisse-vert);
+    border-radius: 999px;
+    color: var(--caisse-vert);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+}
+
+/* --- Navbar / Navbar -------------------------------------------------------- */
+
+.skin-caisse .caisse-navbar {
+    background-color: var(--caisse-papier-clair);
+    border-bottom: 1px solid var(--caisse-sable);
+}
+
+.skin-caisse .caisse-navbar .navbar-brand,
+.skin-caisse .caisse-navbar__marque {
+    font-family: Georgia, "Times New Roman", serif;
+    font-weight: 700;
+    font-size: 1.4rem;
+    color: var(--caisse-vert-fonce);
+}
+
+.skin-caisse .caisse-navbar .nav-link {
+    color: var(--caisse-encre);
+    border-radius: 999px;
+    padding-inline: 0.9rem;
+}
+
+.skin-caisse .caisse-navbar .nav-link:hover,
+.skin-caisse .caisse-navbar .nav-link.active {
+    color: var(--caisse-vert-fonce);
+    background-color: var(--caisse-sable);
+}
+
+/* --- Hero accueil / Home hero ------------------------------------------------ */
+
+.skin-caisse .caisse-hero--image {
+    position: relative;
+}
+
+/* Voile crème au-dessus de la photo pour garder le panneau lisible
+   / Cream veil over the photo so the panel stays readable */
+.skin-caisse .caisse-hero--image::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(247, 242, 231, 0.55), rgba(247, 242, 231, 0.85));
+}
+
+.skin-caisse .caisse-hero--image > .container-lg {
+    position: relative; /* au-dessus du voile / above the veil */
+}
+
+.skin-caisse .caisse-hero__panneau {
+    background-color: var(--caisse-papier-clair);
+    border: 1px solid var(--caisse-sable);
+}
+
+/* --- Cartes « rayon » (entrées de modules) / Aisle cards --------------------- */
+
+.skin-caisse .caisse-carte-rayon {
+    background-color: var(--caisse-papier);
+    border: 1px solid var(--caisse-sable);
+    color: var(--caisse-encre);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.skin-caisse .caisse-carte-rayon:hover {
+    transform: translateY(-3px);
+    border-color: var(--caisse-vert);
+    box-shadow: 0 0.5rem 1.5rem rgba(47, 58, 46, 0.12);
+}
+
+.skin-caisse .caisse-carte-rayon__icone {
+    font-size: 2rem;
+    color: var(--caisse-terracotta);
+}
+
+.skin-caisse .caisse-carte-rayon__titre {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--caisse-vert-fonce);
+}
+
+.skin-caisse .caisse-carte-rayon__texte {
+    font-size: 0.95rem;
+    opacity: 0.85;
+}
+
+/* --- Boutons / Buttons -------------------------------------------------------- */
+
+.skin-caisse .btn-primary {
+    --bs-btn-bg: var(--caisse-vert);
+    --bs-btn-border-color: var(--caisse-vert);
+    --bs-btn-hover-bg: var(--caisse-vert-fonce);
+    --bs-btn-hover-border-color: var(--caisse-vert-fonce);
+    --bs-btn-active-bg: var(--caisse-vert-fonce);
+    --bs-btn-active-border-color: var(--caisse-vert-fonce);
+}
+
+.skin-caisse .btn-outline-primary {
+    --bs-btn-color: var(--caisse-vert);
+    --bs-btn-border-color: var(--caisse-vert);
+    --bs-btn-hover-bg: var(--caisse-vert);
+    --bs-btn-hover-border-color: var(--caisse-vert);
+    --bs-btn-active-bg: var(--caisse-vert-fonce);
+    --bs-btn-active-border-color: var(--caisse-vert-fonce);
+}
+
+/* --- Blocs de page (tb-*) : adaptation douce / Page blocks -------------------- */
+
+.skin-caisse .tb-page {
+    color: var(--caisse-encre);
+}
+
+.skin-caisse .tb-page__titre {
+    text-align: center;
+    margin-block: 2.5rem 1.5rem;
+}
+
+.skin-caisse .tb-fil-ariane {
+    font-size: 0.9rem;
+    margin-top: 1.25rem;
+}
+
+.skin-caisse .tb-fil-ariane a {
+    color: var(--caisse-vert);
+}
+
+/* --- Footer « ardoise » / Chalkboard footer ------------------------------------ */
+
+.skin-caisse .caisse-footer {
+    background-color: var(--caisse-vert-fonce);
+    color: var(--caisse-papier);
+}
+
+.skin-caisse .caisse-footer__titre {
+    color: var(--caisse-papier);
+    font-size: 1.15rem;
+    margin-bottom: 0.75rem;
+}
+
+.skin-caisse .caisse-footer .nav-link {
+    color: rgba(247, 242, 231, 0.85);
+    padding-inline: 0;
+}
+
+.skin-caisse .caisse-footer .nav-link:hover,
+.skin-caisse .caisse-footer .nav-link.active {
+    color: #ffffff;
+    text-decoration: underline;
+}
+
+.skin-caisse .caisse-footer a:not(.nav-link) {
+    color: var(--caisse-papier);
+}
