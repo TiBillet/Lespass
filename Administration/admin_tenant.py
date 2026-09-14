@@ -640,6 +640,11 @@ class ImageBibliothequeAdmin(ModelAdmin):
     warn_unsaved_form = True
 
     list_display = ["_vignette", "name", "_tags"]
+    # Le lien de détail sur le NOM, pas sur la vignette : la miniature reste
+    # décorative, le nom porte le lien (demande utilisateur).
+    # / Detail link on the NAME, not the thumbnail: the picture stays
+    # decorative, the name carries the link (user request).
+    list_display_links = ["name"]
     search_fields = ["name"]
     filter_horizontal = ("tags",)
 

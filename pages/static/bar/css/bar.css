@@ -1,0 +1,528 @@
+/*
+ * Skin BAR — « sombre chic » (esprit speakeasy).
+ * / BAR skin — "dark & classy" (speakeasy spirit).
+ *
+ * LOCALISATION : pages/static/bar/css/bar.css
+ *
+ * TOUT est scopé sous .skin-bar : le wrapper est émis par shell.html (requête
+ * classique) et headless.html (fragment HTMX, hx-target="body"). Si le wrapper
+ * disparaît du fragment, ce fichier cesse de s'appliquer après un swap.
+ * / Everything is scoped under .skin-bar: the wrapper is emitted by shell.html
+ * (full request) and headless.html (HTMX fragment, hx-target="body"). If the
+ * wrapper goes missing from the fragment, this file stops applying after a swap.
+ *
+ * Typographie : Cormorant Garamond auto-hébergée (fonts/Cormorant_Garamond,
+ * polices variables 300-700, le navigateur ne télécharge que les graisses
+ * réellement utilisées), repli sur la pile système serif.
+ * / Typography: self-hosted Cormorant Garamond (variable fonts 300-700, the
+ * browser only downloads the weights actually used), fallback on the system
+ * serif stack.
+ */
+
+/* --- Police du skin / Skin typeface (auto-hébergée / self-hosted) --- */
+@font-face {
+    font-family: 'Cormorant Garamond';
+    src: url('../fonts/Cormorant_Garamond/CormorantGaramond-VariableFont_wght.ttf') format('truetype-variations');
+    font-weight: 300 700;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: 'Cormorant Garamond';
+    src: url('../fonts/Cormorant_Garamond/CormorantGaramond-Italic-VariableFont_wght.ttf') format('truetype-variations');
+    font-weight: 300 700;
+    font-style: italic;
+    font-display: swap;
+}
+
+.skin-bar {
+    /* Palette / Palette */
+    --bar-fond: #14100c;          /* fond général / page background */
+    --bar-fond-2: #1c1712;        /* surfaces (navbar, footer, panneaux) */
+    --bar-texte: #f2e9dc;         /* crème / cream text */
+    --bar-texte-doux: #c8bca8;    /* texte secondaire / muted text */
+    --bar-or: #c9a15f;            /* accent doré / gold accent */
+    --bar-or-clair: #e3c98f;      /* doré au survol / gold on hover */
+    --bar-filet: rgba(201, 161, 95, .35); /* filets / hairlines */
+
+    /* Piles de polices / Font stacks */
+    --bar-serif: 'Cormorant Garamond', Georgia, 'Times New Roman', Times, serif;
+
+    background-color: var(--bar-fond);
+    color: var(--bar-texte);
+    min-height: 100vh;
+}
+
+/* --- Titres : serif élégant / Headings: elegant serif --- */
+.skin-bar h1, .skin-bar h2, .skin-bar h3,
+.skin-bar .display-1, .skin-bar .display-2, .skin-bar .display-3 {
+    font-family: var(--bar-serif);
+    font-weight: 500;
+    letter-spacing: .01em;
+    color: var(--bar-texte);
+}
+
+/* Sur-titre en petites capitales espacées / Spaced small-caps kicker */
+.skin-bar .bar-sur-titre {
+    text-transform: uppercase;
+    letter-spacing: .35em;
+    font-size: .8rem;
+    color: var(--bar-or);
+    margin-bottom: .5rem;
+}
+
+/* --- Liens et boutons / Links and buttons --- */
+.skin-bar a {
+    color: var(--bar-or);
+    text-decoration-color: var(--bar-filet);
+}
+.skin-bar a:hover {
+    color: var(--bar-or-clair);
+}
+
+.skin-bar .btn-outline-primary {
+    --bs-btn-color: var(--bar-or);
+    --bs-btn-border-color: var(--bar-or);
+    --bs-btn-hover-color: var(--bar-fond);
+    --bs-btn-hover-bg: var(--bar-or);
+    --bs-btn-hover-border-color: var(--bar-or);
+    --bs-btn-active-color: var(--bar-fond);
+    --bs-btn-active-bg: var(--bar-or-clair);
+    --bs-btn-active-border-color: var(--bar-or-clair);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    font-size: .9rem;
+}
+
+.skin-bar .btn-primary {
+    --bs-btn-bg: var(--bar-or);
+    --bs-btn-border-color: var(--bar-or);
+    --bs-btn-color: var(--bar-fond);
+    --bs-btn-hover-bg: var(--bar-or-clair);
+    --bs-btn-hover-border-color: var(--bar-or-clair);
+    --bs-btn-hover-color: var(--bar-fond);
+}
+
+/* --- Surfaces Bootstrap redrapées en sombre / Bootstrap surfaces re-draped dark --- */
+.skin-bar .bg-body {
+    background-color: var(--bar-fond-2) !important;
+    color: var(--bar-texte);
+}
+.skin-bar .text-body {
+    color: var(--bar-texte) !important;
+}
+
+/* --- Navbar / Navbar --- */
+.skin-bar .navbar {
+    background-color: var(--bar-fond-2);
+    border-bottom: 1px solid var(--bar-filet);
+}
+.skin-bar .navbar .navbar-brand,
+.skin-bar .navbar .nav-link {
+    color: var(--bar-texte);
+}
+.skin-bar .navbar .nav-link:hover,
+.skin-bar .navbar .nav-link.active {
+    color: var(--bar-or);
+}
+.skin-bar .navbar .navbar-brand {
+    font-family: var(--bar-serif);
+    font-size: 1.35rem;
+    letter-spacing: .05em;
+}
+
+/* --- Hero d'accueil / Home hero --- */
+.skin-bar .home-bg {
+    display: flex;
+    align-items: center;
+}
+.skin-bar .home-bg .bg-body {
+    background-color: rgba(20, 16, 12, .82) !important;
+    backdrop-filter: blur(6px);
+    border: 1px solid var(--bar-filet);
+}
+.skin-bar .home-bg .lead {
+    color: var(--bar-texte-doux);
+}
+
+/* --- Cartes événement (agenda) / Event cards (agenda) --- */
+.skin-bar .bar-carte-evenement {
+    margin-bottom: 0;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--bar-filet);
+}
+.skin-bar .bar-date {
+    font-family: var(--bar-serif);
+    color: var(--bar-or);
+}
+/* Le <hr/> entre deux cartes devient superflu visuellement / <hr/> between cards
+   becomes visually redundant */
+.skin-bar #event_list hr {
+    border-color: var(--bar-filet);
+    opacity: 1;
+}
+
+/* --- Footer / Footer --- */
+.skin-bar .bar-footer {
+    background-color: var(--bar-fond-2);
+    border-top: 1px solid var(--bar-filet);
+    color: var(--bar-texte-doux);
+}
+.skin-bar .bar-footer h4 {
+    font-family: var(--bar-serif);
+    color: var(--bar-texte);
+}
+.skin-bar .bar-footer .nav-link {
+    color: var(--bar-texte-doux);
+}
+.skin-bar .bar-footer .nav-link:hover {
+    color: var(--bar-or);
+}
+
+/* --- Divers / Misc --- */
+.skin-bar ::selection {
+    background: var(--bar-or);
+    color: var(--bar-fond);
+}
+
+/* --- Bloc HERO des pages CMS (surcharge de tb-blocs.css) / CMS HERO block --- */
+.skin-bar .tb-bloc--hero .tb-bloc__titre {
+    font-family: var(--bar-serif);
+    color: var(--bar-texte);
+}
+.skin-bar .tb-bloc--hero .tb-bloc__sous-titre {
+    color: var(--bar-or);
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    font-size: .95rem;
+}
+
+/* --- Cartes (grilles CMS : événements, sous-pages) / Cards (CMS grids) ---
+   Hauteurs égales : la grille étire déjà les cartes d'une même rangée ;
+   on pousse le bouton en bas pour qu'ils soient tous alignés, quelle que
+   soit la longueur du titre ou de la description.
+   / Equal heights: the grid already stretches cards in a row; push the
+   button to the bottom so they all align regardless of content length. */
+.skin-bar .tb-bloc--carte > .tb-bloc__bouton {
+    margin-top: auto;
+}
+/* Espace minimal au-dessus du bouton sur la carte la plus haute.
+   / Minimal gap above the button on the tallest card. */
+.skin-bar .tb-bloc--carte > .tb-bloc__carte-texte {
+    margin-bottom: 1rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * MOSAIQUE BENTO (page d'accueil) / BENTO MOSAIC (home page)
+ * Reproduction de la maquette : grille irrégulière alternant tuiles photos
+ * plein cadre et tuiles texte (crème, doré, sombre), tailles variées.
+ * Contenu : blocs CARTE existants de la page d'accueil — une carte AVEC image
+ * devient une tuile photo, une carte SANS image une tuile texte.
+ * / Reproduces the mockup: irregular grid mixing full-bleed photo tiles and
+ * text tiles (cream, gold, dark), varied sizes. Content: existing CARTE blocks
+ * of the home page — a card WITH an image becomes a photo tile, WITHOUT a
+ * text tile.
+ * ------------------------------------------------------------------------- */
+
+.skin-bar .bar-bento {
+    grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: 8rem;
+    grid-auto-flow: dense;
+}
+
+/* Tuile de base : pas de padding interne, contenu centré / Base tile */
+.skin-bar .bar-bento .tb-bloc--carte {
+    position: relative;
+    border: none;
+    border-radius: var(--tb-rayon, .5rem);
+    box-shadow: none;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    margin: 0;
+    padding: 1.5rem;
+    overflow: hidden;
+}
+.skin-bar .bar-bento .tb-bloc--carte:hover {
+    transform: none;
+    box-shadow: none;
+}
+.skin-bar .bar-bento .tb-bloc--carte > :not(.tb-bloc__carte-image) {
+    margin-inline: 0;
+}
+.skin-bar .bar-bento .tb-bloc--carte > .tb-bloc__carte-surtitre {
+    margin-top: 0;
+}
+/* Le CSS commun (tb-blocs.css) remet margin-top: 1.25rem au :first-child des
+   cartes SANS image — sur une tuile centrée, ça décale le bloc vers le bas.
+   On annule pour toute tuile bento (titre ou surtitre en premier enfant).
+   / The shared CSS gives margin-top: 1.25rem to image-less cards' :first-child
+   — on a centered tile it shifts the block down. Cancelled for every bento
+   tile (title or overline as first child). */
+.skin-bar .bar-bento .tb-bloc--carte > :first-child {
+    margin-top: 0;
+}
+.skin-bar .bar-bento .tb-bloc--carte > :last-child {
+    margin-bottom: 0;
+}
+
+/* Motif de tailles (cycle de 6) : pavage COMPLET d'une grille 4x4 —
+   1+2+4+1+4+4 = 16 cellules, aucun trou (flow dense : la 4e tuile, 1x1,
+   vient combler la case libre sous la 1re).
+   / Size pattern (6-cycle): FULL tiling of a 4x4 grid — 16 cells, no hole
+   (dense flow: the 4th, 1x1 tile, fills the free cell under the 1st). */
+.skin-bar .bar-bento .tb-bloc--carte:nth-child(6n+2) { grid-row: span 2; }
+.skin-bar .bar-bento .tb-bloc--carte:nth-child(6n+3) { grid-column: span 2; grid-row: span 2; }
+.skin-bar .bar-bento .tb-bloc--carte:nth-child(6n+5) { grid-column: span 2; grid-row: span 2; }
+.skin-bar .bar-bento .tb-bloc--carte:nth-child(6n+6) { grid-column: span 2; grid-row: span 2; }
+
+/* --- Tuile TEXTE (carte sans image) : fond crème, encre sombre ---
+   / TEXT tile (card without image): cream background, dark ink */
+.skin-bar .bar-bento .tb-bloc--carte:not(:has(.tb-bloc__carte-image)) {
+    background: var(--bar-texte);          /* crème / cream */
+    color: var(--bar-fond-2);
+}
+.skin-bar .bar-bento .tb-bloc--carte:not(:has(.tb-bloc__carte-image)) .tb-bloc__carte-titre {
+    font-family: var(--bar-serif);
+    color: var(--bar-fond-2);
+    font-size: clamp(1.2rem, 2vw, 1.6rem);
+}
+.skin-bar .bar-bento .tb-bloc--carte:not(:has(.tb-bloc__carte-image)) .tb-bloc__carte-texte {
+    color: #5a4f40;
+}
+/* Variante sombre : la 1re tuile du cycle (texte crème sur fond du skin)
+   / Dark variant: 1st tile of the cycle (cream text on skin background) */
+.skin-bar .bar-bento .tb-bloc--carte:nth-child(6n+1):not(:has(.tb-bloc__carte-image)) {
+    background: transparent;
+    color: var(--bar-texte);
+    text-align: start;
+    align-items: flex-start;
+}
+.skin-bar .bar-bento .tb-bloc--carte:nth-child(6n+1):not(:has(.tb-bloc__carte-image)) .tb-bloc__carte-titre {
+    color: var(--bar-texte);
+}
+.skin-bar .bar-bento .tb-bloc--carte:nth-child(6n+1):not(:has(.tb-bloc__carte-image)) .tb-bloc__carte-texte {
+    color: var(--bar-texte-doux);
+}
+/* Variante dorée : la 6e tuile du cycle / Gold variant: 6th tile of the cycle */
+.skin-bar .bar-bento .tb-bloc--carte:nth-child(6n+6):not(:has(.tb-bloc__carte-image)) {
+    background: var(--bar-or);
+    color: var(--bar-fond);
+}
+.skin-bar .bar-bento .tb-bloc--carte:nth-child(6n+6):not(:has(.tb-bloc__carte-image)) .tb-bloc__carte-titre {
+    color: var(--bar-fond);
+}
+.skin-bar .bar-bento .tb-bloc--carte:nth-child(6n+6):not(:has(.tb-bloc__carte-image)) .tb-bloc__carte-texte {
+    color: #3d2f1c;
+}
+
+/* --- Tuile PHOTO (carte avec image) : image plein cadre, légende en surimpression
+   / PHOTO tile (card with image): full-bleed image, overlay caption */
+.skin-bar .bar-bento .tb-bloc--carte:has(.tb-bloc__carte-image) {
+    padding: 0;
+    justify-content: flex-end;
+    align-items: stretch;
+    text-align: start;
+}
+.skin-bar .bar-bento .tb-bloc--carte:has(.tb-bloc__carte-image) .tb-bloc__carte-image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    object-fit: cover;
+}
+/* Légende en bas, sur dégradé lisible / Bottom caption on a readable gradient */
+.skin-bar .bar-bento .tb-bloc--carte:has(.tb-bloc__carte-image) .tb-bloc__carte-titre {
+    position: relative;
+    margin: 0;
+    padding: 2.5rem 1.25rem 1.25rem;
+    font-family: var(--bar-serif);
+    color: var(--bar-texte);
+    background: linear-gradient(transparent, rgba(20, 16, 12, .85));
+}
+.skin-bar .bar-bento .tb-bloc--carte:has(.tb-bloc__carte-image) .tb-bloc__carte-surtitre,
+.skin-bar .bar-bento .tb-bloc--carte:has(.tb-bloc__carte-image) .tb-bloc__carte-texte {
+    position: relative;
+    margin: 0;
+    padding-inline: 1.25rem;
+    color: var(--bar-texte);
+    background: rgba(20, 16, 12, .85);
+}
+.skin-bar .bar-bento .tb-bloc--carte:has(.tb-bloc__carte-image) .tb-bloc__carte-texte {
+    padding-bottom: 1.25rem;
+}
+
+/* Mobile : on empile simplement / Mobile: plain stacking */
+@media (max-width: 768px) {
+    .skin-bar .bar-bento {
+        grid-template-columns: 1fr;
+        grid-auto-rows: auto;
+    }
+    .skin-bar .bar-bento .tb-bloc--carte:nth-child(n) {
+        grid-column: auto;
+        grid-row: auto;
+    }
+    .skin-bar .bar-bento .tb-bloc--carte:has(.tb-bloc__carte-image) {
+        min-height: 14rem;
+    }
+}
+
+/* ============================================================
+   PAGE « A LA CARTE » — carte de bar encadree (maquette 2026-08-10)
+   / "A LA CARTE" page — framed bar menu (mockup 2026-08-10)
+
+   Cible la page via le crochet .tb-page--a-la-carte emis par page.html.
+   Contenu attendu : un bloc PARAGRAPHE (grand titre + intro centree)
+   suivi de blocs CARTE texte seuls (une section de la carte chacun :
+   « Nos bieres », « Nos vins »…). L'illustration de houblon en pied
+   est decorative (pseudo-element), pas un contenu editable.
+   / Targets the page via the .tb-page--a-la-carte hook from page.html.
+   Expected content: one PARAGRAPH block (big title + centered intro)
+   followed by text-only CARD blocks (one menu section each). The hop
+   illustration at the bottom is decorative, not editable content.
+   ============================================================ */
+.skin-bar .tb-page--a-la-carte {
+    align-self: center;
+    width: min(100% - 1.5rem, 34rem);
+    margin-block: clamp(1rem, 4vw, 3rem);
+    padding: clamp(1.75rem, 6vw, 3rem) clamp(1.25rem, 5vw, 2.5rem) 0;
+    background-color: var(--bar-fond-2);
+    /* Double filet beige / double beige hairline */
+    border: 1px solid var(--bar-filet);
+    outline: 1px solid var(--bar-filet);
+    outline-offset: 5px;
+}
+
+/* Le h1 de secours (« A la carte », libelle de la page) reste dans le DOM
+   pour le SEO et les lecteurs d'ecran, mais cede la vedette au titre du
+   bloc d'intro (technique visually-hidden).
+   / The fallback h1 stays in the DOM for SEO and screen readers but yields
+   the spotlight to the intro block's title (visually-hidden technique). */
+.skin-bar .tb-page--a-la-carte > .tb-page__titre {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Intro : grand titre serif creme centre + texte centre discret.
+   / Intro: big centered cream serif title + discreet centered text. */
+.skin-bar .tb-page--a-la-carte .tb-bloc--paragraphe {
+    padding-block: 0;
+    text-align: center;
+}
+.skin-bar .tb-page--a-la-carte .tb-bloc--paragraphe .tb-bloc__titre {
+    font-size: clamp(1.9rem, 7vw, 2.6rem);
+    line-height: 1.15;
+    margin-bottom: 1rem;
+}
+.skin-bar .tb-page--a-la-carte .tb-bloc--paragraphe .tb-bloc__texte {
+    color: var(--bar-texte-doux);
+    font-size: .95rem;
+    max-width: 26rem;
+    margin-inline: auto;
+}
+
+/* Sections de la carte : CARTE texte empilees, sans chrome de carte
+   (bordure, fond, ombre). / Menu sections: stacked text-only cards with
+   no card chrome (border, background, shadow). */
+.skin-bar .tb-page--a-la-carte .tb-grille {
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+    max-width: none;
+    padding-inline: 0;
+    padding-block: 2.5rem 0;
+}
+.skin-bar .tb-page--a-la-carte .tb-bloc--carte {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+    overflow: visible;
+}
+.skin-bar .tb-page--a-la-carte .tb-bloc--carte:hover {
+    transform: none;
+    box-shadow: none;
+}
+.skin-bar .tb-page--a-la-carte .tb-bloc__carte-titre {
+    display: flex;
+    align-items: baseline;
+    gap: .6rem;
+    font-size: 1.35rem;
+    margin-bottom: .35rem;
+}
+.skin-bar .tb-page--a-la-carte .tb-bloc__carte-titre::before {
+    content: "\274B"; /* ❋ */
+    font-size: 1.05rem;
+    color: var(--bar-texte);
+}
+.skin-bar .tb-page--a-la-carte .tb-bloc__carte-texte {
+    color: var(--bar-texte-doux);
+    font-size: .85rem;
+}
+
+/* Illustration houblon en pied de carte (decoratif).
+   / Hop illustration at the bottom of the menu (decorative). */
+.skin-bar .tb-page--a-la-carte::after {
+    content: "";
+    display: block;
+    height: clamp(90px, 22vw, 130px);
+    margin-top: 2.25rem;
+    margin-bottom: 2.25rem;
+    background: url("../img/houblon.svg") no-repeat center bottom / contain;
+    
+}
+
+/* Pas de « kicker » (filet d'accent au-dessus des h2) sur le grand titre de
+   la carte : la maquette le veut nu. / No kicker accent rule above the menu
+   title: the mockup wants it bare. */
+.skin-bar .tb-page--a-la-carte .tb-bloc--paragraphe .tb-bloc__titre::before {
+    content: none;
+}
+
+/* Lignes produit des sections dynamiques (admin LaBoutik) : nom a gauche,
+   prix dore a droite, pointilles de conduite, description discrete dessous.
+   / Product lines of the dynamic sections (LaBoutik admin): name left, gold
+   price right, dotted leader, discreet description below. */
+.skin-bar .tb-page--a-la-carte .bar-carte-produits {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: .55rem;
+}
+.skin-bar .tb-page--a-la-carte .bar-carte-produit {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .5rem;
+}
+.skin-bar .tb-page--a-la-carte .bar-carte-produit__nom {
+    font-size: .95rem;
+}
+.skin-bar .tb-page--a-la-carte .bar-carte-produit__pointilles {
+    flex: 1;
+    min-width: 1.5rem;
+    border-bottom: 1px dotted var(--bar-filet);
+    transform: translateY(-.25em);
+}
+.skin-bar .tb-page--a-la-carte .bar-carte-produit__prix {
+    font-family: var(--bar-serif);
+    color: var(--bar-or-clair);
+    white-space: nowrap;
+}
+.skin-bar .tb-page--a-la-carte .bar-carte-produit__description {
+    flex-basis: 100%;
+    color: var(--bar-texte-doux);
+    font-size: .8rem;
+}
