@@ -8,8 +8,10 @@
   {% include "laboutik/partial/win_bottom_left.html" %}
   {% include "laboutik/partial/win_bottom_right.html" %}
   <div id="win-under"></div>
-  <div id="modal1"></div>
-  <div id="modal2"></div>
+  <!-- modal tables / pas de table définie -->
+  {% if not id_table %}
+  <c-tables-definition />
+  {% endif %}
 {% endblock content %}
 {% block css %}
   <link rel="stylesheet" href="{% static 'css/restaurant_interface.css' %}" />

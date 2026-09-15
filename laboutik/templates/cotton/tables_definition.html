@@ -1,0 +1,61 @@
+<c-modal id="main-tables-definition">
+<c-slot name="header">Supprimer l'utilisateur</c-slot>
+<c-slot name="main">
+<div class="s-main-tables-definition">
+  <!-- tables_list ou tester pour le débug -->
+  {% for table in tables_list %}<c-bt.table name="{{ table }}" />{% endfor %}
+  <c-bt.table name="+" title="ajouter une table" onclick="document.querySelector('#add-table').style.display = 'flex';" />
+  <!-- modal ajout table -->
+  <!-- mode="hide" le modal n'est pas enlever du DOM (mode par défaut) mais caché -->
+  <c-modal id="add-table" style="display:none;" width="50%" height="20%" mode="hide">
+  <c-slot name="header">Ajouter une table</c-slot>
+  <c-slot name="main">
+  <div class="s-add-table">
+    <input id="new_table" placeholder="nom de la nouvelle table">
+  </div>
+  </c-slot>
+  <c-slot name="footer">
+  <button onclick="addTable()">Valider</button>
+  </c-slot>
+  </c-modal>
+  <!-- fin modal ajout table -->
+</div>
+</c-slot>
+<c-slot name="footer"></c-slot>
+</c-modal>
+<style>
+  .s-main-tables-definition {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content:center;
+    align-content: flex-start;
+  }
+
+  .s-add-table {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content:center;
+    align-content: center;
+    padding: 10px;
+  }
+</style>
+<script>
+function addTable(){
+  const newTable = document.querySelector('#new_table').value
+  console.log('-> addTable - newTable =', newTable)
+
+  // Ajoute au formulaire d'addition la variable/input(name) 'nouvelle_table' avec la valeur newTable
+	sendEventOrganizer({
+		src: { file: 'tables_definition.html', method: 'addTable' },
+    msg: 'additionManageForm',
+		data: { actionType: 'createAndPopInput', name: 'nouvelle_table', value: newTable }
+	})
+
+  // remove modal 
+  document.querySelector('#main-tables-definition').remove()
+}
+</script>
