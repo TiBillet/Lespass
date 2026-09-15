@@ -1,0 +1,21 @@
+{% load i18n %}
+{% comment %}
+    BLOC FAQ — skin classic. Une question / reponse. HTML cote template ;
+    base = texte seul (titre = question, texte = reponse).
+    Si bloc.repliable : accordeon natif <details>/<summary> (repliable, accessible,
+    zero JS). Sinon : reponse ouverte (comportement historique).
+    / One question/answer. HTML in the template. If bloc.repliable: native
+    <details>/<summary> accordion (collapsible, accessible, zero JS). Otherwise:
+    open answer (historical behavior).
+{% endcomment %}
+<div class="tb-bloc tb-bloc--faq" data-testid="bloc-faq">
+    {% if bloc.repliable %}
+        <details class="tb-bloc__faq-details">
+            {% if bloc.titre %}<summary class="tb-bloc__faq-question">{{ bloc.titre }}</summary>{% endif %}
+            {% if bloc.texte %}<div class="tb-bloc__faq-reponse">{{ bloc.texte|safe }}</div>{% endif %}
+        </details>
+    {% else %}
+        {% if bloc.titre %}<h3 class="tb-bloc__faq-question">{{ bloc.titre }}</h3>{% endif %}
+        {% if bloc.texte %}<div class="tb-bloc__faq-reponse">{{ bloc.texte|safe }}</div>{% endif %}
+    {% endif %}
+</div>

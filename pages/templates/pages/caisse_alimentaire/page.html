@@ -1,0 +1,123 @@
+{% extends base_template %}
+{% load static i18n pages_tags %}
+
+{% comment %}
+    Gabarit d'une Page publique (skin "caisse alimentaire").
+    Entete/pied herites du skin (base_template), corps = suite ordonnee des blocs.
+    Chaque bloc est rendu via {% templates_bloc %} qui choisit le gabarit du skin
+    courant, avec fallback sur "classic".
+    / Public Page template (skin "caisse alimentaire"). Header/footer inherited
+    from the skin; body = ordered sequence of blocks. Each block is rendered via
+    {% templates_bloc %} which picks the current skin template, falling back to
+    "classic".
+
+    LOCALISATION : pages/templates/pages/caisse_alimentaire/page.html
+{% endcomment %}
+
+{% block title %}{{ page_courante.meta_title|default:page_courante.titre }}{% endblock %}
+{% block meta_description %}{% if page_courante.meta_description %}{{ page_courante.meta_description }}{% elif config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}
+{# noindex si la page le demande (sinon comportement par defaut du base). #}
+{# / noindex if the page asks for it (otherwise base default behavior). #}
+{% block meta_robots %}{% if page_courante.noindex %}noindex, nofollow{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block og_title %}{{ page_courante.titre }} | {{ config.organisation }}{% endblock %}
+{% block og_description %}{{ page_courante.meta_description|default:config.organisation }}{% endblock %}
+{# Image de partage de la page (og + twitter), repli sur l'image du site (base). #}
+{# / Page share image (og + twitter), falling back to the site image (base). #}
+{% block og_image %}{% if page_courante.image %}https://{{ request.get_host }}{{ page_courante.image.social_card.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block twitter_image %}{% if page_courante.image %}https://{{ request.get_host }}{{ page_courante.image.social_card.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+
+{% block extra_meta %}
+    {# SEO uniquement : ce bloc est PERDU en reponse HTMX (headless n'a pas de head). #}
+    {# / SEO only: this block is DROPPED in HTMX responses. #}
+    {% jsonld_page page_courante %}
+{% endblock %}
+
+{% block main %}
+    {# CSS commun des blocs (.tb-bloc*), charge DANS le main : un <link> dans le body #}
+    {# est valide en HTML5 et le navigateur deduplique via son cache. / Common blocks #}
+    {# CSS loaded INSIDE main: valid HTML5, browser dedupes via cache. #}
+    <link rel="stylesheet" href="{% static 'pages/css/tb-blocs.css' %}">
+    {# Classe crochet par slug (tb-page--<slug>). / Slug hook class. #}
+    <main class="tb-page tb-page--{{ page_courante.slug }}" data-testid="page-{{ page_courante.slug }}">
+        {# h1 de secours si pas de HERO. / Fallback h1 when there is no HERO block. #}
+        {% if not page_a_un_bloc_hero %}
+            <h1 class="tb-page__titre" data-testid="page-titre">{{ page_courante.titre }}</h1>
+        {% endif %}
+        {# Ligne date/auteur visible sur les articles (E-E-A-T). / Visible byline on articles. #}
+        {% if page_est_un_article %}
+            <p class="tb-page__signature text-muted" data-testid="page-signature">
+                {% blocktranslate with date_publication=page_courante.created_at|date:"j F Y" organisation=config.organisation %}Publié le {{ date_publication }} par {{ organisation }}{% endblocktranslate %}
+                {% if page_courante.updated_at|date:"Yj" != page_courante.created_at|date:"Yj" %}
+                    · {% blocktranslate with date_maj=page_courante.updated_at|date:"j F Y" %}mis à jour le {{ date_maj }}{% endblocktranslate %}
+                {% endif %}
+            </p>
+        {% endif %}
+        {# Fil d'Ariane visible pour les sous-pages. / Visible breadcrumb for sub-pages. #}
+        {% if page_courante.parent %}
+            <nav class="tb-fil-ariane" aria-label="{% translate 'Fil d’Ariane' %}">
+                <a href="/">{% translate 'Accueil' %}</a>
+                <span aria-hidden="true">›</span>
+                {% if page_courante.parent.publie %}
+                    <a href="/{{ page_courante.parent.slug }}/">{{ page_courante.parent.titre }}</a>
+                    <span aria-hidden="true">›</span>
+                {% endif %}
+                <span aria-current="page">{{ page_courante.titre }}</span>
+            </nav>
+        {% endif %}
+        {# Groupes de blocs (grille, section video, faq, carte…). / Block groups. #}
+        {% for groupe in groupes_blocs %}
+            {% if groupe.type == "grille" %}
+                <div class="tb-grille">
+                    {% for bloc in groupe.blocs %}
+                        {% templates_bloc bloc as gabarits_bloc %}
+                        {% include gabarits_bloc %}
+                    {% endfor %}
+                </div>
+            {% elif groupe.type == "section_video" %}
+                {% with bloc=groupe.video %}
+                    {% templates_bloc bloc as gabarits_bloc %}
+                    {% include gabarits_bloc %}
+                {% endwith %}
+                {% if groupe.cartes %}
+                    <div class="tb-grille">
+                        {% for bloc in groupe.cartes %}
+                            {% templates_bloc bloc as gabarits_bloc %}
+                            {% include gabarits_bloc %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                {% if groupe.cta %}
+                    {% with bloc=groupe.cta %}
+                        {% templates_bloc bloc as gabarits_bloc %}
+                        {% include gabarits_bloc %}
+                    {% endwith %}
+                {% endif %}
+            {% elif groupe.type == "faq" %}
+                <div class="tb-faq-colonnes">
+                    {% for bloc in groupe.blocs %}
+                        {% templates_bloc bloc as gabarits_bloc %}
+                        {% include gabarits_bloc %}
+                    {% endfor %}
+                </div>
+            {% elif groupe.type == "section_carte" %}
+                <div class="tb-bloc--carte-leaflet">
+                    <div class="tb-bloc__leaflet-grille">
+                        {% with bloc=groupe.info %}
+                            {% templates_bloc bloc as gabarits_bloc %}
+                            {% include gabarits_bloc %}
+                        {% endwith %}
+                        {% with bloc=groupe.carte %}
+                            {% templates_bloc bloc as gabarits_bloc %}
+                            {% include gabarits_bloc %}
+                        {% endwith %}
+                    </div>
+                </div>
+            {% else %}
+                {% with bloc=groupe.bloc %}
+                    {% templates_bloc bloc as gabarits_bloc %}
+                    {% include gabarits_bloc %}
+                {% endwith %}
+            {% endif %}
+        {% endfor %}
+    </main>
+{% endblock %}

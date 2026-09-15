@@ -1,0 +1,35 @@
+{% load i18n %}
+{% comment %}
+    SECTIONS DE LA CARTE generees depuis l'admin LaBoutik (skin bar).
+    / MENU SECTIONS generated from the LaBoutik admin (bar skin).
+
+    LOCALISATION : pages/templates/pages/bar/partials/carte_produits.html
+
+    Une section par CategorieProduct (categories POS) : son nom fait le titre,
+    ses produits publies (avec prix publie) forment les lignes en dessous.
+    Inclus par pages/bar/page.html quand le contexte porte carte_categories
+    (page de slug "a-la-carte", cf. pages/views.py rendre_page).
+    / One section per CategorieProduct (POS categories): its name is the
+    title, its published products (with published price) are the lines below.
+    Included by pages/bar/page.html when the context has carte_categories
+    (page with slug "a-la-carte", see pages/views.py rendre_page).
+{% endcomment %}
+<div class="tb-grille bar-carte-sections" data-testid="carte-sections">
+    {% for section in carte_categories %}
+        <article class="tb-bloc tb-bloc--carte" data-testid="carte-section">
+            <h3 class="tb-bloc__carte-titre">{{ section.name }}</h3>
+            <ul class="bar-carte-produits">
+                {% for produit in section.produits %}
+                    <li class="bar-carte-produit">
+                        <span class="bar-carte-produit__nom">{{ produit.name }}</span>
+                        <span class="bar-carte-produit__pointilles" aria-hidden="true"></span>
+                        <span class="bar-carte-produit__prix">{{ produit.prix }}</span>
+                        {% if produit.description %}
+                            <span class="bar-carte-produit__description">{{ produit.description }}</span>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        </article>
+    {% endfor %}
+</div>

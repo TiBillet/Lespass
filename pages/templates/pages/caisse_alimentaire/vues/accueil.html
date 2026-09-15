@@ -1,0 +1,100 @@
+{% extends base_template %}
+{% load tibitags i18n %}
+
+{% comment %}
+    Accueil du skin « caisse alimentaire » (épicerie / coopérative alimentaire).
+    / Home view of the "caisse alimentaire" skin (grocery / food co-op).
+
+    Design : hero « tableau d'épicerie » (grand titre serif, sur-titre badge,
+    image de fond), bandeau « ardoise » avec les infos clés, puis les entrées
+    vers les modules (agenda, adhésions) sous forme de grandes cartes rayon.
+
+    LOCALISATION : pages/templates/pages/caisse_alimentaire/vues/accueil.html
+{% endcomment %}
+
+{% block title %}{% translate 'Home' %}{% endblock %}
+{% block meta_description %}{{ config.short_description|striptags|default:config.organisation }}{% endblock %}
+{% block og_title %}{{ config.organisation }}{% endblock %}
+{% block og_description %}{{ config.short_description|striptags|default:config.organisation }}{% endblock %}
+{% block og_image_alt %}{{ config.organisation }} - {% translate 'Home page' %}{% endblock %}
+{% block twitter_title %}{{ config.organisation }}{% endblock %}
+{% block twitter_description %}{{ config.short_description|striptags|default:config.organisation }}{% endblock %}
+{% block twitter_image_alt %}{{ config.organisation }} - {% translate 'Home page' %}{% endblock %}
+
+{% block main %}
+    {# Hero « tableau d'épicerie » : fond image + panneau papier. #}
+    {# / "Grocery board" hero: image background + paper panel. #}
+    <div class="caisse-hero{% if config.img %} caisse-hero--image{% endif %} py-5 flex-fill d-flex align-items-center">
+        <div class="container-lg my-5">
+            <div class="caisse-hero__panneau rounded-4 px-4 px-md-5 py-4{% if config.img %} shadow{% endif %}">
+                <p class="caisse-sur-titre mt-4 mb-2">
+                    <i class="bi bi-basket2"></i> {% translate 'Épicerie locale &amp; coopérative' %}
+                </p>
+                <h1 class="caisse-titre display-2 mb-3">{{ config.organisation }}</h1>
+                <p class="lead">{{ config.long_description | safe | default:"" }}</p>
+
+                <div class="row mt-4" data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
+                {% if config.module_billetterie %}
+                    <div class="col-md mb-3">
+                        <a class="caisse-carte-rayon d-block h-100 text-decoration-none p-4 rounded-4"
+                           href="/event/" hx-get="/event/" hx-target="body" hx-push-url="true">
+                            <i class="bi bi-calendar-date caisse-carte-rayon__icone"></i>
+                            <span class="caisse-carte-rayon__titre d-block mt-2">
+                                {% if config.event_menu_name %}{{ config.event_menu_name }}{% else %}{% trans 'Calendar' %}{% endif %}
+                            </span>
+                            <span class="caisse-carte-rayon__texte d-block">
+                                {% translate 'Ateliers cuisine, réunions et événements du magasin.' %}
+                            </span>
+                        </a>
+                    </div>
+                {% endif %}
+                {% if config.module_adhesion %}
+                    <div class="col-md mb-3">
+                        <a class="caisse-carte-rayon d-block h-100 text-decoration-none p-4 rounded-4"
+                           href="/memberships/" hx-get="/memberships/" hx-target="body" hx-push-url="true">
+                            <i class="bi bi-person-badge caisse-carte-rayon__icone"></i>
+                            <span class="caisse-carte-rayon__titre d-block mt-2">
+                                {% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% trans 'Subscriptions' %}{% endif %}
+                            </span>
+                            <span class="caisse-carte-rayon__texte d-block">
+                                {% translate 'Devenir coopérateur·rice et faire vivre le magasin.' %}
+                            </span>
+                        </a>
+                    </div>
+                {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if config.img %}
+    <style>
+        /* Fond du hero selon l'image du tenant — le reste du style vit dans
+           caisse_alimentaire.css. / Hero background from the tenant image —
+           everything else lives in caisse_alimentaire.css. */
+        .caisse-hero--image {
+            background-image: url('{{ config.img.med.url }}');
+            background-size: cover;
+            background-position: center;
+        }
+
+        @media (min-width: 960px), (min-height: 540px) {
+            .caisse-hero--image {
+                background-image: url('{{ config.img.crop_hdr.url }}');
+            }
+        }
+
+        @media (min-width: 1280px), (min-height: 1280px) {
+            .caisse-hero--image {
+                background-image: url('{{ config.img.hdr.url }}');
+            }
+        }
+
+        @media (min-width: 1920px), (min-height: 1920px) {
+            .caisse-hero--image {
+                background-image: url('{{ config.img.fhd.url }}');
+            }
+        }
+    </style>
+    {% endif %}
+{% endblock %}

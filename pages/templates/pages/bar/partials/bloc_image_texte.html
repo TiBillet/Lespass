@@ -1,0 +1,35 @@
+{% load i18n %}
+{% comment %}
+    BLOC IMAGE + TEXTE — image d'un cote, texte de l'autre (alternance G/D).
+    / IMAGE + TEXT block — image on one side, text on the other (left/right).
+    LOCALISATION : pages/templates/pages/partials/bloc_image_texte.html
+
+    Champs : titre, texte, image, image_position (GAUCHE/DROITE), bouton (optionnel).
+    / Fields: title, text, image, image_position (LEFT/RIGHT), button (optional).
+{% endcomment %}
+<section class="tb-bloc tb-bloc--image-texte tb-bloc--image-{{ bloc.image_position|lower }}{% if not bloc.image %} tb-bloc--sans-image{% endif %}"
+         data-testid="bloc-image-texte">
+    {% if bloc.image %}
+        <div class="tb-bloc__media">
+            <img class="tb-bloc__image"
+                 src="{{ bloc.image.hdr.url }}"
+                 alt="{{ bloc.titre }}"
+                 loading="lazy">
+        </div>
+    {% endif %}
+    <div class="tb-bloc__contenu">
+        {% if bloc.titre %}
+            <h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>
+        {% endif %}
+        {% if bloc.texte %}
+            <div class="tb-bloc__texte">{{ bloc.texte|safe }}</div>
+        {% endif %}
+        {% if bloc.bouton_label %}
+            <div class="tb-bloc__boutons">
+                <a class="tb-bloc__bouton tb-bloc__bouton--plein"
+                   href="{{ bloc.bouton_url|default:'#' }}"
+                   data-testid="bloc-image-texte-bouton">{{ bloc.bouton_label }}</a>
+            </div>
+        {% endif %}
+    </div>
+</section>

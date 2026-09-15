@@ -1,0 +1,214 @@
+{% load static %}
+{% load i18n %}
+
+<!-- Leaflet servi en LOCAL (pages/static/pages/vendor/leaflet/), comme le
+     bloc CARTE_LEAFLET et l'explorer — plus de CDN unpkg (audit SEO
+     2026-07-05 : dépendance tierce bloquante, incohérente avec le reste du
+     projet vendorisé). imagePath pointe les icônes de marqueur locales.
+     / Leaflet served LOCALLY like the CARTE_LEAFLET block and the explorer —
+     no more unpkg CDN (third-party blocking dependency, inconsistent with
+     the vendored project). imagePath points to the local marker icons. -->
+<link rel="stylesheet" href="{% static 'pages/vendor/leaflet/leaflet.css' %}"/>
+<script src="{% static 'pages/vendor/leaflet/leaflet.js' %}"></script>
+<script>
+    L.Icon.Default.imagePath = '{% static "pages/vendor/leaflet/images/" %}';
+</script>
+
+<style>
+    .map-section {
+        margin: 20px 0;
+        width: 100%;
+    }
+
+    .map-container {
+        height: 400px;
+        width: 100%;
+        border-radius: 8px;
+        position: relative;
+        z-index: 1;
+        display: none; /* Hide map initially */
+    }
+
+    .osm-link {
+        display: block;
+        margin-bottom: 10px;
+        text-align: right;
+    }
+
+    .map-button {
+        display: block;
+        width: 100%;
+        padding: 15px;
+        margin: 20px 0;
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .map-container {
+            height: 300px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .map-container {
+            height: 250px;
+        }
+
+        .map-button {
+            padding: 10px;
+        }
+    }
+</style>
+
+<section class="map-section" itemscope itemtype="http://schema.org/Place">
+    <meta itemprop="name" content="{{ event.name }}">
+    <meta itemprop="latitude" content="{{ event.postal_address.latitude | safe }}">
+    <meta itemprop="longitude" content="{{ event.postal_address.longitude | safe }}">
+
+    <div class="osm-link">
+        <a href="https://www.openstreetmap.org/?mlat={{ event.postal_address.latitude | safe }}&mlon={{ event.postal_address.longitude | safe }}&zoom=15"
+           target="_blank" rel="noopener noreferrer" aria-label="{% trans 'View on OpenStreetMap in a new tab' %}">
+            <i class="bi bi-box-arrow-up-right"></i> {% trans "View on OpenStreetMap" %}
+        </a>
+    </div>
+
+    <div id="map-{{ event.id }}" class="map-container"
+         aria-label="{% trans 'Map showing the location of' %} {{ event.name }}" 
+         role="application"
+         aria-hidden="true"></div>
+
+    <button id="show-map-button" class="btn btn-lg btn-primary map-button" onclick="initializeMap_{{ event.id }}()">
+        <i class="bi bi-map"></i> {% translate "Show Map" %}
+    </button>
+</section>
+
+<script>
+    // Use an IIFE to create a local scope and avoid global variable conflicts
+    (function() {
+        // Generate a unique ID for this map instance based on the event ID
+        const mapId = 'map-{{ event.id }}';
+
+        // Make the initializeMap function available globally but with a unique name
+        window.initializeMap_{{ event.id }} = function() {
+            try {
+                console.log('Starting map initialization for event {{ event.id }}');
+
+                // Get button and map elements
+                const mapButton = document.getElementById('show-map-button');
+                const mapElement = document.getElementById('map-{{ event.id }}');
+
+                if (!mapElement) {
+                    console.error('Map container not found');
+                    return;
+                }
+
+                // Double-check if Leaflet is loaded
+                if (typeof L === 'undefined') {
+                    console.error('Leaflet not loaded, cannot initialize map');
+                    return;
+                }
+
+                // Get coordinates from the event's postal address
+                const lat = {{ event.postal_address.latitude | safe }};
+                const lng = {{ event.postal_address.longitude | safe }};
+                console.log('Map coordinates:', lat, lng);
+
+                // Check if coordinates are valid
+                if (isNaN(lat) || isNaN(lng)) {
+                    console.error('Invalid coordinates:', lat, lng);
+                    return;
+                }
+
+                // Show the map container
+                mapElement.style.display = 'block';
+                mapElement.setAttribute('aria-hidden', 'false');
+
+                // Hide the button
+                if (mapButton) {
+                    mapButton.style.display = 'none';
+                    mapButton.setAttribute('aria-hidden', 'true');
+                }
+
+                // Check if the map container already has a map instance
+                if (mapElement._leaflet_id) {
+                    console.log('Map already initialized');
+                    return;
+                }
+
+                // Create map with precise coordinates
+                console.log('Creating new map instance');
+                const mapInstance = L.map('map-{{ event.id }}', {
+                    center: [lat, lng],
+                    zoom: 15,
+                    zoomControl: true,
+                    attributionControl: true
+                });
+
+                // Add the OpenStreetMap tile layer
+                const tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                });
+
+                // Add event listeners for tile loading
+                tileLayer.on('loading', function () {
+                    console.log('Tile layer loading started');
+                });
+
+                tileLayer.on('load', function () {
+                    console.log('Tile layer loaded successfully');
+                    // Ensure map is visible after tiles are loaded
+                    mapElement.style.display = 'block';
+                    // Trigger a resize event to ensure the map renders correctly
+                    setTimeout(function() {
+                        window.dispatchEvent(new Event('resize'));
+                    }, 100);
+                });
+
+                tileLayer.on('tileerror', function (error) {
+                    console.error('Tile error:', error);
+                });
+
+                tileLayer.addTo(mapInstance);
+
+                // Add a marker at the exact coordinates
+                const marker = L.marker([lat, lng], {
+                    alt: "{{ event.name }}"
+                }).addTo(mapInstance);
+
+                // Add a popup with the event's name and address
+                marker.bindPopup(`
+                    <strong>{{ event.name }}</strong><br>
+                    {{ event.postal_address.street_address }}<br>
+                    {{ event.postal_address.postal_code }} {{ event.postal_address.address_locality }}
+                `).openPopup();
+
+                console.log('Map initialized successfully');
+
+                // Add resize handler for this specific map
+                const resizeHandler = function() {
+                    if (mapInstance) {
+                        mapInstance.invalidateSize();
+                    }
+                };
+
+                // Add event listener for window resize
+                window.addEventListener('resize', resizeHandler);
+
+                // Store the resize handler reference for potential cleanup
+                mapElement.dataset.resizeHandler = true;
+
+            } catch (error) {
+                console.error('Error initializing map:', error);
+                // Show error message to user
+                const errorMapElement = document.getElementById('map-{{ event.id }}');
+                if (errorMapElement) {
+                    errorMapElement.innerHTML = '<div class="alert alert-danger">{% trans "Unable to load map. Please try again later." %}</div>';
+                    errorMapElement.style.display = 'block';
+                }
+            }
+        };
+    })();
+</script>
