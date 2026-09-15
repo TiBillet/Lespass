@@ -55,7 +55,10 @@
   /* Fond d'action : porte toujours du texte encre, d'où --letchi-fond et non --letchi.
      / Action fill: always carries ink text, hence --letchi-fond. */
   --color-primary: var(--letchi-fond);
-  --color-primary-hover: var(--letchi-fond);   /* + filter: brightness() au survol, voir .btn--primary:hover */
+  /* Bouton principal : fond encre, libellé blanc, letchi en liseré (voir .btn--primary).
+     / Primary button: ink fill, white label, letchi as an inner edge. */
+  --color-action-hover: #2c2630;               /* encre éclaircie au survol : blanc dessus 14,7:1 */
+  --color-action-signal: var(--letchi-fond);   /* liseré : élément non textuel, 4,6:1 contre l'encre (seuil 3:1) */
   --color-link: var(--loseyan-text);
 
   /* --- Neutres --- */
@@ -209,7 +212,7 @@
   --bs-primary-rgb: 234, 59, 105;
 
   /* Blocs CMS : titres en Luciole, action principale en letchi avec
-     texte encre (même règle de contraste que .btn--primary).
+     texte encre (encre sur --letchi-fond : 4,63:1).
 
      ATTENTION — CES TROIS LIGNES NE PORTENT RIEN POUR LES PAGES CMS, et c'est
      normal : tb-blocs.css déclare ces mêmes jetons sur `.tb-page` lui-même
@@ -992,14 +995,55 @@ img { max-width: 100%; display: block; }
   border: 1px solid transparent;
   cursor: pointer;
   white-space: nowrap;
-  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out), filter var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform 100ms var(--ease-out);
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out), filter var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform 100ms var(--ease-out);
 }
-/* Texte encre, pas blanc : mesuré, le blanc sur letchi plafonne à 4,10:1
-   (sous le seuil de 4,5), l'encre y grimpe à 4,45:1.
-   La couleur est répétée au survol : sinon le :hover de Bootstrap
-   (.btn:hover) la remplace. / Colour repeated on hover, else Bootstrap wins. */
-.btn--primary { background: var(--color-primary); color: var(--color-text); }
-.btn--primary:hover { filter: brightness(1.08); color: var(--color-text); border:solid 1px var(--color-primary)}
+/* Bouton principal : fond ENCRE, libellé blanc, letchi en liseré intérieur bas.
+   L'ancien aplat letchi sous texte encre passait le seuil WCAG de justesse
+   (4,63:1) mais ne valait que Lc 38 en APCA (≈ Lc 60 attendu pour 15px gras) :
+   un rose de clarté moyenne, où ni l'encre ni le blanc ne ressortent. Ici :
+   blanc sur encre 18,2:1 (Lc 107). Le letchi reste le signal du geste TiBillet,
+   en liseré de 3px, épaissi à 5px au survol, rentré à l'appui (voir plus bas,
+   après .btn:active, pour passer après sa translation d'un pixel).
+   Fond et couleur sont répétés sur chaque état : les :hover, :focus-visible,
+   :active et :disabled de Bootstrap lisent des --bs-btn-* que .btn--primary ne
+   définit pas, et videraient le fond.
+   / Primary button: ink fill, white label (18.2:1), letchi as a 3px inner edge,
+   5px on hover, retracted on press. The former ink-on-letchi passed WCAG barely
+   (4.63:1) but scored Lc 38 in APCA. Fill and colour repeated on every state,
+   else Bootstrap's state rules empty the background.
+   MÊME DESSIN pour .btn-primary (Bootstrap, chrome partagé, voir plus bas) et
+   pour le SURVOL des deux boutons contour letchi (.btn--outline-primary,
+   .btn-outline-primary) : au survol ils deviennent le bouton principal.
+   / Same look for Bootstrap's .btn-primary, and for the hover of both letchi
+   outline buttons, which turn into the primary button. */
+.btn--primary,
+.btn--primary:focus-visible,
+.btn-primary,
+.btn-primary:focus-visible {
+  background: var(--color-text);
+  color: var(--color-text-inverse);
+  border-color: var(--color-text);
+  box-shadow: inset 0 -3px 0 var(--color-action-signal);
+}
+.btn--primary:hover:not(:disabled),
+.btn-primary:hover:not(:disabled),
+.btn--outline-primary:hover:not(:disabled),
+.btn-outline-primary:hover:not(:disabled) {
+  background: var(--color-action-hover);
+  color: var(--color-text-inverse);
+  border-color: var(--color-action-hover);
+  box-shadow: inset 0 -5px 0 var(--color-action-signal);
+}
+/* Bootstrap met outline: 0 sur .btn:focus-visible : on remet l'anneau du skin. */
+.btn--primary:focus-visible,
+.btn-primary:focus-visible,
+.btn--outline-primary:focus-visible,
+.btn-outline-primary:focus-visible { outline: 2px solid var(--color-link); outline-offset: 2px; }
+/* Désactivé : pas de liseré, un geste indisponible ne se signale pas. L'opacité
+   vient de .btn:disabled. / Disabled: no letchi edge. */
+.btn--primary:disabled,
+.btn-primary:disabled,
+.btn-primary.disabled { background: var(--color-text); color: var(--color-text-inverse); border-color: var(--color-text); box-shadow: none; }
 .btn--secondary { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border-strong); }
 .btn--secondary:hover { background: var(--color-hover); }
 .btn--outline { background: transparent; color: var(--color-text); border-color: var(--color-border-strong); }
@@ -1011,17 +1055,21 @@ img { max-width: 100%; display: block; }
    .btn--secondary ils se confondaient avec le papier, à côté du titre de page.
    Le TEXTE est en --letchi-text (4,6:1 sur papier) et jamais --color-primary
    brut (4,10:1, sous le seuil de 4,5). La BORDURE est un élément non textuel :
-   3:1 suffit, --color-primary passe. Au survol le fond se remplit et le libellé
-   repasse en encre — exactement la règle de .btn--primary ci-dessus.
+   3:1 suffit, --color-primary passe. Au survol il devient le bouton principal
+   (fond encre, libellé blanc, liseré letchi) : règle groupée avec .btn--primary.
    NE PAS CONFONDRE avec .btn-outline-primary (un seul tiret), la classe
    Bootstrap corrigée plus bas.
    / Letchi border on paper. DELIBERATE DEPARTURE from the central rule above:
    these are gestures opening the TiBillet wizard, not venue content, and
    .btn--secondary made them invisible. Text uses --letchi-text; the border is
-   non-text (3:1 suffices). Fills on hover. Not to be confused with Bootstrap's
-   single-dash .btn-outline-primary, patched below. */
-.btn--outline-primary { background: transparent; color: var(--letchi-text); border-color: var(--color-primary); }
-.btn--outline-primary:hover { background: var(--color-primary); color: var(--color-text); }
+   non-text (3:1 suffices). Turns into the primary button on hover (grouped with
+   .btn--primary above). Not to be confused with Bootstrap's single-dash
+   .btn-outline-primary, patched below.
+   Focus clavier : fond et libellé répétés, sinon le .btn:focus-visible de
+   Bootstrap vide le fond et fait hériter la couleur du parent.
+   / Keyboard focus: fill and colour repeated, else Bootstrap empties them. */
+.btn--outline-primary,
+.btn--outline-primary:focus-visible { background: transparent; color: var(--letchi-text); border-color: var(--color-primary); box-shadow: none; }
 
 /* =================================================================
    BOUTONS BOOTSTRAP DU CHROME PARTAGÉ — remis à la marque
@@ -1045,36 +1093,42 @@ img { max-width: 100%; display: block; }
    SHARED chrome rendered by every skin; porting them to .btn--primary would
    break the others, where that class does not exist. V2.css is loaded only by
    the V2 shell, so this patch is V2-scoped by construction. */
+/* Les états visibles (fond encre, liseré, survol, appui) sont posés par les
+   règles groupées avec .btn--primary. Les --bs-btn-* ci-dessous alignent en plus
+   les états que seul Bootstrap connaît : .active, .show, et le bouton coché
+   d'un groupe .btn-check (filtres de l'agenda), qui lisent --bs-btn-active-*.
+   L'ombre de focus de Bootstrap (un halo) est remplacée par le liseré, pour
+   qu'un focus clavier ne l'efface pas.
+   / Visible states come from the rules grouped with .btn--primary. These vars
+   align the Bootstrap-only states (.active, .show, checked .btn-check); the
+   focus halo is replaced by the letchi edge. */
 .btn-primary {
-  --bs-btn-color: var(--color-text);
-  --bs-btn-bg: var(--color-primary);
-  --bs-btn-border-color: var(--color-primary);
-  --bs-btn-hover-color: var(--color-text);
-  /* Survol et appui ÉCLAIRCISSENT (mélange avec du blanc) : le texte est en
-     encre, un fond assombri ferait retomber le contraste sous 4,5:1.
-     / Hover/active LIGHTEN: the label is ink, a darker fill would fail AA. */
-  --bs-btn-hover-bg: color-mix(in srgb, var(--color-primary) 88%, white);
-  --bs-btn-hover-border-color: color-mix(in srgb, var(--color-primary) 88%, white);
-  --bs-btn-active-color: var(--color-text);
-  --bs-btn-active-bg: color-mix(in srgb, var(--color-primary) 78%, white);
-  --bs-btn-active-border-color: color-mix(in srgb, var(--color-primary) 78%, white);
-  --bs-btn-disabled-color: var(--color-text);
-  --bs-btn-disabled-bg: var(--color-primary);
-  --bs-btn-disabled-border-color: var(--color-primary);
-  --bs-btn-focus-shadow-rgb: 234, 59, 105;
+  --bs-btn-color: var(--color-text-inverse);
+  --bs-btn-bg: var(--color-text);
+  --bs-btn-border-color: var(--color-text);
+  --bs-btn-hover-color: var(--color-text-inverse);
+  --bs-btn-hover-bg: var(--color-action-hover);
+  --bs-btn-hover-border-color: var(--color-action-hover);
+  --bs-btn-active-color: var(--color-text-inverse);
+  --bs-btn-active-bg: var(--color-text);
+  --bs-btn-active-border-color: var(--color-text);
+  --bs-btn-disabled-color: var(--color-text-inverse);
+  --bs-btn-disabled-bg: var(--color-text);
+  --bs-btn-disabled-border-color: var(--color-text);
+  --bs-btn-focus-box-shadow: inset 0 -3px 0 var(--color-action-signal);
 }
 .btn-outline-primary {
   --bs-btn-color: var(--letchi-text);
   --bs-btn-border-color: var(--color-primary);
-  --bs-btn-hover-color: var(--color-text);
-  --bs-btn-hover-bg: var(--color-primary);
-  --bs-btn-hover-border-color: var(--color-primary);
-  --bs-btn-active-color: var(--color-text);
-  --bs-btn-active-bg: var(--color-primary);
-  --bs-btn-active-border-color: var(--color-primary);
+  --bs-btn-hover-color: var(--color-text-inverse);
+  --bs-btn-hover-bg: var(--color-action-hover);
+  --bs-btn-hover-border-color: var(--color-action-hover);
+  --bs-btn-active-color: var(--color-text-inverse);
+  --bs-btn-active-bg: var(--color-text);
+  --bs-btn-active-border-color: var(--color-text);
   --bs-btn-disabled-color: var(--letchi-text);
   --bs-btn-disabled-border-color: var(--color-primary);
-  --bs-btn-focus-shadow-rgb: 234, 59, 105;
+  --bs-btn-focus-box-shadow: inset 0 -3px 0 var(--color-action-signal);
 }
 /* line-height en entier (14px), pas 13.5px : une hauteur de ligne
    fractionnaire force le navigateur à arrondir la répartition de
@@ -1101,6 +1155,22 @@ img { max-width: 100%; display: block; }
 .btn:active:not(:disabled),
 .icon-btn:active,
 .tag-pill:active { transform: translateY(1px); }
+/* Appui du bouton principal : le liseré letchi rentre et le bouton descend de sa
+   hauteur, il s'enfonce. Enfoncement en 60ms, remontée à la durée normale.
+   Placé APRÈS la règle générique (même spécificité) pour que les 3px gagnent ;
+   le bloc prefers-reduced-motion, plus bas, annule toujours la translation.
+   / Primary press: the letchi edge retracts and the button sinks by its height.
+   After the generic rule so 3px wins; reduced motion still cancels it below. */
+.btn--primary:active:not(:disabled),
+.btn-primary:active:not(:disabled),
+.btn--outline-primary:active:not(:disabled),
+.btn-outline-primary:active:not(:disabled) {
+  background: var(--color-text);
+  color: var(--color-text-inverse);
+  box-shadow: inset 0 0 0 var(--color-action-signal);
+  transform: translateY(3px);
+  transition-duration: 60ms;
+}
 
 .icon-btn {
   width: 38px;
@@ -1503,7 +1573,7 @@ img { max-width: 100%; display: block; }
   overflow: hidden;
 }
 .map-panel__toolbar { position: absolute; top: var(--space-4); right: var(--space-4); right: var(--space-4); display: flex; justify-content: space-between; align-items: flex-start; z-index: 1001; }
-.map-panel__label { font-size: var(--text-sm); font-weight: 700; color: var(--color-text-muted); background: var(--color-bg); padding: 4px 0; }
+.map-panel__label { font-size: var(--text-sm); font-weight: 700; color: var(--color-text-muted); background: var(--color-bg); padding: 4px ;  border-radius: var(--radius-pill);}
 /* Carte Leaflet reelle posee dans le panneau (accueil V2). Elle remplit tout
    le panneau ; le fond quadrille de .map-panel sert de fond de chargement
    avant l'arrivee des tuiles. La toolbar passe au-dessus des controles
@@ -1604,18 +1674,35 @@ img { max-width: 100%; display: block; }
 #explorer-root .explorer-card-dist { color: var(--color-text-faint); font-size: var(--text-sm); }
 #explorer-root .explorer-card-dist--sans-lieu { color: var(--color-text-faint); }
 
-/* Lien "Visiter le lieu" : look btn--primary btn--sm de la maquette. */
-/* / "Visit the venue" link: mockup btn--primary btn--sm look. */
+/* Lien "Visiter le lieu" : look btn--primary btn--sm (fond encre, liseré letchi,
+   enfoncement à l'appui). / "Visit the venue" link: btn--primary btn--sm look. */
 #explorer-root .explorer-card-link {
-  background: var(--color-primary);
-  color: var(--color-text);
+  background: var(--color-text);
+  color: var(--color-text-inverse);
+  border-color: var(--color-text);   /* explorer.css pose une bordure verte */
+  box-shadow: inset 0 -3px 0 var(--color-action-signal);
   font-weight: 700;
   padding: 7px 14px;
   font-size: var(--text-md);
   border-radius: var(--radius-pill);
   text-decoration: none;
+  transition: background var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), transform 100ms var(--ease-out);
 }
-#explorer-root .explorer-card-link:hover { filter: brightness(1.08); color: var(--color-text); }
+#explorer-root .explorer-card-link:hover {
+  background: var(--color-action-hover);
+  color: var(--color-text-inverse);
+  border-color: var(--color-action-hover);
+  box-shadow: inset 0 -5px 0 var(--color-action-signal);
+  transform: none;   /* explorer.css décale de 2px au survol : un seul mouvement, celui de l'appui */
+}
+#explorer-root .explorer-card-link:active {
+  box-shadow: inset 0 0 0 var(--color-action-signal);
+  transform: translateY(3px);
+  transition-duration: 60ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  #explorer-root .explorer-card-link:active { transform: none; }
+}
 
 /* Carte du lieu courant ("Vous etes ici") : bordure + badge aux couleurs  */
 /* du skin, au lieu du bleu Bootstrap (--bs-primary) pose par explorer.css.  */
@@ -2234,7 +2321,7 @@ details.module + details.module { margin-top: var(--space-4); }
      Filets au-dessus des titres, badges du bloc
      LIEU, bordure des sous-cartes, bande du bloc CTA et bordures des boutons
      étaient en bleu Bootstrap au lieu du letchi. Texte encre sur le letchi,
-     même règle de contraste que .btn--primary.
+     encre sur --letchi-fond (4,63:1).
      / Same cause: the CMS accent was reading Bootstrap blue instead of letchi. */
   --tb-accent: var(--color-primary);
   --tb-accent-contraste: var(--color-text);
