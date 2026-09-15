@@ -1,28 +1,35 @@
 {% load static i18n %}
 <header class="header-background">
-{% if mode_ecole %}
-{# Bandeau orange visible en mode ecole (LNE exigence 5) — indique que les ventes sont des simulations #}
-{# / Orange banner visible in training mode (LNE req. 5) — indicates sales are simulations #}
-<div style="background: #ff6600; color: white; text-align: center; padding: 8px; font-weight: bold; font-size: 1.2em; position: relative; z-index: 1000;"
-     role="alert"
-     aria-label="{% translate 'Mode ecole actif' %}"
-     data-testid="banner-mode-ecole">
-    {% translate "MODE ECOLE — SIMULATION" %}
-</div>
-{% endif %}
-	<div class="flex-container">
-        <!-- link = first sales point of the primary card -->
-        <div class="header-img" data-nav-spinner
-             onclick="window.location = '{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{card.pvs_list.0.uuid}}&tag_id_cm={{card.tag_id}}&type_app={{type_app}}'">
-            <img class="pointer" alt="TiBillet" src="{% static 'images/logo.svg' %}" />
-        </div>
-        <div id="header-title" class="menu-burger-icon" onclick="toggleMenuBurger(event,'left');showSubMenu(event, '.sub-menu-pvs')">
-            <i class="fas {{ pv.icon }}" aria-hidden="true"></i> &nbsp;
-            {% if pv.name and hide_pv_name != True %} {{ pv.name }}{% endif %}
-            <span class="pos-chevron"></span>
-        </div>
-
-        <!--
+  {% if mode_ecole %}
+    {# Bandeau orange visible en mode ecole (LNE exigence 5) — indique que les ventes sont des simulations #}
+    {# / Orange banner visible in training mode (LNE req. 5) — indicates sales are simulations #}
+    <div style="background: #ff6600;
+                color: white;
+                text-align: center;
+                padding: 8px;
+                font-weight: bold;
+                font-size: 1.2em;
+                position: relative;
+                z-index: 1000"
+         role="alert"
+         aria-label="{% translate 'Mode ecole actif' %}"
+         data-testid="banner-mode-ecole">{% translate "MODE ECOLE — SIMULATION" %}</div>
+  {% endif %}
+  <div class="flex-container">
+    <!-- link = first sales point of the primary card -->
+    <div class="header-img"
+         data-nav-spinner
+         onclick="window.location = '{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{ card.pvs_list.0.uuid }}&tag_id_cm={{ card.tag_id }}&type_app={{ type_app }}'">
+      <img class="pointer" alt="TiBillet" src="{% static 'images/logo.svg' %}" />
+    </div>
+    <div id="header-title"
+         class="menu-burger-icon"
+         onclick="toggleMenuBurger(event,'left');showSubMenu(event, '.sub-menu-pvs')">
+      <i class="fas {{ pv.icon }}" aria-hidden="true"></i> &nbsp;
+      {% if pv.name and hide_pv_name != True %}{{ pv.name }}{% endif %}
+      <span class="pos-chevron"></span>
+    </div>
+    <!--
         INDICATEUR CONNEXION WEBSOCKET — toujours visible dans le header
         / WebSocket connection indicator — always visible in header
 
@@ -39,104 +46,127 @@
         3. Clic → envoie JSON {"type":"ping","client_ts":...} via WebSocket
         4. Consumer repond {"type":"pong","client_ts":...}
         5. JS calcule (now - client_ts) et affiche le delai
-        -->
-
-        <div class="net ws-indicator ws-disconnected"  id="ws-indicator" onclick="wsPing()" title="{% translate 'Cliquer pour tester la latence' %}">
-            <i class="net-dot"></i><span class="ws-indicator-text">En ligne</span>
-        </div>
-{#        <div class="header-status">#}
-{#            <div id="header-status-info1"></div>#}
-{#            <div id="header-status-info2"></div>#}
-{#        </div>#}
+-->
+    <div class="net ws-indicator ws-disconnected"
+         id="ws-indicator"
+         onclick="wsPing()"
+         title="{% translate 'Cliquer pour tester la latence' %}">
+      <i class="net-dot"></i><span class="ws-indicator-text">En ligne</span>
     </div>
-
-    <nav id="menu-large" class="hdr-nav" aria-label="Menu">
-        <button class="hdr-nav-btn" data-dest="preparations"><i class="fas fa-solid fa-clipboard" aria-hidden="true"></i>Préparations</button>
-        <button class="hdr-nav-btn" data-dest="tables"><i class="fas fa-solid fa-chair" aria-hidden="true"></i>Tables</button>
-        <button class="hdr-nav-btn" data-dest="ventes"
-                hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?uuid_pv={{ pv.id }}&tag_id_cm={{ card.tag_id }}&type_app={{type_app}}"
-                hx-target="body"
-                hx-swap="innerHTML"
-                hx-push-url="true">
-            <i class="fas fa-solid fa-signal" aria-hidden="true"></i>Ventes
-        </button>
-        <button class="hdr-nav-btn" data-dest="parametres" aria-label="Paramètres"><i class="fas fa-solid fa-cog"></i></button>
-    </nav>
-    <nav id="menu-small" class="hdr-nav">
-            <i class="menu-burger-icon fas fa-bars curseur-action" onclick="toggleMenuBurger(event)"
-               role="button" aria-label="{% translate 'Menu' %}" data-testid="burger-icon"></i>
-    </nav>
-
+    {#        <div class="header-status">#}
+    {#            <div id="header-status-info1"></div>#}
+    {#            <div id="header-status-info2"></div>#}
+    {#        </div>#}
+  </div>
+  <nav id="menu-large" class="hdr-nav" aria-label="Menu">
+    <button class="hdr-nav-btn" data-dest="preparations">
+      <i class="fas fa-solid fa-clipboard" aria-hidden="true"></i>Préparations
+    </button>
+    {% if not pv.service_direct %}
+      <button class="hdr-nav-btn{% if not id_table %} is-missing{% endif %}" data-id-table="{{ id_table }}" data-dest="tables">
+        <i class="fas fa-solid fa-chair" aria-hidden="true"></i>
+        Tables
+      </button>
+    {% endif %}
+    <button class="hdr-nav-btn"
+            data-dest="ventes"
+            hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?uuid_pv={{ pv.id }}&tag_id_cm={{ card.tag_id }}&type_app={{ type_app }}"
+            hx-target="body"
+            hx-swap="innerHTML"
+            hx-push-url="true">
+      <i class="fas fa-solid fa-signal" aria-hidden="true"></i>Ventes
+    </button>
+    <button class="hdr-nav-btn" data-dest="parametres" aria-label="Paramètres">
+      <i class="fas fa-solid fa-cog"></i>
+    </button>
+  </nav>
+  <nav id="menu-small" class="hdr-nav">
+    <i class="menu-burger-icon fas fa-bars curseur-action"
+       onclick="toggleMenuBurger(event)"
+       role="button"
+       aria-label="{% translate 'Menu' %}"
+       data-testid="burger-icon"></i>
+  </nav>
 </header>
-<div id="menu-burger-overlay" data-testid="menu-burger-overlay" aria-hidden="true"></div>
-<nav id="menu-burger-container" aria-label="{% translate 'Menu principal' %}" data-testid="menu-burger">
-	<div class="main-menu">
-		<span class="menu-panel-title menu-burger-item-content">{% translate "Menu" %}</span>
-		<div class="menu-burger-item menu-burger-item-content" onclick="showSubMenu(event, '.sub-menu-pvs')">
-			<i class="menu-burger-item-content fas fa-solid fa-clipboard"></i>
-			<div class="menu-burger-item-content">{% translate "POINTS DE VENTES" %}</div>
-		</div>
-		<div class="menu-burger-item menu-burger-item-content">
-			<i class="menu-burger-item-content fas fa-concierge-bell"></i>
-			<div class="menu-burger-item-content">{% translate "PREPARATIONS" %}</div>
-		</div>
-		<div class="menu-burger-item menu-burger-item-content">
-			<i class="menu-burger-item-content fas fa-solid fa-chair"></i>
-			<div class="menu-burger-item-content">{% translate "TABLES" %}</div>
-		</div>
-		<div class="menu-burger-item menu-burger-item-content"
-			hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?uuid_pv={{ pv.id }}&tag_id_cm={{ card.tag_id }}&type_app={{type_app}}"
-			hx-target="body"
-			hx-swap="innerHTML"
-			hx-push-url="true"
-			onclick="hideMenuBurger()"
-			data-loading-disable
-			data-testid="menu-ventes">
-			<i class="menu-burger-item-content fas fa-solid fa-signal" aria-hidden="true"></i>
-			<div class="menu-burger-item-content">{% translate "VENTES" %}</div>
-		</div>
-		<div class="menu-burger-item menu-burger-item-content" onclick="showSubMenu(event, '.sub-menu-params')">
-			<i class="menu-burger-item-content fas fa-cog"></i>
-			<div class="menu-burger-item-content">{% translate "PARAMÈTRES" %}</div>
-		</div>
-	</div>
-	<!-- sub menu points de vente -->
-	<div class="sub-menu-pvs sub-menu hide">
-		<span class="menu-panel-title menu-burger-item-content">{% translate "Points de vente" %}</span>
-		{# La variable de boucle s'appelle pv_item et non pv : sinon elle masquerait #}
-		{# le pv du contexte, qui est le point de vente courant a surligner.         #}
-		{# / The loop variable is pv_item, not pv: it would otherwise shadow the      #}
-		{# context's pv, which is the current point of sale to highlight.             #}
-		{% for pv_item in card.pvs_list %}
-		{# Full reload (pas de hx-get) pour que les event listeners JS (articles.js, #}
-		{# addition.js, tarif.js) soient re-attaches au chargement de la page POS.    #}
-		{# Un swap HTMX body detruit ces listeners et le POS ne fonctionne plus.       #}
-		{# / Full reload (no hx-get) so JS event listeners are re-attached on POS load.#}
-		<a class="menu-burger-item menu-burger-item-content"
-			href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{pv_item.uuid}}&tag_id_cm={{card.tag_id}}&type_app={{type_app}}"
-			data-nav-spinner
-			{% if pv_item.uuid == pv.id %}aria-current="true" data-testid="menu-pv-courant"{% endif %}>
-			<i class="menu-burger-item-content fas {{ pv_item.icon }}" aria-hidden="true"></i>
-			<div class="menu-burger-item-content">{{ pv_item.name }}</div>
-			{% if pv_item.uuid == pv.id %}
-			<i class="menu-burger-item-content menu-row-check fas fa-check"
-			   aria-label="{% translate 'Point de vente actuel' %}"></i>
-			{% endif %}
-		</a>
-		{% endfor %}
-	</div>
-	<!-- dev sub menu paramètres -->
-	<div class="sub-menu-params sub-menu hide">
-		<span class="menu-panel-title menu-burger-item-content">{% translate "Paramètres" %}</span>
-		<div class="menu-burger-item menu-burger-item-content">
-			<i class="menu-burger-item-content fas fa-utensils"></i>
-			<div class="menu-burger-item-content">params 1</div>
-		</div>
-		<div class="menu-burger-item menu-burger-item-content">
-			<i class="menu-burger-item-content fas fa-utensils"></i>
-			<div class="menu-burger-item-content">params 2</div>
-		</div>
-	</div>
+<div id="menu-burger-overlay"
+     data-testid="menu-burger-overlay"
+     aria-hidden="true"></div>
+<nav id="menu-burger-container"
+     aria-label="{% translate 'Menu principal' %}"
+     data-testid="menu-burger">
+  <div class="main-menu">
+    <span class="menu-panel-title menu-burger-item-content">{% translate "Menu" %}</span>
+    <div class="menu-burger-item menu-burger-item-content"
+         onclick="showSubMenu(event, '.sub-menu-pvs')">
+      <i class="menu-burger-item-content fas fa-solid fa-clipboard"></i>
+      <div class="menu-burger-item-content">{% translate "POINTS DE VENTES" %}</div>
+    </div>
+    <div class="menu-burger-item menu-burger-item-content">
+      <i class="menu-burger-item-content fas fa-concierge-bell"></i>
+      <div class="menu-burger-item-content">{% translate "PREPARATIONS" %}</div>
+    </div>
+    {% if not pv.service_direct %}
+      <div class="menu-burger-item menu-burger-item-content">
+        <i class="menu-burger-item-content fas fa-solid fa-chair"></i>
+        <div class="menu-burger-item-content">{% translate "TABLES" %}</div>
+      </div>
+    {% endif %}
+    <div class="menu-burger-item menu-burger-item-content"
+         hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?uuid_pv={{ pv.id }}&tag_id_cm={{ card.tag_id }}&type_app={{ type_app }}"
+         hx-target="body"
+         hx-swap="innerHTML"
+         hx-push-url="true"
+         onclick="hideMenuBurger()"
+         data-loading-disable
+         data-testid="menu-ventes">
+      <i class="menu-burger-item-content fas fa-solid fa-signal"
+         aria-hidden="true"></i>
+      <div class="menu-burger-item-content">{% translate "VENTES" %}</div>
+    </div>
+    <div class="menu-burger-item menu-burger-item-content"
+         onclick="showSubMenu(event, '.sub-menu-params')">
+      <i class="menu-burger-item-content fas fa-cog"></i>
+      <div class="menu-burger-item-content">{% translate "PARAMÈTRES" %}</div>
+    </div>
+  </div>
+  <!-- sub menu points de vente -->
+  <div class="sub-menu-pvs sub-menu hide">
+    <span class="menu-panel-title menu-burger-item-content">{% translate "Points de vente" %}</span>
+    {# La variable de boucle s'appelle pv_item et non pv : sinon elle masquerait #}
+    {# le pv du contexte, qui est le point de vente courant a surligner.         #}
+    {# / The loop variable is pv_item, not pv: it would otherwise shadow the      #}
+    {# context's pv, which is the current point of sale to highlight.             #}
+    {% for pv_item in card.pvs_list %}
+      {# Full reload (pas de hx-get) pour que les event listeners JS (articles.js, #}
+      {# addition.js, tarif.js) soient re-attaches au chargement de la page POS.    #}
+      {# Un swap HTMX body detruit ces listeners et le POS ne fonctionne plus.       #}
+      {# / Full reload (no hx-get) so JS event listeners are re-attached on POS load.#}
+      <a class="menu-burger-item menu-burger-item-content"
+         href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{ pv_item.uuid }}&tag_id_cm={{ card.tag_id }}&type_app={{ type_app }}"
+         data-nav-spinner
+         {% if pv_item.uuid == pv.id %}aria-current="true" data-testid="menu-pv-courant"{% endif %}>
+        <i class="menu-burger-item-content fas {{ pv_item.icon }}"
+           aria-hidden="true"></i>
+        <div class="menu-burger-item-content">{{ pv_item.name }}</div>
+        {% if pv_item.uuid == pv.id %}
+          <i class="menu-burger-item-content menu-row-check fas fa-check"
+             aria-label="{% translate 'Point de vente actuel' %}"></i>
+        {% endif %}
+      </a>
+    {% endfor %}
+  </div>
+  <!-- dev sub menu paramètres -->
+  <div class="sub-menu-params sub-menu hide">
+    <span class="menu-panel-title menu-burger-item-content">{% translate "Paramètres" %}</span>
+    <div class="menu-burger-item menu-burger-item-content">
+      <i class="menu-burger-item-content fas fa-utensils"></i>
+      <div class="menu-burger-item-content">params 1</div>
+    </div>
+    <div class="menu-burger-item menu-burger-item-content">
+      <i class="menu-burger-item-content fas fa-utensils"></i>
+      <div class="menu-burger-item-content">params 2</div>
+    </div>
+  </div>
 </nav>
 <script>
 	window.showSubMenu = function (event, subMenuClass) {
@@ -194,4 +224,3 @@
 	})
 
 </script>
-
