@@ -2416,11 +2416,6 @@ def _enrichir_explorer_data_avec_type_et_distance(explorer_data, config):
             client_du_reseau.get_categorie_display(),
         )
 
-    for tenant_data in explorer_data.get("tenants", []):
-        categorie_du_tenant = categories_par_uuid.get(tenant_data.get("tenant_id"))
-        if categorie_du_tenant:
-            tenant_data["categorie"], tenant_data["categorie_label"] = categorie_du_tenant
-
     # Origine des distances : l'adresse principale du tenant courant.
     # Si elle n'a pas de coordonnees GPS, aucune distance n'est calculee.
     # / Distance origin: the current tenant's main address. Without GPS

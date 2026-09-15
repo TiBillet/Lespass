@@ -87,12 +87,6 @@
         mapInitialized: false,
     };
 
-    // Types de lieu disponibles, calcules au init depuis les donnees.
-    // Vide si les donnees ne portent pas de categorie (ex : /explorer/ public)
-    // -> la rangee de pills de type n'est alors jamais affichee.
-    // / Available venue types, computed at init. Empty when data carries no
-    // category (e.g. public /explorer/) -> the type pills row stays hidden.
-    let categoriesDisponibles = [];
 
     // ============================================================
     // DOM — references mises en cache au init
@@ -108,7 +102,6 @@
         counter: null,
         fab: null,
         tags: null,   // conteneur chips tags / tag chips container
-        typePills: null,   // conteneur pills type de lieu / venue type pills container
     };
 
     // ============================================================
@@ -181,10 +174,6 @@
         dom.counter = document.getElementById('explorer-counter');
         dom.fab = document.getElementById('explorer-fab');
         dom.tags = document.getElementById('explorer-tags');
-        // Pills de type de lieu : conteneur present seulement sur la page
-        // Reseau V2. Absent ailleurs -> toute la mecanique de type s'eteint.
-        // / Venue type pills: container only exists on the V2 Network page.
-        dom.typePills = document.getElementById('explorer-type-pills');
 
         // Garde-fou : si les elements essentiels manquent, abandonner
         // / Guard: if essential elements are missing, abort
@@ -206,11 +195,10 @@
         // l'URL (?tag=xxx) avec la vue "lieu" par defaut serait un filtre invisible -> reset.
         // / V2 page: tag chips only show in "event" view — reset a URL-provided tag
         // when the initial view is "lieu".
-        if (dom.typePills && state.filters.view === 'lieu') {
+        if (state.filters.view === 'lieu') {
             state.filters.tag = null;
         }
 
-        renderTypePills();   // pills de type de lieu (si donnees enrichies) / venue type pills
         bindControls();
         applyFilters();
 
@@ -539,7 +527,6 @@
 
         // 4bis. Visibilite de la rangee de pills de type : seulement en vue
         // "lieu". / Type pills row visibility: only in "lieu" view.
-        updateTypePillsVisibility();
 
         // 5. Synchroniser l'URL (Task 9 ajoutera syncURL).
         // / Sync URL (Task 9 will add syncURL).
@@ -576,7 +563,6 @@
         bindFAB();
         bindListDelegation();
         bindTagChips();
-        bindTypePills();
     }
 
     function bindSearch() {
@@ -618,16 +604,7 @@
             allPills.forEach(function (p) { p.classList.remove('active'); });
             pill.classList.add('active');
             state.filters.view = pill.getAttribute('data-category') || 'lieu';
-            // Le filtre par type de lieu n'a de sens qu'en vue "lieu" : en
-            // passant en vue "event", on le reinitialise pour ne pas
-            // restreindre les evenements affiches par surprise.
-            // / The venue type filter only makes sense in "lieu" view: reset
-            // it when switching to "event" view to avoid silently restricting
-            // the displayed events.
-            if (state.filters.view !== 'lieu') {
-                state.filters.typeLieu = null;
-                syncTypePillsActives();
-            }
+
             // Symetrique (page Reseau V2 uniquement) : les chips de tags ne
             // s'affichent qu'en vue "event". En repassant en vue "lieu", on
             // reinitialise le tag actif pour ne pas filtrer les lieux avec
@@ -635,7 +612,7 @@
             // / Symmetric (V2 Network page only): tag chips only show in
             // "event" view. When switching back to "lieu" view, reset the
             // active tag so venues are not filtered by an invisible criterion.
-            if (dom.typePills && state.filters.view === 'lieu') {
+            if (state.filters.view === 'lieu') {
                 state.filters.tag = null;
             }
             applyFilters();
@@ -672,95 +649,6 @@
             }
             applyFilters();
         });
-    }
-
-    // ============================================================
-    // TYPE DE LIEU — pills generees depuis les categories presentes
-    // / VENUE TYPE — pills generated from the categories in the data
-    // ============================================================
-    //
-    // Les categories (Client.categorie : Scene, Festival...) sont injectees
-    // cote serveur UNIQUEMENT par la page Reseau du tenant (FederationViewset,
-    // BaseBillet/views.py). Si les donnees n'en portent pas (page publique
-    // /explorer/), categoriesDisponibles reste vide et rien n'est affiche.
-    // / Categories are injected server-side ONLY by the tenant Network page.
-    // Without them (public /explorer/), nothing is rendered.
-
-    function renderTypePills() {
-        // Construit la rangee de pills une seule fois au init.
-        // / Builds the pills row once at init.
-        if (!dom.typePills) return;
-
-        // Categories distinctes presentes dans les tenants, triees par label.
-        // / Distinct categories present in tenants, sorted by label.
-        const labelsParCode = {};
-        const tenants = (state.data && state.data.tenants) || [];
-        for (let i = 0; i < tenants.length; i++) {
-            const tenant = tenants[i];
-            if (tenant.categorie && tenant.categorie_label && !labelsParCode[tenant.categorie]) {
-                labelsParCode[tenant.categorie] = tenant.categorie_label;
-            }
-        }
-        categoriesDisponibles = Object.keys(labelsParCode).map(function (code) {
-            return { code: code, label: labelsParCode[code] };
-        });
-        categoriesDisponibles.sort(function (a, b) {
-            return a.label.localeCompare(b.label);
-        });
-
-        // Aucune categorie dans les donnees : la rangee reste cachee a jamais.
-        // / No category in the data: the row stays hidden forever.
-        if (categoriesDisponibles.length === 0) {
-            dom.typePills.hidden = true;
-            return;
-        }
-
-        // data-categorie="" sur "Tout" = pas de filtre.
-        // / data-categorie="" on "All" = no filter.
-        let html = '<button type="button" class="tag-pill explorer-type-pill is-active"'
-            + ' data-categorie="" data-testid="explorer-type-pill-tout">'
-            + escapeHtml(config.i18n.tout) + '</button>';
-        for (let i = 0; i < categoriesDisponibles.length; i++) {
-            const categorie = categoriesDisponibles[i];
-            html += '<button type="button" class="tag-pill explorer-type-pill"'
-                + ' data-categorie="' + escapeHtml(categorie.code) + '"'
-                + ' data-testid="explorer-type-pill-' + escapeHtml(categorie.code) + '">'
-                + escapeHtml(categorie.label) + '</button>';
-        }
-        dom.typePills.innerHTML = html;
-    }
-
-    function bindTypePills() {
-        if (!dom.typePills) return;
-        dom.typePills.addEventListener('click', function (ev) {
-            const pill = ev.target.closest('.explorer-type-pill');
-            if (!pill) return;
-            // Chaine vide ("Tout") -> null = pas de filtre.
-            // / Empty string ("All") -> null = no filter.
-            state.filters.typeLieu = pill.getAttribute('data-categorie') || null;
-            syncTypePillsActives();
-            applyFilters();
-        });
-    }
-
-    function syncTypePillsActives() {
-        // Met a jour la classe is-active des pills de type pour refleter
-        // state.filters.typeLieu. / Sync the is-active class with the state.
-        if (!dom.typePills) return;
-        const pills = dom.typePills.querySelectorAll('.explorer-type-pill');
-        for (let i = 0; i < pills.length; i++) {
-            const code = pills[i].getAttribute('data-categorie') || null;
-            pills[i].classList.toggle('is-active', code === state.filters.typeLieu);
-        }
-    }
-
-    function updateTypePillsVisibility() {
-        // La rangee n'est visible qu'en vue "lieu" ET si des categories
-        // existent dans les donnees. / Visible only in "lieu" view AND when
-        // categories exist in the data.
-        if (!dom.typePills) return;
-        const aDesPills = categoriesDisponibles.length > 0;
-        dom.typePills.hidden = !(aDesPills && state.filters.view === 'lieu');
     }
 
     // ============================================================
@@ -1094,7 +982,7 @@
         // / V2 Network page only (has #explorer-type-pills): tag chips only
         // show in "event" view — symmetric with venue type pills. Everywhere
         // else, keep the historical behavior (chips in both views).
-        if (dom.typePills && state.filters.view !== 'event') {
+        if (state.filters.view !== 'event') {
             dom.tags.innerHTML = '';
             dom.tags.hidden = true;
             return;
