@@ -280,7 +280,7 @@ data-testid="booking-open-panel" (dans reservation_declencheur.html).
     {# L'hôte : même carte que l'en-tête d'un lieu (maquette). / The host venue. #}
     <section class="section" data-testid="evenement-hote">
         <h2 class="section__title">{% translate "Le lieu qui accueille" %}</h2>
-        <div class="place-header__card event-hote">
+        <div class="place-header__card event-hote" style="--place-tint: var(--color-surface-tint)">
             <div class="place-id">
                 {% if config.logo %}
                     <span class="place-id__mark place-id__mark--logo">
@@ -296,7 +296,7 @@ data-testid="booking-open-panel" (dans reservation_declencheur.html).
                     {% endif %}
                 </span>
             </div>
-            <a class="btn btn--secondary btn--sm" href="/" hx-get="/" hx-target="body" hx-push-url="true">{% translate 'Découvrir le lieu' %}</a>
+            <a class="btn btn--primary btn--sm" href="/" hx-get="/" hx-target="body" hx-push-url="true">{% translate 'Découvrir le lieu' %}</a>
         </div>
     </section>
 

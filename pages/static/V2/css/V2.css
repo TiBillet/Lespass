@@ -90,7 +90,7 @@
 
   /* --- Compositions de dégradés (voisines uniquement — deux couleurs
      opposées sur la roue produisent une zone boueuse au centre) --- */
-  --grad-chaud: linear-gradient(135deg, var(--letchi-fond) 0%, var(--zanana) 100%);  /* signature : letchi → zanana — départ en --letchi-fond pour que l'encre passe 4,5:1 sur tout le dégradé */
+  --grad-chaud: linear-gradient(135deg, var(--letchi-fond) 0%, var(--zanana) 100%);  /* signature : letchi → zanana — en liseré sous « Recharger » et « Faire un don », plus sous aucun texte (voir .btn--signature) */
   --grad-frais: linear-gradient(135deg, var(--zanana) 0%, var(--chouchou) 100%);  /* zanana → chouchou */
   --grad-calme: linear-gradient(135deg, var(--loseyan) 0%, var(--chouchou) 100%);  /* loséyan → chouchou */
   --grad-nuit:  linear-gradient(160deg, var(--loseyan) 0%, var(--violet) 50%, var(--letchi) 100%); /* loséyan → violet → letchi — décoratif seul, jamais sous du texte de bouton (le point violet retombe à 3,8:1) */
@@ -211,8 +211,8 @@
   --bs-primary: var(--color-primary);
   --bs-primary-rgb: 234, 59, 105;
 
-  /* Blocs CMS : titres en Luciole, action principale en letchi avec
-     texte encre (encre sur --letchi-fond : 4,63:1).
+  /* Blocs CMS : titres en Luciole, accent letchi, libellé des boutons
+     en blanc sur encre (voir « BOUTONS DES BLOCS »).
 
      ATTENTION — CES TROIS LIGNES NE PORTENT RIEN POUR LES PAGES CMS, et c'est
      normal : tb-blocs.css déclare ces mêmes jetons sur `.tb-page` lui-même
@@ -229,7 +229,7 @@
      end of this file). These only serve components outside `.tb-page`. */
   --tb-police-titre: var(--font-text);
   --tb-accent: var(--color-primary);
-  --tb-accent-contraste: var(--color-text);
+  --tb-accent-contraste: var(--color-text-inverse);
   /* L'accent en TEXTE : letchi FONCÉ. Le letchi vif ne passe pas en texte sur
      papier (3,87:1, seuil 4,5) alors qu'il passe en aplat sous de l'encre
      (4,45:1) — et l'inverse est vrai du letchi foncé (encre dessus : 3,71:1).
@@ -509,12 +509,12 @@ img { max-width: 100%; display: block; }
 /* Appels à l'action du pied de page — même gabarit pour les trois,
    compositions voisines de la DA (jamais grad-nuit ici : le point
    violet retombe sous le seuil de lisibilité pour un texte de bouton).
-   Texte encre : mesuré à 4,6-9,5:1 selon la teinte, le blanc plafonne
-   plus bas et zanana en particulier devient illisible en blanc.
+   Le don n'a plus d'aplat dégradé sous son texte : fond encre, libellé
+   blanc, dégradé en liseré (même règle que .btn--signature).
 
-   UN SEUL DÉGRADÉ PLEIN PAR SURFACE. Trois aplats en dégradé empilés
+   UN SEUL DÉGRADÉ PAR SURFACE. Trois aplats en dégradé empilés
    contredisaient la règle du .btn--signature (« un CTA de plus en dégradé
-   remettrait de la couleur partout ») : le don garde l'aplat chaud, les deux
+   remettrait de la couleur partout ») : le don garde le dégradé chaud, les deux
    autres passent en bouton blanc cerné, leur composition réduite à une
    pastille devant le libellé. La couleur reste un repère, plus un vacarme.
    Libellés autorisés sur deux lignes : les boutons font toute la largeur de la
@@ -540,7 +540,9 @@ img { max-width: 100%; display: block; }
   transition: filter var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), transform 100ms var(--ease-out);
 }
 .btn--grad:hover { filter: brightness(1.06); }
-.btn--grad-chaud { background: var(--grad-chaud); }   /* Faire un don — la signature */
+/* Faire un don — la signature. Fond encre et liseré dégradé : voir .btn--signature.
+   4px de plus en bas pour compenser le liseré et garder le libellé centré. */
+.btn--grad-chaud { padding-bottom: 19px; }
 .btn--grad-calme { background: var(--grad-calme); }   /* Créer un espace */
 .btn--grad-frais { background: var(--grad-frais); }   /* Contribuer au projet */
 
@@ -1139,15 +1141,47 @@ img { max-width: 100%; display: block; }
    son solde. Pas un aplat générique parmi d'autres — un CTA de plus qui
    passerait en dégradé remettrait de la couleur partout, ce que la DA
    proscrit justement.
-   grad-chaud et texte encre, et NON plus grad-nuit : aucun texte ne passait
-   sur grad-nuit (blanc 3,25:1 au point bleu, encre 3,79:1 au point violet),
-   l'ombre portée ne remplaçant pas le contraste. Encre sur grad-chaud :
-   4,63:1 au départ letchi-fond, 9,5:1 à l'arrivée zanana. grad-nuit reste
-   la surface décorative du talisman, qui ne porte pas de libellé à lire.
-   / grad-chaud with ink, no longer grad-nuit: no text colour cleared AA on
-   grad-nuit. Ink on grad-chaud: 4.63:1 to 9.5:1. */
-.btn--signature { background: var(--grad-chaud); color: var(--color-text); }
-.btn--signature:hover { filter: brightness(1.08); }
+   grad-chaud, et NON grad-nuit : aucun texte ne passait sur grad-nuit (blanc
+   3,25:1 au point bleu, encre 3,79:1 au point violet). grad-nuit reste la
+   surface décorative du talisman, qui ne porte pas de libellé à lire.
+   / grad-chaud, not grad-nuit: no text colour cleared AA on grad-nuit. */
+/* LISERÉ DÉGRADÉ, et plus aplat. L'encre sur grad-chaud passait WCAG (4,63 →
+   9,5:1) mais pas l'œil : Lc 38 au départ letchi en APCA, Lc 42 à 53 sous le
+   libellé centré de « Recharger ». Même mécanique que .btn--primary : fond
+   encre, libellé blanc (18,2:1), le dégradé en liseré de 4px (6px au survol),
+   qui rentre à l'appui. Plus épais que le liseré letchi simple : la signature
+   se distingue du bouton principal. Le liseré est un élément non textuel :
+   4,6 → 9,5:1 contre l'encre, seuil 3:1.
+   Technique : une couche encre, plus courte que le bouton, posée sur le dégradé.
+   `border-box` sur les deux couches, sinon le dégradé déborde sous la bordure
+   transparente de .btn et dessine un filet autour du bouton.
+   Même règle pour « Faire un don » (.btn--grad-chaud, pied de page).
+   / Gradient EDGE, no longer a fill: ink on grad-chaud scored Lc 38-53. Same
+   mechanics as .btn--primary: ink fill, white label, the gradient as a 4px edge
+   (6px on hover) that retracts on press. An ink layer shorter than the button
+   sits on the gradient; border-box on both layers, else the gradient shows
+   under .btn's transparent border. Also used by the footer donation button. */
+.btn--signature,
+.btn--signature:focus-visible,
+.btn--grad-chaud,
+.btn--grad-chaud:focus-visible {
+  background:
+    linear-gradient(var(--color-text), var(--color-text)) top / 100% calc(100% - 4px) no-repeat border-box,
+    var(--grad-chaud) border-box;
+  color: var(--color-text-inverse);
+  border-color: transparent;
+}
+.btn--signature:hover:not(:disabled),
+.btn--grad-chaud:hover:not(:disabled) {
+  background:
+    linear-gradient(var(--color-action-hover), var(--color-action-hover)) top / 100% calc(100% - 6px) no-repeat border-box,
+    var(--grad-chaud) border-box;
+  color: var(--color-text-inverse);
+  filter: none;
+}
+/* Bootstrap met outline: 0 sur .btn:focus-visible : on remet l'anneau du skin. */
+.btn--signature:focus-visible,
+.btn--grad-chaud:focus-visible { outline: 2px solid var(--color-link); outline-offset: 2px; }
 .btn:disabled { opacity: 0.5; cursor: default; }
 /* Appui : le bouton s'enfonce d'un pixel. Un seul signal, pas de rebond ni de
    changement d'échelle. Exclu quand le bouton est désactivé.
@@ -1169,6 +1203,18 @@ img { max-width: 100%; display: block; }
   color: var(--color-text-inverse);
   box-shadow: inset 0 0 0 var(--color-action-signal);
   transform: translateY(3px);
+  transition-duration: 60ms;
+}
+/* Signature et don : même enfoncement, le liseré dégradé (4px) rentre : la
+   couche encre reprend toute la hauteur. / Same press, the 4px gradient edge
+   retracts: the ink layer takes the full height. */
+.btn--signature:active:not(:disabled),
+.btn--grad-chaud:active:not(:disabled) {
+  background:
+    linear-gradient(var(--color-text), var(--color-text)) top / 100% 100% no-repeat border-box,
+    var(--grad-chaud) border-box;
+  color: var(--color-text-inverse);
+  transform: translateY(4px);
   transition-duration: 60ms;
 }
 
@@ -2017,7 +2063,7 @@ img { max-width: 100%; display: block; }
 }
 .event-hero__etat { white-space: normal; }
 .reservation-declencheur { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); }
-.reservation-declencheur > .btn--primary {  }
+.reservation-declencheur > .btn--primary { font-size: var(--text-2xl); line-height: unset; }
 .reservation-declencheur__note { font-size: var(--text-md); color: var(--color-text-muted); }
 /* Texte long saisi par le lieu (HTML riche) : largeur de lecture. */
 /* / Long rich text from the venue: reading width. */
@@ -2320,11 +2366,13 @@ details.module + details.module { margin-top: var(--space-4); }
      ici : tests/pytest/test_marque.py refuse ce littéral dans le CSS du dépôt).
      Filets au-dessus des titres, badges du bloc
      LIEU, bordure des sous-cartes, bande du bloc CTA et bordures des boutons
-     étaient en bleu Bootstrap au lieu du letchi. Texte encre sur le letchi,
-     encre sur --letchi-fond (4,63:1).
-     / Same cause: the CMS accent was reading Bootstrap blue instead of letchi. */
+     étaient en bleu Bootstrap au lieu du letchi.
+     / Same cause: the CMS accent was reading Bootstrap blue instead of letchi.
+     --tb-accent-contraste en BLANC : les boutons des blocs ne posent plus leur
+     libellé sur le letchi mais sur l'encre (voir « BOUTONS DES BLOCS » juste
+     après ce bloc). / White: block buttons now sit on ink, see below. */
   --tb-accent: var(--color-primary);
-  --tb-accent-contraste: var(--color-text);
+  --tb-accent-contraste: var(--color-text-inverse);
   /* Et l'accent en TEXTE, sur le même élément que --tb-accent (c'est là que le
      socle le déclare, donc le seul endroit où une surcharge gagne). Letchi FONCÉ :
      le vif échoue en texte (3,87:1 sur papier, seuil 4,5) tout en passant en aplat
@@ -2333,6 +2381,48 @@ details.module + details.module { margin-top: var(--space-4); }
      override wins). Dark letchi: the vivid one fails as text while passing as a
      fill under ink. Two roles, two tokens. */
   --tb-accent-texte: var(--letchi-text);
+}
+
+/* BOUTONS DES BLOCS — même dessin que .btn--primary : fond encre, libellé blanc,
+   liseré letchi de 3px (5px au survol) qui rentre à l'appui pendant que le
+   bouton descend. Le socle posait le libellé sur le letchi : 4,63:1 en WCAG,
+   Lc 38 en APCA, sur un texte de 16px en semi-gras. Le contour garde son letchi
+   au repos (--tb-accent-texte, Lc 72 sur blanc) et devient le bouton plein au
+   survol. Le filet des titres, les guillemets et les bordures restent en letchi :
+   ce ne sont pas des textes.
+   Le socle soulève le bouton plein au survol (translateY(-2px) et ombre portée) :
+   annulé, le seul mouvement est l'enfoncement. Sélecteurs préfixés .tb-page pour
+   passer devant le socle, y compris devant son bloc prefers-reduced-motion qui
+   remet une ombre au survol.
+   / Block buttons: same look as .btn--primary. The base put the label on letchi
+   (Lc 38). The outline keeps letchi at rest and fills on hover. The base's hover
+   lift is cancelled: the press is the only motion. */
+.tb-page .tb-bloc__bouton--plein {
+  background-color: var(--color-text);
+  border-color: var(--color-text);
+  color: var(--color-text-inverse);
+  box-shadow: inset 0 -3px 0 var(--color-action-signal);
+}
+.tb-page .tb-bloc__bouton--plein:hover,
+.tb-page .tb-bloc__bouton--contour:hover {
+  background-color: var(--color-action-hover);
+  border-color: var(--color-action-hover);
+  color: var(--color-text-inverse);
+  box-shadow: inset 0 -5px 0 var(--color-action-signal);
+  transform: none;
+}
+.tb-page .tb-bloc__bouton--plein:active,
+.tb-page .tb-bloc__bouton--contour:active {
+  background-color: var(--color-text);
+  border-color: var(--color-text);
+  color: var(--color-text-inverse);
+  box-shadow: inset 0 0 0 var(--color-action-signal);
+  transform: translateY(3px);
+  transition-duration: 60ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tb-page .tb-bloc__bouton--plein:active,
+  .tb-page .tb-bloc__bouton--contour:active { transform: none; }
 }
 
 /* SOMMAIRE À GAUCHE. Le socle le place à DROITE (grid-column: 10 / -1), en
