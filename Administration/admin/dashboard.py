@@ -2074,6 +2074,7 @@ MODULE_FIELDS = {
         "testid": "dashboard-card-pages",
         "domaine": "lespass",  # groupe du tableau de bord / dashboard group
         "icone": "web",
+        "beta": True,
         "slug": "site-web",  # module correspondant dans la sidebar
     },
     "module_billetterie": {
