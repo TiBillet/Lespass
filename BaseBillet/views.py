@@ -1134,7 +1134,8 @@ class MyAccount(viewsets.ViewSet):
                     Reservation.PAID_ERROR,
                     Reservation.PAID_NOMAIL,
                     Reservation.VALID,
-                ]
+                ],
+                event__datetime__gte=timezone.localtime(),
             )
 
             # Adhesions de l'utilisateur dans tous les lieux ou il a achete.
@@ -3403,7 +3404,10 @@ class Badge(viewsets.ViewSet):
         from pages.services import gabarit_skin
         template_path = gabarit_skin("vues/compte/partials/badge_switch.html")
 
-        return render(request, template_path, context={})
+        # Le produit sert à rendre un id unique par badge (V2 : "badgeOut-<pk>").
+        # Le partial classic n'utilise pas la clé : sans effet pour les autres skins.
+        # / The product gives each badge a unique id (V2); classic ignores the key.
+        return render(request, template_path, context={'product': product})
 
     @action(detail=False, methods=['GET'])
     def check_out(self, request: HttpRequest):

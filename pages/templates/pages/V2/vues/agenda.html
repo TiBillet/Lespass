@@ -140,9 +140,9 @@ TiBillet. Les pastilles de tags et le bouton de filtres restent donc neutres.
     </form>
 
     {# Liste des événements. id="event_list" : cible HTMX historique de la #}
-    {# pagination (partials/carte_evenement.html, agenda_liste.html). #}
+    {# pagination (cotton/V2/event_card.html, agenda_liste.html). #}
     {# / Event list. id="event_list": historical HTMX target of the pagination. #}
-    <div id="event_list" class="grid grid--3" style="margin-top: var(--space-5);" data-testid="agenda-liste">
+    <div id="event_list" class="grid grid--3 grid--sous-titre" data-testid="agenda-liste">
         {% for date_key, events in dated_events.items %}
             {% for event in events %}
                 <c-V2.event_card :event="event" />

@@ -59,7 +59,7 @@ les adhésions : une seule section, donc pas de sommaire pour l'instant.
     {% block adhesions_grille %}
     <section class="section" id="adhesions" data-testid="adhesions-grille">
         <h2 class="section__title">{% translate 'Adhésions' %}</h2>
-        <div class="grid grid--3" style="margin-top: var(--space-5);">
+        <div class="grid grid--3 grid--sous-titre">
             {% for product in products %}
                 {% if product.publish %}
                     <c-V2.membership_card :product="product" />
@@ -78,7 +78,7 @@ les adhésions : une seule section, donc pas de sommaire pour l'instant.
         <section class="section" id="adhesions-federees" data-testid="adhesions-federees">
             <h2 class="section__title">{% translate 'Chez nos voisins' %}</h2>
             <p class="section__desc">{% translate "Découvrez les adhésions des espaces fédérés :" %}</p>
-            <div class="grid grid--3" style="margin-top: var(--space-5);">
+            <div class="grid grid--3 grid--sous-titre">
                 {% for tenant in federated_tenants %}
                     <article class="service-card">
                         <div class="service-card__head">
