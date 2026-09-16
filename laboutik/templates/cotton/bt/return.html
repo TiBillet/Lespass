@@ -2,8 +2,8 @@
 <c-vars layer="1" :hide_only="False" selector="#messages" action=""/>
 
 {% if hide_only %}
-<div id="bt-retour-layer{{layer}}" class="bt-basic-container bt-basic-bg-return" {{ attrs }}
-	onclick="document.querySelector('{{ selector }}').classList.add('hide')">
+    <div id="bt-retour-layer{{layer}}" class="bt-basic-container bt-basic-bg-return" {{ attrs }}
+        onclick="document.querySelector('{{ selector }}').classList.add('hide')">
 	{% else %}
 	<div id="bt-retour-layer{{layer}}" class="bt-basic-container bt-basic-bg-return" {{ attrs }}
 		onclick="hideAndEmptyElement('{{ selector }}');{{action}}">

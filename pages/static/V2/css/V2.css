@@ -593,7 +593,6 @@ img { max-width: 100%; display: block; }
   --place-tint: var(--color-surface-tint);
   max-width: var(--container-max);
   margin: var(--space-6) auto;
-  /*padding: 0 var(--space-6);*/
 }
 .place-header__card {
   background: var(--place-tint);
