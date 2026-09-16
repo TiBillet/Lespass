@@ -22,6 +22,7 @@ from uuid import uuid4
 
 import tablib
 import pytest
+from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.db import connection
 from django_tenants.utils import tenant_context
@@ -53,8 +54,16 @@ def _creer_image_bibliotheque(nom):
 def _supprimer_evenement_en_sql_brut(uuid_evenement):
     """Suppression de l'evenement en SQL brut (stdimage post_delete plante
     sur champ vide). / Raw SQL event delete (stdimage post_delete crashes
-    on an empty image field)."""
+    on an empty image field). Les lignes M2M des tags de l'evenement sont
+    effacees d'abord : la contrainte de cle etrangere les protege, et le
+    DELETE brut ne declenche aucun ON DELETE CASCADE.
+    / The event's tag M2M rows are deleted first: the foreign key constraint
+    / protects them, and the raw DELETE fires no ON DELETE CASCADE."""
     with connection.cursor() as curseur:
+        curseur.execute(
+            'DELETE FROM "BaseBillet_event_tag" WHERE event_id = %s',
+            [str(uuid_evenement)],
+        )
         curseur.execute(
             'DELETE FROM "BaseBillet_event" WHERE uuid = %s',
             [str(uuid_evenement)],
@@ -367,4 +376,70 @@ def test_import_image_aussi_en_sticker(tenant):
         finally:
             if uuid_evenement is not None:
                 _supprimer_evenement_en_sql_brut(uuid_evenement)
+            bib.delete()
+
+
+def test_agenda_affiche_image_bibliotheque_ajoutee_apres_import(tenant):
+    """Événement importé SANS image (bibliothèque vide au moment de l'import),
+    puis image taguée ajoutée à la bibliothèque : l'agenda (get_sticker_img)
+    affiche la nouvelle image sans ré-import.
+    / Event imported with no image (library empty at import time), then a
+    / tagged image added to the library: the agenda (get_sticker_img) shows
+    / the new image without re-importing."""
+    suffixe = uuid4().hex[:8]
+    nom_evenement = f"Concert Biblio Apres Import {suffixe}"
+    nom_tag = f"swing-{suffixe}"
+
+    with tenant_context(tenant):
+        donnees = tablib.Dataset(
+            [nom_evenement, DATE_IMPORT, nom_tag],
+            headers=["name", "datetime", "short_description"],
+        )
+        ressource = EventResource()
+        resultat = ressource.import_data(donnees, dry_run=False, raise_errors=True)
+        assert not resultat.has_errors()
+
+        evenement = Event.objects.get(name=nom_evenement)
+        uuid_evenement = evenement.uuid
+        # À l'import : aucune image de bibliothèque ne correspond encore.
+        # / At import time: no library image matches yet.
+        assert evenement.sticker_img.name == ""
+
+        tag = _creer_tag(nom_tag)
+        bib = _creer_image_bibliotheque(f"Affiche Swing {suffixe}")
+        bib.tags.add(tag)
+        try:
+            assert evenement.get_sticker_img().name == bib.img.name
+        finally:
+            _supprimer_evenement_en_sql_brut(uuid_evenement)
+            bib.delete()
+            tag.delete()
+
+
+def test_ajout_image_bibliotheque_invalide_cache_stickers(tenant):
+    """Enregistrer une image de bibliothèque supprime le cache sticker des
+    événements sans sticker : la nouvelle image devient visible immédiatement.
+    / Saving a library image drops the sticker cache of sticker-less events:
+    / the new image becomes visible immediately."""
+    suffixe = uuid4().hex[:8]
+    nom_evenement = f"Concert Cache Sticker {suffixe}"
+
+    with tenant_context(tenant):
+        donnees = tablib.Dataset(
+            [nom_evenement, DATE_IMPORT],
+            headers=["name", "datetime"],
+        )
+        ressource = EventResource()
+        resultat = ressource.import_data(donnees, dry_run=False, raise_errors=True)
+        assert not resultat.has_errors()
+
+        evenement = Event.objects.get(name=nom_evenement)
+        uuid_evenement = evenement.uuid
+        cache.set(f'event_get_sticker_img_{evenement.uuid}', 'valeur-ancienne', 3600)
+
+        bib = _creer_image_bibliotheque(f"Affiche Cache {suffixe}")
+        try:
+            assert cache.get(f'event_get_sticker_img_{evenement.uuid}') is None
+        finally:
+            _supprimer_evenement_en_sql_brut(uuid_evenement)
             bib.delete()

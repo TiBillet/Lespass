@@ -2,6 +2,7 @@
 import calendar
 import json
 import logging
+import unicodedata
 import uuid
 from datetime import timedelta, datetime
 from decimal import Decimal
@@ -176,6 +177,18 @@ class Tag(models.Model):
         verbose_name_plural = _("Tags")
 
 
+def normaliser_genre(texte):
+    """Normalise un genre/tag pour la comparaison : minuscules, sans accents,
+    espaces resserres. Partagee par la bibliotheque d'images (pour_genre) et
+    l'import Excel (recherche d'image par tag).
+    / Normalize a genre/tag for comparison: lowercase, accent-free, trimmed.
+    / Shared by the image library (pour_genre) and the Excel import
+    / (image lookup by tag)."""
+    nfkd = unicodedata.normalize("NFKD", str(texte))
+    sans_accents = "".join(c for c in nfkd if not unicodedata.combining(c))
+    return sans_accents.strip().lower()
+
+
 class ImageBibliotheque(models.Model):
     """
     Bibliotheque d'images mutualisee du tenant : permet de reutiliser une meme
@@ -215,6 +228,62 @@ class ImageBibliotheque(models.Model):
         verbose_name=_("Tags"),
         help_text=_("Optional, to organise the library."),
     )
+
+    @classmethod
+    def pour_genre(cls, genre):
+        """Retourne la première image de la bibliothèque dont un tag correspond
+        au genre (comparaison insensible à la casse et aux accents), ou None.
+        Appelée par Event.get_sticker_img() : l'agenda affiche l'image de la
+        bibliothèque quand l'événement n'a ni sticker propre ni sticker de lieu.
+        / Return the first library image with a tag matching the genre
+        / (case/accent-insensitive), or None. Called by Event.get_sticker_img():
+        / the agenda shows the library image when the event has neither its own
+        / sticker nor a venue sticker."""
+        cible = normaliser_genre(genre)
+        if not cible:
+            return None
+        for image_bib in cls.objects.prefetch_related("tags"):
+            for tag in image_bib.tags.all():
+                if normaliser_genre(tag.name) == cible:
+                    return image_bib
+        return None
+
+    def save(self, *args, **kwargs):
+        # Invalider les caches vignettes APRÈS l'enregistrement : les tags M2M
+        # sont posés juste après par l'admin, mais le prochain rendu d'agenda
+        # (requête suivante) les verra déjà.
+        # / Invalidate thumbnail caches AFTER saving: the admin sets the M2M
+        # / tags right after, but the next agenda render (following request)
+        # / already sees them.
+        super().save(*args, **kwargs)
+        self._invalider_caches_vignettes()
+
+    def delete(self, *args, **kwargs):
+        # Même invalidation qu'à l'enregistrement : retirer une image de la
+        # bibliothèque doit mettre à jour l'agenda (repli sur le défaut tenant).
+        # / Same invalidation as on save: removing a library image must update
+        # / the agenda (fallback to the tenant default).
+        self._invalider_caches_vignettes()
+        super().delete(*args, **kwargs)
+
+    def _invalider_caches_vignettes(self):
+        """Rend les vignettes de bibliothèque visibles immédiatement :
+        1) régénère le jeton de version du cache de l'agenda (comme Event.save),
+        2) supprime le cache sticker des événements sans sticker propre
+        (la prochaine requête recalcule get_sticker_img, bibliothèque incluse).
+        / Make library thumbnails visible immediately: 1) regenerate the agenda
+        / cache version token (like Event.save), 2) drop the sticker cache of
+        / events without their own sticker (next request recomputes
+        / get_sticker_img, library included)."""
+        try:
+            cache.set(f'event_list_version_{connection.tenant.uuid}', uuid4().hex, None)
+            evenements_sans_sticker = Event.objects.filter(sticker_img="")
+            for evenement in evenements_sans_sticker.iterator():
+                cache.delete(f'event_get_sticker_img_{evenement.uuid}')
+        except Exception:
+            # Hors contexte tenant (ex : schema public en shell) : rien à
+            # invalider. / Outside a tenant context: nothing to invalidate.
+            pass
 
     def __str__(self):
         return self.name
@@ -1981,11 +2050,25 @@ class Event(models.Model):
             return cached_result
 
         # Algo pour récupérer l'image à afficher.
+        result = None
         if self.sticker_img:
             result = self.sticker_img
         elif self.postal_address and self.postal_address.sticker_img:
             result = self.postal_address.sticker_img
-        else:
+        if result is None:
+            # Bibliothèque d'images (admin « Image vignette ») : une image dont
+            # un tag correspond au genre (short_description) de l'événement
+            # s'affiche AVANT la vignette par défaut du tenant. Ajouter une
+            # image taguée dans la bibliothèque la rend visible dans l'agenda
+            # sans ré-importer les événements.
+            # / Image library (admin "Image vignette"): an image with a tag
+            # matching the event's genre (short_description) shows BEFORE the
+            # tenant default vignette. Adding a tagged library image becomes
+            # visible in the agenda without re-importing events.
+            image_bib = ImageBibliotheque.pour_genre(self.short_description)
+            if image_bib is not None:
+                result = image_bib.img
+        if result is None:
             config = Configuration.get_solo()
             # Vignette par defaut du tenant (admin Configuration) avant le logo.
             if config.default_event_img:

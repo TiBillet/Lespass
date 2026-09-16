@@ -103,15 +103,16 @@ class ConfigurationSite(SingletonModel):
     """
 
     # Choix du theme graphique (skin) pour l'affichage du site.
-    # Par defaut : "reunion" (theme existant). Option : "faire_festival".
+    # Par defaut : "reunion" (theme existant). Options : "faire_festival", "bar".
     # / Graphic theme (skin) choice for the site display.
-    # Default: "reunion" (existing theme). Option: "faire_festival".
+    # Default: "reunion" (existing theme). Options: "faire_festival", "bar".
     skin = models.CharField(
         max_length=50,
         default="reunion",
         choices=[
             ("reunion", "Réunion (thème par défaut)"),
             ("faire_festival", "Faire Festival (thème brutaliste)"),
+            ("bar", "Bar"),
         ],
         verbose_name=_("Thème graphique du site"),
         help_text=_("Sélectionnez le thème visuel à utiliser pour l'affichage du site web."),
