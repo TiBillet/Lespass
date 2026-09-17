@@ -1,5 +1,62 @@
 # Changelog / Journal des modifications
 
+## Webhook Stripe `invoice.paid` : un abonnement hors TiBillet ne lève plus de 500 / Stripe `invoice.paid`: a non-TiBillet subscription no longer raises a 500
+
+**Date :** 2026-09-17
+**Migration :** **Non**
+
+### Le renouvellement d'un abonnement étranger faisait tomber le webhook
+
+**Quoi / What :** un renouvellement Stripe (`invoice.paid`,
+`billing_reason=subscription_cycle`) levait `KeyError: 'tenant'` dans
+`Webhook_stripe.post`, d'où une **500** et trois issues Sentry pour une seule requête
+(`BILLETTERIE-COOP-TD`, `BILLETTERIE-COOP-TE`, `BILLETTERIE-COOP-TB` — même
+`trace_id`). Stripe retentait ensuite le webhook en backoff exponentiel : 4 tentatives
+sur 5 heures pour le même événement.
+
+**Pourquoi / Why :** avec **Stripe Connect, la plateforme reçoit les webhook de TOUS
+les comptes connectés** — y compris pour des objets qui n'ont jamais été créés par
+Lespass. Un lieu qui crée un abonnement directement dans son propre dashboard Stripe
+produit des `invoice.paid` que TiBillet reçoit à chaque cycle. Cet abonnement n'a
+évidemment pas les metadata posées par Lespass au checkout (`tenant`,
+`membership_uuid`, `price_uuid`), donc `metadata['tenant']` levait une `KeyError`.
+
+Le handler voisin `checkout.session.completed` se protégeait **déjà** de ce cas
+(« *Pas de tenant dans metadata, pas pour nous ?* »), mais `invoice.paid` n'avait pas
+la garde équivalente. Elle est ajoutée, symétrique.
+
+Deux choix volontaires :
+
+- **`logger.error` et non `warning`** : la `LoggingIntegration` Sentry a
+  `event_level=ERROR` par défaut (aucune surcharge dans `settings.py`), donc un
+  `warning` n'aurait produit qu'un breadcrumb invisible. On veut une **alerte**, pour
+  aller vérifier l'abonnement côté Stripe. L'`id` de subscription est dans le message :
+  Sentry groupe **par abonnement**, une issue = un abonnement à traiter.
+- **Réponse 204 et non 500** : Stripe acquitte et cesse de réessayer.
+
+**Effet de bord corrigé au passage :** sur le schéma **public**, toute 500 déclenchait
+en plus un `NoReverseMatch: 'staff_admin'` (12 events pour 4 requêtes). Le handler
+`mail_admins` de Django rend `technical_500.txt`, qui fait un `repr()` de **chaque
+setting** : les `reverse_lazy("staff_admin:…")` de `UNFOLD["TABS"]` explosent puisque
+`urls_public.py` ne déclare pas ce namespace. Supprimer la 500 supprime la cascade —
+mais **le piège reste ouvert** pour toute autre 500 sur le schéma public.
+
+### Fichiers modifiés / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `ApiBillet/views.py` | `Webhook_stripe.post`, branche `invoice.paid` : garde `if not metadata.get('tenant')` avant la lecture des metadata → `logger.error` (alerte Sentry) + `204 NO_CONTENT` au lieu de la `KeyError`/500 |
+
+**Pas de test automatisé :** `/api/webhook_stripe/` n'est jamais appelé directement
+dans la suite (cf. `TECH_DOC/SESSIONS/TESTS/TESTS_RESTANTS.md`) — il n'existe pas
+d'infrastructure de payload + signature Stripe mockés. À monter dans un chantier dédié.
+
+### Migration
+
+- **Migration nécessaire / Migration required :** Non
+
+---
+
 ## Webhook d'adhésion : envoi différé au COMMIT / Membership webhook: dispatch deferred to COMMIT
 
 **Date :** 2026-07-25
