@@ -1,144 +1,208 @@
 {% load static i18n %}
-<!--
-ECRAN RETOUR CARTE — informations de la carte NFC scannee.
-Type de carte (anonyme / prenom / carte liee), soldes par asset, adhesions.
-/ Card feedback screen — NFC card info: type, balances per asset, memberships.
+{#<!--#}
+{#ECRAN RETOUR CARTE — informations de la carte NFC scannee.#}
+{#Type de carte (anonyme / prenom / carte liee), soldes par asset, adhesions.#}
+{#/ Card feedback screen — NFC card info: type, balances per asset, memberships.#}
+{##}
+{#LOCALISATION : laboutik/templates/laboutik/partial/hx_card_feedback.html#}
+{##}
+{#Injecte dans #messages via innerHTML (pas outerHTML).#}
+{#Pas de id="messages" ici : l'element #messages existe dans base.html.#}
+{#Note : le listener 'tarifSelection' est sur #articles-zone (tarif.js), pas #messages.#}
+{#/ Injected into #messages via innerHTML (not outerHTML).#}
+{#No id="messages" here: the element is in base.html.#}
+{#Note: 'tarifSelection' listener is on #articles-zone (tarif.js), not #messages.#}
+{#-->#}
+{#<div class="cf-wrapper" aria-live="polite">#}
+{##}
+{#  <!-- EN-TETE CARTE / CARD HEADER -->#}
+{#  <div class="cf-card-header" style="background-color: var({{ background }});">#}
+{#    {% if erreur %}#}
+{#    <div class="cf-card-type" data-testid="retour-carte-erreur">#}
+{#      <i class="fas fa-exclamation-triangle cf-card-type-icon" aria-hidden="true"></i>#}
+{#      <span>{{ erreur }}</span>#}
+{#    </div>#}
+{##}
+{#    {% elif not card.email %}#}
+{#    <div class="cf-card-type" data-testid="retour-carte-anonyme">#}
+{#      <i class="fas fa-user-secret cf-card-type-icon" aria-hidden="true"></i>#}
+{#      <span>{% trans "Carte anonyme" %}</span>#}
+{#    </div>#}
+{##}
+{#    {% else %}#}
+{#    <div class="cf-card-type" data-testid="retour-carte-nom">#}
+{#      <i class="fas fa-user-check cf-card-type-icon" aria-hidden="true"></i>#}
+{#      {% if card.first_name %}#}
+{#      <span>{{ card.first_name|title }}</span>#}
+{#      {% else %}#}
+{#      <span>{% trans "Carte liée" %}</span>#}
+{#      {% endif %}#}
+{#    </div>#}
+{#    {% endif %}#}
+{##}
+{#    {% if not erreur and state.place.name %}#}
+{#    <div class="cf-card-place">#}
+{#      <i class="fas fa-map-marker-alt" aria-hidden="true"></i> {{ state.place.name }}#}
+{#    </div>#}
+{#    {% endif %}#}
+{#  </div>#}
+{##}
+{#  {% if not erreur %}#}
+{#  <!-- CONTENU SCROLLABLE / SCROLLABLE CONTENT -->#}
+{#  <div class="cf-content">#}
+{##}
+{#    <!-- SOLDE TOTAL / TOTAL BALANCE -->#}
+{#    <div class="cf-total" data-testid="retour-carte-soldes">#}
+{#      <div class="cf-total-label">{% trans "Solde total" %}</div>#}
+{#      <div class="cf-total-value test-return-total-card">{{ total_monnaie|floatformat:2 }} &euro;</div>#}
+{#    </div>#}
+{##}
+{#    <!-- DETAIL PAR TOKEN / BALANCE PER TOKEN -->#}
+{#    {% for token in tokens %}#}
+{#    <div class="cf-token-row" data-testid="retour-carte-solde-{{ forloop.counter }}">#}
+{#      <div class="cf-token-icon">#}
+{#        {% if token.asset_category == "TLF" %}#}
+{#        <i class="fas fa-euro-sign" aria-hidden="true"></i>#}
+{#        {% elif token.asset_category == "TNF" %}#}
+{#        <i class="fas fa-gift" aria-hidden="true"></i>#}
+{#        {% elif token.asset_category == "TIM" %}#}
+{#        <i class="fas fa-clock" aria-hidden="true"></i>#}
+{#        {% else %}#}
+{#        <i class="fas fa-coins" aria-hidden="true"></i>#}
+{#        {% endif %}#}
+{#      </div>#}
+{#      <div class="cf-token-info">#}
+{#        <div class="cf-token-name test-return-monnaie-item-name{{ forloop.counter }}">{{ token.asset_name }}</div>#}
+{#        {% if token.provenance %}#}
+{#        <div class="cf-token-place test-return-monnaie-item-place{{ forloop.counter }}">{{ token.provenance }}</div>#}
+{#        {% endif %}#}
+{#      </div>#}
+{#      <div class="cf-token-value test-return-monnaie-item-value{{ forloop.counter }}">{{ token.value_euros|floatformat:2 }}</div>#}
+{#    </div>#}
+{#    {% empty %}#}
+{#    <div class="cf-token-row cf-token-empty">#}
+{#      <div class="cf-token-icon"><i class="fas fa-wallet" aria-hidden="true"></i></div>#}
+{#      <div class="cf-token-info"><div class="cf-token-name">{% trans "Aucun solde" %}</div></div>#}
+{#      <div class="cf-token-value">0.00</div>#}
+{#    </div>#}
+{#    {% endfor %}#}
+{##}
+{#    <!--#}
+{#    SOLDE RESEAU FEDERE (FED) — lu en temps reel sur le Fedow distant.#}
+{#    Affiche seulement pour une carte liee : si le reseau repond (montant), sinon "Indisponible".#}
+{#    / Federated network balance (FED) — read live from the remote Fedow. Shown only for a#}
+{#    / linked card: the amount if the network answers, otherwise "Unavailable".#}
+{#    -->#}
+{#    {% if fed_disponible and fed_euros %}#}
+{#    <div class="cf-token-row" data-testid="retour-carte-solde-fed">#}
+{#      <div class="cf-token-icon">#}
+{#        <i class="fas fa-globe" aria-hidden="true"></i>#}
+{#      </div>#}
+{#      <div class="cf-token-info">#}
+{#        <div class="cf-token-name">{% trans "Réseau" %}</div>#}
+{#        <div class="cf-token-place">{% trans "Monnaie fédérée (FED)" %}</div>#}
+{#      </div>#}
+{#      <div class="cf-token-value test-return-fed-value">{{ fed_euros|floatformat:2 }}</div>#}
+{#    </div>#}
+{#    {% elif card.email and not fed_disponible %}#}
+{#    <div class="cf-token-row cf-token-empty" data-testid="retour-carte-fed-indisponible">#}
+{#      <div class="cf-token-icon"><i class="fas fa-globe" aria-hidden="true"></i></div>#}
+{#      <div class="cf-token-info">#}
+{#        <div class="cf-token-name">{% trans "Réseau" %}</div>#}
+{#        <div class="cf-token-place">{% trans "Indisponible" %}</div>#}
+{#      </div>#}
+{#      <div class="cf-token-value">&mdash;</div>#}
+{#    </div>#}
+{#    {% endif %}#}
+{##}
+{#    <!-- ADHESIONS ACTIVES / ACTIVE MEMBERSHIPS -->#}
+{#    {% if adhesions %}#}
+{#    <div class="cf-section-title">#}
+{#      <i class="fas fa-id-badge" aria-hidden="true"></i> {% trans "Adhesions actives" %}#}
+{#    </div>#}
+{#    {% for adhesion in adhesions %}#}
+{#    <div class="cf-adhesion-row" data-testid="retour-carte-adhesion-{{ forloop.counter }}">#}
+{#      <div class="cf-adhesion-icon">#}
+{#        <i class="fas fa-check-circle" aria-hidden="true"></i>#}
+{#      </div>#}
+{#      <div class="cf-adhesion-info">#}
+{#        <div class="cf-adhesion-name">{{ adhesion.price.product.name }}</div>#}
+{#        {% if adhesion.deadline %}#}
+{#        <div class="cf-adhesion-deadline">{% trans "Expire" %} {{ adhesion.deadline|date:"d/m/Y" }}</div>#}
+{#        {% endif %}#}
+{#      </div>#}
+{#    </div>#}
+{#    {% endfor %}#}
+{#    {% endif %}#}
+{##}
+{#  </div>#}
+{#  {% endif %}#}
+{##}
+{#  <!-- BOUTON RETOUR / BACK BUTTON -->#}
+{#  <c-bt.return selector="#messages" />#}
+{##}
+{#</div>#}
 
-LOCALISATION : laboutik/templates/laboutik/partial/hx_card_feedback.html
+<div class="card-modal" id="cardModal">
+    <div class="card-modal-backdrop"></div>
+    <div class="card-modal-box">
+        <c-V2.bt.return selector="#messages" />
 
-Injecte dans #messages via innerHTML (pas outerHTML).
-Pas de id="messages" ici : l'element #messages existe dans base.html.
-Note : le listener 'tarifSelection' est sur #articles-zone (tarif.js), pas #messages.
-/ Injected into #messages via innerHTML (not outerHTML).
-No id="messages" here: the element is in base.html.
-Note: 'tarifSelection' listener is on #articles-zone (tarif.js), not #messages.
--->
-<div class="cf-wrapper" aria-live="polite">
 
-  <!-- EN-TETE CARTE / CARD HEADER -->
-  <div class="cf-card-header" style="background-color: var({{ background }});">
-    {% if erreur %}
-    <div class="cf-card-type" data-testid="retour-carte-erreur">
-      <i class="fas fa-exclamation-triangle cf-card-type-icon" aria-hidden="true"></i>
-      <span>{{ erreur }}</span>
+        <div class="card-solde">
+            <span class="card-ref">carte ·· 4F2A</span>
+            <span class="card-solde-lbl">Solde</span>
+            <span class="card-solde-val" id="cardSoldeVal">{{ total_monnaie|floatformat:2 }} &euro;</span>
+            <span class="card-solde-lbl">
+
+                {% for token in tokens %}
+                    {% if token.asset_category == "TLF" %}
+                        {{ token.value_euros|floatformat:2 }} € {% translate 'Global' %} |
+                    {% elif token.asset_category == "TNF" %}
+                        {{ token.value_euros|floatformat:2 }} € {% translate 'Cadeau' %} |
+                    {% elif token.asset_category == "TIM" %}
+                        {{ token.value_euros|floatformat:2 }} € {% translate 'Temps' %} |
+                    {% else %}
+                        {{ token.value_euros|floatformat:2 }} € {% translate 'Local' %}
+                    {% endif %}
+                {% endfor %}
+            </span>
+
+            <button class="card-hist-link" data-hist>Historique</button>
+        </div>
+
+        <div class="card-modes">
+            <span class="panel-title">Recharger</span>
+            <div class="card-modes-row">
+
+                <button class="card-mode" data-mode="monnaie" aria-pressed="false">
+                    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9.4" cy="9.4" r="7.2" opacity=".55"/><circle cx="14.6" cy="14.6" r="7.2"/></svg>
+                    <span>Espèces</span>
+                </button>
+
+                <button class="card-mode" data-mode="cadeau" aria-pressed="false">
+                    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.4" y="9.6" width="17.2" height="11.2" rx="1.6"/><rect x="2.2" y="6.2" width="19.6" height="4" rx="1.2"/><rect x="10.9"
+                                                                                                                                                                                                     y="6.2" width="2.2" height="14.6"/><path d="M9.6 6.2c-2.4 0-4-1.3-4-3s1.6-2.6 3.4-1.6c1.4.8 2.4 2.6 2.6 4.6-.7 0-1.4 0-2 0z" opacity=".6"/><path d="M14.4 6.2c2.4 0 4-1.3
+  4-3s-1.6-2.6-3.4-1.6c-1.4.8-2.4 2.6-2.6 4.6.7 0 1.4 0 2 0z" opacity=".6"/></svg>
+                    <span>Cadeau</span>
+                </button>
+
+                <button class="card-mode" data-mode="temps" aria-pressed="false">
+                    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.4"/><path d="M12 6.6v5.8l4 2.4" fill="none" stroke="currentColor" stroke-width="1.8"
+                                                                                                                   stroke-linecap="round" opacity=".5"/></svg>
+                    <span>Monnaie temps</span>
+                </button>
+
+                <button class="card-mode" data-mode="cb" aria-pressed="false">
+                    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M4.4 4h15.2A2.4 2.4 0 0 1 22 6.4v11.2a2.4 2.4 0 0 1-2.4 2.4H4.4A2.4 2.4 0 0 1 2 17.6V6.4A2.4 2.4 0 0 1
+  4.4 4zM2 7.6h20v3.2H2z"/></svg>
+                    <span>Carte bancaire</span>
+                </button>
+
+            </div>
+
+            <!-- fragments conditionnels insérés ici, voir ci-dessous -->
+
+        </div>
     </div>
-
-    {% elif not card.email %}
-    <div class="cf-card-type" data-testid="retour-carte-anonyme">
-      <i class="fas fa-user-secret cf-card-type-icon" aria-hidden="true"></i>
-      <span>{% trans "Carte anonyme" %}</span>
-    </div>
-
-    {% else %}
-    <div class="cf-card-type" data-testid="retour-carte-nom">
-      <i class="fas fa-user-check cf-card-type-icon" aria-hidden="true"></i>
-      {% if card.first_name %}
-      <span>{{ card.first_name|title }}</span>
-      {% else %}
-      <span>{% trans "Carte liée" %}</span>
-      {% endif %}
-    </div>
-    {% endif %}
-
-    {% if not erreur and state.place.name %}
-    <div class="cf-card-place">
-      <i class="fas fa-map-marker-alt" aria-hidden="true"></i> {{ state.place.name }}
-    </div>
-    {% endif %}
-  </div>
-
-  {% if not erreur %}
-  <!-- CONTENU SCROLLABLE / SCROLLABLE CONTENT -->
-  <div class="cf-content">
-
-    <!-- SOLDE TOTAL / TOTAL BALANCE -->
-    <div class="cf-total" data-testid="retour-carte-soldes">
-      <div class="cf-total-label">{% trans "Solde total" %}</div>
-      <div class="cf-total-value test-return-total-card">{{ total_monnaie|floatformat:2 }} &euro;</div>
-    </div>
-
-    <!-- DETAIL PAR TOKEN / BALANCE PER TOKEN -->
-    {% for token in tokens %}
-    <div class="cf-token-row" data-testid="retour-carte-solde-{{ forloop.counter }}">
-      <div class="cf-token-icon">
-        {% if token.asset_category == "TLF" %}
-        <i class="fas fa-euro-sign" aria-hidden="true"></i>
-        {% elif token.asset_category == "TNF" %}
-        <i class="fas fa-gift" aria-hidden="true"></i>
-        {% elif token.asset_category == "TIM" %}
-        <i class="fas fa-clock" aria-hidden="true"></i>
-        {% else %}
-        <i class="fas fa-coins" aria-hidden="true"></i>
-        {% endif %}
-      </div>
-      <div class="cf-token-info">
-        <div class="cf-token-name test-return-monnaie-item-name{{ forloop.counter }}">{{ token.asset_name }}</div>
-        {% if token.provenance %}
-        <div class="cf-token-place test-return-monnaie-item-place{{ forloop.counter }}">{{ token.provenance }}</div>
-        {% endif %}
-      </div>
-      <div class="cf-token-value test-return-monnaie-item-value{{ forloop.counter }}">{{ token.value_euros|floatformat:2 }}</div>
-    </div>
-    {% empty %}
-    <div class="cf-token-row cf-token-empty">
-      <div class="cf-token-icon"><i class="fas fa-wallet" aria-hidden="true"></i></div>
-      <div class="cf-token-info"><div class="cf-token-name">{% trans "Aucun solde" %}</div></div>
-      <div class="cf-token-value">0.00</div>
-    </div>
-    {% endfor %}
-
-    <!--
-    SOLDE RESEAU FEDERE (FED) — lu en temps reel sur le Fedow distant.
-    Affiche seulement pour une carte liee : si le reseau repond (montant), sinon "Indisponible".
-    / Federated network balance (FED) — read live from the remote Fedow. Shown only for a
-    / linked card: the amount if the network answers, otherwise "Unavailable".
-    -->
-    {% if fed_disponible and fed_euros %}
-    <div class="cf-token-row" data-testid="retour-carte-solde-fed">
-      <div class="cf-token-icon">
-        <i class="fas fa-globe" aria-hidden="true"></i>
-      </div>
-      <div class="cf-token-info">
-        <div class="cf-token-name">{% trans "Réseau" %}</div>
-        <div class="cf-token-place">{% trans "Monnaie fédérée (FED)" %}</div>
-      </div>
-      <div class="cf-token-value test-return-fed-value">{{ fed_euros|floatformat:2 }}</div>
-    </div>
-    {% elif card.email and not fed_disponible %}
-    <div class="cf-token-row cf-token-empty" data-testid="retour-carte-fed-indisponible">
-      <div class="cf-token-icon"><i class="fas fa-globe" aria-hidden="true"></i></div>
-      <div class="cf-token-info">
-        <div class="cf-token-name">{% trans "Réseau" %}</div>
-        <div class="cf-token-place">{% trans "Indisponible" %}</div>
-      </div>
-      <div class="cf-token-value">&mdash;</div>
-    </div>
-    {% endif %}
-
-    <!-- ADHESIONS ACTIVES / ACTIVE MEMBERSHIPS -->
-    {% if adhesions %}
-    <div class="cf-section-title">
-      <i class="fas fa-id-badge" aria-hidden="true"></i> {% trans "Adhesions actives" %}
-    </div>
-    {% for adhesion in adhesions %}
-    <div class="cf-adhesion-row" data-testid="retour-carte-adhesion-{{ forloop.counter }}">
-      <div class="cf-adhesion-icon">
-        <i class="fas fa-check-circle" aria-hidden="true"></i>
-      </div>
-      <div class="cf-adhesion-info">
-        <div class="cf-adhesion-name">{{ adhesion.price.product.name }}</div>
-        {% if adhesion.deadline %}
-        <div class="cf-adhesion-deadline">{% trans "Expire" %} {{ adhesion.deadline|date:"d/m/Y" }}</div>
-        {% endif %}
-      </div>
-    </div>
-    {% endfor %}
-    {% endif %}
-
-  </div>
-  {% endif %}
-
-  <!-- BOUTON RETOUR / BACK BUTTON -->
-  <c-bt.return selector="#messages" />
-
 </div>

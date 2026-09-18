@@ -69,6 +69,19 @@
     --tb-accent: var(--bs-primary, #1d4ed8);
     --tb-accent-contraste: #ffffff;
 
+    /* L'ACCENT EN TEXTE, separe de --tb-accent. Un aplat et un texte n'ont pas le
+       meme seuil de contraste : 3:1 pour un fond ou une bordure, 4,5:1 pour du
+       texte. Une meme teinte peut donc passer en aplat et echouer en texte — c'est
+       exactement le cas du letchi de la DA v1 (3,87:1 sur papier en texte, alors
+       que l'encre posee DESSUS atteint 4,45:1). Un skin qui veut les deux roles
+       corrects surcharge donc les deux jetons, avec deux teintes differentes.
+       REPLI SUR --tb-accent : un skin qui ignore ce jeton ne change pas d'aspect,
+       ce qui rend l'ajout sans effet sur classic, reunion et faire_festival.
+       / The accent AS TEXT, split from --tb-accent: a fill and a text do not share
+       a threshold (3:1 vs 4,5:1), so one hue can pass as a fill and fail as text.
+       Falls back to --tb-accent, so skins ignoring it are unchanged. */
+    --tb-accent-texte: var(--tb-accent);
+
     /* Texte/surfaces : contraste fort, fond cassé (pas blanc pur) pour l'œil.
        / Text/surfaces: strong contrast, off-white background (easier on the eye). */
     --tb-texte: var(--bs-body-color, #18181b);
@@ -269,7 +282,7 @@
     font-size: 0.85rem;
     color: var(--tb-texte-doux);
 }
-.tb-fil-ariane a { color: var(--tb-accent); text-decoration: none; }
+.tb-fil-ariane a { color: var(--tb-accent-texte); text-decoration: none; }
 .tb-fil-ariane a:hover { text-decoration: underline; }
 .tb-fil-ariane a:focus-visible { outline: 2px solid var(--tb-accent); outline-offset: 2px; }
 
@@ -346,7 +359,7 @@ h2.tb-bloc__titre::before {
 }
 .tb-bloc__texte > :first-child { margin-top: 0; }
 .tb-bloc__texte > :last-child { margin-bottom: 0; }
-.tb-bloc__texte a { color: var(--tb-accent); text-underline-offset: 0.15em; }
+.tb-bloc__texte a { color: var(--tb-accent-texte); text-underline-offset: 0.15em; }
 .tb-bloc__texte ul { padding-left: 1.2rem; }
 .tb-bloc__texte li { margin-block: 0.25rem; }
 
@@ -399,7 +412,7 @@ h2.tb-bloc__titre::before {
 /* contour / outline */
 .tb-bloc__bouton--contour {
     background-color: transparent;
-    color: var(--tb-accent);
+    color: var(--tb-accent-texte);
 }
 .tb-bloc__bouton--contour:hover { background-color: var(--tb-accent); color: var(--tb-accent-contraste); }
 .tb-bloc__bouton--contour:active { transform: translateY(1px); }
@@ -700,7 +713,7 @@ h2.tb-bloc__titre::before {
     font-size: 0.82rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--tb-accent);
+    color: var(--tb-accent-texte);
 }
 .tb-bloc__carte-badge {
     display: inline-block;
@@ -803,7 +816,7 @@ h2.tb-bloc__titre::before {
     font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--tb-accent);
+    color: var(--tb-accent-texte);
     border-bottom: 2px solid var(--tb-accent);
 }
 .tb-bloc__infos > .tb-bloc__infos-badge:first-child { margin-top: 0; }
@@ -871,6 +884,15 @@ h2.tb-bloc__titre::before {
 .tb-bloc__faq-reponse { font-size: 0.98rem; line-height: 1.65; color: var(--tb-texte-doux); }
 .tb-bloc__faq-reponse > :first-child { margin-top: 0; }
 .tb-bloc__faq-reponse > :last-child { margin-bottom: 0; }
+/* Un lien dans une reponse de FAQ : meme traitement que dans un bloc TEXTE
+   (.tb-bloc__texte a, plus haut). Sans cette regle il n'avait NI couleur NI
+   soulignement propre : il heritait du gris du paragraphe, donc rien ne le
+   distinguait du texte courant — invisible en tant que lien, et pas seulement
+   discret. Le defaut etait dans le socle, donc dans TOUS les skins.
+   / A link inside a FAQ answer: same treatment as in a TEXT block. Without this
+   rule it had neither colour nor underline of its own, inheriting the
+   paragraph's grey — invisible as a link, in every skin. */
+.tb-bloc__faq-reponse a { color: var(--tb-accent-texte); text-underline-offset: 0.15em; }
 @media (max-width: 768px) {
     .tb-faq-colonnes { column-count: 1; }
 }
@@ -905,7 +927,7 @@ h2.tb-bloc__titre::before {
     margin-left: auto;
     padding-left: 0.75rem;
     font-weight: 400;
-    color: var(--tb-accent);
+    color: var(--tb-accent-texte);
 }
 .tb-bloc__faq-details[open] summary::after { content: "\2212"; } /* signe moins */
 .tb-bloc__faq-details summary:focus-visible {
@@ -1309,8 +1331,8 @@ h2.tb-bloc__titre::before {
    / Section currently being read, set by pages/js/sommaire_actif.js. The
    vertical rule marks the position as much as the colour does. Without
    JavaScript no entry carries this class and the ToC stays a plain list. */
-.tb-sommaire__entree--active > a {
-    color: var(--tb-accent);
+.tb-page .tb-sommaire__entree.tb-sommaire__entree--active > a {
+    color: var(--tb-accent-texte);
     font-weight: 600;
     box-shadow: inset 2px 0 0 var(--tb-accent);
 }
@@ -1453,7 +1475,7 @@ h2.tb-bloc__titre::before {
     padding: 0.3rem 0.6rem;
     border-radius: var(--tb-rayon-sm);
     font-weight: 600;
-    color: var(--tb-accent);
+    color: var(--tb-accent-texte);
     background: var(--tb-surface-alt);
 }
 
@@ -1637,8 +1659,18 @@ h2.tb-bloc__titre::before {
         grid-column: 4 / -1;
     }
     /* Replie a nouveau : sur cette largeur le sommaire precede l'article.
-       / Folded again: at this width the ToC precedes the article. */
-    .tb-sommaire::details-content { content-visibility: hidden; }
+       UNIQUEMENT en trois colonnes, comme les trois regles ci-dessus : c'est le
+       menu ET le sommaire ensemble qui etranglent le texte. Sans menu lateral, le
+       sommaire est seul dans sa marge, le texte garde une largeur confortable et
+       il n'y a rien a sacrifier — or cette regle n'etait pas conditionnee, et la
+       colonne du sommaire n'affichait plus que son etiquette entre 62rem et
+       75rem. Le defaut valait pour TOUS les skins (le sommaire est pose en
+       colonne sans condition de menu, cf. plus haut).
+       / Folded again, but ONLY in three-column mode, like the three rules above:
+       it is menu AND ToC together that cramp the text. With no side menu there is
+       nothing to sacrifice — and this rule was not scoped, so the ToC column
+       showed only its label between 62rem and 75rem, in every skin. */
+    .tb-flux:has(> .tb-menu-lateral) > .tb-sommaire::details-content { content-visibility: hidden; }
 }
 
 /* Sur petit ecran, le menu passe au-dessus du contenu, replie en tiroir.
@@ -1726,3 +1758,46 @@ h2.tb-bloc__titre::before {
     font-weight: 600;
     color: var(--tb-texte);
 }
+
+/* =================================================================
+   NOUVEAUX AFFICHAGES SECTION : EQUIPE, FRISE, RESSOURCES (socle classic)
+   / New SECTION displays: EQUIPE, FRISE, RESSOURCES (classic base)
+
+   Gabarits : pages/templates/pages/classic/partials/bloc_section_{equipe,frise,ressources}.html
+   Le skin V2 a ses propres gabarits et styles (pages/static/V2/css/V2.css).
+   Styles volontairement sobres, uniquement avec les jetons --tb-*.
+   ================================================================= */
+.tb-equipe {
+    list-style: none;
+    padding: 0;
+    margin: 1.25rem 0 0;
+    display: grid;
+    gap: var(--tb-grille-gap, 1.25rem);
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+}
+.tb-equipe__membre {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+    padding: 1rem;
+    border: 1px solid var(--tb-bordure);
+    border-radius: var(--tb-rayon);
+    background: var(--tb-surface);
+}
+.tb-equipe__nom { font-weight: 700; }
+.tb-equipe__role { color: var(--tb-texte-doux); }
+
+.tb-frise {
+    list-style: none;
+    margin: 1.25rem 0 0;
+    padding: 0 0 0 1.25rem;
+    border-left: 2px solid var(--tb-bordure);
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+.tb-frise__etape { display: flex; flex-direction: column; gap: .25rem; }
+.tb-frise__date { font-weight: 700; }
+.tb-frise__texte { color: var(--tb-texte-doux); }
+
+.tb-ressources { list-style: none; padding: 0; }

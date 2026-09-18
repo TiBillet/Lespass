@@ -1,0 +1,394 @@
+/* =================================================================
+   TIBILLET — Réserve du skin V2 : composants de la maquette pas encore branchés
+   / V2 skin reserve: mockup components not wired yet
+
+   LOCALISATION : pages/static/V2/css/V2-reserve.css
+
+   CE FICHIER N'EST CHARGÉ PAR AUCUN GABARIT, et c'est voulu.
+   Il garde les styles de la maquette « Direction artistique v1 » dont
+   aucune page ne se sert AUJOURD'HUI, mais qui correspondent à des
+   fonctions prévues (programme jour par jour, lieux épinglés, filtres
+   d'agenda, glisser-déposer des modules, cloche de notifications…) —
+   voir les commentaires V2-HERE des gabarits et
+   CHANGELOG/a traiter/v2-da-v1-points-laisses-de-cote.md.
+   Retirés de V2.css pour ne plus alourdir ni embrouiller la feuille
+   réellement servie.
+
+   POUR BRANCHER UN COMPOSANT : recopier son bloc dans V2.css, dans la
+   section de même nom. Les jetons (--color-*, --text-*, --space-*…) sont
+   ceux de V2.css : ce fichier seul ne s'affiche pas correctement.
+   / Not loaded by any template on purpose. To wire a component, copy its
+   block back into V2.css; tokens come from V2.css.
+   ================================================================= */
+
+/* =================================================================
+   CLOCHE DE NOTIFICATIONS
+   ================================================================= */
+/* Cloche de notifications : le témoin rouge signale du non-lu. */
+.icon-btn--notif { position: relative; }
+.icon-btn--notif[data-unread]::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 7px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--letchi);
+  border: 2px solid var(--color-surface);
+}
+
+/* =================================================================
+   MODULES : GLISSER-DÉPOSER
+   ================================================================= */
+.module.is-dragging { opacity: 0.4; }
+.module.is-over { border-color: var(--color-primary); }
+
+.module__grip {
+  color: var(--color-text-faint);
+  cursor: grab;
+  display: flex;
+  padding: var(--space-1);
+  flex-shrink: 0;
+}
+.module__grip:active { cursor: grabbing; }
+
+/* =================================================================
+   CONTRIBUER : CARTES D’AIDE
+   ================================================================= */
+/* Barre de progression réduite, pour les contributions en cours */
+.help-card .progress-track { margin-top: var(--space-2); }
+
+.help-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  box-shadow: var(--shadow-card);
+}
+.help-card__badges { display: flex; gap: 6px; }
+.help-card__badges .badge { text-transform: uppercase; letter-spacing: 0.03em; font-size: var(--text-2xs); }
+.help-card__title { font-family: var(--font-text); font-size: var(--text-base); font-weight: 700; }
+.help-card__desc { font-size: var(--text-md); color: var(--color-text-muted); line-height: 1.5; flex-grow: 1; }
+.help-card__foot { display: flex; align-items: center; justify-content: space-between; padding-top: var(--space-3); border-top: 1px solid var(--color-border); }
+
+/* =================================================================
+   MES TRACES — le journal. Sobre, dense, lisible : c'est l'endroit
+   où l'on vient chercher une information précise, pas flâner.
+   ================================================================= */
+.ledger {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  overflow: hidden;
+}
+.ledger__row {
+  display: grid;
+  /* Dernière colonne en auto, pas 100px fixe : « Tout public » ou tout
+     badge plus long que « Concert » n'y tenait plus et cassait en deux
+     lignes. */
+  grid-template-columns: 88px minmax(0, 1fr) 160px auto;
+  gap: var(--space-4);
+  align-items: center;
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--text-md);
+}
+.ledger__row:first-child { border-top: none; }
+.ledger__date { color: var(--color-text-faint); font-size: var(--text-sm); }
+.ledger__place { color: var(--color-text-muted); font-size: var(--text-md); }
+.ledger__amount {
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.ledger__amount--in { color: var(--letchi-text); }
+
+@media (max-width: 900px) {
+  .ledger__row { grid-template-columns: 76px minmax(0, 1fr) 92px; }
+  .ledger__place { grid-column: 2; }
+}
+
+/* =================================================================
+   LAYOUT: sidebar + contenu
+   ================================================================= */
+.layout-with-sidebar {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: var(--space-7);
+  align-items: start;
+  padding-bottom: var(--space-8);
+}
+
+.toc { position: sticky; top: 96px; }
+.toc__label {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-3);
+}
+.toc__list { display: flex; flex-direction: column; gap: 2px; }
+.toc__link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 14px;
+  border-radius: var(--radius-s);
+  font-size: var(--text-ui);
+  color: var(--color-text);
+  font-weight: 400;
+}
+.toc__link:hover { background: var(--color-overlay-hover); }
+.toc__link.is-active { background: var(--color-surface); border: 1px solid var(--color-border); font-weight: 700; }
+.toc__count { color: var(--color-text-faint); font-size: var(--text-xs); }
+.toc__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-text); }
+.toc__note {
+  margin-top: var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+  font-style: italic;
+  line-height: 1.5;
+  border-top: 1px dashed var(--color-border-strong);
+  padding-top: var(--space-4);
+}
+
+/* =================================================================
+   CARTE « À DISPOSITION » (ADHÉSION)
+   ================================================================= */
+/* Carte "à disposition" mise en avant (Adhésion) */
+.feature-card {
+  background: var(--color-surface-tint);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-l);
+  padding: var(--space-5) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.feature-card__badge {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-2);
+}
+.feature-card__title { font-size: var(--text-xl); margin-bottom: var(--space-2); }
+.feature-card__text { color: var(--color-text-muted); font-size: var(--text-ui); max-width: 65ch; line-height: 1.55; }
+.feature-card__side { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; }
+.feature-card__price { font-size: var(--text-ui); }
+.feature-card__price strong { font-size: var(--text-lg); }
+.feature-card__side .btn { margin-left: auto; }
+
+/* =================================================================
+   AGENDA : PANNEAU DE FILTRES
+   ================================================================= */
+/* Neutre, comme les puces qu'il ouvre : filtrer un agenda est un
+   geste sur le contenu du lieu, pas un geste Tibillet. */
+.filters-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--color-text);
+  color: var(--color-text-inverse);
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 10px 18px;
+  font-weight: 700;
+  line-height: 0.9375rem;
+  font-size: var(--text-ui);
+  cursor: pointer;
+}
+.filters-btn__count {
+  background: var(--color-inverse-soft);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  padding: 1px 8px;
+}
+
+.filter-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-panel);
+  padding: var(--space-6);
+  margin-bottom: var(--space-6);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-5) var(--space-7);
+
+  /* Déroulé / rétraction : on anime la hauteur plutôt que 'display',
+     qui n'est pas animable. La hauteur cible est posée en JS d'après
+     le contenu réel, pour ne pas dépendre d'un maximum arbitraire. */
+  overflow: hidden;
+  transition: max-height 0.34s ease-in-out,
+              opacity 0.24s ease-in,
+              padding-top 0.34s ease-in-out,
+              padding-bottom 0.34s ease-in-out,
+              margin-bottom 0.34s ease-in-out,
+              border-width 0.34s ease-in-out;
+}
+.filter-panel.is-collapsed {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-bottom: 0;
+  border-width: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .filter-panel { transition: none; }
+}
+.filter-group__label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-3);
+}
+.filter-group__label .hint { text-transform: none; font-weight: 400; letter-spacing: 0; color: var(--color-text-faint); }
+.filter-group__options { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.filter-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  font-size: var(--text-md);
+  line-height: 1;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.filter-pill:hover { background: var(--color-hover); }
+.filter-pill.is-active { background: var(--color-text); border-color: var(--color-text); color: var(--color-text-inverse); font-weight: 700; }
+
+.filter-panel__full { grid-column: 1 / -1; }
+.checkbox-row { display: flex; flex-direction: column; gap: var(--space-3); }
+.checkbox-row + .checkbox-row { margin-top: 0; }
+
+.filter-panel__actions { display: flex; align-items: center; gap: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--color-border); grid-column: 1 / -1; }
+.filter-panel__divider { grid-column: 1 / -1; border: none; border-top: 1px solid var(--color-border); margin: 0; }
+
+@media (max-width: 720px) {
+  .filter-panel { grid-template-columns: 1fr; }
+}
+
+/* =================================================================
+   GRILLE D’ÉVÉNEMENTS
+   ================================================================= */
+.event-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-5); }
+
+@media (max-width: 1100px) {
+  .event-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 720px) {
+  .event-grid { grid-template-columns: 1fr; }
+}
+
+/* =================================================================
+   CONTRIBUER : CARTES DE RÔLE
+   ================================================================= */
+.role-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-text);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-card);
+}
+.role-card + .role-card { margin-top: var(--space-4); }
+.role-card__icon {
+  width: 44px; height: 44px; border-radius: var(--radius-s);
+  background: var(--color-surface-tint); color: var(--color-text);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.role-card__body { flex-grow: 1; }
+.role-card__title { display: flex; align-items: center; gap: var(--space-3); font-size: var(--text-base); font-weight: 700; margin-bottom: 4px; }
+.role-card__desc { font-size: var(--text-ui); color: var(--color-text-muted); line-height: 1.5; }
+.pill-tag {
+  font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1.4;
+  background: var(--cat-green-tint); color: var(--cat-green-solid);
+  padding: 3px 10px; border-radius: var(--radius-pill);
+}
+
+/* =================================================================
+   MON ESPACE
+   ================================================================= */
+.profile-header { padding: var(--space-7) 0 var(--space-5); }
+.profile-header__row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-6); flex-wrap: wrap; }
+.profile-header__main { display: flex; gap: var(--space-4); align-items: center; min-width: 280px; }
+.profile-header__name { font-size: var(--text-2xl); }
+.profile-header__email { color: var(--color-text-muted); font-size: var(--text-md); }
+.profile-header__intro { color: var(--color-text-muted); font-size: var(--text-ui); max-width: 60ch; margin-top: var(--space-4); line-height: 1.55; }
+.profile-stats { display: flex; gap: var(--space-3); flex-shrink: 0; }
+.stat-box {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  padding: var(--space-3) var(--space-5);
+  box-shadow: var(--shadow-card);
+}
+.stat-box__label { font-size: var(--text-xs); color: var(--color-text-faint); margin-bottom: 2px; }
+.stat-box__value { font-size: var(--text-lg); font-weight: 700; display: flex; align-items: center; gap: 6px; }
+
+.favorite-card { border-radius: var(--radius-m); overflow: hidden; border: 1px solid var(--color-border); box-shadow: var(--shadow-card); background: var(--color-surface); }
+.favorite-card__cover { height: 132px; position: relative; }
+/* Épingler, pas aimer : le geste dit l'accès rapide, pas l'affection.
+   Ce qui est épinglé ici remonte dans « Y retourner », en haut. */
+.pin-btn {
+  position: absolute; top: var(--space-3); right: var(--space-3);
+  height: 32px; border-radius: var(--radius-pill);
+  padding: 0 var(--space-3);
+  background: var(--color-surface-overlay);
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: var(--text-xs); font-weight: 700; line-height: 0.8125rem;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border: none;
+}
+.pin-btn svg { fill: none; stroke: currentColor; stroke-width: 1.8; }
+.pin-btn__label { display: none; }
+.pin-btn:hover .pin-btn__label { display: inline; }
+.pin-btn.is-on { background: var(--color-primary); color: var(--color-text); }
+.pin-btn.is-on .pin-btn__label { display: inline; }
+.favorite-card__body { padding: var(--space-4); }
+.favorite-card__title-row { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
+.favorite-card__title { font-family: var(--font-text); font-size: var(--text-lg); font-weight: 700; }
+.favorite-card__list { font-size: var(--text-md); color: var(--color-text-muted); border-top: 1px solid var(--color-border); padding-top: var(--space-3); margin-bottom: var(--space-3); }
+.favorite-card__list li { position: relative; padding-left: 14px; }
+.favorite-card__list li::before { content: '•'; position: absolute; left: 0; color: var(--color-text-faint); }
+.favorite-card__list li + li { margin-top: 4px; }
+
+.footer-links { display: flex; gap: var(--space-6); padding: var(--space-6) 0; border-top: 1px solid var(--color-border); margin-top: var(--space-4); flex-wrap: wrap; }
+.footer-links a { display: flex; align-items: center; gap: 8px; font-size: var(--text-md); font-weight: 700; color: var(--color-text-muted); }
+.footer-links a:hover { color: var(--color-text); }
+
+/* =================================================================
+   QUI SOMMES-NOUS : PASTILLE CHIFFRÉE
+   ================================================================= */
+.stat-pill {
+  display: inline-flex; align-items: center;
+  padding: 8px 16px; border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-strong);
+  font-size: var(--text-md); font-weight: 400; line-height: 1; background: var(--color-surface);
+}
+
+/* =================================================================
+   SOMMAIRE LATÉRAL
+   ================================================================= */
+@media (max-width: 1100px) {
+  .layout-with-sidebar { grid-template-columns: 1fr; }
+  .toc { position: static; display: flex; overflow-x: auto; gap: var(--space-2); }
+  .toc__list { flex-direction: row; }
+}

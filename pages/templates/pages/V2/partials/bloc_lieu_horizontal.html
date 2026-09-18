@@ -1,0 +1,167 @@
+{% load static i18n pages_tags %}
+{% comment %}
+    BLOC LIEU / affichage HORIZONTAL — skin V2 (DA v1)
+    / LIEU block / HORIZONTAL layout — V2 skin (DA v1)
+
+    LOCALISATION : pages/templates/pages/V2/partials/bloc_lieu_horizontal.html
+    Maquette : TEMP-tibillet-lespass-main/qui-sommes-nous.html, section #le-lieu
+
+    LE MEME CONTENU QUE L'AFFICHAGE VERTICAL, AUTREMENT DISPOSE : la carte passe
+    en bandeau pleine largeur, et les infos pratiques se rangent en une rangee de
+    cartes dessous. Aucun champ supplementaire, aucune donnee specifique a cet
+    affichage — c'est une variation purement visuelle, d'ou un `affichage` et non
+    un nouveau type de bloc.
+    / SAME CONTENT as the VERTICAL layout, laid out differently: the map becomes
+    a full-width banner and the practical info sits in a row of cards below.
+
+    DIFFERENCE AVEC LA MAQUETTE, ASSUMEE : la maquette ne dessine qu'un degrade
+    dans `.about-banner` (elle n'a aucune vraie carte, nulle part). Ici le
+    bandeau porte une VRAIE carte Leaflet, posee en absolu ; le degrade reste
+    visible le temps que les tuiles arrivent. Meme patron que `.map-panel` +
+    `.map-panel__carte` sur l'accueil V2.
+    / DELIBERATE DIFFERENCE: the mockup only paints a gradient in
+    `.about-banner`; here the banner carries a real Leaflet map, the gradient
+    acting as a loading backdrop.
+
+    LES TROIS `data-testid` SONT CEUX DE L'AFFICHAGE VERTICAL (`bloc-lieu`,
+    `bloc-lieu-carte`, `bloc-lieu-infos`) : un test qui verifie qu'un bloc lieu
+    s'affiche ne doit pas dependre de la disposition choisie.
+    / The three testids are the vertical layout's: a test checking a place block
+    renders must not depend on the chosen layout.
+
+    Champs : titre, badge (legende sous la carte), points_gps (les marqueurs),
+    contenu (les items typés : badge, para, horaire, adresse, accessibilite,
+    transport). `image` et `image_secondaire` ne sont lues que par le skin
+    faire_festival, comme dans l'affichage vertical.
+{% endcomment %}
+<section class="tb-bloc tb-bloc--lieu-horizontal" data-testid="bloc-lieu">
+
+    {# Le titre coiffe le bloc entier : les <h3> des items « transport » ont #}
+    {# besoin d'un titre parent dans le plan de la page, y compris quand le #}
+    {# bloc n'a pas de coordonnees GPS et donc pas de bandeau. #}
+    {# / The title heads the whole block: the transport <h3> need a parent #}
+    {# heading in the page outline, even with no GPS and therefore no banner. #}
+    {% if bloc.titre %}
+        <h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>
+    {% endif %}
+
+    {# --- Le bandeau : la carte, pleine largeur ---------------------------- #}
+    {% comment %}
+Pas de bandeau sans marqueur a montrer : Leaflet laisserait un aplat de
+220 px de haut, vide et sans raison d'etre.
+/ No banner without a marker to show: Leaflet would leave an empty
+220px-tall block.
+{% endcomment %}
+    {% if bloc.points_gps %}
+        {% with uid=bloc.uuid|stringformat:"s" %}
+            <div class="about-banner" data-testid="bloc-lieu-carte">
+                {# data-maptiler-key : lu par le script ci-dessous et passe au fond #}
+                {# de carte commun. / Read below, passed to the shared basemap. #}
+                <div id="carte-leaflet-{{ uid }}" class="about-banner__carte"
+                     data-maptiler-key="{{ maptiler_key|default:'' }}"
+                     aria-label="{% translate 'Carte interactive' %}"></div>
+            </div>
+            {% if bloc.badge %}<p class="tb-bloc__carte-legende">{{ bloc.badge }}</p>{% endif %}
+
+            {% with json_id="points-"|add:uid %}{{ bloc.points_gps|json_script:json_id }}{% endwith %}
+
+            {# Fond de carte commun : script bloquant, donc tbPoserFondDeCarte est #}
+            {# defini avant que le script ci-dessous ne l'appelle. Le navigateur #}
+            {# dedoublonne les <script src> identiques quand la page porte #}
+            {# plusieurs cartes. / Shared basemap: blocking script, so the #}
+            {# function is defined before the script below calls it. #}
+            <script src="{% static 'cartes/tb_fond_de_carte.js' %}"></script>
+
+            <script>
+            (function () {
+                var uid = "{{ uid }}";
+                function initCarte() {
+                    var c = document.getElementById('carte-leaflet-' + uid);
+                    if (!c || c._leaflet_id) { return; }
+                    var n = document.getElementById('points-' + uid);
+                    var pts = [];
+                    try { pts = JSON.parse(n.textContent) || []; } catch (e) { pts = []; }
+                    if (!pts.length) { return; }
+                    // Chemin des images de marqueur (Leaflet self-hoste).
+                    // / Marker images path (self-hosted Leaflet).
+                    L.Icon.Default.imagePath = '{% static "pages/vendor/leaflet/images/" %}';
+                    var map = L.map('carte-leaflet-' + uid).setView([pts[0].lat, pts[0].lng], 13);
+                    // Fond de carte commun a tout le projet (cf. tb_fond_de_carte.js).
+                    // / Project-wide shared basemap.
+                    tbPoserFondDeCarte(map, c.dataset.maptilerKey);
+                    pts.forEach(function (p) {
+                        var m = L.marker([p.lat, p.lng]).addTo(map);
+                        if (p.label) {
+                            // textContent (pas innerHTML) : le label est traite comme du
+                            // TEXTE, jamais du HTML -> pas d'injection XSS via points_gps.
+                            // / textContent (not innerHTML): the label is TEXT, never HTML
+                            // -> no XSS injection via points_gps.
+                            var span = document.createElement('span');
+                            span.textContent = p.label;
+                            m.bindPopup(span);
+                        }
+                    });
+                }
+                function charger(cb) {
+                    if (typeof L !== 'undefined') { cb(); return; }
+                    if (!document.getElementById('leaflet-css')) {
+                        var css = document.createElement('link');
+                        css.id = 'leaflet-css'; css.rel = 'stylesheet';
+                        css.href = '{% static "pages/vendor/leaflet/leaflet.css" %}';
+                        document.head.appendChild(css);
+                    }
+                    var js = document.getElementById('leaflet-js');
+                    if (js) { js.addEventListener('load', cb); return; }
+                    js = document.createElement('script');
+                    js.id = 'leaflet-js'; js.src = '{% static "pages/vendor/leaflet/leaflet.js" %}';
+                    js.onload = cb; document.head.appendChild(js);
+                }
+                charger(initCarte);
+            })();
+            </script>
+        {% endwith %}
+    {% endif %}
+
+    {# --- La rangee : les infos pratiques en cartes ------------------------- #}
+    {% comment %}
+Le regroupement se fait en PYTHON (tag `cartes_infos_pratiques`) : un item
+`badge` ouvre une carte dont il devient l'intitule, les items suivants la
+remplissent. Le langage de gabarit ne sait pas accumuler une liste, et le
+simuler avec des tests sur `forloop` donnerait un gabarit illisible.
+`.grid--3` est deja defini par le skin (3 colonnes, puis 2 sous 1100 px,
+puis 1 sous 720 px) : rien a ecrire pour la rangee.
+/ Grouping happens in PYTHON: a `badge` item opens a card and labels it.
+The template language cannot accumulate a list. `.grid--3` already exists.
+{% endcomment %}
+    {% cartes_infos_pratiques bloc.contenu as cartes %}
+    {% if cartes %}
+        <div class="grid grid--3" data-testid="bloc-lieu-infos">
+            {% for carte in cartes %}
+                <div class="info-card">
+                    {% if carte.intitule %}
+                        <div class="info-card__label">{{ carte.intitule }}</div>
+                    {% endif %}
+                    <div class="info-card__text">
+                        {% for item in carte.items %}
+                            {% if item.type == "para" %}
+                                <p>{{ item.texte }}</p>
+                            {% elif item.type == "horaire" %}
+                                <p class="tb-bloc__infos-horaire">{{ item.texte }}</p>
+                            {% elif item.type == "adresse" %}
+                                <address>{{ item.texte|linebreaksbr }}</address>
+                            {% elif item.type == "accessibilite" %}
+                                <p><em>{{ item.texte }}</em></p>
+                            {% elif item.type == "transport" %}
+                                <div class="tb-bloc__infos-transport">
+                                    <h3>{{ item.titre }}</h3>
+                                    <ul>{% for ligne in item.lignes %}<li>{{ ligne }}</li>{% endfor %}</ul>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+</section>

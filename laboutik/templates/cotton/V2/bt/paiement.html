@@ -1,0 +1,34 @@
+{% load static i18n %}
+<!--
+BOUTON DE PAIEMENT — composant Cotton reutilisable
+Affiche un bouton avec icone, nom du moyen de paiement et total.
+La variable `bg` permet de personnaliser la couleur de fond (CSS var).
+/ Payment button — reusable Cotton component with icon, name and total.
+
+LOCALISATION : laboutik/templates/cotton/bt/paiement.html
+-->
+<c-vars bg=""/>
+
+{#{% if bg %}#}
+{#<div class="bt-basic-container" style="background-color: var({{ bg }});" {{ attrs }}>#}
+{#{% else %}#}
+{#<div class="bt-basic-container bt-basic-bg-success" {{ attrs }}>#}
+{#{% endif %}#}
+{#	<div class="bt-basic-icon">#}
+{#		<i class="fas {{ icon }}" aria-hidden="true"></i>#}
+{#	</div>#}
+{#	<div class="bt-basic-text">#}
+{#		<div>{{ name }}</div>#}
+{#		<div class="paiement-bt-total" style="font-variant-numeric: tabular-nums;">#}
+{#			<span>{% translate "TOTAL" %}</span>#}
+{#			<span>{{ total|floatformat:2 }}</span>#}
+{#			<span>{{ currency_data.symbol }}</span>#}
+{#		</div>#}
+{#	</div>#}
+{#</div>#}
+
+<button class="card-mode" data-mode="monnaie" aria-pressed="false">
+{#    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9.4" cy="9.4" r="7.2" opacity=".55"/><circle cx="14.6" cy="14.6" r="7.2"/></svg>#}
+    <i class="fas {{ icon }}" aria-hidden="true"></i>
+    <span>{{ name }}</span>
+</button>

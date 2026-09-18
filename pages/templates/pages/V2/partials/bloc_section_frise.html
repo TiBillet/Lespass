@@ -1,0 +1,32 @@
+{% load i18n %}
+{% comment %}
+BLOC SECTION / affichage FRISE — skin V2 (DA v1)
+/ SECTION block / FRISE (timeline) display — V2 skin (DA v1)
+
+LOCALISATION : pages/templates/pages/V2/partials/bloc_section_frise.html
+Maquette : TEMP-tibillet-lespass-main/qui-sommes-nous.html, section « Notre histoire »
+
+Les étapes viennent de `bloc.contenu`, une liste d'items TEXTE :
+    [{"titre": "2019", "texte": "Premières réunions dans le quartier."}, …]
+titre = la date ou l'année, texte = ce qui s'est passé.
+Une liste ordonnée (<ol>) : l'ordre des étapes a un sens.
+DA v1 : la frise est le contenu du lieu, donc à l'encre (pas de couleur de marque).
+/ Steps from `bloc.contenu`: titre = year, texte = story. Ordered list.
+{% endcomment %}
+<section class="tb-bloc tb-bloc--frise" data-testid="bloc-section-frise">
+    <div class="tb-bloc__contenu">
+        {% if bloc.titre %}<h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>{% endif %}
+        {% if bloc.texte %}<div class="tb-bloc__texte">{{ bloc.texte|safe }}</div>{% endif %}
+
+        {% if bloc.contenu %}
+            <ol class="timeline">
+                {% for etape in bloc.contenu %}
+                    <li class="timeline-item">
+                        <div class="timeline-item__year">{{ etape.titre }}</div>
+                        {% if etape.texte %}<div class="timeline-item__text">{{ etape.texte|linebreaksbr }}</div>{% endif %}
+                    </li>
+                {% endfor %}
+            </ol>
+        {% endif %}
+    </div>
+</section>

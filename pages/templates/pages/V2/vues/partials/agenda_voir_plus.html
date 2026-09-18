@@ -1,0 +1,28 @@
+{% load i18n %}
+{% comment %}
+BOUTON « VOIR PLUS D'ÉVÉNEMENTS » — skin V2
+/ "Load more events" button — V2 skin
+
+LOCALISATION : pages/templates/pages/V2/vues/partials/agenda_voir_plus.html
+Inclus par : vues/agenda.html, vues/agenda_liste.html, vues/agenda_liste_suite.html
+
+Il est posé en DERNIÈRE case de la grille #event_list (.agenda-suite prend
+toute la largeur). Au clic, EventMVT.partial_list renvoie la page suivante :
+ses cartes + un nouveau bouton. Le tout remplace ce bloc (hx-swap outerHTML),
+donc les nouvelles cartes arrivent dans la grille.
+hx-include="#search_form" : la recherche et les tags suivent la pagination.
+/ Last cell of the #event_list grid; replaced by the next page (outerHTML).
+
+Contexte attendu : paginated_info (fourni par EventMVT.list et partial_list).
+{% endcomment %}
+{% if paginated_info.has_next %}
+    <div id="paginator" class="agenda-suite">
+        <button type="button" class="btn btn--outline"
+                hx-post="/event/partial_list/?page={{ paginated_info.page|add:1 }}"
+                hx-include="#search_form" hx-target="#paginator" hx-swap="outerHTML"
+                data-loading-disable
+                data-testid="agenda-voir-plus">
+            {% translate "Load more events" %}
+        </button>
+    </div>
+{% endif %}

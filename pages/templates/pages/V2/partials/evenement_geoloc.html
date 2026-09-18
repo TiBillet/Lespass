@@ -85,7 +85,13 @@
          role="application"
          aria-hidden="true"></div>
 
-    <button id="show-map-button" class="btn btn-lg btn-primary map-button" onclick="initializeMap_{{ event.id }}()">
+    {# `btn-lg` retirée : la DA n'a pas de grande taille de bouton, et `.map-button` #}
+    {# (styles en tête de ce fichier) pose déjà son propre padding — `btn-lg` ne #}
+    {# faisait que grossir le texte. `btn-primary` est conservée : elle est remise #}
+    {# à la marque par le patch des `--bs-btn-*` de V2.css. #}
+    {# / `btn-lg` dropped: the DA has no large button size and `.map-button` already #}
+    {# sets its padding. `btn-primary` stays: V2.css's --bs-btn-* patch brands it. #}
+    <button id="show-map-button" class="btn btn-primary map-button" onclick="initializeMap_{{ event.id }}()">
         <i class="bi bi-map"></i> {% translate "Show Map" %}
     </button>
 </section>

@@ -1,11 +1,14 @@
 {% load tibitags %}
 {% load humanize i18n %}
 
-<table class="table">
+<div class="table-responsive">
+<table class="table compte-table">
     <thead>
-    <th>{% trans "Balance" %}</th>
-    <th>{% trans "Used in collectives" %}</th>
-    <th>{% trans "Last transaction" %}</th>
+    <tr>
+    <th scope="col">{% trans "Balance" %}</th>
+    <th scope="col">{% trans "Used in collectives" %}</th>
+    <th scope="col">{% trans "Last transaction" %}</th>
+    </tr>
     </thead>
     <tbody>
     {% for token in tokens %}
@@ -46,3 +49,4 @@
     {% endfor %}
     </tbody>
 </table>
+</div>

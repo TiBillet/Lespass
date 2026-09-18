@@ -651,6 +651,11 @@ class Bloc(models.Model):
     CARTE = "CARTE"
     APPEL_ACTION = "APPEL_ACTION"
     CITATION = "CITATION"
+    # Rendus de la page « Qui sommes-nous » (DA v1). Ils lisent `contenu`.
+    # / "About us" page renderings (DA v1). They read `contenu`.
+    EQUIPE = "EQUIPE"
+    FRISE = "FRISE"
+    RESSOURCES = "RESSOURCES"
     # IMAGES
     PLEINE_LARGEUR = "PLEINE_LARGEUR"
     VIGNETTE_TITRE = "VIGNETTE_TITRE"
@@ -660,6 +665,15 @@ class Bloc(models.Model):
     VIDEO = "VIDEO"
     WIDGET = "WIDGET"
     NEWSLETTER = "NEWSLETTER"
+    # LIEU : deux dispositions du MEME contenu (infos pratiques + carte).
+    # VERTICAL est le rendu historique (infos a gauche, carte a droite) ; il n'a
+    # pas de gabarit a son nom et retombe volontairement sur `bloc_lieu.html`,
+    # ce qui laisse les blocs deja enregistres (affichage vide) inchanges.
+    # / LIEU: two layouts of the SAME content. VERTICAL is the historical
+    # rendering and deliberately has no template of its own, falling back to
+    # `bloc_lieu.html` — so blocks already stored (empty affichage) are untouched.
+    VERTICAL = "VERTICAL"
+    HORIZONTAL = "HORIZONTAL"
 
     AFFICHAGE_CHOICES = [
         # SECTION
@@ -671,6 +685,9 @@ class Bloc(models.Model):
         (CARTE, _("Carte (se range en grille avec les cartes voisines)")),
         (APPEL_ACTION, _("Appel à l'action (boutons mis en avant)")),
         (CITATION, _("Citation / témoignage signé")),
+        (EQUIPE, _("Équipe (personnes et rôles)")),
+        (FRISE, _("Frise chronologique (dates et étapes)")),
+        (RESSOURCES, _("Ressources (documents et liens)")),
         # IMAGES
         (PLEINE_LARGEUR, _("Photo pleine largeur")),
         (VIGNETTE_TITRE, _("Vignette centrée (image-titre dessinée)")),
@@ -680,6 +697,9 @@ class Bloc(models.Model):
         (VIDEO, _("Vidéo en ligne (YouTube / Vimeo / PeerTube)")),
         (WIDGET, _("Formulaire ou widget (hôte autorisé par le ROOT)")),
         (NEWSLETTER, _("Inscription newsletter (Ghost)")),
+        # LIEU
+        (VERTICAL, _("Lieu, infos à gauche, carte à droite (deux colonnes)")),
+        (HORIZONTAL, _("Lieu, carte en bandeau, infos en rangée dessous")),
     ]
 
     # --- Source de donnees du bloc LISTE ---
@@ -878,6 +898,8 @@ class Bloc(models.Model):
     # jamais de HTML — le HTML et les classes vivent dans le gabarit) :
     #   - LIEU : les infos pratiques posees a cote de la carte ;
     #   - SECTION en affichage MEDIA_ET_CARTES : les sous-cartes de la section.
+    #   - SECTION en affichage EQUIPE / FRISE / RESSOURCES : les personnes, les
+    #     étapes ou les ressources ({"titre", "texte", "badge", "url"}).
     # Types d'item : "badge" (texte), "para" (texte), "horaire" (texte),
     # "adresse" (texte multi-lignes), "accessibilite" (texte),
     # "transport" (titre + lignes[]). / Structured content for the left column of the

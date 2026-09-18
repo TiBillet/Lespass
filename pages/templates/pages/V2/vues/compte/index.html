@@ -1,87 +1,92 @@
-{% extends 'fonctionnel/account_base.html' %}
+{% extends 'pages/V2/vues/compte/account_base.html' %}
 {% load static i18n tibitags %}
 
-{% block title %}{% translate 'My account' %}{% endblock %}
+{% comment %}
+MON ESPACE — skin V2 (DA v1)
+/ My space — V2 skin (DA v1)
 
+LOCALISATION : pages/templates/pages/V2/vues/compte/index.html
+Vue : BaseBillet/views.py MyAccount.list (/my_account/)
+Maquettes : TEMP-tibillet-lespass-main/mon-espace.html (rempli)
+            et mon-espace-vide.html (premier jour, états vides)
+
+Contexte (skin V2) : card, tokens, reservations, memberships, bookings,
+tenants_admin, config.show_refill_button.
+
+Structure :
+1. En-tête « moi » : bonjour, email, la carte TiBillet et son solde.
+   « Recharger » est LE geste TiBillet par excellence : .btn--signature.
+2. Accès rapides aux sous-pages du compte.
+3. Modules repliables (<details> natifs : sans JS, accessibles au clavier) :
+   Mes responsabilités, Mon agenda, Mes services, Mes ressources.
+   Un module sans donnée affiche une invitation (.module__invite), jamais
+   un message triste (maquette mon-espace-vide.html).
+
+Masqués en V2-HERE (pas de donnée) : « Y retourner » (R8),
+« Mes contributions » (R9), « Mes lieux » (R10), glisser-déposer des
+modules (R11).
+{% endcomment %}
+
+{% block title %}{% translate 'My account' %}{% endblock %}
 
 {% block account_page %}
 
     {% if config.show_refill_button %}
-        <!-- Si pas possible de recharger, alors pas possible de se faire rembourser -->
-        <!-- refund panel -->
+        {# Panneau de remboursement. Pas de recharge possible = pas de remboursement. #}
+        {# / Refund panel. No refill possible = no refund. #}
         <div class="offcanvas-start offcanvas" tabindex="-1" id="refundPanel" aria-labelledby="refundPanelLabel">
             <div class="offcanvas-header">
-                <h5 class="offcanvas-title" id="refundPanelLabel">{% trans "Request a refund" %}</h5>
+                <h2 class="offcanvas-title h5" id="refundPanelLabel">{% translate "Request a refund" %}</h2>
                 <button type="button" class="btn-close" data-bs-dismiss="offcanvas"
-                        aria-label="{% trans 'Close' %}"></button>
+                        aria-label="{% translate 'Close' %}"></button>
             </div>
             <div class="offcanvas-body">
-                <div class="d-flex flex-column justify-content-between h-100">
-                    <div>
-                        <div class="alert  alert-primary" role="alert">
-                            <h4>{% trans "Don't panic! You've got time left…" %}</h4>
+                <div class="compte__remboursement">
+                    <div class="callout" role="note">
+                        <div class="callout__text">
+                            <p><strong>{% translate "Don't panic! You've got time left…" %}</strong></p>
                             <p>
                                 {% translate 'TiBillet works on a <a href="https://tibillet.github.io/documentation_v3/">melting funds</a> principle.' %}
                                 {% translate "You can get your leftover balance back for 14 months after your last Pass card use." %}
                                 {% translate "We send a reminder a month before expiration." %}
                             </p>
-                            <p>
-                                {% translate "You will also soon be able to donate the leftover balance to the collective that issued this card." %}
-                            </p>
-                            <p>
-                                {% translate "Your Pass card itself and your account are yours for life and can be used with every TiBillet collective!" %}
-                            </p>
+                            <p>{% translate "You will also soon be able to donate the leftover balance to the collective that issued this card." %}</p>
+                            <p>{% translate "Your Pass card itself and your account are yours for life and can be used with every TiBillet collective!" %}</p>
                         </div>
                     </div>
 
-                    <div class="p-3">
-                        <div class="alert  alert-warning" role="alert">
-                            <p>{% translate "You can only obtain online refunds for amounts topped up online or via card payment terminal named ‘TiBillet’. For amounts topped up in cash, please contact the collective or return to their next event!" %}</p>
-                        </div>
-                        <p class="lead">
-                            {# TODO: montant remboursement #}
-                            {% trans "Confirm the refund request?" %}
-                        </p>
-
-                        <button type="button" class="btn btn-primary d-block w-100 mb-3"
-                                data-bs-dismiss="offcanvas" aria-label="{% trans 'Close' %}"
-                                hx-get="/my_account/refund_online/" hx-indicator="#tibillet-spinner">
-                            {% trans "Send request" %}</button>
-
-                        {#                            <button disabled type="button" class="btn btn-secondary d-block w-100 mb-3"#}
-                        {#                                {% trans "Gift my leftover balance to" %} {{ config.organisation }}#}
-                        {#                            </button>#}
-                        {#                            <p class="alert alert-warning">#}
-                        {#                                {% trans "The collective donation feature is being developed, coming soon!" %}#}
-                        {#                            </p>#}
-
-                        <button type="button" class="btn btn-danger d-block w-100" data-bs-dismiss="offcanvas"
-                                aria-label="{% trans 'Close' %}">
-                            {% trans "Cancel" %}
-                        </button>
+                    <div class="callout" role="note">
+                        <p class="callout__text">{% translate "You can only obtain online refunds for amounts topped up online or via card payment terminal named ‘TiBillet’. For amounts topped up in cash, please contact the collective or return to their next event!" %}</p>
                     </div>
+
+                    <p><strong>{% translate "Confirm the refund request?" %}</strong></p>
+                    <button type="button" class="btn btn--primary"
+                            data-bs-dismiss="offcanvas"
+                            hx-get="/my_account/refund_online/" hx-indicator="#tibillet-spinner">
+                        {% translate "Send request" %}</button>
+                    <button type="button" class="btn btn--secondary" data-bs-dismiss="offcanvas">
+                        {% translate "Cancel" %}
+                    </button>
                 </div>
             </div>
         </div>
-
     {% endif %}
 
-    <!-- EN-TÊTE DE L'ESPACE PERSONNEL — l'identité en tête, puis les blocs
-     qui composent l'espace : la carte, puis les accès aux lieux. -->
-    <div class="place-header place-header--me">
+    <!-- EN-TÊTE DE L'ESPACE PERSONNEL — l'identité en tête, puis la carte. -->
+    <div class="place-header place-header--me" data-testid="compte-entete">
         <div class="place-header__card">
 
             <div class="me-id">
-                <span class="place-id__name">{% translate 'Bonjour' %} {{ request.user.first_name }}</span>
+                <h1 class="place-id__name">{% translate 'Bonjour' %}{% if request.user.first_name %} {{ request.user.first_name }}{% endif %}</h1>
                 <span class="place-id__tagline">{{ request.user.email }}</span>
             </div>
-            {% if card %}
-                <div class="me-block">
-                    <div class="me-block__title">Ma carte</div>
-                    <div class="me-card">
+
+            <div class="me-block">
+                <h2 class="me-block__title">{% translate 'Ma carte' %}</h2>
+                {% if card %}
+                    <div class="me-card" data-testid="compte-carte">
                         <div class="me-card__visual">
                             <div class="talisman talisman--sm">
-                                <!-- viewBox resserrée : la constellation occupe davantage la carte -->
                                 <svg class="talisman__sky" viewBox="0 0 76 48" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
                                     <g stroke="rgba(255,255,255,.30)" stroke-width="1.1" fill="none">
                                         <path d="M8 37 L26 27 L45 33 L60 16 L71 25"/>
@@ -103,516 +108,282 @@
                                     </svg>
                                 </div>
                                 <div class="talisman__foot">
-                                    <div class="talisman__number">{{ card.number_printed }}</div>
+                                    <div class="talisman__number">
+                                        <span class="visually-hidden">{% translate 'Numéro de carte' %}</span>
+                                        {{ card.number_printed }}
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
                         <div class="me-card__info">
-                            <div class="balance__label">Solde</div>
-                            <div class="me-card__amount">{{ tokens.0.value | dround}} € </div>
-                            {% if config.show_refill_button %} <!-- Si pas possible de recharger -->
-
-                                <a href="#" hx-get="{% url "my_account-refill-wallet" %}" hx-indicator="#tibillet-spinner"
-                                   class="btn btn--primary btn--sm">
-                                    {% trans "Recharger" %}
+                            <div class="balance__label">{% translate 'Solde' %}</div>
+                            <div class="me-card__amount" data-testid="compte-solde">{% if tokens %}{{ tokens.0.value|dround }}{% else %}0{% endif %} €</div>
+                            {% if config.show_refill_button %}
+                                <a href="#" hx-get="{% url 'my_account-refill-wallet' %}" hx-indicator="#tibillet-spinner"
+                                   class="btn btn--signature btn--sm"
+                                   data-testid="compte-recharger">
+                                    {% translate "Recharger" %}
                                 </a>
                             {% endif %}
 
                             <p class="me-card__links">
-                                <a class="link" href="#">Historique</a> ·
-                                {% if config.show_refill_button %} <!-- Si pas possible de recharger -->
-                                    <button class="link"
+                                <a class="link" href="/my_account/balance/" hx-get="/my_account/balance/" hx-target="body" hx-push-url="true">{% translate 'Historique' %}</a>
+                                {% if config.show_refill_button %}
+                                    ·
+                                    <button type="button" class="link"
                                             id="button-filters"
                                             data-bs-toggle="offcanvas"
                                             data-bs-target="#refundPanel"
                                             aria-controls="refundPanel">
-                                        {% trans "Se faire rembourser" %}
+                                        {% translate "Se faire rembourser" %}
                                     </button>
                                 {% endif %}
+                                ·
                                 {% if user.email_valid and user.is_active %}
-                                        <button type="submit" class="link"
-                                                role="button"
-                                                aria-label="{% trans 'I lost my card' %}"
-                                                hx-get="{% url 'my_account-lost-my-card' pk=card.number_printed %}"
-                                                hx-indicator="#tibillet-spinner">
-                                            {% translate "J'ai perdu ma carte" %}
-                                        </button>
+                                    <button type="button" class="link"
+                                            aria-label="{% translate 'I lost my card' %}"
+                                            hx-get="/my_account/{{ card.number_printed }}/lost_my_card/"
+
+{#                                            hx-get="{% url 'my_account-lost-my-card' pk=card.number_printed %}"#}
+                                            hx-indicator="#tibillet-spinner">
+                                        {% translate "J'ai perdu ma carte" %}
+                                    </button>
                                 {% else %}
-                                    {% trans "Please confirm your email to declare a lost card." %}
+                                    {% translate "Please confirm your email to declare a lost card." %}
                                 {% endif %}
-                                <span class="callout__text d-inline">Obtenue à {{ card.origin.place.name }}</span>
                             </p>
+                            {% if card.origin.place.name %}
+                                <p class="me-card__links">{% blocktrans with lieu=card.origin.place.name %}Obtenue à {{ lieu }}{% endblocktrans %}</p>
+                            {% endif %}
                         </div>
                     </div>
-                </div>
-            {% else %}
-                <p>Pas de cartes liées pour l'instant</p>
-            {% endif %}
-
-            <div class="me-block">
-                <div class="me-block__title">Y retourner</div>
-                <div class="place-shortcuts">
-                    <a class="shortcut" href="accueil.html">
-                        <span class="shortcut__logo solid-green"></span>
-                        <span class="shortcut__text">
-                            <span class="shortcut__name">La MIETE</span>
-                            <span class="shortcut__meta">Membre</span>
-                        </span>
-                    </a>
-                    <a class="shortcut" href="#">
-                        <span class="shortcut__logo solid-mauve"></span>
-                        <span class="shortcut__text">
-                            <span class="shortcut__name">LOWCAL</span>
-                            <span class="shortcut__meta">Abonné·e</span>
-                          </span>
-                    </a>
-                    <a class="shortcut" href="#">
-                        <span class="shortcut__logo solid-teal"></span>
-                        <span class="shortcut__text">
-                            <span class="shortcut__name">Les Incroyables Comestibles</span>
-                            <span class="shortcut__meta">Bénévole</span>
-                        </span>
-                    </a>
-                    <a class="shortcut" href="#">
-                        <span class="shortcut__logo solid-slate"></span>
-                        <span class="shortcut__text">
-            <span class="shortcut__name">Le Rize</span>
-            <span class="shortcut__meta">Vous suivez</span>
-          </span>
-                    </a>
-                    <a class="shortcut" href="#">
-                        <span class="shortcut__logo solid-terracotta"></span>
-                        <span class="shortcut__text">
-            <span class="shortcut__name">Cie du Loup</span>
-            <span class="shortcut__meta">Place réservée</span>
-          </span>
-                    </a>
-                </div>
-                <p class="place-shortcuts__more"><a class="link" href="#lieux">Découvrir d'autres lieux →</a></p>
+                {% else %}
+                    {# Pas encore de carte : une invitation, pas un reproche (maquette vide). #}
+                    {# / No card yet: an invitation, not a complaint. #}
+                    <div class="module__invite" data-testid="compte-carte-vide">
+                        <p>{% translate "Pas encore de carte TiBillet liée à votre compte. Vous pouvez en lier une à tout moment." %}</p>
+                        <a class="btn btn--secondary btn--sm" href="/my_account/card/" hx-get="/my_account/card/" hx-target="body" hx-push-url="true">{% translate 'Lier une carte' %}</a>
+                    </div>
+                {% endif %}
             </div>
 
+            {# Accès aux sous-pages du compte. / Links to the account sub-pages. #}
+            <nav class="me-block" aria-label="{% translate 'My account' %}"
+                 data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
+                <h2 class="me-block__title">{% translate 'Mon compte' %}</h2>
+                <div class="place-shortcuts compte__raccourcis">
+                    {# Raccourci « Mon porte-monnaie » retiré de cette liste (décision #}
+                    {# du mainteneur : cinq entrées). La page reste atteignable par #}
+                    {# son adresse ET par « Historique » dans la carte ci-dessus — #}
+                    {# on n'a retiré QUE l'entrée du menu. #}
+                    {# / "My wallet" shortcut removed from this list only; the page #}
+                    {# stays reachable by URL and from "Historique" in the card above. #}
+                    <a class="shortcut" href="/my_account/membership/" hx-get="/my_account/membership/" hx-target="body" hx-push-url="true">
+                        <span class="shortcut__text"><span class="shortcut__name">{% translate 'My subscriptions' %}</span></span>
+                    </a>
+                    <a class="shortcut" href="/my_account/my_reservations/" hx-get="/my_account/my_reservations/" hx-target="body" hx-push-url="true">
+                        <span class="shortcut__text"><span class="shortcut__name">{% translate 'My bookings' %}</span></span>
+                    </a>
+                    {% if config.module_booking %}
+                        <a class="shortcut" href="/my_account/my_bookings/" data-testid="btn-my-resources">
+                            <span class="shortcut__text"><span class="shortcut__name">{% translate 'Mes ressources' %}</span></span>
+                        </a>
+                    {% endif %}
+                    {# Raccourci « Ma carte Pass » retiré de cette liste (décision du #}
+                    {# mainteneur : cinq entrées). La page reste atteignable par son #}
+                    {# adresse ET par « Lier une carte » quand aucune carte n'est liée. #}
+                    {# / "My Pass card" shortcut removed from this list only; the page #}
+                    {# stays reachable by URL and from "Lier une carte" when unlinked. #}
+                    <a class="shortcut" href="/my_account/profile/" hx-get="/my_account/profile/" hx-target="body" hx-push-url="true">
+                        <span class="shortcut__text"><span class="shortcut__name">{% translate 'My settings' %}</span></span>
+                    </a>
+                    <a class="shortcut" href="/deconnexion/">
+                        <span class="shortcut__text"><span class="shortcut__name">{% translate 'Log out' %}</span></span>
+                    </a>
+                </div>
+            </nav>
+
+            {% comment %} V2-HERE
+            Bloc « Y retourner » de la maquette (raccourcis vers les lieux où l'on
+            est membre, abonné·e, bénévole…) : il faut la liste des lieux
+            fréquentés dans MyAccount.list (point R8).
+            <div class="me-block">
+                <div class="me-block__title">{% translate 'Y retourner' %}</div>
+                <div class="place-shortcuts">…</div>
+            </div>
+            {% endcomment %}
         </div>
     </div>
 
-    <main class="container">
-        <!-- MODULES — une rubrique par type d'activité. Repliables, et
-             réordonnables en attrapant la poignée à gauche du titre. -->
-        <section class="section" style="padding-bottom: 0;">
-            <div data-modules>
+    <!-- MODULES — une rubrique par type d'activité, repliables.
+         <details>/<summary> natifs : ouverture sans JS, clavier inclus. -->
+    <section class="section compte__modules" aria-label="{% translate 'Mon activité' %}">
 
-                <article class="module is-open" draggable="true" data-module>
-                    <div class="module__head" data-module-toggle>
-          <span class="module__grip" data-module-grip title="Glisser pour réordonner">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-          </span>
-                        <span class="module__title">Mon agenda <span class="module__count">· 4 à venir</span></span>
-                        <svg class="module__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
-                    </div>
-                    <div class="module__body">
-                        <div class="module__content">
-                            <div class="grid grid--3">
+        {% comment %} V2-HERE
+        Poignée de glisser-déposer des modules (maquette) : l'ordre choisi n'est
+        enregistré nulle part (point R11). Les modules restent dans l'ordre fixe.
+        {% endcomment %}
 
-                                <article class="event-card">
-                                    <div class="event-card__cover bg-green"></div>
-                                    <div class="event-card__body">
-                                        <div class="event-card__top">
-                                            <div class="event-date-box"><div class="dow">Jeu</div><div class="day">28</div><div class="mon">Aoû</div></div>
-                                            <div><div class="event-card__title">Scène ouverte</div><div class="event-card__time">20h30</div></div>
-                                        </div>
-                                        <div class="event-card__loc">📍 Café associatif</div>
-                                        <div class="event-card__tags">
-                                            <span class="badge badge--green">Scène ouverte</span>
-                                            <span class="badge badge--neutral">Entrée libre</span>
-                                        </div>
-                                        <div class="event-card__meta">par <strong>La MIETE</strong></div>
-                                        <div class="event-card__footer"><a class="link" href="#">Voir le billet</a><span class="event-card__price">Inscrit·e</span></div>
+        {# 1. MES RESPONSABILITÉS — placé en premier : il relève de l'accès, #}
+        {# pas de l'activité (maquette). / Roles first: access, not activity. #}
+        {% if tenants_admin %}
+            <details class="module" open data-testid="module-responsabilites">
+                <summary class="module__head">
+                    <span class="module__title">{% translate 'Mes responsabilités' %} <span class="module__count">· {{ tenants_admin|length }}</span></span>
+                    <svg class="module__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                </summary>
+                <div class="module__body">
+                    <div class="module__content">
+                        <div class="grid grid--3">
+                            {% for tenant in tenants_admin %}
+                                <article class="service-card">
+                                    <div class="service-card__head">
+                                        <span class="service-card__logo solid-slate" aria-hidden="true"></span>
+                                        <span>
+                                            <span class="service-card__title">{{ tenant.name }}</span>
+                                            <span class="service-card__place">{{ tenant.get_primary_domain.domain }}</span>
+                                        </span>
+                                    </div>
+                                    <div><span class="badge badge--dark">{% translate 'Administration' %}</span></div>
+                                    <div class="service-card__foot">
+                                        <span class="service-card__due"></span>
+                                        {# .btn-admin-tenant et le testid : lus par tests/e2e/test_login.py. #}
+                                        {# / Class and testid read by the login E2E test. #}
+                                        <a class="link btn-admin-tenant"
+                                           href="https://{{ tenant.get_primary_domain.domain }}/admin/"
+                                           target="_blank" rel="noopener"
+                                           data-testid="btn-admin-{{ tenant.name|slugify }}">{% translate 'Ouvrir le back-office' %} <span aria-hidden="true">→</span></a>
                                     </div>
                                 </article>
-
-                                <article class="event-card">
-                                    <div class="event-card__cover bg-teal"></div>
-                                    <div class="event-card__body">
-                                        <div class="event-card__top">
-                                            <div class="event-date-box"><div class="dow">Sam</div><div class="day">30</div><div class="mon">Aoû</div></div>
-                                            <div><div class="event-card__title">Chantier jardin</div><div class="event-card__time">10h – 13h</div></div>
-                                        </div>
-                                        <div class="event-card__loc">📍 Cour du quartier</div>
-                                        <div class="event-card__tags">
-                                            <span class="badge badge--teal">Chantier</span>
-                                            <span class="badge badge--neutral">Gratuit</span>
-                                        </div>
-                                        <div class="event-card__meta">par <strong>Les Incroyables Comestibles</strong></div>
-                                        <div class="event-card__footer"><a class="link" href="#">En savoir plus</a><span class="event-card__price">Inscrit·e</span></div>
-                                    </div>
-                                </article>
-
-                                <article class="event-card">
-                                    <div class="event-card__cover bg-mauve"></div>
-                                    <div class="event-card__body">
-                                        <div class="event-card__top">
-                                            <div class="event-date-box"><div class="dow">Mar</div><div class="day">02</div><div class="mon">Sep</div></div>
-                                            <div><div class="event-card__title">Atelier réparation vélo</div><div class="event-card__time">18h – 20h</div></div>
-                                        </div>
-                                        <div class="event-card__loc">📍 Grand atelier</div>
-                                        <div class="event-card__tags">
-                                            <span class="badge badge--mauve">Atelier</span>
-                                            <span class="badge badge--neutral">Prix libre</span>
-                                        </div>
-                                        <div class="event-card__meta">par <strong>LOWCAL</strong></div>
-                                        <div class="event-card__footer"><a class="link" href="#">Voir le billet</a><span class="event-card__price">Prix libre</span></div>
-                                    </div>
-                                </article>
-
-                                <article class="event-card">
-                                    <div class="event-card__cover bg-terracotta"></div>
-                                    <div class="event-card__body">
-                                        <div class="event-card__top">
-                                            <div class="event-date-box"><div class="dow">Ven</div><div class="day">12</div><div class="mon">Sep</div></div>
-                                            <div><div class="event-card__title">Le Fil rouge</div><div class="event-card__time">21h00</div></div>
-                                        </div>
-                                        <div class="event-card__loc">📍 Théâtre de la Croix-Rousse</div>
-                                        <div class="event-card__tags">
-                                            <span class="badge badge--terracotta">Spectacle</span>
-                                            <span class="badge badge--neutral">Place réservée</span>
-                                        </div>
-                                        <div class="event-card__meta">par <strong>Cie du Loup</strong></div>
-                                        <div class="event-card__footer"><a class="link" href="#">Voir le billet</a><span class="event-card__price">18,00 €</span></div>
-                                    </div>
-                                </article>
-
-                            </div>
+                            {% endfor %}
                         </div>
                     </div>
-                </article>
+                </div>
+            </details>
+        {% endif %}
 
-                <article class="module is-open" draggable="true" data-module>
-                    <div class="module__head" data-module-toggle>
-          <span class="module__grip" data-module-grip title="Glisser pour réordonner">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-          </span>
-                        <span class="module__title">Mes contributions <span class="module__count">· 4</span></span>
-                        <svg class="module__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+        {# 2. MON AGENDA — les réservations, en cartes mode « resa ». #}
+        {# / My agenda — bookings as "resa" cards. #}
+        <details class="module" open data-testid="module-agenda">
+            <summary class="module__head">
+                <span class="module__title">{% translate 'Mon agenda' %}
+                    <span class="module__count">·
+                        {% if reservations %}{% blocktrans count compteur=reservations|length %}{{ compteur }} réservation{% plural %}{{ compteur }} réservations{% endblocktrans %}{% else %}{% translate 'rien de prévu' %}{% endif %}
+                    </span>
+                </span>
+                <svg class="module__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+            </summary>
+            <div class="module__body">
+                {% if reservations %}
+                    <div class="module__content">
+                        <div class="grid grid--3">
+                            {% for reservation in reservations %}
+                                <c-V2.event_card mode="resa" :event="reservation.event" :reservation="reservation" />
+                            {% endfor %}
+                        </div>
                     </div>
-                    <div class="module__body">
-                        <div class="module__content">
-                            <div class="grid grid--3">
+                {% else %}
+                    <div class="module__invite">
+                        <p>{% translate "Rien de prévu pour l'instant. Jetez un œil à ce qui arrive près de chez vous." %}</p>
+                        <a class="btn btn--primary btn--sm" href="/event/" hx-get="/event/" hx-target="body" hx-push-url="true">{% translate "Parcourir l'agenda" %}</a>
+                    </div>
+                {% endif %}
+            </div>
+        </details>
 
-                                <article class="help-card">
-                                    <div class="help-card__badges"><span class="badge badge--green">Initiative</span><span class="badge badge--neutral">En cours</span></div>
-                                    <h3 class="help-card__title">Jardin partagé sur la cour</h3>
-                                    <p class="help-card__desc">Vous tenez la phase plantation avec deux autres membres.</p>
+        {% comment %} V2-HERE
+        Module « Mes contributions » de la maquette (initiatives, coups de main,
+        entraide) : il faut les participations crowds de l'utilisateur dans
+        MyAccount.list (point R9).
+        {% endcomment %}
+
+        {# 3. MES SERVICES — les adhésions, tous lieux confondus. #}
+        {# / My services — memberships across all venues. #}
+        <details class="module" open data-testid="module-services">
+            <summary class="module__head">
+                <span class="module__title">{% translate 'Mes services' %}{% if memberships %} <span class="module__count">· {{ memberships|length }}</span>{% endif %}</span>
+                <svg class="module__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+            </summary>
+            <div class="module__body">
+                {% if memberships %}
+                    <div class="module__content">
+                        <div class="grid grid--3">
+                            {% for membership in memberships %}
+                                <article class="service-card">
+                                    <div class="service-card__head">
+                                        <span class="service-card__logo solid-green" aria-hidden="true"></span>
+                                        <span>
+                                            <span class="service-card__title">{{ membership.price.product.name }}</span>
+                                            <span class="service-card__place">{{ membership.origin }}</span>
+                                        </span>
+                                    </div>
                                     <div>
-                                        <div class="progress-label"><span>Phase plantation</span><strong>60%</strong></div>
-                                        <div class="progress-track"><div class="progress-fill" style="width:60%;"></div></div>
+                                        {% if membership.is_valid %}
+                                            <span class="badge badge--green">{% translate 'Active' %}</span>
+                                        {% else %}
+                                            <span class="badge badge--neutral">{% translate 'Expirée' %}</span>
+                                        {% endif %}
                                     </div>
-                                    <div class="help-card__foot">
-                                        <span class="person">La MIETE</span>
-                                        <a class="link" href="#">Ouvrir</a>
-                                    </div>
-                                </article>
-
-                                <article class="help-card">
-                                    <div class="help-card__badges"><span class="badge badge--gold">Responsabilité</span><span class="badge badge--neutral">Candidature envoyée</span></div>
-                                    <h3 class="help-card__title">Référent·e FabLab</h3>
-                                    <p class="help-card__desc">Accompagner les utilisateur·ices des machines. Un entretien est à caler.</p>
-                                    <div class="help-card__foot">
-                                        <span class="person">La MIETE</span>
-                                        <a class="link" href="#">Suivre</a>
+                                    <div class="service-card__foot">
+                                        <span class="service-card__due">
+                                            {% if membership.deadline %}
+                                                {% if membership.is_valid %}{% translate "Valable jusqu'au" %}{% else %}{% translate "Terminée le" %}{% endif %}
+                                                {{ membership.deadline|date:"j F Y" }}
+                                            {% endif %}
+                                        </span>
+                                        <a class="link" href="/my_account/membership/" hx-get="/my_account/membership/" hx-target="body" hx-push-url="true">{% translate 'Gérer' %}</a>
                                     </div>
                                 </article>
-
-                                <article class="help-card">
-                                    <div class="help-card__badges"><span class="badge badge--gold">Entraide</span><span class="badge badge--neutral">2 réponses</span></div>
-                                    <h3 class="help-card__title">Réparation vélo</h3>
-                                    <p class="help-card__desc">Vous proposez un coup de main mécanique, deux personnes ont répondu.</p>
-                                    <div class="help-card__foot">
-                                        <span class="person">LOWCAL</span>
-                                        <a class="link" href="#">Répondre</a>
-                                    </div>
-                                </article>
-
-                                <article class="help-card">
-                                    <div class="help-card__badges"><span class="badge badge--slate">Coup de main</span><span class="badge badge--neutral">Terminé</span></div>
-                                    <h3 class="help-card__title">Accueil public · festival</h3>
-                                    <p class="help-card__desc">8 heures sur l'édition 2025, à l'entrée et au vestiaire.</p>
-                                    <div class="help-card__foot">
-                                        <span class="person">Les Nuits Sonores</span>
-                                        <a class="link" href="#">Voir</a>
-                                    </div>
-                                </article>
-
-                            </div>
+                            {% endfor %}
                         </div>
                     </div>
-                </article>
-
-                <article class="module is-open" draggable="true" data-module>
-                    <div class="module__head" data-module-toggle>
-          <span class="module__grip" data-module-grip title="Glisser pour réordonner">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-          </span>
-                        <span class="module__title">Mes services <span class="module__count">· 3</span></span>
-                        <svg class="module__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                {% else %}
+                    <div class="module__invite">
+                        <p>{% translate "Adhésions, abonnements, accès : tout ce que vous suivez dans un lieu apparaîtra ici." %}</p>
+                        <a class="btn btn--primary btn--sm" href="/memberships/" hx-get="/memberships/" hx-target="body" hx-push-url="true">{% translate 'Voir les adhésions' %}</a>
                     </div>
-                    <div class="module__body">
-                        <div class="module__content">
-                            <div class="grid grid--3">
+                {% endif %}
+            </div>
+        </details>
 
+        {# 4. MES RESSOURCES — réservations de ressources à venir (salles, matériel). #}
+        {# / My resources — upcoming resource bookings. #}
+        {% if config.module_booking and bookings %}
+            <details class="module" open data-testid="module-ressources">
+                <summary class="module__head">
+                    <span class="module__title">{% translate 'Mes ressources' %} <span class="module__count">· {{ bookings|length }}</span></span>
+                    <svg class="module__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                </summary>
+                <div class="module__body">
+                    <div class="module__content">
+                        <div class="grid grid--3">
+                            {% for booking in bookings %}
                                 <article class="service-card">
                                     <div class="service-card__head">
-                                        <span class="service-card__logo solid-green"></span>
+                                        <span class="service-card__logo solid-gold" aria-hidden="true"></span>
                                         <span>
-                    <span class="service-card__title" style="display:block">Adhésion membre</span>
-                    <span class="service-card__place">La MIETE</span>
-                  </span>
+                                            <span class="service-card__title">{{ booking.resource.name }}</span>
+                                            <span class="service-card__place">{{ booking.start_datetime|date:"l j F, H:i" }}</span>
+                                        </span>
                                     </div>
-                                    <div><span class="badge badge--green">Active</span></div>
                                     <div class="service-card__foot">
-                                        <span class="service-card__due">À renouveler le 7 mars</span>
-                                        <a class="link" href="adhesion-services.html">Gérer</a>
+                                        <span class="service-card__due">{% translate "jusqu'à" %} {{ booking.end_datetime|date:"H:i" }}</span>
+                                        <a class="link" href="/my_account/my_bookings/">{% translate 'Voir' %}</a>
                                     </div>
                                 </article>
-
-                                <article class="service-card">
-                                    <div class="service-card__head">
-                                        <span class="service-card__logo solid-mauve"></span>
-                                        <span>
-                    <span class="service-card__title" style="display:block">Accès atelier</span>
-                    <span class="service-card__place">LOWCAL</span>
-                  </span>
-                                    </div>
-                                    <div><span class="badge badge--neutral">Mensuel · 12,00 €</span></div>
-                                    <div class="service-card__foot">
-                                        <span class="service-card__due">Prochain prélèvement le 2 sept.</span>
-                                        <a class="link" href="#">Gérer</a>
-                                    </div>
-                                </article>
-
-                                <article class="service-card">
-                                    <div class="service-card__head">
-                                        <span class="service-card__logo solid-terracotta"></span>
-                                        <span>
-                    <span class="service-card__title" style="display:block">Carte spectacles</span>
-                    <span class="service-card__place">Cie du Loup</span>
-                  </span>
-                                    </div>
-                                    <div><span class="badge badge--terracotta">3 places restantes</span></div>
-                                    <div class="service-card__foot">
-                                        <span class="service-card__due">Valable jusqu'au 30 juin</span>
-                                        <a class="link" href="#">Gérer</a>
-                                    </div>
-                                </article>
-
-                            </div>
+                            {% endfor %}
                         </div>
                     </div>
-                </article>
+                </div>
+            </details>
+        {% endif %}
+    </section>
 
-            </div>
-        </section>
+    {% comment %} V2-HERE
+    Section « Mes lieux » de la maquette (lieux épinglés, filtres par type,
+    bouton pin-btn) : il faut un modèle de lieux épinglés + un endpoint pour
+    épingler/désépingler (point R10).
+    {% endcomment %}
 
-        <!-- 2 · LES LIEUX PARCOURUS -->
-        <section class="section" id="lieux">
-            <div class="section__title">Mes lieux <span class="section__meta">· 6 épinglés</span></div>
-
-            <div class="filter-tabs" data-tabs="favoris" style="margin: var(--space-5) 0 var(--space-5);">
-                <button class="tag-pill is-active" data-value="tout">Tout</button>
-                <button class="tag-pill" data-value="lieu">Lieu</button>
-                <button class="tag-pill" data-value="tiers-lieu">Tiers-lieu</button>
-                <button class="tag-pill" data-value="association">Association</button>
-                <button class="tag-pill" data-value="compagnie">Compagnie</button>
-                <button class="tag-pill" data-value="collectif">Collectif</button>
-                <button class="tag-pill" data-value="festival">Festival</button>
-                <button class="tag-pill" data-value="cooperative">Coopérative</button>
-                <button class="tag-pill" data-value="atelier">Atelier</button>
-                <button class="tag-pill" data-value="media">Média</button>
-                <button class="tag-pill" data-value="institution">Institution</button>
-            </div>
-
-            <div class="grid grid--3" data-cards="favoris">
-                <article class="favorite-card" data-card data-type="tiers-lieu" data-search="la miete membre événements">
-                    <div class="favorite-card__cover bg-green">
-                        <button class="pin-btn is-on" data-pin aria-pressed="true"><svg width="14" height="14" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l-1 5 3.5 3.5H6.5L10 9z"/><path d="M12 12.5V20"/></svg><span class="pin-btn__label">Épinglé</span></button>
-                    </div>
-                    <div class="favorite-card__body">
-                        <div class="favorite-card__title-row"><span class="favorite-card__title">La MIETE</span><span class="badge badge--dark">Tiers-lieu</span></div>
-                        <ul class="favorite-card__list"><li>Vous y êtes membre</li><li>3 événements à venir</li></ul>
-                        <a class="link" href="accueil.html">Y aller →</a>
-                    </div>
-                </article>
-
-                <article class="favorite-card" data-card data-type="compagnie" data-search="cie du loup spectacles">
-                    <div class="favorite-card__cover bg-terracotta">
-                        <button class="pin-btn is-on" data-pin aria-pressed="true"><svg width="14" height="14" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l-1 5 3.5 3.5H6.5L10 9z"/><path d="M12 12.5V20"/></svg><span class="pin-btn__label">Épinglé</span></button>
-                    </div>
-                    <div class="favorite-card__body">
-                        <div class="favorite-card__title-row"><span class="favorite-card__title">Cie du Loup</span><span class="badge badge--dark">Compagnie</span></div>
-                        <ul class="favorite-card__list"><li>Vu 2 spectacles</li></ul>
-                        <a class="link" href="#">Y aller →</a>
-                    </div>
-                </article>
-
-                <article class="favorite-card" data-card data-type="institution" data-search="le rize conférence">
-                    <div class="favorite-card__cover bg-gold">
-                        <button class="pin-btn is-on" data-pin aria-pressed="true"><svg width="14" height="14" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l-1 5 3.5 3.5H6.5L10 9z"/><path d="M12 12.5V20"/></svg><span class="pin-btn__label">Épinglé</span></button>
-                    </div>
-                    <div class="favorite-card__body">
-                        <div class="favorite-card__title-row"><span class="favorite-card__title">Le Rize</span><span class="badge badge--dark">Institution</span></div>
-                        <ul class="favorite-card__list"><li>1 conférence suivie</li></ul>
-                        <a class="link" href="#">Y aller →</a>
-                    </div>
-                </article>
-
-                <article class="favorite-card" data-card data-type="tiers-lieu" data-search="lowcal abonnement">
-                    <div class="favorite-card__cover bg-mauve">
-                        <button class="pin-btn is-on" data-pin aria-pressed="true"><svg width="14" height="14" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l-1 5 3.5 3.5H6.5L10 9z"/><path d="M12 12.5V20"/></svg><span class="pin-btn__label">Épinglé</span></button>
-                    </div>
-                    <div class="favorite-card__body">
-                        <div class="favorite-card__title-row"><span class="favorite-card__title">LOWCAL</span><span class="badge badge--dark">Tiers-lieu</span></div>
-                        <ul class="favorite-card__list"><li>Vous y avez un abonnement</li><li>1 événement à venir</li></ul>
-                        <a class="link" href="#">Y aller →</a>
-                    </div>
-                </article>
-
-                <article class="favorite-card" data-card data-type="collectif" data-search="incroyables comestibles chantier jardin">
-                    <div class="favorite-card__cover bg-teal">
-                        <button class="pin-btn is-on" data-pin aria-pressed="true"><svg width="14" height="14" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l-1 5 3.5 3.5H6.5L10 9z"/><path d="M12 12.5V20"/></svg><span class="pin-btn__label">Épinglé</span></button>
-                    </div>
-                    <div class="favorite-card__body">
-                        <div class="favorite-card__title-row"><span class="favorite-card__title">Les Incroyables Comestibles</span><span class="badge badge--dark">Collectif</span></div>
-                        <ul class="favorite-card__list"><li>Rencontré au chantier jardin</li></ul>
-                        <a class="link" href="#">Y aller →</a>
-                    </div>
-                </article>
-
-                <article class="favorite-card" data-card data-type="festival" data-search="les nuits sonores édition soirées">
-                    <div class="favorite-card__cover bg-indigo">
-                        <button class="pin-btn is-on" data-pin aria-pressed="true"><svg width="14" height="14" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l-1 5 3.5 3.5H6.5L10 9z"/><path d="M12 12.5V20"/></svg><span class="pin-btn__label">Épinglé</span></button>
-                    </div>
-                    <div class="favorite-card__body">
-                        <div class="favorite-card__title-row"><span class="favorite-card__title">Les Nuits Sonores</span><span class="badge badge--dark">Festival</span></div>
-                        <ul class="favorite-card__list"><li>Édition 2025 · 2 soirées</li></ul>
-                        <a class="link" href="#">Y aller →</a>
-                    </div>
-                </article>
-            </div>
-
-        </section>
-
-    </main>
-{% endblock %}
-
-{% block account_page_old %}
-{% if tenants_admin %}
-<style>
-    .btn-admin-tenant {
-        border: 2px solid #dc3545;
-        border-radius: 8px;
-        color: #dc3545;
-        transition: all 200ms ease;
-    }
-    .btn-admin-tenant:hover,
-    .btn-admin-tenant:focus {
-        background-color: #dc3545;
-        color: #fff;
-        box-shadow:
-            0px 0px 0px 1px rgba(220, 53, 69, 0.15),
-            0px 2px 8px 0px rgba(220, 53, 69, 0.20);
-    }
-    .btn-admin-tenant:hover .admin-tenant-domain,
-    .btn-admin-tenant:focus .admin-tenant-domain {
-        color: rgba(255, 255, 255, 0.75) !important;
-    }
-</style>
-<div class="text-center mb-3">
-    <div style="display: flex; align-items: center; gap: 12px; justify-content: center;">
-        <hr style="flex: 1; border-color: #dc3545; opacity: 0.4;">
-        <h5 class="text-danger mb-0" style="white-space: nowrap; font-weight: 600; text-wrap: balance;">
-            <i class="bi bi-key-fill me-1" aria-hidden="true"></i>{% trans 'Administration' %}
-        </h5>
-        <hr style="flex: 1; border-color: #dc3545; opacity: 0.4;">
-    </div>
-</div>
-<div class="row row-cols-1 {% if tenants_admin|length > 1 %}row-cols-md-2{% endif %} g-3 text-center mb-3 justify-content-center">
-    {% for tenant in tenants_admin %}
-    <div class="col{% if tenants_admin|length == 1 %} col-md-6{% endif %}">
-        <a class="w-100 btn btn-lg btn-admin-tenant d-flex flex-column align-items-center py-3"
-           href="https://{{ tenant.get_primary_domain.domain }}/admin/"
-           target="_blank"
-           data-testid="btn-admin-{{ tenant.name|slugify }}">
-            <i class="bi bi-key-fill fs-1" aria-hidden="true"></i>
-            <span class="d-block fw-semibold">{{ tenant.name }}</span>
-            <small class="d-block admin-tenant-domain" style="color: #888; font-size: 0.8em;">{{ tenant.get_primary_domain.domain }}</small>
-        </a>
-    </div>
-    {% endfor %}
-</div>
-{% endif %}
-
-{% if tenants_admin %}
-<div class="text-center mt-2 mb-3">
-    <div style="display: flex; align-items: center; gap: 12px; justify-content: center;">
-        <hr style="flex: 1; opacity: 0.15;">
-        <h5 class="text-secondary mb-0" style="white-space: nowrap; font-weight: 600; text-wrap: balance;">
-            <i class="bi bi-person-fill me-1" aria-hidden="true"></i>{% trans 'My account' %}
-        </h5>
-        <hr style="flex: 1; opacity: 0.15;">
-    </div>
-</div>
-{% endif %}
-
-<div class="row row-cols-1 row-cols-md-2 g-3 text-center mb-3">
-    <div class="col">
-        <a class="w-100 btn btn-lg btn-outline-primary{% if account_tab == 'balance' %} active" aria-current="page{% endif %}"
-            href="/my_account/balance/">
-            <i class="bi bi-piggy-bank-fill fs-1"></i>
-            <span class="d-block">{% trans 'My wallet' %}</span>
-        </a>
-    </div>
-    <div class="col">
-        <a class="w-100 btn btn-lg btn-outline-secondary{% if account_tab == 'memberships' %} active" aria-current="page{% endif %}"
-            href="/my_account/membership/">
-            <i class="bi bi-person-badge-fill fs-1"></i>
-            <span class="d-block">{% trans 'My subscriptions' %}</span>
-        </a>
-    </div>
-    <div class="col">
-        <a class="w-100 btn btn-lg btn-outline-secondary{% if account_tab == 'reservations' %} active" aria-current="page{% endif %}"
-            href="/my_account/my_reservations/">
-            <i class="bi bi-ticket-perforated-fill fs-1"></i>
-            <span class="d-block">{% trans 'My bookings' %}</span>
-        </a>
-    </div>
-    {% if config.module_booking %}
-    <div class="col">
-        <a class="w-100 btn btn-lg btn-outline-secondary{% if account_tab == 'my_resources' %} active" aria-current="page{% endif %}"
-            href="/my_account/my_bookings/"
-            data-testid="btn-my-resources">
-            <i class="bi bi-building fs-1" aria-hidden="true"></i>
-            <span class="d-block">{% trans 'Mes ressources' %}</span>
-        </a>
-    </div>
-    {% endif %}
-    <div class="col">
-        <a class="w-100 btn btn-lg btn-outline-secondary{% if account_tab == 'card' %} active" aria-current="page{% endif %}"
-            href="/my_account/card/">
-            <i class="bi bi-postcard-fill fs-1"></i>
-            <span class="d-block">{% trans 'My Pass card' %}</span>
-        </a>
-    </div>
-    <div class="col">
-        <a class="w-100 btn btn-lg btn-outline-secondary{% if account_tab == 'profile' %} active" aria-current="page{% endif %}"
-            href="/my_account/profile/">
-            <i class="bi bi-gear-fill fs-1"></i>
-            <span class="d-block">{% trans 'My settings' %}</span>
-        </a>
-    </div>
-    <div class="col">
-        <a class="w-100 btn btn-lg btn-outline-secondary" href="/deconnexion/">
-            <i class="bi bi-box-arrow-right fs-1"></i>
-            <span class="d-block">{% trans 'Log out' %}</span>
-        </a>
-    </div>
-</div>
 {% endblock %}

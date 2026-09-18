@@ -1,26 +1,33 @@
-{% extends 'fonctionnel/account_base.html' %}
+{% extends 'pages/V2/vues/compte/account_base.html' %}
 {% load static %}
 {% load tibitags %}
 {% load humanize i18n %}
 
-{% block title %}{% trans 'My Pass card' %}{% endblock %}
+{% comment %}
+MA CARTE PASS — skin V2 (DA v1)
+/ My Pass card — V2 skin (DA v1)
+
+LOCALISATION : pages/templates/pages/V2/vues/compte/card.html
+Vue : BaseBillet/views.py MyAccount.card (/my_account/card/)
+Le détail des cartes arrive quand la zone devient visible (hx-trigger="revealed"),
+rendu par vues/compte/partials/card_table.html.
+{% endcomment %}
+
+{% block title %}{% translate 'My Pass card' %}{% endblock %}
+{% block compte_titre %}{% translate 'My Pass card' %}{% endblock %}
 
 {% block account_page %}
-<section class="card pt-3">
-    <div class="card-body">
-        <h1 class="card-title">{% trans 'My Pass card' %}</h1>
-        <p class="lead">
-            {% trans 'Here I can find my Pass card information and signal a lost card.' %}
+    <section class="section compte-section">
+        <p class="page-intro">
+            {% translate 'Here I can find my Pass card information and signal a lost card.' %}
         </p>
 
-        <div hx-get="/my_account/my_cards/" hx-trigger="revealed" class="mt-4">
-            <span>{% translate "Loading Pass card info" %}</span>
-            <div class="d-flex justify-content-center align-items-center ">
-                <div class="spinner-border text-info"
-                     role="status"
-                ></div>
-            </div>
+        <div hx-get="/my_account/my_cards/" hx-trigger="revealed" class="card card--pad compte-section__contenu"
+             aria-live="polite" data-testid="compte-cartes">
+            <p class="compte__chargement">
+                <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                {% translate "Loading Pass card info" %}
+            </p>
         </div>
-    </div>
-</section>
+    </section>
 {% endblock %}

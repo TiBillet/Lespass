@@ -3,7 +3,13 @@
 {% get_current_language as LANGUAGE_CODE %}
 
 <!doctype html>
-<html lang="{{ LANGUAGE_CODE }}">
+{# Thème clair FIXÉ : la DA v1 n'a pas de mode sombre. theme-switcher.mjs n'est #}
+{# plus chargé ici — il relisait `localStorage.theme`, et une personne ayant #}
+{# choisi le sombre sur un autre skin recevait les panneaux, menus et #}
+{# formulaires Bootstrap en sombre sur le papier clair du V2. #}
+{# / Light theme LOCKED: DA v1 has no dark mode. theme-switcher.mjs is no longer #}
+{# loaded: it re-applied a dark theme stored by another skin. #}
+<html lang="{{ LANGUAGE_CODE }}" data-bs-theme="light">
 
 <head>
     {% load i18n %}
@@ -103,7 +109,6 @@
     {% block extra_meta %}{% endblock %}
 
     <link rel="preload" as="style" href="{% static 'commun/css/tibillet.css' %}">
-    <link rel="modulepreload" href="{% static 'commun/js/theme-switcher.mjs' %}">
     <link rel="modulepreload" href="{% static 'commun/js/language-switcher.mjs' %}">
     <link rel="modulepreload" href="{% static 'commun/js/membership-form.mjs' %}">
 
@@ -210,14 +215,12 @@
         <script src="{{ formbricks_api_host }}/js/formbricks.umd.cjs" async></script>
     {% endif %}
     <script type="module">
-        import * as ThemeSwitcher from '{% static "commun/js/theme-switcher.mjs" %}'
         import * as LanguageSwitcher from '{% static "commun/js/language-switcher.mjs" %}'
         import * as MembershipForm from '{% static "commun/js/membership-form.mjs" %}'
 
         // components
         import '{% static "commun/js/bs-counter.mjs" %}'
 
-        ThemeSwitcher.init()
         LanguageSwitcher.init()
         MembershipForm.init()
     </script>

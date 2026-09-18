@@ -1,0 +1,15 @@
+{% load static i18n %}
+<c-vars layer="1" :hide_only="False" selector="#messages" action=""/>
+
+{% if hide_only %}
+    <button type="button" id="bt-retour-layer{{layer}}" class="card-modal-close" aria-label="Fermer"  {{ attrs }}
+            onclick="document.querySelector('{{ selector }}').classList.add('hide')">
+{% else %}
+    <button type="button" id="bt-retour-layer{{layer}}" class="card-modal-close" aria-label="Fermer"  {{ attrs }}
+            onclick="hideAndEmptyElement('{{ selector }}');{{action}}">
+{% endif %}
+
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M5.6 4.2 12 10.6l6.4-6.4L20.2 6 13.8 12.4l6.4 6.4-1.8 1.8-6.4-6.4-6.4 6.4-1.8-1.8 6.4-6.4-6.4-6.4z"/>
+    </svg>
+</button>

@@ -51,6 +51,10 @@ class LaboutikConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
     compressed_fields = True
     warn_unsaved_form = True
 
+    # Mis à None, parce que "SingletonModelAdmin" est une classe de django,
+    # et que le template d'unfold n'est pas atteint si on ne fais rien. Permet de respecter les settings.py
+    change_form_template = None
+
     # Le compteur de tickets est en lecture seule pour eviter une remise a zero accidentelle.
     # / Receipt counter is read-only to prevent accidental reset.
     readonly_fields = ('compteur_tickets',)

@@ -1,110 +1,86 @@
-{% extends 'fonctionnel/account_base.html' %}
+{% extends 'pages/V2/vues/compte/account_base.html' %}
 {% load static %}
 {% load i18n %}
 
+{% comment %}
+MON PORTE-MONNAIE — skin V2 (DA v1)
+/ My wallet — V2 skin (DA v1)
+
+LOCALISATION : pages/templates/pages/V2/vues/compte/balance.html
+Vue : BaseBillet/views.py MyAccount.balance (/my_account/balance/)
+
+FLUX :
+1. La tirelire (solde + bouton recharger) vient du partiel partagé
+   htmx/views/my_account/tirelire_section.html (#tirelire-section).
+2. La liste des monnaies arrive toute seule quand elle devient visible
+   (hx-trigger="revealed") depuis /my_account/tokens_table/.
+3. L'historique se charge au clic (/my_account/transactions_table/) et
+   remplace la section #transactionHistory.
+
+A CONSERVER : #token-table-loader (spinner local), data-testid="account-tokens-table",
+#transactionHistory, #detail-monnaies.
+{% endcomment %}
+
 {% block title %}{% translate 'My balance' %}{% endblock %}
+{% block compte_titre %}{% translate 'My wallet' %}{% endblock %}
 
 {% block account_page %}
 
-
-    {# La partie sur la création d'un paiement qrcode / nfc#}
+    {# Paiement QR code / NFC pour le compte du collectif (admins, caissier·es). #}
+    {# / QR code / NFC payment on behalf of the collective. #}
     {% if profile.admin_this_tenant or profile.can_initiate_payment %}
-        <div class="alert alert-info d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-2 mb-3">
-            <div class="mb-2 mb-md-0">
+        <div class="callout compte__alerte" role="note">
+            <p class="callout__text">
                 {% blocktrans with organisation=config.organisation %}Vous pouvez initier un paiement pour le compte de votre collectif : {{ organisation }}{% endblocktrans %}
-            </div>
-            <div>
-                <a href="{% url 'qrcodescanpay-get-generator' %}"
-                   class="btn btn-warning square-btn w-100">
-                    <i class="bi bi-qr-code"></i>
-                    {% trans "Initiate a payment" %}
-                </a>
-            </div>
+            </p>
+            <a href="{% url 'qrcodescanpay-get-generator' %}" class="btn btn--secondary btn--sm">
+                {% translate "Initiate a payment" %}
+            </a>
         </div>
     {% endif %}
 
-    {# Section "Ma tirelire" extraite dans un partial reutilisable. #}
-    {# Au clic sur "Refill TiBillets", le partial est remplace par le formulaire #}
-    {# V2 (hx-target="#tirelire-section" hx-swap="outerHTML"). Le bouton "Annuler" #}
-    {# du formulaire fait hx-get /my_account/tirelire_section/ pour restaurer. #}
-    {# / Section "My balance" extracted in a reusable partial. On Refill click, #}
-    {# the form V2 replaces it; the Cancel button restores via HTMX. #}
+    {# Section "Ma tirelire" : partiel partagé entre les skins. Au clic sur #}
+    {# "Refill TiBillets", il est remplacé par le formulaire de recharge #}
+    {# (hx-target="#tirelire-section" hx-swap="outerHTML"). #}
+    {# / Shared "My balance" partial, replaced by the refill form on click. #}
     {% include "htmx/views/my_account/tirelire_section.html" %}
 
-    <div class="row">
-        <div class="col-md">
-            <h2 class="pt-3" id="detail-monnaies">{% translate "Currency list" %}</h2>
+    <section class="section compte-section">
+        <h2 class="section__title" id="detail-monnaies">{% translate "Currency list" %}</h2>
 
-            {# Spinner LOCAL : visible uniquement pendant le chargement de CE tableau. #}
-            {# Le data-loading-target sur le div hx-get ci-dessous remplace l'heritage #}
-            {# du #tibillet-spinner global (quirk htmx : les attributs s'heritent du #}
-            {# parent) — sinon c'est l'overlay de toute la page qui s'ouvrait. #}
-            {# / Local spinner: only while THIS table loads. data-loading-target below #}
-            {# overrides the inherited global overlay. #}
-            {# Pas de d-flex ici : Bootstrap met display:flex !important, ce qui #}
-            {# ecraserait le [data-loading]{display:none} et le spinner ne se #}
-            {# cacherait jamais. On centre avec text-center (n'affecte pas display). #}
-            {# / No d-flex here: it is display:flex !important and would override #}
-            {# [data-loading]{display:none}, keeping the spinner forever. #}
-            <div id="token-table-loader" data-loading data-loading-class="active"
-                 class="text-center mt-4">
-                <div class="spinner-border text-info" role="status">
-                    <span class="visually-hidden">{% translate "Loading list" %}</span>
-                </div>
+        {# Spinner LOCAL : visible uniquement pendant le chargement de CE tableau. #}
+        {# Le data-loading-target du div hx-get ci-dessous remplace l'héritage du #}
+        {# #tibillet-spinner global (quirk htmx : les attributs s'héritent du parent). #}
+        {# Pas de d-flex ici : Bootstrap met display:flex !important, ce qui écraserait #}
+        {# [data-loading]{display:none} et le spinner ne se cacherait jamais. #}
+        {# / Local spinner only; no d-flex (it would override [data-loading]). #}
+        <div id="token-table-loader" data-loading data-loading-class="active"
+             class="compte__chargement">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">{% translate "Loading list" %}</span>
             </div>
-            {# aria-live : le tableau arrive en asynchrone (hx-get), on annonce #}
-            {# son chargement aux lecteurs d'ecran sans voler le focus (polite). #}
-            {# / aria-live: the table loads async; announce it politely to screen readers. #}
-            <div hx-get="/my_account/tokens_table/" hx-trigger="revealed" class="mt-4"
-                 aria-live="polite"
-                 data-loading-target="#token-table-loader"
-                 data-loading-delay="{{ loading_delay|default:'400' }}"
-                 data-testid="account-tokens-table"></div>
         </div>
+        {# aria-live : le tableau arrive en asynchrone, on l'annonce poliment. #}
+        {# / aria-live: the table loads async; announce it politely. #}
+        <div hx-get="/my_account/tokens_table/" hx-trigger="revealed" class="compte-section__contenu"
+             aria-live="polite"
+             data-loading-target="#token-table-loader"
+             data-loading-delay="{{ loading_delay|default:'400' }}"
+             data-testid="account-tokens-table"></div>
 
         {% comment %} HIDE: monnaie temps
-    <div class="col-md">
-        <h2 class="pt-3" id="detail-heures">Détail du temps</h2>
-        <table class="table">
-            <thead>
-                <th>Solde</th>
-                <th>Réseau concerné</th>
-                <th>Dernière transaction</th>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>
-                        <strong>03:30</strong>
-                        Heures Lumière
-                    </td>
-                    <td>
-                        <a href="../reseau/">Un Pour Touche</a>
-                    </td>
-                    <td>07/04/24</td>
-                </tr>
-                <tr class="opacity-50">
-                    <td>
-                        <strong>03:30</strong>
-                        Bûchages
-                    </td>
-                    <td>Les Assos du Bois</td>
-                    <td>12/03/23</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-    {% endcomment %}
-    </div>
+        <h2 class="section__title" id="detail-heures">Détail du temps</h2>
+        …
+        {% endcomment %}
+    </section>
 
-    <section id="transactionHistory">
-        <p class="py-3 text-center">
-            <a href="#" class="btn btn-outline-primary d-block d-sm-inline"
-               hx-get="/my_account/transactions_table/" hx-indicator="#tibillet-spinner"
-               hx-target="#transactionHistory"
-               hx-swap="outerHTML">
-                {% trans "Transaction history" %}
-            </a>
-        </p>
+    <section id="transactionHistory" class="section compte-section">
+        <button type="button" class="btn btn--outline"
+                hx-get="/my_account/transactions_table/" hx-indicator="#tibillet-spinner"
+                hx-target="#transactionHistory"
+                hx-swap="outerHTML">
+            {% translate "Transaction history" %}
+        </button>
     </section>
 
 {% endblock %}

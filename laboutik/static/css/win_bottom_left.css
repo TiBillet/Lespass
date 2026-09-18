@@ -14,7 +14,7 @@
   overflow: hidden;
   column-gap: 6px;
   row-gap: 6px;
-  padding: 6px;
+  /*padding: 6px;*/
   background-color: var(--bleu08);
 }
 

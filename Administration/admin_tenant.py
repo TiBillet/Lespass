@@ -414,6 +414,10 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
+    # Mis à None, parce que "SingletonModelAdmin" est une classe de django,
+    # et que le template d'unfold n'est pas atteint si on ne fais rien. Permet de respecter les settings.py
+    change_form_template = None
+
     # form = ConfigurationAdminForm
 
     def get_queryset(self, request):
@@ -3715,6 +3719,11 @@ class RootConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
 
     fields = ("domaines_embed_autorises",)
 
+    # Mis à None, parce que "SingletonModelAdmin" est une classe de django,
+    # et que le template d'unfold n'est pas atteint si on ne fais rien. Permet de respecter les settings.py
+    change_form_template = None
+
+
     def save_model(self, request, obj, form, change):
         # Vide le cache django-solo (scope par schema) pour que TOUS les tenants
         # voient la nouvelle whitelist sans attendre l'expiration (~5 min).
@@ -3744,6 +3753,10 @@ class RootConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
 class FederationConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
     compressed_fields = True
     warn_unsaved_form = True
+
+    # Mis à None, parce que "SingletonModelAdmin" est une classe de django,
+    # et que le template d'unfold n'est pas atteint si on ne fais rien. Permet de respecter les settings.py
+    change_form_template = None
 
     autocomplete_fields = ["tags_federation"]
 
@@ -3871,6 +3884,10 @@ class GhostConfigAddform(ModelForm):
 class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
+
+    # Mis à None, parce que "SingletonModelAdmin" est une classe de django,
+    # et que le template d'unfold n'est pas atteint si on ne fais rien. Permet de respecter les settings.py
+    change_form_template = None
 
     form = GhostConfigChangeform
     add_form = GhostConfigAddform
@@ -4003,6 +4020,10 @@ class FormbricksConfigAdmin(SingletonModelAdmin, ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
+    # Mis à None, parce que "SingletonModelAdmin" est une classe de django,
+    # et que le template d'unfold n'est pas atteint si on ne fais rien. Permet de respecter les settings.py
+    change_form_template = None
+
     form = FormbricksConfigChangeform
     add_form = FormbricksConfigAddform
 
@@ -4126,6 +4147,10 @@ class BrevoConfigAddform(ModelForm):
 class BrevoConfigAdmin(SingletonModelAdmin, ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
+
+    # Mis à None, parce que "SingletonModelAdmin" est une classe de django,
+    # et que le template d'unfold n'est pas atteint si on ne fais rien. Permet de respecter les settings.py
+    change_form_template = None
 
     readonly_fields = ['last_log', "has_key", ]
     actions_detail = ["test_api_brevo", ]
@@ -4516,6 +4541,10 @@ class AssetAdmin(ModelAdmin):
 class CrowdConfigAdmin(SingletonModelAdmin, ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
+
+    # Mis à None, parce que "SingletonModelAdmin" est une classe de django,
+    # et que le template d'unfold n'est pas atteint si on ne fais rien. Permet de respecter les settings.py
+    change_form_template = None
 
     fieldsets = (
         (_("Général"), {"fields": ("active",)}),

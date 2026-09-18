@@ -1,26 +1,36 @@
-{% extends 'fonctionnel/account_base.html' %}
+{% extends 'pages/V2/vues/compte/account_base.html' %}
 {% load static %}
 {% load tibitags %}
 {% load humanize i18n %}
 
+{% comment %}
+MES ADHÉSIONS — skin V2 (DA v1)
+/ My subscriptions — V2 skin (DA v1)
+
+LOCALISATION : pages/templates/pages/V2/vues/compte/membership/memberships.html
+Vue : BaseBillet/views.py MyAccount.membership (/my_account/membership/)
+Contexte : memberships_dict = {est_valide: [adhésions]}.
+Une carte par adhésion : vues/compte/membership/membership_card.html.
+{% endcomment %}
+
 {% block title %}{% translate 'My subscriptions' %}{% endblock %}
+{% block compte_titre %}{% translate 'My subscriptions' %}{% endblock %}
 
 {% block account_page %}
-    <section class="card pt-3">
-        <div class="card-body">
-            <h1 class="card-title">{% translate 'My subscriptions' %}</h1>
-            <p class="lead">
-                {% translate 'Here I can list my ongoing subscriptions and renew them.' %}
-            </p>
-        </div>
-    </section>
+    <p class="page-intro">
+        {% translate 'Here I can list my ongoing subscriptions and renew them.' %}
+    </p>
 
-    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-3 mb-5">
+    <div class="grid grid--3 compte-section__contenu" data-testid="compte-adhesions">
         {% for is_valid, list_membership in memberships_dict.items %}
             {% for membership in list_membership %}
-                {% include 'fonctionnel/compte/membership/membership_card.html' with membership=membership %}
+                {% include 'pages/V2/vues/compte/membership/membership_card.html' with membership=membership %}
             {% endfor %}
+        {% empty %}
+            <div class="module__invite agenda-vide">
+                <p>{% translate "Aucune adhésion pour l'instant." %}</p>
+                <a class="btn btn--primary btn--sm" href="/memberships/" hx-get="/memberships/" hx-target="body" hx-push-url="true">{% translate 'Voir les adhésions' %}</a>
+            </div>
         {% endfor %}
     </div>
-
 {% endblock %}

@@ -16,7 +16,7 @@
             <div id="ticket{{ ticket.uuid }}Details" class="accordion-collapse collapse"
                  data-bs-parent="#resa{{ resa.uuid }}Accordion">
                 <div class="accordion-body">
-                    <table class="table">
+                    <table class="table compte-table">
                         <tbody>
                         <tr>
                             <th>{% trans "Number" %}</th>
@@ -74,8 +74,9 @@
                         </tr>
                         </tbody>
                     </table>
+                    <div class="compte-billet__actions">
                     <button
-                        class="btn btn-primary w-100 mt-3" type="button"
+                        class="btn btn--primary btn--sm" type="button"
                         hx-get="/ticket/{{ ticket.uuid }}/" hx-swap="innerHTML"
                         hx-target="#ticketPanelBody"
                         data-bs-toggle="offcanvas"
@@ -86,7 +87,8 @@
                     </button>
                     {% if ticket.status == ticket.NOT_SCANNED %}
                     <button
-                        class="btn btn-outline-danger w-100 mt-3"
+                        type="button"
+                        class="btn btn--outline btn--sm"
                         hx-post="/my_account/{{ ticket.uuid }}/cancel_ticket/"
                         hx-confirm="{% if ticket.reservation.total_paid > 0 %}{{ ticket.reservation.cancel_text }}{% else %}J'annule ce billet{% endif %}"
                         hx-target="closest .accordion-item"
@@ -95,6 +97,7 @@
                         {% translate "Cancel this ticket" %}
                     </button>
                     {% endif %}
+                    </div>
                     {% comment %}
                     <div class="row">
                         <div class="col-sm">

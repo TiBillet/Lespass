@@ -2,10 +2,28 @@
 {% load static i18n tibitags %}
 
 {% comment %}
+AGENDA — skin V2 (DA v1)
+/ Agenda — V2 skin (DA v1)
+
 LOCALISATION : pages/templates/pages/V2/vues/agenda.html
-Liste des évènements du tenant (agenda) + filtres par tags + bouton unique vers le
-wizard event unifié (cf. SESSIONS/EVENT_WIZARD/CHANTIER-03).
-/ Tenant event list (agenda) + tag filters + single button to the unified event wizard.
+Vue : BaseBillet/views.py EventMVT.list (/event/)
+Maquette : TEMP-tibillet-lespass-main/agenda.html
+
+Liste des événements du lieu + filtres par tags + recherche + bouton unique
+vers le wizard event unifié (cf. SESSIONS/EVENT_WIZARD/CHANTIER-03).
+
+FLUX « VOIR PLUS D'ÉVÉNEMENTS » (pagination) :
+1. La grille #event_list contient les cartes de la page 1, puis #paginator
+   en dernière case.
+2. Clic sur le bouton : hx-post /event/partial_list/?page=2, avec les champs
+   du formulaire #search_form (recherche + tags).
+3. EventMVT.partial_list rend vues/agenda_liste_suite.html : les cartes
+   suivantes + un nouveau #paginator. Elles remplacent l'ancien #paginator
+   (hx-swap outerHTML), donc s'ajoutent DANS la grille.
+
+DA v1 : filtrer l'agenda est un geste sur le contenu du lieu, pas un geste
+TiBillet. Les pastilles de tags et le bouton de filtres restent donc neutres.
+/ Filtering is a gesture on venue content: neutral pills.
 {% endcomment %}
 
 {% block title %}{% translate 'Agenda' %}{% endblock %}
@@ -20,19 +38,17 @@ wizard event unifié (cf. SESSIONS/EVENT_WIZARD/CHANTIER-03).
 {% block main %}
 
     <div class="page-header">
-        <div class="eyebrow">Ce qui se passe</div>
-        <div class="d-flex justify-content-between">
+        <div class="eyebrow">{% translate 'Ce qui se passe' %}</div>
+        <div class="page-header__top">
+            <h1 class="page-title">{% if config.event_menu_name %}{{ config.event_menu_name }}{% else %}{% translate 'Agenda' %}{% endif %}</h1>
 
-            <h1 class="page-title">Bienvenue chez : {{ config.organisation }}</h1>
-
-        
             {# Bouton UNIQUE vers le wizard event unifié (CHANTIER-03). #}
             {# Staff : "Ajouter" (event publié). Public : "Proposer" (modéré), #}
             {# affiché si l'agenda participatif est actif ET (connecté OU anonyme autorisé). #}
             {# / Single button to the unified event wizard. Staff: add (published); #}
             {# public: propose (moderated), shown if agenda module on AND (logged-in OR anon allowed). #}
             {% if user|can_create_event_tag %}
-                <a class="btn btn-sm bg-green text-white"
+                <a class="btn btn--outline-primary btn--sm"
                    href="{% url 'event-wizard-place' %}"
                    data-testid="btn-event-add">
                     <i class="bi bi-plus-circle" aria-hidden="true"></i>
@@ -40,7 +56,7 @@ wizard event unifié (cf. SESSIONS/EVENT_WIZARD/CHANTIER-03).
                 </a>
             {% elif federation_config.module_agenda_participatif %}
                 {% if user.is_authenticated or federation_config.proposition_anonyme_autorisee %}
-                    <a class="btn btn-sm bg-green text-white"
+                    <a class="btn btn--outline-primary btn--sm"
                        href="{% url 'event-wizard-place' %}"
                        data-testid="btn-event-propose">
                         <i class="bi bi-megaphone" aria-hidden="true"></i>
@@ -50,140 +66,99 @@ wizard event unifié (cf. SESSIONS/EVENT_WIZARD/CHANTIER-03).
             {% endif %}
         </div>
 
-        <p class="page-intro">
+        <div class="page-intro">
             {% if config.description_event_page %}
                 {{ config.description_event_page | safe }}
             {% else %}
                 {% translate "Bienvenue sur l'agenda !" %}
             {% endif %}
-        </p>
+        </div>
     </div>
 
-    <div class="eyebrow" style="margin-bottom:8px;">{% translate '' %}</div>
-    <div class="event-toolbar tag-pill-group" data-tabs="agenda">
-        <a class="tag-pill {% if request.GET.tag is none %}is-active{% endif %}"
-           href="?{% if search %}&search={{ search|urlencode }}{% endif %}"
-           hx-get="?{% if search %}&search={{ search|urlencode }}{% endif %}"
+    {# Pastilles de tags : un clic recharge l'agenda filtré (HTMX, anti-clignotement). #}
+    {# / Tag pills: a click reloads the filtered agenda (HTMX). #}
+    <div class="event-toolbar tag-pill-group" role="group"
+         aria-label="{% translate 'Filtrer par tag' %}"
+         data-loading-target="#tibillet-spinner"
+         data-loading-delay="{{ loading_delay|default:'400' }}"
+         data-testid="agenda-tags">
+        <a class="tag-pill{% if not request.GET.tag %} is-active{% endif %}"
+           href="?{% if search %}search={{ search|urlencode }}{% endif %}"
+           hx-get="?{% if search %}search={{ search|urlencode }}{% endif %}"
            hx-target="body"
            hx-swap="innerHTML"
            hx-push-url="true"
-           data-value="tout">Tout</a>
+           {% if not request.GET.tag %}aria-current="true"{% endif %}>{% translate 'Tout' %}</a>
 
         {% for tag in all_tags %}
-            <a class="tag-pill"
-               style="{% if request.GET.tag == tag.slug %}{{ tag.style_attr }}{% else %}{{ tag.border_style_attr }}{% endif %} "
+            {# Actif : pastille encre (DA). Inactif : la couleur de bordure du lieu. #}
+            {# / Active: ink pill (DA). Inactive: the venue's border colour. #}
+            <a class="tag-pill{% if request.GET.tag == tag.slug %} is-active{% endif %}"
+               {% if request.GET.tag != tag.slug %}style="{{ tag.border_style_attr }}"{% endif %}
                href="?tag={{ tag.slug }}{% if search %}&search={{ search|urlencode }}{% endif %}"
                hx-get="?tag={{ tag.slug }}{% if search %}&search={{ search|urlencode }}{% endif %}"
                hx-target="body"
                hx-swap="innerHTML"
                hx-push-url="true"
+               {% if request.GET.tag == tag.slug %}aria-current="true"{% endif %}
                aria-label="{% blocktrans %}Filtrer par le tag {{ tag.name }}{% endblocktrans %}">
                 {{ tag.name }}
             </a>
         {% empty %}
-            <span class="text-muted small">{% translate 'Aucun tag disponible.' %}</span>
+            <span class="agenda-vide">{% translate 'Aucun tag disponible.' %}</span>
         {% endfor %}
-        
     </div>
 
-    <form class="filters-row" action=".">
+    {# Recherche : id="search_form" est lu par le bouton « Voir plus » (hx-include). #}
+    {# / Search: id="search_form" is read by the "Load more" button (hx-include). #}
+    <form class="filters-row" id="search_form" action="." method="get" role="search"
+          hx-get="." hx-target="body" hx-push-url="true"
+          data-testid="agenda-recherche">
 
-        <button type="button" class="filters-btn" data-bs-toggle="collapse" data-bs-target="#tagFiltersCollapse" aria-expanded="true" aria-controls="tagFiltersCollapse">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
-            Filtres
-            <span class="filters-btn__count" data-active-filter-count="agenda" style="display:none">0</span>
-        </button>
+        {% comment %} V2-HERE
+        Bouton « Filtres » et panneau de filtres avancés de la maquette
+        (accès, présence, genre, moment, « voir autour du lieu », partenariat) :
+        aucun filtre serveur ne correspond encore. Masqués pour ne pas afficher
+        de faux filtres. Voir CHANGELOG/a traiter/v2-da-v1-points-laisses-de-cote.md.
+        / Mockup advanced filters: no matching server-side filter yet.
+        {% endcomment %}
 
         <label class="search-input">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-            <input type="text" placeholder="Rechercher un événement" data-search-input="agenda" style="border:none;outline:none;background:none;width:100%;font-size:14.5px;color:var(--color-text);" name="search" value="{{ search|default:'' }}"/>
-            {# Preserve selected tags when searching #}
-            {% if tags %}
-                {% for t in tags %}
-                    <input type="hidden" name="tag" value="{{ t }}">
-                {% endfor %}
-            {% endif %}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            <span class="visually-hidden">{% translate 'Rechercher un événement' %}</span>
+            <input type="search" name="search" value="{{ search|default:'' }}"
+                   placeholder="{% translate 'Rechercher un événement' %}"
+                   data-testid="agenda-recherche-champ"/>
+            {# On garde les tags choisis pendant la recherche. / Keep selected tags. #}
+            {% for t in tags %}
+                <input type="hidden" name="tag" value="{{ t }}">
+            {% endfor %}
         </label>
-        <div class="results-count" data-results-count="agenda" data-label-plural="événements à venir" data-label-singular="événement à venir"><strong>{{ event_count }}</strong> événements à venir</div>
+        <div class="results-count" aria-live="polite">
+            {% blocktrans count compteur=event_count %}<strong>{{ compteur }}</strong> événement à venir{% plural %}<strong>{{ compteur }}</strong> événements à venir{% endblocktrans %}
+        </div>
     </form>
 
-    <div id="tagFiltersCollapse" class="filter-panel collapse" data-filter-panel data-scope="agenda">
-        <div data-group="acces">
-            <div class="filter-group__label">Accès</div>
-            <div class="filter-group__options">
-                <button class="filter-pill" data-value="entree-libre">Entrée libre</button>
-                <button class="filter-pill" data-value="gratuit">Gratuit</button>
-                <button class="filter-pill" data-value="prix-libre">Prix libre</button>
-                <button class="filter-pill" data-value="monnaie-temps">Monnaie temps</button>
-            </div>
-        </div>
-        <div data-group="presence">
-            <div class="filter-group__label">Présence</div>
-            <div class="filter-group__options">
-                <button class="filter-pill" data-value="presentiel">Présentiel</button>
-                <button class="filter-pill" data-value="visio">Visio</button>
-            </div>
-        </div>
-        <div data-group="genre">
-            <div class="filter-group__label">Genre & ambiance <span class="hint">· selon l'événement</span></div>
-            <div class="filter-group__options">
-                <button class="filter-pill" data-value="jazz">Jazz</button>
-                <button class="filter-pill" data-value="groove">Groove</button>
-                <button class="filter-pill" data-value="disco">Disco</button>
-                <button class="filter-pill" data-value="rock">Rock</button>
-                <button class="filter-pill" data-value="world">World</button>
-            </div>
-        </div>
-        <div data-group="moment">
-            <div class="filter-group__label">Moment</div>
-            <div class="filter-group__options">
-                <button class="filter-pill" data-value="aujourdhui">Aujourd'hui</button>
-                <button class="filter-pill" data-value="ce-week-end">Ce week-end</button>
-                <button class="filter-pill" data-value="cette-semaine">Cette semaine</button>
-                <button class="filter-pill" data-value="ce-mois-ci">Ce mois-ci</button>
-            </div>
-        </div>
-
-        <hr class="filter-panel__divider" />
-
-        <div class="filter-panel__full" style="display:flex; flex-direction:column; gap: var(--space-3);">
-            <label class="checkbox-line">
-                <input type="checkbox" />
-                <span class="box"></span>
-                <span class="checkbox-text">Voir autour du lieu <span class="muted">— élargir aux événements des lieux reliés à La MIETE</span></span>
-            </label>
-            <label class="checkbox-line">
-                <input type="checkbox" checked data-default-checked />
-                <span class="box"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.2 11.5L13 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                <span class="checkbox-text">Afficher les événements en partenariat avec le lieu <span class="muted">— où La MIETE est associée sans être organisatrice</span></span>
-            </label>
-        </div>
-
-        <div class="filter-panel__actions">
-            <button class="btn btn--primary" data-apply="agenda">Appliquer</button>
-            <button class="link" data-reset="agenda" style="background:none;border:none;cursor:pointer;">Tout réinitialiser</button>
-        </div>
-    </div>
-
-
-
-    <!-- event list -->
-    <div class="grid grid--3" style="margin-top: var(--space-5);">
+    {# Liste des événements. id="event_list" : cible HTMX historique de la #}
+    {# pagination (cotton/V2/event_card.html, agenda_liste.html). #}
+    {# / Event list. id="event_list": historical HTMX target of the pagination. #}
+    <div id="event_list" class="grid grid--3 grid--sous-titre" data-testid="agenda-liste">
         {% for date_key, events in dated_events.items %}
             {% for event in events %}
-                <c-V2.event_card event=event />
+                <c-V2.event_card :event="event" />
             {% endfor %}
-            {% empty %}
-            {% if search %}
-                <p style="grid-column: span 3;">
+        {% empty %}
+            <p class="agenda-vide">
+                {% if search or tags %}
                     {% translate 'Aucun évènements avec ces filtres' %},
-                    <a href="?">{% translate 'Retour à tous les évènements ?' %}</a>
-                </p>
-            {% else %}
-                <p>Aucun évènements</p>
-            {% endif %}
-
+                    <a class="link" href="?" hx-get="?" hx-target="body" hx-push-url="true">{% translate 'Retour à tous les évènements ?' %}</a>
+                {% else %}
+                    {% translate 'Aucun évènement à venir pour le moment.' %}
+                {% endif %}
+            </p>
         {% endfor %}
+
+        {% include 'pages/V2/vues/partials/agenda_voir_plus.html' %}
     </div>
 {% endblock %}
 

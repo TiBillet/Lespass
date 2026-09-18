@@ -678,6 +678,7 @@ UNFOLD = {
     "DASHBOARD_CALLBACK": "Administration.admin_tenant.dashboard_callback",
     "SHOW_HISTORY": False,  # show/hide "History" button, default: True
     "SITE_TITLE": "TiBillet",
+    "THEME": "light",  # Force theme disable theme switcher
     # En haut du rail : le nom du lieu, puis une ligne de contexte.
     # SITE_HEADER accepte un chemin pointe vers un callable, comme
     # SIDEBAR.navigation — c'est ce qui permet d'afficher le nom du lieu

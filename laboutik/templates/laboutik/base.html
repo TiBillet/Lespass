@@ -48,8 +48,9 @@
   <!-- <body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-on::before-request="spinnerRequestOn()" hx-on::after-request="spinnerRequestOff()" style="background-color:#000000;"> -->
   <body id="contenu"
         hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-        hx-ext="loading-states"
-        style="background-color:#000000">
+        hx-ext="ws,loading-states"
+        ws-connect="/ws/laboutik/{{ pv.id }}/"
+  style="background-color:#000000">
     <!-- SPINNER NAVIGATION — overlay pour les full page reloads (navigation entre PV).
 	     Cache par defaut. Affiche via JS onclick sur les liens de navigation.
 	     Le full reload remplace tout le DOM, donc pas besoin de le cacher manuellement.
