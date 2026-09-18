@@ -214,11 +214,11 @@ def _construire_sections_modules(request):
     if configuration.module_pages:
         navigation.append(
             {
-                "title": _("Site web personnalisé"),
+                "title": MODULE_FIELDS["module_pages"]["name"],
                 "_order": 2.0,  # rang dans le domaine / rank inside domain
-                "_domaine": "lespass",
-                "_icone": "web",
-                "_slug": "site-web",  # identifiant de la page de module
+                "_domaine": MODULE_FIELDS["module_pages"]["domaine"],
+                "_icone": MODULE_FIELDS["module_pages"]["icone"],
+                "_slug": MODULE_FIELDS["module_pages"]["slug"],  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -249,11 +249,11 @@ def _construire_sections_modules(request):
     if configuration.module_adhesion:
         navigation.append(
             {
-                "title": _("Adhésion, abonnement et pass"),
+                "title": MODULE_FIELDS["module_adhesion"]["name"],
                 "_order": 2.0,  # rang dans le domaine / rank inside domain
-                "_domaine": "lespass",
-                "_icone": "card_membership",
-                "_slug": "adhesion",  # identifiant de la page de module
+                "_domaine": MODULE_FIELDS["module_adhesion"]["domaine"],
+                "_icone": MODULE_FIELDS["module_adhesion"]["icone"],
+                "_slug": MODULE_FIELDS["module_adhesion"]["slug"],  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -283,11 +283,11 @@ def _construire_sections_modules(request):
     if configuration.module_billetterie:
         navigation.append(
             {
-                "title": _("Agenda et Billetterie"),
+                "title": MODULE_FIELDS["module_billetterie"]["name"],
                 "_order": 1.0,  # rang dans le domaine / rank inside domain
-                "_domaine": "lespass",
-                "_icone": "event",
-                "_slug": "agenda",  # identifiant de la page de module
+                "_domaine": MODULE_FIELDS["module_billetterie"]["domaine"],
+                "_icone": MODULE_FIELDS["module_billetterie"]["icone"],
+                "_slug": MODULE_FIELDS["module_billetterie"]["slug"],  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -375,11 +375,11 @@ def _construire_sections_modules(request):
     if configuration.module_federation:
         navigation.append(
             {
-                "title": _("Fédération et agenda participatif"),
+                "title": MODULE_FIELDS["module_federation"]["name"],
                 "_order": 0.0,  # rang dans le domaine / rank inside domain
-                "_domaine": "lerezo",
-                "_icone": "hub",
-                "_slug": "federation",  # identifiant de la page de module
+                "_domaine": MODULE_FIELDS["module_federation"]["domaine"],
+                "_icone": MODULE_FIELDS["module_federation"]["icone"],
+                "_slug": MODULE_FIELDS["module_federation"]["slug"],  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -417,11 +417,11 @@ def _construire_sections_modules(request):
     if configuration.module_caisse:
         navigation.append(
             {
-                "title": _("Caisse & Restaurant"),
+                "title": MODULE_FIELDS["module_caisse"]["name"],
                 "_order": 0.0,  # rang dans le domaine / rank inside domain
-                "_domaine": "laboutik",
-                "_icone": "point_of_sale",
-                "_slug": "caisse",  # identifiant de la page de module
+                "_domaine": MODULE_FIELDS["module_caisse"]["domaine"],
+                "_icone": MODULE_FIELDS["module_caisse"]["icone"],
+                "_slug": MODULE_FIELDS["module_caisse"]["slug"],  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -561,11 +561,11 @@ def _construire_sections_modules(request):
     if configuration.module_monnaie_locale:
         navigation.append(
             {
-                "title": _("Monnaies locales, temps et cashless"),
+                "title": MODULE_FIELDS["module_monnaie_locale"]["name"],
                 "_order": 1.0,  # rang dans le domaine / rank inside domain
-                "_domaine": "lerezo",
-                "_icone": "toll",
-                "_slug": "monnaies",  # identifiant de la page de module
+                "_domaine": MODULE_FIELDS["module_monnaie_locale"]["domaine"],
+                "_icone": MODULE_FIELDS["module_monnaie_locale"]["icone"],
+                "_slug": MODULE_FIELDS["module_monnaie_locale"]["slug"],  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -641,11 +641,11 @@ def _construire_sections_modules(request):
     if configuration.module_tireuse:
         navigation.append(
             {
-                "title": _("Tireuses connectées"),
+                "title": MODULE_FIELDS["module_tireuse"]["name"],
                 "_order": 1.0,  # rang dans le domaine / rank inside domain
-                "_domaine": "lemachines",
-                "_icone": "sports_bar",
-                "_slug": "tireuses",  # identifiant de la page de module
+                "_domaine": MODULE_FIELDS["module_tireuse"]["domaine"],
+                "_icone": MODULE_FIELDS["module_tireuse"]["icone"],
+                "_slug": MODULE_FIELDS["module_tireuse"]["slug"],  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -749,11 +749,11 @@ def _construire_sections_modules(request):
     if configuration.module_kiosk:
         navigation.append(
             {
-                "title": _("Kiosk : borne libre-service"),
+                "title": MODULE_FIELDS["module_kiosk"]["name"],
                 "_order": 0.0,  # rang dans le domaine / rank inside domain
-                "_domaine": "lemachines",
-                "_icone": "smart_display",
-                "_slug": "kiosk",  # identifiant de la page de module
+                "_domaine": MODULE_FIELDS["module_kiosk"]["domaine"],
+                "_icone": MODULE_FIELDS["module_kiosk"]["icone"],
+                "_slug": MODULE_FIELDS["module_kiosk"]["slug"],  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -774,11 +774,11 @@ def _construire_sections_modules(request):
     if configuration.module_booking:
         navigation.append(
             {
-                "title": _("Ressources"),
+                "title": MODULE_FIELDS["module_booking"]["name"],
                 "_order": 3.0,  # rang dans le domaine / rank inside domain
-                "_domaine": "lespass",
-                "_icone": "meeting_room",
-                "_slug": "ressources",  # identifiant de la page de module
+                "_domaine": MODULE_FIELDS["module_booking"]["domaine"],
+                "_icone": MODULE_FIELDS["module_booking"]["icone"],
+                "_slug": MODULE_FIELDS["module_booking"]["slug"],  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -880,11 +880,11 @@ def _construire_sections_modules(request):
     if configuration.module_crowdfunding:
         navigation.append(
             {
-                "title": _("Financement participatif & budgets contributifs"),
+                "title": MODULE_FIELDS["module_crowdfunding"]["name"],
                 "_order": 0.0,  # rang dans le domaine / rank inside domain
-                "_domaine": "lekontrib",
-                "_icone": "volunteer_activism",
-                "_slug": "financement",  # identifiant de la page de module
+                "_domaine": MODULE_FIELDS["module_crowdfunding"]["domaine"],
+                "_icone": MODULE_FIELDS["module_crowdfunding"]["icone"],
+                "_slug": MODULE_FIELDS["module_crowdfunding"]["slug"],  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -922,11 +922,11 @@ def _construire_sections_modules(request):
     if configuration.module_newsletter:
         navigation.append(
             {
-                "title": _("Newsletter"),
+                "title": MODULE_FIELDS["module_newsletter"]["name"],
                 "_order": 4.0,  # rang dans le domaine / rank inside domain
-                "_domaine": "lespass",
-                "_icone": "mail",
-                "_slug": "newsletter",  # identifiant de la page de module
+                "_domaine": MODULE_FIELDS["module_newsletter"]["domaine"],
+                "_icone": MODULE_FIELDS["module_newsletter"]["icone"],
+                "_slug": MODULE_FIELDS["module_newsletter"]["slug"],  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -2064,6 +2064,14 @@ BETA_NOTICE = _(
 # / Key order = card display order. POS sits at its rank (unified card).
 # / Newsletter is last: it lives in the "External tools" section, not the main grid.
 MODULE_FIELDS = {
+    "module_billetterie": {
+        "name": _("Agenda et Billetterie"),
+        "description": _("Events, reservations, and ticket sales"),
+        "testid": "dashboard-card-billetterie",
+        "domaine": "lespass",  # groupe du tableau de bord / dashboard group
+        "icone": "event",
+        "slug": "agenda",  # module correspondant dans la sidebar
+    },
     "module_pages": {
         "name": _("Site web personnalisé"),
         "description": _(
@@ -2076,14 +2084,6 @@ MODULE_FIELDS = {
         "icone": "web",
         "beta": True,
         "slug": "site-web",  # module correspondant dans la sidebar
-    },
-    "module_billetterie": {
-        "name": _("Agenda et Billetterie"),
-        "description": _("Events, reservations, and ticket sales"),
-        "testid": "dashboard-card-billetterie",
-        "domaine": "lespass",  # groupe du tableau de bord / dashboard group
-        "icone": "event",
-        "slug": "agenda",  # module correspondant dans la sidebar
     },
     "module_adhesion": {
         "name": _("Adhésion, abonnement et pass"),
