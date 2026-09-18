@@ -1,7 +1,18 @@
-{% load static %}
 {% load static i18n %}
+<!--
+ATTENTE CARTE NFC POUR UN PAIEMENT CASHLESS (V2)
+/ NFC card wait for a cashless payment (V2)
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_read_nfc.html
+
+FLUX : clic sur la tuile CASHLESS (hx_display_type_payment.html)
+-> lire_nfc() -> ce partial remplace #confirm (outerHTML).
+La lecture de la carte soumet #addition-form vers payer().
+La popup de #messages s'efface tant que celle-ci est ouverte (overlay.css,
+regle « Rien ne s'empile »). La croix la fait revenir.
+/ Tapping CASHLESS loads this partial into #confirm. The #messages popup
+hides while this one is open; the cross brings it back.
+-->
 <div id="confirm">
-	<c-read-nfc selector="#confirm" input-selector="#nfc-tag-id" form-selector="#addition-form" submit-url="{% url 'laboutik-paiement-payer' %}">
-		<h1>{% translate "Attente lecture carte" %}</h1>
-	</c-read-nfc>
+	<c-V2.read-nfc selector="#confirm" hint='{% translate "Cashless" %}' input-selector="#nfc-tag-id" form-selector="#addition-form" submit-url="{% url 'laboutik-paiement-payer' %}" />
 </div>

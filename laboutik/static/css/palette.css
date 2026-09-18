@@ -115,6 +115,13 @@
 	--wash-4: oklch(1 0 0 / .30);
 	--shade-1: oklch(0 0 0 / .10);
 	--shade-2: oklch(0 0 0 / .25);
+	--shade-3: oklch(0 0 0 / .60);
+
+	/* Voile derriere une popup centree (.card-modal-backdrop) : plus leger que
+	   --overlay-veil, on doit encore deviner l'ecran de vente dessous.
+	   / Veil behind a centred popup: lighter than --overlay-veil, the sales
+	   screen must still show through. */
+	--modal-veil: oklch(0 0 0 / .55);
 
 	/* Trois intensites par famille semantique : le fond de la boite (wash),
 	   son filet (edge), et l'encre du texte pose dessus (ink).
