@@ -108,7 +108,7 @@
 	box-shadow: 0 0 0 1px var(--line), 0 18px 44px rgba(0, 0, 0, 0.6);
 	scrollbar-width: thin;
 	scrollbar-color: var(--surface-3) transparent;
-	z-index: 2;
+	z-index: 2000;
 
 	/* Fermé par défaut — animé via .menu-open / Closed by default — animated via .menu-open */
 	transform: scale(.94);
