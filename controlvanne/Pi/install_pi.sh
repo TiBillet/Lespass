@@ -2,8 +2,9 @@
 set -e
 
 # ==========================================
-#  BOOTSTRAP TIBEER — clone le dépôt Lespass
-#  puis délègue à make (controlvanne/Pi/).
+#  BOOTSTRAP TIBEER — clone sparse : seul
+#  controlvanne/Pi/ est téléchargé, puis
+#  délègue à make.
 # ==========================================
 
 if [ "$EUID" -eq 0 ]; then
@@ -66,13 +67,14 @@ echo "[1/3] Prérequis (git, make, python3)..."
 sudo apt-get update -qq
 sudo apt-get install -y --no-install-recommends git make python3 curl ca-certificates
 
-# ── Clone complet du dépôt dans REPO_DIR ───────────────────
-# Clone complet (tout le contenu de la branche). --depth=1 : on ne
-# télécharge pas l'historique git, inutile sur le Pi.
-# / Full clone (the branch's whole content). --depth=1: git history
-# is not downloaded, useless on the Pi.
+# ── Clone sparse directement dans REPO_DIR ─────────────────
+# Seuls les blobs de controlvanne/Pi/ sont téléchargés (--filter=blob:none
+# + sparse-checkout). --depth=1 : pas d'historique, inutile sur le Pi.
+# / Only controlvanne/Pi/ blobs are downloaded (--filter=blob:none
+# + sparse-checkout). --depth=1: no history, useless on the Pi.
+
 echo ""
-echo "[2/3] Clonage du dépôt Lespass ($GIT_BRANCH)..."
+echo "[2/3] Clonage sparse de controlvanne/Pi/ ($GIT_BRANCH)..."
 
 REPO_DIR="/home/$SYSUSER/tibeer"
 
@@ -85,10 +87,15 @@ else
         mv "$REPO_DIR" "${REPO_DIR}_bak_$(date +%s)"
     fi
     git clone \
+        --no-checkout \
         --depth=1 \
+        --filter=blob:none \
         -b "$GIT_BRANCH" \
         "$GIT_REPO" \
         "$REPO_DIR"
+    git -C "$REPO_DIR" sparse-checkout init --cone
+    git -C "$REPO_DIR" sparse-checkout set controlvanne/Pi
+    git -C "$REPO_DIR" checkout "$GIT_BRANCH"
 fi
 
 TARGET_DIR="$REPO_DIR/controlvanne/Pi"

@@ -1,6 +1,6 @@
 #!/bin/bash
-# Mise à jour au démarrage : git pull sur le dépôt.
-# / Startup update: git pull on the repo.
+#  Mise à jour au démarrage : git pull sur le dépôt sparse (controlvanne/Pi/ seul).
+#  Startup update: git pull on the sparse repo (controlvanne/Pi/ only).
 
 REPO_DIR="/home/sysop/tibeer"
 
