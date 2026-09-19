@@ -37,14 +37,18 @@ Le script pose quelques questions puis délègue à `make`. À la fin, redémarr
 ### Ce que fait `install_pi.sh`
 
 1. Installe les prérequis minimaux (`git`, `make`, `python3`)
-2. Clone le dépôt Lespass (`--depth=1`, sans historique git) dans `/home/sysop/tibeer/`
+2. Clone **sparse** du dépôt Lespass dans `/home/sysop/tibeer/` : seul `controlvanne/Pi/`
+   est téléchargé (`--filter=blob:none` + `sparse-checkout`), sans historique git (`--depth=1`).
+   Le `git pull` au démarrage fonctionne normalement sur ce dépôt.
 3. Lance `make all` (claim → install → deploy → start)
 
 ### Structure sur le Pi après installation
 
 ```
-/home/sysop/tibeer/          ← dépôt git Lespass (clone complet, --depth=1)
+/home/sysop/tibeer/          ← dépôt git Lespass (clone sparse : controlvanne/Pi/ seul, --depth=1)
   .git/
+  logs/                      ← logs de tibeer, créé au premier démarrage (non versionné)
+  manage.py, README.md…      ← fichiers de la racine du dépôt (toujours présents en sparse, sans effet)
   controlvanne/
     Pi/                      ← répertoire de travail des services
       main.py
