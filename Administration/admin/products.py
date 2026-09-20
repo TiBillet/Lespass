@@ -1312,10 +1312,6 @@ class TicketProductAdmin(ProductAdmin):
 
     list_filter = ["publish", ProductArchiveFilter]  # categorie_article inutile, deja filtre
 
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        return qs.filter(categorie_article__in=[Product.BILLET, Product.FREERES])
-
 
 @admin.register(MembershipProduct, site=staff_admin_site)
 class MembershipProductAdmin(HelpDisplayMixin, ProductAdmin):
@@ -1334,10 +1330,6 @@ class MembershipProductAdmin(HelpDisplayMixin, ProductAdmin):
     changeform_help_url = HELP_MESSAGES_DICT["ADHESION_PRODUIT"]["changeform_help_url"]
 
     list_filter = ["publish", ProductArchiveFilter]  # categorie_article inutile, deja filtre
-
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        return qs.filter(categorie_article=Product.ADHESION)
 
 
 # ---------------------------------------------------------------------------
