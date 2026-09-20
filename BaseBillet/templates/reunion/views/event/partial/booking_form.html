@@ -126,7 +126,13 @@
                                         id="amount-{{ price.uuid }}"
                                         name="{{ price.uuid }}"
                                         step="1" min="0"
-                                        max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% elif price.max_per_user %}{{ price.max_per_user }}{% else %}{{ event.max_per_user }}{% endif %}"
+                                        {# max_billets est calcule dans BaseBillet.views.EventMVT.retrieve : le plus #}
+                                        {# petit des plafonds applicables (places restantes, quota du tarif, quota de #}
+                                        {# l'evenement). `is not None` est indispensable : 0 est falsy, et c'est #}
+                                        {# justement la valeur qui doit bloquer le compteur. #}
+                                        {# / max_billets comes from EventMVT.retrieve: smallest applicable cap. #}
+                                        {# `is not None` is required: 0 is falsy, yet it must block the counter. #}
+                                        {% if price.max_billets is not None %}max="{{ price.max_billets }}"{% endif %}
                                         class="flex-grow-1 js-order-amount"
                                         data-testid="booking-amount-{{ price.uuid }}">
                                 </bs-counter>
@@ -139,7 +145,9 @@
                                     id="amount-{{ price.uuid }}"
                                     name="{{ price.uuid }}"
                                     step="1" min="0"
-                                    max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% elif price.max_per_user %}{{ price.max_per_user }}{% else %}{{ event.max_per_user }}{% endif %}"
+                                    {# Meme plafond que dans la branche "adhesion obligatoire" ci-dessus. #}
+                                    {# / Same ceiling as in the "membership required" branch above. #}
+                                    {% if price.max_billets is not None %}max="{{ price.max_billets }}"{% endif %}
                                     class="flex-grow-1 js-order-amount"
                                     data-testid="booking-amount-{{ price.uuid }}"
                             ></bs-counter>
@@ -474,6 +482,26 @@
             {% trans "Maximum capacity of tickets limited to" %}<span
                 class="js-max-amount"> {{ event.max_per_user }} </span>{% trans 'per buyer' %}.
         </p>
+        {% endif %}
+        {# Places restantes. Contrainte globale au formulaire, donc affichee ici et #}
+        {# non sous chaque compteur : avec plusieurs tarifs, repeter "il reste 3" #}
+        {# sous chacun laisserait croire a 3 places par tarif. #}
+        {# Le test `is not None` ecarte les evenements federes, dont la jauge n'est #}
+        {# pas calculable depuis ce schema. Ensuite : affichage permanent si le lieu #}
+        {# a active la jauge, sinon uniquement quand il reste peu de places. #}
+        {# / Remaining seats: a form-wide constraint, shown once here rather than #}
+        {# under each counter. `is not None` skips federated events. Always shown #}
+        {# when the venue enabled the gauge, otherwise only when seats run low. #}
+        {% if places_restantes is not None %}
+            {% if event.show_gauge or places_restantes <= 10 %}
+        <p class="text-danger-emphasis" data-testid="booking-remaining-seats">
+            {% blocktrans count places=places_restantes trimmed %}
+                Il reste {{ places }} place disponible.
+            {% plural %}
+                Il reste {{ places }} places disponibles.
+            {% endblocktrans %}
+        </p>
+            {% endif %}
         {% endif %}
     </div>
 

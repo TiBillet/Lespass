@@ -1,5 +1,71 @@
 # Changelog / Journal des modifications
 
+## Compteur de billets borné aux places restantes / Ticket counter capped to the remaining seats
+
+**Date :** 2026-09-17
+**Migration :** **Non**
+
+### Le formulaire laissait demander plus de billets qu'il n'y avait de places
+
+**Quoi / What :** issue Sentry `BILLETTERIE-COOP-4G` — **781 occurrences depuis avril
+2025**. Sur un évènement où il restait 1 place, le compteur laissait saisir jusqu'à 10
+billets ; le serveur refusait (« Nombre de places disponibles : 1 »), et le refus était
+loggé en `logger.error`, donc remonté en alerte Sentry.
+
+**Pourquoi / Why :** l'attribut `max` du composant `bs-counter` était borné par le seul
+`max_per_user` — le nombre de billets qu'une personne a le **droit** de prendre — et
+**jamais** par `jauge_max − valid_tickets_count − under_purchase`. Les trois autres
+garde-fous de la page (`event.complet`, quota utilisateur, quota par tarif) étaient bien
+en place ; seul celui du stock manquait. `Event.complet` exigeant `>= jauge_max`, une
+dernière place laissait le formulaire s'afficher normalement.
+
+**Bug corrigé au passage :** `Event.max_per_user` et `Price.max_per_user` sont tous deux
+`null=True`. Quand les deux étaient vides, le gabarit rendait la chaîne littérale
+`max="None"`. Or `bs-counter.mjs` teste `if (this.max)` — `"None"` est *truthy* — puis
+`Number(this.max)`, qui vaut `NaN` : le bouton `+` n'était **jamais** désactivé, et le
+champ affichait le placeholder « 0 / NaN ». Symétriquement, `max_per_user = 0` produisait
+`max="0"` et bloquait le compteur alors que le validator, lui, ne limitait rien.
+
+Le plafond est désormais calculé en Python (le plus petit des plafonds *réellement*
+définis) et déposé sur chaque tarif sous le nom `max_billets`. Quand aucun plafond ne
+s'applique, il vaut `None` et le gabarit n'écrit **aucun** attribut `max`.
+
+**Piège à connaître / Gotcha :** le plafond doit être posé dans la boucle
+`for p in event.published_prices:`, **pas** sur la liste `prices` issue du
+`prefetch_related`. Ce sont deux collections d'**instances Python différentes** pour les
+mêmes lignes SQL, et le gabarit itère sur la première. Un attribut posé sur la seconde
+serait invisible au rendu — `max=""` — donc un compteur **illimité pour tout le monde**,
+y compris là où `max_per_user` fonctionnait. Aucun test e2e existant ne l'aurait détecté :
+aucun ne lit l'attribut `max`. D'où le nouveau fichier de tests.
+
+**Affichage :** le nombre de places restantes s'affiche sous le total — en permanence si
+le lieu a activé « Afficher la jauge », sinon seulement à partir de 10 places ou moins.
+Le message est unique et global au formulaire : le répéter sous chaque compteur
+laisserait croire à un stock par tarif.
+
+**Refus de validation en `warning` :** un refus métier (jauge atteinte, quota dépassé,
+adhésion manquante) n'est pas une erreur applicative. Passés en `logger.warning`, ils ne
+créent plus d'event Sentry (`event_level=ERROR` par défaut) — même arbitrage que pour
+l'API v1 le 2026-05-25. Une part de ces refus restera toujours légitime : `under_purchase`
+compte les paniers ouverts depuis moins de 15 minutes, donc le stock bouge entre
+l'affichage de la page et l'envoi du formulaire.
+
+### Fichiers modifiés / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/views.py` | `EventMVT.retrieve` : calcul de `places_restantes`, plafond `max_billets` par tarif dans la boucle `published_prices`, `event.remaining_seats` (lu par le skin `faire_festival` mais défini nulle part — il affichait un blanc). `action_reservation` et `reservation` : `logger.error` → `logger.warning` |
+| `BaseBillet/templates/reunion/views/event/partial/booking_form.html` | Les deux `bs-counter` utilisent `{% if price.max_billets is not None %}max="…"{% endif %}` (le `is not None` est requis : `0` est *falsy*, et c'est justement la valeur qui doit bloquer). Message des places restantes sous le total |
+| `tests/pytest/test_booking_counter_max.py` | Nouveau — 10 tests de rendu : plafond par tarif, plusieurs tarifs, branche « adhésion obligatoire », zéro non avalé, **aucun `None` ni `NaN`**, seuil d'affichage, jauge visible, évènement fédéré, accord singulier/pluriel |
+
+### Migration
+
+- **Migration nécessaire / Migration required :** Non
+- **Traductions :** le message des places restantes est un nouveau `blocktrans` à texte
+  source français. `makemessages` / `compilemessages` restent à la main du mainteneur.
+
+---
+
 ## Webhook Stripe `invoice.paid` : un abonnement hors TiBillet ne lève plus de 500 / Stripe `invoice.paid`: a non-TiBillet subscription no longer raises a 500
 
 **Date :** 2026-09-17

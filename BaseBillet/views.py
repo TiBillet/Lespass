@@ -2290,6 +2290,11 @@ class EventMVT(viewsets.ViewSet):
         product_max_per_user_reached = []
         price_max_per_user_reached = []
         event_max_per_user_reached = False
+        # Reste a None pour un evenement venu de la federation : il n'existe pas dans
+        # le schema courant, ses compteurs de jauge n'ont donc aucun sens ici.
+        # / Stays None for a federated event: it does not live in the current schema,
+        # so its capacity counters are meaningless here.
+        places_restantes = None
 
         try:
             if hex8:
@@ -2337,6 +2342,16 @@ class EventMVT(viewsets.ViewSet):
 
                 event_max_per_user_reached = event.max_per_user_reached_on_this_event(request.user)
 
+            # Places encore disponibles : la jauge, moins les billets valides, moins
+            # les paniers ouverts depuis moins de 15 minutes. C'est exactement la
+            # quantite maximale que le validator acceptera (BaseBillet.validators,
+            # verification de la jauge). On le calcule UNE seule fois ici : chaque
+            # appel declenche deux COUNT SQL, il ne doit jamais tomber dans une boucle.
+            # / Seats still available: capacity minus valid tickets minus carts opened
+            # less than 15 minutes ago. This is exactly the maximum quantity the
+            # validator will accept. Computed ONCE: each call costs two COUNT queries.
+            places_restantes = max(0, event.jauge_max - event.valid_tickets_count() - event.under_purchase())
+
             tarifs = [price.prix for price in prices]
             # Calcul des prix min et max
             event.price_min = min(tarifs) if tarifs else None
@@ -2373,6 +2388,12 @@ class EventMVT(viewsets.ViewSet):
         template_context['event'] = event
         template_context['event_in_this_tenant'] = event_in_this_tenant
         template_context['event_max_per_user_reached'] = event_max_per_user_reached
+        template_context['places_restantes'] = places_restantes
+        # Le gabarit du skin faire_festival lit `event.remaining_seats`, qui n'etait
+        # defini nulle part : il affichait donc un blanc. On le renseigne ici.
+        # / The faire_festival skin reads `event.remaining_seats`, which was defined
+        # nowhere and rendered as a blank. Filled in here.
+        event.remaining_seats = places_restantes
 
         # On prépare les prix publiés pour le template (utilisé par le sélecteur de billet)
         # On s'assure que price.name n'est jamais None pour éviter les "undefined" en JS
@@ -2386,6 +2407,32 @@ class EventMVT(viewsets.ViewSet):
         for p in event.published_prices:
             if p.name is None:
                 p.name = ""
+
+            # Plafond du compteur de billets, affiche dans l'attribut `max`.
+            # On prend le plus petit des plafonds qui s'appliquent vraiment :
+            #   - les places encore disponibles sur l'evenement,
+            #   - le maximum par personne du tarif,
+            #   - le maximum par personne de l'evenement.
+            # Les deux `max_per_user` sont facultatifs en base (null=True) et
+            # `places_restantes` est None pour un evenement federe : on n'ajoute donc
+            # que les plafonds reellement definis. Si aucun ne l'est, on laisse None,
+            # et le gabarit n'ecrit alors aucun attribut `max`. Sans cette precaution,
+            # le gabarit rendait la chaine "None", que le composant bs-counter
+            # interprete comme un plafond illimite (Number("None") vaut NaN).
+            # / Ceiling for the ticket counter, rendered in the `max` attribute: the
+            # smallest of the caps that actually apply. Both `max_per_user` fields are
+            # optional and `places_restantes` is None for a federated event, so only
+            # defined caps are collected. None means the template writes no `max` at
+            # all — previously it rendered the string "None", which bs-counter reads
+            # as unlimited (Number("None") is NaN).
+            plafonds = []
+            if places_restantes is not None:
+                plafonds.append(places_restantes)
+            if p.max_per_user:
+                plafonds.append(p.max_per_user)
+            if event.max_per_user:
+                plafonds.append(event.max_per_user)
+            p.max_billets = min(plafonds) if plafonds else None
 
         # L'evènement possède des sous évènement.
         # Pour l'instant : uniquement des ACTIONS
@@ -2422,7 +2469,14 @@ class EventMVT(viewsets.ViewSet):
         }, context={'request': request})
 
         if not validator.is_valid():
-            logger.error(f"ReservationViewset CREATE ERROR : {validator.errors}")
+            # Refus metier (jauge atteinte, quota par personne depasse, adhesion
+            # manquante...) : ce n'est PAS une erreur applicative. En warning, la
+            # LoggingIntegration de Sentry n'en fait qu'un breadcrumb au lieu d'une
+            # alerte (event_level=ERROR par defaut). La personne est deja prevenue
+            # par les messages ci-dessous. Meme arbitrage que pour l'API v1.
+            # / Business refusal, not an app error. At warning level Sentry only
+            # records a breadcrumb instead of raising an alert. Same call as API v1.
+            logger.warning(f"ReservationViewset CREATE : validation refusee : {validator.errors}")
             for error in validator.errors:
                 messages.add_message(request, messages.ERROR, f"{validator.errors[error][0]}")
             return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
@@ -2438,7 +2492,11 @@ class EventMVT(viewsets.ViewSet):
         validator = ReservationValidator(data=request.data, context={'request': request})
 
         if not validator.is_valid():
-            logger.error(f"ReservationViewset CREATE ERROR : {validator.errors}")
+            # Meme arbitrage que dans action_reservation ci-dessus : un refus metier
+            # n'est pas une erreur applicative, donc warning et pas d'alerte Sentry.
+            # / Same call as in action_reservation above: a business refusal is not an
+            # app error, so warning level and no Sentry alert.
+            logger.warning(f"ReservationViewset CREATE : validation refusee : {validator.errors}")
             for error in validator.errors:
                 messages.add_message(request, messages.ERROR, f"{validator.errors[error][0]}")
             return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
