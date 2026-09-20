@@ -682,7 +682,7 @@ Une valeur fausse **inverse** le comportement — la « fermeture de securite »
 ouvre alors la vanne. `make claim` regenere le `.env` avec la valeur par defaut (`True`) :
 re-verifier apres tout re-appairage. Voir `Pi/tireuses-FAQ.md`.
 
-+**Securite — ce que le code garantit** :
+**Securite — ce que le code garantit** :
 - vanne forcee fermee au demarrage (`close()` dans `__init__`) ;
 - vanne refermee par `cleanup()` a tout arret normal du programme : fin de session,
   exception, Ctrl+C, et `systemctl stop` / reboot (SIGTERM est traite comme Ctrl+C).
