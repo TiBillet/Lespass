@@ -1159,6 +1159,17 @@ class MyAccount(viewsets.ViewSet):
                     # / The loop must run INSIDE tenant_context: it executes the query.
                     for membership in memberships_all:
                         membership.origin = nom_du_lieu_d_origine
+
+                        # is_valid() doit etre appele ICI, dans le tenant_context.
+                        # Si la deadline est vide, is_valid() la calcule et fait un
+                        # self.save() : hors du with, cet UPDATE partirait sur le
+                        # schema du lieu courant (PK entiere) et ecraserait
+                        # l'adhesion d'un autre membre. Le template lit
+                        # `membership.est_valide`, jamais `membership.is_valid`.
+                        # / is_valid() MUST be called here, inside tenant_context:
+                        # it may save() and would write to the wrong schema outside.
+                        membership.est_valide = membership.is_valid()
+
                         memberships.append(membership)
 
 
@@ -1638,7 +1649,15 @@ class MyAccount(viewsets.ViewSet):
 
                 for membership in memberships:
                     membership.origin = Configuration.get_solo().organisation
-                    if membership.is_valid():
+
+                    # Calcule ICI, dans le tenant_context : is_valid() peut appeler
+                    # set_deadline(), qui fait un self.save(). Hors du with, cet
+                    # UPDATE partirait sur le schema du lieu courant. Le gabarit lit
+                    # `membership.est_valide`, jamais `membership.is_valid`.
+                    # / Computed inside tenant_context: is_valid() may save().
+                    membership.est_valide = membership.is_valid()
+
+                    if membership.est_valide:
                         memberships_dict[True].append(membership)
                     else:
                         memberships_dict[False].append(membership)

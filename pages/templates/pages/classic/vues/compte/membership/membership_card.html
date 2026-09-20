@@ -8,8 +8,8 @@
 {#    - message_success (optional): text to display as success alert#}
 {#    - message_error (optional): text to display as error alert#}
 
-<div id="membership-card-{{ membership.uuid }}" class="col{% if not membership.is_valid %} d-flex flex-column justify-content-between{% endif %}" data-testid="membership-card-{{ membership.uuid }}">
-  <div class="card{% if membership.is_valid %} h-100{% else %} opacity-50 flex-grow-1{% endif %}">
+<div id="membership-card-{{ membership.uuid }}" class="col{% if not membership.est_valide %} d-flex flex-column justify-content-between{% endif %}" data-testid="membership-card-{{ membership.uuid }}">
+  <div class="card{% if membership.est_valide %} h-100{% else %} opacity-50 flex-grow-1{% endif %}">
     {% include 'commun/partials/picture.html' with img=membership.product_img alt=membership.name class='card-img-top' ratio='16x9' %}
     <div class="card-body" id="{{ membership.price.product.uuid }}">
       {% if message_success %}
@@ -45,7 +45,7 @@
       <ul class="list-group list-group-flush my-3">
         <li class="list-group-item px-0">
           du {{ membership.last_contribution|date }}
-          au {{ membership.get_deadline|date }}
+          au {{ membership.deadline|date }}
         </li>
         <li class="list-group-item px-0">
           {% trans 'Issued by' %} <strong>{{ membership.origin }}</strong>
@@ -67,12 +67,12 @@
       {% endif %}
     </div>
 
-    {% if membership.is_valid %}
+    {% if membership.est_valide %}
     <div class="card-footer">
       {# Infos de renouvellement / expiration en FALC #}
       {% if membership.price.recurring_payment %}
       <p class="mt-3">
-        Se renouvelle dans {{ membership.get_deadline|naturaltime }}
+        Se renouvelle dans {{ membership.deadline|naturaltime }}
       </p>
       {% if membership.price.commitment %}
       <p class="mb-0">
@@ -85,7 +85,7 @@
       {% endif %}
       {% else %}
       <p class="mt-3">
-        {% trans 'Expires' %} {{ membership.get_deadline|naturaltime }}
+        {% trans 'Expires' %} {{ membership.deadline|naturaltime }}
       </p>
       {% endif %}
 
@@ -110,11 +110,11 @@
     {% endif %}
   </div>
 
-  {% if not membership.is_valid %}
+  {% if not membership.est_valide %}
   <div class="card mt-3 border-warning">
     <div class="card-footer">
       <p class="mt-3">
-        {% trans 'Expired' %} {{ membership.get_deadline|naturaltime }}
+        {% trans 'Expired' %} {{ membership.deadline|naturaltime }}
       </p>
       <a href="/memberships/" class="btn btn-primary d-block mb-3">
         {% trans "Renew" %}

@@ -46,10 +46,16 @@
     <script src="{% static 'js/nfc.js' %}"></script>
   </head>
   <!-- <body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-on::before-request="spinnerRequestOn()" hx-on::after-request="spinnerRequestOff()" style="background-color:#000000;"> -->
+  {# Le websocket est adresse a un point de vente : son URL porte l'uuid du PV. #}
+  {# Les ecrans sans PV (attente de la carte primaire, choix du PV) n'ouvrent    #}
+  {# donc aucun socket : sans uuid, la route Channels ne matche pas et le        #}
+  {# navigateur boucle en reconnexion.                                           #}
+  {# / The websocket is addressed to a point of sale: its URL carries the POS    #}
+  {# uuid. Screens without a POS open no socket at all.                          #}
   <body id="contenu"
         hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
         hx-ext="ws,loading-states"
-        ws-connect="/ws/laboutik/{{ pv.id }}/"
+        {% if pv.id %}ws-connect="/ws/laboutik/{{ pv.id }}/"{% endif %}
   style="background-color:#000000">
     <!-- SPINNER NAVIGATION — overlay pour les full page reloads (navigation entre PV).
 	     Cache par defaut. Affiche via JS onclick sur les liens de navigation.

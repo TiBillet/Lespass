@@ -319,7 +319,7 @@ modules (R11).
                                         </span>
                                     </div>
                                     <div>
-                                        {% if membership.is_valid %}
+                                        {% if membership.est_valide %}
                                             <span class="badge badge--green">{% translate 'Active' %}</span>
                                         {% else %}
                                             <span class="badge badge--neutral">{% translate 'Expirée' %}</span>
@@ -328,7 +328,7 @@ modules (R11).
                                     <div class="service-card__foot">
                                         <span class="service-card__due">
                                             {% if membership.deadline %}
-                                                {% if membership.is_valid %}{% translate "Valable jusqu'au" %}{% else %}{% translate "Terminée le" %}{% endif %}
+                                                {% if membership.est_valide %}{% translate "Valable jusqu'au" %}{% else %}{% translate "Terminée le" %}{% endif %}
                                                 {{ membership.deadline|date:"j F Y" }}
                                             {% endif %}
                                         </span>

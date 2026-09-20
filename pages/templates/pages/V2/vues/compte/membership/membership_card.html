@@ -22,7 +22,7 @@ A CONSERVER : id="membership-card-<uuid>", data-testid="membership-card-<uuid>",
 data-testid="membership-cancel-auto-<uuid>".
 {% endcomment %}
 <article id="membership-card-{{ membership.uuid }}"
-         class="offer-card compte-adhesion{% if not membership.is_valid %} compte-adhesion--expiree{% endif %}"
+         class="offer-card compte-adhesion{% if not membership.est_valide %} compte-adhesion--expiree{% endif %}"
          data-testid="membership-card-{{ membership.uuid }}">
     {% if membership.product_img %}
         <div class="offer-card__cover">
@@ -47,7 +47,7 @@ data-testid="membership-cancel-auto-<uuid>".
         </p>
 
         <div class="event-card__tags">
-            {% if membership.is_valid %}
+            {% if membership.est_valide %}
                 <span class="badge badge--green">{% translate 'Active' %}</span>
             {% else %}
                 <span class="badge badge--neutral">{% translate 'Expired' %}</span>
@@ -67,7 +67,7 @@ data-testid="membership-cancel-auto-<uuid>".
         <dl class="compte-adhesion__infos">
             <div>
                 <dt>{% translate 'Période' %}</dt>
-                <dd>{% translate 'du' %} {{ membership.last_contribution|date }} {% translate 'au' %} {{ membership.get_deadline|date }}</dd>
+                <dd>{% translate 'du' %} {{ membership.last_contribution|date }} {% translate 'au' %} {{ membership.deadline|date }}</dd>
             </div>
             <div>
                 <dt>{% translate 'Issued by' %}</dt>
@@ -87,10 +87,10 @@ data-testid="membership-cancel-auto-<uuid>".
         {% endif %}
 
         <div class="offer-card__footer compte-adhesion__pied">
-            {% if membership.is_valid %}
+            {% if membership.est_valide %}
                 {# Infos de renouvellement / expiration en FALC #}
                 {% if membership.price.recurring_payment %}
-                    <p class="compte-champ__aide">Se renouvelle dans {{ membership.get_deadline|naturaltime }}</p>
+                    <p class="compte-champ__aide">Se renouvelle dans {{ membership.deadline|naturaltime }}</p>
                     {% if membership.price.commitment %}
                         {# L'engagement se calcule depuis first_contribution sur "iteration" périodes #}
                         <p class="compte-champ__aide">
@@ -101,7 +101,7 @@ data-testid="membership-cancel-auto-<uuid>".
                         </p>
                     {% endif %}
                 {% else %}
-                    <p class="compte-champ__aide">{% translate 'Expires' %} {{ membership.get_deadline|naturaltime }}</p>
+                    <p class="compte-champ__aide">{% translate 'Expires' %} {{ membership.deadline|naturaltime }}</p>
                 {% endif %}
 
                 {# Bouton d'arrêt du prélèvement : seulement si renouvellement auto Stripe, sans engagement. #}
@@ -122,7 +122,7 @@ data-testid="membership-cancel-auto-<uuid>".
                     </form>
                 {% endif %}
             {% else %}
-                <p class="compte-champ__aide">{% translate 'Expired' %} {{ membership.get_deadline|naturaltime }}</p>
+                <p class="compte-champ__aide">{% translate 'Expired' %} {{ membership.deadline|naturaltime }}</p>
                 <a href="/memberships/" class="btn btn--primary btn--sm" hx-get="/memberships/" hx-target="body" hx-push-url="true">
                     {% translate "Renew" %}
                 </a>

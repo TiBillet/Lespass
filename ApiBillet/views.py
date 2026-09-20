@@ -609,6 +609,12 @@ class CancelSubscription(DeprecatedV1Mixin, APIView):
                 return HttpResponse(html, status=404)
             return Response(_('Subscription not found for this user'), status=status.HTTP_404_NOT_FOUND)
 
+        # Le gabarit de la carte lit `membership.est_valide` et `membership.deadline`,
+        # jamais les methodes : un appel depuis le gabarit peut declencher
+        # set_deadline(), donc un save(). Ici on est dans le tenant de la requete,
+        # le calcul est sur. / The card template reads attributes, never methods.
+        membership.est_valide = membership.is_valid()
+
         if membership.status != Membership.AUTO:
             if is_htmx:
                 html = render_to_string('pages/classic/vues/compte/membership/membership_card.html', {
@@ -658,6 +664,10 @@ class CancelSubscription(DeprecatedV1Mixin, APIView):
         # Mark as canceled (no more auto-renew). Keep benefits until period end.
         membership.status = Membership.CANCELED
         membership.save(update_fields=['status', 'last_action'])
+
+        # Le statut vient de changer : la carte doit refleter le nouvel etat.
+        # / Status just changed: refresh the value the card renders.
+        membership.est_valide = membership.is_valid()
 
         # HTMX response: re-render the updated card with a success message
         success_message = _('Automatic renewal turned off. Your subscription remains active until the end of the current period.')

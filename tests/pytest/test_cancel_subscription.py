@@ -393,6 +393,11 @@ def test_le_bouton_arreter_le_prelevement_est_affiche_pour_une_adhesion_auto(
     adhesion.last_contribution = timezone.now()
     adhesion.deadline = timezone.now() + timezone.timedelta(days=30)
 
+    # Le gabarit lit `est_valide`, pose par la vue dans le bon schema.
+    # On reproduit ce que fait CancelSubscription avant de rendre la carte.
+    # / The template reads `est_valide`, set by the view; mirror that here.
+    adhesion.est_valide = adhesion.is_valid()
+
     html = render_to_string(GABARIT_CARTE_ADHESION, {"membership": adhesion})
 
     assert f"membership-cancel-auto-{adhesion.uuid}" in html, (
