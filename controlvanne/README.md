@@ -669,18 +669,33 @@ Le facteur de calibration peut etre mis a jour en temps reel par le serveur Djan
 
 #### Electrovanne — `hardware/valve.py`
 
-L'electrovanne est une vanne pilotee electriquement qui ouvre ou ferme le passage du liquide. Elle est commandee via un relais connecte a un GPIO du Pi.
+L'electrovanne est une vanne pilotee electriquement qui ouvre ou ferme le passage du liquide. Elle est commandee via un etage de puissance (module relais, transistor...) connecte a un GPIO du Pi.
 
-**Controle** : un seul GPIO, deux etats :
-- `write(pin, 1)` → relais active → vanne ouverte → le liquide coule
-- `write(pin, 0)` → relais desactive → vanne fermee → le liquide s'arrete
+**Controle** : un seul GPIO, deux etats. Le niveau qui OUVRE depend du cablage, et
+c'est `VALVE_ACTIVE_HIGH` (dans `.env`) qui le decrit :
+- `VALVE_ACTIVE_HIGH=True` (actif-haut) : `write(pin, 1)` → vanne ouverte, `write(pin, 0)` → fermee
+- `VALVE_ACTIVE_HIGH=False` (actif-bas, ex. module relais a entree inversee) : `write(pin, 0)` → ouverte, `write(pin, 1)` → fermee
 
-**Securite** : la vanne est forcee fermee au demarrage (`close()` dans `__init__`). En cas de crash du programme, de perte de courant, ou de deconnexion, le relais retombe → vanne fermee. C'est un choix de securite delibere : en cas de defaillance, la biere ne coule pas.
+Cette valeur n'est pas une preference : elle se **mesure** sur chaque Pi (service arrete,
+vanne sans pression : `pigs w 18 1` puis `pigs w 18 0`, observer quel niveau ouvre).
+Une valeur fausse **inverse** le comportement — la « fermeture de securite » du demarrage
+ouvre alors la vanne. `make claim` regenere le `.env` avec la valeur par defaut (`True`) :
+re-verifier apres tout re-appairage. Voir `Pi/tireuses-FAQ.md`.
 
-Le controleur ouvre la vanne uniquement apres une autorisation reussie du serveur Django. Il la ferme dans 3 cas :
-1. Le volume autorise (`allowed_ml`) est atteint
-2. La carte est retiree (grace period de `CARD_GRACE_PERIOD_S` = 3s ecoulee)
-3. Une erreur survient (exception, serveur injoignable)
++**Securite — ce que le code garantit** :
+- vanne forcee fermee au demarrage (`close()` dans `__init__`) ;
+- vanne refermee par `cleanup()` a tout arret normal du programme : fin de session,
+  exception, Ctrl+C, et `systemctl stop` / reboot (SIGTERM est traite comme Ctrl+C).
+
+**Securite — ce que le code ne garantit PAS** :
+- **crash dur ou `kill -9`** : `pigpiod` conserve le dernier niveau ecrit sur le GPIO ;
+  une vanne ouverte a cet instant le reste jusqu'a la relance du service ;
+- **`VALVE_ACTIVE_HIGH` faux** : toutes les fermetures ci-dessus deviennent des ouvertures.
+
+**Ce qui releve du materiel** : la vanne est normalement fermee (NC) — couper son
+alimentation 24 V la ferme, quel que soit l'etat du Pi .
+C'est le seul arret garanti « quoi qu'il arrive » ; un timeout de session ou un
+watchdog materiel restent a ajouter pour couvrir le crash dur.
 
 #### Gestion du wallet — `controlvanne/billing.py` + `fedow_core/services.py`
 

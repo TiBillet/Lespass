@@ -6,7 +6,7 @@ Chemins sur le Pi : dépôt dans `/home/sysop/tibeer/`, code dans `/home/sysop/t
 ## Installation
 
 **L'affichage du kiosk est trop grand / trop petit (écran 10 pouces) — où régler ?**
-→ `controlvanne/Pi/config/xinitrc.bash`, option Chromium `--force-device-scale-factor` (`1.0` pour un écran 10 pouces ; `2.0` = tout deux fois plus gros).
+→ `controlvanne/Pi/config/xinitrc.bash`, option Chromium `--force-device-scale-factor` (`1.0` pour un écran 10 pouces ; `2.0` = tout deux fois plus gros) à adapter en fonction de la taille de l'ecran.
 Déployé vers `/home/sysop/.xinitrc` par `make deploy` — ne pas éditer `.xinitrc` à la main, il serait écrasé.
 Vérifier la valeur en service : `ps aux | grep -o 'force-device-scale-factor=[0-9.]*'`.
 Détail : issue [#448](https://github.com/TiBillet/Lespass/issues/448).
