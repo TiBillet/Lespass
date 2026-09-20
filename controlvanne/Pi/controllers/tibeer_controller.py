@@ -283,6 +283,11 @@ class TibeerController:
             except Exception as e:
                 logger.error(f"Cloture de session a l'arret echouee: {e}")
         try:
-            self.valve.close()
+            # ferme la vanne, puis pi.stop()
+            self.valve.cleanup()      
+        except Exception:
+            pass
+        try:
+            self.flow_meter.cleanup()  # cb.cancel(), puis pi.stop()
         except Exception:
             pass
