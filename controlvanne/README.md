@@ -693,7 +693,7 @@ re-verifier apres tout re-appairage. Voir `Pi/tireuses-FAQ.md`.
 - **`VALVE_ACTIVE_HIGH` faux** : toutes les fermetures ci-dessus deviennent des ouvertures.
 
 **Ce qui releve du materiel** : la vanne est normalement fermee (NC) — couper son
-alimentation 24 V la ferme, quel que soit l'etat du Pi .
+alimentation 24 V la ferme, quel que soit l'etat du Pi.
 C'est le seul arret garanti « quoi qu'il arrive » ; un timeout de session ou un
 watchdog materiel restent a ajouter pour couvrir le crash dur.
 
