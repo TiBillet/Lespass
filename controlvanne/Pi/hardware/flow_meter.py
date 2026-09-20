@@ -135,7 +135,7 @@ class FlowMeter:
         if self.cb:
             self.cb.cancel()
             self.cb = None
-            # Chaque classe a SA connexion pigpio (pas de partage avec Valve).
-            # / Each class owns ITS pigpio connection (not shared with Valve).
-            if self.pi.connected:
-                self.pi.stop()
+        # Chaque classe a SA connexion pigpio (pas de partage avec Valve).
+        # / Each class owns ITS pigpio connection (not shared with Valve).
+        if self.pi.connected:
+            self.pi.stop()

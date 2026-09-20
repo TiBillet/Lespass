@@ -75,9 +75,9 @@ deploy:
 	sudo mkdir -p /etc/X11/xorg.conf.d
 	sudo cp $(CONFIG)/dpms.conf /etc/X11/xorg.conf.d/10-dpms.conf
 	sudo cp $(CONFIG)/xwrapper.conf /etc/X11/Xwrapper.config
-    sudo mkdir -p /etc/systemd/system/pigpiod.service.d
-    sudo cp $(CONFIG)/pigpiod-override.conf /etc/systemd/system/pigpiod.service.d/override.conf
-    sudo systemctl daemon-reload
+	sudo mkdir -p /etc/systemd/system/pigpiod.service.d
+	sudo cp $(CONFIG)/pigpiod-override.conf /etc/systemd/system/pigpiod.service.d/override.conf
+	sudo systemctl daemon-reload
 	$(eval CFG := $(shell [ -d /boot/firmware ] && echo /boot/firmware/config.txt || echo /boot/config.txt))
 	sudo sed -i '/^dtoverlay=vc4/d;/^hdmi_force_hotplug=/d' $(CFG)
 	echo "dtoverlay=vc4-fkms-v3d" | sudo tee -a $(CFG) > /dev/null
