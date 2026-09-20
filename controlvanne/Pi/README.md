@@ -2,7 +2,7 @@
 
 Client pour tireuse à bière connectée au système cashless TiBillet.  
 Gère la lecture NFC, le contrôle de vanne et la communication avec le serveur Lespass.
-
+Aide-mémoire « où régler quoi » : [tireuses-FAQ.md](tireuses-FAQ.md)
 ## Prérequis matériels
 
 - Raspberry Pi (testé sur Bookworm 64-bit)
