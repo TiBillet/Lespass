@@ -62,32 +62,38 @@ Règle de décision / Decision rule:
 
 ## 🚀 Lancer les tests / Running the tests
 
-Trois modes, du plus rapide au plus complet. Le choix se fait sur **ce qu'on
-accepte de ne pas vérifier**, pas seulement sur la durée.
+Quatre modes, via `make` : **Python ou E2E, avec ou sans Stripe réel**. Le choix se
+fait sur **ce qu'on accepte de ne pas vérifier**, pas seulement sur la durée. La logique
+(serveur live, clé API de test, `stripe listen`) vit dans `scripts/lancer_tests.sh`.
 
 ```bash
-# --- 1. BACKEND SEUL (~1 min 30) ---
-# Aucun prérequis : ni serveur, ni navigateur, ni Stripe. Stripe est mocké.
-docker exec lespass_django poetry run pytest tests/pytest/ -q
+make test          # 1. PYTHON (~3 min) — Stripe mocké
+make test-stripe   # 2. PYTHON + STRIPE RÉEL — vrais paiements et remboursements, mode test
+make e2e           # 3. E2E SANS STRIPE RÉEL (~9 min)
+make e2e-stripe    # 4. E2E COMPLETS (~12 min) — `stripe listen` doit tourner dans byobu
 
-# --- 2. E2E SANS STRIPE (~9 min) ---
-# Les parcours qui attendent un webhook Stripe sont IGNORÉS — et nommés
-# en rouge en fin de run, impossible de les rater.
-docker exec lespass_django poetry run pytest tests/e2e/ -q
-
-# --- 3. E2E COMPLET (~12 min) ---
-# Lancer `stripe listen` sur l'hôte AVANT, dans un autre terminal.
-docker exec -e E2E_STRIPE_LISTEN=1 lespass_django poetry run pytest tests/e2e/ -q
-
-# --- Raccourcis utiles ---
-docker exec lespass_django poetry run pytest tests/ --last-failed   # seuls les échecs précédents
-docker exec lespass_django poetry run pytest tests/pytest/ -m integration  # API v2 seulement
+# Cibler un fichier, un test, un marqueur (tout ARGS est passé à pytest) :
+make test ARGS="tests/pytest/test_stripe_refund.py -k panier"
+make test ARGS="tests/ --last-failed"          # seuls les échecs précédents
+make test ARGS="tests/pytest/ -m integration"  # API v2 seulement
 ```
 
-**L'écart entre les modes 2 et 3 n'est que de ~3 min.** Le mode 2 n'existe pas
-pour gagner du temps, mais pour pouvoir lancer les E2E **sans avoir à démarrer
-`stripe listen`**. Dès qu'on touche au paiement, au Fedow ou aux adhésions, c'est
-le mode 3 qui fait foi.
+**Sans Stripe réel, les tests qui en ont besoin sont IGNORÉS — et nommés en rouge
+en fin de run**, impossible de les rater. Deux marqueurs, une seule variable
+(`STRIPE_REEL=1`, posée par les cibles `-stripe`) :
+
+| Marqueur | Suite | Ce qu'il exige |
+|---|---|---|
+| `stripe_reel` | `tests/pytest/` | l'API Stripe en mode test (réseau, clé `sk_test_`) |
+| `stripe_listen` | `tests/e2e/` | en plus, `stripe listen` pour le webhook de confirmation |
+
+Le mécanisme (ignorer + encadré rouge) est partagé : `tests/stripe_reel.py`.
+
+**Tous les modes exigent le serveur live** : une partie des tests pytest l'appelle en
+HTTP. Le script le vérifie avant de lancer (un `502` = runserver mort dans byobu).
+
+**Dès qu'on touche au paiement, au Fedow ou aux adhésions, ce sont les modes `-stripe`
+qui font foi.**
 
 **Ordre conseillé : les E2E AVANT pytest.** Les E2E créent de vraies ventes dans
 le tenant de développement ; un test pytest qui compte largement peut en être
@@ -111,32 +117,30 @@ pollué. C'est déjà arrivé.
 4. Celery tourne (`lespass_celery`) : les récompenses en monnaie partent par
    `.delay()`. Sans worker, elles ne sont **jamais** versées — et rien ne le dit.
 
-### Le mode 3 en détail : `stripe listen`
+### Les modes `-stripe` en détail
 
-Le marqueur `stripe_listen` (déclaré dans `pytest.ini`, **pas** dans
-`pyproject.toml` — un marqueur déclaré là y est inerte) porte les parcours qui
-ne s'achèvent que sur un webhook Stripe : recharge en monnaie fédérée, validation
-manuelle d'adhésion, renouvellement d'abonnement.
+Les marqueurs `stripe_reel` et `stripe_listen` sont déclarés dans `pytest.ini`
+(**pas** dans `pyproject.toml` — un marqueur déclaré là y est inerte).
 
-```bash
-# 1. sur l'hôte, dans un terminal qu'on laisse ouvert :
-stripe listen
-
-# 2. dans un autre :
-docker exec -e E2E_STRIPE_LISTEN=1 lespass_django poetry run pytest tests/e2e/ -q
-```
+- `stripe_reel` (pytest) : paiements et remboursements réels en mode test, sans
+  navigateur. Outils : `tests/stripe_reel.py` (clé de test obligatoire, paiement par
+  carte de test, lecture des remboursements) et `tests/pytest/fabriques_reservation.py`
+  (réservation payée avec ou sans panier, `compte_stripe_reel=`). Voir `PIEGES.md` 12.18.
+- `stripe_listen` (E2E) : parcours qui ne s'achèvent que sur un webhook Stripe —
+  recharge en monnaie fédérée, validation manuelle d'adhésion, renouvellement
+  d'abonnement. `stripe listen` tourne sur l'hôte, dans byobu.
 
 Deux choses à savoir :
 
-- **`E2E_STRIPE_LISTEN=1` est déclaratif.** Il affirme que le CLI tourne, il ne
-  le vérifie pas : le conteneur ne voit pas les processus de l'hôte. Si le CLI
-  meurt en cours de session, les tests s'exécutent quand même et échouent pour
+- **`STRIPE_REEL=1` est déclaratif.** `make e2e-stripe` vérifie que `stripe listen`
+  tourne **au lancement**, mais le conteneur ne voit pas les processus de l'hôte : si
+  le CLI meurt en cours de session, les tests s'exécutent quand même et échouent pour
   une raison sans rapport avec le code. Vérification :
   ```bash
-  tmux list-panes -a -F "#{pane_current_command}" | grep stripe   # rien = CLI mort
+  pgrep -af "stripe listen.*/api/webhook_stripe/"   # rien = CLI mort
   ```
 - **Sans la variable, le skip est bruyant.** Un encadré rouge en fin de run nomme
-  chaque test non joué (hook `pytest_terminal_summary`, `tests/e2e/conftest.py`).
+  chaque test non joué (hook `pytest_terminal_summary`, `tests/stripe_reel.py`).
   C'est délibéré : un run vert qui cache des parcours de paiement non vérifiés
   donne une confiance qu'on n'a pas.
 

@@ -141,23 +141,23 @@ For installation, configuration and production deployment details: [→ Full doc
 
 ## Tests
 
-Three ways to run the suite, from fastest to most complete.
+Four ways to run the suite, through `make` (logic: `scripts/lancer_tests.sh`).
+Tests calling the real Stripe (test mode) only run on demand; otherwise they are
+SKIPPED and listed in red at the end of the run.
 
 ```bash
-# 1. Backend only (~1 min 30) — models, views, API, validation. Stripe mocked.
-#    No prerequisites: no server, no browser.
-docker exec lespass_django poetry run pytest tests/pytest/ -q
+make test          # 1. Python (~3 min) — models, views, API. Stripe mocked.
+make test-stripe   # 2. Python + real Stripe payments and refunds (test mode)
+make e2e           # 3. Browser E2E (~9 min) — Playwright, no real Stripe
+make e2e-stripe    # 4. Full E2E (~12 min) — requires `stripe listen` in byobu
 
-# 2. Browser E2E (~9 min) — Playwright. Journeys awaiting a Stripe webhook are
-#    SKIPPED, and listed in red at the end of the run.
-docker exec lespass_django poetry run pytest tests/e2e/ -q
-
-# 3. Full E2E (~12 min) — adds the real payment journeys.
-#    Start `stripe listen` on the host FIRST, in another terminal.
-docker exec -e E2E_STRIPE_LISTEN=1 lespass_django poetry run pytest tests/e2e/ -q
+make test ARGS="tests/pytest/test_stripe_refund.py -k panier"   # target
 ```
 
-**Prerequisites for modes 2 and 3**: the Django server runs behind Traefik
+Every mode needs the live server (the script checks it): part of the tests call
+it over HTTP.
+
+**Prerequisites for the E2E modes (3 and 4)**: the Django server runs behind Traefik
 (alias `rsp` in the byobu pane — `manage.py runserver` in daphne mode, required
 for WebSockets), and Chromium is installed in the container:
 

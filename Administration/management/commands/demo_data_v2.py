@@ -339,18 +339,18 @@ class Command(BaseCommand):
 
 
         # Site web complet (app pages) du tenant lespass : 5 pages cohérentes
-        # utilisant tous les types de blocs (skin classic). Lancé en dernier, une
+        # utilisant tous les types de blocs (skin V2). Lancé en dernier, une
         # fois la Configuration remplie et les évènements créés (le bloc EVENEMENTS
         # est dynamique). / Complete website (pages app) for the lespass tenant: 5
-        # coherent pages using all block types (classic skin). Run last, once the
+        # coherent pages using all block types (V2 skin). Run last, once the
         # Configuration is filled and the events created (EVENEMENTS is dynamic).
         self._seed_site_pages_lespass()
 
-        # Site vitrine du tenant festival en skin faire_festival : la démo
-        # couvre ainsi LES DEUX skins après un flush (toujours deux peaux à
-        # comparer, sans manipulation manuelle — utile pour la migration skins).
+        # Site vitrine du tenant festival en skin faire_festival. Avec lespass en
+        # V2 et les autres tenants en classic (skin « reunion » par défaut), la
+        # démo couvre TROIS skins après un flush, sans manipulation manuelle.
         # / Showcase website for the festival tenant with the faire_festival
-        # skin: after a flush the demo covers BOTH skins.
+        # skin: after a flush the demo covers THREE skins (V2, ff, classic).
         self._seed_site_pages_festival()
 
         # Site documentaire du tenant « La Maison des Communs » : arborescence

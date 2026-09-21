@@ -12,3 +12,4 @@
 | # | Fichier | Domaine | Pré-requis |
 |---|---|---|---|
 | 1 | [`COMPTABILITE-inter-tenants.md`](COMPTABILITE-inter-tenants.md) | Compta — versements et monnaies locales fédérées | Chantier Fedow V2 mature |
+| 2 | [`PANIER-en-base-commande-draft.md`](PANIER-en-base-commande-draft.md) | Panier — en base (`Commande.DRAFT`) au lieu de la session | Aucun |

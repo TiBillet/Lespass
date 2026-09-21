@@ -61,18 +61,14 @@ subscription with it); the Lespass-side objects remain.
 PREREQUIS / PREREQUISITES
 --------------------------
 - **`stripe listen` doit tourner** : sans lui, l'echeance est bien prelevee chez
-  Stripe mais Lespass n'en sait rien. Ce test est ignore tant que
-  `E2E_STRIPE_LISTEN=1` n'est pas pose — et l'oubli est signale bruyamment en fin
-  de run (voir `tests/e2e/conftest.py`).
+  Stripe mais Lespass n'en sait rien. Ce test ne tourne qu'avec `make e2e-stripe`
+  (STRIPE_REEL=1) — sinon il est ignore, et l'oubli est signale bruyamment en fin
+  de run (voir `tests/stripe_reel.py`).
 - Celery tourne : la recompense part par `.delay()`.
 - le Fedow est joignable.
 
-Lancement / Run:
-    # 1. sur l'hote :
-    stripe listen
-    # 2. puis :
-    docker exec -e E2E_STRIPE_LISTEN=1 lespass_django poetry run pytest \
-        /DjangoFiles/tests/e2e/test_renouvellement_adhesion_recurrente.py -v
+Lancement / Run (`stripe listen` doit tourner dans byobu) :
+    make e2e-stripe ARGS="tests/e2e/test_renouvellement_adhesion_recurrente.py -v"
 """
 
 import json
@@ -231,11 +227,10 @@ def abonnement_stripe_sur_horloge_de_test(django_shell, tarif_recurrent_recompen
         "from django.db import connection\n"
         "from AuthBillet.utils import get_or_create_user\n"
         "from ApiBillet.serializers import get_or_create_price_sold\n"
-        "from BaseBillet.models import Configuration, Membership, Price\n"
+        "from BaseBillet.models import Membership, Price\n"
         "from fedow_connect.fedow_api import FedowAPI\n"
-        "from root_billet.models import RootConfiguration\n"
-        "stripe.api_key = RootConfiguration.get_solo().get_stripe_api()\n"
-        "compte = Configuration.get_solo().get_stripe_connect_account()\n"
+        "from tests.stripe_reel import preparer_stripe_mode_test\n"
+        "compte = preparer_stripe_mode_test()\n"
         "tenant = connection.tenant\n"
         f"tarif = Price.objects.get(uuid='{tarif_recurrent_recompense['uuid']}')\n"
         f"user = get_or_create_user('{adresse}', send_mail=False)\n"
@@ -303,10 +298,8 @@ def abonnement_stripe_sur_horloge_de_test(django_shell, tarif_recurrent_recompen
     # / The test clock takes its customer and subscription with it.
     django_shell(
         "import stripe\n"
-        "from BaseBillet.models import Configuration\n"
-        "from root_billet.models import RootConfiguration\n"
-        "stripe.api_key = RootConfiguration.get_solo().get_stripe_api()\n"
-        "compte = Configuration.get_solo().get_stripe_connect_account()\n"
+        "from tests.stripe_reel import preparer_stripe_mode_test\n"
+        "compte = preparer_stripe_mode_test()\n"
         "try:\n"
         f"    stripe.test_helpers.TestClock.delete('{donnees['horloge']}',\n"
         "                                          stripe_account=compte)\n"
@@ -360,10 +353,8 @@ def test_chaque_echeance_reverse_la_recompense_et_entre_en_comptabilite(
     sortie = django_shell(
         "import time\n"
         "import stripe\n"
-        "from BaseBillet.models import Configuration\n"
-        "from root_billet.models import RootConfiguration\n"
-        "stripe.api_key = RootConfiguration.get_solo().get_stripe_api()\n"
-        "compte = Configuration.get_solo().get_stripe_connect_account()\n"
+        "from tests.stripe_reel import preparer_stripe_mode_test\n"
+        "compte = preparer_stripe_mode_test()\n"
         f"h = stripe.test_helpers.TestClock.retrieve('{horloge}', stripe_account=compte)\n"
         "stripe.test_helpers.TestClock.advance(\n"
         f"    '{horloge}',\n"

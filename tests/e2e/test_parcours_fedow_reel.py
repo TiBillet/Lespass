@@ -33,15 +33,13 @@ PREREQUIS / PREREQUISITES
 - le Fedow est joignable (`FedowConfig.can_fedow()` vaut True) ;
 - pour le parcours Stripe uniquement : **`stripe listen` doit tourner**, sans
   quoi le webhook de confirmation n'arrive jamais et la recharge reste en
-  attente. Ce test est ignore tant que `E2E_STRIPE_LISTEN=1` n'est pas pose.
+  attente. Ce test ne tourne qu'avec `make e2e-stripe` (STRIPE_REEL=1).
 
 Lancement / Run:
-    docker exec lespass_django poetry run pytest \
-        /DjangoFiles/tests/e2e/test_parcours_fedow_reel.py -v
+    make e2e ARGS="tests/e2e/test_parcours_fedow_reel.py -v"
 
-    # avec le volet Stripe (apres avoir lance `stripe listen`) :
-    docker exec -e E2E_STRIPE_LISTEN=1 lespass_django poetry run pytest \
-        /DjangoFiles/tests/e2e/test_parcours_fedow_reel.py -v
+    # avec le volet Stripe (`stripe listen` doit tourner dans byobu) :
+    make e2e-stripe ARGS="tests/e2e/test_parcours_fedow_reel.py -v"
 """
 
 import re

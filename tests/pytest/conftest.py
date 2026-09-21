@@ -3,6 +3,11 @@ import subprocess
 import sys
 import pytest
 
+from tests.stripe_reel import (
+    afficher_les_tests_stripe_reel_non_joues,
+    ignorer_les_tests_stripe_reel_non_demandes,
+)
+
 try:
     import urllib3
 except Exception:  # pragma: no cover - optional dependency for warnings
@@ -167,6 +172,17 @@ def pytest_collection_modifyitems(config, items):
         return (rang_du_fichier, chemin_du_fichier)
 
     items.sort(key=sort_key)
+
+    # Tests qui appellent le vrai Stripe (mode test) : sur demande seulement (STRIPE_REEL=1,
+    # make test-stripe). Sinon ignorés et nommés en rouge en fin de run (tests/stripe_reel.py).
+    # / Real-Stripe tests: on demand only. Otherwise skipped and named in red at the end.
+    ignorer_les_tests_stripe_reel_non_demandes(items, "stripe_reel")
+
+
+def pytest_terminal_summary(terminalreporter, exitstatus, config):
+    """Nomme en rouge les tests Stripe réel qui n'ont PAS été joués.
+    / Names in red the real-Stripe tests that were NOT run."""
+    afficher_les_tests_stripe_reel_non_joues(terminalreporter)
 
 
 # --- Fixtures partagees portees depuis la V2 (lespass-main) ---

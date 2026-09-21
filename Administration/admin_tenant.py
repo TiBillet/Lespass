@@ -1028,9 +1028,10 @@ def _admin_url_basebillet(model_name, pk):
         return None
 
 
-# Statuts de ligne considérés comme "payés" (cf Reservation.articles_paid).
-# / Line statuses considered "paid".
-LIGNE_PAYEE_STATUTS = (LigneArticle.PAID, LigneArticle.VALID, LigneArticle.REFUNDED)
+# Statuts de ligne comptés dans le montant payé (cf Reservation.articles_paid) :
+# remboursements et avoirs y entrent en négatif.
+# / Line statuses counted in the paid amount: refunds and credit notes count negatively.
+LIGNE_PAYEE_STATUTS = (LigneArticle.PAID, LigneArticle.VALID, LigneArticle.REFUNDED, LigneArticle.CREDIT_NOTE)
 
 
 def _lignes_payees_prefetch(reservation):

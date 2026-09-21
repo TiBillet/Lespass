@@ -3399,10 +3399,11 @@ lire une fenetre vide sans qu'aucune assertion ne le signale.
 **12.13.quinquies — `stripe listen` peut mourir en cours de session, et tout devient
 ininterpretable.**
 
-`E2E_STRIPE_LISTEN=1` est **declaratif** : il dit « je promets que le CLI tourne », il ne le
-verifie pas (le conteneur ne voit pas les process de l'hote, cf. `tests/e2e/conftest.py`). Si
-le CLI meurt en cours de session, les tests marques `stripe_listen` s'executent quand meme et
-echouent — pour une raison qui n'a rien a voir avec le code.
+`STRIPE_REEL=1` est **declaratif** : il dit « je promets que Stripe est joignable », il ne le
+verifie pas (le conteneur ne voit pas les process de l'hote). `make e2e-stripe` controle que
+`stripe listen` tourne **au lancement** (`scripts/lancer_tests.sh`), mais si le CLI meurt en
+cours de session, les tests marques `stripe_listen` s'executent quand meme et echouent — pour
+une raison qui n'a rien a voir avec le code.
 
 **Le cas vicieux** : cela invalide silencieusement une **verification par mutation**. Une
 mutation censee casser la recompense a fait echouer le test sur « aucune vente enregistree »
@@ -3414,7 +3415,7 @@ panne.
 vise, ne pas conclure — verifier l'environnement d'abord.
 
 ```bash
-tmux list-panes -a -F "#{pane_current_command}" | grep stripe   # rien = CLI mort
+pgrep -af "stripe listen.*/api/webhook_stripe/"   # rien = CLI mort (installe par npm, le CLI s'affiche « node » dans tmux)
 ```
 
 Et faire porter aux assertions un message qui **nomme les causes d'environnement** : c'est ce
@@ -3502,6 +3503,54 @@ Le serveur HTTP, lui, recharge tout seul : une mutation dans `views.py` ou `sign
 demande qu'une poignee de secondes.
 
 Rencontres en ecrivant les E2E recharge comptoir + recompense au scan (2026-07-22).
+
+### Remboursements et Stripe reel (2026-09-21)
+
+**12.16 — Un prix a 0 € en categorie « Ticket booking » ouvre un paiement Stripe.**
+
+La categorie decide du parcours, pas le prix. « Ticket booking » (`BILLET`) passe par
+`method_B` : session Checkout Stripe, reservation `U`, ligne a 0 € `U`, paiement `W` — meme a
+0 €. Un test sans `mock_stripe` appelle alors le **vrai** Stripe, en silence.
+
+Une vraie reservation gratuite exige la categorie « Free booking » (`FREERES`). Par l'API v2,
+elle cree une ligne au statut `FREERES` (0 €, « Offert »), jamais payee. Et l'admin refuse de
+vendre un tarif gratuit autrement qu'en « Offert » (erreur de formulaire).
+
+Garde-fou dans un test gratuit : `assert not mock_stripe.mock_create.called`.
+
+**12.17 — `.update()` court-circuite la machine a etats : la reservation « payee » reste `U`.**
+
+Un test qui simule un paiement par `.update()` (paiement `VALID`, lignes `VALID`) ne declenche
+aucun signal : la reservation reste `U` (ou `R`) et ses billets `N`. Deux consequences :
+
+- les billets doivent etre actives a la main (`K`), comme le fait `reservation_paid` ;
+- la reservation doit recevoir un statut **realiste** (`V`, ou `P` si le mail n'est pas parti).
+  Sinon les transitions testees ne sont pas celles de la production : `P → C` ecrivait
+  `erreur_regression` et aucun test ne le voyait, parce que les tests partaient de `U`.
+
+Voir `_simuler_paiement_valide()` dans `tests/pytest/fabriques_reservation.py`.
+
+**12.18 — Rembourser un VRAI paiement Stripe sans navigateur.**
+
+On ne peut pas payer une session Checkout par l'API (12.15). Pour tester un remboursement
+reel, on paie donc directement un `PaymentIntent`, cote serveur, sur le compte Connect du
+lieu :
+
+```python
+from tests.stripe_reel import preparer_stripe_mode_test, payer_avec_la_carte_de_test
+compte = preparer_stripe_mode_test()          # refuse toute cle qui n'est pas sk_test_
+pi = payer_avec_la_carte_de_test(3000, compte, "Lespass test")   # pm_card_visa, confirm=True
+```
+
+Puis on rattache `pi.id` au `Paiement_stripe`. Seule la session Checkout reste simulee :
+`mock_stripe.session.payment_intent = pi.id`, exactement ce que renvoie une session payee en
+production. Le remboursement (`stripe.Refund.create`) part **vraiment** chez Stripe.
+
+Piege dans le piege : `mock_stripe` patche aussi `stripe.PaymentIntent.retrieve`. Pour
+verifier cote Stripe, lire `stripe.Refund.list(payment_intent=…, stripe_account=compte)` —
+c'est ce que fait `montants_rembourses_chez_stripe()`.
+
+Ces tests portent le marqueur `stripe_reel` : ils ne tournent qu'avec `make test-stripe`.
 
 ---
 

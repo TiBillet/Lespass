@@ -85,6 +85,11 @@ def partial_refund_payment(paiement, config, ligne_articles, specified_quantity=
                         amount=ligne_article.amount,
                         vat=ligne_article.vat,
                         paiement_stripe=paiement,
+                        # Rattachée comme la vente d'origine : total_paid() voit le remboursement.
+                        # / Linked like the original sale: total_paid() sees the refund.
+                        reservation=ligne_article.reservation,
+                        booking=ligne_article.booking,
+                        membership=ligne_article.membership,
                         payment_method=ligne_article.payment_method,
                         asset=ligne_article.asset,
                         wallet=ligne_article.wallet,

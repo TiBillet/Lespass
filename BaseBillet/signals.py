@@ -303,9 +303,12 @@ PRE_SAVE_TRANSITIONS = {
         Paiement_stripe.PAID: {
             Paiement_stripe.PAID: set_ligne_article_paid,
             Paiement_stripe.VALID: valide_stripe_paiement,
+            Paiement_stripe.PARTIALLY_REFUNDED: no_change,
+            Paiement_stripe.REFUNDED: no_change,
             '_else_': error_regression,
         },
         Paiement_stripe.VALID: {
+            Paiement_stripe.PARTIALLY_REFUNDED: no_change,
             Paiement_stripe.REFUNDED: no_change,
             '_else_': error_regression,
         }
@@ -350,6 +353,7 @@ PRE_SAVE_TRANSITIONS = {
             Reservation.PAID_ERROR: error_in_mail,
             Reservation.PAID: reservation_paid,
             Reservation.VALID: set_paiement_valid,  # Celery passe la reservation a Valid si mail sended = True
+            Reservation.CANCELED: no_change,
             '_else_': error_regression,
         },
         Reservation.VALID: {

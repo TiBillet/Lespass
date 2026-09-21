@@ -2816,15 +2816,15 @@ class Reservation(models.Model):
 
     def articles_paid(self):
         """
-        Toutes les lignes comptables payees, confirmees ou remboursees de cette reservation.
+        Toutes les lignes comptables payees, confirmees, remboursees ou en avoir de cette reservation.
         Utilise la FK directe si elle existe, sinon fallback sur paiement_stripe (anciennes donnees).
-        / All paid, confirmed or refunded accounting lines for this reservation.
+        / All paid, confirmed, refunded or credited accounting lines for this reservation.
         Uses direct FK if available, otherwise falls back to paiement_stripe (legacy data).
         """
         # Lignes liees directement a cette reservation (nouvelles donnees)
         # / Lines linked directly to this reservation (new data)
         lignes_directes = list(self.lignearticles.filter(
-            status__in=[LigneArticle.PAID, LigneArticle.VALID, LigneArticle.REFUNDED]
+            status__in=[LigneArticle.PAID, LigneArticle.VALID, LigneArticle.REFUNDED, LigneArticle.CREDIT_NOTE]
         ))
         if lignes_directes:
             return lignes_directes
@@ -2834,7 +2834,7 @@ class Reservation(models.Model):
         articles_paid = []
         for paiement in self.paiements.all():
             for ligne in paiement.lignearticles.filter(status__in=[
-                LigneArticle.PAID, LigneArticle.VALID, LigneArticle.REFUNDED
+                LigneArticle.PAID, LigneArticle.VALID, LigneArticle.REFUNDED, LigneArticle.CREDIT_NOTE
             ]):
                 articles_paid.append(ligne)
         return articles_paid
@@ -2860,58 +2860,52 @@ class Reservation(models.Model):
 
     def _lignes_hors_stripe(self, pricesold_ids=None):
         """
-        Retrouve les LigneArticle VALID/PAID sans paiement Stripe pour cette reservation.
-        Utilise la FK directe si possible, sinon fallback par pricesold des tickets.
-        / Finds VALID/PAID LigneArticle without Stripe payment for this reservation.
-        Uses direct FK if available, otherwise falls back to ticket pricesold matching.
-        """
-        # Filtre de base : pas de Stripe, statut VALID ou PAID, pas d'avoir existant
-        # / Base filter: no Stripe, VALID or PAID status, no existing credit note
-        base_filter = {
-            'paiement_stripe__isnull': True,
-            'status__in': [LigneArticle.VALID, LigneArticle.PAID],
-        }
+        Lignes VALID/PAID sans paiement Stripe (espèces, chèque…) de CETTE réservation,
+        pas encore entièrement créditées. Seule la FK directe compte : la vente d'une
+        autre réservation n'est jamais touchée.
+        / VALID/PAID non-Stripe lines (cash, check…) of THIS reservation, not yet fully
+        credited. Only the direct FK counts: another reservation's sale is never touched.
 
-        # Essai via FK directe (nouvelles donnees)
-        # / Try via direct FK (new data)
-        lignes = self.lignearticles.filter(**base_filter).exclude(
-            credit_notes__isnull=False,
+        Chaque ligne renvoyée porte `quantite_restante` : la quantité pas encore créditée.
+        / Each returned line carries `quantite_restante`: the quantity not yet credited.
+        """
+        lignes_vendues_hors_stripe = self.lignearticles.filter(
+            paiement_stripe__isnull=True,
+            status__in=[LigneArticle.VALID, LigneArticle.PAID],
         ).select_related('pricesold', 'pricesold__productsold')
 
         if pricesold_ids is not None:
-            lignes = lignes.filter(pricesold_id__in=pricesold_ids)
+            lignes_vendues_hors_stripe = lignes_vendues_hors_stripe.filter(pricesold_id__in=pricesold_ids)
 
-        if lignes.exists():
-            return lignes
+        lignes_a_crediter = []
+        for ligne in lignes_vendues_hors_stripe:
+            # Les avoirs ont une quantité négative : on les ajoute à la quantité vendue.
+            # / Credit notes have a negative quantity: they are added to the sold quantity.
+            quantite_restante = ligne.qty
+            for avoir in ligne.credit_notes.all():
+                quantite_restante += avoir.qty
 
-        # Fallback : recherche par pricesold des tickets (anciennes donnees sans FK reservation)
-        # / Fallback: search by ticket pricesold (legacy data without reservation FK)
-        if pricesold_ids is None:
-            pricesold_ids = list(
-                self.tickets.values_list('pricesold_id', flat=True).distinct()
-            )
-        return LigneArticle.objects.filter(
-            **base_filter,
-            pricesold_id__in=pricesold_ids,
-            sale_origin=SaleOrigin.ADMIN,
-        ).exclude(
-            credit_notes__isnull=False,
-        ).select_related('pricesold', 'pricesold__productsold')
+            if quantite_restante > 0:
+                ligne.quantite_restante = quantite_restante
+                lignes_a_crediter.append(ligne)
+
+        return lignes_a_crediter
 
     @staticmethod
-    def _creer_avoir(ligne):
+    def _creer_avoir(ligne, quantite):
         """
-        Cree un avoir (credit note) pour une LigneArticle hors-Stripe.
-        / Creates a credit note for a non-Stripe LigneArticle.
+        Cree un avoir (credit note) de `quantite` billets pour une LigneArticle hors-Stripe.
+        / Creates a credit note of `quantite` tickets for a non-Stripe LigneArticle.
         """
         metadata = ligne.metadata if ligne.metadata else {}
         metadata['original_lignearticle_uuid'] = str(ligne.uuid)
         avoir = LigneArticle.objects.create(
             pricesold=ligne.pricesold,
-            qty=-ligne.qty,
+            qty=-quantite,
             amount=ligne.amount,
             vat=ligne.vat,
             paiement_stripe=ligne.paiement_stripe,
+            reservation=ligne.reservation,
             membership=ligne.membership,
             payment_method=ligne.payment_method,
             asset=ligne.asset,
@@ -2927,16 +2921,35 @@ class Reservation(models.Model):
 
     @atomic
     def cancel_and_refund_resa(self):
+        """
+        Annule toute la réservation et rembourse ce qui reste à rembourser.
+        / Cancels the whole reservation and refunds what is left to refund.
 
+        LOCALISATION : BaseBillet/models.py
+
+        FLUX :
+        1. Payée par Stripe : remboursement des billets encore actifs
+           (partial_refund_payment crée une ligne négative REFUNDED).
+        2. Vente hors Stripe (espèces, chèque…) : avoir de la quantité pas encore créditée.
+        3. Si la réservation a été payée mais que rien n'a pu être remboursé : erreur,
+           rien n'est annulé.
+        4. La réservation et tous ses billets passent CANCELED.
+
+        Appelée par : BaseBillet/views.py (cancel_reservation) et les actions admin d'annulation.
+        / Called by: BaseBillet/views.py (cancel_reservation) and the admin cancel actions.
+        """
         if self.status == Reservation.CANCELED:
             raise Exception(_("This reservation has already been canceled."))
 
         if self.tickets.filter(status=Ticket.SCANNED).exists():
             raise Exception(_("You cannot cancel a reservation that has been scanned."))
 
-        # 1) Remboursement Stripe (flow existant, inchange)
-        # / Stripe refund (existing flow, unchanged)
-        if self.total_paid() > 0:
+        montant_paye = self.total_paid()
+        remboursement_effectue = False
+
+        # 1) Remboursement Stripe, avec ou sans panier
+        # / Stripe refund, with or without cart
+        if montant_paye > 0:
             config = Configuration.get_solo()
             # stripe.api_key = config.get_stripe_api()
             stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
@@ -2954,12 +2967,16 @@ class Reservation(models.Model):
 
                 # Appel la fonction helper pour gérer le refund
                 partial_refund_payment(paiement, config, lignes)
+                remboursement_effectue = True
 
             # Si la commande est faite SANS le panier, récupère la lignearticle depuis le paiement
             elif self.paiements.count() > 0:
+                # PARTIALLY_REFUNDED : un paiement déjà remboursé en partie reste remboursable.
+                # / PARTIALLY_REFUNDED: a partly refunded payment remains refundable.
                 for paiement in self.paiements.filter(status__in=[Paiement_stripe.VALID,
                                                                   Paiement_stripe.PAID,
                                                                   Paiement_stripe.NOTSYNC,
+                                                                  Paiement_stripe.PARTIALLY_REFUNDED,
                                                                   ]):
 
                     lignes = paiement.lignearticles.filter(status__in=[LigneArticle.VALID, LigneArticle.PAID])
@@ -2968,12 +2985,21 @@ class Reservation(models.Model):
                         ligne.to_refund_qty = valid_ticket.count()
 
                     partial_refund_payment(paiement, config, lignes)
+                    remboursement_effectue = True
 
         # 2) Avoir pour les lignes hors-Stripe (reservations admin : cheque, especes, etc.)
         # / Credit note for non-Stripe lines (admin reservations: check, cash, etc.)
         for ligne in self._lignes_hors_stripe():
-            self._creer_avoir(ligne)
+            # Avoir de ce qui n'a pas encore été crédité (billets déjà annulés un par un exclus).
+            # / Credit note for what is not yet credited (tickets already cancelled one by one excluded).
+            self._creer_avoir(ligne, quantite=ligne.quantite_restante)
+            remboursement_effectue = True
             logger.info(f"Credit note created for non-Stripe line {ligne.uuid}")
+
+        # Payée mais rien de remboursable : on refuse d'annuler plutôt que de garder l'argent en silence.
+        # / Paid but nothing refundable: refuse to cancel rather than silently keep the money.
+        if montant_paye > 0 and not remboursement_effectue:
+            raise Exception(_("Aucun paiement remboursable n'a été trouvé. Rien n'a été annulé."))
 
         self.status = Reservation.CANCELED
         for ticket in self.tickets.all():
@@ -2986,12 +3012,24 @@ class Reservation(models.Model):
     @atomic
     def cancel_and_refund_ticket(self, ticket):
         """
-        Cancel and refund a single ticket of this reservation.
-        - Refunds only the matching LigneArticle amount via Stripe (partial refund)
-        - Sets the LigneArticle to REFUNDED (if it was VALID) so signals trigger send_refund_to_laboutik
-        - Sets the Ticket status to CANCELED
+        Annule et rembourse UN billet de cette réservation.
+        / Cancels and refunds ONE ticket of this reservation.
+
+        LOCALISATION : BaseBillet/models.py
+
+        FLUX :
+        1. Payé par Stripe : remboursement Stripe du prix d'un billet
+           (partial_refund_payment crée une ligne négative REFUNDED).
+        2. Sinon, vente hors Stripe (espèces, chèque…) : avoir d'un billet sur la ligne de la réservation.
+        3. Si la réservation a été payée mais que rien n'a pu être remboursé : erreur,
+           le billet n'est pas annulé.
+        4. Le billet passe CANCELED.
+        5. S'il ne reste aucun billet non annulé, la réservation passe CANCELED.
+
+        Appelée par : BaseBillet/views.py (cancel_ticket) et l'action admin « Cancel and refund ».
+        / Called by: BaseBillet/views.py (cancel_ticket) and the admin action "Cancel and refund".
         """
-        # Basic guards
+        # Garde-fous / Basic guards
         if ticket.status == Ticket.CANCELED:
             raise Exception(_("This ticket has already been canceled."))
         if ticket.reservation != self:
@@ -3000,8 +3038,10 @@ class Reservation(models.Model):
             raise Exception(_("You cannot cancel a ticket that has been scanned."))
 
         refund = False
-        # If reservation had a payment and ticket has a price superior to free, try partial refund
-        if self.total_paid() > 0:
+        montant_paye = self.total_paid()
+        # 1) Réservation payée : remboursement Stripe d'un billet
+        # / Paid reservation: Stripe refund of one ticket
+        if montant_paye > 0:
             config = Configuration.get_solo()
             stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
 
@@ -3015,15 +3055,20 @@ class Reservation(models.Model):
                 if not ligne:
                     raise Exception(_("Ticket does not have a matching LigneArticle."))
 
-                # Refund only one ticket from the `ligne` using specified_quantity=1
+                # Rembourse un seul billet de la ligne (specified_quantity=1).
+                # / Refunds only one ticket from the line.
                 partial_refund_payment(paiement, config, [ligne], specified_quantity=1)
+                refund = True
                 logger.info(f"Partial refund stripe for one ticket")
             elif self.paiements.count() > 0:
 
-                # Find the paiement/lignearticle corresponding to this ticket
+                # Cherche le paiement et la ligne de ce billet.
+                # PARTIALLY_REFUNDED : un paiement déjà remboursé en partie reste remboursable.
+                # / Finds this ticket's payment and line. A partly refunded payment remains refundable.
                 for paiement in self.paiements.filter(status__in=[Paiement_stripe.VALID,
                                                                   Paiement_stripe.PAID,
                                                                   Paiement_stripe.NOTSYNC,
+                                                                  Paiement_stripe.PARTIALLY_REFUNDED,
                                                                   ]):
 
 
@@ -3034,8 +3079,10 @@ class Reservation(models.Model):
                     if not ligne:
                         raise Exception(_("Ticket does not have a matching LigneArticle."))
 
-                    # Refund only one ticket from the `ligne` using specified_quantity=1
+                    # Rembourse un seul billet de la ligne (specified_quantity=1).
+                    # / Refunds only one ticket from the line.
                     partial_refund_payment(paiement, config, [ligne], specified_quantity=1)
+                    refund = True
                     logger.info(f"Partial refund stripe for one ticket")
 
                     break
@@ -3047,14 +3094,26 @@ class Reservation(models.Model):
                 pricesold_ids=[ticket.pricesold_id]
             )
             for ligne in lignes_hors_stripe:
-                self._creer_avoir(ligne)
+                self._creer_avoir(ligne, quantite=1)
                 logger.info(f"Credit note created for non-Stripe line {ligne.uuid} (single ticket cancel)")
                 refund = True
                 break  # Un seul avoir pour un seul ticket
 
-        # Cancel the ticket regardless of refund result
+        # Payé mais rien de remboursable : on refuse d'annuler plutôt que de garder l'argent en silence.
+        # / Paid but nothing refundable: refuse to cancel rather than silently keep the money.
+        if montant_paye > 0 and not refund:
+            raise Exception(_("Aucun paiement remboursable n'a été trouvé. Rien n'a été annulé."))
+
         ticket.status = Ticket.CANCELED
         ticket.save()
+
+        # Plus aucun billet non annulé : la réservation entière est annulée.
+        # update_fields : ne réécrit ni `datetime` (auto_now) ni `mail_send`, qui peut avoir changé.
+        # / No uncancelled ticket left: the whole reservation is cancelled.
+        # update_fields: rewrites neither `datetime` (auto_now) nor `mail_send`, which may have changed.
+        if not self.tickets.exclude(status=Ticket.CANCELED).exists():
+            self.status = Reservation.CANCELED
+            self.save(update_fields=["status"])
 
         return self.cancel_text() if refund else _("Ticket cancelled.")
 

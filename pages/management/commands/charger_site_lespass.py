@@ -1,15 +1,15 @@
 """
 Construit une LANDING PAGE UNIQUE de démonstration pour le tenant `lespass` via le
-moteur pages (skin classic). Une seule page (l'accueil) qui enchaîne les 7 types
+moteur pages (skin V2). Une seule page (l'accueil) qui enchaîne les 7 types
 de blocs et leurs affichages dans un flow cohérent — une grande page vitrine.
 / Builds a SINGLE demo LANDING PAGE for the `lespass` tenant via the pages engine
-(classic skin). One page (the home) chaining the 7 block types and their displays.
+(V2 skin). One page (the home) chaining the 7 block types and their displays.
 
 LOCALISATION : pages/management/commands/charger_site_lespass.py
 
 Branché dans les fixtures : appelé par Administration/management/commands/demo_data_v2.py
 après le seed du tenant lespass (config + events). Peut aussi être lancé seul :
-    python manage.py charger_site_lespass               # tenant "lespass", skin classic
+    python manage.py charger_site_lespass               # tenant "lespass", skin V2
     python manage.py charger_site_lespass --schema=x
     python manage.py charger_site_lespass --no-skin     # ne force pas le skin
 
@@ -38,7 +38,7 @@ ANCIENNES_PAGES = ["le-lieu", "programmation", "adhesion", "infos-pratiques"]
 
 
 class Command(BaseCommand):
-    help = "Construit une landing page unique de démo pour lespass (tous les blocs, skin classic)."
+    help = "Construit une landing page unique de démo pour lespass (tous les blocs, skin V2)."
 
     def add_arguments(self, parser):
         parser.add_argument("--schema", default="lespass")
@@ -46,7 +46,7 @@ class Command(BaseCommand):
             "--no-skin",
             action="store_false",
             dest="skin",
-            help="Ne pas forcer le skin classic (laisse le skin actuel).",
+            help="Ne pas forcer le skin V2 (laisse le skin actuel).",
         )
 
     def handle(self, *args, **options):
@@ -82,9 +82,9 @@ class Command(BaseCommand):
         from pages.models import ConfigurationSite
 
         config = ConfigurationSite.get_solo()
-        config.skin = "reunion"  # = gabarits classic
+        config.skin = "V2"
         config.save()
-        self.stdout.write("  → skin forcé à 'reunion' (classic).")
+        self.stdout.write("  → skin forcé à 'V2'.")
 
     def _autoriser_hote_embed(self, hote):
         """

@@ -1,260 +1,349 @@
 """
-Tests pytest : remboursement Stripe d'une réservation payée (mock).
-/ Pytest tests: Stripe refund of a paid reservation (mocked).
+Tests pytest : remboursements d'une réservation (Stripe mocké) et avoirs hors Stripe.
+/ Pytest tests: reservation refunds (mocked Stripe) and non-Stripe credit notes.
 
-Couvre le chemin Reservation.cancel_and_refund_resa() qui n'était testé nulle
-part : appel réel de stripe.Refund.create, passage du paiement en REFUNDED,
-création d'une ligne d'avoir négative REFUNDED, annulation de la réservation et
-des billets.
-/ Covers Reservation.cancel_and_refund_resa(), previously untested: real
-stripe.Refund.create call, payment moved to REFUNDED, negative REFUNDED credit
-line created, reservation and tickets cancelled.
+Deux façons de vendre, testées avec les mêmes scénarios :
+- SANS panier : réservation directe (API v2), le paiement pointe vers la réservation ;
+- AVEC panier : CommandeService.materialiser(), le paiement est porté par la Commande.
+/ Two ways to sell, same scenarios: WITHOUT cart (API v2, payment points to the
+reservation) and WITH cart (materialiser(), payment held by the Commande).
 
-Stripe est mocké : Session.retrieve via la fixture mock_stripe, Refund.create
-patché dans le test.
-/ Stripe is mocked: Session.retrieve via the mock_stripe fixture, Refund.create
-patched in the test.
+Scénarios Stripe : 3 billets remboursés un par un, réservation complète, un billet
+puis le reste. Ventes admin en espèces : un avoir par billet annulé, et jamais
+d'avoir sur la vente d'un autre client.
+/ Stripe scenarios: 3 tickets one by one, full reservation, one ticket then the
+rest. Admin cash sales: one credit note per cancelled ticket, never on another
+customer's sale.
+
+Stripe est mocké : Session.retrieve via la fixture mock_stripe, Refund.create patché.
+/ Stripe is mocked: Session.retrieve via the mock_stripe fixture, Refund.create patched.
+
+LOCALISATION : tests/pytest/test_stripe_refund.py
+Code testé / Tested code : BaseBillet/models.py (Reservation.cancel_and_refund_resa,
+cancel_and_refund_ticket, _lignes_hors_stripe), PaiementStripe/utils.py (partial_refund_payment).
+Plan : TECH_DOC/SESSIONS/REMBOURSEMENT/SPEC.md
+Fabriques de ventes / Sale factories : tests/pytest/fabriques_reservation.py
+
+Lancer / Run :
+  KEY=$(docker exec -e TEST=1 lespass_django poetry run python /DjangoFiles/manage.py test_api_key 2>/dev/null | tail -1)
+  docker exec -e API_KEY="$KEY" lespass_django poetry run pytest tests/pytest/test_stripe_refund.py -q
 """
 
-import json
-import random
-import string
-from datetime import datetime, timedelta, timezone
+import re
+from decimal import Decimal
 from unittest.mock import patch, MagicMock
 
 import pytest
 
+from fabriques_reservation import (
+    creer_evenement_et_produit,
+    creer_reservation_api,
+    identifiant_aleatoire,
+    nettoyer_paiement,
+    nettoyer_vente_admin,
+    reservation_payee,
+    vente_admin_especes,
+)
 
-def _random_id():
-    return "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
 
-
-def _create_event_and_paid_product(api_client, auth_headers, rid, price_amount="10.00"):
-    """Crée un événement + un produit billetterie payant via l'API v2.
-    / Creates an event + a paid ticketing product via API v2.
-
-    Retourne (event_uuid, price_uuid).
+class TestRemboursementStripe:
+    """Remboursements Stripe, avec et sans panier.
+    / Stripe refunds, with and without cart.
     """
-    start_date = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
 
-    resp_event = api_client.post(
-        "/api/v2/events/",
-        data=json.dumps({
-            "@context": "https://schema.org",
-            "@type": "Event",
-            "name": f"Refund Event {rid}",
-            "startDate": start_date,
-        }),
-        content_type="application/json",
-        **auth_headers,
-    )
-    assert resp_event.status_code in (200, 201), (
-        f"Création événement échouée ({resp_event.status_code}): {resp_event.content[:300]}"
-    )
-    event_uuid = resp_event.json()["identifier"]
-
-    resp_product = api_client.post(
-        "/api/v2/products/",
-        data=json.dumps({
-            "@context": "https://schema.org",
-            "@type": "Product",
-            "name": f"Billets Refund {rid}",
-            "description": "Test remboursement Stripe",
-            "category": "Ticket booking",
-            "isRelatedTo": {"@type": "Event", "identifier": event_uuid},
-            "offers": [{
-                "@type": "Offer",
-                "name": "Plein tarif",
-                "price": price_amount,
-                "priceCurrency": "EUR",
-            }],
-        }),
-        content_type="application/json",
-        **auth_headers,
-    )
-    assert resp_product.status_code in (200, 201), (
-        f"Création produit échouée ({resp_product.status_code}): {resp_product.content[:300]}"
-    )
-    price_uuid = resp_product.json()["offers"][0]["identifier"]
-    return event_uuid, price_uuid
-
-
-def _create_reservation(api_client, auth_headers, event_uuid, price_uuid, email, qty=1):
-    """Crée une réservation payante via l'API v2.
-    / Creates a paid reservation via API v2.
-    """
-    return api_client.post(
-        "/api/v2/reservations/",
-        data=json.dumps({
-            "@context": "https://schema.org",
-            "@type": "Reservation",
-            "reservationFor": {"@type": "Event", "identifier": event_uuid},
-            "underName": {"@type": "Person", "email": email},
-            "reservedTicket": [{
-                "@type": "Ticket",
-                "identifier": price_uuid,
-                "ticketQuantity": qty,
-            }],
-        }),
-        content_type="application/json",
-        **auth_headers,
-    )
-
-
-class TestStripeRefund:
-    """Remboursement Stripe d'une réservation payée / Stripe refund of a paid reservation."""
-
-    def test_cancel_and_refund_paid_reservation_calls_stripe_refund(
-        self, api_client, auth_headers, mock_stripe, tenant
+    @pytest.mark.parametrize("parcours", ["sans_panier", "avec_panier"])
+    def test_trois_billets_rembourses_un_par_un(
+        self, parcours, api_client, auth_headers, mock_stripe, tenant
     ):
-        """Annuler une réservation payée déclenche un vrai remboursement Stripe.
-        / Cancelling a paid reservation triggers a real Stripe refund.
+        """3 billets remboursés un par un : 3 remboursements Stripe d'un billet.
+        / 3 tickets refunded one by one: 3 one-ticket Stripe refunds.
 
-        Flux :
-        1. Créer un événement + produit payant + réservation (Stripe mocké).
-        2. Forcer l'état "payé" : paiement VALID, lignes VALID.
-        3. Appeler cancel_and_refund_resa() avec Refund.create patché.
-        4. Vérifier : Refund.create appelé (bon montant/payment_intent), paiement
-           REFUNDED, ligne d'avoir négative REFUNDED, réservation + billets annulés.
+        Après chaque billet : le paiement passe H, H puis R, et total_paid() baisse
+        de 10 €. Au dernier billet, la réservation est annulée.
+        / After each ticket: payment goes H, H then R, total_paid() drops by 10 €.
+        At the last ticket, the reservation is cancelled.
         """
         from django_tenants.utils import tenant_context
-        from BaseBillet.models import (
-            Reservation, Paiement_stripe, LigneArticle, Ticket,
+        from BaseBillet.models import Reservation, Paiement_stripe, LigneArticle, Ticket
+
+        event_uuid, price_uuid = creer_evenement_et_produit(api_client, auth_headers, identifiant_aleatoire())
+        reservation, paiement, prix_un_billet = reservation_payee(
+            parcours, api_client, auth_headers, tenant, mock_stripe, event_uuid, price_uuid, qty=3,
         )
 
-        rid = _random_id()
-        email = f"test+refund{rid}@mock.test"
+        try:
+            with tenant_context(tenant):
+                billets = list(reservation.tickets.order_by("pk"))
+                statut_paiement_attendu = [
+                    Paiement_stripe.PARTIALLY_REFUNDED,
+                    Paiement_stripe.PARTIALLY_REFUNDED,
+                    Paiement_stripe.REFUNDED,
+                ]
+                total_paye_attendu = [Decimal("20.00"), Decimal("10.00"), Decimal("0.00")]
+                date_de_reservation = reservation.datetime
 
-        # 1. Événement + produit payant + réservation
-        # / Event + paid product + reservation
-        event_uuid, price_uuid = _create_event_and_paid_product(api_client, auth_headers, rid)
-        resp = _create_reservation(api_client, auth_headers, event_uuid, price_uuid, email)
-        assert resp.status_code in (200, 201), (
-            f"Réservation échouée ({resp.status_code}): {resp.content[:300]}"
-        )
-        assert mock_stripe.mock_create.called, "Stripe Session.create devrait être appelé"
+                with patch(
+                    "stripe.Refund.create",
+                    return_value=MagicMock(status="succeeded"),
+                ) as mock_refund:
+                    for numero, billet in enumerate(billets):
+                        reservation.cancel_and_refund_ticket(billet)
 
-        with tenant_context(tenant):
-            reservation = Reservation.objects.filter(
-                user_commande__email=email,
-            ).order_by("-datetime").first()
-            assert reservation is not None, f"Réservation introuvable pour {email}"
+                        paiement.refresh_from_db()
+                        assert paiement.status == statut_paiement_attendu[numero], (
+                            f"Billet {numero + 1} : paiement attendu {statut_paiement_attendu[numero]}, "
+                            f"obtenu {paiement.status}"
+                        )
+                        assert reservation.total_paid() == total_paye_attendu[numero], (
+                            f"Billet {numero + 1} : total payé attendu {total_paye_attendu[numero]}, "
+                            f"obtenu {reservation.total_paid()}"
+                        )
 
-            paiement = reservation.paiements.first()
-            assert paiement is not None, "Paiement_stripe introuvable"
-
-            # 2. Forcer l'état "payé" via .update() (pas de signal parasite) :
-            #    paiement VALID + lignes VALID. Les billets sont CREATED (non scannés).
-            # / Force the "paid" state via .update(): payment VALID + lines VALID.
-            Paiement_stripe.objects.filter(pk=paiement.pk).update(
-                status=Paiement_stripe.VALID,
-                payment_intent_id="pi_refund_mock",
-            )
-            LigneArticle.objects.filter(paiement_stripe=paiement).update(
-                status=LigneArticle.VALID,
-            )
-
-            # Montant de CETTE réservation = somme de ses lignes payées.
-            # Aujourd'hui un paiement = une seule réservation, donc ce montant
-            # coïncide avec l'amount_total du checkout.
-            # ⚠️ PANIER (à venir) : cancel_and_refund_resa rembourse amount_total
-            # (le PAIEMENT entier), PAS ce sous-total. Le jour où un paiement
-            # portera plusieurs réservations/adhésions, ce test devra diverger
-            # (et le code devra rembourser le sous-total de la réservation).
-            # / Amount of THIS reservation = sum of its paid lines. Today a payment
-            # holds a single reservation, so it equals the checkout amount_total.
-            # WARNING (baskets): cancel_and_refund_resa refunds amount_total (the
-            # whole payment), not this subtotal.
-            montant_reservation = sum(
-                int(ligne.amount * ligne.qty)
-                for ligne in LigneArticle.objects.filter(
-                    paiement_stripe=paiement, status=LigneArticle.VALID,
+                montants = [appel.kwargs["amount"] for appel in mock_refund.call_args_list]
+                assert montants == [prix_un_billet, prix_un_billet, prix_un_billet], (
+                    f"3 remboursements d'un billet ({prix_un_billet}) attendus, obtenu {montants}"
                 )
-            )
-            assert montant_reservation > 0, "Le montant de la réservation doit être positif."
 
-            mock_stripe.session.payment_intent = "pi_refund_mock"
-            mock_stripe.session.amount_total = montant_reservation
+                # Chaque remboursement est une ligne négative rattachée à la réservation.
+                # / Each refund is a negative line linked to the reservation.
+                remboursements = LigneArticle.objects.filter(
+                    paiement_stripe=paiement, status=LigneArticle.REFUNDED,
+                )
+                assert remboursements.count() == 3
+                assert all(ligne.qty == -1 for ligne in remboursements)
+                assert all(ligne.reservation_id == reservation.pk for ligne in remboursements), (
+                    "Les lignes de remboursement doivent être rattachées à la réservation."
+                )
 
-            lignes_avant = LigneArticle.objects.filter(paiement_stripe=paiement).count()
+                assert all(billet.status == Ticket.CANCELED for billet in reservation.tickets.all())
+                reservation.refresh_from_db()
+                assert reservation.status == Reservation.CANCELED, (
+                    f"Plus aucun billet actif : réservation attendue CANCELED, obtenu {reservation.status}"
+                )
+                # Seul le statut est réécrit : la date de réservation ne bouge pas.
+                # / Only the status is rewritten: the reservation date does not move.
+                assert reservation.datetime == date_de_reservation
+        finally:
+            nettoyer_paiement(tenant, paiement)
 
-            # 3. Annulation + remboursement, avec Refund.create patché.
-            # / Cancellation + refund, with Refund.create patched.
-            with patch(
-                "stripe.Refund.create",
-                return_value=MagicMock(status="succeeded"),
-            ) as mock_refund:
-                reservation.cancel_and_refund_resa()
-
-            # 4. Vérifications / Assertions
-            assert mock_refund.called, "stripe.Refund.create n'a pas été appelé"
-            kwargs = mock_refund.call_args.kwargs
-            assert kwargs.get("payment_intent") == "pi_refund_mock", (
-                f"payment_intent inattendu : {kwargs.get('payment_intent')}"
-            )
-
-            # Aujourd'hui amount_total == montant de la réservation (1 paiement
-            # = 1 réservation). Cette assertion vérifie donc bien le montant
-            # remboursé de LA RÉSERVATION (et non un montant arbitraire).
-            # / Today amount_total == reservation amount: this checks the amount
-            # refunded for THE RESERVATION.
-            assert kwargs.get("amount") == montant_reservation, (
-                f"Le montant remboursé doit être celui de la réservation "
-                f"({montant_reservation}), obtenu : {kwargs.get('amount')}"
-            )
-
-            paiement.refresh_from_db()
-            assert paiement.status == Paiement_stripe.REFUNDED, (
-                f"Paiement attendu REFUNDED, obtenu {paiement.status}"
-            )
-
-            reservation.refresh_from_db()
-            assert reservation.status == Reservation.CANCELED, (
-                f"Réservation attendue CANCELED, obtenu {reservation.status}"
-            )
-
-            # Une ligne d'avoir négative en REFUNDED a été créée.
-            # / A negative REFUNDED credit line was created.
-            lignes_apres = LigneArticle.objects.filter(paiement_stripe=paiement)
-            assert lignes_apres.count() == lignes_avant + 1, (
-                "Une ligne d'avoir aurait dû être créée."
-            )
-            avoirs = lignes_apres.filter(status=LigneArticle.REFUNDED)
-            assert avoirs.exists(), "Aucune ligne REFUNDED créée."
-            assert any(ligne.qty < 0 for ligne in avoirs), (
-                "La ligne d'avoir doit avoir une quantité négative."
-            )
-
-            # Tous les billets sont annulés.
-            # / All tickets are cancelled.
-            assert all(t.status == Ticket.CANCELED for t in reservation.tickets.all()), (
-                "Tous les billets doivent être annulés."
-            )
-
-            # Nettoyage : on retire les lignes comptables créées (vente + avoir)
-            # pour ne pas polluer les calculs de comptabilité (DB dev partagée,
-            # pas de rollback). / Cleanup: remove created accounting lines (sale +
-            # credit note) to avoid polluting accounting tests (shared dev DB).
-            LigneArticle.objects.filter(paiement_stripe=paiement).delete()
-
-    def test_free_reservation_cancel_does_not_call_stripe_refund(
-        self, api_client, auth_headers, mock_stripe, tenant
+    @pytest.mark.parametrize("parcours", ["sans_panier", "avec_panier"])
+    def test_reservation_complete_remboursee_d_un_coup(
+        self, parcours, api_client, auth_headers, mock_stripe, tenant
     ):
-        """Annuler une réservation gratuite ne déclenche aucun remboursement Stripe.
-        / Cancelling a free reservation triggers no Stripe refund.
+        """Réservation de 3 billets annulée d'un coup : un seul remboursement de 3 billets.
+        / 3-ticket reservation cancelled at once: one refund of 3 tickets.
         """
         from django_tenants.utils import tenant_context
-        from BaseBillet.models import Reservation, LigneArticle
+        from BaseBillet.models import Reservation, Paiement_stripe, LigneArticle, Ticket
 
-        rid = _random_id()
+        event_uuid, price_uuid = creer_evenement_et_produit(api_client, auth_headers, identifiant_aleatoire())
+        reservation, paiement, prix_un_billet = reservation_payee(
+            parcours, api_client, auth_headers, tenant, mock_stripe, event_uuid, price_uuid, qty=3,
+        )
+
+        try:
+            with tenant_context(tenant):
+                with patch(
+                    "stripe.Refund.create",
+                    return_value=MagicMock(status="succeeded"),
+                ) as mock_refund:
+                    reservation.cancel_and_refund_resa()
+
+                assert mock_refund.call_count == 1
+                kwargs = mock_refund.call_args.kwargs
+                assert kwargs["amount"] == prix_un_billet * 3, (
+                    f"Remboursement de 3 billets attendu ({prix_un_billet * 3}), obtenu {kwargs['amount']}"
+                )
+                assert kwargs["payment_intent"] == mock_stripe.session.payment_intent
+
+                paiement.refresh_from_db()
+                assert paiement.status == Paiement_stripe.REFUNDED
+
+                remboursement = LigneArticle.objects.get(
+                    paiement_stripe=paiement, status=LigneArticle.REFUNDED,
+                )
+                assert remboursement.qty == -3
+                assert remboursement.reservation_id == reservation.pk, (
+                    "La ligne de remboursement doit être rattachée à la réservation."
+                )
+
+                reservation.refresh_from_db()
+                assert reservation.status == Reservation.CANCELED
+                assert all(billet.status == Ticket.CANCELED for billet in reservation.tickets.all())
+                assert reservation.total_paid() == Decimal("0.00"), (
+                    f"Tout est remboursé : total payé attendu 0, obtenu {reservation.total_paid()}"
+                )
+        finally:
+            nettoyer_paiement(tenant, paiement)
+
+    @pytest.mark.parametrize("parcours", ["sans_panier", "avec_panier"])
+    def test_un_billet_puis_reservation_complete(
+        self, parcours, api_client, auth_headers, mock_stripe, tenant
+    ):
+        """Un billet remboursé, puis la réservation annulée : les 2 restants sont remboursés.
+        / One ticket refunded, then the reservation cancelled: the 2 others are refunded.
+        """
+        from django_tenants.utils import tenant_context
+        from BaseBillet.models import Reservation, Paiement_stripe
+
+        event_uuid, price_uuid = creer_evenement_et_produit(api_client, auth_headers, identifiant_aleatoire())
+        reservation, paiement, prix_un_billet = reservation_payee(
+            parcours, api_client, auth_headers, tenant, mock_stripe, event_uuid, price_uuid, qty=3,
+        )
+
+        try:
+            with tenant_context(tenant):
+                with patch(
+                    "stripe.Refund.create",
+                    return_value=MagicMock(status="succeeded"),
+                ) as mock_refund:
+                    reservation.cancel_and_refund_ticket(reservation.tickets.order_by("pk").first())
+                    reservation.cancel_and_refund_resa()
+
+                montants = [appel.kwargs["amount"] for appel in mock_refund.call_args_list]
+                assert montants == [prix_un_billet, prix_un_billet * 2], (
+                    f"Remboursements attendus : 1 billet, puis les 2 restants. Obtenu {montants}"
+                )
+
+                paiement.refresh_from_db()
+                assert paiement.status == Paiement_stripe.REFUNDED
+                reservation.refresh_from_db()
+                assert reservation.status == Reservation.CANCELED
+                assert reservation.total_paid() == Decimal("0.00")
+        finally:
+            nettoyer_paiement(tenant, paiement)
+
+    @pytest.mark.parametrize("parcours", ["sans_panier", "avec_panier"])
+    def test_annuler_apres_trois_billets_rembourses_ne_rembourse_rien_de_plus(
+        self, parcours, api_client, auth_headers, mock_stripe, tenant
+    ):
+        """Après les 3 billets remboursés, la réservation est annulée : la ré-annuler est refusé.
+        / After the 3 tickets are refunded, the reservation is cancelled: cancelling again is refused.
+        """
+        from django.utils.translation import gettext
+        from django_tenants.utils import tenant_context
+        from BaseBillet.models import LigneArticle
+
+        event_uuid, price_uuid = creer_evenement_et_produit(api_client, auth_headers, identifiant_aleatoire())
+        reservation, paiement, _prix = reservation_payee(
+            parcours, api_client, auth_headers, tenant, mock_stripe, event_uuid, price_uuid, qty=3,
+        )
+
+        try:
+            with tenant_context(tenant):
+                with patch(
+                    "stripe.Refund.create",
+                    return_value=MagicMock(status="succeeded"),
+                ) as mock_refund:
+                    for billet in reservation.tickets.order_by("pk"):
+                        reservation.cancel_and_refund_ticket(billet)
+                    lignes_avant = LigneArticle.objects.filter(paiement_stripe=paiement).count()
+
+                    message_attendu = re.escape(gettext("This reservation has already been canceled."))
+                    with pytest.raises(Exception, match=message_attendu):
+                        reservation.cancel_and_refund_resa()
+
+                assert mock_refund.call_count == 3, "Aucun remboursement Stripe de plus."
+                assert LigneArticle.objects.filter(paiement_stripe=paiement).count() == lignes_avant
+        finally:
+            nettoyer_paiement(tenant, paiement)
+
+    def test_annulation_billet_par_billet_n_ecrit_pas_d_erreur_dans_les_logs(
+        self, api_client, auth_headers, mock_stripe, tenant, caplog
+    ):
+        """Rembourser tous les billets un par un n'écrit aucune fausse erreur dans les logs.
+        / Refunding all tickets one by one writes no false error in the logs.
+
+        Transitions couvertes : paiement VALID → PARTIALLY_REFUNDED → REFUNDED, et
+        réservation PAID → CANCELED (payée, mail pas encore envoyé).
+        / Covered transitions: payment VALID → H → R, reservation PAID → CANCELED.
+        """
+        from django_tenants.utils import tenant_context
+        from BaseBillet.models import Reservation
+
+        event_uuid, price_uuid = creer_evenement_et_produit(api_client, auth_headers, identifiant_aleatoire())
+        reservation, paiement, _prix = reservation_payee(
+            "sans_panier", api_client, auth_headers, tenant, mock_stripe, event_uuid, price_uuid, qty=2,
+        )
+
+        try:
+            with tenant_context(tenant):
+                Reservation.objects.filter(pk=reservation.pk).update(status=Reservation.PAID)
+                reservation.refresh_from_db()
+
+                with patch("stripe.Refund.create", return_value=MagicMock(status="succeeded")):
+                    for billet in reservation.tickets.order_by("pk"):
+                        reservation.cancel_and_refund_ticket(billet)
+
+                reservation.refresh_from_db()
+                assert reservation.status == Reservation.CANCELED
+
+            assert "erreur_regression" not in caplog.text, (
+                "Une annulation a déclenché error_regression dans la machine à états."
+            )
+        finally:
+            nettoyer_paiement(tenant, paiement)
+
+    @pytest.mark.parametrize("annulation", ["billet", "reservation"])
+    def test_annuler_sans_paiement_remboursable_leve_une_erreur_et_n_annule_rien(
+        self, annulation, api_client, auth_headers, mock_stripe, tenant
+    ):
+        """Réservation payée dont le paiement n'est plus remboursable : erreur, rien n'est annulé.
+        / Paid reservation whose payment is no longer refundable: error, nothing is cancelled.
+        """
+        from django.utils.translation import gettext
+        from django_tenants.utils import tenant_context
+        from BaseBillet.models import Paiement_stripe, Reservation, Ticket
+
+        event_uuid, price_uuid = creer_evenement_et_produit(api_client, auth_headers, identifiant_aleatoire())
+        reservation, paiement, _prix = reservation_payee(
+            "sans_panier", api_client, auth_headers, tenant, mock_stripe, event_uuid, price_uuid, qty=2,
+        )
+
+        try:
+            with tenant_context(tenant):
+                # Un statut que les filtres de remboursement ne retiennent pas.
+                # / A status the refund filters do not keep.
+                Paiement_stripe.objects.filter(pk=paiement.pk).update(status=Paiement_stripe.CANCELED)
+
+                message_attendu = re.escape(gettext("Aucun paiement remboursable n'a été trouvé. Rien n'a été annulé."))
+                with patch("stripe.Refund.create") as mock_refund:
+                    with pytest.raises(Exception, match=message_attendu):
+                        if annulation == "billet":
+                            reservation.cancel_and_refund_ticket(reservation.tickets.order_by("pk").first())
+                        else:
+                            reservation.cancel_and_refund_resa()
+
+                assert not mock_refund.called
+                assert not reservation.tickets.filter(status=Ticket.CANCELED).exists(), (
+                    "Aucun billet ne doit être annulé sans remboursement."
+                )
+                reservation.refresh_from_db()
+                assert reservation.status == Reservation.VALID
+        finally:
+            nettoyer_paiement(tenant, paiement)
+
+    def test_annuler_une_reservation_gratuite_n_appelle_pas_stripe(
+        self, api_client, auth_headers, mock_stripe, tenant
+    ):
+        """Annuler une réservation gratuite n'appelle jamais Stripe.
+        / Cancelling a free reservation never calls Stripe.
+
+        Une réservation gratuite (« Free booking ») n'a aucune ligne payée : l'API v2 ne crée
+        qu'une ligne FREERES à 0 €.
+        / A free reservation ("Free booking") has no paid line: API v2 only creates a
+        FREERES line at 0 €.
+        """
+        from django_tenants.utils import tenant_context
+        from BaseBillet.models import LigneArticle, Reservation
+
+        rid = identifiant_aleatoire()
         email = f"test+refundfree{rid}@mock.test"
 
-        # Produit gratuit (0 €).
-        # / Free product (0 €).
-        event_uuid, price_uuid = _create_event_and_paid_product(
-            api_client, auth_headers, rid, price_amount="0.00",
+        event_uuid, price_uuid = creer_evenement_et_produit(
+            api_client, auth_headers, rid, price_amount="0.00", category="Free booking",
         )
-        resp = _create_reservation(api_client, auth_headers, event_uuid, price_uuid, email)
+        resp = creer_reservation_api(api_client, auth_headers, event_uuid, price_uuid, email)
         assert resp.status_code in (200, 201)
 
         with tenant_context(tenant):
@@ -263,127 +352,276 @@ class TestStripeRefund:
             ).order_by("-datetime").first()
             assert reservation is not None
 
-            with patch("stripe.Refund.create") as mock_refund:
-                reservation.cancel_and_refund_resa()
+            try:
+                assert not mock_stripe.mock_create.called, "Le parcours gratuit ne doit ouvrir aucun paiement Stripe."
+                assert not LigneArticle.objects.filter(
+                    reservation=reservation, status__in=[LigneArticle.VALID, LigneArticle.PAID],
+                ).exists(), "Une réservation gratuite ne doit avoir aucune ligne payée."
 
-            # total_paid() == 0 → pas de remboursement Stripe.
-            # / total_paid() == 0 → no Stripe refund.
-            assert not mock_refund.called, (
-                "Aucun remboursement Stripe ne doit être créé pour une réservation gratuite."
-            )
-            reservation.refresh_from_db()
-            assert reservation.status == Reservation.CANCELED
+                with patch("stripe.Refund.create") as mock_refund:
+                    reservation.cancel_and_refund_resa()
 
-            # Nettoyage des lignes (l'annulation gratuite crée un avoir
-            # CREDIT_NOTE) pour ne pas polluer la comptabilité.
-            # / Cleanup lines (free cancel creates a CREDIT_NOTE) to avoid
-            # polluting accounting.
-            LigneArticle.objects.filter(reservation=reservation).delete()
+                assert not mock_refund.called, "Aucun remboursement Stripe pour une réservation gratuite."
+                reservation.refresh_from_db()
+                assert reservation.status == Reservation.CANCELED
+            finally:
+                LigneArticle.objects.filter(reservation=reservation).delete()
 
-    def test_partial_refund_one_ticket_out_of_four(
+
+class TestAvoirsHorsStripe:
+    """Ventes admin (espèces, chèque…) : avoirs à l'annulation.
+    / Admin sales (cash, check…): credit notes on cancellation.
+    """
+
+    def test_annuler_une_reservation_stripe_ne_touche_pas_la_vente_especes_d_un_autre_client(
         self, api_client, auth_headers, mock_stripe, tenant
     ):
-        """Rembourser 1 billet sur 4 ne rembourse que le prix d'UN billet.
-        / Refunding 1 of 4 tickets only refunds one ticket's price.
-
-        Vérifie le remboursement PARTIEL (cancel_and_refund_ticket) : le montant
-        remboursé est celui d'un seul billet, pas du paiement entier ; un avoir
-        qty=-1 est créé ; seul le billet visé est annulé ; le paiement reste VALID.
-        / Checks the PARTIAL refund: one ticket's price (not the whole payment),
-        a qty=-1 credit line, only the targeted ticket cancelled, payment stays VALID.
+        """Annuler une réservation Stripe ne crée aucun avoir sur la vente espèces d'un autre client.
+        / Cancelling a Stripe reservation creates no credit note on another customer's cash sale.
         """
         from django_tenants.utils import tenant_context
-        from BaseBillet.models import (
-            Reservation, Paiement_stripe, LigneArticle, Ticket,
+        from BaseBillet.models import LigneArticle, Reservation
+
+        event_uuid, price_uuid = creer_evenement_et_produit(api_client, auth_headers, identifiant_aleatoire())
+        reservation_stripe, paiement, _prix = reservation_payee(
+            "sans_panier", api_client, auth_headers, tenant, mock_stripe, event_uuid, price_uuid, qty=1,
+        )
+        reservation_admin, ligne_admin = vente_admin_especes(tenant, event_uuid, price_uuid, qty=1)
+
+        try:
+            with tenant_context(tenant):
+                # Précondition : les deux ventes partagent le même tarif vendu.
+                # / Precondition: both sales share the same sold price.
+                assert reservation_stripe.tickets.get().pricesold_id == ligne_admin.pricesold_id
+
+                with patch("stripe.Refund.create", return_value=MagicMock(status="succeeded")):
+                    reservation_stripe.cancel_and_refund_resa()
+
+                avoirs = LigneArticle.objects.filter(credit_note_for=ligne_admin)
+                assert avoirs.count() == 0, (
+                    "Annuler la réservation Stripe a créé un avoir sur la vente espèces d'un autre client."
+                )
+                reservation_admin.refresh_from_db()
+                assert reservation_admin.status == Reservation.VALID
+        finally:
+            nettoyer_vente_admin(tenant, ligne_admin)
+            nettoyer_paiement(tenant, paiement)
+
+    def test_annuler_un_billet_stripe_ne_touche_pas_la_vente_especes_d_un_autre_client(
+        self, api_client, auth_headers, mock_stripe, tenant
+    ):
+        """Annuler UN billet Stripe : aucun avoir chez un autre client, et le message de remboursement.
+        / Cancelling ONE Stripe ticket: no credit note for another customer, and the refund message.
+        """
+        from django_tenants.utils import tenant_context
+        from BaseBillet.models import LigneArticle
+
+        event_uuid, price_uuid = creer_evenement_et_produit(api_client, auth_headers, identifiant_aleatoire())
+        reservation_stripe, paiement, _prix = reservation_payee(
+            "sans_panier", api_client, auth_headers, tenant, mock_stripe, event_uuid, price_uuid, qty=2,
+        )
+        _reservation_admin, ligne_admin = vente_admin_especes(tenant, event_uuid, price_uuid, qty=1)
+
+        try:
+            with tenant_context(tenant):
+                with patch("stripe.Refund.create", return_value=MagicMock(status="succeeded")):
+                    message = reservation_stripe.cancel_and_refund_ticket(
+                        reservation_stripe.tickets.order_by("pk").first()
+                    )
+
+                avoirs = LigneArticle.objects.filter(credit_note_for=ligne_admin)
+                assert avoirs.count() == 0, (
+                    "Annuler un billet Stripe a créé un avoir sur la vente espèces d'un autre client."
+                )
+                # Remboursé par Stripe : le message est celui du remboursement.
+                # / Refunded by Stripe: the message is the refund one.
+                assert str(message) == str(reservation_stripe.cancel_text()), (
+                    f"Message de remboursement attendu, obtenu {message!r}"
+                )
+        finally:
+            nettoyer_vente_admin(tenant, ligne_admin)
+            nettoyer_paiement(tenant, paiement)
+
+    def test_annuler_une_reservation_admin_especes_cree_son_avoir(
+        self, api_client, auth_headers, tenant
+    ):
+        """Réservation admin de 3 billets en espèces annulée : un avoir de 3 billets, total payé à 0.
+        / 3-ticket admin cash reservation cancelled: one 3-ticket credit note, total paid at 0.
+        """
+        from django_tenants.utils import tenant_context
+        from BaseBillet.models import LigneArticle, Reservation
+
+        event_uuid, price_uuid = creer_evenement_et_produit(api_client, auth_headers, identifiant_aleatoire())
+        reservation_admin, ligne_admin = vente_admin_especes(tenant, event_uuid, price_uuid, qty=3)
+
+        try:
+            with tenant_context(tenant):
+                assert reservation_admin.total_paid() == Decimal("30.00")
+
+                reservation_admin.cancel_and_refund_resa()
+
+                avoir = LigneArticle.objects.get(credit_note_for=ligne_admin)
+                assert avoir.status == LigneArticle.CREDIT_NOTE
+                assert avoir.qty == -3
+                assert avoir.reservation_id == reservation_admin.pk, (
+                    "L'avoir doit être rattaché à la réservation."
+                )
+                reservation_admin.refresh_from_db()
+                assert reservation_admin.status == Reservation.CANCELED
+                assert reservation_admin.total_paid() == Decimal("0.00"), (
+                    f"Avoir compté : total payé attendu 0, obtenu {reservation_admin.total_paid()}"
+                )
+
+                # La fiche utilisateur de l'admin recalcule le montant payé à sa façon.
+                # / The admin user page computes the paid amount its own way.
+                from Administration.admin_tenant import _lignes_payees_prefetch
+                montant_admin = sum(
+                    int(ligne.amount * ligne.qty) for ligne in _lignes_payees_prefetch(reservation_admin)
+                )
+                assert montant_admin == 0, f"Montant payé côté admin attendu 0, obtenu {montant_admin}"
+        finally:
+            nettoyer_vente_admin(tenant, ligne_admin)
+
+    def test_trois_billets_admin_annules_un_par_un_creent_trois_avoirs_d_un_billet(
+        self, api_client, auth_headers, tenant
+    ):
+        """3 billets admin en espèces annulés un par un : 3 avoirs d'un billet.
+        / 3 admin cash tickets cancelled one by one: 3 one-ticket credit notes.
+        """
+        from django_tenants.utils import tenant_context
+        from BaseBillet.models import LigneArticle, Reservation
+
+        event_uuid, price_uuid = creer_evenement_et_produit(api_client, auth_headers, identifiant_aleatoire())
+        reservation_admin, ligne_admin = vente_admin_especes(tenant, event_uuid, price_uuid, qty=3)
+
+        try:
+            with tenant_context(tenant):
+                total_paye_attendu = [Decimal("20.00"), Decimal("10.00"), Decimal("0.00")]
+                for numero, billet in enumerate(reservation_admin.tickets.order_by("pk")):
+                    reservation_admin.cancel_and_refund_ticket(billet)
+
+                    avoirs = LigneArticle.objects.filter(credit_note_for=ligne_admin)
+                    assert [avoir.qty for avoir in avoirs] == [-1] * (numero + 1), (
+                        f"Billet {numero + 1} : un avoir de -1 par billet attendu, "
+                        f"obtenu {[avoir.qty for avoir in avoirs]}"
+                    )
+                    assert reservation_admin.total_paid() == total_paye_attendu[numero], (
+                        f"Billet {numero + 1} : total payé attendu {total_paye_attendu[numero]}, "
+                        f"obtenu {reservation_admin.total_paid()}"
+                    )
+
+                reservation_admin.refresh_from_db()
+                assert reservation_admin.status == Reservation.CANCELED
+                # Une ligne entièrement créditée n'est plus proposée.
+                # / A fully credited line is no longer offered.
+                assert reservation_admin._lignes_hors_stripe() == []
+        finally:
+            nettoyer_vente_admin(tenant, ligne_admin)
+
+    def test_un_billet_admin_puis_reservation_complete_cree_un_avoir_pour_le_reste(
+        self, api_client, auth_headers, tenant
+    ):
+        """3 billets admin en espèces : un billet annulé, puis la réservation. Avoirs de -1, puis -2.
+        / 3 admin cash tickets: one cancelled, then the reservation. Credit notes of -1, then -2.
+        """
+        from django_tenants.utils import tenant_context
+        from BaseBillet.models import LigneArticle
+
+        event_uuid, price_uuid = creer_evenement_et_produit(api_client, auth_headers, identifiant_aleatoire())
+        reservation_admin, ligne_admin = vente_admin_especes(tenant, event_uuid, price_uuid, qty=3)
+
+        try:
+            with tenant_context(tenant):
+                reservation_admin.cancel_and_refund_ticket(reservation_admin.tickets.order_by("pk").first())
+                reservation_admin.cancel_and_refund_resa()
+
+                quantites_des_avoirs = sorted(
+                    avoir.qty for avoir in LigneArticle.objects.filter(credit_note_for=ligne_admin)
+                )
+                assert quantites_des_avoirs == [-2, -1], (
+                    f"Avoirs attendus : -1 (le billet), puis -2 (le reste). Obtenu {quantites_des_avoirs}"
+                )
+                assert reservation_admin.total_paid() == Decimal("0.00")
+        finally:
+            nettoyer_vente_admin(tenant, ligne_admin)
+
+    def test_annuler_une_reservation_gratuite_ne_touche_pas_la_vente_admin_du_meme_tarif(
+        self, api_client, auth_headers, mock_stripe, tenant
+    ):
+        """Une réservation gratuite n'a aucune ligne : l'annuler ne touche pas la vente admin du même tarif.
+        / A free reservation has no line: cancelling it does not touch the admin sale of the same price.
+        """
+        from django_tenants.utils import tenant_context
+        from BaseBillet.models import LigneArticle, Reservation
+
+        rid = identifiant_aleatoire()
+        email = f"test+gratuit{rid}@mock.test"
+        event_uuid, price_uuid = creer_evenement_et_produit(
+            api_client, auth_headers, rid, price_amount="0.00", category="Free booking",
+        )
+        resp = creer_reservation_api(api_client, auth_headers, event_uuid, price_uuid, email)
+        assert resp.status_code in (200, 201)
+        assert not mock_stripe.mock_create.called, "Le parcours gratuit ne doit ouvrir aucun paiement Stripe."
+        # L'admin offre le même tarif gratuit à un autre client.
+        # / The admin offers the same free price to another customer.
+        _reservation_admin, ligne_admin = vente_admin_especes(
+            tenant, event_uuid, price_uuid, qty=1, offert=True,
         )
 
-        rid = _random_id()
-        email = f"test+partial{rid}@mock.test"
+        try:
+            with tenant_context(tenant):
+                reservation_gratuite = Reservation.objects.filter(
+                    user_commande__email=email,
+                ).order_by("-datetime").first()
+                assert reservation_gratuite.tickets.get().pricesold_id == ligne_admin.pricesold_id
 
-        event_uuid, price_uuid = _create_event_and_paid_product(
-            api_client, auth_headers, rid, price_amount="10.00",
-        )
-        resp = _create_reservation(api_client, auth_headers, event_uuid, price_uuid, email, qty=4)
-        assert resp.status_code in (200, 201), (
-            f"Réservation échouée ({resp.status_code}): {resp.content[:300]}"
+                reservation_gratuite.cancel_and_refund_resa()
+
+                assert LigneArticle.objects.filter(credit_note_for=ligne_admin).count() == 0, (
+                    "Annuler la réservation gratuite a créé un avoir sur la vente admin."
+                )
+        finally:
+            nettoyer_vente_admin(tenant, ligne_admin)
+            with tenant_context(tenant):
+                LigneArticle.objects.filter(reservation__user_commande__email=email).delete()
+
+    def test_lignes_hors_stripe_ne_renvoie_que_les_lignes_de_la_reservation(
+        self, api_client, auth_headers, mock_stripe, tenant
+    ):
+        """_lignes_hors_stripe() ne renvoie que les lignes rattachées à la réservation.
+        / _lignes_hors_stripe() only returns the lines linked to the reservation.
+
+        Ni la vente d'un autre client, ni une ancienne ligne sans réservation.
+        / Neither another customer's sale, nor an old line without reservation.
+        """
+        from django_tenants.utils import tenant_context
+        from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin
+
+        event_uuid, price_uuid = creer_evenement_et_produit(api_client, auth_headers, identifiant_aleatoire())
+        reservation_admin, ligne_admin = vente_admin_especes(tenant, event_uuid, price_uuid, qty=2)
+        _autre_reservation, ligne_autre_client = vente_admin_especes(tenant, event_uuid, price_uuid, qty=1)
+        reservation_stripe, paiement, _prix = reservation_payee(
+            "sans_panier", api_client, auth_headers, tenant, mock_stripe, event_uuid, price_uuid, qty=1,
         )
 
         with tenant_context(tenant):
-            reservation = Reservation.objects.filter(
-                user_commande__email=email,
-            ).order_by("-datetime").first()
-            assert reservation is not None
-            assert reservation.tickets.count() == 4, (
-                f"4 billets attendus, obtenu {reservation.tickets.count()}"
+            ancienne_ligne_sans_reservation = LigneArticle.objects.create(
+                pricesold=ligne_admin.pricesold, qty=1, amount=1000,
+                payment_method=PaymentMethod.CASH, status=LigneArticle.VALID,
+                sale_origin=SaleOrigin.ADMIN,
             )
 
-            paiement = reservation.paiements.first()
-            assert paiement is not None
-
-            # Forcer l'état "payé".
-            # / Force the "paid" state.
-            Paiement_stripe.objects.filter(pk=paiement.pk).update(
-                status=Paiement_stripe.VALID,
-                payment_intent_id="pi_partial_mock",
-            )
-            LigneArticle.objects.filter(paiement_stripe=paiement).update(
-                status=LigneArticle.VALID,
-            )
-
-            ligne = LigneArticle.objects.filter(
-                paiement_stripe=paiement, status=LigneArticle.VALID,
-            ).first()
-            prix_un_billet = ligne.amount  # montant unitaire (cancel_and_refund_ticket: ligne.amount * 1)
-
-            # amount_total = le PAIEMENT entier (4 billets) — ne doit PAS être remboursé.
-            # / amount_total = the whole payment (4 tickets) — must NOT be refunded.
-            mock_stripe.session.payment_intent = "pi_partial_mock"
-            mock_stripe.session.amount_total = int(prix_un_billet * 4)
-
-            ticket_a_rembourser = reservation.tickets.first()
-
-            with patch(
-                "stripe.Refund.create",
-                return_value=MagicMock(status="succeeded"),
-            ) as mock_refund:
-                reservation.cancel_and_refund_ticket(ticket_a_rembourser)
-
-            # Le remboursement porte sur UN billet, pas sur le paiement entier.
-            # / Refund is for ONE ticket, not the whole payment.
-            assert mock_refund.called, "stripe.Refund.create n'a pas été appelé"
-            kwargs = mock_refund.call_args.kwargs
-            assert kwargs.get("amount") == prix_un_billet, (
-                f"Refund partiel attendu {prix_un_billet} (1 billet), obtenu {kwargs.get('amount')}"
-            )
-            assert kwargs.get("amount") != int(prix_un_billet * 4), (
-                "Le remboursement ne doit pas porter sur tout le panier."
-            )
-
-            # Seul le billet visé est annulé ; les 3 autres restent.
-            # / Only the targeted ticket is cancelled; the other 3 remain.
-            ticket_a_rembourser.refresh_from_db()
-            assert ticket_a_rembourser.status == Ticket.CANCELED
-            autres = reservation.tickets.exclude(pk=ticket_a_rembourser.pk)
-            assert autres.count() == 3
-            assert all(t.status != Ticket.CANCELED for t in autres), (
-                "Les 3 autres billets ne doivent pas être annulés."
-            )
-
-            # Un avoir d'un billet (qty=-1) est créé.
-            # / A one-ticket credit line (qty=-1) is created.
-            avoir = LigneArticle.objects.filter(
-                paiement_stripe=paiement, status=LigneArticle.REFUNDED, qty=-1,
-            )
-            assert avoir.exists(), "Un avoir d'un billet (qty=-1) doit être créé."
-
-            # Le paiement reste VALID : remboursement partiel, pas annulation totale.
-            # / Payment stays VALID: partial refund, not a full cancellation.
-            paiement.refresh_from_db()
-            assert paiement.status == Paiement_stripe.VALID, (
-                f"Le paiement ne doit PAS passer REFUNDED sur un remboursement partiel "
-                f"(obtenu {paiement.status})."
-            )
-
-            # Nettoyage des lignes comptables créées (cf. test ci-dessus).
-            # / Cleanup created accounting lines (see test above).
-            LigneArticle.objects.filter(paiement_stripe=paiement).delete()
+        try:
+            with tenant_context(tenant):
+                assert list(reservation_admin._lignes_hors_stripe()) == [ligne_admin]
+                assert list(reservation_admin._lignes_hors_stripe(
+                    pricesold_ids=[ligne_admin.pricesold_id],
+                )) == [ligne_admin]
+                assert list(reservation_stripe._lignes_hors_stripe()) == [], (
+                    "Une réservation Stripe n'a aucune ligne hors Stripe à elle."
+                )
+        finally:
+            nettoyer_vente_admin(tenant, ancienne_ligne_sans_reservation)
+            nettoyer_vente_admin(tenant, ligne_autre_client)
+            nettoyer_vente_admin(tenant, ligne_admin)
+            nettoyer_paiement(tenant, paiement)

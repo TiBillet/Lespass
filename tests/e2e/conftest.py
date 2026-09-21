@@ -1284,7 +1284,7 @@ def soumettre_paiement_stripe():
 
 
 # ---------------------------------------------------------------------------
-# Tests qui exigent `stripe listen`
+# Tests qui exigent `stripe listen` (Stripe reel)
 # ---------------------------------------------------------------------------
 #
 # Certains parcours ne s'achevent que lorsque Stripe rappelle le webhook de
@@ -1293,76 +1293,28 @@ def soumettre_paiement_stripe():
 # echoue au bout de son delai d'attente, pour une raison qui n'a rien a voir
 # avec le code.
 #
-# On les ignore donc quand le CLI n'est pas la — mais JAMAIS en silence. Un run
-# vert qui cache des tests non joues est pire qu'un run rouge : il donne une
-# confiance qu'on n'a pas.
+# Ils ne tournent donc que sur demande (STRIPE_REEL=1, pose par `make e2e-stripe`,
+# qui verifie aussi que `stripe listen` tourne). Sinon ils sont ignores — mais
+# JAMAIS en silence : le mecanisme est partage avec les tests pytest, dans
+# tests/stripe_reel.py.
 #
 # / Some journeys only complete when Stripe calls the confirmation webhook back.
-# Without `stripe listen` that call never comes, and the test fails on timeout
-# for a reason unrelated to the code. We skip them — but NEVER silently: a green
-# run hiding unplayed tests is worse than a red one.
+# They only run on demand (STRIPE_REEL=1, set by `make e2e-stripe`). Otherwise they
+# are skipped — NEVER silently. The mechanism is shared with pytest (tests/stripe_reel.py).
 
-VARIABLE_STRIPE_LISTEN = 'E2E_STRIPE_LISTEN'
-
-# Renseigne par le hook de skip, relu par le resume de fin de run.
-# / Filled by the skip hook, read back by the end-of-run summary.
-_tests_stripe_ignores = []
-
-
-def _stripe_listen_est_actif():
-    """`stripe listen` tourne-t-il ? / Is `stripe listen` running?
-
-    On ne peut pas le detecter depuis le conteneur : le CLI tourne sur l'hote,
-    et ses processus n'y sont pas visibles. On se fie donc a une variable posee
-    a la main au lancement — d'ou l'importance de signaler bruyamment les tests
-    ignores, puisque l'oubli est facile.
-    / It cannot be detected from inside the container: the CLI runs on the host.
-    We rely on a manually set variable, hence the loud reporting.
-    """
-    return os.environ.get(VARIABLE_STRIPE_LISTEN) == '1'
+from tests.stripe_reel import (
+    afficher_les_tests_stripe_reel_non_joues,
+    ignorer_les_tests_stripe_reel_non_demandes,
+)
 
 
 def pytest_collection_modifyitems(config, items):
-    """Ignore les tests marques `stripe_listen` quand le CLI n'est pas lance.
-    / Skips tests marked `stripe_listen` when the CLI is not running."""
-    if _stripe_listen_est_actif():
-        return
-
-    raison = pytest.mark.skip(
-        reason=(
-            f"`stripe listen` non lance ({VARIABLE_STRIPE_LISTEN}!=1) — "
-            "le webhook de confirmation n'arriverait jamais."
-        ),
-    )
-    for item in items:
-        if item.get_closest_marker('stripe_listen'):
-            _tests_stripe_ignores.append(item.nodeid)
-            item.add_marker(raison)
+    """Ignore les tests marques `stripe_listen` sans STRIPE_REEL=1.
+    / Skips tests marked `stripe_listen` without STRIPE_REEL=1."""
+    ignorer_les_tests_stripe_reel_non_demandes(items, "stripe_listen")
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus, config):
-    """Affiche en fin de run ce qui n'a PAS ete joue faute de `stripe listen`.
-
-    Sans ce resume, la ligne « 12 passed, 2 skipped » se lit comme un succes
-    complet. Le but est qu'on ne puisse pas conclure « tout est vert » alors
-    qu'un parcours de paiement n'a pas ete verifie.
-    / Without this summary, "12 passed, 2 skipped" reads as full success.
-    """
-    if not _tests_stripe_ignores:
-        return
-
-    terminalreporter.write_sep('=', 'PARCOURS DE PAIEMENT NON VERIFIES', red=True, bold=True)
-    terminalreporter.write_line(
-        f"{len(_tests_stripe_ignores)} test(s) ont ete IGNORES faute de `stripe listen`.",
-        red=True, bold=True,
-    )
-    for identifiant in _tests_stripe_ignores:
-        terminalreporter.write_line(f"  - {identifiant}", red=True)
-    terminalreporter.write_line("")
-    terminalreporter.write_line("Pour les jouer / To run them:", bold=True)
-    terminalreporter.write_line("  1. sur l'hote : stripe listen")
-    terminalreporter.write_line(
-        f"  2. docker exec -e {VARIABLE_STRIPE_LISTEN}=1 lespass_django "
-        "poetry run pytest /DjangoFiles/tests/e2e/ -v",
-    )
-    terminalreporter.write_line("")
+    """Nomme en rouge les parcours de paiement qui n'ont PAS ete joues.
+    / Names in red the payment journeys that were NOT run."""
+    afficher_les_tests_stripe_reel_non_joues(terminalreporter)

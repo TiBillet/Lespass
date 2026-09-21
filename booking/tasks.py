@@ -1,7 +1,8 @@
 import logging
 
-from BaseBillet.models import Configuration
+from BaseBillet.models import Configuration, LigneArticle
 from django.db import connection
+from fedow_connect.utils import dround
 
 from BaseBillet.tasks import CeleryMailerClass
 from django.utils.translation import gettext_lazy as _, activate
@@ -37,12 +38,18 @@ def send_booking_cancellation_user(booking_uuid: str):
     except Exception:
         pass
 
-    # Montant potentiel associé à ce ticket (indicatif)
+    # Montant remboursé = montant de la vente d'origine (lignes payées).
+    # Pas total_paid() : le mail part après l'annulation, il compte déjà le remboursement et vaut 0.
+    # / Refunded amount = original sale amount (paid lines).
+    # Not total_paid(): the mail is sent after cancellation, it already counts the refund and is 0.
     refund_amount = 0
 
     try:
         if booking.can_refund():
-            refund_amount = booking.total_paid()
+            montant_de_la_vente = 0
+            for ligne in booking.lignearticles.filter(status__in=[LigneArticle.PAID, LigneArticle.VALID]):
+                montant_de_la_vente += int(ligne.amount * ligne.qty)
+            refund_amount = dround(montant_de_la_vente)
     except Exception:
         refund_amount = None
 
