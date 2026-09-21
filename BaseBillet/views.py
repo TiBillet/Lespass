@@ -2381,60 +2381,34 @@ def _distance_km_haversine(latitude_a, longitude_a, latitude_b, longitude_b):
     return rayon_de_la_terre_en_km * 2 * asin(sqrt(terme_central))
 
 
-def _enrichir_explorer_data_avec_type_et_distance(explorer_data, config):
+def _enrichir_explorer_data_avec_distance(explorer_data, config):
     """
-    Ajoute le type de lieu et la distance a chaque entree de explorer_data.
-    / Adds venue type and distance to each explorer_data entry.
+    Ajoute la distance a chaque point de explorer_data.
+    / Adds the distance to each explorer_data point.
 
     LOCALISATION : BaseBillet/views.py — appelee par FederationViewset.list
 
-    - tenants[] : + "categorie" (code Client.categorie, ex "S")
-                  + "categorie_label" (label traduit, ex "Scene")
-    - points[]  : + "tenant_categorie" et "tenant_categorie_label" (idem)
-                  + "distance_km" (float arrondi a 0,1 km, ou None si le
+    - points[]  : + "distance_km" (float arrondi a 0,1 km, ou None si le
                     point n'a pas de coordonnees ou si le tenant courant
                     n'a pas d'adresse geocodee)
 
     Seule la page Reseau appelle cette fonction. Le JS de l'explorer ne rend
-    le badge de type et la distance QUE si ces cles existent : la page
-    publique /explorer/ n'est pas impactee.
-    / Only the Network page calls this. The explorer JS renders the type badge
-    and the distance ONLY when these keys exist: /explorer/ is unaffected.
+    la distance QUE si la cle existe : la page publique /explorer/ n'est pas
+    impactee.
+    / Only the Network page calls this. The explorer JS renders the distance
+    ONLY when the key exists: /explorer/ is unaffected.
+
+    Le type de lieu (Client.categorie) n'est plus enrichi : ni le filtre ni le
+    badge de type n'existent plus cote front. Tous les lieux sont de meme
+    nature, seul le tenant racine "public" differe et il n'apparait pas dans
+    l'explorer. La requete sur Client a donc ete supprimee avec eux.
+    / Venue type is no longer enriched: neither the filter nor the type badge
+    exist in the front end anymore, so the Client query went away with them.
 
     :param explorer_data: dict {"points": [...], "tenants": [...]}
     :param config: Configuration du tenant courant (adresse = origine des distances)
     :return: le meme dict, enrichi en place
     """
-    # Tous les UUIDs de tenants visibles (cartes + marqueurs)
-    # / All visible tenant UUIDs (cards + markers)
-    uuids_des_tenants_visibles = {t.get("tenant_id") for t in explorer_data.get("tenants", [])}
-    uuids_des_tenants_visibles |= {p.get("tenant_id") for p in explorer_data.get("points", [])}
-    uuids_des_tenants_visibles.discard(None)
-
-    # Garde : les donnees de cache peuvent contenir des identifiants qui ne
-    # sont pas des UUID valides (donnees corrompues, tests). Un UUIDField
-    # leverait une ValidationError a la requete : on ecarte ces valeurs.
-    # / Guard: cached data may contain non-UUID identifiers (corrupted data,
-    # tests). An UUIDField would raise ValidationError: filter them out.
-    import uuid as uuid_module
-    uuids_valides = []
-    for valeur in uuids_des_tenants_visibles:
-        try:
-            uuids_valides.append(uuid_module.UUID(str(valeur)))
-        except (ValueError, TypeError, AttributeError):
-            continue
-
-    # 1 seule requete. Client est en SHARED_APPS : la table vit dans le
-    # schema public, accessible depuis n'importe quel tenant.
-    # / A single query. Client is in SHARED_APPS: the table lives in the
-    # public schema, reachable from any tenant.
-    categories_par_uuid = {}
-    for client_du_reseau in Client.objects.filter(uuid__in=uuids_valides):
-        categories_par_uuid[str(client_du_reseau.uuid)] = (
-            client_du_reseau.categorie,
-            client_du_reseau.get_categorie_display(),
-        )
-
     # Origine des distances : l'adresse principale du tenant courant.
     # Si elle n'a pas de coordonnees GPS, aucune distance n'est calculee.
     # / Distance origin: the current tenant's main address. Without GPS
@@ -2445,10 +2419,6 @@ def _enrichir_explorer_data_avec_type_et_distance(explorer_data, config):
     origine_est_geocodee = origine_latitude is not None and origine_longitude is not None
 
     for point_data in explorer_data.get("points", []):
-        categorie_du_point = categories_par_uuid.get(point_data.get("tenant_id"))
-        if categorie_du_point:
-            point_data["tenant_categorie"], point_data["tenant_categorie_label"] = categorie_du_point
-
         # La cle "distance_km" n'existe QUE si l'origine est geocodee. Sans
         # origine, la cle est absente : le JS n'affiche alors ni distance ni
         # "sans lieu fixe" (sinon tous les lieux seraient marques "sans lieu
@@ -2571,7 +2541,7 @@ class FederationViewset(viewsets.ViewSet):
         # / Enrichment for the Network page (V2 skin): venue type and
         # straight-line distance. The JS renders them only when present:
         # the public /explorer/ page is unaffected.
-        explorer_data = _enrichir_explorer_data_avec_type_et_distance(explorer_data, config)
+        explorer_data = _enrichir_explorer_data_avec_distance(explorer_data, config)
 
         # Etat vide : a-t-on AUTRE chose que le tenant courant sur la carte ?
         # / Empty state: do we have something OTHER than the current tenant on the map?

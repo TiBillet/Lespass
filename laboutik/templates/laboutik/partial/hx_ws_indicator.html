@@ -61,15 +61,22 @@ COMMUNICATION :
 
     // Vérifie que le script n'a pas déjà été chargé, si "wsPublicInterface" existe, il a déjà été chargé donc on ne fait rien
     if(typeof wsPublicInterface !== 'undefined' && wsPublicInterface!==null){
-        console.log("Web socket already connected")
-        set_connection_indicator_ok()
+        // Le script est re-execute (swap HTMX) alors que la socket est vivante :
+        // on ne re-enregistre pas les listeners, et on redemande un pong pour
+        // reposer le vert sur l'indicateur que le swap vient de remplacer.
+        // / Script re-run while the socket is alive: do not re-register the
+        // listeners, just ask for a fresh pong to repaint the indicator.
+        wsPing()
         return
     }
 
+      // Apres chaque swap HTMX, on rafraichit la mesure de latence et on
+      // repeint l'indicateur, que le swap a pu remplacer dans le DOM.
+      // Le delai laisse le nouveau DOM s'installer avant qu'on cherche
+      // #ws-indicator. / After each HTMX swap, refresh the latency and repaint
+      // the indicator, which the swap may have replaced in the DOM.
       document.addEventListener('htmx:afterSwap', ev => {
-          // Ping marche pas, alors que c'est le afterSwap :/
-          // Correction un peu bancal
-          setTimeout(wsPing,500)
+          setTimeout(wsPing, 500)
       });
 
     // Reference au publicInterface de la WebSocket HTMX
@@ -81,13 +88,17 @@ COMMUNICATION :
     // Quand la connexion WebSocket s'ouvre → icone verte
     // / When WebSocket connection opens → green icon
     document.body.addEventListener("htmx:wsOpen", function (event) {
-        set_connection_indicator_ok()
-
-      // Stocker la reference au publicInterface pour envoyer des pings
-      // / Store the publicInterface reference for sending pings
+      // Stocker la reference au publicInterface AVANT le ping : wsPing() en a
+      // besoin pour envoyer. / Store the publicInterface BEFORE pinging.
       if (event.detail && event.detail.socketWrapper) {
         wsPublicInterface = event.detail.socketWrapper;
       }
+
+      // Une socket ouverte ne prouve pas que le serveur repond : on envoie un
+      // ping, et c'est le pong qui allumera le vert (voir htmx:wsBeforeMessage).
+      // / An open socket does not prove the server answers: we ping, and the
+      // pong is what turns the indicator green.
+      wsPing();
     });
 
     // Quand la connexion WebSocket se ferme → icone rouge
@@ -145,6 +156,12 @@ COMMUNICATION :
       // / Prevent HTMX from processing this message as HTML
       event.preventDefault();
 
+      // Le pong prouve l'aller-retour complet : c'est ici, et nulle part
+      // ailleurs, que l'indicateur passe au vert.
+      // / The pong proves the full round trip: this is the only place where
+      // the indicator turns green.
+      set_connection_indicator_ok();
+
       // Calculer la latence aller-retour
       // / Calculate round-trip latency
       var latence_ms = Date.now() - data.client_ts;
@@ -192,14 +209,21 @@ COMMUNICATION :
       // sendImmediately() envoie sans passer par la queue
       // / Send ping to consumer via the HTMX ws API
       // sendImmediately() sends without going through the queue
+      // client_ts est renvoye tel quel par le consumer : c'est l'horodatage
+      // du depart, dont on soustrait Date.now() a la reception pour obtenir la
+      // latence. Une constante ici donnait un ecart absurde (~1,7e12 ms).
+      // / client_ts is echoed back by the consumer: it is the departure
+      // timestamp, subtracted from Date.now() on arrival to get the latency.
+      // A constant here produced an absurd value (~1.7e12 ms).
       wsPublicInterface.sendImmediately(JSON.stringify({
         type: "ping",
-        client_ts: 1000,
-        {#client_ts: ping_timestamp_envoi,#}
+        client_ts: Date.now(),
       }));
 
-
-      set_connection_indicator_ok()
+      // Pas de passage au vert ici : envoyer un ping ne prouve rien sur la
+      // sante de la liaison. L'indicateur attend le pong.
+      // / No green here: sending a ping proves nothing. The indicator waits
+      // for the pong.
     };
   })();
 </script>

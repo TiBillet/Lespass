@@ -26,6 +26,7 @@ from BaseBillet import signals as basebillet_signals
 from BaseBillet.models import (
     PROXYS_PRODUCT,
     Product,
+    ResourceProduct,
     TicketProduct,
     post_save_Product,
 )
@@ -138,6 +139,46 @@ def test_tarif_gratuit_freeres_auto_cree_via_proxy_ticket():
             assert produit.prices.filter(prix=0).exists(), (
                 "Le tarif gratuit n'a pas ete auto-cree par post_save_Product "
                 "via le proxy TicketProduct"
+            )
+        finally:
+            # Nettoyage TOUJOURS execute (DB de dev partagee, pas de rollback).
+            # / Cleanup ALWAYS runs (shared dev DB, no rollback).
+            produit.prices.all().delete()
+            produit.delete()
+
+
+def test_archiver_une_ressource_la_depublie_via_proxy_resource():
+    """
+    Archiver un produit via le proxy ResourceProduct doit le depublier.
+
+    `unpublish_if_archived` est un pre_save SANS condition de categorie : il
+    s'applique a tous les produits. ResourceProduct est reste hors de
+    PROXYS_PRODUCT pendant trois mois, et pendant ce temps archiver une
+    ressource depuis l'admin la laissait `publish=True`, donc visible en
+    ligne. Le test des connexions ne voit pas ce genre d'oubli en aval : il
+    verifie que le receiver est branche, pas que l'effet metier se produit.
+    / Archiving through the ResourceProduct proxy must unpublish the product.
+    `unpublish_if_archived` is an unconditional pre_save. ResourceProduct was
+    missing from PROXYS_PRODUCT for three months, leaving archived resources
+    published. The connection test cannot catch the downstream effect.
+    """
+    tenant_lespass = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant_lespass):
+        produit = ResourceProduct.objects.create(
+            name=f"TestArchiveResource_{uuid.uuid4().hex[:8]}",
+            categorie_article=Product.RESOURCE,
+            publish=True,
+        )
+        try:
+            produit.archive = True
+            produit.save()
+            produit.refresh_from_db()
+
+            assert produit.publish is False, (
+                "Une ressource archivee est restee publiee : "
+                "unpublish_if_archived n'a pas ete declenche par le proxy "
+                "ResourceProduct (verifier PROXYS_PRODUCT dans "
+                "BaseBillet/models.py)"
             )
         finally:
             # Nettoyage TOUJOURS execute (DB de dev partagee, pas de rollback).

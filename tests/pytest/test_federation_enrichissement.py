@@ -6,8 +6,9 @@ LOCALISATION : tests/pytest/test_federation_enrichissement.py
 
 Couvre les deux helpers de BaseBillet/views.py :
 - _distance_km_haversine : distance a vol d'oiseau entre deux points GPS.
-- _enrichir_explorer_data_avec_type_et_distance : ajoute le type de lieu
-  (Client.categorie) et la distance a chaque entree de explorer_data.
+- _enrichir_explorer_data_avec_distance : ajoute la distance a chaque point
+  de explorer_data. Le type de lieu (Client.categorie) n'est plus enrichi :
+  ni le filtre ni le badge de type n'existent plus cote front.
 """
 from types import SimpleNamespace
 
@@ -15,7 +16,7 @@ import pytest
 
 from BaseBillet.views import (
     _distance_km_haversine,
-    _enrichir_explorer_data_avec_type_et_distance,
+    _enrichir_explorer_data_avec_distance,
 )
 from Customers.models import Client
 
@@ -75,16 +76,16 @@ class TestDistanceKmHaversine:
 
 
 # ----------------------------------------------------------------------------
-# _enrichir_explorer_data_avec_type_et_distance
-# / _enrichir_explorer_data_avec_type_et_distance
+# _enrichir_explorer_data_avec_distance
+# / _enrichir_explorer_data_avec_distance
 # ----------------------------------------------------------------------------
 
 @pytest.mark.django_db
 class TestEnrichissementExplorerData:
 
-    def test_ajoute_categorie_et_distance_quand_origine_geocodee(self, tenant):
-        # Un point au tenant courant recoit categorie + label + distance 0.0.
-        # / A point at the current tenant gets category + label + 0.0 distance.
+    def test_ajoute_la_distance_quand_origine_geocodee(self, tenant):
+        # Un point situe au tenant courant est a 0.0 km de l'origine.
+        # / A point at the current tenant is 0.0 km away from the origin.
         uuid_du_tenant = str(tenant.uuid)
         explorer_data = {
             "tenants": [{"tenant_id": uuid_du_tenant, "name": "Lieu Test"}],
@@ -96,17 +97,11 @@ class TestEnrichissementExplorerData:
             }],
         }
 
-        resultat = _enrichir_explorer_data_avec_type_et_distance(
+        resultat = _enrichir_explorer_data_avec_distance(
             explorer_data, _config_avec_adresse_geocodee(),
         )
 
-        tenant_enrichi = resultat["tenants"][0]
-        assert tenant_enrichi["categorie"] == tenant.categorie
-        assert tenant_enrichi["categorie_label"]  # label non vide / non-empty label
-
-        point_enrichi = resultat["points"][0]
-        assert point_enrichi["tenant_categorie"] == tenant.categorie
-        assert point_enrichi["distance_km"] == 0.0
+        assert resultat["points"][0]["distance_km"] == 0.0
 
     def test_point_sans_coordonnees_recoit_distance_null(self, tenant):
         # Un point sans lat/lng (lieu sans adresse fixe) recoit distance_km None.
@@ -122,7 +117,7 @@ class TestEnrichissementExplorerData:
             }],
         }
 
-        resultat = _enrichir_explorer_data_avec_type_et_distance(
+        resultat = _enrichir_explorer_data_avec_distance(
             explorer_data, _config_avec_adresse_geocodee(),
         )
 
@@ -145,20 +140,17 @@ class TestEnrichissementExplorerData:
         }
         config_sans_adresse = SimpleNamespace(postal_address=None)
 
-        resultat = _enrichir_explorer_data_avec_type_et_distance(
+        resultat = _enrichir_explorer_data_avec_distance(
             explorer_data, config_sans_adresse,
         )
 
         assert "distance_km" not in resultat["points"][0]
-        # Le type de lieu, lui, est toujours enrichi. / The venue type is
-        # still enriched.
-        assert resultat["points"][0]["tenant_categorie"] == tenant.categorie
 
     def test_tenants_avec_uuid_invalides_ne_font_pas_echouer(self, tenant):
         # Des identifiants non-UUID dans les donnees de cache ne doivent pas
-        # lever de ValidationError : ils sont simplement ignores.
-        # / Non-UUID identifiers in cached data must not raise ValidationError:
-        # they are simply ignored.
+        # faire echouer le calcul : un point sans coordonnees recoit None.
+        # / Non-UUID identifiers in cached data must not break the computation:
+        # a point without coordinates gets None.
         explorer_data = {
             "tenants": [{"tenant_id": "uuid-sans-adresse", "name": "Lieu Fictif"}],
             "points": [{
@@ -169,10 +161,8 @@ class TestEnrichissementExplorerData:
             }],
         }
 
-        resultat = _enrichir_explorer_data_avec_type_et_distance(
+        resultat = _enrichir_explorer_data_avec_distance(
             explorer_data, _config_avec_adresse_geocodee(),
         )
 
-        assert "categorie" not in resultat["tenants"][0]
-        assert "tenant_categorie" not in resultat["points"][0]
         assert resultat["points"][0]["distance_km"] is None

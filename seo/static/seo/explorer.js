@@ -76,10 +76,7 @@
     // ============================================================
     const state = {
         data: null,
-        // typeLieu : code Client.categorie actif (ex "S" pour Scene), null = tous.
-        // Renseigne seulement sur les pages dont les donnees portent une
-        // categorie (page Reseau tenant). / Venue category code filter.
-        filters: { text: '', view: 'lieu', tag: null, typeLieu: null },
+        filters: { text: '', view: 'lieu', tag: null },
         map: null,
         markers: {},
         markerCluster: null,
@@ -292,24 +289,13 @@
         return false;
     }
 
-    function paMatchesTypeLieu(point) {
-        // Filtre par type de lieu (Client.categorie). Sans filtre actif, tout
-        // passe. Si le point ne porte pas de categorie (donnees non enrichies),
-        // il ne passe PAS quand un filtre de type est actif.
-        // / Venue type filter (Client.categorie). Without an active filter,
-        // everything passes. A point with no category does NOT pass when a
-        // type filter is active.
-        if (!state.filters.typeLieu) return true;
-        return point.tenant_categorie === state.filters.typeLieu;
-    }
-
     function filterPAsByTextAndTag(points) {
         // Malgre son nom historique, filtre aussi par type de lieu.
         // / Despite its historical name, also filters by venue type.
         const result = [];
         for (let i = 0; i < points.length; i++) {
             const point = points[i];
-            if (paMatchesText(point) && paMatchesTag(point) && paMatchesTypeLieu(point)) {
+            if (paMatchesText(point) && paMatchesTag(point)) {
                 result.push(point);
             }
         }
@@ -443,12 +429,9 @@
                 logo_url: t.logo_url,
                 image_url: t.image_url || '',
                 events: eventsUniques,
-                // Type de lieu + distance : presents seulement si la vue a
-                // enrichi les donnees (page Reseau tenant).
-                // / Venue type + distance: present only when the view enriched
-                // the data (tenant Network page).
-                categorie: t.categorie || '',
-                categorie_label: t.categorie_label || '',
+                // Distance : presente seulement si la vue a enrichi les
+                // donnees (page Reseau tenant).
+                // / Distance: present only when the view enriched the data.
                 distance_km: distanceMinDesPAs(parTenant[tid].pas),
             });
         }
@@ -791,13 +774,11 @@
             ? ' <span class="explorer-badge explorer-badge--current">' + escapeHtml(config.i18n.current) + '</span>'
             : '';
 
-        // Badge de type de lieu (Scene, Festival...) : remplace le badge
-        // generique "Lieu" quand la donnee existe (page Reseau enrichie).
-        // / Venue type badge: replaces the generic "Venue" badge when the
-        // data exists (enriched Network page).
-        const badgeType = lieu.categorie_label
-            ? '<span class="explorer-badge explorer-badge--type">' + escapeHtml(lieu.categorie_label) + '</span>'
-            : '<span class="explorer-badge lieu">' + escapeHtml(config.i18n.lieu) + '</span>';
+        // Badge "Lieu". Les categories de tenant ne sont plus affichees :
+        // tous les lieux sont de meme nature, seul le tenant racine "public"
+        // differe et il n'apparait pas dans l'explorer.
+        // / Generic "Venue" badge. Tenant categories are no longer displayed.
+        const badgeType = '<span class="explorer-badge lieu">' + escapeHtml(config.i18n.lieu) + '</span>';
 
         // Distance a vol d'oiseau : affichee seulement si la vue a calcule
         // des distances (cle presente). null -> "Sans lieu fixe".
@@ -974,14 +955,10 @@
     function updateChips(paVisibles) {
         if (!dom.tags) return;
 
-        // Page Reseau V2 (presence de #explorer-type-pills) : les chips de
-        // tags ne s'affichent qu'en vue "event" — symetrique avec les pills
-        // de type de lieu, visibles seulement en vue "lieu". Ailleurs (page
-        // publique /explorer/, skin classic), comportement historique
-        // conserve : chips visibles dans les 2 vues.
-        // / V2 Network page only (has #explorer-type-pills): tag chips only
-        // show in "event" view — symmetric with venue type pills. Everywhere
-        // else, keep the historical behavior (chips in both views).
+        // Les chips de tags ne s'affichent qu'en vue "event" : en vue "lieu",
+        // les tags d'evenements n'ont rien a filtrer.
+        // / Tag chips only show in "event" view: in "lieu" view there is
+        // nothing for event tags to filter.
         if (state.filters.view !== 'event') {
             dom.tags.innerHTML = '';
             dom.tags.hidden = true;
