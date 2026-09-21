@@ -2352,6 +2352,185 @@ body:has(#confirm:not(.hide) .card-modal) #messages .card-modal {
 }
 .card-hist-link:active { color: var(--text-dim); }
 
+/* Titulaire de la carte : prenom, « Carte liee » ou « Carte anonyme »
+   / Card holder: first name, "Linked card" or "Anonymous card" */
+.card-owner {
+	font-size: max(var(--fs-min), calc(15px * var(--k)));
+	font-weight: 700;
+	color: var(--text);
+	overflow-wrap: anywhere;
+}
+.card-owner--anonyme { color: var(--text-dim); font-weight: 600; }
+
+/* Detail du solde : une pastille par monnaie, qui passe a la ligne si besoin.
+   Nom en gris, montant en blanc gras : l'oeil lit le chiffre d'abord.
+   / Balance detail: one pill per currency, wrapping when needed. Grey name,
+   bold white amount: the eye reads the figure first. */
+.card-pastilles {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: calc(6px * var(--k));
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.card-pastille {
+	display: inline-flex;
+	align-items: baseline;
+	gap: calc(7px * var(--k));
+	min-width: 0;
+	max-width: 100%;
+	padding: calc(6px * var(--k)) calc(12px * var(--k));
+	border-radius: var(--r-pill);
+	background: var(--surface-2);
+	font-size: max(var(--fs-min), calc(12px * var(--k)));
+	line-height: 1.2;
+}
+.card-pastille-nom {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: 600;
+	color: var(--text-dim);
+}
+.card-pastille b {
+	flex: none;
+	font-weight: 800;
+	font-variant-numeric: tabular-nums;
+	color: var(--text);
+}
+/* Reseau injoignable : pastille en creux, sans montant
+   / Network unreachable: hollow pill, no amount */
+.card-pastille--vide {
+	background: transparent;
+	box-shadow: inset 0 0 0 1px var(--line);
+	color: var(--text-faint);
+}
+.card-pastille--vide .card-pastille-nom { color: var(--text-faint); }
+
+/* Pendant une recharge (montant libre, confirmation), la popup se concentre
+   sur le geste : le detail des soldes et les adhesions se retirent. Sans ca,
+   la boite depasse la hauteur du D3 Mini et le dernier bouton sort de l'ecran.
+   / During a top-up (free amount, confirm) the detail and memberships step
+   aside, otherwise the box outgrows the D3 Mini height. */
+.card-modal-box:has(.card-confirm, .card-clavier) :is(.card-pastilles, .card-adhesions) {
+	display: none;
+}
+
+/* Adhesions actives : liste compacte, coche verte
+   / Active memberships: compact list, green tick */
+.card-adhesions { display: grid; gap: calc(6px * var(--k)); }
+.card-adhesions ul {
+	display: grid;
+	gap: calc(4px * var(--k));
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.card-adhesions li {
+	display: flex;
+	align-items: center;
+	gap: calc(8px * var(--k));
+	font-size: max(var(--fs-min), calc(13px * var(--k)));
+	font-weight: 700;
+	text-align: left;
+}
+.card-adhesions li .ico { font-size: calc(15px * var(--k)); color: var(--valid); }
+.card-adhesions li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.card-adhesions li small {
+	flex: none;
+	font-size: max(var(--fs-min), calc(11px * var(--k)));
+	font-weight: 600;
+	color: var(--text-faint);
+}
+
+/* Carte inconnue : meme gabarit que l'attente, en rouge
+   / Unknown card: same layout as the wait screen, in red */
+.card-erreur {
+	display: grid;
+	justify-items: center;
+	gap: calc(10px * var(--k));
+	padding: calc(20px * var(--k)) calc(10px * var(--k)) calc(6px * var(--k));
+}
+.card-erreur-signal {
+	display: grid;
+	place-items: center;
+	width: calc(84px * var(--k));
+	height: calc(84px * var(--k));
+	border-radius: 50%;
+	background: var(--danger-wash);
+	color: var(--danger);
+	font-size: calc(36px * var(--k));
+}
+.card-erreur strong {
+	font-size: calc(17px * var(--k));
+	font-weight: 800;
+}
+
+/* Bloc « montant libre » (maquette : .card-clavier)
+   / "Free amount" block (mockup: .card-clavier) */
+.card-clavier {
+	display: grid;
+	gap: calc(7px * var(--k));
+	margin-top: calc(2px * var(--k));
+	padding-top: calc(9px * var(--k));
+	border-top: 1px solid var(--line-soft);
+	animation: rise .14s var(--ease);
+}
+.card-clavier-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	font-size: max(var(--fs-min), calc(10px * var(--k)));
+	font-weight: 700;
+	letter-spacing: .08em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+}
+.card-clavier-close {
+	width: max(36px, calc(24px * var(--k)));
+	height: max(36px, calc(24px * var(--k)));
+	display: grid;
+	place-items: center;
+	border-radius: 50%;
+	background: var(--surface-2);
+	color: var(--text-dim);
+	font-size: calc(10px * var(--k));
+}
+.card-clavier-close:active { background: var(--surface-3); }
+
+/* Montant libre : champ de saisie + message d'erreur
+   / Free amount: input + error message */
+.card-clavier-head label { cursor: default; }
+.card-montant-champ {
+	display: flex;
+	align-items: baseline;
+	justify-content: center;
+	gap: calc(6px * var(--k));
+	font-size: calc(24px * var(--k));
+	font-weight: 800;
+}
+.card-montant-champ input {
+	width: calc(150px * var(--k));
+	min-height: calc(46px * var(--k));
+	padding: 0 calc(12px * var(--k));
+	border: 1px solid var(--line);
+	border-radius: calc(var(--r-ctrl) * var(--k));
+	background: var(--bg);
+	color: var(--text);
+	font: inherit;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+.card-montant-champ input[aria-invalid="true"] { border-color: var(--danger); }
+.card-montant-erreur {
+	font-size: max(var(--fs-min), calc(12px * var(--k)));
+	font-weight: 700;
+	color: var(--danger);
+}
+
 /* Petit titre de section dans la popup (« Recharger », etc.)
    / Small section label inside the popup */
 .card-modal-box .panel-title,
@@ -2371,13 +2550,20 @@ body:has(#confirm:not(.hide) .card-modal) #messages .card-modal {
 .card-modes-row { display: flex; gap: calc(6px * var(--k)); }
 .card-modes-row > * { flex: 1 1 0; min-width: 0; }
 
+/* Montants : 3 par ligne (1, 5, 10 €), « Montant libre » sur toute la largeur.
+   / Amounts: 3 per row, "Free amount" full width. */
 .card-amounts {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
+	display: flex;
+	flex-wrap: wrap;
 	gap: calc(7px * var(--k));
 	padding-top: calc(2px * var(--k));
 	animation: rise .14s var(--ease);
 }
+.card-amounts > * {
+	flex: 1 1 calc((100% - 2 * 7px * var(--k)) / 3);
+	min-width: 0;
+}
+.card-amounts > .card-amount-libre { flex-basis: 100%; }
 .card-amount {
 	min-height: calc(46px * var(--k));
 	border-radius: calc(var(--r-ctrl) * var(--k));
@@ -2389,7 +2575,6 @@ body:has(#confirm:not(.hide) .card-modal) #messages .card-modal {
 }
 .card-amount:active { background: var(--surface-3); }
 .card-amount-libre {
-	grid-column: span 2;
 	font-size: max(var(--fs-min), calc(13px * var(--k)));
 	color: var(--text-dim);
 	background: var(--bg);
@@ -2414,7 +2599,7 @@ body:has(#confirm:not(.hide) .card-modal) #messages .card-modal {
 	color: var(--text-dim);
 	text-align: left;
 }
-.card-confirm-row b { font-size: calc(15px * var(--k)); font-weight: 800; color: var(--text); }
+.card-confirm-row b { flex: none; white-space: nowrap; font-size: calc(15px * var(--k)); font-weight: 800; color: var(--text); }
 .card-confirm-total b { font-size: calc(22px * var(--k)); }
 .card-confirm-acts { display: flex; gap: calc(8px * var(--k)); }
 .card-confirm-cancel {

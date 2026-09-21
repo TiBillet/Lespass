@@ -1,0 +1,173 @@
+{% load i18n laboutik_filters laboutik_process %}
+{% comment %}
+ZONE « RECHARGER » DE LA POPUP CHECK CARTE
+/ "Top up" zone of the card check popup
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_card_recharge.html
+
+Maquette : TEMP-tibillet-laboutik-main/caisse/Laboutik.js, renderCardModal
+(card-modes, card-amounts, card-clavier, card-confirm).
+Style : overlay.css, bloc « POPUP CENTREE V2 ».
+
+La zone avance par etapes. Chaque clic fait un hx-get vers
+recharge_carte() qui renvoie CETTE zone recalculee (outerHTML sur
+#card-recharge-zone). Aucun etat cote JS.
+/ Step by step. Each tap hx-gets recharge_carte(), which returns this zone
+re-rendered. No JS state.
+
+ETAPES (contexte « recharge » construit par _construire_contexte_recharge) :
+1. QUOI    : une tuile par produit de recharge du lieu (tous les PV).
+             Toucher la tuile deja choisie la deselectionne.
+2. COMBIEN : les tarifs du produit choisi (1, 5, 10, Libre...).
+3. LIBRE   : champ de saisie si le tarif est libre.
+4. CONFIRMER : montant, solde apres recharge, puis
+   - recharge payante (RE) : tuiles de paiement → POST payer()
+   - recharge offerte (RC / TM) : « Offrir » → POST identifier_client()
+   Ces deux vues existent deja : elles font la recharge, la compta et
+   l'ecran de succes. Les champs envoyes sont dans #card-recharge-form.
+   tag_id_cm (carte primaire) et hostname_client viennent de #addition-form.
+{% endcomment %}
+{% url 'laboutik-paiement-recharge_carte' as url_recharge %}
+<div id="card-recharge-zone" class="card-modes" aria-live="polite" data-testid="retour-carte-recharge">
+  {% if recharge.produits %}
+    <span class="card-section-lbl" id="card-recharge-titre">{% translate "Recharger" %}</span>
+
+    {# --- ETAPE 1 : QUOI / STEP 1: WHAT --- #}
+    <div class="card-modes-row" role="group" aria-labelledby="card-recharge-titre">
+      {% for produit in recharge.produits %}
+        {% if produit.est_choisi %}
+          <c-V2.bt.paiement name="{{ produit.nom }}" icon="{{ produit.icone }}" pressed="true" hx-get="{{ url_recharge }}?tag_id={{ recharge.tag_id|urlencode }}&uuid_pv={{ recharge.uuid_pv }}" hx-target="#card-recharge-zone" hx-swap="outerHTML" data-testid="recharge-produit-{{ forloop.counter }}" />
+        {% else %}
+          <c-V2.bt.paiement name="{{ produit.nom }}" icon="{{ produit.icone }}" pressed="false" hx-get="{{ url_recharge }}?tag_id={{ recharge.tag_id|urlencode }}&uuid_pv={{ recharge.uuid_pv }}&produit={{ produit.uuid }}" hx-target="#card-recharge-zone" hx-swap="outerHTML" data-testid="recharge-produit-{{ forloop.counter }}" />
+        {% endif %}
+      {% endfor %}
+    </div>
+
+    {% if recharge.produit_choisi %}
+      {% with produit=recharge.produit_choisi %}
+
+      {# --- ETAPE 2 : COMBIEN / STEP 2: HOW MUCH --- #}
+      {% if not recharge.tarif_choisi %}
+        <div class="card-amounts" role="group" aria-label="{% translate 'Montant' %}">
+          {% for tarif in recharge.tarifs %}
+            {% if tarif.est_libre %}
+              <button type="button" class="card-amount card-amount-libre"
+                      hx-get="{{ url_recharge }}?tag_id={{ recharge.tag_id|urlencode }}&uuid_pv={{ recharge.uuid_pv }}&produit={{ produit.uuid }}&prix={{ tarif.uuid }}"
+                      hx-target="#card-recharge-zone" hx-swap="outerHTML"
+                      data-testid="recharge-montant-libre">
+                {% translate "Montant libre" %}
+              </button>
+            {% else %}
+              <button type="button" class="card-amount"
+                      hx-get="{{ url_recharge }}?tag_id={{ recharge.tag_id|urlencode }}&uuid_pv={{ recharge.uuid_pv }}&produit={{ produit.uuid }}&prix={{ tarif.uuid }}"
+                      hx-target="#card-recharge-zone" hx-swap="outerHTML"
+                      data-testid="recharge-montant-{{ forloop.counter }}">
+                {{ tarif.prix_euros|floatformat:"-2" }}{% if not produit.est_offert %} {{ currency_data.symbol }}{% endif %}
+              </button>
+            {% endif %}
+          {% endfor %}
+        </div>
+
+      {# --- ETAPE 3 : MONTANT LIBRE / STEP 3: FREE AMOUNT --- #}
+      {% elif recharge.montant_a_saisir %}
+        {# Un <form> : htmx envoie ses champs, et Entree valide / A form: htmx sends its fields, Enter submits #}
+        <form class="card-clavier"
+              hx-get="{{ url_recharge }}"
+              hx-target="#card-recharge-zone" hx-swap="outerHTML"
+              data-testid="recharge-form-montant-libre">
+          <input type="hidden" name="tag_id" value="{{ recharge.tag_id }}" />
+          <input type="hidden" name="uuid_pv" value="{{ recharge.uuid_pv }}" />
+          <input type="hidden" name="produit" value="{{ produit.uuid }}" />
+          <input type="hidden" name="prix" value="{{ recharge.tarif_choisi.uuid }}" />
+          <div class="card-clavier-head">
+            <label for="card-recharge-montant">{% translate "Montant libre" %}</label>
+            <button type="button" class="card-clavier-close"
+                    aria-label="{% translate 'Retour aux montants' %}"
+                    hx-get="{{ url_recharge }}?tag_id={{ recharge.tag_id|urlencode }}&uuid_pv={{ recharge.uuid_pv }}&produit={{ produit.uuid }}"
+                    hx-target="#card-recharge-zone" hx-swap="outerHTML">
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5.6 4.2 12 10.6l6.4-6.4L20.2 6 13.8 12.4l6.4 6.4-1.8 1.8-6.4-6.4-6.4 6.4-1.8-1.8 6.4-6.4-6.4-6.4z"/></svg>
+            </button>
+          </div>
+          <div class="card-montant-champ">
+            <input id="card-recharge-montant" name="montant" type="text" inputmode="decimal"
+                   autocomplete="off" autofocus required
+                   value="{{ recharge.montant_saisi|default:'' }}"
+                   placeholder="0,00"
+                   {% if recharge.erreur_montant %}aria-invalid="true" aria-describedby="card-recharge-montant-erreur"{% endif %}
+                   data-testid="recharge-input-montant" />
+            {% if not produit.est_offert %}<span aria-hidden="true">{{ currency_data.symbol }}</span>{% endif %}
+          </div>
+          {% if recharge.erreur_montant %}
+            <small id="card-recharge-montant-erreur" class="card-montant-erreur" role="alert">{{ recharge.erreur_montant }}</small>
+          {% endif %}
+          <button type="submit" class="card-valider" data-testid="recharge-btn-montant-ok">{% translate "Valider" %}</button>
+        </form>
+
+      {# --- ETAPE 4 : CONFIRMER / STEP 4: CONFIRM --- #}
+      {% elif recharge.montant_centimes %}
+        <div class="card-confirm" data-testid="recharge-confirmation">
+          <div class="card-confirm-row">
+            <span>{{ produit.nom }}</span>
+            <b>+ {% if produit.est_offert %}{{ recharge.montant_centimes|divide_by:100|floatformat:"-2" }}{% else %}{{ recharge.montant_centimes|euros }}{% endif %}</b>
+          </div>
+          <div class="card-confirm-row card-confirm-total">
+            <span>{% blocktranslate with nom_monnaie=produit.nom %}Nouveau solde {{ nom_monnaie }}{% endblocktranslate %}</span>
+            <b>{% if produit.est_offert %}{{ recharge.solde_apres_centimes|divide_by:100|floatformat:"-2" }}{% else %}{{ recharge.solde_apres_centimes|euros }}{% endif %}</b>
+          </div>
+
+          {# Les champs lus par payer() / identifier_client() : meme format que #addition-form #}
+          {# / Fields read by payer() / identifier_client(): same format as #addition-form     #}
+          <form id="card-recharge-form" hidden>
+            <input type="hidden" name="tag_id" value="{{ recharge.tag_id }}" />
+            <input type="hidden" name="uuid_pv" value="{{ recharge.uuid_pv }}" />
+            <input type="hidden" name="total" value="{{ recharge.montant_centimes }}" />
+            <input type="hidden" name="repid-{{ produit.uuid }}--{{ recharge.tarif_choisi.uuid }}" value="1" />
+            {% if recharge.tarif_choisi.est_libre %}
+              <input type="hidden" name="custom-{{ produit.uuid }}--{{ recharge.tarif_choisi.uuid }}" value="{{ recharge.montant_centimes }}" />
+            {% endif %}
+          </form>
+
+          {% if produit.est_offert %}
+            {# Recharge offerte : identifier_client() credite tout de suite (court-circuit RC/TM) #}
+            {# / Free top-up: identifier_client() credits right away (RC/TM short-circuit)       #}
+            <div class="card-confirm-acts">
+              <button type="button" class="card-confirm-cancel"
+                      hx-get="{{ url_recharge }}?tag_id={{ recharge.tag_id|urlencode }}&uuid_pv={{ recharge.uuid_pv }}&produit={{ produit.uuid }}"
+                      hx-target="#card-recharge-zone" hx-swap="outerHTML"
+                      data-testid="recharge-btn-annuler">{% translate "Annuler" %}</button>
+              <button type="button" class="card-valider"
+                      hx-post="{% url 'laboutik-paiement-identifier_client' %}"
+                      hx-include="#card-recharge-form, #addition-form [name='tag_id_cm'], #addition-form [name='hostname_client']"
+                      hx-target="#messages" hx-swap="outerHTML"
+                      data-loading-disable
+                      data-testid="recharge-btn-offrir">{% translate "Offrir" %}</button>
+            </div>
+          {% else %}
+            {# Recharge payante : un moyen de paiement du point de vente → payer() #}
+            {# / Paid top-up: one of the POS payment methods → payer()              #}
+            <p class="payment-title">{% translate "Payé en" %}</p>
+            <div class="payment-methods">
+              {% if 'espece' in recharge.moyens_paiement %}
+                <c-V2.bt.paiement name='{% translate "ESPÈCE" %}' icon="bills" hx-post="{% url 'laboutik-paiement-payer' %}" hx-vals='{"moyen_paiement": "espece"}' hx-include="#card-recharge-form, #addition-form [name='tag_id_cm'], #addition-form [name='hostname_client']" hx-target="#messages" hx-swap="outerHTML" data-loading-disable data-testid="recharge-btn-especes" />
+              {% endif %}
+              {% if 'carte_bancaire' in recharge.moyens_paiement %}
+                <c-V2.bt.paiement name='{% translate "CB" %}' icon="card" hx-post="{% url 'laboutik-paiement-payer' %}" hx-vals='{"moyen_paiement": "carte_bancaire"}' hx-include="#card-recharge-form, #addition-form [name='tag_id_cm'], #addition-form [name='hostname_client']" hx-target="#messages" hx-swap="outerHTML" data-loading-disable data-testid="recharge-btn-cb" />
+              {% endif %}
+              {% if 'CH' in recharge.moyens_paiement %}
+                <c-V2.bt.paiement name='{% translate "CHÈQUE" %}' icon="cheque" hx-post="{% url 'laboutik-paiement-payer' %}" hx-vals='{"moyen_paiement": "CH"}' hx-include="#card-recharge-form, #addition-form [name='tag_id_cm'], #addition-form [name='hostname_client']" hx-target="#messages" hx-swap="outerHTML" data-loading-disable data-testid="recharge-btn-cheque" />
+              {% endif %}
+            </div>
+            {% if not recharge.moyens_paiement %}
+              <p class="payment-empty" role="alert">{% translate "Aucun moyen de paiement" %}</p>
+            {% endif %}
+            <button type="button" class="card-confirm-cancel"
+                    hx-get="{{ url_recharge }}?tag_id={{ recharge.tag_id|urlencode }}&uuid_pv={{ recharge.uuid_pv }}&produit={{ produit.uuid }}"
+                    hx-target="#card-recharge-zone" hx-swap="outerHTML"
+                    data-testid="recharge-btn-annuler">{% translate "Annuler" %}</button>
+          {% endif %}
+        </div>
+      {% endif %}
+      {% endwith %}
+    {% endif %}
+  {% endif %}
+</div>

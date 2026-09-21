@@ -31,6 +31,7 @@ from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
 from django.core.exceptions import PermissionDenied
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import connection
 from django.db.models import (
     F,
@@ -103,6 +104,7 @@ from laboutik.serializers import (
     ArticleCommandeSerializer,
     ClotureSerializer,
     EnvoyerRapportSerializer,
+    RechargeMontantLibreSerializer,
 )
 from laboutik.reports import RapportComptableService
 from inventaire.models import Stock, TypeMouvement
@@ -1460,6 +1462,208 @@ METHODES_RECHARGE_PAYANTES = (Product.RECHARGE_EUROS,)
 # Recharges gratuites : credit automatique, pas de paiement demande
 # Free top-ups: auto-credit, no payment asked
 METHODES_RECHARGE_GRATUITES = (Product.RECHARGE_CADEAU, Product.RECHARGE_TEMPS)
+
+
+# Pictogramme de la tuile « Recharger » selon le type de recharge.
+# Les noms sont ceux de cotton/V2/bt/paiement.html.
+# / Top-up tile pictogram per top-up type (names from cotton/V2/bt/paiement.html).
+ICONES_RECHARGE = {
+    Product.RECHARGE_EUROS: "coins",
+    Product.RECHARGE_CADEAU: "gift",
+    Product.RECHARGE_TEMPS: "clock",
+}
+
+
+def _produits_de_recharge_du_lieu():
+    """
+    Les produits de recharge utilisables dans ce lieu, avec leurs tarifs en euros.
+    / The top-up products usable in this venue, with their EUR prices.
+
+    LOCALISATION : laboutik/views.py
+
+    REGLE (decision du 2026-09-18) : la recharge est possible depuis TOUS les
+    points de vente, pas seulement ceux qui contiennent le produit (Cashless).
+    Le check carte la propose partout. La vente reste enregistree sur le point
+    de vente ou elle a lieu.
+    / Top-ups are allowed from EVERY POS, not only those holding the product.
+
+    Un produit est retenu s'il est publie, non archive, et lie a un Asset
+    actif et non archive (meme regle que l'ecran de vente).
+    / Kept if published, not archived, linked to an active non-archived Asset.
+
+    Utilise par / Used by :
+    - _construire_contexte_recharge() : les tuiles « Recharger »
+    - _extraire_articles_du_panier() : accepte ces produits hors M2M du PV
+
+    :return: QuerySet de Product, avec l'attribut prix_euros (liste de Price)
+    """
+    tarifs_en_euros = Prefetch(
+        "prices",
+        queryset=Price.objects.filter(publish=True, asset__isnull=True).order_by(
+            "order"
+        ),
+        to_attr="prix_euros",
+    )
+    return (
+        Product.objects.filter(
+            methode_caisse__in=METHODES_RECHARGE,
+            publish=True,
+            archive=False,
+            asset__isnull=False,
+            asset__archive=False,
+            asset__active=True,
+        )
+        .select_related("asset")
+        .prefetch_related(tarifs_en_euros)
+        .order_by("poids", "name")
+    )
+
+
+def _construire_contexte_recharge(
+    carte,
+    point_de_vente,
+    uuid_produit_choisi="",
+    uuid_prix_choisi="",
+    montant_libre_saisi=None,
+):
+    """
+    Prepare les donnees de la zone « Recharger » de la popup check carte.
+    / Builds the data of the "Top up" zone of the card check popup.
+
+    LOCALISATION : laboutik/views.py
+
+    La zone avance par etapes. Chaque clic renvoie la zone entiere,
+    recalculee ici (HTMX, pas d'etat cote JS) :
+    1. Choisir QUOI : une tuile par produit de recharge du lieu
+       (monnaie locale RE, cadeau RC, temps TM), depuis n'importe quel PV.
+    2. Choisir COMBIEN : les tarifs du produit (1, 5, 10, Libre...).
+    3. Montant libre : un champ de saisie (seulement si le tarif est libre).
+    4. Confirmer : le montant, le solde apres recharge, puis
+       - RE (payante) : les tuiles des moyens de paiement du point de vente ;
+       - RC / TM (offertes) : un bouton « Offrir ».
+    La recharge elle-meme n'est PAS faite ici : les boutons de l'etape 4
+    postent vers payer() ou identifier_client(), qui existent deja.
+    / The zone moves step by step (what, how much, free amount, confirm).
+    The top-up itself is done by the existing payer() / identifier_client().
+
+    Utilise par / Used by : PaiementViewSet.retour_carte() et
+    PaiementViewSet.recharge_carte() → laboutik/partial/hx_card_recharge.html
+
+    :param carte: CarteCashless scannee
+    :param point_de_vente: PointDeVente courant, ou None (pas de recharge alors)
+    :param uuid_produit_choisi: uuid (str) du produit choisi a l'etape 1
+    :param uuid_prix_choisi: uuid (str) du tarif choisi a l'etape 2
+    :param montant_libre_saisi: centimes (int) valides par le serializer, ou None
+    :return: dict pour le template (voir les cles en bas)
+    """
+    contexte_recharge = {
+        "tag_id": carte.tag_id,
+        "uuid_pv": str(point_de_vente.uuid) if point_de_vente else "",
+        "produits": [],
+        "produit_choisi": None,
+        "tarifs": [],
+        "tarif_choisi": None,
+        "montant_a_saisir": False,
+        "montant_centimes": None,
+        "solde_apres_centimes": None,
+        "moyens_paiement": [],
+    }
+
+    # Sans point de vente connu, on ne propose pas de recharge.
+    # / Without a known POS, no top-up is offered.
+    if point_de_vente is None:
+        return contexte_recharge
+
+    # 1. Les produits de recharge du lieu (utilisables depuis tous les PV).
+    # / 1. The venue top-up products (usable from every POS).
+    produits_de_recharge = _produits_de_recharge_du_lieu()
+
+    produit_choisi_en_base = None
+    for produit in produits_de_recharge:
+        if not produit.prix_euros:
+            continue
+        est_le_produit_choisi = str(produit.uuid) == uuid_produit_choisi
+        if est_le_produit_choisi:
+            produit_choisi_en_base = produit
+        contexte_recharge["produits"].append(
+            {
+                "uuid": str(produit.uuid),
+                # Le nom de la monnaie suffit : le titre de la zone dit deja « Recharger »
+                # / The currency name is enough: the zone title already says "Top up"
+                "nom": produit.asset.name,
+                "icone": ICONES_RECHARGE.get(produit.methode_caisse, "coins"),
+                "est_offert": produit.methode_caisse in METHODES_RECHARGE_GRATUITES,
+                "est_choisi": est_le_produit_choisi,
+            }
+        )
+
+    if produit_choisi_en_base is None:
+        return contexte_recharge
+
+    produit_est_offert = produit_choisi_en_base.methode_caisse in METHODES_RECHARGE_GRATUITES
+    contexte_recharge["produit_choisi"] = {
+        "uuid": str(produit_choisi_en_base.uuid),
+        "nom": produit_choisi_en_base.asset.name,
+        "est_offert": produit_est_offert,
+    }
+
+    # 2. Les tarifs du produit choisi
+    # / 2. The chosen product's prices
+    tarif_choisi_en_base = None
+    for tarif in produit_choisi_en_base.prix_euros:
+        if str(tarif.uuid) == uuid_prix_choisi:
+            tarif_choisi_en_base = tarif
+        contexte_recharge["tarifs"].append(
+            {
+                "uuid": str(tarif.uuid),
+                "prix_euros": tarif.prix,
+                "est_libre": tarif.free_price,
+            }
+        )
+
+    if tarif_choisi_en_base is None:
+        return contexte_recharge
+
+    contexte_recharge["tarif_choisi"] = {
+        "uuid": str(tarif_choisi_en_base.uuid),
+        "est_libre": tarif_choisi_en_base.free_price,
+        "minimum_euros": tarif_choisi_en_base.prix,
+    }
+
+    # 3. Le montant : le prix du tarif, ou le montant libre saisi.
+    # / 3. The amount: the price, or the typed free amount.
+    if tarif_choisi_en_base.free_price:
+        if montant_libre_saisi is None:
+            contexte_recharge["montant_a_saisir"] = True
+            return contexte_recharge
+        montant_centimes = montant_libre_saisi
+    else:
+        montant_centimes = int(round(tarif_choisi_en_base.prix * 100))
+
+    contexte_recharge["montant_centimes"] = montant_centimes
+
+    # 4. Le solde de CETTE monnaie apres la recharge (base locale, pas de Fedow distant)
+    # / 4. The balance of THIS currency after the top-up (local DB, no remote Fedow)
+    wallet_de_la_carte = _obtenir_ou_creer_wallet(carte)
+    solde_actuel_centimes = WalletService.obtenir_solde(
+        wallet_de_la_carte, produit_choisi_en_base.asset
+    )
+    contexte_recharge["solde_apres_centimes"] = solde_actuel_centimes + montant_centimes
+
+    # Les moyens de paiement d'une recharge payante : ceux du point de vente,
+    # sans le cashless (regle de _determiner_moyens_paiement pour RE).
+    # / Payment methods for a paid top-up: the POS ones, without cashless.
+    if not produit_est_offert:
+        article_recharge = {
+            "product": produit_choisi_en_base,
+            "price": tarif_choisi_en_base,
+            "quantite": 1,
+        }
+        contexte_recharge["moyens_paiement"] = _determiner_moyens_paiement(
+            point_de_vente, [article_recharge]
+        )
+
+    return contexte_recharge
 
 
 def _panier_contient_recharges(articles_panier):
@@ -3985,6 +4189,20 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
         # / Standard POS articles: look up by Product UUID
         if produit is None:
             produit = produits_du_pv.get(uuid_str)
+
+        # --- Recharges : acceptees depuis TOUS les points de vente ---
+        # Un produit de recharge du lieu est accepte meme s'il n'est pas dans
+        # le M2M du PV (voir _produits_de_recharge_du_lieu). La vente reste
+        # enregistree sur CE point de vente.
+        # / Top-ups: accepted from EVERY POS, even outside the POS M2M.
+        if produit is None:
+            uuid_est_valide = True
+            try:
+                uuid_module.UUID(uuid_str)
+            except ValueError:
+                uuid_est_valide = False
+            if uuid_est_valide:
+                produit = _produits_de_recharge_du_lieu().filter(uuid=uuid_str).first()
 
         if produit is None:
             logger.warning(
@@ -8915,6 +9133,20 @@ class PaiementViewSet(viewsets.ViewSet):
         prenom_carte = carte.user.first_name if carte.user else None
         couleur_fond = "--success" if email_carte else "--warning"
 
+        # 6. Zone « Recharger » : les produits de recharge du point de vente courant.
+        #    uuid_pv vient de #addition-form (hx-include sur #form-check-nfc,
+        #    voir hx_check_card.html). Sans PV valide, la zone ne s'affiche pas.
+        # 6. "Top up" zone: the current POS top-up products. uuid_pv comes from
+        #    #addition-form (hx-include in hx_check_card.html).
+        point_de_vente_courant = None
+        uuid_pv_recu = request.POST.get("uuid_pv", "").strip()
+        if uuid_pv_recu:
+            try:
+                point_de_vente_courant = PointDeVente.objects.get(uuid=uuid_pv_recu)
+            except (PointDeVente.DoesNotExist, ValueError, DjangoValidationError):
+                point_de_vente_courant = None
+        contexte_recharge = _construire_contexte_recharge(carte, point_de_vente_courant)
+
         context = {
             "card": {"email": email_carte, "first_name": prenom_carte},
             "total_monnaie": solde["total_centimes"] / 100,
@@ -8925,8 +9157,85 @@ class PaiementViewSet(viewsets.ViewSet):
             "tag_id": tag_id_scanne,
             "background": couleur_fond,
             "state": state,
+            "recharge": contexte_recharge,
+            "currency_data": CURRENCY_DATA,
         }
         return render(request, "laboutik/partial/hx_card_feedback.html", context)
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="recharge_carte",
+        url_name="recharge_carte",
+    )
+    def recharge_carte(self, request):
+        """
+        GET /laboutik/paiement/recharge_carte/
+        Renvoie la zone « Recharger » de la popup check carte, a l'etape demandee.
+        / Returns the "Top up" zone of the card check popup, at the requested step.
+
+        LOCALISATION : laboutik/views.py
+
+        FLUX :
+        1. hx_card_feedback.html inclut hx_card_recharge.html (etape 1 : quoi)
+        2. Chaque tuile / bouton de la zone fait un hx-get ici avec :
+           tag_id, uuid_pv, produit, prix, montant (montant libre en euros)
+        3. On recalcule la zone avec _construire_contexte_recharge()
+        4. Le partial remplace #card-recharge-zone (outerHTML)
+        La recharge elle-meme part ensuite vers payer() (RE) ou
+        identifier_client() (RC / TM) : rien n'est ecrit en base ici.
+        / Each tap re-renders the zone. Nothing is written to the DB here.
+        """
+        tag_id_de_la_carte = request.GET.get("tag_id", "").strip().upper()
+        uuid_pv_recu = request.GET.get("uuid_pv", "").strip()
+        uuid_produit_choisi = request.GET.get("produit", "").strip()
+        uuid_prix_choisi = request.GET.get("prix", "").strip()
+
+        carte = get_object_or_404(CarteCashless, tag_id=tag_id_de_la_carte)
+
+        point_de_vente_courant = None
+        if uuid_pv_recu:
+            try:
+                point_de_vente_courant = PointDeVente.objects.get(uuid=uuid_pv_recu)
+            except (PointDeVente.DoesNotExist, ValueError, DjangoValidationError):
+                point_de_vente_courant = None
+
+        # Premier passage : on construit sans montant libre pour connaitre le tarif choisi
+        # / First pass without free amount, to know the chosen price
+        contexte_recharge = _construire_contexte_recharge(
+            carte,
+            point_de_vente_courant,
+            uuid_produit_choisi=uuid_produit_choisi,
+            uuid_prix_choisi=uuid_prix_choisi,
+        )
+
+        # Montant libre envoye : on le valide (serializer), minimum = prix de base du tarif
+        # / Free amount sent: validate it (serializer), minimum = base price
+        montant_libre_envoye = "montant" in request.GET
+        tarif_choisi = contexte_recharge["tarif_choisi"]
+        if montant_libre_envoye and tarif_choisi and tarif_choisi["est_libre"]:
+            minimum_centimes = int(round(tarif_choisi["minimum_euros"] * 100))
+            serializer_montant = RechargeMontantLibreSerializer(
+                data={"montant": request.GET.get("montant", "")},
+                context={"minimum_centimes": minimum_centimes},
+            )
+            if serializer_montant.is_valid():
+                contexte_recharge = _construire_contexte_recharge(
+                    carte,
+                    point_de_vente_courant,
+                    uuid_produit_choisi=uuid_produit_choisi,
+                    uuid_prix_choisi=uuid_prix_choisi,
+                    montant_libre_saisi=serializer_montant.validated_data["montant"],
+                )
+            else:
+                contexte_recharge["erreur_montant"] = serializer_montant.errors["montant"][0]
+                contexte_recharge["montant_saisi"] = request.GET.get("montant", "")
+
+        return render(
+            request,
+            "laboutik/partial/hx_card_recharge.html",
+            {"recharge": contexte_recharge, "currency_data": CURRENCY_DATA},
+        )
 
     @action(
         detail=False,

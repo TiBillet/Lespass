@@ -461,3 +461,63 @@ class EnvoyerRapportSerializer(serializers.Serializer):
             "invalid": _("Adresse email invalide"),
         },
     )
+
+
+class RechargeMontantLibreSerializer(serializers.Serializer):
+    """
+    Valide le montant libre saisi dans la popup « check carte » (zone Recharger).
+    Validates the free amount typed in the card check popup (top-up zone).
+
+    LOCALISATION : laboutik/serializers.py
+
+    Utilise par PaiementViewSet.recharge_carte() (GET).
+    Le caissier tape un montant en euros (ex : "12,50" ou "12.5").
+    On accepte la virgule, puis on renvoie le montant en centimes.
+    Le minimum est le prix de base du tarif libre (passe dans le contexte).
+    / Used by PaiementViewSet.recharge_carte() (GET). The cashier types an
+    amount in euros; comma accepted; returns cents. Minimum = the free
+    price's base price (passed in the serializer context).
+    """
+
+    montant = serializers.CharField(
+        max_length=12,
+        error_messages={
+            "required": _("Saisissez un montant"),
+            "blank": _("Saisissez un montant"),
+        },
+    )
+
+    def validate_montant(self, value):
+        """
+        Transforme "12,50" en 1250 centimes et verifie le minimum.
+        / Turns "12,50" into 1250 cents and checks the minimum.
+        """
+        from decimal import Decimal, InvalidOperation
+
+        texte_nettoye = value.strip().replace(",", ".")
+        try:
+            montant_en_euros = Decimal(texte_nettoye)
+        except InvalidOperation:
+            raise serializers.ValidationError(_("Montant invalide"))
+
+        # Pas plus de deux chiffres apres la virgule
+        # / No more than two decimals
+        if montant_en_euros != montant_en_euros.quantize(Decimal("0.01")):
+            raise serializers.ValidationError(_("Montant invalide"))
+
+        montant_en_centimes = int(montant_en_euros * 100)
+
+        if montant_en_centimes <= 0:
+            raise serializers.ValidationError(_("Le montant doit être positif"))
+
+        # Plafond de securite : evite une faute de frappe a 5 chiffres
+        # / Safety cap: prevents a 5-digit typo
+        montant_maximum_en_centimes = 1000000
+        if montant_en_centimes > montant_maximum_en_centimes:
+            raise serializers.ValidationError(_("Montant trop élevé"))
+
+        montant_minimum_en_centimes = self.context.get("minimum_centimes", 0)
+        if montant_en_centimes < montant_minimum_en_centimes:
+            raise serializers.ValidationError(_("Montant inférieur au minimum"))
+
+        return montant_en_centimes
