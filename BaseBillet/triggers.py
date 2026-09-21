@@ -25,6 +25,50 @@ def update_membership_state_after_stripe_paiement(ligne_article: LigneArticle):
     if not membership:
         membership: Membership = paiement_stripe.membership.first()
 
+    # GARDE : un paiement ne ressuscite jamais une adhesion annulee par un admin.
+    #
+    # Sans elle, un prelevement Stripe arrivant apres une annulation administrative
+    # repasse la fiche en AUTO avec une nouvelle echeance (plus bas dans cette
+    # fonction) : l'adhesion annulee — et peut-etre remboursee par avoir —
+    # redevient active toute seule.
+    #
+    # Le cas arrive quand l'abonnement Stripe tourne encore : l'admin a decoche la
+    # resiliation, ou notre appel a Stripe a echoue (reseau, cle, compte Connect).
+    # Cet echec est volontairement non bloquant cote admin, donc silencieux ici.
+    #
+    # On garde `last_stripe_invoice` : c'est la SEULE deduplication du webhook
+    # (ApiBillet.views, invoice.paid compare la facture a celle-ci). Sans elle, un
+    # rejeu Stripe du meme evenement creerait une deuxieme vente.
+    #
+    # On ne leve pas : TRIGGER_LigneArticlePaid_ActionByCategorie avale les
+    # exceptions, la LigneArticle resterait PAID sans passer VALID — comptabilite
+    # fausse alors que l'argent EST encaisse. On retourne `membership`, que
+    # l'appelant utilise aussitot (set_deadline()).
+    #
+    # Le reste de trigger_A suit son cours : reçu par mail, vente envoyee a
+    # LaBoutik, ligne passee VALID — c'est voulu, le paiement est reel. Une
+    # recompense wallet peut aussi etre creditee : c'est le seul effet non
+    # souhaitable, assume et signale dans l'alerte ci-dessous plutot que traite
+    # par du code supplementaire.
+    #
+    # / GUARD: a payment never revives an admin-cancelled membership. Keeps
+    # last_stripe_invoice (the webhook's only dedup), never raises (the caller
+    # swallows exceptions and the accounting line would stay PAID), returns the
+    # membership. The rest of trigger_A still runs: the payment is real.
+    if membership.status == Membership.ADMIN_CANCELED:
+        if paiement_stripe.invoice_stripe:
+            membership.last_stripe_invoice = paiement_stripe.invoice_stripe
+            membership.save(update_fields=["last_stripe_invoice"])
+
+        logger.error(
+            f"Paiement Stripe encaisse sur une adhesion ANNULEE PAR UN ADMIN : "
+            f"adhesion {membership.uuid}, facture {paiement_stripe.invoice_stripe}, "
+            f"abonnement {membership.stripe_id_subscription}. La fiche n'est PAS "
+            f"reactivee. A faire a la main : resilier l'abonnement dans Stripe, "
+            f"rembourser, et verifier qu'aucune recompense wallet n'a ete creditee."
+        )
+        return membership
+
     price: Price = ligne_article.pricesold.price
     membership.contribution_value = ligne_article.pricesold.prix
 

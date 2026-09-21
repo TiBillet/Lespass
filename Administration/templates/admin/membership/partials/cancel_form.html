@@ -86,6 +86,30 @@ Le POST renvoie un HX-Redirect vers la changelist.
 
         {% endif %}
 
+        {# Resiliation de l'abonnement Stripe : uniquement sur une adhesion en   #}
+        {# prelevement automatique (statut AUTO). Sans cette case, l'abonnement  #}
+        {# continue de tourner et un prelevement peut reactiver la fiche.        #}
+        {# / Stripe subscription cancellation: only on an auto-renewing          #}
+        {# membership. Without it, Stripe keeps charging the member.             #}
+        {% if abonnement_stripe_resiliable %}
+        <div style="margin-bottom:.875rem;padding:.75rem;border-radius:.25rem;background:#eff6ff;border:1px solid #bfdbfe">
+            <label style="display:flex;gap:.5rem;align-items:flex-start;cursor:pointer;margin-bottom:.375rem">
+                <input type="checkbox"
+                       name="resilier_abonnement_stripe"
+                       value="1"
+                       checked
+                       data-testid="membership-cancel-resilier-stripe"
+                       style="margin-top:.15rem;flex-shrink:0">
+                <span style="font-size:.8125rem;font-weight:600;color:#1e40af">
+                    {% translate "Résilier aussi l'abonnement Stripe" %}
+                </span>
+            </label>
+            <p style="font-size:.8125rem;color:#1e3a8a;margin-bottom:0;line-height:1.6">
+                {% translate "L'abonnement s'arrête à la fin de la période déjà payée : aucun nouveau prélèvement ne sera déclenché. Sans cette option, Stripe continuera de prélever l'adhérent·e à chaque échéance." %}
+            </p>
+        </div>
+        {% endif %}
+
         {# Boutons / Buttons #}
         <div style="display:flex;gap:.5rem;flex-wrap:wrap">
 

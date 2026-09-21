@@ -4434,6 +4434,15 @@ class MembershipMVT(viewsets.ViewSet):
                 "membership_email": membership.user.email if membership.user else "—",
                 "has_paid_lines": lignes_de_vente_payees.exists(),
                 "lignes_payees": lignes_de_vente_payees,
+                # La case « resilier l'abonnement » n'a de sens que sur une
+                # adhesion en prelevement automatique. On se fie au statut AUTO,
+                # pose par le trigger en meme temps que stripe_id_subscription :
+                # se fier au seul identifiant afficherait la case sur des
+                # abonnements deja clos chez Stripe, et chaque annulation
+                # declencherait une alerte Sentry pour rien.
+                # / The checkbox only makes sense on an auto-renewing membership.
+                # We rely on the AUTO status, set together with the subscription id.
+                "abonnement_stripe_resiliable": membership.est_renouvellement_auto,
             })
 
         # POST : annulation effective
@@ -4441,6 +4450,42 @@ class MembershipMVT(viewsets.ViewSet):
         membership.archiver = True
         membership.status = Membership.ADMIN_CANCELED
         membership.save()
+
+        # Resiliation de l'abonnement Stripe, si le gestionnaire l'a demandee.
+        #
+        # L'appel reseau ne doit JAMAIS faire echouer l'annulation, qui vient
+        # d'etre enregistree : meme parti pris que BaseBillet.triggers quand il
+        # resilie en fin d'engagement. En cas d'echec, niveau ERROR pour que
+        # Sentry alerte — un humain doit aller resilier dans le tableau de bord
+        # Stripe, sinon le prelevement continue.
+        # `get_stripe_connect_account()` est dans le try a dessein : sans compte
+        # Connect enregistre, il en CREE un chez Stripe et peut lever.
+        # Le filet de securite si tout cela echoue est la garde ADMIN_CANCELED
+        # de BaseBillet.triggers : un prelevement ne reactivera pas la fiche.
+        # / The network call must NEVER fail the cancellation just recorded.
+        # On failure: ERROR level so Sentry alerts, a human must cancel the
+        # subscription in the Stripe dashboard. The safety net is the
+        # ADMIN_CANCELED guard in BaseBillet.triggers.
+        resiliation_demandee = request.POST.get("resilier_abonnement_stripe") == "1"
+        if resiliation_demandee and membership.stripe_id_subscription:
+            try:
+                stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+                stripe.Subscription.modify(
+                    membership.stripe_id_subscription,
+                    cancel_at_period_end=True,
+                    stripe_account=Configuration.get_solo().get_stripe_connect_account(),
+                )
+                logger.info(
+                    f"Abonnement Stripe {membership.stripe_id_subscription} resilie "
+                    f"en fin de periode (adhesion {membership.uuid})"
+                )
+            except Exception as erreur_stripe:
+                logger.error(
+                    f"Resiliation Stripe impossible pour l'abonnement "
+                    f"{membership.stripe_id_subscription} (adhesion {membership.uuid}) : "
+                    f"{erreur_stripe}. L'adhesion EST annulee cote TiBillet, mais le "
+                    f"prelevement continue : resilier a la main dans Stripe."
+                )
 
         # Crée les avoirs si demandé
         # / Creates credit notes if requested
