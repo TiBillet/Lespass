@@ -576,6 +576,14 @@ class CancelSubscription(DeprecatedV1Mixin, APIView):
     def post(self, request):
         user = request.user
         is_htmx = request.headers.get('HX-Request') == 'true'
+
+        # La carte re-rendue doit etre celle du skin COURANT. En dur sur
+        # "classic", un clic depuis le skin V2 remplacait la carte V2 par une
+        # carte Bootstrap classic (le bouton HTMX cible #membership-card-<uuid>
+        # avec hx-swap="outerHTML"). / The re-rendered card must match the
+        # CURRENT skin: hardcoding "classic" broke the V2 layout on click.
+        from pages.services import gabarit_skin
+        gabarit_carte = gabarit_skin("vues/compte/membership/membership_card.html")
         # Important: we must use the membership UUID here rather than the price UUID.
         # Rationale:
         # - A parent can purchase multiple memberships for several children under the same price.
@@ -587,7 +595,7 @@ class CancelSubscription(DeprecatedV1Mixin, APIView):
             if is_htmx:
                 # Can't render a specific card without a valid UUID → keep JSON error
                 return HttpResponse(render_to_string(
-                    'pages/classic/vues/compte/membership/membership_card.html',
+                    gabarit_carte,
                     {
                         # no membership to render; return a minimal error block instead
                         'message_error': _('Invalid request.'),
@@ -617,7 +625,7 @@ class CancelSubscription(DeprecatedV1Mixin, APIView):
 
         if membership.status != Membership.AUTO:
             if is_htmx:
-                html = render_to_string('pages/classic/vues/compte/membership/membership_card.html', {
+                html = render_to_string(gabarit_carte, {
                     'membership': membership,
                     'message_error': _('No automatic renewal on this.'),
                 })
@@ -626,7 +634,7 @@ class CancelSubscription(DeprecatedV1Mixin, APIView):
 
         if not membership.stripe_id_subscription:
             if is_htmx:
-                html = render_to_string('pages/classic/vues/compte/membership/membership_card.html', {
+                html = render_to_string(gabarit_carte, {
                     'membership': membership,
                     'message_error': _('Stripe subscription ID missing'),
                 })
@@ -645,7 +653,7 @@ class CancelSubscription(DeprecatedV1Mixin, APIView):
         except stripe.error.InvalidRequestError as e:
             logging.getLogger(__name__).exception("Stripe InvalidRequestError while canceling subscription")
             if is_htmx:
-                html = render_to_string('pages/classic/vues/compte/membership/membership_card.html', {
+                html = render_to_string(gabarit_carte, {
                     'membership': membership,
                     'message_error': _('Stripe error'),
                 })
@@ -654,7 +662,7 @@ class CancelSubscription(DeprecatedV1Mixin, APIView):
         except Exception as e:
             logging.getLogger(__name__).exception("Unexpected error while canceling subscription")
             if is_htmx:
-                html = render_to_string('pages/classic/vues/compte/membership/membership_card.html', {
+                html = render_to_string(gabarit_carte, {
                     'membership': membership,
                     'message_error': _('Unexpected error'),
                 })
@@ -672,7 +680,7 @@ class CancelSubscription(DeprecatedV1Mixin, APIView):
         # HTMX response: re-render the updated card with a success message
         success_message = _('Automatic renewal turned off. Your subscription remains active until the end of the current period.')
         if is_htmx:
-            html = render_to_string('pages/classic/vues/compte/membership/membership_card.html', {
+            html = render_to_string(gabarit_carte, {
                 'membership': membership,
                 'message_success': success_message,
             })

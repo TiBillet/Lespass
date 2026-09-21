@@ -89,7 +89,9 @@ def _create_membership_api_with_sub(
 
     Paramètres / Parameters:
     - valid_until            : ISO date string (deadline de l'adhésion)
-    - override_status        : code statut (ex: 'A' pour ONCE)
+    - override_status        : code statut ('O' = AUTO, 'A' = ONCE).
+                               Attention : ONCE, AUTO = 'A', 'O' (inverse de
+                               l'intuition). Toujours passer par le libelle.
     - stripe_subscription_id : identifiant Stripe sub (ex: 'sub_test_00000000')
     """
     additional_property = [
@@ -156,17 +158,29 @@ def _create_membership_api_with_sub(
 
 
 class TestMembershipRecurringCancel:
-    """Annulation d'un prélèvement automatique — bouton visible et erreur attendue.
-    / Cancellation of automatic debit — button visible and error expected.
+    """Annulation d'un prélèvement automatique depuis le compte.
+    / Cancelling an automatic debit from the user account.
+
+    Ce test garde le bouton d'arrêt du prélèvement. Il crée une adhésion
+    réellement AUTO ('O') : si quelqu'un remet une comparaison en dur sur 'A'
+    (= ONCE) dans le gabarit, le bouton disparaît et ce test échoue.
+    C'est exactement le bug qui a vécu en production sans être vu
+    (CHANGELOG/2026-09-18-tests-cancel-subscription-et-bouton-jamais-affiche.md).
+    / This test guards the cancel button: it creates a genuinely AUTO membership,
+    so hardcoding 'A' (= ONCE) in the template again makes it fail.
     """
 
-    def test_cancel_button_visible_and_shows_error(
+    def test_cancel_button_visible_on_auto_membership(
         self, page, login_as, create_product, api_key, django_shell
     ):
-        """Crée une adhésion récurrente AUTO, vérifie le bouton annulation et
-        que le clic affiche un message d'erreur (sub Stripe fictif).
-        / Creates a recurring AUTO membership, verifies the cancel button and
-        that clicking it shows an error message (fake Stripe sub).
+        """Une adhésion AUTO affiche le bouton d'arrêt, et le clic atteint la vue.
+
+        Le succès de l'annulation n'est PAS verifiable ici : l'abonnement Stripe
+        est fictif, donc Stripe refuse et la vue rend la carte avec une erreur.
+        Le chemin nominal (annulation réussie) est couvert côté pytest, Stripe
+        mocké, dans tests/pytest/test_cancel_subscription.py.
+        / Cancellation success is NOT checkable here: the Stripe subscription is
+        fake. The happy path is covered with a mocked Stripe in pytest.
         """
         random_id = _random_id()
         user_email = f"jturbeaux+auto{random_id}@pm.me"
@@ -211,16 +225,14 @@ class TestMembershipRecurringCancel:
         )
 
         # --- Étape 2 : Créer l'adhésion AUTO via API ---
-        # paymentMode FREE → last_contribution est défini, adhésion active (ONCE)
-        # status='A' : override vers ONCE (Payé en ligne) — la condition du
-        # bouton annulation dans le template est : status == 'A'.
-        # stripeSubscriptionId simulé pour déclencher l'affichage du bouton.
+        # paymentMode FREE → last_contribution est défini, donc adhésion active.
+        # status='O' = Membership.AUTO : c'est l'état d'une adhésion en
+        # prélèvement automatique Stripe, le seul qui doit afficher le bouton.
+        # stripeSubscriptionId simulé : le gabarit exige aussi cet identifiant.
         # validUntil = maintenant + 30 jours (adhésion valide, pas expirée).
-        # / Step 2: Create AUTO membership via API
-        # paymentMode FREE → last_contribution set, membership active (ONCE)
-        # status='A': override to ONCE — template cancel button condition: status == 'A'.
-        # Simulated stripeSubscriptionId to trigger button display.
-        # validUntil = now + 30 days (valid, not expired).
+        # / Step 2: Create the AUTO membership via API
+        # status='O' = Membership.AUTO: the only state that must show the button.
+        # Simulated stripeSubscriptionId: the template also requires it.
         valid_until = (
             datetime.datetime.now(datetime.timezone.utc)
             + datetime.timedelta(days=30)
@@ -234,7 +246,7 @@ class TestMembershipRecurringCancel:
             last_name="Test",
             payment_mode="FREE",
             valid_until=valid_until,
-            override_status="A",
+            override_status="O",  # Membership.AUTO
             stripe_subscription_id="sub_test_00000000",
         )
         assert membership_result["ok"], (
@@ -274,22 +286,25 @@ class TestMembershipRecurringCancel:
         page.wait_for_load_state("domcontentloaded")
 
         # --- Étape 5 : Vérifier que le bouton "Annuler le prélèvement" est visible ---
-        # Le bouton a un data-testid "membership-cancel-auto-<uuid>".
-        # Il s'affiche quand : status=='A' ET stripe_id_subscription ET pas d'engagement.
-        # / Step 5: Verify that the "Cancel automatic debit" button is visible
-        # Button has data-testid "membership-cancel-auto-<uuid>".
-        # Shown when: status=='A' AND stripe_id_subscription AND no commitment.
+        # Le bouton a un data-testid "membership-cancel-auto-<uuid>". Il s'affiche
+        # quand : membership.est_renouvellement_auto (status == Membership.AUTO)
+        # ET stripe_id_subscription ET pas d'engagement.
+        # C'est CETTE assertion qui garde le bug : avec une comparaison en dur
+        # sur 'A' (= ONCE), l'adhésion créée à l'étape 2 n'afficherait rien.
+        # / Step 5: the button shows when est_renouvellement_auto AND
+        # stripe_id_subscription AND no commitment. This assertion guards the bug.
         cancel_button = page.locator('[data-testid^="membership-cancel-auto-"]').first
         expect(cancel_button).to_be_visible(timeout=10_000)
 
         # --- Étape 6 : Cliquer sur le bouton d'annulation ---
-        # Le formulaire envoie une requête HTMX POST à /api/cancel_sub/ avec
-        # le UUID de l'adhésion. Le sub Stripe 'sub_test_00000000' est fictif,
-        # donc Stripe retourne une erreur → le template affiche .alert-danger.
-        # / Step 6: Click the cancel button
-        # The form sends an HTMX POST to /api/cancel_sub/ with the membership UUID.
-        # The Stripe sub 'sub_test_00000000' is fake, so Stripe returns an error
-        # → the template renders .alert-danger.
+        # Le formulaire envoie un POST HTMX à /api/cancel_sub/ avec le UUID.
+        # L'abonnement 'sub_test_00000000' n'existe pas chez Stripe : la vue
+        # attrape InvalidRequestError et re-rend la carte avec une alerte.
+        # L'adhésion étant bien AUTO, la vue ne renvoie PAS « pas de
+        # renouvellement automatique » : elle va jusqu'à l'appel Stripe.
+        # / The form POSTs to /api/cancel_sub/. The fake subscription makes
+        # Stripe fail, so the view re-renders the card with an alert. Since the
+        # membership really is AUTO, the view reaches the Stripe call.
         cancel_button.click()
 
         # Attendre que la réponse HTMX remplace le contenu.

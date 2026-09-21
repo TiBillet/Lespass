@@ -53,7 +53,7 @@ data-testid="membership-cancel-auto-<uuid>".
                 <span class="badge badge--neutral">{% translate 'Expired' %}</span>
             {% endif %}
             {% if membership.price.recurring_payment %}
-                {% if membership.status == 'A' %}
+                {% if membership.est_renouvellement_auto %}
                     <span class="badge badge--neutral">{% translate 'Recurring payment' %}</span>
                 {% elif membership.status == 'C' %}
                     <span class="badge badge--neutral">{% translate 'Recurring payment canceled' %}</span>
@@ -106,7 +106,7 @@ data-testid="membership-cancel-auto-<uuid>".
 
                 {# Bouton d'arrêt du prélèvement : seulement si renouvellement auto Stripe, sans engagement. #}
                 {# / Cancel auto debit: only when auto-renewing with Stripe, no commitment. #}
-                {% if membership.status == 'A' and membership.stripe_id_subscription and not membership.price.commitment %}
+                {% if membership.est_renouvellement_auto and membership.stripe_id_subscription and not membership.price.commitment %}
                     <form
                         method="post"
                         action="/api/cancel_sub/"

@@ -34,7 +34,7 @@
 
       {% if membership.price.recurring_payment %}
       <p>
-        {% if membership.status == 'A' %}
+        {% if membership.est_renouvellement_auto %}
             <span class="badge text-bg-success">{% trans 'Recurring payment' %}</span>
         {% elif membership.status == 'C' %}
             <span class="badge text-bg-warning">{% trans 'Recurring payment canceled' %}</span>
@@ -90,7 +90,7 @@
       {% endif %}
 
       {# Show cancel auto debit button only when auto-renewing with Stripe sub id #}
-      {% if membership.status == 'A' and membership.stripe_id_subscription and not membership.price.commitment %}
+      {% if membership.est_renouvellement_auto and membership.stripe_id_subscription and not membership.price.commitment %}
       <form
           method="post"
           action="/api/cancel_sub/"

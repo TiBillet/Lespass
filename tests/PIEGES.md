@@ -1369,6 +1369,89 @@ champ **unique** pose par un test doit porter un prefixe de test
 pourrait avoir saisie dans l'admin. Et ne jamais supprimer la donnee reelle qui gene :
 c'est celle du mainteneur.
 
+**9.114 — Un objet sorti d'un `tenant_context` est en LECTURE SEULE. Une methode appelee depuis le template ECRIT sur le mauvais schema.**
+
+Le pattern « je parcours les lieux, j'empile les objets, j'affiche la liste » est
+partout dans `/my_account/`. Il est sur tant qu'on ne touche que des champs **deja
+charges**. Il devient corrupteur des qu'on appelle, **apres** la sortie du `with`,
+une methode qui retourne en base.
+
+```python
+# ❌ Les objets sont deracines : la connexion est revenue au lieu courant
+memberships = []
+for tenant in user.client_achat.exclude(schema_name='public'):
+    with tenant_context(tenant):
+        for membership in Membership.objects.filter(user=user):
+            memberships.append(membership)
+    # <- sortie du with : connexion de retour sur le lieu de la page
+
+# ✅ Tout ce qui peut requeter ou sauver est evalue DANS le with
+memberships = []
+for tenant in user.client_achat.exclude(schema_name='public'):
+    with tenant_context(tenant):
+        for membership in Membership.objects.filter(user=user):
+            membership.est_valide = membership.is_valid()   # calcule ici
+            memberships.append(membership)
+```
+
+```django
+{# ❌ appels de methode au rendu, donc HORS tenant_context #}
+{% if membership.is_valid %}
+{{ membership.get_deadline|naturaltime }}
+
+{# ✅ lecture d'un attribut calcule dans la boucle, et du champ concret #}
+{% if membership.est_valide %}
+{{ membership.deadline|naturaltime }}
+```
+
+**`get_deadline` est le meme piege que `is_valid`**, et il est plus facile a rater :
+il ressemble a un getter inoffensif, mais il appelle `set_deadline()` — donc
+`save()` — des que `deadline` est vide. Les cartes d'adhesion V2 et classic en
+contenaient quatre chacune. Apres le calcul dans la boucle, `membership.deadline`
+porte deja la bonne valeur : le champ concret suffit, et il ne requete rien.
+
+**Pourquoi c'est une corruption silencieuse.** `is_valid()` appelle `get_deadline()`,
+qui appelle `set_deadline()` si `deadline` est vide — et `set_deadline()` se termine
+par `self.save()`. Or `Membership.uuid` n'est **pas** `primary_key=True` : la PK est
+l'`id` auto-incremente, et les `id` sont sequentiels **par schema**. Le `save()`
+produit donc :
+
+```sql
+UPDATE "BaseBillet_membership" SET deadline = '...' WHERE id = 42;
+```
+
+…sur le schema du lieu **affiche**, pas celui d'origine. L'adhesion n°42 du Cafe A
+ecrase l'adhesion n°42 de la Salle B, qui appartient a quelqu'un d'autre. Si l'`id`
+n'existe pas dans le schema courant, Django enchaine sur un `INSERT`. Selon les
+donnees, cet INSERT cree une adhesion fantome **en silence**, ou echoue en
+`IntegrityError` sur la FK `price_id` (le Price vient de l'autre schema) — donc un
+500 dans les logs. Corruption muette ou crash inexplique : les deux sont couteux,
+et aucun test ne rougit.
+
+Effet secondaire plus discret : `set_deadline()` lit `Configuration.get_solo().get_tzinfo()`,
+donc le fuseau du **mauvais** lieu. La Reunion / metropole = plusieurs heures d'ecart
+sur une fin d'adhesion.
+
+**Comment le reperer en relecture.** Dans un template alimente par une boucle
+`tenant_context`, tout `{{ obj.methode }}` ou `{% if obj.methode %}` est suspect :
+Django appelle la methode au rendu. Seuls sont surs les champs concrets et les
+relations couvertes par `select_related` / `prefetch_related`.
+
+**Le gabarit compte autant que la vue.** `MyAccount.membership` appelait bien
+`is_valid()` dans le `with` — mais la carte classic rappelait `is_valid` et
+`get_deadline` au rendu, hors `with`. Quand `set_deadline()` renvoie `None`
+(adhesion sans `price`), `deadline` reste vide et **chaque** rendu refait un
+`save()` sur le mauvais schema. Corriger la vue sans corriger le gabarit ne
+suffit donc pas : il a fallu traiter les deux.
+
+**Reste a traiter (2026-09-20) :** `membership.get_iteration_end_date` est encore
+appele 3 fois par carte (classic ~80-82, V2 ~97-99). Il ne sauve pas, donc pas de
+corruption — mais il lit `Configuration.get_solo().get_tzinfo()`, soit le fuseau
+du **mauvais** lieu, pour les echeances CAL_MONTH / CIVIL / SCHOLAR.
+
+Rencontre sur `/my_account/` skin V2 (`BaseBillet/views.py`, boucle memberships) en
+relisant le pull du 2026-09-18.
+
 ---
 
 ### Piege 71 : Locale francaise et DecimalField dans les templates JS
@@ -1723,75 +1806,6 @@ backends d'authentification.
 Dans les tests, `from django.core.cache import cache; cache.clear()` avant
 chaque appel pour reinitialiser. Attention : clear() vide TOUT le cache,
 acceptable uniquement sur dev DB.
-
-**9.114 — Un objet sorti d'un `tenant_context` est en LECTURE SEULE. Une methode appelee depuis le template ECRIT sur le mauvais schema.**
-
-Le pattern « je parcours les lieux, j'empile les objets, j'affiche la liste » est
-partout dans `/my_account/`. Il est sur tant qu'on ne touche que des champs **deja
-charges**. Il devient corrupteur des qu'on appelle, **apres** la sortie du `with`,
-une methode qui retourne en base.
-
-```python
-# ❌ Les objets sont deracines : la connexion est revenue au lieu courant
-memberships = []
-for tenant in user.client_achat.exclude(schema_name='public'):
-    with tenant_context(tenant):
-        for membership in Membership.objects.filter(user=user):
-            memberships.append(membership)
-    # <- sortie du with : connexion de retour sur le lieu de la page
-
-# ✅ Tout ce qui peut requeter ou sauver est evalue DANS le with
-memberships = []
-for tenant in user.client_achat.exclude(schema_name='public'):
-    with tenant_context(tenant):
-        for membership in Membership.objects.filter(user=user):
-            membership.est_valide = membership.is_valid()   # calcule ici
-            memberships.append(membership)
-```
-
-```django
-{# ❌ appels de methode au rendu, donc HORS tenant_context #}
-{% if membership.is_valid %}
-{{ membership.get_deadline|naturaltime }}
-
-{# ✅ lecture d'un attribut calcule dans la boucle, et du champ concret #}
-{% if membership.est_valide %}
-{{ membership.deadline|naturaltime }}
-```
-
-**`get_deadline` est le meme piege que `is_valid`**, et il est plus facile a rater :
-il ressemble a un getter inoffensif, mais il appelle `set_deadline()` — donc
-`save()` — des que `deadline` est vide. Les cartes d'adhesion V2 et classic en
-contenaient quatre chacune. Apres le calcul dans la boucle, `membership.deadline`
-porte deja la bonne valeur : le champ concret suffit, et il ne requete rien.
-
-**Pourquoi c'est une corruption silencieuse.** `is_valid()` appelle `get_deadline()`,
-qui appelle `set_deadline()` si `deadline` est vide — et `set_deadline()` se termine
-par `self.save()`. Or `Membership.uuid` n'est **pas** `primary_key=True` : la PK est
-l'`id` auto-incremente, et les `id` sont sequentiels **par schema**. Le `save()`
-produit donc :
-
-```sql
-UPDATE "BaseBillet_membership" SET deadline = '...' WHERE id = 42;
-```
-
-…sur le schema du lieu **affiche**, pas celui d'origine. L'adhesion n°42 du Cafe A
-ecrase l'adhesion n°42 de la Salle B, qui appartient a quelqu'un d'autre. Si l'`id`
-n'existe pas dans le schema courant, Django enchaine sur un `INSERT` et cree une
-adhesion fantome. Rien n'est logue, aucun test ne rougit.
-
-Effet secondaire plus discret : `set_deadline()` lit `Configuration.get_solo().get_tzinfo()`,
-donc le fuseau du **mauvais** lieu. La Reunion / metropole = plusieurs heures d'ecart
-sur une fin d'adhesion.
-
-**Comment le reperer en relecture.** Dans un template alimente par une boucle
-`tenant_context`, tout `{{ obj.methode }}` ou `{% if obj.methode %}` est suspect :
-Django appelle la methode au rendu. Seuls sont surs les champs concrets et les
-relations couvertes par `select_related` / `prefetch_related`.
-
-Rencontre sur `/my_account/` skin V2 (`BaseBillet/views.py`, boucle memberships) en
-relisant le pull du 2026-09-18. Le meme fichier contenait deja la version correcte
-dans `MyAccount.membership`, qui appelle `is_valid()` a l'interieur du `with`.
 
 ---
 

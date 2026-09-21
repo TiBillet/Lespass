@@ -4081,6 +4081,23 @@ class Membership(models.Model):
         # Par défaut (NA ou autre): aucune itération applicable
         return None
 
+    @property
+    def est_renouvellement_auto(self):
+        """
+        L'adhesion est-elle en prelevement automatique Stripe ?
+        / Is this membership on Stripe auto-renewal ?
+
+        A utiliser dans les gabarits, qui ne peuvent pas lire `Membership.AUTO`.
+        Les constantes sont piegeuses a lire (`ONCE, AUTO = 'A', 'O'`) : comparer
+        la valeur en dur dans un gabarit a deja produit un bug ou le bouton
+        d'arret du prelevement n'etait affiche pour personne.
+        Simple lecture d'un champ : aucune requete, aucun save, donc sans danger
+        hors d'un `tenant_context` (cf. tests/PIEGES.md 9.114).
+        / Use this in templates: they cannot read `Membership.AUTO`. Plain field
+        read, so no query and no save - safe outside a tenant_context.
+        """
+        return self.status == Membership.AUTO
+
     def is_valid(self):
         if self.status in [Membership.CANCELED, Membership.ADMIN_CANCELED]:
             return False
