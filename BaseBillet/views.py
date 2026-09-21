@@ -1170,6 +1170,17 @@ class MyAccount(viewsets.ViewSet):
                         # it may save() and would write to the wrong schema outside.
                         membership.est_valide = membership.is_valid()
 
+                        # Meme raison : get_iteration_end_date() lit
+                        # Configuration.get_solo() pour le fuseau du lieu. Hors
+                        # du with, ce serait le fuseau du lieu AFFICHE, pas celui
+                        # qui a delivre l'adhesion — la fin d'engagement peut
+                        # alors basculer d'un jour (Reunion/metropole). Un seul
+                        # appel ici, contre trois au rendu du gabarit.
+                        # / Same reason: it reads the venue timezone via
+                        # get_solo(). Outside the with, that is the DISPLAYED
+                        # venue's timezone. One call here instead of three.
+                        membership.date_fin_engagement = membership.get_iteration_end_date()
+
                         memberships.append(membership)
 
 
@@ -1647,8 +1658,12 @@ class MyAccount(viewsets.ViewSet):
                     user=user,
                 ).select_related('price', 'price__product').prefetch_related("option_generale").order_by('deadline')
 
+                # Le nom du lieu est lu une seule fois par lieu, pas a chaque
+                # adhesion. / Venue name read once per venue, not per membership.
+                nom_du_lieu_d_origine = Configuration.get_solo().organisation
+
                 for membership in memberships:
-                    membership.origin = Configuration.get_solo().organisation
+                    membership.origin = nom_du_lieu_d_origine
 
                     # Calcule ICI, dans le tenant_context : is_valid() peut appeler
                     # set_deadline(), qui fait un self.save(). Hors du with, cet
@@ -1656,6 +1671,11 @@ class MyAccount(viewsets.ViewSet):
                     # `membership.est_valide`, jamais `membership.is_valid`.
                     # / Computed inside tenant_context: is_valid() may save().
                     membership.est_valide = membership.is_valid()
+
+                    # Idem : get_iteration_end_date() lit le fuseau du lieu via
+                    # Configuration.get_solo(). Au rendu, ce serait celui du lieu
+                    # affiche. / Same: it reads the venue timezone via get_solo().
+                    membership.date_fin_engagement = membership.get_iteration_end_date()
 
                     if membership.est_valide:
                         memberships_dict[True].append(membership)

@@ -632,6 +632,12 @@ class CancelSubscription(DeprecatedV1Mixin, APIView):
         # "Issued by". We are in the request's tenant, so get_solo() is correct.
         membership.origin = Configuration.get_solo().organisation
 
+        # Le gabarit affiche la fin d'engagement via un attribut, pas la methode :
+        # get_iteration_end_date() lit le fuseau du lieu via get_solo().
+        # / The template reads an attribute, not the method, which reads the
+        # venue timezone via get_solo().
+        membership.date_fin_engagement = membership.get_iteration_end_date()
+
         if membership.status != Membership.AUTO:
             if is_htmx:
                 html = render_to_string(gabarit_carte, {

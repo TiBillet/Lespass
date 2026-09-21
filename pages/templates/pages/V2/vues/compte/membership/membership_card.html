@@ -103,9 +103,9 @@ data-testid="membership-cancel-auto-<uuid>".
                     {% if membership.price.commitment %}
                         {# L'engagement se calcule depuis first_contribution sur "iteration" périodes #}
                         <p class="compte-champ__aide">
-                            Engagement jusqu'au {{ membership.get_iteration_end_date|date }}
-                            {% if membership.first_contribution and membership.get_iteration_end_date %}
-                                (durée: {{ membership.first_contribution|timesince:membership.get_iteration_end_date }})
+                            Engagement jusqu'au {{ membership.date_fin_engagement|date }}
+                            {% if membership.first_contribution and membership.date_fin_engagement %}
+                                (durée: {{ membership.first_contribution|timesince:membership.date_fin_engagement }})
                             {% endif %}
                         </p>
                     {% endif %}
