@@ -623,6 +623,15 @@ class CancelSubscription(DeprecatedV1Mixin, APIView):
         # le calcul est sur. / The card template reads attributes, never methods.
         membership.est_valide = membership.is_valid()
 
+        # `origin` est le nom du lieu qui a delivre l'adhesion. C'est un attribut
+        # pose par la vue, pas un champ du modele : sans lui, la carte re-rendue
+        # affiche "Delivree par" suivi du vide. On est dans le tenant de la
+        # requete, donc get_solo() renvoie bien le lieu courant.
+        # / `origin` is the issuing venue's name, set by the view rather than
+        # stored on the model: without it the re-rendered card shows an empty
+        # "Issued by". We are in the request's tenant, so get_solo() is correct.
+        membership.origin = Configuration.get_solo().organisation
+
         if membership.status != Membership.AUTO:
             if is_htmx:
                 html = render_to_string(gabarit_carte, {

@@ -8888,12 +8888,21 @@ class PaiementViewSet(viewsets.ViewSet):
         # 4. Active memberships (if user known)
         adhesions = []
         if carte.user:
+            # CANCELED n'est PAS exclu ici : une adhesion resiliee court
+            # jusqu'a sa deadline (l'adherent a paye sa periode), et c'est
+            # is_valid() qui tranche. L'exclure au niveau SQL priverait
+            # l'adherent de son adhesion des la resiliation.
+            # ADMIN_CANCELED reste exclu : annulation administrative, effet
+            # immediat, avoir possible.
+            # / CANCELED is NOT excluded here: a cancelled membership runs
+            # until its deadline and is_valid() decides. ADMIN_CANCELED stays
+            # excluded: admin cancellation is immediate.
             toutes_adhesions = list(
                 Membership.objects.filter(
                     user=carte.user,
                 )
                 .exclude(
-                    status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED],
+                    status=Membership.ADMIN_CANCELED,
                 )
                 .select_related("price__product")
             )

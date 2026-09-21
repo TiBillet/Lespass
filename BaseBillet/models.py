@@ -4098,10 +4098,49 @@ class Membership(models.Model):
         """
         return self.status == Membership.AUTO
 
+    @property
+    def est_resiliee_en_cours(self):
+        """
+        L'adherent a arrete son prelevement, mais sa periode court encore ?
+        / Auto-renewal stopped, but the paid period is still running?
+
+        Sert aux gabarits a distinguer « resiliee, encore valable jusqu'au X »
+        de « expiree ». Les deux sont des adhesions CANCELED : seule la
+        deadline les separe.
+        Simple lecture de champs : aucune requete, aucun save, donc sans
+        danger hors d'un `tenant_context` (cf. tests/PIEGES.md 9.114).
+        / Lets templates tell "cancelled, still valid until X" from "expired".
+        Plain field read: no query, no save.
+        """
+        return (
+            self.status == Membership.CANCELED
+            and bool(self.deadline)
+            and timezone.localtime() <= self.deadline
+        )
+
     def is_valid(self):
-        if self.status in [Membership.CANCELED, Membership.ADMIN_CANCELED]:
+        # Annulation administrative : effet IMMEDIAT. L'action admin archive
+        # l'adhesion et peut emettre un avoir (remboursement) : laisser l'acces
+        # reviendrait a offrir l'adhesion.
+        # / Admin cancellation takes effect IMMEDIATELY: the admin action
+        # archives the membership and may issue a credit note, so keeping
+        # access would mean giving the membership away.
+        if self.status == Membership.ADMIN_CANCELED:
             return False
-        elif self.get_deadline():
+
+        # Resiliation par l'adherent : seul le renouvellement automatique
+        # s'arrete. La periode deja payee court jusqu'a son terme, comme le
+        # fait Stripe avec cancel_at_period_end=True.
+        # On lit `deadline` et non `get_deadline()` : ce dernier appelle
+        # set_deadline(), donc un save() (cf. tests/PIEGES.md 9.114). Une
+        # adhesion resiliee sans deadline n'a jamais ete payee : invalide.
+        # / Member-initiated cancellation only stops auto-renewal: the paid
+        # period runs to its end, mirroring Stripe's cancel_at_period_end.
+        # We read `deadline`, not `get_deadline()`, which would save().
+        if self.status == Membership.CANCELED:
+            return bool(self.deadline) and timezone.localtime() <= self.deadline
+
+        if self.get_deadline():
             if timezone.localtime() <= self.deadline:
                 return True
         return False

@@ -89,7 +89,16 @@ data-testid="membership-cancel-auto-<uuid>".
         <div class="offer-card__footer compte-adhesion__pied">
             {% if membership.est_valide %}
                 {# Infos de renouvellement / expiration en FALC #}
-                {% if membership.price.recurring_payment %}
+                {% if membership.est_resiliee_en_cours %}
+                    {# Prelevement arrete : plus de renouvellement, mais la periode #}
+                    {# deja payee court jusqu'a son terme (comme chez Stripe). Sans #}
+                    {# ce cas, la carte annoncerait "Se renouvelle dans...".        #}
+                    {# / Debit stopped: no renewal, but the paid period runs on.     #}
+                    <p class="compte-champ__aide">
+                        {% translate "Prélèvement arrêté. Adhésion valable jusqu'au" %}
+                        {{ membership.deadline|date }}
+                    </p>
+                {% elif membership.price.recurring_payment %}
                     <p class="compte-champ__aide">Se renouvelle dans {{ membership.deadline|naturaltime }}</p>
                     {% if membership.price.commitment %}
                         {# L'engagement se calcule depuis first_contribution sur "iteration" périodes #}
