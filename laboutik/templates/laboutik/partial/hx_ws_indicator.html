@@ -60,15 +60,30 @@ COMMUNICATION :
       }
 
     // Vérifie que le script n'a pas déjà été chargé, si "wsPublicInterface" existe, il a déjà été chargé donc on ne fait rien
-    if(typeof wsPublicInterface !== 'undefined' && wsPublicInterface!==null){
-        // Le script est re-execute (swap HTMX) alors que la socket est vivante :
-        // on ne re-enregistre pas les listeners, et on redemande un pong pour
+    // Ce partial est inclus dans deux gabarits, et la nav "Ventes" fait un swap
+    // innerHTML sur <body>. Le script est donc re-execute a chaque passage,
+    // alors que document.body — qui porte les listeners — survit au swap.
+    // Sans garde, chaque passage empile une couche de listeners sur les memes
+    // noeuds.
+    //
+    // Le drapeau porte sur l'INSTALLATION des listeners, pas sur l'etat de la
+    // socket : wsClose et wsError remettent wsPublicInterface a null, donc un
+    // garde adosse a la socket laissait passer les swaps survenus pendant une
+    // coupure, et dupliquait les listeners a la reconnexion.
+    // / This partial is included twice and the "Ventes" nav swaps the body's
+    // innerHTML, so the script re-runs while document.body — which holds the
+    // listeners — survives. The flag tracks LISTENER INSTALLATION, not socket
+    // state: wsClose/wsError null the interface, so a socket-based guard let
+    // swaps through during an outage and duplicated the listeners.
+    if (window.wsIndicatorListenersInstalled) {
+        // Listeners deja en place : on redemande seulement un pong, pour
         // reposer le vert sur l'indicateur que le swap vient de remplacer.
-        // / Script re-run while the socket is alive: do not re-register the
-        // listeners, just ask for a fresh pong to repaint the indicator.
+        // / Listeners already installed: just ask for a fresh pong to repaint
+        // the indicator the swap has replaced.
         wsPing()
         return
     }
+    window.wsIndicatorListenersInstalled = true;
 
       // Apres chaque swap HTMX, on rafraichit la mesure de latence et on
       // repeint l'indicateur, que le swap a pu remplacer dans le DOM.
