@@ -239,7 +239,7 @@ class TestPaiementComplementaire(FastTenantTestCase):
             # La 2ème carte EST proposée à cette étape.
             assert 'data-testid="btn-complement-2eme-carte"' in contenu1
             # Reste à payer = 9,00 € (15 - 6 couverts par carte1).
-            assert '9.00' in contenu1
+            assert '9,00' in contenu1
 
             cascade_carte1 = _extraire_hidden(contenu1, 'cascade_carte1')
             total_nfc_carte1 = _extraire_hidden(contenu1, 'total_nfc_carte1')
@@ -558,7 +558,7 @@ class TestPaiementComplementaire(FastTenantTestCase):
             reponse1 = self._post_payer_nfc(tag_id=self.carte1.tag_id, quantite=3)
             contenu1 = reponse1.content.decode()
             # Étape 1 : le FED de carte1 couvre 6 € → reste 9 €.
-            assert '9.00' in contenu1
+            assert '9,00' in contenu1
             cascade_carte1 = _extraire_hidden(contenu1, 'cascade_carte1')
             total_nfc_carte1 = _extraire_hidden(contenu1, 'total_nfc_carte1')
 

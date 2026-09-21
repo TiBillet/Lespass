@@ -1480,7 +1480,7 @@ def _valider_carte_primaire_pour_pv(tag_id_carte_manager, uuid_pv):
 METHODES_RECHARGE = (
     Product.RECHARGE_EUROS,
     Product.RECHARGE_CADEAU,
-    Product.RECHARGE_TEMPS,
+    # Product.RECHARGE_TEMPS,
 )
 
 # Recharges payantes : le client doit payer (especes, CB, cheque)
@@ -1489,7 +1489,7 @@ METHODES_RECHARGE_PAYANTES = (Product.RECHARGE_EUROS,)
 
 # Recharges gratuites : credit automatique, pas de paiement demande
 # Free top-ups: auto-credit, no payment asked
-METHODES_RECHARGE_GRATUITES = (Product.RECHARGE_CADEAU, Product.RECHARGE_TEMPS)
+METHODES_RECHARGE_GRATUITES = (Product.RECHARGE_CADEAU)#, Product.RECHARGE_TEMPS)
 
 
 # Pictogramme de la tuile « Recharger » selon le type de recharge.
@@ -1498,7 +1498,7 @@ METHODES_RECHARGE_GRATUITES = (Product.RECHARGE_CADEAU, Product.RECHARGE_TEMPS)
 ICONES_RECHARGE = {
     Product.RECHARGE_EUROS: "coins",
     Product.RECHARGE_CADEAU: "gift",
-    Product.RECHARGE_TEMPS: "clock",
+#    Product.RECHARGE_TEMPS: "clock",
 }
 
 
@@ -4043,7 +4043,7 @@ MAPPING_ASSET_CATEGORY_PAYMENT_METHOD = {
     Asset.TNF: PaymentMethod.LOCAL_GIFT,  # LG — cadeau
     Asset.TLF: PaymentMethod.LOCAL_EURO,  # LE — monnaie locale
     Asset.FED: PaymentMethod.STRIPE_FED,  # SF — monnaie fédérée du réseau (PAS de la monnaie locale)
-    Asset.TIM: PaymentMethod.LOCAL_EURO,  # LE — temps
+    # Asset.TIM: PaymentMethod.LOCAL_EURO,  # LE — temps
     Asset.FID: PaymentMethod.LOCAL_EURO,  # LE — fidélité
 }
 
