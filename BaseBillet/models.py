@@ -1744,7 +1744,7 @@ def post_save_Product(sender, instance: Product, created, **kwargs):
 # stay silent too.
 # Guard: tests/pytest/test_signaux_proxys_product.py fails if a new Product
 # proxy is created without being added to PROXYS_PRODUCT.
-PROXYS_PRODUCT = (TicketProduct, MembershipProduct, POSProduct, FutProduct)
+PROXYS_PRODUCT = (TicketProduct, MembershipProduct, ResourceProduct, POSProduct, FutProduct)
 for _proxy_product in PROXYS_PRODUCT:
     post_save.connect(post_save_Product, sender=_proxy_product)
 
