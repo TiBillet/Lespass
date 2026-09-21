@@ -188,7 +188,7 @@ test_pos_retour_consigne.py, test_pos_paiement_cheque.py) : ne pas les renommer.
               <c-V2.bt.paiement name='{% translate "ESPÈCE" %}' icon="bills" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=espece&total={{ total|unlocalize }}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','espece')" data-loading-disable data-testid="paiement-btn-especes" />
             {% endif %}
             {% if 'carte_bancaire' in moyens_paiement %}
-              <c-V2.bt.paiement name='{% translate "CB" %}' icon="card" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=carte_bancaire" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','carte_bancaire')" data-loading-disable data-testid="paiement-btn-cb" />
+              <c-V2.bt.paiement name='{% translate "CB" %}' icon="card" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=carte_bancaire&total={{ total|unlocalize }}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','carte_bancaire')" data-loading-disable data-testid="paiement-btn-cb" />
             {% endif %}
             {% if 'CH' in moyens_paiement %}
               <c-V2.bt.paiement name='{% translate "CHÈQUE" %}' icon="cheque" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=CH" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','CH')" data-loading-disable data-testid="paiement-btn-cheque" />

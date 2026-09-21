@@ -1194,6 +1194,10 @@ def obtenir_solde_complet_carte(carte):
     tokens_locaux = []
     locaux_centimes = 0
     for token in WalletService.obtenir_tous_les_soldes(wallet):
+        # Ignore token with 0 value
+        if token.value == 0:
+            continue
+
         tokens_locaux.append(
             {
                 "asset_name": token.asset.name,
