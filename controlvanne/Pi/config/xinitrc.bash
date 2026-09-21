@@ -65,7 +65,7 @@ while true; do
     --overscroll-history-navigation=0 \
     --autoplay-policy=no-user-gesture-required \
     --disable-gpu --use-gl=swiftshader --disable-dev-shm-usage \
-    --noerrdialogs --disable-session-crashed-bubble --disable-translate \
+    --noerrdialogs --disable-session-crashed-bubble --disable-features=Translate,TranslateUI \
     --enable-features=UseOzonePlatform --ozone-platform=x11
   rc=$?
   echo "[KIOSK] Chromium terminé (rc=$rc), relance dans 2s…"

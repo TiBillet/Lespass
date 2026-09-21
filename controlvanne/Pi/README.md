@@ -70,6 +70,7 @@ make help
 | `make claim PIN=123456 [SERVER=...] [RFID=...]` | Appairage : génère `.env`. `SERVER` repris du `.env` (`CLAIM_SERVER_URL`) s'il existe |
 | `make install [RFID=RC522]` | Dépendances système + virtualenv |
 | `make deploy` | Copie les services systemd et fichiers de config |
+`make deploy` pose aussi une policy Chromium (`config/chromium-kiosk-policy.json` → `/etc/chromium/policies/managed/`) qui désactive la traduction automatique — la bulle « French | English » du kiosk. L'ancienne option `--disable-translate` est sans effet sur les Chromium récents.
 | `make start` | Active et démarre `tibeer` + `kiosk` |
 | `make update` | `git pull` + `pip install` + redémarrage |
 | `make logs` | Logs en direct (`journalctl -u tibeer -f`) |

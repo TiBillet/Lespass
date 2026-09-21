@@ -77,6 +77,8 @@ deploy:
 	sudo cp $(CONFIG)/xwrapper.conf /etc/X11/Xwrapper.config
 	sudo mkdir -p /etc/systemd/system/pigpiod.service.d
 	sudo cp $(CONFIG)/pigpiod-override.conf /etc/systemd/system/pigpiod.service.d/override.conf
+	sudo mkdir -p /etc/chromium/policies/managed
+	sudo cp $(CONFIG)/chromium-kiosk-policy.json /etc/chromium/policies/managed/tibeer-kiosk.json
 	sudo systemctl daemon-reload
 	$(eval CFG := $(shell [ -d /boot/firmware ] && echo /boot/firmware/config.txt || echo /boot/config.txt))
 	sudo sed -i '/^dtoverlay=vc4/d;/^hdmi_force_hotplug=/d' $(CFG)
