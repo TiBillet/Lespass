@@ -15,8 +15,9 @@ Contexte attendu :
 FLUX D'ARRÊT DU PRÉLÈVEMENT AUTOMATIQUE :
 hx-post /api/cancel_sub/ -> la réponse remplace la carte entière
 (#membership-card-<uuid>, hx-swap outerHTML).
-Attention : ApiBillet CancelSubscription rend aujourd'hui le gabarit CLASSIC
-(voir CHANGELOG/a traiter/v2-da-v1-points-laisses-de-cote.md).
+ApiBillet CancelSubscription rend le gabarit du skin COURANT (gabarit_skin),
+donc cette carte-ci en V2 : l'alerte d'erreur est une .callout--erreur, pas une
+.alert-danger Bootstrap.
 
 A CONSERVER : id="membership-card-<uuid>", data-testid="membership-card-<uuid>",
 data-testid="membership-cancel-auto-<uuid>".

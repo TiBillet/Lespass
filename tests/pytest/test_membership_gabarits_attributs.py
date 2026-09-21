@@ -200,3 +200,57 @@ def test_la_boucle_des_adhesions_ne_fabrique_pas_de_n_plus_un(adhesion_avec_enga
         f"pour 1, {requetes_pour_dix} pour 10. Un acces non precharge a ete "
         f"introduit dans la boucle (N+1)."
     )
+
+
+def test_la_page_des_adhesions_affiche_une_adhesion_valide_comme_active(
+    adhesion_avec_engagement,
+):
+    """Le rendu complet, par la vraie vue : une adhesion valide dit « Active ».
+
+    C'est le seul test qui exerce la chaine entiere — vue, boucle
+    tenant_context, gabarit. Les autres verifient le gabarit (garde statique)
+    ou le modele. Si quelqu'un retire `membership.est_valide = ...` de la
+    boucle, l'attribut vaut '' au rendu, `{% if %}` est faux, et la carte
+    affiche « Expiree » sur une adhesion parfaitement valide : c'est CE test
+    qui rougit.
+    / The only test exercising the whole chain: view, tenant_context loop,
+    template. Drop `est_valide` from the loop and a valid membership renders
+    as expired — this is the test that catches it.
+    """
+    from django.test import Client as ClientDjango
+
+    tenant, tarif, adherent = adhesion_avec_engagement
+
+    with tenant_context(tenant):
+        _creer_adhesion(tarif, adherent)
+
+        # La boucle de la vue itere sur `user.client_achat` : sans ce lien,
+        # aucune adhesion n'est collectee et le test passerait a vide.
+        # / The view loops over `user.client_achat`: without this link nothing
+        # is collected and the test would pass vacuously.
+        adherent.client_achat.add(tenant)
+        adherent.is_active = True
+        adherent.save(update_fields=["is_active"])
+
+    navigateur = ClientDjango(HTTP_HOST="lespass.tibillet.localhost")
+    # Le projet a plusieurs backends d'authentification : force_login exige
+    # qu'on designe lequel. / Several auth backends: force_login needs one.
+    navigateur.force_login(
+        adherent, backend="django.contrib.auth.backends.ModelBackend"
+    )
+
+    reponse = navigateur.get("/my_account/membership/")
+    assert reponse.status_code == 200, reponse.status_code
+    contenu = reponse.content.decode()
+
+    assert tarif.product.name in contenu, (
+        "L'adhesion n'apparait pas sur la page : la boucle ne l'a pas collectee."
+    )
+    assert "badge--green" in contenu, (
+        "Une adhesion valide doit porter le badge vert « Active ». Si elle "
+        "apparait comme expiree, l'attribut `est_valide` n'a pas ete pose par "
+        "la vue (cf. tests/PIEGES.md 9.114)."
+    )
+    assert "compte-adhesion--expiree" not in contenu, (
+        "Une adhesion valide ne doit pas porter la classe des adhesions expirees."
+    )

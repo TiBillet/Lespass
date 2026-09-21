@@ -1444,10 +1444,15 @@ relations couvertes par `select_related` / `prefetch_related`.
 `save()` sur le mauvais schema. Corriger la vue sans corriger le gabarit ne
 suffit donc pas : il a fallu traiter les deux.
 
-**Reste a traiter (2026-09-20) :** `membership.get_iteration_end_date` est encore
-appele 3 fois par carte (classic ~80-82, V2 ~97-99). Il ne sauve pas, donc pas de
-corruption — mais il lit `Configuration.get_solo().get_tzinfo()`, soit le fuseau
-du **mauvais** lieu, pour les echeances CAL_MONTH / CIVIL / SCHOLAR.
+**Le meme piege, en plus discret : `get_iteration_end_date`.** Il ressemble a un
+getter inoffensif, mais il lit `Configuration.get_solo().get_tzinfo()` : appele
+au rendu, il prend le fuseau du **mauvais** lieu pour les echeances CAL_MONTH /
+CIVIL / SCHOLAR — une fin d'engagement peut basculer d'un jour. Il ne sauve pas,
+donc pas de corruption, mais le resultat est faux.
+Traite le 2026-09-21 : les vues posent `date_fin_engagement` dans le `with` (un
+appel au lieu de trois par carte), et `tests/pytest/test_membership_gabarits_attributs.py`
+interdit desormais par test statique tout appel de methode sur `membership` dans
+les gabarits de carte.
 
 Rencontre sur `/my_account/` skin V2 (`BaseBillet/views.py`, boucle memberships) en
 relisant le pull du 2026-09-18.

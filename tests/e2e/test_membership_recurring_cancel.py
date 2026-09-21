@@ -308,6 +308,14 @@ class TestMembershipRecurringCancel:
         cancel_button.click()
 
         # Attendre que la réponse HTMX remplace le contenu.
-        # / Wait for the HTMX response to replace the content.
-        error_alert = page.locator(".alert-danger, .alert-warning").first
+        #
+        # On cible role="alert" et non une classe CSS : depuis que
+        # CancelSubscription rend le gabarit du skin COURANT (gabarit_skin),
+        # l'alerte est une `.callout--erreur` en V2 et une `.alert-danger` en
+        # classic. Le rôle ARIA, lui, est le même dans les deux — et c'est ce
+        # qui compte pour la personne qui utilise un lecteur d'écran.
+        # / We target role="alert" rather than a CSS class: since the view
+        # renders the CURRENT skin's card, the alert is `.callout--erreur` in
+        # V2 and `.alert-danger` in classic. The ARIA role is the same in both.
+        error_alert = page.locator('[role="alert"]').first
         expect(error_alert).to_be_visible(timeout=15_000)

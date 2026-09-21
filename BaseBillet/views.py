@@ -2554,12 +2554,12 @@ class FederationViewset(viewsets.ViewSet):
             afficher_lieux_sans_adresse=config_federation.afficher_lieux_sans_adresse,
         )
 
-        # Enrichissement pour la page Reseau (skin V2) : type de lieu
-        # (Client.categorie) et distance a vol d'oiseau depuis l'adresse du
-        # tenant courant. Le JS ne rend ces infos que si les cles existent :
-        # la page publique /explorer/ n'est pas impactee.
-        # / Enrichment for the Network page (V2 skin): venue type and
-        # straight-line distance. The JS renders them only when present:
+        # Enrichissement pour la page Reseau (skin V2) : distance a vol
+        # d'oiseau depuis l'adresse du tenant courant. Le type de lieu n'est
+        # plus enrichi (ni filtre ni badge cote front). Le JS ne rend la
+        # distance que si la cle existe : /explorer/ n'est pas impactee.
+        # / Enrichment for the Network page (V2 skin): straight-line distance
+        # only. Venue type is no longer enriched. The JS renders it when present:
         # the public /explorer/ page is unaffected.
         explorer_data = _enrichir_explorer_data_avec_distance(explorer_data, config)
 

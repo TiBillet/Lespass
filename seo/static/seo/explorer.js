@@ -290,8 +290,6 @@
     }
 
     function filterPAsByTextAndTag(points) {
-        // Malgre son nom historique, filtre aussi par type de lieu.
-        // / Despite its historical name, also filters by venue type.
         const result = [];
         for (let i = 0; i < points.length; i++) {
             const point = points[i];
