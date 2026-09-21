@@ -1,59 +1,113 @@
 {% load static i18n %}
 {% load laboutik_process %}
 <!--
-ECRAN CONFIRMATION DE PAIEMENT
+POPUP CONFIRMATION DE PAIEMENT (V2)
 Demande une validation avant de finaliser le paiement.
-Pour les especes : affiche le total a encaisser et un champ pour la somme donnee.
-/ Payment confirmation screen — validates before finalizing. Cash: shows total and given amount field.
+Especes : pave numerique pour la somme donnee, monnaie a rendre en direct.
+CB / cheque / offert : rappel de ce qu'il faut faire, puis Valider.
+/ Payment confirmation popup (V2). Cash: keypad for the given amount, live
+change. Card / cheque / gift: a reminder of what to do, then Validate.
 
 LOCALISATION : laboutik/templates/laboutik/partial/hx_confirm_payment.html
 
+Maquette : TEMP-tibillet-laboutik-main/caisse (popup .card-modal).
+Style : overlay.css, bloc « POPUP CENTREE V2 ».
+
 FLUX :
-1. Clic sur un bouton paiement dans hx_display_type_payment.html
-2. Ce partial s'affiche avec le moyen de paiement et le total
-3. Clic VALIDER → soumet le formulaire d'addition vers laboutik-paiement-payer
+1. Clic sur une tuile de paiement (hx_display_type_payment.html ou
+   hx_funds_insufficient.html) → confirmer() → CE partial remplace #confirm
+2. La popup de #messages s'efface pendant ce temps (regle « Rien ne s'empile »)
+3. Especes : le pave (cotton/numpad.html) envoie ses touches a #confirm-especes.
+   Le script calcule la monnaie a rendre et range la somme dans #given-sum.
+4. Clic VALIDER → askManageAddition() soumet #addition-form vers payer()
+   (comme avant : somme vide = compte juste, somme trop petite = message).
+5. La croix ou le fond ferme #confirm : on revient au choix du paiement.
 -->
 <div id="confirm"
-     class="BF-col"
      data-testid="paiement-confirmation"
      aria-live="polite">
-  <h1>{% translate "Confirmez le paiement par" %} {{ payment_translation }}</h1>
-  {% if method == 'espece' %}
-    <!-- total a encaisser, bien visible pour le caissier / total to collect, clearly visible -->
-    <div class="confirm-total">{% translate "A encaisser" %} : {{ total|floatformat:2 }} {{ currency_data.symbol }}</div>
-    <div class="info-sum-given">
-      <i class="fas fa-coins" aria-hidden="true"></i> {% translate "Somme donnée" %}
-    </div>
-    <!-- champ de saisie de la somme donnee par le client / input for amount given by customer -->
-    <div class="confirm-input-wrapper">
-      <input type="number"
-             id="given-sum"
-             class="addition-fractionnee-input"
-             inputmode="decimal"
-             autofocus
-             aria-label="{% translate "Somme donnée" %}"
-             data-testid="paiement-input-somme-donnee">
-      <span class="confirm-currency" aria-hidden="true">{{ currency_data.symbol }}</span>
-    </div>
-    <small id="given-sum-msg-erreur" role="alert"></small>
-  {% endif %}
-  <div id="confirm-action-container">
-    <!-- bouton retour / back button -->
-    <c-bt.return selector="#confirm" layer="2" />
-    <div id="bt-valider-layer2"
-         class="bt-basic-container bt-basic-bg-success"
-         onclick="askManageAddition('{{ method }}' {% if method == 'espece' %}, {{ total|force_dot }}{% endif %});openCashDrawer('{{ method }}')"
-         data-testid="paiement-btn-valider">
-      <div class="bt-basic-icon">
-        <i class="fas fa-check-circle" aria-hidden="true"></i>
+  <div class="card-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-titre">
+    {# Toucher le fond ferme la popup, comme la croix / Tapping the backdrop closes the popup #}
+    <div class="card-modal-backdrop" onclick="hideAndEmptyElement('#confirm')"></div>
+    <div class="card-modal-box">
+      <c-V2.bt.return selector="#confirm" layer="2" data-testid="paiement-confirmation-btn-fermer" />
+
+      {# --- EN-TETE : moyen de paiement + total / HEADER: method + total --- #}
+      <div class="payment-total">
+        {% if method != 'espece' %}
+          <span class="confirm-signal" aria-hidden="true">
+            <svg class="ico" viewBox="0 0 24 24" focusable="false">
+              {% if method == 'carte_bancaire' %}
+                <path fill-rule="evenodd" d="M4.4 4h15.2A2.4 2.4 0 0 1 22 6.4v11.2a2.4 2.4 0 0 1-2.4 2.4H4.4A2.4 2.4 0 0 1 2 17.6V6.4A2.4 2.4 0 0 1 4.4 4zM2 7.6h20v3.2H2z"/>
+              {% elif method == 'CH' %}
+                <rect x="2" y="5" width="20" height="14" rx="2"/><rect x="5" y="9.2" width="10" height="1.8" rx=".9" opacity=".5"/><path d="M14 16.5c1.5 0 2.5-.9 4-.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity=".6"/>
+              {% elif method == 'gift' %}
+                <rect x="3.4" y="9.6" width="17.2" height="11.2" rx="1.6"/><rect x="2.2" y="6.2" width="19.6" height="4" rx="1.2"/><rect x="10.9" y="6.2" width="2.2" height="14.6"/><path d="M9.6 6.2c-2.4 0-4-1.3-4-3s1.6-2.6 3.4-1.6c1.4.8 2.4 2.6 2.6 4.6-.7 0-1.4 0-2 0z" opacity=".6"/><path d="M14.4 6.2c2.4 0 4-1.3 4-3s-1.6-2.6-3.4-1.6c-1.4.8-2.4 2.6-2.6 4.6.7 0 1.4 0 2 0z" opacity=".6"/>
+              {% else %}
+                <path d="M3.4 6.8A2.4 2.4 0 0 1 5.8 4.4h10.8a1 1 0 0 1 0 2H5.8a.4.4 0 0 0-.4.4v.6h14a2.2 2.2 0 0 1 2.2 2.2v6.2a2.2 2.2 0 0 1-2.2 2.2H5.6a2.2 2.2 0 0 1-2.2-2.2V6.8z"/><rect x="15.6" y="11.3" width="4.4" height="3.4" rx="1.1"/>
+              {% endif %}
+            </svg>
+          </span>
+        {% endif %}
+        <span class="payment-total-lbl" id="confirm-titre">{{ payment_translation }}</span>
+        <span class="payment-total-val confirm-total">{{ total|floatformat:2 }} {{ currency_data.symbol }}</span>
       </div>
-      <div class="bt-basic-text">
-        <div>{% translate "VALIDER" %}</div>
+
+      {% if method == 'espece' %}
+        {# ================================================================ #}
+        {# --- ESPECES : somme donnee au pave, monnaie a rendre ---         #}
+        {# --- CASH: given amount on the keypad, change to give back ---    #}
+        {# ================================================================ #}
+        <div id="confirm-especes" class="card-confirm confirm-especes">
+          <div class="card-confirm-row">
+            <span id="confirm-somme-titre">{% translate "Somme donnée" %}</span>
+            <b class="confirm-somme-donnee" aria-live="polite">&mdash;</b>
+          </div>
+          <div class="card-confirm-row card-confirm-total">
+            <span class="confirm-rendu-lbl">{% translate "À rendre" %}</span>
+            <b class="confirm-rendu" aria-live="polite">&mdash;</b>
+          </div>
+          {# Lu par askManageAddition() : vide = compte juste. Point decimal. #}
+          {# / Read by askManageAddition(): empty = exact amount. Dot decimal. #}
+          <input type="hidden"
+                 id="given-sum"
+                 aria-labelledby="confirm-somme-titre"
+                 data-testid="paiement-input-somme-donnee">
+          <small id="given-sum-msg-erreur" class="card-montant-erreur" role="alert"></small>
+          <c-numpad id="confirm-numpad" ck-target="#confirm-especes" effacer="retour" />
+        </div>
+      {% else %}
+        {# --- CB / CHEQUE / OFFERT : ce qu'il faut faire avant de valider --- #}
+        {# --- CARD / CHEQUE / GIFT: what to do before validating ---          #}
+        <p class="payment-help">
+          {% if method == 'carte_bancaire' %}
+            {% translate "Encaissez sur le terminal de paiement, puis validez." %}
+          {% elif method == 'CH' %}
+            {% translate "Vérifiez le montant et l'ordre du chèque, puis validez." %}
+          {% elif method == 'gift' %}
+            {% translate "Montant offert : rien à encaisser." %}
+          {% endif %}
+        </p>
+      {% endif %}
+
+      {# --- ACTIONS --- #}
+      <div class="card-confirm-acts">
+        <button type="button" class="card-confirm-cancel"
+                onclick="hideAndEmptyElement('#confirm')"
+                data-testid="paiement-btn-annuler">{% translate "Annuler" %}</button>
+        <button type="button"
+                id="bt-valider-layer2"
+                class="card-valider"
+                onclick="askManageAddition('{{ method }}' {% if method == 'espece' %}, {{ total|force_dot }}{% endif %});openCashDrawer('{{ method }}')"
+                data-testid="paiement-btn-valider">
+          {% translate "Valider" %}<span class="confirm-valider-detail">{% if method == 'espece' %} · {% translate "compte juste" %}{% endif %}</span>
+        </button>
       </div>
     </div>
   </div>
+
   <script>
-    /** 
+    /**
      * open cash drawer
      * for sunmi pos
      */
@@ -119,5 +173,96 @@ FLUX :
         data: { actionType: 'submit' }
       })
     }
+
+    {% if method == 'espece' %}
+    {% translate "À rendre" as texte_a_rendre %}
+    {% translate "Il manque" as texte_il_manque %}
+    {% translate "compte juste" as texte_compte_juste %}
+    {% translate "rendre" as texte_rendre %}
+    /**
+     * Especes : assemble la somme donnee a partir du pave et affiche la
+     * monnaie a rendre. N'envoie rien : c'est Valider qui soumet.
+     * / Cash: builds the given amount from the keypad and shows the change.
+     * Sends nothing: Validate submits.
+     *
+     * LOCALISATION : laboutik/templates/laboutik/partial/hx_confirm_payment.html
+     *
+     * Recoit : 'keypadSendValue' { key } depuis cotton/numpad.html
+     * Met a jour : #given-sum (point decimal, lu par askManageAddition),
+     * « Somme donnee », « A rendre » et le libelle du bouton Valider.
+     * Regles de saisie : une virgule, deux decimales, 7 chiffres au plus.
+     */
+    function especesSaisirTouche(event) {
+      const zoneEspeces = event.currentTarget
+      const champSommeDonnee = zoneEspeces.querySelector('#given-sum')
+      const touche = event.detail.key
+      const totalAEncaisser = {{ total|force_dot }}
+      // La saisie est gardee avec une virgule pour l'affichage
+      // / Input is kept with a comma for display
+      let saisie = zoneEspeces.dataset.saisie || ''
+
+      if (touche === 'Backspace') {
+        saisie = saisie.slice(0, -1)
+      } else if (touche === 'C') {
+        saisie = ''
+      } else if (touche === '.') {
+        if (!saisie.includes(',')) {
+          saisie = saisie === '' ? '0,' : saisie + ','
+        }
+      } else {
+        const aDejaDeuxDecimales = saisie.includes(',') && saisie.split(',')[1].length >= 2
+        const aDejaSeptChiffres = saisie.replace(',', '').length >= 7
+        if (aDejaDeuxDecimales || aDejaSeptChiffres) {
+          return
+        }
+        saisie = saisie === '0' ? touche : saisie + touche
+      }
+      zoneEspeces.dataset.saisie = saisie
+
+      const symbole = ' {{ currency_data.symbol }}'
+      const formaterEuros = (montant) => montant.toFixed(2).replace('.', ',') + symbole
+      const sommeDonnee = parseFloat(saisie.replace(',', '.')) || 0
+      const libelleRendu = zoneEspeces.querySelector('.confirm-rendu-lbl')
+      const valeurRendu = zoneEspeces.querySelector('.confirm-rendu')
+      const detailBouton = document.querySelector('#bt-valider-layer2 .confirm-valider-detail')
+      const boutonValider = document.querySelector('#bt-valider-layer2')
+      zoneEspeces.querySelector('#given-sum-msg-erreur').innerText = ''
+
+      // Rien de saisi : compte juste, comme avant (champ vide)
+      // / Nothing typed: exact amount, as before (empty field)
+      if (saisie === '') {
+        champSommeDonnee.value = ''
+        zoneEspeces.querySelector('.confirm-somme-donnee').textContent = '—'
+        libelleRendu.textContent = '{{ texte_a_rendre|escapejs }}'
+        valeurRendu.textContent = '—'
+        zoneEspeces.classList.remove('is-insuffisant')
+        detailBouton.textContent = ' · {{ texte_compte_juste|escapejs }}'
+        boutonValider.disabled = false
+        return
+      }
+
+      champSommeDonnee.value = saisie.replace(',', '.')
+      zoneEspeces.querySelector('.confirm-somme-donnee').textContent = saisie + symbole
+
+      // Arrondi au centime pour eviter 7.499999 / Round to the cent
+      const differenceEnCentimes = Math.round((sommeDonnee - totalAEncaisser) * 100)
+      if (differenceEnCentimes < 0) {
+        libelleRendu.textContent = '{{ texte_il_manque|escapejs }}'
+        valeurRendu.textContent = formaterEuros(-differenceEnCentimes / 100)
+        zoneEspeces.classList.add('is-insuffisant')
+        detailBouton.textContent = ''
+        boutonValider.disabled = true
+      } else {
+        libelleRendu.textContent = '{{ texte_a_rendre|escapejs }}'
+        valeurRendu.textContent = formaterEuros(differenceEnCentimes / 100)
+        zoneEspeces.classList.remove('is-insuffisant')
+        detailBouton.textContent = differenceEnCentimes === 0
+          ? ' · {{ texte_compte_juste|escapejs }}'
+          : ' · {{ texte_rendre|escapejs }} ' + formaterEuros(differenceEnCentimes / 100)
+        boutonValider.disabled = false
+      }
+    }
+    document.querySelector('#confirm-especes').addEventListener('keypadSendValue', especesSaisirTouche)
+    {% endif %}
   </script>
 </div>

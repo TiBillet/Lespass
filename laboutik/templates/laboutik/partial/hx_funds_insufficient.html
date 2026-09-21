@@ -1,44 +1,95 @@
 {% load static i18n l10n %}
 {% load laboutik_process %}
+<!--
+POPUP FONDS INSUFFISANTS (V2)
+La carte cashless ne couvre pas le total. On dit combien il manque,
+ce qu'il y a sur la carte, et on propose de completer.
+/ Insufficient funds popup (V2): how much is missing, what the card holds,
+and how to complete the payment.
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_funds_insufficient.html
+
+Maquette : meme gabarit que « Carte inconnue » (hx_card_feedback.html) :
+disque rouge, titre, detail. Style : overlay.css, bloc « POPUP CENTREE V2 ».
+
+FLUX :
+1. Paiement cashless refuse dans payer() → _payer_par_nfc()
+2. Ce partial remplace #messages (outerHTML)
+3. Une tuile « Compléter avec » charge l'etape suivante dans #confirm :
+   confirmer() (especes, CB) ou lire_nfc() (autre carte), avec
+   total = montant manquant. La popup de #messages s'efface pendant ce temps.
+
+CONTEXTE (_payer_par_nfc) :
+- payment.missing   : montant manquant en euros
+- carte_ref         : 4 derniers caracteres du tag de la carte
+- soldes            : soldes locaux de la carte (_soldes_locaux_pour_affichage)
+- payments_accepted : especes / CB acceptees par le point de vente
+- uuid_transaction  : transaction a completer (vide si aucune)
+-->
 <div id="messages">
-  <div class="BF-col"
-       data-testid="paiement-nfc-insuffisant"
-       aria-live="polite">
-    {% if payment.moyen_paiement == 'nfc' and step == 2 %}
-      <div class="fi-title1 test-return-title">{% translate "Fonds insuffisants" %}</div>
-      <div class="fi-title1">{% translate "sur deuxième carte" %}</div>
-      <div class="fi-msg1 test-return-missing-cash" role="alert">
-        {% translate "Il manque" %} <span id="test-manque-monnaie">{{ payment.missing }}</span> {{ currency_data.symbol }} à
-        {{ card.name }}.
-      </div>
-    {% else %}
-      <div class="fi-title1 test-return-title">{% translate "Fonds insuffisants." %}</div>
-      <div class="fi-msg1 test-return-missing-cash" role="alert">
-        {% translate "Il manque" %} <span id="test-manque-monnaie">{{ payment.missing }}</span> {{ currency_data.symbol }} à
-        {{ card.name }}.
-      </div>
-      <c-status-wallets monnaie-name="{{ monnaie_name }}" name="{{ card.name }}" :wallets="wallets" />
-      <div class="fi-msg1 test-returm-possible-purchase">{% translate "Achat possible par :" %}</div>
-      {% if payments_accepted.accepte_especes %}
-        <c-bt.paiement name='{% translate "ESPÈCE" %}' total="{{ payment.missing }}" icon="fa-coins" hx-trigger="click" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=espece&uuid_transaction={{ uuid_transaction }}&total={{ payment.missing|unlocalize }}" hx-target="#confirm" hx-swap="outerHTML" data-loading-disable hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','espece')
-        {% if uuid_transaction != '' %}
-          ; askAdditionManageForm('updateInput','#addition-uuid-transaction','{{ uuid_transaction }}')
+  <div data-testid="paiement-nfc-insuffisant" aria-live="polite">
+    <div class="card-modal" role="alertdialog" aria-modal="true"
+         aria-labelledby="fonds-insuffisants-titre" aria-describedby="fonds-insuffisants-manque">
+      {# Toucher le fond ferme la popup, comme la croix / Tapping the backdrop closes the popup #}
+      <div class="card-modal-backdrop" onclick="hideAndEmptyElement('#messages')"></div>
+      <div class="card-modal-box">
+        <c-V2.bt.return selector="#messages" data-testid="paiement-insuffisant-btn-fermer" />
+
+        {# --- CE QUI MANQUE / WHAT IS MISSING --- #}
+        <div class="card-erreur">
+          <span class="card-erreur-signal">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path fill-rule="evenodd" d="M12 2.6 22.8 21.2H1.2zM10.9 9h2.2v6.2h-2.2zm0 7.6h2.2v2.2h-2.2z"/>
+            </svg>
+          </span>
+          <strong id="fonds-insuffisants-titre" class="test-return-title">{% translate "Fonds insuffisants" %}</strong>
+          <span id="fonds-insuffisants-manque" class="card-manque test-return-missing-cash" role="alert">
+            {% translate "Il manque" %}
+            <b id="test-manque-monnaie">{{ payment.missing|floatformat:2 }} {{ currency_data.symbol }}</b>
+          </span>
+          {% if carte_ref %}
+            <span class="card-ref">{% translate "carte" %} ·· {{ carte_ref }}</span>
+          {% endif %}
+        </div>
+
+        {# --- CE QU'IL Y A SUR LA CARTE (pastilles) / WHAT THE CARD HOLDS (pills) --- #}
+        {% if soldes %}
+          <ul class="card-pastilles" aria-label="{% translate 'Détail du solde' %}">
+            {% for solde in soldes %}
+              <li class="card-pastille" data-testid="paiement-insuffisant-solde-{{ forloop.counter }}">
+                <span class="card-pastille-nom">{{ solde.asset_name }}</span>
+                <b>{{ solde.value_euros|floatformat:2 }}{% if solde.asset_category == "TLF" %} {{ currency_data.symbol }}{% endif %}</b>
+              </li>
+            {% endfor %}
+          </ul>
         {% endif %}
-        " />
-      {% endif %}
-      {% if payments_accepted.accepte_carte_bancaire %}
-        <c-bt.paiement name='{% translate "CB" %}' total="{{ payment.missing }}" icon="fa-coins" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=carte_bancaire&uuid_transaction={{ uuid_transaction }}&total={{ payment.missing|unlocalize }}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" data-loading-disable hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','carte_bancaire')
-        {% if uuid_transaction != '' %}
-          ; askAdditionManageForm('updateInput','#addition-uuid-transaction','{{ uuid_transaction }}')
-        {% endif %}
-        " />
-      {% endif %}
-      <c-bt.paiement name='{% translate "CASHLESS" %}' total="{{ payment.missing }}" icon="fa-address-card" hx-get="{% url 'laboutik-paiement-lire_nfc' %}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" data-loading-disable hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc')
-      {% if uuid_transaction != '' %}
-        ; askAdditionManageForm('updateInput','#addition-uuid-transaction','{{ uuid_transaction }}')
-      {% endif %}
-      " />
-    {% endif %}
-    <c-bt.return />
+
+        {# --- COMPLETER LE PAIEMENT / COMPLETE THE PAYMENT --- #}
+        {# Memes requetes qu'avant : seule l'apparence des boutons change. #}
+        {# / Same requests as before: only the button look changes.       #}
+        <p class="payment-title test-returm-possible-purchase">{% translate "Compléter avec" %}</p>
+        <div class="payment-methods">
+          {% if payments_accepted.accepte_especes %}
+            <c-V2.bt.paiement name='{% translate "ESPÈCE" %}' icon="bills" hx-trigger="click" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=espece&uuid_transaction={{ uuid_transaction }}&total={{ payment.missing|unlocalize }}" hx-target="#confirm" hx-swap="outerHTML" data-loading-disable data-testid="paiement-insuffisant-btn-especes" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','espece')
+            {% if uuid_transaction != '' %}
+              ; askAdditionManageForm('updateInput','#addition-uuid-transaction','{{ uuid_transaction }}')
+            {% endif %}
+            " />
+          {% endif %}
+          {% if payments_accepted.accepte_carte_bancaire %}
+            <c-V2.bt.paiement name='{% translate "CB" %}' icon="card" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=carte_bancaire&uuid_transaction={{ uuid_transaction }}&total={{ payment.missing|unlocalize }}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" data-loading-disable data-testid="paiement-insuffisant-btn-cb" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','carte_bancaire')
+            {% if uuid_transaction != '' %}
+              ; askAdditionManageForm('updateInput','#addition-uuid-transaction','{{ uuid_transaction }}')
+            {% endif %}
+            " />
+          {% endif %}
+          <c-V2.bt.paiement name='{% translate "CASHLESS" %}' icon="wallet" hx-get="{% url 'laboutik-paiement-lire_nfc' %}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" data-loading-disable data-testid="paiement-insuffisant-btn-cashless" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc')
+          {% if uuid_transaction != '' %}
+            ; askAdditionManageForm('updateInput','#addition-uuid-transaction','{{ uuid_transaction }}')
+          {% endif %}
+          " />
+        </div>
+      </div>
+    </div>
   </div>
 </div>

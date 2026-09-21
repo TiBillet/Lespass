@@ -1,3 +1,15 @@
-<div id="message-nfc" aria-live="polite">
-<h1 style="color: var(--yellow00)">{{ msg }}</h1>
-</div>
+{% comment %}
+MESSAGE D'ERREUR DE L'ECRAN CARTE PRIMAIRE (V2)
+/ Primary card screen error message (V2)
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_primary_card_message.html
+
+Renvoye par carte_primaire() (laboutik/views.py) quand la carte est refusee :
+carte inconnue, carte non primaire, aucun point de vente, tag invalide.
+Il remplace le contenu de .message-nfc (views/ask_primary_card.html),
+sous la consigne « Approchez la carte primaire ». La lecture NFC repart
+aussitot (hx-on::after-request="initNfc()") : le caissier peut reposer une carte.
+Style : .card-wait-erreur dans overlay.css.
+/ Returned when the card is refused; replaces .message-nfc content.
+{% endcomment %}
+<p class="card-wait-erreur" role="alert" data-testid="caisse-carte-primaire-erreur">{{ msg }}</p>

@@ -22,9 +22,16 @@ PARAMETRES :
 - form-selector  : formulaire que nfc.js soumet.
 - submit-url     : url du hx-post du formulaire.
 - slot           : le formulaire cache (il reste hors de la boite).
+- slot « entete »  (optionnel) : contenu en haut de la boite (ex : logo).
+- slot « contenu » (optionnel) : contenu sous la consigne (ex : message
+                   d'erreur mis a jour par HTMX).
+  Syntaxe : balise c-slot avec name="entete" dans la balise du composant
+  (voir views/ask_primary_card.html). Ne pas ecrire la balise ici : Cotton
+  la compilerait meme dans ce commentaire.
 
 Utilise par / Used by : hx_check_card.html, hx_read_nfc.html,
-hx_display_type_payment.html (point de vente cashless).
+hx_display_type_payment.html (point de vente cashless),
+hx_lire_nfc_complement.html, views/ask_primary_card.html.
 {% endcomment %}
 <c-vars selector="" title="" hint="" />
 <div {{ attrs }} class="nfc-container">
@@ -43,6 +50,8 @@ hx_display_type_payment.html (point de vente cashless).
                 <c-V2.bt.return selector="{{ selector }}" action="state.nfc.stop()" data-testid="nfc-btn-fermer" />
             {% endif %}
 
+            {{ entete }}
+
             <div class="card-wait" aria-live="polite" data-testid="nfc-attente">
                 <span class="card-wait-signal">
                     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -55,6 +64,7 @@ hx_display_type_payment.html (point de vente cashless).
                 </span>
                 <strong id="card-wait-title">{% if title %}{{ title }}{% else %}{% translate "Approchez la carte" %}{% endif %}</strong>
                 <span>{% if hint %}{{ hint }}{% else %}{% translate "lecture du solde" %}{% endif %}</span>
+                {{ contenu }}
             </div>
         </div>
     </div>

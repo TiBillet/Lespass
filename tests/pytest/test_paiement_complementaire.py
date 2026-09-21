@@ -63,12 +63,16 @@ def _extraire_hidden(contenu_html, nom_champ):
 
 def _extraire_reste(contenu_html):
     """Extrait le « reste à payer » (en euros, ex. '1.00') de l'écran complément.
-    / Extracts the 'remaining to pay' amount from the complement screen."""
+    L'écran V2 l'affiche avec une virgule (« 1,00 € ») : on accepte les deux
+    séparateurs et on renvoie toujours un point, comme avant.
+    / Extracts the 'remaining to pay' amount from the complement screen.
+    The V2 screen shows a comma ("1,00 €"): both separators are accepted and a
+    dot is always returned, as before."""
     motif = re.compile(
-        r'complement-reste-a-payer.*?<strong>\s*([0-9.]+)\s*€', re.DOTALL
+        r'complement-reste-a-payer.*?<strong>\s*([0-9.,]+)\s*€', re.DOTALL
     )
     correspondance = motif.search(contenu_html)
-    return correspondance.group(1) if correspondance else None
+    return correspondance.group(1).replace(",", ".") if correspondance else None
 
 
 class TestPaiementComplementaire(FastTenantTestCase):

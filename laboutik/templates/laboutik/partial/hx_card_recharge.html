@@ -19,7 +19,7 @@ ETAPES (contexte « recharge » construit par _construire_contexte_recharge) :
 1. QUOI    : une tuile par produit de recharge du lieu (tous les PV).
              Toucher la tuile deja choisie la deselectionne.
 2. COMBIEN : les tarifs du produit choisi (1, 5, 10, Libre...).
-3. LIBRE   : champ de saisie si le tarif est libre.
+3. LIBRE   : pave numerique (cotton/numpad.html) si le tarif est libre.
 4. CONFIRMER : montant, solde apres recharge, puis
    - recharge payante (RE) : tuiles de paiement → POST payer()
    - recharge offerte (RC / TM) : « Offrir » → POST identifier_client()
@@ -69,9 +69,14 @@ ETAPES (contexte « recharge » construit par _construire_contexte_recharge) :
         </div>
 
       {# --- ETAPE 3 : MONTANT LIBRE / STEP 3: FREE AMOUNT --- #}
+      {# Maquette : .card-clavier = titre + montant en grand + pave + « Valider · montant ».  #}
+      {# Le pave (cotton/numpad.html) envoie ses touches a CE formulaire ('keypadSendValue'). #}
+      {# Le petit script plus bas assemble le texte « 12,50 » dans le champ cache « montant ». #}
+      {# Le serveur le valide ensuite (RechargeMontantLibreSerializer).                       #}
+      {# / The keypad sends its keys to this form; the script below builds "12,50" in the    #}
+      {# hidden "montant" field; the server then validates it.                              #}
       {% elif recharge.montant_a_saisir %}
-        {# Un <form> : htmx envoie ses champs, et Entree valide / A form: htmx sends its fields, Enter submits #}
-        <form class="card-clavier"
+        <form id="card-recharge-montant-form" class="card-clavier"
               hx-get="{{ url_recharge }}"
               hx-target="#card-recharge-zone" hx-swap="outerHTML"
               data-testid="recharge-form-montant-libre">
@@ -79,8 +84,11 @@ ETAPES (contexte « recharge » construit par _construire_contexte_recharge) :
           <input type="hidden" name="uuid_pv" value="{{ recharge.uuid_pv }}" />
           <input type="hidden" name="produit" value="{{ produit.uuid }}" />
           <input type="hidden" name="prix" value="{{ recharge.tarif_choisi.uuid }}" />
+          <input type="hidden" name="montant" value="{{ recharge.montant_saisi|default:'' }}"
+                 data-testid="recharge-input-montant" />
+
           <div class="card-clavier-head">
-            <label for="card-recharge-montant">{% translate "Montant libre" %}</label>
+            <span id="card-recharge-montant-titre">{% translate "Montant libre" %}</span>
             <button type="button" class="card-clavier-close"
                     aria-label="{% translate 'Retour aux montants' %}"
                     hx-get="{{ url_recharge }}?tag_id={{ recharge.tag_id|urlencode }}&uuid_pv={{ recharge.uuid_pv }}&produit={{ produit.uuid }}"
@@ -88,19 +96,76 @@ ETAPES (contexte « recharge » construit par _construire_contexte_recharge) :
               <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5.6 4.2 12 10.6l6.4-6.4L20.2 6 13.8 12.4l6.4 6.4-1.8 1.8-6.4-6.4-6.4 6.4-1.8-1.8 6.4-6.4-6.4-6.4z"/></svg>
             </button>
           </div>
-          <div class="card-montant-champ">
-            <input id="card-recharge-montant" name="montant" type="text" inputmode="decimal"
-                   autocomplete="off" autofocus required
-                   value="{{ recharge.montant_saisi|default:'' }}"
-                   placeholder="0,00"
-                   {% if recharge.erreur_montant %}aria-invalid="true" aria-describedby="card-recharge-montant-erreur"{% endif %}
-                   data-testid="recharge-input-montant" />
-            {% if not produit.est_offert %}<span aria-hidden="true">{{ currency_data.symbol }}</span>{% endif %}
-          </div>
+
+          {# Montant en cours de saisie, annonce au lecteur d'ecran #}
+          {# / Amount being typed, announced to screen readers     #}
+          <output class="card-keypad-val{% if recharge.erreur_montant %} is-invalide{% endif %}"
+                  aria-live="polite" aria-labelledby="card-recharge-montant-titre"
+                  {% if recharge.erreur_montant %}aria-describedby="card-recharge-montant-erreur"{% endif %}>
+            <span class="card-keypad-saisie">{{ recharge.montant_saisi|default:'0' }}</span>{% if not produit.est_offert %} {{ currency_data.symbol }}{% endif %}
+          </output>
           {% if recharge.erreur_montant %}
             <small id="card-recharge-montant-erreur" class="card-montant-erreur" role="alert">{{ recharge.erreur_montant }}</small>
           {% endif %}
-          <button type="submit" class="card-valider" data-testid="recharge-btn-montant-ok">{% translate "Valider" %}</button>
+
+          <c-numpad id="card-recharge-numpad" ck-target="#card-recharge-montant-form" effacer="retour" />
+
+          <button type="submit" class="card-valider" data-testid="recharge-btn-montant-ok"
+                  {% if not recharge.montant_saisi %}disabled{% endif %}>
+            {% translate "Valider" %}<span class="card-valider-montant">{% if recharge.montant_saisi %} · {{ recharge.montant_saisi }}{% if not produit.est_offert %} {{ currency_data.symbol }}{% endif %}{% endif %}</span>
+          </button>
+
+          <script>
+            /**
+             * Assemble le montant libre a partir des touches du pave.
+             * / Builds the free amount from the keypad keys.
+             *
+             * LOCALISATION : laboutik/templates/laboutik/partial/hx_card_recharge.html
+             *
+             * Recoit : 'keypadSendValue' { key } depuis cotton/numpad.html
+             * Met a jour : le champ cache « montant », l'affichage en grand,
+             * et le bouton « Valider · montant » (desactive tant que c'est vide).
+             * Regles : une seule virgule, deux chiffres apres, 7 chiffres au plus.
+             * Aucune validation metier ici : le serveur valide a l'envoi.
+             * / Updates the hidden field, the big display and the Validate button.
+             * No business validation here: the server validates on submit.
+             */
+            function rechargeSaisirTouche(event) {
+              const formulaire = event.currentTarget
+              const champMontant = formulaire.querySelector('input[name="montant"]')
+              const touche = event.detail.key
+              let saisie = champMontant.value
+
+              if (touche === 'Backspace') {
+                saisie = saisie.slice(0, -1)
+              } else if (touche === 'C') {
+                saisie = ''
+              } else if (touche === '.') {
+                if (!saisie.includes(',')) {
+                  saisie = saisie === '' ? '0,' : saisie + ','
+                }
+              } else {
+                const aDejaDeuxDecimales = saisie.includes(',') && saisie.split(',')[1].length >= 2
+                const aDejaSeptChiffres = saisie.replace(',', '').length >= 7
+                if (aDejaDeuxDecimales || aDejaSeptChiffres) {
+                  return
+                }
+                saisie = saisie === '0' ? touche : saisie + touche
+              }
+
+              champMontant.value = saisie
+              formulaire.querySelector('.card-keypad-saisie').textContent = saisie === '' ? '0' : saisie
+              formulaire.querySelector('.card-keypad-val').classList.remove('is-invalide')
+
+              const montantEnEuros = parseFloat(saisie.replace(',', '.')) || 0
+              const boutonValider = formulaire.querySelector('[type="submit"]')
+              boutonValider.disabled = montantEnEuros <= 0
+              const symbole = '{% if not produit.est_offert %} {{ currency_data.symbol }}{% endif %}'
+              boutonValider.querySelector('.card-valider-montant').textContent =
+                montantEnEuros > 0 ? ' · ' + saisie + symbole : ''
+            }
+            document.querySelector('#card-recharge-montant-form').addEventListener('keypadSendValue', rechargeSaisirTouche)
+          </script>
         </form>
 
       {# --- ETAPE 4 : CONFIRMER / STEP 4: CONFIRM --- #}

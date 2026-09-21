@@ -485,3 +485,33 @@ def test_recharge_offerte_credite_la_carte_sans_paiement(
             carte_client.wallet_ephemere, produits_de_recharge["asset_cadeau"]
         )
     assert solde_cadeau == 1000
+
+
+def test_recharge_montant_libre_affiche_le_pave_numerique(
+    tenant_lespass, point_de_vente, carte_client, produits_de_recharge
+):
+    """
+    L'etape « montant libre » utilise le pave cotton/numpad.html en mode ⌫,
+    relie au formulaire, avec le bouton Valider desactive tant que c'est vide.
+    / The free amount step uses the numpad in backspace mode, wired to the
+    form, with Validate disabled while empty.
+    """
+    produit_local = produits_de_recharge["produit_local"]
+    tarif_libre = _tarif(produit_local, libre=True)
+    client_http = _client_connecte_admin(tenant_lespass)
+    reponse = client_http.get(
+        URL_RECHARGE_CARTE,
+        {
+            "tag_id": carte_client.tag_id,
+            "uuid_pv": str(point_de_vente.uuid),
+            "produit": str(produit_local.uuid),
+            "prix": str(tarif_libre.uuid),
+        },
+    )
+    contenu = reponse.content.decode()
+
+    assert 'id="card-recharge-numpad"' in contenu
+    assert 'data-cible="#card-recharge-montant-form"' in contenu
+    assert 'data-key="Backspace"' in contenu
+    assert 'data-key="C"' not in contenu
+    assert "disabled" in contenu.split('data-testid="recharge-btn-montant-ok"')[1][:40]

@@ -2312,6 +2312,43 @@ body:has(#confirm:not(.hide) .card-modal) #messages .card-modal {
 	color: var(--text-faint);
 }
 
+/* --- Ecran carte primaire (views/ask_primary_card.html) ---
+   Le logo en tete de boite, comme dans l'en-tete de l'ecran de vente,
+   et le message d'erreur sous la consigne.
+   / Primary card screen: logo at the top of the box, error under the hint. */
+.card-wait-logo {
+	justify-self: center;
+	display: block;
+	height: calc(30px * var(--k));
+	width: auto;
+	margin-top: calc(4px * var(--k));
+}
+/* Annule l'ancien style jaune de .message-nfc (views.css)
+   / Cancels the old yellow .message-nfc style (views.css) */
+.card-wait .message-nfc {
+	min-height: 0;
+	margin: 0;
+	color: inherit;
+	white-space: normal;
+}
+/* Sans message, la zone ne prend aucune place. Elle reste dans le DOM :
+   c'est la cible HTMX (hx-target) des erreurs.
+   / Without a message the zone takes no room; it stays in the DOM as the
+   HTMX target for errors. */
+.card-wait .message-nfc:not(:has(*)) { display: none; }
+.card-wait-erreur {
+	margin: calc(4px * var(--k)) 0 0;
+	padding: calc(8px * var(--k)) calc(12px * var(--k));
+	border-radius: calc(var(--r-ctrl) * var(--k));
+	background: var(--danger-wash);
+	box-shadow: inset 0 0 0 1px var(--danger-edge);
+	color: var(--text);
+	font-size: max(var(--fs-min), calc(13px * var(--k)));
+	font-weight: 700;
+	white-space: pre-line;
+	overflow-wrap: anywhere;
+}
+
 /* --- Solde de la carte (hx_card_feedback.html) / Card balance --- */
 .card-solde {
 	display: grid;
@@ -2418,6 +2455,13 @@ body:has(#confirm:not(.hide) .card-modal) #messages .card-modal {
 .card-modal-box:has(.card-confirm, .card-clavier) :is(.card-pastilles, .card-adhesions) {
 	display: none;
 }
+/* Le pave numerique est le bloc le plus haut : on retire aussi la reference
+   et le titulaire (deja vus a l'etape precedente). Le solde total reste.
+   / The keypad is the tallest block: the reference and holder step aside
+   too (already seen). The total balance stays. */
+.card-modal-box:has(.card-clavier) .card-solde :is(.card-ref, .card-owner) {
+	display: none;
+}
 
 /* Adhesions actives : liste compacte, coche verte
    / Active memberships: compact list, green tick */
@@ -2468,6 +2512,145 @@ body:has(#confirm:not(.hide) .card-modal) #messages .card-modal {
 	font-size: calc(17px * var(--k));
 	font-weight: 800;
 }
+/* Fonds insuffisants : « Il manque 3,50 € », le montant en blanc gras
+   / Insufficient funds: "3.50 € missing", amount in bold white */
+.card-manque {
+	font-size: max(var(--fs-min), calc(15px * var(--k)));
+	color: var(--text-dim);
+}
+.card-manque b {
+	font-weight: 800;
+	font-variant-numeric: tabular-nums;
+	color: var(--text);
+}
+
+/* --- Titre en haut a gauche, aligne sur la croix (hx_complement_paiement)
+   / Top-left title, aligned with the close cross --- */
+.card-titre {
+	justify-self: start;
+	min-height: max(44px, calc(36px * var(--k)));
+	display: flex;
+	align-items: center;
+	margin-top: calc(-6px * var(--k));
+	/* laisse la place a la croix / leaves room for the cross */
+	padding-right: calc(52px * var(--k));
+	font-size: max(var(--fs-min), calc(11px * var(--k)));
+	font-weight: 700;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+	text-align: left;
+	overflow-wrap: anywhere;
+}
+
+/* --- Lignes « ticket » : libelle a gauche, montant a droite, filets entre
+   les lignes. Portage du pied de ticket (.tk-total de la maquette).
+   / Receipt rows: label left, amount right, hairlines between rows. --- */
+.card-ticket {
+	display: grid;
+	text-align: left;
+}
+.card-ticket-ligne {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: calc(10px * var(--k));
+	padding: calc(9px * var(--k)) 0;
+	font-size: max(var(--fs-min), calc(14px * var(--k)));
+	color: var(--text-dim);
+}
+.card-ticket-ligne + .card-ticket-ligne { border-top: 1px solid var(--line-soft); }
+.card-ticket-ligne span { min-width: 0; overflow-wrap: anywhere; }
+.card-ticket-ligne b {
+	flex: none;
+	white-space: nowrap;
+	font-weight: 800;
+	font-variant-numeric: tabular-nums;
+	color: var(--text);
+}
+/* Pastilles sous une ligne : alignees a gauche, comme un detail de ticket
+   / Pills under a row: left-aligned, like a receipt detail */
+.card-ticket .card-pastilles {
+	justify-content: flex-start;
+	padding-bottom: calc(4px * var(--k));
+}
+
+/* --- Encart « Reste a payer » : fond et filet ambre, comme l'ancien ecran,
+   au gabarit V2. C'est le seul bloc teinte de la popup : il ressort seul.
+   / "Remaining" box: amber fill and border like the old screen, V2 shape.
+   The only tinted block of the popup, so it stands out alone. --- */
+.card-encart-reste {
+	display: flex;
+	/* Si la place manque (V2s, gros montant), le montant passe sous le libelle
+	   au lieu de couper « Reste a payer » en deux.
+	   / If space runs out, the amount wraps below the label instead of
+	   breaking "Remaining" in two. */
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: calc(12px * var(--k));
+	padding: calc(12px * var(--k)) calc(14px * var(--k));
+	border-radius: calc(var(--r-ctrl) * var(--k));
+	background: var(--warn-wash);
+	box-shadow: inset 0 0 0 2px var(--warn);
+	text-align: left;
+}
+.card-encart-reste-lbl {
+	display: flex;
+	align-items: center;
+	gap: calc(8px * var(--k));
+	min-width: 0;
+	white-space: nowrap;
+	font-size: max(var(--fs-min), calc(13px * var(--k)));
+	font-weight: 800;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	color: var(--warn);
+}
+.card-encart-reste-lbl .ico { font-size: calc(18px * var(--k)); }
+.card-encart-reste strong {
+	flex: none;
+	margin-left: auto;
+	white-space: nowrap;
+	font-size: calc(32px * var(--k));
+	font-weight: 800;
+	letter-spacing: -.025em;
+	font-variant-numeric: tabular-nums;
+	color: var(--text);
+}
+
+/* Confirmation CB / cheque / offert : le moyen de paiement dans un disque,
+   meme langage que l'attente NFC, sans animation (rien n'attend ici).
+   / Card / cheque / gift confirmation: method pictogram in a disc, same
+   language as the NFC wait, no animation (nothing is waiting here). */
+.confirm-signal {
+	display: grid;
+	place-items: center;
+	width: calc(64px * var(--k));
+	height: calc(64px * var(--k));
+	margin-bottom: calc(6px * var(--k));
+	border-radius: 50%;
+	background: var(--surface-2);
+	color: var(--text-dim);
+	font-size: calc(28px * var(--k));
+}
+
+/* Confirmation especes : la ligne « A rendre » passe en rouge quand la
+   somme donnee ne couvre pas le total (elle devient « Il manque »).
+   / Cash confirmation: the change row turns red when the given amount
+   does not cover the total. */
+.confirm-especes.is-insuffisant .confirm-rendu-lbl,
+.confirm-especes.is-insuffisant .confirm-rendu {
+	color: var(--danger);
+}
+.confirm-especes .numpad-content { margin-top: calc(2px * var(--k)); }
+/* Petit ecran : le bouton garde « Valider » sur une ligne. La monnaie a
+   rendre reste lisible juste au-dessus, dans la ligne « A rendre ».
+   / Small screen: the button keeps "Validate" on one line; the change is
+   still shown just above. */
+@media only screen and (max-width: 599px) {
+	.confirm-valider-detail { display: none; }
+}
 
 /* Bloc « montant libre » (maquette : .card-clavier)
    / "Free amount" block (mockup: .card-clavier) */
@@ -2501,31 +2684,26 @@ body:has(#confirm:not(.hide) .card-modal) #messages .card-modal {
 }
 .card-clavier-close:active { background: var(--surface-3); }
 
-/* Montant libre : champ de saisie + message d'erreur
-   / Free amount: input + error message */
-.card-clavier-head label { cursor: default; }
-.card-montant-champ {
-	display: flex;
-	align-items: baseline;
-	justify-content: center;
-	gap: calc(6px * var(--k));
+/* Montant libre : montant en grand au-dessus du pave (maquette : .card-keypad-val)
+   / Free amount: big figure above the keypad */
+.card-clavier-head span { cursor: default; }
+.card-keypad-val {
+	justify-self: center;
 	font-size: calc(24px * var(--k));
 	font-weight: 800;
-}
-.card-montant-champ input {
-	width: calc(150px * var(--k));
-	min-height: calc(46px * var(--k));
-	padding: 0 calc(12px * var(--k));
-	border: 1px solid var(--line);
-	border-radius: calc(var(--r-ctrl) * var(--k));
-	background: var(--bg);
-	color: var(--text);
-	font: inherit;
-	text-align: right;
+	letter-spacing: -.02em;
 	font-variant-numeric: tabular-nums;
+	color: var(--text);
 }
-.card-montant-champ input[aria-invalid="true"] { border-color: var(--danger); }
+.card-keypad-val.is-invalide { color: var(--danger); }
+/* Le montant dans le bouton, comme la maquette : « Valider · 12,50 € »
+   / The amount in the button, as in the mockup */
+.card-valider-montant { font-variant-numeric: tabular-nums; }
+/* Vide = aucune place prise dans la grille (sinon un trou sous « A rendre »)
+   / Empty = takes no grid row (otherwise a gap under the change row) */
+.card-montant-erreur:empty { display: none; }
 .card-montant-erreur {
+	justify-self: center;
 	font-size: max(var(--fs-min), calc(12px * var(--k)));
 	font-weight: 700;
 	color: var(--danger);

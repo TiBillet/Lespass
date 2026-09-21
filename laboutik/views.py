@@ -1227,6 +1227,34 @@ def obtenir_solde_complet_carte(carte):
     }
 
 
+def _soldes_locaux_pour_affichage(wallet):
+    """
+    Liste les soldes locaux d'un wallet, prets pour l'affichage en pastilles.
+    / Lists a wallet's local balances, ready for pill display.
+
+    LOCALISATION : laboutik/views.py
+
+    Lecture locale seulement (fedow_core), sans appel au Fedow distant :
+    l'ecran « fonds insuffisants » doit s'afficher tout de suite.
+    / Local read only, no remote Fedow call: the screen must show at once.
+
+    Utilise par / Used by : _payer_par_nfc() → hx_funds_insufficient.html
+
+    :param wallet: Wallet de la carte
+    :return: liste de dicts {asset_name, asset_category, value_euros}
+    """
+    soldes_pour_affichage = []
+    for token in WalletService.obtenir_tous_les_soldes(wallet):
+        soldes_pour_affichage.append(
+            {
+                "asset_name": token.asset.name,
+                "asset_category": token.asset.category,
+                "value_euros": token.value / 100,
+            }
+        )
+    return soldes_pour_affichage
+
+
 def _repartir_legacy_sur_articles(lignes_complement, transactions_legacy):
     """
     Répartit les transactions du débit legacy (renvoyées par Fedow) sur les parts d'articles
@@ -7115,6 +7143,10 @@ class PaiementViewSet(viewsets.ViewSet):
                     "currency_data": CURRENCY_DATA,
                     "payment": donnees_paiement,
                     "card": {"name": carte_client.tag_id},
+                    # Reference courte « ·· 4F2A » et soldes en pastilles
+                    # / Short reference and balances as pills
+                    "carte_ref": carte_client.tag_id[-4:],
+                    "soldes": _soldes_locaux_pour_affichage(wallet_client),
                     "monnaie_name": asset_cible.name,
                     "payments_accepted": {
                         "accepte_especes": False,
@@ -7227,7 +7259,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 # / Otherwise: PARTIAL legacy → complement screen shows the reduced remainder; the
                 # partial FED debit happens in payer_complementaire (which re-reads fresh FED).
 
-        # ================================================================ #
+        # =====================================================Type d'actif=========== #
         #  PHASE 6 : Si complémentaire > 0 → écran fonds insuffisants       #
         #  PHASE 6: If complement > 0 → insufficient funds screen           #
         # ================================================================ #
@@ -7524,6 +7556,10 @@ class PaiementViewSet(viewsets.ViewSet):
                 "currency_data": CURRENCY_DATA,
                 "payment": donnees_paiement,
                 "card": {"name": carte_client.tag_id},
+                # Reference courte « ·· 4F2A » et soldes en pastilles
+                # / Short reference and balances as pills
+                "carte_ref": carte_client.tag_id[-4:],
+                "soldes": _soldes_locaux_pour_affichage(wallet_client),
                 "monnaie_name": nom_monnaie_fallback,
                 "payments_accepted": {
                     "accepte_especes": point_de_vente.accepte_especes,
