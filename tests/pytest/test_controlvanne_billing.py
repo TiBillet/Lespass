@@ -153,7 +153,7 @@ def tireuse_billing(tenant):
     with schema_context(tenant.schema_name):
         from controlvanne.models import TireuseBec, Debimetre
         from BaseBillet.models import Product, Price
-        from laboutik.models import PointDeVente
+        from laboutik.models import PointDeVente, Terminal
 
         # Nettoyer les doublons de runs precedents.
         # PIEGE : le signal post_save de TireuseBec nomme le PointDeVente auto-cree
@@ -169,6 +169,13 @@ def tireuse_billing(tenant):
         Debimetre.objects.filter(name="Test billing debimetre").delete()
         TireuseBec.objects.filter(nom_tireuse="Tireuse billing test").delete()
         PointDeVente.objects.filter(name="Tireuse billing test").delete()
+        # Le meme signal cree aussi un Terminal, qui porte lui aussi une
+        # contrainte unique sur "name" et n'est PAS supprime avec la TireuseBec.
+        # Sans ce nettoyage, le run suivant echoue en UniqueViolation sur
+        # laboutik_terminal_name.
+        # / The same signal also creates a Terminal, unique on "name" too, and
+        # not deleted with the TireuseBec: the next run fails on UniqueViolation.
+        Terminal.objects.filter(name="Tireuse billing test").delete()
 
         debimetre = Debimetre.objects.create(
             name="Test billing debimetre",

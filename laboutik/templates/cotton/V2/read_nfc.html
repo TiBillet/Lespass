@@ -32,8 +32,6 @@
         state['nfc'] = null
         state.nfc = new NfcReader(state.socketIoPort, state.typeApp)
         const formSelector = '{{ form_selector }}'
-          console.log('{{form_selector}}')
-          console.log('{{globalManageForm}}')
 
         // supprime l'écoute sur le formulaire associé au lecteur nfc si déjà écouté
         document.querySelector(formSelector).removeEventListener(formSelector, globalManageForm)

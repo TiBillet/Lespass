@@ -111,12 +111,19 @@ def rf_tireuse(tenant):
     with schema_context(tenant.schema_name):
         from controlvanne.models import TireuseBec
         from BaseBillet.models import Product, Price
-        from laboutik.models import PointDeVente
+        from laboutik.models import PointDeVente, Terminal
 
         # Nettoyage anti-collision DB dev (cf. piège documenté dans
         # test_controlvanne_billing) / Anti-collision cleanup on shared dev DB
         TireuseBec.objects.filter(nom_tireuse="Tireuse review fixes").delete()
         PointDeVente.objects.filter(name="Tireuse review fixes").delete()
+        # Le meme signal cree aussi un Terminal, qui porte lui aussi une
+        # contrainte unique sur "name" et n'est PAS supprime avec la TireuseBec.
+        # Sans ce nettoyage, le run suivant echoue en UniqueViolation sur
+        # laboutik_terminal_name.
+        # / The same signal also creates a Terminal, unique on "name" too, and
+        # not deleted with the TireuseBec: the next run fails on UniqueViolation.
+        Terminal.objects.filter(name="Tireuse review fixes").delete()
 
         produit_fut, _ = Product.objects.get_or_create(
             name="Fut review fixes",
@@ -285,10 +292,15 @@ class TestI2SwapFutSansStock:
         with schema_context(tenant.schema_name):
             from controlvanne.models import TireuseBec
             from BaseBillet.models import Product
-            from laboutik.models import PointDeVente
+            from laboutik.models import PointDeVente, Terminal
 
             TireuseBec.objects.filter(nom_tireuse="Tireuse swap fut test").delete()
             PointDeVente.objects.filter(name="Tireuse swap fut test").delete()
+            # Le Terminal auto-cree porte la meme contrainte unique sur "name"
+            # et survit a la suppression de la TireuseBec (cf. meme nettoyage
+            # dans test_controlvanne_billing).
+            # / The auto-created Terminal is unique on "name" too and survives.
+            Terminal.objects.filter(name="Tireuse swap fut test").delete()
 
             fut_a, _ = Product.objects.get_or_create(
                 name="Fut swap A", categorie_article="U", defaults={"publish": True}

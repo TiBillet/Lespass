@@ -148,7 +148,9 @@ Contient un message d'erreur et un bouton de retour pour fermer l'overlay.
      / WebSocket indicator (CSS + JS) — loaded at end of page so DOM is ready -->
     {% include "laboutik/partial/hx_ws_indicator.html" %}
   </div>
-  {# Fin du conteneur WebSocket hx-ext="ws" / End of WebSocket container #}
+  {# Fin du conteneur neutre (display: contents). Le websocket vit desormais #}
+  {# sur le <body> de laboutik/base.html, pour survivre aux swaps HTMX.       #}
+  {# / End of the neutral wrapper. The websocket now lives on base.html body. #}
 {% endblock content %}
 {% block css %}
 {% endblock css %}

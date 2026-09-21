@@ -1713,9 +1713,6 @@ img { max-width: 100%; display: block; }
 #explorer-root .explorer-card-desc { color: var(--color-text-muted); font-size: var(--text-ui); line-height: 1.5; }
 #explorer-root .explorer-card-footer { border-top-color: var(--color-border); }
 
-/* Badge de type de lieu : look badge--dark de la maquette. */
-/* / Venue type badge: mockup badge--dark look. */
-#explorer-root .explorer-badge--type { background: var(--color-text); color: var(--color-text-inverse); margin-left: auto; }
 #explorer-root .explorer-card-dist { color: var(--color-text-faint); font-size: var(--text-sm); }
 #explorer-root .explorer-card-dist--sans-lieu { color: var(--color-text-faint); }
 
