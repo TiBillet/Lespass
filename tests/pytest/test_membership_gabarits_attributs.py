@@ -217,6 +217,8 @@ def test_la_page_des_adhesions_affiche_une_adhesion_valide_comme_active(
     template. Drop `est_valide` from the loop and a valid membership renders
     as expired — this is the test that catches it.
     """
+    from unittest.mock import MagicMock, patch
+
     from django.test import Client as ClientDjango
 
     tenant, tarif, adherent = adhesion_avec_engagement
@@ -239,7 +241,14 @@ def test_la_page_des_adhesions_affiche_une_adhesion_valide_comme_active(
         adherent, backend="django.contrib.auth.backends.ModelBackend"
     )
 
-    reponse = navigateur.get("/my_account/membership/")
+    # Toute page de compte demande son wallet a Fedow (BaseBillet/views.py,
+    # fedowAPI.wallet.get_or_create_wallet). Fedow n'est pas joignable depuis
+    # la suite : on neutralise l'appel, il est hors sujet ici.
+    # / Every account page asks Fedow for the user's wallet. Fedow is not
+    # reachable from the suite: the call is stubbed, it is off-topic here.
+    with patch("BaseBillet.views.FedowAPI", return_value=MagicMock()):
+        reponse = navigateur.get("/my_account/membership/")
+
     assert reponse.status_code == 200, reponse.status_code
     contenu = reponse.content.decode()
 
